@@ -318,7 +318,9 @@ TEST_F(TreeWireAddition, SECURITY_DoesNotMoveTheEpoch) {
     EXPECT_EQ(grant->parentGeneration, 5);
 }
 
-TEST_F(TreeWireAddition, LeavesEveryExistingNodeKeyUntouched) {
+TEST_F(TreeWireAddition, GrowthPastAFullLevelTouchesNoExistingNodeKey) {
+    // Four full seats, so the newcomer is appended and their whole path is a single node that did not exist a
+    // moment ago. Re-keying a path costs nothing here — there is nothing on it to re-key.
     auto fixture = build(4, 5);
     const AdditionOutcome outcome = addMember(*fixture, publicOf(fixture->members));
     for (const server::GroupTreeNode& before : fixture->tree.nodes) {
@@ -376,7 +378,7 @@ TEST_F(TreeWireAddition, GrowthMintsANewRootAndRelinksTheGrantEdgeToIt) {
     EXPECT_EQ(grantEdges, 1u);
 }
 
-TEST_F(TreeWireAddition, SeatingIntoABlankCostsOneWrapAndAddsNoNode) {
+TEST_F(TreeWireAddition, SeatingIntoABlankRekeysThePathAndAddsNoNode) {
     auto fixture = build(4, 5);
     const RemovalOutcome removal = removeMember(*fixture, 2, 0);
     // Continue from the post-removal state, which is where a blank comes from in the first place.
@@ -394,7 +396,10 @@ TEST_F(TreeWireAddition, SeatingIntoABlankCostsOneWrapAndAddsNoNode) {
 
     const AdditionOutcome outcome = addMember(next, publicOf(next.members));
     EXPECT_EQ(outcome.plan.position, 2u) << "the blank is filled before the tree grows";
-    EXPECT_EQ(outcome.plan.wrapCount, 1u) << "one wrap: the newcomer's edge to a parent that already exists";
-    EXPECT_EQ(outcome.after.nodes.size(), next.tree.nodes.size());
+    // Two nodes on the path of a four-leaf tree, two children each, plus the grant edge re-issued to the root.
+    // Not one wrap: seating somebody under a node the caller cannot reach means re-keying the path to it.
+    EXPECT_EQ(outcome.plan.wrapCount, 5u);
+    EXPECT_EQ(outcome.after.nodes.size(), next.tree.nodes.size())
+        << "the path is re-keyed in place, so no node index appears twice";
     EXPECT_TRUE(canClimb(outcome.after, next.epoch, next.grantKey.getPublicKey(), outcome.newcomer));
 }

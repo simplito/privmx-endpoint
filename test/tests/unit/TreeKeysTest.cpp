@@ -13,6 +13,8 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -100,6 +102,75 @@ protected:
         state.edges = withoutGrant;
         state.epoch = plan.newEpoch;
         state.grantPublicKey = plan.newGrantKey.getPublicKey();
+    }
+
+    /** Applies an addition plan the way the bridge would after accepting it. */
+    void applyAddition(TreeGroupState& state, const AdditionPlan& plan, const std::string& newMemberId) {
+        const std::vector<std::optional<std::string>> seatingBefore = state.leafAssignment;
+        state.numLeaves = plan.newNumLeaves;
+        state.leafAssignment.resize(plan.newNumLeaves, std::nullopt);
+        state.leafAssignment[plan.position] = newMemberId;
+
+        std::set<std::uint32_t> rekeyed;
+        for (const TreeNodeState& node : plan.nodes) {
+            rekeyed.insert(node.nodeIndex);
+            const auto existing = std::find_if(state.nodes.begin(), state.nodes.end(), [&](const TreeNodeState& n) {
+                return n.nodeIndex == node.nodeIndex;
+            });
+            if (existing == state.nodes.end()) {
+                state.nodes.push_back(node);
+            } else {
+                *existing = node;
+            }
+        }
+
+        std::vector<TreeEdge> kept;
+        for (const TreeEdge& edge : state.edges) {
+            if (edge.isGrantEdge || rekeyed.count(edge.parentIndex) > 0) {
+                continue; // superseded: the plan re-issues every edge under a node it re-keyed, and the grant edge
+            }
+            std::uint32_t childNode = edge.childIndex;
+            if (edge.childKind == EdgeChildKind::User) {
+                const auto seat = std::find_if(seatingBefore.begin(), seatingBefore.end(), [&](const auto& holder) {
+                    return holder.has_value() && holder.value() == edge.childUserId;
+                });
+                if (seat == seatingBefore.end()) {
+                    continue;
+                }
+                childNode =
+                    TreeMath::leafNode(static_cast<std::uint32_t>(std::distance(seatingBefore.begin(), seat)));
+            }
+            // Growth re-parents nodes at the truncated right edge, so an edge can name a parent that is no longer
+            // the child's parent. The plan supplies the replacement.
+            if (childNode == TreeMath::root(plan.newNumLeaves)) {
+                continue;
+            }
+            if (TreeMath::parent(childNode, plan.newNumLeaves) != edge.parentIndex) {
+                continue;
+            }
+            kept.push_back(edge);
+        }
+        kept.insert(kept.end(), plan.edges.begin(), plan.edges.end());
+        state.edges = kept;
+    }
+
+    /** Every seated member reaches the grant key from a cold cache — the check that nobody was locked out. */
+    void expectEveryoneClimbs(const TreeGroupState& state, const std::vector<TestMember>& members) {
+        for (const TestMember& member : members) {
+            const auto seated = std::find_if(
+                state.leafAssignment.begin(), state.leafAssignment.end(),
+                [&](const auto& holder) { return holder.has_value() && holder.value() == member.userId; }
+            );
+            if (seated == state.leafAssignment.end()) {
+                continue;
+            }
+            TreeKeyCache cache;
+            TreeKeys keys(cache);
+            const ClimbResult result = keys.climbToGrantKey(state, member.userId, member.priv);
+            EXPECT_EQ(result.failure, ClimbFailure::None) << member.userId << " can no longer climb";
+            ASSERT_TRUE(result.grantKey.has_value()) << member.userId;
+            EXPECT_EQ(result.grantKey->getPublicKey(), state.grantPublicKey) << member.userId;
+        }
     }
 };
 
@@ -456,7 +527,7 @@ TEST_F(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing)
 
 class TreeKeysAddition : public TreeKeysTestBase {};
 
-TEST_F(TreeKeysAddition, FillingABlankCostsOneWrapAndDoesNotRotate) {
+TEST_F(TreeKeysAddition, FillingABlankRekeysThePathAndDoesNotRotate) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
@@ -472,24 +543,226 @@ TEST_F(TreeKeysAddition, FillingABlankCostsOneWrapAndDoesNotRotate) {
     ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
 
     const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
+    std::vector<TreeMember> roster = publicOf(members);
+    roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
+    owner.setMemberKeys(roster);
     const AdditionPlan addition = owner.planAddition(
         state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv
     );
 
     EXPECT_EQ(addition.position, 1u) << "must reuse the blank rather than append";
-    EXPECT_EQ(addition.wrapCount, 1u) << "filling a blank is one wrap";
     EXPECT_EQ(addition.newNumLeaves, state.numLeaves) << "topology unchanged";
     EXPECT_FALSE(addition.newRoot.has_value());
+    // Two nodes on the path for four leaves, each wrapping to two children, plus the grant edge.
+    EXPECT_EQ(addition.nodes.size(), 2u);
+    EXPECT_EQ(addition.wrapCount, 5u);
+    for (const TreeNodeState& node : addition.nodes) {
+        const auto before = std::find_if(state.nodes.begin(), state.nodes.end(), [&](const TreeNodeState& n) {
+            return n.nodeIndex == node.nodeIndex;
+        });
+        ASSERT_NE(before, state.nodes.end());
+        EXPECT_EQ(node.generation, before->generation + 1) << "node " << node.nodeIndex;
+        EXPECT_NE(node.publicKey.toBase58DER(), before->publicKey.toBase58DER()) << "node " << node.nodeIndex;
+    }
 
-    // The newcomer can now climb: the epoch and grant key are untouched by the addition.
-    state.leafAssignment[1] = newcomer.userId;
-    state.edges.insert(state.edges.end(), addition.edges.begin(), addition.edges.end());
+    const privmx::crypto::PublicKey grantBefore = state.grantPublicKey;
+    applyAddition(state, addition, newcomer.userId);
+    EXPECT_EQ(state.grantPublicKey.toBase58DER(), grantBefore.toBase58DER())
+        << "an addition must not change the grant key";
+    EXPECT_EQ(state.epoch, removal.newEpoch) << "an addition must not advance the epoch";
+
+    std::vector<TestMember> after = members;
+    after.push_back(newcomer);
+    expectEveryoneClimbs(state, after);
+}
+
+TEST_F(TreeKeysAddition, SeatsAMemberUnderANodeTheCallerCannotReach) {
+    // The case that a four-member group hides: with eight seats the blank at position 5 sits under node 11, and
+    // nothing on the caller's own climb from seat 0 ever yields that node's key. Wrapping to an existing parent
+    // key is therefore impossible here, and this is the shape production groups are almost entirely made of.
+    const std::vector<TestMember> members = makeMembers(8);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    owner.setMemberKeys(publicOf(members));
+    ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+
+    const RemovalPlan removal = owner.planRemoval(state, members[5].userId, members[0].priv);
+    applyRemoval(state, removal, members[5].userId);
+    ownerStore.clear();
+    ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+    // The seat's parent is genuinely out of reach: the climb cached nothing for it.
+    const std::uint32_t seatParent = TreeMath::parent(TreeMath::leafNode(5), state.numLeaves);
+    const auto parentState = std::find_if(state.nodes.begin(), state.nodes.end(), [&](const TreeNodeState& n) {
+        return n.nodeIndex == seatParent;
+    });
+    ASSERT_NE(parentState, state.nodes.end());
+    ASSERT_FALSE(ownerStore.getNodeKey(seatParent, parentState->generation).has_value());
+
+    const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
+    std::vector<TreeMember> roster = publicOf(members);
+    roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
+    owner.setMemberKeys(roster);
+    const AdditionPlan addition = owner.planAddition(
+        state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv
+    );
+    EXPECT_EQ(addition.position, 5u);
+    EXPECT_EQ(addition.nodes.size(), 3u) << "three nodes on the path of an eight-leaf tree";
+
+    applyAddition(state, addition, newcomer.userId);
+    std::vector<TestMember> after = members;
+    after[5] = newcomer; // seat 5 changed hands
+    expectEveryoneClimbs(state, after);
+
+    // And the member who was removed from that seat is still out, despite the path having been re-keyed since.
+    TreeKeyCache removedStore;
+    TreeKeys removedKeys(removedStore);
+    EXPECT_NE(removedKeys.climbToGrantKey(state, members[5].userId, members[5].priv).failure, ClimbFailure::None);
+}
+
+TEST_F(TreeKeysAddition, GrowsTheTreeWithoutBorrowingAnyExistingKey) {
+    // Growth re-parents leaves at the truncated right edge, which used to need several other members' node keys
+    // at once. Re-keying the new leaf's path removes that requirement entirely.
+    const std::vector<TestMember> members = makeMembers(5);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    owner.setMemberKeys(publicOf(members));
+    ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+
+    const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
+    std::vector<TreeMember> roster = publicOf(members);
+    roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
+    owner.setMemberKeys(roster);
+    const AdditionPlan addition = owner.planAddition(
+        state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv
+    );
+    EXPECT_EQ(addition.position, 5u) << "every seat is taken, so the tree grows";
+    EXPECT_EQ(addition.newNumLeaves, 6u);
+
+    const privmx::crypto::PublicKey grantBefore = state.grantPublicKey;
+    const std::uint32_t epochBefore = state.epoch;
+    applyAddition(state, addition, newcomer.userId);
+    EXPECT_EQ(state.grantPublicKey.toBase58DER(), grantBefore.toBase58DER());
+    EXPECT_EQ(state.epoch, epochBefore) << "growth must not stale a single container";
+
+    std::vector<TestMember> after = members;
+    after.push_back(newcomer);
+    expectEveryoneClimbs(state, after);
+}
+
+TEST_F(TreeKeysAddition, GrowsAcrossARootChangeAndKeepsEverybodyClimbing) {
+    // Four seats to five: the root index itself changes and the grant edge moves to a node that did not exist a
+    // moment ago, while the grant keypair stays put.
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+
+    const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
+    std::vector<TreeMember> roster = publicOf(members);
+    roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
+    owner.setMemberKeys(roster);
+    const AdditionPlan addition = owner.planAddition(
+        state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv
+    );
+    ASSERT_TRUE(addition.newRoot.has_value()) << "growing from four to five leaves changes the root";
+    EXPECT_EQ(addition.newRoot->nodeIndex, TreeMath::root(5));
+
+    const privmx::crypto::PublicKey grantBefore = state.grantPublicKey;
+    applyAddition(state, addition, newcomer.userId);
+    EXPECT_EQ(state.grantPublicKey.toBase58DER(), grantBefore.toBase58DER());
+
+    std::vector<TestMember> after = members;
+    after.push_back(newcomer);
+    expectEveryoneClimbs(state, after);
+}
+
+TEST_F(TreeKeysAddition, SeatsTheSecondMemberOfAOneMemberGroup) {
+    // The one tree with no internal node at all: the root is the founder's own leaf, and the grant edge is
+    // addressed to them directly. Seating anybody mints the first internal node and moves that edge onto it.
+    const std::vector<TestMember> members = makeMembers(1);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+
+    const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
+    std::vector<TreeMember> roster = publicOf(members);
+    roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
+    owner.setMemberKeys(roster);
+    const AdditionPlan addition = owner.planAddition(
+        state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv
+    );
+    EXPECT_EQ(addition.position, 1u);
+    EXPECT_EQ(addition.nodes.size(), 1u);
+
+    const privmx::crypto::PublicKey grantBefore = state.grantPublicKey;
+    applyAddition(state, addition, newcomer.userId);
+    EXPECT_EQ(state.grantPublicKey.toBase58DER(), grantBefore.toBase58DER());
+    std::vector<TestMember> after = members;
+    after.push_back(newcomer);
+    expectEveryoneClimbs(state, after);
+}
+
+TEST_F(TreeKeysRemoval, ParsesOnlyTheRosterKeysItWrapsTo) {
+    // The roster arrives whole because the API takes it whole, but a removal wraps to the sibling leaf beside the
+    // departing one and to nothing else. Every other entry here is unparseable: if planning touched them it would
+    // throw, so this is the guard on the laziness rather than a claim about it.
+    const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache store;
     TreeKeys keys(store);
-    const ClimbResult result = keys.climbToGrantKey(state, newcomer.userId, newcomer.priv);
-    ASSERT_EQ(result.failure, ClimbFailure::None);
-    EXPECT_EQ(result.grantKey->getPublicKey(), removal.newGrantKey.getPublicKey())
-        << "an addition must not change the grant key";
+    TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
+    ASSERT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+
+    const std::uint32_t leaving = 5;
+    const std::uint32_t sibling = 4; // the other leaf under node 9
+    std::map<std::string, std::string> roster;
+    for (std::size_t i = 0; i < members.size(); ++i) {
+        roster[members[i].userId] = i == sibling
+            ? members[i].priv.getPublicKey().toBase58DER()
+            : std::string("not-a-key");
+    }
+    keys.setMemberKeyStrings(roster);
+
+    RemovalPlan plan;
+    ASSERT_NO_THROW({ plan = keys.planRemoval(state, members[leaving].userId, members[0].priv); });
+    EXPECT_EQ(plan.newEpoch, state.epoch + 1);
+}
+
+TEST_F(TreeKeysRemoval, StillFailsWhenTheKeyItDoesNeedIsUnusable) {
+    // The other direction: lazy must not mean never. The sibling's key is the one entry that gets parsed.
+    const std::vector<TestMember> members = makeMembers(8);
+    TreeKeyCache store;
+    TreeKeys keys(store);
+    TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
+    ASSERT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+
+    std::map<std::string, std::string> roster;
+    for (const TestMember& member : members) {
+        roster[member.userId] = member.priv.getPublicKey().toBase58DER();
+    }
+    roster[members[4].userId] = "not-a-key";
+    keys.setMemberKeyStrings(roster);
+    EXPECT_ANY_THROW(keys.planRemoval(state, members[5].userId, members[0].priv));
+}
+
+TEST_F(TreeKeysClimb, ReadsAServedStateWithoutParsingNodeKeys) {
+    // Climbing verifies each recovered key against the published one, which is a string comparison — so a state
+    // whose off-path nodes carry unparseable keys still climbs. That is what makes reading a 4000-member tree
+    // cost `log n` subgroup checks instead of 4000.
+    const std::vector<TestMember> members = makeMembers(8);
+    TreeKeyCache store;
+    TreeKeys keys(store);
+    TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
+    const std::vector<std::uint32_t> mine = TreeMath::directPath(0, state.numLeaves);
+    for (TreeNodeState& node : state.nodes) {
+        if (std::find(mine.begin(), mine.end(), node.nodeIndex) == mine.end()) {
+            node.publicKey = NodePublicKey::fromBase58DER("not-a-key");
+        }
+    }
+    EXPECT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
 }
 
 TEST_F(TreeKeysAddition, ChoosesTheLowestBlankThenAppends) {
@@ -502,16 +775,18 @@ TEST_F(TreeKeysAddition, ChoosesTheLowestBlankThenAppends) {
     EXPECT_EQ(TreeKeys::choosePosition(state), 4u) << "no blanks: append";
 }
 
-TEST_F(TreeKeysAddition, RequiresTheParentKeyAndSaysSo) {
+TEST_F(TreeKeysAddition, RequiresTheGrantKeyAndSaysSo) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
     TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
     state.leafAssignment[1] = std::nullopt;
 
-    // A fresh store holds no node keys, so the addition cannot be prepared without climbing first.
+    // Re-keying the path needs no existing node key, but the root's new key has to be joined to the grant keypair
+    // — and that one has to be climbed for. A fresh cache holds neither.
     TreeKeyCache emptyStore;
     TreeKeys keys(emptyStore);
+    keys.setMemberKeys(publicOf(members));
     const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
     EXPECT_THROW(
         keys.planAddition(state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv),
@@ -519,28 +794,21 @@ TEST_F(TreeKeysAddition, RequiresTheParentKeyAndSaysSo) {
     );
 }
 
-TEST_F(TreeKeysAddition, SECURITY_RejectsANodeKeyThatDoesNotMatchThePublishedOne) {
+TEST_F(TreeKeysAddition, RequiresTheRosterForTheSiblingsItRewrapsTo) {
+    // The siblings' public keys are not in the tree state — a leaf *is* the member's key — so a caller who did
+    // not supply the roster would silently leave them without an edge to the re-keyed path.
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
     TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
     state.leafAssignment[1] = std::nullopt;
 
-    // A key for the right (node, generation) slot, but not the key the state publishes for that node — the shape a cross-group collision used to produce. Wrapping it would seat the newcomer on an edge nobody can open, and their failure would surface much later as `Tampered`.
-    const std::uint32_t parentIndex = TreeMath::parent(TreeMath::leafNode(1), state.numLeaves);
-    TreeKeyCache poisoned;
-    for (const TreeNodeState& node : state.nodes) {
-        if (node.nodeIndex == parentIndex) {
-            poisoned.putNodeKey(parentIndex, node.generation, PrivateKey::generateRandom());
-        }
-    }
-
-    TreeKeys keys(poisoned);
     const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
     EXPECT_THROW(
-        keys.planAddition(state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv),
+        owner.planAddition(state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv),
         std::invalid_argument
-    );
+    ) << "no setMemberKeys call, so the sibling leaves cannot be wrapped to";
 }
 
 // TreeKeyCache — the cache itself
@@ -785,5 +1053,4 @@ TEST_F(TreeKeysClimb, TwoTreesAtTheSameEpochDoNotAliasThroughOneStore) {
     const ClimbResult b = keys.climbToGrantKey(stateB, membersB[0].userId, membersB[0].priv);
     ASSERT_EQ(b.failure, ClimbFailure::None);
     EXPECT_EQ(b.grantKey->getPublicKey(), planB.grantKey.getPublicKey())
-        << "group B must not be handed group A's grant key";
-}
+        << "group B must not be handed group A's grant key";}

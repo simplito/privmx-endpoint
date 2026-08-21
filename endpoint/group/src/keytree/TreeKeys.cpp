@@ -313,73 +313,31 @@ AdditionPlan TreeKeys::planAddition(
 
     const std::uint32_t oldRoot = TreeMath::root(state.numLeaves);
     const std::uint32_t newRoot = TreeMath::root(plan.newNumLeaves);
-    const std::uint32_t leaf = TreeMath::leafNode(plan.position);
-
-    if (plan.newNumLeaves == state.numLeaves) {
-        // Filling a blank: the topology is unchanged, so one wrap suffices. The new member climbs on edges that
-        // already exist, because every parent edge targets its child's current generation.
-        const std::uint32_t parentIndex = TreeMath::parent(leaf, state.numLeaves);
-        const TreeNodeState* parentState = findNode(state, parentIndex);
-        if (parentState == nullptr) {
-            throw std::invalid_argument("tree state is missing node " + std::to_string(parentIndex));
-        }
-        const auto parentKey = _cache.getNodeKey(parentIndex, parentState->generation);
-        // A cached key that does not match the node's published key is not this node's key. Treating it as absent
-        // is the safe reading: the alternative is wrapping it to the newcomer, who then cannot climb, and whose
-        // failure surfaces as `Tampered` far from the cause.
-        if (!parentKey.has_value() || !(parentState->publicKey == parentKey.value().getPublicKey())) {
-            throw std::invalid_argument(
-                "adding a member needs the key of node " + std::to_string(parentIndex) + "; climb the tree first"
-            );
-        }
-        TreeEdge edge;
-        edge.parentIndex = parentIndex;
-        edge.parentGeneration = parentState->generation;
-        edge.childKind = EdgeChildKind::User;
-        edge.childUserId = newMember.userId;
-        edge.blob = wrapKey(parentKey.value(), newMember.publicKey, signer);
-        plan.edges.push_back(edge);
-        plan.wrapCount = 1;
-        return plan;
-    }
-
-    // Appending grows the tree. Growth is purely additive for keys — nothing rotates, because nobody loses
-    // access — but it can change which children an existing node has, so those edges must be re-created.
-    std::map<std::uint32_t, privmx::crypto::PrivateKey> mintedKeys;
     const std::vector<std::uint32_t> newPath = TreeMath::directPath(plan.position, plan.newNumLeaves);
 
+    // A fresh keypair for every node on the new leaf's path. Wrapping to an EXISTING parent key would be one
+    // wrap instead of `log n`, and was the original design — but it requires holding that parent's private key,
+    // and a caller only ever recovers keys by climbing from their own leaf. The only lowest-level node on that
+    // climb is their own parent, so borrowing works for exactly one seat in the tree: the one beside them.
+    // Minting instead means every wrap goes to a PUBLIC key, and the seat can be anywhere.
+    std::map<std::uint32_t, privmx::crypto::PrivateKey> refreshed;
+    std::map<std::uint32_t, std::uint32_t> generationOf;
     for (const std::uint32_t node : newPath) {
-        if (findNode(state, node) == nullptr) {
-            // A node that did not exist before: mint it.
-            const privmx::crypto::PrivateKey key = privmx::crypto::PrivateKey::generateRandom();
-            mintedKeys[node] = key;
-            plan.nodes.push_back(TreeNodeState{node, 0, key.getPublicKey()});
-        }
+        const privmx::crypto::PrivateKey key = privmx::crypto::PrivateKey::generateRandom();
+        const TreeNodeState* existing = findNode(state, node);
+        const std::uint32_t generation = existing == nullptr ? 0 : existing->generation + 1;
+        refreshed.emplace(node, key);
+        generationOf[node] = generation;
+        plan.nodes.push_back(TreeNodeState{node, generation, key.getPublicKey()});
+        plan.nodeKeys.emplace_back(node, key);
     }
 
     for (const std::uint32_t node : newPath) {
-        privmx::crypto::PrivateKey nodeKey;
-        std::uint32_t nodeGeneration = 0;
-        if (const auto minted = mintedKeys.find(node); minted != mintedKeys.end()) {
-            nodeKey = minted->second;
-        } else {
-            const TreeNodeState* existing = findNode(state, node);
-            nodeGeneration = existing->generation;
-            const auto held = _cache.getNodeKey(node, nodeGeneration);
-            // Same reasoning as the blank-fill branch: a key that does not match what the server publishes for
-            // this node is not this node's key, so it counts as a miss rather than as material to wrap.
-            if (!held.has_value() || !(existing->publicKey == held.value().getPublicKey())) {
-                throw std::invalid_argument(
-                    "growing the tree needs the key of existing node " + std::to_string(node) + "; climb the tree first"
-                );
-            }
-            nodeKey = held.value();
-        }
-
+        const privmx::crypto::PrivateKey& nodeKey = refreshed.at(node);
         for (const std::uint32_t child : TreeMath::children(node, plan.newNumLeaves)) {
             TreeEdge edge;
             edge.parentIndex = node;
-            edge.parentGeneration = nodeGeneration;
+            edge.parentGeneration = generationOf.at(node);
             if (TreeMath::isLeaf(child)) {
                 const std::uint32_t position = TreeMath::leafPosition(child);
                 if (position == plan.position) {
@@ -387,75 +345,70 @@ AdditionPlan TreeKeys::planAddition(
                     edge.childUserId = newMember.userId;
                     edge.blob = wrapKey(nodeKey, newMember.publicKey, signer);
                 } else {
-                    // An existing leaf whose parent changed. Growth re-parents leaves at the truncated edge of
-                    // the tree, and that member's climb now runs through a node that did not exist a moment ago,
-                    // so the edge has to be created for them. Their public key is not part of the tree state —
-                    // the leaf *is* their key, and only its holder publishes it — so it comes from the roster.
-                    if (!state.leafAssignment[position].has_value()) {
+                    // A sibling leaf: the refresh replaced the key their climb runs through, so they need an edge
+                    // to the new one. Their public key is not part of the tree state — the leaf *is* their key,
+                    // and only its holder publishes it — so it comes from the roster.
+                    const bool seated = position < state.leafAssignment.size()
+                        && state.leafAssignment[position].has_value();
+                    if (!seated) {
                         continue; // blank leaf: nothing to wrap to
                     }
-                    const auto memberPub = _memberKeys.find(state.leafAssignment[position].value());
-                    if (memberPub == _memberKeys.end()) {
+                    const auto memberPub = memberKey(state.leafAssignment[position].value());
+                    if (!memberPub.has_value()) {
                         throw std::invalid_argument(
-                            "growing the tree re-parents existing leaf " +
-                            std::to_string(position) +
-                            " (member " +
-                            state.leafAssignment[position].value() +
-                            "); call setMemberKeys with the full roster first"
+                            "seating a member re-keys the path and needs the public key of member " +
+                            state.leafAssignment[position].value() + "; supply the roster first"
                         );
                     }
                     edge.childKind = EdgeChildKind::User;
                     edge.childUserId = state.leafAssignment[position].value();
-                    edge.blob = wrapKey(nodeKey, memberPub->second, signer);
+                    edge.blob = wrapKey(nodeKey, memberPub.value(), signer);
                 }
             } else {
-                const privmx::crypto::PublicKey childPub = [&]() {
-                    if (const auto minted = mintedKeys.find(child); minted != mintedKeys.end()) {
-                        return minted->second.getPublicKey();
-                    }
+                // On-path children carry their new public key; everything off the path keeps its current one, so
+                // the subtree under it climbs into the refreshed path without re-keying anything of its own.
+                const auto onPath = refreshed.find(child);
+                if (onPath != refreshed.end()) {
+                    edge.childKind = EdgeChildKind::Node;
+                    edge.childIndex = child;
+                    edge.childGeneration = generationOf.at(child);
+                    edge.blob = wrapKey(nodeKey, onPath->second.getPublicKey(), signer);
+                } else {
                     const TreeNodeState* existing = findNode(state, child);
                     if (existing == nullptr) {
                         throw std::invalid_argument("tree state is missing node " + std::to_string(child));
                     }
-                    return existing->publicKey;
-                }();
-                edge.childKind = EdgeChildKind::Node;
-                edge.childIndex = child;
-                edge.childGeneration = [&]() -> std::uint32_t {
-                    if (mintedKeys.count(child) > 0) {
-                        return 0;
-                    }
-                    return findNode(state, child)->generation;
-                }();
-                edge.blob = wrapKey(nodeKey, childPub, signer);
+                    edge.childKind = EdgeChildKind::Node;
+                    edge.childIndex = child;
+                    edge.childGeneration = existing->generation;
+                    edge.blob = wrapKey(nodeKey, existing->publicKey.parsed(), signer);
+                }
             }
             plan.edges.push_back(edge);
         }
     }
 
     if (newRoot != oldRoot) {
-        const auto rootKey = mintedKeys.find(newRoot);
-        if (rootKey == mintedKeys.end()) {
-            throw std::invalid_argument("expected the new root to be freshly minted");
-        }
-        plan.newRoot = TreeNodeState{newRoot, 0, rootKey->second.getPublicKey()};
-        plan.newRootKey = rootKey->second;
-
-        // Re-link the grant edge to the new root. The grant keypair itself is UNCHANGED, so `grantPublicKey`
-        // stays the same and no container becomes stale.
-        const auto grantKey = _cache.getGrantKey(state.epoch);
-        if (!grantKey.has_value()) {
-            throw std::invalid_argument("re-linking the grant edge needs the grant key; climb the tree first");
-        }
-        TreeEdge grantEdge;
-        grantEdge.isGrantEdge = true;
-        grantEdge.parentGeneration = state.epoch;
-        grantEdge.childKind = EdgeChildKind::Node;
-        grantEdge.childIndex = newRoot;
-        grantEdge.childGeneration = 0;
-        grantEdge.blob = wrapKey(grantKey.value(), rootKey->second.getPublicKey(), signer);
-        plan.edges.push_back(grantEdge);
+        plan.newRoot = TreeNodeState{newRoot, generationOf.at(newRoot), refreshed.at(newRoot).getPublicKey()};
+        plan.newRootKey = refreshed.at(newRoot);
     }
+
+    // The root is on the path, so its key changed and the grant edge has to be re-issued to it — on growth and
+    // when filling a blank alike. The grant keypair ITSELF is unchanged, `parentGeneration` stays at the current
+    // epoch, and so no container holding a wrap of the grant key becomes stale. That is the whole economy of a
+    // cheap addition, and it is why the grant keypair sits one indirection above the root.
+    const auto grantKey = _cache.getGrantKey(state.epoch);
+    if (!grantKey.has_value()) {
+        throw std::invalid_argument("re-linking the grant edge needs the grant key; climb the tree first");
+    }
+    TreeEdge grantEdge;
+    grantEdge.isGrantEdge = true;
+    grantEdge.parentGeneration = state.epoch;
+    grantEdge.childKind = EdgeChildKind::Node;
+    grantEdge.childIndex = newRoot;
+    grantEdge.childGeneration = generationOf.at(newRoot);
+    grantEdge.blob = wrapKey(grantKey.value(), refreshed.at(newRoot).getPublicKey(), signer);
+    plan.edges.push_back(grantEdge);
 
     plan.wrapCount = static_cast<std::uint32_t>(plan.edges.size());
     return plan;
@@ -512,17 +465,16 @@ RemovalPlan TreeKeys::planRemoval(
                     continue; // blank leaf: nobody to wrap to
                 }
                 // A sibling leaf still occupied: its member's public key must come from the caller's roster.
-                const auto memberPub = _memberKeys.find(state.leafAssignment[childPosition].value());
-                if (memberPub == _memberKeys.end()) {
+                const auto memberPub = memberKey(state.leafAssignment[childPosition].value());
+                if (!memberPub.has_value()) {
                     throw std::invalid_argument(
-                        "removal needs the public key of member " +
-                        state.leafAssignment[childPosition].value() +
-                        "; call setMemberKeys first"
+                        "removal needs the public key of member " + state.leafAssignment[childPosition].value() +
+                        "; supply the roster first"
                     );
                 }
                 edge.childKind = EdgeChildKind::User;
                 edge.childUserId = state.leafAssignment[childPosition].value();
-                edge.blob = wrapKey(refresh.newKey, memberPub->second, signer);
+                edge.blob = wrapKey(refresh.newKey, memberPub.value(), signer);
             } else {
                 // On-path children carry their NEW public key; copath children keep their current one.
                 const auto onPath = refreshed.find(child);
@@ -534,9 +486,9 @@ RemovalPlan TreeKeys::planRemoval(
                 edge.childKind = EdgeChildKind::Node;
                 edge.childIndex = child;
                 edge.childGeneration = childOnPath ? childState->generation + 1 : childState->generation;
-                edge.blob = wrapKey(
-                    refresh.newKey, childOnPath ? onPath->second.getPublicKey() : childState->publicKey, signer
-                );
+                edge.blob = childOnPath
+                    ? wrapKey(refresh.newKey, onPath->second.getPublicKey(), signer)
+                    : wrapKey(refresh.newKey, childState->publicKey.parsed(), signer);
             }
             refresh.edges.push_back(edge);
         }
@@ -562,8 +514,27 @@ RemovalPlan TreeKeys::planRemoval(
     return plan;
 }
 
+std::optional<privmx::crypto::PublicKey> TreeKeys::memberKey(const std::string& userId) const {
+    const auto parsed = _memberKeys.find(userId);
+    if (parsed != _memberKeys.end()) {
+        return parsed->second;
+    }
+    const auto raw = _memberKeyStrings.find(userId);
+    if (raw == _memberKeyStrings.end()) {
+        return std::nullopt;
+    }
+    const auto inserted = _memberKeys.emplace(userId, privmx::crypto::PublicKey::fromBase58DER(raw->second));
+    return inserted.first->second;
+}
+
+void TreeKeys::setMemberKeyStrings(std::map<std::string, std::string> membersByUserId) {
+    _memberKeys.clear();
+    _memberKeyStrings = std::move(membersByUserId);
+}
+
 void TreeKeys::setMemberKeys(const std::vector<TreeMember>& members) {
     _memberKeys.clear();
+    _memberKeyStrings.clear();
     for (const TreeMember& member : members) {
         _memberKeys[member.userId] = member.publicKey;
     }

@@ -54,14 +54,50 @@ JSON_STRUCT(GroupTreeNode, GROUP_TREE_NODE_FIELDS);
     F(data, std::string)
 JSON_STRUCT(GroupTreeEdge, GROUP_TREE_EDGE_FIELDS);
 
-// Complete public tree state, sent as one object: a partially-submitted tree is not a thing the protocol
-// allows, so it is not a shape the wire format can express either.
+// Complete public tree state. Sending it costs `O(n)` in each direction — see GroupTreeTransition for the shape
+// a removal actually needs.
 #define GROUP_TREE_STATE_FIELDS(F)                                                                                     \
     F(numLeaves, int64_t)                                                                                              \
     F(leafAssignment, std::vector<std::string>)                                                                        \
     F(nodes, std::vector<GroupTreeNode>)                                                                               \
     F(edges, std::vector<GroupTreeEdge>)
 JSON_STRUCT(GroupTreeState, GROUP_TREE_STATE_FIELDS);
+
+// One node a transition refreshes. `fromGeneration` is the generation it was read at — the precondition that lets
+// the server apply a delta to a base it can confirm, and that makes a replayed transition a no-op.
+#define GROUP_TREE_REFRESHED_NODE_FIELDS(F)                                                                            \
+    F(nodeIndex, int64_t)                                                                                              \
+    F(fromGeneration, int64_t)                                                                                         \
+    F(generation, int64_t)                                                                                             \
+    F(publicKey, std::string)
+JSON_STRUCT(GroupTreeRefreshedNode, GROUP_TREE_REFRESHED_NODE_FIELDS);
+
+// A removal as what it changes: the refreshed path and the edges around it. `O(log n)` where the whole state is
+// `O(n)` — ~13 MB of edges at 16 384 members, in each direction, to change fourteen nodes.
+#define GROUP_TREE_TRANSITION_FIELDS(F)                                                                                \
+    F(baseKeyVersion, int64_t)                                                                                         \
+    F(blankedPosition, int64_t)                                                                                        \
+    F(refreshedNodes, std::vector<GroupTreeRefreshedNode>)                                                             \
+    F(edges, std::vector<GroupTreeEdge>)
+JSON_STRUCT(GroupTreeTransition, GROUP_TREE_TRANSITION_FIELDS);
+
+// One node an addition re-keys. `fromGeneration` is absent when growth mints the node: there is no generation it
+// was read at, and claiming one would be a claim about a node the server does not hold.
+#define GROUP_TREE_SEATED_NODE_FIELDS(F)                                                                               \
+    F(nodeIndex, int64_t)                                                                                              \
+    F(fromGeneration, std::optional<int64_t>)                                                                          \
+    F(generation, int64_t)                                                                                             \
+    F(publicKey, std::string)
+JSON_STRUCT(GroupTreeSeatedNode, GROUP_TREE_SEATED_NODE_FIELDS);
+
+// An addition as what it changes: the new leaf's path re-keyed, at the **same** epoch. The epoch not moving is the
+// whole point — every container wrap of the grant key stays valid, so nobody else has to act.
+#define GROUP_TREE_ADDITION_TRANSITION_FIELDS(F)                                                                       \
+    F(baseKeyVersion, int64_t)                                                                                         \
+    F(position, int64_t)                                                                                               \
+    F(seatedNodes, std::vector<GroupTreeSeatedNode>)                                                                    \
+    F(edges, std::vector<GroupTreeEdge>)
+JSON_STRUCT(GroupTreeAdditionTransition, GROUP_TREE_ADDITION_TRANSITION_FIELDS);
 
 // ── Epoch Ladder (documents/epoch_key_archive/) ─────────────────────────────────────────────────────────────
 
@@ -136,9 +172,15 @@ JSON_STRUCT(GroupCreateResult, GROUP_CREATE_RESULT_FIELDS);
 #define GROUP_DELETE_MODEL_FIELDS(F) F(groupId, std::string)
 JSON_STRUCT(GroupDeleteModel, GROUP_DELETE_MODEL_FIELDS);
 
+// `scope` picks how much of the tree the server sends: "path" (default) is the caller's own climb — their leaf
+// edge, the edges above it, the grant edge, and the public keys of the path and the copath. "full" is the whole
+// structure, which only an operation that submits a complete new state needs (BR-10/EP-07).
 #define GROUP_GET_MODEL_FIELDS(F)                                                                                      \
     F(groupId, std::string)                                                                                            \
-    F(type, std::optional<std::string>)
+    F(type, std::optional<std::string>)                                                                                \
+    F(scope, std::optional<std::string>)                                                                               \
+    F(forUserId, std::optional<std::string>)                                                                           \
+    F(forPosition, std::optional<int64_t>)
 JSON_STRUCT(GroupGetModel, GROUP_GET_MODEL_FIELDS);
 
 #define GROUP_LIST_MODEL_EXTRA_FIELDS(F)
@@ -180,7 +222,8 @@ JSON_STRUCT(GroupChangedEventData, GROUP_CHANGED_EVENT_DATA_FIELDS);
     F(position, int64_t)                                                                                               \
     F(keyId, std::string)                                                                                              \
     F(data, Poco::Dynamic::Var)                                                                                        \
-    F(tree, GroupTreeState)                                                                                            \
+    F(transition, std::optional<GroupTreeAdditionTransition>)                                                          \
+    F(tree, std::optional<GroupTreeState>)                                                                             \
     F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
     F(expectedKeyVersion, int64_t)
 JSON_STRUCT(GroupAddMemberModel, GROUP_ADD_MEMBER_MODEL_FIELDS);
@@ -192,7 +235,8 @@ JSON_STRUCT(GroupAddMemberModel, GROUP_ADD_MEMBER_MODEL_FIELDS);
     F(groupPubKey, std::string)                                                                                        \
     F(keyId, std::string)                                                                                              \
     F(data, Poco::Dynamic::Var)                                                                                        \
-    F(tree, GroupTreeState)                                                                                            \
+    F(transition, std::optional<GroupTreeTransition>)                                                                  \
+    F(tree, std::optional<GroupTreeState>)                                                                             \
     F(rungs, std::vector<GroupArchiveRung>)                                                                            \
     F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
     F(groupKeys, std::vector<core::server::GroupKeyEntrySet>)                                                          \

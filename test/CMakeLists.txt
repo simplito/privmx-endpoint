@@ -119,3 +119,9 @@ target_link_libraries(keytree_state_dump privmx privmxendpointcore privmxendpoin
 add_executable(keytree_conformance_dump ${CMAKE_CURRENT_SOURCE_DIR}/tools/keytree_conformance_dump.cpp)
 target_link_libraries(keytree_conformance_dump privmxendpointgroup)
 
+# A hand-run driver for tree-backed groups against a live bridge: provisions its own context and users, then
+# walks a group through creation, an addition, a removal and the re-key that follows. Not a test — the e2e suite
+# asserts these one at a time; this one session shows them holding together, and leaves a database to poke at.
+add_executable(group_playground ${CMAKE_CURRENT_SOURCE_DIR}/tools/group_playground.cpp)
+target_link_libraries(group_playground privmx privmxendpointcore privmxendpointcrypto privmxendpointgroup privmxendpointthread privmxendpointstore Poco::Foundation Poco::JSON Poco::Util)
+

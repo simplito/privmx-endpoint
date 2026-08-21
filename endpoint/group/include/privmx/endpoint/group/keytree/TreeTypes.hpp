@@ -55,11 +55,54 @@ struct TreeEdge {
     std::string blob;
 };
 
+/**
+ * A node's public key, kept as served and turned into a point only where one is needed.
+ *
+ * Parsing a public key is not cheap: the ECC driver runs `EC_KEY_check_key`, which multiplies the point by the
+ * group order to prove subgroup membership — about 0.19 ms, most of it that one scalar multiplication. Reading a
+ * whole served tree used to pay it per node, so a group of four thousand spent ~0.75 s parsing keys before doing
+ * anything, while a climb touches `log n` of them and an operation wraps to a handful.
+ *
+ * Comparing and re-serialising work on the base58 form, which is canonical for a given key, so those need no
+ * point at all.
+ */
+class NodePublicKey {
+public:
+    NodePublicKey() = default;
+    /** From a key this process already holds — a minted one. Serialises once, and that is what the wire wants. */
+    NodePublicKey(const privmx::crypto::PublicKey& key) : _parsed(key), _der(key.toBase58DER()) {}
+
+    static NodePublicKey fromBase58DER(std::string der) {
+        NodePublicKey result;
+        result._der = std::move(der);
+        return result;
+    }
+
+    /** The point. Parsed on first use and kept, so wrapping to the same node twice costs one parse. */
+    const privmx::crypto::PublicKey& parsed() const {
+        if (!_parsed.has_value()) {
+            _parsed = privmx::crypto::PublicKey::fromBase58DER(_der);
+        }
+        return _parsed.value();
+    }
+
+    const std::string& toBase58DER() const { return _der; }
+
+    bool operator==(const privmx::crypto::PublicKey& other) const { return _der == other.toBase58DER(); }
+    bool operator!=(const privmx::crypto::PublicKey& other) const { return !(*this == other); }
+    bool operator==(const NodePublicKey& other) const { return _der == other._der; }
+    bool operator!=(const NodePublicKey& other) const { return _der != other._der; }
+
+private:
+    mutable std::optional<privmx::crypto::PublicKey> _parsed;
+    std::string _der;
+};
+
 /** Public state of a tree node. Nodes are never deleted, only refreshed into a new generation. */
 struct TreeNodeState {
     std::uint32_t nodeIndex = 0;
     std::uint32_t generation = 0;
-    privmx::crypto::PublicKey publicKey;
+    NodePublicKey publicKey;
 };
 
 /**
@@ -122,12 +165,14 @@ struct RemovalPlan {
     std::uint32_t wrapCount = 0;
 };
 
-/** Everything an addition must submit. One wrap in the common case. */
+/** Everything an addition must submit: the new leaf's path re-keyed, `2*depth + 1` wraps. */
 struct AdditionPlan {
     std::uint32_t position = 0;
     std::vector<TreeEdge> edges;
-    /** Nodes that did not exist before, minted because the tree grew. */
+    /** Every node on the new leaf's path: minted where the tree grew, one generation on where it existed. */
     std::vector<TreeNodeState> nodes;
+    /** The keys behind those nodes, to keep locally so the next climb starts from cache. */
+    std::vector<std::pair<std::uint32_t, privmx::crypto::PrivateKey>> nodeKeys;
     /** Present only when the tree grew a level; the grant keypair is unchanged either way. */
     std::optional<TreeNodeState> newRoot;
     std::optional<privmx::crypto::PrivateKey> newRootKey;
