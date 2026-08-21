@@ -36,7 +36,7 @@ namespace privmx {
 namespace cryptoservice {
 namespace ecc {
 
-TEST(PrivateKeyTest, EncryptDecryptBasicTests) {
+TEST(PrivateKeyTest, EciesEncryptDecryptBasicTests) {
 
     const string messageToSign("Sample message");
     Bytes data(Utils::s2b(messageToSign));

@@ -73,9 +73,10 @@ public:
     virtual bool verify(BytesView data, BytesView sig, SigScheme) const = 0;
 
     // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
+    // virtual Bytes seal(BytesView data, const IPrivateKey& senderForSignature) const = 0;
     virtual Bytes seal(BytesView data, const IPrivateKey& senderForSignature) const = 0;
 
-    virtual Bytes export_(KeyFormat) const = 0;                 // np. Der/Base58Der
+    virtual Bytes export_(KeyFormat) const = 0;                 // only: Der/Base58Der/Base58DerAddr
 
     virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) = 0;  
 };
@@ -90,9 +91,10 @@ public:
     virtual Bytes deriveSharedSecret(const IPublicKey& publicKey) const = 0;  
 
     // previously EciesEncryptor::decrypt(*this,sealed,expectedSender)
+    // virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) const = 0;
     virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) const = 0;
 
-    virtual Bytes export_(KeyFormat) const = 0;                     // Raw / Wif
+    virtual Bytes export_(KeyFormat) const = 0;                     // only: Wif (to add Raw?)
 
     virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) = 0;  
 };

@@ -60,7 +60,7 @@ enum class KeyFormat {
 //    ,Seed          // only for IExtKey 
 };
 
-// signing schemes
+// signing schemes (Todo: shorten label names)
 enum class SigScheme { 
     EcdsaSecp256k1Compact, 
     EcdsaSecp256k1CompactWithHash 

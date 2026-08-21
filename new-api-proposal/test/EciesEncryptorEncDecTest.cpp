@@ -1,0 +1,85 @@
+#include <string>
+#include <gtest/gtest.h>
+
+// #include <privmx/crypto/ecc/PrivateKey.hpp>
+// #include <privmx/utils/Utils.hpp>
+#include "CoreTypes.hpp"
+#include "CoreInterfaces.hpp"
+
+#include "CryptoProviderRegistry.hpp"
+#include "CryptoProviderFromDriver.hpp"
+
+#include "BN.hpp"
+#include "Point.hpp"
+#include "ECCImpl.hpp"
+
+#include "PrivateKey.hpp"
+#include "PublicKey.hpp"
+#include "Utils.hpp"
+
+#include "ECC.hpp"
+// #include "ECIES.hpp"
+#include "EciesEncryptor.hpp"
+
+
+using privmx::cryptoservice::CryptoProviderRegistry;
+using privmx::cryptoservice::ICryptoProvider;
+using privmx::cryptoservice::Bytes;
+using privmx::cryptoservice::AsymAlg;
+using privmx::cryptoservice::KeyFormat;
+using privmx::cryptoservice::SigScheme;
+
+using privmx::cryptoservice::ecc::ECCImpl;
+
+using namespace std;
+
+namespace privmx {
+namespace cryptoservice {
+namespace ecc {
+
+TEST(PrivateKeyTest, EciesEncryptorEncryptDecryptTests) {
+
+    const string messageToSign("Sample message");
+    Bytes data(Utils::s2b(messageToSign));
+
+    const string wif1("L1YwTwAr8dQCBzfmXBzh6ggBkYbLuu15Tc7s4bajrRNDbsogs9a5");
+    const string wif2("KwDzTrBejZw91hSpkoauVYnjgkm64DAb3UX1QBCRjf5BryiVK6jk");
+    const string wif3("KwDiK7diMWJYFDV6pPbQ8BzgWznPa4evLqKwLncDpeMrEZA5E2Xp");
+    const string wif4("KwDkPqYKx8R2zEPTP6QnPLsvYSwsqeCJKHsJ6GWncC3r4CaqViRB");
+
+    PrivateKey priv1 = PrivateKey::fromWIF(wif1);
+    PrivateKey priv2 = PrivateKey::fromWIF(wif2);
+    PrivateKey priv3 = PrivateKey::fromWIF(wif3);
+    PrivateKey priv4 = PrivateKey::fromWIF(wif4);
+
+    PublicKey publ1 = priv1.getPublicKey();
+    PublicKey publ2 = priv2.getPublicKey();
+    PublicKey publ3 = priv3.getPublicKey();
+    PublicKey publ4 = priv4.getPublicKey();
+    
+    const string expected_eciesEncr12("\x65\x02\x83\xDC\x94\x5E\xBC\xA5\x55\xC3\x89\xDB\xEE\x2B\x35\x88\x13\xBD\x88\x29\x9C\xAF\xC3\x77\xC4\x36\x0C\x42\x78\x8C\xA6\x81\xC8\xB6\x03\x3F\x9C\xDA\x80\x59\x6E\x64\xE1\xE9\xC3\x1F\x62\x7B\x11\xDD\x7B\xD1\xA7\x4D\x83\x59\x63\xA6\x2A\xE5\x5A\x8C\xB3\x1E\x6F\xD3\xF9\xC7\x09\x44\x6C\x13\x95\x0F\xDE\xDF\x20\x34\x02\xC9\xC9\x22\x8C\xF6\x4C\x9C\xB6\xA8\x3D\x31\xA5\x89\x87\x39\x28\xF1\x6A\x96\x3F\xBF\x8A\x2C\x1D");
+    const string expected_eciesEncr21("\x65\x03\x3F\x9C\xDA\x80\x59\x6E\x64\xE1\xE9\xC3\x1F\x62\x7B\x11\xDD\x7B\xD1\xA7\x4D\x83\x59\x63\xA6\x2A\xE5\x5A\x8C\xB3\x1E\x6F\xD3\xF9\x02\x83\xDC\x94\x5E\xBC\xA5\x55\xC3\x89\xDB\xEE\x2B\x35\x88\x13\xBD\x88\x29\x9C\xAF\xC3\x77\xC4\x36\x0C\x42\x78\x8C\xA6\x81\xC8\xB6\x3D\xE8\x21\xC2\x47\xF1\x36\xA7\x1B\x70\xF2\x9F\x89\xB7\xA9\xC6\x40\xA0\x08\xB4\x4E\x73\x13\x76\xE6\xD2\x23\x8D\xD7\x3D\x04\x86\xDB\xC1\x0D\x0A");
+    const string expected_eciesEncr34("\x65\x02\x80\x4D\xD8\xE9\x3C\xC9\xBF\xEB\x4D\xA3\x72\x26\x99\xD1\x32\x95\x51\x61\xD2\xDD\x57\xCD\x31\x0E\x28\x67\x31\x18\xD9\x44\x16\x38\x03\xF5\xC7\x61\x87\x5B\xA5\x97\x0C\x15\x24\x26\xD9\xA5\x0A\x25\xC7\xDB\xD9\xB6\xF5\xC0\xFE\x09\xA3\x1B\x64\x37\x88\xFA\x81\x9F\xC0\x4C\xD5\x01\x33\xA5\x01\x1C\x61\xB2\x0A\xFD\x91\x6D\xE9\xB2\xCB\x9F\x41\x5A\xF7\xBF\x5D\x1F\x0A\x8A\x39\xB0\x44\x7D\x34\xB0\x89\x57\x5A\xB6\x56");
+    const string expected_eciesEncr43("\x65\x03\xF5\xC7\x61\x87\x5B\xA5\x97\x0C\x15\x24\x26\xD9\xA5\x0A\x25\xC7\xDB\xD9\xB6\xF5\xC0\xFE\x09\xA3\x1B\x64\x37\x88\xFA\x81\x9F\xC0\x02\x80\x4D\xD8\xE9\x3C\xC9\xBF\xEB\x4D\xA3\x72\x26\x99\xD1\x32\x95\x51\x61\xD2\xDD\x57\xCD\x31\x0E\x28\x67\x31\x18\xD9\x44\x16\x38\xFD\x3C\xEE\xA0\x3A\x1E\x70\xA8\x54\x28\x51\x05\x9E\xD0\xBD\x34\xAF\xBC\x99\x3D\x2E\x1E\xAC\x76\x8C\x2A\xC5\x14\x0E\xEA\x09\x24\x94\x4D\x02\xFF");
+
+    const string eciesEncr12(EciesEncryptor::encrypt(publ2, messageToSign, priv1));
+    const string eciesEncr21(EciesEncryptor::encrypt(publ1, messageToSign, priv2));
+    const string eciesEncr34(EciesEncryptor::encrypt(publ4, messageToSign, priv3));
+    const string eciesEncr43(EciesEncryptor::encrypt(publ3, messageToSign, priv4));
+
+    // encryption tests
+    EXPECT_EQ(eciesEncr12, expected_eciesEncr12);
+    EXPECT_EQ(eciesEncr21, expected_eciesEncr21);
+    EXPECT_EQ(eciesEncr34, expected_eciesEncr34);
+    EXPECT_EQ(eciesEncr43, expected_eciesEncr43);
+
+    // decryption tests
+    EXPECT_EQ(EciesEncryptor::decrypt(priv2, eciesEncr12, publ1), messageToSign);
+    EXPECT_EQ(EciesEncryptor::decrypt(priv1, eciesEncr21, publ2), messageToSign);
+    EXPECT_EQ(EciesEncryptor::decrypt(priv4, eciesEncr34, publ3), messageToSign);
+    EXPECT_EQ(EciesEncryptor::decrypt(priv3, eciesEncr43, publ4), messageToSign);
+}
+
+} // namespace ecc
+} // namespace cryptoservice
+} // namespace privmx

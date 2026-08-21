@@ -91,7 +91,7 @@ bool PublicKey::verify(BytesView data, BytesView signature, SigScheme scheme) co
 // }
 Bytes PublicKey::seal(BytesView data, const IPrivateKey& senderForSignature) const {
     // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
-    throw PrivmxDriverCryptoException("PublicKey::seal: NOT IMPLEMENTED");
+    // throw PrivmxDriverCryptoException("PublicKey::seal: NOT IMPLEMENTED");
     if (typeid(senderForSignature) != typeid(PrivateKey)) {
         throw PrivmxDriverCryptoException("PublicKey::seal: Wrong type of private key");
     }
