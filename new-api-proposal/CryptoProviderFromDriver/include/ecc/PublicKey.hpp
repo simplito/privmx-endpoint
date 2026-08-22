@@ -43,6 +43,7 @@ public:
     const ECC& getEcc() const;
     bool verifyCompactSignature(const std::string& message, const std::string& signature) const;
 
+    // // To do: implement the following methods to operate on Bytes and ViewBytes
     // static PublicKey fromDERb(BytesViewder der);
     // static PublicKey fromBase58DERb(BytesViewder base58);
     // std::string toDERb() const;

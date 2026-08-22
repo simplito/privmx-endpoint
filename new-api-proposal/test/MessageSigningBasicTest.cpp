@@ -75,6 +75,16 @@ TEST(PrivateKeyTest, SigningVerifyingBasicTests) {
     EXPECT_TRUE(publ2.verifyCompactSignatureWithHash(messageToSign, sign2wh));
     EXPECT_TRUE(publ3.verifyCompactSignatureWithHash(messageToSign, sign3wh));
     EXPECT_TRUE(publ4.verifyCompactSignatureWithHash(messageToSign, sign4wh));
+
+    EXPECT_FALSE(publ1.verifyCompactSignature(messageToSign, sign2));
+    EXPECT_FALSE(publ2.verifyCompactSignature(messageToSign, sign1));
+    EXPECT_FALSE(publ3.verifyCompactSignature(messageToSign, sign4));
+    EXPECT_FALSE(publ4.verifyCompactSignature(messageToSign, sign3));
+
+    EXPECT_FALSE(publ1.verifyCompactSignatureWithHash(messageToSign, sign2wh));
+    EXPECT_FALSE(publ2.verifyCompactSignatureWithHash(messageToSign, sign1wh));
+    EXPECT_FALSE(publ3.verifyCompactSignatureWithHash(messageToSign, sign4wh));
+    EXPECT_FALSE(publ4.verifyCompactSignatureWithHash(messageToSign, sign3wh));
 }
 
 } // namespace ecc

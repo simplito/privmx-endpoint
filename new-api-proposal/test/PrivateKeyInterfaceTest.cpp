@@ -9,6 +9,9 @@
 using privmx::cryptoservice::AsymAlg;
 using privmx::cryptoservice::KeyFormat;
 
+using privmx::cryptoservice::IDigest;
+using privmx::cryptoservice::ISymCryptoProvider;
+
 using namespace std;
 
 namespace privmx {
@@ -16,6 +19,9 @@ namespace cryptoservice {
 namespace ecc {
 
 TEST(PrivateKeyTest, FromWifAndToWifInterface) {
+    std::shared_ptr<IDigest> digest = std::make_shared<privmx::cryptoservice::CryptoProviderFromDriver>();
+    std::shared_ptr<ISymCryptoProvider> provider = std::make_shared<privmx::cryptoservice::CryptoProviderFromDriver>();
+    
     const string wif1("L1YwTwAr8dQCBzfmXBzh6ggBkYbLuu15Tc7s4bajrRNDbsogs9a5");
     const string wif2("KwDzTrBejZw91hSpkoauVYnjgkm64DAb3UX1QBCRjf5BryiVK6jk");
     const string wif3("KwDiK7diMWJYFDV6pPbQ8BzgWznPa4evLqKwLncDpeMrEZA5E2Xp");
@@ -50,10 +56,15 @@ TEST(PrivateKeyTest, FromWifAndToWifInterface) {
     // PrivateKey priv3b = PrivateKey::fromWIFb(Utils::s2b(wif3));
     // PrivateKey priv4b = PrivateKey::fromWIFb(Utils::s2b(wif4));
 
-    PrivateKey priv1b = PrivateKey::fromWIFb(wif1b);
-    PrivateKey priv2b = PrivateKey::fromWIFb(wif2b);
-    PrivateKey priv3b = PrivateKey::fromWIFb(wif3b);
-    PrivateKey priv4b = PrivateKey::fromWIFb(wif4b);
+    PrivateKey priv1b = PrivateKey::fromWIFb(digest, wif1b);
+    PrivateKey priv2b = PrivateKey::fromWIFb(digest, wif2b);
+    PrivateKey priv3b = PrivateKey::fromWIFb(digest, wif3b);
+    PrivateKey priv4b = PrivateKey::fromWIFb(digest, wif4b);
+
+    priv1b.setSymProvider(provider);
+    priv2b.setSymProvider(provider);
+    priv3b.setSymProvider(provider);
+    priv4b.setSymProvider(provider);
 
     EXPECT_EQ(priv1b.getPrivateEncKey(), expected_priv1);
     EXPECT_EQ(priv2b.getPrivateEncKey(), expected_priv2);

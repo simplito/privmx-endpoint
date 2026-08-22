@@ -91,7 +91,6 @@ public:
     virtual Bytes deriveSharedSecret(const IPublicKey& publicKey) const = 0;  
 
     // previously EciesEncryptor::decrypt(*this,sealed,expectedSender)
-    // virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) const = 0;
     virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) const = 0;
 
     virtual Bytes export_(KeyFormat) const = 0;                     // only: Wif (to add Raw?)

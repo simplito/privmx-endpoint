@@ -43,7 +43,6 @@ public:
     virtual std::shared_ptr<IPublicKey> publicKey() const override;
     virtual Bytes deriveSharedSecret(const IPublicKey& publicKey) const override;  
     virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) const override;  
-    // virtual Bytes open(BytesView sealed, const std::optional<IPublicKey>& pubOfSignature = std::nullopt) const override;
     virtual Bytes export_(KeyFormat) const override; 
 
 // protected:
@@ -53,14 +52,16 @@ public:
     std::string signToCompactSignatureWithHash(const std::string& message) const;
     std::string toWIF() const;
 
-    static PrivateKey fromWIFb(BytesView wif);
+    static PrivateKey fromWIFb(std::shared_ptr<IDigest> p, BytesView wif);
     Bytes toWIFb() const;
+    Bytes deriveB(const PublicKey& public_key) const;
+
     virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 
 private:
     ECC _key;
-    // std::shared_ptr<ISymCryptoProvider> _provider;
-    static std::shared_ptr<ISymCryptoProvider> _provider;
+    // static std::shared_ptr<ISymCryptoProvider> _provider;
+    std::shared_ptr<ISymCryptoProvider> _provider;
 };
 
 inline PublicKey PrivateKey::getPublicKey() const {

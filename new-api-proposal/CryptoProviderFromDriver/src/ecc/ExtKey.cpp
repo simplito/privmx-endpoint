@@ -232,23 +232,42 @@ Poco::UInt32 ExtKey::read_u32_be(const std::string& raw_key, size_t offset) {
     return Poco::ByteOrder::fromBigEndian(v);
 }
 
-inline std::shared_ptr<IExtKey> ExtKey::deriveChild(uint32_t index, bool hardened) const {
-    // throw PrivmxDriverCryptoException("ExtKey::deriveChild: NOT IMPLEMENTED");
+// inline std::shared_ptr<IExtKey> ExtKey::deriveChild(uint32_t index, bool hardened) const {
+//     if (hardened) {
+//         return std::make_shared<ExtKey>(std::move(deriveHardened(index)));
+//     } else {
+//         return std::make_shared<ExtKey>(std::move(derive(index)));
+//     }
+// }
+std::shared_ptr<IExtKey> ExtKey::deriveChild(uint32_t index, bool hardened) const {
+    
     if (hardened) {
-        return std::make_shared<ExtKey>(std::move(deriveHardened(index)));
+        ExtKey key = deriveHardened(index);
+        key.setSymProvider(_provider);
+        return std::make_shared<ExtKey>(std::move(key));
     } else {
-        return std::make_shared<ExtKey>(std::move(derive(index)));
+        ExtKey key = derive(index);
+        key.setSymProvider(_provider);
+        return std::make_shared<ExtKey>(std::move(key));
     }
 }
 
-inline std::shared_ptr<IPrivateKey> ExtKey::privateKey() const {
-    // throw PrivmxDriverCryptoException("ExtKey::privateKey: NOT IMPLEMENTED");
-    return std::make_shared<PrivateKey>(std::move(getPrivateKey()));
+// inline std::shared_ptr<IPrivateKey> ExtKey::privateKey() const {
+//     return std::make_shared<PrivateKey>(std::move(getPrivateKey()));
+// }
+std::shared_ptr<IPrivateKey> ExtKey::privateKey() const {
+    PrivateKey key = getPrivateKey();
+    key.setSymProvider(_provider);
+    return std::make_shared<PrivateKey>(std::move(key));
 }
 
-inline std::shared_ptr<IPublicKey> ExtKey::publicKey() const {
-    // throw PrivmxDriverCryptoException("ExtKey::publicKey: NOT IMPLEMENTED");
-    return std::make_shared<PublicKey>(std::move(getPublicKey()));
+// inline std::shared_ptr<IPublicKey> ExtKey::publicKey() const {
+//     return std::make_shared<PublicKey>(std::move(getPublicKey()));
+// }
+std::shared_ptr<IPublicKey> ExtKey::publicKey() const {
+    PublicKey key = getPublicKey();
+    key.setSymProvider(_provider);
+    return std::make_shared<PublicKey>(std::move(key));
 }
 
 inline Bytes ExtKey::chainCode() const {

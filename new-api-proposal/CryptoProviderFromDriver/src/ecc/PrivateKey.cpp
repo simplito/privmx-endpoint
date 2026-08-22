@@ -23,15 +23,15 @@ limitations under the License.
 #include "Networks.hpp"
 #include "Base58.hpp"
 #include "Utils.hpp"
-#include "ECDHE.hpp"
+// #include "ECDHE.hpp"  //not used - to be removed
 #include "EciesEncryptor.hpp"
 
 namespace privmx {
 namespace cryptoservice {
 namespace ecc {
 
-// std::shared_ptr<ISymCryptoProvider> CryptoProviderRegistry::_provider(nullptr);
-std::shared_ptr<ISymCryptoProvider> PrivateKey::_provider(std::make_shared<CryptoProviderFromDriver>());
+// static version - to be replaced by injected provider in next versions    
+// std::shared_ptr<ISymCryptoProvider> PrivateKey::_provider(std::make_shared<CryptoProviderFromDriver>());
 
 PrivateKey PrivateKey::fromWIF(const std::string& wif) {
     std::string payload = Base58::decodeWithChecksum(wif);
@@ -55,8 +55,9 @@ PrivateKey PrivateKey::fromWIF(const std::string& wif) {
     return PrivateKey(std::move(key));
 }
 
-PrivateKey PrivateKey::fromWIFb(BytesView wif) {
-    Bytes payload = Base58::decodeWithChecksumB(_provider, wif);
+PrivateKey PrivateKey::fromWIFb(std::shared_ptr<IDigest> p, BytesView wif) {
+    // Bytes payload = Base58::decodeWithChecksumB(_provider, wif);
+    Bytes payload = Base58::decodeWithChecksumB(p, wif);
     if (payload.front() != (uint8_t) Networks::BITCOIN.WIF) {
         // throw InvalidNetworkException();
         throw std::runtime_error("PrivateKey: InvalidNetworkException");
@@ -107,6 +108,9 @@ std::string PrivateKey::signToCompactSignatureWithHash(const std::string& messag
 std::string PrivateKey::derive(const PublicKey& public_key) const {
     return _key.derive(public_key.getEcc());
 }
+Bytes PrivateKey::deriveB(const PublicKey& public_key) const {
+    return Utils::s2b(_key.derive(public_key.getEcc()));
+}
 
 std::string PrivateKey::toWIF() const {
     std::string buffer(1, Networks::BITCOIN.WIF);
@@ -123,7 +127,29 @@ Bytes PrivateKey::toWIFb() const {
     return Base58::encodeWithChecksumB(_provider, buffer);
 }
 
-Bytes PrivateKey::sign(BytesView data, SigScheme) const {
+// Bytes PrivateKey::sign(BytesView data, SigScheme scheme) const {
+//     switch (scheme) {
+//         case SigScheme::EcdsaSecp256k1CompactWithHash: 
+//             return Utils::s2b(signToCompactSignatureWithHash(Utils::b2s(data)));
+//         case SigScheme::EcdsaSecp256k1Compact: 
+//             return Utils::s2b(signToCompactSignature(Utils::b2s(data)));
+//         default:
+//             throw PrivmxDriverCryptoException("PrivateKey::sign: Unknowne signning scheme");
+//             break;        
+//     }
+//     throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
+// }
+
+Bytes PrivateKey::sign(BytesView data, SigScheme scheme) const {
+    switch (scheme) {
+        case SigScheme::EcdsaSecp256k1CompactWithHash: // first we need to obtain hash
+            return Utils::s2b(_key.sign(Utils::b2s(_provider->digest(Hash::Sha256, data))));
+        case SigScheme::EcdsaSecp256k1Compact:  // in both cases we compute signature
+            return Utils::s2b(_key.sign(Utils::b2s(data)));
+        default:
+            throw PrivmxDriverCryptoException("PrivateKey::sign: Unknowne signning scheme");
+            break;        
+    }
     throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
 }
 
@@ -133,12 +159,20 @@ std::shared_ptr<IPublicKey> PrivateKey::publicKey() const {
     // throw PrivmxDriverCryptoException("PrivateKey::publicKey: NOT IMPLEMENTED");
 }
 
+// // Old implementaion:
+// Bytes PrivateKey::deriveSharedSecret(const IPublicKey& publicKey) const {
+//     if (typeid(publicKey) != typeid(PublicKey)) {
+//         throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
+//     }
+//     return Utils::s2b(ECDHE(*this, (const PublicKey&) publicKey).getSecret());
+// }
+
 Bytes PrivateKey::deriveSharedSecret(const IPublicKey& publicKey) const {
-    // throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: NOT IMPLEMENTED");
     if (typeid(publicKey) != typeid(PublicKey)) {
         throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
     }
-    return Utils::s2b(ECDHE(*this, (const PublicKey&) publicKey).getSecret());
+    Bytes secret = deriveB((const PublicKey&) publicKey);
+    return Utils::fillTo32b(secret);
 }
 
 Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
@@ -166,7 +200,7 @@ Bytes PrivateKey::export_(KeyFormat format) const {
 }
 
 void PrivateKey::setSymProvider(std::shared_ptr<ISymCryptoProvider> provider) {
-    // _provider = provider;
+    _provider = provider;
 }
 
 } // ecc

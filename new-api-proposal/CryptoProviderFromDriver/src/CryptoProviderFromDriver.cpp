@@ -601,7 +601,7 @@ std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesVie
 {
     if (alg ==  AsymAlg::EccSecp256k1) {
         if (format ==  KeyFormat::Wif) {
-            ecc::PrivateKey key = ecc::PrivateKey::fromWIFb(data);
+            ecc::PrivateKey key = ecc::PrivateKey::fromWIFb(shared_from_this(),data);
             key.setSymProvider(shared_from_this());
             return std::make_shared<ecc::PrivateKey>(std::move(key));
         } else {
@@ -620,8 +620,6 @@ std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView 
 {
     if (alg ==  AsymAlg::EccSecp256k1) {
         if (format ==  KeyFormat::Wif) {
-            // ecc::PrivateKey key = ecc::PrivateKey::fromWIFb(data);
-            // return std::make_shared<ecc::PrivateKey>(std::move(key));
             throw PrivmxDriverCryptoException("importPrivateKey: Format WIF is used only for private keys");    
         } else if (format ==  KeyFormat::Der) {
             ecc::PublicKey key = ecc::PublicKey::fromDER(ecc::Utils::b2s(data)); // TO BE REPLACED

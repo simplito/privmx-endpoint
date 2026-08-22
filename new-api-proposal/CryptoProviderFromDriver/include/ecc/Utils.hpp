@@ -49,7 +49,6 @@ public:
     static std::string decrypt(const SymParamsString&, std::string ciphertext);
 
 private:
-    // static std::shared_ptr<ICryptoProvider> _provider = std::make_shared<CryptoProviderFromDriver>();
     static inline CryptoProviderFromDriver _provider;
 };
 
@@ -60,6 +59,7 @@ public:
     static std::string removeEscape(const std::string& data);
     static std::string stringify(const Poco::JSON::Array::Ptr& arr, bool pretty = false);
     static std::string stringify(const Poco::JSON::Object::Ptr& obj, bool pretty = false);
+    // used by PublicKey::seal() and PrivateKey::open() (EciesEncryptor)
     static Poco::Dynamic::Var parseJson(const std::string& json);
     static Poco::JSON::Object::Ptr parseJsonObject(const std::string& json);
 
