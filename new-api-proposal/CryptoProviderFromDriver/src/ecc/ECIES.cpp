@@ -14,6 +14,10 @@ limitations under the License.
 #include "Utils.hpp"
 #include "ECIES.hpp"
 
+#include "PublicKey.hpp"
+#include "PrivateKey.hpp"
+
+
 namespace privmx {
 namespace cryptoservice {
 namespace ecc {

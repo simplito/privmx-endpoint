@@ -19,6 +19,10 @@ limitations under the License.
 
 #include <openssl/ec.h>
 
+// from EciesEncryptor
+#include <Poco/Dynamic/Var.h>
+#include <Poco/JSON/Object.h>
+
 #include "CoreTypes.hpp"
 #include "CoreInterfaces.hpp"
 #include "ECC.hpp"
@@ -28,6 +32,8 @@ limitations under the License.
 namespace privmx {
 namespace cryptoservice {
 namespace ecc {
+
+class PublicKey;
 
 class PrivateKey : public IPrivateKey
 {
@@ -57,6 +63,12 @@ public:
     Bytes deriveB(const PublicKey& public_key) const;
 
     virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
+
+// from EciesEncryptor class:
+    static Poco::JSON::Object::Ptr decryptObjectFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
+    static std::string decryptFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
+    static std::string decrypt(const PrivateKey& priv, const std::string& cipher, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
+    static std::string decryptV0(const PrivateKey& priv, const PublicKey& pub, const std::string& cipher);
 
 private:
     ECC _key;

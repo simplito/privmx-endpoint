@@ -20,8 +20,10 @@ limitations under the License.
 #include "Networks.hpp"
 #include "Base58.hpp"
 #include "Utils.hpp"
-#include "EciesEncryptor.hpp"
+// #include "EciesEncryptor.hpp"   // not used - to be removed
 #include "PrivateKey.hpp"
+#include "ECIES.hpp"
+
 
 
 namespace privmx {
@@ -86,16 +88,19 @@ bool PublicKey::verify(BytesView data, BytesView signature, SigScheme scheme) co
     }
 }
 
-// inline Bytes PublicKey::seal(BytesView data, const IPrivateKey* senderForSignature) const {
-//     throw PrivmxDriverCryptoException("PublicKey::seal: NOT IMPLEMENTED");
+// Bytes PublicKey::seal(BytesView data, const IPrivateKey& senderForSignature) const {
+//     // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
+//     if (typeid(senderForSignature) != typeid(PrivateKey)) {
+//         throw PrivmxDriverCryptoException("PublicKey::seal: Wrong type of private key");
+//     }
+//     return Utils::s2b(EciesEncryptor::encrypt(*this, Utils::b2s(data), (const PrivateKey&) senderForSignature));
 // }
 Bytes PublicKey::seal(BytesView data, const IPrivateKey& senderForSignature) const {
     // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
-    // throw PrivmxDriverCryptoException("PublicKey::seal: NOT IMPLEMENTED");
     if (typeid(senderForSignature) != typeid(PrivateKey)) {
         throw PrivmxDriverCryptoException("PublicKey::seal: Wrong type of private key");
     }
-    return Utils::s2b(EciesEncryptor::encrypt(*this, Utils::b2s(data), (const PrivateKey&) senderForSignature));
+    return Utils::s2b(encrypt(*this, Utils::b2s(data), (const PrivateKey&) senderForSignature));
 }
 
 
@@ -121,6 +126,27 @@ Bytes PublicKey::export_(KeyFormat format) const {
 void PublicKey::setSymProvider(std::shared_ptr<ISymCryptoProvider> provider) {
     _provider = provider;
 }
+
+// from PublicKey class:
+std::string PublicKey::encryptObjectToBase64(const PublicKey& pub, Poco::JSON::Object::Ptr data, const PrivateKey& privForSignature) {
+    return encryptToBase64(pub, Utils::stringify(data), privForSignature);
+}
+
+std::string PublicKey::encryptToBase64(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature) {
+    return Base64::from(encrypt(pub, data, privForSignature));
+}
+
+std::string PublicKey::encrypt(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature) {
+    ECIES ecies(privForSignature, pub);
+    auto cipher = ecies.encrypt(data);
+    return std::string("e")
+            .append(privForSignature.getPublicKey().toDER())
+            .append(pub.toDER())
+            .append(cipher);
+}
+
+
+
 
 } // ecc
 } // cryptoservice

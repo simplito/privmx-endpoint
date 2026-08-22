@@ -23,8 +23,10 @@ limitations under the License.
 #include "Networks.hpp"
 #include "Base58.hpp"
 #include "Utils.hpp"
-// #include "ECDHE.hpp"  //not used - to be removed
-#include "EciesEncryptor.hpp"
+// #include "ECDHE.hpp"          // not used - to be removed
+// #include "EciesEncryptor.hpp" // not used - to be removed
+#include "ECIES.hpp"
+
 
 namespace privmx {
 namespace cryptoservice {
@@ -175,18 +177,25 @@ Bytes PrivateKey::deriveSharedSecret(const IPublicKey& publicKey) const {
     return Utils::fillTo32b(secret);
 }
 
+// Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
+//     if (expectedSender != nullptr && typeid(*expectedSender) != typeid(PublicKey)) {
+//         throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
+//     } else if (expectedSender != nullptr) {
+//         return Utils::s2b(EciesEncryptor::decrypt(*this, Utils::b2s(sealed)));
+//     } else {
+//         return Utils::s2b(EciesEncryptor::decrypt(*this, Utils::b2s(sealed), *((const PublicKey*) expectedSender)));
+//     }
+// }
+
 Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
-    // Bytes open(BytesView sealed, const std::optional<IPublicKey>& pubOfSignature = std::nullopt) const {
-    // throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
     if (expectedSender != nullptr && typeid(*expectedSender) != typeid(PublicKey)) {
         throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
     } else if (expectedSender != nullptr) {
-        return Utils::s2b(EciesEncryptor::decrypt(*this, Utils::b2s(sealed)));
+        return Utils::s2b(decrypt(*this, Utils::b2s(sealed)));
     } else {
-        return Utils::s2b(EciesEncryptor::decrypt(*this, Utils::b2s(sealed), *((const PublicKey*) expectedSender)));
+        return Utils::s2b(decrypt(*this, Utils::b2s(sealed), *((const PublicKey*) expectedSender)));
     }
 }
-
 Bytes PrivateKey::export_(KeyFormat format) const {
     if (format == KeyFormat::Wif) {
         // PrivateKey key = toWIFb();
@@ -201,6 +210,43 @@ Bytes PrivateKey::export_(KeyFormat format) const {
 
 void PrivateKey::setSymProvider(std::shared_ptr<ISymCryptoProvider> provider) {
     _provider = provider;
+}
+
+// // from EciesEncryptor class:
+
+Poco::JSON::Object::Ptr PrivateKey::decryptObjectFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature) {
+    return Utils::parseJsonObject(decryptFromBase64(priv, cipher_base64, pubOfSignature));
+}
+
+std::string PrivateKey::decryptFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature) {
+    return decrypt(priv, Base64::toString(cipher_base64), pubOfSignature);
+}
+
+std::string PrivateKey::decrypt(const PrivateKey& priv, const std::string& cipher, const std::optional<PublicKey>& pubOfSignature) {
+    if (cipher.front() != 101 || cipher.size() < 67) {
+        // throw InvalidFirstByteOfCipherException();
+        throw std::runtime_error("EciesEncryptor: InvalidFirstByteOfCipherException");
+    }
+    auto external_pub = cipher.substr(1, 33);
+    auto my_pub = cipher.substr(34, 33);
+    auto external_pub_ec = PublicKey::fromDER(external_pub);
+    if(pubOfSignature.has_value() && external_pub_ec != pubOfSignature.value()) {
+        // throw GivenPublicKeyDoesNotMatchWithSignatureException();
+        throw std::runtime_error("EciesEncryptor: GivenPublicKeyDoesNotMatchWithSignatureException");
+    }
+    auto my_pub_ec = PublicKey::fromDER(my_pub);
+    if (my_pub_ec != priv.getPublicKey()) {
+        // throw GivenPrivKeyDoesNotMatchException();
+        throw std::runtime_error("EciesEncryptor: GivenPrivKeyDoesNotMatchException");
+    }
+    ECIES ecies(priv, external_pub_ec);
+    auto key = ecies.decrypt(cipher.substr(67));
+    return key;
+}
+
+std::string PrivateKey::decryptV0(const PrivateKey& priv, const PublicKey& pub, const std::string& cipher) {
+    ECIES ecies(priv, pub);
+    return ecies.decrypt(cipher);
 }
 
 } // ecc
