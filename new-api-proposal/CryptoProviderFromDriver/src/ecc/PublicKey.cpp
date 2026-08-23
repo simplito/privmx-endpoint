@@ -20,11 +20,7 @@ limitations under the License.
 #include "Networks.hpp"
 #include "Base58.hpp"
 #include "Utils.hpp"
-// #include "EciesEncryptor.hpp"   // not used - to be removed
 #include "PrivateKey.hpp"
-// #include "ECIES.hpp"            // not used - to be removed
-
-
 
 namespace privmx {
 namespace cryptoservice {
@@ -76,7 +72,6 @@ bool PublicKey::verifyCompactSignatureWithHash(const std::string& message, const
 }
 
 bool PublicKey::verify(BytesView data, BytesView signature, SigScheme scheme) const {
-    // throw PrivmxDriverCryptoException("PublicKey::verify: NOT IMPLEMENTED");
     switch (scheme) {
     case SigScheme::EcdsaSecp256k1Compact:
         return verifyCompactSignature(Utils::b2s(data), Utils::b2s(signature));
@@ -88,13 +83,6 @@ bool PublicKey::verify(BytesView data, BytesView signature, SigScheme scheme) co
     }
 }
 
-// Bytes PublicKey::seal(BytesView data, const IPrivateKey& senderForSignature) const {
-//     // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
-//     if (typeid(senderForSignature) != typeid(PrivateKey)) {
-//         throw PrivmxDriverCryptoException("PublicKey::seal: Wrong type of private key");
-//     }
-//     return Utils::s2b(EciesEncryptor::encrypt(*this, Utils::b2s(data), (const PrivateKey&) senderForSignature));
-// }
 Bytes PublicKey::seal(BytesView data, const IPrivateKey& senderForSignature) const {
     // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
     if (typeid(senderForSignature) != typeid(PrivateKey)) {
@@ -137,8 +125,6 @@ std::string PublicKey::encryptToBase64(const std::string& data, const PrivateKey
 }
 
 std::string PublicKey::encrypt(const std::string& data, const PrivateKey& privForSignature) const {
-    // ECIES ecies(privForSignature, *this);
-    // auto cipher = ecies.encrypt(data);
     auto cipher = eciesEncrypt(data, privForSignature);
     return std::string("e")
             .append(privForSignature.getPublicKey().toDER())
@@ -149,23 +135,15 @@ std::string PublicKey::encrypt(const std::string& data, const PrivateKey& privFo
 // from ECIES class:
     std::string PublicKey::eciesEncrypt(const std::string& data, const PrivateKey& private_key) const {
     std::string secret = private_key.derive(*this);
-    // _shared_key = Crypto::sha512(secret);
-    // std::string _shared_key = NewCrypto::digest(Hash::Sha512,secret);
     std::string _shared_key = Utils::b2s(_provider->digest(Hash::Sha512,Utils::s2b(secret)));
     std::string _private_enc_key = private_key.getPrivateEncKey();
 
-    // string iv = Crypto::hmacSha256(_private_enc_key, data).substr(0, 16);
-    // std::string iv = NewCrypto::hmac(Hash::Sha256,_private_enc_key, data).substr(0, 16);
     std::string iv = Utils::b2s(_provider->hmac(Hash::Sha256,Utils::s2b(_private_enc_key), Utils::s2b(data))).substr(0, 16);
     // std::string M = getM();
     std::string M = _shared_key.substr(32, 32);
     // std::string E = getE();
     std::string E = _shared_key.substr(0, 32);
-    // string c = iv + Crypto::aes256CbcPkcs7Encrypt(data, E, iv);
-    // std::string c = iv + NewCrypto::encrypt({SymAlg::Aes256Cbc, E, iv}, data);
     std::string c = iv + Utils::b2s(_provider->encrypt({SymAlg::Aes256Cbc, Utils::s2b(E), Utils::s2b(iv)}, Utils::s2b(data)));
-    // return c + Crypto::hmacSha256(M, c).substr(0, 4);
-    // return c + NewCrypto::hmac(Hash::Sha256,M, c).substr(0, 4);
     return c + Utils::b2s(_provider->hmac(Hash::Sha256,Utils::s2b(M), Utils::s2b(c))).substr(0, 4);
 }
 } // ecc

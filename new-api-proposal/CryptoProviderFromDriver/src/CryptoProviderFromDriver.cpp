@@ -748,7 +748,6 @@ std::shared_ptr<IExtKey> CryptoProviderFromDriver::importExtKey(BytesView data, 
     }
 }
 
-
 std::shared_ptr<IExtKey> CryptoProviderFromDriver::extKeyFromSeed(BytesView seed, AsymAlg alg) {
     if (alg == AsymAlg::EccSecp256k1) {
         ecc::ExtKey key = ecc::ExtKey::fromSeed(ecc::Utils::b2s(seed));
@@ -763,4 +762,3 @@ std::shared_ptr<IExtKey> CryptoProviderFromDriver::extKeyFromSeed(BytesView seed
 
 } // cryptoservice
 } // privmx
-

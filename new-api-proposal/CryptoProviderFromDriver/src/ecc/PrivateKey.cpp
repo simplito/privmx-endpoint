@@ -23,10 +23,6 @@ limitations under the License.
 #include "Networks.hpp"
 #include "Base58.hpp"
 #include "Utils.hpp"
-// #include "ECDHE.hpp"          // not used - to be removed
-// #include "EciesEncryptor.hpp" // not used - to be removed
-// #include "ECIES.hpp"          // not used - to be removed
-
 
 namespace privmx {
 namespace cryptoservice {
@@ -129,19 +125,6 @@ Bytes PrivateKey::toWIFb() const {
     return Base58::encodeWithChecksumB(_provider, buffer);
 }
 
-// Bytes PrivateKey::sign(BytesView data, SigScheme scheme) const {
-//     switch (scheme) {
-//         case SigScheme::EcdsaSecp256k1CompactWithHash: 
-//             return Utils::s2b(signToCompactSignatureWithHash(Utils::b2s(data)));
-//         case SigScheme::EcdsaSecp256k1Compact: 
-//             return Utils::s2b(signToCompactSignature(Utils::b2s(data)));
-//         default:
-//             throw PrivmxDriverCryptoException("PrivateKey::sign: Unknowne signning scheme");
-//             break;        
-//     }
-//     throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
-// }
-
 Bytes PrivateKey::sign(BytesView data, SigScheme scheme) const {
     switch (scheme) {
         case SigScheme::EcdsaSecp256k1CompactWithHash: // first we need to obtain hash
@@ -152,7 +135,6 @@ Bytes PrivateKey::sign(BytesView data, SigScheme scheme) const {
             throw PrivmxDriverCryptoException("PrivateKey::sign: Unknowne signning scheme");
             break;        
     }
-    throw PrivmxDriverCryptoException("PrivateKey::sign: NOT IMPLEMENTED");
 }
 
 std::shared_ptr<IPublicKey> PrivateKey::publicKey() const {
@@ -178,16 +160,6 @@ Bytes PrivateKey::deriveSharedSecret(const IPublicKey& publicKey) const {
     return Utils::fillTo32b(secret);
 }
 
-// Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
-//     if (expectedSender != nullptr && typeid(*expectedSender) != typeid(PublicKey)) {
-//         throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
-//     } else if (expectedSender != nullptr) {
-//         return Utils::s2b(EciesEncryptor::decrypt(*this, Utils::b2s(sealed)));
-//     } else {
-//         return Utils::s2b(EciesEncryptor::decrypt(*this, Utils::b2s(sealed), *((const PublicKey*) expectedSender)));
-//     }
-// }
-
 Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
     if (expectedSender != nullptr && typeid(*expectedSender) != typeid(PublicKey)) {
         throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
@@ -199,14 +171,11 @@ Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const
 }
 Bytes PrivateKey::export_(KeyFormat format) const {
     if (format == KeyFormat::Wif) {
-        // PrivateKey key = toWIFb();
-        // return std::make_shared<PrivateKey>(std::move(key));
         return toWIFb();
     } else {
         // other formats ...
         throw PrivmxDriverCryptoException("PrivateKey::export_:: Unknown data format");    
     }
-    throw PrivmxDriverCryptoException("PrivateKey::export_: NOT IMPLEMENTED");
 }
 
 void PrivateKey::setSymProvider(std::shared_ptr<ISymCryptoProvider> provider) {
@@ -240,24 +209,17 @@ std::string PrivateKey::decrypt(const std::string& cipher, const std::optional<P
         // throw GivenPrivKeyDoesNotMatchException();
         throw std::runtime_error("EciesEncryptor: GivenPrivKeyDoesNotMatchException");
     }
-    // ECIES ecies(*this, external_pub_ec);
-    // auto key = ecies.decrypt(cipher.substr(67));
     auto key = eciesDecrypt(cipher.substr(67), external_pub_ec);
     return key;
 }
 
 std::string PrivateKey::decryptV0(const PublicKey& pub, const std::string& cipher) const {
-    // ECIES ecies(*this, pub);
-    // return ecies.decrypt(cipher);
     return eciesDecrypt(cipher, pub);
 }
 
 // from ECIES class:
-
 std::string PrivateKey::eciesDecrypt(const std::string& enc_buf, const PublicKey& public_key) const {
     std::string secret = derive(public_key);
-    // _shared_key = Crypto::sha512(secret);
-    // std::string _shared_key = NewCrypto::digest(Hash::Sha512,secret);
     std::string _shared_key = Utils::b2s(_provider->digest(Hash::Sha512,Utils::s2b(secret)));
     std::string _private_enc_key = getPrivateEncKey();
 
@@ -265,8 +227,6 @@ std::string PrivateKey::eciesDecrypt(const std::string& enc_buf, const PublicKey
     std::string d = enc_buf.substr(enc_buf.length() - 4, 4);
     // std::string M = eciesGetM();
     std::string M = _shared_key.substr(32, 32);
-    // string d2 = Crypto::hmacSha256(M, c).substr(0, 4);
-    // std::string d2 =  NewCrypto::hmac(Hash::Sha256, M, c).substr(0, 4);
     std::string d2 =  Utils::b2s(_provider->hmac(Hash::Sha256, Utils::s2b(M), Utils::s2b(c))).substr(0, 4);
     if (d != d2) {
         // throw InvalidChecksumException();
@@ -274,8 +234,6 @@ std::string PrivateKey::eciesDecrypt(const std::string& enc_buf, const PublicKey
     }
     // std::string E = eciesGetE();
     std::string E = _shared_key.substr(0, 32);
-    // return Crypto::aes256CbcPkcs7Decrypt(c.substr(16), E, c.substr(0, 16));
-    // return NewCrypto::decrypt({SymAlg::Aes256Cbc, E, c.substr(0, 16)}, c.substr(16));
     return Utils::b2s(_provider->decrypt({SymAlg::Aes256Cbc, Utils::s2b(E), Utils::s2b(c.substr(0, 16))}, Utils::s2b(c.substr(16))));
 }
 

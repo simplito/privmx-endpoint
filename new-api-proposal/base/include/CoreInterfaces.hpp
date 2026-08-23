@@ -126,16 +126,6 @@ public:
     virtual std::shared_ptr<IExtKey>  importExtKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) = 0;
 };
 
-// Probably to be removed (used by code not included in the repository)
-class IAsymAlgImpl {
-public:
-    virtual ~IAsymAlgImpl() = default;
-    virtual void setRandom(std::shared_ptr<IRandom>) = 0;  
-    virtual void setDigest(std::shared_ptr<IDigest>) = 0;  
-    virtual void setHmac(std::shared_ptr<IHmac>) = 0;  
-    virtual void setSymmetricCipher(std::shared_ptr<ISymmetricCipher>) = 0;  
-};
-
 // ---- Provider facade (role aggregate) ----
 class ICryptoProvider : public ISymCryptoProvider, public IKdf, public IKeyProvider
 {

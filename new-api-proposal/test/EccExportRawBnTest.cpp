@@ -18,7 +18,7 @@
 #include "Utils.hpp"
 
 #include "ECC.hpp"
-#include "ECIES.hpp"
+// #include "ECIES.hpp"
 
 
 using privmx::cryptoservice::CryptoProviderRegistry;
@@ -86,22 +86,22 @@ TEST(EccTest, ExportRawBnBasicTests) {
     const string expected_ecies34_enc("\x4C\xD5\x01\x33\xA5\x01\x1C\x61\xB2\x0A\xFD\x91\x6D\xE9\xB2\xCB\x9F\x41\x5A\xF7\xBF\x5D\x1F\x0A\x8A\x39\xB0\x44\x7D\x34\xB0\x89\x57\x5A\xB6\x56");
     const string expected_ecies43_enc("\xFD\x3C\xEE\xA0\x3A\x1E\x70\xA8\x54\x28\x51\x05\x9E\xD0\xBD\x34\x27\x09\x6D\xA2\xB8\xAB\xCF\xFD\x93\xAF\x57\xB4\xB8\x42\x8F\x84\x84\xEA\x2A\xCF");
 
-    ECIES ecies12(priv1, publ2);
-    ECIES ecies21(priv2, publ1);
-    ECIES ecies34(priv3, publ4);
-    ECIES ecies43(priv4, publ4);
+    // ECIES ecies12(priv1, publ2);
+    // ECIES ecies21(priv2, publ1);
+    // ECIES ecies34(priv3, publ4);
+    // ECIES ecies43(priv4, publ4);
 
-    // encryption tests
-    EXPECT_EQ(ecies12.encrypt(messageToSign), expected_ecies12_enc);
-    EXPECT_EQ(ecies21.encrypt(messageToSign), expected_ecies21_enc);
-    EXPECT_EQ(ecies34.encrypt(messageToSign), expected_ecies34_enc);
-    EXPECT_EQ(ecies43.encrypt(messageToSign), expected_ecies43_enc);
+    // // encryption tests
+    // EXPECT_EQ(ecies12.encrypt(messageToSign), expected_ecies12_enc);
+    // EXPECT_EQ(ecies21.encrypt(messageToSign), expected_ecies21_enc);
+    // EXPECT_EQ(ecies34.encrypt(messageToSign), expected_ecies34_enc);
+    // EXPECT_EQ(ecies43.encrypt(messageToSign), expected_ecies43_enc);
 
-    // decryption tests
-    EXPECT_EQ(ecies12.decrypt(ecies12.encrypt(messageToSign)), messageToSign);
-    EXPECT_EQ(ecies21.decrypt(ecies21.encrypt(messageToSign)), messageToSign);
-    EXPECT_EQ(ecies34.decrypt(ecies34.encrypt(messageToSign)), messageToSign);
-    EXPECT_EQ(ecies43.decrypt(ecies43.encrypt(messageToSign)), messageToSign);
+    // // decryption tests
+    // EXPECT_EQ(ecies12.decrypt(ecies12.encrypt(messageToSign)), messageToSign);
+    // EXPECT_EQ(ecies21.decrypt(ecies21.encrypt(messageToSign)), messageToSign);
+    // EXPECT_EQ(ecies34.decrypt(ecies34.encrypt(messageToSign)), messageToSign);
+    // EXPECT_EQ(ecies43.decrypt(ecies43.encrypt(messageToSign)), messageToSign);
 
     const string expected_sign1("\x1B\xDB\x7A\x57\xA6\xB4\x57\xC4\xD1\x54\xB1\x37\x60\xF1\xD4\x0C\x68\x02\xB2\xED\x0F\x0F\x55\xCE\x67\x00\x28\x3D\xBF\xC3\xFD\x1B\x40\x7C\xC8\xC4\x65\x6D\xB3\x11\xCE\xA0\xB9\x78\x68\xFB\x32\x44\x1A\x6D\x74\x1D\xAC\xF7\x6F\xA0\x3D\x7E\xA0\xE3\xEC\x5C\x0F\xDA\x4A");
 

@@ -16,7 +16,6 @@ limitations under the License.
 #include "CoreTypes.hpp"
 #include "CoreInterfaces.hpp"
 
-
 namespace privmx {
 namespace cryptoservice {
 
