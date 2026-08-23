@@ -28,9 +28,6 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<stream::TurnCredentials>(const stream::TurnCredentials& val);
 
 template<>
-Poco::Dynamic::Var VarSerializer::serialize<stream::Stream>(const stream::Stream& val);
-
-template<>
 Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<stream::StreamRoom>>(
     const core::PagingList<stream::StreamRoom>& val
 );

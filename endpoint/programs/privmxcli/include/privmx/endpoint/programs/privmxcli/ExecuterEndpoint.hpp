@@ -29,10 +29,14 @@ limitations under the License.
 #include "privmx/endpoint/core/varinterface/ConnectionVarInterface.hpp"
 #include "privmx/endpoint/core/varinterface/EventQueueVarInterface.hpp"
 #include "privmx/endpoint/core/varinterface/BackendRequesterVarInterface.hpp"
+#include "privmx/endpoint/core/varinterface/UtilsVarInterface.hpp"
 #include "privmx/endpoint/crypto/varinterface/CryptoApiVarInterface.hpp"
+#include "privmx/endpoint/crypto/varinterface/ExtKeyVarInterface.hpp"
+#include "privmx/endpoint/event/varinterface/EventApiVarInterface.hpp"
 #include "privmx/endpoint/thread/varinterface/ThreadApiVarInterface.hpp"
 #include "privmx/endpoint/store/varinterface/StoreApiVarInterface.hpp"
 #include "privmx/endpoint/inbox/varinterface/InboxApiVarInterface.hpp"
+#include "privmx/endpoint/kvdb/varinterface/KvdbApiVarInterface.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 
@@ -47,19 +51,27 @@ struct ApiVar {
         std::shared_ptr<privmx::endpoint::core::EventQueueVarInterface> _event,
         std::shared_ptr<privmx::endpoint::core::ConnectionVarInterface> _connection,
         std::shared_ptr<privmx::endpoint::core::BackendRequesterVarInterface> _backendRequester,
+        std::shared_ptr<privmx::endpoint::core::UtilsVarInterface> _utils,
         std::shared_ptr<privmx::endpoint::crypto::CryptoApiVarInterface> _crypto,
+        std::shared_ptr<privmx::endpoint::crypto::ExtKeyVarInterface> _extKey,
         std::shared_ptr<privmx::endpoint::thread::ThreadApiVarInterface> _thread,
         std::shared_ptr<privmx::endpoint::store::StoreApiVarInterface> _store,
-        std::shared_ptr<privmx::endpoint::inbox::InboxApiVarInterface> _inbox
-    ) : serializer(_serializer), event(_event), connection(_connection), backendRequester(_backendRequester), crypto(_crypto), thread(_thread), store(_store), inbox(_inbox) {}
+        std::shared_ptr<privmx::endpoint::inbox::InboxApiVarInterface> _inbox,
+        std::shared_ptr<privmx::endpoint::kvdb::KvdbApiVarInterface> _kvdb,
+        std::shared_ptr<privmx::endpoint::event::EventApiVarInterface> _eventApi
+    ) : serializer(_serializer), event(_event), connection(_connection), backendRequester(_backendRequester), utils(_utils), crypto(_crypto), extKey(_extKey), thread(_thread), store(_store), inbox(_inbox), kvdb(_kvdb), eventApi(_eventApi) {}
     core::VarSerializer serializer;
     std::shared_ptr<privmx::endpoint::core::EventQueueVarInterface> event;
     std::shared_ptr<privmx::endpoint::core::ConnectionVarInterface> connection;
     std::shared_ptr<privmx::endpoint::core::BackendRequesterVarInterface> backendRequester;
+    std::shared_ptr<privmx::endpoint::core::UtilsVarInterface> utils;
     std::shared_ptr<privmx::endpoint::crypto::CryptoApiVarInterface> crypto;
+    std::shared_ptr<privmx::endpoint::crypto::ExtKeyVarInterface> extKey;
     std::shared_ptr<privmx::endpoint::thread::ThreadApiVarInterface> thread;
     std::shared_ptr<privmx::endpoint::store::StoreApiVarInterface> store;
     std::shared_ptr<privmx::endpoint::inbox::InboxApiVarInterface> inbox;
+    std::shared_ptr<privmx::endpoint::kvdb::KvdbApiVarInterface> kvdb;
+    std::shared_ptr<privmx::endpoint::event::EventApiVarInterface> eventApi;
 };
 
 class ExecuterEndpoint {
@@ -109,6 +121,12 @@ private:
             std::shared_ptr<inbox::InboxApiVarInterface> inbox = std::make_shared<inbox::InboxApiVarInterface>(api->connection->getApi(), api->thread->getApi(), api->store->getApi(), api->serializer);
             inbox->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->inbox = inbox;
+            std::shared_ptr<kvdb::KvdbApiVarInterface> kvdb = std::make_shared<kvdb::KvdbApiVarInterface>(api->connection->getApi(), api->serializer);
+            kvdb->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->kvdb = kvdb;
+            std::shared_ptr<event::EventApiVarInterface> eventApi = std::make_shared<event::EventApiVarInterface>(api->connection->getApi(), api->serializer);
+            eventApi->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->eventApi = eventApi;
             return Poco::Dynamic::Var();
         }},
         {core_connectPublic, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
@@ -122,6 +140,12 @@ private:
             std::shared_ptr<inbox::InboxApiVarInterface> inbox = std::make_shared<inbox::InboxApiVarInterface>(api->connection->getApi(), api->thread->getApi(), api->store->getApi(), api->serializer);
             inbox->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->inbox = inbox;
+            std::shared_ptr<kvdb::KvdbApiVarInterface> kvdb = std::make_shared<kvdb::KvdbApiVarInterface>(api->connection->getApi(), api->serializer);
+            kvdb->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->kvdb = kvdb;
+            std::shared_ptr<event::EventApiVarInterface> eventApi = std::make_shared<event::EventApiVarInterface>(api->connection->getApi(), api->serializer);
+            eventApi->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->eventApi = eventApi;
             return Poco::Dynamic::Var();
         }},
         {core_disconnect, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
@@ -133,8 +157,59 @@ private:
         {core_listContexts, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->connection->listContexts(args);
         }},
+        {core_listContextUsers, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->connection->listContextUsers(args);
+        }},
         {core_backendRequest, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->backendRequester->backendRequest(args);
+        }},
+        {core_subscribeFor, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->connection->subscribeFor(args);
+        }},
+        {core_unsubscribeFrom, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->connection->unsubscribeFrom(args);
+        }},
+        {core_buildSubscriptionQuery, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->connection->buildSubscriptionQuery(args);
+        }},
+        {utils_encodeHex, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->encodeHex(args);
+        }},
+        {utils_decodeHex, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->decodeHex(args);
+        }},
+        {utils_isHex, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->isHex(args);
+        }},
+        {utils_encodeBase32, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->encodeBase32(args);
+        }},
+        {utils_decodeBase32, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->decodeBase32(args);
+        }},
+        {utils_isBase32, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->isBase32(args);
+        }},
+        {utils_encodeBase64, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->encodeBase64(args);
+        }},
+        {utils_decodeBase64, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->decodeBase64(args);
+        }},
+        {utils_isBase64, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->isBase64(args);
+        }},
+        {utils_trim, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->trim(args);
+        }},
+        {utils_split, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->split(args);
+        }},
+        {utils_ltrim, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->ltrim(args);
+        }},
+        {utils_rtrim, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->utils->rtrim(args);
         }},
         {crypto_signData, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->crypto->signData(args);
@@ -162,6 +237,106 @@ private:
         }},
         {crypto_convertPEMKeytoWIFKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->crypto->convertPEMKeytoWIFKey(args);
+        }},
+        {crypto_fromMnemonic, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->crypto->fromMnemonic(args);
+        }},
+        {crypto_fromEntropy, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->crypto->fromEntropy(args);
+        }},
+        {crypto_entropyToMnemonic, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->crypto->entropyToMnemonic(args);
+        }},
+        {crypto_mnemonicToEntropy, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->crypto->mnemonicToEntropy(args);
+        }},
+        {crypto_mnemonicToSeed, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->crypto->mnemonicToSeed(args);
+        }},
+        // ExtKey: factory methods return an int64 handle to an ExtKey instance;
+        // instance methods take that handle as the first argument.
+        {extkey_fromSeed, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->extKey->fromSeed(args);
+        }},
+        {extkey_fromBase58, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->extKey->fromBase58(args);
+        }},
+        {extkey_generateRandom, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->extKey->generateRandom(args);
+        }},
+        {extkey_derive, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+            auto extKey = reinterpret_cast<crypto::ExtKeyVarInterface*>((intptr_t)argsArr->get(0).convert<int64_t>());
+            Poco::JSON::Array::Ptr subArgs = new Poco::JSON::Array();
+            subArgs->add(argsArr->get(1));
+            return extKey->derive(subArgs);
+        }},
+        {extkey_deriveHardened, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+            auto extKey = reinterpret_cast<crypto::ExtKeyVarInterface*>((intptr_t)argsArr->get(0).convert<int64_t>());
+            Poco::JSON::Array::Ptr subArgs = new Poco::JSON::Array();
+            subArgs->add(argsArr->get(1));
+            return extKey->deriveHardened(subArgs);
+        }},
+        {extkey_getPrivatePartAsBase58, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+            auto extKey = reinterpret_cast<crypto::ExtKeyVarInterface*>((intptr_t)argsArr->get(0).convert<int64_t>());
+            return extKey->getPrivatePartAsBase58(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+        }},
+        {extkey_getPublicPartAsBase58, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+            auto extKey = reinterpret_cast<crypto::ExtKeyVarInterface*>((intptr_t)argsArr->get(0).convert<int64_t>());
+            return extKey->getPublicPartAsBase58(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+        }},
+        {extkey_getPrivateKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+            auto extKey = reinterpret_cast<crypto::ExtKeyVarInterface*>((intptr_t)argsArr->get(0).convert<int64_t>());
+            return extKey->getPrivateKey(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+        }},
+        {extkey_getPublicKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+            auto extKey = reinterpret_cast<crypto::ExtKeyVarInterface*>((intptr_t)argsArr->get(0).convert<int64_t>());
+            return extKey->getPublicKey(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+        }},
+        {extkey_getPrivateEncKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+            auto extKey = reinterpret_cast<crypto::ExtKeyVarInterface*>((intptr_t)argsArr->get(0).convert<int64_t>());
+            return extKey->getPrivateEncKey(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+        }},
+        {extkey_getPublicKeyAsBase58Address, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+            auto extKey = reinterpret_cast<crypto::ExtKeyVarInterface*>((intptr_t)argsArr->get(0).convert<int64_t>());
+            return extKey->getPublicKeyAsBase58Address(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+        }},
+        {extkey_getChainCode, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+            auto extKey = reinterpret_cast<crypto::ExtKeyVarInterface*>((intptr_t)argsArr->get(0).convert<int64_t>());
+            return extKey->getChainCode(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+        }},
+        {extkey_verifyCompactSignatureWithHash, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+            auto extKey = reinterpret_cast<crypto::ExtKeyVarInterface*>((intptr_t)argsArr->get(0).convert<int64_t>());
+            Poco::JSON::Array::Ptr subArgs = new Poco::JSON::Array();
+            subArgs->add(argsArr->get(1));
+            subArgs->add(argsArr->get(2));
+            return extKey->verifyCompactSignatureWithHash(subArgs);
+        }},
+        {extkey_isPrivate, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+            auto extKey = reinterpret_cast<crypto::ExtKeyVarInterface*>((intptr_t)argsArr->get(0).convert<int64_t>());
+            return extKey->isPrivate(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+        }},
+        {event_emitEvent, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->eventApi->emitEvent(args);
+        }},
+        {event_subscribeFor, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->eventApi->subscribeFor(args);
+        }},
+        {event_unsubscribeFrom, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->eventApi->unsubscribeFrom(args);
+        }},
+        {event_buildSubscriptionQuery, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->eventApi->buildSubscriptionQuery(args);
         }},
         {thread_createThread, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->thread->createThread(args);
@@ -192,6 +367,15 @@ private:
         }},
         {thread_deleteMessage, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->thread->deleteMessage(args);
+        }},
+        {thread_subscribeFor, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->thread->subscribeFor(args);
+        }},
+        {thread_unsubscribeFrom, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->thread->unsubscribeFrom(args);
+        }},
+        {thread_buildSubscriptionQuery, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->thread->buildSubscriptionQuery(args);
         }},
         {store_createStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->store->createStore(args);
@@ -240,6 +424,18 @@ private:
         }},
         {store_closeFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->store->closeFile(args);
+        }},
+        {store_syncFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->store->syncFile(args);
+        }},
+        {store_subscribeFor, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->store->subscribeFor(args);
+        }},
+        {store_unsubscribeFrom, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->store->unsubscribeFrom(args);
+        }},
+        {store_buildSubscriptionQuery, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->store->buildSubscriptionQuery(args);
         }},
         {inbox_createInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->inbox->createInbox(args);
@@ -294,6 +490,63 @@ private:
         }},
         {inbox_closeFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->inbox->closeFile(args);
+        }},
+        {inbox_subscribeFor, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->inbox->subscribeFor(args);
+        }},
+        {inbox_unsubscribeFrom, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->inbox->unsubscribeFrom(args);
+        }},
+        {inbox_buildSubscriptionQuery, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->inbox->buildSubscriptionQuery(args);
+        }},
+        {kvdb_createKvdb, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->createKvdb(args);
+        }},
+        {kvdb_updateKvdb, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->updateKvdb(args);
+        }},
+        {kvdb_deleteKvdb, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->deleteKvdb(args);
+        }},
+        {kvdb_getKvdb, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->getKvdb(args);
+        }},
+        {kvdb_listKvdbs, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->listKvdbs(args);
+        }},
+        {kvdb_getEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->getEntry(args);
+        }},
+        {kvdb_listEntriesKeys, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->listEntriesKeys(args);
+        }},
+        {kvdb_listEntries, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->listEntries(args);
+        }},
+        {kvdb_setEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->setEntry(args);
+        }},
+        {kvdb_deleteEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->deleteEntry(args);
+        }},
+        {kvdb_deleteEntries, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->deleteEntries(args);
+        }},
+        {kvdb_hasEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->hasEntry(args);
+        }},
+        {kvdb_subscribeFor, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->subscribeFor(args);
+        }},
+        {kvdb_unsubscribeFrom, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->unsubscribeFrom(args);
+        }},
+        {kvdb_buildSubscriptionQuery, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->buildSubscriptionQuery(args);
+        }},
+        {kvdb_buildSubscriptionQueryForSelectedEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->buildSubscriptionQueryForSelectedEntry(args);
         }},
     };
 
@@ -415,9 +668,9 @@ private:
             "\tjson format - [pemKey]\n"
             "\t\tpemKey [STRING] - private key to convert"
         },
-        {thread_createThread, 
+        {thread_createThread,
             "createThread JSON_ARRAY\n"
-            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta]\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?]\n"
             "\t\tcontextId [STRING] - ID of the Context to create the Thread in\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey structs which indicates who will have access to the created Thread\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -426,12 +679,13 @@ private:
             "\t\t\tuserId [STRING] - ID of the user\n"
             "\t\t\tpubKey [STRING] - user's public key\n"
             "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
-            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata"
+            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
+            "\t\tpolicies [OBJECT] - (optional) Thread's policies (ContainerPolicy)"
         },
         {thread_updateThread, 
             "updateThread JSON_ARRAY\n"
-            "\tjson format - [threadId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, generateNewKey]\n"
-            "\t\threadId [STRING] - ID of the Thread to update\n"
+            "\tjson format - [threadId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?]\n"
+            "\t\tthreadId [STRING] - ID of the Thread to update\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the updated Thread\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
             "\t\t\tpubKey [STRING] - user's public key\n"
@@ -442,7 +696,8 @@ private:
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
             "\t\tversion [NUMBER] - current version of the updated Thread\n"
             "\t\tforce [BOOL] - force update (without checking version)\n"
-            "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Thread"
+            "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Thread\n"
+            "\t\tpolicies [OBJECT] - (optional) Thread's policies (ContainerPolicy)"
             },
         {thread_getThread, 
             "getThread JSON_ARRAY\n"
@@ -502,7 +757,7 @@ private:
         },
         {store_createStore, 
             "createStore JSON_ARRAY\n"
-            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta]\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?]\n"
             "\t\tcontextId [STRING] - ID of the Context to create the Store in\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey structs which indicates who will have access to the created Store\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -511,11 +766,12 @@ private:
             "\t\t\tuserId [STRING] - ID of the user\n"
             "\t\t\tpubKey [STRING] - user's public key\n"
             "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
-            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata"
+            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
+            "\t\tpolicies [OBJECT] - (optional) Store's policies (ContainerPolicy)"
         },
         {store_updateStore, 
             "updateStore JSON_ARRAY\n"
-            "\tjson format - [storeId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, generateNewKey]\n"
+            "\tjson format - [storeId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?]\n"
             "\t\tstoreId [STRING] - ID of the Store to update\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey structs which indicates who will have access to the updated Store\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -527,7 +783,8 @@ private:
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
             "\t\tversion [NUMBER] - current version of the updated Store\n"
             "\t\tforce [BOOL] - force update (without checking version)\n"
-            "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Store"
+            "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Store\n"
+            "\t\tpolicies [OBJECT] - (optional) Store's policies (ContainerPolicy)"
         },
         {store_getStore, 
             "getStore JSON_ARRAY\n"
@@ -622,7 +879,7 @@ private:
         },
         {inbox_createInbox, 
             "createInbox JSON_ARRAY\n"
-            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, filesConfig?:{minCount, maxCount, maxFileSize, maxWholeUploadSize}]\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, filesConfig?:{minCount, maxCount, maxFileSize, maxWholeUploadSize}, policies?]\n"
             "\t\tcontextId [STRING] - ID of the Context of the new Inbox\n"
             "\t\tusers [ARRAY] -  vector of UserWithPubKey which indicates who will have access to the created Inbox\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -632,15 +889,16 @@ private:
             "\t\t\tpubKey [STRING] - user's public key\n"
             "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
-            "\t\tfilesConfig [OBJECT] - to override default file configuration\n"
+            "\t\tfilesConfig [OBJECT] - (optional) to override default file configuration\n"
             "\t\t\tminCount [NUMBER] - minimum number of files required when sending inbox entry\n"
             "\t\t\tmaxCount [NUMBER] - maximum number of files allowed when sending inbox entry\n"
             "\t\t\tmaxFileSize [NUMBER] - maximum file size allowed when sending inbox entry\n"
-            "\t\t\tmaxWholeUploadSize [NUMBER] - maximum size of all files in total allowed when sending inbox entry"
+            "\t\t\tmaxWholeUploadSize [NUMBER] - maximum size of all files in total allowed when sending inbox entry\n"
+            "\t\tpolicies [OBJECT] - (optional) Inbox's policies (ContainerPolicyWithoutItem)"
         },
         {inbox_updateInbox, 
             "updateInbox JSON_ARRAY\n"
-            "\tjson format - [inboxId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, filesConfig?:{minCount, maxCount, maxFileSize, maxWholeUploadSize}, version, force, forceGenerateNewKey]\n"
+            "\tjson format - [inboxId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, filesConfig?:{minCount, maxCount, maxFileSize, maxWholeUploadSize}, version, force, forceGenerateNewKey, policies?]\n"
             "\t\tinboxId [STRING] - ID of the Inbox to update\n"
             "\t\tusers [ARRAY] -  vector of UserWithPubKey which indicates who will have access to the updated Inbox\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -650,14 +908,15 @@ private:
             "\t\t\tpubKey [STRING] - user's public key\n"
             "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
-            "\t\tfilesConfig [OBJECT] - to override default file configuration\n"
+            "\t\tfilesConfig [OBJECT] - (optional) to override default file configuration\n"
             "\t\t\tminCount [NUMBER] - minimum number of files required when sending inbox entry\n"
             "\t\t\tmaxCount [NUMBER] - maximum number of files allowed when sending inbox entry\n"
             "\t\t\tmaxFileSize [NUMBER] - maximum file size allowed when sending inbox entry\n"
             "\t\t\tmaxWholeUploadSize [NUMBER] - maximum size of all files in total allowed when sending inbox entry\n"
             "\t\tversion [NUMBER] - current version of the updated Inbox\n"
             "\t\tforce [BOOL] - force update (without checking version)\n"
-            "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Inbox"
+            "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Inbox\n"
+            "\t\tpolicies [OBJECT] - (optional) Inbox's policies (ContainerPolicyWithoutItem)"
         },
         {inbox_getInbox, 
             "getInbox JSON_ARRAY\n"
@@ -749,10 +1008,431 @@ private:
             "\t\tfileHandle [NUMBER] - handle to the file\n"
             "\t\tposition [NUMBER] - sets new cursor position"
         },
-        {inbox_closeFile, 
+        {inbox_closeFile,
             "closeFile JSON_ARRAY\n"
             "\tjson format - [fileHandle]\n"
             "\t\tfileHandle [NUMBER] - handle to the file"
+        },
+        {core_listContextUsers,
+            "listContextUsers JSON_ARRAY\n"
+            "\tjson format - [contextId, pagingQuery:{skip, limit, sortOrder, lastId?}]\n"
+            "\t\tcontextId [STRING] - ID of the Context\n"
+            "\t\tpagingQuery [OBJECT] - list query parameters"
+        },
+        {core_subscribeFor,
+            "subscribeFor JSON_ARRAY\n"
+            "\tjson format - [subscriptionQueries:[query]]\n"
+            "\t\tsubscriptionQueries [ARRAY] - list of subscription query strings (see buildSubscriptionQuery)\n"
+            "\t\t\tquery [STRING] - single subscription query\n"
+            "\treturns a list of subscriptionIds in matching order to subscriptionQueries"
+        },
+        {core_unsubscribeFrom,
+            "unsubscribeFrom JSON_ARRAY\n"
+            "\tjson format - [subscriptionIds:[subscriptionId]]\n"
+            "\t\tsubscriptionIds [ARRAY] - list of subscriptionIds to unsubscribe from\n"
+            "\t\t\tsubscriptionId [STRING] - single subscriptionId"
+        },
+        {core_buildSubscriptionQuery,
+            "buildSubscriptionQuery JSON_ARRAY\n"
+            "\tjson format - [eventType, selectorType, selectorId]\n"
+            "\t\teventType [NUMBER] - type of event to listen for (core::EventType enum value)\n"
+            "\t\tselectorType [NUMBER] - scope on which to listen for events (core::EventSelectorType enum value)\n"
+            "\t\tselectorId [STRING] - ID of the selector"
+        },
+        {utils_encodeHex,
+            "encodeHex JSON_ARRAY\n"
+            "\tjson format - [data]\n"
+            "\t\tdata [BUFFER] - buffer to encode"
+        },
+        {utils_decodeHex,
+            "decodeHex JSON_ARRAY\n"
+            "\tjson format - [hex_data]\n"
+            "\t\thex_data [STRING] - Hex string to decode"
+        },
+        {utils_isHex,
+            "isHex JSON_ARRAY\n"
+            "\tjson format - [data]\n"
+            "\t\tdata [STRING] - string to check"
+        },
+        {utils_encodeBase32,
+            "encodeBase32 JSON_ARRAY\n"
+            "\tjson format - [data]\n"
+            "\t\tdata [BUFFER] - buffer to encode"
+        },
+        {utils_decodeBase32,
+            "decodeBase32 JSON_ARRAY\n"
+            "\tjson format - [base32_data]\n"
+            "\t\tbase32_data [STRING] - Base32 string to decode"
+        },
+        {utils_isBase32,
+            "isBase32 JSON_ARRAY\n"
+            "\tjson format - [data]\n"
+            "\t\tdata [STRING] - string to check"
+        },
+        {utils_encodeBase64,
+            "encodeBase64 JSON_ARRAY\n"
+            "\tjson format - [data]\n"
+            "\t\tdata [BUFFER] - buffer to encode"
+        },
+        {utils_decodeBase64,
+            "decodeBase64 JSON_ARRAY\n"
+            "\tjson format - [base64_data]\n"
+            "\t\tbase64_data [STRING] - Base64 string to decode"
+        },
+        {utils_isBase64,
+            "isBase64 JSON_ARRAY\n"
+            "\tjson format - [data]\n"
+            "\t\tdata [STRING] - string to check"
+        },
+        {utils_trim,
+            "trim JSON_ARRAY\n"
+            "\tjson format - [data]\n"
+            "\t\tdata [STRING] - string to trim of leading and trailing whitespace"
+        },
+        {utils_split,
+            "split JSON_ARRAY\n"
+            "\tjson format - [data, delimiter]\n"
+            "\t\tdata [STRING] - string to split\n"
+            "\t\tdelimiter [STRING] - delimiter to split on (removed from output)"
+        },
+        {utils_ltrim,
+            "ltrim JSON_ARRAY\n"
+            "\tjson format - [data]\n"
+            "\t\tdata [STRING] - string to trim of leading whitespace"
+        },
+        {utils_rtrim,
+            "rtrim JSON_ARRAY\n"
+            "\tjson format - [data]\n"
+            "\t\tdata [STRING] - string to trim of trailing whitespace"
+        },
+        {crypto_fromMnemonic,
+            "fromMnemonic JSON_ARRAY\n"
+            "\tjson format - [mnemonic, password]\n"
+            "\t\tmnemonic [STRING] - the BIP-39 mnemonic used to generate the key\n"
+            "\t\tpassword [STRING] - the password used to generate the key\n"
+            "\treturns a BIP39 object (privateKey, publicKey, mnemonic, entropy) plus an extKey handle"
+        },
+        {crypto_fromEntropy,
+            "fromEntropy JSON_ARRAY\n"
+            "\tjson format - [entropy, password]\n"
+            "\t\tentropy [BUFFER] - the BIP-39 entropy used to generate the key\n"
+            "\t\tpassword [STRING] - the password used to generate the key\n"
+            "\treturns a BIP39 object (privateKey, publicKey, mnemonic, entropy) plus an extKey handle"
+        },
+        {crypto_entropyToMnemonic,
+            "entropyToMnemonic JSON_ARRAY\n"
+            "\tjson format - [entropy]\n"
+            "\t\tentropy [BUFFER] - the BIP-39 entropy to convert"
+        },
+        {crypto_mnemonicToEntropy,
+            "mnemonicToEntropy JSON_ARRAY\n"
+            "\tjson format - [mnemonic]\n"
+            "\t\tmnemonic [STRING] - the BIP-39 mnemonic to convert"
+        },
+        {crypto_mnemonicToSeed,
+            "mnemonicToSeed JSON_ARRAY\n"
+            "\tjson format - [mnemonic, password]\n"
+            "\t\tmnemonic [STRING] - the BIP-39 mnemonic\n"
+            "\t\tpassword [STRING] - the password used to generate the seed"
+        },
+        {extkey_fromSeed,
+            "fromSeed JSON_ARRAY\n"
+            "\tjson format - [seed]\n"
+            "\t\tseed [BUFFER] - the seed used to generate the ExtKey\n"
+            "\treturns an extKey handle (NUMBER) used as the first argument of the other extkey.* methods"
+        },
+        {extkey_fromBase58,
+            "fromBase58 JSON_ARRAY\n"
+            "\tjson format - [base58]\n"
+            "\t\tbase58 [STRING] - the ExtKey in Base58 format\n"
+            "\treturns an extKey handle (NUMBER)"
+        },
+        {extkey_generateRandom,
+            "generateRandom JSON_ARRAY\n"
+            "\tjson format - []\n"
+            "\treturns an extKey handle (NUMBER)"
+        },
+        {extkey_derive,
+            "derive JSON_ARRAY\n"
+            "\tjson format - [extKey, index]\n"
+            "\t\textKey [NUMBER] - handle to an ExtKey instance (from fromSeed/fromBase58/generateRandom/derive/deriveHardened or crypto.fromMnemonic/fromEntropy)\n"
+            "\t\tindex [NUMBER] - BIP32 child index\n"
+            "\treturns a new extKey handle (NUMBER)"
+        },
+        {extkey_deriveHardened,
+            "deriveHardened JSON_ARRAY\n"
+            "\tjson format - [extKey, index]\n"
+            "\t\textKey [NUMBER] - handle to an ExtKey instance\n"
+            "\t\tindex [NUMBER] - BIP32 hardened child index\n"
+            "\treturns a new extKey handle (NUMBER)"
+        },
+        {extkey_getPrivatePartAsBase58,
+            "getPrivatePartAsBase58 JSON_ARRAY\n"
+            "\tjson format - [extKey]\n"
+            "\t\textKey [NUMBER] - handle to an ExtKey instance"
+        },
+        {extkey_getPublicPartAsBase58,
+            "getPublicPartAsBase58 JSON_ARRAY\n"
+            "\tjson format - [extKey]\n"
+            "\t\textKey [NUMBER] - handle to an ExtKey instance"
+        },
+        {extkey_getPrivateKey,
+            "getPrivateKey JSON_ARRAY\n"
+            "\tjson format - [extKey]\n"
+            "\t\textKey [NUMBER] - handle to an ExtKey instance\n"
+            "\treturns the ECC private key in WIF format"
+        },
+        {extkey_getPublicKey,
+            "getPublicKey JSON_ARRAY\n"
+            "\tjson format - [extKey]\n"
+            "\t\textKey [NUMBER] - handle to an ExtKey instance\n"
+            "\treturns the ECC public key in BASE58DER format"
+        },
+        {extkey_getPrivateEncKey,
+            "getPrivateEncKey JSON_ARRAY\n"
+            "\tjson format - [extKey]\n"
+            "\t\textKey [NUMBER] - handle to an ExtKey instance\n"
+            "\treturns the raw ECC private key (BUFFER)"
+        },
+        {extkey_getPublicKeyAsBase58Address,
+            "getPublicKeyAsBase58Address JSON_ARRAY\n"
+            "\tjson format - [extKey]\n"
+            "\t\textKey [NUMBER] - handle to an ExtKey instance"
+        },
+        {extkey_getChainCode,
+            "getChainCode JSON_ARRAY\n"
+            "\tjson format - [extKey]\n"
+            "\t\textKey [NUMBER] - handle to an ExtKey instance\n"
+            "\treturns the raw chain code (BUFFER)"
+        },
+        {extkey_verifyCompactSignatureWithHash,
+            "verifyCompactSignatureWithHash JSON_ARRAY\n"
+            "\tjson format - [extKey, message, signature]\n"
+            "\t\textKey [NUMBER] - handle to an ExtKey instance\n"
+            "\t\tmessage [BUFFER] - data used for validation\n"
+            "\t\tsignature [BUFFER] - signature of the data to verify"
+        },
+        {extkey_isPrivate,
+            "isPrivate JSON_ARRAY\n"
+            "\tjson format - [extKey]\n"
+            "\t\textKey [NUMBER] - handle to an ExtKey instance"
+        },
+        {event_emitEvent,
+            "emitEvent JSON_ARRAY\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], channelName, eventData]\n"
+            "\t\tcontextId [STRING] - ID of the Context the event is emitted on\n"
+            "\t\tusers [ARRAY] - recipients of the event\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tchannelName [STRING] - name of the channel\n"
+            "\t\teventData [BUFFER] - event payload data"
+        },
+        {event_subscribeFor,
+            "subscribeFor JSON_ARRAY\n"
+            "\tjson format - [subscriptionQueries:[query]]\n"
+            "\t\tsubscriptionQueries [ARRAY] - list of subscription query strings (see buildSubscriptionQuery)\n"
+            "\t\t\tquery [STRING] - single subscription query\n"
+            "\treturns a list of subscriptionIds in matching order to subscriptionQueries"
+        },
+        {event_unsubscribeFrom,
+            "unsubscribeFrom JSON_ARRAY\n"
+            "\tjson format - [subscriptionIds:[subscriptionId]]\n"
+            "\t\tsubscriptionIds [ARRAY] - list of subscriptionIds to unsubscribe from\n"
+            "\t\t\tsubscriptionId [STRING] - single subscriptionId"
+        },
+        {event_buildSubscriptionQuery,
+            "buildSubscriptionQuery JSON_ARRAY\n"
+            "\tjson format - [channelName, selectorType, selectorId]\n"
+            "\t\tchannelName [STRING] - name of the channel\n"
+            "\t\tselectorType [NUMBER] - scope on which to listen for events (event::EventSelectorType enum value)\n"
+            "\t\tselectorId [STRING] - ID of the selector"
+        },
+        {thread_subscribeFor,
+            "subscribeFor JSON_ARRAY\n"
+            "\tjson format - [subscriptionQueries:[query]]\n"
+            "\t\tsubscriptionQueries [ARRAY] - list of subscription query strings (see buildSubscriptionQuery)\n"
+            "\t\t\tquery [STRING] - single subscription query\n"
+            "\treturns a list of subscriptionIds in matching order to subscriptionQueries"
+        },
+        {thread_unsubscribeFrom,
+            "unsubscribeFrom JSON_ARRAY\n"
+            "\tjson format - [subscriptionIds:[subscriptionId]]\n"
+            "\t\tsubscriptionIds [ARRAY] - list of subscriptionIds to unsubscribe from\n"
+            "\t\t\tsubscriptionId [STRING] - single subscriptionId"
+        },
+        {thread_buildSubscriptionQuery,
+            "buildSubscriptionQuery JSON_ARRAY\n"
+            "\tjson format - [eventType, selectorType, selectorId]\n"
+            "\t\teventType [NUMBER] - type of event to listen for (thread::EventType enum value)\n"
+            "\t\tselectorType [NUMBER] - scope on which to listen for events (thread::EventSelectorType enum value)\n"
+            "\t\tselectorId [STRING] - ID of the selector"
+        },
+        {store_syncFile,
+            "syncFile JSON_ARRAY\n"
+            "\tjson format - [fileHandle]\n"
+            "\t\tfileHandle [NUMBER] - handle of the open file to synchronize"
+        },
+        {store_subscribeFor,
+            "subscribeFor JSON_ARRAY\n"
+            "\tjson format - [subscriptionQueries:[query]]\n"
+            "\t\tsubscriptionQueries [ARRAY] - list of subscription query strings (see buildSubscriptionQuery)\n"
+            "\t\t\tquery [STRING] - single subscription query\n"
+            "\treturns a list of subscriptionIds in matching order to subscriptionQueries"
+        },
+        {store_unsubscribeFrom,
+            "unsubscribeFrom JSON_ARRAY\n"
+            "\tjson format - [subscriptionIds:[subscriptionId]]\n"
+            "\t\tsubscriptionIds [ARRAY] - list of subscriptionIds to unsubscribe from\n"
+            "\t\t\tsubscriptionId [STRING] - single subscriptionId"
+        },
+        {store_buildSubscriptionQuery,
+            "buildSubscriptionQuery JSON_ARRAY\n"
+            "\tjson format - [eventType, selectorType, selectorId]\n"
+            "\t\teventType [NUMBER] - type of event to listen for (store::EventType enum value)\n"
+            "\t\tselectorType [NUMBER] - scope on which to listen for events (store::EventSelectorType enum value)\n"
+            "\t\tselectorId [STRING] - ID of the selector"
+        },
+        {inbox_subscribeFor,
+            "subscribeFor JSON_ARRAY\n"
+            "\tjson format - [subscriptionQueries:[query]]\n"
+            "\t\tsubscriptionQueries [ARRAY] - list of subscription query strings (see buildSubscriptionQuery)\n"
+            "\t\t\tquery [STRING] - single subscription query\n"
+            "\treturns a list of subscriptionIds in matching order to subscriptionQueries"
+        },
+        {inbox_unsubscribeFrom,
+            "unsubscribeFrom JSON_ARRAY\n"
+            "\tjson format - [subscriptionIds:[subscriptionId]]\n"
+            "\t\tsubscriptionIds [ARRAY] - list of subscriptionIds to unsubscribe from\n"
+            "\t\t\tsubscriptionId [STRING] - single subscriptionId"
+        },
+        {inbox_buildSubscriptionQuery,
+            "buildSubscriptionQuery JSON_ARRAY\n"
+            "\tjson format - [eventType, selectorType, selectorId]\n"
+            "\t\teventType [NUMBER] - type of event to listen for (inbox::EventType enum value)\n"
+            "\t\tselectorType [NUMBER] - scope on which to listen for events (inbox::EventSelectorType enum value)\n"
+            "\t\tselectorId [STRING] - ID of the selector"
+        },
+        {kvdb_createKvdb,
+            "createKvdb JSON_ARRAY\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?]\n"
+            "\t\tcontextId [STRING] - ID of the Context to create the KVDB in\n"
+            "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the created KVDB\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tmanagers [ARRAY] - vector of UserWithPubKey which indicates who will have access (and management rights) to the created KVDB\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
+            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
+            "\t\tpolicies [OBJECT] - (optional) KVDB's policies (ContainerPolicy)"
+        },
+        {kvdb_updateKvdb,
+            "updateKvdb JSON_ARRAY\n"
+            "\tjson format - [kvdbId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?]\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB to update\n"
+            "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the updated KVDB\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tmanagers [ARRAY] - vector of UserWithPubKey which indicates who will have access (and management rights) to the updated KVDB\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
+            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
+            "\t\tversion [NUMBER] - current version of the updated KVDB\n"
+            "\t\tforce [BOOL] - force update (without checking version)\n"
+            "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the KVDB\n"
+            "\t\tpolicies [OBJECT] - (optional) KVDB's policies (ContainerPolicy)"
+        },
+        {kvdb_deleteKvdb,
+            "deleteKvdb JSON_ARRAY\n"
+            "\tjson format - [kvdbId]\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB to delete"
+        },
+        {kvdb_getKvdb,
+            "getKvdb JSON_ARRAY\n"
+            "\tjson format - [kvdbId]\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB to get"
+        },
+        {kvdb_listKvdbs,
+            "listKvdbs JSON_ARRAY\n"
+            "\tjson format - [contextId, pagingQuery:{skip, limit, sortOrder, lastId?}]\n"
+            "\t\tcontextId [STRING] - ID of the Context to get the KVDBs from\n"
+            "\t\tpagingQuery [OBJECT] - list query parameters"
+        },
+        {kvdb_getEntry,
+            "getEntry JSON_ARRAY\n"
+            "\tjson format - [kvdbId, key]\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB to get the entry from\n"
+            "\t\tkey [STRING] - key of the KVDB entry to get"
+        },
+        {kvdb_listEntriesKeys,
+            "listEntriesKeys JSON_ARRAY\n"
+            "\tjson format - [kvdbId, pagingQuery:{skip, limit, sortOrder, lastId?}]\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB to list entry keys from\n"
+            "\t\tpagingQuery [OBJECT] - list query parameters"
+        },
+        {kvdb_listEntries,
+            "listEntries JSON_ARRAY\n"
+            "\tjson format - [kvdbId, pagingQuery:{skip, limit, sortOrder, lastId?}]\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB to list entries from\n"
+            "\t\tpagingQuery [OBJECT] - list query parameters"
+        },
+        {kvdb_setEntry,
+            "setEntry JSON_ARRAY\n"
+            "\tjson format - [kvdbId, key, publicMeta, privateMeta, data, version?]\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB to set the entry in\n"
+            "\t\tkey [STRING] - KVDB entry key\n"
+            "\t\tpublicMeta [BUFFER] - public KVDB entry metadata\n"
+            "\t\tprivateMeta [BUFFER] - private KVDB entry metadata\n"
+            "\t\tdata [BUFFER] - content of the KVDB entry\n"
+            "\t\tversion [NUMBER] - (optional) current entry version; 0 to create a new entry"
+        },
+        {kvdb_deleteEntry,
+            "deleteEntry JSON_ARRAY\n"
+            "\tjson format - [kvdbId, key]\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB to delete the entry from\n"
+            "\t\tkey [STRING] - key of the KVDB entry to delete"
+        },
+        {kvdb_deleteEntries,
+            "deleteEntries JSON_ARRAY\n"
+            "\tjson format - [kvdbId, keys:[key]]\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB to delete from\n"
+            "\t\tkeys [ARRAY] - list of keys of the KVDB entries to delete\n"
+            "\t\t\tkey [STRING] - single KVDB entry key\n"
+            "\treturns a map with the deletion status for every key"
+        },
+        {kvdb_hasEntry,
+            "hasEntry JSON_ARRAY\n"
+            "\tjson format - [kvdbId, key]\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB to check\n"
+            "\t\tkey [STRING] - key of the KVDB entry to check"
+        },
+        {kvdb_subscribeFor,
+            "subscribeFor JSON_ARRAY\n"
+            "\tjson format - [subscriptionQueries:[query]]\n"
+            "\t\tsubscriptionQueries [ARRAY] - list of subscription query strings (see buildSubscriptionQuery)\n"
+            "\t\t\tquery [STRING] - single subscription query\n"
+            "\treturns a list of subscriptionIds in matching order to subscriptionQueries"
+        },
+        {kvdb_unsubscribeFrom,
+            "unsubscribeFrom JSON_ARRAY\n"
+            "\tjson format - [subscriptionIds:[subscriptionId]]\n"
+            "\t\tsubscriptionIds [ARRAY] - list of subscriptionIds to unsubscribe from\n"
+            "\t\t\tsubscriptionId [STRING] - single subscriptionId"
+        },
+        {kvdb_buildSubscriptionQuery,
+            "buildSubscriptionQuery JSON_ARRAY\n"
+            "\tjson format - [eventType, selectorType, selectorId]\n"
+            "\t\teventType [NUMBER] - type of event to listen for (kvdb::EventType enum value)\n"
+            "\t\tselectorType [NUMBER] - scope on which to listen for events (kvdb::EventSelectorType enum value)\n"
+            "\t\tselectorId [STRING] - ID of the selector"
+        },
+        {kvdb_buildSubscriptionQueryForSelectedEntry,
+            "buildSubscriptionQueryForSelectedEntry JSON_ARRAY\n"
+            "\tjson format - [eventType, kvdbId, kvdbEntryKey]\n"
+            "\t\teventType [NUMBER] - type of event to listen for (kvdb::EventType enum value)\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB\n"
+            "\t\tkvdbEntryKey [STRING] - key of the KVDB entry"
         }
     };
 
@@ -819,6 +1499,72 @@ private:
         {inbox_readFromFile, "Reads file data."},
         {inbox_seekInFile, "Moves file's read cursor."},
         {inbox_closeFile, "Closes a file by given handle."},
+        {core_listContextUsers, "Gets a list of users of given Context."},
+        {core_subscribeFor, "Subscribes for the Context events on the given subscription queries."},
+        {core_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
+        {core_buildSubscriptionQuery, "Generates a subscription query for Context events."},
+        {utils_encodeHex, "Encodes a buffer to a Hex string."},
+        {utils_decodeHex, "Decodes a Hex string to a buffer."},
+        {utils_isHex, "Checks whether a string is valid Hex."},
+        {utils_encodeBase32, "Encodes a buffer to a Base32 string."},
+        {utils_decodeBase32, "Decodes a Base32 string to a buffer."},
+        {utils_isBase32, "Checks whether a string is valid Base32."},
+        {utils_encodeBase64, "Encodes a buffer to a Base64 string."},
+        {utils_decodeBase64, "Decodes a Base64 string to a buffer."},
+        {utils_isBase64, "Checks whether a string is valid Base64."},
+        {utils_trim, "Removes leading and trailing whitespace from a string."},
+        {utils_split, "Splits a string by a delimiter into parts."},
+        {utils_ltrim, "Removes whitespace from the left of a string."},
+        {utils_rtrim, "Removes whitespace from the right of a string."},
+        {crypto_fromMnemonic, "Generates an ECC key and an extKey handle from a BIP-39 mnemonic."},
+        {crypto_fromEntropy, "Generates an ECC key and an extKey handle from BIP-39 entropy."},
+        {crypto_entropyToMnemonic, "Converts BIP-39 entropy to a mnemonic."},
+        {crypto_mnemonicToEntropy, "Converts a BIP-39 mnemonic to entropy."},
+        {crypto_mnemonicToSeed, "Generates a seed from a BIP-39 mnemonic."},
+        {extkey_fromSeed, "Creates an ExtKey from the given seed and returns its handle."},
+        {extkey_fromBase58, "Creates an ExtKey from a Base58 string and returns its handle."},
+        {extkey_generateRandom, "Generates a new random ExtKey and returns its handle."},
+        {extkey_derive, "Derives a child ExtKey using BIP32."},
+        {extkey_deriveHardened, "Derives a hardened child ExtKey using BIP32."},
+        {extkey_getPrivatePartAsBase58, "Gets the private part of the ExtKey as a Base58 string."},
+        {extkey_getPublicPartAsBase58, "Gets the public part of the ExtKey as a Base58 string."},
+        {extkey_getPrivateKey, "Extracts the ECC private key (WIF) from the ExtKey."},
+        {extkey_getPublicKey, "Extracts the ECC public key (BASE58DER) from the ExtKey."},
+        {extkey_getPrivateEncKey, "Extracts the raw ECC private key from the ExtKey."},
+        {extkey_getPublicKeyAsBase58Address, "Gets the public key as a Base58 address."},
+        {extkey_getChainCode, "Gets the chain code of the ExtKey."},
+        {extkey_verifyCompactSignatureWithHash, "Validates a message signature against the ExtKey."},
+        {extkey_isPrivate, "Checks whether the ExtKey is private."},
+        {event_emitEvent, "Emits a custom event to the given users on a Context channel."},
+        {event_subscribeFor, "Subscribes for custom events on the given subscription queries."},
+        {event_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
+        {event_buildSubscriptionQuery, "Generates a subscription query for custom events."},
+        {thread_subscribeFor, "Subscribes for the Thread events on the given subscription queries."},
+        {thread_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
+        {thread_buildSubscriptionQuery, "Generates a subscription query for Thread events."},
+        {store_syncFile, "Synchronizes the file identified by the given handle."},
+        {store_subscribeFor, "Subscribes for the Store events on the given subscription queries."},
+        {store_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
+        {store_buildSubscriptionQuery, "Generates a subscription query for Store events."},
+        {inbox_subscribeFor, "Subscribes for the Inbox events on the given subscription queries."},
+        {inbox_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
+        {inbox_buildSubscriptionQuery, "Generates a subscription query for Inbox events."},
+        {kvdb_createKvdb, "Creates a new KVDB in given Context."},
+        {kvdb_updateKvdb, "Updates an existing KVDB."},
+        {kvdb_deleteKvdb, "Deletes a KVDB by given KVDB ID."},
+        {kvdb_getKvdb, "Gets a KVDB by given KVDB ID."},
+        {kvdb_listKvdbs, "Gets a list of KVDBs in given Context."},
+        {kvdb_getEntry, "Gets a KVDB entry by given key."},
+        {kvdb_listEntriesKeys, "Gets a list of KVDB entry keys from a KVDB."},
+        {kvdb_listEntries, "Gets a list of KVDB entries from a KVDB."},
+        {kvdb_setEntry, "Sets a KVDB entry in the given KVDB."},
+        {kvdb_deleteEntry, "Deletes a KVDB entry by given key."},
+        {kvdb_deleteEntries, "Deletes multiple KVDB entries by given keys."},
+        {kvdb_hasEntry, "Checks whether a KVDB entry exists."},
+        {kvdb_subscribeFor, "Subscribes for the KVDB events on the given subscription queries."},
+        {kvdb_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
+        {kvdb_buildSubscriptionQuery, "Generates a subscription query for KVDB events."},
+        {kvdb_buildSubscriptionQueryForSelectedEntry, "Generates a subscription query for events of a single KVDB entry."},
     };
 
     const std::unordered_map<func_enum, std::string> functions_endpoint_action_description = {
@@ -879,6 +1625,72 @@ private:
         {inbox_readFromFile, "Reading form file"},
         {inbox_seekInFile, "Seeking in file"},
         {inbox_closeFile, "Closing file"},
+        {core_listContextUsers, "Getting context users"},
+        {core_subscribeFor, "Subscribing for core events"},
+        {core_unsubscribeFrom, "Unsubscribing from events"},
+        {core_buildSubscriptionQuery, "Building subscription query"},
+        {utils_encodeHex, "Encoding hex"},
+        {utils_decodeHex, "Decoding hex"},
+        {utils_isHex, "Checking hex"},
+        {utils_encodeBase32, "Encoding base32"},
+        {utils_decodeBase32, "Decoding base32"},
+        {utils_isBase32, "Checking base32"},
+        {utils_encodeBase64, "Encoding base64"},
+        {utils_decodeBase64, "Decoding base64"},
+        {utils_isBase64, "Checking base64"},
+        {utils_trim, "Trimming"},
+        {utils_split, "Splitting"},
+        {utils_ltrim, "Left-trimming"},
+        {utils_rtrim, "Right-trimming"},
+        {crypto_fromMnemonic, "Generating key from mnemonic"},
+        {crypto_fromEntropy, "Generating key from entropy"},
+        {crypto_entropyToMnemonic, "Converting entropy to mnemonic"},
+        {crypto_mnemonicToEntropy, "Converting mnemonic to entropy"},
+        {crypto_mnemonicToSeed, "Generating seed from mnemonic"},
+        {extkey_fromSeed, "Creating ExtKey from seed"},
+        {extkey_fromBase58, "Creating ExtKey from base58"},
+        {extkey_generateRandom, "Generating random ExtKey"},
+        {extkey_derive, "Deriving ExtKey"},
+        {extkey_deriveHardened, "Deriving hardened ExtKey"},
+        {extkey_getPrivatePartAsBase58, "Getting ExtKey private part"},
+        {extkey_getPublicPartAsBase58, "Getting ExtKey public part"},
+        {extkey_getPrivateKey, "Getting ExtKey private key"},
+        {extkey_getPublicKey, "Getting ExtKey public key"},
+        {extkey_getPrivateEncKey, "Getting ExtKey private enc key"},
+        {extkey_getPublicKeyAsBase58Address, "Getting ExtKey public address"},
+        {extkey_getChainCode, "Getting ExtKey chain code"},
+        {extkey_verifyCompactSignatureWithHash, "Verifying ExtKey signature"},
+        {extkey_isPrivate, "Checking if ExtKey is private"},
+        {event_emitEvent, "Emitting event"},
+        {event_subscribeFor, "Subscribing for custom events"},
+        {event_unsubscribeFrom, "Unsubscribing from events"},
+        {event_buildSubscriptionQuery, "Building subscription query"},
+        {thread_subscribeFor, "Subscribing for thread events"},
+        {thread_unsubscribeFrom, "Unsubscribing from events"},
+        {thread_buildSubscriptionQuery, "Building subscription query"},
+        {store_syncFile, "Syncing store file"},
+        {store_subscribeFor, "Subscribing for store events"},
+        {store_unsubscribeFrom, "Unsubscribing from events"},
+        {store_buildSubscriptionQuery, "Building subscription query"},
+        {inbox_subscribeFor, "Subscribing for inbox events"},
+        {inbox_unsubscribeFrom, "Unsubscribing from events"},
+        {inbox_buildSubscriptionQuery, "Building subscription query"},
+        {kvdb_createKvdb, "Creating kvdb"},
+        {kvdb_updateKvdb, "Updating kvdb"},
+        {kvdb_deleteKvdb, "Deleting kvdb"},
+        {kvdb_getKvdb, "Getting kvdb"},
+        {kvdb_listKvdbs, "Getting kvdbs"},
+        {kvdb_getEntry, "Getting kvdb entry"},
+        {kvdb_listEntriesKeys, "Getting kvdb entry keys"},
+        {kvdb_listEntries, "Getting kvdb entries"},
+        {kvdb_setEntry, "Setting kvdb entry"},
+        {kvdb_deleteEntry, "Deleting kvdb entry"},
+        {kvdb_deleteEntries, "Deleting kvdb entries"},
+        {kvdb_hasEntry, "Checking kvdb entry"},
+        {kvdb_subscribeFor, "Subscribing for kvdb events"},
+        {kvdb_unsubscribeFrom, "Unsubscribing from events"},
+        {kvdb_buildSubscriptionQuery, "Building subscription query"},
+        {kvdb_buildSubscriptionQueryForSelectedEntry, "Building subscription query"},
     };
 };
 

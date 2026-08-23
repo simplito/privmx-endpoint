@@ -7,6 +7,8 @@ std::vector<std::string> PrepareInitDataThread(
     std::shared_ptr<thread::ThreadApi> threadApi, 
     std::shared_ptr<store::StoreApi> storeApi, 
     std::shared_ptr<inbox::InboxApi> inboxApi,
+    std::shared_ptr<kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<event::EventApi> eventApi,
     std::string userId,
     std::string userPubKey,
     uint64_t fun_number
@@ -187,6 +189,8 @@ std::vector<std::string> PrepareInitDataStore(
     std::shared_ptr<thread::ThreadApi> threadApi, 
     std::shared_ptr<store::StoreApi> storeApi, 
     std::shared_ptr<inbox::InboxApi> inboxApi,
+    std::shared_ptr<kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<event::EventApi> eventApi,
     std::string userId,
     std::string userPubKey,
     uint64_t fun_number
@@ -378,6 +382,8 @@ std::vector<std::string> PrepareInitDataInbox(
     std::shared_ptr<thread::ThreadApi> threadApi, 
     std::shared_ptr<store::StoreApi> storeApi, 
     std::shared_ptr<inbox::InboxApi> inboxApi,
+    std::shared_ptr<kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<event::EventApi> eventApi,
     std::string userId,
     std::string userPubKey,
     uint64_t fun_number
@@ -641,6 +647,8 @@ std::vector<std::string> PrepareInitDataCrypto(
     std::shared_ptr<thread::ThreadApi> threadApi, 
     std::shared_ptr<store::StoreApi> storeApi, 
     std::shared_ptr<inbox::InboxApi> inboxApi,
+    std::shared_ptr<kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<event::EventApi> eventApi,
     std::string userId,
     std::string userPubKey,
     uint64_t fun_number
@@ -683,6 +691,8 @@ std::vector<std::string> PrepareInitData(
     std::shared_ptr<thread::ThreadApi> threadApi, 
     std::shared_ptr<store::StoreApi> storeApi, 
     std::shared_ptr<inbox::InboxApi> inboxApi,
+    std::shared_ptr<kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<event::EventApi> eventApi,
     std::string userId,
     std::string userPubKey,
     Module module, 
@@ -690,15 +700,122 @@ std::vector<std::string> PrepareInitData(
 ) {
     switch(module) {
         case Module::thread:
-            return PrepareInitDataThread(connection, threadApi, storeApi, inboxApi, userId, userPubKey, fun_number);
+            return PrepareInitDataThread(connection, threadApi, storeApi, inboxApi, kvdbApi, eventApi, userId, userPubKey, fun_number);
         case Module::store:
-            return PrepareInitDataStore(connection, threadApi, storeApi, inboxApi, userId, userPubKey, fun_number);
+            return PrepareInitDataStore(connection, threadApi, storeApi, inboxApi, kvdbApi, eventApi, userId, userPubKey, fun_number);
         case Module::inbox:
-            return PrepareInitDataInbox(connection, threadApi, storeApi, inboxApi, userId, userPubKey, fun_number);
+            return PrepareInitDataInbox(connection, threadApi, storeApi, inboxApi, kvdbApi, eventApi, userId, userPubKey, fun_number);
         case Module::crypto:
-            return PrepareInitDataCrypto(connection, threadApi, storeApi, inboxApi, userId, userPubKey, fun_number);
+            return PrepareInitDataCrypto(connection, threadApi, storeApi, inboxApi, kvdbApi, eventApi, userId, userPubKey, fun_number);
+        case Module::kvdb:
+            return PrepareInitDataKvdb(connection, threadApi, storeApi, inboxApi, kvdbApi, eventApi, userId, userPubKey, fun_number);
+        case Module::event:
+            return PrepareInitDataEvent(connection, threadApi, storeApi, inboxApi, kvdbApi, eventApi, userId, userPubKey, fun_number);
     }
     std::cout << "Module not found" << std::endl;
     throw "Module not found";
-     
+
+}
+
+std::vector<std::string> PrepareInitDataKvdb(
+    std::shared_ptr<core::Connection> connection,
+    std::shared_ptr<thread::ThreadApi> threadApi,
+    std::shared_ptr<store::StoreApi> storeApi,
+    std::shared_ptr<inbox::InboxApi> inboxApi,
+    std::shared_ptr<kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<event::EventApi> eventApi,
+    std::string userId,
+    std::string userPubKey,
+    uint64_t fun_number
+) {
+    std::vector<std::string> result;
+    result.push_back(userId);
+    result.push_back(userPubKey);
+    auto contextId = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0].contextId;
+    switch(fun_number) {
+        case 0x00010000 :
+        case 0x00010001 :
+        case 0x00010002 :
+        case 0x00010003 :
+        case 0x00010004 :
+        case 0x00010006 : {
+            // entry operations need an existing Kvdb
+            result.push_back(
+                kvdbApi->createKvdb(
+                    contextId,
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{.userId=userId, .pubKey=userPubKey}},
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{.userId=userId, .pubKey=userPubKey}},
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private")
+                )
+            );
+            return result;
+        }
+        case 0x00010005 : {
+            // sized setEntry: kvdbId + 1 KB payload
+            result.push_back(
+                kvdbApi->createKvdb(
+                    contextId,
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{.userId=userId, .pubKey=userPubKey}},
+                    std::vector<core::UserWithPubKey>{core::UserWithPubKey{.userId=userId, .pubKey=userPubKey}},
+                    core::Buffer::from("public"),
+                    core::Buffer::from("private")
+                )
+            );
+            result.push_back(std::string(1024, 's'));
+            return result;
+        }
+        case 0x00020000 :
+        case 0x00020001 :
+        case 0x00020002 : {
+            // getEntry needs an existing entry: kvdbId + key
+            auto kvdbId = kvdbApi->createKvdb(
+                contextId,
+                std::vector<core::UserWithPubKey>{core::UserWithPubKey{.userId=userId, .pubKey=userPubKey}},
+                std::vector<core::UserWithPubKey>{core::UserWithPubKey{.userId=userId, .pubKey=userPubKey}},
+                core::Buffer::from("public"),
+                core::Buffer::from("private")
+            );
+            kvdbApi->setEntry(kvdbId, "bench_get_key", core::Buffer::from("public"), core::Buffer::from("private"), core::Buffer::from("data"), 0);
+            result.push_back(kvdbId);
+            result.push_back("bench_get_key");
+            return result;
+        }
+        case 0x00000000 :
+        case 0x00000001 :
+        case 0x00000002 :
+        case 0x00000003 :
+        case 0x00000004 :
+        default : {
+            result.push_back(contextId);
+            return result;
+        }
+    }
+    return result;
+}
+
+std::vector<std::string> PrepareInitDataEvent(
+    std::shared_ptr<core::Connection> connection,
+    std::shared_ptr<thread::ThreadApi> threadApi,
+    std::shared_ptr<store::StoreApi> storeApi,
+    std::shared_ptr<inbox::InboxApi> inboxApi,
+    std::shared_ptr<kvdb::KvdbApi> kvdbApi,
+    std::shared_ptr<event::EventApi> eventApi,
+    std::string userId,
+    std::string userPubKey,
+    uint64_t fun_number
+) {
+    std::vector<std::string> result;
+    result.push_back(userId);
+    result.push_back(userPubKey);
+    auto contextId = connection->listContexts({.skip=0, .limit=1, .sortOrder="asc"}).readItems[0].contextId;
+    result.push_back(contextId);
+    switch(fun_number) {
+        case 0x00000001 : {
+            // emitEvent with a 1 KB payload
+            result.push_back(std::string(1024, 's'));
+            break;
+        }
+    }
+    return result;
 }

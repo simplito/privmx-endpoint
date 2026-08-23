@@ -78,7 +78,6 @@ public:
     );
 
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);
-    void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
     void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     void joinStreamRoom(
@@ -103,7 +102,6 @@ public:
     );
     void removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle);
     // Data Channel
-    void registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId);
     core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage);
     DecryptedDataChannelMessage decryptDataChannelMessage(
         const std::string& streamRoomId,

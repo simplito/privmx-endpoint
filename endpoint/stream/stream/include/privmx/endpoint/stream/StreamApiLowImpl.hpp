@@ -113,11 +113,9 @@ public:
     );
 
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);
-    void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
     void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage);
-    void registerRemoteDataChannel(const std::string& streamRoomId, const std::string& remoteStreamId);
     DecryptedDataChannelMessage decryptDataChannelMessage(
         const std::string& streamRoomId,
         const std::string& remoteStreamId,
@@ -183,6 +181,7 @@ private:
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys streamRoomToModuleKeys(server::StreamRoomInfo streamRoom);
     void assertTurnServerUri(const std::string& uri);
+    void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
 
     static int32_t nextIdCounter;
     static int32_t nextId() { return nextIdCounter++; }

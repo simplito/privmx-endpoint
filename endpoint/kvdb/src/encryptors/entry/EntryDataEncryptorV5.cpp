@@ -14,7 +14,6 @@ limitations under the License.
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/kvdb/Constants.hpp"
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
-#include "privmx/utils/Debug.hpp"
 #include "privmx/utils/Utils.hpp"
 #include <privmx/crypto/Crypto.hpp>
 
