@@ -29,7 +29,6 @@ limitations under the License.
 #include <openssl/evp.h>
 #include <openssl/ripemd.h>
 
-// #include <Poco/ByteOrder.h>
 
 #include "Utils.hpp" // temporary - used only to data translation for test
 
@@ -43,6 +42,10 @@ std::string  CryptoProviderFromDriver::name() const {
     return std::string("reimplementation of privmx-endpoint/crypto/driver"); 
 }
 
+/// @brief Generates a sequence of (pseudo)random bytes 
+/// @param len Length of the generated sequence of bytes
+/// @return The sequence of (pseudo)random bytes
+/// @throws <TO_BE_REPLACED> If the random generator fails
 Bytes CryptoProviderFromDriver::randomBytes(size_t len)
 {
     Bytes buffer(len);
@@ -52,6 +55,15 @@ Bytes CryptoProviderFromDriver::randomBytes(size_t len)
     return buffer;
 }
 
+/// @brief Auxiliary method for generating hash
+/// @param config Configuration string describing the algorithm to be used
+/// @param data The data whose hash is to be generate.
+/// @return Calculated hash
+/// @throws <TO_BE_REPLACED_1> If the given protocol configuration string is not known
+/// @throws <TO_BE_REPLACED_2> If there is an error when setting digest context
+/// @throws <TO_BE_REPLACED_3> If the message digest initialization failed
+/// @throws <TO_BE_REPLACED_4> If the message digest update failed
+/// @throws <TO_BE_REPLACED_5> If the message digest finalization failed
 Bytes CryptoProviderFromDriver::digestConfStr(const char *config, BytesView data)
 {
     std::unique_ptr<EVP_MD, decltype(&EVP_MD_free)>
@@ -79,6 +91,11 @@ Bytes CryptoProviderFromDriver::digestConfStr(const char *config, BytesView data
     return result;
 }
 
+/// @brief Method for generating hash
+/// @param alg Algorithm to be used
+/// @param data The data whose hash is to be generated.
+/// @return Calculated hash
+/// @throws <TO_BE_REPLACED> If the given algorithm is not known or not implemented
 Bytes CryptoProviderFromDriver::digest(Hash alg, BytesView data) 
 {
     switch (alg)
@@ -99,6 +116,16 @@ Bytes CryptoProviderFromDriver::digest(Hash alg, BytesView data)
     }
 }
 
+/// @brief Auxiliary method for generating Hash-based Message Authentication Code
+/// @param config Configuration string describing the hash algorithm to be used
+/// @param key Shared secret key
+/// @param data The data whose authentication code is to be generate
+/// @return Calculated Hash-based Message Authentication Code
+/// @throws <TO_BE_REPLACED_1> If the given protocol configuration string is not known
+/// @throws <TO_BE_REPLACED_2> If there is an error when setting digest context
+/// @throws <TO_BE_REPLACED_3> If the message digest initialization failed
+/// @throws <TO_BE_REPLACED_4> If the message digest update failed
+/// @throws <TO_BE_REPLACED_5> If the message digest finalization failed
 Bytes CryptoProviderFromDriver::hmacConfStr(const char *config,  BytesView key, BytesView data)
 {
     std::unique_ptr<EVP_MAC, decltype(&EVP_MAC_free)> 
@@ -132,6 +159,12 @@ Bytes CryptoProviderFromDriver::hmacConfStr(const char *config,  BytesView key, 
     return result;
 }
 
+/// @brief Method for generating Hash-based Message Authentication Code
+/// @param alg The hash algorithm to be used
+/// @param key Shared secret key
+/// @param data The data whose authentication code is to be generate
+/// @return Calculated Hash-based Message Authentication Code
+/// @throws <TO_BE_REPLACED> If the given algorithm is not known or not implemented
 Bytes CryptoProviderFromDriver::hmac(Hash alg, BytesView key, BytesView data) 
 {
     switch (alg)
@@ -152,6 +185,13 @@ Bytes CryptoProviderFromDriver::hmac(Hash alg, BytesView key, BytesView data)
     }
 }
 
+/// @brief Auxiliary method for encryption with symmetric cryptography algorithms
+/// @param alg Configuration string describing the encryption algorithm to be used
+/// @param padding Information on whether padding should be used
+/// @param key Shared secret key
+/// @param iv Initialization vector (optional)
+/// @param plaintext Data to be encrypted
+/// @return Encrypted data
 Bytes CryptoProviderFromDriver::encryptConfStr(const char *alg, const bool padding, 
         BytesView key, BytesView iv, BytesView plaintext) 
 {
@@ -188,6 +228,13 @@ Bytes CryptoProviderFromDriver::encryptConfStr(const char *alg, const bool paddi
     return result;
 }
 
+/// @brief Auxiliary method for encryption with algoritm AES 256 GCM with ACC and tag
+/// @param alg Configuration string describing the encryption algorithm to be used
+/// @param aad Additional Authenticated Data
+/// @param key Shared secret key
+/// @param iv Initialization vector
+/// @param plaintext Data to be encrypted
+/// @return Encrypted data combined with tag
 Bytes CryptoProviderFromDriver::encryptAeadConfStr(const char *alg, BytesView aad, 
         BytesView key, BytesView iv, BytesView plaintext) 
 {
@@ -233,7 +280,10 @@ Bytes CryptoProviderFromDriver::encryptAeadConfStr(const char *alg, BytesView aa
     return result;
 }
 
-
+/// @brief Method for encryption with symmetric cryptography algorithms
+/// @param opt Parameters describing the encryption method and options
+/// @param plaintext Data to be encrypted
+/// @return Encrypted data
 Bytes CryptoProviderFromDriver::encrypt(const SymParams& opt, BytesView plaintext)
 {
     switch (opt.cipher)
@@ -252,6 +302,13 @@ Bytes CryptoProviderFromDriver::encrypt(const SymParams& opt, BytesView plaintex
     }
 }
 
+/// @brief Auxiliary method for decryption data encrypted with symmetric cryptography algorithms
+/// @param alg Configuration string describing algorithm used for the encryption
+/// @param padding Information on whether padding were used for the encryption
+/// @param key Shared secret key
+/// @param iv Initialization vector (optional)
+/// @param ciphertext Encrypted data
+/// @return Decrypted data
 Bytes CryptoProviderFromDriver::decryptConfStr(const char *alg, const bool padding, 
         BytesView key, BytesView iv, BytesView ciphertext) {
     std::unique_ptr<EVP_CIPHER, decltype(&EVP_CIPHER_free)> cipher(EVP_CIPHER_fetch(NULL, alg, NULL), EVP_CIPHER_free);
@@ -285,6 +342,13 @@ Bytes CryptoProviderFromDriver::decryptConfStr(const char *alg, const bool paddi
     return result;
 }
 
+/// @brief Auxiliary method for decryption data encrypted with algoritm AES 256 GCM with ACC and tag
+/// @param alg Configuration string describing algorithm used for the encryption
+/// @param aad Additional Authenticated Data
+/// @param key Shared secret key
+/// @param iv Initialization vector (optional)
+/// @param ciphertextWithTag Encrypted data combined with tag
+/// @return Decrypted data
 Bytes CryptoProviderFromDriver::decryptAeadConfStr(const char *alg, BytesView aad, 
         BytesView key, BytesView iv, BytesView ciphertextWithTag) {            
     const size_t EXPECTED_TAG_LEN = 16;
@@ -334,6 +398,10 @@ Bytes CryptoProviderFromDriver::decryptAeadConfStr(const char *alg, BytesView aa
     return result;
 }
 
+/// @brief Method for decryption data encrypted with symmetric cryptography algorithms
+/// @param opt Parameters describing the encryption method and options used to the encryption
+/// @param ciphertext Encrypted data (combined with tag in the case of AES 256 GCM with ACC and tag)
+/// @return Decrypted data 
 Bytes CryptoProviderFromDriver::decrypt(const SymParams& opt, BytesView ciphertext)
 {
     switch (opt.cipher)
@@ -475,6 +543,10 @@ Bytes CryptoProviderFromDriver::prf_tls12(BytesView key, BytesView seed, size_t 
     return result;
 }
 
+/// @brief Key derivation method
+/// @param opt Parameters describing the algorithm and its options
+/// @param secretData The secret data used in the algorithm
+/// @return Derived key
 Bytes CryptoProviderFromDriver::derive(const KdfParams& opt, BytesView secretData)
 {
     switch (opt.kdf)
@@ -502,6 +574,10 @@ Bytes CryptoProviderFromDriver::derive(const KdfParams& opt, BytesView secretDat
 //     return hash;
 // }
 
+/// @brief Auxiliary method for generating an initialization vector (probably not used)
+/// @param key Key used in HMAC
+/// @param idx Number used as part of the encrypted string
+/// @return Generated initialization vector
 Bytes CryptoProviderFromDriver::generateIv(BytesView& key, int32_t idx) {
     std::string dataString = "iv" + std::to_string(idx).substr(0, 16);
     const uint8_t* s = reinterpret_cast<const uint8_t*>(dataString.data());
@@ -510,6 +586,9 @@ Bytes CryptoProviderFromDriver::generateIv(BytesView& key, int32_t idx) {
     return hash;
 }
 
+/// @brief Auxiliary method that returns a string describing the algorithm used to identify the algorithm in OpenSSL library methods.
+/// @param alg Symmetric cryptography encryption algorithm
+/// @return Configuration string describing the algorithm used to identify the algorithm in OpenSSL library method
 const char* CryptoProviderFromDriver::getHashAlgName(Hash alg) {
     switch (alg)
     {
@@ -583,6 +662,9 @@ unsigned char* CryptoProviderFromDriver::store_u32_be(unsigned char* out, uint32
     return out+4;
 }
 
+/// @brief Method for generating a private key for a selected asymmetric cryptography algorithm
+/// @param alg The asymmetric cryptography algorithm to be used
+/// @return Generated private key (public key can be extracted from it)
 std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::generatePrivateKey(AsymAlg alg)
 {
     if (alg ==  AsymAlg::EccSecp256k1) {
@@ -597,6 +679,11 @@ std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::generatePrivateKey(AsymAl
     throw PrivmxDriverCryptoException("generatePrivateKey: NOT IMPLEMENTED");
 }
 
+/// @brief Method for importing a private key used in asymmetric cryptography
+/// @param data Exported key data
+/// @param format Data storage format (currently accepted formats: Wif)
+/// @param alg The asymmetric cryptography algorithm in use
+/// @return Imported private key
 std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesView data, KeyFormat format, AsymAlg alg)
 {
     if (alg ==  AsymAlg::EccSecp256k1) {
@@ -612,10 +699,13 @@ std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesVie
         // other algoritms ...
         throw PrivmxDriverCryptoException("importPrivateKey: Unknown protocol");    
     }
-
-    throw PrivmxDriverCryptoException("importPrivateKey: NOT IMPLEMENTED");
 }
 
+/// @brief Method for importing a private key used in asymmetric cryptography
+/// @param data Exported key data
+/// @param format Data storage format (currently accepted formats: Der and Base58Der)
+/// @param alg The asymmetric cryptography algorithm in use
+/// @return Imported public key
 std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView data, KeyFormat format, AsymAlg alg)
 {
     if (alg ==  AsymAlg::EccSecp256k1) {
@@ -639,8 +729,6 @@ std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView 
         // other algoritms ...
         throw PrivmxDriverCryptoException("importPrivateKey: Unknown protocol");    
     }
-
-    throw PrivmxDriverCryptoException("importPublicKey: NOT IMPLEMENTED");
 }
 
 std::shared_ptr<IExtKey> CryptoProviderFromDriver::importExtKey(BytesView data, KeyFormat format, AsymAlg alg)
@@ -658,8 +746,6 @@ std::shared_ptr<IExtKey> CryptoProviderFromDriver::importExtKey(BytesView data, 
         // other algoritms ...
         throw PrivmxDriverCryptoException("importExtKey: Unknown protocol");    
     }
-
-    throw PrivmxDriverCryptoException("importExtKey: NOT IMPLEMENTED");
 }
 
 

@@ -73,8 +73,9 @@ public:
     virtual bool verify(BytesView data, BytesView sig, SigScheme) const = 0;
 
     // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
-    // virtual Bytes seal(BytesView data, const IPrivateKey& senderForSignature) const = 0;
     virtual Bytes seal(BytesView data, const IPrivateKey& senderForSignature) const = 0;
+    // Maybe change to the following(?):
+    // virtual Bytes seal(BytesView data, const std::shared_ptr<IPublicKey>  senderForSignature) const = 0;
 
     virtual Bytes export_(KeyFormat) const = 0;                 // only: Der/Base58Der/Base58DerAddr
 
@@ -89,9 +90,13 @@ public:
 
     // previously ECDHE(*this, publicKey).getSecret()
     virtual Bytes deriveSharedSecret(const IPublicKey& publicKey) const = 0;  
+    // Maybe change to the following(?):
+    // virtual Bytes deriveSharedSecret(const std::shared_ptr<IPublicKey> publicKey) const = 0;  
 
     // previously EciesEncryptor::decrypt(*this,sealed,expectedSender)
     virtual Bytes open(BytesView sealed, const IPublicKey* expectedSender = nullptr) const = 0;
+    // Maybe change to the following(?):
+    // virtual Bytes open(BytesView sealed, const std::shared_ptr<IPublicKey> expectedSender = nullptr) const = 0;
 
     virtual Bytes export_(KeyFormat) const = 0;                     // only: Wif (to add Raw?)
 

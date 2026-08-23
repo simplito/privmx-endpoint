@@ -32,7 +32,7 @@ namespace privmx {
 namespace cryptoservice {
 namespace ecc {
 
-// static version - to be replaced by injected provider in next versions    
+// from static version - has been replaced by injected provider
 // std::shared_ptr<ISymCryptoProvider> PrivateKey::_provider(std::make_shared<CryptoProviderFromDriver>());
 
 PrivateKey PrivateKey::fromWIF(const std::string& wif) {
