@@ -25,7 +25,7 @@ limitations under the License.
 #include "Utils.hpp"
 // #include "ECDHE.hpp"          // not used - to be removed
 // #include "EciesEncryptor.hpp" // not used - to be removed
-#include "ECIES.hpp"
+// #include "ECIES.hpp"          // not used - to be removed
 
 
 namespace privmx {
@@ -157,6 +157,7 @@ Bytes PrivateKey::sign(BytesView data, SigScheme scheme) const {
 
 std::shared_ptr<IPublicKey> PrivateKey::publicKey() const {
     PublicKey key = getPublicKey();
+    key.setSymProvider(_provider);
     return std::make_shared<PublicKey>(std::move(key));
     // throw PrivmxDriverCryptoException("PrivateKey::publicKey: NOT IMPLEMENTED");
 }
@@ -191,9 +192,9 @@ Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const
     if (expectedSender != nullptr && typeid(*expectedSender) != typeid(PublicKey)) {
         throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
     } else if (expectedSender != nullptr) {
-        return Utils::s2b(decrypt(*this, Utils::b2s(sealed)));
+        return Utils::s2b(decrypt(Utils::b2s(sealed)));
     } else {
-        return Utils::s2b(decrypt(*this, Utils::b2s(sealed), *((const PublicKey*) expectedSender)));
+        return Utils::s2b(decrypt(Utils::b2s(sealed), *((const PublicKey*) expectedSender)));
     }
 }
 Bytes PrivateKey::export_(KeyFormat format) const {
@@ -212,17 +213,17 @@ void PrivateKey::setSymProvider(std::shared_ptr<ISymCryptoProvider> provider) {
     _provider = provider;
 }
 
-// // from EciesEncryptor class:
+// from EciesEncryptor class:
 
-Poco::JSON::Object::Ptr PrivateKey::decryptObjectFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature) {
-    return Utils::parseJsonObject(decryptFromBase64(priv, cipher_base64, pubOfSignature));
+Poco::JSON::Object::Ptr PrivateKey::decryptObjectFromBase64(const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature) const {
+    return Utils::parseJsonObject(decryptFromBase64(cipher_base64, pubOfSignature));
 }
 
-std::string PrivateKey::decryptFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature) {
-    return decrypt(priv, Base64::toString(cipher_base64), pubOfSignature);
+std::string PrivateKey::decryptFromBase64(const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature) const {
+    return decrypt(Base64::toString(cipher_base64), pubOfSignature);
 }
 
-std::string PrivateKey::decrypt(const PrivateKey& priv, const std::string& cipher, const std::optional<PublicKey>& pubOfSignature) {
+std::string PrivateKey::decrypt(const std::string& cipher, const std::optional<PublicKey>& pubOfSignature) const {
     if (cipher.front() != 101 || cipher.size() < 67) {
         // throw InvalidFirstByteOfCipherException();
         throw std::runtime_error("EciesEncryptor: InvalidFirstByteOfCipherException");
@@ -235,18 +236,47 @@ std::string PrivateKey::decrypt(const PrivateKey& priv, const std::string& ciphe
         throw std::runtime_error("EciesEncryptor: GivenPublicKeyDoesNotMatchWithSignatureException");
     }
     auto my_pub_ec = PublicKey::fromDER(my_pub);
-    if (my_pub_ec != priv.getPublicKey()) {
+    if (my_pub_ec != getPublicKey()) {
         // throw GivenPrivKeyDoesNotMatchException();
         throw std::runtime_error("EciesEncryptor: GivenPrivKeyDoesNotMatchException");
     }
-    ECIES ecies(priv, external_pub_ec);
-    auto key = ecies.decrypt(cipher.substr(67));
+    // ECIES ecies(*this, external_pub_ec);
+    // auto key = ecies.decrypt(cipher.substr(67));
+    auto key = eciesDecrypt(cipher.substr(67), external_pub_ec);
     return key;
 }
 
-std::string PrivateKey::decryptV0(const PrivateKey& priv, const PublicKey& pub, const std::string& cipher) {
-    ECIES ecies(priv, pub);
-    return ecies.decrypt(cipher);
+std::string PrivateKey::decryptV0(const PublicKey& pub, const std::string& cipher) const {
+    // ECIES ecies(*this, pub);
+    // return ecies.decrypt(cipher);
+    return eciesDecrypt(cipher, pub);
+}
+
+// from ECIES class:
+
+std::string PrivateKey::eciesDecrypt(const std::string& enc_buf, const PublicKey& public_key) const {
+    std::string secret = derive(public_key);
+    // _shared_key = Crypto::sha512(secret);
+    // std::string _shared_key = NewCrypto::digest(Hash::Sha512,secret);
+    std::string _shared_key = Utils::b2s(_provider->digest(Hash::Sha512,Utils::s2b(secret)));
+    std::string _private_enc_key = getPrivateEncKey();
+
+    std::string c = enc_buf.substr(0, enc_buf.length() - 4);
+    std::string d = enc_buf.substr(enc_buf.length() - 4, 4);
+    // std::string M = eciesGetM();
+    std::string M = _shared_key.substr(32, 32);
+    // string d2 = Crypto::hmacSha256(M, c).substr(0, 4);
+    // std::string d2 =  NewCrypto::hmac(Hash::Sha256, M, c).substr(0, 4);
+    std::string d2 =  Utils::b2s(_provider->hmac(Hash::Sha256, Utils::s2b(M), Utils::s2b(c))).substr(0, 4);
+    if (d != d2) {
+        // throw InvalidChecksumException();
+        throw std::runtime_error("ECIES: InvalidChecksumException");
+    }
+    // std::string E = eciesGetE();
+    std::string E = _shared_key.substr(0, 32);
+    // return Crypto::aes256CbcPkcs7Decrypt(c.substr(16), E, c.substr(0, 16));
+    // return NewCrypto::decrypt({SymAlg::Aes256Cbc, E, c.substr(0, 16)}, c.substr(16));
+    return Utils::b2s(_provider->decrypt({SymAlg::Aes256Cbc, Utils::s2b(E), Utils::s2b(c.substr(0, 16))}, Utils::s2b(c.substr(16))));
 }
 
 } // ecc

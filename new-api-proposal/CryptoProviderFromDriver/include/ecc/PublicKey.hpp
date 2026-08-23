@@ -64,13 +64,19 @@ public:
     virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 
 // from EciesEncryptor class:
-    static std::string encryptObjectToBase64(const PublicKey& pub, Poco::JSON::Object::Ptr data, const PrivateKey& privForSignature);
-    static std::string encryptToBase64(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature);
-    static std::string encrypt(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature);
+    // static std::string encryptObjectToBase64(const PublicKey& pub, Poco::JSON::Object::Ptr data, const PrivateKey& privForSignature);
+    // static std::string encryptToBase64(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature);
+    // static std::string encrypt(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature);
+    std::string encryptObjectToBase64(Poco::JSON::Object::Ptr data, const PrivateKey& privForSignature) const;
+    std::string encryptToBase64(const std::string& data, const PrivateKey& privForSignature) const;
+    std::string encrypt(const std::string& data, const PrivateKey& privForSignature) const;
 
-    private:
+private:
     ECC _key;
     std::shared_ptr<ISymCryptoProvider> _provider;
+
+// from ECIES class:
+    std::string eciesEncrypt(const std::string& data, const PrivateKey& private_key) const;
 };
 
 inline const ECC& PublicKey::getEcc() const {

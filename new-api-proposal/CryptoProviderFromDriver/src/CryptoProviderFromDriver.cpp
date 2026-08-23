@@ -57,7 +57,7 @@ Bytes CryptoProviderFromDriver::randomBytes(size_t len)
 
 /// @brief Auxiliary method for generating hash
 /// @param config Configuration string describing the algorithm to be used
-/// @param data The data whose hash is to be generate.
+/// @param data The data whose hash is to be generated
 /// @return Calculated hash
 /// @throws <TO_BE_REPLACED_1> If the given protocol configuration string is not known
 /// @throws <TO_BE_REPLACED_2> If there is an error when setting digest context
@@ -93,7 +93,7 @@ Bytes CryptoProviderFromDriver::digestConfStr(const char *config, BytesView data
 
 /// @brief Method for generating hash
 /// @param alg Algorithm to be used
-/// @param data The data whose hash is to be generated.
+/// @param data The data whose hash is to be generated
 /// @return Calculated hash
 /// @throws <TO_BE_REPLACED> If the given algorithm is not known or not implemented
 Bytes CryptoProviderFromDriver::digest(Hash alg, BytesView data) 

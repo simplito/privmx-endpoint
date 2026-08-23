@@ -18,7 +18,6 @@
 #include "Utils.hpp"
 
 #include "ECC.hpp"
-#include "ECIES.hpp"
 
 
 using privmx::cryptoservice::CryptoProviderRegistry;

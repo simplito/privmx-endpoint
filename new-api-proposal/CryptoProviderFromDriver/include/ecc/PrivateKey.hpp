@@ -65,17 +65,33 @@ public:
     virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 
 // from EciesEncryptor class:
-    static Poco::JSON::Object::Ptr decryptObjectFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
-    static std::string decryptFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
-    static std::string decrypt(const PrivateKey& priv, const std::string& cipher, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
-    static std::string decryptV0(const PrivateKey& priv, const PublicKey& pub, const std::string& cipher);
+    // static Poco::JSON::Object::Ptr decryptObjectFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
+    // static std::string decryptFromBase64(const PrivateKey& priv, const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
+    // static std::string decrypt(const PrivateKey& priv, const std::string& cipher, const std::optional<PublicKey>& pubOfSignature = std::nullopt);
+    // static std::string decryptV0(const PrivateKey& priv, const PublicKey& pub, const std::string& cipher);
+    Poco::JSON::Object::Ptr decryptObjectFromBase64(const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt) const;
+    std::string decryptFromBase64(const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt) const;
+    std::string decrypt(const std::string& cipher, const std::optional<PublicKey>& pubOfSignature = std::nullopt) const;
+    std::string decryptV0(const PublicKey& pub, const std::string& cipher) const;
 
 private:
     ECC _key;
     // static std::shared_ptr<ISymCryptoProvider> _provider;
     std::shared_ptr<ISymCryptoProvider> _provider;
+
+// from ECIES class:
+    std::string eciesDecrypt(const std::string& enc_buf, const PublicKey& public_key) const;
+    // std::string eciesGetM() const;
+    // std::string eciesGetE() const;
 };
 
+// inline std::string PrivateKey::eciesGetM() const {
+//     return _shared_key.substr(32, 32);
+// }
+
+// inline std::string PrivateKey::eciesGetE() const {
+//     return _shared_key.substr(0, 32);
+// }
 inline PublicKey PrivateKey::getPublicKey() const {
     return PublicKey(_key);
 }

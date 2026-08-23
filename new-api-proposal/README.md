@@ -7,7 +7,7 @@ This is a working version of the new API proposal for PrivMX Endpoint
 ### Prerequisites
 
 - CMake ≥ 3.12
-- C++20-capable compiler (testet with GCC)
+- C++20-capable compiler (tested with GCC)
 - [Conan 2.x](https://conan.io/) (recommended) — or manually provided pre-built libraries
 
 ### 1. Building with Conan (Recommended)

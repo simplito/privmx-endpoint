@@ -27,7 +27,9 @@ class ECIES
 {
 public:
     ECIES(const PrivateKey& private_key, const PublicKey& public_key);
+    // to move to PrivateKey class:
     std::string decrypt(const std::string& enc_buf) const;
+    // to move to PublicKey class:
     std::string encrypt(const std::string& data) const;
 
 private:
