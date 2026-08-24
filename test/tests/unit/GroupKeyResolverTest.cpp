@@ -186,7 +186,7 @@ protected:
                 const std::uint32_t rootIndex = TreeMath::root(state.numLeaves);
                 for (const TreeNodeState& node : state.nodes) {
                     if (node.nodeIndex == rootIndex) {
-                        edge.data = TreeKeys::wrapKey(epochKeys.back(), node.publicKey, signer);
+                        edge.data = TreeKeys::wrapKey(epochKeys.back(), node.publicKey.parsed(), signer);
                     }
                 }
                 edge.parentGeneration = static_cast<std::int64_t>(upTo);

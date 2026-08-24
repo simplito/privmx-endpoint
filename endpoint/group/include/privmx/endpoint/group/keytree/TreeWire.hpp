@@ -62,6 +62,32 @@ public:
      * Nothing off the removed leaf's direct path is touched, which is exactly what the bridge checks — and what
      * keeps a removal proportional to the tree's depth rather than to its size.
      */
+    /**
+     * The removal as a delta: the refreshed path with the generations it was planned against, the edges that
+     * refresh owes, and the grant edge at the new epoch. What `afterRemoval` produces minus everything the server
+     * already holds.
+     */
+    static server::GroupTreeTransition toTransition(
+        const server::GroupTreeState& before,
+        const RemovalPlan& plan,
+        std::uint32_t position,
+        std::int64_t baseKeyVersion
+    );
+
+    /**
+     * The addition as a delta: the re-keyed path with the generations it was planned against, the edges that
+     * re-keying owes, and the grant edge re-issued to the new root at the **unchanged** epoch.
+     *
+     * `previousGenerations` says which nodes the server already holds, so the delta can distinguish a node it
+     * advanced from one growth minted. It comes from the same path view the plan was built against — the whole
+     * tree is never needed on either side.
+     */
+    static server::GroupTreeAdditionTransition toAdditionTransition(
+        const AdditionPlan& plan,
+        const std::map<std::uint32_t, std::uint32_t>& previousGenerations,
+        std::int64_t baseKeyVersion
+    );
+
     static server::GroupTreeState afterRemoval(
         const server::GroupTreeState& before,
         const RemovalPlan& plan,
@@ -69,8 +95,13 @@ public:
     );
 
     /**
-     * The state after an addition: the newcomer takes a seat, new nodes appear if the tree grew, and no existing
-     * node key changes. The epoch does not move — that is what keeps every container the group can read valid.
+     * The state after an addition: the newcomer takes a seat and the nodes on their path carry the keys the plan
+     * minted, replacing the ones held before. The epoch does not move — that is what keeps every container the
+     * group can read valid.
+     *
+     * Edges the plan supersedes are dropped, as are edges whose parent is no longer the child's parent: growth
+     * re-parents nodes at the truncated right edge, and an edge describing the old topology would leave the state
+     * self-contradictory.
      */
     static server::GroupTreeState afterAddition(
         const server::GroupTreeState& before,

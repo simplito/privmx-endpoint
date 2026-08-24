@@ -9,6 +9,10 @@ namespace group {
 
 static constexpr char GROUP_TYPE_FILTER_FLAG[] = "group";
 
+// How much of the tree `groupGet` should send. The default is the caller's own path, which is what climbing and
+// reading need; an operation that submits a whole new tree has to ask for the whole one (BR-10/EP-07).
+static constexpr char TREE_SCOPE_FULL[] = "full";
+
 } // namespace group
 } // namespace endpoint
 } // namespace privmx

@@ -163,6 +163,18 @@ private:
     );
 
     /**
+     * The roster as unparsed base58 keys, indexed by user id.
+     *
+     * What `toTreeMembers` does, minus the parsing: building a group wraps to every member so it needs every key,
+     * but a membership change wraps to the `log n` leaves beside one path. At four thousand members parsing the
+     * rest costs ~0.75 s of subgroup checks for nothing.
+     */
+    static std::map<std::string, std::string> rosterKeyStrings(
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers
+    );
+
+    /**
      * Climbs the tree so the caller holds the node keys a plan needs, and returns the current runtime state.
      *
      * Both membership changes need this first: an addition needs the seat's parent key, a removal needs every key

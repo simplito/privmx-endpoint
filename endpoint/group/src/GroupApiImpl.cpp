@@ -95,6 +95,20 @@ std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
     return members;
 }
 
+std::map<std::string, std::string> GroupApiImpl::rosterKeyStrings(
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers
+) {
+    std::map<std::string, std::string> result;
+    for (const core::UserWithPubKey& user : users) {
+        result[user.userId] = user.pubKey;
+    }
+    for (const core::UserWithPubKey& manager : managers) {
+        result[manager.userId] = manager.pubKey;
+    }
+    return result;
+}
+
 /**
  * Runs a plan builder, converting its argument errors into an endpoint exception.
  *
@@ -214,7 +228,18 @@ void GroupApiImpl::addGroupMember(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta
 ) {
+    // Two `O(log n)` reads rather than one `O(n)` one. Which seat the newcomer takes follows from `leafAssignment`,
+    // which every scope carries, so the first read is the caller's own path view; the second asks for what seating
+    // that position needs — the nodes beside the new leaf, whose public keys the re-keying wraps to. The seat has
+    // no holder yet, so `forUserId` cannot name it, which is what `forPosition` is for.
+    server::GroupGetModel seatModel{.groupId = groupId, .type = {}};
+    const auto seating = _serverApi.groupGet(seatModel).group;
+    const std::uint32_t position = keytree::TreeKeys::choosePosition(
+        keytree::TreeWire::toRuntime(keytree::TreeWire::fromGroupInfo(seating), 0, _userPrivKey.getPublicKey())
+    );
+
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
+    getModel.forPosition = static_cast<std::int64_t>(position);
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -224,15 +249,31 @@ void GroupApiImpl::addGroupMember(
     // up in between would let a concurrent invalidation leave `planAddition` with nothing to work from.
     const auto cache = _treeKeyCaches.get(groupId);
     const keytree::TreeGroupState state = climbForPlanning(currentGroup, cache);
+    // What the server already holds for the nodes on that path: a node it has advances a generation, a node it
+    // does not is one growth mints, and the delta has to say which is which.
+    std::map<std::uint32_t, std::uint32_t> previousGenerations;
+    for (const keytree::TreeNodeState& node : state.nodes) {
+        previousGenerations[node.nodeIndex] = node.generation;
+    }
 
     keytree::TreeKeys tree(*cache);
-    tree.setMemberKeys(toTreeMembers(users, managers));
+    tree.setMemberKeyStrings(rosterKeyStrings(users, managers));
     const keytree::AdditionPlan plan = planOrThrow<keytree::AdditionPlan>([&] {
         return tree.planAddition(
             state, keytree::TreeMember{newMember.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.pubKey)},
             _userPrivKey
         );
     });
+    // The path this caller just re-keyed includes their own ancestors, so their cached keys for those nodes now
+    // name a generation the tree no longer has. Keeping the minted ones spares the next operation a re-climb.
+    for (const auto& [nodeIndex, nodeKey] : plan.nodeKeys) {
+        const auto minted = std::find_if(plan.nodes.begin(), plan.nodes.end(), [&](const keytree::TreeNodeState& n) {
+            return n.nodeIndex == nodeIndex;
+        });
+        if (minted != plan.nodes.end()) {
+            cache->putNodeKey(nodeIndex, minted->generation, nodeKey);
+        }
+    }
 
     // No new epoch: `forceGenerateNewKey` stays false so the metadata key is untouched and every container the
     // group can read stays valid. The newcomer simply gets an entry for the key that already exists.
@@ -245,7 +286,6 @@ void GroupApiImpl::addGroupMember(
     auto ctx = prepareContainerUpdate(
         currentGroup, currentEntry, resourceId, users, managers, false, false, _groupPrivKeyResolver
     );
-
     std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
     std::vector<std::string> sortedManagers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     std::sort(sortedUsers.begin(), sortedUsers.end());
@@ -278,9 +318,8 @@ void GroupApiImpl::addGroupMember(
     model.position = static_cast<std::int64_t>(plan.position);
     model.keyId = ctx.key.id;
     model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
-    model.tree = keytree::TreeWire::afterAddition(
-        keytree::TreeWire::fromGroupInfo(currentGroup), plan, newMember.userId
-    );
+    // The delta, not the state: the server holds everything else and checks this against it.
+    model.transition = keytree::TreeWire::toAdditionTransition(plan, previousGenerations, currentEpoch);
     // Exactly one entry, at the key that already exists: no rotation was requested, so `ctx.key` is the group's
     // current metadata key.
     model.keys = _keyProvider->prepareKeysList({newMember}, ctx.key, ctx.dio, ctx.location, ctx.secret);
@@ -292,9 +331,10 @@ void GroupApiImpl::addGroupMember(
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
-    // Deliberately no tree-key invalidation: an addition rotates nothing and refreshes no node. Growing the tree
-    // mints new node *indices* and leaves every existing index's key at its current generation, so what is cached
-    // stays correct.
+    // Deliberately no tree-key invalidation: seating re-keys the new leaf's path, and the minted keys went into
+    // the cache above under the generation they were minted at. Cache entries are keyed by (node, generation), so
+    // the superseded ones cannot be mistaken for current — they are dead weight, not a correctness problem. The
+    // epoch does not move and the grant keypair is untouched, so nothing else cached goes stale.
     invalidateModuleKeysInCache(groupId);
 }
 
@@ -306,7 +346,11 @@ void GroupApiImpl::removeGroupMember(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta
 ) {
+    // The path view is enough for both halves of a removal: climbing runs on the caller's own path, and planning
+    // needs the subject's path and copath — which `forUserId` asks the server to include. What used to be a
+    // ~13 MB download at 16 384 members is `O(log n)`.
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
+    getModel.forUserId = userId;
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -322,7 +366,7 @@ void GroupApiImpl::removeGroupMember(
     keytree::TreeKeys tree(*cache);
     // The surviving siblings' public keys come from the roster: they are not part of the tree state, and a
     // refresh that skipped one would silently lock that member out.
-    tree.setMemberKeys(toTreeMembers(users, managers));
+    tree.setMemberKeyStrings(rosterKeyStrings(users, managers));
     const keytree::RemovalPlan plan = planOrThrow<keytree::RemovalPlan>([&] {
         return tree.planRemoval(state, userId, _userPrivKey);
     });
@@ -398,8 +442,9 @@ void GroupApiImpl::removeGroupMember(
     model.groupPubKey = newGroupPubKeyStr;
     model.keyId = ctx.key.id;
     model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
-    model.tree = keytree::TreeWire::afterRemoval(
-        keytree::TreeWire::fromGroupInfo(currentGroup), plan, position.value()
+    // The delta, not the state: the server holds everything else and checks this against it.
+    model.transition = keytree::TreeWire::toTransition(
+        keytree::TreeWire::fromGroupInfo(currentGroup), plan, position.value(), currentEpoch
     );
     model.rungs = keytree::TreeWire::toWire(rungs);
     // Deliberately empty: `groupKeys` carries the same key in a single ciphertext.
@@ -439,6 +484,7 @@ void GroupApiImpl::updateGroup(
     bool allowRotationRetry
 ) {
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
+    getModel.scope = TREE_SCOPE_FULL;   // submits a whole new tree, so it needs the whole one
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -541,6 +587,7 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
 }
 
 void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload) {
+    // Verifies the winner's key entry and nothing else — no tree is submitted, so the default path view is enough.
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
     auto updatedGroup = _serverApi.groupGet(getModel).group;
 
