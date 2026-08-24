@@ -168,6 +168,13 @@ struct Thread {
      * list of groups granted access to this Thread
      */
     std::vector<core::GroupGrant> groups;
+
+    /**
+     * IDs of the grantee groups that have rotated past the epoch this Thread's current key was wrapped to.
+     * Non-empty means the Thread needs re-keying — rotateThreadKeys() re-wraps its key to the current epoch of
+     * every grantee. Members of a stale group cannot read content written under the current key until then.
+     */
+    std::vector<std::string> staleGroups;
 };
 
 enum EventType : int64_t {

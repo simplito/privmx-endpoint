@@ -98,12 +98,17 @@ public:
      * Unlike updateThread, this can be called by any Thread member (not just managers) when the
      * default rotateKeys policy of "user" is in effect.
      *
+     * The Thread's key is re-wrapped to every one of its grantee groups at that group's current epoch, whether or
+     * not the caller belongs to the group and whether or not it names the group in `groups`: the grantee list comes
+     * from the Thread itself, and any epoch public key missing from `groups` is read from the Bridge.
+     *
      * @param threadId ID of the Thread to re-key
      * @param users current Thread users with their public keys
      * @param managers current Thread managers with their public keys
      * @param version current Thread version (optimistic lock guard)
      * @param force skip the version check when true
-     * @param groups current group grantees with their epoch public keys (required when the Thread has group grants)
+     * @param groups epoch public keys of grantee groups the caller has verified itself; optional, and groups the
+     * Thread does not grant are ignored — a re-key changes no grants
      */
     void rotateThreadKeys(
         const std::string& threadId,

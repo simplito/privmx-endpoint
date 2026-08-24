@@ -40,6 +40,7 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::Thread>(const thread::Thread
     obj->set("messagesCount", serialize(val.messagesCount));
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("groups", serialize(val.groups));
+    obj->set("staleGroups", serialize(val.staleGroups));
     return obj;
 }
 

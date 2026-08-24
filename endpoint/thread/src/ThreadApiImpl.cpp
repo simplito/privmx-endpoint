@@ -9,6 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <algorithm>
+
 #include <privmx/utils/JsonHelper.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -120,17 +122,8 @@ std::string ThreadApiImpl::createThread(
     if (!groups.empty()) {
         // Populate groupEpoch from current group state when caller didn't supply it (EP-13/14)
         std::vector<privmx::endpoint::core::GroupGrantWithKey> resolvedGroups = groups;
-        if (_groupApiImpl) {
-            for (auto& g : resolvedGroups) {
-                if (g.groupEpoch == 0) {
-                    try {
-                        auto grp = _groupApiImpl->getGroup(g.groupId);
-                        g.groupEpoch = grp.keyVersion;
-                        g.groupPubKey = grp.groupPubKey;
-                    } catch (...) {}
-                }
-            }
-        }
+        std::unordered_map<std::string, GroupEpochInfo> groupEpochCache;
+        resolveGroupEpochs(contextId, resolvedGroups, groupEpochCache);
         create_thread_model.groupKeys = buildGroupKeyEntries(
             resolvedGroups, ctx.key, ctx.dio, contextId, ctx.resourceId, ctx.secret
         );
@@ -181,8 +174,8 @@ void ThreadApiImpl::updateThread(
     // EP-13: detect if any grantee group's epoch has advanced; if so, force new thread key.
     bool epochStaleness = false;
     std::unordered_map<std::string, GroupEpochInfo> groupEpochCache;
-    if (_groupApiImpl && !groups.empty()) {
-        epochStaleness = isRekeyNeeded(currentThread, groupEpochCache);
+    if (!groups.empty()) {
+        epochStaleness = isRekeyNeeded(currentThread);
     }
 
     auto ctx = prepareContainerUpdate(
@@ -195,26 +188,10 @@ void ThreadApiImpl::updateThread(
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
     if (!groups.empty()) {
-        // Populate groupEpoch from current group state when caller didn't supply it (EP-13/14)
+        // Populate groupEpoch from current group state when caller didn't supply it (EP-13/14). The grant list
+        // itself is the caller's: this is the call that adds and removes group grantees.
         std::vector<core::GroupGrantWithKey> resolvedGroups = groups;
-        if (_groupApiImpl) {
-            for (auto& g : resolvedGroups) {
-                if (g.groupEpoch == 0) {
-                    auto it = groupEpochCache.find(g.groupId);
-                    if (it != groupEpochCache.end()) {
-                        g.groupEpoch = it->second.keyVersion;
-                        g.groupPubKey = it->second.groupPubKey;
-                    } else {
-                        try {
-                            auto grp = _groupApiImpl->getGroup(g.groupId);
-                            g.groupEpoch = grp.keyVersion;
-                            g.groupPubKey = grp.groupPubKey;
-                            groupEpochCache[g.groupId] = {grp.keyVersion, grp.groupPubKey};
-                        } catch (...) {}
-                    }
-                }
-            }
-        }
+        resolveGroupEpochs(currentThread.contextId, resolvedGroups, groupEpochCache);
         model.groupKeys = buildGroupKeyEntries(
             resolvedGroups, ctx.key, ctx.dio, currentThread.contextId, currentThreadResourceId, ctx.secret
         );
@@ -263,19 +240,13 @@ void ThreadApiImpl::rotateThreadKeys(
     model.version = version;
     model.force = force;
 
-    if (!groups.empty()) {
-        std::vector<core::GroupGrantWithKey> resolvedGroups = groups;
-        if (_groupApiImpl) {
-            for (auto& g : resolvedGroups) {
-                if (g.groupEpoch == 0) {
-                    try {
-                        auto grp = _groupApiImpl->getGroup(g.groupId);
-                        g.groupEpoch = grp.keyVersion;
-                        g.groupPubKey = grp.groupPubKey;
-                    } catch (...) {}
-                }
-            }
-        }
+    // A re-key changes no grants, so the grantees are the Thread's own — `currentThread.groups`, which the bridge
+    // serves in full. Taking them from `groups` instead would silently drop every grantee the caller did not name,
+    // and a caller can only name the groups it belongs to: `groupKeys`, the one place a Thread's grantee groups
+    // show up in its payload, is narrowed to those. The bridge rejects a re-key that leaves a granted group without
+    // an entry at the new keyId, so the dropped grantees would fail the whole call.
+    auto resolvedGroups = resolveGranteesForRekey(currentThread, groups);
+    if (!resolvedGroups.empty()) {
         model.groupKeys = buildGroupKeyEntries(
             resolvedGroups, ctx.key, ctx.dio, currentThread.contextId, resourceId, ctx.secret
         );
@@ -572,35 +543,141 @@ core::ModuleKeys ThreadApiImpl::threadToModuleKeys(server::ThreadInfo thread) {
 }
 
 bool ThreadApiImpl::isRekeyNeeded(
-    const server::ThreadInfo& thread,
-    std::unordered_map<std::string, GroupEpochInfo>& groupCache
+    const server::ThreadInfo& thread
 ) {
-    if (!_groupApiImpl || thread.groupKeys.empty())
-        return false;
-    bool stale = false;
-    for (const auto& entry : thread.groupKeys) {
-        if (groupCache.find(entry.group) == groupCache.end()) {
-            try {
-                auto grp = _groupApiImpl->getGroup(entry.group);
-                groupCache[entry.group] = GroupEpochInfo{.keyVersion = grp.keyVersion, .groupPubKey = grp.groupPubKey};
-            } catch (...) { continue; }
-        }
-        int64_t storedEpoch = 0;
-        for (const auto& keyEntry : entry.keys) {
-            storedEpoch = std::max(storedEpoch, keyEntry.groupEpoch.value_or(0));
-        }
-        int64_t currentEpoch = groupCache[entry.group].keyVersion;
-        if (storedEpoch < currentEpoch) {
-            stale = true;
-            break;
+    return !thread.staleGroups.empty();
+}
+
+std::vector<core::GroupGrantWithKey> ThreadApiImpl::resolveGranteesForRekey(
+    const server::ThreadInfo& thread,
+    const std::vector<core::GroupGrantWithKey>& callerSupplied
+) {
+    std::vector<core::GroupGrantWithKey> grants;
+    grants.reserve(thread.groups.size());
+    for (const auto& grant : thread.groups) {
+        auto supplied = std::find_if(
+            callerSupplied.begin(), callerSupplied.end(),
+            [&](const core::GroupGrantWithKey& g) { return g.groupId == grant.groupId; }
+        );
+        if (supplied != callerSupplied.end()) {
+            // The caller's public key wins where it has one: it is the key it verified out-of-band, and the role
+            // still comes from the grant, which a re-key cannot change.
+            grants.push_back(
+                core::GroupGrantWithKey{
+                    .groupId = grant.groupId,
+                    .role = grant.role,
+                    .groupPubKey = supplied->groupPubKey,
+                    .groupEpoch = supplied->groupEpoch
+                }
+            );
+        } else {
+            grants.push_back(core::GroupGrantWithKey{.groupId = grant.groupId, .role = grant.role});
         }
     }
-    return stale;
+    for (const auto& g : callerSupplied) {
+        auto granted = std::find_if(
+            thread.groups.begin(), thread.groups.end(),
+            [&](const core::server::GroupGrant& grant) { return grant.groupId == g.groupId; }
+        );
+        if (granted == thread.groups.end()) {
+            // Not dropped silently: a re-key cannot add a grant (the bridge refuses a key entry for a group the
+            // Thread does not grant), so a group named here that the Thread does not grant is a caller mistake
+            // that updateThread, not this call, is the fix for.
+            LOG_DEBUG("[resolveGranteesForRekey] group ", g.groupId, " is not a grantee of this thread — ignored")
+        }
+    }
+    std::unordered_map<std::string, GroupEpochInfo> groupCache;
+    resolveGroupEpochs(thread.contextId, grants, groupCache);
+    return grants;
+}
+
+void ThreadApiImpl::resolveGroupEpochs(
+    const std::string& contextId,
+    std::vector<core::GroupGrantWithKey>& grants,
+    std::unordered_map<std::string, GroupEpochInfo>& groupCache
+) {
+    auto isComplete = [](const core::GroupGrantWithKey& g) {
+        return g.groupEpoch > 0 && !g.groupPubKey.empty();
+    };
+    std::vector<std::string> toFetch;
+    for (const auto& g : grants) {
+        if (isComplete(g) || groupCache.find(g.groupId) != groupCache.end())
+            continue;
+        if (std::find(toFetch.begin(), toFetch.end(), g.groupId) == toFetch.end())
+            toFetch.push_back(g.groupId);
+    }
+    if (!toFetch.empty()) {
+        fetchGroupEpochs(contextId, toFetch, groupCache);
+    }
+    for (auto& g : grants) {
+        if (isComplete(g))
+            continue;
+        auto resolved = groupCache.find(g.groupId);
+        if (resolved == groupCache.end()) {
+            throw UnresolvedGroupGranteeException("groupId=" + g.groupId);
+        }
+        // Both fields, never one: the epoch names which key pair the entry is readable with, so a caller-supplied
+        // public key cannot be kept alongside an epoch read from somewhere else.
+        g.groupPubKey = resolved->second.groupPubKey;
+        g.groupEpoch = resolved->second.keyVersion;
+    }
+}
+
+void ThreadApiImpl::fetchGroupEpochs(
+    const std::string& contextId,
+    const std::vector<std::string>& groupIds,
+    std::unordered_map<std::string, GroupEpochInfo>& groupCache
+) {
+    if (!_groupApiImpl)
+        return;
+    // The bridge caps a listing at 100 items, so the id filter is spent in batches of that size.
+    constexpr size_t BATCH = 100;
+    for (size_t offset = 0; offset < groupIds.size(); offset += BATCH) {
+        std::vector<std::string> batch(
+            groupIds.begin() + offset, groupIds.begin() + std::min(offset + BATCH, groupIds.size())
+        );
+        Poco::JSON::Array::Ptr ids = new Poco::JSON::Array();
+        for (const auto& id : batch) {
+            ids->add(id);
+        }
+        Poco::JSON::Object::Ptr in = new Poco::JSON::Object();
+        in->set("$in", ids);
+        Poco::JSON::Object::Ptr query = new Poco::JSON::Object();
+        query->set("#id", in);
+        core::PagingQuery pagingQuery{
+            .skip = 0,
+            .limit = static_cast<int64_t>(batch.size()),
+            .sortOrder = "asc",
+            .queryAsJson = privmx::utils::Utils::stringify(query)
+        };
+        try {
+            auto listed = _groupApiImpl->listGroups(contextId, pagingQuery);
+            for (const auto& summary : listed.readItems) {
+                groupCache[summary.groupId] =
+                    GroupEpochInfo{.keyVersion = summary.keyVersion, .groupPubKey = summary.groupPubKey};
+            }
+        } catch (const std::exception& e) {
+            // A deployment may set `group.listAll: "none"`; the per-group read below is then the only way in,
+            // and it only works for groups we belong to.
+            LOG_DEBUG("[fetchGroupEpochs] groupList by id unavailable: ", e.what())
+        }
+    }
+    for (const auto& id : groupIds) {
+        if (groupCache.find(id) != groupCache.end())
+            continue;
+        try {
+            auto fetched = _groupApiImpl->getGroup(id);
+            groupCache[id] = GroupEpochInfo{.keyVersion = fetched.keyVersion, .groupPubKey = fetched.groupPubKey};
+        } catch (const std::exception& e) {
+            // Deleted, in another context, or one we are not a member of — left out, so the caller of
+            // resolveGroupEpochs can name it in the error rather than sending an entry it cannot fill in.
+            LOG_DEBUG("[fetchGroupEpochs] cannot read group ", id, ": ", e.what())
+        }
+    }
 }
 
 void ThreadApiImpl::applyRekeyIfNeeded(const std::string& threadId, const server::ThreadInfo& thread) {
-    std::unordered_map<std::string, GroupEpochInfo> groupCache;
-    if (!isRekeyNeeded(thread, groupCache))
+    if (!isRekeyNeeded(thread))
         return;
     // Rekey: rebuild GroupGrantWithKey list with current epoch public keys, then force updateThread.
     // The caller of updateThread must provide users/managers with public keys; since we don't have
