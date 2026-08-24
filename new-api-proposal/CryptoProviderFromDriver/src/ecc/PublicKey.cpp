@@ -38,6 +38,11 @@ PublicKey PublicKey::fromBase58DER(const std::string& base58) {
 
 PublicKey::PublicKey(const ECC& key) : _key(key) {}
 
+PublicKey::PublicKey(std::shared_ptr<ISymCryptoProvider> p) : _provider(p) {}
+
+PublicKey::PublicKey(std::shared_ptr<ISymCryptoProvider> p, const ECC& key) : _provider(p), _key(key) {}
+
+
 bool PublicKey::operator==(const PublicKey& obj) const {
     return (_key.getPublicKey() == obj._key.getPublicKey());
 }

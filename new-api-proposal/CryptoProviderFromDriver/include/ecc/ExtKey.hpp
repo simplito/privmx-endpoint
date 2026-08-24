@@ -43,6 +43,12 @@ public:
     ExtKey(const std::string& key, const std::string& chain_code, bool private_key = true);
     ExtKey(const std::string& key, const std::string& chain_code, bool private_key, Poco::UInt8 depth,
            Poco::UInt32 parent_fingerprint, Poco::UInt32 index);
+    ExtKey(std::shared_ptr<ISymCryptoProvider> p);
+    ExtKey(std::shared_ptr<ISymCryptoProvider> p, 
+           BytesView key, BytesView chain_code, bool private_key = true);
+    ExtKey(std::shared_ptr<ISymCryptoProvider> p,
+           BytesView key, BytesView chain_code, bool private_key, Poco::UInt8 depth,
+           Poco::UInt32 parent_fingerprint, Poco::UInt32 index);
     operator bool() const;
     ExtKey derive(Poco::UInt32 index) const;
     ExtKey deriveHardened(Poco::UInt32 index) const;
@@ -67,10 +73,16 @@ public:
     virtual Bytes chainCode() const override;
     virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 
+// new methods    
+    static ExtKey fromSeed(std::shared_ptr<ISymCryptoProvider> p, BytesView seed);
+    static ExtKey fromBase58(std::shared_ptr<ISymCryptoProvider> p, BytesView base58);
+    static ExtKey generateRandom(std::shared_ptr<ISymCryptoProvider> p);
+
 private:
     static const Poco::UInt32 HIGHEST_BIT = 0x80000000;
     static const std::string MASTER_SECRET;
     static Poco::UInt32 read_u32_be(const std::string& raw_key, size_t offset);
+    static Poco::UInt32 read_u32_be_b(BytesView raw_key, size_t offset); // possibly to rewrite
 
     std::string toBase58(bool is_private = false) const;
     ExtKey derive(Poco::UInt32 index, bool old_privmx_version) const;
@@ -102,11 +114,13 @@ inline PrivateKey ExtKey::getPrivateKey() const {
         // throw ExtKeyDoesNotHoldPrivateKeyException();
         throw std::runtime_error("ExtKey: ExtKeyDoesNotHoldPrivateKeyException");
     }
-    return PrivateKey(_ec);
+    // return PrivateKey(_ec);
+    return PrivateKey(_provider, _ec);
 }
 
 inline PublicKey ExtKey::getPublicKey() const {
-    return PublicKey(_ec);
+    // return PublicKey(_ec);
+    return PublicKey(_provider, _ec);
 }
 
 inline std::string ExtKey::getPrivateEncKey() const {

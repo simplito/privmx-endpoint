@@ -39,6 +39,13 @@ ExtKey ExtKey::fromSeed(const std::string& seed) {
     return ExtKey(key, chain_code);
 }
 
+ExtKey ExtKey::fromSeed(std::shared_ptr<ISymCryptoProvider> p, BytesView seed) {
+    Bytes raw_key = p->hmac(Hash::Sha512,Utils::s2b(MASTER_SECRET), seed);
+    Bytes key(raw_key.begin(),raw_key.begin()+32);
+    Bytes chain_code(raw_key.begin()+32,raw_key.end());
+    return ExtKey(p, key, chain_code);
+}
+
 ExtKey ExtKey::fromBase58(const std::string& base58) {
     std::string raw_key = Base58::decodeWithChecksum(base58);
 
@@ -93,12 +100,79 @@ ExtKey ExtKey::fromBase58(const std::string& base58) {
     return key;
 }
 
+ExtKey ExtKey::fromBase58(std::shared_ptr<ISymCryptoProvider> p, BytesView base58) {
+    Bytes raw_key = Base58::decodeWithChecksumB(p, base58);
+
+    // BIP32 extended key must be exactly 78 bytes
+    if (raw_key.size() != 78) {
+        // throw InvalidExtendedKeySizeException();
+        throw std::runtime_error("ExtKey: InvalidExtendedKeySizeException");
+    }
+
+    // ===== version (4 bytes) =====
+    Poco::UInt32 version = read_u32_be_b(raw_key, 0);
+
+    if (version != Networks::BITCOIN.BIP39.PRIVATE &&
+        version != Networks::BITCOIN.BIP39.PUBLIC) {
+        // throw InvalidVersionException();
+        throw std::runtime_error("ExtKey: InvalidVersionException");
+        }
+
+    // ===== depth (1 byte) =====
+    Poco::UInt8 depth = static_cast<Poco::UInt8>(raw_key[4]);
+
+    // ===== parent fingerprint (4 bytes) =====
+    Poco::UInt32 parent_fingerprint = read_u32_be_b(raw_key, 5);
+
+    if (depth == 0 && parent_fingerprint != 0) {
+        // throw InvalidParentFingerprintException();
+        throw std::runtime_error("ExtKey: InvalidParentFingerprintException");
+    }
+
+    // ===== chain code (32 bytes) =====
+    // std::string chain_code = raw_key.substr(13, 32);
+    Bytes chain_code(raw_key.begin()+13,raw_key.begin()+13+32);
+
+    // ===== key data =====
+    ExtKey key;
+    if (version == Networks::BITCOIN.BIP39.PRIVATE) {
+        // layout: [0x00][32-byte privkey]
+        // key data starts at offset 45, private key at 46
+        key = ExtKey(
+            p,
+            // raw_key.substr(46, 32),
+            Bytes(raw_key.begin()+46,raw_key.begin()+46+32),
+            chain_code
+        );
+    } else {
+        // layout: [33-byte compressed pubkey]
+        // key data starts at offset 45
+        key = ExtKey(
+            p,
+            // raw_key.substr(45, 33),
+            Bytes(raw_key.begin()+45,raw_key.begin()+45+33),
+            chain_code,
+            false
+        );
+    }
+
+    return key;
+}
+
 ExtKey ExtKey::generateRandom() {
     // std::string raw_buf = Crypto::randomBytes(64);
     std::string raw_buf = NewCrypto::randomBytes(64);
     std::string key = raw_buf.substr(0, 32);
     std::string chain_code = raw_buf.substr(32, 32);
     return ExtKey(key, chain_code);
+}
+
+ExtKey ExtKey::generateRandom(std::shared_ptr<ISymCryptoProvider> p) {
+    Bytes raw_buf = p->randomBytes(64);
+    Bytes key(raw_buf.begin(), raw_buf.begin()+32);
+    Bytes chain_code(raw_buf.begin()+32,raw_buf.end());
+    // return ExtKey(p, Utils::b2s(key), Utils::b2s(chain_code));
+    return ExtKey(p, key, chain_code);
 }
 
 ExtKey::ExtKey() {}
@@ -122,6 +196,32 @@ ExtKey::ExtKey(const std::string& key, const std::string& chain_code, bool priva
         _ec = ECC::fromPublicKey(key);
     }
     _chain_code = chain_code;
+    _is_private = private_key;
+}
+
+ExtKey::ExtKey(std::shared_ptr<ISymCryptoProvider> p) : _provider(p) {}
+
+ExtKey::ExtKey(std::shared_ptr<ISymCryptoProvider> p, 
+    BytesView key, BytesView chain_code, bool private_key) : _provider(p) {
+    if (private_key) {
+        _ec = ECC::fromPrivateKey(Utils::b2s(key));
+    } else {
+        _ec = ECC::fromPublicKey(Utils::b2s(key));
+    }
+    _chain_code = Utils::b2s(chain_code);
+    _is_private = private_key;
+}
+
+ExtKey::ExtKey(std::shared_ptr<ISymCryptoProvider> p, 
+               BytesView key, BytesView chain_code, bool private_key, Poco::UInt8 depth,
+               Poco::UInt32 parent_fingerprint, Poco::UInt32 index)
+        : _depth(depth), _parent_fingerprint(parent_fingerprint), _index(index), _provider(p) {
+    if (private_key) {
+        _ec = ECC::fromPrivateKey(Utils::b2s(key));
+    } else {
+        _ec = ECC::fromPublicKey(Utils::b2s(key));
+    }
+    _chain_code = Utils::b2s(chain_code);
     _is_private = private_key;
 }
 
@@ -227,6 +327,13 @@ std::string ExtKey::toBase58(bool is_private) const {
 }
 
 Poco::UInt32 ExtKey::read_u32_be(const std::string& raw_key, size_t offset) {
+    Poco::UInt32 v;
+    std::memcpy(&v, raw_key.data() + offset, 4);
+    return Poco::ByteOrder::fromBigEndian(v);
+}
+
+// TO REWRITE
+Poco::UInt32 ExtKey::read_u32_be_b(BytesView raw_key, size_t offset) {
     Poco::UInt32 v;
     std::memcpy(&v, raw_key.data() + offset, 4);
     return Poco::ByteOrder::fromBigEndian(v);

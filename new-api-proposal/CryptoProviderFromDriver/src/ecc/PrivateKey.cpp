@@ -53,7 +53,7 @@ PrivateKey PrivateKey::fromWIF(const std::string& wif) {
     return PrivateKey(std::move(key));
 }
 
-PrivateKey PrivateKey::fromWIFb(std::shared_ptr<IDigest> p, BytesView wif) {
+PrivateKey PrivateKey::fromWIFb(std::shared_ptr<ISymCryptoProvider> p, BytesView wif) {
     // Bytes payload = Base58::decodeWithChecksumB(_provider, wif);
     Bytes payload = Base58::decodeWithChecksumB(p, wif);
     if (payload.front() != (uint8_t) Networks::BITCOIN.WIF) {
@@ -73,7 +73,8 @@ PrivateKey PrivateKey::fromWIFb(std::shared_ptr<IDigest> p, BytesView wif) {
         throw std::runtime_error("PrivateKey: InvalidWIFPayloadLengthException");
     }
     ECC key = ECC::fromPrivateKey(Utils::b2s(payload));
-    return PrivateKey(std::move(key));
+    // return PrivateKey(std::move(key));
+    return PrivateKey(p, std::move(key));
 }
 
 PrivateKey PrivateKey::generateRandom() {
@@ -81,7 +82,16 @@ PrivateKey PrivateKey::generateRandom() {
     return PrivateKey(std::move(key));
 }
 
+PrivateKey PrivateKey::generateRandom(std::shared_ptr<ISymCryptoProvider> p) {
+    ECC key = ECC::genPair();
+    return PrivateKey(p, std::move(key));
+}
+
 PrivateKey::PrivateKey(const ECC& key) : _key(key) {}
+
+PrivateKey::PrivateKey(std::shared_ptr<ISymCryptoProvider> p) : _provider(p) {}
+
+PrivateKey::PrivateKey(std::shared_ptr<ISymCryptoProvider> p, const ECC& key) : _provider(p), _key(key) {}
 
 std::string PrivateKey::getPrivateEncKey() const {
     std::string key = _key.getPrivateKey();
@@ -139,9 +149,7 @@ Bytes PrivateKey::sign(BytesView data, SigScheme scheme) const {
 
 std::shared_ptr<IPublicKey> PrivateKey::publicKey() const {
     PublicKey key = getPublicKey();
-    key.setSymProvider(_provider);
     return std::make_shared<PublicKey>(std::move(key));
-    // throw PrivmxDriverCryptoException("PrivateKey::publicKey: NOT IMPLEMENTED");
 }
 
 // // Old implementaion:

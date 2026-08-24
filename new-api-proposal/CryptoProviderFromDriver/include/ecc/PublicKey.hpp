@@ -41,6 +41,8 @@ public:
     static PublicKey fromBase58DER(const std::string& base58);
     PublicKey() = default;
     PublicKey(const ECC& key);
+    PublicKey(std::shared_ptr<ISymCryptoProvider> p); // new
+    PublicKey(std::shared_ptr<ISymCryptoProvider> p, const ECC& key); // new
     bool operator==(const PublicKey& obj) const;
     bool operator!=(const PublicKey& obj) const;
     std::string toDER() const;

@@ -40,6 +40,8 @@ class PrivateKey : public IPrivateKey
 public:
     PrivateKey() {}
     PrivateKey(const ECC& key);
+    PrivateKey(std::shared_ptr<ISymCryptoProvider> p); // new
+    PrivateKey(std::shared_ptr<ISymCryptoProvider> p, const ECC& key); // new
     PublicKey getPublicKey() const;
     std::string getPrivateEncKey() const;
     std::string derive(const PublicKey& public_key) const;
@@ -58,7 +60,9 @@ public:
     std::string signToCompactSignatureWithHash(const std::string& message) const;
     std::string toWIF() const;
 
-    static PrivateKey fromWIFb(std::shared_ptr<IDigest> p, BytesView wif);
+// new public methods:
+    PrivateKey generateRandom(std::shared_ptr<ISymCryptoProvider> p); 
+    static PrivateKey fromWIFb(std::shared_ptr<ISymCryptoProvider> p, BytesView wif);
     Bytes toWIFb() const;
     Bytes deriveB(const PublicKey& public_key) const;
 
@@ -80,7 +84,8 @@ private:
 };
 
 inline PublicKey PrivateKey::getPublicKey() const {
-    return PublicKey(_key);
+    // return PublicKey(_key);
+    return PublicKey(_provider,_key);
 }
 
 inline ECC PrivateKey::getEccKey() const {
