@@ -170,11 +170,11 @@ private:
     static const TreeNodeState* findNode(const TreeGroupState& state, std::uint32_t nodeIndex);
 
     /** The public key of a member's leaf, parsing it on first use. Empty when the roster does not name them. */
-    std::optional<privmx::crypto::PublicKey> memberKey(const std::string& userId) const;
+    std::optional<privmx::crypto::PublicKey> memberKey(const std::string& userId);
 
     TreeKeyCache& _cache;
     /** Member public keys already parsed: supplied whole by `setMemberKeys`, or filled in on demand. */
-    mutable std::map<std::string, privmx::crypto::PublicKey> _memberKeys;
+    std::map<std::string, privmx::crypto::PublicKey> _memberKeys;
     /** Unparsed roster from `setMemberKeyStrings`, base58-DER per user id. */
     std::map<std::string, std::string> _memberKeyStrings;
 };

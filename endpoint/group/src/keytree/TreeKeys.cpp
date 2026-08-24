@@ -514,7 +514,7 @@ RemovalPlan TreeKeys::planRemoval(
     return plan;
 }
 
-std::optional<privmx::crypto::PublicKey> TreeKeys::memberKey(const std::string& userId) const {
+std::optional<privmx::crypto::PublicKey> TreeKeys::memberKey(const std::string& userId) {
     const auto parsed = _memberKeys.find(userId);
     if (parsed != _memberKeys.end()) {
         return parsed->second;
