@@ -83,5 +83,5 @@ target_link_libraries(${PROJECT_NAME}-exec
     add_executable(privmxcryptoservice_test ${TESTS_SOURCES})
     target_include_directories(privmxcryptoservice_test PUBLIC ${INCLUDE_LIBDRIVER})
 #    target_link_libraries(privmxcryptoservice_test PUBLIC Poco::Foundation Poco::JSON Pson privmx GTest::GTest GTest::Main)
-    target_link_libraries(privmxcryptoservice_test PUBLIC libraryFromDriver Poco::Poco openssl::openssl GTest::gtest_main)
+    target_link_libraries(privmxcryptoservice_test PUBLIC libraryFromDriver Poco::Poco gmp::gmp openssl::openssl GTest::gtest_main)
     gtest_add_tests(TARGET privmxcryptoservice_test)
