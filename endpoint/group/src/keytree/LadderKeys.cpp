@@ -11,6 +11,9 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/LadderKeys.hpp"
 
+#include <algorithm>
+#include <cstddef>
+#include <functional>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -51,6 +54,79 @@ bool LadderKeys::verifyAgainstRegistry(
 // Publishing
 // ─────────────────────────────────────────────────────────────────────────────
 
+std::vector<std::uint32_t> LadderKeys::requiredSkipTargets(
+    std::uint32_t newEpoch,
+    std::uint32_t eraFloor,
+    std::optional<std::uint32_t> prunedBelow
+) {
+    std::vector<std::uint32_t> targets;
+    if (!LadderMath::requiresUnitRung(newEpoch, eraFloor)) {
+        return targets; // genesis of an era: nothing below to link to
+    }
+    // Only the era floor and the prune watermark may shorten this list. Both are policy the bridge applies to the
+    // rung set anyway, and the keys they cut off are gone for every member alike — unlike a key that is merely
+    // absent from *this* client's cache, which is the case this whole path exists to stop being decisive.
+    const std::uint32_t floor = LadderMath::descentFloor(eraFloor, prunedBelow).floor;
+    for (const std::uint32_t target : LadderMath::skipRungTargets(newEpoch, eraFloor)) {
+        if (target == newEpoch - 1 || target < floor) {
+            continue; // the unit rung already covers `newEpoch - 1`
+        }
+        targets.push_back(target);
+    }
+    // Nearest first: `gatherRungKeys` walks this as a chain, each descent resuming where the previous one landed.
+    std::sort(targets.begin(), targets.end(), std::greater<std::uint32_t>());
+    return targets;
+}
+
+RungKeyGathering LadderKeys::gatherRungKeys(
+    std::uint32_t newEpoch,
+    const std::vector<ArchiveRung>& available,
+    const std::vector<EpochRegistryEntry>& registry,
+    std::uint32_t eraFloor,
+    std::optional<std::uint32_t> prunedBelow
+) {
+    RungKeyGathering gathering;
+    const std::vector<std::uint32_t> targets = requiredSkipTargets(newEpoch, eraFloor, prunedBelow);
+    if (targets.empty()) {
+        return gathering;
+    }
+
+    std::uint32_t from = newEpoch - 1;
+    if (!_cache.getGrantKey(from).has_value()) {
+        // Nothing to descend from. The rotation cannot proceed regardless — the unit rung needs this same key —
+        // but reporting it here keeps the caller's error about the ladder rather than about a failed wrap.
+        gathering.complete = false;
+        gathering.missingTargets = targets;
+        gathering.failure = DescentFailure::NotEntitled;
+        return gathering;
+    }
+
+    for (std::size_t i = 0; i < targets.size(); ++i) {
+        const std::uint32_t target = targets[i];
+        if (_cache.getGrantKey(target).has_value()) {
+            from = target; // already held, from an earlier gather or a read in this session
+            continue;
+        }
+        // `maxWalk` sized to this hop instead of left at its default. The default protects a *reader* from a
+        // pathological rung set; here the point is to gather keys even across a stretch that only ever published
+        // unit rungs, since refusing to walk it is exactly what would leave that stretch permanently linear.
+        // Termination does not rest on this bound anyway — `descend` keeps a visited set.
+        const DescentResult step = descend(from, target, available, registry, eraFloor, prunedBelow, from - target + 1);
+        gathering.unwraps += step.hops;
+        if (!step.key.has_value()) {
+            gathering.complete = false;
+            gathering.failure = step.failure;
+            gathering.blame = step.blame;
+            // Every deeper target goes with it: the gather descends, so a break here cuts off the rest of the
+            // chain too. Naming them all is what lets the caller report the whole stretch at risk.
+            gathering.missingTargets.assign(targets.begin() + static_cast<std::ptrdiff_t>(i), targets.end());
+            return gathering;
+        }
+        from = target;
+    }
+    return gathering;
+}
+
 std::vector<ArchiveRung> LadderKeys::buildRungs(
     std::uint32_t newEpoch,
     const privmx::crypto::PublicKey& newGrantPublicKey,
@@ -58,7 +134,8 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
     std::uint32_t eraFloor,
     const std::string& author,
     const privmx::crypto::PrivateKey& signer,
-    bool includeSkipRungs
+    bool includeSkipRungs,
+    std::optional<std::uint32_t> prunedBelow
 ) {
     std::vector<ArchiveRung> rungs;
     if (!LadderMath::requiresUnitRung(newEpoch, eraFloor)) {
@@ -86,17 +163,25 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
         return rungs;
     }
 
-    // Skip rungs are best effort: a target key we do not hold costs walk time, not correctness.
-    for (const std::uint32_t target : LadderMath::skipRungTargets(newEpoch, eraFloor)) {
-        if (target == newEpoch - 1) {
-            continue; // already covered by the unit rung
-        }
-        const auto targetKey = _cache.getGrantKey(target);
+    // Emitted oldest target first, undoing the nearest-first order the gather needs.
+    const std::vector<std::uint32_t> targets = requiredSkipTargets(newEpoch, eraFloor, prunedBelow);
+    for (auto target = targets.rbegin(); target != targets.rend(); ++target) {
+        const auto targetKey = _cache.getGrantKey(*target);
         if (!targetKey.has_value()) {
-            continue;
+            // Not a skippable optimisation. This rung can never be published again — its span is pinned to this
+            // epoch — so committing the set without it orphans everything below it from the fast path forever.
+            throw std::invalid_argument(
+                "cannot build the aligned skip rung " +
+                std::to_string(newEpoch) +
+                "->" +
+                std::to_string(*target) +
+                ": the grant key for epoch " +
+                std::to_string(*target) +
+                " is not held. Call gatherRungKeys before rotating; a rung missing from this set is unrepairable"
+            );
         }
         ArchiveRung rung;
-        rung.span = RungSpan{newEpoch, target};
+        rung.span = RungSpan{newEpoch, *target};
         rung.recipientKind = RungRecipientKind::Epoch;
         rung.blob = TreeKeys::wrapKey(targetKey.value(), newGrantPublicKey, signer);
         rung.author = author;
@@ -177,10 +262,9 @@ DescentResult LadderKeys::descend(
     std::uint32_t current = from;
     privmx::crypto::PrivateKey currentKey = startKey.value();
     std::set<std::uint32_t> visited{from};
-    std::uint32_t steps = 0;
 
     while (current > goal) {
-        if (++steps > maxWalk) {
+        if (result.hops >= maxWalk) {
             result.failure = DescentFailure::TooLong;
             result.reachedEpoch = current;
             return result;
@@ -227,6 +311,7 @@ DescentResult LadderKeys::descend(
         currentKey = recovered.value();
         _cache.putGrantKey(current, currentKey);
         result.reachedEpoch = current;
+        ++result.hops;
 
         if (visited.count(current) > 0) {
             // Defensive: a malformed rung set must not spin forever.

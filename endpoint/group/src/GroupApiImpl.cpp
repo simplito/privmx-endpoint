@@ -338,6 +338,67 @@ void GroupApiImpl::addGroupMember(
     invalidateModuleKeysInCache(groupId);
 }
 
+std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
+    const server::GroupInfo& group,
+    std::uint32_t newEpoch,
+    const privmx::crypto::PublicKey& newGrantPublicKey,
+    const std::optional<privmx::crypto::PrivateKey>& previousEpochKey,
+    const std::string& author,
+    keytree::TreeKeyCache& cache
+) {
+    const auto asEpoch = [](const std::optional<int64_t>& value) -> std::optional<std::uint32_t> {
+        return value.has_value() ? std::optional<std::uint32_t>(static_cast<std::uint32_t>(value.value())) :
+                                   std::nullopt;
+    };
+    keytree::LadderKeys ladder(cache);
+
+    // Sized off the group first, only to decide whether an archive is needed at all and how wide a window to ask
+    // for. The archive's own floors are authoritative for the walk itself, and are read back below.
+    const std::vector<std::uint32_t> targets = keytree::LadderKeys::requiredSkipTargets(
+        newEpoch, static_cast<std::uint32_t>(group.eraFloor.value_or(1)), asEpoch(group.archivePrunedBelow)
+    );
+    if (targets.empty()) {
+        // The unit rung is the whole set — an odd epoch, or the first above a floor — and the climb already
+        // supplied its key. Nothing to fetch and nothing to walk.
+        return planOrThrow<std::vector<keytree::ArchiveRung>>([&] {
+            return ladder.buildRungs(
+                newEpoch, newGrantPublicKey, previousEpochKey, static_cast<std::uint32_t>(group.eraFloor.value_or(1)),
+                author, _userPrivKey, true, asEpoch(group.archivePrunedBelow)
+            );
+        });
+    }
+
+    // The window is the stretch this rotation actually walks: from the oldest target it owes a rung to, up to the
+    // epoch being replaced. Every rung used along the way is addressed to an epoch inside it.
+    const server::GroupGetKeyArchiveResult archive = fetchKeyArchive(
+        group.id, static_cast<int64_t>(targets.back()), static_cast<int64_t>(newEpoch - 1)
+    );
+    const std::uint32_t eraFloor = static_cast<std::uint32_t>(archive.eraFloor);
+    const std::optional<std::uint32_t> prunedBelow = asEpoch(archive.archivePrunedBelow);
+
+    const keytree::RungKeyGathering gathered = ladder.gatherRungKeys(
+        newEpoch, keytree::GroupKeyResolver::toRungs(archive), keytree::GroupKeyResolver::toRegistry(group, archive),
+        eraFloor, prunedBelow
+    );
+    LOG_DEBUG(
+        "ladder gather for epoch ",
+        std::to_string(newEpoch) +
+            ": " +
+            std::to_string(gathered.unwraps) +
+            " unwraps for " +
+            std::to_string(targets.size()) +
+            " skip target(s)"
+    )
+    if (!gathered.complete) {
+        throw IncompleteEpochLadderException();
+    }
+    return planOrThrow<std::vector<keytree::ArchiveRung>>([&] {
+        return ladder.buildRungs(
+            newEpoch, newGrantPublicKey, previousEpochKey, eraFloor, author, _userPrivKey, true, prunedBelow
+        );
+    });
+}
+
 void GroupApiImpl::removeGroupMember(
     const std::string& groupId,
     const std::string& userId,
@@ -371,14 +432,11 @@ void GroupApiImpl::removeGroupMember(
         return tree.planRemoval(state, userId, _userPrivKey);
     });
 
-    // Rungs for the new epoch. The unit rung is mandatory — without it the group's own history is orphaned at
-    // the moment of the removal. Skip rungs are added when this client happens to hold the older epoch keys,
-    // and are a shortcut for future descents rather than a correctness requirement.
-    keytree::LadderKeys ladder(*cache);
-    const std::vector<keytree::ArchiveRung> rungs = ladder.buildRungs(
-        static_cast<std::uint32_t>(newEpoch), plan.newGrantKey.getPublicKey(), currentGrantKey,
-        static_cast<std::uint32_t>(currentGroup.eraFloor.value_or(1)),
-        keytree::GroupKeyResolver::ownUserId(currentGroup).value_or(std::string()), _userPrivKey
+    // Rungs for the new epoch — the complete set, older grant keys fetched and recovered first. Every rung here
+    // is a one-time chance: its span is pinned to this epoch, so whatever the set omits stays omitted.
+    const std::vector<keytree::ArchiveRung> rungs = buildRotationRungs(
+        currentGroup, static_cast<std::uint32_t>(newEpoch), plan.newGrantKey.getPublicKey(), currentGrantKey,
+        keytree::GroupKeyResolver::ownUserId(currentGroup).value_or(std::string()), *cache
     );
 
     // A removal DOES rotate the metadata key: otherwise the departing member keeps reading the group's name and
@@ -461,9 +519,9 @@ void GroupApiImpl::removeGroupMember(
         throw core::Exception("ExceptionConverter rethrow error");
     }
     // Node keys only. The removal refreshed every generation on the departing leaf's path, so those are dead —
-    // but the grant keys are not: within one group `epoch -> key` is immutable, and `buildRungs` reads the older
-    // ones to publish skip rungs at the next removal. Dropping them would quietly degrade future descents to
-    // walking one rung at a time.
+    // but the grant keys are not: within one group `epoch -> key` is immutable, and the next rotation's rung set
+    // is built from the older ones. Keeping them is not what makes that set complete — `buildRotationRungs`
+    // recovers whatever is absent — but it is what lets the next removal skip the walk.
     cache->clearNodeKeys();
     cache->putGrantKey(static_cast<std::uint32_t>(newEpoch), plan.newGrantKey);
     invalidateModuleKeysInCache(groupId);
