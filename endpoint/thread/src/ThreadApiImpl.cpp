@@ -187,7 +187,7 @@ void ThreadApiImpl::updateThread(
 
     auto ctx = prepareContainerUpdate(
         currentThread, currentThreadEntry, currentThreadResourceId, users, managers,
-        forceGenerateNewKey || groupRemovalForcesNewKey || epochStaleness
+        forceGenerateNewKey || groupRemovalForcesNewKey || epochStaleness, true, _groupPrivKeyResolver
     );
     server::ThreadUpdateModel model;
     fillContainerUpdateModel(model, threadId, currentThreadResourceId, users, managers, ctx, version, force);
@@ -254,7 +254,9 @@ void ThreadApiImpl::rotateThreadKeys(
     const auto& currentEntry = currentThread.data.back();
     auto resourceId = currentThread.resourceId.value_or(core::EndpointUtils::generateId());
 
-    auto ctx = prepareContainerUpdate(currentThread, currentEntry, resourceId, users, managers, true);
+    auto ctx = prepareContainerUpdate(
+        currentThread, currentEntry, resourceId, users, managers, true, true, _groupPrivKeyResolver
+    );
 
     server::ThreadRotateKeysModel model;
     model.id = threadId;
@@ -575,6 +577,8 @@ bool ThreadApiImpl::isRekeyNeeded(
     const server::ThreadInfo& thread,
     std::unordered_map<std::string, GroupEpochInfo>& groupCache
 ) {
+    // `groupKeys` is narrowed to our own groups, so empty means "no grant applies to us". Nothing is lost: a
+    // grantee group we are not in is one whose `getGroup` below would throw anyway.
     if (!_groupApiImpl || thread.groupKeys.empty())
         return false;
     bool stale = false;

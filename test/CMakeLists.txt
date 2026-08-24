@@ -85,6 +85,11 @@ target_link_libraries(test_unit_CryptoTest privmx privmxendpointcore privmxendpo
 add_executable(test_unit_UtilsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/UtilsTest.cpp)
 target_link_libraries(test_unit_UtilsTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
 
+# Choosing between several group-addressed routes to one container key. Stubs the group key resolver, which is
+# the only way to make a route unopenable on demand and to assert that a route was NOT attempted.
+add_executable(test_unit_KeyProviderGroupKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/KeyProviderGroupKeysTest.cpp)
+target_link_libraries(test_unit_KeyProviderGroupKeysTest privmx privmxendpointcore privmxendpointcrypto Poco::Foundation GTest::GTest GTest::Main)
+
 # Key-tree arithmetic must match the bridge exactly (it computes the same refresh set; keytree_conformance_dump.cpp emits diff vectors, see test/tools/README.md)
 add_executable(test_unit_TreeMathTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeMathTest.cpp)
 target_link_libraries(test_unit_TreeMathTest privmxendpointgroup GTest::GTest GTest::Main)
