@@ -97,6 +97,11 @@ struct ModuleKeys {
     std::string contextId;
 };
 
+struct GroupEpochInfo {
+    int64_t keyVersion;
+    std::string groupPubKey;
+};
+
 struct ContainerUpdateContext {
     EncKeyLocation location;
     EncKey key;

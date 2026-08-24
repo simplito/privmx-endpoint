@@ -13,12 +13,14 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_CORE_MODULEBASEAPI_HPP_
 
 #include <Poco/Dynamic/Var.h>
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <vector>
 
 #include "privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp"
@@ -54,6 +56,17 @@ struct module_has_group_keys<T, std::void_t<decltype(std::declval<T>().groupKeys
 
 class ModuleBaseApi {
 public:
+    using GroupEpochResolver = std::function<
+        std::unordered_map<std::string, GroupEpochInfo>(
+            const std::string& contextId,
+            const std::vector<std::string>& groupIds
+        )>;
+
+    struct GroupResolvers {
+        core::KeyProvider::GroupPrivKeyResolver groupPrivKey;
+        GroupEpochResolver groupEpochs;
+    };
+
     ModuleBaseApi(
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -68,6 +81,8 @@ protected:
     void initModuleDataSchemaMapper(std::shared_ptr<core::BaseModuleDataSchemaMapper> mapper) {
         _moduleDataSchemaMapper = std::move(mapper);
     }
+
+    void initGroupResolvers(const GroupResolvers& resolvers);
 
     template<typename ModuleStruct>
     auto getAndValidateModuleCurrentEncKey(
@@ -97,13 +112,14 @@ protected:
     );
 
     template<typename TCreateModel>
-    static void fillContainerCreateModel(
+    void fillContainerCreateModel(
         TCreateModel& model,
         const std::string& contextId,
         const std::vector<UserWithPubKey>& users,
         const std::vector<UserWithPubKey>& managers,
         const ContainerCreateContext& ctx,
-        Poco::Dynamic::Var encryptedData
+        Poco::Dynamic::Var encryptedData,
+        const std::optional<std::vector<GroupGrantWithKey>>& groups = std::nullopt
     ) {
         static_assert(
             std::is_base_of_v<server::ContainerCreateModelBase, TCreateModel>,
@@ -116,10 +132,13 @@ protected:
         model.keys = ctx.keyEntries;
         model.users = EndpointUtils::usersWithPubKeyToIds(users);
         model.managers = EndpointUtils::usersWithPubKeyToIds(managers);
+        if (groups.has_value() && !groups->empty()) {
+            fillContainerGroupGrants(model, contextId, ctx.resourceId, ctx.key, ctx.dio, ctx.secret, groups.value());
+        }
     }
 
     template<typename TUpdateModel>
-    static void fillContainerUpdateModel(
+    void fillContainerUpdateModel(
         TUpdateModel& model,
         const std::string& id,
         const std::string& resourceId,
@@ -127,7 +146,8 @@ protected:
         const std::vector<UserWithPubKey>& managers,
         const ContainerUpdateContext& ctx,
         int64_t version,
-        bool force
+        bool force,
+        const std::optional<std::vector<GroupGrantWithKey>>& groups = std::nullopt
     ) {
         static_assert(
             std::is_base_of_v<server::ContainerUpdateModelBase, TUpdateModel>,
@@ -141,15 +161,13 @@ protected:
         model.managers = EndpointUtils::usersWithPubKeyToIds(managers);
         model.version = version;
         model.force = force;
+        if (groups.has_value()) {
+            fillContainerGroupGrants(
+                model, ctx.location.contextId, resourceId, ctx.key, ctx.dio, ctx.secret, groups.value()
+            );
+        }
     }
 
-    /**
-     * @param distributeToUsers when false, a new key is still generated but **no per-user entries are built**.
-     *
-     * For a module that distributes its key some other way — a group that wraps it once to its own identity key
-     * rather than once per member — building those entries is not merely redundant, it is the `O(n)` cost that
-     * mechanism exists to avoid, and it would be paid in client CPU even after the entries are discarded.
-     */
     template<typename TContainer, typename TEntry>
     ContainerUpdateContext prepareContainerUpdate(
         const TContainer& container,
@@ -246,9 +264,123 @@ protected:
         const std::string& containerSecret
     );
 
+    template<typename TContainer>
+    static auto isRekeyNeeded(const TContainer& container) -> decltype(container.staleGroups, bool()) {
+        return !container.staleGroups.empty();
+    }
+
+    template<typename TContainer>
+    static auto doesGroupStateForceNewKey(const TContainer& container, const std::vector<GroupGrantWithKey>& groups)
+        -> decltype(container.groups, container.staleGroups, bool()) {
+        for (const auto& current : container.groups) {
+            auto kept = std::find_if(groups.begin(), groups.end(), [&](const GroupGrantWithKey& g) {
+                return g.groupId == current.groupId;
+            });
+            if (kept == groups.end()) {
+                return true;
+            }
+        }
+        return !groups.empty() && isRekeyNeeded(container);
+    }
+
+    template<typename TContainer>
+    auto resolveGranteesForRekey(
+        const TContainer& container,
+        const std::vector<GroupGrantWithKey>& callerSupplied
+    ) -> decltype(container.groups, container.contextId, std::vector<GroupGrantWithKey>()) {
+        std::vector<GroupGrantWithKey> grants;
+        grants.reserve(container.groups.size());
+        for (const auto& grant : container.groups) {
+            auto supplied = std::find_if(
+                callerSupplied.begin(), callerSupplied.end(),
+                [&](const GroupGrantWithKey& g) { return g.groupId == grant.groupId; }
+            );
+            if (supplied != callerSupplied.end()) {
+                // The caller's public key wins where it has one: it is the key it verified out-of-band, and the
+                // role still comes from the grant, which a re-key cannot change.
+                grants.push_back(
+                    GroupGrantWithKey{
+                        .groupId = grant.groupId,
+                        .role = grant.role,
+                        .groupPubKey = supplied->groupPubKey,
+                        .groupEpoch = supplied->groupEpoch
+                    }
+                );
+            } else {
+                grants.push_back(GroupGrantWithKey{.groupId = grant.groupId, .role = grant.role});
+            }
+        }
+        for (const auto& g : callerSupplied) {
+            auto granted = std::find_if(
+                container.groups.begin(), container.groups.end(),
+                [&](const server::GroupGrant& grant) { return grant.groupId == g.groupId; }
+            );
+            if (granted == container.groups.end()) {
+                // Not dropped silently: a re-key cannot add a grant (the bridge refuses a key entry for a group
+                // the container does not grant), so a group named here that the container does not grant is a
+                // caller mistake that the container's update call, not this one, is the fix for.
+                LOG_DEBUG("[resolveGranteesForRekey] group ", g.groupId, " is not a grantee of this module — ignored")
+            }
+        }
+        std::unordered_map<std::string, GroupEpochInfo> groupCache;
+        resolveGroupEpochs(container.contextId, grants, groupCache);
+        return grants;
+    }
+
+    template<typename TContainer>
+    auto buildRekeyGroupKeyEntries(
+        const TContainer& container,
+        const std::string& resourceId,
+        const ContainerUpdateContext& ctx,
+        const std::vector<GroupGrantWithKey>& callerSupplied
+    ) -> decltype(container.groups, container.contextId, std::optional<std::vector<server::GroupKeyEntrySet>>()) {
+        auto grantees = resolveGranteesForRekey(container, callerSupplied);
+        if (grantees.empty()) {
+            return std::nullopt;
+        }
+        return buildGroupKeyEntries(grantees, ctx.key, ctx.dio, container.contextId, resourceId, ctx.secret);
+    }
+
+    void resolveGroupEpochs(
+        const std::string& contextId,
+        std::vector<GroupGrantWithKey>& grants,
+        std::unordered_map<std::string, GroupEpochInfo>& groupCache
+    );
+
+    template<typename TModel>
+    void fillContainerGroupGrants(
+        TModel& model,
+        const std::string& contextId,
+        const std::string& resourceId,
+        const EncKey& key,
+        const DataIntegrityObject& dio,
+        const std::string& secret,
+        const std::vector<GroupGrantWithKey>& groups
+    ) {
+        // Populate groupEpoch and groupPubKey from current group state wherever the caller didn't supply them.
+        std::vector<GroupGrantWithKey> resolved = groups;
+        std::unordered_map<std::string, GroupEpochInfo> groupEpochCache;
+        resolveGroupEpochs(contextId, resolved, groupEpochCache);
+        std::vector<server::GroupGrant> grants;
+        grants.reserve(resolved.size());
+        for (const auto& g : resolved) {
+            grants.push_back({.groupId = g.groupId, .role = g.role});
+        }
+        model.groups = std::move(grants);
+        model.groupKeys = buildGroupKeyEntries(resolved, key, dio, contextId, resourceId, secret);
+    }
+
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
+    core::KeyProvider::GroupPrivKeyResolver _groupPrivKeyResolver;
+    GroupEpochResolver _groupEpochResolver;
 
 private:
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolverOr(
+        const core::KeyProvider::GroupPrivKeyResolver& explicitResolver
+    ) const {
+        return explicitResolver ? explicitResolver : _groupPrivKeyResolver;
+    }
+
     static core::ContainerKeyCache::CachedModuleKeys convertModuleKeysToContainerKeyCacheFormat(
         const ModuleKeys& moduleKeys,
         int64_t moduleVersion
@@ -276,14 +408,12 @@ auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(
     auto location{getModuleEncKeyLocation(moduleObj, moduleObj.resourceId)};
     keyProviderRequest.addOne(moduleObj.keys, data_entry.keyId, location);
     if constexpr (module_has_group_keys<ModuleStruct>::value) {
-        // A module may distribute its key to a *group* rather than to each member — a group wrapping its own
-        // metadata key to itself does exactly that. Without this the current key is simply not found, and the
-        // failure surfaces as "enc key with given keyId does not exist" rather than as anything informative.
         keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
     }
-    core::DecryptedEncKeyV2 ret = _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver)
-                                      .at(location)
-                                      .at(data_entry.keyId);
+    core::DecryptedEncKeyV2 ret =
+        _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolverOr(groupPrivKeyResolver))
+            .at(location)
+            .at(data_entry.keyId);
     return ret;
 }
 
@@ -306,7 +436,9 @@ auto ModuleBaseApi::getAndValidateModuleKeys(
     if constexpr (module_has_group_keys<ModuleStruct>::value) {
         keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
     }
-    auto moduleKeys{_keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver).at(location)};
+    auto moduleKeys{
+        _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolverOr(groupPrivKeyResolver)).at(location)
+    };
     return moduleKeys;
 }
 

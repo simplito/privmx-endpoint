@@ -22,14 +22,10 @@ namespace endpoint {
 namespace thread {
 namespace server {
 
-#define THREAD_CREATE_MODEL_EXTRA_FIELDS(F)                                                                            \
-    F(groups, std::optional<std::vector<core::server::GroupGrant>>)                                                    \
-    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
+#define THREAD_CREATE_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(ThreadCreateModel, core::server::ContainerCreateModelBase, THREAD_CREATE_MODEL_EXTRA_FIELDS);
 
-#define THREAD_UPDATE_MODEL_EXTRA_FIELDS(F)                                                                            \
-    F(groups, std::optional<std::vector<core::server::GroupGrant>>)                                                    \
-    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
+#define THREAD_UPDATE_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(ThreadUpdateModel, core::server::ContainerUpdateModelBase, THREAD_UPDATE_MODEL_EXTRA_FIELDS);
 
 #define THREAD_ROTATE_KEYS_MODEL_FIELDS(F)                                                                             \
@@ -44,19 +40,11 @@ JSON_STRUCT(ThreadRotateKeysModel, THREAD_ROTATE_KEYS_MODEL_FIELDS);
 #define THREAD2_DATA_ENTRY_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(Thread2DataEntry, core::server::ContainerDataEntry, THREAD2_DATA_ENTRY_EXTRA_FIELDS);
 
-// `groups` is every grant on the Thread; `groupKeys` is narrowed by the bridge to the caller's own groups. Anything
-// that has to cover *all* grantees — building the group key entries of a re-key above all — must read `groups`.
-// `staleGroups` names the grantee groups whose current epoch is ahead of the epoch the Thread's current key was
-// wrapped to; the bridge computes it over the unnarrowed entries, so it sees groups the caller is not a member of.
-// Optional because a bridge from before that field simply omits it.
 #define THREAD_INFO_EXTRA_FIELDS(F)                                                                                    \
     F(data, std::vector<Thread2DataEntry>)                                                                             \
     F(keeper, std::optional<std::string>)                                                                              \
     F(lastMsgDate, int64_t)                                                                                            \
-    F(messages, int64_t)                                                                                               \
-    F(groups, std::vector<core::server::GroupGrant>)                                                                   \
-    F(groupKeys, std::vector<core::server::GroupKeysEntry>)                                                            \
-    F(staleGroups, std::vector<std::string>)
+    F(messages, int64_t)
 JSON_STRUCT_EXT(ThreadInfo, core::server::ContainerInfoBase, THREAD_INFO_EXTRA_FIELDS);
 
 #define THREAD_CREATE_RESULT_FIELDS(F) F(threadId, std::string)

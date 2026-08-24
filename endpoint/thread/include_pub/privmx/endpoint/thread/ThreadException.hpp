@@ -51,8 +51,7 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointThreadException, "Unknown endpoint thre
     X(CannotExtractThreadMessageUpdatedEventException, "Cannot extract ThreadMessageUpdatedEvent", 0x000F)             \
     X(MessagePublicDataMismatchException, "Message public data mismatch", 0x0011)                                      \
     X(ThreadDataIntegrityException, "Failed thread data integrity check", 0x0014)                                      \
-    X(MessageDataIntegrityException, "Failed message data integrity check", 0x0015)                                     \
-    X(UnresolvedGroupGranteeException, "Cannot resolve current key of a Thread's grantee group", 0x0016)
+    X(MessageDataIntegrityException, "Failed message data integrity check", 0x0015)
 
 #define PRIVMX_THREAD_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointThreadException, NAME, MSG, CODE)
 THREAD_EXCEPTIONS(PRIVMX_THREAD_DECLARE)

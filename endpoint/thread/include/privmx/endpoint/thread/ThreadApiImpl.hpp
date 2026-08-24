@@ -149,65 +149,12 @@ private:
 
     void assertThreadExist(const std::string& threadId);
 
-    // Current epoch of a group and the identity public key that epoch wraps to. The two travel together: a key
-    // entry declares an epoch and is encrypted to that epoch's public key, and a mismatched pair is unreadable.
-    struct GroupEpochInfo {
-        int64_t keyVersion;
-        std::string groupPubKey;
-    };
-
-    bool isRekeyNeeded(const server::ThreadInfo& thread);
-    // If rekey is needed, performs updateThread with new keys only. Caller re-fetches thread after.
-    void applyRekeyIfNeeded(const std::string& threadId, const server::ThreadInfo& thread);
-
-    /**
-     * Every grantee group of the Thread, ready to be wrapped to: the grant list the bridge stores, with each
-     * group's current epoch public key filled in.
-     *
-     * Built from `thread.groups` rather than from `thread.groupKeys` or from what the caller passed, because a
-     * re-key has to cover *all* grantees — the bridge rejects one that leaves a granted group without an entry at
-     * the new keyId — while `groupKeys` is narrowed to the caller's own groups and a caller generally knows only
-     * the groups it belongs to.
-     *
-     * @param callerSupplied grants the caller has already verified out-of-band; an entry naming both a public key
-     *                       and an epoch is taken as-is, and anything else is resolved from the bridge.
-     */
-    std::vector<core::GroupGrantWithKey> resolveGranteesForRekey(
-        const server::ThreadInfo& thread,
-        const std::vector<core::GroupGrantWithKey>& callerSupplied
-    );
-
-    /**
-     * Fills in `groupPubKey` and `groupEpoch` wherever a grant leaves either unset, in one request per 100 groups.
-     *
-     * Throws UnresolvedGroupGranteeException rather than sending a zero epoch the bridge would reject with a
-     * message about a key entry, which says nothing about the group that could not be read.
-     */
-    void resolveGroupEpochs(
-        const std::string& contextId,
-        std::vector<core::GroupGrantWithKey>& grants,
-        std::unordered_map<std::string, GroupEpochInfo>& groupCache
-    );
-
-    /**
-     * Epoch and public key of the named groups, from `groupList` filtered by id — one request per 100 ids
-     * instead of a `groupGet` each, and it answers for groups the caller is not a member of, which `groupGet`
-     * under the default `group.get: "user"` policy cannot. Groups it could not read are left out of the cache.
-     */
-    void fetchGroupEpochs(
-        const std::string& contextId,
-        const std::vector<std::string>& groupIds,
-        std::unordered_map<std::string, GroupEpochInfo>& groupCache
-    );
-
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
-    std::shared_ptr<group::GroupApiImpl> _groupApiImpl;
-    core::KeyProvider::GroupPrivKeyResolver _groupPrivKeyResolver;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
 

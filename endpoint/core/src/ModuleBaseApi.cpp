@@ -9,6 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <algorithm>
 #include <privmx/utils/Utils.hpp>
 #include <type_traits>
 
@@ -39,6 +40,11 @@ ModuleBaseApi::ModuleBaseApi(
 )
     : _guardedExecutor(std::make_shared<privmx::utils::GuardedExecutor>()), _userPrivKey(userPrivKey),
       _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware), _connection(connection) {}
+
+void ModuleBaseApi::initGroupResolvers(const GroupResolvers& resolvers) {
+    _groupPrivKeyResolver = resolvers.groupPrivKey;
+    _groupEpochResolver = resolvers.groupEpochs;
+}
 
 ContainerCreateContext ModuleBaseApi::prepareContainerCreate(
     const std::string& contextId,
@@ -76,9 +82,40 @@ core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(
     auto location = core::EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
     keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver)
+    return _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolverOr(groupPrivKeyResolver))
         .at(location)
         .at(moduleKeys.currentKeyId);
+}
+
+void ModuleBaseApi::resolveGroupEpochs(
+    const std::string& contextId,
+    std::vector<GroupGrantWithKey>& grants,
+    std::unordered_map<std::string, GroupEpochInfo>& groupCache
+) {
+    auto isComplete = [](const GroupGrantWithKey& g) {
+        return g.groupEpoch > 0 && !g.groupPubKey.empty();
+    };
+    std::vector<std::string> toFetch;
+    for (const auto& g : grants) {
+        if (isComplete(g) || groupCache.find(g.groupId) != groupCache.end())
+            continue;
+        if (std::find(toFetch.begin(), toFetch.end(), g.groupId) == toFetch.end())
+            toFetch.push_back(g.groupId);
+    }
+    if (!toFetch.empty() && _groupEpochResolver) {
+        auto fetched = _groupEpochResolver(contextId, toFetch);
+        groupCache.insert(fetched.begin(), fetched.end());
+    }
+    for (auto& g : grants) {
+        if (isComplete(g))
+            continue;
+        auto resolved = groupCache.find(g.groupId);
+        if (resolved == groupCache.end()) {
+            throw UnresolvedGroupGranteeException("groupId=" + g.groupId);
+        }
+        g.groupPubKey = resolved->second.groupPubKey;
+        g.groupEpoch = resolved->second.keyVersion;
+    }
 }
 
 ModuleKeys ModuleBaseApi::getModuleKeys(

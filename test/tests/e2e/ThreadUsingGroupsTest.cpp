@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <algorithm>
 #include "../../utils/BaseTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
@@ -10,6 +11,7 @@
 #include <privmx/endpoint/thread/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 
 using namespace privmx::endpoint;
@@ -48,6 +50,21 @@ protected:
         threadApi.reset();
         groupApi.reset();
     }
+    /** One of the fixture's logins as a container names its members — id plus public key, from the same ini. */
+    core::UserWithPubKey userOf(TUGConnectionType type) {
+        std::string n;
+        if (type == TUGConnectionType::TUGUser1) {
+            n = "1";
+        } else if (type == TUGConnectionType::TUGUser2) {
+            n = "2";
+        } else {
+            n = "3";
+        }
+        return core::UserWithPubKey{
+            .userId = reader->getString("Login.user_" + n + "_id"),
+            .pubKey = reader->getString("Login.user_" + n + "_pubKey")
+        };
+    }
     void customSetUp() override {
         reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
         connection = std::make_shared<core::Connection>(
@@ -85,6 +102,36 @@ protected:
                 .role = "user",
                 .groupPubKey = group.groupPubKey
             }}
+        );
+    }
+    /**
+     * A Thread whose direct members are `users` — as both users and managers, so any of them can update it —
+     * and whose grantee groups are `groups`, each granted at `role`.
+     *
+     * The grants carry no epoch: leaving `groupEpoch` at 0 is what makes the endpoint resolve each group's
+     * current epoch from the Bridge, which is the path these tests are about.
+     */
+    std::string createThreadWithGroups(
+        const std::string& contextId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<group::Group>& groups,
+        const std::string& role = "user"
+    ) {
+        std::vector<core::GroupGrantWithKey> grants;
+        grants.reserve(groups.size());
+        for (const auto& group : groups) {
+            grants.push_back(
+                core::GroupGrantWithKey{.groupId = group.groupId, .role = role, .groupPubKey = group.groupPubKey}
+            );
+        }
+        return threadApi->createThread(
+            contextId,
+            users,
+            users,
+            core::Buffer::from("group_thread_public"),
+            core::Buffer::from("group_thread_private"),
+            core::ContainerPolicy(),
+            grants
         );
     }
     std::string createThreadWithGroupPolicyReadAll(

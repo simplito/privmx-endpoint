@@ -109,7 +109,7 @@ Thread ThreadDataSchemaMapper::toLibThread(
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
         .groups = std::move(groups),
-        .staleGroups = info.staleGroups.value_or(std::vector<std::string>{})
+        .staleGroups = info.staleGroups
     };
 }
 

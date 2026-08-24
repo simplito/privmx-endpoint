@@ -70,7 +70,8 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointCoreException, "Unknown endpoint core e
     X(InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x00024)                                        \
     X(InvalidSingletonsHolderStateException, "Invalid Singletons Holder state", 0x00025)                              \
     X(EncryptionKeyValidationException, "Encryption key validation error", 0x0027)                                    \
-    X(IncorrectKeyIdFormatException, "Incorrect key id format", 0x0028)
+    X(IncorrectKeyIdFormatException, "Incorrect key id format", 0x0028)                                               \
+    X(UnresolvedGroupGranteeException, "Cannot resolve current key of a container's grantee group", 0x0029)
 
 #define PRIVMX_CORE_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, NAME, MSG, CODE)
 CORE_EXCEPTIONS(PRIVMX_CORE_DECLARE)
