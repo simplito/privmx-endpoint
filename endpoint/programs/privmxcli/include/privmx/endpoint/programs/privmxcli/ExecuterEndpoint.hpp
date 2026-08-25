@@ -37,6 +37,7 @@ limitations under the License.
 #include "privmx/endpoint/store/varinterface/StoreApiVarInterface.hpp"
 #include "privmx/endpoint/inbox/varinterface/InboxApiVarInterface.hpp"
 #include "privmx/endpoint/kvdb/varinterface/KvdbApiVarInterface.hpp"
+#include "privmx/endpoint/group/varinterface/GroupApiVarInterface.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 
@@ -58,8 +59,9 @@ struct ApiVar {
         std::shared_ptr<privmx::endpoint::store::StoreApiVarInterface> _store,
         std::shared_ptr<privmx::endpoint::inbox::InboxApiVarInterface> _inbox,
         std::shared_ptr<privmx::endpoint::kvdb::KvdbApiVarInterface> _kvdb,
+        std::shared_ptr<privmx::endpoint::group::GroupApiVarInterface> _group,
         std::shared_ptr<privmx::endpoint::event::EventApiVarInterface> _eventApi
-    ) : serializer(_serializer), event(_event), connection(_connection), backendRequester(_backendRequester), utils(_utils), crypto(_crypto), extKey(_extKey), thread(_thread), store(_store), inbox(_inbox), kvdb(_kvdb), eventApi(_eventApi) {}
+    ) : serializer(_serializer), event(_event), connection(_connection), backendRequester(_backendRequester), utils(_utils), crypto(_crypto), extKey(_extKey), thread(_thread), store(_store), inbox(_inbox), kvdb(_kvdb), group(_group), eventApi(_eventApi) {}
     core::VarSerializer serializer;
     std::shared_ptr<privmx::endpoint::core::EventQueueVarInterface> event;
     std::shared_ptr<privmx::endpoint::core::ConnectionVarInterface> connection;
@@ -71,6 +73,7 @@ struct ApiVar {
     std::shared_ptr<privmx::endpoint::store::StoreApiVarInterface> store;
     std::shared_ptr<privmx::endpoint::inbox::InboxApiVarInterface> inbox;
     std::shared_ptr<privmx::endpoint::kvdb::KvdbApiVarInterface> kvdb;
+    std::shared_ptr<privmx::endpoint::group::GroupApiVarInterface> group;
     std::shared_ptr<privmx::endpoint::event::EventApiVarInterface> eventApi;
 };
 
@@ -124,6 +127,9 @@ private:
             std::shared_ptr<kvdb::KvdbApiVarInterface> kvdb = std::make_shared<kvdb::KvdbApiVarInterface>(api->connection->getApi(), api->serializer);
             kvdb->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->kvdb = kvdb;
+            std::shared_ptr<group::GroupApiVarInterface> group = std::make_shared<group::GroupApiVarInterface>(api->connection->getApi(), api->serializer);
+            group->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->group = group;
             std::shared_ptr<event::EventApiVarInterface> eventApi = std::make_shared<event::EventApiVarInterface>(api->connection->getApi(), api->serializer);
             eventApi->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->eventApi = eventApi;
@@ -143,6 +149,9 @@ private:
             std::shared_ptr<kvdb::KvdbApiVarInterface> kvdb = std::make_shared<kvdb::KvdbApiVarInterface>(api->connection->getApi(), api->serializer);
             kvdb->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->kvdb = kvdb;
+            std::shared_ptr<group::GroupApiVarInterface> group = std::make_shared<group::GroupApiVarInterface>(api->connection->getApi(), api->serializer);
+            group->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->group = group;
             std::shared_ptr<event::EventApiVarInterface> eventApi = std::make_shared<event::EventApiVarInterface>(api->connection->getApi(), api->serializer);
             eventApi->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->eventApi = eventApi;
@@ -547,6 +556,36 @@ private:
         }},
         {kvdb_buildSubscriptionQueryForSelectedEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->kvdb->buildSubscriptionQueryForSelectedEntry(args);
+        }},
+        {group_createGroupWithKeyTree, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->createGroupWithKeyTree(args);
+        }},
+        {group_addGroupMember, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->addGroupMember(args);
+        }},
+        {group_removeGroupMember, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->removeGroupMember(args);
+        }},
+        {group_updateGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->updateGroup(args);
+        }},
+        {group_deleteGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->deleteGroup(args);
+        }},
+        {group_getGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->getGroup(args);
+        }},
+        {group_listGroups, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->listGroups(args);
+        }},
+        {group_subscribeFor, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->subscribeFor(args);
+        }},
+        {group_unsubscribeFrom, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->unsubscribeFrom(args);
+        }},
+        {group_buildSubscriptionQuery, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->buildSubscriptionQuery(args);
         }},
     };
 
@@ -1433,6 +1472,96 @@ private:
             "\t\teventType [NUMBER] - type of event to listen for (kvdb::EventType enum value)\n"
             "\t\tkvdbId [STRING] - ID of the KVDB\n"
             "\t\tkvdbEntryKey [STRING] - key of the KVDB entry"
+        },
+        {group_createGroupWithKeyTree,
+            "createGroupWithKeyTree JSON_ARRAY\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?]\n"
+            "\t\tcontextId [STRING] - ID of the Context to create the Group in\n"
+            "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the created Group\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tmanagers [ARRAY] - vector of UserWithPubKey which indicates who will have access (and management rights) to the created Group\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
+            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
+            "\t\tpolicies [OBJECT] - (optional) Group's policies (ContainerPolicy)"
+        },
+        {group_addGroupMember,
+            "addGroupMember JSON_ARRAY\n"
+            "\tjson format - [groupId, newMember:{userId, pubKey}, asManager, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta]\n"
+            "\t\tgroupId [STRING] - ID of the Group\n"
+            "\t\tnewMember [OBJECT] - the member to add, with their public key (UserWithPubKey)\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tasManager [BOOL] - whether the new member joins as a manager\n"
+            "\t\tusers [ARRAY] - full member list *after* the addition\n"
+            "\t\tmanagers [ARRAY] - full manager list *after* the addition\n"
+            "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata to store with this change\n"
+            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata to store with this change\n"
+            "\tdoes not advance the Group's key epoch"
+        },
+        {group_removeGroupMember,
+            "removeGroupMember JSON_ARRAY\n"
+            "\tjson format - [groupId, userId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta]\n"
+            "\t\tgroupId [STRING] - ID of the Group\n"
+            "\t\tuserId [STRING] - ID of the member to remove\n"
+            "\t\tusers [ARRAY] - member list that *remains*, without the removed member\n"
+            "\t\tmanagers [ARRAY] - manager list that remains\n"
+            "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata to store with this change\n"
+            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata to store with this change\n"
+            "\tadvances the Group's key epoch; containers the Group can read must be re-keyed afterwards"
+        },
+        {group_updateGroup,
+            "updateGroup JSON_ARRAY\n"
+            "\tjson format - [groupId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?]\n"
+            "\t\tgroupId [STRING] - ID of the Group to update\n"
+            "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the updated Group\n"
+            "\t\tmanagers [ARRAY] - vector of UserWithPubKey which indicates who will have access (and management rights) to the updated Group\n"
+            "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
+            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
+            "\t\tversion [NUMBER] - current version of the updated Group\n"
+            "\t\tforce [BOOL] - force update (without checking version)\n"
+            "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Group\n"
+            "\t\tpolicies [OBJECT] - (optional) Group's policies (ContainerPolicy)"
+        },
+        {group_deleteGroup,
+            "deleteGroup JSON_ARRAY\n"
+            "\tjson format - [groupId]\n"
+            "\t\tgroupId [STRING] - ID of the Group to delete"
+        },
+        {group_getGroup,
+            "getGroup JSON_ARRAY\n"
+            "\tjson format - [groupId]\n"
+            "\t\tgroupId [STRING] - ID of the Group to get"
+        },
+        {group_listGroups,
+            "listGroups JSON_ARRAY\n"
+            "\tjson format - [contextId, pagingQuery:{skip, limit, sortOrder, lastId?, sortBy?, queryAsJson?}]\n"
+            "\t\tcontextId [STRING] - ID of the Context to get the Groups from\n"
+            "\t\tpagingQuery [OBJECT] - struct with list query parameters\n"
+            "\t\t\tskip [NUMBER] - number of elements to skip from result\n"
+            "\t\t\tlimit [NUMBER] - limit of elements to return for query\n"
+            "\t\t\tsortOrder [STRING] - order of elements in result (\"asc\" or \"desc\")\n"
+            "\t\t\tlastId [STRING] - (optional) ID of the element from which query results should start\n"
+            "\tthe listing carries no publicMeta/privateMeta - call getGroup for those"
+        },
+        {group_subscribeFor,
+            "subscribeFor JSON_ARRAY\n"
+            "\tjson format - [subscriptionQueries:[STRING]]\n"
+            "\t\tsubscriptionQueries [ARRAY] - list of queries built with group.buildSubscriptionQuery"
+        },
+        {group_unsubscribeFrom,
+            "unsubscribeFrom JSON_ARRAY\n"
+            "\tjson format - [subscriptionIds:[STRING]]\n"
+            "\t\tsubscriptionIds [ARRAY] - list of subscriptionId"
+        },
+        {group_buildSubscriptionQuery,
+            "buildSubscriptionQuery JSON_ARRAY\n"
+            "\tjson format - [eventType, selectorType, selectorId]\n"
+            "\t\teventType [NUMBER] - type of event to listen for (group::EventType: 0 - GROUP_CREATE, 1 - GROUP_UPDATE, 2 - GROUP_DELETE)\n"
+            "\t\tselectorType [NUMBER] - scope to listen on (group::EventSelectorType: 0 - CONTEXT_ID, 1 - GROUP_ID)\n"
+            "\t\tselectorId [STRING] - ID of the selector"
         }
     };
 
@@ -1565,6 +1694,16 @@ private:
         {kvdb_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
         {kvdb_buildSubscriptionQuery, "Generates a subscription query for KVDB events."},
         {kvdb_buildSubscriptionQueryForSelectedEntry, "Generates a subscription query for events of a single KVDB entry."},
+        {group_createGroupWithKeyTree, "Creates a new Group whose key distribution is backed by a hidden key tree."},
+        {group_addGroupMember, "Adds one member to a tree-backed Group, without advancing its key epoch."},
+        {group_removeGroupMember, "Removes one member from a tree-backed Group and advances its key epoch."},
+        {group_updateGroup, "Updates an existing Group."},
+        {group_deleteGroup, "Deletes a Group by given Group ID."},
+        {group_getGroup, "Gets a Group by given Group ID."},
+        {group_listGroups, "Gets a list of Groups in given Context."},
+        {group_subscribeFor, "Subscribes for the Group events on the given subscription queries."},
+        {group_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
+        {group_buildSubscriptionQuery, "Generates a subscription query for Group events."},
     };
 
     const std::unordered_map<func_enum, std::string> functions_endpoint_action_description = {
@@ -1691,6 +1830,16 @@ private:
         {kvdb_unsubscribeFrom, "Unsubscribing from events"},
         {kvdb_buildSubscriptionQuery, "Building subscription query"},
         {kvdb_buildSubscriptionQueryForSelectedEntry, "Building subscription query"},
+        {group_createGroupWithKeyTree, "Creating group"},
+        {group_addGroupMember, "Adding group member"},
+        {group_removeGroupMember, "Removing group member"},
+        {group_updateGroup, "Updating group"},
+        {group_deleteGroup, "Deleting group"},
+        {group_getGroup, "Getting group"},
+        {group_listGroups, "Getting group list"},
+        {group_subscribeFor, "Subscribing for events"},
+        {group_unsubscribeFrom, "Unsubscribing from events"},
+        {group_buildSubscriptionQuery, "Building subscription query"},
     };
 };
 
