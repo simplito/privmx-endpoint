@@ -84,7 +84,9 @@ JSON_STRUCT_EXT(PublicDataV5, core::dynamic::VersionedData, PUBLIC_DATA_V5_FIELD
     F(data, InboxData)                                                                                                 \
     F(keyId, std::string)                                                                                              \
     F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(policy, std::optional<Poco::Dynamic::Var>)
+    F(policy, std::optional<Poco::Dynamic::Var>)                                                                       \
+    F(groups, std::optional<std::vector<core::server::GroupGrant>>)                                                    \
+    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
 JSON_STRUCT(InboxCreateModel, INBOX_CREATE_MODEL_FIELDS);
 
 #define INBOX_CREATE_RESULT_FIELDS(F) F(inboxId, std::string)
@@ -100,8 +102,19 @@ JSON_STRUCT(InboxCreateResult, INBOX_CREATE_RESULT_FIELDS);
     F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
     F(version, int64_t)                                                                                                \
     F(force, bool)                                                                                                     \
-    F(policy, std::optional<Poco::Dynamic::Var>)
+    F(policy, std::optional<Poco::Dynamic::Var>)                                                                       \
+    F(groups, std::optional<std::vector<core::server::GroupGrant>>)                                                    \
+    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
 JSON_STRUCT(InboxUpdateModel, INBOX_UPDATE_MODEL_FIELDS);
+
+#define INBOX_ROTATE_KEYS_MODEL_FIELDS(F)                                                                              \
+    F(id, std::string)                                                                                                 \
+    F(keyId, std::string)                                                                                              \
+    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
+    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)                                           \
+    F(version, int64_t)                                                                                                \
+    F(force, bool)
+JSON_STRUCT(InboxRotateKeysModel, INBOX_ROTATE_KEYS_MODEL_FIELDS);
 
 #define INBOX_GET_MODEL_FIELDS(F)                                                                                      \
     F(id, std::string)                                                                                                 \

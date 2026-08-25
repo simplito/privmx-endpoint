@@ -52,9 +52,10 @@ InboxEntryPublicDataResult InboxEntryDataSchemaMapper::decryptPublicOnly(std::st
 
 InboxEntryResult InboxEntryDataSchemaMapper::decryptInboxEntry(
     thread::server::Message message,
-    const core::ModuleKeys& inboxKeys
+    const core::ModuleKeys& inboxKeys,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return _strategyV1.decryptEntry(message, inboxKeys, _keyProvider);
+    return _strategyV1.decryptEntry(message, inboxKeys, _keyProvider, groupPrivKeyResolver);
 }
 
 inbox::InboxEntry InboxEntryDataSchemaMapper::convertInboxEntry(
@@ -66,9 +67,10 @@ inbox::InboxEntry InboxEntryDataSchemaMapper::convertInboxEntry(
 
 inbox::InboxEntry InboxEntryDataSchemaMapper::decryptAndConvertInboxEntry(
     thread::server::Message message,
-    const core::ModuleKeys& inboxKeys
+    const core::ModuleKeys& inboxKeys,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    auto inboxEntry = decryptInboxEntry(message, inboxKeys);
+    auto inboxEntry = decryptInboxEntry(message, inboxKeys, groupPrivKeyResolver);
     return convertInboxEntry(message, inboxEntry);
 }
 

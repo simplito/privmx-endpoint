@@ -131,6 +131,18 @@ struct Inbox {
      * Version of the Inbox data structure and how it is encoded/encrypted
      */
     int64_t schemaVersion;
+
+    /**
+     * list of groups granted access to this Inbox
+     */
+    std::vector<core::GroupGrant> groups;
+
+    /**
+     * IDs of the grantee groups that have rotated past the epoch this Inbox's current key was wrapped to.
+     * Non-empty means the Inbox needs re-keying — rotateInboxKeys() re-wraps its key to the current epoch of
+     * every grantee. Members of a stale group cannot read content written under the current key until then.
+     */
+    std::vector<std::string> staleGroups;
 };
 
 /**

@@ -119,7 +119,8 @@ core::ModuleInternalMetaV5 InboxDataSchemaMapper::decryptInternalMeta(
 
 std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
     const std::vector<server::InboxInfo>& inboxes,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Inbox>(
         inboxes, keyProvider, _connection, [&](const server::InboxInfo& inbox) { return validateDataIntegrity(inbox); },
@@ -129,15 +130,17 @@ std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
         [&](const server::InboxInfo& inbox, const core::DecryptedEncKey& key) { return decrypt(inbox, key); },
         [](const server::InboxInfo& inbox, uint32_t code) {
             return toLibInbox(inbox, {}, {}, {}, code, InboxDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
 Inbox InboxDataSchemaMapper::validateDecryptAndConvertInbox(
     const server::InboxInfo& inbox,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertInboxes({inbox}, keyProvider)[0];
+    return validateDecryptAndConvertInboxes({inbox}, keyProvider, groupPrivKeyResolver)[0];
 }
 
 Inbox InboxDataSchemaMapper::toLibInbox(
@@ -148,6 +151,10 @@ Inbox InboxDataSchemaMapper::toLibInbox(
     int64_t statusCode,
     int64_t schemaVersion
 ) {
+    std::vector<core::GroupGrant> groups;
+    for (const auto& g : info.groups) {
+        groups.push_back({.groupId = g.groupId, .role = g.role});
+    }
     return Inbox{
         .inboxId = info.id,
         .contextId = info.contextId,
@@ -163,6 +170,8 @@ Inbox InboxDataSchemaMapper::toLibInbox(
         .filesConfig = filesConfig,
         .policy = core::Factory::parsePolicyServerObject(info.policy),
         .statusCode = statusCode,
-        .schemaVersion = schemaVersion
+        .schemaVersion = schemaVersion,
+        .groups = std::move(groups),
+        .staleGroups = info.staleGroups
     };
 }

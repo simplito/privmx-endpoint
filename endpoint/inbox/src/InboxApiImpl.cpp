@@ -28,6 +28,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/inbox/InboxApiImpl.hpp"
 #include "privmx/endpoint/inbox/InboxDataHelper.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
@@ -51,7 +52,8 @@ InboxApiImpl::InboxApiImpl(
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const std::shared_ptr<core::HandleManager>& handleManager,
-    size_t serverRequestChunkSize
+    size_t serverRequestChunkSize,
+    const std::optional<group::GroupApi>& groupApi
 )
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _connection(connection),
       _threadApi(threadApi), _storeApi(storeApi), _keyProvider(keyProvider), _serverApi(serverApi),
@@ -62,6 +64,9 @@ InboxApiImpl::InboxApiImpl(
       _subscriber(connection.getImpl()->getGateway(), INBOX_TYPE_FILTER_FLAG),
       _inboxDataSchemaMapper(std::make_shared<InboxDataSchemaMapper>(userPrivKey, connection)),
       _inboxEntryDataSchemaMapper(keyProvider, serverApi, storeApi) {
+    if (groupApi.has_value()) {
+        initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi->getImpl()));
+    }
     initModuleDataSchemaMapper(_inboxDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&InboxApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -89,7 +94,8 @@ std::string InboxApiImpl::createInbox(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<inbox::FilesConfig>& fileConfig,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
 
     auto inboxKey = _keyProvider->generateKey();
@@ -106,11 +112,13 @@ std::string InboxApiImpl::createInbox(
                                std::nullopt
     };
 
+    // The Inbox's entries live in the inner Thread and their files in the inner Store, so a group granted the Inbox
+    // has to be granted those too — otherwise it could read the Inbox metadata but none of its content.
     auto storeId = _storeApi.getImpl()->createStore(
-        contextId, users, managers, emptyBuf, randNameAsBuf, policiesWithItems, INBOX_TYPE_FILTER_FLAG
+        contextId, users, managers, emptyBuf, randNameAsBuf, policiesWithItems, INBOX_TYPE_FILTER_FLAG, groups
     );
     auto threadId = _threadApi.getImpl()->createThread(
-        contextId, users, managers, emptyBuf, randNameAsBuf, policiesWithItems, INBOX_TYPE_FILTER_FLAG
+        contextId, users, managers, emptyBuf, randNameAsBuf, policiesWithItems, INBOX_TYPE_FILTER_FLAG, groups
     );
     auto resourceId = core::EndpointUtils::generateId();
     auto inboxDIO = _connection.getImpl()->createDIO(contextId, resourceId);
@@ -143,6 +151,9 @@ std::string InboxApiImpl::createInbox(
         all_users, inboxKey, inboxDIO, {.contextId = contextId, .resourceId = resourceId}, inboxSecret
     );
     createInboxModel.keys = keysList;
+    if (!groups.empty()) {
+        fillContainerGroupGrants(createInboxModel, contextId, resourceId, inboxKey, inboxDIO, inboxSecret, groups);
+    }
     if (policies.has_value()) {
         createInboxModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policiesWithItems.value());
     }
@@ -161,7 +172,8 @@ void InboxApiImpl::updateInbox(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto currentInbox = getServerInbox(inboxId);
     auto currentInboxEntry = getInboxCurrentDataEntry(currentInbox);
@@ -169,7 +181,8 @@ void InboxApiImpl::updateInbox(
     auto currentInboxResourceId = currentInbox.resourceId.has_value() ? currentInbox.resourceId.value() :
                                                                         core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
-        currentInbox, currentInboxEntry, currentInboxResourceId, users, managers, forceGenerateNewKey
+        currentInbox, currentInboxEntry, currentInboxResourceId, users, managers,
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentInbox, groups), true, _groupPrivKeyResolver
     );
     auto eccKey = crypto::ECC::fromPrivateKey(ctx.key.key);
     auto privateKey = crypto::PrivateKey(eccKey);
@@ -202,6 +215,11 @@ void InboxApiImpl::updateInbox(
     inboxUpdateModel.version = version;
     inboxUpdateModel.force = force;
     inboxUpdateModel.data = _inboxDataSchemaMapper->encrypt(inboxDataIn, ctx.key.key);
+    // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
+    // revokes every grant the Inbox had.
+    fillContainerGroupGrants(
+        inboxUpdateModel, ctx.location.contextId, currentInboxResourceId, ctx.key, ctx.dio, ctx.secret, groups
+    );
 
     std::optional<core::ContainerPolicy> policiesWithItems{
         policies.has_value() ? std::make_optional<core::ContainerPolicy>({policies.value(), std::nullopt}) :
@@ -215,22 +233,66 @@ void InboxApiImpl::updateInbox(
     _serverApi->inboxUpdate(inboxUpdateModel);
     invalidateModuleKeysInCache(inboxId);
 
+    // The inner containers carry the same grants as the Inbox — see createInbox.
     auto store = _storeApi.getImpl()->getStore(currentInboxData.storeId, INBOX_TYPE_FILTER_FLAG);
     _storeApi.getImpl()->updateStore(
         currentInboxData.storeId, users, managers, store.publicMeta, store.privateMeta, store.version, force,
-        forceGenerateNewKey, policiesWithItems
+        forceGenerateNewKey, policiesWithItems, groups
     );
     auto thread = _threadApi.getImpl()->getThread(currentInboxData.threadId, INBOX_TYPE_FILTER_FLAG);
     _threadApi.getImpl()->updateThread(
         currentInboxData.threadId, users, managers, thread.publicMeta, thread.privateMeta, thread.version, force,
-        forceGenerateNewKey, policiesWithItems
+        forceGenerateNewKey, policiesWithItems, groups
     );
+}
+
+void InboxApiImpl::rotateInboxKeys(
+    const std::string& inboxId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    auto currentInbox = getServerInbox(inboxId);
+    auto currentEntry = getInboxCurrentDataEntry(currentInbox);
+    auto currentInboxData = currentEntry.data;
+    auto resourceId = currentInbox.resourceId.value_or(core::EndpointUtils::generateId());
+
+    auto ctx = prepareContainerUpdate(
+        currentInbox, currentEntry, resourceId, users, managers, true, true, _groupPrivKeyResolver
+    );
+
+    server::InboxRotateKeysModel model;
+    model.id = inboxId;
+    model.keyId = ctx.key.id;
+    model.keys = ctx.keyEntries;
+    model.version = version;
+    model.force = force;
+
+    // A re-key changes no grants, so the grantees are the Inbox's own — `currentInbox.groups`, which the bridge
+    // serves in full. Taking them from `groups` instead would silently drop every grantee the caller did not name,
+    // and a caller can only name the groups it belongs to: `groupKeys`, the one place an Inbox's grantee groups
+    // show up in its payload, is narrowed to those. The bridge rejects a re-key that leaves a granted group without
+    // an entry at the new keyId, so the dropped grantees would fail the whole call.
+    model.groupKeys = buildRekeyGroupKeyEntries(currentInbox, resourceId, ctx, groups);
+
+    _serverApi->inboxRotateKeys(model);
+    invalidateModuleKeysInCache(inboxId);
+
+    // The entries and their files live in the inner Thread and Store, so re-keying only the Inbox would leave every
+    // entry unreadable to a group that has rotated past the epoch those containers were wrapped to. Each carries its
+    // own version, so the caller's `version` guard applies to the Inbox alone.
+    auto store = _storeApi.getImpl()->getStore(currentInboxData.storeId, INBOX_TYPE_FILTER_FLAG);
+    _storeApi.getImpl()->rotateStoreKeys(currentInboxData.storeId, users, managers, store.version, force, groups);
+    auto thread = _threadApi.getImpl()->getThread(currentInboxData.threadId, INBOX_TYPE_FILTER_FLAG);
+    _threadApi.getImpl()->rotateThreadKeys(currentInboxData.threadId, users, managers, thread.version, force, groups);
 }
 
 Inbox InboxApiImpl::getInbox(const std::string& inboxId, const std::string& type) {
     auto inbox = getServerInbox(inboxId, type);
     setNewModuleKeysInCache(inbox.id, inboxToModuleKeys(inbox), inbox.version);
-    auto result = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(inbox, _keyProvider);
+    auto result = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(inbox, _keyProvider, _groupPrivKeyResolver);
     return result;
 }
 
@@ -258,7 +320,7 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
         setNewModuleKeysInCache(inbox.id, inboxToModuleKeys(inbox), inbox.version);
     }
     std::vector<Inbox> inboxes = _inboxDataSchemaMapper->validateDecryptAndConvertInboxes(
-        inboxesListResult.inboxes, _keyProvider
+        inboxesListResult.inboxes, _keyProvider, _groupPrivKeyResolver
     );
     return core::PagingList<inbox::Inbox>({.totalAvailable = inboxesListResult.count, .readItems = inboxes});
 }
@@ -383,7 +445,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
 inbox::InboxEntry InboxApiImpl::readEntry(const std::string& inboxEntryId) {
     auto messageRaw = getServerMessage(inboxEntryId);
     auto result = _inboxEntryDataSchemaMapper.decryptAndConvertInboxEntry(
-        messageRaw, getEntryDecryptionKeys(messageRaw)
+        messageRaw, getEntryDecryptionKeys(messageRaw), _groupPrivKeyResolver
     );
     return result;
 }
@@ -407,7 +469,9 @@ core::PagingList<inbox::InboxEntry> InboxApiImpl::listEntries(
     if (messagesList.messages.size() > 0) {
         for (auto message : messagesList.messages) {
             messages.push_back(
-                _inboxEntryDataSchemaMapper.decryptAndConvertInboxEntry(message, getEntryDecryptionKeys(message))
+                _inboxEntryDataSchemaMapper.decryptAndConvertInboxEntry(
+                    message, getEntryDecryptionKeys(message), _groupPrivKeyResolver
+                )
             );
         }
     }
@@ -437,7 +501,7 @@ int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store
 
     auto inboxKeys = getEntryDecryptionKeys(messageRaw);
 
-    auto messageData = _inboxEntryDataSchemaMapper.decryptInboxEntry(messageRaw, inboxKeys);
+    auto messageData = _inboxEntryDataSchemaMapper.decryptInboxEntry(messageRaw, inboxKeys, _groupPrivKeyResolver);
     core::DecryptedEncKey fileMetaEncKey{
         core::EncKey{.id = "", .key = messageData.privateData.filesMetaKey},
         core::DecryptedVersionedData{.dataStructureVersion = 0, .statusCode = 0}
@@ -552,7 +616,9 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::InboxInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, inboxToModuleKeys(raw), raw.version);
-                auto data = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(raw, _keyProvider);
+                auto data = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(
+                    raw, _keyProvider, _groupPrivKeyResolver
+                );
                 auto event = core::EventBuilder::buildEvent<InboxCreatedEvent>("inbox", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -560,7 +626,9 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::InboxInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, inboxToModuleKeys(raw), raw.version);
-                auto data = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(raw, _keyProvider);
+                auto data = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(
+                    raw, _keyProvider, _groupPrivKeyResolver
+                );
                 auto event = core::EventBuilder::buildEvent<InboxUpdatedEvent>("inbox", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -577,7 +645,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
             if (raw.containerType.value_or("") == INBOX_TYPE_FILTER_FLAG) {
                 auto inboxId = readInboxIdFromMessageKeyId(raw.keyId);
                 auto message = _inboxEntryDataSchemaMapper.decryptAndConvertInboxEntry(
-                    raw, getEntryDecryptionKeys(raw)
+                    raw, getEntryDecryptionKeys(raw), _groupPrivKeyResolver
                 );
                 auto event = core::EventBuilder::buildEvent<InboxEntryCreatedEvent>(
                     "inbox/" + inboxId + "/entries", message, notification
@@ -681,6 +749,7 @@ std::pair<core::ModuleKeys, int64_t> InboxApiImpl::getModuleKeysAndVersionFromSe
 core::ModuleKeys InboxApiImpl::inboxToModuleKeys(inbox::server::InboxInfo inbox) {
     return core::ModuleKeys{
         .keys = inbox.keys,
+        .groupKeys = inbox.groupKeys,
         .staleGroups = inbox.staleGroups,
         .currentKeyId = inbox.keyId,
         .moduleSchemaVersion = _inboxDataSchemaMapper->getDataStructureVersion(inbox.data.back()),
