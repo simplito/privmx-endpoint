@@ -47,6 +47,12 @@ struct has_group_keys : std::false_type {};
 template<typename T>
 struct has_group_keys<T, std::void_t<decltype(std::declval<T>().groupKeys)>> : std::true_type {};
 
+/** Whether a served module struct carries per-member key entries at all. A group carries none. */
+template<typename T, typename = void>
+struct has_keys : std::false_type {};
+template<typename T>
+struct has_keys<T, std::void_t<decltype(std::declval<T>().keys)>> : std::true_type {};
+
 class DataSchemaMapperUtils {
 public:
     static uint32_t toStatusCode(std::function<void()> fn) noexcept {
@@ -149,7 +155,9 @@ public:
             if (result[i].statusCode != 0) {
                 continue;
             }
-            keyRequest.addOne(items[i].keys, items[i].data.back().keyId, getLocation(items[i]));
+            if constexpr (has_keys<TServer>::value) {
+                keyRequest.addOne(items[i].keys, items[i].data.back().keyId, getLocation(items[i]));
+            }
             if constexpr (has_group_keys<TServer>::value) {
                 keyRequest.addGroupKeys(items[i].groupKeys, getLocation(items[i]));
             }
