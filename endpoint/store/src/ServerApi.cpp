@@ -24,6 +24,10 @@ void ServerApi::storeUpdate(const server::StoreUpdateModel& model) {
     requestVoid("storeUpdate", model.toJSON());
 }
 
+void ServerApi::storeRotateKeys(const server::StoreRotateKeysModel& model) {
+    requestVoid("storeRotateKeys", model.toJSON());
+}
+
 void ServerApi::storeDelete(const server::StoreDeleteModel& model) {
     requestVoid("storeDelete", model.toJSON());
 }

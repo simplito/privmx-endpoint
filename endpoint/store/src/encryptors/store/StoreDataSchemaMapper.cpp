@@ -77,7 +77,8 @@ uint32_t StoreDataSchemaMapper::validateDataIntegrity(const server::Store& store
 
 std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
     const std::vector<server::Store>& stores,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Store>(
         stores, keyProvider, _connection, [&](const server::Store& s) { return validateDataIntegrity(s); },
@@ -87,15 +88,17 @@ std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
         [&](const server::Store& s, const core::DecryptedEncKey& key) { return decrypt(s, key); },
         [](const server::Store& s, uint32_t code) {
             return toLibStore(s, {}, {}, code, StoreDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
 Store StoreDataSchemaMapper::validateDecryptAndConvertStore(
     const server::Store& store,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertStores({store}, keyProvider)[0];
+    return validateDecryptAndConvertStores({store}, keyProvider, groupPrivKeyResolver)[0];
 }
 
 Store StoreDataSchemaMapper::toLibStore(
@@ -105,6 +108,10 @@ Store StoreDataSchemaMapper::toLibStore(
     int64_t statusCode,
     int64_t schemaVersion
 ) {
+    std::vector<core::GroupGrant> groups;
+    for (const auto& g : store.groups) {
+        groups.push_back({.groupId = g.groupId, .role = g.role});
+    }
     return Store{
         .storeId = store.id,
         .contextId = store.contextId,
@@ -121,6 +128,8 @@ Store StoreDataSchemaMapper::toLibStore(
         .policy = core::Factory::parsePolicyServerObject(store.policy),
         .filesCount = store.files,
         .statusCode = statusCode,
-        .schemaVersion = schemaVersion
+        .schemaVersion = schemaVersion,
+        .groups = std::move(groups),
+        .staleGroups = store.staleGroups
     };
 }

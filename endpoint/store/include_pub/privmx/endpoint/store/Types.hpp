@@ -183,6 +183,18 @@ struct Store {
      * Version of the Store data structure and how it is encoded/encrypted
      */
     int64_t schemaVersion;
+
+    /**
+     * list of groups granted access to this Store
+     */
+    std::vector<core::GroupGrant> groups;
+
+    /**
+     * IDs of the grantee groups that have rotated past the epoch this Store's current key was wrapped to.
+     * Non-empty means the Store needs re-keying — rotateStoreKeys() re-wraps its key to the current epoch of
+     * every grantee. Members of a stale group cannot read content written under the current key until then.
+     */
+    std::vector<std::string> staleGroups;
 };
 
 enum EventType : int64_t {

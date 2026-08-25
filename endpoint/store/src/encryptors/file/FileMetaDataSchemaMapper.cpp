@@ -153,7 +153,8 @@ dynamic::InternalStoreFileMeta FileMetaDataSchemaMapper::decryptFileInternalMeta
 std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
     const std::vector<server::File>& files,
     const core::ModuleKeys& storeKeys,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyEntries<File>(
         files, storeKeys, keyProvider, _connection,
@@ -166,28 +167,32 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
         [&](const server::File& f, const core::DecryptedEncKey& key) { return decrypt(f, key); },
         [](const server::File& f, uint32_t code) {
             return toLibFile(f, {}, {}, 0, {}, code, FileDataSchema::Version::UNKNOWN, false);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
 File FileMetaDataSchemaMapper::validateDecryptAndConvertFile(
     const server::File& file,
     const core::ModuleKeys& storeKeys,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertFiles({file}, storeKeys, keyProvider)[0];
+    return validateDecryptAndConvertFiles({file}, storeKeys, keyProvider, groupPrivKeyResolver)[0];
 }
 
 dynamic::InternalStoreFileMeta FileMetaDataSchemaMapper::validateDecryptFileInternalMeta(
     const server::File& file,
     const core::ModuleKeys& storeKeys,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     const auto& keyId = file.keyId;
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     core::EncKeyLocation location{.contextId = file.contextId, .resourceId = storeKeys.moduleResourceId};
     keyProviderRequest.addOne(storeKeys.keys, keyId, location);
-    auto encKey = keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(keyId);
+    keyProviderRequest.addGroupKeys(storeKeys.groupKeys, location);
+    auto encKey = keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver).at(location).at(keyId);
     return decryptFileInternalMeta(file, encKey);
 }
 
