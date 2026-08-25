@@ -215,9 +215,11 @@ int main() {
             const server::GroupTreeState after = TreeWire::afterRemoval(group.tree, plan, position);
 
             LadderKeys ladder(store);
+            // Unit rung only: the fixture group is minted straight at epoch 5, so there is no epoch history behind
+            // it and no archive to gather the aligned skip targets from. A real rotation owes the full set.
             const std::vector<ArchiveRung> rungs = ladder.buildRungs(
                 plan.newEpoch, plan.newGrantKey.getPublicKey(), store.getGrantKey(5), 1,
-                group.members[remover].userId, group.members[remover].priv
+                group.members[remover].userId, group.members[remover].priv, /*includeSkipRungs*/ false
             );
             std::string rungJson = "[";
             for (std::size_t i = 0; i < rungs.size(); ++i) {

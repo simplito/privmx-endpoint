@@ -428,6 +428,7 @@ std::pair<core::ModuleKeys, int64_t> KvdbApiImpl::getModuleKeysAndVersionFromSer
 core::ModuleKeys KvdbApiImpl::kvdbToModuleKeys(server::KvdbInfo kvdb) {
     return core::ModuleKeys{
         .keys = kvdb.keys,
+        .staleGroups = kvdb.staleGroups,
         .currentKeyId = kvdb.keyId,
         .moduleSchemaVersion = _kvdbDataSchemaMapper->getDataStructureVersion(kvdb.data.back()),
         .moduleResourceId = kvdb.resourceId.value_or(""),

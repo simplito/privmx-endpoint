@@ -52,21 +52,7 @@ ThreadApiImpl::ThreadApiImpl(
       _threadDataSchemaMapper(std::make_shared<ThreadDataSchemaMapper>(userPrivKey, connection)),
       _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) {
     if (groupApi.has_value()) {
-        _groupApiImpl = groupApi->getImpl();
-    } else {
-        _groupApiImpl = nullptr;
-    }
-    if (_groupApiImpl) {
-        auto groupApiImpl = _groupApiImpl;
-        _groupPrivKeyResolver =
-            [groupApiImpl](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
-            try {
-                return groupApiImpl->resolveGroupPrivKey(groupId, epoch);
-            } catch (...) {
-                // not a member of this group at this epoch — skip
-                return std::nullopt;
-            }
-        };
+        initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi->getImpl()));
     }
     initModuleDataSchemaMapper(_threadDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
@@ -109,36 +95,13 @@ std::string ThreadApiImpl::createThread(
     server::ThreadCreateModel create_thread_model;
     fillContainerCreateModel(
         create_thread_model, contextId, users, managers, ctx,
-        _threadDataSchemaMapper->encrypt(threadDataToEncrypt, ctx.key.key)
+        _threadDataSchemaMapper->encrypt(threadDataToEncrypt, ctx.key.key), groups
     );
     if (type.length() > 0) {
         create_thread_model.type = type;
     }
     if (policies.has_value()) {
         create_thread_model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
-    }
-    if (!groups.empty()) {
-        // Populate groupEpoch from current group state when caller didn't supply it (EP-13/14)
-        std::vector<privmx::endpoint::core::GroupGrantWithKey> resolvedGroups = groups;
-        if (_groupApiImpl) {
-            for (auto& g : resolvedGroups) {
-                if (g.groupEpoch == 0) {
-                    try {
-                        auto grp = _groupApiImpl->getGroup(g.groupId);
-                        g.groupEpoch = grp.keyVersion;
-                        g.groupPubKey = grp.groupPubKey;
-                    } catch (...) {}
-                }
-            }
-        }
-        create_thread_model.groupKeys = buildGroupKeyEntries(
-            resolvedGroups, ctx.key, ctx.dio, contextId, ctx.resourceId, ctx.secret
-        );
-        std::vector<core::server::GroupGrant> groupGrants;
-        for (const auto& g : resolvedGroups) {
-            groupGrants.push_back({.groupId = g.groupId, .role = g.role});
-        }
-        create_thread_model.groups = std::move(groupGrants);
     }
     auto result = _serverApi.threadCreate(create_thread_model);
     return result.threadId;
@@ -163,68 +126,16 @@ void ThreadApiImpl::updateThread(
     const auto& currentThreadEntry = currentThread.data.back();
     auto currentThreadResourceId = currentThread.resourceId ? currentThread.resourceId.value() :
                                                               core::EndpointUtils::generateId();
-    // Force key rotation when groups are being removed so the old group
-    // no longer has access to the new key (Bridge rejects if it does).
-    bool groupRemovalForcesNewKey = false;
-    {
-        std::set<std::string> newGroupIds;
-        for (const auto& g : groups) {
-            newGroupIds.insert(g.groupId);
-        }
-        for (const auto& current : currentThread.groups) {
-            if (newGroupIds.find(current.groupId) == newGroupIds.end()) {
-                groupRemovalForcesNewKey = true;
-                break;
-            }
-        }
-    }
-    // EP-13: detect if any grantee group's epoch has advanced; if so, force new thread key.
-    bool epochStaleness = false;
-    std::unordered_map<std::string, GroupEpochInfo> groupEpochCache;
-    if (_groupApiImpl && !groups.empty()) {
-        epochStaleness = isRekeyNeeded(currentThread, groupEpochCache);
-    }
-
     auto ctx = prepareContainerUpdate(
         currentThread, currentThreadEntry, currentThreadResourceId, users, managers,
-        forceGenerateNewKey || groupRemovalForcesNewKey || epochStaleness
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentThread, groups), true, _groupPrivKeyResolver
     );
     server::ThreadUpdateModel model;
-    fillContainerUpdateModel(model, threadId, currentThreadResourceId, users, managers, ctx, version, force);
+    // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
+    // revokes every grant the Thread had.
+    fillContainerUpdateModel(model, threadId, currentThreadResourceId, users, managers, ctx, version, force, groups);
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
-    }
-    if (!groups.empty()) {
-        // Populate groupEpoch from current group state when caller didn't supply it (EP-13/14)
-        std::vector<core::GroupGrantWithKey> resolvedGroups = groups;
-        if (_groupApiImpl) {
-            for (auto& g : resolvedGroups) {
-                if (g.groupEpoch == 0) {
-                    auto it = groupEpochCache.find(g.groupId);
-                    if (it != groupEpochCache.end()) {
-                        g.groupEpoch = it->second.keyVersion;
-                        g.groupPubKey = it->second.groupPubKey;
-                    } else {
-                        try {
-                            auto grp = _groupApiImpl->getGroup(g.groupId);
-                            g.groupEpoch = grp.keyVersion;
-                            g.groupPubKey = grp.groupPubKey;
-                            groupEpochCache[g.groupId] = {grp.keyVersion, grp.groupPubKey};
-                        } catch (...) {}
-                    }
-                }
-            }
-        }
-        model.groupKeys = buildGroupKeyEntries(
-            resolvedGroups, ctx.key, ctx.dio, currentThread.contextId, currentThreadResourceId, ctx.secret
-        );
-        std::vector<core::server::GroupGrant> groupGrants;
-        for (const auto& g : resolvedGroups) {
-            groupGrants.push_back({.groupId = g.groupId, .role = g.role});
-        }
-        model.groups = std::move(groupGrants);
-    } else {
-        model.groups = std::vector<core::server::GroupGrant>{};
     }
     core::ModuleDataToEncryptV5 threadDataToEncrypt{
         .publicMeta = publicMeta,
@@ -254,7 +165,9 @@ void ThreadApiImpl::rotateThreadKeys(
     const auto& currentEntry = currentThread.data.back();
     auto resourceId = currentThread.resourceId.value_or(core::EndpointUtils::generateId());
 
-    auto ctx = prepareContainerUpdate(currentThread, currentEntry, resourceId, users, managers, true);
+    auto ctx = prepareContainerUpdate(
+        currentThread, currentEntry, resourceId, users, managers, true, true, _groupPrivKeyResolver
+    );
 
     server::ThreadRotateKeysModel model;
     model.id = threadId;
@@ -263,23 +176,12 @@ void ThreadApiImpl::rotateThreadKeys(
     model.version = version;
     model.force = force;
 
-    if (!groups.empty()) {
-        std::vector<core::GroupGrantWithKey> resolvedGroups = groups;
-        if (_groupApiImpl) {
-            for (auto& g : resolvedGroups) {
-                if (g.groupEpoch == 0) {
-                    try {
-                        auto grp = _groupApiImpl->getGroup(g.groupId);
-                        g.groupEpoch = grp.keyVersion;
-                        g.groupPubKey = grp.groupPubKey;
-                    } catch (...) {}
-                }
-            }
-        }
-        model.groupKeys = buildGroupKeyEntries(
-            resolvedGroups, ctx.key, ctx.dio, currentThread.contextId, resourceId, ctx.secret
-        );
-    }
+    // A re-key changes no grants, so the grantees are the Thread's own — `currentThread.groups`, which the bridge
+    // serves in full. Taking them from `groups` instead would silently drop every grantee the caller did not name,
+    // and a caller can only name the groups it belongs to: `groupKeys`, the one place a Thread's grantee groups
+    // show up in its payload, is narrowed to those. The bridge rejects a re-key that leaves a granted group without
+    // an entry at the new keyId, so the dropped grantees would fail the whole call.
+    model.groupKeys = buildRekeyGroupKeyEntries(currentThread, resourceId, ctx, groups);
 
     _serverApi.threadRotateKeys(model);
     invalidateModuleKeysInCache(threadId);
@@ -564,49 +466,12 @@ core::ModuleKeys ThreadApiImpl::threadToModuleKeys(server::ThreadInfo thread) {
     return core::ModuleKeys{
         .keys = thread.keys,
         .groupKeys = thread.groupKeys,
+        .staleGroups = thread.staleGroups,
         .currentKeyId = thread.keyId,
         .moduleSchemaVersion = _threadDataSchemaMapper->getDataStructureVersion(thread.data.back()),
         .moduleResourceId = thread.resourceId.value_or(""),
         .contextId = thread.contextId
     };
-}
-
-bool ThreadApiImpl::isRekeyNeeded(
-    const server::ThreadInfo& thread,
-    std::unordered_map<std::string, GroupEpochInfo>& groupCache
-) {
-    if (!_groupApiImpl || thread.groupKeys.empty())
-        return false;
-    bool stale = false;
-    for (const auto& entry : thread.groupKeys) {
-        if (groupCache.find(entry.group) == groupCache.end()) {
-            try {
-                auto grp = _groupApiImpl->getGroup(entry.group);
-                groupCache[entry.group] = GroupEpochInfo{.keyVersion = grp.keyVersion, .groupPubKey = grp.groupPubKey};
-            } catch (...) { continue; }
-        }
-        int64_t storedEpoch = 0;
-        for (const auto& keyEntry : entry.keys) {
-            storedEpoch = std::max(storedEpoch, keyEntry.groupEpoch.value_or(0));
-        }
-        int64_t currentEpoch = groupCache[entry.group].keyVersion;
-        if (storedEpoch < currentEpoch) {
-            stale = true;
-            break;
-        }
-    }
-    return stale;
-}
-
-void ThreadApiImpl::applyRekeyIfNeeded(const std::string& threadId, const server::ThreadInfo& thread) {
-    std::unordered_map<std::string, GroupEpochInfo> groupCache;
-    if (!isRekeyNeeded(thread, groupCache))
-        return;
-    // Rekey: rebuild GroupGrantWithKey list with current epoch public keys, then force updateThread.
-    // The caller of updateThread must provide users/managers with public keys; since we don't have
-    // them here, we skip the rekey and let the next explicit updateThread call perform it.
-    // updateThread always checks group epochs and sets groupEpoch correctly when given groups[].
-    LOG_DEBUG("[applyRekeyIfNeeded] thread ", threadId, " has stale group key epoch — rekey on next updateThread")
 }
 
 std::vector<std::string> ThreadApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

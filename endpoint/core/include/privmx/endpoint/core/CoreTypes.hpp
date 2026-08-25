@@ -12,7 +12,6 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_CORETYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_CORETYPES_HPP_
 
-#include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include <Poco/Dynamic/Var.h>
@@ -91,10 +90,16 @@ struct NotificationEvent {
 struct ModuleKeys {
     std::vector<server::KeyEntry> keys;
     std::vector<server::GroupKeysEntry> groupKeys;
+    std::vector<std::string> staleGroups;
     std::string currentKeyId;
     int64_t moduleSchemaVersion;
     std::string moduleResourceId;
     std::string contextId;
+};
+
+struct GroupEpochInfo {
+    int64_t keyVersion;
+    std::string groupPubKey;
 };
 
 struct ContainerUpdateContext {

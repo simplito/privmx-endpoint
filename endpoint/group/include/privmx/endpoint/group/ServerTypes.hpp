@@ -95,7 +95,7 @@ JSON_STRUCT(GroupTreeSeatedNode, GROUP_TREE_SEATED_NODE_FIELDS);
 #define GROUP_TREE_ADDITION_TRANSITION_FIELDS(F)                                                                       \
     F(baseKeyVersion, int64_t)                                                                                         \
     F(position, int64_t)                                                                                               \
-    F(seatedNodes, std::vector<GroupTreeSeatedNode>)                                                                    \
+    F(seatedNodes, std::vector<GroupTreeSeatedNode>)                                                                   \
     F(edges, std::vector<GroupTreeEdge>)
 JSON_STRUCT(GroupTreeAdditionTransition, GROUP_TREE_ADDITION_TRANSITION_FIELDS);
 

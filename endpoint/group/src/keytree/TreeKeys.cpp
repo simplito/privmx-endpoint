@@ -11,8 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/TreeKeys.hpp"
 
-#include <algorithm>
-#include <set>
 #include <stdexcept>
 
 #include <privmx/crypto/EciesEncryptor.hpp>
@@ -348,8 +346,8 @@ AdditionPlan TreeKeys::planAddition(
                     // A sibling leaf: the refresh replaced the key their climb runs through, so they need an edge
                     // to the new one. Their public key is not part of the tree state — the leaf *is* their key,
                     // and only its holder publishes it — so it comes from the roster.
-                    const bool seated = position < state.leafAssignment.size()
-                        && state.leafAssignment[position].has_value();
+                    const bool seated = position < state.leafAssignment.size() &&
+                        state.leafAssignment[position].has_value();
                     if (!seated) {
                         continue; // blank leaf: nothing to wrap to
                     }
@@ -357,7 +355,8 @@ AdditionPlan TreeKeys::planAddition(
                     if (!memberPub.has_value()) {
                         throw std::invalid_argument(
                             "seating a member re-keys the path and needs the public key of member " +
-                            state.leafAssignment[position].value() + "; supply the roster first"
+                            state.leafAssignment[position].value() +
+                            "; supply the roster first"
                         );
                     }
                     edge.childKind = EdgeChildKind::User;
@@ -468,7 +467,8 @@ RemovalPlan TreeKeys::planRemoval(
                 const auto memberPub = memberKey(state.leafAssignment[childPosition].value());
                 if (!memberPub.has_value()) {
                     throw std::invalid_argument(
-                        "removal needs the public key of member " + state.leafAssignment[childPosition].value() +
+                        "removal needs the public key of member " +
+                        state.leafAssignment[childPosition].value() +
                         "; supply the roster first"
                     );
                 }
@@ -486,9 +486,8 @@ RemovalPlan TreeKeys::planRemoval(
                 edge.childKind = EdgeChildKind::Node;
                 edge.childIndex = child;
                 edge.childGeneration = childOnPath ? childState->generation + 1 : childState->generation;
-                edge.blob = childOnPath
-                    ? wrapKey(refresh.newKey, onPath->second.getPublicKey(), signer)
-                    : wrapKey(refresh.newKey, childState->publicKey.parsed(), signer);
+                edge.blob = childOnPath ? wrapKey(refresh.newKey, onPath->second.getPublicKey(), signer) :
+                                          wrapKey(refresh.newKey, childState->publicKey.parsed(), signer);
             }
             refresh.edges.push_back(edge);
         }
@@ -536,6 +535,6 @@ void TreeKeys::setMemberKeys(const std::vector<TreeMember>& members) {
     _memberKeys.clear();
     _memberKeyStrings.clear();
     for (const TreeMember& member : members) {
-        _memberKeys[member.userId] = member.publicKey;
+        _memberKeys.insert_or_assign(member.userId, member.publicKey);
     }
 }
