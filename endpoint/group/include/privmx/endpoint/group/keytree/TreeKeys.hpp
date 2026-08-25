@@ -77,11 +77,19 @@ public:
     BuildPlan build(const std::vector<TreeMember>& members, const privmx::crypto::PrivateKey& signer);
 
     /**
-     * Prepares an addition. **One wrap** in the common case: the new member's leaf parent key wrapped to them.
+     * Prepares an addition: re-keys the new leaf's direct path and wraps each new key to both of its children.
      *
-     * From there the new member climbs on edges that already exist. Nothing rotates, the epoch does not advance,
-     * and no container is touched — nobody loses access. When the tree grows a level the new root is minted and
-     * the grant edge re-linked, but `grantPublicKey` stays the same, so containers never notice.
+     * Costs `2*depth + 1` wraps. The cheaper shape — one wrap of the existing parent key to the newcomer — needs
+     * that parent's private key, and climbing only ever recovers keys on the caller's own path, whose single
+     * lowest-level node is their own parent. It therefore works for one seat in the tree and no other. Minting
+     * fresh keys wraps to public keys only, so any seat is reachable.
+     *
+     * The epoch does not advance and the grant keypair is untouched, so no container the group can read goes
+     * stale; the grant edge is re-issued to the re-keyed root at the same epoch. Existing members reach the new
+     * path keys through the copath edges, so nobody loses access and nobody has to act.
+     *
+     * @throws std::invalid_argument when the roster is missing a sibling's public key, or the grant key has not
+     *         been recovered yet
      */
     AdditionPlan planAddition(
         const TreeGroupState& state,
@@ -118,6 +126,16 @@ public:
      */
     void setMemberKeys(const std::vector<TreeMember>& members);
 
+    /**
+     * Supplies the same keys as base58 strings, parsed only when a wrap needs one.
+     *
+     * A plan wraps to the `log n` sibling leaves beside one path, but the caller hands over the whole roster
+     * because that is what the API takes. Parsing every entry up front costs ~0.19 ms each — 0.75 s at four
+     * thousand members — for keys the plan never touches, which is why the strings arrive unparsed and stay that
+     * way unless used. Overrides any earlier `setMemberKeys`.
+     */
+    void setMemberKeyStrings(std::map<std::string, std::string> membersByUserId);
+
     /** Chooses a position for a new member: lowest blank leaf, else append. Never moves anyone. */
     static std::uint32_t choosePosition(const TreeGroupState& state);
 
@@ -151,9 +169,14 @@ private:
     static const TreeEdge* findGrantEdge(const TreeGroupState& state);
     static const TreeNodeState* findNode(const TreeGroupState& state, std::uint32_t nodeIndex);
 
+    /** The public key of a member's leaf, parsing it on first use. Empty when the roster does not name them. */
+    std::optional<privmx::crypto::PublicKey> memberKey(const std::string& userId);
+
     TreeKeyCache& _cache;
-    /** Member public keys supplied by `setMemberKeys`, needed to wrap to surviving sibling leaves. */
+    /** Member public keys already parsed: supplied whole by `setMemberKeys`, or filled in on demand. */
     std::map<std::string, privmx::crypto::PublicKey> _memberKeys;
+    /** Unparsed roster from `setMemberKeyStrings`, base58-DER per user id. */
+    std::map<std::string, std::string> _memberKeyStrings;
 };
 
 } // namespace keytree

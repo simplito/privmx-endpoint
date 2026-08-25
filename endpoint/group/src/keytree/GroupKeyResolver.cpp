@@ -49,7 +49,7 @@ TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
                 TreeNodeState{
                     static_cast<std::uint32_t>(node.nodeIndex),
                     static_cast<std::uint32_t>(node.generation),
-                    privmx::crypto::PublicKey::fromBase58DER(node.publicKey),
+                    NodePublicKey::fromBase58DER(node.publicKey),
                 }
             );
         }

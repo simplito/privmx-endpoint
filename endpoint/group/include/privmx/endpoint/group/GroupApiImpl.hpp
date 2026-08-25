@@ -173,6 +173,18 @@ private:
     );
 
     /**
+     * The roster as unparsed base58 keys, indexed by user id.
+     *
+     * What `toTreeMembers` does, minus the parsing: building a group wraps to every member so it needs every key,
+     * but a membership change wraps to the `log n` leaves beside one path. At four thousand members parsing the
+     * rest costs ~0.75 s of subgroup checks for nothing.
+     */
+    static std::map<std::string, std::string> rosterKeyStrings(
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers
+    );
+
+    /**
      * Climbs the tree so the caller holds the node keys a plan needs, and returns the current runtime state.
      *
      * Both membership changes need this first: an addition needs the seat's parent key, a removal needs every key
@@ -186,6 +198,28 @@ private:
     keytree::TreeGroupState climbForPlanning(
         const server::GroupInfo& group,
         const std::shared_ptr<keytree::TreeKeyCache>& cache
+    );
+
+    /**
+     * Builds the complete rung set a rotation owes, fetching the archive and recovering the older grant keys first.
+     *
+     * The recovery is the point. A rung may only be published at the moment its own epoch is created, so whatever
+     * this set omits is omitted for good — and a manager rotating from a freshly started client holds exactly one
+     * grant key, the current one. Left to the cache, such a rotation would publish the unit rung alone; enough of
+     * those in a row and the ladder is linear, which puts history further back than a reader's walk bound out of
+     * reach for everyone. So the keys are gathered from the archive (about `log2(epoch)` unwraps) before any rung
+     * is wrapped, and a key that cannot be recovered aborts the rotation instead of shortening the set.
+     *
+     * @param cache the group's own cache, already holding `sk_{newEpoch-1}` from the climb
+     * @throws IncompleteEpochLadderException when some rung the epoch owes cannot be built
+     */
+    std::vector<keytree::ArchiveRung> buildRotationRungs(
+        const server::GroupInfo& group,
+        std::uint32_t newEpoch,
+        const privmx::crypto::PublicKey& newGrantPublicKey,
+        const std::optional<privmx::crypto::PrivateKey>& previousEpochKey,
+        const std::string& author,
+        keytree::TreeKeyCache& cache
     );
 
     /**

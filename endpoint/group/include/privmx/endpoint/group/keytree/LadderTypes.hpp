@@ -94,6 +94,13 @@ struct DescentResult {
     std::uint32_t reachedEpoch = 0;
     /** Publisher of the offending rung, when `failure == Tampered`. */
     std::optional<std::string> blame;
+    /**
+     * Rungs actually traversed — one ECIES decryption each.
+     *
+     * Reported rather than inferred from the span, because the two differ exactly when they matter: a ladder that
+     * carries its aligned skip rungs walks `O(log delta)`, one that lost them walks `delta`.
+     */
+    std::uint32_t hops = 0;
 };
 
 /** An entitlement target for an era-crossing link: a member or a group, with the key to wrap to. */

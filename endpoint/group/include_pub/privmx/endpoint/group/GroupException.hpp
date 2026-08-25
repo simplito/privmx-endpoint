@@ -51,6 +51,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupMembershipMismatchExcept
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x000E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, RotatedAlreadyException, "Concurrent group key rotation: another manager won and one auto-retry did not resolve it", 0x000F)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupHistoryForkException, "Group history diverged from a previously verified state (version or keyVersion regressed)", 0x0010)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, IncompleteEpochLadderException, "Rotation aborted: the epoch ladder rung set for the new epoch would be incomplete", 0x0011)
 // clang-format on
 } // namespace group
 } // namespace endpoint

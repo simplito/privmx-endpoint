@@ -129,7 +129,7 @@ TreeGroupState TreeWire::toRuntime(
             TreeNodeState{
                 static_cast<std::uint32_t>(node.nodeIndex),
                 static_cast<std::uint32_t>(node.generation),
-                privmx::crypto::PublicKey::fromBase58DER(node.publicKey),
+                NodePublicKey::fromBase58DER(node.publicKey),
             }
         );
     }
@@ -150,6 +150,65 @@ TreeGroupState TreeWire::toRuntime(
         state.edges.push_back(converted);
     }
     return state;
+}
+
+server::GroupTreeTransition TreeWire::toTransition(
+    const server::GroupTreeState& before,
+    const RemovalPlan& plan,
+    std::uint32_t position,
+    std::int64_t baseKeyVersion
+) {
+    server::GroupTreeTransition transition;
+    transition.baseKeyVersion = baseKeyVersion;
+    transition.blankedPosition = static_cast<std::int64_t>(position);
+    for (const NodeRefresh& refresh : plan.pathRefresh) {
+        // The generation the node was read at travels with the refresh: the server refuses the delta if the node
+        // has moved since, rather than applying it to a base the client never saw.
+        std::int64_t fromGeneration = static_cast<std::int64_t>(refresh.newGeneration) - 1;
+        for (const server::GroupTreeNode& node : before.nodes) {
+            if (static_cast<std::uint32_t>(node.nodeIndex) == refresh.nodeIndex) {
+                fromGeneration = node.generation;
+                break;
+            }
+        }
+        server::GroupTreeRefreshedNode wire;
+        wire.nodeIndex = static_cast<std::int64_t>(refresh.nodeIndex);
+        wire.fromGeneration = fromGeneration;
+        wire.generation = static_cast<std::int64_t>(refresh.newGeneration);
+        wire.publicKey = refresh.newKey.getPublicKey().toBase58DER();
+        transition.refreshedNodes.push_back(wire);
+
+        for (const TreeEdge& edge : refresh.edges) {
+            transition.edges.push_back(toWire(edge));
+        }
+    }
+    transition.edges.push_back(toWire(plan.grantEdge));
+    return transition;
+}
+
+server::GroupTreeAdditionTransition TreeWire::toAdditionTransition(
+    const AdditionPlan& plan,
+    const std::map<std::uint32_t, std::uint32_t>& previousGenerations,
+    std::int64_t baseKeyVersion
+) {
+    server::GroupTreeAdditionTransition transition;
+    transition.baseKeyVersion = baseKeyVersion;
+    transition.position = static_cast<std::int64_t>(plan.position);
+    for (const TreeNodeState& node : plan.nodes) {
+        server::GroupTreeSeatedNode wire;
+        wire.nodeIndex = static_cast<std::int64_t>(node.nodeIndex);
+        const auto previous = previousGenerations.find(node.nodeIndex);
+        if (previous != previousGenerations.end()) {
+            wire.fromGeneration = static_cast<std::int64_t>(previous->second);
+        }
+        wire.generation = static_cast<std::int64_t>(node.generation);
+        wire.publicKey = node.publicKey.toBase58DER();
+        transition.seatedNodes.push_back(wire);
+    }
+    for (const TreeEdge& edge : plan.edges) {
+        transition.edges.push_back(toWire(edge));
+    }
+    return transition;
 }
 
 server::GroupTreeState TreeWire::afterRemoval(
@@ -216,9 +275,17 @@ server::GroupTreeState TreeWire::afterAddition(
     after.leafAssignment = before.leafAssignment;
     after.leafAssignment.resize(plan.newNumLeaves, std::string());
     after.leafAssignment[plan.position] = newMemberId;
-    after.nodes = before.nodes;
+    // The plan re-keys the new leaf's path, so its nodes REPLACE the ones held before rather than joining them:
+    // appending would leave the state carrying two entries for one node index, one of them a key nobody holds.
+    std::map<std::uint32_t, server::GroupTreeNode> nodesByIndex;
+    for (const server::GroupTreeNode& node : before.nodes) {
+        nodesByIndex[static_cast<std::uint32_t>(node.nodeIndex)] = node;
+    }
     for (const TreeNodeState& node : plan.nodes) {
-        after.nodes.push_back(toWire(node));
+        nodesByIndex[node.nodeIndex] = toWire(node);
+    }
+    for (const auto& [nodeIndex, node] : nodesByIndex) {
+        after.nodes.push_back(node);
     }
 
     // Growth re-parents nodes and leaves at the truncated edge of the tree, so an edge that was correct a moment

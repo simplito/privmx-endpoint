@@ -13,7 +13,7 @@
 #include <privmx/endpoint/group/VarSerializer.hpp>
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
-
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 using namespace privmx::endpoint;
 
 enum TUGConnectionType {

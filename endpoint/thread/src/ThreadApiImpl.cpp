@@ -128,7 +128,7 @@ void ThreadApiImpl::updateThread(
                                                               core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
         currentThread, currentThreadEntry, currentThreadResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentThread, groups)
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentThread, groups), true, _groupPrivKeyResolver
     );
     server::ThreadUpdateModel model;
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
@@ -165,7 +165,9 @@ void ThreadApiImpl::rotateThreadKeys(
     const auto& currentEntry = currentThread.data.back();
     auto resourceId = currentThread.resourceId.value_or(core::EndpointUtils::generateId());
 
-    auto ctx = prepareContainerUpdate(currentThread, currentEntry, resourceId, users, managers, true);
+    auto ctx = prepareContainerUpdate(
+        currentThread, currentEntry, resourceId, users, managers, true, true, _groupPrivKeyResolver
+    );
 
     server::ThreadRotateKeysModel model;
     model.id = threadId;
