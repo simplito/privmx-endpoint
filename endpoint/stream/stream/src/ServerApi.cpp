@@ -21,6 +21,10 @@ server::StreamRoomCreateResult ServerApi::streamRoomCreate(server::StreamRoomCre
     return request<server::StreamRoomCreateResult>("streamRoomCreate", model.toJSON());
 }
 
+void ServerApi::streamRoomRotateKeys(server::StreamRoomRotateKeysModel model) {
+    request("streamRoomRotateKeys", model.toJSON());
+}
+
 void ServerApi::streamRoomUpdate(server::StreamRoomUpdateModel model) {
     request("streamRoomUpdate", model.toJSON());
 }

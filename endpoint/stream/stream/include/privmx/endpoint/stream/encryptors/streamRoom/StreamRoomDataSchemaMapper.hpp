@@ -53,12 +53,14 @@ public:
 
     std::vector<StreamRoom> validateDecryptAndConvertStreamRooms(
         const std::vector<server::StreamRoomInfo>& streamRooms,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     StreamRoom validateDecryptAndConvertStreamRoom(
         const server::StreamRoomInfo& streamRoom,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
     static StreamRoom toLibStreamRoom(
         const server::StreamRoomInfo& info,

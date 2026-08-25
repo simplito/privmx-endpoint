@@ -27,6 +27,7 @@ limitations under the License.
 #include <privmx/utils/Logger.hpp>
 
 #include "privmx/endpoint/core/EventBuilder.hpp"
+#include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/stream/Events.hpp"
 #include "privmx/endpoint/stream/Mapper.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
@@ -42,13 +43,17 @@ StreamApiLowImpl::StreamApiLowImpl(
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
-    const std::shared_ptr<core::EventMiddleware>& eventMiddleware
+    const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
+    const std::optional<group::GroupApi>& groupApi
 )
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _connection(connection.getImpl()),
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
       _serverApi(std::make_shared<ServerApi>(gateway)),
       _subscriber(stream::SubscriberImpl(gateway, STREAM_TYPE_FILTER_FLAG)),
       _streamRoomDataSchemaMapper(std::make_shared<StreamRoomDataSchemaMapper>(userPrivKey, connection)) {
+    if (groupApi.has_value()) {
+        initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi->getImpl()));
+    }
     initModuleDataSchemaMapper(_streamRoomDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -118,7 +123,9 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         if (raw.type.value_or(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
             return;
         }
-        auto eventData = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(raw, _keyProvider);
+        auto eventData = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(
+            raw, _keyProvider, _groupPrivKeyResolver
+        );
         auto event = core::EventBuilder::buildEvent<StreamRoomCreatedEvent, StreamRoom>(
             "stream", eventData, notification
         );
@@ -129,7 +136,9 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         if (raw.type.value_or(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
             return;
         }
-        auto eventData = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(raw, _keyProvider);
+        auto eventData = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(
+            raw, _keyProvider, _groupPrivKeyResolver
+        );
         auto event = core::EventBuilder::buildEvent<StreamRoomUpdatedEvent, StreamRoom>(
             "stream", eventData, notification
         );
@@ -544,7 +553,8 @@ std::string StreamApiLowImpl::createStreamRoom(
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicyWithoutItem>& policies,
     const std::optional<int64_t>& emptyRoomTtl,
-    const std::string& type
+    const std::string& type,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 streamRoomDataToEncrypt{
@@ -557,7 +567,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     server::StreamRoomCreateModel createStreamRoomModel;
     fillContainerCreateModel(
         createStreamRoomModel, contextId, users, managers, ctx,
-        _streamRoomDataSchemaMapper->encrypt(streamRoomDataToEncrypt, ctx.key.key)
+        _streamRoomDataSchemaMapper->encrypt(streamRoomDataToEncrypt, ctx.key.key), groups
     );
     createStreamRoomModel.type = type;
     if (policies.has_value()) {
@@ -577,7 +587,8 @@ void StreamApiLowImpl::updateStreamRoom(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
 
     server::StreamRoomGetModel getModel;
@@ -586,10 +597,15 @@ void StreamApiLowImpl::updateStreamRoom(
     auto currentStreamRoomEntry = currentStreamRoom.data.back();
     auto currentStreamRoomResourceId = currentStreamRoom.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
-        currentStreamRoom, currentStreamRoomEntry, currentStreamRoomResourceId, users, managers, forceGenerateNewKey
+        currentStreamRoom, currentStreamRoomEntry, currentStreamRoomResourceId, users, managers,
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentStreamRoom, groups), true, _groupPrivKeyResolver
     );
     server::StreamRoomUpdateModel model;
-    fillContainerUpdateModel(model, streamRoomId, currentStreamRoomResourceId, users, managers, ctx, version, force);
+    // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
+    // revokes every grant the StreamRoom had.
+    fillContainerUpdateModel(
+        model, streamRoomId, currentStreamRoomResourceId, users, managers, ctx, version, force, groups
+    );
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
@@ -606,6 +622,42 @@ void StreamApiLowImpl::updateStreamRoom(
     _serverApi->streamRoomUpdate(model);
 }
 
+void StreamApiLowImpl::rotateStreamRoomKeys(
+    const std::string& streamRoomId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    server::StreamRoomGetModel getModel;
+    getModel.id = streamRoomId;
+    auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
+    const auto& currentEntry = currentStreamRoom.data.back();
+    auto resourceId = currentStreamRoom.resourceId.value_or(core::EndpointUtils::generateId());
+
+    auto ctx = prepareContainerUpdate(
+        currentStreamRoom, currentEntry, resourceId, users, managers, true, true, _groupPrivKeyResolver
+    );
+
+    server::StreamRoomRotateKeysModel model;
+    model.id = streamRoomId;
+    model.keyId = ctx.key.id;
+    model.keys = ctx.keyEntries;
+    model.version = version;
+    model.force = force;
+
+    // A re-key changes no grants, so the grantees are the StreamRoom's own — `currentStreamRoom.groups`, which the
+    // bridge serves in full. Taking them from `groups` instead would silently drop every grantee the caller did not
+    // name, and a caller can only name the groups it belongs to: `groupKeys`, the one place a StreamRoom's grantee
+    // groups show up in its payload, is narrowed to those. The bridge rejects a re-key that leaves a granted group
+    // without an entry at the new keyId, so the dropped grantees would fail the whole call.
+    model.groupKeys = buildRekeyGroupKeyEntries(currentStreamRoom, resourceId, ctx, groups);
+
+    _serverApi->streamRoomRotateKeys(model);
+    invalidateModuleKeysInCache(streamRoomId);
+}
+
 core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(
     const std::string& contextId,
     const core::PagingQuery& query,
@@ -617,7 +669,7 @@ core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(
     core::ListQueryMapper::map(model, query);
     auto streamRoomsList = _serverApi->streamRoomList(model);
     auto streamRooms = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRooms(
-        streamRoomsList.list, _keyProvider
+        streamRoomsList.list, _keyProvider, _groupPrivKeyResolver
     );
     return core::PagingList<StreamRoom>({.totalAvailable = streamRoomsList.count, .readItems = streamRooms});
 }
@@ -627,7 +679,9 @@ StreamRoom StreamApiLowImpl::getStreamRoom(const std::string& streamRoomId, cons
     params.id = streamRoomId;
     params.type = type;
     auto streamRoom = _serverApi->streamRoomGet(params).streamRoom;
-    auto result = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(streamRoom, _keyProvider);
+    auto result = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(
+        streamRoom, _keyProvider, _groupPrivKeyResolver
+    );
     return result;
 }
 
@@ -686,6 +740,7 @@ std::pair<core::ModuleKeys, int64_t> StreamApiLowImpl::getModuleKeysAndVersionFr
 core::ModuleKeys StreamApiLowImpl::streamRoomToModuleKeys(server::StreamRoomInfo stream) {
     return core::ModuleKeys{
         .keys = stream.keys,
+        .groupKeys = stream.groupKeys,
         .staleGroups = stream.staleGroups,
         .currentKeyId = stream.keyId,
         .moduleSchemaVersion = _streamRoomDataSchemaMapper->getDataStructureVersion(stream.data.back()),
@@ -769,7 +824,8 @@ std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> Strea
         .contextId = streamRoomInfo.contextId, .resourceId = streamRoomInfo.resourceId.value_or("")
     };
     keyProviderRequest.addAll(streamRoomInfo.keys, location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest).at(location);
+    keyProviderRequest.addGroupKeys(streamRoomInfo.groupKeys, location);
+    return _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver).at(location);
 }
 
 std::string StreamApiLowImpl::deriveStreamEncryptionKey(privmx::endpoint::core::DecryptedEncKeyV2 encKey) {
