@@ -115,12 +115,12 @@ public:
     );
 
     /**
-     * Updates an existing Group.
+     * Updates an existing Group's metadata.
+     *
+     * The membership is deliberately not updatable here: seating a member and re-keying their path is one
+     * operation on the Group's key tree, so it goes through addGroupMember/removeGroupMember instead.
      *
      * @param groupId ID of the Group to update
-     * @param users vector of UserWithPubKey structs which indicates who will have access to the updated Group
-     * @param managers vector of UserWithPubKey structs which indicates who will have access (and management rights) to
-     * the updated Group
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
      * @param version current version of the updated Group
@@ -130,8 +130,6 @@ public:
      */
     void updateGroup(
         const std::string& groupId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const int64_t version,

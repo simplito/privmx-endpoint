@@ -167,7 +167,9 @@ std::string GroupApiImpl::createGroupWithKeyTree(
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies
 ) {
-    auto ctx = prepareContainerCreate(contextId, users, managers);
+    // Empty rosters: no per-member key entries. The metadata key is wrapped once, to the group's own grant public
+    // key, and every member opens it by climbing — see `GROUP_CREATE_MODEL_EXTRA_FIELDS` for what one wrap each cost.
+    auto ctx = prepareContainerCreate(contextId, {}, {});
 
     const std::vector<keytree::TreeMember> members = toTreeMembers(users, managers);
     // A scratch cache: the group has no id yet, so it has no cache in the registry to write to. `build()` writes
@@ -204,12 +206,31 @@ std::string GroupApiImpl::createGroupWithKeyTree(
         .membership = membership
     };
 
+    // Filled field by field rather than through `fillContainerCreateModel`: that helper also sets `keys`, and a
+    // group carries none — the bridge refuses a create that names the field at all.
     server::GroupCreateModel model;
-    fillContainerCreateModel(
-        model, contextId, users, managers, ctx, _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key)
-    );
+    model.resourceId = ctx.resourceId;
+    model.contextId = contextId;
+    model.keyId = ctx.key.id;
+    model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
+    model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
+    model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     model.groupPubKey = groupPubKeyStr;
     model.type = GROUP_TYPE_FILTER_FLAG;
+    // The group is a grantee of itself, at epoch 1. The entry names no group: the id does not exist yet, and the
+    // server files it against the group it is creating; nothing inside the ciphertext depends on it.
+    const auto selfAddressed = buildGroupKeyEntries(
+        {core::GroupGrantWithKey{
+            .groupId = std::string(),
+            .role = "manager",
+            .groupPubKey = groupPubKeyStr,
+            .groupEpoch = 1,
+        }},
+        ctx.key, ctx.dio, contextId, ctx.resourceId, ctx.secret
+    );
+    model.groupKeys = server::GroupKeyEntrySetForNewGroup{
+        .keyId = selfAddressed.at(0).keyId, .groupEpoch = 1, .data = selfAddressed.at(0).data
+    };
     model.tree = keytree::TreeWire::fromBuildPlan(plan, members);
     if (policies.has_value()) {
         model.policy = core::Factory::createPolicyServerObject(policies.value());
@@ -241,6 +262,7 @@ void GroupApiImpl::addGroupMember(
     // that position needs — the nodes beside the new leaf, whose public keys the re-keying wraps to. The seat has
     // no holder yet, so `forUserId` cannot name it, which is what `forPosition` is for.
     server::GroupGetModel seatModel{.groupId = groupId, .type = {}};
+    withHistoryFrom(seatModel, groupId);
     const auto seating = _serverApi.groupGet(seatModel).group;
     const std::uint32_t position = keytree::TreeKeys::choosePosition(
         keytree::TreeWire::toRuntime(keytree::TreeWire::fromGroupInfo(seating), 0, _userPrivKey.getPublicKey())
@@ -248,6 +270,7 @@ void GroupApiImpl::addGroupMember(
 
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
     getModel.forPosition = static_cast<std::int64_t>(position);
+    withHistoryFrom(getModel, groupId);
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -294,8 +317,8 @@ void GroupApiImpl::addGroupMember(
     auto ctx = prepareContainerUpdate(
         currentGroup, currentEntry, resourceId, users, managers, false, false, _groupPrivKeyResolver
     );
-    std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
-    std::vector<std::string> sortedManagers = core::EndpointUtils::usersWithPubKeyToIds(managers);
+    std::vector<std::string> sortedUsers = currentGroup.users;
+    std::vector<std::string> sortedManagers = currentGroup.managers;
     std::sort(sortedUsers.begin(), sortedUsers.end());
     std::sort(sortedManagers.begin(), sortedManagers.end());
 
@@ -328,9 +351,8 @@ void GroupApiImpl::addGroupMember(
     model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
     // The delta, not the state: the server holds everything else and checks this against it.
     model.transition = keytree::TreeWire::toAdditionTransition(plan, previousGenerations, currentEpoch);
-    // Exactly one entry, at the key that already exists: no rotation was requested, so `ctx.key` is the group's
-    // current metadata key.
-    model.keys = _keyProvider->prepareKeysList({newMember}, ctx.key, ctx.dio, ctx.location, ctx.secret);
+    // There is no key entry to send: the newcomer climbs to the grant key and opens the group's single
+    // self-addressed metadata entry, like everybody else.
     model.expectedKeyVersion = currentEpoch;
 
     try {
@@ -420,6 +442,7 @@ void GroupApiImpl::removeGroupMember(
     // ~13 MB download at 16 384 members is `O(log n)`.
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
     getModel.forUserId = userId;
+    withHistoryFrom(getModel, groupId);
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -461,7 +484,7 @@ void GroupApiImpl::removeGroupMember(
     auto ctx = prepareContainerUpdate(
         currentGroup, currentEntry, resourceId, users, managers, true, false, _groupPrivKeyResolver
     );
-    const std::vector<core::server::GroupKeyEntrySet> selfAddressedKey = buildGroupKeyEntries(
+    const auto selfAddressedKey = buildGroupKeyEntries(
         {core::GroupGrantWithKey{
             .groupId = groupId,
             .role = "manager",
@@ -513,9 +536,8 @@ void GroupApiImpl::removeGroupMember(
         keytree::TreeWire::fromGroupInfo(currentGroup), plan, position.value(), currentEpoch
     );
     model.rungs = keytree::TreeWire::toWire(rungs);
-    // Deliberately empty: `groupKeys` carries the same key in a single ciphertext.
-    model.keys = {};
-    model.groupKeys = selfAddressedKey;
+    // One ciphertext, whatever the group's size — the O(1) replacement for one wrap per survivor.
+    model.groupKeys = selfAddressedKey.at(0);
     model.expectedKeyVersion = currentEpoch;
     const auto confInput = std::string("confirm") + groupId + std::to_string(newEpoch) + ctx.key.id;
     model.confirmationTag = privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(ctx.key.key, confInput));
@@ -539,8 +561,6 @@ static constexpr unsigned int BRIDGE_GROUP_ROTATED_ALREADY = 0x621C;
 
 void GroupApiImpl::updateGroup(
     const std::string& groupId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const int64_t version,
@@ -549,38 +569,30 @@ void GroupApiImpl::updateGroup(
     const std::optional<core::ContainerPolicy>& policies,
     bool allowRotationRetry
 ) {
+    // The default path view is enough: this submits no tree, and the roster it re-signs is the one it reads back.
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
-    getModel.scope = TREE_SCOPE_FULL; // submits a whole new tree, so it needs the whole one
+    withHistoryFrom(getModel, groupId);
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
     int64_t currentEpoch = currentGroup.keyVersion.value_or(0);
 
-    std::set<std::string> newMemberIds;
-    for (const auto& u : users)
-        newMemberIds.insert(u.userId);
-    for (const auto& m : managers)
-        newMemberIds.insert(m.userId);
-    bool removalDetected = false;
-    for (const auto& u : currentGroup.users) {
-        if (!newMemberIds.count(u)) {
-            removalDetected = true;
-            break;
-        }
-    }
-    if (!removalDetected) {
-        for (const auto& m : currentGroup.managers) {
-            if (!newMemberIds.count(m)) {
-                removalDetected = true;
-                break;
-            }
-        }
-    }
-
     auto currentDecryptedEncKey = getAndValidateModuleCurrentEncKey(currentGroup, _groupPrivKeyResolver);
 
+    // The roster is unchanged by definition — moving a member goes through addGroupMember/removeGroupMember —
+    // so the resolver is handed the group's own roster back. That leaves `doNeedNewKey()` driven by
+    // `forceGenerateNewKey` alone; an empty roster here would read as "everybody was removed" and rotate.
+    // Public keys are not needed: `distributeToUsers = false` discards everything they would be used for.
+    std::vector<core::UserWithPubKey> unchangedUsers;
+    for (const auto& userId : currentGroup.users) {
+        unchangedUsers.push_back(core::UserWithPubKey{.userId = userId, .pubKey = std::string()});
+    }
+    std::vector<core::UserWithPubKey> unchangedManagers;
+    for (const auto& userId : currentGroup.managers) {
+        unchangedManagers.push_back(core::UserWithPubKey{.userId = userId, .pubKey = std::string()});
+    }
     auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, users, managers, forceGenerateNewKey || removalDetected, true,
+        currentGroup, currentEntry, resourceId, unchangedUsers, unchangedManagers, forceGenerateNewKey, false,
         _groupPrivKeyResolver
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
@@ -592,8 +604,8 @@ void GroupApiImpl::updateGroup(
     std::string newGroupPubKeyStr = currentGroup.groupPubKey;
     int64_t newEpoch = currentEpoch;
 
-    std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
-    std::vector<std::string> sortedManagers = core::EndpointUtils::usersWithPubKeyToIds(managers);
+    std::vector<std::string> sortedUsers = currentGroup.users;
+    std::vector<std::string> sortedManagers = currentGroup.managers;
     std::sort(sortedUsers.begin(), sortedUsers.end());
     std::sort(sortedManagers.begin(), sortedManagers.end());
 
@@ -617,9 +629,13 @@ void GroupApiImpl::updateGroup(
         .membership = membership
     };
 
+    // Metadata only: no roster, no `keys`, no grant key. The bridge refuses a groupUpdate that names any of them.
     server::GroupUpdateModel model;
-    fillContainerUpdateModel(model, groupId, resourceId, users, managers, ctx, version, force);
-    model.groupPubKey = newGroupPubKeyStr;
+    model.id = groupId;
+    model.resourceId = resourceId;
+    model.keyId = ctx.key.id;
+    model.version = version;
+    model.force = force;
     model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
     if (policies.has_value()) {
         model.policy = core::Factory::createPolicyServerObject(policies.value());
@@ -631,9 +647,7 @@ void GroupApiImpl::updateGroup(
         if (allowRotationRetry && (e.getCode() & 0x0000FFFF) == BRIDGE_GROUP_ROTATED_ALREADY) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
-            updateGroup(
-                groupId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, false
-            );
+            updateGroup(groupId, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, false);
             return;
         }
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -655,6 +669,7 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
 void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload) {
     // Verifies the winner's key entry and nothing else — no tree is submitted, so the default path view is enough.
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
+    withHistoryFrom(getModel, groupId);
     auto updatedGroup = _serverApi.groupGet(getModel).group;
 
     std::vector<core::server::KeyEntry> winnerKeyVec{payload.winnerKeyEntry};
@@ -680,8 +695,20 @@ void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server:
     invalidateModuleKeysInCache(groupId);
 }
 
+void GroupApiImpl::withHistoryFrom(server::GroupGetModel& params, const std::string& groupId) {
+    const int64_t verified = _groupDataSchemaMapper->verifiedVersion(groupId);
+    if (verified > 0) {
+        params.fromVersion = verified + 1;
+    }
+}
+
 Group GroupApiImpl::getGroup(const std::string& groupId) {
     server::GroupGetModel params{.groupId = groupId, .type = {}};
+    // Only the part of the chain this client has not verified yet. Each entry carries the roster it was written
+    // with — ~40 B per member — so a group of 16 384 ships ~650 KB per version, and re-sending versions we have
+    // already proved is the bulk of what a read costs. The window has to chain into our checkpoint, which
+    // `assertDataIntegrity` insists on rather than assumes.
+    withHistoryFrom(params, groupId);
     auto group = _serverApi.groupGet(params).group;
     setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.version);
     return _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider, _groupPrivKeyResolver);
@@ -826,6 +853,7 @@ void GroupApiImpl::processDisconnectedEvent() {
 
 std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     server::GroupGetModel params{.groupId = moduleId, .type = {}};
+    withHistoryFrom(params, moduleId);
     auto group = _serverApi.groupGet(params).group;
     _groupDataSchemaMapper->assertDataIntegrity(group);
     return std::make_pair(groupToModuleKeys(group), group.version);
@@ -835,7 +863,8 @@ core::ModuleKeys GroupApiImpl::groupToModuleKeys(const server::GroupInfo& group)
     // `staleGroups` stays empty by design: a group is not granted to other groups, so it carries no such list.
     // Its own freshness is `keyVersion`, and the epoch ladder — not a re-key — is what reaches past it.
     return core::ModuleKeys{
-        .keys = group.keys,
+        // Always empty: a group distributes its metadata key through `groupKeys`, opened by climbing.
+        .keys = {},
         .groupKeys = group.groupKeys.value_or(std::vector<core::server::GroupKeysEntry>{}),
         .currentKeyId = group.data.back().keyId,
         .moduleSchemaVersion = _groupDataSchemaMapper->getDataStructureVersion(group.data.back()),
@@ -865,6 +894,7 @@ std::string GroupApiImpl::buildSubscriptionQuery(
 
 privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& groupId, int64_t epoch) {
     server::GroupGetModel params{.groupId = groupId, .type = {}};
+    withHistoryFrom(params, groupId);
     auto group = _serverApi.groupGet(params).group;
 
     const int64_t currentEpoch = group.keyVersion.value_or(1);
