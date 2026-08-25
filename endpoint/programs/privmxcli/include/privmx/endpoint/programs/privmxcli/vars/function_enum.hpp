@@ -204,6 +204,17 @@ enum func_enum {
     kvdb_unsubscribeFrom,
     kvdb_buildSubscriptionQuery,
     kvdb_buildSubscriptionQueryForSelectedEntry,
+    //  group
+    group_createGroupWithKeyTree,
+    group_addGroupMember,
+    group_removeGroupMember,
+    group_updateGroup,
+    group_deleteGroup,
+    group_getGroup,
+    group_listGroups,
+    group_subscribeFor,
+    group_unsubscribeFrom,
+    group_buildSubscriptionQuery,
 };
 
 } // privmxcli
