@@ -125,7 +125,6 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(data, std::vector<GroupDataEntry>)                                                                               \
     F(users, std::vector<std::string>)                                                                                 \
     F(managers, std::vector<std::string>)                                                                              \
-    F(keys, std::vector<core::server::KeyEntry>)                                                                       \
     F(groupKeys, std::optional<std::vector<core::server::GroupKeysEntry>>)                                             \
     F(version, int64_t)                                                                                                \
     F(keyVersion, std::optional<int64_t>)                                                                              \
@@ -159,17 +158,42 @@ JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
     F(policy, Poco::Dynamic::Var)
 JSON_STRUCT(GroupSummary, GROUP_SUMMARY_FIELDS);
 
-// `groupKeys` carries the group's metadata key wrapped **once** to its own grant public key. A tree-backed group
-// sends no per-member entries at all: one wrap per member is 1.29 KB each on the server's document, which capped
-// a group near 12 400 seats against a protocol that allows 16 384.
-#define GROUP_CREATE_MODEL_EXTRA_FIELDS(F)                                                                             \
-    F(groupPubKey, std::string)                                                                                        \
-    F(groupKeys, std::vector<core::server::GroupKeyEntrySet>)                                                          \
-    F(tree, std::optional<GroupTreeState>)
-JSON_STRUCT_EXT(GroupCreateModel, core::server::ContainerCreateModelBase, GROUP_CREATE_MODEL_EXTRA_FIELDS);
+// The group's own metadata key at creation time. No `group`: the id does not exist until the server generates
+// it, and the server files the entry against the group it is creating.
+#define GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELDS(F)                                                                    \
+    F(keyId, std::string)                                                                                              \
+    F(groupEpoch, int64_t)                                                                                             \
+    F(data, Poco::Dynamic::Var)
+JSON_STRUCT(GroupKeyEntrySetForNewGroup, GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELDS);
 
-#define GROUP_UPDATE_MODEL_EXTRA_FIELDS(F) F(groupPubKey, std::string)
-JSON_STRUCT_EXT(GroupUpdateModel, core::server::ContainerUpdateModelBase, GROUP_UPDATE_MODEL_EXTRA_FIELDS);
+// Deliberately **not** built on `ContainerCreateModelBase`: that base carries `keys`, the per-member entries a
+// tree-backed group must not send at all, and the bridge refuses a create that names the field. Every group is
+// tree-backed, so `tree` is required and `groupKeys` is the single wrap to the group's own grant public key.
+#define GROUP_CREATE_MODEL_FIELDS(F)                                                                                   \
+    F(resourceId, std::string)                                                                                         \
+    F(contextId, std::string)                                                                                          \
+    F(users, std::vector<std::string>)                                                                                 \
+    F(managers, std::vector<std::string>)                                                                              \
+    F(data, Poco::Dynamic::Var)                                                                                        \
+    F(keyId, std::string)                                                                                              \
+    F(type, std::string)                                                                                               \
+    F(policy, std::optional<Poco::Dynamic::Var>)                                                                       \
+    F(groupPubKey, std::string)                                                                                        \
+    F(groupKeys, std::optional<GroupKeyEntrySetForNewGroup>)                                                           \
+    F(tree, GroupTreeState)
+JSON_STRUCT(GroupCreateModel, GROUP_CREATE_MODEL_FIELDS);
+
+// Metadata only. Moving a member moves the tree, so the roster and the grant key are not reachable from here —
+// `groupAddMember`/`groupRemoveMember` are the only ways in, and the bridge refuses the fields outright.
+#define GROUP_UPDATE_MODEL_FIELDS(F)                                                                                   \
+    F(id, std::string)                                                                                                 \
+    F(resourceId, std::string)                                                                                         \
+    F(data, Poco::Dynamic::Var)                                                                                        \
+    F(keyId, std::string)                                                                                              \
+    F(version, int64_t)                                                                                                \
+    F(force, bool)                                                                                                     \
+    F(policy, std::optional<Poco::Dynamic::Var>)
+JSON_STRUCT(GroupUpdateModel, GROUP_UPDATE_MODEL_FIELDS);
 
 #define GROUP_CREATE_RESULT_FIELDS(F) F(groupId, std::string)
 JSON_STRUCT(GroupCreateResult, GROUP_CREATE_RESULT_FIELDS);
@@ -230,7 +254,6 @@ JSON_STRUCT(GroupChangedEventData, GROUP_CHANGED_EVENT_DATA_FIELDS);
     F(data, Poco::Dynamic::Var)                                                                                        \
     F(transition, std::optional<GroupTreeAdditionTransition>)                                                          \
     F(tree, std::optional<GroupTreeState>)                                                                             \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
     F(expectedKeyVersion, int64_t)
 JSON_STRUCT(GroupAddMemberModel, GROUP_ADD_MEMBER_MODEL_FIELDS);
 
@@ -244,8 +267,7 @@ JSON_STRUCT(GroupAddMemberModel, GROUP_ADD_MEMBER_MODEL_FIELDS);
     F(transition, std::optional<GroupTreeTransition>)                                                                  \
     F(tree, std::optional<GroupTreeState>)                                                                             \
     F(rungs, std::vector<GroupArchiveRung>)                                                                            \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(groupKeys, std::vector<core::server::GroupKeyEntrySet>)                                                          \
+    F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
     F(expectedKeyVersion, int64_t)                                                                                     \
     F(confirmationTag, std::optional<std::string>)
 JSON_STRUCT(GroupRemoveMemberModel, GROUP_REMOVE_MEMBER_MODEL_FIELDS);

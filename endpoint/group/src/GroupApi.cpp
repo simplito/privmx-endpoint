@@ -104,8 +104,6 @@ void GroupApi::removeGroupMember(
 
 void GroupApi::updateGroup(
     const std::string& groupId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const int64_t version,
@@ -115,12 +113,8 @@ void GroupApi::updateGroup(
 ) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     try {
-        impl->updateGroup(
-            groupId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
-        );
+        impl->updateGroup(groupId, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

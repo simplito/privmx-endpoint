@@ -100,8 +100,6 @@ public:
 
     void updateGroup(
         const std::string& groupId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const int64_t version,
