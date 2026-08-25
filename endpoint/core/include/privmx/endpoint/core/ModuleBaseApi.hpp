@@ -15,7 +15,6 @@ limitations under the License.
 #include <Poco/Dynamic/Var.h>
 #include <algorithm>
 #include <functional>
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -29,6 +28,7 @@ limitations under the License.
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include "privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp"
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
@@ -267,6 +267,21 @@ protected:
     template<typename TContainer>
     static auto isRekeyNeeded(const TContainer& container) -> decltype(container.staleGroups, bool()) {
         return !container.staleGroups.empty();
+    }
+
+    /**
+     * Refuses a key that is stale — see `ModuleKeys::staleGroups`. Called where the answer decides whether to
+     * encrypt; the container update and re-key calls are deliberately not guarded, a re-key being the way out.
+     */
+    template<typename TContainer>
+    static auto assertRekeyNotNeeded(const TContainer& container) -> decltype(container.staleGroups, void()) {
+        if (isRekeyNeeded(container)) {
+            std::string staleGroups;
+            for (const auto& groupId : container.staleGroups) {
+                staleGroups += staleGroups.empty() ? groupId : "," + groupId;
+            }
+            throw StaleKeyRekeyRequiredException("staleGroups=" + staleGroups);
+        }
     }
 
     template<typename TContainer>

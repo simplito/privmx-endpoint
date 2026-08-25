@@ -31,6 +31,9 @@ public:
     struct CachedModuleKeys {
         std::vector<server::KeyEntry> keys;
         std::vector<server::GroupKeysEntry> groupKeys;
+        // See ModuleKeys::staleGroups. A snapshot: a group's epoch advancing does not touch the module's
+        // version, so nothing invalidates this entry — the list stays as it was until the module is refetched.
+        std::vector<std::string> staleGroups;
         std::string currentKeyId;
         int64_t moduleSchemaVersion;
         std::string moduleResourceId;

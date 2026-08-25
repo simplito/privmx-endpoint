@@ -730,6 +730,8 @@ std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromSe
 }
 
 core::ModuleKeys GroupApiImpl::groupToModuleKeys(const server::GroupInfo& group) {
+    // `staleGroups` stays empty by design: a group is not granted to other groups, so it carries no such list.
+    // Its own freshness is `keyVersion`, and the epoch ladder — not a re-key — is what reaches past it.
     return core::ModuleKeys{
         .keys = group.keys,
         .groupKeys = group.groupKeys.value_or(std::vector<core::server::GroupKeysEntry>{}),

@@ -341,6 +341,9 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
     if (!room->publisherStream || room->publisherStream->streamHandle != streamHandle) {
         throw StreamHandleNotInitialized();
     }
+    // Where this client starts encrypting outgoing media under the room key — the stream module's equivalent of
+    // the item write the other modules guard. Receiving stays unguarded: decrypting what others publish is a read.
+    assertRekeyNotNeeded(getModuleKeys(room->streamRoomId));
     auto streamData = room->publisherStream;
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId, "publisher");
     server::SessionDescription sessionDescription;
@@ -375,6 +378,7 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
     if (!room->publisherStream->sessionId.has_value()) {
         throw StreamHandleNotPublishedException();
     }
+    assertRekeyNotNeeded(getModuleKeys(room->streamRoomId));
     auto streamData = room->publisherStream;
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId, "publisher");
     server::SessionDescription sessionDescription;
@@ -682,6 +686,7 @@ std::pair<core::ModuleKeys, int64_t> StreamApiLowImpl::getModuleKeysAndVersionFr
 core::ModuleKeys StreamApiLowImpl::streamRoomToModuleKeys(server::StreamRoomInfo stream) {
     return core::ModuleKeys{
         .keys = stream.keys,
+        .staleGroups = stream.staleGroups,
         .currentKeyId = stream.keyId,
         .moduleSchemaVersion = _streamRoomDataSchemaMapper->getDataStructureVersion(stream.data.back()),
         .moduleResourceId = stream.resourceId.value_or(""),

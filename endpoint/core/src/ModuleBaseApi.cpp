@@ -78,6 +78,8 @@ core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(
     ModuleKeys moduleKeys,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
+    // The key every new item is encrypted under: a stale one is refused here rather than at each write site.
+    assertRekeyNotNeeded(moduleKeys);
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location = core::EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
@@ -160,6 +162,7 @@ core::ContainerKeyCache::CachedModuleKeys ModuleBaseApi::convertModuleKeysToCont
     return core::ContainerKeyCache::CachedModuleKeys{
         .keys = moduleKeys.keys,
         .groupKeys = moduleKeys.groupKeys,
+        .staleGroups = moduleKeys.staleGroups,
         .currentKeyId = moduleKeys.currentKeyId,
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,
@@ -174,6 +177,7 @@ ModuleKeys ModuleBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat(
     return ModuleKeys{
         .keys = moduleKeys.keys,
         .groupKeys = moduleKeys.groupKeys,
+        .staleGroups = moduleKeys.staleGroups,
         .currentKeyId = moduleKeys.currentKeyId,
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,

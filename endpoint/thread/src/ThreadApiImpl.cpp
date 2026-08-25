@@ -464,6 +464,7 @@ core::ModuleKeys ThreadApiImpl::threadToModuleKeys(server::ThreadInfo thread) {
     return core::ModuleKeys{
         .keys = thread.keys,
         .groupKeys = thread.groupKeys,
+        .staleGroups = thread.staleGroups,
         .currentKeyId = thread.keyId,
         .moduleSchemaVersion = _threadDataSchemaMapper->getDataStructureVersion(thread.data.back()),
         .moduleResourceId = thread.resourceId.value_or(""),
