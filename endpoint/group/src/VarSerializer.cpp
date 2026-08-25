@@ -27,6 +27,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& va
     obj->set("policy", serialize(val.policy));
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("schemaVersion", serialize(val.schemaVersion));
+    obj->set("keyVersion", serialize(val.keyVersion));
     if (val.type.has_value()) {
         obj->set("type", serialize(val.type.value()));
     }
