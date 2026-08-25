@@ -477,7 +477,7 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(
     const core::ModuleKeys& storeKey
 ) {
     auto serverId = _host;
-    auto key = getAndValidateModuleCurrentEncKey(storeKey);
+    auto key = getAndValidateModuleCurrentEncKey(storeKey, _groupPrivKeyResolver);
     if (key.statusCode != 0) {
         throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(key.statusCode)
@@ -666,7 +666,7 @@ void StoreApiImpl::updateFileMeta(
     }
     // Guarded here because the server-struct key fetch, unlike the `ModuleKeys` one, does not assert.
     assertRekeyNotNeeded(store);
-    auto key = getAndValidateModuleCurrentEncKey(store);
+    auto key = getAndValidateModuleCurrentEncKey(store, _groupPrivKeyResolver);
     if (key.statusCode != 0) {
         throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(key.statusCode)

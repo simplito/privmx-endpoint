@@ -620,6 +620,7 @@ void StreamApiLowImpl::updateStreamRoom(
     };
     model.data = _streamRoomDataSchemaMapper->encrypt(streamRoomDataToEncrypt, ctx.key.key);
     _serverApi->streamRoomUpdate(model);
+    invalidateModuleKeysInCache(streamRoomId);
 }
 
 void StreamApiLowImpl::rotateStreamRoomKeys(

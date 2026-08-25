@@ -283,10 +283,18 @@ void InboxApiImpl::rotateInboxKeys(
     // The entries and their files live in the inner Thread and Store, so re-keying only the Inbox would leave every
     // entry unreadable to a group that has rotated past the epoch those containers were wrapped to. Each carries its
     // own version, so the caller's `version` guard applies to the Inbox alone.
-    auto store = _storeApi.getImpl()->getStore(currentInboxData.storeId, INBOX_TYPE_FILTER_FLAG);
-    _storeApi.getImpl()->rotateStoreKeys(currentInboxData.storeId, users, managers, store.version, force, groups);
-    auto thread = _threadApi.getImpl()->getThread(currentInboxData.threadId, INBOX_TYPE_FILTER_FLAG);
-    _threadApi.getImpl()->rotateThreadKeys(currentInboxData.threadId, users, managers, thread.version, force, groups);
+    //
+    // Read the versions off the served structs rather than through getStore/getThread: those decrypt the whole
+    // container, and a re-key needs nothing but the version.
+    store::server::StoreGetModel storeGetModel{.storeId = currentInboxData.storeId, .type = INBOX_TYPE_FILTER_FLAG};
+    auto storeVersion = _serverApi->storeGet(storeGetModel).store.version;
+    _storeApi.getImpl()->rotateStoreKeys(currentInboxData.storeId, users, managers, storeVersion, force, groups);
+
+    thread::server::ThreadGetModel threadGetModel{
+        .threadId = currentInboxData.threadId, .type = INBOX_TYPE_FILTER_FLAG
+    };
+    auto threadVersion = _serverApi->threadGet(threadGetModel).thread.version;
+    _threadApi.getImpl()->rotateThreadKeys(currentInboxData.threadId, users, managers, threadVersion, force, groups);
 }
 
 Inbox InboxApiImpl::getInbox(const std::string& inboxId, const std::string& type) {
