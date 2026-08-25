@@ -90,6 +90,7 @@ protected:
         const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
 
+    /** Empty rosters build no per-user key entries — for a module that hands its key over some other way. */
     ContainerCreateContext prepareContainerCreate(
         const std::string& contextId,
         const std::vector<UserWithPubKey>& users,

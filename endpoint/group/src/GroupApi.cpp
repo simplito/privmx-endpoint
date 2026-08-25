@@ -69,8 +69,9 @@ void GroupApi::addGroupMember(
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     core::Validator::validateClass<core::UserWithPubKey>(newMember, "field:newMember ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    // Format only — see `Validator::validateUserListFormat`. Keys the operation actually uses are checked in full.
+    core::Validator::validateUserListFormat(users, "field:users ");
+    core::Validator::validateUserListFormat(managers, "field:managers ");
     try {
         impl->addGroupMember(groupId, newMember, asManager, users, managers, publicMeta, privateMeta);
     } catch (const privmx::utils::PrivmxException& e) {
@@ -90,8 +91,9 @@ void GroupApi::removeGroupMember(
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     core::Validator::validateId(userId, "field:userId ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    // Format only — see `Validator::validateUserListFormat`. Keys the operation actually uses are checked in full.
+    core::Validator::validateUserListFormat(users, "field:users ");
+    core::Validator::validateUserListFormat(managers, "field:managers ");
     try {
         impl->removeGroupMember(groupId, userId, users, managers, publicMeta, privateMeta);
     } catch (const privmx::utils::PrivmxException& e) {

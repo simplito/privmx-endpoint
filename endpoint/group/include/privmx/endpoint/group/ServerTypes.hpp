@@ -138,7 +138,8 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(eraFloor, std::optional<int64_t>)                                                                                \
     F(archivePrunedBelow, std::optional<int64_t>)                                                                      \
     F(policy, Poco::Dynamic::Var)                                                                                      \
-    F(history, std::vector<GroupHistoryEntryInfo>)
+    F(history, std::vector<GroupHistoryEntryInfo>)                                                                     \
+    F(firstServedVersion, std::optional<int64_t>)
 JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
 
 #define GROUP_SUMMARY_FIELDS(F)                                                                                        \
@@ -158,8 +159,12 @@ JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
     F(policy, Poco::Dynamic::Var)
 JSON_STRUCT(GroupSummary, GROUP_SUMMARY_FIELDS);
 
+// `groupKeys` carries the group's metadata key wrapped **once** to its own grant public key. A tree-backed group
+// sends no per-member entries at all: one wrap per member is 1.29 KB each on the server's document, which capped
+// a group near 12 400 seats against a protocol that allows 16 384.
 #define GROUP_CREATE_MODEL_EXTRA_FIELDS(F)                                                                             \
     F(groupPubKey, std::string)                                                                                        \
+    F(groupKeys, std::vector<core::server::GroupKeyEntrySet>)                                                          \
     F(tree, std::optional<GroupTreeState>)
 JSON_STRUCT_EXT(GroupCreateModel, core::server::ContainerCreateModelBase, GROUP_CREATE_MODEL_EXTRA_FIELDS);
 
@@ -180,7 +185,8 @@ JSON_STRUCT(GroupDeleteModel, GROUP_DELETE_MODEL_FIELDS);
     F(type, std::optional<std::string>)                                                                                \
     F(scope, std::optional<std::string>)                                                                               \
     F(forUserId, std::optional<std::string>)                                                                           \
-    F(forPosition, std::optional<int64_t>)
+    F(forPosition, std::optional<int64_t>)                                                                             \
+    F(fromVersion, std::optional<int64_t>)
 JSON_STRUCT(GroupGetModel, GROUP_GET_MODEL_FIELDS);
 
 #define GROUP_LIST_MODEL_EXTRA_FIELDS(F)

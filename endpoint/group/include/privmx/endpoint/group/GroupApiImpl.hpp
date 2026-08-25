@@ -156,6 +156,9 @@ private:
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys groupToModuleKeys(const server::GroupInfo& group);
 
+    /** Asks for history above what this client has already verified, when there is such a point. */
+    void withHistoryFrom(server::GroupGetModel& params, const std::string& groupId);
+
     /** Roster entries as tree leaves, in a stable order — the seating is part of the state the bridge checks. */
     static std::vector<keytree::TreeMember> toTreeMembers(
         const std::vector<core::UserWithPubKey>& users,
