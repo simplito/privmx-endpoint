@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <Poco/JSON/Object.h>
 #include <privmx/endpoint/core/Factory.hpp>
+#include <privmx/endpoint/core/Mapper.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 #include "privmx/endpoint/inbox/InboxException.hpp"
@@ -151,10 +152,6 @@ Inbox InboxDataSchemaMapper::toLibInbox(
     int64_t statusCode,
     int64_t schemaVersion
 ) {
-    std::vector<core::GroupGrant> groups;
-    for (const auto& g : info.groups) {
-        groups.push_back({.groupId = g.groupId, .role = g.role});
-    }
     return Inbox{
         .inboxId = info.id,
         .contextId = info.contextId,
@@ -171,7 +168,7 @@ Inbox InboxDataSchemaMapper::toLibInbox(
         .policy = core::Factory::parsePolicyServerObject(info.policy),
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
-        .groups = std::move(groups),
+        .groups = core::Mapper::mapToGroupGrants(info.groups),
         .staleGroups = info.staleGroups
     };
 }

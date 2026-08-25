@@ -107,14 +107,12 @@ JSON_STRUCT(InboxCreateResult, INBOX_CREATE_RESULT_FIELDS);
     F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
 JSON_STRUCT(InboxUpdateModel, INBOX_UPDATE_MODEL_FIELDS);
 
-#define INBOX_ROTATE_KEYS_MODEL_FIELDS(F)                                                                              \
-    F(id, std::string)                                                                                                 \
-    F(keyId, std::string)                                                                                              \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)                                           \
-    F(version, int64_t)                                                                                                \
-    F(force, bool)
-JSON_STRUCT(InboxRotateKeysModel, INBOX_ROTATE_KEYS_MODEL_FIELDS);
+#define INBOX_ROTATE_KEYS_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(
+    InboxRotateKeysModel,
+    core::server::ContainerRotateKeysModelBase,
+    INBOX_ROTATE_KEYS_MODEL_EXTRA_FIELDS
+);
 
 #define INBOX_GET_MODEL_FIELDS(F)                                                                                      \
     F(id, std::string)                                                                                                 \

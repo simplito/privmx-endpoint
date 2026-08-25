@@ -43,14 +43,12 @@ JSON_STRUCT_EXT(StoreCreateModel, core::server::ContainerCreateModelBase, STORE_
 #define STORE_UPDATE_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(StoreUpdateModel, core::server::ContainerUpdateModelBase, STORE_UPDATE_MODEL_EXTRA_FIELDS);
 
-#define STORE_ROTATE_KEYS_MODEL_FIELDS(F)                                                                              \
-    F(id, std::string)                                                                                                 \
-    F(keyId, std::string)                                                                                              \
-    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
-    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)                                           \
-    F(version, int64_t)                                                                                                \
-    F(force, bool)
-JSON_STRUCT(StoreRotateKeysModel, STORE_ROTATE_KEYS_MODEL_FIELDS);
+#define STORE_ROTATE_KEYS_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(
+    StoreRotateKeysModel,
+    core::server::ContainerRotateKeysModelBase,
+    STORE_ROTATE_KEYS_MODEL_EXTRA_FIELDS
+);
 
 #define FILE_THUMB_FIELDS(F) F(size, int64_t)
 JSON_STRUCT(FileThumb, FILE_THUMB_FIELDS);

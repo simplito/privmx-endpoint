@@ -51,9 +51,7 @@ StreamApiLowImpl::StreamApiLowImpl(
       _serverApi(std::make_shared<ServerApi>(gateway)),
       _subscriber(stream::SubscriberImpl(gateway, STREAM_TYPE_FILTER_FLAG)),
       _streamRoomDataSchemaMapper(std::make_shared<StreamRoomDataSchemaMapper>(userPrivKey, connection)) {
-    if (groupApi.has_value()) {
-        initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi->getImpl()));
-    }
+    initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi));
     initModuleDataSchemaMapper(_streamRoomDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -634,29 +632,10 @@ void StreamApiLowImpl::rotateStreamRoomKeys(
     server::StreamRoomGetModel getModel;
     getModel.id = streamRoomId;
     auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
-    const auto& currentEntry = currentStreamRoom.data.back();
-    auto resourceId = currentStreamRoom.resourceId.value_or(core::EndpointUtils::generateId());
-
-    auto ctx = prepareContainerUpdate(
-        currentStreamRoom, currentEntry, resourceId, users, managers, true, true, _groupPrivKeyResolver
+    rotateContainerKeys<server::StreamRoomRotateKeysModel>(
+        streamRoomId, currentStreamRoom, users, managers, version, force, groups,
+        [&](const server::StreamRoomRotateKeysModel& model) { _serverApi->streamRoomRotateKeys(model); }
     );
-
-    server::StreamRoomRotateKeysModel model;
-    model.id = streamRoomId;
-    model.keyId = ctx.key.id;
-    model.keys = ctx.keyEntries;
-    model.version = version;
-    model.force = force;
-
-    // A re-key changes no grants, so the grantees are the StreamRoom's own — `currentStreamRoom.groups`, which the
-    // bridge serves in full. Taking them from `groups` instead would silently drop every grantee the caller did not
-    // name, and a caller can only name the groups it belongs to: `groupKeys`, the one place a StreamRoom's grantee
-    // groups show up in its payload, is narrowed to those. The bridge rejects a re-key that leaves a granted group
-    // without an entry at the new keyId, so the dropped grantees would fail the whole call.
-    model.groupKeys = buildRekeyGroupKeyEntries(currentStreamRoom, resourceId, ctx, groups);
-
-    _serverApi->streamRoomRotateKeys(model);
-    invalidateModuleKeysInCache(streamRoomId);
 }
 
 core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(
@@ -739,15 +718,7 @@ std::pair<core::ModuleKeys, int64_t> StreamApiLowImpl::getModuleKeysAndVersionFr
 }
 
 core::ModuleKeys StreamApiLowImpl::streamRoomToModuleKeys(server::StreamRoomInfo stream) {
-    return core::ModuleKeys{
-        .keys = stream.keys,
-        .groupKeys = stream.groupKeys,
-        .staleGroups = stream.staleGroups,
-        .currentKeyId = stream.keyId,
-        .moduleSchemaVersion = _streamRoomDataSchemaMapper->getDataStructureVersion(stream.data.back()),
-        .moduleResourceId = stream.resourceId.value_or(""),
-        .contextId = stream.contextId
-    };
+    return containerToModuleKeys(stream);
 }
 
 void StreamApiLowImpl::assertTurnServerUri(const std::string& uri) {

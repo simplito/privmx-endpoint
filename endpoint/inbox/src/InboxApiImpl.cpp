@@ -64,9 +64,7 @@ InboxApiImpl::InboxApiImpl(
       _subscriber(connection.getImpl()->getGateway(), INBOX_TYPE_FILTER_FLAG),
       _inboxDataSchemaMapper(std::make_shared<InboxDataSchemaMapper>(userPrivKey, connection)),
       _inboxEntryDataSchemaMapper(keyProvider, serverApi, storeApi) {
-    if (groupApi.has_value()) {
-        initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi->getImpl()));
-    }
+    initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi));
     initModuleDataSchemaMapper(_inboxDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&InboxApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -255,30 +253,11 @@ void InboxApiImpl::rotateInboxKeys(
     const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto currentInbox = getServerInbox(inboxId);
-    auto currentEntry = getInboxCurrentDataEntry(currentInbox);
-    auto currentInboxData = currentEntry.data;
-    auto resourceId = currentInbox.resourceId.value_or(core::EndpointUtils::generateId());
-
-    auto ctx = prepareContainerUpdate(
-        currentInbox, currentEntry, resourceId, users, managers, true, true, _groupPrivKeyResolver
+    auto currentInboxData = getInboxCurrentDataEntry(currentInbox).data;
+    rotateContainerKeys<server::InboxRotateKeysModel>(
+        inboxId, currentInbox, users, managers, version, force, groups,
+        [&](const server::InboxRotateKeysModel& model) { _serverApi->inboxRotateKeys(model); }
     );
-
-    server::InboxRotateKeysModel model;
-    model.id = inboxId;
-    model.keyId = ctx.key.id;
-    model.keys = ctx.keyEntries;
-    model.version = version;
-    model.force = force;
-
-    // A re-key changes no grants, so the grantees are the Inbox's own — `currentInbox.groups`, which the bridge
-    // serves in full. Taking them from `groups` instead would silently drop every grantee the caller did not name,
-    // and a caller can only name the groups it belongs to: `groupKeys`, the one place an Inbox's grantee groups
-    // show up in its payload, is narrowed to those. The bridge rejects a re-key that leaves a granted group without
-    // an entry at the new keyId, so the dropped grantees would fail the whole call.
-    model.groupKeys = buildRekeyGroupKeyEntries(currentInbox, resourceId, ctx, groups);
-
-    _serverApi->inboxRotateKeys(model);
-    invalidateModuleKeysInCache(inboxId);
 
     // The entries and their files live in the inner Thread and Store, so re-keying only the Inbox would leave every
     // entry unreadable to a group that has rotated past the epoch those containers were wrapped to. Each carries its
@@ -755,15 +734,7 @@ std::pair<core::ModuleKeys, int64_t> InboxApiImpl::getModuleKeysAndVersionFromSe
 }
 
 core::ModuleKeys InboxApiImpl::inboxToModuleKeys(inbox::server::InboxInfo inbox) {
-    return core::ModuleKeys{
-        .keys = inbox.keys,
-        .groupKeys = inbox.groupKeys,
-        .staleGroups = inbox.staleGroups,
-        .currentKeyId = inbox.keyId,
-        .moduleSchemaVersion = _inboxDataSchemaMapper->getDataStructureVersion(inbox.data.back()),
-        .moduleResourceId = inbox.resourceId.value_or(""),
-        .contextId = inbox.contextId
-    };
+    return containerToModuleKeys(inbox);
 }
 
 std::vector<std::string> InboxApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

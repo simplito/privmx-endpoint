@@ -67,9 +67,7 @@ StoreApiImpl::StoreApiImpl(
       _subscriber(connection.getImpl()->getGateway(), STORE_TYPE_FILTER_FLAG),
       _storeDataSchemaMapper(std::make_shared<StoreDataSchemaMapper>(userPrivKey, connection)),
       _fileMetaDataSchemaMapper(userPrivKey, connection) {
-    if (groupApi.has_value()) {
-        initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi->getImpl()));
-    }
+    initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi));
     initModuleDataSchemaMapper(_storeDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -178,29 +176,10 @@ void StoreApiImpl::rotateStoreKeys(
     server::StoreGetModel getModel;
     getModel.storeId = storeId;
     auto currentStore = _serverApi->storeGet(getModel).store;
-    const auto& currentEntry = currentStore.data.back();
-    auto resourceId = currentStore.resourceId.value_or(core::EndpointUtils::generateId());
-
-    auto ctx = prepareContainerUpdate(
-        currentStore, currentEntry, resourceId, users, managers, true, true, _groupPrivKeyResolver
+    rotateContainerKeys<server::StoreRotateKeysModel>(
+        storeId, currentStore, users, managers, version, force, groups,
+        [&](const server::StoreRotateKeysModel& model) { _serverApi->storeRotateKeys(model); }
     );
-
-    server::StoreRotateKeysModel model;
-    model.id = storeId;
-    model.keyId = ctx.key.id;
-    model.keys = ctx.keyEntries;
-    model.version = version;
-    model.force = force;
-
-    // A re-key changes no grants, so the grantees are the Store's own — `currentStore.groups`, which the bridge
-    // serves in full. Taking them from `groups` instead would silently drop every grantee the caller did not name,
-    // and a caller can only name the groups it belongs to: `groupKeys`, the one place a Store's grantee groups
-    // show up in its payload, is narrowed to those. The bridge rejects a re-key that leaves a granted group without
-    // an entry at the new keyId, so the dropped grantees would fail the whole call.
-    model.groupKeys = buildRekeyGroupKeyEntries(currentStore, resourceId, ctx, groups);
-
-    _serverApi->storeRotateKeys(model);
-    invalidateModuleKeysInCache(storeId);
 }
 
 void StoreApiImpl::deleteStore(const std::string& storeId) {
@@ -705,15 +684,7 @@ std::pair<core::ModuleKeys, int64_t> StoreApiImpl::getModuleKeysAndVersionFromSe
 }
 
 core::ModuleKeys StoreApiImpl::storeToModuleKeys(server::Store store) {
-    return core::ModuleKeys{
-        .keys = store.keys,
-        .groupKeys = store.groupKeys,
-        .staleGroups = store.staleGroups,
-        .currentKeyId = store.keyId,
-        .moduleSchemaVersion = _storeDataSchemaMapper->getDataStructureVersion(store.data.back()),
-        .moduleResourceId = store.resourceId.value_or(""),
-        .contextId = store.contextId
-    };
+    return containerToModuleKeys(store);
 }
 
 std::vector<std::string> StoreApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

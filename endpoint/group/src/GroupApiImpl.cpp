@@ -778,6 +778,15 @@ core::ModuleBaseApi::GroupResolvers GroupApiImpl::makeGroupResolvers(
     };
 }
 
+std::optional<core::ModuleBaseApi::GroupResolvers> GroupApiImpl::makeGroupResolvers(
+    const std::optional<GroupApi>& groupApi
+) {
+    if (!groupApi.has_value()) {
+        return std::nullopt;
+    }
+    return makeGroupResolvers(groupApi->getImpl());
+}
+
 void GroupApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
     auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
     if (!subscriptionQuery.has_value()) {

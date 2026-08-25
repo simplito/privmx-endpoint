@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <Poco/JSON/Object.h>
 #include <privmx/endpoint/core/Factory.hpp>
+#include <privmx/endpoint/core/Mapper.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 #include "privmx/endpoint/store/StoreException.hpp"
@@ -108,10 +109,6 @@ Store StoreDataSchemaMapper::toLibStore(
     int64_t statusCode,
     int64_t schemaVersion
 ) {
-    std::vector<core::GroupGrant> groups;
-    for (const auto& g : store.groups) {
-        groups.push_back({.groupId = g.groupId, .role = g.role});
-    }
     return Store{
         .storeId = store.id,
         .contextId = store.contextId,
@@ -129,7 +126,7 @@ Store StoreDataSchemaMapper::toLibStore(
         .filesCount = store.files,
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
-        .groups = std::move(groups),
+        .groups = core::Mapper::mapToGroupGrants(store.groups),
         .staleGroups = store.staleGroups
     };
 }

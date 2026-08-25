@@ -51,9 +51,7 @@ ThreadApiImpl::ThreadApiImpl(
       _messageDataSchemaMapper(userPrivKey, connection),
       _threadDataSchemaMapper(std::make_shared<ThreadDataSchemaMapper>(userPrivKey, connection)),
       _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) {
-    if (groupApi.has_value()) {
-        initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi->getImpl()));
-    }
+    initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi));
     initModuleDataSchemaMapper(_threadDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -162,29 +160,10 @@ void ThreadApiImpl::rotateThreadKeys(
     server::ThreadGetModel getModel;
     getModel.threadId = threadId;
     auto currentThread = _serverApi.threadGet(getModel).thread;
-    const auto& currentEntry = currentThread.data.back();
-    auto resourceId = currentThread.resourceId.value_or(core::EndpointUtils::generateId());
-
-    auto ctx = prepareContainerUpdate(
-        currentThread, currentEntry, resourceId, users, managers, true, true, _groupPrivKeyResolver
+    rotateContainerKeys<server::ThreadRotateKeysModel>(
+        threadId, currentThread, users, managers, version, force, groups,
+        [&](const server::ThreadRotateKeysModel& model) { _serverApi.threadRotateKeys(model); }
     );
-
-    server::ThreadRotateKeysModel model;
-    model.id = threadId;
-    model.keyId = ctx.key.id;
-    model.keys = ctx.keyEntries;
-    model.version = version;
-    model.force = force;
-
-    // A re-key changes no grants, so the grantees are the Thread's own — `currentThread.groups`, which the bridge
-    // serves in full. Taking them from `groups` instead would silently drop every grantee the caller did not name,
-    // and a caller can only name the groups it belongs to: `groupKeys`, the one place a Thread's grantee groups
-    // show up in its payload, is narrowed to those. The bridge rejects a re-key that leaves a granted group without
-    // an entry at the new keyId, so the dropped grantees would fail the whole call.
-    model.groupKeys = buildRekeyGroupKeyEntries(currentThread, resourceId, ctx, groups);
-
-    _serverApi.threadRotateKeys(model);
-    invalidateModuleKeysInCache(threadId);
 }
 
 void ThreadApiImpl::deleteThread(const std::string& threadId) {
@@ -463,15 +442,7 @@ std::pair<core::ModuleKeys, int64_t> ThreadApiImpl::getModuleKeysAndVersionFromS
 }
 
 core::ModuleKeys ThreadApiImpl::threadToModuleKeys(server::ThreadInfo thread) {
-    return core::ModuleKeys{
-        .keys = thread.keys,
-        .groupKeys = thread.groupKeys,
-        .staleGroups = thread.staleGroups,
-        .currentKeyId = thread.keyId,
-        .moduleSchemaVersion = _threadDataSchemaMapper->getDataStructureVersion(thread.data.back()),
-        .moduleResourceId = thread.resourceId.value_or(""),
-        .contextId = thread.contextId
-    };
+    return containerToModuleKeys(thread);
 }
 
 std::vector<std::string> ThreadApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

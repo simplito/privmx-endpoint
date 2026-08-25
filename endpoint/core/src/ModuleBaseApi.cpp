@@ -41,9 +41,12 @@ ModuleBaseApi::ModuleBaseApi(
     : _guardedExecutor(std::make_shared<privmx::utils::GuardedExecutor>()), _userPrivKey(userPrivKey),
       _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware), _connection(connection) {}
 
-void ModuleBaseApi::initGroupResolvers(const GroupResolvers& resolvers) {
-    _groupPrivKeyResolver = resolvers.groupPrivKey;
-    _groupEpochResolver = resolvers.groupEpochs;
+void ModuleBaseApi::initGroupResolvers(const std::optional<GroupResolvers>& resolvers) {
+    if (!resolvers.has_value()) {
+        return;
+    }
+    _groupPrivKeyResolver = resolvers->groupPrivKey;
+    _groupEpochResolver = resolvers->groupEpochs;
 }
 
 ContainerCreateContext ModuleBaseApi::prepareContainerCreate(

@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <Poco/JSON/Object.h>
 #include <privmx/endpoint/core/Factory.hpp>
+#include <privmx/endpoint/core/Mapper.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 #include "privmx/endpoint/stream/StreamException.hpp"
@@ -117,10 +118,6 @@ StreamRoom StreamRoomDataSchemaMapper::toLibStreamRoom(
     int64_t statusCode,
     int64_t schemaVersion
 ) {
-    std::vector<core::GroupGrant> groups;
-    for (const auto& g : info.groups) {
-        groups.push_back({.groupId = g.groupId, .role = g.role});
-    }
     return StreamRoom{
         .contextId = info.contextId,
         .streamRoomId = info.id,
@@ -138,7 +135,7 @@ StreamRoom StreamRoomDataSchemaMapper::toLibStreamRoom(
         .schemaVersion = schemaVersion,
         .state = info.state.value_or("closed"),
         .emptyRoomTtl = info.emptyRoomTtl.value_or(0),
-        .groups = std::move(groups),
+        .groups = core::Mapper::mapToGroupGrants(info.groups),
         .staleGroups = info.staleGroups
     };
 }

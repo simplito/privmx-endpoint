@@ -48,9 +48,7 @@ KvdbApiImpl::KvdbApiImpl(
       _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway, KVDB_TYPE_FILTER_FLAG),
       _kvdbDataSchemaMapper(std::make_shared<KvdbDataSchemaMapper>(userPrivKey, connection)),
       _entryDataSchemaMapper(userPrivKey, connection) {
-    if (groupApi.has_value()) {
-        initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi->getImpl()));
-    }
+    initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi));
     initModuleDataSchemaMapper(_kvdbDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -157,29 +155,10 @@ void KvdbApiImpl::rotateKvdbKeys(
     server::KvdbGetModel getModel;
     getModel.kvdbId = kvdbId;
     auto currentKvdb = _serverApi.kvdbGet(getModel).kvdb;
-    const auto& currentEntry = currentKvdb.data.back();
-    auto resourceId = currentKvdb.resourceId.value_or(core::EndpointUtils::generateId());
-
-    auto ctx = prepareContainerUpdate(
-        currentKvdb, currentEntry, resourceId, users, managers, true, true, _groupPrivKeyResolver
+    rotateContainerKeys<server::KvdbRotateKeysModel>(
+        kvdbId, currentKvdb, users, managers, version, force, groups,
+        [&](const server::KvdbRotateKeysModel& model) { _serverApi.kvdbRotateKeys(model); }
     );
-
-    server::KvdbRotateKeysModel model;
-    model.id = kvdbId;
-    model.keyId = ctx.key.id;
-    model.keys = ctx.keyEntries;
-    model.version = version;
-    model.force = force;
-
-    // A re-key changes no grants, so the grantees are the KVDB's own — `currentKvdb.groups`, which the bridge
-    // serves in full. Taking them from `groups` instead would silently drop every grantee the caller did not name,
-    // and a caller can only name the groups it belongs to: `groupKeys`, the one place a KVDB's grantee groups
-    // show up in its payload, is narrowed to those. The bridge rejects a re-key that leaves a granted group without
-    // an entry at the new keyId, so the dropped grantees would fail the whole call.
-    model.groupKeys = buildRekeyGroupKeyEntries(currentKvdb, resourceId, ctx, groups);
-
-    _serverApi.kvdbRotateKeys(model);
-    invalidateModuleKeysInCache(kvdbId);
 }
 
 void KvdbApiImpl::deleteKvdb(const std::string& kvdbId) {
@@ -474,15 +453,7 @@ std::pair<core::ModuleKeys, int64_t> KvdbApiImpl::getModuleKeysAndVersionFromSer
 }
 
 core::ModuleKeys KvdbApiImpl::kvdbToModuleKeys(server::KvdbInfo kvdb) {
-    return core::ModuleKeys{
-        .keys = kvdb.keys,
-        .groupKeys = kvdb.groupKeys,
-        .staleGroups = kvdb.staleGroups,
-        .currentKeyId = kvdb.keyId,
-        .moduleSchemaVersion = _kvdbDataSchemaMapper->getDataStructureVersion(kvdb.data.back()),
-        .moduleResourceId = kvdb.resourceId.value_or(""),
-        .contextId = kvdb.contextId
-    };
+    return containerToModuleKeys(kvdb);
 }
 
 std::vector<std::string> KvdbApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

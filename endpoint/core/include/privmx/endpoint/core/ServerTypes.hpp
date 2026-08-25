@@ -208,6 +208,15 @@ JSON_STRUCT(ContainerCreateModelBase, CONTAINER_CREATE_MODEL_BASE_FIELDS);
     F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
 JSON_STRUCT(ContainerUpdateModelBase, CONTAINER_UPDATE_MODEL_BASE_FIELDS);
 
+#define CONTAINER_ROTATE_KEYS_MODEL_BASE_FIELDS(F)                                                                     \
+    F(id, std::string)                                                                                                 \
+    F(keyId, std::string)                                                                                              \
+    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
+    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)                                           \
+    F(version, int64_t)                                                                                                \
+    F(force, bool)
+JSON_STRUCT(ContainerRotateKeysModelBase, CONTAINER_ROTATE_KEYS_MODEL_BASE_FIELDS);
+
 #define CONTAINER_INFO_PREFIX_FIELDS(F)                                                                                \
     F(id, std::string)                                                                                                 \
     F(resourceId, std::optional<std::string>)                                                                          \
