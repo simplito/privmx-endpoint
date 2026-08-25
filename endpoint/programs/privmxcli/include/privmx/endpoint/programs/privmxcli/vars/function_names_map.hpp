@@ -203,6 +203,16 @@ inline const std::unordered_map<std::string, func_enum> functions_endpoint = {
     {"kvdb.unsubscribeFrom", kvdb_unsubscribeFrom},
     {"kvdb.buildSubscriptionQuery", kvdb_buildSubscriptionQuery},
     {"kvdb.buildSubscriptionQueryForSelectedEntry", kvdb_buildSubscriptionQueryForSelectedEntry},
+    {"group.createGroupWithKeyTree", group_createGroupWithKeyTree},
+    {"group.addGroupMember", group_addGroupMember},
+    {"group.removeGroupMember", group_removeGroupMember},
+    {"group.updateGroup", group_updateGroup},
+    {"group.deleteGroup", group_deleteGroup},
+    {"group.getGroup", group_getGroup},
+    {"group.listGroups", group_listGroups},
+    {"group.subscribeFor", group_subscribeFor},
+    {"group.unsubscribeFrom", group_unsubscribeFrom},
+    {"group.buildSubscriptionQuery", group_buildSubscriptionQuery},
 };
 
 } // privmxcli
