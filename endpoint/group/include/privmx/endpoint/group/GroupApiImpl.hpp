@@ -117,7 +117,6 @@ public:
     Group getGroup(const std::string& groupId);
     core::PagingList<GroupSummary> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
-
     std::unordered_map<std::string, core::GroupEpochInfo> fetchGroupEpochs(
         const std::string& contextId,
         const std::vector<std::string>& groupIds

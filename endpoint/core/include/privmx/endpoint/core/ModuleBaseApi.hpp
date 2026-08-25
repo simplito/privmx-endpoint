@@ -56,11 +56,10 @@ struct module_has_group_keys<T, std::void_t<decltype(std::declval<T>().groupKeys
 
 class ModuleBaseApi {
 public:
-    using GroupEpochResolver = std::function<
-        std::unordered_map<std::string, GroupEpochInfo>(
-            const std::string& contextId,
-            const std::vector<std::string>& groupIds
-        )>;
+    using GroupEpochResolver = std::function<std::unordered_map<std::string, GroupEpochInfo>(
+        const std::string& contextId,
+        const std::vector<std::string>& groupIds
+    )>;
 
     struct GroupResolvers {
         core::KeyProvider::GroupPrivKeyResolver groupPrivKey;
@@ -299,17 +298,14 @@ protected:
     }
 
     template<typename TContainer>
-    auto resolveGranteesForRekey(
-        const TContainer& container,
-        const std::vector<GroupGrantWithKey>& callerSupplied
-    ) -> decltype(container.groups, container.contextId, std::vector<GroupGrantWithKey>()) {
+    auto resolveGranteesForRekey(const TContainer& container, const std::vector<GroupGrantWithKey>& callerSupplied)
+        -> decltype(container.groups, container.contextId, std::vector<GroupGrantWithKey>()) {
         std::vector<GroupGrantWithKey> grants;
         grants.reserve(container.groups.size());
         for (const auto& grant : container.groups) {
-            auto supplied = std::find_if(
-                callerSupplied.begin(), callerSupplied.end(),
-                [&](const GroupGrantWithKey& g) { return g.groupId == grant.groupId; }
-            );
+            auto supplied = std::find_if(callerSupplied.begin(), callerSupplied.end(), [&](const GroupGrantWithKey& g) {
+                return g.groupId == grant.groupId;
+            });
             if (supplied != callerSupplied.end()) {
                 // The caller's public key wins where it has one: it is the key it verified out-of-band, and the
                 // role still comes from the grant, which a re-key cannot change.
@@ -425,10 +421,12 @@ auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(
     if constexpr (module_has_group_keys<ModuleStruct>::value) {
         keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
     }
-    core::DecryptedEncKeyV2 ret =
-        _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolverOr(groupPrivKeyResolver))
-            .at(location)
-            .at(data_entry.keyId);
+    core::DecryptedEncKeyV2 ret = _keyProvider
+                                      ->getKeysAndVerify(
+                                          keyProviderRequest, groupPrivKeyResolverOr(groupPrivKeyResolver)
+                                      )
+                                      .at(location)
+                                      .at(data_entry.keyId);
     return ret;
 }
 

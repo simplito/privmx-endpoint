@@ -52,10 +52,9 @@ GroupApiImpl::GroupApiImpl(
                     return std::nullopt;
                 }
             },
-            .groupEpochs =
-                [this](const std::string& contextId, const std::vector<std::string>& groupIds) {
-                return fetchGroupEpochs(contextId, groupIds);
-            }
+            .groupEpochs = [this](
+                               const std::string& contextId, const std::vector<std::string>& groupIds
+                           ) { return fetchGroupEpochs(contextId, groupIds); }
         }
     );
     initModuleDataSchemaMapper(_groupDataSchemaMapper);
@@ -551,7 +550,7 @@ void GroupApiImpl::updateGroup(
     bool allowRotationRetry
 ) {
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
-    getModel.scope = TREE_SCOPE_FULL;   // submits a whole new tree, so it needs the whole one
+    getModel.scope = TREE_SCOPE_FULL; // submits a whole new tree, so it needs the whole one
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -735,8 +734,9 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
         try {
             auto listed = listGroups(contextId, pagingQuery);
             for (const auto& summary : listed.readItems) {
-                epochs[summary.groupId] =
-                    core::GroupEpochInfo{.keyVersion = summary.keyVersion, .groupPubKey = summary.groupPubKey};
+                epochs[summary.groupId] = core::GroupEpochInfo{
+                    .keyVersion = summary.keyVersion, .groupPubKey = summary.groupPubKey
+                };
             }
         } catch (const std::exception& e) {
             // A deployment may set `group.listAll: "none"`; the per-group read below is then the only way in,
@@ -764,9 +764,7 @@ core::ModuleBaseApi::GroupResolvers GroupApiImpl::makeGroupResolvers(
 ) {
     return core::ModuleBaseApi::GroupResolvers{
         .groupPrivKey =
-            [groupApiImpl](
-                const std::string& groupId, int64_t epoch
-            ) -> std::optional<privmx::crypto::PrivateKey> {
+            [groupApiImpl](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
             try {
                 return groupApiImpl->resolveGroupPrivKey(groupId, epoch);
             } catch (...) {
@@ -774,10 +772,9 @@ core::ModuleBaseApi::GroupResolvers GroupApiImpl::makeGroupResolvers(
                 return std::nullopt;
             }
         },
-        .groupEpochs =
-            [groupApiImpl](const std::string& contextId, const std::vector<std::string>& groupIds) {
-            return groupApiImpl->fetchGroupEpochs(contextId, groupIds);
-        }
+        .groupEpochs = [groupApiImpl](
+                           const std::string& contextId, const std::vector<std::string>& groupIds
+                       ) { return groupApiImpl->fetchGroupEpochs(contextId, groupIds); }
     };
 }
 

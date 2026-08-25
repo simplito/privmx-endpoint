@@ -94,9 +94,7 @@ void ModuleBaseApi::resolveGroupEpochs(
     std::vector<GroupGrantWithKey>& grants,
     std::unordered_map<std::string, GroupEpochInfo>& groupCache
 ) {
-    auto isComplete = [](const GroupGrantWithKey& g) {
-        return g.groupEpoch > 0 && !g.groupPubKey.empty();
-    };
+    auto isComplete = [](const GroupGrantWithKey& g) { return g.groupEpoch > 0 && !g.groupPubKey.empty(); };
     std::vector<std::string> toFetch;
     for (const auto& g : grants) {
         if (isComplete(g) || groupCache.find(g.groupId) != groupCache.end())
