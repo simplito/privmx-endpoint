@@ -681,6 +681,7 @@ std::pair<core::ModuleKeys, int64_t> InboxApiImpl::getModuleKeysAndVersionFromSe
 core::ModuleKeys InboxApiImpl::inboxToModuleKeys(inbox::server::InboxInfo inbox) {
     return core::ModuleKeys{
         .keys = inbox.keys,
+        .staleGroups = inbox.staleGroups,
         .currentKeyId = inbox.keyId,
         .moduleSchemaVersion = _inboxDataSchemaMapper->getDataStructureVersion(inbox.data.back()),
         .moduleResourceId = inbox.resourceId.value_or(""),

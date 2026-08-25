@@ -108,7 +108,8 @@ Thread ThreadDataSchemaMapper::toLibThread(
         .messagesCount = info.messages,
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
-        .groups = std::move(groups)
+        .groups = std::move(groups),
+        .staleGroups = info.staleGroups
     };
 }
 

@@ -22,14 +22,10 @@ namespace endpoint {
 namespace thread {
 namespace server {
 
-#define THREAD_CREATE_MODEL_EXTRA_FIELDS(F)                                                                            \
-    F(groups, std::optional<std::vector<core::server::GroupGrant>>)                                                    \
-    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
+#define THREAD_CREATE_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(ThreadCreateModel, core::server::ContainerCreateModelBase, THREAD_CREATE_MODEL_EXTRA_FIELDS);
 
-#define THREAD_UPDATE_MODEL_EXTRA_FIELDS(F)                                                                            \
-    F(groups, std::optional<std::vector<core::server::GroupGrant>>)                                                    \
-    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
+#define THREAD_UPDATE_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(ThreadUpdateModel, core::server::ContainerUpdateModelBase, THREAD_UPDATE_MODEL_EXTRA_FIELDS);
 
 #define THREAD_ROTATE_KEYS_MODEL_FIELDS(F)                                                                             \
@@ -48,9 +44,7 @@ JSON_STRUCT_EXT(Thread2DataEntry, core::server::ContainerDataEntry, THREAD2_DATA
     F(data, std::vector<Thread2DataEntry>)                                                                             \
     F(keeper, std::optional<std::string>)                                                                              \
     F(lastMsgDate, int64_t)                                                                                            \
-    F(messages, int64_t)                                                                                               \
-    F(groups, std::vector<core::server::GroupGrant>)                                                                   \
-    F(groupKeys, std::vector<core::server::GroupKeysEntry>)
+    F(messages, int64_t)
 JSON_STRUCT_EXT(ThreadInfo, core::server::ContainerInfoBase, THREAD_INFO_EXTRA_FIELDS);
 
 #define THREAD_CREATE_RESULT_FIELDS(F) F(threadId, std::string)

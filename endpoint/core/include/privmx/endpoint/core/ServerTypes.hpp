@@ -44,6 +44,32 @@ JSON_STRUCT(KeyEntry, KEY_ENTRY_FIELDS);
     F(data, Poco::Dynamic::Var)
 JSON_STRUCT(KeyEntrySet, KEY_ENTRY_SET_FIELDS);
 
+// Group-related types shared across all container modules and the group module. Declared above the container
+// models below, which carry them.
+
+#define GROUP_GRANT_FIELDS(F)                                                                                          \
+    F(groupId, std::string)                                                                                            \
+    F(role, std::string)
+JSON_STRUCT(GroupGrant, GROUP_GRANT_FIELDS);
+
+#define GROUP_KEY_ENTRY_SET_FIELDS(F)                                                                                  \
+    F(group, std::string)                                                                                              \
+    F(keyId, std::string)                                                                                              \
+    F(groupEpoch, int64_t)                                                                                             \
+    F(data, Poco::Dynamic::Var)
+JSON_STRUCT(GroupKeyEntrySet, GROUP_KEY_ENTRY_SET_FIELDS);
+
+#define GROUP_KEY_ENTRY_FIELDS(F)                                                                                      \
+    F(keyId, std::string)                                                                                              \
+    F(data, Poco::Dynamic::Var)                                                                                        \
+    F(groupEpoch, std::optional<int64_t>)
+JSON_STRUCT(GroupKeyEntry, GROUP_KEY_ENTRY_FIELDS);
+
+#define GROUP_KEYS_ENTRY_FIELDS(F)                                                                                     \
+    F(group, std::string)                                                                                              \
+    F(keys, std::vector<core::server::GroupKeyEntry>)
+JSON_STRUCT(GroupKeysEntry, GROUP_KEYS_ENTRY_FIELDS);
+
 #define LIST_MODEL_FIELDS(F)                                                                                           \
     F(sortOrder, std::string)                                                                                          \
     F(skip, int64_t)                                                                                                   \
@@ -162,7 +188,9 @@ JSON_STRUCT_EXT(ContainerListModel, ListModel, CONTAINER_LIST_MODEL_FIELDS);
     F(keyId, std::string)                                                                                              \
     F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
     F(type, std::string)                                                                                               \
-    F(policy, std::optional<Poco::Dynamic::Var>)
+    F(policy, std::optional<Poco::Dynamic::Var>)                                                                       \
+    F(groups, std::optional<std::vector<core::server::GroupGrant>>)                                                    \
+    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
 JSON_STRUCT(ContainerCreateModelBase, CONTAINER_CREATE_MODEL_BASE_FIELDS);
 
 #define CONTAINER_UPDATE_MODEL_BASE_FIELDS(F)                                                                          \
@@ -175,7 +203,9 @@ JSON_STRUCT(ContainerCreateModelBase, CONTAINER_CREATE_MODEL_BASE_FIELDS);
     F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
     F(version, int64_t)                                                                                                \
     F(force, bool)                                                                                                     \
-    F(policy, std::optional<Poco::Dynamic::Var>)
+    F(policy, std::optional<Poco::Dynamic::Var>)                                                                       \
+    F(groups, std::optional<std::vector<core::server::GroupGrant>>)                                                    \
+    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
 JSON_STRUCT(ContainerUpdateModelBase, CONTAINER_UPDATE_MODEL_BASE_FIELDS);
 
 #define CONTAINER_INFO_PREFIX_FIELDS(F)                                                                                \
@@ -192,7 +222,10 @@ JSON_STRUCT(ContainerUpdateModelBase, CONTAINER_UPDATE_MODEL_BASE_FIELDS);
     F(users, std::vector<std::string>)                                                                                 \
     F(managers, std::vector<std::string>)                                                                              \
     F(keys, std::vector<core::server::KeyEntry>)                                                                       \
-    F(version, int64_t)
+    F(version, int64_t)                                                                                                \
+    F(groups, std::vector<core::server::GroupGrant>)                                                                   \
+    F(groupKeys, std::vector<core::server::GroupKeysEntry>)                                                            \
+    F(staleGroups, std::vector<std::string>)
 
 #define CONTAINER_INFO_SUFFIX_FIELDS(F)                                                                                \
     CONTAINER_INFO_SUFFIX_CORE_FIELDS(F)                                                                               \
@@ -203,31 +236,6 @@ JSON_STRUCT(ContainerUpdateModelBase, CONTAINER_UPDATE_MODEL_BASE_FIELDS);
     CONTAINER_INFO_PREFIX_FIELDS(F)                                                                                    \
     CONTAINER_INFO_SUFFIX_FIELDS(F)
 JSON_STRUCT(ContainerInfoBase, CONTAINER_INFO_BASE_FIELDS);
-
-// Group-related types shared across all container modules and the group module
-
-#define GROUP_GRANT_FIELDS(F)                                                                                          \
-    F(groupId, std::string)                                                                                            \
-    F(role, std::string)
-JSON_STRUCT(GroupGrant, GROUP_GRANT_FIELDS);
-
-#define GROUP_KEY_ENTRY_SET_FIELDS(F)                                                                                  \
-    F(group, std::string)                                                                                              \
-    F(keyId, std::string)                                                                                              \
-    F(groupEpoch, int64_t)                                                                                             \
-    F(data, Poco::Dynamic::Var)
-JSON_STRUCT(GroupKeyEntrySet, GROUP_KEY_ENTRY_SET_FIELDS);
-
-#define GROUP_KEY_ENTRY_FIELDS(F)                                                                                      \
-    F(keyId, std::string)                                                                                              \
-    F(data, Poco::Dynamic::Var)                                                                                        \
-    F(groupEpoch, std::optional<int64_t>)
-JSON_STRUCT(GroupKeyEntry, GROUP_KEY_ENTRY_FIELDS);
-
-#define GROUP_KEYS_ENTRY_FIELDS(F)                                                                                     \
-    F(group, std::string)                                                                                              \
-    F(keys, std::vector<core::server::GroupKeyEntry>)
-JSON_STRUCT(GroupKeysEntry, GROUP_KEYS_ENTRY_FIELDS);
 
 } // namespace server
 } // namespace core

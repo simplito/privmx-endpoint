@@ -149,24 +149,12 @@ private:
 
     void assertThreadExist(const std::string& threadId);
 
-    // EP-13: lazy re-key check. Returns true if any grantee group's epoch has advanced.
-    // Also caches resolved current-epoch group info in groupCache (groupId → {keyVersion, groupPubKey}).
-    struct GroupEpochInfo {
-        int64_t keyVersion;
-        std::string groupPubKey;
-    };
-    bool isRekeyNeeded(const server::ThreadInfo& thread, std::unordered_map<std::string, GroupEpochInfo>& groupCache);
-    // If rekey is needed, performs updateThread with new keys only. Caller re-fetches thread after.
-    void applyRekeyIfNeeded(const std::string& threadId, const server::ThreadInfo& thread);
-
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     core::Connection _connection;
-    std::shared_ptr<group::GroupApiImpl> _groupApiImpl;
-    core::KeyProvider::GroupPrivKeyResolver _groupPrivKeyResolver;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
 

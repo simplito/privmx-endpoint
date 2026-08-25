@@ -418,13 +418,7 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     server::StoreFileGetModel storeFileGetModel;
     storeFileGetModel.fileId = handle->getFileId();
     auto store = _serverApi->storeFileGet(storeFileGetModel).store;
-    auto storeKey = core::ModuleKeys{
-        .keys = store.keys,
-        .currentKeyId = store.keyId,
-        .moduleSchemaVersion = _storeDataSchemaMapper->getDataStructureVersion(store.data.back()),
-        .moduleResourceId = store.resourceId.value_or(""),
-        .contextId = store.contextId
-    };
+    auto storeKey = storeToModuleKeys(store);
     setNewModuleKeysInCache(store.id, storeKey, store.version);
     return storeFileFinalizeWriteRequest(handle, data, storeKey);
 }
@@ -608,21 +602,22 @@ void StoreApiImpl::updateFileMeta(
 
     auto storeFileGetResult = _serverApi->storeFileGet(storeFileGetModel);
     server::Store store = storeFileGetResult.store;
-    setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
+    auto storeKey = storeToModuleKeys(store);
+    setNewModuleKeysInCache(store.id, storeKey, store.version);
     server::File file = storeFileGetResult.file;
     auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(file, store.resourceId.value_or(""));
     if (statusCode != 0) {
         throw FileDataIntegrityException("statusCode=" + std::to_string(statusCode));
     }
+    // Guarded here because the server-struct key fetch, unlike the `ModuleKeys` one, does not assert.
+    assertRekeyNotNeeded(store);
     auto key = getAndValidateModuleCurrentEncKey(store);
     if (key.statusCode != 0) {
         throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(key.statusCode)
         );
     }
-    auto fileInternalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(
-        file, storeToModuleKeys(store), _keyProvider
-    );
+    auto fileInternalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(file, storeKey, _keyProvider);
     auto internalMeta = core::Buffer::from(fileInternalMeta.serialize());
     auto encryptedMetaVar = _fileMetaDataSchemaMapper.encrypt(
         file.storeId, file.resourceId.empty() ? core::EndpointUtils::generateId() : file.resourceId, file.contextId,
@@ -655,6 +650,7 @@ std::pair<core::ModuleKeys, int64_t> StoreApiImpl::getModuleKeysAndVersionFromSe
 core::ModuleKeys StoreApiImpl::storeToModuleKeys(server::Store store) {
     return core::ModuleKeys{
         .keys = store.keys,
+        .staleGroups = store.staleGroups,
         .currentKeyId = store.keyId,
         .moduleSchemaVersion = _storeDataSchemaMapper->getDataStructureVersion(store.data.back()),
         .moduleResourceId = store.resourceId.value_or(""),

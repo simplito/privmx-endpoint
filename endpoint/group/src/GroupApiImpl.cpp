@@ -40,15 +40,23 @@ GroupApiImpl::GroupApiImpl(
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
       _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway),
       _groupDataSchemaMapper(std::make_shared<GroupDataSchemaMapper>(userPrivKey, connection)) {
-    _groupPrivKeyResolver =
-        [this](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
-        try {
-            return resolveGroupPrivKey(groupId, epoch);
-        } catch (...) {
-            // caller holds no leaf in this group's tree at this epoch — skip
-            return std::nullopt;
+    initGroupResolvers(
+        core::ModuleBaseApi::GroupResolvers{
+            // Resolves a group's own grant key by climbing its own tree — swallows a failed climb to nullopt.
+            .groupPrivKey =
+                [this](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
+                try {
+                    return resolveGroupPrivKey(groupId, epoch);
+                } catch (...) {
+                    // caller holds no leaf in this group's tree at this epoch — skip
+                    return std::nullopt;
+                }
+            },
+            .groupEpochs = [this](
+                               const std::string& contextId, const std::vector<std::string>& groupIds
+                           ) { return fetchGroupEpochs(contextId, groupIds); }
         }
-    };
+    );
     initModuleDataSchemaMapper(_groupDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&GroupApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -542,7 +550,7 @@ void GroupApiImpl::updateGroup(
     bool allowRotationRetry
 ) {
     server::GroupGetModel getModel{.groupId = groupId, .type = {}};
-    getModel.scope = TREE_SCOPE_FULL;   // submits a whole new tree, so it needs the whole one
+    getModel.scope = TREE_SCOPE_FULL; // submits a whole new tree, so it needs the whole one
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -698,6 +706,78 @@ core::PagingList<GroupSummary> GroupApiImpl::listGroups(
     return core::PagingList<GroupSummary>({.totalAvailable = groupsList.count, .readItems = groups});
 }
 
+std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEpochs(
+    const std::string& contextId,
+    const std::vector<std::string>& groupIds
+) {
+    std::unordered_map<std::string, core::GroupEpochInfo> epochs;
+    // The bridge caps a listing at 100 items, so the id filter is spent in batches of that size.
+    constexpr size_t BATCH = 100;
+    for (size_t offset = 0; offset < groupIds.size(); offset += BATCH) {
+        std::vector<std::string> batch(
+            groupIds.begin() + offset, groupIds.begin() + std::min(offset + BATCH, groupIds.size())
+        );
+        Poco::JSON::Array::Ptr ids = new Poco::JSON::Array();
+        for (const auto& id : batch) {
+            ids->add(id);
+        }
+        Poco::JSON::Object::Ptr in = new Poco::JSON::Object();
+        in->set("$in", ids);
+        Poco::JSON::Object::Ptr query = new Poco::JSON::Object();
+        query->set("#id", in);
+        core::PagingQuery pagingQuery{
+            .skip = 0,
+            .limit = static_cast<int64_t>(batch.size()),
+            .sortOrder = "asc",
+            .queryAsJson = privmx::utils::Utils::stringify(query)
+        };
+        try {
+            auto listed = listGroups(contextId, pagingQuery);
+            for (const auto& summary : listed.readItems) {
+                epochs[summary.groupId] = core::GroupEpochInfo{
+                    .keyVersion = summary.keyVersion, .groupPubKey = summary.groupPubKey
+                };
+            }
+        } catch (const std::exception& e) {
+            // A deployment may set `group.listAll: "none"`; the per-group read below is then the only way in,
+            // and it only works for groups we belong to.
+            LOG_DEBUG("[fetchGroupEpochs] groupList by id unavailable: ", e.what())
+        }
+    }
+    for (const auto& id : groupIds) {
+        if (epochs.find(id) != epochs.end())
+            continue;
+        try {
+            auto fetched = getGroup(id);
+            epochs[id] = core::GroupEpochInfo{.keyVersion = fetched.keyVersion, .groupPubKey = fetched.groupPubKey};
+        } catch (const std::exception& e) {
+            // Deleted, in another context, or one we are not a member of — left out, so whoever asked can name it
+            // in the error rather than sending an entry it cannot fill in.
+            LOG_DEBUG("[fetchGroupEpochs] cannot read group ", id, ": ", e.what())
+        }
+    }
+    return epochs;
+}
+
+core::ModuleBaseApi::GroupResolvers GroupApiImpl::makeGroupResolvers(
+    const std::shared_ptr<GroupApiImpl>& groupApiImpl
+) {
+    return core::ModuleBaseApi::GroupResolvers{
+        .groupPrivKey =
+            [groupApiImpl](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
+            try {
+                return groupApiImpl->resolveGroupPrivKey(groupId, epoch);
+            } catch (...) {
+                // not a member of this group at this epoch — skip
+                return std::nullopt;
+            }
+        },
+        .groupEpochs = [groupApiImpl](
+                           const std::string& contextId, const std::vector<std::string>& groupIds
+                       ) { return groupApiImpl->fetchGroupEpochs(contextId, groupIds); }
+    };
+}
+
 void GroupApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
     auto subscriptionQuery = _subscriber.getSubscriptionQuery(notification.subscriptions);
     if (!subscriptionQuery.has_value()) {
@@ -752,6 +832,8 @@ std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromSe
 }
 
 core::ModuleKeys GroupApiImpl::groupToModuleKeys(const server::GroupInfo& group) {
+    // `staleGroups` stays empty by design: a group is not granted to other groups, so it carries no such list.
+    // Its own freshness is `keyVersion`, and the epoch ladder — not a re-key — is what reaches past it.
     return core::ModuleKeys{
         .keys = group.keys,
         .groupKeys = group.groupKeys.value_or(std::vector<core::server::GroupKeysEntry>{}),

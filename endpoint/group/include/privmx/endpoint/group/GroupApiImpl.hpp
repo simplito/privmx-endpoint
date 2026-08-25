@@ -6,6 +6,8 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
@@ -114,6 +116,13 @@ public:
 
     Group getGroup(const std::string& groupId);
     core::PagingList<GroupSummary> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
+
+    std::unordered_map<std::string, core::GroupEpochInfo> fetchGroupEpochs(
+        const std::string& contextId,
+        const std::vector<std::string>& groupIds
+    );
+
+    static core::ModuleBaseApi::GroupResolvers makeGroupResolvers(const std::shared_ptr<GroupApiImpl>& groupApiImpl);
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
@@ -229,8 +238,6 @@ private:
     core::Connection _connection;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
-    /** Resolves a group's own grant key by climbing its own tree — swallows a failed climb to nullopt. */
-    core::KeyProvider::GroupPrivKeyResolver _groupPrivKeyResolver;
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<GroupDataSchemaMapper> _groupDataSchemaMapper;
