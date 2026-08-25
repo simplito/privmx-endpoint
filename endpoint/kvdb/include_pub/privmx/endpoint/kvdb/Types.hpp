@@ -92,6 +92,18 @@ struct Kvdb {
      * Version of the Kvdb data structure and how it is encoded/encrypted
      */
     int64_t schemaVersion;
+
+    /**
+     * list of groups granted access to this Kvdb
+     */
+    std::vector<core::GroupGrant> groups;
+
+    /**
+     * IDs of the grantee groups that have rotated past the epoch this Kvdb's current key was wrapped to.
+     * Non-empty means the Kvdb needs re-keying — rotateKvdbKeys() re-wraps its key to the current epoch of
+     * every grantee. Members of a stale group cannot read content written under the current key until then.
+     */
+    std::vector<std::string> staleGroups;
 };
 
 /**

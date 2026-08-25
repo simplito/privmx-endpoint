@@ -72,7 +72,8 @@ uint32_t KvdbDataSchemaMapper::validateDataIntegrity(const server::KvdbInfo& kvd
 
 std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
     const std::vector<server::KvdbInfo>& kvdbs,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Kvdb>(
         kvdbs, keyProvider, _connection, [&](const server::KvdbInfo& k) { return validateDataIntegrity(k); },
@@ -82,15 +83,17 @@ std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
         [&](const server::KvdbInfo& k, const core::DecryptedEncKey& key) { return decrypt(k, key); },
         [](const server::KvdbInfo& k, uint32_t code) {
             return toLibKvdb(k, {}, {}, code, KvdbDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
 Kvdb KvdbDataSchemaMapper::validateDecryptAndConvertKvdb(
     const server::KvdbInfo& kvdb,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertKvdbs({kvdb}, keyProvider)[0];
+    return validateDecryptAndConvertKvdbs({kvdb}, keyProvider, groupPrivKeyResolver)[0];
 }
 
 Kvdb KvdbDataSchemaMapper::toLibKvdb(
@@ -100,6 +103,10 @@ Kvdb KvdbDataSchemaMapper::toLibKvdb(
     int64_t statusCode,
     int64_t schemaVersion
 ) {
+    std::vector<core::GroupGrant> groups;
+    for (const auto& g : info.groups) {
+        groups.push_back({.groupId = g.groupId, .role = g.role});
+    }
     return Kvdb{
         .contextId = info.contextId,
         .kvdbId = info.id,
@@ -116,6 +123,8 @@ Kvdb KvdbDataSchemaMapper::toLibKvdb(
         .lastEntryDate = info.lastEntryDate,
         .policy = core::Factory::parsePolicyServerObject(info.policy),
         .statusCode = statusCode,
-        .schemaVersion = schemaVersion
+        .schemaVersion = schemaVersion,
+        .groups = std::move(groups),
+        .staleGroups = info.staleGroups
     };
 }

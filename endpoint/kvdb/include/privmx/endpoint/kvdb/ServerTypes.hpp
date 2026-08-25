@@ -42,6 +42,15 @@ JSON_STRUCT(KvdbCreateResult, KVDB_CREATE_RESULT_FIELDS);
 #define KVDB_UPDATE_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(KvdbUpdateModel, core::server::ContainerUpdateModelBase, KVDB_UPDATE_MODEL_EXTRA_FIELDS);
 
+#define KVDB_ROTATE_KEYS_MODEL_FIELDS(F)                                                                               \
+    F(id, std::string)                                                                                                 \
+    F(keyId, std::string)                                                                                              \
+    F(keys, std::vector<core::server::KeyEntrySet>)                                                                    \
+    F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)                                           \
+    F(version, int64_t)                                                                                                \
+    F(force, bool)
+JSON_STRUCT(KvdbRotateKeysModel, KVDB_ROTATE_KEYS_MODEL_FIELDS);
+
 #define KVDB_DELETE_MODEL_FIELDS(F) F(kvdbId, std::string)
 JSON_STRUCT(KvdbDeleteModel, KVDB_DELETE_MODEL_FIELDS);
 
