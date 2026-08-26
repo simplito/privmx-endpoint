@@ -202,6 +202,12 @@ std::vector<ArchiveRung> LadderKeys::buildEraLinks(
         if (recipient.kind == RungRecipientKind::Epoch) {
             throw std::invalid_argument("an era link must be addressed to a user or a group, not to an epoch");
         }
+        if (recipient.id.empty()) {
+            // The bridge pairs `recipientKind` with `recipient`: an `epoch` rung names nobody, and the two
+            // era-crossing kinds must name their recipient, because both go into the rung's stored identity.
+            // Caught here so the caller gets the reason instead of GROUP_ARCHIVE_INVALID from the server.
+            throw std::invalid_argument("an era link addressed to a user or a group has to name it");
+        }
         ArchiveRung link;
         // An era link is not a descent step — the recipient's own key opens it — but it must still satisfy the
         // direction invariant `target < at`, because the server validates every rung uniformly. So it is

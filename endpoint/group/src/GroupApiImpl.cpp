@@ -317,8 +317,12 @@ void GroupApiImpl::addGroupMember(
     auto ctx = prepareContainerUpdate(
         currentGroup, currentEntry, resourceId, users, managers, false, false, _groupPrivKeyResolver
     );
-    std::vector<std::string> sortedUsers = currentGroup.users;
-    std::vector<std::string> sortedManagers = currentGroup.managers;
+    // The roster *after* the addition, from the caller — not `currentGroup.users`, which is the bridge's
+    // pre-addition view. The bridge records the post-addition roster in the history entry it writes for this
+    // change, and `assertDataIntegrity` holds the signed membership against exactly that: committing the old one
+    // leaves an entry whose signature does not cover the addition and which fails every later read.
+    std::vector<std::string> sortedUsers = core::EndpointUtils::usersWithPubKeyToIds(users);
+    std::vector<std::string> sortedManagers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     std::sort(sortedUsers.begin(), sortedUsers.end());
     std::sort(sortedManagers.begin(), sortedManagers.end());
 
