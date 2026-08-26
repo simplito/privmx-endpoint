@@ -24,6 +24,7 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
         {GetTurnCredentials, &StreamApiLowVarInterface::getTurnCredentials},
         {CreateStreamRoom, &StreamApiLowVarInterface::createStreamRoom},
         {UpdateStreamRoom, &StreamApiLowVarInterface::updateStreamRoom},
+        {RotateStreamRoomKeys, &StreamApiLowVarInterface::rotateStreamRoomKeys},
         {ListStreamRooms, &StreamApiLowVarInterface::listStreamRooms},
         {GetStreamRoom, &StreamApiLowVarInterface::getStreamRoom},
         {DeleteStreamRoom, &StreamApiLowVarInterface::deleteStreamRoom},
@@ -53,7 +54,7 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
 };
 Poco::Dynamic::Var StreamApiLowVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _streamApi = StreamApiLow::create(_connection);
+    _streamApi = StreamApiLow::create(_connection, _groupApi);
     return {};
 }
 
@@ -87,7 +88,7 @@ Poco::Dynamic::Var StreamApiLowVarInterface::buildSubscriptionQuery(const Poco::
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::createStreamRoom(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 8);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
@@ -95,14 +96,15 @@ Poco::Dynamic::Var StreamApiLowVarInterface::createStreamRoom(const Poco::Dynami
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(5), "policies");
     auto emptyRoomTtl = _deserializer.deserializeOptional<int64_t>(argsArr->get(6), "emptyRoomTtl");
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(7), "groups");
     auto result = _streamApi.createStreamRoom(
-        contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl
+        contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl, groups
     );
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var StreamApiLowVarInterface::updateStreamRoom(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 9);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 10);
     auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
@@ -112,9 +114,22 @@ Poco::Dynamic::Var StreamApiLowVarInterface::updateStreamRoom(const Poco::Dynami
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(8), "policies");
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(9), "groups");
     _streamApi.updateStreamRoom(
-        inboxId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+        inboxId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
     );
+    return {};
+}
+
+Poco::Dynamic::Var StreamApiLowVarInterface::rotateStreamRoomKeys(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto version = _deserializer.deserialize<int64_t>(argsArr->get(3), "version");
+    auto force = _deserializer.deserialize<bool>(argsArr->get(4), "force");
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(5), "groups");
+    _streamApi.rotateStreamRoomKeys(streamRoomId, users, managers, version, force, groups);
     return {};
 }
 

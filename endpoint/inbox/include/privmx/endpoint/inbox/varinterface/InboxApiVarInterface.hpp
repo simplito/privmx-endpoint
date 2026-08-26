@@ -17,6 +17,8 @@ limitations under the License.
 #include "privmx/endpoint/inbox/InboxApi.hpp"
 #include "privmx/endpoint/inbox/VarDeserializer.hpp"
 #include "privmx/endpoint/inbox/VarSerializer.hpp"
+#include <optional>
+#include <privmx/endpoint/group/GroupApi.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -50,20 +52,29 @@ public:
         SubscribeFor = 22,
         UnsubscribeFrom = 23,
         BuildSubscriptionQuery = 24,
+        RotateInboxKeys = 25,
     };
 
+    /**
+     * `groupApi` is optional: without it the InboxApi is group-unaware, exactly as when `InboxApi::create` is
+     * called with no GroupApi. Passed through the constructor rather than as a `create` argument because a
+     * GroupApi is an object, not something that survives Var serialization. An Inbox grants and re-keys its inner
+     * Thread and Store alongside itself, so `threadApi` and `storeApi` must carry the same GroupApi.
+     */
     InboxApiVarInterface(
         core::Connection connection,
         thread::ThreadApi threadApi,
         store::StoreApi storeApi,
-        const core::VarSerializer& serializer
+        const core::VarSerializer& serializer,
+        std::optional<group::GroupApi> groupApi = std::nullopt
     )
         : _connection(std::move(connection)), _threadApi(std::move(threadApi)), _storeApi(std::move(storeApi)),
-          _serializer(serializer) {}
+          _groupApi(std::move(groupApi)), _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var createInbox(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateInbox(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var rotateInboxKeys(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getInbox(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listInboxes(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getInboxPublicView(const Poco::Dynamic::Var& args);
@@ -91,6 +102,7 @@ private:
     core::Connection _connection;
     thread::ThreadApi _threadApi;
     store::StoreApi _storeApi;
+    std::optional<group::GroupApi> _groupApi;
     InboxApi _inboxApi;
     core::VarDeserializer _deserializer;
     core::VarSerializer _serializer;

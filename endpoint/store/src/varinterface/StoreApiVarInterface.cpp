@@ -22,6 +22,7 @@ std::map<StoreApiVarInterface::METHOD, Poco::Dynamic::Var (StoreApiVarInterface:
         {Create, &StoreApiVarInterface::create},
         {CreateStore, &StoreApiVarInterface::createStore},
         {UpdateStore, &StoreApiVarInterface::updateStore},
+        {RotateStoreKeys, &StoreApiVarInterface::rotateStoreKeys},
         {DeleteStore, &StoreApiVarInterface::deleteStore},
         {GetStore, &StoreApiVarInterface::getStore},
         {ListStores, &StoreApiVarInterface::listStores},
@@ -44,24 +45,25 @@ std::map<StoreApiVarInterface::METHOD, Poco::Dynamic::Var (StoreApiVarInterface:
 
 Poco::Dynamic::Var StoreApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _storeApi = StoreApi::create(_connection);
+    _storeApi = StoreApi::create(_connection, _groupApi);
     return {};
 }
 
 Poco::Dynamic::Var StoreApiVarInterface::createStore(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(5), "policies");
-    auto result = _storeApi.createStore(contextId, users, managers, publicMeta, privateMeta, policies);
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(6), "groups");
+    auto result = _storeApi.createStore(contextId, users, managers, publicMeta, privateMeta, policies, groups);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var StoreApiVarInterface::updateStore(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 9);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 10);
     auto storeId = _deserializer.deserialize<std::string>(argsArr->get(0), "storeId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
@@ -71,9 +73,22 @@ Poco::Dynamic::Var StoreApiVarInterface::updateStore(const Poco::Dynamic::Var& a
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(9), "groups");
     _storeApi.updateStore(
-        storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+        storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
     );
+    return {};
+}
+
+Poco::Dynamic::Var StoreApiVarInterface::rotateStoreKeys(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto storeId = _deserializer.deserialize<std::string>(argsArr->get(0), "storeId");
+    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto version = _deserializer.deserialize<int64_t>(argsArr->get(3), "version");
+    auto force = _deserializer.deserialize<bool>(argsArr->get(4), "force");
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(5), "groups");
+    _storeApi.rotateStoreKeys(storeId, users, managers, version, force, groups);
     return {};
 }
 

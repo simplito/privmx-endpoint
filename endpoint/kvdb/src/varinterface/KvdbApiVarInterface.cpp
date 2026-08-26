@@ -22,6 +22,7 @@ std::map<KvdbApiVarInterface::METHOD, Poco::Dynamic::Var (KvdbApiVarInterface::*
         {Create, &KvdbApiVarInterface::create},
         {CreateKvdb, &KvdbApiVarInterface::createKvdb},
         {UpdateKvdb, &KvdbApiVarInterface::updateKvdb},
+        {RotateKvdbKeys, &KvdbApiVarInterface::rotateKvdbKeys},
         {DeleteKvdb, &KvdbApiVarInterface::deleteKvdb},
         {GetKvdb, &KvdbApiVarInterface::getKvdb},
         {ListKvdbs, &KvdbApiVarInterface::listKvdbs},
@@ -40,24 +41,25 @@ std::map<KvdbApiVarInterface::METHOD, Poco::Dynamic::Var (KvdbApiVarInterface::*
 
 Poco::Dynamic::Var KvdbApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _kvdbApi = KvdbApi::create(_connection);
+    _kvdbApi = KvdbApi::create(_connection, _groupApi);
     return {};
 }
 
 Poco::Dynamic::Var KvdbApiVarInterface::createKvdb(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(5), "policies");
-    auto result = _kvdbApi.createKvdb(contextId, users, managers, publicMeta, privateMeta, policies);
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(6), "groups");
+    auto result = _kvdbApi.createKvdb(contextId, users, managers, publicMeta, privateMeta, policies, groups);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var KvdbApiVarInterface::updateKvdb(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 9);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 10);
     auto kvdbId = _deserializer.deserialize<std::string>(argsArr->get(0), "kvdbId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
@@ -67,9 +69,22 @@ Poco::Dynamic::Var KvdbApiVarInterface::updateKvdb(const Poco::Dynamic::Var& arg
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(9), "groups");
     _kvdbApi.updateKvdb(
-        kvdbId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+        kvdbId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
     );
+    return {};
+}
+
+Poco::Dynamic::Var KvdbApiVarInterface::rotateKvdbKeys(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto kvdbId = _deserializer.deserialize<std::string>(argsArr->get(0), "kvdbId");
+    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto version = _deserializer.deserialize<int64_t>(argsArr->get(3), "version");
+    auto force = _deserializer.deserialize<bool>(argsArr->get(4), "force");
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(5), "groups");
+    _kvdbApi.rotateKvdbKeys(kvdbId, users, managers, version, force, groups);
     return {};
 }
 

@@ -17,6 +17,8 @@ limitations under the License.
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/thread/VarDeserializer.hpp"
 #include "privmx/endpoint/thread/VarSerializer.hpp"
+#include <optional>
+#include <privmx/endpoint/group/GroupApi.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -43,14 +45,25 @@ public:
         SubscribeFor = 15,
         UnsubscribeFrom = 16,
         BuildSubscriptionQuery = 17,
+        RotateThreadKeys = 18,
     };
 
-    ThreadApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
-        : _connection(std::move(connection)), _serializer(serializer) {}
+    /**
+     * `groupApi` is optional: without it the ThreadApi is group-unaware, exactly as when `ThreadApi::create` is
+     * called with no GroupApi. Passed through the constructor rather than as a `create` argument because a
+     * GroupApi is an object, not something that survives Var serialization.
+     */
+    ThreadApiVarInterface(
+        core::Connection connection,
+        const core::VarSerializer& serializer,
+        std::optional<group::GroupApi> groupApi = std::nullopt
+    )
+        : _connection(std::move(connection)), _groupApi(std::move(groupApi)), _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var createThread(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateThread(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var rotateThreadKeys(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteThread(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getThread(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listThreads(const Poco::Dynamic::Var& args);
@@ -71,6 +84,7 @@ private:
     static std::map<METHOD, Poco::Dynamic::Var (ThreadApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     core::Connection _connection;
+    std::optional<group::GroupApi> _groupApi;
     ThreadApi _threadApi;
     core::VarDeserializer _deserializer;
     core::VarSerializer _serializer;
