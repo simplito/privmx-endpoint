@@ -46,6 +46,16 @@ add_executable(test_e2e_GroupTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupTes
 target_link_libraries(test_e2e_GroupTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 add_executable(test_e2e_ThreadUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/ThreadUsingGroupsTest.cpp)
 target_link_libraries(test_e2e_ThreadUsingGroupsTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+add_executable(test_e2e_StoreUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/StoreUsingGroupsTest.cpp)
+target_link_libraries(test_e2e_StoreUsingGroupsTest privmx privmxendpointcore privmxendpointstore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+add_executable(test_e2e_KvdbUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/KvdbUsingGroupsTest.cpp)
+target_link_libraries(test_e2e_KvdbUsingGroupsTest privmx privmxendpointcore privmxendpointkvdb privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+# Inbox grants and re-keys its inner Thread and Store alongside itself, so all three modules are linked here
+add_executable(test_e2e_InboxUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/InboxUsingGroupsTest.cpp)
+target_link_libraries(test_e2e_InboxUsingGroupsTest privmx privmxendpointcore privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+# StreamRoom groups at container level — publishing needs WebRTC, so these cover grants/re-key/staleGroups only
+add_executable(test_e2e_StreamRoomUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/StreamRoomUsingGroupsTest.cpp)
+target_link_libraries(test_e2e_StreamRoomUsingGroupsTest privmx privmxendpointcore privmxendpointstream privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 # Tree-backed groups end to end (only place the full round trip runs; unit tests and the conformance fixture each cover just one side)
 add_executable(test_e2e_GroupKeyTreeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupKeyTreeTest.cpp)
 target_link_libraries(test_e2e_GroupKeyTreeTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
