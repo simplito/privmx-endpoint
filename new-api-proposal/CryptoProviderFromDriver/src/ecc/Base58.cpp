@@ -18,8 +18,11 @@ limitations under the License.
 
 #include "Base58.hpp"
 #include "Utils.hpp"
-
 #include "CryptoProviderFromDriver.hpp"
+// to be replaced with
+// #include <privmx/cryptoservice/Base58.hpp>
+// #include <privmx/cryptoservice/Utils.hpp>
+// #include <privmx/cryptoservice/CryptoProviderRegistry.hpp>
 
 #include <gmpxx.h>
 #include <regex>

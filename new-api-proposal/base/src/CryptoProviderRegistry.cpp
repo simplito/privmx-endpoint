@@ -17,6 +17,10 @@ limitations under the License.
 #include "CoreTypes.hpp"
 #include "CoreInterfaces.hpp"
 #include "CryptoProviderRegistry.hpp"
+// to be replaced with
+// #include <privmx/cryptoservice/CoreTypes.hpp>
+// #include <privmx/cryptoservice/CoreInterfaces.hpp>
+// #include <privmx/cryptoservice/CryptoProviderRegistry.hpp>
 
 namespace privmx {
 namespace cryptoservice {

@@ -19,6 +19,8 @@ limitations under the License.
 #include <optional>
 
 #include "CoreTypes.hpp"
+// to be replaced with
+// #include <privmx/cryptoservice/CoreTypes.hpp>
 
 namespace privmx {
 namespace cryptoservice {

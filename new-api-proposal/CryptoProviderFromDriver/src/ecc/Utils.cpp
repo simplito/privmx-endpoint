@@ -27,6 +27,14 @@ limitations under the License.
 #include <Poco/JSON/Parser.h>
 
 #include "Utils.hpp"
+#include "CoreTypes.hpp"
+#include "CoreInterfaces.hpp"
+#include "CryptoProviderFromDriver.hpp"
+// to be replaced with
+// #include <privmx/cryptoservice/Utils.hpp>
+// #include <privmx/cryptoservice/CoreTypes.hpp>
+// #include <privmx/cryptoservice/CoreInterfaces.hpp>
+// #include <privmx/cryptoservice/CryptoProviderRegistry.hpp>
 
 namespace privmx {
 namespace cryptoservice {

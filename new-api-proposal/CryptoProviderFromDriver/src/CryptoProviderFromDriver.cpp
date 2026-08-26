@@ -18,12 +18,21 @@ limitations under the License.
 
 #include "CoreTypes.hpp"
 #include "CoreInterfaces.hpp"
+#include "Exceptions.hpp"
+
 #include "CryptoProviderFromDriver.hpp"
 
 #include "PublicKey.hpp"
 #include "PrivateKey.hpp"
 #include "ExtKey.hpp"
 
+// to be replaced with
+// #include <privmx/cryptoservice/CoreTypes.hpp>
+// #include <privmx/cryptoservice/CoreInterfaces.hpp>
+// #include <privmx/cryptoservice/CryptoProviderFromDriver.hpp>
+// #include <privmx/cryptoservice/ecc/PublicKey.hpp>
+// #include <privmx/cryptoservice/ecc/PrivateKey.hpp>
+// #include <privmx/cryptoservice/ecc/ExtKey.hpp>
 
 #include <openssl/rand.h>
 #include <openssl/evp.h>
@@ -31,6 +40,8 @@ limitations under the License.
 
 
 #include "Utils.hpp" // temporary - used only to data translation for test
+// to be replaced with
+// #include <privmx/cryptoservice/ecc/Utils.hpp>
 
 
 namespace privmx {
@@ -41,61 +52,65 @@ uint32_t  CryptoProviderFromDriver::version() const { return 0; }
 std::string  CryptoProviderFromDriver::name() const { 
     return std::string("reimplementation of privmx-endpoint/crypto/driver"); 
 }
-
-/// @brief Generates a sequence of (pseudo)random bytes 
-/// @param len Length of the generated sequence of bytes
-/// @return The sequence of (pseudo)random bytes
-/// @throws <TO_BE_REPLACED> If the random generator fails
+/**
+ * @brief Generates a sequence of (pseudo)random bytes 
+ * @param len Length of the generated sequence of bytes
+ * @return The sequence of (pseudo)random bytes
+ * @throws PrivmxCryptoserviceRandomGeneratorFailException If the random generator fails
+ */
 Bytes CryptoProviderFromDriver::randomBytes(size_t len)
 {
     Bytes buffer(len);
     if (RAND_priv_bytes(reinterpret_cast<unsigned char*>(buffer.data()), len) != 1) {
-        throw PrivmxDriverCryptoException("randomBytes: Random generator fail");
+        throw PrivmxCryptoserviceRandomGeneratorFailException("randomBytes: Random generator fail");
     }
     return buffer;
 }
 
-/// @brief Auxiliary method for generating hash
-/// @param config Configuration string describing the algorithm to be used
-/// @param data The data whose hash is to be generated
-/// @return Calculated hash
-/// @throws <TO_BE_REPLACED_1> If the given protocol configuration string is not known
-/// @throws <TO_BE_REPLACED_2> If there is an error when setting digest context
-/// @throws <TO_BE_REPLACED_3> If the message digest initialization failed
-/// @throws <TO_BE_REPLACED_4> If the message digest update failed
-/// @throws <TO_BE_REPLACED_5> If the message digest finalization failed
+/**
+ * @brief Auxiliary method for generating hash
+ * @param config Configuration string describing the algorithm to be used
+ * @param data The data whose hash is to be generated
+ * @return Calculated hash
+ * @throws PrivmxCryptoserviceDigestUnableFetchProtocolException If the given protocol configuration string is not known
+ * @throws PrivmxCryptoserviceDigestUnableSetContextException If there is an error when setting digest context
+ * @throws PrivmxCryptoserviceDigestInitializationFailedException If the message digest initialization failed
+ * @throws PrivmxCryptoserviceDigestUpdateFailedException If the message digest update failed
+ * @throws PrivmxCryptoserviceDigestFinalizationFailedException If the message digest finalization failed
+ */
 Bytes CryptoProviderFromDriver::digestConfStr(const char *config, BytesView data)
 {
     std::unique_ptr<EVP_MD, decltype(&EVP_MD_free)>
         evp_md(EVP_MD_fetch(NULL, config, NULL), EVP_MD_free);
     if (evp_md.get() == NULL) {
-        throw PrivmxDriverCryptoException("Digest: Unable to fetch protocol implementation");
+        throw PrivmxCryptoserviceDigestUnableFetchProtocolException("Digest: Unable to fetch protocol implementation");
     }
     std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>
         ctx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
     if (ctx.get() == NULL) {
-        throw PrivmxDriverCryptoException("Digest: Unable to set digest context");
+        throw PrivmxCryptoserviceDigestUnableSetContextException("Digest: Unable to set digest context");
     }
     if (!EVP_DigestInit_ex2(ctx.get(), evp_md.get(), NULL)) {
-        throw PrivmxDriverCryptoException("Digest: Message digest initialization failed");
+        throw PrivmxCryptoserviceDigestInitializationFailedException("Digest: Message digest initialization failed");
     }
     if (!EVP_DigestUpdate(ctx.get(), data.data(), data.size())) {
-        throw PrivmxDriverCryptoException("Digest: Message digest update failed");
+        throw PrivmxCryptoserviceDigestUpdateFailedException("Digest: Message digest update failed");
     }
     unsigned int len;
     unsigned char res[EVP_MAX_MD_SIZE];
     if (!EVP_DigestFinal_ex(ctx.get(), res, &len)) {
-        throw PrivmxDriverCryptoException("Digest: Message digest finalization failed.");
+        throw PrivmxCryptoserviceDigestFinalizationFailedException("Digest: Message digest finalization failed.");
     }
     Bytes result(res, res+len);
     return result;
 }
-
-/// @brief Method for generating hash
-/// @param alg Algorithm to be used
-/// @param data The data whose hash is to be generated
-/// @return Calculated hash
-/// @throws <TO_BE_REPLACED> If the given algorithm is not known or not implemented
+/**
+ * @brief Method for generating hash
+ * @param alg Algorithm to be used
+ * @param data The data whose hash is to be generated
+ * @return Calculated hash
+ * @throws PrivmxCryptoserviceDigestUnknownProtocolException If the given algorithm is not known or not implemented
+ */
 Bytes CryptoProviderFromDriver::digest(Hash alg, BytesView data) 
 {
     switch (alg)
@@ -111,32 +126,33 @@ Bytes CryptoProviderFromDriver::digest(Hash alg, BytesView data)
     case Hash::Hash160:
         return digestConfStr("RIPEMD160", digestConfStr("SHA256", data));
     default:
-        throw PrivmxDriverCryptoException("Digest: Unknown protocol");
+        throw PrivmxCryptoserviceDigestUnknownProtocolException("Digest: Unknown protocol");
         break;
     }
 }
-
-/// @brief Auxiliary method for generating Hash-based Message Authentication Code
-/// @param config Configuration string describing the hash algorithm to be used
-/// @param key Shared secret key
-/// @param data The data whose authentication code is to be generate
-/// @return Calculated Hash-based Message Authentication Code
-/// @throws <TO_BE_REPLACED_1> If the given protocol configuration string is not known
-/// @throws <TO_BE_REPLACED_2> If there is an error when setting digest context
-/// @throws <TO_BE_REPLACED_3> If the message digest initialization failed
-/// @throws <TO_BE_REPLACED_4> If the message digest update failed
-/// @throws <TO_BE_REPLACED_5> If the message digest finalization failed
+/**
+ * @brief Auxiliary method for generating Hash-based Message Authentication Code
+ * @param config Configuration string describing the hash algorithm to be used
+ * @param key Shared secret key
+ * @param data The data whose authentication code is to be generate
+ * @return Calculated Hash-based Message Authentication Code
+ * @throws PrivmxCryptoserviceHmacUnableFetchProtocolException If the given protocol configuration string is not known
+ * @throws PrivmxCryptoserviceHmacUnableSetContextException If there is an error when setting digest context
+ * @throws PrivmxCryptoserviceHmacInitializationFailedException If the message digest initialization failed
+ * @throws PrivmxCryptoserviceHmacUpdateFailedException If the message digest update failed
+ * @throws PrivmxCryptoserviceHmacException If the message digest finalization failed
+ */
 Bytes CryptoProviderFromDriver::hmacConfStr(const char *config,  BytesView key, BytesView data)
 {
     std::unique_ptr<EVP_MAC, decltype(&EVP_MAC_free)> 
         evp_mac(EVP_MAC_fetch(NULL, "HMAC", NULL), EVP_MAC_free);
     if (evp_mac.get() == NULL) {
-        throw PrivmxDriverCryptoException("HMAC: Unable to fetch protocol implementation");
+        throw PrivmxCryptoserviceHmacUnableFetchProtocolException("HMAC: Unable to fetch protocol implementation");
     }
     std::unique_ptr<EVP_MAC_CTX, decltype(&EVP_MAC_CTX_free)> 
         ctx(EVP_MAC_CTX_new(evp_mac.get()), EVP_MAC_CTX_free);
     if (ctx.get() == NULL) {
-        throw PrivmxDriverCryptoException("HMAC: Unable to set digest context");
+        throw PrivmxCryptoserviceHmacUnableSetContextException("HMAC: Unable to set digest context");
     }
     std::string digest(config);
     OSSL_PARAM params[2];
@@ -144,27 +160,29 @@ Bytes CryptoProviderFromDriver::hmacConfStr(const char *config,  BytesView key, 
     params[1] = OSSL_PARAM_construct_end();
     if (!EVP_MAC_init(ctx.get(), reinterpret_cast<const unsigned char*>(key.data()), 
         key.size(), params)) {
-        throw PrivmxDriverCryptoException("HMAC: Message digest initialization failed");
+        throw PrivmxCryptoserviceHmacInitializationFailedException("HMAC: Message digest initialization failed");
     }
     if (!EVP_MAC_update(ctx.get(), reinterpret_cast<const unsigned char*>(data.data()), 
         data.size())) {
-        throw PrivmxDriverCryptoException("HMAC: Message digest update failed");
+        throw PrivmxCryptoserviceHmacUpdateFailedException("HMAC: Message digest update failed");
     }
     size_t len = EVP_MAC_CTX_get_mac_size(ctx.get());
     uint8_t res[len];
     if (!EVP_MAC_final(ctx.get(), reinterpret_cast<unsigned char*>(res), &len, len)) {
-        throw PrivmxDriverCryptoException("HMAC: Message digest finalization failed.");
+        throw PrivmxCryptoserviceHmacFinalizationFailedException("HMAC: Message digest finalization failed.");
     }
     Bytes result(res, res+len);
     return result;
 }
 
-/// @brief Method for generating Hash-based Message Authentication Code
-/// @param alg The hash algorithm to be used
-/// @param key Shared secret key
-/// @param data The data whose authentication code is to be generate
-/// @return Calculated Hash-based Message Authentication Code
-/// @throws <TO_BE_REPLACED> If the given algorithm is not known or not implemented
+/**
+ * @brief Method for generating Hash-based Message Authentication Code
+ * @param alg The hash algorithm to be used
+ * @param key Shared secret key
+ * @param data The data whose authentication code is to be generate
+ * @return Calculated Hash-based Message Authentication Code
+ * @throws PrivmxCryptoserviceHmacUnknownProtocolException If the given algorithm is not known or not implemented
+ */
 Bytes CryptoProviderFromDriver::hmac(Hash alg, BytesView key, BytesView data) 
 {
     switch (alg)
@@ -180,43 +198,51 @@ Bytes CryptoProviderFromDriver::hmac(Hash alg, BytesView key, BytesView data)
     case Hash::Hash160:
         return hmacConfStr("RIPEMD160", key, hmacConfStr("SHA256", key, data));
     default:
-        throw PrivmxDriverCryptoException("HMAC: Unknown protocol");
+        throw PrivmxCryptoserviceHmacUnknownProtocolException("HMAC: Unknown protocol");
         break;
     }
 }
 
-/// @brief Auxiliary method for encryption with symmetric cryptography algorithms
-/// @param alg Configuration string describing the encryption algorithm to be used
-/// @param padding Information on whether padding should be used
-/// @param key Shared secret key
-/// @param iv Initialization vector (optional)
-/// @param plaintext Data to be encrypted
-/// @return Encrypted data
+/**
+ * @brief Auxiliary method for encryption with symmetric cryptography algorithms
+ * @param alg Configuration string describing the encryption algorithm to be used
+ * @param padding Information on whether padding should be used
+ * @param key Shared secret key
+ * @param iv Initialization vector (optional)
+ * @param plaintext Data to be encrypted
+ * @throws PrivmxCryptoserviceEncryptionUnableFetchProtocolException If the given protocol configuration string is not known
+ * @throws PrivmxCryptoserviceEncryptionUnableSetContextException If there is an error when setting encryption context
+ * @throws PrivmxCryptoserviceEncryptionInitializationFailedException If the message encryption initialization failed
+ * @throws PrivmxCryptoserviceEncryptionPaddingException If there is an error when setting encryption padding
+ * @throws PrivmxCryptoserviceEncryptionUpdateFailedException If the message encryption update failed
+ * @throws PrivmxCryptoserviceEncryptionFinalizationFailedException If the message encryption finalization failed
+ * @return Encrypted data
+ */
 Bytes CryptoProviderFromDriver::encryptConfStr(const char *alg, const bool padding, 
         BytesView key, BytesView iv, BytesView plaintext) 
 {
     std::unique_ptr<EVP_CIPHER, decltype(&EVP_CIPHER_free)> 
             cipher(EVP_CIPHER_fetch(NULL, alg, NULL), EVP_CIPHER_free);
     if (cipher.get() == NULL) {
-        throw PrivmxDriverCryptoException("Encrypt: Unable to fetch protocol implementation");
+        throw PrivmxCryptoserviceEncryptionUnableFetchProtocolException("Encrypt: Unable to fetch protocol implementation");
     }
     std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> 
             ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
     EVP_CIPHER_CTX* raw_ctx = ctx.get();
     if (raw_ctx == NULL) {
-        throw PrivmxDriverCryptoException("Encrypt: Unable to set encryption context");
+        throw PrivmxCryptoserviceEncryptionUnableSetContextException("Encrypt: Unable to set encryption context");
     }
     EVP_CIPHER_CTX_init(raw_ctx);
     if (EVP_EncryptInit_ex(raw_ctx, cipher.get(), NULL, key.data(), iv.data()) != 1) {
-        throw PrivmxDriverCryptoException("Encrypt: Message encryption initialization failed");
+        throw PrivmxCryptoserviceEncryptionInitializationFailedException("Encrypt: Message encryption initialization failed");
     }
     if (!padding && EVP_CIPHER_CTX_set_padding(raw_ctx, 0) != 1) {
-        throw PrivmxDriverCryptoException("Encrypt: Message encryption padding failed");
+        throw PrivmxCryptoserviceEncryptionPaddingException("Encrypt: Message encryption padding failed");
     }
     std::vector<unsigned char> buf(plaintext.size() + EVP_CIPHER_block_size(cipher.get()));
     int buf_len = 0;
     if (EVP_EncryptUpdate(raw_ctx, buf.data(), &buf_len, plaintext.data(), plaintext.size()) != 1) {
-        throw PrivmxDriverCryptoException("Encrypt: Message encryption update failed");
+        throw PrivmxCryptoserviceEncryptionFinalizationFailedException("Encrypt: Message encryption update failed");
     }
     int final_len = 0;
     if (EVP_EncryptFinal_ex(raw_ctx, buf.data() + buf_len, &final_len) != 1) {
@@ -228,13 +254,22 @@ Bytes CryptoProviderFromDriver::encryptConfStr(const char *alg, const bool paddi
     return result;
 }
 
-/// @brief Auxiliary method for encryption with algoritm AES 256 GCM with ACC and tag
-/// @param alg Configuration string describing the encryption algorithm to be used
-/// @param aad Additional Authenticated Data
-/// @param key Shared secret key
-/// @param iv Initialization vector
-/// @param plaintext Data to be encrypted
-/// @return Encrypted data combined with tag
+/**
+ * @brief Auxiliary method for encryption with algoritm AES 256 GCM with AAC and tag
+ * @param alg Configuration string describing the encryption algorithm to be used
+ * @param aad Additional Authenticated Data
+ * @param key Shared secret key
+ * @param iv Initialization vector
+ * @param plaintext Data to be encrypted
+ * @throws PrivmxCryptoserviceEncryptionUnableFetchProtocolException If the given protocol configuration string is not known
+ * @throws PrivmxCryptoserviceEncryptionUnableSetContextException If there is an error when setting encryption context
+ * @throws PrivmxCryptoserviceEncryptionInitializationFailedException If the message encryption initialization failed
+ * @throws PrivmxCryptoserviceEncryptionAacUpdateFailedException If the message encryption AAC update failed
+ * @throws PrivmxCryptoserviceEncryptionUpdateFailedException If the message encryption update failed
+ * @throws PrivmxCryptoserviceEncryptionFinalizationFailedException If the message encryption finalization failed
+ * @throws PrivmxCryptoserviceEncryptionTagExtractionFailedException If there is an error when getting the message tag
+ * @return Encrypted data combined with tag
+ */
 Bytes CryptoProviderFromDriver::encryptAeadConfStr(const char *alg, BytesView aad, 
         BytesView key, BytesView iv, BytesView plaintext) 
 {
@@ -242,35 +277,35 @@ Bytes CryptoProviderFromDriver::encryptAeadConfStr(const char *alg, BytesView aa
     std::unique_ptr<EVP_CIPHER, decltype(&EVP_CIPHER_free)> 
             cipher(EVP_CIPHER_fetch(NULL, alg, NULL), EVP_CIPHER_free);
     if (cipher.get() == NULL) {
-        throw PrivmxDriverCryptoException("AES AEAD Encrypt: Unable to fetch protocol implementation");
+        throw PrivmxCryptoserviceEncryptionUnableFetchProtocolException("AES AEAD Encrypt: Unable to fetch protocol implementation");
     }
     std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
     if (!ctx) { 
-        throw PrivmxDriverCryptoException("AES AEAD Encrypt: Unable to set encryption context");
+        throw PrivmxCryptoserviceEncryptionUnableSetContextException("AES AEAD Encrypt: Unable to set encryption context");
     }
     if (EVP_EncryptInit_ex(ctx.get(), cipher.get(), NULL, key.data(), iv.data()) != 1) {
-        throw PrivmxDriverCryptoException("AES AEAD Encrypt: Message encryption initialization failed");
+        throw PrivmxCryptoserviceEncryptionInitializationFailedException("AES AEAD Encrypt: Message encryption initialization failed");
     }
     std::vector<unsigned char> buf(plaintext.size());
     int buf_len = 0;
     int extra_buf_len = 0;
     if (aad.size() > 0) {
         if (EVP_EncryptUpdate(ctx.get(), NULL, &extra_buf_len, aad.data(), aad.size()) != 1) {
-            throw PrivmxDriverCryptoException("AES AEAD Encrypt: Message encryption AAD update failed");    
+            throw PrivmxCryptoserviceEncryptionAacUpdateFailedException("AES AEAD Encrypt: Message encryption AAD update failed");    
         }
     }
     if (EVP_EncryptUpdate(ctx.get(), buf.data() + buf_len, &extra_buf_len, plaintext.data(), plaintext.size()) != 1) {
-        throw PrivmxDriverCryptoException("AES AEAD Encrypt: Message encryption update failed");
+        throw PrivmxCryptoserviceEncryptionUpdateFailedException("AES AEAD Encrypt: Message encryption update failed");
     }
     buf_len += extra_buf_len;
     if (EVP_EncryptFinal_ex(ctx.get(), buf.data() + buf_len, &extra_buf_len) != 1) {
-        throw PrivmxDriverCryptoException("AES AEAD Encrypt: Message encryption finalization failed.");
+        throw PrivmxCryptoserviceEncryptionFinalizationFailedException("AES AEAD Encrypt: Message encryption finalization failed.");
     }
     buf_len += extra_buf_len;
     
     unsigned char tagbuf[DEFAULT_TAG_LEN];
     if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, DEFAULT_TAG_LEN, tagbuf) != 1) {
-        throw PrivmxDriverCryptoException("AES AEAD Encrypt: Tag extraction failed");
+        throw PrivmxCryptoserviceEncryptionTagExtractionFailedException("AES AEAD Encrypt: Tag extraction failed");
     }
     EVP_CIPHER_CTX_cleanup(ctx.get());
     // copy buf and tag
@@ -279,11 +314,13 @@ Bytes CryptoProviderFromDriver::encryptAeadConfStr(const char *alg, BytesView aa
     result.insert(result.end(), tagbuf, tagbuf + DEFAULT_TAG_LEN);
     return result;
 }
-
-/// @brief Method for encryption with symmetric cryptography algorithms
-/// @param opt Parameters describing the encryption method and options
-/// @param plaintext Data to be encrypted
-/// @return Encrypted data
+/**
+ * @brief Method for encryption with symmetric cryptography algorithms
+ * @param opt Parameters describing the encryption method and options
+ * @param plaintext Data to be encrypted
+ * @throws PrivmxCryptoserviceEncryptionUnknownProtocolException If the given algorithm is not known or not implemented
+ * @return Encrypted data
+ */
 Bytes CryptoProviderFromDriver::encrypt(const SymParams& opt, BytesView plaintext)
 {
     switch (opt.cipher)
@@ -297,44 +334,52 @@ Bytes CryptoProviderFromDriver::encrypt(const SymParams& opt, BytesView plaintex
     case SymAlg::Aes256Gcm:
         return encryptAeadConfStr("AES-256-GCM", opt.aad, opt.key, opt.iv, plaintext);
     default:
-        throw PrivmxDriverCryptoException("Symmetric Encryption: Unknown protocol");
+        throw PrivmxCryptoserviceEncryptionUnknownProtocolException("Symmetric Encryption: Unknown protocol");
         break;
     }
 }
 
-/// @brief Auxiliary method for decryption data encrypted with symmetric cryptography algorithms
-/// @param alg Configuration string describing algorithm used for the encryption
-/// @param padding Information on whether padding were used for the encryption
-/// @param key Shared secret key
-/// @param iv Initialization vector (optional)
-/// @param ciphertext Encrypted data
-/// @return Decrypted data
+/**
+ * @brief Auxiliary method for decryption data encrypted with symmetric cryptography algorithms
+ * @param alg Configuration string describing algorithm used for the encryption
+ * @param padding Information on whether padding were used for the encryption
+ * @param key Shared secret key
+ * @param iv Initialization vector (optional)
+ * @param ciphertext Encrypted data
+ * @throws PrivmxCryptoserviceDecryptionUnableFetchProtocolException If the given protocol configuration string is not known
+ * @throws PrivmxCryptoserviceDecryptionUnableSetContextException If there is an error when setting decryption context
+ * @throws PrivmxCryptoserviceDecryptionInitializationFailedException If the message decryption initialization failed
+ * @throws PrivmxCryptoserviceDecryptionPaddingException If there is an error when setting decryption padding
+ * @throws PrivmxCryptoserviceDecryptionUpdateFailedException If the message decryption update failed
+ * @throws PrivmxCryptoserviceDecryptionFinalizationFailedException If the message decryption finalization failed
+ * @return Decrypted data
+ */
 Bytes CryptoProviderFromDriver::decryptConfStr(const char *alg, const bool padding, 
         BytesView key, BytesView iv, BytesView ciphertext) {
     std::unique_ptr<EVP_CIPHER, decltype(&EVP_CIPHER_free)> cipher(EVP_CIPHER_fetch(NULL, alg, NULL), EVP_CIPHER_free);
     if (cipher.get() == NULL) {
-        throw PrivmxDriverCryptoException("Decrypt: Unable to fetch protocol implementation");
+        throw PrivmxCryptoserviceDecryptionUnableFetchProtocolException("Decrypt: Unable to fetch protocol implementation");
     }
     std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
     EVP_CIPHER_CTX* raw_ctx = ctx.get();
     if (raw_ctx == NULL) {
-        throw PrivmxDriverCryptoException("Decrypt: Unable to set decryption context");
+        throw PrivmxCryptoserviceDecryptionUnableSetContextException("Decrypt: Unable to set decryption context");
     }
     EVP_CIPHER_CTX_init(raw_ctx);
     if (EVP_DecryptInit_ex(raw_ctx, cipher.get(), NULL, key.data(), iv.data()) != 1) {
-        throw PrivmxDriverCryptoException("Decrypt: Message decryption initialization failed");
+        throw PrivmxCryptoserviceDecryptionInitializationFailedException("Decrypt: Message decryption initialization failed");
     }
     if (!padding && EVP_CIPHER_CTX_set_padding(raw_ctx, 0) != 1) {
-        throw PrivmxDriverCryptoException("Decrypt: Message decryption padding failed");    
+        throw PrivmxCryptoserviceDecryptionPaddingException("Decrypt: Message decryption padding failed");    
     }
     std::vector<unsigned char> buf(ciphertext.size() + EVP_CIPHER_block_size(cipher.get()));
     int buf_len = 0;
     if (EVP_DecryptUpdate(raw_ctx, buf.data(), &buf_len, ciphertext.data(), ciphertext.size()) != 1) {
-        throw PrivmxDriverCryptoException("Decrypt: Message decryption update failed");    
+        throw PrivmxCryptoserviceDecryptionUpdateFailedException("Decrypt: Message decryption update failed");    
     }
     int final_len = 0;
     if (EVP_DecryptFinal_ex(raw_ctx, buf.data() + buf_len, &final_len) != 1) {
-        throw PrivmxDriverCryptoException("Decrypt: Message decryption finalization failed.");    
+        throw PrivmxCryptoserviceDecryptionFinalizationFailedException("Decrypt: Message decryption finalization failed.");    
     }
     buf_len += final_len;
     EVP_CIPHER_CTX_cleanup(raw_ctx);
@@ -342,18 +387,28 @@ Bytes CryptoProviderFromDriver::decryptConfStr(const char *alg, const bool paddi
     return result;
 }
 
-/// @brief Auxiliary method for decryption data encrypted with algoritm AES 256 GCM with ACC and tag
-/// @param alg Configuration string describing algorithm used for the encryption
-/// @param aad Additional Authenticated Data
-/// @param key Shared secret key
-/// @param iv Initialization vector (optional)
-/// @param ciphertextWithTag Encrypted data combined with tag
-/// @return Decrypted data
+/**
+ * @brief Auxiliary method for decryption data encrypted with algoritm AES 256 GCM with ACC and tag
+ * @param alg Configuration string describing algorithm used for the encryption
+ * @param aad Additional Authenticated Data
+ * @param key Shared secret key
+ * @param iv Initialization vector (optional)
+ * @param ciphertextWithTag Encrypted data combined with tag
+ * @throws PrivmxCryptoserviceDecryptionInvalidTagException If the size of a message with a tag is smaller than the expected tag size
+ * @throws PrivmxCryptoserviceDecryptionUnableFetchProtocolException If the given protocol configuration string is not known
+ * @throws PrivmxCryptoserviceDecryptionUnableSetContextException If there is an error when setting decryption context
+ * @throws PrivmxCryptoserviceDecryptionInitializationFailedException If the message decryption initialization failed
+ * @throws PrivmxCryptoserviceDecryptionAacUpdateFailedException If the message decryption AAC update failed
+ * @throws PrivmxCryptoserviceDecryptionUpdateFailedException If the message decryption update failed
+ * @throws PrivmxCryptoserviceDecryptionTagSettingFailedException If there is an error when setting the message tag
+ * @throws PrivmxCryptoserviceDecryptionFinalizationFailedException If the message decryption finalization failed
+ * @return Decrypted data
+ */
 Bytes CryptoProviderFromDriver::decryptAeadConfStr(const char *alg, BytesView aad, 
         BytesView key, BytesView iv, BytesView ciphertextWithTag) {            
     const size_t EXPECTED_TAG_LEN = 16;
     if(ciphertextWithTag.size() <= EXPECTED_TAG_LEN) {
-        throw PrivmxDriverCryptoException("AES AEAD Decrypt: wrong tag size");
+        throw PrivmxCryptoserviceDecryptionInvalidTagException("AES AEAD Decrypt: wrong tag size");
     }
     size_t data_len = ciphertextWithTag.size() - EXPECTED_TAG_LEN;
     BytesView ciphertext(ciphertextWithTag.begin(),ciphertextWithTag.begin()+data_len);
@@ -362,35 +417,35 @@ Bytes CryptoProviderFromDriver::decryptAeadConfStr(const char *alg, BytesView aa
     std::unique_ptr<EVP_CIPHER, decltype(&EVP_CIPHER_free)> 
             cipher(EVP_CIPHER_fetch(NULL, alg, NULL), EVP_CIPHER_free);
     if (cipher.get() == NULL) {
-        throw PrivmxDriverCryptoException("AES AEAD Decrypt: Unable to fetch protocol implementation");
+        throw PrivmxCryptoserviceDecryptionUnableFetchProtocolException("AES AEAD Decrypt: Unable to fetch protocol implementation");
     }
     std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> 
             ctx(EVP_CIPHER_CTX_new(), EVP_CIPHER_CTX_free);
     if (ctx.get() == NULL) {
-        throw PrivmxDriverCryptoException("AES AEAD Decrypt: Unable to set decryption context");
+        throw PrivmxCryptoserviceDecryptionUnableSetContextException("AES AEAD Decrypt: Unable to set decryption context");
     }
 
     std::vector<unsigned char> buf(ciphertext.size());
     int buf_len = 0;
     int extra_buf_len = 0;
     if (EVP_DecryptInit_ex(ctx.get(), cipher.get(), NULL, key.data(), iv.data()) != 1) {
-        throw PrivmxDriverCryptoException("AES AEAD Decrypt: Message decryption initialization failed");
+        throw PrivmxCryptoserviceDecryptionInitializationFailedException("AES AEAD Decrypt: Message decryption initialization failed");
     }
     if (aad.size() > 0) {
         if (EVP_DecryptUpdate(ctx.get(), NULL, &extra_buf_len, aad.data(), aad.size()) != 1) {
-            throw PrivmxDriverCryptoException("AES AEAD Decrypt: Message decryption AAD update failed");
+            throw PrivmxCryptoserviceDecryptionAacUpdateFailedException("AES AEAD Decrypt: Message decryption AAD update failed");
         }
     }
     if (EVP_DecryptUpdate(ctx.get(), buf.data() + buf_len, &extra_buf_len, ciphertext.data(), ciphertext.size()) != 1) {
-        throw PrivmxDriverCryptoException("AES AEAD Decrypt: Message decryption update failed");
+        throw PrivmxCryptoserviceDecryptionUpdateFailedException("AES AEAD Decrypt: Message decryption update failed");
     }
     buf_len += extra_buf_len;
     if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, tag.size(), (void*)tag.data()) != 1) {
-        throw PrivmxDriverCryptoException("AES AEAD Decrypt: Setting tag failed");
+        throw PrivmxCryptoserviceDecryptionTagSettingFailedException("AES AEAD Decrypt: Setting tag failed");
     }
     int final_len = 0;
     if (EVP_DecryptFinal_ex(ctx.get(), buf.data() + buf_len, &extra_buf_len) != 1) {
-        throw PrivmxDriverCryptoException("AES AEAD Decrypt: Message decryption finalization failed.");
+        throw PrivmxCryptoserviceDecryptionFinalizationFailedException("AES AEAD Decrypt: Message decryption finalization failed.");
     }
     buf_len += extra_buf_len;
     EVP_CIPHER_CTX_cleanup(ctx.get());
@@ -398,10 +453,13 @@ Bytes CryptoProviderFromDriver::decryptAeadConfStr(const char *alg, BytesView aa
     return result;
 }
 
-/// @brief Method for decryption data encrypted with symmetric cryptography algorithms
-/// @param opt Parameters describing the encryption method and options used to the encryption
-/// @param ciphertext Encrypted data (combined with tag in the case of AES 256 GCM with ACC and tag)
-/// @return Decrypted data 
+/**
+ * @brief Method for decryption data encrypted with symmetric cryptography algorithms
+ * @param opt Parameters describing the encryption method and options used to the encryption
+ * @param ciphertext Encrypted data (combined with tag in the case of AES 256 GCM with ACC and tag)
+ * @throws PrivmxCryptoserviceDecryptionUnknownProtocolException If the given algorithm is not known or not implemented
+ * @return Decrypted data 
+ */
 Bytes CryptoProviderFromDriver::decrypt(const SymParams& opt, BytesView ciphertext)
 {
     switch (opt.cipher)
@@ -415,7 +473,7 @@ Bytes CryptoProviderFromDriver::decrypt(const SymParams& opt, BytesView cipherte
     case SymAlg::Aes256Gcm:
         return decryptAeadConfStr("AES-256-GCM", opt.aad, opt.key, opt.iv, ciphertext);
     default:
-        throw PrivmxDriverCryptoException("Symmetric Decryption: Unknown protocol");
+        throw PrivmxCryptoserviceDecryptionUnknownProtocolException("Symmetric Decryption: Unknown protocol");
         break;
     }
 }
@@ -501,18 +559,36 @@ Bytes CryptoProviderFromDriver::aes256CbcHmac256Decrypt(Bytes data, BytesView ke
     Bytes rtag = hmac(Hash::Sha256, kM, data);
     rtag.resize(taglen);
     if (tag != rtag) {
-        throw PrivmxDriverCryptoException("WrongMessageSecurityTagException");
+        throw PrivmxCryptoserviceDecryptionWrongMessageSecurityTagException("WrongMessageSecurityTagException");
     }
     Bytes iv(data.begin(), data.begin()+16);
     data.erase(data.begin(),data.begin()+16);
     return decrypt({SymAlg::Aes256Cbc,kE,iv}, data);
 }
 
+/// @brief 
+/// @param pass 
+/// @param salt 
+/// @param rounds 
+/// @param length 
+/// @param hash 
+/// @return 
+/**
+ * @brief Computes Password-Based Key Derivation Function 2
+ * @param pass Secret data to be used in the computation
+ * @param salt Salt to be used in the computation
+ * @param rounds Number iterations of the algorithm
+ * @param length The length of the derived key
+ * @param hash Hash algorithm to be used in HMAC iterations
+ * @throws PrivmxCryptoserviceDigestUnableFetchProtocolException If the given protocol configuration string is not known
+ * @throws PrivmxCryptoserviceKdfUnableGetHmacException  If there is an error when computing the HMAC hash
+ * @return Derived key
+ */
 Bytes CryptoProviderFromDriver::pbkdf2(BytesView pass, BytesView salt, int rounds, size_t length, const char* hash) {
     std::unique_ptr<EVP_MD, decltype(&EVP_MD_free)> 
             evp_md(EVP_MD_fetch(NULL, hash, NULL), EVP_MD_free);
     if (evp_md.get() == NULL) {
-        throw PrivmxDriverCryptoException("PBKDF2: Unable to fetch protocol implementation");
+        throw PrivmxCryptoserviceKdfUnableFetchProtocolException("PBKDF2: Unable to fetch protocol implementation");
     }
     Bytes result(length, 0);
     const char *pass_as_chars = reinterpret_cast<const char *>(pass.data());
@@ -520,11 +596,19 @@ Bytes CryptoProviderFromDriver::pbkdf2(BytesView pass, BytesView salt, int round
     unsigned char *result_as_uchars = reinterpret_cast<unsigned char *>(result.data());
     if (PKCS5_PBKDF2_HMAC(pass_as_chars, pass.size(), salt_as_uchars, salt.size(), 
             rounds, evp_md.get(), length, result_as_uchars) != 1) {
-        throw PrivmxDriverCryptoException("PBKDF2: Unable to get hash");
+        throw PrivmxCryptoserviceKdfUnableGetHmacException("PBKDF2: Unable to get hash");
     }
     return result;
 }
 
+/**
+ * @brief Computes TLS 1.2 Pseudo-Random Function (Key Derivation Function)
+ * @param key Secret key to be used in the computation
+ * @param seed Seed to be used in the computation
+ * @param length The length of the derived key
+ * @param hash Hash algorithm to be used in HMAC iterations
+ * @return Derived key
+ */
 Bytes CryptoProviderFromDriver::prf_tls12(BytesView key, BytesView seed, size_t length,
         Hash hash) {
     Bytes a(seed.begin(),seed.end());
@@ -543,10 +627,13 @@ Bytes CryptoProviderFromDriver::prf_tls12(BytesView key, BytesView seed, size_t 
     return result;
 }
 
-/// @brief Key derivation method
-/// @param opt Parameters describing the algorithm and its options
-/// @param secretData The secret data used in the algorithm
-/// @return Derived key
+/**
+ * @brief Key derivation method
+ * @param opt Parameters describing the algorithm and its options
+ * @param secretData The secret data used in the algorithm
+ * @throws PrivmxCryptoserviceKdfUnknownProtocolException If the given algorithm is not known or not implemented
+ * @return Derived key
+ */
 Bytes CryptoProviderFromDriver::derive(const KdfParams& opt, BytesView secretData)
 {
     switch (opt.kdf)
@@ -559,7 +646,7 @@ Bytes CryptoProviderFromDriver::derive(const KdfParams& opt, BytesView secretDat
         return pbkdf2(secretData, opt.salt, opt.rounds, opt.length, 
                 getHashAlgName(opt.hash));
     default:
-        throw PrivmxDriverCryptoException("Key derivation function: Unknown protocol");
+        throw PrivmxCryptoserviceKdfUnknownProtocolException("Key derivation function: Unknown protocol");
         break;
     }
 }
@@ -574,10 +661,12 @@ Bytes CryptoProviderFromDriver::derive(const KdfParams& opt, BytesView secretDat
 //     return hash;
 // }
 
-/// @brief Auxiliary method for generating an initialization vector (probably not used)
-/// @param key Key used in HMAC
-/// @param idx Number used as part of the encrypted string
-/// @return Generated initialization vector
+/**
+ * @brief Auxiliary method for generating an initialization vector (probably not used)
+ * @param key Key used in HMAC
+ * @param idx Number used as part of the encrypted string
+ * @return Generated initialization vector
+ */
 Bytes CryptoProviderFromDriver::generateIv(BytesView& key, int32_t idx) {
     std::string dataString = "iv" + std::to_string(idx).substr(0, 16);
     const uint8_t* s = reinterpret_cast<const uint8_t*>(dataString.data());
@@ -586,9 +675,12 @@ Bytes CryptoProviderFromDriver::generateIv(BytesView& key, int32_t idx) {
     return hash;
 }
 
-/// @brief Auxiliary method that returns a string describing the algorithm used to identify the algorithm in OpenSSL library methods.
-/// @param alg Symmetric cryptography encryption algorithm
-/// @return Configuration string describing the algorithm used to identify the algorithm in OpenSSL library method
+/**
+ * @brief Auxiliary method that returns a string describing the algorithm used to identify the algorithm in OpenSSL library methods.
+ * @param alg Symmetric cryptography encryption algorithm
+ * @throws PrivmxCryptoserviceDigestUnknownProtocolException If the given algorithm is not known or not implemented
+ * @return Configuration string describing the algorithm used to identify the algorithm in OpenSSL library method
+ */
 const char* CryptoProviderFromDriver::getHashAlgName(Hash alg) {
     switch (alg)
     {
@@ -603,7 +695,7 @@ const char* CryptoProviderFromDriver::getHashAlgName(Hash alg) {
     case Hash::Hash160:
         return "HASH160";
     default:
-        throw PrivmxDriverCryptoException("hashAlgName: Unknown algorithm");
+        throw PrivmxCryptoserviceDigestUnknownProtocolException("hashAlgName: Unknown algorithm");
         break;
     }
 }
@@ -662,9 +754,11 @@ unsigned char* CryptoProviderFromDriver::store_u32_be(unsigned char* out, uint32
     return out+4;
 }
 
-/// @brief Method for generating a private key for a selected asymmetric cryptography algorithm
-/// @param alg The asymmetric cryptography algorithm to be used
-/// @return Generated private key (public key can be extracted from it)
+/**
+ * @brief Method for generating a private key for a selected asymmetric cryptography algorithm
+ * @param alg The asymmetric cryptography algorithm to be used
+ * @return Generated private key (public key can be extracted from it)
+ */
 std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::generatePrivateKey(AsymAlg alg)
 {
     if (alg ==  AsymAlg::EccSecp256k1) {
@@ -679,11 +773,13 @@ std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::generatePrivateKey(AsymAl
     throw PrivmxDriverCryptoException("generatePrivateKey: NOT IMPLEMENTED");
 }
 
-/// @brief Method for importing a private key used in asymmetric cryptography
-/// @param data Exported key data
-/// @param format Data storage format (currently accepted formats: Wif)
-/// @param alg The asymmetric cryptography algorithm in use
-/// @return Imported private key
+/**
+ * @brief Method for importing a private key used in asymmetric cryptography
+ * @param data Exported key data
+ * @param format Data storage format (currently accepted formats: Wif)
+ * @param alg The asymmetric cryptography algorithm in use
+ * @return Imported private key
+ */
 std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesView data, KeyFormat format, AsymAlg alg)
 {
     if (alg ==  AsymAlg::EccSecp256k1) {
@@ -701,11 +797,13 @@ std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesVie
     }
 }
 
-/// @brief Method for importing a private key used in asymmetric cryptography
-/// @param data Exported key data
-/// @param format Data storage format (currently accepted formats: Der and Base58Der)
-/// @param alg The asymmetric cryptography algorithm in use
-/// @return Imported public key
+/**
+ * @brief Method for importing a private key used in asymmetric cryptography
+ * @param data Exported key data
+ * @param format Data storage format (currently accepted formats: Der and Base58Der)
+ * @param alg The asymmetric cryptography algorithm in use
+ * @return Imported public key
+ */
 std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView data, KeyFormat format, AsymAlg alg)
 {
     if (alg ==  AsymAlg::EccSecp256k1) {
