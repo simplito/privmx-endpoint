@@ -455,11 +455,9 @@ core::PagingList<inbox::InboxEntry> InboxApiImpl::listEntries(
     std::vector<inbox::InboxEntry> messages;
     if (messagesList.messages.size() > 0) {
         for (auto message : messagesList.messages) {
-            messages.push_back(
-                _inboxEntryDataSchemaMapper.decryptAndConvertInboxEntry(
-                    message, getEntryDecryptionKeys(message), _groupPrivKeyResolver
-                )
-            );
+            messages.push_back(_inboxEntryDataSchemaMapper.decryptAndConvertInboxEntry(
+                message, getEntryDecryptionKeys(message), _groupPrivKeyResolver
+            ));
         }
     }
     return core::PagingList<inbox::InboxEntry>{.totalAvailable = messagesList.count, .readItems = messages};

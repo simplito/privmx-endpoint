@@ -26,10 +26,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApiLow StreamApiLow::create(
-    const core::Connection& connection,
-    const std::optional<group::GroupApi>& groupApi
-) {
+StreamApiLow StreamApiLow::create(const core::Connection& connection, const std::optional<group::GroupApi>& groupApi) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<StreamApiLowImpl> impl(new stream::StreamApiLowImpl(

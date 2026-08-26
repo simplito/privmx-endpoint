@@ -556,9 +556,7 @@ std::string StreamApiImpl::createStreamRoom(
     const std::optional<int64_t>& emptyRoomTtl,
     const std::vector<core::GroupGrantWithKey>& groups
 ) {
-    return _api->createStreamRoom(
-        contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl, groups
-    );
+    return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl, groups);
 }
 
 void StreamApiImpl::updateStreamRoom(

@@ -32,10 +32,7 @@ public:
      *
      * @return KvdbApi object
      */
-    static KvdbApi create(
-        core::Connection& connection,
-        const std::optional<group::GroupApi>& groupApi = std::nullopt
-    );
+    static KvdbApi create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi = std::nullopt);
 
     /**
      * //doc-gen:ignore

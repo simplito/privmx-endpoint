@@ -108,11 +108,7 @@ JSON_STRUCT(InboxCreateResult, INBOX_CREATE_RESULT_FIELDS);
 JSON_STRUCT(InboxUpdateModel, INBOX_UPDATE_MODEL_FIELDS);
 
 #define INBOX_ROTATE_KEYS_MODEL_EXTRA_FIELDS(F)
-JSON_STRUCT_EXT(
-    InboxRotateKeysModel,
-    core::server::ContainerRotateKeysModelBase,
-    INBOX_ROTATE_KEYS_MODEL_EXTRA_FIELDS
-);
+JSON_STRUCT_EXT(InboxRotateKeysModel, core::server::ContainerRotateKeysModelBase, INBOX_ROTATE_KEYS_MODEL_EXTRA_FIELDS);
 
 #define INBOX_GET_MODEL_FIELDS(F)                                                                                      \
     F(id, std::string)                                                                                                 \

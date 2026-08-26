@@ -30,10 +30,7 @@ public:
      *
      * @return StoreApi object
      */
-    static StoreApi create(
-        core::Connection& connection,
-        const std::optional<group::GroupApi>& groupApi = std::nullopt
-    );
+    static StoreApi create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi = std::nullopt);
 
     /**
      * //doc-gen:ignore
