@@ -54,6 +54,17 @@ struct module_has_group_keys : std::false_type {};
 template<typename T>
 struct module_has_group_keys<T, std::void_t<decltype(std::declval<T>().groupKeys)>> : std::true_type {};
 
+/**
+ * Whether a served module struct carries per-member key entries at all.
+ *
+ * A group carries none: its metadata key is wrapped once to its own grant public key and members open it by
+ * climbing the key tree, so the field is absent from what the bridge serves rather than merely empty.
+ */
+template<typename T, typename = void>
+struct module_has_keys : std::false_type {};
+template<typename T>
+struct module_has_keys<T, std::void_t<decltype(std::declval<T>().keys)>> : std::true_type {};
+
 class ModuleBaseApi {
 public:
     using GroupEpochResolver = std::function<std::unordered_map<std::string, GroupEpochInfo>(
@@ -92,7 +103,7 @@ protected:
     auto getAndValidateModuleCurrentEncKey(
         ModuleStruct moduleObj,
         const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
-    ) -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, core::DecryptedEncKeyV2());
+    ) -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.resourceId, core::DecryptedEncKeyV2());
     core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(
         ModuleKeys moduleKeys,
         const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
@@ -107,8 +118,9 @@ protected:
         ModuleStruct moduleObj,
         const std::string& resourceId,
         const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
-    ) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
+    ) -> decltype(moduleObj.contextId, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
 
+    /** Empty rosters build no per-user key entries — for a module that hands its key over some other way. */
     ContainerCreateContext prepareContainerCreate(
         const std::string& contextId,
         const std::vector<UserWithPubKey>& users,
@@ -481,11 +493,13 @@ template<typename ModuleStruct>
 auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(
     ModuleStruct moduleObj,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
-) -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, core::DecryptedEncKeyV2()) {
+) -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.resourceId, core::DecryptedEncKeyV2()) {
     auto data_entry = moduleObj.data.back();
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location{getModuleEncKeyLocation(moduleObj, moduleObj.resourceId)};
-    keyProviderRequest.addOne(moduleObj.keys, data_entry.keyId, location);
+    if constexpr (module_has_keys<ModuleStruct>::value) {
+        keyProviderRequest.addOne(moduleObj.keys, data_entry.keyId, location);
+    }
     if constexpr (module_has_group_keys<ModuleStruct>::value) {
         keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
     }
@@ -510,10 +524,12 @@ auto ModuleBaseApi::getAndValidateModuleKeys(
     ModuleStruct moduleObj,
     const std::string& resourceId,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
-) -> decltype(moduleObj.contextId, moduleObj.keys, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>()) {
+) -> decltype(moduleObj.contextId, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>()) {
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location{getModuleEncKeyLocation(moduleObj, resourceId)};
-    keyProviderRequest.addAll(moduleObj.keys, location);
+    if constexpr (module_has_keys<ModuleStruct>::value) {
+        keyProviderRequest.addAll(moduleObj.keys, location);
+    }
     if constexpr (module_has_group_keys<ModuleStruct>::value) {
         keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
     }

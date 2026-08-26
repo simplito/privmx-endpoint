@@ -281,14 +281,6 @@ TEST_F(GroupTest, updateGroup_incorrect_data) {
     EXPECT_THROW({
         groupApi->updateGroup(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
             core::Buffer::from("public"),
             core::Buffer::from("private"),
             1,
@@ -300,52 +292,9 @@ TEST_F(GroupTest, updateGroup_incorrect_data) {
     EXPECT_THROW({
         groupApi->updateGroup(
             reader->getString("Group_2.groupId"),
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
             core::Buffer::from("public"),
             core::Buffer::from("private"),
             99,
-            false,
-            false
-        );
-    }, core::Exception);
-    // user pubKey mismatch
-    EXPECT_THROW({
-        groupApi->updateGroup(
-            reader->getString("Group_2.groupId"),
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_2_pubKey")
-            }},
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
-            core::Buffer::from("public"),
-            core::Buffer::from("private"),
-            1,
-            false,
-            false
-        );
-    }, core::Exception);
-    // no managers
-    EXPECT_THROW({
-        groupApi->updateGroup(
-            reader->getString("Group_2.groupId"),
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
-            std::vector<core::UserWithPubKey>{},
-            core::Buffer::from("public"),
-            core::Buffer::from("private"),
-            1,
             false,
             false
         );
@@ -357,20 +306,6 @@ TEST_F(GroupTest, updateGroup_correct_data) {
     EXPECT_NO_THROW({
         groupApi->updateGroup(
             reader->getString("Group_1.groupId"),
-            std::vector<core::UserWithPubKey>{
-                core::UserWithPubKey{
-                    .userId = reader->getString("Login.user_1_id"),
-                    .pubKey = reader->getString("Login.user_1_pubKey")
-                },
-                core::UserWithPubKey{
-                    .userId = reader->getString("Login.user_2_id"),
-                    .pubKey = reader->getString("Login.user_2_pubKey")
-                }
-            },
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
             core::Buffer::from("updated_public"),
             core::Buffer::from("updated_private"),
             1,
@@ -390,24 +325,11 @@ TEST_F(GroupTest, updateGroup_correct_data) {
     if (group.managers.size() == 1) {
         EXPECT_EQ(group.managers[0], reader->getString("Login.user_1_id"));
     }
-    // update managers
+    // A second metadata update, and the roster is still the one the group was created with: updateGroup cannot
+    // reach it at all any more. Promoting somebody goes through addGroupMember/removeGroupMember.
     EXPECT_NO_THROW({
         groupApi->updateGroup(
             reader->getString("Group_1.groupId"),
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
-            std::vector<core::UserWithPubKey>{
-                core::UserWithPubKey{
-                    .userId = reader->getString("Login.user_1_id"),
-                    .pubKey = reader->getString("Login.user_1_pubKey")
-                },
-                core::UserWithPubKey{
-                    .userId = reader->getString("Login.user_2_id"),
-                    .pubKey = reader->getString("Login.user_2_pubKey")
-                }
-            },
             core::Buffer::from("updated_public_2"),
             core::Buffer::from("updated_private_2"),
             2,
@@ -422,7 +344,8 @@ TEST_F(GroupTest, updateGroup_correct_data) {
     EXPECT_EQ(group.version, 3);
     EXPECT_EQ(group.publicMeta.stdString(), "updated_public_2");
     EXPECT_EQ(group.privateMeta.stdString(), "updated_private_2");
-    EXPECT_EQ(group.managers.size(), 2);
+    EXPECT_EQ(group.users.size(), 2);
+    EXPECT_EQ(group.managers.size(), 1);
 }
 
 TEST_F(GroupTest, updateGroup_chain_integrity) {
@@ -448,14 +371,6 @@ TEST_F(GroupTest, updateGroup_chain_integrity) {
     EXPECT_NO_THROW({
         groupApi->updateGroup(
             groupId,
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
             core::Buffer::from("v2"),
             core::Buffer::from("v2_priv"),
             1,
@@ -467,14 +382,6 @@ TEST_F(GroupTest, updateGroup_chain_integrity) {
     EXPECT_NO_THROW({
         groupApi->updateGroup(
             groupId,
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
             core::Buffer::from("v3"),
             core::Buffer::from("v3_priv"),
             2,
@@ -497,14 +404,6 @@ TEST_F(GroupTest, updateGroup_force) {
     EXPECT_NO_THROW({
         groupApi->updateGroup(
             reader->getString("Group_2.groupId"),
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
-            std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            }},
             core::Buffer::from("forced"),
             core::Buffer::from("forced_priv"),
             99,

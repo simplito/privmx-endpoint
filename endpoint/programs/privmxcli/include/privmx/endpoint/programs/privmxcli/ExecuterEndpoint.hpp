@@ -1640,10 +1640,8 @@ private:
         },
         {group_updateGroup,
             "updateGroup JSON_ARRAY\n"
-            "\tjson format - [groupId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?]\n"
+            "\tjson format - [groupId, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?]\n"
             "\t\tgroupId [STRING] - ID of the Group to update\n"
-            "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the updated Group\n"
-            "\t\tmanagers [ARRAY] - vector of UserWithPubKey which indicates who will have access (and management rights) to the updated Group\n"
             "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
             "\t\tversion [NUMBER] - current version of the updated Group\n"

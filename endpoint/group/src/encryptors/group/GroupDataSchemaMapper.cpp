@@ -49,12 +49,57 @@ std::tuple<Group, core::DataIntegrityObject> GroupDataSchemaMapper::decrypt(
     );
 }
 
-void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupInfo) {
-    if (groupInfo.data.empty()) {
-        throw UnknownGroupFormatException();
+void GroupDataSchemaMapper::assertHeadMatchesVerifiedState(
+    const server::GroupInfo& groupInfo,
+    const std::set<std::string>& verifiedUsers,
+    const std::set<std::string>& verifiedManagers,
+    const std::string& verifiedGroupPubKey,
+    int64_t verifiedKeyVersion
+) {
+    // Anchored to verified state, never to `history.back()`: once entries can be skipped — or not sent at all —
+    // that field is bridge-supplied plaintext this call may never have touched, and checking the head against it
+    // would let a server tamper with it and the matching top-level fields consistently, with nothing to catch it.
+    const auto headUsers = std::set<std::string>(groupInfo.users.begin(), groupInfo.users.end());
+    const auto headManagers = std::set<std::string>(groupInfo.managers.begin(), groupInfo.managers.end());
+    const bool bridgeEpochMismatch =
+        groupInfo.keyVersion.has_value() && groupInfo.keyVersion.value() != verifiedKeyVersion;
+    if (verifiedUsers != headUsers ||
+        verifiedManagers != headManagers ||
+        groupInfo.groupPubKey != verifiedGroupPubKey ||
+        bridgeEpochMismatch) {
+        throw GroupDataIntegrityException();
     }
-    if (static_cast<size_t>(groupInfo.version) != groupInfo.data.size() ||
-        groupInfo.data.size() != groupInfo.history.size()) {
+}
+
+int64_t GroupDataSchemaMapper::verifiedVersion(const std::string& groupId) {
+    const auto checkpoint = _chainCheckpoints.get(groupId)->get();
+    return checkpoint.has_value() ? checkpoint->verifiedVersion : 0;
+}
+
+void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupInfo) {
+    // Where the served entries start. A server that knows nothing of windowing omits the field and always sends
+    // from genesis, which is what 1 means — so an old server and a full response are the same case.
+    const int64_t firstServed = groupInfo.firstServedVersion.value_or(1);
+    if (firstServed < 1) {
+        throw GroupDataIntegrityException();
+    }
+    if (groupInfo.data.empty()) {
+        // An empty window is only meaningful as "you already have everything", and only when the head agrees
+        // with what we verified. Anything else is a response with no chain in it.
+        const auto onlyCheckpoint = _chainCheckpoints.get(groupInfo.id)->get();
+        if (!onlyCheckpoint.has_value() || firstServed != groupInfo.version + 1
+            || onlyCheckpoint->verifiedVersion != groupInfo.version) {
+            throw UnknownGroupFormatException();
+        }
+        assertHeadMatchesVerifiedState(
+            groupInfo, onlyCheckpoint->verifiedUsers, onlyCheckpoint->verifiedManagers,
+            onlyCheckpoint->groupPubKeyAtCheckpoint, onlyCheckpoint->keyVersionAtCheckpoint
+        );
+        return;
+    }
+    // The window has to end at the head: `firstServed` plus what was sent must land exactly on `version`.
+    if (groupInfo.data.size() != groupInfo.history.size() ||
+        firstServed - 1 + static_cast<int64_t>(groupInfo.data.size()) != groupInfo.version) {
         throw GroupDataIntegrityException();
     }
 
@@ -72,8 +117,15 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     // succeed on its own terms and never notice it is stale. Reported as a distinct fork/rollback exception
     // rather than the generic integrity failure, since it signals a diverging server, not malformed data. First
     // sighting of a group is exempt by construction (no checkpoint to regress behind), same as with public keys.
-    if (checkpoint.has_value() && groupInfo.data.size() < static_cast<size_t>(checkpoint->verifiedVersion)) {
+    if (checkpoint.has_value() && groupInfo.version < checkpoint->verifiedVersion) {
         throw GroupHistoryForkException();
+    }
+
+    // A window that does not start at genesis can only be verified from the checkpoint it chains into. Without
+    // one — evicted, or a different client — there is no anchor, and accepting the window would mean trusting
+    // its first entry on the server's word.
+    if (firstServed > 1 && (!checkpoint.has_value() || checkpoint->verifiedVersion != firstServed - 1)) {
+        throw GroupDataIntegrityException();
     }
 
     size_t startIndex = 0;
@@ -84,8 +136,10 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     std::string prevGroupPubKey;
 
     if (checkpoint.has_value()) {
-        // The version gate above guarantees `checkpoint->verifiedVersion <= groupInfo.data.size()` here.
-        startIndex = static_cast<size_t>(checkpoint->verifiedVersion);
+        // Both are versions, so the skip is measured against what the window actually starts at: a full response
+        // skips the verified prefix, a window that begins right above the checkpoint skips nothing.
+        const int64_t alreadyVerifiedInWindow = checkpoint->verifiedVersion - (firstServed - 1);
+        startIndex = static_cast<size_t>(std::max<int64_t>(0, alreadyVerifiedInWindow));
         verifiedManagers = checkpoint->verifiedManagers;
         verifiedUsers = checkpoint->verifiedUsers;
         runningPrevDioHashHex = checkpoint->lastEntryDioHashHex;
@@ -99,6 +153,9 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     for (size_t i = startIndex; i < groupInfo.data.size(); ++i) {
         const auto& entry = groupInfo.data[i];
         const auto& histEntry = groupInfo.history[i];
+        // Genesis is a property of the version, not of the array index: in a window, index 0 is whatever version
+        // the window starts at, and only the true first entry may have no chain link and name its own signer.
+        const bool isGenesis = (firstServed + static_cast<int64_t>(i) == 1);
 
         auto encData = dynamic::EncryptedGroupDataV5::fromJSON(entry.data);
 
@@ -134,7 +191,7 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         // G1: chain link — for a resumed run, `runningPrevDioHashHex` is the checkpoint's own anchor, so the
         // first new entry must chain directly into it, exactly as if it were the next entry in an uninterrupted
         // full verification.
-        if (i == 0) {
+        if (isGenesis) {
             if (membership.prevEntryHash.has_value()) {
                 throw GroupChainBrokenException();
             }
@@ -145,7 +202,7 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         }
 
         // G2: manager authorization
-        if (i == 0) {
+        if (isGenesis) {
             if (membership.managers.end() ==
                 std::find(membership.managers.begin(), membership.managers.end(), dio.creatorUserId)) {
                 throw GroupUnauthorizedSignerException();
@@ -171,7 +228,7 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
 
         // Epoch (keyVersion) monotonicity — backward compat: absent keyVersion treated as 0
         int64_t thisKeyVersion = membership.keyVersion.value_or(0);
-        if (i == 0) {
+        if (isGenesis) {
             // The genesis epoch is 0 for a flat group and 1 for a tree-backed one, whose grant key exists from
             // the moment of creation and whose Epoch Ladder counts from 1. Which of the two it is cannot be
             // chosen freely: the head check below pins the committed value to the bridge's own `keyVersion`, and
@@ -202,17 +259,7 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     // bridge-supplied plaintext that may not have been touched by this call at all, so anchoring the head check
     // to it instead of to verified state would let a bridge tamper it (and the matching top-level fields)
     // consistently, with nothing here to catch it.
-    auto headUsers = std::set<std::string>(groupInfo.users.begin(), groupInfo.users.end());
-    auto headManagers = std::set<std::string>(groupInfo.managers.begin(), groupInfo.managers.end());
-
-    // Cross-check bridge's top-level keyVersion == head membership's committed keyVersion
-    bool bridgeEpochMismatch = groupInfo.keyVersion.has_value() && groupInfo.keyVersion.value() != prevKeyVersion;
-    if (verifiedUsers != headUsers ||
-        verifiedManagers != headManagers ||
-        groupInfo.groupPubKey != prevGroupPubKey ||
-        bridgeEpochMismatch) {
-        throw GroupDataIntegrityException();
-    }
+    assertHeadMatchesVerifiedState(groupInfo, verifiedUsers, verifiedManagers, prevGroupPubKey, prevKeyVersion);
 
     // keyVersion pinning, checked against the freshly-*verified* epoch rather than any bridge-supplied
     // claim. In this chain model a version regression (caught above) is the only way keyVersion could regress

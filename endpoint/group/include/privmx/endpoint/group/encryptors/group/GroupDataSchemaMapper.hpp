@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -41,6 +42,14 @@ public:
     );
 
     void assertDataIntegrity(const server::GroupInfo& groupInfo);
+
+    /**
+     * How much of this group's chain has already been verified, so a read can ask for only the rest.
+     *
+     * Zero when the group has never been seen. The caller turns this into `fromVersion`; the window it gets back
+     * has to chain into exactly this point, which `assertDataIntegrity` checks rather than assumes.
+     */
+    int64_t verifiedVersion(const std::string& groupId);
 
     uint32_t validateDataIntegrity(const server::GroupInfo& groupInfo);
 
@@ -91,6 +100,15 @@ public:
     ) override;
 
 private:
+    /** Head fields against state this call actually verified — see the definition for why not against `history`. */
+    void assertHeadMatchesVerifiedState(
+        const server::GroupInfo& groupInfo,
+        const std::set<std::string>& verifiedUsers,
+        const std::set<std::string>& verifiedManagers,
+        const std::string& verifiedGroupPubKey,
+        int64_t verifiedKeyVersion
+    );
+
     core::VersionStrategyMapper<server::GroupInfo, std::tuple<Group, core::DataIntegrityObject>> _strategyMapper;
     std::shared_ptr<GroupDataSchemaStrategyV5> _strategyV5;
     core::DataEncryptorV4 _dataEncryptor;
