@@ -61,6 +61,26 @@ ECCImpl::Ptr ECCImpl::fromPrivateKey(const std::string& private_key) {
     return std::make_shared<ECCImpl>(std::move(key), true);
 }
 
+ECCImpl::Ptr ECCImpl::fromPublicKey(BytesView public_key) {
+    ec_key_unique_ptr key = newEcKey();
+    ec_point_unique_ptr public_point = oct2point(key, public_key);
+    setPublicKey(key, public_point);
+    checkKey(key);
+    // return new ECCImpl(std::move(key), false);
+    return std::make_shared<ECCImpl>(std::move(key), false);
+}
+
+ECCImpl::Ptr ECCImpl::fromPrivateKey(BytesView private_key) {
+    ec_key_unique_ptr key = newEcKey();
+    bignum_unique_ptr private_bn = bin2bignum(private_key);
+    setPrivateKey(key, private_bn);
+    ec_point_unique_ptr public_point = mul(key);
+    setPublicKey(key, public_point);
+    checkKey(key);
+    // return new ECCImpl(std::move(key), true);
+    return std::make_shared<ECCImpl>(std::move(key), true);
+}
+
 ECCImpl::ECCImpl() : _key(nullptr) {}
 
 ECCImpl::ECCImpl(const ECCImpl& obj) : _key(copyEcKey(obj._key)), _has_priv(obj._has_priv) {}
@@ -100,6 +120,26 @@ std::string ECCImpl::getPublicKey(bool compact) const {
     return public_key;
 }
 
+Bytes ECCImpl::getPublicKeyB(bool compact) const {
+    const EC_KEY* raw_key = checkIfInitializedKeyAndGet();
+    const EC_POINT* public_point = EC_KEY_get0_public_key(raw_key);
+    const EC_GROUP* group = EC_KEY_get0_group(raw_key);
+    point_conversion_form_t form = compact ? POINT_CONVERSION_COMPRESSED : POINT_CONVERSION_UNCOMPRESSED;
+    size_t size = EC_POINT_point2oct(group, public_point, form, NULL, 0, NULL);
+    if (size == 0) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    // std::string public_key(size, 0);
+    Bytes public_key(size, 0);
+    unsigned char* buf = reinterpret_cast<unsigned char*>(public_key.data());
+    if (EC_POINT_point2oct(group, public_point, form, buf, size, NULL) == 0) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    return public_key;
+}
+
 PointImpl::Ptr ECCImpl::getPublicKey2() const {
     const EC_KEY* raw_key = checkIfInitializedKeyAndGet();
     const EC_POINT* public_point = EC_KEY_get0_public_key(raw_key);
@@ -113,6 +153,17 @@ std::string ECCImpl::getPrivateKey() const {
     const BIGNUM* priv = EC_KEY_get0_private_key(raw_key);
     size_t size = BN_num_bytes(priv);
     std::string private_key(size, 0);
+    unsigned char* to = reinterpret_cast<unsigned char*>(private_key.data());
+    BN_bn2bin(priv, to);
+    return private_key;
+}
+
+Bytes ECCImpl::getPrivateKeyB() const {
+    const EC_KEY* raw_key = checkIfInitializedKeyAndGet();
+    const BIGNUM* priv = EC_KEY_get0_private_key(raw_key);
+    size_t size = BN_num_bytes(priv);
+    // std::string private_key(size, 0);
+    Bytes private_key(size, 0);
     unsigned char* to = reinterpret_cast<unsigned char*>(private_key.data());
     BN_bn2bin(priv, to);
     return private_key;
@@ -180,7 +231,85 @@ std::string ECCImpl::sign(const std::string& data) const {
         .append(32 - s.size(), 0).append(s);
 }
 
+ECCImpl::Signature ECCImpl::sign2(BytesView data) const {
+    EC_KEY* raw_key = checkIfInitializedKeyAndGet();
+    const unsigned char* dgst = reinterpret_cast<const unsigned char*>(data.data());
+    int dgst_len = data.size();
+    ecdsa_sig_unique_ptr sig(ECDSA_do_sign(dgst, dgst_len, raw_key), ECDSA_SIG_free);
+    const ECDSA_SIG* raw_sig = sig.get();
+    if (raw_sig == NULL) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    const BIGNUM* r;
+    const BIGNUM* s;
+    ECDSA_SIG_get0(raw_sig, &r, &s);
+    // Signature signature{new BNImpl(copyBignum(r)), new BNImpl(copyBignum(s))};
+    Signature signature{std::make_shared<BNImpl>(copyBignum(r)), std::make_shared<BNImpl>(copyBignum(s))};
+    return signature;
+}
+
+Bytes ECCImpl::sign(BytesView data) const {
+    Signature sig = sign2(data);
+    Bytes r = sig.r->toBufferB();
+    Bytes s = sig.s->toBufferB();
+    Bytes result(1,27);
+    result.reserve(65);
+    result.resize(1+32-r.size(), 0);
+    result.insert(result.end(), r.begin(), r.end());
+    result.resize(1+32+32-s.size(), 0);
+    result.insert(result.end(), s.begin(), s.end());
+    return result;
+}
+
 bool ECCImpl::verify(const std::string& data, const std::string& signature) const {
+    EC_KEY* raw_key = checkIfInitializedKeyAndGet();
+    if (signature.size() != 65) {
+        // throw InvalidSignatureSizeException();
+        throw std::runtime_error("ECC: InvalidSignatureSizeException");
+    }
+    if (signature.front() < 27 || signature.front() > 42) {
+        // throw InvalidSignatureHeaderException();
+        throw std::runtime_error("ECC: InvalidSignatureHeaderException");
+    }
+    const unsigned char* dgst = reinterpret_cast<const unsigned char*>(data.data());
+    int dgst_len = data.size();
+    const unsigned char* sign = reinterpret_cast<const unsigned char*>(signature.data());
+    ecdsa_sig_unique_ptr sig(ECDSA_SIG_new(), ECDSA_SIG_free);
+    ECDSA_SIG* raw_sig = sig.get();
+    if (raw_sig == NULL) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    bignum_unique_ptr r = newBignum();
+    bignum_unique_ptr s = newBignum();
+    BIGNUM* raw_r = r.get();
+    BIGNUM* raw_s = s.get();
+    if (BN_bin2bn(&sign[1], 32, raw_r) == NULL) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    if (BN_bin2bn(&sign[33], 32, raw_s) == NULL) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    if (ECDSA_SIG_set0(raw_sig, raw_r, raw_s) == 0) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    // Release r and s, cause calling ECDSA_SIG_set0() transfers
+    // the memory management of the values to the ECDSA_SIG object
+    r.release();
+    s.release();
+    int result = ECDSA_do_verify(dgst, dgst_len, raw_sig, raw_key);
+    if (result == -1) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    return (result == 1);
+}
+
+bool ECCImpl::verify(BytesView data, BytesView signature) const {
     EC_KEY* raw_key = checkIfInitializedKeyAndGet();
     if (signature.size() != 65) {
         // throw InvalidSignatureSizeException();
@@ -300,6 +429,18 @@ BNImpl::Ptr ECCImpl::getOrder2() const {
     const BIGNUM* order = EC_GROUP_get0_order(group);
     // return new BNImpl(copyBignum(order));
     return std::make_shared<BNImpl>(copyBignum(order));
+}
+
+Bytes ECCImpl::getOrderB() const {
+    const EC_KEY* raw_key = checkIfInitializedKeyAndGet();
+    const EC_GROUP* group = EC_KEY_get0_group(raw_key);
+    const BIGNUM* order_bn = EC_GROUP_get0_order(group);
+    size_t size = BN_num_bytes(order_bn);
+    // std::string order(size, 0);
+    Bytes order(size, 0);
+    unsigned char* to = reinterpret_cast<unsigned char*>(order.data());
+    BN_bn2bin(order_bn, to);
+    return order;
 }
 
 PointImpl::Ptr ECCImpl::getGenerator() const {
@@ -454,7 +595,35 @@ ECCImpl::bignum_unique_ptr ECCImpl::bin2bignum(const std::string& bin) {
     return bignum;
 }
 
+ECCImpl::bignum_unique_ptr ECCImpl::bin2bignum(BytesView bin) {
+    const unsigned char* s = reinterpret_cast<const unsigned char*>(bin.data());
+    int len = bin.size();
+    bignum_unique_ptr bignum = newBignum();
+    BIGNUM* raw_bignum = bignum.get();
+    if (BN_bin2bn(s, len, raw_bignum) == NULL) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    return bignum;
+}
+
 ECCImpl::ec_point_unique_ptr ECCImpl::oct2point(const ec_key_unique_ptr& key, const std::string& oct) {
+    const EC_KEY* raw_key = key.get();
+    const EC_GROUP* group = EC_KEY_get0_group(raw_key);
+    const unsigned char* buf = reinterpret_cast<const unsigned char*>(oct.data());
+    size_t len = oct.size();
+    bn_ctx_unique_ptr ctx = newBnCtx();
+    BN_CTX* raw_ctx = ctx.get();
+    ec_point_unique_ptr public_point = newEcPoint(group);
+    EC_POINT* raw_public_point = public_point.get();
+    if (EC_POINT_oct2point(group, raw_public_point, buf, len, raw_ctx) == 0) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    return public_point;
+}
+
+ECCImpl::ec_point_unique_ptr ECCImpl::oct2point(const ec_key_unique_ptr& key, BytesView oct) {
     const EC_KEY* raw_key = key.get();
     const EC_GROUP* group = EC_KEY_get0_group(raw_key);
     const unsigned char* buf = reinterpret_cast<const unsigned char*>(oct.data());

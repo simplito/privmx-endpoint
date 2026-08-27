@@ -79,6 +79,16 @@ std::string BNImpl::toBuffer() const {
     return result;
 }
 
+Bytes BNImpl::toBufferB() const {
+    validate();
+    const BIGNUM* raw = _bn.get();
+    size_t size = BN_num_bytes(raw);
+    Bytes result(size, 0);
+    unsigned char* to = reinterpret_cast<unsigned char*>(result.data());
+    BN_bn2bin(raw, to);
+    return result;
+}
+
 std::size_t BNImpl::getBitsLength() const {
     validate();
     const BIGNUM* raw = _bn.get();

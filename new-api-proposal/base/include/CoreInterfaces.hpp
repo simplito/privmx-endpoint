@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef _PRIVMXLIB_CRYPTOSERVICE_CRYPTOINTERFACES_HPP_
-#define _PRIVMXLIB_CRYPTOSERVICE_CRYPTOINTERFACES_HPP_
+#ifndef _PRIVMXLIB_CRYPTOSERVICE_COREINTERFACES_HPP_
+#define _PRIVMXLIB_CRYPTOSERVICE_COREINTERFACES_HPP_
 
 #include <vector>
 #include <string>
@@ -142,4 +142,4 @@ public:
 } // cryptoservice
 } // privmx
 
-#endif // _PRIVMXLIB_CRYPTOSERVICE_CRYPTOINTERFACES_HPP_
+#endif // _PRIVMXLIB_CRYPTOSERVICE_COREINTERFACES_HPP_

@@ -38,8 +38,8 @@ public:
     bool eq(const BN& bn) const;
     BNImpl::Ptr getImpl() const;
 
-
-    private:
+    Bytes toBufferB() const;
+private:
     BNImpl::Ptr _impl;
 
 };
@@ -84,6 +84,10 @@ inline bool BN::isEmpty() const {
 
 inline std::string BN::toBuffer() const {
     return _impl->toBuffer();
+}
+
+inline Bytes BN::toBufferB() const {
+    return _impl->toBufferB();
 }
 
 inline std::size_t BN::getBitsLength() const {

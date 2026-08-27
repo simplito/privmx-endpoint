@@ -65,6 +65,10 @@ public:
     static PrivateKey fromWIFb(std::shared_ptr<ISymCryptoProvider> p, BytesView wif);
     Bytes toWIFb() const;
     Bytes deriveB(const PublicKey& public_key) const;
+    Bytes getPrivateEncKeyB() const;
+    Bytes signToCompactSignature(BytesView message) const;
+    Bytes signToCompactSignatureWithHash(BytesView message) const;
+
 
     virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 
@@ -74,6 +78,9 @@ public:
     std::string decrypt(const std::string& cipher, const std::optional<PublicKey>& pubOfSignature = std::nullopt) const;
     std::string decryptV0(const PublicKey& pub, const std::string& cipher) const;
 
+
+// new public methods:
+    Bytes decrypt(BytesView cipher, const std::optional<PublicKey>& pubOfSignature = std::nullopt) const;
 private:
     ECC _key;
     // static std::shared_ptr<ISymCryptoProvider> _provider;
@@ -81,6 +88,8 @@ private:
 
 // from ECIES class:
     std::string eciesDecrypt(const std::string& enc_buf, const PublicKey& public_key) const;
+// new variants:
+    Bytes eciesDecrypt(BytesView enc_buf, const PublicKey& public_key) const;
 };
 
 inline PublicKey PrivateKey::getPublicKey() const {

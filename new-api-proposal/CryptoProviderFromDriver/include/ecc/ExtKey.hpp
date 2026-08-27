@@ -79,10 +79,16 @@ public:
     // Old Privmx implementation skips leanding zeros of private key
     ExtKey deriveOldPrivmxVersionB(Poco::UInt32 index) const;
     ExtKey deriveHardenedOldPrivmxVersionB(Poco::UInt32 index) const;
+    Bytes getPrivatePartAsBase58B() const;
+    Bytes getPublicPartAsBase58B() const;
 
     static ExtKey fromSeed(std::shared_ptr<ISymCryptoProvider> p, BytesView seed);
     static ExtKey fromBase58(std::shared_ptr<ISymCryptoProvider> p, BytesView base58);
     static ExtKey generateRandom(std::shared_ptr<ISymCryptoProvider> p);
+
+    Bytes getPrivateEncKeyB() const;
+    Bytes getPublicKeyAsBase58B() const;
+    Bytes getPublicKeyAsBase58AddressB() const;
 
 private:
     static const Poco::UInt32 HIGHEST_BIT = 0x80000000;
@@ -101,6 +107,7 @@ private:
 
 // new:    
     static Poco::UInt32 read_u32_be_b(BytesView raw_key, size_t offset); // possibly to rewrite
+    Bytes toBase58B(bool is_private = false) const;
     ExtKey deriveB(Poco::UInt32 index, bool old_privmx_version) const;
     std::shared_ptr<ISymCryptoProvider> _provider;
 };
@@ -115,6 +122,14 @@ inline std::string ExtKey::getPrivatePartAsBase58() const {
 
 inline std::string ExtKey::getPublicPartAsBase58() const {
     return toBase58();
+}
+
+inline Bytes ExtKey::getPrivatePartAsBase58B() const {
+    return toBase58B(true);
+}
+
+inline Bytes ExtKey::getPublicPartAsBase58B() const {
+    return toBase58B();
 }
 
 inline PrivateKey ExtKey::getPrivateKey() const {
@@ -145,6 +160,22 @@ inline std::string ExtKey::getPublicKeyAsBase58() const {
 
 inline std::string ExtKey::getPublicKeyAsBase58Address() const {
     return getPublicKey().toBase58Address();
+}
+
+inline Bytes ExtKey::getPrivateEncKeyB() const {
+    if (!_is_private) {
+        // throw ExtKeyDoesNotHoldPrivateKeyException();
+        throw std::runtime_error("ExtKey: ExtKeyDoesNotHoldPrivateKeyException");
+    }
+    return getPrivateKey().getPrivateEncKeyB();
+}
+
+inline Bytes ExtKey::getPublicKeyAsBase58B() const {
+    return getPublicKey().toBase58DERb();
+}
+
+inline Bytes ExtKey::getPublicKeyAsBase58AddressB() const {
+    return getPublicKey().toBase58AddressB();
 }
 
 inline const std::string& ExtKey::getChainCode() const {

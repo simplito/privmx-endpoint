@@ -18,6 +18,7 @@ limitations under the License.
 #include <openssl/bn.h>
 #include <Poco/SharedPtr.h>
 
+#include "CoreTypes.hpp"
 
 namespace privmx {
 namespace cryptoservice {
@@ -48,6 +49,8 @@ public:
     bool eq(const BNImpl::Ptr bn) const;
     // const privmxDrvEcc_BN* getRaw() const;
     const BIGNUM* getRaw() const;
+
+    Bytes toBufferB() const;
 
 private:
     using bn_ctx_unique_ptr = std::unique_ptr<BN_CTX, std::function<decltype(BN_CTX_free)>>;

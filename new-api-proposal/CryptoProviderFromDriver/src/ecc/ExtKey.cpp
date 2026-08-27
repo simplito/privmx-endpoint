@@ -204,9 +204,11 @@ ExtKey::ExtKey(std::shared_ptr<ISymCryptoProvider> p) : _provider(p) {}
 ExtKey::ExtKey(std::shared_ptr<ISymCryptoProvider> p, 
     BytesView key, BytesView chain_code, bool private_key) : _provider(p) {
     if (private_key) {
-        _ec = ECC::fromPrivateKey(Utils::b2s(key));
+        // _ec = ECC::fromPrivateKey(Utils::b2s(key));
+        _ec = ECC::fromPrivateKey(key);
     } else {
-        _ec = ECC::fromPublicKey(Utils::b2s(key));
+        // _ec = ECC::fromPublicKey(Utils::b2s(key));
+        _ec = ECC::fromPublicKey(key);
     }
     _chain_code = Utils::b2s(chain_code);
     _is_private = private_key;
@@ -217,9 +219,11 @@ ExtKey::ExtKey(std::shared_ptr<ISymCryptoProvider> p,
                Poco::UInt32 parent_fingerprint, Poco::UInt32 index)
         : _depth(depth), _parent_fingerprint(parent_fingerprint), _index(index), _provider(p) {
     if (private_key) {
-        _ec = ECC::fromPrivateKey(Utils::b2s(key));
+        // _ec = ECC::fromPrivateKey(Utils::b2s(key));
+        _ec = ECC::fromPrivateKey(key);
     } else {
-        _ec = ECC::fromPublicKey(Utils::b2s(key));
+        // _ec = ECC::fromPublicKey(Utils::b2s(key));
+        _ec = ECC::fromPublicKey(key);
     }
     _chain_code = Utils::b2s(chain_code);
     _is_private = private_key;
@@ -293,7 +297,8 @@ ExtKey ExtKey::deriveB(Poco::UInt32 index, bool old_privmx_version) const {
         // throw ExtKeyDoesNotHoldPrivateKeyException();
         throw std::runtime_error("ExtKey: ExtKeyDoesNotHoldPrivateKeyException");
     }
-    Bytes private_key = Utils::s2b(_ec.getPrivateKey());
+    // Bytes private_key = Utils::s2b(_ec.getPrivateKey());
+    Bytes private_key = _ec.getPrivateKeyB();
     Poco::UInt32 index_be = Poco::ByteOrder::toBigEndian(index);
     Bytes data;
     if (index >= HIGHEST_BIT) {
@@ -312,7 +317,8 @@ ExtKey ExtKey::deriveB(Poco::UInt32 index, bool old_privmx_version) const {
     } else {
         // data.append(_ec.getPublicKey())
         //     .append((char*)&index_be, 4);
-        Bytes publicKeyData(Utils::s2b(_ec.getPublicKey()));
+        // Bytes publicKeyData(Utils::s2b(_ec.getPublicKey()));
+        Bytes publicKeyData(_ec.getPublicKeyB());
         data.reserve(data.size()+publicKeyData.size()+4);
         data.insert(data.end(), publicKeyData.begin(), publicKeyData.end());
         const uint8_t* d = reinterpret_cast<const uint8_t*>(&index_be); 
@@ -328,7 +334,8 @@ ExtKey ExtKey::deriveB(Poco::UInt32 index, bool old_privmx_version) const {
     mpz_import(pIL.get_mpz_t(), IL.size(), 1, 1, 0, 0, IL.data());
     mpz_import(k.get_mpz_t(), private_key.size(), 1, 1, 0, 0, private_key.data());
     // std::string n_str = _ec.getOrder();
-    Bytes n_str = Utils::s2b(_ec.getOrder());
+    // Bytes n_str = Utils::s2b(_ec.getOrder());
+    Bytes n_str = _ec.getOrderB();
     mpz_import(n.get_mpz_t(), n_str.size(), 1, 1, 0, 0, n_str.data());
     if (pIL > n) {
         return deriveB(index + 1); // to rewrite
@@ -343,7 +350,8 @@ ExtKey ExtKey::deriveB(Poco::UInt32 index, bool old_privmx_version) const {
     mpz_export((char*)ki_str.data(), &ki_size, 1, 1, 0, 0, ki.get_mpz_t());
     // std::string identifier = Crypto::hash160(_ec.getPublicKey()).substr(0, 4);
     // std::string identifier = NewCrypto::digest(Hash::Hash160, _ec.getPublicKey()).substr(0, 4);
-    Bytes identifier = _provider->digest(Hash::Hash160, Utils::s2b(_ec.getPublicKey()));
+    // Bytes identifier = _provider->digest(Hash::Hash160, Utils::s2b(_ec.getPublicKey()));
+    Bytes identifier = _provider->digest(Hash::Hash160, _ec.getPublicKeyB());
     identifier.resize(4);
     Poco::UInt32 parent_fingerprint = *reinterpret_cast<Poco::UInt32*>(identifier.data());
     parent_fingerprint = Poco::ByteOrder::fromBigEndian(parent_fingerprint);
@@ -404,6 +412,56 @@ std::string ExtKey::toBase58(bool is_private) const {
         throw std::runtime_error("ExtKey: InvalidResultSizeException");
     }
     return Base58::encodeWithChecksum(result);
+}
+
+Bytes ExtKey::toBase58B(bool is_private) const {
+    if (is_private && !_is_private) {
+        // throw ExtKeyDoesNotHoldPrivateKeyException();
+        throw std::runtime_error("ExtKey: ExtKeyDoesNotHoldPrivateKeyException");
+    }
+
+    Poco::UInt32 version = is_private ? Networks::BITCOIN.BIP39.PRIVATE : Networks::BITCOIN.BIP39.PUBLIC;
+    Poco::UInt32 versionBE = Poco::ByteOrder::toBigEndian(version);
+    Poco::UInt32 fingerprintBE = Poco::ByteOrder::toBigEndian(_parent_fingerprint);
+    Poco::UInt32 indexBE = Poco::ByteOrder::toBigEndian(_index);
+    Poco::UInt8 depth = _depth;
+
+    // std::string result(13, '\0');
+    Bytes result(13, '\0');
+    // char* result_data =  result.data();
+    char* result_data = reinterpret_cast<char*>(result.data());
+
+    std::memcpy(result_data,     &versionBE,     4); // Offset 0
+    std::memcpy(result_data + 4, &depth,         1); // Offset 4
+    std::memcpy(result_data + 5, &fingerprintBE, 4); // Offset 5 (Fixed!)
+    std::memcpy(result_data + 9, &indexBE,       4); // Offset 9 (Fixed!)
+
+    // result.append(_chain_code);
+    const uint8_t* c = reinterpret_cast<const uint8_t*> (_chain_code.data());
+    result.reserve(result.size() + _chain_code.size());
+    result.insert(result.end(), c, c+_chain_code.size());
+
+    if (is_private) {
+        Bytes key = _ec.getPrivateKeyB();
+        if (key.size() < 32) {
+            // key = std::string(32 - key.size(), '\0').append(key);
+            key.insert(key.begin(), 32 - key.size(), (uint8_t)0);
+        }
+        // result.append("\0", 1).append(key);
+        result.insert(result.end(), (uint8_t)0 );
+        result.insert(result.end(), key.begin(), key.end());
+    } else {
+        // result.append(_ec.getPublicKey());
+        Bytes key = _ec.getPublicKeyB();
+        result.insert(result.end(), key.begin(), key.end());
+    }
+
+    if (result.size() != 78) {
+        // throw InvalidResultSizeException();
+        throw std::runtime_error("ExtKey: InvalidResultSizeException");
+    }
+    // return Base58::encodeWithChecksum(result);
+    return Base58::encodeWithChecksumB(_provider, result);
 }
 
 Poco::UInt32 ExtKey::read_u32_be(const std::string& raw_key, size_t offset) {

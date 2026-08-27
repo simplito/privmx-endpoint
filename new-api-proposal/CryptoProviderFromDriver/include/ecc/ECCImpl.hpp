@@ -20,7 +20,9 @@ limitations under the License.
 
 #include "BNImpl.hpp"
 #include "PointImpl.hpp"
-#include "ECCImpl.hpp"
+// #include "ECCImpl.hpp"
+
+#include "CoreTypes.hpp"
 
 namespace privmx {
 namespace cryptoservice {
@@ -67,7 +69,16 @@ public:
     const EC_POINT* getEcPoint() const;
     bool hasPrivate() const { return _has_priv; }
 
-private:
+    static ECCImpl::Ptr fromPublicKey(BytesView public_key);
+    static ECCImpl::Ptr fromPrivateKey(BytesView private_key);
+    Bytes getPrivateKeyB() const;
+    Bytes getPublicKeyB(bool compact = true) const;
+    Bytes sign(BytesView data) const;
+    Signature sign2(BytesView data) const;
+    bool verify(BytesView data, BytesView signature) const;
+    Bytes getOrderB() const;
+
+ private:
     using bignum_unique_ptr = std::unique_ptr<BIGNUM, std::function<decltype(BN_free)>>;
     using bn_ctx_unique_ptr = std::unique_ptr<BN_CTX, std::function<decltype(BN_CTX_free)>>;
     using ec_point_unique_ptr = std::unique_ptr<EC_POINT, std::function<decltype(EC_POINT_free)>>;
@@ -92,6 +103,10 @@ private:
 
     ec_key_unique_ptr _key;
     bool _has_priv = false;
+
+    static bignum_unique_ptr bin2bignum(BytesView bin);
+    static ec_point_unique_ptr oct2point(const ec_key_unique_ptr& key, BytesView oct);
+
 
     // // Probably to be removed:
     // void validate() const;

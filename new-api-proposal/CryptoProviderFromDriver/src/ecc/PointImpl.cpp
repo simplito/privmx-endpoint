@@ -22,7 +22,6 @@ namespace privmx {
 namespace cryptoservice {
 namespace ecc {
 
-
 PointImpl::Ptr PointImpl::fromBuffer(const std::string& data) {
     ec_point_unique_ptr point = oct2point(data);
     // return new PointImpl(move(point));
@@ -110,7 +109,6 @@ const EC_POINT* PointImpl::getRaw() const {
     validate();
     return _point.get();
 }
-
 
 PointImpl::ec_point_unique_ptr PointImpl::oct2point(const std::string& oct) {
     const unsigned char* s = reinterpret_cast<const unsigned char*>(oct.data());

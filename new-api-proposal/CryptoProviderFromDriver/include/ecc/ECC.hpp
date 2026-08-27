@@ -62,6 +62,14 @@ public:
     bool hasPrivate() const;
     ECCImpl::Ptr getImpl() const;
 
+    static ECC fromPublicKey(BytesView public_key);
+    static ECC fromPrivateKey(BytesView private_key);
+    Bytes getPublicKeyB(bool compact = true) const;
+    Bytes getPrivateKeyB() const;
+    Bytes sign(BytesView data) const;
+    Signature sign2(BytesView data) const;
+    bool verify(BytesView data, BytesView signature) const;
+    Bytes getOrderB() const;
 private:
     ECCImpl::Ptr _impl;
 
@@ -76,6 +84,14 @@ inline ECC ECC::fromPublicKey(const std::string& public_key) {
 }
 
 inline ECC ECC::fromPrivateKey(const std::string& private_key) {
+    return ECC(ECCImpl::fromPrivateKey(private_key));
+}
+
+inline ECC ECC::fromPublicKey(BytesView public_key) {
+    return ECC(ECCImpl::fromPublicKey(public_key));
+}
+
+inline ECC ECC::fromPrivateKey(BytesView private_key) {
     return ECC(ECCImpl::fromPrivateKey(private_key));
 }
 
@@ -130,6 +146,14 @@ inline BN ECC::getPrivateKey2() const {
     return _impl->getPrivateKey2();
 }
 
+inline Bytes ECC::getPublicKeyB(bool compact) const {
+    return _impl->getPublicKeyB(compact);
+}
+
+inline Bytes ECC::getPrivateKeyB() const {
+    return _impl->getPrivateKeyB();
+}
+
 inline std::string ECC::sign(const std::string& data) const {
     return _impl->sign(data);
 }
@@ -139,7 +163,20 @@ inline ECC::Signature ECC::sign2(const std::string& data) const {
     return {res.r, res.s};
 }
 
+inline Bytes ECC::sign(BytesView data) const {
+    return _impl->sign(data);
+}
+
+inline ECC::Signature ECC::sign2(BytesView data) const {
+    auto res = _impl->sign2(data);
+    return {res.r, res.s};
+}
+
 inline bool ECC::verify(const std::string& data, const std::string& signature) const {
+    return _impl->verify(data, signature);
+}
+
+inline bool ECC::verify(BytesView data, BytesView signature) const {
     return _impl->verify(data, signature);
 }
 
@@ -157,6 +194,10 @@ inline std::string ECC::getOrder() const {
 
 inline BN ECC::getOrder2() const {
     return _impl->getOrder2();
+}
+
+inline Bytes ECC::getOrderB() const {
+    return _impl->getOrderB();
 }
 
 inline Point ECC::getGenerator() const {

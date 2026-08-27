@@ -103,6 +103,11 @@ std::string PrivateKey::getPrivateEncKey() const {
     return Utils::fillTo32(key);
 }
 
+Bytes PrivateKey::getPrivateEncKeyB() const {
+    Bytes key = _key.getPrivateKeyB();
+    return Utils::fillTo32b(key);
+}
+
 std::string PrivateKey::signToCompactSignature(const std::string& message) const {
     return _key.sign(message);
 }
@@ -110,6 +115,15 @@ std::string PrivateKey::signToCompactSignature(const std::string& message) const
 std::string PrivateKey::signToCompactSignatureWithHash(const std::string& message) const {
     // std::string hash = Crypto::sha256(message);
     std::string hash = NewCrypto::digest(Hash::Sha256, message);
+    return signToCompactSignature(hash);
+}
+
+Bytes PrivateKey::signToCompactSignature(BytesView message) const {
+    return _key.sign(message);
+}
+
+Bytes PrivateKey::signToCompactSignatureWithHash(BytesView message) const {
+    Bytes hash = _provider->digest(Hash::Sha256, message);
     return signToCompactSignature(hash);
 }
 
@@ -128,7 +142,8 @@ std::string PrivateKey::toWIF() const {
 }
 
 Bytes PrivateKey::toWIFb() const {
-    Bytes buffer = Utils::s2b(_key.getPrivateKey());
+    // Bytes buffer = Utils::s2b(_key.getPrivateKey());
+    Bytes buffer = _key.getPrivateKeyB();
     Utils::fillTo32b(buffer);
     buffer.insert(buffer.begin(), 1, (uint8_t) Networks::BITCOIN.WIF);
     buffer.insert(buffer.end(), 1, 0x01);
@@ -138,9 +153,11 @@ Bytes PrivateKey::toWIFb() const {
 Bytes PrivateKey::sign(BytesView data, SigScheme scheme) const {
     switch (scheme) {
         case SigScheme::EcdsaSecp256k1CompactWithHash: // first we need to obtain hash
-            return Utils::s2b(_key.sign(Utils::b2s(_provider->digest(Hash::Sha256, data))));
+            // return Utils::s2b(_key.sign(Utils::b2s(_provider->digest(Hash::Sha256, data))));
+            return _key.sign(_provider->digest(Hash::Sha256, data));
         case SigScheme::EcdsaSecp256k1Compact:  // in both cases we compute signature
-            return Utils::s2b(_key.sign(Utils::b2s(data)));
+            // return Utils::s2b(_key.sign(Utils::b2s(data)));
+            return _key.sign(data);
         default:
             throw PrivmxDriverCryptoException("PrivateKey::sign: Unknowne signning scheme");
             break;        
@@ -168,15 +185,26 @@ Bytes PrivateKey::deriveSharedSecret(const IPublicKey& publicKey) const {
     return Utils::fillTo32b(secret);
 }
 
+// Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
+//     if (expectedSender != nullptr && typeid(*expectedSender) != typeid(PublicKey)) {
+//         throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
+//     } else if (expectedSender != nullptr) {
+//         return Utils::s2b(decrypt(Utils::b2s(sealed)));
+//     } else {
+//         return Utils::s2b(decrypt(Utils::b2s(sealed), *((const PublicKey*) expectedSender)));
+//     }
+// }
+
 Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
     if (expectedSender != nullptr && typeid(*expectedSender) != typeid(PublicKey)) {
         throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
     } else if (expectedSender != nullptr) {
-        return Utils::s2b(decrypt(Utils::b2s(sealed)));
+        return decrypt(sealed);
     } else {
-        return Utils::s2b(decrypt(Utils::b2s(sealed), *((const PublicKey*) expectedSender)));
+        return decrypt(sealed, *((const PublicKey*) expectedSender));
     }
 }
+
 Bytes PrivateKey::export_(KeyFormat format) const {
     if (format == KeyFormat::Wif) {
         return toWIFb();
@@ -243,6 +271,70 @@ std::string PrivateKey::eciesDecrypt(const std::string& enc_buf, const PublicKey
     // std::string E = eciesGetE();
     std::string E = _shared_key.substr(0, 32);
     return Utils::b2s(_provider->decrypt({SymAlg::Aes256Cbc, Utils::s2b(E), Utils::s2b(c.substr(0, 16))}, Utils::s2b(c.substr(16))));
+}
+
+// new versions from EciesEncryptor class:
+
+// Poco::JSON::Object::Ptr PrivateKey::decryptObjectFromBase64(const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature) const {
+//     return Utils::parseJsonObject(decryptFromBase64(cipher_base64, pubOfSignature));
+// }
+
+// std::string PrivateKey::decryptFromBase64(const std::string& cipher_base64, const std::optional<PublicKey>& pubOfSignature) const {
+//     return decrypt(Base64::toString(cipher_base64), pubOfSignature);
+// }
+
+Bytes PrivateKey::decrypt(BytesView cipher, const std::optional<PublicKey>& pubOfSignature) const {
+    if (cipher.front() != 101 || cipher.size() < 67) {
+        // throw InvalidFirstByteOfCipherException();
+        throw std::runtime_error("EciesEncryptor: InvalidFirstByteOfCipherException");
+    }
+    // auto external_pub = cipher.substr(1, 33);
+    // auto my_pub = cipher.substr(34, 33);
+    Bytes external_pub = Bytes(cipher.begin()+1,cipher.begin()+34);
+    Bytes my_pub = Bytes(cipher.begin()+34,cipher.begin()+67);
+    auto external_pub_ec = PublicKey::fromDER(_provider, external_pub);
+    if(pubOfSignature.has_value() && external_pub_ec != pubOfSignature.value()) {
+        // throw GivenPublicKeyDoesNotMatchWithSignatureException();
+        throw std::runtime_error("EciesEncryptor: GivenPublicKeyDoesNotMatchWithSignatureException");
+    }
+    auto my_pub_ec = PublicKey::fromDER(_provider, my_pub);
+    if (my_pub_ec != getPublicKey()) {
+        // throw GivenPrivKeyDoesNotMatchException();
+        throw std::runtime_error("EciesEncryptor: GivenPrivKeyDoesNotMatchException");
+    }
+    // auto key = eciesDecrypt(cipher.substr(67), external_pub_ec);
+    auto key = eciesDecrypt(Bytes(cipher.begin()+67,cipher.end()), external_pub_ec);
+    return key;
+}
+
+// std::string PrivateKey::decryptV0(const PublicKey& pub, const std::string& cipher) const {
+//     return eciesDecrypt(cipher, pub);
+// }
+
+// new version from ECIES class:
+Bytes PrivateKey::eciesDecrypt(BytesView enc_buf, const PublicKey& public_key) const {
+    Bytes secret = deriveB(public_key);
+    Bytes _shared_key = _provider->digest(Hash::Sha512, secret);
+    Bytes _private_enc_key = getPrivateEncKeyB();
+
+    // std::string c = enc_buf.substr(0, enc_buf.length() - 4);
+    // std::string d = enc_buf.substr(enc_buf.length() - 4, 4);
+    Bytes c = Bytes(enc_buf.begin(), enc_buf.end() - 4);
+    Bytes d = Bytes(enc_buf.end() - 4, enc_buf.end());
+    // std::string M = eciesGetM();
+    // std::string M = _shared_key.substr(32, 32);
+    Bytes M = Bytes(_shared_key.begin()+32, _shared_key.begin()+64);
+    Bytes d2 =  _provider->hmac(Hash::Sha256, M, c);
+    d2.resize(4);
+    if (d != d2) {
+        // throw InvalidChecksumException();
+        throw std::runtime_error("ECIES: InvalidChecksumException");
+    }
+    // std::string E = eciesGetE();
+    // std::string E = _shared_key.substr(0, 32);
+    Bytes E = Bytes(_shared_key.begin(), _shared_key.begin()+32);
+    // return Utils::b2s(_provider->decrypt({SymAlg::Aes256Cbc, Utils::s2b(E), Utils::s2b(c.substr(0, 16))}, Utils::s2b(c.substr(16))));
+    return _provider->decrypt({SymAlg::Aes256Cbc, E, Bytes(c.begin(),c.begin()+16)}, Bytes(c.begin()+16,c.end()));
 }
 
 } // ecc
