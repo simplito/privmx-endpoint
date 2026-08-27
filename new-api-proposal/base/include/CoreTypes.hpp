@@ -23,9 +23,12 @@ namespace cryptoservice {
 using Bytes = std::vector<uint8_t>;
 using BytesView = std::span<const uint8_t>;
 
+/// @brief TO BE REMOVED
 using PrivmxDriverCryptoException = std::runtime_error;
 
-// types of implemented hash functions
+/**
+ * @brief Types of implemented hash functions
+ */
 enum class Hash  {
     Sha1,      // probably used directly only in HMAC
     Sha256,
@@ -34,22 +37,29 @@ enum class Hash  {
    ,Hash160   // probably not used (correction: used in PublicKey::toBase58Address)
 };
 
-// types of implemented symmetric algorithms
+/**
+ * @brief Types of implemented symmetric algorithms
+ */
 enum class SymAlg {
     Aes256Cbc,      // AES 256 CBC, padding
     Aes256CbcNoPad, // AES 256 CBC, no padding
     Aes256Ecb,      // AES 256 ECB, no padding
-    Aes256Gcm       // AES 256 GCM, ACC + tag 
+    Aes256Gcm,      // AES 256 GCM, ACC + tag 
+    Aes256CbcHmac   // AES 256 CBC + HMAC SHA256 with tag
 };
 
-// types of implemented key derivation functions
+/**
+ * @brief Types of implemented key derivation functions
+ */
 enum class Kdf {
     Kdf,        // HMAC-based Key Derivation Function
     Pbkdf2,     // Password-Based Key Derivation Function 2
     Prf12       // TLS 1.2 Pseudo-Random Function 
 };
 
-// formats of keys used in asymmetric cryptography
+/**
+ * @brief Formats of keys used in asymmetric cryptography
+ */
 enum class KeyFormat { 
     Raw, 
     Wif,          // only for IPrivateKey
@@ -60,28 +70,36 @@ enum class KeyFormat {
 //    ,Seed          // only for IExtKey 
 };
 
-// signing schemes (Todo: shorten label names)
+/**
+ * @brief Signing schemes (Todo: shorten label names)
+ */
 enum class SigScheme { 
     EcdsaSecp256k1Compact, 
     EcdsaSecp256k1CompactWithHash 
 };
 
-// types of implemented asymmetric algorithms
+/**
+ * @brief Types of implemented asymmetric algorithms
+ */
 enum class AsymAlg {
-    EccSecp256k1    
+    EccSecp256k1     
 };
 
-
-// arguments used in symmetric cryptography
+/**
+ * @brief Arguments used in symmetric cryptography
+ */
 struct SymParams {
     SymAlg cipher;
     BytesView key;
-    BytesView iv;       // optional for ECB
+    BytesView iv;       // optional for ECB and (encryption only) CBC + HMAC + tag 
     BytesView aad = {}; // only for AEAD
     // Bytes tag;       // not used, for AEAD tag is appended to ciphertext
+    size_t taglen = 0;  // used only for encryption with AES 256 CBC + HMAC (with tag)
 };
 
-// arguments used in key derivation functions 
+/**
+ * @brief Arguments used in key derivation functions 
+ */
 struct KdfParams {
     Kdf kdf;             // algorithm
     size_t length;       // length of resulting key

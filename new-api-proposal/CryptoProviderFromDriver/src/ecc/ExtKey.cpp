@@ -287,6 +287,86 @@ ExtKey ExtKey::deriveHardenedOldPrivmxVersion(Poco::UInt32 index) const {
     return deriveOldPrivmxVersion(index + HIGHEST_BIT);
 }
 
+// new version
+ExtKey ExtKey::deriveB(Poco::UInt32 index, bool old_privmx_version) const {
+    if (!_is_private) {
+        // throw ExtKeyDoesNotHoldPrivateKeyException();
+        throw std::runtime_error("ExtKey: ExtKeyDoesNotHoldPrivateKeyException");
+    }
+    Bytes private_key = Utils::s2b(_ec.getPrivateKey());
+    Poco::UInt32 index_be = Poco::ByteOrder::toBigEndian(index);
+    Bytes data;
+    if (index >= HIGHEST_BIT) {
+        // NOTE:
+        // Privmx implementation skips leanding zeros of private key
+        // BIP32 requires 256-bit long serialized private key
+        auto serialized_key = old_privmx_version ? private_key : Utils::fillTo32b(private_key);
+        // data.append("\0", 1)
+        //     .append(serialized_key)
+        //     .append((char*)&index_be, 4);
+        data.reserve(data.size()+serialized_key.size()+1+4);
+        data.insert(data.end(), (uint8_t) 0);
+        data.insert(data.end(), serialized_key.begin(), serialized_key.end());
+        const uint8_t* d = reinterpret_cast<const uint8_t*>(&index_be); 
+        data.insert(data.end(), d, d+4);        
+    } else {
+        // data.append(_ec.getPublicKey())
+        //     .append((char*)&index_be, 4);
+        Bytes publicKeyData(Utils::s2b(_ec.getPublicKey()));
+        data.reserve(data.size()+publicKeyData.size()+4);
+        data.insert(data.end(), publicKeyData.begin(), publicKeyData.end());
+        const uint8_t* d = reinterpret_cast<const uint8_t*>(&index_be); 
+        data.insert(data.end(), d, d+4);        
+    }
+    // std::string I = Crypto::hmacSha512(_chain_code, data);
+    Bytes I = _provider->hmac(Hash::Sha512,Utils::s2b(_chain_code), data);
+    // std::string IL = I.substr(0, 32);
+    // std::string LR = I.substr(32, 32);
+    Bytes IL(I.begin(),I.begin()+32);
+    Bytes LR(I.begin()+32,I.begin()+64);
+    mpz_class pIL, k, n;
+    mpz_import(pIL.get_mpz_t(), IL.size(), 1, 1, 0, 0, IL.data());
+    mpz_import(k.get_mpz_t(), private_key.size(), 1, 1, 0, 0, private_key.data());
+    // std::string n_str = _ec.getOrder();
+    Bytes n_str = Utils::s2b(_ec.getOrder());
+    mpz_import(n.get_mpz_t(), n_str.size(), 1, 1, 0, 0, n_str.data());
+    if (pIL > n) {
+        return deriveB(index + 1); // to rewrite
+    }
+    mpz_class ki = (pIL + k) % n;
+    if (ki == 0) {
+        return deriveB(index + 1); // to rewrite
+    }
+    size_t ki_size = (mpz_sizeinbase(ki.get_mpz_t(), 2) + 7) / 8;
+    // std::string ki_str(ki_size, 0);
+    Bytes ki_str(ki_size, 0);
+    mpz_export((char*)ki_str.data(), &ki_size, 1, 1, 0, 0, ki.get_mpz_t());
+    // std::string identifier = Crypto::hash160(_ec.getPublicKey()).substr(0, 4);
+    // std::string identifier = NewCrypto::digest(Hash::Hash160, _ec.getPublicKey()).substr(0, 4);
+    Bytes identifier = _provider->digest(Hash::Hash160, Utils::s2b(_ec.getPublicKey()));
+    identifier.resize(4);
+    Poco::UInt32 parent_fingerprint = *reinterpret_cast<Poco::UInt32*>(identifier.data());
+    parent_fingerprint = Poco::ByteOrder::fromBigEndian(parent_fingerprint);
+    return ExtKey(_provider, ki_str, LR, true, _depth + 1, parent_fingerprint, index);
+}
+
+ExtKey ExtKey::deriveB(Poco::UInt32 index) const {
+    return deriveB(index, false);
+}
+
+ExtKey ExtKey::deriveHardenedB(Poco::UInt32 index) const {
+    return deriveB(index + HIGHEST_BIT);
+}
+
+ExtKey ExtKey::deriveOldPrivmxVersionB(Poco::UInt32 index) const {
+    return deriveB(index, true);
+}
+
+ExtKey ExtKey::deriveHardenedOldPrivmxVersionB(Poco::UInt32 index) const {
+    return deriveOldPrivmxVersionB(index + HIGHEST_BIT);
+}
+
+
 std::string ExtKey::toBase58(bool is_private) const {
     if (is_private && !_is_private) {
         // throw ExtKeyDoesNotHoldPrivateKeyException();

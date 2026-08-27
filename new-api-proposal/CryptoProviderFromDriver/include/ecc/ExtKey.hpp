@@ -74,6 +74,12 @@ public:
     virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 
 // new methods    
+    ExtKey deriveB(Poco::UInt32 index) const;
+    ExtKey deriveHardenedB(Poco::UInt32 index) const;
+    // Old Privmx implementation skips leanding zeros of private key
+    ExtKey deriveOldPrivmxVersionB(Poco::UInt32 index) const;
+    ExtKey deriveHardenedOldPrivmxVersionB(Poco::UInt32 index) const;
+
     static ExtKey fromSeed(std::shared_ptr<ISymCryptoProvider> p, BytesView seed);
     static ExtKey fromBase58(std::shared_ptr<ISymCryptoProvider> p, BytesView base58);
     static ExtKey generateRandom(std::shared_ptr<ISymCryptoProvider> p);
@@ -82,7 +88,6 @@ private:
     static const Poco::UInt32 HIGHEST_BIT = 0x80000000;
     static const std::string MASTER_SECRET;
     static Poco::UInt32 read_u32_be(const std::string& raw_key, size_t offset);
-    static Poco::UInt32 read_u32_be_b(BytesView raw_key, size_t offset); // possibly to rewrite
 
     std::string toBase58(bool is_private = false) const;
     ExtKey derive(Poco::UInt32 index, bool old_privmx_version) const;
@@ -94,6 +99,9 @@ private:
     Poco::UInt32 _parent_fingerprint = 0x00000000;
     Poco::UInt32 _index = 0;
 
+// new:    
+    static Poco::UInt32 read_u32_be_b(BytesView raw_key, size_t offset); // possibly to rewrite
+    ExtKey deriveB(Poco::UInt32 index, bool old_privmx_version) const;
     std::shared_ptr<ISymCryptoProvider> _provider;
 };
 

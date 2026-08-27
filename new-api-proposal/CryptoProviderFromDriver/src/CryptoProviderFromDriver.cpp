@@ -333,6 +333,8 @@ Bytes CryptoProviderFromDriver::encrypt(const SymParams& opt, BytesView plaintex
         return encryptConfStr("AES-256-ECB", false, opt.key, opt.iv, plaintext);
     case SymAlg::Aes256Gcm:
         return encryptAeadConfStr("AES-256-GCM", opt.aad, opt.key, opt.iv, plaintext);
+    case SymAlg::Aes256CbcHmac:
+        return aes256CbcHmac256Encrypt(plaintext, opt.key, opt.iv, opt.taglen);
     default:
         throw PrivmxCryptoserviceEncryptionUnknownProtocolException("Symmetric Encryption: Unknown protocol");
         break;
@@ -472,6 +474,8 @@ Bytes CryptoProviderFromDriver::decrypt(const SymParams& opt, BytesView cipherte
         return decryptConfStr("AES-256-ECB", false, opt.key, opt.iv, ciphertext);
     case SymAlg::Aes256Gcm:
         return decryptAeadConfStr("AES-256-GCM", opt.aad, opt.key, opt.iv, ciphertext);
+    case SymAlg::Aes256CbcHmac:
+        return aes256CbcHmac256Decrypt(ciphertext, opt.key, opt.taglen);
     default:
         throw PrivmxCryptoserviceDecryptionUnknownProtocolException("Symmetric Decryption: Unknown protocol");
         break;
@@ -503,6 +507,14 @@ Bytes CryptoProviderFromDriver::decrypt(const SymParams& opt, BytesView cipherte
 
 // Implementation with intention to replace POCO with OPENSSL
 
+/**
+ * @brief Method implementing Key Derivation Function
+ * @param length Length of the output key
+ * @param key Secret key to be used in the computation (KDF key)
+ * @param label Passphrase used in the computation as a secret data
+ * @param hash Hash algorithm to be used in HMAC iterations
+ * @return Output key 
+ */
 Bytes CryptoProviderFromDriver::kdf(size_t length, BytesView key, 
         const std::string& label, Hash hash) {
     const uint8_t* labStr = reinterpret_cast<const uint8_t*>(label.data());
@@ -528,22 +540,41 @@ Bytes CryptoProviderFromDriver::kdf(size_t length, BytesView key,
     return Bytes(result.begin(), result.begin()+length);
 }
 
+/**
+ * @brief Method to derive MAC Key and Encryption Key used in Key Encapsulation Mechanism (KEM) 
+ * @param key Secret key used to derive MAC Key and Encryption Key
+ * @param hash Hash algorithm to be used in Key Derivation Function (KDF)
+ * @param kelen Length of the Encryption Key
+ * @param kmlen Length of the Message Authentication Code Key (MAC Key)
+ * @return Pair (tuple) of keys: MAC Key and Encryption Key
+ */
 std::tuple<Bytes, Bytes> CryptoProviderFromDriver::getKEM(
             BytesView key, Hash hash, size_t kelen, size_t kmlen) {
     Bytes kEM = kdf(kelen + kmlen, key, "key expansion", hash);
     return std::make_tuple(Bytes(kEM.begin(),kEM.begin()+kelen), Bytes(kEM.begin()+kelen,kEM.end()));
 }
 
-Bytes CryptoProviderFromDriver::aes256CbcHmac256Encrypt(BytesView data, BytesView key32, Bytes iv, size_t taglen) {
+/**
+ * @brief Auxiliary method for encryption with algoritm AES 256 CBC with HMAC and tag
+ * @param data Data to be encrypted
+ * @param key32 Shared secret key used to derive encryption key and initialization vector
+ * @param iv Initialization vector (optional)
+ * @param taglen Length of the generated tag
+ * @return Encrypted data combined with tag
+ */
+Bytes CryptoProviderFromDriver::aes256CbcHmac256Encrypt(BytesView data, BytesView key32, BytesView iv, size_t taglen) {
     Bytes kE, kM;
     tie(kE, kM) = getKEM(key32, Hash::Sha256);
+    Bytes iv2;
     if (iv.empty()) {
-        iv = hmac(Hash::Sha256, key32, data);
+        iv2 = hmac(Hash::Sha256, key32, data);
+    } else {
+        iv2 = Bytes(iv.begin(), iv.end());
     }
-    iv.resize(16);
+    iv2.resize(16);
     Bytes data2(16, 0);
     data2.insert(data2.end(),data.begin(),data.end());
-    Bytes cipher = encrypt({SymAlg::Aes256Cbc,kE,iv}, data2);
+    Bytes cipher = encrypt({SymAlg::Aes256Cbc,kE,iv2}, data2);
     Bytes tag = hmac(Hash::Sha256, kM, cipher);
     tag.resize(taglen);
     cipher.reserve(cipher.size()+taglen);
@@ -551,11 +582,20 @@ Bytes CryptoProviderFromDriver::aes256CbcHmac256Encrypt(BytesView data, BytesVie
     return cipher;
 }
 
-Bytes CryptoProviderFromDriver::aes256CbcHmac256Decrypt(Bytes data, BytesView key32, size_t taglen) {
+/**
+ * @brief Auxiliary method for decryption with algoritm AES 256 CBC with HMAC and tag
+ * @param data Encrypted data combined with tag
+ * @param key32 Shared secret key used to derive encryption key and initialization vector
+ * @param iv Initialization vector (optional)
+ * @param taglen Expected length of the tag
+ * @throws PrivmxCryptoserviceDecryptionWrongMessageSecurityTagException If the size of a message with a tag is smaller than the expected tag size
+ * @return Decrypted data
+ */
+Bytes CryptoProviderFromDriver::aes256CbcHmac256Decrypt(BytesView dataWithTag, BytesView key32, size_t taglen) {
     Bytes kE, kM;
     tie(kE, kM) = getKEM(key32, Hash::Sha256);
-    Bytes tag(data.begin(), data.begin() + data.size() - taglen);
-    data.resize(data.size() - taglen);
+    Bytes data(dataWithTag.begin(), dataWithTag.begin() + dataWithTag.size() - taglen);
+    Bytes tag(dataWithTag.begin() + data.size(), dataWithTag.end());
     Bytes rtag = hmac(Hash::Sha256, kM, data);
     rtag.resize(taglen);
     if (tag != rtag) {
@@ -566,23 +606,16 @@ Bytes CryptoProviderFromDriver::aes256CbcHmac256Decrypt(Bytes data, BytesView ke
     return decrypt({SymAlg::Aes256Cbc,kE,iv}, data);
 }
 
-/// @brief 
-/// @param pass 
-/// @param salt 
-/// @param rounds 
-/// @param length 
-/// @param hash 
-/// @return 
 /**
  * @brief Computes Password-Based Key Derivation Function 2
- * @param pass Secret data to be used in the computation
+ * @param pass Secret data to be used in the computation (as KDF key)
  * @param salt Salt to be used in the computation
  * @param rounds Number iterations of the algorithm
- * @param length The length of the derived key
+ * @param length The length of the output key
  * @param hash Hash algorithm to be used in HMAC iterations
  * @throws PrivmxCryptoserviceDigestUnableFetchProtocolException If the given protocol configuration string is not known
  * @throws PrivmxCryptoserviceKdfUnableGetHmacException  If there is an error when computing the HMAC hash
- * @return Derived key
+ * @return Output key
  */
 Bytes CryptoProviderFromDriver::pbkdf2(BytesView pass, BytesView salt, int rounds, size_t length, const char* hash) {
     std::unique_ptr<EVP_MD, decltype(&EVP_MD_free)> 
@@ -603,11 +636,11 @@ Bytes CryptoProviderFromDriver::pbkdf2(BytesView pass, BytesView salt, int round
 
 /**
  * @brief Computes TLS 1.2 Pseudo-Random Function (Key Derivation Function)
- * @param key Secret key to be used in the computation
+ * @param key Secret key to be used in the computation (KDF key)
  * @param seed Seed to be used in the computation
  * @param length The length of the derived key
  * @param hash Hash algorithm to be used in HMAC iterations
- * @return Derived key
+ * @return Output key
  */
 Bytes CryptoProviderFromDriver::prf_tls12(BytesView key, BytesView seed, size_t length,
         Hash hash) {
