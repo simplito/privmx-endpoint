@@ -175,6 +175,21 @@ TEST_F(TreeWireBuild, SeatsEveryMemberAndPublishesEveryInternalNode) {
     }
 }
 
+TEST_F(TreeWireBuild, StaysWithinTheBridgesPerTreeSubmissionCaps) {
+    // The bridge derives the caps on `groupCreate` from the `numLeaves` the request declares — at most N-1 nodes
+    // and 2N-1 edges — so that a tree naming four leaves cannot carry the node and edge lists of a 16 384-leaf
+    // one. That leaves this client no headroom at all: an honest full tree sits exactly on both caps. So the
+    // agreement is pinned here, because the alternative is finding out from a rejected groupCreate.
+    for (const std::uint32_t count : {1u, 2u, 3u, 4u, 5u, 7u, 8u, 9u, 16u, 17u, 31u, 32u, 33u, 64u}) {
+        const auto fixture = build(count);
+        const auto numLeaves = static_cast<std::size_t>(fixture->tree.numLeaves);
+        EXPECT_EQ(numLeaves, count) << "N=" << count;
+        EXPECT_EQ(fixture->tree.leafAssignment.size(), numLeaves) << "N=" << count;
+        EXPECT_LE(fixture->tree.nodes.size(), numLeaves - 1) << "N=" << count;
+        EXPECT_LE(fixture->tree.edges.size(), 2 * numLeaves - 1) << "N=" << count;
+    }
+}
+
 TEST_F(TreeWireBuild, EveryMemberCanClimbTheStateThatWasSubmitted) {
     // The functional counterpart to the shape checks: a state that looks right but nobody can climb is worse than one the server rejects.
     const auto fixture = build(5);

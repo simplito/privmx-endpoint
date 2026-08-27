@@ -639,6 +639,23 @@ TEST_F(LadderKeysEras, RejectsAnEraLinkAddressedToAnEpoch) {
     );
 }
 
+TEST_F(LadderKeysEras, RejectsAnEraLinkThatNamesNoRecipient) {
+    // The bridge pairs the two fields: an `epoch` rung names nobody, the era-crossing kinds must name who they
+    // are for, and both go into the rung's stored identity. A link built without an id would be refused there,
+    // so it is refused here instead — with a reason the caller can act on.
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    const PrivateKey key = PrivateKey::generateRandom();
+    EXPECT_THROW(
+        ladder.buildEraLinks(6, key, {EraLinkRecipient{RungRecipientKind::User, "", key.getPublicKey()}}, AUTHOR, key),
+        std::invalid_argument
+    );
+    EXPECT_THROW(
+        ladder.buildEraLinks(6, key, {EraLinkRecipient{RungRecipientKind::Group, "", key.getPublicKey()}}, AUTHOR, key),
+        std::invalid_argument
+    );
+}
+
 /** SECURITY — a tampered era link is detected and attributed, not silently accepted. */
 TEST_F(LadderKeysEras, SECURITY_DetectsATamperedEraLink) {
     const EpochHistory closed = simulateEpochHistory(6, 1);

@@ -65,6 +65,8 @@ Poco::Dynamic::Var GroupApiVarInterface::removeGroupMember(const Poco::Dynamic::
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::updateGroup(const Poco::Dynamic::Var& args) {
+    // No roster here: seating a member re-keys their path, so membership goes through addGroupMember /
+    // removeGroupMember and `updateGroup` is metadata only — which is also all the bridge's `groupUpdate` accepts.
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "publicMeta");
