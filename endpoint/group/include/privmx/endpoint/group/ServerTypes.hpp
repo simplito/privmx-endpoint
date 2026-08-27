@@ -241,8 +241,8 @@ JSON_STRUCT(GroupDeletedEventData, GROUP_DELETED_EVENT_DATA_FIELDS);
 JSON_STRUCT(GroupChangedEventData, GROUP_CHANGED_EVENT_DATA_FIELDS);
 
 // ── Tree-backed membership + Epoch Ladder RPCs ──────────────────────────────────────────────────────────────
-// The tree fields on GroupCreateModel/AddMember/RemoveMember are sent as one nested object, which is how the
-// bridge validates them: a partially-submitted tree is not a thing the protocol allows.
+// GroupCreateModel sends the whole tree; AddMember/RemoveMember send only a transition against a base the server
+// already holds. Either way it is one required nested object — the bridge rejects a partially-submitted tree.
 
 // Adds one member without advancing the epoch — the operation the tree exists to make cheap.
 #define GROUP_ADD_MEMBER_MODEL_FIELDS(F)                                                                               \
@@ -252,8 +252,7 @@ JSON_STRUCT(GroupChangedEventData, GROUP_CHANGED_EVENT_DATA_FIELDS);
     F(position, int64_t)                                                                                               \
     F(keyId, std::string)                                                                                              \
     F(data, Poco::Dynamic::Var)                                                                                        \
-    F(transition, std::optional<GroupTreeAdditionTransition>)                                                          \
-    F(tree, std::optional<GroupTreeState>)                                                                             \
+    F(transition, GroupTreeAdditionTransition)                                                                         \
     F(expectedKeyVersion, int64_t)
 JSON_STRUCT(GroupAddMemberModel, GROUP_ADD_MEMBER_MODEL_FIELDS);
 
@@ -264,8 +263,7 @@ JSON_STRUCT(GroupAddMemberModel, GROUP_ADD_MEMBER_MODEL_FIELDS);
     F(groupPubKey, std::string)                                                                                        \
     F(keyId, std::string)                                                                                              \
     F(data, Poco::Dynamic::Var)                                                                                        \
-    F(transition, std::optional<GroupTreeTransition>)                                                                  \
-    F(tree, std::optional<GroupTreeState>)                                                                             \
+    F(transition, GroupTreeTransition)                                                                                 \
     F(rungs, std::vector<GroupArchiveRung>)                                                                            \
     F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
     F(expectedKeyVersion, int64_t)                                                                                     \
