@@ -65,6 +65,33 @@ struct module_has_keys : std::false_type {};
 template<typename T>
 struct module_has_keys<T, std::void_t<decltype(std::declval<T>().keys)>> : std::true_type {};
 
+/**
+ * Bridge error codes this base reacts to, straight from the Bridge's `AppException` table.
+ *
+ * Matched against the low half of a `PrivmxException`'s code — the way `GroupApiImpl` matches
+ * `ROTATED_ALREADY` — rather than through the generated exception classes. Naming those here would pull
+ * `privmx::endpoint::server` into every translation unit that includes this header, where it collides with each
+ * module's own `server` namespace. These three are the same for every container, unlike a module's own
+ * "invalid key" code, which stays a parameter.
+ */
+namespace bridge_code {
+constexpr int64_t ACCESS_DENIED = 0x0030;
+constexpr int64_t CONTAINER_GROUP_EPOCH_OUTDATED = 0x600E;
+constexpr int64_t CONTAINER_ROTATED_ALREADY = 0x600F;
+
+/**
+ * The Bridge's code carried by a `PrivmxException`, or -1 if it carries something else.
+ *
+ * A server error is the one whose high half is zero — the same split `ExceptionConverter` switches on. Without
+ * that check a library or transport error whose code happened to end in `0x0030` would read as `ACCESS_DENIED`.
+ */
+inline int64_t of(const privmx::utils::PrivmxException& e) {
+    // Split exactly as ExceptionConverter does — `getCode()` is signed, so it goes through `unsigned` first.
+    unsigned int code = e.getCode();
+    return (code & 0xFFFF0000) == 0 ? static_cast<int64_t>(code & 0x0000FFFF) : -1;
+}
+} // namespace bridge_code
+
 class ModuleBaseApi {
 public:
     using GroupEpochResolver = std::function<std::unordered_map<std::string, GroupEpochInfo>(
@@ -119,6 +146,40 @@ protected:
         const std::string& resourceId,
         const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) -> decltype(moduleObj.contextId, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
+
+    struct ContainerRoster {
+        std::vector<UserWithPubKey> users;
+        std::vector<UserWithPubKey> managers;
+    };
+
+    /**
+     * Puts a public key to each name on a served container's roster.
+     *
+     * A container carries its members as bare user ids, but re-wrapping its key needs a public key per member.
+     * Applications supply those themselves; a re-key the library starts on its own has to find them, and the
+     * Context user list is where they live. Both rosters at once, because that listing is a round trip and a
+     * container's users and managers always come from the same Context. Throws if a member has left it.
+     */
+    ContainerRoster resolveRosterPubKeys(
+        const std::string& contextId,
+        const std::vector<std::string>& userIds,
+        const std::vector<std::string>& managerIds
+    );
+
+    /**
+     * Runs a re-key the library started on its own, absorbing the two outcomes that are not failures.
+     *
+     * A lost race (`CONTAINER_ROTATED_ALREADY`) means somebody else already did the work, so the cached keys are
+     * dropped and the caller carries on. A refusal (`ACCESS_DENIED`) means this caller may write but may not
+     * re-key, which is the one case an automatic re-key cannot paper over: it becomes the
+     * `StaleKeyRekeyRequiredException` such a caller would have been given before any of this existed, rather
+     * than an access error for a call they never made. Anything else is a real failure and is rethrown.
+     *
+     * `UnresolvedGroupGranteeException` is deliberately among those: a caller who belongs to none of the
+     * container's grantee groups cannot read their epoch keys and so cannot re-key at all (see the module's
+     * public `rotate*Keys` docs). It names the group, which is more use than a generic "somebody must re-key".
+     */
+    void runAutoRekey(const std::string& moduleId, const std::function<void()>& rotate);
 
     /** Empty rosters build no per-user key entries — for a module that hands its key over some other way. */
     ContainerCreateContext prepareContainerCreate(
@@ -233,20 +294,45 @@ protected:
         return {location, key, dio, secret, keyEntries};
     }
 
+    /**
+     * Runs an item write against the module's current keys, retrying once if the key turns out to be spent.
+     *
+     * `autoRekey`, when given, makes a stale key (see `ModuleKeys::staleGroups`) recoverable instead of fatal:
+     * the module re-keys the container and the write is retried against the new key. Left null — the default —
+     * a stale key still reaches `assertRekeyNotNeeded` and surfaces as `StaleKeyRekeyRequiredException`.
+     */
     template<typename TReturn>
     TReturn withKeyRefresh(
         const std::string& moduleId,
         int64_t invalidKeyCode,
-        std::function<TReturn(const core::ModuleKeys&)> op
+        std::function<TReturn(const core::ModuleKeys&)> op,
+        const std::function<void()>& autoRekey = nullptr
     ) {
+        auto keys = getModuleKeys(moduleId);
+        // Proactive: the keys we already hold say the container is stale, so the write is doomed — re-key now
+        // rather than spending a round trip being told so.
+        if (autoRekey && isRekeyNeeded(keys)) {
+            autoRekey();
+            keys = getNewModuleKeysAndUpdateCache(moduleId);
+        }
         try {
-            return op(getModuleKeys(moduleId));
+            return op(keys);
         } catch (const privmx::utils::PrivmxException& e) {
-            if (core::ExceptionConverter::convert(e).getCode() == invalidKeyCode) {
+            auto code = core::ExceptionConverter::convert(e).getCode();
+            if (code == invalidKeyCode) {
+                return op(getNewModuleKeysAndUpdateCache(moduleId));
+            }
+            // Reactive, and the only reliable trigger: a cached `staleGroups` is a snapshot that nothing
+            // invalidates when a grantee group's epoch advances (see ContainerKeyCache), so the check above can
+            // be arbitrarily out of date. The bridge's refusal cannot be.
+            if (autoRekey && bridge_code::of(e) == bridge_code::CONTAINER_GROUP_EPOCH_OUTDATED) {
+                autoRekey();
                 return op(getNewModuleKeysAndUpdateCache(moduleId));
             }
             throw;
         }
+        // One retry only: a group that advances its epoch again mid-flight gives the caller a real error rather
+        // than a spin.
     }
 
     /**

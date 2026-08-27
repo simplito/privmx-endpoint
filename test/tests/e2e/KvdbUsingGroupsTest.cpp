@@ -832,13 +832,18 @@ TEST_F(KvdbUsingGroupsTest, caller_in_two_granted_groups_reads) {
     EXPECT_EQ(entry.data.stdString(), "twogroups_data");
 }
 
-TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_is_not_in) {
-    // The KVDB grants Group_1 (user_1 only). user_2 is a direct member but no Group_1 member, so the bridge
-    // narrows `groupKeys` to nothing for it. A re-key by user_2 must still re-wrap the new key to Group_1 —
-    // the grantee list comes from the KVDB, not from what the caller can see.
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_did_not_name) {
+    // The KVDB grants Group_2. user_2 re-keys naming no groups at all, and the new key must still be re-wrapped
+    // to Group_2 — the grantee list comes from the KVDB, not from the caller's argument.
+    //
+    // The grantee is a group the caller belongs to, and that is a constraint rather than a convenience: wrapping
+    // a key to a group needs its current epoch and public key, and a Bridge running the default group policy
+    // (`get: "user"`, `listAll: "none"`) hands those to members only. Re-keying a container granted to a group
+    // the caller is not in therefore cannot work — `resolveGroupEpochs` throws `UnresolvedGroupGranteeException`
+    // — so do not "restore" this test to Group_1, which holds user_1 alone.
+    group::Group granteeGroup;
+    ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(reader->getString("Group_2.groupId")); });
+    ASSERT_EQ(granteeGroup.statusCode, 0);
 
     std::string kvdbId;
     ASSERT_NO_THROW({
@@ -847,7 +852,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_is_
             std::vector<core::UserWithPubKey>{
                 userOf(KUGConnectionType::KUGUser1), userOf(KUGConnectionType::KUGUser2)
             },
-            std::vector<group::Group>{group_1}
+            std::vector<group::Group>{granteeGroup}
         );
     });
     ASSERT_FALSE(kvdbId.empty());
@@ -880,7 +885,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_is_
     EXPECT_EQ(after.statusCode, 0);
     EXPECT_EQ(after.groups.size(), 1);
     if (after.groups.size() == 1) {
-        EXPECT_EQ(after.groups[0].groupId, group_1.groupId);
+        EXPECT_EQ(after.groups[0].groupId, granteeGroup.groupId);
     }
 
     // An entry written under the new key is readable, proving the re-key produced a usable key.
@@ -979,4 +984,77 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
     EXPECT_NO_THROW({ oldEpochEntry = kvdbApi->getEntry(kvdbId, "old_epoch_key"); });
     EXPECT_EQ(oldEpochEntry.statusCode, 0);
     EXPECT_EQ(oldEpochEntry.privateMeta.stdString(), "old_epoch_priv");
+}
+
+TEST_F(KvdbUsingGroupsTest, setEntry_auto_rotates_a_stale_kvdb_key) {
+    // The same ground as the test above, minus the `rotateKvdbKeys` call: a stale key is not the caller's
+    // problem to notice. `setEntry` re-keys the KVDB with its own roster and writes under the new key.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroupWithKeyTree(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                userOf(KUGConnectionType::KUGUser1),
+                userOf(KUGConnectionType::KUGUser2),
+                userOf(KUGConnectionType::KUGUser3)
+            },
+            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            core::Buffer::from("auto_grp_pub"),
+            core::Buffer::from("auto_grp_priv")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    group::Group group;
+    ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
+    ASSERT_EQ(group.statusCode, 0);
+
+    std::string kvdbId;
+    ASSERT_NO_THROW({
+        kvdbId = createKvdbWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<group::Group>{group}
+        );
+    });
+    ASSERT_FALSE(kvdbId.empty());
+
+    ASSERT_NO_THROW({
+        groupApi->removeGroupMember(
+            groupId,
+            reader->getString("Login.user_3_id"),
+            std::vector<core::UserWithPubKey>{
+                userOf(KUGConnectionType::KUGUser1), userOf(KUGConnectionType::KUGUser2)
+            },
+            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            core::Buffer::from("auto_grp_removed_pub"),
+            core::Buffer::from("auto_grp_removed_priv")
+        );
+    });
+
+    kvdb::Kvdb stale;
+    ASSERT_NO_THROW({ stale = kvdbApi->getKvdb(kvdbId); });
+    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(stale.staleGroups.size(), 1);
+    ASSERT_EQ(stale.staleGroups[0], groupId);
+
+    EXPECT_NO_THROW({ setNewEntry(kvdbId, "auto_key", "auto_pub", "auto_priv", "auto_data"); });
+
+    kvdb::Kvdb rekeyed;
+    ASSERT_NO_THROW({ rekeyed = kvdbApi->getKvdb(kvdbId); });
+    EXPECT_EQ(rekeyed.statusCode, 0);
+    EXPECT_TRUE(rekeyed.staleGroups.empty());
+    // Exactly one re-key: a rotation appends one history entry and nothing else wrote to the KVDB.
+    EXPECT_EQ(rekeyed.version, stale.version + 1);
+    EXPECT_EQ(rekeyed.users, stale.users);
+    EXPECT_EQ(rekeyed.managers, stale.managers);
+
+    // user_2 is in G at its new epoch and holds no direct entry: reading proves the new key was wrapped to the
+    // epoch G actually moved to, not the one the KVDB was stuck on.
+    disconnect();
+    connectAs(KUGConnectionType::KUGUser2);
+    kvdb::KvdbEntry entry;
+    EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId, "auto_key"); });
+    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(entry.data.stdString(), "auto_data");
 }

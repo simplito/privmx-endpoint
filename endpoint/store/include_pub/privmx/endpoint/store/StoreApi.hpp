@@ -99,8 +99,13 @@ public:
      * default rotateKeys policy of "user" is in effect.
      *
      * The Store's key is re-wrapped to every one of its grantee groups at that group's current epoch, whether or
-     * not the caller belongs to the group and whether or not it names the group in `groups`: the grantee list comes
-     * from the Store itself, and any epoch public key missing from `groups` is read from the Bridge.
+     * not it names the group in `groups`: the grantee list comes from the Store itself, and any epoch public key
+     * missing from `groups` is read from the Bridge.
+     *
+     * That read is what bounds who may re-key: a group's epoch and public key are readable only by its members
+     * under the default group policy (`get: "user"`, `listAll: "none"`). A caller who belongs to none of the
+     * Store's grantee groups, and cannot supply their epoch keys in `groups` either, gets
+     * `UnresolvedGroupGranteeException` naming the group it could not resolve.
      *
      * @param storeId ID of the Store to re-key
      * @param users current Store users with their public keys

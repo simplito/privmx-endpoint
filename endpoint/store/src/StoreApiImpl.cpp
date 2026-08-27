@@ -182,6 +182,25 @@ void StoreApiImpl::rotateStoreKeys(
     );
 }
 
+void StoreApiImpl::autoRotateStoreKeys(const std::string& storeId) {
+    // A fresh read, not the cached keys: whatever triggered this may have been a stale snapshot, and the roster
+    // and version this re-key is built on have to be the ones the bridge will check it against.
+    server::StoreGetModel getModel;
+    getModel.storeId = storeId;
+    auto currentStore = _serverApi->storeGet(getModel).store;
+    if (!isRekeyNeeded(currentStore)) {
+        // Someone else already re-keyed it. The caller refetches the keys either way, so there is nothing to do.
+        return;
+    }
+    auto roster = resolveRosterPubKeys(currentStore.contextId, currentStore.users, currentStore.managers);
+    runAutoRekey(storeId, [&] {
+        rotateContainerKeys<server::StoreRotateKeysModel>(
+            storeId, currentStore, roster.users, roster.managers, currentStore.version, false, {},
+            [&](const server::StoreRotateKeysModel& model) { _serverApi->storeRotateKeys(model); }
+        );
+    });
+}
+
 void StoreApiImpl::deleteStore(const std::string& storeId) {
     server::StoreDeleteModel model;
     model.storeId = storeId;
@@ -439,12 +458,19 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     if (handle->getFileId().empty()) {
         return withKeyRefresh<std::string>(
             handle->getStoreId(), privmx::endpoint::server::InvalidKeyException().getCode(),
-            [&](const core::ModuleKeys& keys) { return storeFileFinalizeWriteRequest(handle, data, keys); }
+            [&](const core::ModuleKeys& keys) { return storeFileFinalizeWriteRequest(handle, data, keys); },
+            [&] { autoRotateStoreKeys(handle->getStoreId()); }
         );
     }
     server::StoreFileGetModel storeFileGetModel;
     storeFileGetModel.fileId = handle->getFileId();
     auto store = _serverApi->storeFileGet(storeFileGetModel).store;
+    // Overwriting an existing file reaches the Store through the file rather than through `withKeyRefresh`, so
+    // the stale key has to be caught by hand. Re-keying invalidates what was just cached, hence the re-read.
+    if (isRekeyNeeded(store)) {
+        autoRotateStoreKeys(store.id);
+        store = _serverApi->storeFileGet(storeFileGetModel).store;
+    }
     auto storeKey = storeToModuleKeys(store);
     setNewModuleKeysInCache(store.id, storeKey, store.version);
     return storeFileFinalizeWriteRequest(handle, data, storeKey);
@@ -636,6 +662,13 @@ void StoreApiImpl::updateFileMeta(
 
     auto storeFileGetResult = _serverApi->storeFileGet(storeFileGetModel);
     server::Store store = storeFileGetResult.store;
+    // Like the overwrite path in `storeFileFinalizeWrite`: this reaches the Store through the file, so the stale
+    // key is caught by hand rather than by `withKeyRefresh`, and the re-key means the fetch has to be redone.
+    if (isRekeyNeeded(store)) {
+        autoRotateStoreKeys(store.id);
+        storeFileGetResult = _serverApi->storeFileGet(storeFileGetModel);
+        store = storeFileGetResult.store;
+    }
     auto storeKey = storeToModuleKeys(store);
     setNewModuleKeysInCache(store.id, storeKey, store.version);
     server::File file = storeFileGetResult.file;
@@ -643,7 +676,8 @@ void StoreApiImpl::updateFileMeta(
     if (statusCode != 0) {
         throw FileDataIntegrityException("statusCode=" + std::to_string(statusCode));
     }
-    // Guarded here because the server-struct key fetch, unlike the `ModuleKeys` one, does not assert.
+    // Still guarded: the server-struct key fetch, unlike the `ModuleKeys` one, does not assert, and the re-key
+    // above is not guaranteed to have happened — a caller who may not re-key never gets here.
     assertRekeyNotNeeded(store);
     auto key = getAndValidateModuleCurrentEncKey(store, _groupPrivKeyResolver);
     if (key.statusCode != 0) {

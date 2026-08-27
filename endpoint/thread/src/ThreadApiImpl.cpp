@@ -166,6 +166,25 @@ void ThreadApiImpl::rotateThreadKeys(
     );
 }
 
+void ThreadApiImpl::autoRotateThreadKeys(const std::string& threadId) {
+    // A fresh read, not the cached keys: whatever triggered this may have been a stale snapshot, and the roster
+    // and version this re-key is built on have to be the ones the bridge will check it against.
+    server::ThreadGetModel getModel;
+    getModel.threadId = threadId;
+    auto currentThread = _serverApi.threadGet(getModel).thread;
+    if (!isRekeyNeeded(currentThread)) {
+        // Someone else already re-keyed it. The caller refetches the keys either way, so there is nothing to do.
+        return;
+    }
+    auto roster = resolveRosterPubKeys(currentThread.contextId, currentThread.users, currentThread.managers);
+    runAutoRekey(threadId, [&] {
+        rotateContainerKeys<server::ThreadRotateKeysModel>(
+            threadId, currentThread, roster.users, roster.managers, currentThread.version, false, {},
+            [&](const server::ThreadRotateKeysModel& model) { _serverApi.threadRotateKeys(model); }
+        );
+    });
+}
+
 void ThreadApiImpl::deleteThread(const std::string& threadId) {
     server::ThreadDeleteModel model{.threadId = threadId};
     _serverApi.threadDelete(model);
@@ -239,7 +258,8 @@ std::string ThreadApiImpl::sendMessage(
 ) {
     return withKeyRefresh<std::string>(
         threadId, privmx::endpoint::server::InvalidThreadKeyException().getCode(),
-        [&](const core::ModuleKeys& keys) { return sendMessageRequest(threadId, publicMeta, privateMeta, data, keys); }
+        [&](const core::ModuleKeys& keys) { return sendMessageRequest(threadId, publicMeta, privateMeta, data, keys); },
+        [&] { autoRotateThreadKeys(threadId); }
     );
 }
 
@@ -284,7 +304,8 @@ void ThreadApiImpl::updateMessage(
         message.threadId, privmx::endpoint::server::InvalidThreadKeyException().getCode(),
         [&](const core::ModuleKeys& keys) {
             updateMessageRequest(messageId, resourceId, message.threadId, publicMeta, privateMeta, data, keys);
-        }
+        },
+        [&] { autoRotateThreadKeys(message.threadId); }
     );
 }
 

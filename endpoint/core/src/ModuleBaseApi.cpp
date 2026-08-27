@@ -49,6 +49,61 @@ void ModuleBaseApi::initGroupResolvers(const std::optional<GroupResolvers>& reso
     _groupEpochResolver = resolvers->groupEpochs;
 }
 
+ModuleBaseApi::ContainerRoster ModuleBaseApi::resolveRosterPubKeys(
+    const std::string& contextId,
+    const std::vector<std::string>& userIds,
+    const std::vector<std::string>& managerIds
+) {
+    static constexpr int64_t PAGE_SIZE = 100;
+    std::unordered_map<std::string, std::string> pubKeyByUserId;
+    int64_t skip = 0;
+    int64_t totalAvailable = 0;
+    do {
+        auto page = _connection.listContextUsers(
+            contextId, PagingQuery{.skip = skip, .limit = PAGE_SIZE, .sortOrder = "asc"}
+        );
+        if (page.readItems.empty()) {
+            break;
+        }
+        totalAvailable = page.totalAvailable;
+        for (const auto& userInfo : page.readItems) {
+            pubKeyByUserId.emplace(userInfo.user.userId, userInfo.user.pubKey);
+        }
+        skip += static_cast<int64_t>(page.readItems.size());
+    } while (skip < totalAvailable);
+
+    auto resolve = [&](const std::vector<std::string>& ids) {
+        std::vector<UserWithPubKey> resolved;
+        resolved.reserve(ids.size());
+        for (const auto& userId : ids) {
+            auto found = pubKeyByUserId.find(userId);
+            if (found == pubKeyByUserId.end()) {
+                throw UnresolvedContainerMemberException("userId=" + userId);
+            }
+            resolved.push_back(UserWithPubKey{.userId = userId, .pubKey = found->second});
+        }
+        return resolved;
+    };
+    return {.users = resolve(userIds), .managers = resolve(managerIds)};
+}
+
+void ModuleBaseApi::runAutoRekey(const std::string& moduleId, const std::function<void()>& rotate) {
+    try {
+        rotate();
+    } catch (const privmx::utils::PrivmxException& e) {
+        switch (bridge_code::of(e)) {
+        case bridge_code::CONTAINER_ROTATED_ALREADY:
+            invalidateModuleKeysInCache(moduleId);
+            return;
+        case bridge_code::ACCESS_DENIED:
+            throw StaleKeyRekeyRequiredException("automatic re-key of moduleId=" + moduleId + " was denied");
+        default:
+            ExceptionConverter::rethrowAsCoreException(e);
+            throw Exception("ExceptionConverter rethrow error");
+        }
+    }
+}
+
 ContainerCreateContext ModuleBaseApi::prepareContainerCreate(
     const std::string& contextId,
     const std::vector<UserWithPubKey>& users,

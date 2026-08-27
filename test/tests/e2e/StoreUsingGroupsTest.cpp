@@ -861,13 +861,18 @@ TEST_F(StoreUsingGroupsTest, caller_in_two_granted_groups_reads) {
     EXPECT_EQ(f.privateMeta.stdString(), "twogroups_private");
 }
 
-TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_is_not_in) {
-    // The Store grants Group_1 (user_1 only). user_2 is a direct member but no Group_1 member, so the bridge
-    // narrows `groupKeys` to nothing for it. A re-key by user_2 must still re-wrap the new key to Group_1 —
-    // the grantee list comes from the Store, not from what the caller can see.
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_did_not_name) {
+    // The Store grants Group_2. user_2 re-keys naming no groups at all, and the new key must still be re-wrapped
+    // to Group_2 — the grantee list comes from the Store, not from the caller's argument.
+    //
+    // The grantee is a group the caller belongs to, and that is a constraint rather than a convenience: wrapping
+    // a key to a group needs its current epoch and public key, and a Bridge running the default group policy
+    // (`get: "user"`, `listAll: "none"`) hands those to members only. Re-keying a container granted to a group
+    // the caller is not in therefore cannot work — `resolveGroupEpochs` throws `UnresolvedGroupGranteeException`
+    // — so do not "restore" this test to Group_1, which holds user_1 alone.
+    group::Group granteeGroup;
+    ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(reader->getString("Group_2.groupId")); });
+    ASSERT_EQ(granteeGroup.statusCode, 0);
 
     std::string storeId;
     ASSERT_NO_THROW({
@@ -876,7 +881,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_i
             std::vector<core::UserWithPubKey>{
                 userOf(SUGConnectionType::SUGUser1), userOf(SUGConnectionType::SUGUser2)
             },
-            std::vector<group::Group>{group_1}
+            std::vector<group::Group>{granteeGroup}
         );
     });
     ASSERT_FALSE(storeId.empty());
@@ -903,7 +908,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_i
         );
     });
 
-    // The grant survives the re-key, and user_1 — who reads through Group_1 — still resolves the new key.
+    // The grant survives the re-key, and user_1 — who reads through the group — still resolves the new key.
     disconnect();
     connectAs(SUGConnectionType::SUGUser1);
     store::Store after;
@@ -911,7 +916,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_i
     EXPECT_EQ(after.statusCode, 0);
     EXPECT_EQ(after.groups.size(), 1);
     if (after.groups.size() == 1) {
-        EXPECT_EQ(after.groups[0].groupId, group_1.groupId);
+        EXPECT_EQ(after.groups[0].groupId, granteeGroup.groupId);
     }
 
     // A file written under the new key is readable, proving the re-key produced a usable key.
@@ -1015,4 +1020,79 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_clears_staleGroups_after_the_group_
     EXPECT_NO_THROW({ oldEpochFile = storeApi->getFile(oldEpochFileId); });
     EXPECT_EQ(oldEpochFile.statusCode, 0);
     EXPECT_EQ(oldEpochFile.privateMeta.stdString(), "old_epoch_priv");
+}
+
+TEST_F(StoreUsingGroupsTest, uploading_a_file_auto_rotates_a_stale_store_key) {
+    // The same ground as the test above, minus the `rotateStoreKeys` call: a stale key is not the caller's
+    // problem to notice. Closing the file re-keys the Store with its own roster and writes under the new key.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroupWithKeyTree(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                userOf(SUGConnectionType::SUGUser1),
+                userOf(SUGConnectionType::SUGUser2),
+                userOf(SUGConnectionType::SUGUser3)
+            },
+            std::vector<core::UserWithPubKey>{userOf(SUGConnectionType::SUGUser1)},
+            core::Buffer::from("auto_grp_pub"),
+            core::Buffer::from("auto_grp_priv")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    group::Group group;
+    ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
+    ASSERT_EQ(group.statusCode, 0);
+
+    std::string storeId;
+    ASSERT_NO_THROW({
+        storeId = createStoreWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{userOf(SUGConnectionType::SUGUser1)},
+            std::vector<group::Group>{group}
+        );
+    });
+    ASSERT_FALSE(storeId.empty());
+
+    ASSERT_NO_THROW({
+        groupApi->removeGroupMember(
+            groupId,
+            reader->getString("Login.user_3_id"),
+            std::vector<core::UserWithPubKey>{
+                userOf(SUGConnectionType::SUGUser1), userOf(SUGConnectionType::SUGUser2)
+            },
+            std::vector<core::UserWithPubKey>{userOf(SUGConnectionType::SUGUser1)},
+            core::Buffer::from("auto_grp_removed_pub"),
+            core::Buffer::from("auto_grp_removed_priv")
+        );
+    });
+
+    store::Store stale;
+    ASSERT_NO_THROW({ stale = storeApi->getStore(storeId); });
+    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(stale.staleGroups.size(), 1);
+    ASSERT_EQ(stale.staleGroups[0], groupId);
+
+    std::string fileId;
+    EXPECT_NO_THROW({ fileId = uploadFile(storeId, "auto_pub", "auto_priv", "auto_data"); });
+    EXPECT_FALSE(fileId.empty());
+
+    store::Store rekeyed;
+    ASSERT_NO_THROW({ rekeyed = storeApi->getStore(storeId); });
+    EXPECT_EQ(rekeyed.statusCode, 0);
+    EXPECT_TRUE(rekeyed.staleGroups.empty());
+    // Exactly one re-key: a rotation appends one history entry and nothing else wrote to the Store.
+    EXPECT_EQ(rekeyed.version, stale.version + 1);
+    EXPECT_EQ(rekeyed.users, stale.users);
+    EXPECT_EQ(rekeyed.managers, stale.managers);
+
+    // user_2 is in G at its new epoch and holds no direct entry: reading proves the new key was wrapped to the
+    // epoch G actually moved to, not the one the Store was stuck on.
+    disconnect();
+    connectAs(SUGConnectionType::SUGUser2);
+    store::File file;
+    EXPECT_NO_THROW({ file = storeApi->getFile(fileId); });
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(downloadFile(fileId, (int64_t)std::string("auto_data").size()), "auto_data");
 }

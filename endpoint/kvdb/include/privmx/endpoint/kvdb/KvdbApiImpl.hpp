@@ -143,6 +143,14 @@ private:
     );
 
     void assertKvdbExist(const std::string& kvdbId);
+
+    /**
+     * Re-keys a Kvdb whose key has gone stale, without being asked to.
+     *
+     * The roster is the Kvdb's own — a re-key changes nothing but the key — so unlike `rotateKvdbKeys` this
+     * takes no arguments beyond the id and looks the members' public keys up itself.
+     */
+    void autoRotateKvdbKeys(const std::string& kvdbId);
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
