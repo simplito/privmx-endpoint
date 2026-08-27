@@ -39,6 +39,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/store/DynamicTypes.hpp>
 #include <privmx/endpoint/store/FileHandle.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
@@ -65,7 +66,8 @@ public:
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
         const std::shared_ptr<core::HandleManager>& handleManager,
-        size_t serverRequestChunkSize
+        size_t serverRequestChunkSize,
+        const std::optional<group::GroupApi>& groupApi = std::nullopt
     );
 
     ~InboxApiImpl();
@@ -78,7 +80,8 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<inbox::FilesConfig>& filesConfig,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     void updateInbox(
@@ -91,7 +94,17 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+
+    void rotateInboxKeys(
+        const std::string& inboxId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     inbox::Inbox getInbox(const std::string& inboxId, const std::string& type = std::string());

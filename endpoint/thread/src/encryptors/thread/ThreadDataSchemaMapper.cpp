@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <Poco/JSON/Object.h>
 #include <privmx/endpoint/core/Factory.hpp>
+#include <privmx/endpoint/core/Mapper.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 #include "privmx/endpoint/thread/ThreadException.hpp"
@@ -86,10 +87,6 @@ Thread ThreadDataSchemaMapper::toLibThread(
     int64_t statusCode,
     int64_t schemaVersion
 ) {
-    std::vector<core::GroupGrant> groups;
-    for (const auto& g : info.groups) {
-        groups.push_back({.groupId = g.groupId, .role = g.role});
-    }
     return Thread{
         .contextId = info.contextId,
         .threadId = info.id,
@@ -108,7 +105,7 @@ Thread ThreadDataSchemaMapper::toLibThread(
         .messagesCount = info.messages,
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
-        .groups = std::move(groups),
+        .groups = core::Mapper::mapToGroupGrants(info.groups),
         .staleGroups = info.staleGroups
     };
 }

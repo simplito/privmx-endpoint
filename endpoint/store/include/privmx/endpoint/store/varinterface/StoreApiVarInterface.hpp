@@ -17,6 +17,8 @@ limitations under the License.
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/VarDeserializer.hpp"
 #include "privmx/endpoint/store/VarSerializer.hpp"
+#include <optional>
+#include <privmx/endpoint/group/GroupApi.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -50,14 +52,25 @@ public:
         SubscribeFor = 22,
         UnsubscribeFrom = 23,
         BuildSubscriptionQuery = 24,
+        RotateStoreKeys = 25,
     };
 
-    StoreApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
-        : _connection(std::move(connection)), _serializer(serializer) {}
+    /**
+     * `groupApi` is optional: without it the StoreApi is group-unaware, exactly as when `StoreApi::create` is
+     * called with no GroupApi. Passed through the constructor rather than as a `create` argument because a
+     * GroupApi is an object, not something that survives Var serialization.
+     */
+    StoreApiVarInterface(
+        core::Connection connection,
+        const core::VarSerializer& serializer,
+        std::optional<group::GroupApi> groupApi = std::nullopt
+    )
+        : _connection(std::move(connection)), _groupApi(std::move(groupApi)), _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var createStore(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateStore(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var rotateStoreKeys(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteStore(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getStore(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listStores(const Poco::Dynamic::Var& args);
@@ -85,6 +98,7 @@ private:
     static std::map<METHOD, Poco::Dynamic::Var (StoreApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     core::Connection _connection;
+    std::optional<group::GroupApi> _groupApi;
     StoreApi _storeApi;
     core::VarDeserializer _deserializer;
     core::VarSerializer _serializer;

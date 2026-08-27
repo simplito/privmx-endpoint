@@ -9,6 +9,7 @@
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/store/Types.hpp"
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
+#include <privmx/endpoint/group/GroupApi.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -23,12 +24,13 @@ class StoreApi : public privmx::endpoint::core::ExtendedPointer<StoreApiImpl> {
 public:
     /**
      * Creates an instance of 'StoreApi'.
-     * 
+     *
      * @param connection instance of 'Connection'
-     * 
+     * @param groupApi instance of 'GroupApi', required to read and write Stores granted to groups
+     *
      * @return StoreApi object
      */
-    static StoreApi create(core::Connection& connection);
+    static StoreApi create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi = std::nullopt);
 
     /**
      * //doc-gen:ignore
@@ -49,6 +51,7 @@ public:
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
      * @param policies Store's policies
+     * @param groups groups granted access to the Store, with their verified epoch public keys
      * @return created Store ID
      */
     std::string createStore(
@@ -57,7 +60,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**
@@ -73,6 +77,8 @@ public:
      * @param force force update (without checking version)
      * @param forceGenerateNewKey force to regenerate a key for the Store
      * @param policies Store's policies
+     * @param groups groups granted access to the Store, with their verified epoch public keys; the list is
+     * authoritative — an empty list revokes every group grant the Store had
     */
     void updateStore(
         const std::string& storeId,
@@ -83,7 +89,34 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+
+    /**
+     * Re-encrypts the Store key for all current members without changing data, membership, or policy.
+     * Unlike updateStore, this can be called by any Store member (not just managers) when the
+     * default rotateKeys policy of "user" is in effect.
+     *
+     * The Store's key is re-wrapped to every one of its grantee groups at that group's current epoch, whether or
+     * not the caller belongs to the group and whether or not it names the group in `groups`: the grantee list comes
+     * from the Store itself, and any epoch public key missing from `groups` is read from the Bridge.
+     *
+     * @param storeId ID of the Store to re-key
+     * @param users current Store users with their public keys
+     * @param managers current Store managers with their public keys
+     * @param version current Store version (optimistic lock guard)
+     * @param force skip the version check when true
+     * @param groups epoch public keys of grantee groups the caller has verified itself; optional, and groups the
+     * Store does not grant are ignored — a re-key changes no grants
+     */
+    void rotateStoreKeys(
+        const std::string& storeId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**

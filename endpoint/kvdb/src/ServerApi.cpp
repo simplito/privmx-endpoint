@@ -25,6 +25,10 @@ void ServerApi::kvdbUpdate(server::KvdbUpdateModel model) {
     request("kvdbUpdate", model.toJSON());
 }
 
+void ServerApi::kvdbRotateKeys(server::KvdbRotateKeysModel model) {
+    request("kvdbRotateKeys", model.toJSON());
+}
+
 void ServerApi::kvdbDelete(server::KvdbDeleteModel model) {
     request("kvdbDelete", model.toJSON());
 }

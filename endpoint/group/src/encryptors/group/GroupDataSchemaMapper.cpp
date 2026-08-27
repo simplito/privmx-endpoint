@@ -61,8 +61,8 @@ void GroupDataSchemaMapper::assertHeadMatchesVerifiedState(
     // would let a server tamper with it and the matching top-level fields consistently, with nothing to catch it.
     const auto headUsers = std::set<std::string>(groupInfo.users.begin(), groupInfo.users.end());
     const auto headManagers = std::set<std::string>(groupInfo.managers.begin(), groupInfo.managers.end());
-    const bool bridgeEpochMismatch =
-        groupInfo.keyVersion.has_value() && groupInfo.keyVersion.value() != verifiedKeyVersion;
+    const bool bridgeEpochMismatch = groupInfo.keyVersion.has_value() &&
+        groupInfo.keyVersion.value() != verifiedKeyVersion;
     if (verifiedUsers != headUsers ||
         verifiedManagers != headManagers ||
         groupInfo.groupPubKey != verifiedGroupPubKey ||
@@ -87,8 +87,9 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         // An empty window is only meaningful as "you already have everything", and only when the head agrees
         // with what we verified. Anything else is a response with no chain in it.
         const auto onlyCheckpoint = _chainCheckpoints.get(groupInfo.id)->get();
-        if (!onlyCheckpoint.has_value() || firstServed != groupInfo.version + 1
-            || onlyCheckpoint->verifiedVersion != groupInfo.version) {
+        if (!onlyCheckpoint.has_value() ||
+            firstServed != groupInfo.version + 1 ||
+            onlyCheckpoint->verifiedVersion != groupInfo.version) {
             throw UnknownGroupFormatException();
         }
         assertHeadMatchesVerifiedState(

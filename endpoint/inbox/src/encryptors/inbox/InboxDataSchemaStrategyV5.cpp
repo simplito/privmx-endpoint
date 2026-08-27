@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataSchemaStrategyV5.hpp"
+#include "privmx/endpoint/inbox/encryptors/inbox/InboxDataSchemaMapper.hpp"
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
@@ -32,23 +33,10 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaStrategyV5::convert(
     const InboxDataResultV5& raw
 ) const {
     return {
-        Inbox{
-            .inboxId = inbox.id,
-            .contextId = inbox.contextId,
-            .createDate = inbox.createDate,
-            .creator = inbox.creator,
-            .lastModificationDate = inbox.lastModificationDate,
-            .lastModifier = inbox.lastModifier,
-            .users = inbox.users,
-            .managers = inbox.managers,
-            .version = inbox.version,
-            .publicMeta = raw.publicData.publicMeta,
-            .privateMeta = raw.privateData.privateMeta,
-            .filesConfig = raw.filesConfig,
-            .policy = core::Factory::parsePolicyServerObject(inbox.policy),
-            .statusCode = raw.statusCode,
-            .schemaVersion = InboxDataSchema::Version::VERSION_5
-        },
+        InboxDataSchemaMapper::toLibInbox(
+            inbox, raw.publicData.publicMeta, raw.privateData.privateMeta, raw.filesConfig, raw.statusCode,
+            InboxDataSchema::Version::VERSION_5
+        ),
         raw.privateData.dio
     };
 }
@@ -58,23 +46,7 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaStrategyV5::makeErro
     int64_t errorCode
 ) const {
     return {
-        Inbox{
-            .inboxId = inbox.id,
-            .contextId = inbox.contextId,
-            .createDate = inbox.createDate,
-            .creator = inbox.creator,
-            .lastModificationDate = inbox.lastModificationDate,
-            .lastModifier = inbox.lastModifier,
-            .users = inbox.users,
-            .managers = inbox.managers,
-            .version = inbox.version,
-            .publicMeta = {},
-            .privateMeta = {},
-            .filesConfig = {},
-            .policy = core::Factory::parsePolicyServerObject(inbox.policy),
-            .statusCode = errorCode,
-            .schemaVersion = InboxDataSchema::Version::VERSION_5
-        },
+        InboxDataSchemaMapper::toLibInbox(inbox, {}, {}, {}, errorCode, InboxDataSchema::Version::VERSION_5),
         core::DataIntegrityObject{}
     };
 }

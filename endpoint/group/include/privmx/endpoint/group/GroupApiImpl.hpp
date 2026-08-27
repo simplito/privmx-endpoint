@@ -122,6 +122,14 @@ public:
 
     static core::ModuleBaseApi::GroupResolvers makeGroupResolvers(const std::shared_ptr<GroupApiImpl>& groupApiImpl);
 
+    /**
+     * Container-module convenience: feeds straight into `ModuleBaseApi::initGroupResolvers` so a module never has
+     * to branch on whether it was given a GroupApi. Returns nullopt when it wasn't.
+     */
+    static std::optional<core::ModuleBaseApi::GroupResolvers> makeGroupResolvers(
+        const std::optional<GroupApi>& groupApi
+    );
+
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
     void unsubscribeFrom(const std::vector<std::string>& subscriptionIds);
     std::string buildSubscriptionQuery(

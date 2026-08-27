@@ -92,7 +92,12 @@ protected:
         _moduleDataSchemaMapper = std::move(mapper);
     }
 
-    void initGroupResolvers(const GroupResolvers& resolvers);
+    /**
+     * Wires up group key resolution. Takes an optional so a module can hand over whatever its own group module
+     * produced without branching — `std::nullopt` (no GroupApi given) leaves the module group-unaware.
+     * Core cannot reach into the group module, so building the resolvers stays on the group side.
+     */
+    void initGroupResolvers(const std::optional<GroupResolvers>& resolvers);
 
     template<typename ModuleStruct>
     auto getAndValidateModuleCurrentEncKey(
@@ -244,6 +249,24 @@ protected:
         }
     }
 
+    /**
+     * The served container struct reduced to what the key cache and the decryptors need. Identical for every
+     * container type — the schema version comes from the module's own mapper, which the base already holds.
+     */
+    template<typename TContainer>
+    auto containerToModuleKeys(const TContainer& container)
+        -> decltype(container.keys, container.groupKeys, container.staleGroups, container.keyId, ModuleKeys()) {
+        return ModuleKeys{
+            .keys = container.keys,
+            .groupKeys = container.groupKeys,
+            .staleGroups = container.staleGroups,
+            .currentKeyId = container.keyId,
+            .moduleSchemaVersion = _moduleDataSchemaMapper->getDataStructureVersion(container.data.back()),
+            .moduleResourceId = container.resourceId.value_or(""),
+            .contextId = container.contextId
+        };
+    }
+
     DecryptedEncKeyV2 findEncKeyByKeyId(
         std::unordered_map<std::string, DecryptedEncKeyV2> keys,
         const std::string& keyId
@@ -348,6 +371,51 @@ protected:
         std::unordered_map<std::string, GroupEpochInfo> groupCache;
         resolveGroupEpochs(container.contextId, grants, groupCache);
         return grants;
+    }
+
+    /**
+     * Re-encrypts a container's key for its current members and grantee groups, changing nothing else.
+     *
+     * The caller fetches the container (each module has its own get model) and supplies `sendRotateRequest`,
+     * which issues the module's own rotate RPC. Everything between is identical for every container type.
+     */
+    template<typename TRotateModel, typename TContainer, typename TSendRotateRequest>
+    void rotateContainerKeys(
+        const std::string& id,
+        const TContainer& container,
+        const std::vector<UserWithPubKey>& users,
+        const std::vector<UserWithPubKey>& managers,
+        int64_t version,
+        bool force,
+        const std::vector<GroupGrantWithKey>& groups,
+        TSendRotateRequest&& sendRotateRequest
+    ) {
+        static_assert(
+            std::is_base_of_v<server::ContainerRotateKeysModelBase, TRotateModel>,
+            "TRotateModel must inherit from ContainerRotateKeysModelBase"
+        );
+        const auto& currentEntry = container.data.back();
+        auto resourceId = container.resourceId.value_or(EndpointUtils::generateId());
+        auto ctx = prepareContainerUpdate(
+            container, currentEntry, resourceId, users, managers, true, true, _groupPrivKeyResolver
+        );
+
+        TRotateModel model;
+        model.id = id;
+        model.keyId = ctx.key.id;
+        model.keys = ctx.keyEntries;
+        model.version = version;
+        model.force = force;
+
+        // A re-key changes no grants, so the grantees are the container's own — `container.groups`, which the bridge
+        // serves in full. Taking them from `groups` instead would silently drop every grantee the caller did not
+        // name, and a caller can only name the groups it belongs to: `groupKeys`, the one place a container's
+        // grantee groups show up in its payload, is narrowed to those. The bridge rejects a re-key that leaves a
+        // granted group without an entry at the new keyId, so the dropped grantees would fail the whole call.
+        model.groupKeys = buildRekeyGroupKeyEntries(container, resourceId, ctx, groups);
+
+        sendRotateRequest(model);
+        invalidateModuleKeysInCache(id);
     }
 
     template<typename TContainer>

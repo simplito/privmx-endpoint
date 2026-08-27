@@ -11,6 +11,7 @@
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/kvdb/Types.hpp"
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
+#include <privmx/endpoint/group/GroupApi.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -25,12 +26,13 @@ class KvdbApi : public privmx::endpoint::core::ExtendedPointer<KvdbApiImpl> {
 public:
     /**
      * Creates an instance of 'KvdbApi'.
-     * 
+     *
      * @param connection instance of 'Connection'
-     * 
+     * @param groupApi instance of 'GroupApi', required to read and write KVDBs granted to groups
+     *
      * @return KvdbApi object
      */
-    static KvdbApi create(core::Connection& connection);
+    static KvdbApi create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi = std::nullopt);
 
     /**
      * //doc-gen:ignore
@@ -50,6 +52,7 @@ public:
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
      * @param policies KVDB's policies
+     * @param groups groups granted access to the KVDB, with their verified epoch public keys
      * @return ID of the created KVDB
      */
     std::string createKvdb(
@@ -58,7 +61,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**
@@ -73,6 +77,8 @@ public:
      * @param force force update (without checking version)
      * @param forceGenerateNewKey force to regenerate a key for the KVDB
      * @param policies KVDB's policies
+     * @param groups groups granted access to the KVDB, with their verified epoch public keys; the list is
+     * authoritative — an empty list revokes every group grant the KVDB had
      */
     void updateKvdb(
         const std::string& kvdbId,
@@ -83,7 +89,34 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+
+    /**
+     * Re-encrypts the KVDB key for all current members without changing data, membership, or policy.
+     * Unlike updateKvdb, this can be called by any KVDB member (not just managers) when the
+     * default rotateKeys policy of "user" is in effect.
+     *
+     * The KVDB's key is re-wrapped to every one of its grantee groups at that group's current epoch, whether or
+     * not the caller belongs to the group and whether or not it names the group in `groups`: the grantee list comes
+     * from the KVDB itself, and any epoch public key missing from `groups` is read from the Bridge.
+     *
+     * @param kvdbId ID of the KVDB to re-key
+     * @param users current KVDB users with their public keys
+     * @param managers current KVDB managers with their public keys
+     * @param version current KVDB version (optimistic lock guard)
+     * @param force skip the version check when true
+     * @param groups epoch public keys of grantee groups the caller has verified itself; optional, and groups the
+     * KVDB does not grant are ignored — a re-key changes no grants
+     */
+    void rotateKvdbKeys(
+        const std::string& kvdbId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**

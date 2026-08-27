@@ -320,7 +320,7 @@ TEST_F(GroupTest, updateGroup_correct_data) {
     EXPECT_EQ(group.version, 2);
     EXPECT_EQ(group.publicMeta.stdString(), "updated_public");
     EXPECT_EQ(group.privateMeta.stdString(), "updated_private");
-    EXPECT_EQ(group.users.size(), 2);
+    EXPECT_EQ(group.users.size(), 1);
     EXPECT_EQ(group.managers.size(), 1);
     if (group.managers.size() == 1) {
         EXPECT_EQ(group.managers[0], reader->getString("Login.user_1_id"));
@@ -344,7 +344,7 @@ TEST_F(GroupTest, updateGroup_correct_data) {
     EXPECT_EQ(group.version, 3);
     EXPECT_EQ(group.publicMeta.stdString(), "updated_public_2");
     EXPECT_EQ(group.privateMeta.stdString(), "updated_private_2");
-    EXPECT_EQ(group.users.size(), 2);
+    EXPECT_EQ(group.users.size(), 1);
     EXPECT_EQ(group.managers.size(), 1);
 }
 

@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <Poco/JSON/Object.h>
 #include <privmx/endpoint/core/Factory.hpp>
+#include <privmx/endpoint/core/Mapper.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 #include "privmx/endpoint/stream/StreamException.hpp"
@@ -85,7 +86,8 @@ uint32_t StreamRoomDataSchemaMapper::validateDataIntegrity(const server::StreamR
 
 std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStreamRooms(
     const std::vector<server::StreamRoomInfo>& streamRooms,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<StreamRoom>(
         streamRooms, keyProvider, _connection,
@@ -96,15 +98,17 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
         [&](const server::StreamRoomInfo& room, const core::DecryptedEncKey& key) { return decrypt(room, key); },
         [](const server::StreamRoomInfo& room, uint32_t code) {
             return toLibStreamRoom(room, {}, {}, code, StreamRoomDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
 StreamRoom StreamRoomDataSchemaMapper::validateDecryptAndConvertStreamRoom(
     const server::StreamRoomInfo& streamRoom,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertStreamRooms({streamRoom}, keyProvider)[0];
+    return validateDecryptAndConvertStreamRooms({streamRoom}, keyProvider, groupPrivKeyResolver)[0];
 }
 
 StreamRoom StreamRoomDataSchemaMapper::toLibStreamRoom(
@@ -130,6 +134,8 @@ StreamRoom StreamRoomDataSchemaMapper::toLibStreamRoom(
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
         .state = info.state.value_or("closed"),
-        .emptyRoomTtl = info.emptyRoomTtl.value_or(0)
+        .emptyRoomTtl = info.emptyRoomTtl.value_or(0),
+        .groups = core::Mapper::mapToGroupGrants(info.groups),
+        .staleGroups = info.staleGroups
     };
 }

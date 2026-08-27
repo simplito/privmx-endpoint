@@ -46,6 +46,18 @@ struct StreamRoom {
     int64_t schemaVersion;
     std::string state; // "created" | "open" | "closed"
     int64_t emptyRoomTtl;
+
+    /**
+     * list of groups granted access to this StreamRoom
+     */
+    std::vector<core::GroupGrant> groups;
+
+    /**
+     * IDs of the grantee groups that have rotated past the epoch this StreamRoom's current key was wrapped to.
+     * Non-empty means the StreamRoom needs re-keying — rotateStreamRoomKeys() re-wraps its key to the current
+     * epoch of every grantee. Members of a stale group cannot read content written under the current key until then.
+     */
+    std::vector<std::string> staleGroups;
 };
 
 struct SdpWithTypeModel {

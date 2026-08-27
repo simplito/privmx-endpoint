@@ -30,6 +30,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 #include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
 #include "privmx/endpoint/stream/encryptors/streamRoom/StreamRoomDataSchemaMapper.hpp"
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 namespace privmx {
 namespace endpoint {
@@ -43,7 +44,8 @@ public:
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
-        const std::shared_ptr<core::EventMiddleware>& eventMiddleware
+        const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
+        const std::optional<group::GroupApi>& groupApi = std::nullopt
     );
     ~StreamApiLowImpl();
 
@@ -57,7 +59,8 @@ public:
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicyWithoutItem>& policies,
         const std::optional<int64_t>& emptyRoomTtl,
-        const std::string& type = STREAM_TYPE_FILTER_FLAG
+        const std::string& type = STREAM_TYPE_FILTER_FLAG,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     void updateStreamRoom(
@@ -69,7 +72,16 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+    void rotateStreamRoomKeys(
+        const std::string& streamRoomId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
     core::PagingList<StreamRoom> listStreamRooms(
         const std::string& contextId,

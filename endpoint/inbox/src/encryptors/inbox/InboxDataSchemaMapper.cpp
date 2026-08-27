@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <Poco/JSON/Object.h>
 #include <privmx/endpoint/core/Factory.hpp>
+#include <privmx/endpoint/core/Mapper.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 #include "privmx/endpoint/inbox/InboxException.hpp"
@@ -119,7 +120,8 @@ core::ModuleInternalMetaV5 InboxDataSchemaMapper::decryptInternalMeta(
 
 std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
     const std::vector<server::InboxInfo>& inboxes,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Inbox>(
         inboxes, keyProvider, _connection, [&](const server::InboxInfo& inbox) { return validateDataIntegrity(inbox); },
@@ -129,15 +131,17 @@ std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
         [&](const server::InboxInfo& inbox, const core::DecryptedEncKey& key) { return decrypt(inbox, key); },
         [](const server::InboxInfo& inbox, uint32_t code) {
             return toLibInbox(inbox, {}, {}, {}, code, InboxDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
 Inbox InboxDataSchemaMapper::validateDecryptAndConvertInbox(
     const server::InboxInfo& inbox,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertInboxes({inbox}, keyProvider)[0];
+    return validateDecryptAndConvertInboxes({inbox}, keyProvider, groupPrivKeyResolver)[0];
 }
 
 Inbox InboxDataSchemaMapper::toLibInbox(
@@ -163,6 +167,8 @@ Inbox InboxDataSchemaMapper::toLibInbox(
         .filesConfig = filesConfig,
         .policy = core::Factory::parsePolicyServerObject(info.policy),
         .statusCode = statusCode,
-        .schemaVersion = schemaVersion
+        .schemaVersion = schemaVersion,
+        .groups = core::Mapper::mapToGroupGrants(info.groups),
+        .staleGroups = info.staleGroups
     };
 }
