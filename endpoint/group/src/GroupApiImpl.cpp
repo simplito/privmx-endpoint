@@ -378,7 +378,8 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
     const std::optional<std::uint32_t> prunedBelow = asEpoch(archive.archivePrunedBelow);
 
     const keytree::RungKeyGathering gathered = ladder.gatherRungKeys(
-        newEpoch, keytree::GroupKeyResolver::toRungs(archive), keytree::GroupKeyResolver::toRegistry(group, archive),
+        newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive),
+        keytree::GroupKeyResolver::toRegistry(group, archive),
         eraFloor, prunedBelow
     );
     LOG_DEBUG(
@@ -482,7 +483,7 @@ void GroupApiImpl::removeGroupMember(
     model.groupPubKey = newGroupPubKeyStr;
     model.keyId = ctx.key.id;
     model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
-    model.transition = keytree::TreeWire::toTransition(
+    model.transition = keytree::TreeWire::toRemovalTransition(
         keytree::TreeWire::fromGroupInfo(currentGroup), plan, position.value(), currentEpoch
     );
     model.rungs = keytree::TreeWire::toWire(rungs);
@@ -632,7 +633,7 @@ void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server:
         throw GroupDataIntegrityException("RotatedAlready: confirmation tag mismatch");
     }
 
-    noteGroupEpoch(groupId, static_cast<std::uint32_t>(payload.keyVersion));
+    dropNodeKeysIfEpochAdvanced(groupId, static_cast<std::uint32_t>(payload.keyVersion));
     invalidateModuleKeysInCache(groupId);
 }
 
@@ -842,7 +843,8 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
     auto group = _serverApi.groupGet(params).group;
 
     const int64_t currentEpoch = group.keyVersion.value_or(1);
-    noteGroupEpoch(groupId, static_cast<std::uint32_t>(currentEpoch));
+    // Every read learns the epoch here, so a client that missed the `groupUpdated` event still converges.
+    dropNodeKeysIfEpochAdvanced(groupId, static_cast<std::uint32_t>(currentEpoch));
     const auto cache = _treeKeyCaches.get(groupId);
     keytree::GroupKeyResolver resolver(*cache);
     const bool needsDescent = epoch > 0 && epoch < currentEpoch;
@@ -860,7 +862,7 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
     throw core::EncryptionKeyValidationException(describeResolveFailure(resolved));
 }
 
-void GroupApiImpl::noteGroupEpoch(const std::string& groupId, std::uint32_t epoch) {
+void GroupApiImpl::dropNodeKeysIfEpochAdvanced(const std::string& groupId, std::uint32_t epoch) {
     const auto cache = _treeKeyCaches.get(groupId);
     const auto known = cache->highestGrantEpoch();
     if (!known.has_value() || epoch > known.value()) {

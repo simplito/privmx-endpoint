@@ -42,8 +42,6 @@ public:
     );
     ~GroupApiImpl();
 
-    // Grant key distributed by a hidden key tree, not one wrap per member: removal costs the wraps on one path,
-    // addition a single wrap at the same epoch. The grant private key stays out of the metadata on purpose.
     std::string createGroup(
         const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
@@ -53,8 +51,6 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
 
-    // Seats one member at the same epoch; `users`/`managers` are the full roster after the addition. Any member
-    // can climb to the seat's parent, so this is not manager-only cryptographically — the bridge still gates it.
     void addGroupMember(
         const std::string& groupId,
         const core::UserWithPubKey& newMember,
@@ -65,8 +61,6 @@ public:
         const core::Buffer& privateMeta
     );
 
-    // Removes one member and advances the epoch; `users`/`managers` are the roster that remains. Blanks the leaf,
-    // refreshes its direct path, rotates the grant keypair and publishes the ladder rungs — none is safe alone.
     void removeGroupMember(
         const std::string& groupId,
         const std::string& userId,
@@ -97,9 +91,6 @@ public:
     );
 
     static core::ModuleBaseApi::GroupResolvers makeGroupResolvers(const std::shared_ptr<GroupApiImpl>& groupApiImpl);
-
-    // Feeds straight into `ModuleBaseApi::initGroupResolvers` so a module never has to branch on whether it was
-    // given a GroupApi. Returns nullopt when it wasn't.
     static std::optional<core::ModuleBaseApi::GroupResolvers> makeGroupResolvers(
         const std::optional<GroupApi>& groupApi
     );
@@ -111,15 +102,11 @@ public:
         EventSelectorType selectorType,
         const std::string& selectorId
     );
-    // The grant private key for an epoch (`0` means current): climbs from the caller's leaf to the current grant
-    // key, then descends the Epoch Ladder for an older one. Throws EncryptionKeyValidationException if it can't.
     privmx::crypto::PrivateKey resolveGroupPrivKey(const std::string& groupId, int64_t epoch = 0);
 
-    // Renders a resolver failure so policy (era boundary, pruning) reads differently from an attack.
+
     static std::string describeResolveFailure(const keytree::ResolveResult& resolved);
 
-    // Fetches the Epoch Ladder for one descent, windowed to the epochs it passes through, so the request is
-    // proportional to the hop rather than to how long the group has existed.
     server::GroupGetKeyArchiveResult fetchKeyArchive(
         const std::string& groupId,
         int64_t targetEpoch,
@@ -140,22 +127,16 @@ private:
         const std::vector<core::UserWithPubKey>& managers
     );
 
-    // The roster as unparsed base58 keys, indexed by user id — `toTreeMembers` minus the parsing, since a
-    // membership change only wraps to the `log n` leaves beside one path and parsing the rest is wasted.
     static std::map<std::string, std::string> rosterKeyStrings(
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers
     );
 
-    // Climbs for the node keys a plan needs (the seat's parent for an addition, the whole leaf path plus the grant
-    // key for a removal). `cache` is passed in and shared-owned so climb and plan use the same one, alive till done.
     keytree::TreeGroupState climbForPlanning(
         const server::GroupInfo& group,
         const std::shared_ptr<keytree::TreeKeyCache>& cache
     );
 
-    // Builds the complete rung set a rotation owes, recovering the older grant keys from the archive first: a rung
-    // is publishable only at its own epoch, so a short set is permanent and enough of them make the ladder linear.
     std::vector<keytree::ArchiveRung> buildRotationRungs(
         const server::GroupInfo& group,
         std::uint32_t newEpoch,
@@ -165,9 +146,7 @@ private:
         keytree::TreeKeyCache& cache
     );
 
-    // Drops a group's node keys once the server reports a newer epoch — the removal refreshed that path, while the
-    // grant keys stay valid for rungs. Called from every path that learns an epoch, so a missed event converges.
-    void noteGroupEpoch(const std::string& groupId, std::uint32_t epoch);
+    void dropNodeKeysIfEpochAdvanced(const std::string& groupId, std::uint32_t epoch);
 
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
@@ -180,8 +159,6 @@ private:
 
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<GroupDataSchemaMapper> _groupDataSchemaMapper;
-    // Per-group caches of node keys and epoch grant keys, shared by climb and descent; purely an optimisation.
-    // One per group, never one for all: nothing inside is keyed by group and epochs start at 1 everywhere.
     keytree::TreeKeyCacheRegistry _treeKeyCaches;
 };
 

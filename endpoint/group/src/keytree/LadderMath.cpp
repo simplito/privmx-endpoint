@@ -29,7 +29,6 @@ std::vector<std::uint32_t> LadderMath::skipRungTargets(std::uint32_t newEpoch, s
     assertEpoch(newEpoch, "newEpoch");
     assertEpoch(eraFloor, "eraFloor");
     std::vector<std::uint32_t> targets;
-    // Spans double each step: 2, 4, 8, ...
     for (std::uint32_t span = 2; span <= newEpoch; span *= 2) {
         if (newEpoch % span != 0) {
             continue;

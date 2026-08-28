@@ -322,7 +322,7 @@ TEST_F(ResolverConversion, SECURITY_DropsUpwardRungsDuringConversion) {
         server::GroupArchiveRung{8, 8, std::nullopt, std::nullopt, "self", std::nullopt},
         server::GroupArchiveRung{8, 9, std::nullopt, std::nullopt, "upward", std::nullopt},
     };
-    const std::vector<ArchiveRung> rungs = GroupKeyResolver::toRungs(archive);
+    const std::vector<ArchiveRung> rungs = GroupKeyResolver::toDownwardRungs(archive);
     ASSERT_EQ(rungs.size(), 1u) << "only the downward rung may survive conversion";
     EXPECT_EQ(rungs[0].span.at, 8u);
     EXPECT_EQ(rungs[0].span.target, 7u);

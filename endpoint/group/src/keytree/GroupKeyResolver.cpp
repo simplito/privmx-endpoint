@@ -33,8 +33,7 @@ TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
 
     if (group.leafAssignment.has_value()) {
         for (const std::string& userId : group.leafAssignment.value()) {
-            // The wire format uses an empty string for a blank leaf, so that the array needs no nullable
-            // elements. Anything non-empty is an occupied position.
+            // The wire format uses an empty string for a blank leaf.
             if (userId.empty()) {
                 state.leafAssignment.push_back(std::nullopt);
             } else {
@@ -105,7 +104,7 @@ std::optional<ArchiveRung> convertRung(const privmx::endpoint::group::server::Gr
 
 } // namespace
 
-std::vector<ArchiveRung> GroupKeyResolver::toRungs(const server::GroupGetKeyArchiveResult& archive) {
+std::vector<ArchiveRung> GroupKeyResolver::toDownwardRungs(const server::GroupGetKeyArchiveResult& archive) {
     std::vector<ArchiveRung> rungs;
     for (const server::GroupArchiveRung& rung : archive.rungs) {
         const auto converted = convertRung(rung);
@@ -240,7 +239,7 @@ ResolveResult GroupKeyResolver::resolve(
         std::optional<std::uint32_t>(static_cast<std::uint32_t>(archive.archivePrunedBelow.value())) :
         std::nullopt;
     return resolveWith(
-        group, epoch, ownUserKey, toRungs(archive), toRegistry(group, archive),
+        group, epoch, ownUserKey, toDownwardRungs(archive), toRegistry(group, archive),
         static_cast<std::uint32_t>(archive.eraFloor), prunedBelow
     );
 }

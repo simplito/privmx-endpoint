@@ -42,7 +42,6 @@ public:
     // `LadderKeys::buildRungs` reads the older ones to publish skip rungs at the next removal.
     void clearNodeKeys();
 
-    // Lets a caller tell a newer epoch from one it already has.
     std::optional<std::uint32_t> highestGrantEpoch() const;
 
     // For tests and diagnostics.

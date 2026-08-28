@@ -36,19 +36,17 @@ public:
     // The state of a brand-new group: every member seated in order, epoch 1.
     static server::GroupTreeState fromBuildPlan(const BuildPlan& plan, const std::vector<TreeMember>& members);
 
-    // The tree fields of a served group, gathered back into the one object the bridge expects to receive.
     static server::GroupTreeState fromGroupInfo(const server::GroupInfo& group);
 
-    // Runtime view of a served state, so a plan can be computed against what the bridge currently holds.
     static TreeGroupState toRuntime(
         const server::GroupTreeState& tree,
         std::uint32_t epoch,
         const privmx::crypto::PublicKey& grantPublicKey
     );
 
-    // The removal as a delta: the refreshed path with the generations it was planned against, the edges that
-    // refresh owes, and the grant edge at the new epoch — `afterRemoval` minus what the server already holds.
-    static server::GroupTreeTransition toTransition(
+    // The refreshed path with the generations it was planned against, the edges that refresh owes, and the grant
+    // edge at the new epoch — `afterRemoval` minus everything the server already holds.
+    static server::GroupTreeTransition toRemovalTransition(
         const server::GroupTreeState& before,
         const RemovalPlan& plan,
         std::uint32_t position,

@@ -152,7 +152,7 @@ TreeGroupState TreeWire::toRuntime(
     return state;
 }
 
-server::GroupTreeTransition TreeWire::toTransition(
+server::GroupTreeTransition TreeWire::toRemovalTransition(
     const server::GroupTreeState& before,
     const RemovalPlan& plan,
     std::uint32_t position,

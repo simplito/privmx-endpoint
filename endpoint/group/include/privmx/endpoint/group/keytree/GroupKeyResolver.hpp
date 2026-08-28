@@ -62,7 +62,6 @@ public:
         const server::GroupGetKeyArchiveResult& archive
     );
 
-    // The caller's user id, read out of the leaf the bridge pointed at.
     static std::optional<std::string> ownUserId(const server::GroupInfo& group);
 
     static bool hasTree(const server::GroupInfo& group);
@@ -72,9 +71,8 @@ public:
     // An empty string in `leafAssignment` is a blank left by a removal — the wire format's "no member here".
     static TreeGroupState toTreeState(const server::GroupInfo& group);
 
-    // Rungs violating the direction invariant are dropped here, before anything can traverse them: the bridge
-    // rejects them too, but trusting it on this would trust the one party the design assumes may be hostile.
-    static std::vector<ArchiveRung> toRungs(const server::GroupGetKeyArchiveResult& archive);
+    // The bridge rejects upward rungs too, but trusting it on that would trust the one party assumed hostile.
+    static std::vector<ArchiveRung> toDownwardRungs(const server::GroupGetKeyArchiveResult& archive);
 
     // Assembled from `groupPubKey` (current epoch) plus `keyHistory` (past ones).
     static std::vector<EpochRegistryEntry> toRegistry(const server::GroupInfo& group);
