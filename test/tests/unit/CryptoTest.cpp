@@ -92,9 +92,12 @@ TEST_F(CryptoTest, generatePrivateKey) {
 
 TEST_F(CryptoTest, derivePrivateKey) {
     std::string keyInWIF;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     EXPECT_NO_THROW({
         keyInWIF = cryptoApi->derivePrivateKey("pass","salt");
     });
+#pragma GCC diagnostic pop
     EXPECT_NO_THROW({
         privmx::crypto::PrivateKey::fromWIF(keyInWIF);
     });
