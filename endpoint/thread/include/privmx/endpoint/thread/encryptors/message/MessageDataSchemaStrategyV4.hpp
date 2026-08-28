@@ -31,7 +31,7 @@ class MessageDataSchemaStrategyV4 : public core::TypedDataSchemaStrategyDIO<
     DecryptedMessageDataV4,
     Message
 > {
-// clang-format on
+    // clang-format on
 public:
     server::EncryptedMessageDataV4 encrypt(
         const core::Buffer& publicMeta,

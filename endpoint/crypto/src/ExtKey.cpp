@@ -46,7 +46,6 @@ ExtKey::ExtKey() {}
 
 ExtKey::ExtKey(const privmx::crypto::ExtKey& impl) : _impl(std::make_shared<privmx::crypto::ExtKey>(impl)) {}
 
-
 ExtKey ExtKey::derive(uint32_t index) const {
     try {
         return ExtKey(_impl->derive(index));

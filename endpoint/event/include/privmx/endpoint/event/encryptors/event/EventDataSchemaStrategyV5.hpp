@@ -30,7 +30,7 @@ class EventDataSchemaStrategyV5 : public core::TypedDataSchemaStrategy<
     DecryptedEventDataV5,
     ContextCustomEventData
 > {
-// clang-format on
+    // clang-format on
 public:
     DecryptedEventDataV5 decrypt(
         const server::ContextCustomEventData& model,

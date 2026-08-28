@@ -36,7 +36,7 @@ class StoreDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     server::Store,
     Store
 > {
-// clang-format on
+    // clang-format on
 public:
     std::tuple<Store, core::DataIntegrityObject> convert(
         const server::Store& store,

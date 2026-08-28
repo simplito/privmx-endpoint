@@ -87,7 +87,7 @@ std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
 ) {
     std::vector<keytree::TreeMember> members;
     std::map<std::string, std::string> seen; // user id -> the key that took their leaf
-    
+
     std::vector<core::UserWithPubKey> all;
     all.insert(all.end(), users.begin(), users.end());
     all.insert(all.end(), managers.begin(), managers.end());
@@ -232,7 +232,7 @@ std::string GroupApiImpl::createGroup(
 
     auto result = _serverApi.groupCreate(model);
     const auto cache = _treeKeyCaches.get(result.groupId);
-    cache->putGrantKey(1, plan.grantKey); 
+    cache->putGrantKey(1, plan.grantKey);
     for (const auto& minted : plan.nodeKeys) {
         cache->putNodeKey(minted.first, 0, minted.second);
     }
@@ -379,8 +379,7 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
 
     const keytree::RungKeyGathering gathered = ladder.gatherRungKeys(
         newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive),
-        keytree::GroupKeyResolver::toRegistry(group, archive),
-        eraFloor, prunedBelow
+        keytree::GroupKeyResolver::toRegistry(group, archive), eraFloor, prunedBelow
     );
     LOG_DEBUG(
         "ladder gather for epoch ",
@@ -705,9 +704,7 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
                     .keyVersion = summary.keyVersion, .groupPubKey = summary.groupPubKey
                 };
             }
-        } catch (const std::exception& e) {
-            LOG_WARN("[fetchGroupEpochs] groupList by id unavailable: ", e.what())
-        }
+        } catch (const std::exception& e) { LOG_WARN("[fetchGroupEpochs] groupList by id unavailable: ", e.what()) }
     }
     for (const auto& id : groupIds) {
         if (epochs.find(id) != epochs.end())
@@ -715,9 +712,7 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
         try {
             auto fetched = getGroup(id);
             epochs[id] = core::GroupEpochInfo{.keyVersion = fetched.keyVersion, .groupPubKey = fetched.groupPubKey};
-        } catch (const std::exception& e) {
-            LOG_WARN("[fetchGroupEpochs] cannot read group ", id, ": ", e.what())
-        }
+        } catch (const std::exception& e) { LOG_WARN("[fetchGroupEpochs] cannot read group ", id, ": ", e.what()) }
     }
     return epochs;
 }

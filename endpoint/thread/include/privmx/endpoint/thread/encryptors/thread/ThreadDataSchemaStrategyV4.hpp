@@ -32,7 +32,7 @@ class ThreadDataSchemaStrategyV4 : public core::TypedDataSchemaStrategyDIO<
     core::DecryptedModuleDataV4,
     Thread
 > {
-// clang-format on
+    // clang-format on
 public:
     core::DecryptedModuleDataV4 decrypt(
         const server::ThreadInfo& thread,

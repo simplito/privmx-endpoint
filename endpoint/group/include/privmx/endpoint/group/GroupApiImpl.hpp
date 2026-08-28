@@ -104,7 +104,6 @@ public:
     );
     privmx::crypto::PrivateKey resolveGroupPrivKey(const std::string& groupId, int64_t epoch = 0);
 
-
     static std::string describeResolveFailure(const keytree::ResolveResult& resolved);
 
     server::GroupGetKeyArchiveResult fetchKeyArchive(

@@ -35,7 +35,7 @@ class FileDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     server::File,
     File
 > {
-// clang-format on
+    // clang-format on
 public:
     DecryptedFileMetaV5 decryptFileMeta(const server::File& file, const core::DecryptedEncKey& encKey) const;
     std::tuple<File, core::DataIntegrityObject> convert(

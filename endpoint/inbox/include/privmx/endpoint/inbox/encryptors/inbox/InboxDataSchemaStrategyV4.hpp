@@ -33,7 +33,7 @@ class InboxDataSchemaStrategyV4 : public core::TypedDataSchemaStrategy<
     InboxDataResultV4,
     std::tuple<Inbox, core::DataIntegrityObject>
 > {
-// clang-format on
+    // clang-format on
 public:
     InboxDataResultV4 decrypt(const server::InboxInfo& inbox, const core::DecryptedEncKey& encKey) const override;
     std::tuple<Inbox, core::DataIntegrityObject> convert(

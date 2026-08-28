@@ -32,7 +32,7 @@ class StoreDataSchemaStrategyV4 : public core::TypedDataSchemaStrategyDIO<
     core::DecryptedModuleDataV4,
     Store
 > {
-// clang-format on
+    // clang-format on
 public:
     core::DecryptedModuleDataV4 decrypt(const server::Store& store, const core::DecryptedEncKey& encKey) const override;
     std::tuple<Store, core::DataIntegrityObject> convert(

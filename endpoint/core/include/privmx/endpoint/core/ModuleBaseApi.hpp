@@ -406,9 +406,7 @@ protected:
                 );
             } else {
                 grants.push_back(
-                    GroupGrantWithKey{
-                        .groupId = grant.groupId, .role = grant.role, .groupPubKey = {}, .groupEpoch = 0
-                    }
+                    GroupGrantWithKey{.groupId = grant.groupId, .role = grant.role, .groupPubKey = {}, .groupEpoch = 0}
                 );
             }
         }
@@ -550,10 +548,7 @@ auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(
     if constexpr (module_has_group_keys<ModuleStruct>::value) {
         keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
     }
-    auto keysMap =_keyProvider->getKeysAndVerify(
-        keyProviderRequest, 
-        groupPrivKeyResolverOr(groupPrivKeyResolver)
-    );
+    auto keysMap = _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolverOr(groupPrivKeyResolver));
     core::DecryptedEncKeyV2 ret = keysMap.at(location).at(data_entry.keyId);
     return ret;
 }

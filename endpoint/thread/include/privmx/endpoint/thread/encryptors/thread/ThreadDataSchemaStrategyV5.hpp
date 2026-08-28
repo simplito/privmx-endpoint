@@ -35,7 +35,7 @@ class ThreadDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     server::ThreadInfo,
     Thread
 > {
-// clang-format on
+    // clang-format on
 public:
     core::dynamic::EncryptedModuleDataV5 encrypt(
         const core::ModuleDataToEncryptV5& data,

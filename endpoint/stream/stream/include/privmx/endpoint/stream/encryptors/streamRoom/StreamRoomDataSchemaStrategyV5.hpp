@@ -36,7 +36,7 @@ class StreamRoomDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     server::StreamRoomInfo,
     StreamRoom
 > {
-// clang-format on
+    // clang-format on
 public:
     std::tuple<StreamRoom, core::DataIntegrityObject> convert(
         const server::StreamRoomInfo& streamRoom,
