@@ -733,7 +733,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_clears_staleGroups_after_
     // re-wraps to the current epoch and must clear it.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(SRUGConnectionType::SRUGUser1),

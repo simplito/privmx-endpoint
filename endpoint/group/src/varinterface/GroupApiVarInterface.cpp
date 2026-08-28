@@ -9,7 +9,7 @@ using namespace privmx::endpoint::group;
 std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface::*)(const Poco::Dynamic::Var&)>
     GroupApiVarInterface::methodMap = {
         {Create, &GroupApiVarInterface::create},
-        {CreateGroupWithKeyTree, &GroupApiVarInterface::createGroupWithKeyTree},
+        {createGroup, &GroupApiVarInterface::createGroup},
         {AddGroupMember, &GroupApiVarInterface::addGroupMember},
         {RemoveGroupMember, &GroupApiVarInterface::removeGroupMember},
         {UpdateGroup, &GroupApiVarInterface::updateGroup},
@@ -27,7 +27,7 @@ Poco::Dynamic::Var GroupApiVarInterface::create(const Poco::Dynamic::Var& args) 
     return {};
 }
 
-Poco::Dynamic::Var GroupApiVarInterface::createGroupWithKeyTree(const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var GroupApiVarInterface::createGroup(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
@@ -35,7 +35,7 @@ Poco::Dynamic::Var GroupApiVarInterface::createGroupWithKeyTree(const Poco::Dyna
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(5), "policies");
-    auto result = _groupApi.createGroupWithKeyTree(contextId, users, managers, publicMeta, privateMeta, policies);
+    auto result = _groupApi.createGroup(contextId, users, managers, publicMeta, privateMeta, policies);
     return _serializer.serialize(result);
 }
 

@@ -866,7 +866,7 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
     // Group G: user_1 (manager) + user_2 + user_3, at epoch 1.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
@@ -1006,7 +1006,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_threa
     // Create a dynamic group containing user_1 and user_2.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
@@ -1678,7 +1678,7 @@ TEST_F(ThreadUsingGroupsTest, group_manager_role_does_not_grant_container_manage
     // ever sees.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2)
@@ -1762,7 +1762,7 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller
 
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2),
@@ -1867,7 +1867,7 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_clears_staleGroups_after_the_grou
     // epoch to wrap to.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2),
@@ -1955,7 +1955,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_auto_rotates_a_stale_thread_key) {
     // problem to notice. sendMessage sees it, re-keys T with T's own roster, and sends under the new key.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2),
@@ -2041,7 +2041,7 @@ TEST_F(ThreadUsingGroupsTest, auto_rotation_does_not_repeat_a_re_key_another_cli
     // with CONTAINER_ROTATED_ALREADY — is covered by the Bridge's own ThreadRotateKeysTest.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2),
@@ -2148,7 +2148,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_still_reports_a_stale_key_when_the_re_
     // call they never made.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2),

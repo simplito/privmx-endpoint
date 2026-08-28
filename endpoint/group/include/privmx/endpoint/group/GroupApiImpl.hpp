@@ -53,7 +53,7 @@ public:
      * would hand it to every member through the metadata key, and the metadata key would then have to be
      * re-wrapped for everyone on each removal — which is exactly the cost the tree exists to remove.
      */
-    std::string createGroupWithKeyTree(
+    std::string createGroup(
         const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,

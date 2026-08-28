@@ -571,8 +571,8 @@ private:
         {kvdb_buildSubscriptionQueryForSelectedEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->kvdb->buildSubscriptionQueryForSelectedEntry(args);
         }},
-        {group_createGroupWithKeyTree, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->group->createGroupWithKeyTree(args);
+        {group_createGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->createGroup(args);
         }},
         {group_addGroupMember, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->addGroupMember(args);
@@ -1599,8 +1599,8 @@ private:
             "\t\tkvdbId [STRING] - ID of the KVDB\n"
             "\t\tkvdbEntryKey [STRING] - key of the KVDB entry"
         },
-        {group_createGroupWithKeyTree,
-            "createGroupWithKeyTree JSON_ARRAY\n"
+        {group_createGroup,
+            "createGroup JSON_ARRAY\n"
             "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?]\n"
             "\t\tcontextId [STRING] - ID of the Context to create the Group in\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the created Group\n"
@@ -1822,7 +1822,7 @@ private:
         {kvdb_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
         {kvdb_buildSubscriptionQuery, "Generates a subscription query for KVDB events."},
         {kvdb_buildSubscriptionQueryForSelectedEntry, "Generates a subscription query for events of a single KVDB entry."},
-        {group_createGroupWithKeyTree, "Creates a new Group whose key distribution is backed by a hidden key tree."},
+        {group_createGroup, "Creates a new Group whose key distribution is backed by a hidden key tree."},
         {group_addGroupMember, "Adds one member to a tree-backed Group, without advancing its key epoch."},
         {group_removeGroupMember, "Removes one member from a tree-backed Group and advances its key epoch."},
         {group_updateGroup, "Updates an existing Group."},
@@ -1962,7 +1962,7 @@ private:
         {kvdb_unsubscribeFrom, "Unsubscribing from events"},
         {kvdb_buildSubscriptionQuery, "Building subscription query"},
         {kvdb_buildSubscriptionQueryForSelectedEntry, "Building subscription query"},
-        {group_createGroupWithKeyTree, "Creating group"},
+        {group_createGroup, "Creating group"},
         {group_addGroupMember, "Adding group member"},
         {group_removeGroupMember, "Removing group member"},
         {group_updateGroup, "Updating group"},

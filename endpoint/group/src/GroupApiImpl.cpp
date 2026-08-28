@@ -182,7 +182,7 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
     return state;
 }
 
-std::string GroupApiImpl::createGroupWithKeyTree(
+std::string GroupApiImpl::createGroup(
     const std::string& contextId,
     const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers,

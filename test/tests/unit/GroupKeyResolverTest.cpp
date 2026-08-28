@@ -33,7 +33,7 @@ protected:
     };
 
     /**
-     * Builds a tree-backed group exactly as the bridge would serve it after `createGroupWithKeyTree`.
+     * Builds a tree-backed group exactly as the bridge would serve it after `createGroup`.
      *
      * `archive` mirrors the split in the real API: `groupGet` serves the tree, `groupGetKeyArchive` serves the
      * ladder, and the caller hands both to `resolve()`.
