@@ -413,7 +413,14 @@ protected:
                     }
                 );
             } else {
-                grants.push_back(GroupGrantWithKey{.groupId = grant.groupId, .role = grant.role});
+                // The caller named no key for this grantee, so the pair left empty here is precisely what marks the
+                // grant as one for `resolveGroupEpochs` below to fill in — it skips a grant only once both the key
+                // and the epoch are set, and throws rather than re-keying blind if it cannot resolve one.
+                grants.push_back(
+                    GroupGrantWithKey{
+                        .groupId = grant.groupId, .role = grant.role, .groupPubKey = {}, .groupEpoch = 0
+                    }
+                );
             }
         }
         for (const auto& g : callerSupplied) {

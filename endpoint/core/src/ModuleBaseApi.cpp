@@ -60,7 +60,15 @@ ModuleBaseApi::ContainerRoster ModuleBaseApi::resolveRosterPubKeys(
     int64_t totalAvailable = 0;
     do {
         auto page = _connection.listContextUsers(
-            contextId, PagingQuery{.skip = skip, .limit = PAGE_SIZE, .sortOrder = "asc"}
+            contextId,
+            PagingQuery{
+                .skip = skip,
+                .limit = PAGE_SIZE,
+                .sortOrder = "asc",
+                .lastId = std::nullopt,
+                .sortBy = std::nullopt,
+                .queryAsJson = std::nullopt
+            }
         );
         if (page.readItems.empty()) {
             break;

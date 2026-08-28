@@ -284,15 +284,23 @@ void GroupApiImpl::addGroupMember(
     // which every scope carries, so the first read is the caller's own path view; the second asks for what seating
     // that position needs — the nodes beside the new leaf, whose public keys the re-keying wraps to. The seat has
     // no holder yet, so `forUserId` cannot name it, which is what `forPosition` is for.
-    server::GroupGetModel seatModel{.groupId = groupId, .type = {}};
+    server::GroupGetModel seatModel{
+        .groupId = groupId, .type = {}, .scope = {}, .forUserId = {}, .forPosition = {}, .fromVersion = {}
+    };
     withHistoryFrom(seatModel, groupId);
     const auto seating = _serverApi.groupGet(seatModel).group;
     const std::uint32_t position = keytree::TreeKeys::choosePosition(
         keytree::TreeWire::toRuntime(keytree::TreeWire::fromGroupInfo(seating), 0, _userPrivKey.getPublicKey())
     );
 
-    server::GroupGetModel getModel{.groupId = groupId, .type = {}};
-    getModel.forPosition = static_cast<std::int64_t>(position);
+    server::GroupGetModel getModel{
+        .groupId = groupId,
+        .type = {},
+        .scope = {},
+        .forUserId = {},
+        .forPosition = static_cast<std::int64_t>(position),
+        .fromVersion = {}
+    };
     withHistoryFrom(getModel, groupId);
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
@@ -467,8 +475,9 @@ void GroupApiImpl::removeGroupMember(
     // The path view is enough for both halves of a removal: climbing runs on the caller's own path, and planning
     // needs the subject's path and copath — which `forUserId` asks the server to include. What used to be a
     // ~13 MB download at 16 384 members is `O(log n)`.
-    server::GroupGetModel getModel{.groupId = groupId, .type = {}};
-    getModel.forUserId = userId;
+    server::GroupGetModel getModel{
+        .groupId = groupId, .type = {}, .scope = {}, .forUserId = userId, .forPosition = {}, .fromVersion = {}
+    };
     withHistoryFrom(getModel, groupId);
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
@@ -597,7 +606,9 @@ void GroupApiImpl::updateGroup(
     bool allowRotationRetry
 ) {
     // The default path view is enough: this submits no tree, and the roster it re-signs is the one it reads back.
-    server::GroupGetModel getModel{.groupId = groupId, .type = {}};
+    server::GroupGetModel getModel{
+        .groupId = groupId, .type = {}, .scope = {}, .forUserId = {}, .forPosition = {}, .fromVersion = {}
+    };
     withHistoryFrom(getModel, groupId);
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
@@ -695,7 +706,9 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
 
 void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload) {
     // Verifies the winner's key entry and nothing else — no tree is submitted, so the default path view is enough.
-    server::GroupGetModel getModel{.groupId = groupId, .type = {}};
+    server::GroupGetModel getModel{
+        .groupId = groupId, .type = {}, .scope = {}, .forUserId = {}, .forPosition = {}, .fromVersion = {}
+    };
     withHistoryFrom(getModel, groupId);
     auto updatedGroup = _serverApi.groupGet(getModel).group;
 
@@ -730,7 +743,9 @@ void GroupApiImpl::withHistoryFrom(server::GroupGetModel& params, const std::str
 }
 
 Group GroupApiImpl::getGroup(const std::string& groupId) {
-    server::GroupGetModel params{.groupId = groupId, .type = {}};
+    server::GroupGetModel params{
+        .groupId = groupId, .type = {}, .scope = {}, .forUserId = {}, .forPosition = {}, .fromVersion = {}
+    };
     // Only the part of the chain this client has not verified yet. Each entry carries the roster it was written
     // with — ~40 B per member — so a group of 16 384 ships ~650 KB per version, and re-sending versions we have
     // already proved is the bulk of what a read costs. The window has to chain into our checkpoint, which
@@ -783,6 +798,8 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
             .skip = 0,
             .limit = static_cast<int64_t>(batch.size()),
             .sortOrder = "asc",
+            .lastId = std::nullopt,
+            .sortBy = std::nullopt,
             .queryAsJson = privmx::utils::Utils::stringify(query)
         };
         try {
@@ -888,7 +905,9 @@ void GroupApiImpl::processDisconnectedEvent() {
 }
 
 std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
-    server::GroupGetModel params{.groupId = moduleId, .type = {}};
+    server::GroupGetModel params{
+        .groupId = moduleId, .type = {}, .scope = {}, .forUserId = {}, .forPosition = {}, .fromVersion = {}
+    };
     withHistoryFrom(params, moduleId);
     auto group = _serverApi.groupGet(params).group;
     _groupDataSchemaMapper->assertDataIntegrity(group);
@@ -902,6 +921,7 @@ core::ModuleKeys GroupApiImpl::groupToModuleKeys(const server::GroupInfo& group)
         // Always empty: a group distributes its metadata key through `groupKeys`, opened by climbing.
         .keys = {},
         .groupKeys = group.groupKeys.value_or(std::vector<core::server::GroupKeysEntry>{}),
+        .staleGroups = {},
         .currentKeyId = group.data.back().keyId,
         .moduleSchemaVersion = _groupDataSchemaMapper->getDataStructureVersion(group.data.back()),
         .moduleResourceId = group.resourceId.value_or(""),
@@ -929,7 +949,9 @@ std::string GroupApiImpl::buildSubscriptionQuery(
 }
 
 privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& groupId, int64_t epoch) {
-    server::GroupGetModel params{.groupId = groupId, .type = {}};
+    server::GroupGetModel params{
+        .groupId = groupId, .type = {}, .scope = {}, .forUserId = {}, .forPosition = {}, .fromVersion = {}
+    };
     withHistoryFrom(params, groupId);
     auto group = _serverApi.groupGet(params).group;
 
