@@ -28,12 +28,12 @@ limitations under the License.
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include "privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp"
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
-#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>

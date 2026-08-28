@@ -19,10 +19,10 @@ limitations under the License.
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp"
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
-#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/Utils.hpp>
