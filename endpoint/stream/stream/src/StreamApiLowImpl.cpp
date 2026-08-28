@@ -431,7 +431,7 @@ void StreamApiLowImpl::removeStream(const StreamHandle& streamHandle) {
     room->publisherStream.reset();
 }
 
-std::vector<server::StreamSubscription> StreamApiLowImpl::mapSubscriptions(
+std::vector<privmx::endpoint::stream::server::StreamSubscription> StreamApiLowImpl::mapSubscriptions(
     const std::vector<StreamSubscription>& subscriptions
 ) {
     std::vector<server::StreamSubscription> items;
@@ -836,7 +836,7 @@ std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> Strea
 }
 
 std::string StreamApiLowImpl::deriveStreamEncryptionKey(privmx::endpoint::core::DecryptedEncKeyV2 encKey) {
-    return crypto::Crypto::sha256(encKey.key);
+    return privmx::crypto::Crypto::sha256(encKey.key);
 }
 
 core::Buffer StreamApiLowImpl::encryptDataChannelMessage(

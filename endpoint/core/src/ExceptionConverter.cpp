@@ -369,7 +369,3 @@ core::Exception ExceptionConverter::convert(const privmx::utils::PrivmxException
         "Msg: " + (std::string)e.what() + "\nDescription: " + e.getData()
     );
 }
-
-int64_t ExceptionConverter::getCodeOfUserVerificationFailureException() {
-    return privmx::endpoint::core::UserVerificationFailureException().getCode();
-}

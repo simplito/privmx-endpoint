@@ -33,6 +33,7 @@ limitations under the License.
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
@@ -64,33 +65,6 @@ template<typename T, typename = void>
 struct module_has_keys : std::false_type {};
 template<typename T>
 struct module_has_keys<T, std::void_t<decltype(std::declval<T>().keys)>> : std::true_type {};
-
-/**
- * Bridge error codes this base reacts to, straight from the Bridge's `AppException` table.
- *
- * Matched against the low half of a `PrivmxException`'s code — the way `GroupApiImpl` matches
- * `ROTATED_ALREADY` — rather than through the generated exception classes. Naming those here would pull
- * `privmx::endpoint::server` into every translation unit that includes this header, where it collides with each
- * module's own `server` namespace. These three are the same for every container, unlike a module's own
- * "invalid key" code, which stays a parameter.
- */
-namespace bridge_code {
-constexpr int64_t ACCESS_DENIED = 0x0030;
-constexpr int64_t CONTAINER_GROUP_EPOCH_OUTDATED = 0x600E;
-constexpr int64_t CONTAINER_ROTATED_ALREADY = 0x600F;
-
-/**
- * The Bridge's code carried by a `PrivmxException`, or -1 if it carries something else.
- *
- * A server error is the one whose high half is zero — the same split `ExceptionConverter` switches on. Without
- * that check a library or transport error whose code happened to end in `0x0030` would read as `ACCESS_DENIED`.
- */
-inline int64_t of(const privmx::utils::PrivmxException& e) {
-    // Split exactly as ExceptionConverter does — `getCode()` is signed, so it goes through `unsigned` first.
-    unsigned int code = e.getCode();
-    return (code & 0xFFFF0000) == 0 ? static_cast<int64_t>(code & 0x0000FFFF) : -1;
-}
-} // namespace bridge_code
 
 class ModuleBaseApi {
 public:
@@ -169,9 +143,9 @@ protected:
     /**
      * Runs a re-key the library started on its own, absorbing the two outcomes that are not failures.
      *
-     * A lost race (`CONTAINER_ROTATED_ALREADY`) means somebody else already did the work, so the cached keys are
-     * dropped and the caller carries on. A refusal (`ACCESS_DENIED`) means this caller may write but may not
-     * re-key, which is the one case an automatic re-key cannot paper over: it becomes the
+     * A lost race (`ContainerRotatedAlreadyException`) means somebody else already did the work, so the cached
+     * keys are dropped and the caller carries on. A refusal (`AccessDeniedException`) means this caller may write
+     * but may not re-key, which is the one case an automatic re-key cannot paper over: it becomes the
      * `StaleKeyRekeyRequiredException` such a caller would have been given before any of this existed, rather
      * than an access error for a call they never made. Anything else is a real failure and is rethrown.
      *
@@ -325,7 +299,7 @@ protected:
             // Reactive, and the only reliable trigger: a cached `staleGroups` is a snapshot that nothing
             // invalidates when a grantee group's epoch advances (see ContainerKeyCache), so the check above can
             // be arbitrarily out of date. The bridge's refusal cannot be.
-            if (autoRekey && bridge_code::of(e) == bridge_code::CONTAINER_GROUP_EPOCH_OUTDATED) {
+            if (autoRekey && code == privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode()) {
                 autoRekey();
                 return op(getNewModuleKeysAndUpdateCache(moduleId));
             }
