@@ -33,7 +33,7 @@ class FileDataSchemaStrategyV4 : public core::TypedDataSchemaStrategyDIO<
     DecryptedFileMetaV4,
     File
 > {
-    // clang-format on
+// clang-format on
 public:
     DecryptedFileMetaV4 decrypt(const server::File& file, const core::DecryptedEncKey& encKey) const override;
     DecryptedFileMetaV4 decryptFileMeta(const server::File& file, const core::DecryptedEncKey& encKey) const;

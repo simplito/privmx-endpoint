@@ -36,7 +36,7 @@ class KvdbDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     server::KvdbInfo,
     Kvdb
 > {
-    // clang-format on
+// clang-format on
 public:
     std::tuple<Kvdb, core::DataIntegrityObject> convert(
         const server::KvdbInfo& kvdb,

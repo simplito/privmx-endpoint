@@ -76,19 +76,6 @@ GroupApiImpl::~GroupApiImpl() {
     _guardedExecutor.reset();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tree-backed membership (documents/nested_groups/09-hidden-key-tree.md)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * One member, one key.
- *
- * A user id carrying two different public keys used to be caught for free: every module sent one key entry per
- * (user, key) pair and the bridge rejected the two that named the same user. A tree-backed group sends no key
- * entries at all — the roster reaches the bridge as bare ids and the leaf wrap is opaque to it — so nothing
- * downstream can notice any more. Seating the member on either key would be a coin toss between a group they
- * can read and one they cannot.
- */
 static void rejectConflictingRosterKey(const std::string& userId) {
     throw core::InvalidParamsException("user '" + userId + "' is listed with two different public keys");
 }

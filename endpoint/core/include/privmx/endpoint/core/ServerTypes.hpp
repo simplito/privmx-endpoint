@@ -44,9 +44,6 @@ JSON_STRUCT(KeyEntry, KEY_ENTRY_FIELDS);
     F(data, Poco::Dynamic::Var)
 JSON_STRUCT(KeyEntrySet, KEY_ENTRY_SET_FIELDS);
 
-// Group-related types shared across all container modules and the group module. Declared above the container
-// models below, which carry them.
-
 #define GROUP_GRANT_FIELDS(F)                                                                                          \
     F(groupId, std::string)                                                                                            \
     F(role, std::string)

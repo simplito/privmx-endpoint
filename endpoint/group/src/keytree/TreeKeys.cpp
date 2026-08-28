@@ -19,10 +19,6 @@ limitations under the License.
 
 using namespace privmx::endpoint::group::keytree;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TreeKeys — primitives
-// ─────────────────────────────────────────────────────────────────────────────
-
 TreeKeys::TreeKeys(TreeKeyCache& cache) : _cache(cache) {}
 
 std::string TreeKeys::wrapKey(
@@ -45,10 +41,6 @@ std::optional<privmx::crypto::PrivateKey> TreeKeys::unwrapKey(
         return std::nullopt;
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TreeKeys — lookups
-// ─────────────────────────────────────────────────────────────────────────────
 
 const TreeEdge* TreeKeys::findEdgeFromNode(
     const TreeGroupState& state,
@@ -117,10 +109,6 @@ std::uint32_t TreeKeys::choosePosition(const TreeGroupState& state) {
     }
     return static_cast<std::uint32_t>(state.leafAssignment.size());
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TreeKeys — climb
-// ─────────────────────────────────────────────────────────────────────────────
 
 ClimbResult TreeKeys::climbToGrantKey(
     const TreeGroupState& state,
@@ -230,10 +218,6 @@ ClimbResult TreeKeys::climbToGrantKey(
     return result;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TreeKeys — build
-// ─────────────────────────────────────────────────────────────────────────────
-
 BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const privmx::crypto::PrivateKey& signer) {
     if (members.empty()) {
         throw std::invalid_argument("a group needs at least one member");
@@ -295,10 +279,6 @@ BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const privmx::
     plan.wrapCount = static_cast<std::uint32_t>(plan.edges.size());
     return plan;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TreeKeys — addition
-// ─────────────────────────────────────────────────────────────────────────────
 
 AdditionPlan TreeKeys::planAddition(
     const TreeGroupState& state,
@@ -412,10 +392,6 @@ AdditionPlan TreeKeys::planAddition(
     plan.wrapCount = static_cast<std::uint32_t>(plan.edges.size());
     return plan;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TreeKeys — removal
-// ─────────────────────────────────────────────────────────────────────────────
 
 RemovalPlan TreeKeys::planRemoval(
     const TreeGroupState& state,

@@ -33,7 +33,7 @@ class MessageDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
     server::Message,
     Message
 > {
-    // clang-format on
+// clang-format on
 public:
     server::EncryptedMessageDataV5 encrypt(
         const core::Buffer& publicMeta,

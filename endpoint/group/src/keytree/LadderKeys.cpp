@@ -50,10 +50,6 @@ bool LadderKeys::verifyAgainstRegistry(
     return published.value() == recovered.getPublicKey();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Publishing
-// ─────────────────────────────────────────────────────────────────────────────
-
 std::vector<std::uint32_t> LadderKeys::requiredSkipTargets(
     std::uint32_t newEpoch,
     std::uint32_t eraFloor,
@@ -221,10 +217,6 @@ std::vector<ArchiveRung> LadderKeys::buildEraLinks(
     }
     return links;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Descending
-// ─────────────────────────────────────────────────────────────────────────────
 
 DescentResult LadderKeys::descend(
     std::uint32_t from,

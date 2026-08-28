@@ -46,11 +46,6 @@ ExtKey::ExtKey() {}
 
 ExtKey::ExtKey(const privmx::crypto::ExtKey& impl) : _impl(std::make_shared<privmx::crypto::ExtKey>(impl)) {}
 
-// ExtKey::ExtKey(const std::string& key, const std::string& chain_code, bool private_key)
-//     : _impl(std::make_shared<privmx::crypto::ExtKey>(key, chain_code, private_key)) {}
-
-// ExtKey::ExtKey(const std::string& key, const std::string& chain_code, bool private_key, uint8_t depth, uint32_t parent_fingerprint, uint32_t index)
-//     : _impl(std::make_shared<privmx::crypto::ExtKey>(key, chain_code, private_key, depth, parent_fingerprint, index)) {}
 
 ExtKey ExtKey::derive(uint32_t index) const {
     try {
