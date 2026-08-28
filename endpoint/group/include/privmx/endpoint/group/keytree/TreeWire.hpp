@@ -24,17 +24,8 @@ namespace endpoint {
 namespace group {
 namespace keytree {
 
-/**
- * Turns plans into the complete tree state the bridge expects to receive.
- *
- * The server validates a **whole** submitted state rather than a delta, and deliberately so: checking a delta
- * would mean trusting the client's account of what it started from, while checking a full state lets the bridge
- * compare against what it already holds. That puts the merging work here — a removal's refreshed nodes have to
- * replace their predecessors, the edges they invalidated have to go, and the rest has to come through untouched.
- *
- * Every rule the bridge applies to the result is mirrored by a unit test on both sides; this class is where the
- * client's side of that agreement is written down.
- */
+// Turns plans into the tree state the bridge expects. The server validates a whole submitted state rather than a
+// delta — checking a delta would trust the client's account of what it started from — so the merging happens here.
 class TreeWire {
 public:
     static server::GroupTreeNode toWire(const TreeNodeState& node);
@@ -42,31 +33,21 @@ public:
     static server::GroupArchiveRung toWire(const ArchiveRung& rung);
     static std::vector<server::GroupArchiveRung> toWire(const std::vector<ArchiveRung>& rungs);
 
-    /** The state of a brand-new group: every member seated in order, epoch 1. */
+    // The state of a brand-new group: every member seated in order, epoch 1.
     static server::GroupTreeState fromBuildPlan(const BuildPlan& plan, const std::vector<TreeMember>& members);
 
-    /** The tree fields of a served group, gathered back into the one object the bridge expects to receive. */
+    // The tree fields of a served group, gathered back into the one object the bridge expects to receive.
     static server::GroupTreeState fromGroupInfo(const server::GroupInfo& group);
 
-    /** Runtime view of a served state, so a plan can be computed against what the bridge currently holds. */
+    // Runtime view of a served state, so a plan can be computed against what the bridge currently holds.
     static TreeGroupState toRuntime(
         const server::GroupTreeState& tree,
         std::uint32_t epoch,
         const privmx::crypto::PublicKey& grantPublicKey
     );
 
-    /**
-     * The state after a removal: refreshed nodes replace their predecessors, the departing member's edge and
-     * every edge a refresh invalidated are dropped, and the grant edge is re-linked at the new epoch.
-     *
-     * Nothing off the removed leaf's direct path is touched, which is exactly what the bridge checks — and what
-     * keeps a removal proportional to the tree's depth rather than to its size.
-     */
-    /**
-     * The removal as a delta: the refreshed path with the generations it was planned against, the edges that
-     * refresh owes, and the grant edge at the new epoch. What `afterRemoval` produces minus everything the server
-     * already holds.
-     */
+    // The removal as a delta: the refreshed path with the generations it was planned against, the edges that
+    // refresh owes, and the grant edge at the new epoch — `afterRemoval` minus what the server already holds.
     static server::GroupTreeTransition toTransition(
         const server::GroupTreeState& before,
         const RemovalPlan& plan,
@@ -74,35 +55,24 @@ public:
         std::int64_t baseKeyVersion
     );
 
-    /**
-     * The addition as a delta: the re-keyed path with the generations it was planned against, the edges that
-     * re-keying owes, and the grant edge re-issued to the new root at the **unchanged** epoch.
-     *
-     * `previousGenerations` says which nodes the server already holds, so the delta can distinguish a node it
-     * advanced from one growth minted. It comes from the same path view the plan was built against — the whole
-     * tree is never needed on either side.
-     */
+    // The addition as a delta, the grant edge re-issued to the new root at the unchanged epoch.
+    // `previousGenerations` says which nodes the server holds, so an advanced node reads differently from a minted one.
     static server::GroupTreeAdditionTransition toAdditionTransition(
         const AdditionPlan& plan,
         const std::map<std::uint32_t, std::uint32_t>& previousGenerations,
         std::int64_t baseKeyVersion
     );
 
+    // Refreshed nodes replace their predecessors and the edges they invalidated are dropped. Nothing off the
+    // removed leaf's direct path is touched, which is what the bridge checks.
     static server::GroupTreeState afterRemoval(
         const server::GroupTreeState& before,
         const RemovalPlan& plan,
         std::uint32_t position
     );
 
-    /**
-     * The state after an addition: the newcomer takes a seat and the nodes on their path carry the keys the plan
-     * minted, replacing the ones held before. The epoch does not move — that is what keeps every container the
-     * group can read valid.
-     *
-     * Edges the plan supersedes are dropped, as are edges whose parent is no longer the child's parent: growth
-     * re-parents nodes at the truncated right edge, and an edge describing the old topology would leave the state
-     * self-contradictory.
-     */
+    // The epoch does not move, which is what keeps every container the group can read valid. Edges the plan
+    // supersedes are dropped, as are edges growth re-parented — those would describe a topology no longer there.
     static server::GroupTreeState afterAddition(
         const server::GroupTreeState& before,
         const AdditionPlan& plan,

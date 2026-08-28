@@ -22,9 +22,8 @@ void TreeKeyCache::putNodeKey(
     const privmx::crypto::PrivateKey& key
 ) {
     std::unique_lock lock(_mutex);
-    // `insert_or_assign`, not `operator[]`: subscripting default-constructs the value first, and a
-    // default-constructed EC key **generates a fresh keypair** (`ECC::ECC()` calls `genPair()`). That is ~225 us
-    // of thrown-away work per insertion — a thousand times the cost of the insertion itself.
+    // `insert_or_assign`, not `operator[]`: subscripting default-constructs the value, and a default-constructed
+    // EC key generates a fresh keypair (`ECC::ECC()` calls `genPair()`) — ~225 us thrown away per insertion.
     _nodeKeys.insert_or_assign(std::make_pair(nodeIndex, generation), key);
 }
 

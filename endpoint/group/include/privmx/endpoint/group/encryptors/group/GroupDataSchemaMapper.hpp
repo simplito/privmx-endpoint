@@ -43,23 +43,19 @@ public:
 
     void assertDataIntegrity(const server::GroupInfo& groupInfo);
 
-    /**
-     * How much of this group's chain has already been verified, so a read can ask for only the rest.
-     *
-     * Zero when the group has never been seen. The caller turns this into `fromVersion`; the window it gets back
-     * has to chain into exactly this point, which `assertDataIntegrity` checks rather than assumes.
-     */
+    // How much of this group's chain is already verified, so a read can ask for only the rest; zero when unseen.
+    // The caller turns it into `fromVersion`, and `assertDataIntegrity` checks the window chains into this point.
     int64_t verifiedVersion(const std::string& groupId);
 
     uint32_t validateDataIntegrity(const server::GroupInfo& groupInfo);
 
-    /** Drops one group's chain checkpoint. Call when the group is gone or the session was reset. */
+    // Call when the group is gone or the session was reset.
     void dropChainCheckpoint(const std::string& groupId);
 
-    /** Drops every group's chain checkpoint. Call on connect/disconnect, mirroring the tree-key cache. */
+    // Call on connect/disconnect, mirroring the tree-key cache.
     void dropAllChainCheckpoints();
 
-    /** The stored checkpoint for one group, if any. For tests and diagnostics. */
+    // For tests and diagnostics.
     std::optional<checkpoint::ChainCheckpoint::Snapshot> peekChainCheckpoint(const std::string& groupId) const;
 
     std::vector<Group> validateDecryptAndConvertGroups(
@@ -82,11 +78,8 @@ public:
         int64_t schemaVersion
     );
 
-    /**
-     * A listed group, straight across. Nothing to decrypt and nothing to verify: a summary carries no
-     * encrypted data, no key entries and no history, so there is no key request, no integrity check and no
-     * chain checkpoint to advance here.
-     */
+    // Straight across: a summary carries no encrypted data, no key entries and no history, so there is nothing
+    // to decrypt, verify or checkpoint here.
     static GroupSummary toLibGroupSummary(const server::GroupSummary& info);
 
     // Returns the decrypted group private key from the head data entry.
@@ -100,7 +93,7 @@ public:
     ) override;
 
 private:
-    /** Head fields against state this call actually verified — see the definition for why not against `history`. */
+    // Head fields against state this call actually verified — see the definition for why not against `history`.
     void assertHeadMatchesVerifiedState(
         const server::GroupInfo& groupInfo,
         const std::set<std::string>& verifiedUsers,
@@ -113,8 +106,7 @@ private:
     std::shared_ptr<GroupDataSchemaStrategyV5> _strategyV5;
     core::DataEncryptorV4 _dataEncryptor;
     GroupDataEncryptorV5 _groupEncryptor;
-    /** Per-group chain-verification checkpoints, so a warm `assertDataIntegrity` skips already-verified
-     *  entries instead of re-proving the whole history from genesis on every call. */
+    // So a warm `assertDataIntegrity` skips already-verified entries instead of re-proving history from genesis.
     checkpoint::ChainCheckpointRegistry _chainCheckpoints;
 };
 

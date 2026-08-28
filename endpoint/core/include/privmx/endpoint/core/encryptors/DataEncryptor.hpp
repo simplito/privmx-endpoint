@@ -45,15 +45,6 @@ public:
         return pubKey.verifyCompactSignatureWithHash(data, signature);
     }
 
-    static bool hasSign(const Pson::BinaryString& data) {
-        Pson::BinaryString plain = data;
-        if (plain[0] == 1) {
-            // Temporary Solution
-            return true;
-        }
-        return false;
-    }
-
     static std::tuple<Pson::BinaryString, Pson::BinaryString> extractSignAndDataBuff(const Pson::BinaryString& data) {
         Pson::BinaryString plain = data;
         if (plain[0] == 1) {

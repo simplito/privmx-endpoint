@@ -124,11 +124,8 @@ ClimbResult TreeKeys::climbToGrantKey(
             result.reachedNode = TreeMath::root(state.numLeaves);
             return result;
         }
-        // Not the key the server publishes for this epoch. Two things look like this: our own staleness, or a
-        // server equivocating about an epoch we already verified. Do not decide here — evict and walk. The full
-        // climb ends at the same check against `state.grantPublicKey` below, but on a key just recovered from the
-        // server's own edges, so it reports `Tampered` on real evidence. Failing here instead would wedge the
-        // group for good, because nothing else ever evicts a grant key.
+        // Not the key the server publishes for this epoch — our staleness or its equivocation, indistinguishable
+        // here. Evict and walk: the same check below runs on a freshly recovered key, so `Tampered` is real evidence.
         _cache.forgetGrantKey(state.epoch);
     }
 
@@ -293,11 +290,8 @@ AdditionPlan TreeKeys::planAddition(
     const std::uint32_t newRoot = TreeMath::root(plan.newNumLeaves);
     const std::vector<std::uint32_t> newPath = TreeMath::directPath(plan.position, plan.newNumLeaves);
 
-    // A fresh keypair for every node on the new leaf's path. Wrapping to an EXISTING parent key would be one
-    // wrap instead of `log n`, and was the original design — but it requires holding that parent's private key,
-    // and a caller only ever recovers keys by climbing from their own leaf. The only lowest-level node on that
-    // climb is their own parent, so borrowing works for exactly one seat in the tree: the one beside them.
-    // Minting instead means every wrap goes to a PUBLIC key, and the seat can be anywhere.
+    // A fresh keypair for every node on the new leaf's path. Wrapping to an existing parent key would be one wrap
+    // instead of `log n`, but needs that parent's private key — which a climb only yields for the seat beside you.
     std::map<std::uint32_t, privmx::crypto::PrivateKey> refreshed;
     std::map<std::uint32_t, std::uint32_t> generationOf;
     for (const std::uint32_t node : newPath) {
@@ -324,8 +318,7 @@ AdditionPlan TreeKeys::planAddition(
                     edge.blob = wrapKey(nodeKey, newMember.publicKey, signer);
                 } else {
                     // A sibling leaf: the refresh replaced the key their climb runs through, so they need an edge
-                    // to the new one. Their public key is not part of the tree state — the leaf *is* their key,
-                    // and only its holder publishes it — so it comes from the roster.
+                    // to the new one. Their public key is not part of the tree state, so it comes from the roster.
                     const bool seated = position < state.leafAssignment.size() &&
                         state.leafAssignment[position].has_value();
                     if (!seated) {
@@ -372,10 +365,8 @@ AdditionPlan TreeKeys::planAddition(
         plan.newRootKey = refreshed.at(newRoot);
     }
 
-    // The root is on the path, so its key changed and the grant edge has to be re-issued to it — on growth and
-    // when filling a blank alike. The grant keypair ITSELF is unchanged, `parentGeneration` stays at the current
-    // epoch, and so no container holding a wrap of the grant key becomes stale. That is the whole economy of a
-    // cheap addition, and it is why the grant keypair sits one indirection above the root.
+    // The root is on the path, so the grant edge is re-issued to its new key. The grant keypair itself is unchanged,
+    // so no container holding a wrap of it goes stale — which is why it sits one indirection above the root.
     const auto grantKey = _cache.getGrantKey(state.epoch);
     if (!grantKey.has_value()) {
         throw std::invalid_argument("re-linking the grant edge needs the grant key; climb the tree first");
@@ -408,9 +399,8 @@ RemovalPlan TreeKeys::planRemoval(
     const std::uint32_t leavingLeaf = TreeMath::leafNode(position.value());
     const std::vector<std::uint32_t> path = TreeMath::directPath(position.value(), state.numLeaves);
 
-    // Every node on the path gets a FRESH independent random keypair. Deriving it from the key it replaces
-    // would let the removed member compute forward and defeat the whole construction; the server cannot detect
-    // that, so it lives or dies on this line.
+    // Every node on the path gets a fresh independent random keypair. Deriving it from the key it replaces would
+    // let the removed member compute forward, and the server cannot detect that — it lives or dies on this line.
     std::map<std::uint32_t, privmx::crypto::PrivateKey> refreshed;
     for (const std::uint32_t node : path) {
         refreshed[node] = privmx::crypto::PrivateKey::generateRandom();

@@ -24,35 +24,20 @@ namespace endpoint {
 namespace group {
 namespace keytree {
 
-/**
- * The per-group stores for one connection.
- *
- * Scoping lives here rather than inside `TreeKeyCache` so that `TreeKeys`, `LadderKeys` and `GroupKeyResolver` —
- * none of which has any use for a group id — keep working on a plain store. The id is known at the `GroupApiImpl`
- * boundary and nowhere deeper, which is exactly where this sits.
- *
- * Invalidation **detaches** a store instead of emptying it. That is what makes it safe to drop a group's keys
- * while another thread is mid-climb: the climber holds a `shared_ptr` and keeps writing into what is now a
- * private orphan, which dies with the operation. Emptying a shared store would instead let an in-flight climb
- * write stale keys back in after the drop.
- */
+// The per-group stores for one connection. Invalidation detaches a store instead of emptying it, so a climb
+// already in flight keeps writing into a private orphan rather than putting stale keys back into a live store.
 class TreeKeyCacheRegistry {
 public:
-    /**
-     * The store for one group, created on first use. Never null.
-     *
-     * **Bind the result to a named local** before taking a reference into it. `TreeKeys tree(*registry.get(id))`
-     * leaves `tree` holding a reference into a store whose last owner died at the end of the full expression.
-     */
+    // Created on first use, never null. Bind the result to a named local before taking a reference into it —
+    // `TreeKeys tree(*registry.get(id))` references a store whose last owner dies at the end of the expression.
     std::shared_ptr<TreeKeyCache> get(const std::string& groupId);
 
-    /** Detaches one group's store. Handles already taken stay valid; they just stop being shared. */
+    // Handles already taken stay valid; they just stop being shared.
     void drop(const std::string& groupId);
 
-    /** Detaches every store. */
     void dropAll();
 
-    /** Number of groups with a live store. For tests and diagnostics. */
+    // For tests and diagnostics.
     std::size_t groupCount() const;
 
 private:

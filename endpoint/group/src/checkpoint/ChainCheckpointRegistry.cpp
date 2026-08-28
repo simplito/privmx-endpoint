@@ -17,9 +17,8 @@ limitations under the License.
 using namespace privmx::endpoint::group::checkpoint;
 
 std::shared_ptr<ChainCheckpoint> ChainCheckpointRegistry::get(const std::string& groupId) {
-    // A unique_lock throughout, so get-or-create is atomic — see TreeKeyCacheRegistry::get for why a shared_lock
-    // fast path would be wrong here too: two threads racing on the same group would each build a store, and one
-    // would keep filling an orphan nobody reads.
+    // A unique_lock throughout, so get-or-create is atomic: with a shared_lock fast path two threads racing on the
+    // same group would each build a store, and one would keep filling an orphan nobody reads.
     std::unique_lock lock(_mutex);
     const auto it = _stores.find(groupId);
     if (it != _stores.end()) {

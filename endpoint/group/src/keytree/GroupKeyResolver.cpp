@@ -78,13 +78,8 @@ TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
 
 namespace {
 
-/**
- * Converts one wire rung, dropping it when it does not point downwards.
- *
- * Re-checking the direction client-side is not redundancy for its own sake: the bridge enforces it, but taking
- * the server's word for it would mean trusting the one party the threat model assumes may be hostile — and an
- * upward rung is exactly the shape that hands a removed member a key from after their removal.
- */
+// Drops a rung that does not point downwards. The bridge enforces this too, but taking its word for it would trust
+// the one party the threat model assumes may be hostile — an upward rung hands a removed member a later key.
 std::optional<ArchiveRung> convertRung(const privmx::endpoint::group::server::GroupArchiveRung& rung) {
     if (rung.targetKeyVersion >= rung.atKeyVersion) {
         return std::nullopt;
@@ -181,13 +176,8 @@ std::optional<std::string> GroupKeyResolver::ownUserId(const server::GroupInfo& 
     return userId;
 }
 
-/**
- * Resolves through the tree, then through the ladder if an older epoch was asked for.
- *
- * `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group because the
- * group no longer carries them: the bridge serves the ladder from `groupGetKeyArchive`, and keeping the walk
- * ignorant of where they came from is what lets the verification at each hop be written once.
- */
+// `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group, which no longer
+// carries them: the bridge serves the ladder separately, and the walk stays ignorant of where they came from.
 ResolveResult GroupKeyResolver::resolveWith(
     const server::GroupInfo& group,
     std::int64_t epoch,
