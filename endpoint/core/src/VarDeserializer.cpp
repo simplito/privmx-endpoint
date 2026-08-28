@@ -119,6 +119,7 @@ ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutIt
         .ownerCanBeRemovedFromManagers = deserializeOptional<std::string>(
             obj->get("ownerCanBeRemovedFromManagers"), name + ".ownerCanBeRemovedFromManagers"
         ),
+        .rotateKeys = deserializeOptional<std::string>(obj->get("rotateKeys"), name + ".rotateKeys"),
         .forwardSecrecy = deserializeOptional<std::string>(obj->get("forwardSecrecy"), name + ".forwardSecrecy"),
     };
 }
