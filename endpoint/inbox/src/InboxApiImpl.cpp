@@ -37,7 +37,6 @@ limitations under the License.
 using namespace privmx::endpoint::inbox;
 using namespace privmx::endpoint;
 using namespace privmx::utils;
-using namespace privmx;
 
 const Poco::Int64 InboxApiImpl::_CHUNK_SIZE = 128 * 1024;
 
@@ -97,8 +96,8 @@ std::string InboxApiImpl::createInbox(
 ) {
 
     auto inboxKey = _keyProvider->generateKey();
-    auto eccKey = crypto::ECC::fromPrivateKey(inboxKey.key);
-    auto privateKey = crypto::PrivateKey(eccKey);
+    auto eccKey = privmx::crypto::ECC::fromPrivateKey(inboxKey.key);
+    auto privateKey = privmx::crypto::PrivateKey(eccKey);
     auto pubKey = privateKey.getPublicKey();
 
     auto randName{InboxDataHelper::getRandomName()};
@@ -182,8 +181,8 @@ void InboxApiImpl::updateInbox(
         currentInbox, currentInboxEntry, currentInboxResourceId, users, managers,
         forceGenerateNewKey || doesGroupStateForceNewKey(currentInbox, groups), true, _groupPrivKeyResolver
     );
-    auto eccKey = crypto::ECC::fromPrivateKey(ctx.key.key);
-    auto privateKey = crypto::PrivateKey(eccKey);
+    auto eccKey = privmx::crypto::ECC::fromPrivateKey(ctx.key.key);
+    auto privateKey = privmx::crypto::PrivateKey(eccKey);
     auto pubKey = privateKey.getPublicKey();
     InboxDataProcessorModelV5 inboxDataIn{
         .storeId = currentInboxData.storeId,
@@ -373,7 +372,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     auto _userPubKeyECC = _userPrivKeyECC.getPublicKey();
     std::string filesMetaKey;
     bool hasFiles = !handle->inboxFileHandles.empty();
-    filesMetaKey = (hasFiles ? crypto::Crypto::randomBytes(32) : std::string());
+    filesMetaKey = (hasFiles ? privmx::crypto::Crypto::randomBytes(32) : std::string());
 
     InboxEntrySendModel modelForSerializer{
         .publicData =

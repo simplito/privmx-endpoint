@@ -668,13 +668,18 @@ TEST_F(StreamRoomUsingGroupsTest, caller_in_two_granted_groups_reads) {
     EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
 }
 
-TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_the_caller_is_not_in) {
-    // The room grants Group_1 (user_1 only). user_2 is a direct member but no Group_1 member, so the bridge
-    // narrows `groupKeys` to nothing for it. A re-key by user_2 must still re-wrap the new key to Group_1 —
-    // the grantee list comes from the room, not from what the caller can see.
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_the_caller_did_not_name) {
+    // The room grants Group_2. user_2 re-keys naming no groups at all, and the new key must still be re-wrapped
+    // to Group_2 — the grantee list comes from the room, not from the caller's argument.
+    //
+    // The grantee is a group the caller belongs to, and that is a constraint rather than a convenience: wrapping
+    // a key to a group needs its current epoch and public key, and a Bridge running the default group policy
+    // (`get: "user"`, `listAll: "none"`) hands those to members only. Re-keying a container granted to a group
+    // the caller is not in therefore cannot work — `resolveGroupEpochs` throws `UnresolvedGroupGranteeException`
+    // — so do not "restore" this test to Group_1, which holds user_1 alone.
+    group::Group granteeGroup;
+    ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(reader->getString("Group_2.groupId")); });
+    ASSERT_EQ(granteeGroup.statusCode, 0);
 
     std::string streamRoomId;
     ASSERT_NO_THROW({
@@ -683,7 +688,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_th
             std::vector<core::UserWithPubKey>{
                 userOf(SRUGConnectionType::SRUGUser1), userOf(SRUGConnectionType::SRUGUser2)
             },
-            std::vector<group::Group>{group_1}
+            std::vector<group::Group>{granteeGroup}
         );
     });
     ASSERT_FALSE(streamRoomId.empty());
@@ -709,7 +714,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_th
         );
     });
 
-    // The grant survives the re-key, and user_1 — who reads through Group_1 — still resolves the new key.
+    // The grant survives the re-key, and user_1 — who reads through the group — still resolves the new key.
     disconnect();
     connectAs(SRUGConnectionType::SRUGUser1);
     stream::StreamRoom after;
@@ -718,7 +723,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_th
     EXPECT_EQ(after.privateMeta.stdString(), "group_room_private");
     EXPECT_EQ(after.groups.size(), 1);
     if (after.groups.size() == 1) {
-        EXPECT_EQ(after.groups[0].groupId, group_1.groupId);
+        EXPECT_EQ(after.groups[0].groupId, granteeGroup.groupId);
     }
 }
 

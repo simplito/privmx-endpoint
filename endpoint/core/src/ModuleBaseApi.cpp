@@ -19,6 +19,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp"
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
@@ -28,15 +29,14 @@ limitations under the License.
 #include <privmx/endpoint/core/VarDeserializer.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 
-using namespace privmx::endpoint;
-using namespace core;
+using namespace privmx::endpoint::core;
 
 ModuleBaseApi::ModuleBaseApi(
     const privmx::crypto::PrivateKey& userPrivKey,
-    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const std::shared_ptr<KeyProvider>& keyProvider,
     const std::string& host,
-    const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const core::Connection& connection
+    const std::shared_ptr<EventMiddleware>& eventMiddleware,
+    const Connection& connection
 )
     : _guardedExecutor(std::make_shared<privmx::utils::GuardedExecutor>()), _userPrivKey(userPrivKey),
       _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware), _connection(connection) {}
@@ -47,6 +47,60 @@ void ModuleBaseApi::initGroupResolvers(const std::optional<GroupResolvers>& reso
     }
     _groupPrivKeyResolver = resolvers->groupPrivKey;
     _groupEpochResolver = resolvers->groupEpochs;
+}
+
+ModuleBaseApi::ContainerRoster ModuleBaseApi::resolveRosterPubKeys(
+    const std::string& contextId,
+    const std::vector<std::string>& userIds,
+    const std::vector<std::string>& managerIds
+) {
+    static constexpr int64_t PAGE_SIZE = 100;
+    std::unordered_map<std::string, std::string> pubKeyByUserId;
+    int64_t skip = 0;
+    int64_t totalAvailable = 0;
+    do {
+        auto page = _connection.listContextUsers(
+            contextId, PagingQuery{.skip = skip, .limit = PAGE_SIZE, .sortOrder = "asc"}
+        );
+        if (page.readItems.empty()) {
+            break;
+        }
+        totalAvailable = page.totalAvailable;
+        for (const auto& userInfo : page.readItems) {
+            pubKeyByUserId.emplace(userInfo.user.userId, userInfo.user.pubKey);
+        }
+        skip += static_cast<int64_t>(page.readItems.size());
+    } while (skip < totalAvailable);
+
+    auto resolve = [&](const std::vector<std::string>& ids) {
+        std::vector<UserWithPubKey> resolved;
+        resolved.reserve(ids.size());
+        for (const auto& userId : ids) {
+            auto found = pubKeyByUserId.find(userId);
+            if (found == pubKeyByUserId.end()) {
+                throw UnresolvedContainerMemberException("userId=" + userId);
+            }
+            resolved.push_back(UserWithPubKey{.userId = userId, .pubKey = found->second});
+        }
+        return resolved;
+    };
+    return {.users = resolve(userIds), .managers = resolve(managerIds)};
+}
+
+void ModuleBaseApi::runAutoRekey(const std::string& moduleId, const std::function<void()>& rotate) {
+    try {
+        rotate();
+    } catch (const privmx::utils::PrivmxException& e) {
+        auto code = ExceptionConverter::convert(e).getCode();
+        if (code == privmx::endpoint::server::ContainerRotatedAlreadyException().getCode()) {
+            invalidateModuleKeysInCache(moduleId);
+            return;
+        } else if (code == privmx::endpoint::server::AccessDeniedException().getCode()) {
+            throw StaleKeyRekeyRequiredException("automatic re-key of moduleId=" + moduleId + " was denied");
+        }
+        ExceptionConverter::rethrowAsCoreException(e);
+        throw Exception("ExceptionConverter rethrow error");
+    }
 }
 
 ContainerCreateContext ModuleBaseApi::prepareContainerCreate(
@@ -77,14 +131,14 @@ DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(
     throw UnknownModuleEncryptionKeyException();
 }
 
-core::DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(
+DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(
     ModuleKeys moduleKeys,
-    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+    const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     // The key every new item is encrypted under: a stale one is refused here rather than at each write site.
     assertRekeyNotNeeded(moduleKeys);
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    auto location = core::EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
+    KeyDecryptionAndVerificationRequest keyProviderRequest;
+    auto location = EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
     keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location);
     return _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolverOr(groupPrivKeyResolver))
@@ -156,11 +210,11 @@ ModuleKeys ModuleBaseApi::getNewModuleKeysAndUpdateCache(const std::string& modu
     return moduleKeys.first;
 }
 
-core::ContainerKeyCache::CachedModuleKeys ModuleBaseApi::convertModuleKeysToContainerKeyCacheFormat(
+ContainerKeyCache::CachedModuleKeys ModuleBaseApi::convertModuleKeysToContainerKeyCacheFormat(
     const ModuleKeys& moduleKeys,
     int64_t moduleVersion
 ) {
-    return core::ContainerKeyCache::CachedModuleKeys{
+    return ContainerKeyCache::CachedModuleKeys{
         .keys = moduleKeys.keys,
         .groupKeys = moduleKeys.groupKeys,
         .staleGroups = moduleKeys.staleGroups,
@@ -173,7 +227,7 @@ core::ContainerKeyCache::CachedModuleKeys ModuleBaseApi::convertModuleKeysToCont
 }
 
 ModuleKeys ModuleBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat(
-    const core::ContainerKeyCache::CachedModuleKeys& moduleKeys
+    const ContainerKeyCache::CachedModuleKeys& moduleKeys
 ) {
     return ModuleKeys{
         .keys = moduleKeys.keys,

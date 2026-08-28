@@ -58,7 +58,7 @@ ContextCustomEventData EventDataSchemaMapper::decrypt(const server::ContextCusto
     try {
         auto raw = _strategyV5->decrypt(rawEvent, encKey);
         if (raw.statusCode == 0 && !verifyDecryptedEventData(raw)) {
-            raw.statusCode = core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+            raw.statusCode = privmx::endpoint::core::UserVerificationFailureException().getCode();
         }
         return _strategyV5->convert(rawEvent, raw);
     } catch (const core::Exception& e) {
@@ -91,7 +91,7 @@ DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
         result.data = raw.data;
         result.type = raw.type.has_value() ? raw.type.value() : "";
         if (result.statusCode == 0 && !verifyDecryptedEventData(raw)) {
-            result.statusCode = core::ExceptionConverter::getCodeOfUserVerificationFailureException();
+            result.statusCode = privmx::endpoint::core::UserVerificationFailureException().getCode();
         }
     } catch (const core::Exception& e) {
         result.statusCode = e.getCode();

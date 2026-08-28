@@ -1747,12 +1747,16 @@ TEST_F(ThreadUsingGroupsTest, group_manager_role_does_not_grant_container_manage
     EXPECT_THROW({ threadApi->deleteThread(threadId); }, server::AccessDeniedException);
 }
 
-TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller_is_not_in) {
-    // The case a caller cannot describe for itself: T grants G, and the caller re-keying T is not a member of G.
-    // `groupKeys` — the only place a thread's grantee groups carry key material — is narrowed to the caller's own
-    // groups, so user_1 sees none of G here and could not name it in `groups` even if it wanted to. The grantee
-    // list therefore has to come from `thread.groups`, which the bridge serves in full: a re-key that leaves G
-    // without an entry at the new keyId is refused outright, so getting this wrong fails the whole call.
+TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller_did_not_name) {
+    // The case a caller cannot describe for itself: T grants G, and the caller re-keying T passes no `groups` at
+    // all. The grantee list therefore has to come from `thread.groups`, which the bridge serves in full: a re-key
+    // that leaves G without an entry at the new keyId is refused outright, so getting this wrong fails the call.
+    //
+    // The caller is in G, and that is a constraint rather than a convenience: wrapping a key to a group needs its
+    // current epoch and public key, and a Bridge running the default group policy (`get: "user"`,
+    // `listAll: "none"`) hands those to members only. Re-keying a container granted to a group the caller is not
+    // in therefore cannot work — `resolveGroupEpochs` throws `UnresolvedGroupGranteeException` — so do not
+    // "restore" this test by dropping user_1 from G.
     disconnect();
     connectAs(TUGConnectionType::TUGUser2);
 
@@ -1761,20 +1765,21 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller
         groupId = groupApi->createGroupWithKeyTree(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
-                userOf(TUGConnectionType::TUGUser2), userOf(TUGConnectionType::TUGUser3)
+                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2),
+                userOf(TUGConnectionType::TUGUser3)
             },
             std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser2)},
-            core::Buffer::from("foreign_group_pub"),
-            core::Buffer::from("foreign_group_priv")
+            core::Buffer::from("grantee_group_pub"),
+            core::Buffer::from("grantee_group_priv")
         );
     });
     ASSERT_FALSE(groupId.empty());
 
-    group::Group foreignGroup;
-    ASSERT_NO_THROW({ foreignGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(foreignGroup.statusCode, 0);
+    group::Group granteeGroup;
+    ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(groupId); });
+    ASSERT_EQ(granteeGroup.statusCode, 0);
 
-    // user_1 is a direct member — enough to re-key under the default `rotateKeys: "user"` — but no member of G.
+    // user_1 is a direct member — enough to re-key under the default `rotateKeys: "user"`.
     std::string threadId;
     ASSERT_NO_THROW({
         threadId = threadApi->createThread(
@@ -1787,7 +1792,7 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller
             core::Buffer::from("foreign_grant_private"),
             core::ContainerPolicy(),
             std::vector<core::GroupGrantWithKey>{{
-                .groupId = foreignGroup.groupId, .role = "user", .groupPubKey = foreignGroup.groupPubKey
+                .groupId = granteeGroup.groupId, .role = "user", .groupPubKey = granteeGroup.groupPubKey
             }}
         );
     });
@@ -1810,9 +1815,9 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller
     thread::Thread t;
     ASSERT_NO_THROW({ t = threadApi->getThread(threadId); });
     ASSERT_EQ(t.statusCode, 0);
-    // The grant is visible, its key material is not: the two halves of what this test is about.
+    // The grant is there to be read off the thread — which is exactly where the re-key has to get it from.
     ASSERT_EQ(t.groups.size(), 1);
-    ASSERT_EQ(t.groups[0].groupId, foreignGroup.groupId);
+    ASSERT_EQ(t.groups[0].groupId, granteeGroup.groupId);
     EXPECT_TRUE(t.staleGroups.empty());
 
     // No `groups` argument at all — the whole point is that the caller does not have to supply one.
@@ -1943,4 +1948,279 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_clears_staleGroups_after_the_grou
     EXPECT_NO_THROW({ message = threadApi->getMessage(messageId); });
     EXPECT_EQ(message.statusCode, 0);
     EXPECT_EQ(message.data.stdString(), "post_rekey_data");
+}
+
+TEST_F(ThreadUsingGroupsTest, sendMessage_auto_rotates_a_stale_thread_key) {
+    // The same setup as the test above, minus the rotateThreadKeys call: a stale key is no longer the caller's
+    // problem to notice. sendMessage sees it, re-keys T with T's own roster, and sends under the new key.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroupWithKeyTree(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2),
+                userOf(TUGConnectionType::TUGUser3)
+            },
+            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
+            core::Buffer::from("auto_rotate_group_pub"),
+            core::Buffer::from("auto_rotate_group_priv")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    group::Group sharedGroup;
+    ASSERT_NO_THROW({ sharedGroup = groupApi->getGroup(groupId); });
+    ASSERT_EQ(sharedGroup.statusCode, 0);
+
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = createThreadWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
+            std::vector<group::Group>{sharedGroup}
+        );
+    });
+    ASSERT_FALSE(threadId.empty());
+
+    ASSERT_NO_THROW({
+        groupApi->removeGroupMember(
+            groupId,
+            reader->getString("Login.user_3_id"),
+            std::vector<core::UserWithPubKey>{
+                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2)
+            },
+            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
+            core::Buffer::from("auto_rotate_group_pub_2"),
+            core::Buffer::from("auto_rotate_group_priv_2")
+        );
+    });
+
+    thread::Thread stale;
+    ASSERT_NO_THROW({ stale = threadApi->getThread(threadId); });
+    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(stale.staleGroups.size(), 1);
+    ASSERT_EQ(stale.staleGroups[0], groupId);
+
+    std::string messageId;
+    EXPECT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            threadId,
+            core::Buffer::from("auto_rotated_public"),
+            core::Buffer::from("auto_rotated_private"),
+            core::Buffer::from("auto_rotated_data")
+        );
+    });
+
+    thread::Thread rekeyed;
+    ASSERT_NO_THROW({ rekeyed = threadApi->getThread(threadId); });
+    EXPECT_EQ(rekeyed.statusCode, 0);
+    EXPECT_TRUE(rekeyed.staleGroups.empty());
+    // Exactly one re-key: a rotation appends one history entry and nothing else wrote to T.
+    EXPECT_EQ(rekeyed.version, stale.version + 1);
+    // The roster a re-key may not touch.
+    EXPECT_EQ(rekeyed.users, stale.users);
+    EXPECT_EQ(rekeyed.managers, stale.managers);
+
+    // user_2 is in G at its new epoch and holds no direct entry on T: reading the message proves the new key
+    // was wrapped to the epoch G actually moved to, not to the one T was stuck on.
+    disconnect();
+    connectAs(TUGConnectionType::TUGUser2);
+
+    thread::Message message;
+    EXPECT_NO_THROW({ message = threadApi->getMessage(messageId); });
+    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(message.data.stdString(), "auto_rotated_data");
+}
+
+TEST_F(ThreadUsingGroupsTest, auto_rotation_does_not_repeat_a_re_key_another_client_already_did) {
+    // Two clients both holding T at the same stale key. The first one's sendMessage re-keys; the second's must
+    // notice that the work is done and send under the winner's key rather than re-keying on top of it.
+    //
+    // The endpoint gets there by re-reading T before it rotates, which is the deterministic half of this. The
+    // narrower window — both clients past that read before either commits, where the Bridge answers the loser
+    // with CONTAINER_ROTATED_ALREADY — is covered by the Bridge's own ThreadRotateKeysTest.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroupWithKeyTree(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2),
+                userOf(TUGConnectionType::TUGUser3)
+            },
+            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
+            core::Buffer::from("concurrent_group_pub"),
+            core::Buffer::from("concurrent_group_priv")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    group::Group sharedGroup;
+    ASSERT_NO_THROW({ sharedGroup = groupApi->getGroup(groupId); });
+    ASSERT_EQ(sharedGroup.statusCode, 0);
+
+    // Both users are direct members and managers of T, so either of them may send and either may re-key.
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = createThreadWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2)
+            },
+            std::vector<group::Group>{sharedGroup}
+        );
+    });
+    ASSERT_FALSE(threadId.empty());
+
+    ASSERT_NO_THROW({
+        groupApi->removeGroupMember(
+            groupId,
+            reader->getString("Login.user_3_id"),
+            std::vector<core::UserWithPubKey>{
+                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2)
+            },
+            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
+            core::Buffer::from("concurrent_group_pub_2"),
+            core::Buffer::from("concurrent_group_priv_2")
+        );
+    });
+
+    // A second, independent connection as user_2, kept alive throughout.
+    auto conn2 = std::make_shared<core::Connection>(
+        core::Connection::connect(
+            reader->getString("Login.user_2_privKey"),
+            reader->getString("Login.solutionId"),
+            getPlatformUrl(reader->getString("Login.instanceUrl"))
+        )
+    );
+    auto grpApi2 = std::make_shared<group::GroupApi>(group::GroupApi::create(*conn2));
+    auto threadApi2 = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*conn2, *grpApi2));
+
+    // Both connections read T while it is stale, so both cache a snapshot that says "needs a re-key".
+    thread::Thread stale1, stale2;
+    ASSERT_NO_THROW({ stale1 = threadApi->getThread(threadId); });
+    ASSERT_NO_THROW({ stale2 = threadApi2->getThread(threadId); });
+    ASSERT_EQ(stale1.staleGroups.size(), 1);
+    ASSERT_EQ(stale2.staleGroups.size(), 1);
+    ASSERT_EQ(stale1.version, stale2.version);
+
+    // user_1 wins: its send re-keys T.
+    ASSERT_NO_THROW({
+        threadApi->sendMessage(
+            threadId,
+            core::Buffer::from("winner_public"),
+            core::Buffer::from("winner_private"),
+            core::Buffer::from("winner_data")
+        );
+    });
+
+    // user_2 still believes T is stale. Its send must succeed without a second re-key.
+    std::string loserMessageId;
+    EXPECT_NO_THROW({
+        loserMessageId = threadApi2->sendMessage(
+            threadId,
+            core::Buffer::from("loser_public"),
+            core::Buffer::from("loser_private"),
+            core::Buffer::from("loser_data")
+        );
+    });
+
+    thread::Thread after;
+    ASSERT_NO_THROW({ after = threadApi->getThread(threadId); });
+    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_TRUE(after.staleGroups.empty());
+    // One re-key, not two.
+    EXPECT_EQ(after.version, stale1.version + 1);
+    // And it was user_1's: `keeper` is set to whoever rotated.
+    ASSERT_TRUE(after.keeper.has_value());
+    EXPECT_EQ(after.keeper.value(), reader->getString("Login.user_1_id"));
+
+    thread::Message loserMessage;
+    EXPECT_NO_THROW({ loserMessage = threadApi->getMessage(loserMessageId); });
+    EXPECT_EQ(loserMessage.statusCode, 0);
+    EXPECT_EQ(loserMessage.data.stdString(), "loser_data");
+
+    conn2->disconnect();
+}
+
+TEST_F(ThreadUsingGroupsTest, sendMessage_still_reports_a_stale_key_when_the_re_key_is_denied) {
+    // Auto-rotation is not a way around the rotateKeys policy. A member who may write but may not re-key gets
+    // the same StaleKeyRekeyRequiredException they got before any of this existed — not an access error for a
+    // call they never made.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroupWithKeyTree(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2),
+                userOf(TUGConnectionType::TUGUser3)
+            },
+            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
+            core::Buffer::from("denied_group_pub"),
+            core::Buffer::from("denied_group_priv")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    group::Group sharedGroup;
+    ASSERT_NO_THROW({ sharedGroup = groupApi->getGroup(groupId); });
+    ASSERT_EQ(sharedGroup.statusCode, 0);
+
+    // user_2 is a user of T but not a manager, and T only lets managers re-key.
+    core::ContainerPolicy policy;
+    policy.rotateKeys = "manager";
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = threadApi->createThread(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{
+                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2)
+            },
+            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
+            core::Buffer::from("denied_thread_public"),
+            core::Buffer::from("denied_thread_private"),
+            policy,
+            std::vector<core::GroupGrantWithKey>{
+                {.groupId = groupId, .role = "user", .groupPubKey = sharedGroup.groupPubKey}
+            }
+        );
+    });
+    ASSERT_FALSE(threadId.empty());
+
+    ASSERT_NO_THROW({
+        groupApi->removeGroupMember(
+            groupId,
+            reader->getString("Login.user_3_id"),
+            std::vector<core::UserWithPubKey>{
+                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2)
+            },
+            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
+            core::Buffer::from("denied_group_pub_2"),
+            core::Buffer::from("denied_group_priv_2")
+        );
+    });
+
+    thread::Thread stale;
+    ASSERT_NO_THROW({ stale = threadApi->getThread(threadId); });
+    ASSERT_EQ(stale.staleGroups.size(), 1);
+
+    disconnect();
+    connectAs(TUGConnectionType::TUGUser2);
+
+    EXPECT_THROW(
+        {
+            threadApi->sendMessage(
+                threadId,
+                core::Buffer::from("denied_public"),
+                core::Buffer::from("denied_private"),
+                core::Buffer::from("denied_data")
+            );
+        },
+        core::StaleKeyRekeyRequiredException
+    );
+
+    // Nothing was re-keyed on the way to that exception.
+    thread::Thread untouched;
+    ASSERT_NO_THROW({ untouched = threadApi->getThread(threadId); });
+    EXPECT_EQ(untouched.version, stale.version);
+    EXPECT_EQ(untouched.staleGroups.size(), 1);
 }

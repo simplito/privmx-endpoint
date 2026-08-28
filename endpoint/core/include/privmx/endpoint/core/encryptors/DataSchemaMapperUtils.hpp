@@ -206,7 +206,7 @@ public:
         for (size_t j = 0; j < verifyIdxs.size(); j++) {
             result[verifyIdxs[j]].statusCode = verified[j] ?
                 0 :
-                ExceptionConverter::getCodeOfUserVerificationFailureException();
+                privmx::endpoint::core::UserVerificationFailureException().getCode();
         }
         return result;
     }
@@ -298,7 +298,7 @@ public:
         for (size_t j = 0; j < verifyIdxs.size(); j++) {
             result[verifyIdxs[j]].statusCode = verified[j] ?
                 0 :
-                ExceptionConverter::getCodeOfUserVerificationFailureException();
+                privmx::endpoint::core::UserVerificationFailureException().getCode();
         }
         return result;
     }

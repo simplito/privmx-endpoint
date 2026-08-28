@@ -119,9 +119,14 @@ public:
      * default rotateKeys policy of "user" is in effect.
      *
      * The Inbox's key is re-wrapped to every one of its grantee groups at that group's current epoch, whether or
-     * not the caller belongs to the group and whether or not it names the group in `groups`: the grantee list comes
-     * from the Inbox itself, and any epoch public key missing from `groups` is read from the Bridge. The Inbox's
-     * inner Thread and Store are re-keyed the same way, since the entries and their files live there.
+     * not it names the group in `groups`: the grantee list comes from the Inbox itself, and any epoch public key
+     * missing from `groups` is read from the Bridge. The Inbox's inner Thread and Store are re-keyed the same
+     * way, since the entries and their files live there.
+     *
+     * That read is what bounds who may re-key: a group's epoch and public key are readable only by its members
+     * under the default group policy (`get: "user"`, `listAll: "none"`). A caller who belongs to none of the
+     * Inbox's grantee groups, and cannot supply their epoch keys in `groups` either, gets
+     * `UnresolvedGroupGranteeException` naming the group it could not resolve.
      *
      * @param inboxId ID of the Inbox to re-key
      * @param users current Inbox users with their public keys

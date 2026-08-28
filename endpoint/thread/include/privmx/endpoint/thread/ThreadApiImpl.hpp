@@ -149,6 +149,14 @@ private:
 
     void assertThreadExist(const std::string& threadId);
 
+    /**
+     * Re-keys a Thread whose key has gone stale, without being asked to.
+     *
+     * The roster is the Thread's own — a re-key changes nothing but the key — so unlike `rotateThreadKeys` this
+     * takes no arguments beyond the id and looks the members' public keys up itself.
+     */
+    void autoRotateThreadKeys(const std::string& threadId);
+
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;

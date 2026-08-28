@@ -350,7 +350,10 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
     }
     // Where this client starts encrypting outgoing media under the room key — the stream module's equivalent of
     // the item write the other modules guard. Receiving stays unguarded: decrypting what others publish is a read.
-    assertRekeyNotNeeded(getModuleKeys(room->streamRoomId));
+    //
+    // No `withKeyRefresh` here: the Bridge does not epoch-check stream writes, so the client's own view of
+    // `staleGroups` is the whole trigger, and the re-key has to happen before the room key is used.
+    ensureRoomKeyIsFresh(room->streamRoomId);
     auto streamData = room->publisherStream;
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId, "publisher");
     server::SessionDescription sessionDescription;
@@ -385,7 +388,7 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
     if (!room->publisherStream->sessionId.has_value()) {
         throw StreamHandleNotPublishedException();
     }
-    assertRekeyNotNeeded(getModuleKeys(room->streamRoomId));
+    ensureRoomKeyIsFresh(room->streamRoomId);
     auto streamData = room->publisherStream;
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId, "publisher");
     server::SessionDescription sessionDescription;
@@ -428,7 +431,7 @@ void StreamApiLowImpl::removeStream(const StreamHandle& streamHandle) {
     room->publisherStream.reset();
 }
 
-std::vector<server::StreamSubscription> StreamApiLowImpl::mapSubscriptions(
+std::vector<privmx::endpoint::stream::server::StreamSubscription> StreamApiLowImpl::mapSubscriptions(
     const std::vector<StreamSubscription>& subscriptions
 ) {
     std::vector<server::StreamSubscription> items;
@@ -638,6 +641,38 @@ void StreamApiLowImpl::rotateStreamRoomKeys(
     );
 }
 
+void StreamApiLowImpl::ensureRoomKeyIsFresh(const std::string& streamRoomId) {
+    auto keys = getModuleKeys(streamRoomId);
+    if (isRekeyNeeded(keys)) {
+        autoRotateStreamRoomKeys(streamRoomId);
+        keys = getNewModuleKeysAndUpdateCache(streamRoomId);
+    }
+    // Backstop: a re-key that did not happen — a caller the room's `rotateKeys` policy refuses — has already
+    // thrown by now, so reaching here still stale would mean the rotation silently did nothing.
+    assertRekeyNotNeeded(keys);
+}
+
+void StreamApiLowImpl::autoRotateStreamRoomKeys(const std::string& streamRoomId) {
+    // A fresh read, not the cached keys: whatever triggered this may have been a stale snapshot, and the roster
+    // and version this re-key is built on have to be the ones the bridge will check it against.
+    server::StreamRoomGetModel getModel;
+    getModel.id = streamRoomId;
+    auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
+    if (!isRekeyNeeded(currentStreamRoom)) {
+        // Someone else already re-keyed it. The caller refetches the keys either way, so there is nothing to do.
+        return;
+    }
+    auto roster = resolveRosterPubKeys(
+        currentStreamRoom.contextId, currentStreamRoom.users, currentStreamRoom.managers
+    );
+    runAutoRekey(streamRoomId, [&] {
+        rotateContainerKeys<server::StreamRoomRotateKeysModel>(
+            streamRoomId, currentStreamRoom, roster.users, roster.managers, currentStreamRoom.version, false, {},
+            [&](const server::StreamRoomRotateKeysModel& model) { _serverApi->streamRoomRotateKeys(model); }
+        );
+    });
+}
+
 core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(
     const std::string& contextId,
     const core::PagingQuery& query,
@@ -801,7 +836,7 @@ std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> Strea
 }
 
 std::string StreamApiLowImpl::deriveStreamEncryptionKey(privmx::endpoint::core::DecryptedEncKeyV2 encKey) {
-    return crypto::Crypto::sha256(encKey.key);
+    return privmx::crypto::Crypto::sha256(encKey.key);
 }
 
 core::Buffer StreamApiLowImpl::encryptDataChannelMessage(

@@ -124,6 +124,35 @@ protected:
         );
     }
 
+    /**
+     * As `createThreadGrantedTo`, with forward secrecy on and user_2 able to write but not to re-key.
+     *
+     * A stale key normally repairs itself — `sendMessage` re-keys the thread and sends under the new key — so a
+     * caller who *may* re-key never sees the window at all. Pinning `rotateKeys` to managers and writing as a
+     * plain user is what still puts a writer inside it: refused, until somebody with the right to fix it does.
+     */
+    std::string createThreadGrantedToWithManagerOnlyRekey(const group::Group& group) {
+        core::ContainerPolicy policy;
+        policy.get = "all";
+        policy.forwardSecrecy = "yes";
+        policy.rotateKeys = "manager";
+        policy.item = core::ItemPolicy{.get = "all", .listAll = "all"};
+        return threadApi->createThread(
+            contextId(),
+            std::vector<core::UserWithPubKey>{user(1), user(2)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("kt_thread_public"),
+            core::Buffer::from("kt_thread_private"),
+            policy,
+            std::vector<core::GroupGrantWithKey>{{
+                .groupId = group.groupId,
+                .role = "user",
+                .groupPubKey = group.groupPubKey,
+                .groupEpoch = group.keyVersion
+            }}
+        );
+    }
+
     std::shared_ptr<core::Connection> connection;
     std::shared_ptr<thread::ThreadApi> threadApi;
     std::shared_ptr<group::GroupApi> groupApi;
@@ -313,8 +342,9 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_removed_member_cannot_read_content_written_a
         );
     });
 
-    // Re-key the thread to the new epoch, then write again. Until this happens the bridge refuses new content
-    // (see the ROTATE_REQUIRED test below), so this step is what makes the removal bite.
+    // Re-key the thread to the new epoch, then write again. Until this happens no new content is accepted (see
+    // the ROTATE_REQUIRED test below), so this step is what makes the removal bite. Done explicitly rather than
+    // left to `sendMessage`'s automatic re-key, so what the removed member is denied is not in doubt.
     group::Group rotated;
     ASSERT_NO_THROW({ rotated = groupApi->getGroup(groupId); });
     ASSERT_NO_THROW({
@@ -510,20 +540,23 @@ TEST_F(GroupKeyTreeTest, reconnecting_rebuilds_the_key_cache_from_scratch) {
 }
 
 TEST_F(GroupKeyTreeTest, ROTATE_REQUIRED_blocks_writes_until_the_container_catches_up) {
-    // Lazy revocation: the bridge does not re-key anyone's containers for them, it refuses new content under a
-    // superseded epoch. The window between the removal and the re-key is safe precisely because nothing can be
-    // written in it.
+    // Lazy revocation: nobody re-keys a container behind its members' backs, and no new content is accepted
+    // under a superseded epoch. The window between the removal and the re-key is safe precisely because nothing
+    // can be written in it.
     //
-    // Enforcement is opt-in per container (`forwardSecrecy`), so the thread here asks for it. A container that
-    // has not asked keeps accepting writes after a group rotation — deliberately, and the reason the assertion
-    // below would otherwise pass for the wrong reason.
+    // Two things have to hold for that to be the assertion below. Enforcement is opt-in per container
+    // (`forwardSecrecy`), so the thread here asks for it — a container that has not asked keeps accepting writes
+    // after a group rotation, deliberately. And the writer has to be someone who cannot close the window
+    // themselves: `sendMessage` re-keys a stale thread and retries, so user_1 would never see the refusal. Hence
+    // `rotateKeys: "manager"` and a write from user_2, who is a thread user and not a manager. Putting user_1
+    // back here would make this test pass for the wrong reason.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
 
     std::string threadId;
-    ASSERT_NO_THROW({ threadId = createThreadGrantedTo(group, "yes"); });
+    ASSERT_NO_THROW({ threadId = createThreadGrantedToWithManagerOnlyRekey(group); });
     ASSERT_NO_THROW({
         threadApi->sendMessage(
             threadId, core::Buffer::from("p"), core::Buffer::from("p"), core::Buffer::from("before")
@@ -539,12 +572,28 @@ TEST_F(GroupKeyTreeTest, ROTATE_REQUIRED_blocks_writes_until_the_container_catch
         );
     });
 
-    // The thread still holds a key wrapped to epoch 1 while the group is at epoch 2.
+    thread::Thread beforeWrite;
+    ASSERT_NO_THROW({ beforeWrite = threadApi->getThread(threadId); });
+    ASSERT_EQ(beforeWrite.staleGroups.size(), 1);
+
+    disconnect();
+    connectAs(KeyTreeConnectionType::KTUser2);
+
+    // The thread still holds a key wrapped to epoch 1 while the group is at epoch 2, and user_2 may not re-key.
     EXPECT_THROW({
         threadApi->sendMessage(
             threadId, core::Buffer::from("p"), core::Buffer::from("p"), core::Buffer::from("stale")
         );
-    }, core::Exception) << "the bridge accepted content encrypted under a superseded group epoch";
+    }, core::StaleKeyRekeyRequiredException) << "content was accepted under a superseded group epoch";
+
+    // And the refused write left the thread exactly where it was — no partial re-key on the way out.
+    thread::Thread afterWrite;
+    ASSERT_NO_THROW({ afterWrite = threadApi->getThread(threadId); });
+    EXPECT_EQ(afterWrite.version, beforeWrite.version);
+    EXPECT_EQ(afterWrite.staleGroups.size(), 1);
+
+    disconnect();
+    connectAs(KeyTreeConnectionType::KTUser1);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

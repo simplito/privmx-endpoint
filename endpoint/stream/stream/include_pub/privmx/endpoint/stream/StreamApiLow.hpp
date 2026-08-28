@@ -81,8 +81,13 @@ public:
      * default rotateKeys policy of "user" is in effect.
      *
      * The StreamRoom's key is re-wrapped to every one of its grantee groups at that group's current epoch, whether
-     * or not the caller belongs to the group and whether or not it names the group in `groups`: the grantee list
-     * comes from the StreamRoom itself, and any epoch public key missing from `groups` is read from the Bridge.
+     * or not it names the group in `groups`: the grantee list comes from the StreamRoom itself, and any epoch
+     * public key missing from `groups` is read from the Bridge.
+     *
+     * That read is what bounds who may re-key: a group's epoch and public key are readable only by its members
+     * under the default group policy (`get: "user"`, `listAll: "none"`). A caller who belongs to none of the
+     * room's grantee groups, and cannot supply their epoch keys in `groups` either, gets
+     * `UnresolvedGroupGranteeException` naming the group it could not resolve.
      *
      * @param streamRoomId ID of the StreamRoom to re-key
      * @param users current StreamRoom users with their public keys

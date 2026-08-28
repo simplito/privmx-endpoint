@@ -179,6 +179,17 @@ private:
         std::shared_ptr<WebRTCInterface> webRtc
     );
 
+    /** Re-keys the room if its key has gone stale, then refuses to go on if it somehow still is. */
+    void ensureRoomKeyIsFresh(const std::string& streamRoomId);
+
+    /**
+     * Re-keys a StreamRoom whose key has gone stale, without being asked to.
+     *
+     * The roster is the room's own — a re-key changes nothing but the key — so unlike `rotateStreamRoomKeys`
+     * this takes no arguments beyond the id and looks the members' public keys up itself.
+     */
+    void autoRotateStreamRoomKeys(const std::string& streamRoomId);
+
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
     std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(

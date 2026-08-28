@@ -71,8 +71,8 @@ InboxEntryResult InboxEntryDataSchemaStrategyV1::decryptEntry(
         auto encKey = keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver)
                           .at(location)
                           .at(msgPublicData.usedInboxKeyId);
-        auto eccKey = crypto::ECC::fromPrivateKey(encKey.key);
-        auto privKeyECC = crypto::PrivateKey(eccKey);
+        auto eccKey = privmx::crypto::ECC::fromPrivateKey(encKey.key);
+        auto privKeyECC = privmx::crypto::PrivateKey(eccKey);
         auto decrypted = decrypt(msgData, privKeyECC);
         result.statusCode = encKey.statusCode;
         result.publicData = decrypted.publicData;

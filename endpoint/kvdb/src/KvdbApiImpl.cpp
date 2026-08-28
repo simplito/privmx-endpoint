@@ -161,6 +161,25 @@ void KvdbApiImpl::rotateKvdbKeys(
     );
 }
 
+void KvdbApiImpl::autoRotateKvdbKeys(const std::string& kvdbId) {
+    // A fresh read, not the cached keys: whatever triggered this may have been a stale snapshot, and the roster
+    // and version this re-key is built on have to be the ones the bridge will check it against.
+    server::KvdbGetModel getModel;
+    getModel.kvdbId = kvdbId;
+    auto currentKvdb = _serverApi.kvdbGet(getModel).kvdb;
+    if (!isRekeyNeeded(currentKvdb)) {
+        // Someone else already re-keyed it. The caller refetches the keys either way, so there is nothing to do.
+        return;
+    }
+    auto roster = resolveRosterPubKeys(currentKvdb.contextId, currentKvdb.users, currentKvdb.managers);
+    runAutoRekey(kvdbId, [&] {
+        rotateContainerKeys<server::KvdbRotateKeysModel>(
+            kvdbId, currentKvdb, roster.users, roster.managers, currentKvdb.version, false, {},
+            [&](const server::KvdbRotateKeysModel& model) { _serverApi.kvdbRotateKeys(model); }
+        );
+    });
+}
+
 void KvdbApiImpl::deleteKvdb(const std::string& kvdbId) {
     server::KvdbDeleteModel model{.kvdbId = kvdbId};
     _serverApi.kvdbDelete(model);
@@ -257,7 +276,8 @@ void KvdbApiImpl::setEntry(
         kvdbId, privmx::endpoint::server::InvalidKeyIdException().getCode(),
         [&](const core::ModuleKeys& keys) {
             setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, keys);
-        }
+        },
+        [&] { autoRotateKvdbKeys(kvdbId); }
     );
 }
 
