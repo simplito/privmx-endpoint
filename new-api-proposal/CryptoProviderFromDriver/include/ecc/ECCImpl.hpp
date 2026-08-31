@@ -69,6 +69,7 @@ public:
     const EC_POINT* getEcPoint() const;
     bool hasPrivate() const { return _has_priv; }
 
+    // new methods
     static ECCImpl::Ptr fromPublicKey(BytesView public_key);
     static ECCImpl::Ptr fromPrivateKey(BytesView private_key);
     Bytes getPrivateKeyB() const;
@@ -76,6 +77,7 @@ public:
     Bytes sign(BytesView data) const;
     Signature sign2(BytesView data) const;
     bool verify(BytesView data, BytesView signature) const;
+    bool verify2(BytesView data, const Signature& signature) const;
     Bytes getOrderB() const;
 
  private:

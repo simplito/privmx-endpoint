@@ -78,9 +78,11 @@ public:
     std::string decrypt(const std::string& cipher, const std::optional<PublicKey>& pubOfSignature = std::nullopt) const;
     std::string decryptV0(const PublicKey& pub, const std::string& cipher) const;
 
-
-// new public methods:
+// new version:
+    // Poco::JSON::Object::Ptr decryptObjectFromBase64(BytesView cipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt) const;
+    // Bytes decryptFromBase64(BytesViewcipher_base64, const std::optional<PublicKey>& pubOfSignature = std::nullopt) const;
     Bytes decrypt(BytesView cipher, const std::optional<PublicKey>& pubOfSignature = std::nullopt) const;
+    Bytes decryptV0(const PublicKey& pub, BytesView cipher) const;
 private:
     ECC _key;
     // static std::shared_ptr<ISymCryptoProvider> _provider;

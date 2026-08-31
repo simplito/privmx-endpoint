@@ -50,6 +50,9 @@ public:
     PointImpl::Ptr add(const PointImpl::Ptr point) const;
     const EC_POINT* getRaw() const;
 
+    // new methods
+    static PointImpl::Ptr fromBuffer(BytesView data);
+
 private:
     using ec_group_unique_ptr = std::unique_ptr<EC_GROUP, std::function<decltype(EC_GROUP_free)>>;
     using bn_ctx_unique_ptr = std::unique_ptr<BN_CTX, std::function<decltype(BN_CTX_free)>>;
@@ -62,6 +65,9 @@ private:
     void validate() const;
 
     ec_point_unique_ptr _point;
+
+    // new methods
+    static ec_point_unique_ptr oct2point(BytesView oct);
 };
 
 inline PointImpl::operator bool() const {

@@ -59,13 +59,14 @@ public:
     // std::string toBase58DERb() const;
     // std::string toBase58AddressB() const;
     
+    // new variants of methods
     static PublicKey fromDER(std::shared_ptr<ISymCryptoProvider> p, BytesView der);
     static PublicKey fromBase58DER(std::shared_ptr<ISymCryptoProvider> p, BytesView base58);
-    virtual bool verify(BytesView data, BytesView sig, SigScheme) const override;
-    // virtual Bytes seal(BytesView data, const IPrivateKey* senderForSignature = nullptr) const override;
-    virtual Bytes seal(BytesView data, const IPrivateKey& senderForSignature) const override;
-    virtual Bytes export_(KeyFormat) const override;
-    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
+    Bytes toDERb() const;
+    Bytes toBase58DERb() const;
+    Bytes toBase58AddressB() const;
+    bool verifyCompactSignatureWithHash(BytesView message, BytesView signature) const;
+    bool verifyCompactSignature(BytesView message, BytesView signature) const;
 
 // from EciesEncryptor class:
     std::string encryptObjectToBase64(Poco::JSON::Object::Ptr data, const PrivateKey& privForSignature) const;
@@ -74,11 +75,12 @@ public:
 // new variants:
     Bytes encrypt(BytesView data, const PrivateKey& privForSignature) const;
 
-    Bytes toDERb() const;
-    Bytes toBase58DERb() const;
-    Bytes toBase58AddressB() const;
-    bool verifyCompactSignatureWithHash(BytesView message, BytesView signature) const;
-    bool verifyCompactSignature(BytesView message, BytesView signature) const;
+// from IPublicKey
+    virtual bool verify(BytesView data, BytesView sig, SigScheme) const override;
+    // virtual Bytes seal(BytesView data, const IPrivateKey* senderForSignature = nullptr) const override;
+    virtual Bytes seal(BytesView data, const IPrivateKey& senderForSignature) const override;
+    virtual Bytes export_(KeyFormat) const override;
+    virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 private:
     ECC _key;
     std::shared_ptr<ISymCryptoProvider> _provider;

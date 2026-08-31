@@ -252,6 +252,10 @@ std::string PrivateKey::decrypt(const std::string& cipher, const std::optional<P
 std::string PrivateKey::decryptV0(const PublicKey& pub, const std::string& cipher) const {
     return eciesDecrypt(cipher, pub);
 }
+    
+Bytes PrivateKey::decryptV0(const PublicKey& pub, BytesView cipher) const {
+    return eciesDecrypt(cipher, pub);
+}
 
 // from ECIES class:
 std::string PrivateKey::eciesDecrypt(const std::string& enc_buf, const PublicKey& public_key) const {

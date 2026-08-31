@@ -38,11 +38,18 @@ public:
     Point add(const Point& point) const;
     PointImpl::Ptr getImpl() const;
 
+    // new methods
+    static Point fromBuffer(BytesView data);
+
 private:    
     PointImpl::Ptr _impl;
 };
 
 inline Point Point::fromBuffer(const std::string& data) {
+    return Point(PointImpl::fromBuffer(data));
+}
+
+inline Point Point::fromBuffer(BytesView data) {
     return Point(PointImpl::fromBuffer(data));
 }
 

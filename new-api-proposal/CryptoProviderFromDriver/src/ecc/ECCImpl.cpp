@@ -395,6 +395,44 @@ bool ECCImpl::verify2(const std::string& data, const ECCImpl::Signature& signatu
     return (result == 1);
 }
 
+bool ECCImpl::verify2(BytesView data, const ECCImpl::Signature& signature) const {
+    EC_KEY* raw_key = checkIfInitializedKeyAndGet();
+    if (signature.r->getBitsLength() > 256 || signature.s->getBitsLength() > 256) {
+        // throw InvalidSignatureSizeException();
+        throw std::runtime_error("ECC: InvalidSignatureSizeException");
+    }
+    const unsigned char* dgst = reinterpret_cast<const unsigned char*>(data.data());
+    int dgst_len = data.size();
+    ecdsa_sig_unique_ptr sig(ECDSA_SIG_new(), ECDSA_SIG_free);
+    ECDSA_SIG* raw_sig = sig.get();
+    if (raw_sig == NULL) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    // bignum_unique_ptr r = copyBignum(signature.r.cast<BNImpl>()->getRaw());
+    // bignum_unique_ptr s = copyBignum(signature.s.cast<BNImpl>()->getRaw());
+    bignum_unique_ptr r = copyBignum(std::dynamic_pointer_cast<BNImpl>(signature.r)->getRaw());
+    bignum_unique_ptr s = copyBignum(std::dynamic_pointer_cast<BNImpl>(signature.s)->getRaw());
+    // bignum_unique_ptr r = copyBignum(signature.r->getRaw());
+    // bignum_unique_ptr s = copyBignum(signature.s->getRaw());
+    BIGNUM* raw_r = r.get();
+    BIGNUM* raw_s = s.get();
+    if (ECDSA_SIG_set0(raw_sig, raw_r, raw_s) == 0) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    // Release r and s, cause calling ECDSA_SIG_set0() transfers
+    // the memory management of the values to the ECDSA_SIG object
+    r.release();
+    s.release();
+    int result = ECDSA_do_verify(dgst, dgst_len, raw_sig, raw_key);
+    if (result == -1) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("ECCImpl: ...");
+    }
+    return (result == 1);
+}
+
 std::string ECCImpl::derive(const ECCImpl::Ptr ecc) const {
     const EC_KEY* raw_key = checkIfInitializedKeyAndGet();
     const EC_GROUP* group = EC_KEY_get0_group(raw_key);

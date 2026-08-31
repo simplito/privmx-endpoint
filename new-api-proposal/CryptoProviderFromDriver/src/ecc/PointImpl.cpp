@@ -28,6 +28,12 @@ PointImpl::Ptr PointImpl::fromBuffer(const std::string& data) {
     return std::make_shared<PointImpl>(std::move(point));
 }
 
+PointImpl::Ptr PointImpl::fromBuffer(BytesView data) {
+    ec_point_unique_ptr point = oct2point(data);
+    // return new PointImpl(move(point));
+    return std::make_shared<PointImpl>(std::move(point));
+}
+
 PointImpl::Ptr PointImpl::getDefault() {
     // return new PointImpl();
     return std::make_shared<PointImpl>();
@@ -111,6 +117,21 @@ const EC_POINT* PointImpl::getRaw() const {
 }
 
 PointImpl::ec_point_unique_ptr PointImpl::oct2point(const std::string& oct) {
+    const unsigned char* s = reinterpret_cast<const unsigned char*>(oct.data());
+    int len = oct.size();
+    ec_point_unique_ptr point = newEcPoint();
+    ec_group_unique_ptr group = getEcGroup();
+    bn_ctx_unique_ptr ctx = newBnCtx();
+    EC_POINT* raw_point = point.get();
+    BN_CTX* raw_ctx = ctx.get();
+    if (EC_POINT_oct2point(group.get(), raw_point, s, len, raw_ctx) == 0) {
+        // OpenSSLUtils::handleErrors();
+        throw std::runtime_error("PointImpl: ...");
+    }
+    return point;
+}
+
+PointImpl::ec_point_unique_ptr PointImpl::oct2point(BytesView oct) {
     const unsigned char* s = reinterpret_cast<const unsigned char*>(oct.data());
     int len = oct.size();
     ec_point_unique_ptr point = newEcPoint();

@@ -74,25 +74,28 @@ public:
     virtual void setSymProvider(std::shared_ptr<ISymCryptoProvider>) override;  
 
 // new methods    
+    static ExtKey fromSeed(std::shared_ptr<ISymCryptoProvider> p, BytesView seed);
+    static ExtKey fromBase58(std::shared_ptr<ISymCryptoProvider> p, BytesView base58);
+    static ExtKey generateRandom(std::shared_ptr<ISymCryptoProvider> p);
+
     ExtKey deriveB(Poco::UInt32 index) const;
     ExtKey deriveHardenedB(Poco::UInt32 index) const;
     // Old Privmx implementation skips leanding zeros of private key
     ExtKey deriveOldPrivmxVersionB(Poco::UInt32 index) const;
     ExtKey deriveHardenedOldPrivmxVersionB(Poco::UInt32 index) const;
+
     Bytes getPrivatePartAsBase58B() const;
     Bytes getPublicPartAsBase58B() const;
-
-    static ExtKey fromSeed(std::shared_ptr<ISymCryptoProvider> p, BytesView seed);
-    static ExtKey fromBase58(std::shared_ptr<ISymCryptoProvider> p, BytesView base58);
-    static ExtKey generateRandom(std::shared_ptr<ISymCryptoProvider> p);
-
     Bytes getPrivateEncKeyB() const;
     Bytes getPublicKeyAsBase58B() const;
     Bytes getPublicKeyAsBase58AddressB() const;
+    // BytesView getChainCodeB() const;
+    bool verifyCompactSignatureWithHash(BytesView message, BytesView signature) const;
 
 private:
-    static const Poco::UInt32 HIGHEST_BIT = 0x80000000;
-    static const std::string MASTER_SECRET;
+    static const Poco::UInt32 HIGHEST_BIT = 0x80000000; 
+    static const std::string MASTER_SECRET; // to replace
+    // static const BytesView MASTER_SECRET;
     static Poco::UInt32 read_u32_be(const std::string& raw_key, size_t offset);
 
     std::string toBase58(bool is_private = false) const;
@@ -183,6 +186,10 @@ inline const std::string& ExtKey::getChainCode() const {
 }
 
 inline bool ExtKey::verifyCompactSignatureWithHash(const std::string& message, const std::string& signature) const {
+    return getPublicKey().verifyCompactSignatureWithHash(message, signature);
+}
+
+inline bool ExtKey::verifyCompactSignatureWithHash(BytesView message, BytesView signature) const {
     return getPublicKey().verifyCompactSignatureWithHash(message, signature);
 }
 
