@@ -15,7 +15,7 @@ class GroupApiVarInterface {
 public:
     enum METHOD {
         Create = 0,
-        createGroup = 1,
+        CreateGroup = 1,
         AddGroupMember = 2,
         RemoveGroupMember = 3,
         UpdateGroup = 4,

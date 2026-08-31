@@ -9,7 +9,7 @@ using namespace privmx::endpoint::group;
 std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface::*)(const Poco::Dynamic::Var&)>
     GroupApiVarInterface::methodMap = {
         {Create, &GroupApiVarInterface::create},
-        {createGroup, &GroupApiVarInterface::createGroup},
+        {CreateGroup, &GroupApiVarInterface::createGroup},
         {AddGroupMember, &GroupApiVarInterface::addGroupMember},
         {RemoveGroupMember, &GroupApiVarInterface::removeGroupMember},
         {UpdateGroup, &GroupApiVarInterface::updateGroup},
