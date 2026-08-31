@@ -342,7 +342,7 @@ int main(int argc, char** argv) {
         //group_1 — user_1 only (user + manager)
         auto group_1_publicMeta = endpoint::core::Buffer::from("test_group_1_publicMeta");
         auto group_1_privateMeta = endpoint::core::Buffer::from("test_group_1_privateMeta");
-        auto group_1_id = groupApi.createGroupWithKeyTree(
+        auto group_1_id = groupApi.createGroup(
             context_1_Id,
             users_1,
             users_1,
@@ -352,7 +352,7 @@ int main(int argc, char** argv) {
         //group_2 — user_1 + user_2 as members, user_1 as manager
         auto group_2_publicMeta = endpoint::core::Buffer::from("test_group_2_publicMeta");
         auto group_2_privateMeta = endpoint::core::Buffer::from("test_group_2_privateMeta");
-        auto group_2_id = groupApi.createGroupWithKeyTree(
+        auto group_2_id = groupApi.createGroup(
             context_1_Id,
             users_1_2,
             users_1,
@@ -362,7 +362,7 @@ int main(int argc, char** argv) {
         //group_3 — user_1 + user_2 + user_3 as members, user_1 as manager
         auto group_3_publicMeta = endpoint::core::Buffer::from("test_group_3_publicMeta");
         auto group_3_privateMeta = endpoint::core::Buffer::from("test_group_3_privateMeta");
-        auto group_3_id = groupApi.createGroupWithKeyTree(
+        auto group_3_id = groupApi.createGroup(
             context_1_Id,
             users_1_2_3,
             users_1,

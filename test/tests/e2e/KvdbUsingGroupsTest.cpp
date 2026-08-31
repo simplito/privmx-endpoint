@@ -902,7 +902,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
     // re-wraps to the current epoch and must clear it.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(KUGConnectionType::KUGUser1),
@@ -991,7 +991,7 @@ TEST_F(KvdbUsingGroupsTest, setEntry_auto_rotates_a_stale_kvdb_key) {
     // problem to notice. `setEntry` re-keys the KVDB with its own roster and writes under the new key.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(KUGConnectionType::KUGUser1),

@@ -24,33 +24,22 @@ namespace endpoint {
 namespace group {
 namespace checkpoint {
 
-/**
- * The per-group checkpoints for one connection.
- *
- * Scoping lives here rather than inside `ChainCheckpoint` for the same reason as `TreeKeyCacheRegistry`: the id
- * is known at the schema-mapper boundary and nowhere deeper, and nothing inside a single checkpoint is keyed by
- * group.
- *
- * Invalidation **detaches** a store instead of clearing it, so it's safe to drop a group's checkpoint while
- * another thread is mid-verification of it: the verifier holds a `shared_ptr` and finishes writing into what is
- * now a private orphan, which dies with the call. Clearing a shared store in place could instead let an
- * in-flight verification write a stale-but-still-monotonic snapshot back in right after the drop.
- */
+// The per-group checkpoints for one connection. Like `TreeKeyCacheRegistry`, invalidation detaches a store rather
+// than clearing it, so a verification in flight finishes into a private orphan instead of writing a stale snapshot.
 class ChainCheckpointRegistry {
 public:
-    /** The checkpoint for one group, created on first use. Never null. */
+    // Created on first use, never null.
     std::shared_ptr<ChainCheckpoint> get(const std::string& groupId);
 
-    /** The checkpoint for one group if it already exists, without creating one. For tests and diagnostics. */
+    // Without creating one. For tests and diagnostics.
     std::shared_ptr<ChainCheckpoint> tryGet(const std::string& groupId) const;
 
-    /** Detaches one group's checkpoint. Handles already taken stay valid; they just stop being shared. */
+    // Handles already taken stay valid; they just stop being shared.
     void drop(const std::string& groupId);
 
-    /** Detaches every checkpoint. */
     void dropAll();
 
-    /** Number of groups with a live checkpoint. For tests and diagnostics. */
+    // For tests and diagnostics.
     std::size_t groupCount() const;
 
 private:

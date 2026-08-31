@@ -886,7 +886,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
     // re-wraps to the current epoch and must clear it.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(IUGConnectionType::IUGUser1),

@@ -60,7 +60,15 @@ ModuleBaseApi::ContainerRoster ModuleBaseApi::resolveRosterPubKeys(
     int64_t totalAvailable = 0;
     do {
         auto page = _connection.listContextUsers(
-            contextId, PagingQuery{.skip = skip, .limit = PAGE_SIZE, .sortOrder = "asc"}
+            contextId,
+            PagingQuery{
+                .skip = skip,
+                .limit = PAGE_SIZE,
+                .sortOrder = "asc",
+                .lastId = std::nullopt,
+                .sortBy = std::nullopt,
+                .queryAsJson = std::nullopt
+            }
         );
         if (page.readItems.empty()) {
             break;
@@ -135,7 +143,6 @@ DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(
     ModuleKeys moduleKeys,
     const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    // The key every new item is encrypted under: a stale one is refused here rather than at each write site.
     assertRekeyNotNeeded(moduleKeys);
     KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location = EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
@@ -181,7 +188,6 @@ ModuleKeys ModuleBaseApi::getModuleKeys(
     const std::optional<int64_t>& minimumSchemaVersion
 ) {
     auto keys = _keyCache.getKeys(moduleId, keyIds, minimumSchemaVersion);
-    // if cache don't have decryption keys
     if (!keys.has_value()) {
         return getNewModuleKeysAndUpdateCache(moduleId);
     }
@@ -202,7 +208,6 @@ void ModuleBaseApi::invalidateModuleKeysInCache(const std::optional<std::string>
 }
 
 ModuleKeys ModuleBaseApi::getNewModuleKeysAndUpdateCache(const std::string& moduleId) {
-    // get newest module
     LOG_DEBUG("PlatformModule", "getNewModuleKeysAndUpdateCache")
     auto moduleKeys = getModuleKeysAndVersionFromServer(moduleId);
     auto keys = convertModuleKeysToContainerKeyCacheFormat(moduleKeys.first, moduleKeys.second);

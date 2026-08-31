@@ -33,8 +33,7 @@ TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
 
     if (group.leafAssignment.has_value()) {
         for (const std::string& userId : group.leafAssignment.value()) {
-            // The wire format uses an empty string for a blank leaf, so that the array needs no nullable
-            // elements. Anything non-empty is an occupied position.
+            // The wire format uses an empty string for a blank leaf.
             if (userId.empty()) {
                 state.leafAssignment.push_back(std::nullopt);
             } else {
@@ -78,13 +77,8 @@ TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
 
 namespace {
 
-/**
- * Converts one wire rung, dropping it when it does not point downwards.
- *
- * Re-checking the direction client-side is not redundancy for its own sake: the bridge enforces it, but taking
- * the server's word for it would mean trusting the one party the threat model assumes may be hostile — and an
- * upward rung is exactly the shape that hands a removed member a key from after their removal.
- */
+// Drops a rung that does not point downwards. The bridge enforces this too, but taking its word for it would trust
+// the one party the threat model assumes may be hostile — an upward rung hands a removed member a later key.
 std::optional<ArchiveRung> convertRung(const privmx::endpoint::group::server::GroupArchiveRung& rung) {
     if (rung.targetKeyVersion >= rung.atKeyVersion) {
         return std::nullopt;
@@ -110,7 +104,7 @@ std::optional<ArchiveRung> convertRung(const privmx::endpoint::group::server::Gr
 
 } // namespace
 
-std::vector<ArchiveRung> GroupKeyResolver::toRungs(const server::GroupGetKeyArchiveResult& archive) {
+std::vector<ArchiveRung> GroupKeyResolver::toDownwardRungs(const server::GroupGetKeyArchiveResult& archive) {
     std::vector<ArchiveRung> rungs;
     for (const server::GroupArchiveRung& rung : archive.rungs) {
         const auto converted = convertRung(rung);
@@ -181,13 +175,8 @@ std::optional<std::string> GroupKeyResolver::ownUserId(const server::GroupInfo& 
     return userId;
 }
 
-/**
- * Resolves through the tree, then through the ladder if an older epoch was asked for.
- *
- * `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group because the
- * group no longer carries them: the bridge serves the ladder from `groupGetKeyArchive`, and keeping the walk
- * ignorant of where they came from is what lets the verification at each hop be written once.
- */
+// `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group, which no longer
+// carries them: the bridge serves the ladder separately, and the walk stays ignorant of where they came from.
 ResolveResult GroupKeyResolver::resolveWith(
     const server::GroupInfo& group,
     std::int64_t epoch,
@@ -250,7 +239,7 @@ ResolveResult GroupKeyResolver::resolve(
         std::optional<std::uint32_t>(static_cast<std::uint32_t>(archive.archivePrunedBelow.value())) :
         std::nullopt;
     return resolveWith(
-        group, epoch, ownUserKey, toRungs(archive), toRegistry(group, archive),
+        group, epoch, ownUserKey, toDownwardRungs(archive), toRegistry(group, archive),
         static_cast<std::uint32_t>(archive.eraFloor), prunedBelow
     );
 }

@@ -249,9 +249,8 @@ void Validator::validatePubKeyBase58DER(const string& value, const string& stack
 }
 
 void Validator::validatePubKeyFormat(const string& value, const string& stack_trace) {
-    // A DER-encoded point is 33 bytes compressed or 65 uncompressed; anything else is not a key whatever the
-    // curve says. The decode also enforces the base58 alphabet and the checksum, so a truncated or corrupted
-    // string is caught here rather than surfacing later as a decryption that does not work.
+    // A DER-encoded point is 33 bytes compressed or 65 uncompressed; the decode itself enforces
+    // the base58 alphabet and checksum, so corrupted keys fail here instead of at decryption time.
     std::string der;
     try {
         der = privmx::utils::Base58::decodeWithChecksum(value);

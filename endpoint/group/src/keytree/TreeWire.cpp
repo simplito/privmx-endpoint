@@ -152,7 +152,7 @@ TreeGroupState TreeWire::toRuntime(
     return state;
 }
 
-server::GroupTreeTransition TreeWire::toTransition(
+server::GroupTreeTransition TreeWire::toRemovalTransition(
     const server::GroupTreeState& before,
     const RemovalPlan& plan,
     std::uint32_t position,
@@ -288,9 +288,8 @@ server::GroupTreeState TreeWire::afterAddition(
         after.nodes.push_back(node);
     }
 
-    // Growth re-parents nodes and leaves at the truncated edge of the tree, so an edge that was correct a moment
-    // ago can name a parent that is no longer the child's parent. Those have to go: the plan supplies the
-    // replacement, and keeping the old one would leave the state describing a topology that no longer exists.
+    // Growth re-parents nodes at the truncated edge, so an edge correct a moment ago can name a parent that is no
+    // longer the child's. The plan supplies the replacement; keeping the old one would describe a dead topology.
     const auto stillCorrect = [&](const server::GroupTreeEdge& edge) {
         if (edge.isGrantEdge.value_or(false)) {
             return true; // the plan replaces it when the root changed; otherwise it still points at the root

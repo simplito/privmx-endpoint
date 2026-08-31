@@ -57,7 +57,7 @@ public:
      * @param policies Group's policies
      * @return ID of the created Group
      */
-    std::string createGroupWithKeyTree(
+    std::string createGroup(
         const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,

@@ -56,9 +56,8 @@ void GroupDataSchemaMapper::assertHeadMatchesVerifiedState(
     const std::string& verifiedGroupPubKey,
     int64_t verifiedKeyVersion
 ) {
-    // Anchored to verified state, never to `history.back()`: once entries can be skipped — or not sent at all —
-    // that field is bridge-supplied plaintext this call may never have touched, and checking the head against it
-    // would let a server tamper with it and the matching top-level fields consistently, with nothing to catch it.
+    // Anchored to verified state, never to `history.back()`: once entries can be skipped, that field is
+    // bridge-supplied plaintext this call may never have touched, and tampering it stays consistent.
     const auto headUsers = std::set<std::string>(groupInfo.users.begin(), groupInfo.users.end());
     const auto headManagers = std::set<std::string>(groupInfo.managers.begin(), groupInfo.managers.end());
     const bool bridgeEpochMismatch = groupInfo.keyVersion.has_value() &&
@@ -109,22 +108,14 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     auto checkpointStore = _chainCheckpoints.get(groupInfo.id);
     auto checkpoint = checkpointStore->get();
 
-    // Trust-on-first-use version/epoch pinning. A shorter response than what we've already confirmed can
-    // still be a perfectly validly-signed *past* state of this same group — chain-link/manager checks alone
-    // can't see anything wrong with it, because they only look inside the response they're given, never at what
-    // was seen before. That is exactly the gap a malicious bridge would use to hide a since-revoked member: keep
-    // replaying an old, genuinely-once-valid state from before the removal. So this has to be checked before
-    // any per-entry verification even starts — a fresh from-genesis verify of the shorter array would happily
-    // succeed on its own terms and never notice it is stale. Reported as a distinct fork/rollback exception
-    // rather than the generic integrity failure, since it signals a diverging server, not malformed data. First
-    // sighting of a group is exempt by construction (no checkpoint to regress behind), same as with public keys.
+    // Trust-on-first-use rollback pinning, before any per-entry check: a shorter response can be a validly signed
+    // *past* state, which a from-genesis verify would accept on its own terms while hiding a since-revoked member.
     if (checkpoint.has_value() && groupInfo.version < checkpoint->verifiedVersion) {
         throw GroupHistoryForkException();
     }
 
-    // A window that does not start at genesis can only be verified from the checkpoint it chains into. Without
-    // one — evicted, or a different client — there is no anchor, and accepting the window would mean trusting
-    // its first entry on the server's word.
+    // A window that does not start at genesis is only verifiable from the checkpoint it chains into. Without one
+    // there is no anchor, and accepting the window would mean trusting its first entry on the server's word.
     if (firstServed > 1 && (!checkpoint.has_value() || checkpoint->verifiedVersion != firstServed - 1)) {
         throw GroupDataIntegrityException();
     }
@@ -148,9 +139,8 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         prevGroupPubKey = checkpoint->groupPubKeyAtCheckpoint;
     }
 
-    // `i == 0` below only ever means true genesis: a resumed run's first new entry has `i == startIndex >= 1`
-    // (a checkpoint can't exist for an empty chain), so it always takes the `else` branch of every check below —
-    // no new branching needed, the existing genesis/non-genesis split already does the right thing.
+    // `i == 0` below only ever means true genesis: a resumed run's first new entry has `i == startIndex >= 1`, so
+    // the existing genesis/non-genesis split already does the right thing without new branching.
     for (size_t i = startIndex; i < groupInfo.data.size(); ++i) {
         const auto& entry = groupInfo.data[i];
         const auto& histEntry = groupInfo.history[i];
@@ -189,9 +179,8 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
             );
         } catch (...) { throw GroupMembershipMismatchException(); }
 
-        // G1: chain link — for a resumed run, `runningPrevDioHashHex` is the checkpoint's own anchor, so the
-        // first new entry must chain directly into it, exactly as if it were the next entry in an uninterrupted
-        // full verification.
+        // G1: chain link — on a resumed run `runningPrevDioHashHex` is the checkpoint's own anchor, so the first
+        // new entry must chain into it exactly as it would in an uninterrupted full verification.
         if (isGenesis) {
             if (membership.prevEntryHash.has_value()) {
                 throw GroupChainBrokenException();
@@ -230,10 +219,8 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         // Epoch (keyVersion) monotonicity — backward compat: absent keyVersion treated as 0
         int64_t thisKeyVersion = membership.keyVersion.value_or(0);
         if (isGenesis) {
-            // The genesis epoch is 0 for a flat group and 1 for a tree-backed one, whose grant key exists from
-            // the moment of creation and whose Epoch Ladder counts from 1. Which of the two it is cannot be
-            // chosen freely: the head check below pins the committed value to the bridge's own `keyVersion`, and
-            // only the tree-backed creation path makes the bridge record 1. Anything above 1 is a fabrication.
+            // The genesis epoch is 0 for a flat group and 1 for a tree-backed one. Neither is freely chosen: the
+            // head check below pins it to the bridge's own `keyVersion`, so anything above 1 is a fabrication.
             if (thisKeyVersion > 1)
                 throw GroupDataIntegrityException();
         } else {
@@ -253,22 +240,12 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         runningPrevDioHashHex = privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(encData.dio));
     }
 
-    // Head consistency checks — unconditional, always run, and always O(1): `verifiedUsers`/`verifiedManagers`/
-    // `prevGroupPubKey`/`prevKeyVersion` are either freshly computed above or (when nothing new was visited,
-    // i.e. a full checkpoint hit) exactly the checkpoint's own remembered values. They are deliberately never
-    // re-derived from `groupInfo.history.back()`: once the loop can skip already-verified entries, that field is
-    // bridge-supplied plaintext that may not have been touched by this call at all, so anchoring the head check
-    // to it instead of to verified state would let a bridge tamper it (and the matching top-level fields)
-    // consistently, with nothing here to catch it.
+    // Unconditional and `O(1)`: the arguments are either freshly computed above or the checkpoint's own remembered
+    // values, and deliberately never re-derived from `history.back()`, which this call may never have touched.
     assertHeadMatchesVerifiedState(groupInfo, verifiedUsers, verifiedManagers, prevGroupPubKey, prevKeyVersion);
 
-    // keyVersion pinning, checked against the freshly-*verified* epoch rather than any bridge-supplied
-    // claim. In this chain model a version regression (caught above) is the only way keyVersion could regress
-    // without version regressing too — resuming from a checkpoint seeds `prevKeyVersion` from
-    // `keyVersionAtCheckpoint`, and the per-entry monotonicity check above already forbids it from decreasing
-    // from there — so this can't actually fire given today's checks. It stays as an explicit, literal assertion
-    // of the pinning guarantee rather than an implicit consequence of it, so a future change to those checks
-    // can't silently reopen the gap without also breaking this one.
+    // keyVersion pinning against the freshly verified epoch, not a bridge-supplied claim. Today's checks already
+    // make this unreachable; it stays explicit so a future change to them cannot silently reopen the gap.
     if (checkpoint.has_value() && prevKeyVersion < checkpoint->keyVersionAtCheckpoint) {
         throw GroupHistoryForkException();
     }

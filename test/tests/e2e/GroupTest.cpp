@@ -149,10 +149,10 @@ TEST_F(GroupTest, listGroups_correct_input_data) {
 }
 
 
-TEST_F(GroupTest, createGroupWithKeyTree_incorrect_data) {
+TEST_F(GroupTest, createGroup_incorrect_data) {
     // incorrect contextId
     EXPECT_THROW({
-        groupApi->createGroupWithKeyTree(
+        groupApi->createGroup(
             reader->getString("Group_1.groupId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId = reader->getString("Login.user_1_id"),
@@ -168,7 +168,7 @@ TEST_F(GroupTest, createGroupWithKeyTree_incorrect_data) {
     }, core::Exception);
     // user pubKey mismatch
     EXPECT_THROW({
-        groupApi->createGroupWithKeyTree(
+        groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId = reader->getString("Login.user_1_id"),
@@ -184,7 +184,7 @@ TEST_F(GroupTest, createGroupWithKeyTree_incorrect_data) {
     }, core::Exception);
     // manager pubKey mismatch
     EXPECT_THROW({
-        groupApi->createGroupWithKeyTree(
+        groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId = reader->getString("Login.user_1_id"),
@@ -200,7 +200,7 @@ TEST_F(GroupTest, createGroupWithKeyTree_incorrect_data) {
     }, core::Exception);
     // no managers
     EXPECT_THROW({
-        groupApi->createGroupWithKeyTree(
+        groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId = reader->getString("Login.user_1_id"),
@@ -213,12 +213,12 @@ TEST_F(GroupTest, createGroupWithKeyTree_incorrect_data) {
     }, core::Exception);
 }
 
-TEST_F(GroupTest, createGroupWithKeyTree) {
+TEST_F(GroupTest, createGroup) {
     std::string groupId;
     group::Group group;
     // different users and managers
     EXPECT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId = reader->getString("Login.user_2_id"),
@@ -252,7 +252,7 @@ TEST_F(GroupTest, createGroupWithKeyTree) {
     }
     // same users and managers
     EXPECT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId = reader->getString("Login.user_1_id"),
@@ -352,7 +352,7 @@ TEST_F(GroupTest, updateGroup_chain_integrity) {
     // A three-entry group (create + 2 updates) must pass G1/G2 → statusCode=0
     std::string groupId;
     EXPECT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
                 .userId = reader->getString("Login.user_1_id"),
@@ -437,7 +437,7 @@ TEST_F(GroupTest, group_member_can_read) {
     // Create group with user_1 as manager, user_2 as member
     std::string groupId;
     EXPECT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 core::UserWithPubKey{

@@ -90,7 +90,7 @@ protected:
 
     /** A tree-backed group with user_1 managing and the given users as members. */
     std::string createTreeGroup(const std::vector<core::UserWithPubKey>& members) {
-        return groupApi->createGroupWithKeyTree(
+        return groupApi->createGroup(
             contextId(), members, std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
         );
@@ -164,7 +164,7 @@ protected:
 // creation
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_F(GroupKeyTreeTest, createGroupWithKeyTree_starts_at_epoch_one) {
+TEST_F(GroupKeyTreeTest, createGroup_starts_at_epoch_one) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     ASSERT_FALSE(groupId.empty());

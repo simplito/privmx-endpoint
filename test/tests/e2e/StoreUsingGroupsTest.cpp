@@ -934,7 +934,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_clears_staleGroups_after_the_group_
     // re-wraps to the current epoch and must clear it.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(SUGConnectionType::SUGUser1),
@@ -1027,7 +1027,7 @@ TEST_F(StoreUsingGroupsTest, uploading_a_file_auto_rotates_a_stale_store_key) {
     // problem to notice. Closing the file re-keys the Store with its own roster and writes under the new key.
     std::string groupId;
     ASSERT_NO_THROW({
-        groupId = groupApi->createGroupWithKeyTree(
+        groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
                 userOf(SUGConnectionType::SUGUser1),

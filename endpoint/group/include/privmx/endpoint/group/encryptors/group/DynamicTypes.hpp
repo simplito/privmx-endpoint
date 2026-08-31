@@ -13,9 +13,6 @@ namespace endpoint {
 namespace group {
 namespace dynamic {
 
-// EncryptedGroupDataV5 — the opaque group data blob stored on the server.
-// Extends VersionedData (version field).
-// Extra compared to EncryptedModuleDataV5: groupPrivKey (encrypted) and membership (signed plaintext).
 #define ENCRYPTED_GROUP_DATA_V5_FIELDS(F)                                                                              \
     F(publicMeta, std::string)                                                                                         \
     F(publicMetaObject, Poco::Dynamic::Var)                                                                            \
@@ -27,8 +24,6 @@ namespace dynamic {
     F(dio, std::string)
 JSON_STRUCT_EXT(EncryptedGroupDataV5, core::dynamic::VersionedData, ENCRYPTED_GROUP_DATA_V5_FIELDS);
 
-// MembershipBlock — signed plaintext. Verifiable by non-members for G1/G2 chain checks.
-// Fields are in fixed serialization order.
 #define MEMBERSHIP_BLOCK_FIELDS(F)                                                                                     \
     F(users, std::vector<std::string>)                                                                                 \
     F(managers, std::vector<std::string>)                                                                              \

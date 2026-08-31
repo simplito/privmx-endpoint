@@ -370,15 +370,13 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
                 firstFailureGroupId = candidate.groupId;
             }
         }
-        // Must stay in the map even when every route failed: callers read `.at(keyId).statusCode`.
         if (!chosen.has_value()) {
             chosen = firstFailure;
         }
         if (!chosen.has_value()) {
-            continue; // no candidates; `addGroupKeys` cannot produce an empty list
+            continue;
         }
         if (firstFailure.has_value()) {
-            // Fail closed: a healthy sibling route must not mask a failure that may be evidence of tampering.
             LOG_ERROR(
                 "Error on KeyProvider::decryptAndVerifyGroupKeys, group key route failed", "\nkeyId: ", entry.first,
                 "\ngroup: ", firstFailureGroupId, "\nstatusCode: ", firstFailure->statusCode,

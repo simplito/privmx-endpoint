@@ -27,6 +27,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Factory.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
 #include "privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp"
+#include "privmx/utils/Logger.hpp"
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
@@ -283,8 +284,6 @@ protected:
         const std::function<void()>& autoRekey = nullptr
     ) {
         auto keys = getModuleKeys(moduleId);
-        // Proactive: the keys we already hold say the container is stale, so the write is doomed — re-key now
-        // rather than spending a round trip being told so.
         if (autoRekey && isRekeyNeeded(keys)) {
             autoRekey();
             keys = getNewModuleKeysAndUpdateCache(moduleId);
@@ -296,17 +295,12 @@ protected:
             if (code == invalidKeyCode) {
                 return op(getNewModuleKeysAndUpdateCache(moduleId));
             }
-            // Reactive, and the only reliable trigger: a cached `staleGroups` is a snapshot that nothing
-            // invalidates when a grantee group's epoch advances (see ContainerKeyCache), so the check above can
-            // be arbitrarily out of date. The bridge's refusal cannot be.
             if (autoRekey && code == privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode()) {
                 autoRekey();
                 return op(getNewModuleKeysAndUpdateCache(moduleId));
             }
             throw;
         }
-        // One retry only: a group that advances its epoch again mid-flight gives the caller a real error rather
-        // than a spin.
     }
 
     /**
@@ -402,8 +396,6 @@ protected:
                 return g.groupId == grant.groupId;
             });
             if (supplied != callerSupplied.end()) {
-                // The caller's public key wins where it has one: it is the key it verified out-of-band, and the
-                // role still comes from the grant, which a re-key cannot change.
                 grants.push_back(
                     GroupGrantWithKey{
                         .groupId = grant.groupId,
@@ -413,7 +405,9 @@ protected:
                     }
                 );
             } else {
-                grants.push_back(GroupGrantWithKey{.groupId = grant.groupId, .role = grant.role});
+                grants.push_back(
+                    GroupGrantWithKey{.groupId = grant.groupId, .role = grant.role, .groupPubKey = {}, .groupEpoch = 0}
+                );
             }
         }
         for (const auto& g : callerSupplied) {
@@ -422,10 +416,7 @@ protected:
                 [&](const server::GroupGrant& grant) { return grant.groupId == g.groupId; }
             );
             if (granted == container.groups.end()) {
-                // Not dropped silently: a re-key cannot add a grant (the bridge refuses a key entry for a group
-                // the container does not grant), so a group named here that the container does not grant is a
-                // caller mistake that the container's update call, not this one, is the fix for.
-                LOG_DEBUG("[resolveGranteesForRekey] group ", g.groupId, " is not a grantee of this module — ignored")
+                LOG_WARN("[resolveGranteesForRekey] group ", g.groupId, " is not a grantee of this module — ignored")
             }
         }
         std::unordered_map<std::string, GroupEpochInfo> groupCache;
@@ -467,11 +458,6 @@ protected:
         model.version = version;
         model.force = force;
 
-        // A re-key changes no grants, so the grantees are the container's own — `container.groups`, which the bridge
-        // serves in full. Taking them from `groups` instead would silently drop every grantee the caller did not
-        // name, and a caller can only name the groups it belongs to: `groupKeys`, the one place a container's
-        // grantee groups show up in its payload, is narrowed to those. The bridge rejects a re-key that leaves a
-        // granted group without an entry at the new keyId, so the dropped grantees would fail the whole call.
         model.groupKeys = buildRekeyGroupKeyEntries(container, resourceId, ctx, groups);
 
         sendRotateRequest(model);
@@ -508,7 +494,6 @@ protected:
         const std::string& secret,
         const std::vector<GroupGrantWithKey>& groups
     ) {
-        // Populate groupEpoch and groupPubKey from current group state wherever the caller didn't supply them.
         std::vector<GroupGrantWithKey> resolved = groups;
         std::unordered_map<std::string, GroupEpochInfo> groupEpochCache;
         resolveGroupEpochs(contextId, resolved, groupEpochCache);
@@ -563,12 +548,8 @@ auto ModuleBaseApi::getAndValidateModuleCurrentEncKey(
     if constexpr (module_has_group_keys<ModuleStruct>::value) {
         keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
     }
-    core::DecryptedEncKeyV2 ret = _keyProvider
-                                      ->getKeysAndVerify(
-                                          keyProviderRequest, groupPrivKeyResolverOr(groupPrivKeyResolver)
-                                      )
-                                      .at(location)
-                                      .at(data_entry.keyId);
+    auto keysMap = _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolverOr(groupPrivKeyResolver));
+    core::DecryptedEncKeyV2 ret = keysMap.at(location).at(data_entry.keyId);
     return ret;
 }
 

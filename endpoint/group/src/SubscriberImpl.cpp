@@ -35,9 +35,6 @@ std::vector<std::string> SubscriberImpl::getChannelPath(EventType eventType) {
     case EventType::GROUP_CREATE:
     case EventType::GROUP_UPDATE:
     case EventType::GROUP_DELETE:
-        // The bridge addresses groups as a collection inside the context module — `context/groups/<event>`, the
-        // same shape kvdb uses for its entries. A two-segment path matches nothing: the server compares the
-        // subscription path against the event channel by equality or a prefix ending in a slash (BR-37).
         return {std::string(_moduleName), std::string(_collectionName), _eventTypeNames.at(eventType)};
     }
     throw core::NotImplementedException(_readableEventType.at(eventType));
@@ -95,8 +92,6 @@ void SubscriberImpl::assertQuery(const std::vector<core::SubscriptionQueryObj>& 
         if (subscriptionQuery.selectors().size() != 1) {
             throw InvalidSubscriptionQueryException();
         }
-        // `context/groups/<event>`: the module, the collection, the event. Three segments, like kvdb's entries —
-        // a two-segment path is the shape that silently matched nothing before (BR-37/EP-24).
         if (subscriptionQuery.channelPath().size() != 3 ||
             subscriptionQuery.channelPath()[MODULE_NAME_IN_QUERY_PATH] != std::string(_moduleName) ||
             subscriptionQuery.channelPath()[COLLECTION_NAME_IN_QUERY_PATH] != std::string(_collectionName)) {

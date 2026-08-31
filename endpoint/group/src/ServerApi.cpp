@@ -8,7 +8,6 @@ ServerApi::ServerApi(privmx::privfs::RpcGateway::Ptr gateway) : _gateway(gateway
 
 server::GroupCreateResult ServerApi::groupCreate(server::GroupCreateModel model) {
     auto json = model.toJSON();
-    // bridge optResourceType requires absent or non-empty; strip empty string
     if (json->has("type") && json->get("type").toString().empty()) {
         json->remove("type");
     }

@@ -15,7 +15,7 @@ class GroupApiVarInterface {
 public:
     enum METHOD {
         Create = 0,
-        CreateGroupWithKeyTree = 1,
+        CreateGroup = 1,
         AddGroupMember = 2,
         RemoveGroupMember = 3,
         UpdateGroup = 4,
@@ -31,7 +31,7 @@ public:
         : _connection(std::move(connection)), _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var createGroupWithKeyTree(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var createGroup(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var addGroupMember(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var removeGroupMember(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateGroup(const Poco::Dynamic::Var& args);

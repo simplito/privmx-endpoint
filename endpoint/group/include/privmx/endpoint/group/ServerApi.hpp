@@ -28,7 +28,7 @@ public:
     void groupRemoveMember(server::GroupRemoveMemberModel model);
     void groupCutEra(server::GroupCutEraModel model);
     void groupPruneArchive(server::GroupPruneArchiveModel model);
-    /** The Epoch Ladder, fetched only when a client is actually reaching for an older epoch. */
+    // The Epoch Ladder, fetched only when a client is actually reaching for an older epoch.
     server::GroupGetKeyArchiveResult groupGetKeyArchive(server::GroupGetKeyArchiveModel model);
 
 private:

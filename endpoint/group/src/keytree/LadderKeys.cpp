@@ -50,10 +50,6 @@ bool LadderKeys::verifyAgainstRegistry(
     return published.value() == recovered.getPublicKey();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Publishing
-// ─────────────────────────────────────────────────────────────────────────────
-
 std::vector<std::uint32_t> LadderKeys::requiredSkipTargets(
     std::uint32_t newEpoch,
     std::uint32_t eraFloor,
@@ -63,9 +59,8 @@ std::vector<std::uint32_t> LadderKeys::requiredSkipTargets(
     if (!LadderMath::requiresUnitRung(newEpoch, eraFloor)) {
         return targets; // genesis of an era: nothing below to link to
     }
-    // Only the era floor and the prune watermark may shorten this list. Both are policy the bridge applies to the
-    // rung set anyway, and the keys they cut off are gone for every member alike — unlike a key that is merely
-    // absent from *this* client's cache, which is the case this whole path exists to stop being decisive.
+    // Only the era floor and the prune watermark may shorten this list: both are policy the bridge applies anyway,
+    // and what they cut off is gone for every member alike, unlike a key merely absent from this client's cache.
     const std::uint32_t floor = LadderMath::descentFloor(eraFloor, prunedBelow).floor;
     for (const std::uint32_t target : LadderMath::skipRungTargets(newEpoch, eraFloor)) {
         if (target == newEpoch - 1 || target < floor) {
@@ -107,10 +102,8 @@ RungKeyGathering LadderKeys::gatherRungKeys(
             from = target; // already held, from an earlier gather or a read in this session
             continue;
         }
-        // `maxWalk` sized to this hop instead of left at its default. The default protects a *reader* from a
-        // pathological rung set; here the point is to gather keys even across a stretch that only ever published
-        // unit rungs, since refusing to walk it is exactly what would leave that stretch permanently linear.
-        // Termination does not rest on this bound anyway — `descend` keeps a visited set.
+        // `maxWalk` sized to this hop: the default protects a reader from a pathological rung set, but here even a
+        // stretch of nothing but unit rungs must be walked, or it stays linear forever. `descend` has a visited set.
         const DescentResult step = descend(from, target, available, registry, eraFloor, prunedBelow, from - target + 1);
         gathering.unwraps += step.hops;
         if (!step.key.has_value()) {
@@ -203,15 +196,13 @@ std::vector<ArchiveRung> LadderKeys::buildEraLinks(
             throw std::invalid_argument("an era link must be addressed to a user or a group, not to an epoch");
         }
         if (recipient.id.empty()) {
-            // The bridge pairs `recipientKind` with `recipient`: an `epoch` rung names nobody, and the two
-            // era-crossing kinds must name their recipient, because both go into the rung's stored identity.
+            // The bridge pairs `recipientKind` with `recipient`, both going into the rung's stored identity.
             // Caught here so the caller gets the reason instead of GROUP_ARCHIVE_INVALID from the server.
             throw std::invalid_argument("an era link addressed to a user or a group has to name it");
         }
         ArchiveRung link;
-        // An era link is not a descent step — the recipient's own key opens it — but it must still satisfy the
-        // direction invariant `target < at`, because the server validates every rung uniformly. So it is
-        // addressed at the new era's floor and carries the closing era's top key.
+        // Not a descent step — the recipient's own key opens it — but the server validates every rung uniformly,
+        // so it still has to satisfy `target < at`: addressed at the new era's floor, carrying the closing top key.
         link.span = RungSpan{closingEpoch + 1, closingEpoch};
         link.recipientKind = recipient.kind;
         link.recipientId = recipient.id;
@@ -221,10 +212,6 @@ std::vector<ArchiveRung> LadderKeys::buildEraLinks(
     }
     return links;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Descending
-// ─────────────────────────────────────────────────────────────────────────────
 
 DescentResult LadderKeys::descend(
     std::uint32_t from,

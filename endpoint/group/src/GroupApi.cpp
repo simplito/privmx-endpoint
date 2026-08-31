@@ -37,7 +37,7 @@ GroupApi GroupApi::create(core::Connection& connection) {
 
 GroupApi::GroupApi(const std::shared_ptr<GroupApiImpl>& impl) : ExtendedPointer(impl) {}
 
-std::string GroupApi::createGroupWithKeyTree(
+std::string GroupApi::createGroup(
     const std::string& contextId,
     const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers,
@@ -47,10 +47,10 @@ std::string GroupApi::createGroupWithKeyTree(
 ) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
-    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateUserListFormat(users, "field:users ");
+    core::Validator::validateUserListFormat(managers, "field:managers ");
     try {
-        return impl->createGroupWithKeyTree(contextId, users, managers, publicMeta, privateMeta, policies);
+        return impl->createGroup(contextId, users, managers, publicMeta, privateMeta, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -69,7 +69,6 @@ void GroupApi::addGroupMember(
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     core::Validator::validateClass<core::UserWithPubKey>(newMember, "field:newMember ");
-    // Format only — see `Validator::validateUserListFormat`. Keys the operation actually uses are checked in full.
     core::Validator::validateUserListFormat(users, "field:users ");
     core::Validator::validateUserListFormat(managers, "field:managers ");
     try {
@@ -91,7 +90,6 @@ void GroupApi::removeGroupMember(
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     core::Validator::validateId(userId, "field:userId ");
-    // Format only — see `Validator::validateUserListFormat`. Keys the operation actually uses are checked in full.
     core::Validator::validateUserListFormat(users, "field:users ");
     core::Validator::validateUserListFormat(managers, "field:managers ");
     try {

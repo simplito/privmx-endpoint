@@ -33,7 +33,7 @@ protected:
     };
 
     /**
-     * Builds a tree-backed group exactly as the bridge would serve it after `createGroupWithKeyTree`.
+     * Builds a tree-backed group exactly as the bridge would serve it after `createGroup`.
      *
      * `archive` mirrors the split in the real API: `groupGet` serves the tree, `groupGetKeyArchive` serves the
      * ladder, and the caller hands both to `resolve()`.
@@ -322,7 +322,7 @@ TEST_F(ResolverConversion, SECURITY_DropsUpwardRungsDuringConversion) {
         server::GroupArchiveRung{8, 8, std::nullopt, std::nullopt, "self", std::nullopt},
         server::GroupArchiveRung{8, 9, std::nullopt, std::nullopt, "upward", std::nullopt},
     };
-    const std::vector<ArchiveRung> rungs = GroupKeyResolver::toRungs(archive);
+    const std::vector<ArchiveRung> rungs = GroupKeyResolver::toDownwardRungs(archive);
     ASSERT_EQ(rungs.size(), 1u) << "only the downward rung may survive conversion";
     EXPECT_EQ(rungs[0].span.at, 8u);
     EXPECT_EQ(rungs[0].span.target, 7u);
