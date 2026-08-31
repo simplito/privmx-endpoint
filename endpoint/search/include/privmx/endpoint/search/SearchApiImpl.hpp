@@ -135,9 +135,6 @@ private:
     static const std::string SEARCH_TYPE_FILTER_FLAG;
 
     dynamic::IndexData getIndexData(const std::string& indexId);
-    // The Index's two containers are versioned apart — an automatic re-key bumps only the half that was written
-    // to — so a write to the Store half is guarded by the Store's own version, not the Index's. Not read under
-    // `force`: the Bridge skips the version check then, and the fetch would be a round trip for nothing.
     int64_t storeVersionGuard(const std::string& storeId, bool force);
     void setIndexData(const std::string& indexId, const std::string& storeId, const IndexMode mode);
     SearchIndex mapSearchIndex(const kvdb::Kvdb& kvdb);

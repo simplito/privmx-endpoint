@@ -10,6 +10,7 @@
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/utils/Logger.hpp>
+#include <privmx/utils/Logger.hpp>
 
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
@@ -298,8 +299,7 @@ int main(int argc, char** argv) {
         auto file_1_handle = storeApi.createFile(store_1_id, endpoint::core::Buffer::from(file_1_publicMeta), endpoint::core::Buffer::from(file_1_privateMeta), file_1_data.size());
         storeApi.writeToFile(file_1_handle, endpoint::core::Buffer::from(file_1_data));
         auto file_1_id = storeApi.closeFile(file_1_handle);
-        
-        LOG_INFO("File 2 - create")
+                LOG_INFO("File 2 - create")
         std::string file_2_publicMeta = "test_fileData_2_publicMeta";
         std::string file_2_privateMeta = "test_fileData_2_privateMeta";
         std::string file_2_data = "test_fileData_2_extraText";
@@ -738,6 +738,65 @@ int main(int argc, char** argv) {
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(searchIndex_3_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(searchIndex_3_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(searchIndex_3_privateMeta.stdString()) << std::endl;
+            // SearchIndex 1
+            iniFileWriter << "[SearchIndex_1]" << std::endl;
+            iniFileWriter << "indexId = " << searchIndex_1_server_data.indexId << std::endl;
+            iniFileWriter << "contextId = " << searchIndex_1_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << searchIndex_1_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << searchIndex_1_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << searchIndex_1_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << searchIndex_1_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << searchIndex_1_server_data.version << std::endl;
+            iniFileWriter << "mode = " <<  static_cast<int64_t>(searchIndex_1_server_data.mode) << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(searchIndex_1_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(searchIndex_1_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << searchIndex_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << searchIndex_1_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(searchIndex_1_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(searchIndex_1_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(searchIndex_1_privateMeta.stdString()) << std::endl;
+
+            iniFileWriter << "doc_1_id = " << searchIndex_1_doc_1_id << std::endl;
+            iniFileWriter << "doc_1_name = " << searchIndex_1_doc_1_name << std::endl;
+            iniFileWriter << "doc_1_content = " << searchIndex_1_doc_1_content << std::endl;
+            iniFileWriter << "doc_2_id = " << searchIndex_1_doc_2_id << std::endl;
+            iniFileWriter << "doc_2_name = " << searchIndex_1_doc_2_name << std::endl;
+            iniFileWriter << "doc_2_content = " << searchIndex_1_doc_2_content << std::endl;
+            iniFileWriter << "docs_common_content_part = " << searchIndex_1_docs_common_content_part << std::endl;
+            // SearchIndex 2
+            iniFileWriter << "[SearchIndex_2]" << std::endl;
+            iniFileWriter << "indexId = " << searchIndex_2_server_data.indexId << std::endl;
+            iniFileWriter << "contextId = " << searchIndex_2_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << searchIndex_2_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << searchIndex_2_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << searchIndex_2_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << searchIndex_2_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << searchIndex_2_server_data.version << std::endl;
+            iniFileWriter << "mode = " << static_cast<int64_t>(searchIndex_2_server_data.mode) << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(searchIndex_2_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(searchIndex_2_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << searchIndex_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << searchIndex_2_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(searchIndex_2_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(searchIndex_2_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(searchIndex_2_privateMeta.stdString()) << std::endl;
+            // SearchIndex 3
+            iniFileWriter << "[SearchIndex_3]" << std::endl;
+            iniFileWriter << "indexId = " << searchIndex_3_server_data.indexId << std::endl;
+            iniFileWriter << "contextId = " << searchIndex_3_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << searchIndex_3_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << searchIndex_3_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << searchIndex_3_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << searchIndex_3_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << searchIndex_3_server_data.version << std::endl;
+            iniFileWriter << "mode = " << static_cast<int64_t>(searchIndex_3_server_data.mode) << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(searchIndex_3_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(searchIndex_3_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << searchIndex_3_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << searchIndex_3_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(searchIndex_3_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(searchIndex_3_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(searchIndex_3_privateMeta.stdString()) << std::endl;
             
             //Message_1
             iniFileWriter << "[Message_1]" << std::endl;
@@ -896,6 +955,7 @@ int main(int argc, char** argv) {
             
         }
         LOG_INFO("Writing data to json file")
+        LOG_INFO("Writing data to json file")
         iniFileWriter.open(iniFileJSONPath, ios::out | ios::trunc);
         if(iniFileWriter.is_open()) {
             Poco::JSON::Object::Ptr data = new Poco::JSON::Object();
@@ -947,6 +1007,7 @@ int main(int argc, char** argv) {
             data_store_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(store_3_publicMeta.stdString()));
             data_store_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(store_3_privateMeta.stdString()));
             data->set("Store_3", data_store_3);
+            
             Poco::JSON::Object::Ptr data_inbox_1 = new Poco::JSON::Object();
             data_inbox_1->set("server_data", (_serializer.serialize(inbox_1_server_data)));
             data_inbox_1->set("uploaded_publicMeta_inBase64", utils::Base64::from(inbox_1_publicMeta.stdString()));
@@ -962,6 +1023,7 @@ int main(int argc, char** argv) {
             data_inbox_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(inbox_3_publicMeta.stdString()));
             data_inbox_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(inbox_3_privateMeta.stdString()));
             data->set("Inbox_3", data_inbox_3);
+
             Poco::JSON::Object::Ptr data_kvdb_1 = new Poco::JSON::Object();
             data_kvdb_1->set("server_data", (_serializer.serialize(kvdb_1_server_data)));
             data_kvdb_1->set("uploaded_publicMeta_inBase64", utils::Base64::from(kvdb_1_publicMeta.stdString()));
@@ -977,6 +1039,7 @@ int main(int argc, char** argv) {
             data_kvdb_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(kvdb_3_publicMeta.stdString()));
             data_kvdb_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(kvdb_3_privateMeta.stdString()));
             data->set("Kvdb_3", data_kvdb_3);
+
             Poco::JSON::Object::Ptr search_index_1 = new Poco::JSON::Object();
             search_index_1->set("server_data", (_serializer.serialize(searchIndex_1_server_data)));
             search_index_1->set("uploaded_publicMeta_inBase64", utils::Base64::from(searchIndex_1_publicMeta.stdString()));
@@ -999,7 +1062,7 @@ int main(int argc, char** argv) {
             search_index_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(searchIndex_3_publicMeta.stdString()));
             search_index_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(searchIndex_3_privateMeta.stdString()));
             data->set("SearchIndex_3", search_index_3);
-            
+                      
 
             Poco::JSON::Object::Ptr data_message_1 = new Poco::JSON::Object();
             data_message_1->set("server_data", (_serializer.serialize(message_1_server_data)));

@@ -57,8 +57,6 @@ std::string SearchApiImpl::createSearchIndex(
     const std::optional<core::ContainerPolicy>& policies,
     const std::vector<core::GroupGrantWithKey>& groups
 ) {
-    // Both halves get the same grants: a member of a granted group reads the Index's metadata from the KVDB and
-    // its documents from the Store, so a grant on one alone would leave the Index half-readable.
     std::string indexId = _kvdbApi.getImpl()->createKvdb(
         contextId, users, managers, publicMeta, privateMeta, policies, groups, SEARCH_TYPE_FILTER_FLAG
     );
