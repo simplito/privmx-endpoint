@@ -42,6 +42,7 @@ public:
         BeginTransaction = 14,
         Commit = 15,
         Rollback = 16,
+        RotateSearchIndexKeys = 17,
     };
 
     SearchApiVarInterface(
@@ -57,6 +58,7 @@ public:
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var createSearchIndex(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateSearchIndex(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var rotateSearchIndexKeys(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteSearchIndex(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getSearchIndex(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listSearchIndexes(const Poco::Dynamic::Var& args);

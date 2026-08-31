@@ -233,7 +233,7 @@ std::optional<KvdbEntry> KvdbApiImpl::findEntry(const std::string& kvdbId, const
         return std::nullopt;
     }
     return _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(
-        entryOpt.value(), getEntryDecryptionKeys(entryOpt.value()), _keyProvider
+        entryOpt.value(), getEntryDecryptionKeys(entryOpt.value()), _keyProvider, _groupPrivKeyResolver
     );
 }
 

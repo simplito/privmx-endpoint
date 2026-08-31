@@ -54,13 +54,16 @@ std::string SearchApiImpl::createSearchIndex(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const IndexMode mode,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
+    // Both halves get the same grants: a member of a granted group reads the Index's metadata from the KVDB and
+    // its documents from the Store, so a grant on one alone would leave the Index half-readable.
     std::string indexId = _kvdbApi.getImpl()->createKvdb(
-        contextId, users, managers, publicMeta, privateMeta, policies, SEARCH_TYPE_FILTER_FLAG
+        contextId, users, managers, publicMeta, privateMeta, policies, groups, SEARCH_TYPE_FILTER_FLAG
     );
     std::string storeId = _storeApi.getImpl()->createStore(
-        contextId, users, managers, {}, {}, policies, SEARCH_TYPE_FILTER_FLAG
+        contextId, users, managers, {}, {}, policies, SEARCH_TYPE_FILTER_FLAG, groups
     );
     setIndexData(indexId, storeId, mode);
     return indexId;
@@ -75,14 +78,31 @@ void SearchApiImpl::updateSearchIndex(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto data = getIndexData(indexId);
     _kvdbApi.getImpl()->updateKvdb(
-        indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+        indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
     );
     _storeApi.getImpl()->updateStore(
-        data.storeId, users, managers, {}, {}, version, force, forceGenerateNewKey, policies
+        data.storeId, users, managers, {}, {}, storeVersionGuard(data.storeId, force), force, forceGenerateNewKey,
+        policies, groups
+    );
+}
+
+void SearchApiImpl::rotateSearchIndexKeys(
+    const std::string& indexId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    auto data = getIndexData(indexId);
+    _kvdbApi.getImpl()->rotateKvdbKeys(indexId, users, managers, version, force, groups);
+    _storeApi.getImpl()->rotateStoreKeys(
+        data.storeId, users, managers, storeVersionGuard(data.storeId, force), force, groups
     );
 }
 
@@ -178,6 +198,10 @@ dynamic::IndexData SearchApiImpl::getIndexData(const std::string& indexId) {
     return deserializeIndexData(data.data);
 }
 
+int64_t SearchApiImpl::storeVersionGuard(const std::string& storeId, bool force) {
+    return force ? 0 : _storeApi.getImpl()->getStore(storeId, SEARCH_TYPE_FILTER_FLAG).version;
+}
+
 void SearchApiImpl::setIndexData(const std::string& indexId, const std::string& storeId, const IndexMode mode) {
     dynamic::IndexData indexData{.storeId = storeId, .mode = mode};
     _kvdbApi.getImpl()->setEntry(indexId, "data", {}, {}, serializeIndexData(indexData), 0);
@@ -199,7 +223,11 @@ SearchIndex SearchApiImpl::mapSearchIndex(const kvdb::Kvdb& kvdb) {
         .policy = kvdb.policy,
         .mode = (kvdb.statusCode == 0) ? (IndexMode)getIndexData(kvdb.kvdbId).mode : IndexMode::UNKNOWN,
         .statusCode = kvdb.statusCode,
-        .schemaVersion = kvdb.schemaVersion
+        .schemaVersion = kvdb.schemaVersion,
+        // Reported off the KVDB half alone: both halves are granted together, and reading the Store's would cost
+        // a round trip per Index. A re-key of either half clears its own staleness.
+        .groups = kvdb.groups,
+        .staleGroups = kvdb.staleGroups
     };
 }
 

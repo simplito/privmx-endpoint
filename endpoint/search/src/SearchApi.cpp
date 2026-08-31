@@ -54,15 +54,17 @@ std::string SearchApi::createSearchIndex(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const IndexMode mode,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     core::Validator::validateEnum<IndexMode>(mode, {IndexMode::WITH_CONTENT, IndexMode::WITHOUT_CONTENT}, "field:mode");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
-        return impl->createSearchIndex(contextId, users, managers, publicMeta, privateMeta, mode, policies);
+        return impl->createSearchIndex(contextId, users, managers, publicMeta, privateMeta, mode, policies, groups);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -78,16 +80,39 @@ void SearchApi::updateSearchIndex(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto impl = getImpl();
     core::Validator::validateId(indexId, "field:indexId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
         impl->updateSearchIndex(
-            indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+            indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
         );
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void SearchApi::rotateSearchIndexKeys(
+    const std::string& indexId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(indexId, "field:indexId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
+    try {
+        impl->rotateSearchIndexKeys(indexId, users, managers, version, force, groups);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
