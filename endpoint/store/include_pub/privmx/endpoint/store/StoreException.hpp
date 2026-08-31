@@ -70,7 +70,9 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointStoreException, "Unknown endpoint store
     X(HashIndexOutOfBoundsException, "Hash index out of bounds", 0x002A)                                              \
     X(InvalidFileTopHashException, "Invalid file top hash", 0x002B)                                                   \
     X(FileSyncFailedHandleCloseException, "File sync failed, handle closed", 0x002C)                                  \
-    X(FileRandomWriteInternalException, "File random write internal Exception ", 0x002D)
+    X(FileRandomWriteInternalException, "File random write internal Exception ", 0x002D)                              \
+    X(InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x002E)                                         \
+    X(InvalidFileReadWriteHandleException, "Invalid file handle: handle is not FILE_READ_WRITE_HANDLE", 0x002F)
 
 #define PRIVMX_STORE_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointStoreException, NAME, MSG, CODE)
 STORE_EXCEPTIONS(PRIVMX_STORE_DECLARE)

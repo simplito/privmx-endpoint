@@ -64,7 +64,8 @@ FileReadHandle::FileReadHandle(
     int64_t id,
     const store::FileDecryptionParams& decryptionParams,
     size_t serverChunkSize,
-    std::shared_ptr<ServerApi> server
+    std::shared_ptr<ServerApi> server,
+    std::shared_ptr<CacheInterface> cache
 )
     : FileHandle(
           id,
@@ -76,8 +77,8 @@ FileReadHandle::FileReadHandle(
       ) {
     _chunkEncryptor = std::make_shared<ChunkEncryptor>(decryptionParams.key, decryptionParams.chunkSize);
     _chunkDataProvider = std::make_shared<ChunkDataProvider>(
-        server, _chunkEncryptor->getEncryptedChunkSize(), serverChunkSize, decryptionParams.fileId,
-        decryptionParams.sizeOnServer, decryptionParams.version
+        server, _chunkEncryptor, _chunkEncryptor->getEncryptedChunkSize(), serverChunkSize, decryptionParams.fileId,
+        decryptionParams.sizeOnServer, decryptionParams.version, std::move(cache)
     );
     _hashList = std::make_shared<HmacList>(
         decryptionParams.key, decryptionParams.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge()
@@ -190,7 +191,8 @@ FileReadWriteHandle::FileReadWriteHandle(
     size_t serverChunkSize,
     const privmx::crypto::PrivateKey& userPrivKey,
     const privmx::endpoint::core::Connection& connection,
-    std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi
+    std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi,
+    std::shared_ptr<CacheInterface> cache
 )
     : FileHandle(
           id,
@@ -205,9 +207,9 @@ FileReadWriteHandle::FileReadWriteHandle(
         encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.chunkSize
     );
     std::shared_ptr<ChunkDataProvider> chunkDataProvider = std::make_shared<ChunkDataProvider>(
-        serverApi, chunkEncryptor->getEncryptedChunkSize(), serverChunkSize,
+        serverApi, chunkEncryptor, chunkEncryptor->getEncryptedChunkSize(), serverChunkSize,
         encryptionParams.fileDecryptionParams.fileId, encryptionParams.fileDecryptionParams.sizeOnServer,
-        encryptionParams.fileDecryptionParams.version
+        encryptionParams.fileDecryptionParams.version, std::move(cache)
     );
     std::shared_ptr<IHashList> hashList = std::make_shared<HmacList>(
         encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.hmac,
@@ -231,11 +233,12 @@ FileHandleManager::FileHandleManager(std::shared_ptr<core::HandleManager> handle
 std::shared_ptr<FileReadHandle> FileHandleManager::createFileReadHandle(
     const store::FileDecryptionParams& decryptionParams,
     size_t serverChunkSize,
-    std::shared_ptr<ServerApi> server
+    std::shared_ptr<ServerApi> server,
+    std::shared_ptr<CacheInterface> cache
 ) {
     int64_t id = _handleManager->createHandle((_labelPrefix.empty() ? "" : _labelPrefix + ":") + "FileRead");
     std::shared_ptr<FileReadHandle> result = std::make_shared<FileReadHandle>(
-        id, decryptionParams, serverChunkSize, server
+        id, decryptionParams, serverChunkSize, server, std::move(cache)
     );
     _map.set(id, result);
     return result;
@@ -268,11 +271,12 @@ std::shared_ptr<FileReadWriteHandle> FileHandleManager::createFileReadWriteHandl
     size_t serverChunkSize,
     const privmx::crypto::PrivateKey& userPrivKey,
     const privmx::endpoint::core::Connection& connection,
-    std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi
+    std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi,
+    std::shared_ptr<CacheInterface> cache
 ) {
     int64_t id = _handleManager->createHandle("FileReadWrite");
     std::shared_ptr<FileReadWriteHandle> result = std::make_shared<FileReadWriteHandle>(
-        id, fileInfo, encryptionParams, serverChunkSize, userPrivKey, connection, serverApi
+        id, fileInfo, encryptionParams, serverChunkSize, userPrivKey, connection, serverApi, std::move(cache)
     );
     _map.set(id, result);
     return result;

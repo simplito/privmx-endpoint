@@ -2461,6 +2461,7 @@ TEST_F(StoreTest, random_write_sync_oneChunk) {
         storeApi->writeToFile(rwFileHandle, core::Buffer::from("testing_rw"));
         storeApi->seekInFile(rwFileHandle,0);
         auto testWrite1 = storeApi->readFromFile(rwFileHandle, 20).stdString();
+        storeApi->flushFile(rwFileHandle);
         EXPECT_EQ(testWrite1, "testing_rw");
     });
 
@@ -2511,6 +2512,7 @@ TEST_F(StoreTest, random_write_multipleSync_multipleChunks) {
         storeApi->writeToFile(rwFileHandle, core::Buffer::from(Hx64k+Hx64k+Hx64k+Hx64k));
         storeApi->seekInFile(rwFileHandle,0);
         auto testWrite = storeApi->readFromFile(rwFileHandle, blockSize*4+1).stdString();
+        storeApi->flushFile(rwFileHandle);
         EXPECT_EQ(testWrite, Hx64k+Hx64k+Hx64k+Hx64k);
     });
     EXPECT_NO_THROW({
@@ -2519,12 +2521,14 @@ TEST_F(StoreTest, random_write_multipleSync_multipleChunks) {
         storeApi_user2->writeToFile(rwFileHandle_2, core::Buffer::from(Ix64k+Ix64k));
         storeApi_user2->seekInFile(rwFileHandle_2,0);
         auto testWrite = storeApi_user2->readFromFile(rwFileHandle_2, blockSize*4+1).stdString();
+        storeApi_user2->flushFile(rwFileHandle_2);
         EXPECT_EQ(testWrite, Hx64k+Ix64k+Ix64k+Hx64k);
     });
     EXPECT_NO_THROW({
         storeApi->syncFile(rwFileHandle);
         storeApi->seekInFile(rwFileHandle, blockSize*3);
         storeApi->writeToFile(rwFileHandle, core::Buffer::from(Tx64k+Tx64k+Tx64k));
+        storeApi->flushFile(rwFileHandle);
         storeApi->seekInFile(rwFileHandle,0);
         auto testWrite = storeApi->readFromFile(rwFileHandle, blockSize*6+1).stdString();
         EXPECT_EQ(testWrite, Hx64k+Ix64k+Ix64k+Tx64k+Tx64k+Tx64k);
@@ -2533,6 +2537,7 @@ TEST_F(StoreTest, random_write_multipleSync_multipleChunks) {
         // truncate
         storeApi->seekInFile(rwFileHandle, blockSize*1);
         storeApi->writeToFile(rwFileHandle, core::Buffer::from(Tx64k+Ix64k), true);
+        storeApi->flushFile(rwFileHandle);
         storeApi->seekInFile(rwFileHandle,0);
         auto testWrite = storeApi->readFromFile(rwFileHandle, blockSize*6+1).stdString();
         EXPECT_EQ(testWrite, Hx64k+Tx64k+Ix64k);
@@ -2541,6 +2546,7 @@ TEST_F(StoreTest, random_write_multipleSync_multipleChunks) {
         storeApi_user2->syncFile(rwFileHandle_2);
         storeApi_user2->seekInFile(rwFileHandle_2, 0);
         storeApi_user2->writeToFile(rwFileHandle_2, core::Buffer::from(Ix64k));
+        storeApi_user2->flushFile(rwFileHandle_2);
         storeApi_user2->seekInFile(rwFileHandle_2,0);
         auto testWrite = storeApi_user2->readFromFile(rwFileHandle_2, blockSize*6+1).stdString();
         EXPECT_EQ(testWrite, Ix64k+Tx64k+Ix64k);

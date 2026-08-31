@@ -9,7 +9,8 @@ set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/utils ${CMAKE_CURRENT_BINARY_DIR}/u
 
 # Data set Generator
 add_executable(test_env_DockerSetupData ${CMAKE_CURRENT_SOURCE_DIR}/test_env/utils/DockerSetupData.cpp)
-target_link_libraries(test_env_DockerSetupData privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent privmxendpointkvdb privmxendpointgroup Poco::Foundation Poco::Util)
+target_link_libraries(test_env_DockerSetupData privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent privmxendpointkvdb privmxendpointlock privmxendpointsearch privmxendpointgroup Poco::Foundation Poco::Util)
+
 
 
 ## END to End TESTS
@@ -50,15 +51,23 @@ add_executable(test_e2e_StoreUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e
 target_link_libraries(test_e2e_StoreUsingGroupsTest privmx privmxendpointcore privmxendpointstore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 add_executable(test_e2e_KvdbUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/KvdbUsingGroupsTest.cpp)
 target_link_libraries(test_e2e_KvdbUsingGroupsTest privmx privmxendpointcore privmxendpointkvdb privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
-# Inbox grants and re-keys its inner Thread and Store alongside itself, so all three modules are linked here
 add_executable(test_e2e_InboxUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/InboxUsingGroupsTest.cpp)
 target_link_libraries(test_e2e_InboxUsingGroupsTest privmx privmxendpointcore privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
-# StreamRoom groups at container level — publishing needs WebRTC, so these cover grants/re-key/staleGroups only
 add_executable(test_e2e_StreamRoomUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/StreamRoomUsingGroupsTest.cpp)
 target_link_libraries(test_e2e_StreamRoomUsingGroupsTest privmx privmxendpointcore privmxendpointstream privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+add_executable(test_e2e_LockUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/LockUsingGroupsTest.cpp)
+target_link_libraries(test_e2e_LockUsingGroupsTest privmx privmxendpointcore privmxendpointstore privmxendpointlock privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+add_executable(test_e2e_SearchUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/SearchUsingGroupsTest.cpp)
+target_link_libraries(test_e2e_SearchUsingGroupsTest privmx privmxendpointcore privmxendpointstore privmxendpointkvdb privmxendpointlock privmxendpointsearch privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 # Tree-backed groups end to end (only place the full round trip runs; unit tests and the conformance fixture each cover just one side)
 add_executable(test_e2e_GroupKeyTreeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupKeyTreeTest.cpp)
 target_link_libraries(test_e2e_GroupKeyTreeTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+# Lock
+add_executable(test_e2e_LockTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/LockTest.cpp)
+target_link_libraries(test_e2e_LockTest privmx privmxendpointcore privmxendpointstore privmxendpointlock Poco::Foundation Poco::Util GTest::GTest)
+# Search
+add_executable(test_e2e_SearchTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/SearchTest.cpp)
+target_link_libraries(test_e2e_SearchTest privmx privmxendpointcore privmxendpointstore privmxendpointkvdb privmxendpointlock privmxendpointsearch Poco::Foundation Poco::Util GTest::GTest GTest::Main)
 # StreamLow
 add_executable(test_e2e_StreamLowTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/StreamLowTest.cpp)
 target_link_libraries(test_e2e_StreamLowTest privmx privmxendpointcore privmxendpointstream Poco::Foundation Poco::Util GTest::GTest GTest::Main)
@@ -133,4 +142,3 @@ target_link_libraries(keytree_state_dump privmx privmxendpointcore privmxendpoin
 # Emits the conformance vectors for the cross-implementation diff (not a test, a tool)
 add_executable(keytree_conformance_dump ${CMAKE_CURRENT_SOURCE_DIR}/tools/keytree_conformance_dump.cpp)
 target_link_libraries(keytree_conformance_dump privmxendpointgroup)
-

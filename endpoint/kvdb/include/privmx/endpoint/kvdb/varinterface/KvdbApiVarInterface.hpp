@@ -48,7 +48,8 @@ public:
         UnsubscribeFrom = 18,
         BuildSubscriptionQuery = 19,
         BuildSubscriptionQueryForSelectedEntry = 20,
-        RotateKvdbKeys = 21,
+        FindEntry = 21,
+        RotateKvdbKeys = 22,
     };
 
     /**
@@ -81,6 +82,7 @@ public:
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQueryForSelectedEntry(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var findEntry(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

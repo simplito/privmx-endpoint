@@ -36,6 +36,7 @@ public:
     server::KvdbGetResult kvdbGet(server::KvdbGetModel model);
     server::KvdbListResult kvdbList(server::KvdbListModel model);
     server::KvdbEntryGetResult kvdbEntryGet(server::KvdbEntryGetModel model);
+    server::KvdbEntryFindResult kvdbEntryFind(server::KvdbEntryGetModel model);
     void kvdbEntrySet(server::KvdbEntrySetModel model);
     void kvdbEntryDelete(server::KvdbEntryDeleteModel model);
     server::KvdbListKeysResult kvdbListKeys(server::KvdbListKeysModel model);
