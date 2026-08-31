@@ -32,9 +32,9 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 // clang-format off
-#define ENDPOINT_GROUP_EXCEPTION_CODE 0x000B0000
+#define ENDPOINT_GROUP_EXCEPTION_CODE 0x000D0000
 
-DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointGroupException, "Unknown endpoint group exception", "Group", 0x000B)
+DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointGroupException, "Unknown endpoint group exception", "Group", 0x000D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, NotInitializedException, "Endpoint not initialized", 0x0001)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, CannotExtractGroupCreatedEventException, "Cannot extract GroupCreatedEvent", 0x0002)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, CannotExtractGroupUpdatedEventException, "Cannot extract GroupUpdatedEvent", 0x0003)

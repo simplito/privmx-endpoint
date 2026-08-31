@@ -12,6 +12,8 @@ DIRS=(
     endpoint/event
     endpoint/kvdb
     endpoint/stream
+    endpoint/search
+    endpoint/lock
     endpoint/group
 )
 

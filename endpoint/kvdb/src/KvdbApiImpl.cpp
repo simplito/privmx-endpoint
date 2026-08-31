@@ -76,7 +76,8 @@ std::string KvdbApiImpl::createKvdb(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies,
-    const std::vector<core::GroupGrantWithKey>& groups
+    const std::vector<core::GroupGrantWithKey>& groups,
+    const std::string& type
 ) {
     auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 kvdbDataToEncrypt{
@@ -91,7 +92,7 @@ std::string KvdbApiImpl::createKvdb(
         create_kvdb_model, contextId, users, managers, ctx,
         _kvdbDataSchemaMapper->encrypt(kvdbDataToEncrypt, ctx.key.key), groups
     );
-    create_kvdb_model.type = KVDB_TYPE_FILTER_FLAG;
+    create_kvdb_model.type = type;
     if (policies.has_value()) {
         create_kvdb_model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
@@ -186,20 +187,24 @@ void KvdbApiImpl::deleteKvdb(const std::string& kvdbId) {
     invalidateModuleKeysInCache(kvdbId);
 }
 
-Kvdb KvdbApiImpl::getKvdb(const std::string& kvdbId) {
+Kvdb KvdbApiImpl::getKvdb(const std::string& kvdbId, const std::string& type) {
     server::KvdbGetModel params;
     params.kvdbId = kvdbId;
-    params.type = KVDB_TYPE_FILTER_FLAG;
+    params.type = type;
     auto kvdb = _serverApi.kvdbGet(params).kvdb;
     setNewModuleKeysInCache(kvdb.id, kvdbToModuleKeys(kvdb), kvdb.version);
     auto result = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdb(kvdb, _keyProvider, _groupPrivKeyResolver);
     return result;
 }
 
-core::PagingList<Kvdb> KvdbApiImpl::listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery) {
+core::PagingList<Kvdb> KvdbApiImpl::listKvdbs(
+    const std::string& contextId,
+    const core::PagingQuery& pagingQuery,
+    const std::string& type
+) {
     server::KvdbListModel model;
     model.contextId = contextId;
-    model.type = KVDB_TYPE_FILTER_FLAG;
+    model.type = type;
     core::ListQueryMapper::map(model, pagingQuery);
     auto kvdbsList = _serverApi.kvdbList(model);
     for (auto kvdb : kvdbsList.kvdbs) {
@@ -219,6 +224,17 @@ KvdbEntry KvdbApiImpl::getEntry(const std::string& kvdbId, const std::string& ke
         entry, getEntryDecryptionKeys(entry), _keyProvider, _groupPrivKeyResolver
     );
     return result;
+}
+
+std::optional<KvdbEntry> KvdbApiImpl::findEntry(const std::string& kvdbId, const std::string& key) {
+    server::KvdbEntryGetModel model{.kvdbId = kvdbId, .kvdbEntryKey = key};
+    auto entryOpt = _serverApi.kvdbEntryFind(model).kvdbEntry;
+    if (!entryOpt.has_value()) {
+        return std::nullopt;
+    }
+    return _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(
+        entryOpt.value(), getEntryDecryptionKeys(entryOpt.value()), _keyProvider
+    );
 }
 
 bool KvdbApiImpl::hasEntry(const std::string& kvdbId, const std::string& key) {

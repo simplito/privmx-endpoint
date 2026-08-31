@@ -49,6 +49,10 @@ server::KvdbEntryGetResult ServerApi::kvdbEntryGet(server::KvdbEntryGetModel mod
     return request<server::KvdbEntryGetResult>("kvdbEntryGet", model.toJSON());
 }
 
+server::KvdbEntryFindResult ServerApi::kvdbEntryFind(server::KvdbEntryGetModel model) {
+    return request<server::KvdbEntryFindResult>("kvdbEntryFind", model.toJSON());
+}
+
 void ServerApi::kvdbEntrySet(server::KvdbEntrySetModel model) {
     request("kvdbEntrySet", model.toJSON());
 }

@@ -303,6 +303,26 @@ void StoreApi::syncFile(const int64_t handle) {
     }
 }
 
+void StoreApi::flushFile(const int64_t handle) {
+    auto impl = getImpl();
+    try {
+        return impl->flushFile(handle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+uint64_t StoreApi::getFileSize(const int64_t handle) {
+    auto impl = getImpl();
+    try {
+        return impl->getFileSize(handle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 std::vector<std::string> StoreApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto impl = getImpl();
     try {
