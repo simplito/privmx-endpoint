@@ -54,7 +54,6 @@ ModuleBaseApi::ContainerRoster ModuleBaseApi::resolveRosterPubKeys(
     const std::vector<std::string>& userIds,
     const std::vector<std::string>& managerIds
 ) {
-    static constexpr int64_t PAGE_SIZE = 100;
     std::unordered_map<std::string, std::string> pubKeyByUserId;
     int64_t skip = 0;
     int64_t totalAvailable = 0;
@@ -63,7 +62,7 @@ ModuleBaseApi::ContainerRoster ModuleBaseApi::resolveRosterPubKeys(
             contextId,
             PagingQuery{
                 .skip = skip,
-                .limit = PAGE_SIZE,
+                .limit = 100, // bridge limit = 100
                 .sortOrder = "asc",
                 .lastId = std::nullopt,
                 .sortBy = std::nullopt,
