@@ -9,8 +9,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <Poco/JSON/Array.h>
+#include <Poco/JSON/Object.h>
 #include <algorithm>
 #include <privmx/utils/Utils.hpp>
+#include <set>
 #include <type_traits>
 
 #include <privmx/crypto/Crypto.hpp>
@@ -54,30 +57,36 @@ ModuleBaseApi::ContainerRoster ModuleBaseApi::resolveRosterPubKeys(
     const std::vector<std::string>& userIds,
     const std::vector<std::string>& managerIds
 ) {
+    std::set<std::string> wanted(userIds.begin(), userIds.end());
+    wanted.insert(managerIds.begin(), managerIds.end());
+
     std::unordered_map<std::string, std::string> pubKeyByUserId;
-    int64_t skip = 0;
-    int64_t totalAvailable = 0;
-    do {
+    constexpr size_t BRIDGE_MAX_BATCH_SIZE = 100; // The bridge listing caps at 100
+    auto it = wanted.begin();
+    while (it != wanted.end()) {
+        Poco::JSON::Array::Ptr ids = new Poco::JSON::Array();
+        for (size_t i = 0; i < BRIDGE_MAX_BATCH_SIZE && it != wanted.end(); ++i, ++it) {
+            ids->add(*it);
+        }
+        Poco::JSON::Object::Ptr in = new Poco::JSON::Object();
+        in->set("$in", ids);
+        Poco::JSON::Object::Ptr query = new Poco::JSON::Object();
+        query->set("#userId", in);
         auto page = _connection.listContextUsers(
             contextId,
             PagingQuery{
-                .skip = skip,
-                .limit = 100, // bridge limit = 100
+                .skip = 0,
+                .limit = static_cast<int64_t>(ids->size()),
                 .sortOrder = "asc",
                 .lastId = std::nullopt,
                 .sortBy = std::nullopt,
-                .queryAsJson = std::nullopt
+                .queryAsJson = privmx::utils::Utils::stringify(query)
             }
         );
-        if (page.readItems.empty()) {
-            break;
-        }
-        totalAvailable = page.totalAvailable;
         for (const auto& userInfo : page.readItems) {
             pubKeyByUserId.emplace(userInfo.user.userId, userInfo.user.pubKey);
         }
-        skip += static_cast<int64_t>(page.readItems.size());
-    } while (skip < totalAvailable);
+    }
 
     auto resolve = [&](const std::vector<std::string>& ids) {
         std::vector<UserWithPubKey> resolved;

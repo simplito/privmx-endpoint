@@ -10,7 +10,6 @@
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/Config.hpp>
 #include <privmx/utils/Logger.hpp>
-#include <privmx/utils/Logger.hpp>
 
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
@@ -1007,7 +1006,7 @@ int main(int argc, char** argv) {
             data_store_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(store_3_publicMeta.stdString()));
             data_store_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(store_3_privateMeta.stdString()));
             data->set("Store_3", data_store_3);
-            
+
             Poco::JSON::Object::Ptr data_inbox_1 = new Poco::JSON::Object();
             data_inbox_1->set("server_data", (_serializer.serialize(inbox_1_server_data)));
             data_inbox_1->set("uploaded_publicMeta_inBase64", utils::Base64::from(inbox_1_publicMeta.stdString()));
