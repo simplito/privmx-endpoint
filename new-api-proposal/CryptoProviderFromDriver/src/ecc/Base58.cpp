@@ -19,10 +19,12 @@ limitations under the License.
 #include "Base58.hpp"
 #include "Utils.hpp"
 #include "CryptoProviderFromDriver.hpp"
+#include "EccExceptions.hpp"
 // to be replaced with
-// #include <privmx/cryptoservice/Base58.hpp>
-// #include <privmx/cryptoservice/Utils.hpp>
+// #include <privmx/cryptoservice/ecc/Base58.hpp>
+// #include <privmx/cryptoservice/ecc/Utils.hpp>
 // #include <privmx/cryptoservice/CryptoProviderRegistry.hpp>
+// #include <privmx/cryptoservice/ecc/EccExceptions.hpp>
 
 #include <gmpxx.h>
 #include <regex>
@@ -77,8 +79,9 @@ std::string Base58::decodeWithChecksum(const std::string& s) {
     // std::string newchecksum = Crypto::sha256(Crypto::sha256(payload)).substr(0, 4);
     std::string newchecksum = NewCrypto::digest(Hash::Sha256, NewCrypto::digest(Hash::Sha256,payload)).substr(0, 4);
     if (checksum != newchecksum) {
-        // throw PrivmxException("Invalid base58 checksum");
-        throw std::runtime_error("Base58: Invalid base58 checksum");
+        throw PrivmxCryptoserviceEccInvalidBase58ChecksumException(
+            "Base58: Invalid base58 checksum:"
+        );
     }
     return payload;
 }
@@ -158,9 +161,8 @@ Bytes Base58::decodeWithChecksumB(std::shared_ptr<IDigest> p, BytesView encodedD
     Bytes newchecksum = p.get()->digest(Hash::Sha256,p.get()->digest(Hash::Sha256,payload));
     if (newchecksum.size() > 4) newchecksum.resize(4);
     if (checksum != newchecksum) {
-        // throw PrivmxException("Invalid base58 checksum");
-        throw std::runtime_error("Base58: Invalid base58 checksum:"
-        //     " [" + Utils::b2s(checksum) + "] vs [" + Utils::b2s(newchecksum) + "]"
+        throw PrivmxCryptoserviceEccInvalidBase58ChecksumException(
+            "Base58: Invalid base58 checksum:"
         );
     }
     return payload;

@@ -22,6 +22,8 @@ limitations under the License.
 #include "Utils.hpp"
 #include "PrivateKey.hpp"
 
+#include "EccExceptions.hpp"
+
 namespace privmx {
 namespace cryptoservice {
 namespace ecc {
@@ -122,7 +124,7 @@ bool PublicKey::verify(BytesView data, BytesView signature, SigScheme scheme) co
         // return verifyCompactSignatureWithHash(Utils::b2s(data), Utils::b2s(signature));
         return verifyCompactSignatureWithHash(data, signature);
     default:
-        throw PrivmxDriverCryptoException("PublicKey::verify: Unknown signing scheme");
+        throw PrivmxCryptoserviceEccPublicKeyUnknownSignShmException("PublicKey::verify: Unknown signing scheme");
         break;
     }
 }
@@ -140,14 +142,14 @@ bool PublicKey::verify(BytesView data, BytesView signature, SigScheme scheme) co
 Bytes PublicKey::seal(BytesView data, const IPrivateKey& senderForSignature) const {
     // previously EciesEncryptor::encrypt(*this,data,senderForSignature)
     if (typeid(senderForSignature) != typeid(PrivateKey)) {
-        throw PrivmxDriverCryptoException("PublicKey::seal: Wrong type of private key");
+        throw PrivmxCryptoserviceEccPublicKeyTypeKeyException("PublicKey::seal: Wrong type of private key");
     }
     return encrypt(data, (const PrivateKey&) senderForSignature);
 }
 
 Bytes PublicKey::export_(KeyFormat format) const {
     if (format ==  KeyFormat::Wif) {
-        throw PrivmxDriverCryptoException("PrivateKey::export_: Format WIF is used only for private keys");    
+        throw PrivmxCryptoserviceEccPublicKeyExportFormatException("PrivateKey::export_: Format WIF is used only for private keys");    
     } else if (format == KeyFormat::Der) {
         // return Utils::s2b(toDER());   // TO BE REPLACED
         return toDERb();
@@ -159,9 +161,9 @@ Bytes PublicKey::export_(KeyFormat format) const {
         // return toBase58AddressB();
     } else {
         // other formats ...
-        throw PrivmxDriverCryptoException("PrivateKey::export_: Unknown data format");    
+        throw PrivmxCryptoserviceEccPublicKeyExportFormatException("PrivateKey::export_: Unknown data format");    
     }
-    throw PrivmxDriverCryptoException("PrivateKey::export_: NOT IMPLEMENTED");
+    throw PrivmxCryptoserviceEccPublicKeyExportFormatException("PrivateKey::export_: NOT IMPLEMENTED");
 }
 
 void PublicKey::setSymProvider(std::shared_ptr<ISymCryptoProvider> provider) {

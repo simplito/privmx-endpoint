@@ -25,6 +25,8 @@ limitations under the License.
 #include "CoreTypes.hpp"
 #include "CoreInterfaces.hpp"
 
+#include "EccExceptions.hpp"
+
 
 namespace privmx {
 namespace cryptoservice {
@@ -35,7 +37,7 @@ ECCImpl::Ptr ECCImpl::genPair() {
     EC_KEY* raw_key = key.get();
     if (EC_KEY_generate_key(raw_key) == 0) {
         // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplGenerateKeyException("ECCImpl: Generate key failure");
     }
     // return new ECCImpl(std::move(key), true);
     return std::make_shared<ECCImpl>(std::move(key), true);
@@ -108,14 +110,12 @@ std::string ECCImpl::getPublicKey(bool compact) const {
     point_conversion_form_t form = compact ? POINT_CONVERSION_COMPRESSED : POINT_CONVERSION_UNCOMPRESSED;
     size_t size = EC_POINT_point2oct(group, public_point, form, NULL, 0, NULL);
     if (size == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplPoint2OctException("getPublicKey: point2oct failure");
     }
     std::string public_key(size, 0);
     unsigned char* buf = reinterpret_cast<unsigned char*>(public_key.data());
     if (EC_POINT_point2oct(group, public_point, form, buf, size, NULL) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplPoint2OctException("getPublicKey: point2oct failure");
     }
     return public_key;
 }
@@ -127,15 +127,13 @@ Bytes ECCImpl::getPublicKeyB(bool compact) const {
     point_conversion_form_t form = compact ? POINT_CONVERSION_COMPRESSED : POINT_CONVERSION_UNCOMPRESSED;
     size_t size = EC_POINT_point2oct(group, public_point, form, NULL, 0, NULL);
     if (size == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplPoint2OctException("getPublicKeyB: point2oct failure");
     }
     // std::string public_key(size, 0);
     Bytes public_key(size, 0);
     unsigned char* buf = reinterpret_cast<unsigned char*>(public_key.data());
     if (EC_POINT_point2oct(group, public_point, form, buf, size, NULL) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplPoint2OctException("getPublicKeyB: point2oct failure");
     }
     return public_key;
 }
@@ -180,27 +178,6 @@ BNImpl::Ptr ECCImpl::getPrivateKey2() const {
     return std::make_shared<BNImpl>(copyBignum(priv));
 }
 
-// // Possibly from wrong implementation
-// std::string ECCImpl::sign(const std::string& data) const {
-//     EC_KEY* raw_key = checkIfInitializedKeyAndGet();
-//     const unsigned char* dgst = reinterpret_cast<const unsigned char*>(data.data());
-//     int dgst_len = data.size();
-//     ecdsa_sig_unique_ptr sig(ECDSA_do_sign(dgst, dgst_len, raw_key), ECDSA_SIG_free);
-//     const ECDSA_SIG* raw_sig = sig.get();
-//     if (raw_sig == NULL) {
-//         // OpenSSLUtils::handleErrors();
-//         throw std::runtime_error("ECCImpl: ...");
-//     }
-//     std::string result(65, 0);
-//     unsigned char* buf = reinterpret_cast<unsigned char*>(result.data());
-//     result[0] = 27;
-//     const BIGNUM* r;
-//     const BIGNUM* s;
-//     ECDSA_SIG_get0(raw_sig, &r, &s);
-//     BN_bn2bin(r, &buf[1 + 32 - BN_num_bytes(r)]);
-//     BN_bn2bin(s, &buf[33 + 32 - BN_num_bytes(s)]);
-//     return result;
-// }
 
 // Possibly from wrong implementation
 ECCImpl::Signature ECCImpl::sign2(const std::string& data) const {
@@ -210,8 +187,7 @@ ECCImpl::Signature ECCImpl::sign2(const std::string& data) const {
     ecdsa_sig_unique_ptr sig(ECDSA_do_sign(dgst, dgst_len, raw_key), ECDSA_SIG_free);
     const ECDSA_SIG* raw_sig = sig.get();
     if (raw_sig == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplEcdsaSign2Exception("sign2: ECDSA_do_sign() failure");
     }
     const BIGNUM* r;
     const BIGNUM* s;
@@ -238,8 +214,7 @@ ECCImpl::Signature ECCImpl::sign2(BytesView data) const {
     ecdsa_sig_unique_ptr sig(ECDSA_do_sign(dgst, dgst_len, raw_key), ECDSA_SIG_free);
     const ECDSA_SIG* raw_sig = sig.get();
     if (raw_sig == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplEcdsaSign2Exception("sign2: ECDSA_do_sign() failure");
     }
     const BIGNUM* r;
     const BIGNUM* s;
@@ -265,12 +240,10 @@ Bytes ECCImpl::sign(BytesView data) const {
 bool ECCImpl::verify(const std::string& data, const std::string& signature) const {
     EC_KEY* raw_key = checkIfInitializedKeyAndGet();
     if (signature.size() != 65) {
-        // throw InvalidSignatureSizeException();
-        throw std::runtime_error("ECC: InvalidSignatureSizeException");
+        throw PrivmxCryptoserviceEccImplInvalidSignatureSizeException("verify: Invalid Signature Size");
     }
     if (signature.front() < 27 || signature.front() > 42) {
-        // throw InvalidSignatureHeaderException();
-        throw std::runtime_error("ECC: InvalidSignatureHeaderException");
+        throw PrivmxCryptoserviceEccImplInvalidSignatureHeaderException("verify: Invalid Signature Header");
     }
     const unsigned char* dgst = reinterpret_cast<const unsigned char*>(data.data());
     int dgst_len = data.size();
@@ -278,24 +251,20 @@ bool ECCImpl::verify(const std::string& data, const std::string& signature) cons
     ecdsa_sig_unique_ptr sig(ECDSA_SIG_new(), ECDSA_SIG_free);
     ECDSA_SIG* raw_sig = sig.get();
     if (raw_sig == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureCreationException("verify: ECDSA_SIG_new failure");
     }
     bignum_unique_ptr r = newBignum();
     bignum_unique_ptr s = newBignum();
     BIGNUM* raw_r = r.get();
     BIGNUM* raw_s = s.get();
     if (BN_bin2bn(&sign[1], 32, raw_r) == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureConversionException("verify: First part binary to BN conversion failure");
     }
     if (BN_bin2bn(&sign[33], 32, raw_s) == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureConversionException("verify: Second part binary to BN conversion failure");
     }
     if (ECDSA_SIG_set0(raw_sig, raw_r, raw_s) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureSettingException("verify: ECDSA_SIG_set0 failure");
     }
     // Release r and s, cause calling ECDSA_SIG_set0() transfers
     // the memory management of the values to the ECDSA_SIG object
@@ -303,8 +272,7 @@ bool ECCImpl::verify(const std::string& data, const std::string& signature) cons
     s.release();
     int result = ECDSA_do_verify(dgst, dgst_len, raw_sig, raw_key);
     if (result == -1) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureVerificationException("verify: ECDSA_do_verify failure");
     }
     return (result == 1);
 }
@@ -312,12 +280,10 @@ bool ECCImpl::verify(const std::string& data, const std::string& signature) cons
 bool ECCImpl::verify(BytesView data, BytesView signature) const {
     EC_KEY* raw_key = checkIfInitializedKeyAndGet();
     if (signature.size() != 65) {
-        // throw InvalidSignatureSizeException();
-        throw std::runtime_error("ECC: InvalidSignatureSizeException");
+        throw PrivmxCryptoserviceEccImplInvalidSignatureSizeException("verify: Invalid Signature Size");
     }
     if (signature.front() < 27 || signature.front() > 42) {
-        // throw InvalidSignatureHeaderException();
-        throw std::runtime_error("ECC: InvalidSignatureHeaderException");
+        throw PrivmxCryptoserviceEccImplInvalidSignatureHeaderException("verify: Invalid Signature Header");
     }
     const unsigned char* dgst = reinterpret_cast<const unsigned char*>(data.data());
     int dgst_len = data.size();
@@ -325,24 +291,20 @@ bool ECCImpl::verify(BytesView data, BytesView signature) const {
     ecdsa_sig_unique_ptr sig(ECDSA_SIG_new(), ECDSA_SIG_free);
     ECDSA_SIG* raw_sig = sig.get();
     if (raw_sig == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureCreationException("verify: ECDSA_SIG_new failure");
     }
     bignum_unique_ptr r = newBignum();
     bignum_unique_ptr s = newBignum();
     BIGNUM* raw_r = r.get();
     BIGNUM* raw_s = s.get();
     if (BN_bin2bn(&sign[1], 32, raw_r) == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureConversionException("verify: First part binary to BN conversion failure");
     }
     if (BN_bin2bn(&sign[33], 32, raw_s) == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureConversionException("verify: Second part binary to BN conversion failure");
     }
     if (ECDSA_SIG_set0(raw_sig, raw_r, raw_s) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureSettingException("verify: ECDSA_SIG_set0 failure");
     }
     // Release r and s, cause calling ECDSA_SIG_set0() transfers
     // the memory management of the values to the ECDSA_SIG object
@@ -350,8 +312,7 @@ bool ECCImpl::verify(BytesView data, BytesView signature) const {
     s.release();
     int result = ECDSA_do_verify(dgst, dgst_len, raw_sig, raw_key);
     if (result == -1) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureVerificationException("verify: ECDSA_do_verify failure");
     }
     return (result == 1);
 }
@@ -360,16 +321,14 @@ bool ECCImpl::verify(BytesView data, BytesView signature) const {
 bool ECCImpl::verify2(const std::string& data, const ECCImpl::Signature& signature) const {
     EC_KEY* raw_key = checkIfInitializedKeyAndGet();
     if (signature.r->getBitsLength() > 256 || signature.s->getBitsLength() > 256) {
-        // throw InvalidSignatureSizeException();
-        throw std::runtime_error("ECC: InvalidSignatureSizeException");
+        throw PrivmxCryptoserviceEccImplInvalidSignatureSizeException("verify2: Invalid Signature Size");
     }
     const unsigned char* dgst = reinterpret_cast<const unsigned char*>(data.data());
     int dgst_len = data.size();
     ecdsa_sig_unique_ptr sig(ECDSA_SIG_new(), ECDSA_SIG_free);
     ECDSA_SIG* raw_sig = sig.get();
     if (raw_sig == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureCreationException("verify2: ECDSA_SIG_new failure");
     }
     // bignum_unique_ptr r = copyBignum(signature.r.cast<BNImpl>()->getRaw());
     // bignum_unique_ptr s = copyBignum(signature.s.cast<BNImpl>()->getRaw());
@@ -380,8 +339,7 @@ bool ECCImpl::verify2(const std::string& data, const ECCImpl::Signature& signatu
     BIGNUM* raw_r = r.get();
     BIGNUM* raw_s = s.get();
     if (ECDSA_SIG_set0(raw_sig, raw_r, raw_s) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureSettingException("verify2: ECDSA_SIG_set0 failure");
     }
     // Release r and s, cause calling ECDSA_SIG_set0() transfers
     // the memory management of the values to the ECDSA_SIG object
@@ -389,8 +347,7 @@ bool ECCImpl::verify2(const std::string& data, const ECCImpl::Signature& signatu
     s.release();
     int result = ECDSA_do_verify(dgst, dgst_len, raw_sig, raw_key);
     if (result == -1) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureVerificationException("verify2: ECDSA_do_verify failure");
     }
     return (result == 1);
 }
@@ -398,16 +355,14 @@ bool ECCImpl::verify2(const std::string& data, const ECCImpl::Signature& signatu
 bool ECCImpl::verify2(BytesView data, const ECCImpl::Signature& signature) const {
     EC_KEY* raw_key = checkIfInitializedKeyAndGet();
     if (signature.r->getBitsLength() > 256 || signature.s->getBitsLength() > 256) {
-        // throw InvalidSignatureSizeException();
-        throw std::runtime_error("ECC: InvalidSignatureSizeException");
+        throw PrivmxCryptoserviceEccImplInvalidSignatureSizeException("verify2: Invalid Signature Size");
     }
     const unsigned char* dgst = reinterpret_cast<const unsigned char*>(data.data());
     int dgst_len = data.size();
     ecdsa_sig_unique_ptr sig(ECDSA_SIG_new(), ECDSA_SIG_free);
     ECDSA_SIG* raw_sig = sig.get();
     if (raw_sig == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureCreationException("verify2: ECDSA_SIG_new failure");
     }
     // bignum_unique_ptr r = copyBignum(signature.r.cast<BNImpl>()->getRaw());
     // bignum_unique_ptr s = copyBignum(signature.s.cast<BNImpl>()->getRaw());
@@ -418,8 +373,7 @@ bool ECCImpl::verify2(BytesView data, const ECCImpl::Signature& signature) const
     BIGNUM* raw_r = r.get();
     BIGNUM* raw_s = s.get();
     if (ECDSA_SIG_set0(raw_sig, raw_r, raw_s) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureSettingException("verify2: ECDSA_SIG_set0 failure");
     }
     // Release r and s, cause calling ECDSA_SIG_set0() transfers
     // the memory management of the values to the ECDSA_SIG object
@@ -427,8 +381,7 @@ bool ECCImpl::verify2(BytesView data, const ECCImpl::Signature& signature) const
     s.release();
     int result = ECDSA_do_verify(dgst, dgst_len, raw_sig, raw_key);
     if (result == -1) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSignatureVerificationException("verify2: ECDSA_do_verify failure");
     }
     return (result == 1);
 }
@@ -444,8 +397,7 @@ std::string ECCImpl::derive(const ECCImpl::Ptr ecc) const {
     std::string secret(secret_len, 0);
     char* out = secret.data();
     if (ECDH_compute_key(out, secret_len, raw_point, raw_key, NULL) <= 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplKeyDerivationException("derive: Compute key failure");
     }
     return secret;
 }
@@ -508,8 +460,7 @@ PointImpl::Ptr ECCImpl::getEcGenerator() const {
 ECCImpl::ec_key_unique_ptr ECCImpl::newEcKey() {
     ec_key_unique_ptr key(EC_KEY_new_by_curve_name(NID_secp256k1), EC_KEY_free);
     if (key.get() == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplCreatingEcKeyException("newEcKey: EC_KEY_new_by_curve_name() failure");
     }
     return key;
 }
@@ -522,8 +473,7 @@ ECCImpl::ec_key_unique_ptr ECCImpl::copyEcKey(const ec_key_unique_ptr& key) {
     EC_KEY* dst = new_key.get();
     const EC_KEY* src = key.get();
     if (EC_KEY_copy(dst, src) == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplCopyEcKeyException("copyEcKey: EC_KEY_copy() failure");
     }
     return new_key;
 }
@@ -531,8 +481,7 @@ ECCImpl::ec_key_unique_ptr ECCImpl::copyEcKey(const ec_key_unique_ptr& key) {
 ECCImpl::bignum_unique_ptr ECCImpl::newBignum() {
     bignum_unique_ptr bignum(BN_new(), BN_free);
     if (bignum.get() == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplCreatingBnException("newBignum: Creating bignum failure");
     }
     return bignum;
 }
@@ -544,8 +493,7 @@ ECCImpl::bignum_unique_ptr ECCImpl::copyBignum(const BIGNUM* raw_bn) {
     bignum_unique_ptr bn = newBignum();
     BIGNUM* dst = bn.get();
     if (BN_copy(dst, raw_bn) == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplCopyBnException("copyBignum: BN_copy() failure");
     }
     return bn;
 }
@@ -553,7 +501,7 @@ ECCImpl::bignum_unique_ptr ECCImpl::copyBignum(const BIGNUM* raw_bn) {
 ECCImpl::bn_ctx_unique_ptr ECCImpl::newBnCtx() {
     bn_ctx_unique_ptr ctx(BN_CTX_new(), BN_CTX_free);
     if (ctx.get() == NULL) {
-        // OpenSSLUtils::handleErrors();
+        throw PrivmxCryptoserviceEccImplCreatingBnCtxException("newBnCtx: BN_CTX_new() failure");        
     }
     return ctx;
 }
@@ -565,8 +513,7 @@ ECCImpl::ec_point_unique_ptr ECCImpl::copyEcPoint(const EC_POINT* raw_point, con
     ec_point_unique_ptr new_point = newEcPoint(group);
     EC_POINT* dst = new_point.get();
     if (EC_POINT_copy(dst, raw_point) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplCopyBnException("copyEcPoint: EC_POINT_copy() failure");
     }
     return new_point;
 }
@@ -574,8 +521,7 @@ ECCImpl::ec_point_unique_ptr ECCImpl::copyEcPoint(const EC_POINT* raw_point, con
 ECCImpl::ec_point_unique_ptr ECCImpl::newEcPoint(const EC_GROUP* group) {
     ec_point_unique_ptr point(EC_POINT_new(group), EC_POINT_free);
     if (point.get() == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplCreatingPointException("newEcPoint: EC_POINT_new() failure");
     }
     return point;
 }
@@ -584,8 +530,7 @@ void ECCImpl::setPublicKey(const ec_key_unique_ptr& key, const ec_point_unique_p
     EC_KEY* raw_key = key.get();
     const EC_POINT* raw_public_point = public_point.get();
     if (EC_KEY_set_public_key(raw_key, raw_public_point) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSetPublicKeyException("setPublicKey: EC_KEY_set_public_key() failure");
     }
 }
 
@@ -593,16 +538,14 @@ void ECCImpl::setPrivateKey(const ec_key_unique_ptr& key, const bignum_unique_pt
     EC_KEY* raw_key = key.get();
     const BIGNUM* raw_private_key = private_key.get();
     if (EC_KEY_set_private_key(raw_key, raw_private_key) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplSetPrivateKeyException("setPrivateKey: EC_KEY_set_private_key() failure");
     }
 }
 
 void ECCImpl::checkKey(const ec_key_unique_ptr& key) {
     const EC_KEY* raw_key = key.get();
     if (EC_KEY_check_key(raw_key) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplCheckKeyException("checkKey: EC_KEY_check_key() failure");
     }
 }
 
@@ -615,8 +558,7 @@ ECCImpl::ec_point_unique_ptr ECCImpl::mul(ec_key_unique_ptr& key) {
     ec_point_unique_ptr public_point = newEcPoint(group);
     EC_POINT* raw_public_point = public_point.get();
     if (EC_POINT_mul(group, raw_public_point, raw_private_key, NULL, NULL, raw_ctx) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplPointMultiplicationException("mul: EC_POINT_mul() failure");
     }
     return public_point;
 }
@@ -627,8 +569,7 @@ ECCImpl::bignum_unique_ptr ECCImpl::bin2bignum(const std::string& bin) {
     bignum_unique_ptr bignum = newBignum();
     BIGNUM* raw_bignum = bignum.get();
     if (BN_bin2bn(s, len, raw_bignum) == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplBnConversionException("bin2bignum: BN_bin2bn() failure");
     }
     return bignum;
 }
@@ -639,8 +580,7 @@ ECCImpl::bignum_unique_ptr ECCImpl::bin2bignum(BytesView bin) {
     bignum_unique_ptr bignum = newBignum();
     BIGNUM* raw_bignum = bignum.get();
     if (BN_bin2bn(s, len, raw_bignum) == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplBnConversionException("bin2bignum: BN_bin2bn() failure");
     }
     return bignum;
 }
@@ -655,8 +595,7 @@ ECCImpl::ec_point_unique_ptr ECCImpl::oct2point(const ec_key_unique_ptr& key, co
     ec_point_unique_ptr public_point = newEcPoint(group);
     EC_POINT* raw_public_point = public_point.get();
     if (EC_POINT_oct2point(group, raw_public_point, buf, len, raw_ctx) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplOct2PointConversionException("oct2point: EC_POINT_oct2point() failure");
     }
     return public_point;
 }
@@ -671,8 +610,7 @@ ECCImpl::ec_point_unique_ptr ECCImpl::oct2point(const ec_key_unique_ptr& key, By
     ec_point_unique_ptr public_point = newEcPoint(group);
     EC_POINT* raw_public_point = public_point.get();
     if (EC_POINT_oct2point(group, raw_public_point, buf, len, raw_ctx) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("ECCImpl: ...");
+        throw PrivmxCryptoserviceEccImplOct2PointConversionException("oct2point: EC_POINT_oct2point() failure");
     }
     return public_point;
 }
@@ -684,19 +622,10 @@ ECCImpl::ec_group_unique_ptr ECCImpl::getEcGroup() {
 
 EC_KEY* ECCImpl::checkIfInitializedKeyAndGet() const {
     if (!_key) {
-        // throw ECCIsNotInitializedException();
-        throw std::runtime_error("ECC: ECCIsNotInitializedException");
+        throw PrivmxCryptoserviceEccNotInitializedException();
     }
     return _key.get();
 }
-
-// // Probably to be removed
-// void ECCImpl::validate() const {
-//     if (!_key) {
-//         // throw ECCIsNotInitializedException();
-//         throw std::runtime_error("ECCImpl::validate: ECCIsNotInitializedException");    
-//     }
-// }
 
 } // ecc
 } // cryptoservice

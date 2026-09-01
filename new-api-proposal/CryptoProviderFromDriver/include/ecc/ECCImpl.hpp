@@ -109,27 +109,6 @@ public:
     static bignum_unique_ptr bin2bignum(BytesView bin);
     static ec_point_unique_ptr oct2point(const ec_key_unique_ptr& key, BytesView oct);
 
-
-    // // Probably to be removed:
-    // void validate() const;
-    
-    // // Probably to be removed:
-    // struct privmxDrvEcc_BN {
-    //     std::unique_ptr<BIGNUM, decltype(&BN_free)> impl;
-    // };
-    // struct privmxDrvEcc_ECC {
-    //     std::unique_ptr<EC_KEY, decltype(&EC_KEY_free)> impl;
-    // };
-    // struct privmxDrvEcc_Signature
-    // {
-    //     const privmxDrvEcc_BN* r;
-    //     const privmxDrvEcc_BN* s;
-    // };
-    // int privmxDrvEcc_eccSign(privmxDrvEcc_ECC* ecc, const char* msg, int msglen, privmxDrvEcc_Signature* res);
-    // int privmxDrvEcc_eccSign(const ec_key_unique_ptr& _ecc, const char* msg, int msglen, privmxDrvEcc_Signature* res);
-    // int privmxDrvEcc_eccSign(ec_key_unique_ptr _ecc, const char* msg, int msglen, privmxDrvEcc_Signature* res);
-    // int privmxDrvEcc_eccSign(const char* msg, int msglen, privmxDrvEcc_Signature* res);
-    // int privmxDrvEcc_eccSign(std::string data, privmxDrvEcc_Signature* res);
 };
 
 inline ECCImpl::operator bool() const {

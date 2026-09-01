@@ -18,6 +18,8 @@ limitations under the License.
 #include "BN.hpp"
 #include "PointImpl.hpp"
 
+#include "EccExceptions.hpp"
+
 namespace privmx {
 namespace cryptoservice {
 namespace ecc {
@@ -62,14 +64,12 @@ std::string PointImpl::encode(bool compact) const {
     point_conversion_form_t form = compact ? POINT_CONVERSION_COMPRESSED : POINT_CONVERSION_UNCOMPRESSED;
     size_t size = EC_POINT_point2oct(group.get(), raw, form, NULL, 0, NULL);
     if (size == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("PointImpl: ...");
+        throw PrivmxCryptoserviceEccPointImplEncodeException("encode: EC_POINT_point2oct() failure");
     }
     std::string result(size, 0);
     unsigned char* buf = reinterpret_cast<unsigned char*>(result.data());
     if (EC_POINT_point2oct(group.get(), raw, form, buf, size, NULL) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("PointImpl: ...");
+        throw PrivmxCryptoserviceEccPointImplEncodeException("encode: EC_POINT_point2oct() failure");
     }
     return result;
 }
@@ -85,8 +85,7 @@ PointImpl::Ptr PointImpl::mul(const BNImpl::Ptr bn) const {
     const EC_POINT* raw_point = _point.get();
     BN_CTX* raw_ctx = ctx.get();
     if (EC_POINT_mul(group.get(), raw_result, NULL, raw_point, raw_bn, raw_ctx) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("PointImpl: ...");
+        throw PrivmxCryptoserviceEccPointImplMultiplicationException("mul: EC_POINT_mul() failure");
     }
     // return new PointImpl(move(result));
     return std::make_shared<PointImpl>(move(result));
@@ -104,8 +103,7 @@ PointImpl::Ptr PointImpl::add(const PointImpl::Ptr point) const {
     // const EC_POINT* raw_point_b = point->getRaw();
     BN_CTX* raw_ctx = ctx.get();
     if (EC_POINT_add(group.get(), raw_result, raw_point_a, raw_point_b, raw_ctx) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("PointImpl: ...");
+        throw PrivmxCryptoserviceEccPointImplAddException("mul: EC_POINT_mul() failure");
     }
     // return new PointImpl(move(result));
     return std::make_shared<PointImpl>(move(result));
@@ -125,8 +123,7 @@ PointImpl::ec_point_unique_ptr PointImpl::oct2point(const std::string& oct) {
     EC_POINT* raw_point = point.get();
     BN_CTX* raw_ctx = ctx.get();
     if (EC_POINT_oct2point(group.get(), raw_point, s, len, raw_ctx) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("PointImpl: ...");
+        throw PrivmxCryptoserviceEccPointImplOct2PointException("oct2point: EC_POINT_oct2point() failure");
     }
     return point;
 }
@@ -140,8 +137,7 @@ PointImpl::ec_point_unique_ptr PointImpl::oct2point(BytesView oct) {
     EC_POINT* raw_point = point.get();
     BN_CTX* raw_ctx = ctx.get();
     if (EC_POINT_oct2point(group.get(), raw_point, s, len, raw_ctx) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("PointImpl: ...");
+        throw PrivmxCryptoserviceEccPointImplOct2PointException("oct2point: EC_POINT_oct2point() failure");
     }
     return point;
 }
@@ -155,8 +151,7 @@ PointImpl::ec_point_unique_ptr PointImpl::copyEcPoint(const ec_point_unique_ptr&
     EC_POINT* dst = new_point.get();
     const EC_POINT* src = point.get();
     if (EC_POINT_copy(dst, src) == 0) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("PointImpl: ...");
+        throw PrivmxCryptoserviceEccPointImplCopyException("copyEcPoint: EC_POINT_copy() failure");
     }
     return new_point;
 }
@@ -165,8 +160,7 @@ PointImpl::ec_point_unique_ptr PointImpl::newEcPoint() {
     ec_group_unique_ptr group = getEcGroup();
     ec_point_unique_ptr point(EC_POINT_new(group.get()), EC_POINT_free);
     if (point.get() == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("PointImpl: ...");
+        throw PrivmxCryptoserviceEccPointImplCreateException("newEcPoint: EC_POINT_new() failure");
     }
     return point;
 }
@@ -179,16 +173,14 @@ PointImpl::ec_group_unique_ptr PointImpl::getEcGroup() {
 PointImpl::bn_ctx_unique_ptr PointImpl::newBnCtx() {
     bn_ctx_unique_ptr ctx(BN_CTX_new(), BN_CTX_free);
     if (ctx.get() == NULL) {
-        // OpenSSLUtils::handleErrors();
-        throw std::runtime_error("PointImpl: ...");
+        throw PrivmxCryptoserviceEccPointImplCreateCtxException("newBnCtx: BN_CTX_new() failure");
     }
     return ctx;
 }
 
 void PointImpl::validate() const {
     if (!_point) {
-        // EmptyPointException();
-        throw std::runtime_error("PointImpl: Empty Point Exception");
+        throw PrivmxCryptoserviceEccPointEmptyPointException();
     }
 }
 
