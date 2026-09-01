@@ -59,6 +59,17 @@ add_executable(test_e2e_LockUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2
 target_link_libraries(test_e2e_LockUsingGroupsTest privmx privmxendpointcore privmxendpointstore privmxendpointlock privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 add_executable(test_e2e_SearchUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/SearchUsingGroupsTest.cpp)
 target_link_libraries(test_e2e_SearchUsingGroupsTest privmx privmxendpointcore privmxendpointstore privmxendpointkvdb privmxendpointlock privmxendpointsearch privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+# One long Thread+Group flow across a member removal, with three sessions kept alive so their key caches carry over
+add_executable(test_e2e_ThreadGroupScenarioTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/ThreadGroupScenarioTest.cpp)
+target_link_libraries(test_e2e_ThreadGroupScenarioTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+# The same flow for the other container modules; each adds what its own items make possible (file bytes, keyed
+# and versioned entries, an Inbox's three containers and its manual re-key)
+add_executable(test_e2e_StoreGroupScenarioTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/StoreGroupScenarioTest.cpp)
+target_link_libraries(test_e2e_StoreGroupScenarioTest privmx privmxendpointcore privmxendpointstore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+add_executable(test_e2e_KvdbGroupScenarioTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/KvdbGroupScenarioTest.cpp)
+target_link_libraries(test_e2e_KvdbGroupScenarioTest privmx privmxendpointcore privmxendpointkvdb privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+add_executable(test_e2e_InboxGroupScenarioTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/InboxGroupScenarioTest.cpp)
+target_link_libraries(test_e2e_InboxGroupScenarioTest privmx privmxendpointcore privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 # Tree-backed groups end to end (only place the full round trip runs; unit tests and the conformance fixture each cover just one side)
 add_executable(test_e2e_GroupKeyTreeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupKeyTreeTest.cpp)
 target_link_libraries(test_e2e_GroupKeyTreeTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
