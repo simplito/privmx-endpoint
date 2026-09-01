@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <optional>
 #include <set>
 #include <string>
@@ -108,6 +109,20 @@ protected:
         return dynamic::EncryptedGroupDataV5::fromJSON(blob).dio;
     }
 
+    // The group as the bridge serves it to a client that already holds a checkpoint: the entries from
+    // `fromVersion` on, with `firstServedVersion` naming where the window starts. A window that would come out
+    // empty falls back to the head entry alone, the way GroupStateRepository::getHistory does — the head carries
+    // the current data and keyId, so a response without it would be unusable rather than smaller.
+    server::GroupInfo windowedFrom(const server::GroupInfo& full, int64_t fromVersion) {
+        const int64_t total = static_cast<int64_t>(full.data.size());
+        const int64_t first = std::min(std::max<int64_t>(fromVersion, 1), total);
+        server::GroupInfo windowed = full;
+        windowed.data.assign(full.data.begin() + (first - 1), full.data.end());
+        windowed.history.assign(full.history.begin() + (first - 1), full.history.end());
+        windowed.firstServedVersion = first;
+        return windowed;
+    }
+
     void populateHeadFromLastEntry(server::GroupInfo& group, int64_t keyVersion) {
         const auto& last = group.history.back();
         group.version = static_cast<int64_t>(group.data.size());
@@ -165,6 +180,81 @@ TEST_F(GroupChainCheckpoint, DeltaCorrectnessExtendsPastCheckpoint) {
     auto checkpoint = verifier.peekChainCheckpoint(fx.group.id);
     ASSERT_TRUE(checkpoint.has_value());
     EXPECT_EQ(checkpoint->verifiedVersion, 5) << "the resumed run must validate the new entries, not just no-op";
+}
+
+TEST_F(GroupChainCheckpoint, PartialWindowResumesTwiceInARow) {
+    // What a bridge actually serves once a checkpoint exists: only the entries above it, never the whole chain
+    // again. Two such windows in a row is where a checkpoint that recorded the window length instead of the head
+    // version comes apart — the second window resumes at the wrong entry, and G1 rejects an intact chain.
+    ChainFixture fx = buildThreeEntryChain("grp-window");
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+
+    // Cold read: the whole chain, versions 1..3.
+    ASSERT_NO_THROW(verifier.assertDataIntegrity(fx.group));
+    ASSERT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 3);
+
+    // One new entry, served alone as version 4.
+    const std::string e3Dio = appendNewHistoryEntry(
+        fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, hashOf(fx.e2Dio), 4000
+    );
+    populateHeadFromLastEntry(fx.group, 0);
+    ASSERT_NO_THROW(verifier.assertDataIntegrity(windowedFrom(fx.group, 4)));
+    auto afterFirstWindow = verifier.peekChainCheckpoint(fx.group.id);
+    ASSERT_TRUE(afterFirstWindow.has_value());
+    EXPECT_EQ(afterFirstWindow->verifiedVersion, 4) << "the checkpoint must name the head version, not the window length";
+    EXPECT_EQ(afterFirstWindow->lastEntryDioHashHex, hashOf(e3Dio));
+
+    // And again, so the second window is planned against the checkpoint the first one left behind.
+    const std::string e4Dio = appendNewHistoryEntry(
+        fx.group, fx.alice, "alice", {"alice"}, {"alice"}, "pub0", 0, hashOf(e3Dio), 5000
+    );
+    populateHeadFromLastEntry(fx.group, 0);
+    ASSERT_NO_THROW(verifier.assertDataIntegrity(windowedFrom(fx.group, 5)));
+    auto afterSecondWindow = verifier.peekChainCheckpoint(fx.group.id);
+    ASSERT_TRUE(afterSecondWindow.has_value());
+    EXPECT_EQ(afterSecondWindow->verifiedVersion, 5);
+    EXPECT_EQ(afterSecondWindow->lastEntryDioHashHex, hashOf(e4Dio));
+}
+
+TEST_F(GroupChainCheckpoint, WindowOverlappingTheCheckpointIsAccepted) {
+    // Re-reading a group nothing has changed: the request asks for entries above the head, and the head entry is
+    // never windowed out, so the window comes back starting at an entry the checkpoint already covers. There is
+    // nothing new to verify and nothing to reject either.
+    ChainFixture fx = buildThreeEntryChain("grp-overlap");
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+
+    ASSERT_NO_THROW(verifier.assertDataIntegrity(fx.group));
+    ASSERT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 3);
+
+    ASSERT_NO_THROW(verifier.assertDataIntegrity(windowedFrom(fx.group, 4)))
+        << "a window that re-serves the head a client already verified must not be treated as unanchored";
+    auto checkpoint = verifier.peekChainCheckpoint(fx.group.id);
+    ASSERT_TRUE(checkpoint.has_value());
+    EXPECT_EQ(checkpoint->verifiedVersion, 3);
+    EXPECT_EQ(checkpoint->lastEntryDioHashHex, hashOf(fx.e2Dio));
+}
+
+TEST_F(GroupChainCheckpoint, WindowLeavingAGapIsRejected) {
+    // The other side of the same relaxation: a window starting *above* checkpoint + 1 skips entries nobody ever
+    // verified, so there is no anchor for its first entry and it must stay refused.
+    ChainFixture fx = buildThreeEntryChain("grp-gap");
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+
+    // Verify the first entry only, leaving the checkpoint at version 1.
+    server::GroupInfo firstEntryOnly;
+    firstEntryOnly.id = fx.group.id;
+    firstEntryOnly.contextId = fx.group.contextId;
+    firstEntryOnly.resourceId = fx.group.resourceId;
+    firstEntryOnly.data = {fx.group.data[0]};
+    firstEntryOnly.history = {fx.group.history[0]};
+    populateHeadFromLastEntry(firstEntryOnly, 0);
+    ASSERT_NO_THROW(verifier.assertDataIntegrity(firstEntryOnly));
+    ASSERT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 1);
+
+    // A window from version 3 leaves version 2 unaccounted for.
+    EXPECT_THROW(verifier.assertDataIntegrity(windowedFrom(fx.group, 3)), GroupDataIntegrityException);
+    EXPECT_EQ(verifier.peekChainCheckpoint(fx.group.id)->verifiedVersion, 1)
+        << "the rejected window must not have moved the checkpoint";
 }
 
 TEST_F(GroupChainCheckpoint, RewrittenPrefixIsRejected) {
