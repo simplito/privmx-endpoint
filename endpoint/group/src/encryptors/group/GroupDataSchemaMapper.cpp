@@ -116,7 +116,10 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
 
     // A window that does not start at genesis is only verifiable from the checkpoint it chains into. Without one
     // there is no anchor, and accepting the window would mean trusting its first entry on the server's word.
-    if (firstServed > 1 && (!checkpoint.has_value() || checkpoint->verifiedVersion != firstServed - 1)) {
+    // Overlapping the verified prefix is fine — the head entry is never windowed out, so a re-read with nothing
+    // new lands back on it, and `startIndex` below skips what is already proved. Only a gap above the checkpoint
+    // is fatal: those entries would go unverified.
+    if (firstServed > 1 && (!checkpoint.has_value() || checkpoint->verifiedVersion < firstServed - 1)) {
         throw GroupDataIntegrityException();
     }
 
@@ -250,9 +253,11 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         throw GroupHistoryForkException();
     }
 
+    // `verifiedVersion` is the head version every reader takes it for, not the window length: a partial window
+    // holds only the entries above the last checkpoint, and the two coincide only for a window from genesis.
     checkpointStore->advance(
         checkpoint::ChainCheckpoint::Snapshot{
-            .verifiedVersion = static_cast<int64_t>(groupInfo.data.size()),
+            .verifiedVersion = groupInfo.version,
             .lastEntryDioHashHex = runningPrevDioHashHex,
             .verifiedManagers = verifiedManagers,
             .verifiedUsers = verifiedUsers,
