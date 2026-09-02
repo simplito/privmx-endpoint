@@ -100,14 +100,104 @@ public:
 };
 
 // Exceptions for IPrivateKey interface
-class PrivmxCryptoserviceEccIPrivateKeyException : public PrivmxCryptoserviceEccException {
+class PrivmxCryptoserviceEccPrivateKeyException : public PrivmxCryptoserviceEccException {
 public:
-    PrivmxCryptoserviceEccIPrivateKeyException(
+    PrivmxCryptoserviceEccPrivateKeyException(
         const std::string& msg = std::string()
     ) : PrivmxCryptoserviceEccException(msg) {}
-    PrivmxCryptoserviceEccIPrivateKeyException(
+    PrivmxCryptoserviceEccPrivateKeyException(
         const char * msg 
     ) : PrivmxCryptoserviceEccException(std::string(msg)) {}
+};
+
+class PrivmxCryptoserviceEccInvalidNetworkException : public PrivmxCryptoserviceEccPrivateKeyException {
+public:
+    PrivmxCryptoserviceEccInvalidNetworkException(
+        const std::string& msg = std::string()
+    ) : PrivmxCryptoserviceEccPrivateKeyException(msg) {}
+    PrivmxCryptoserviceEccInvalidNetworkException(
+        const char * msg 
+    ) : PrivmxCryptoserviceEccPrivateKeyException(std::string(msg)) {}
+};
+
+class PrivmxCryptoserviceEccInvalidCompressionFlagkException : public PrivmxCryptoserviceEccPrivateKeyException {
+public:
+    PrivmxCryptoserviceEccInvalidCompressionFlagkException(
+        const std::string& msg = std::string()
+    ) : PrivmxCryptoserviceEccPrivateKeyException(msg) {}
+    PrivmxCryptoserviceEccInvalidCompressionFlagkException(
+        const char * msg 
+    ) : PrivmxCryptoserviceEccPrivateKeyException(std::string(msg)) {}
+};
+
+class PrivmxCryptoserviceEccInvalidWIFPayloadLengthException : public PrivmxCryptoserviceEccPrivateKeyException {
+public:
+    PrivmxCryptoserviceEccInvalidWIFPayloadLengthException(
+        const std::string& msg = std::string()
+    ) : PrivmxCryptoserviceEccPrivateKeyException(msg) {}
+    PrivmxCryptoserviceEccInvalidWIFPayloadLengthException(
+        const char * msg 
+    ) : PrivmxCryptoserviceEccPrivateKeyException(std::string(msg)) {}
+};
+
+class PrivmxCryptoserviceEccUnknownSignningSchemeException : public PrivmxCryptoserviceEccPrivateKeyException {
+public:
+    PrivmxCryptoserviceEccUnknownSignningSchemeException(
+        const std::string& msg = std::string()
+    ) : PrivmxCryptoserviceEccPrivateKeyException(msg) {}
+    PrivmxCryptoserviceEccUnknownSignningSchemeException(
+        const char * msg 
+    ) : PrivmxCryptoserviceEccPrivateKeyException(std::string(msg)) {}
+};
+
+class PrivmxCryptoserviceEccPrivateKeyTypeKeyException : public PrivmxCryptoserviceEccPrivateKeyException {
+public:
+    PrivmxCryptoserviceEccPrivateKeyTypeKeyException(
+        const std::string& msg = std::string()
+    ) : PrivmxCryptoserviceEccPrivateKeyException(msg) {}
+    PrivmxCryptoserviceEccPrivateKeyTypeKeyException(
+        const char * msg 
+    ) : PrivmxCryptoserviceEccPrivateKeyException(std::string(msg)) {}
+};
+
+class PrivmxCryptoserviceEccPrivateKeyInvalidFirstByteOfCipherException : public PrivmxCryptoserviceEccPrivateKeyException {
+public:
+    PrivmxCryptoserviceEccPrivateKeyInvalidFirstByteOfCipherException(
+        const std::string& msg = std::string()
+    ) : PrivmxCryptoserviceEccPrivateKeyException(msg) {}
+    PrivmxCryptoserviceEccPrivateKeyInvalidFirstByteOfCipherException(
+        const char * msg 
+    ) : PrivmxCryptoserviceEccPrivateKeyException(std::string(msg)) {}
+};
+
+class PrivmxCryptoserviceEccPrivateKeyDecryptSignatureException : public PrivmxCryptoserviceEccPrivateKeyException {
+public:
+    PrivmxCryptoserviceEccPrivateKeyDecryptSignatureException(
+        const std::string& msg = std::string()
+    ) : PrivmxCryptoserviceEccPrivateKeyException(msg) {}
+    PrivmxCryptoserviceEccPrivateKeyDecryptSignatureException(
+        const char * msg 
+    ) : PrivmxCryptoserviceEccPrivateKeyException(std::string(msg)) {}
+};
+
+class PrivmxCryptoserviceEccPrivateKeyExportException : public PrivmxCryptoserviceEccPrivateKeyException {
+public:
+    PrivmxCryptoserviceEccPrivateKeyExportException(
+        const std::string& msg = std::string()
+    ) : PrivmxCryptoserviceEccPrivateKeyException(msg) {}
+    PrivmxCryptoserviceEccPrivateKeyExportException(
+        const char * msg 
+    ) : PrivmxCryptoserviceEccPrivateKeyException(std::string(msg)) {}
+};
+
+class PrivmxCryptoserviceEccPrivateKeyDecryptInvalidChecksumeException : public PrivmxCryptoserviceEccPrivateKeyException {
+public:
+    PrivmxCryptoserviceEccPrivateKeyDecryptInvalidChecksumeException(
+        const std::string& msg = std::string()
+    ) : PrivmxCryptoserviceEccPrivateKeyException(msg) {}
+    PrivmxCryptoserviceEccPrivateKeyDecryptInvalidChecksumeException(
+        const char * msg 
+    ) : PrivmxCryptoserviceEccPrivateKeyException(std::string(msg)) {}
 };
 
 // Exceptions for IExtKey interface

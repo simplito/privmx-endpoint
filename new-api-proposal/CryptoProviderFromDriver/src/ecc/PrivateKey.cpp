@@ -24,6 +24,8 @@ limitations under the License.
 #include "Base58.hpp"
 #include "Utils.hpp"
 
+#include "EccExceptions.hpp"
+
 namespace privmx {
 namespace cryptoservice {
 namespace ecc {
@@ -34,20 +36,17 @@ namespace ecc {
 PrivateKey PrivateKey::fromWIF(const std::string& wif) {
     std::string payload = Base58::decodeWithChecksum(wif);
     if (payload.front() != Networks::BITCOIN.WIF) {
-        // throw InvalidNetworkException();
-        throw std::runtime_error("PrivateKey: InvalidNetworkException");
+        throw PrivmxCryptoserviceEccInvalidNetworkException("fromWIF: InvalidNetworkException");
     }
     payload.erase(payload.begin());
     if (payload.length() == 33) {
         if (payload.back() != '\x01') {
-            // throw InvalidCompressionFlagException();
-            throw std::runtime_error("PrivateKey: InvalidCompressionFlagException");
+            throw PrivmxCryptoserviceEccInvalidCompressionFlagkException("fromWIF: InvalidCompressionFlagException");
         }
         payload.erase(payload.end() - 1);
     }
     if (payload.length() != 32) {
-        // throw InvalidWIFPayloadLengthException();
-        throw std::runtime_error("PrivateKey: InvalidWIFPayloadLengthException");
+        throw PrivmxCryptoserviceEccInvalidWIFPayloadLengthException("fromWIF: InvalidWIFPayloadLengthException");
     }
     ECC key = ECC::fromPrivateKey(payload);
     return PrivateKey(std::move(key));
@@ -57,20 +56,17 @@ PrivateKey PrivateKey::fromWIFb(std::shared_ptr<ISymCryptoProvider> p, BytesView
     // Bytes payload = Base58::decodeWithChecksumB(_provider, wif);
     Bytes payload = Base58::decodeWithChecksumB(p, wif);
     if (payload.front() != (uint8_t) Networks::BITCOIN.WIF) {
-        // throw InvalidNetworkException();
-        throw std::runtime_error("PrivateKey: InvalidNetworkException");
+        throw PrivmxCryptoserviceEccInvalidNetworkException("fromWIFb: InvalidNetworkException");
     }
     payload.erase(payload.begin());
     if (payload.size() == 33) {
         if (payload.back() != '\x01') {
-            // throw InvalidCompressionFlagException();
-            throw std::runtime_error("PrivateKey: InvalidCompressionFlagException");
+            throw PrivmxCryptoserviceEccInvalidCompressionFlagkException("fromWIFb: InvalidCompressionFlagException");
         }
         payload.erase(payload.end() - 1);
     }
     if (payload.size() != 32) {
-        // throw InvalidWIFPayloadLengthException();
-        throw std::runtime_error("PrivateKey: InvalidWIFPayloadLengthException");
+        throw PrivmxCryptoserviceEccInvalidWIFPayloadLengthException("fromWIFb: InvalidWIFPayloadLengthException");
     }
     ECC key = ECC::fromPrivateKey(Utils::b2s(payload));
     // return PrivateKey(std::move(key));
@@ -159,7 +155,7 @@ Bytes PrivateKey::sign(BytesView data, SigScheme scheme) const {
             // return Utils::s2b(_key.sign(Utils::b2s(data)));
             return _key.sign(data);
         default:
-            throw PrivmxDriverCryptoException("PrivateKey::sign: Unknowne signning scheme");
+            throw PrivmxCryptoserviceEccUnknownSignningSchemeException("PrivateKey::sign: Unknown signning scheme");
             break;        
     }
 }
@@ -179,7 +175,7 @@ std::shared_ptr<IPublicKey> PrivateKey::publicKey() const {
 
 Bytes PrivateKey::deriveSharedSecret(const IPublicKey& publicKey) const {
     if (typeid(publicKey) != typeid(PublicKey)) {
-        throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
+        throw PrivmxCryptoserviceEccPrivateKeyTypeKeyException("PrivateKey::deriveSharedSecret: Wrong type of public key");
     }
     Bytes secret = deriveB((const PublicKey&) publicKey);
     return Utils::fillTo32b(secret);
@@ -197,7 +193,7 @@ Bytes PrivateKey::deriveSharedSecret(const IPublicKey& publicKey) const {
 
 Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
     if (expectedSender != nullptr && typeid(*expectedSender) != typeid(PublicKey)) {
-        throw PrivmxDriverCryptoException("PrivateKey::deriveSharedSecret: Wrong type of public key");
+        throw PrivmxCryptoserviceEccPrivateKeyTypeKeyException("PrivateKey::deriveSharedSecret: Wrong type of public key");
     } else if (expectedSender != nullptr) {
         return decrypt(sealed);
     } else {
@@ -210,7 +206,7 @@ Bytes PrivateKey::export_(KeyFormat format) const {
         return toWIFb();
     } else {
         // other formats ...
-        throw PrivmxDriverCryptoException("PrivateKey::export_:: Unknown data format");    
+        throw PrivmxCryptoserviceEccPrivateKeyExportException("PrivateKey::export_:: Unknown data format");    
     }
 }
 
@@ -230,20 +226,17 @@ std::string PrivateKey::decryptFromBase64(const std::string& cipher_base64, cons
 
 std::string PrivateKey::decrypt(const std::string& cipher, const std::optional<PublicKey>& pubOfSignature) const {
     if (cipher.front() != 101 || cipher.size() < 67) {
-        // throw InvalidFirstByteOfCipherException();
-        throw std::runtime_error("EciesEncryptor: InvalidFirstByteOfCipherException");
+        throw PrivmxCryptoserviceEccPrivateKeyInvalidFirstByteOfCipherException("EciesEncryptor: InvalidFirstByteOfCipherException");
     }
     auto external_pub = cipher.substr(1, 33);
     auto my_pub = cipher.substr(34, 33);
     auto external_pub_ec = PublicKey::fromDER(external_pub);
     if(pubOfSignature.has_value() && external_pub_ec != pubOfSignature.value()) {
-        // throw GivenPublicKeyDoesNotMatchWithSignatureException();
-        throw std::runtime_error("EciesEncryptor: GivenPublicKeyDoesNotMatchWithSignatureException");
+        throw PrivmxCryptoserviceEccPrivateKeyDecryptSignatureException("EciesEncryptor: GivenPublicKeyDoesNotMatchWithSignatureException");
     }
     auto my_pub_ec = PublicKey::fromDER(my_pub);
     if (my_pub_ec != getPublicKey()) {
-        // throw GivenPrivKeyDoesNotMatchException();
-        throw std::runtime_error("EciesEncryptor: GivenPrivKeyDoesNotMatchException");
+        throw PrivmxCryptoserviceEccPrivateKeyTypeKeyException("EciesEncryptor: GivenPrivKeyDoesNotMatchException");
     }
     auto key = eciesDecrypt(cipher.substr(67), external_pub_ec);
     return key;
@@ -269,8 +262,7 @@ std::string PrivateKey::eciesDecrypt(const std::string& enc_buf, const PublicKey
     std::string M = _shared_key.substr(32, 32);
     std::string d2 =  Utils::b2s(_provider->hmac(Hash::Sha256, Utils::s2b(M), Utils::s2b(c))).substr(0, 4);
     if (d != d2) {
-        // throw InvalidChecksumException();
-        throw std::runtime_error("ECIES: InvalidChecksumException");
+        throw PrivmxCryptoserviceEccPrivateKeyDecryptInvalidChecksumeException("ECIES: InvalidChecksumException");
     }
     // std::string E = eciesGetE();
     std::string E = _shared_key.substr(0, 32);
@@ -289,8 +281,7 @@ std::string PrivateKey::eciesDecrypt(const std::string& enc_buf, const PublicKey
 
 Bytes PrivateKey::decrypt(BytesView cipher, const std::optional<PublicKey>& pubOfSignature) const {
     if (cipher.front() != 101 || cipher.size() < 67) {
-        // throw InvalidFirstByteOfCipherException();
-        throw std::runtime_error("EciesEncryptor: InvalidFirstByteOfCipherException");
+        throw PrivmxCryptoserviceEccPrivateKeyInvalidFirstByteOfCipherException("EciesEncryptor: InvalidFirstByteOfCipherException");
     }
     // auto external_pub = cipher.substr(1, 33);
     // auto my_pub = cipher.substr(34, 33);
@@ -298,13 +289,11 @@ Bytes PrivateKey::decrypt(BytesView cipher, const std::optional<PublicKey>& pubO
     Bytes my_pub = Bytes(cipher.begin()+34,cipher.begin()+67);
     auto external_pub_ec = PublicKey::fromDER(_provider, external_pub);
     if(pubOfSignature.has_value() && external_pub_ec != pubOfSignature.value()) {
-        // throw GivenPublicKeyDoesNotMatchWithSignatureException();
-        throw std::runtime_error("EciesEncryptor: GivenPublicKeyDoesNotMatchWithSignatureException");
+        throw PrivmxCryptoserviceEccPrivateKeyDecryptSignatureException("EciesEncryptor: GivenPublicKeyDoesNotMatchWithSignatureException");
     }
     auto my_pub_ec = PublicKey::fromDER(_provider, my_pub);
     if (my_pub_ec != getPublicKey()) {
-        // throw GivenPrivKeyDoesNotMatchException();
-        throw std::runtime_error("EciesEncryptor: GivenPrivKeyDoesNotMatchException");
+        throw PrivmxCryptoserviceEccPrivateKeyTypeKeyException("EciesEncryptor: GivenPrivKeyDoesNotMatchException");
     }
     // auto key = eciesDecrypt(cipher.substr(67), external_pub_ec);
     auto key = eciesDecrypt(Bytes(cipher.begin()+67,cipher.end()), external_pub_ec);
@@ -331,8 +320,7 @@ Bytes PrivateKey::eciesDecrypt(BytesView enc_buf, const PublicKey& public_key) c
     Bytes d2 =  _provider->hmac(Hash::Sha256, M, c);
     d2.resize(4);
     if (d != d2) {
-        // throw InvalidChecksumException();
-        throw std::runtime_error("ECIES: InvalidChecksumException");
+        throw PrivmxCryptoserviceEccPrivateKeyDecryptInvalidChecksumeException("ECIES: InvalidChecksumException");
     }
     // std::string E = eciesGetE();
     // std::string E = _shared_key.substr(0, 32);
