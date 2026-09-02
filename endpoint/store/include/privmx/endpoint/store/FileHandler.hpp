@@ -62,6 +62,11 @@ public:
     );
     void close();
     void flush();
+    /**
+     * Replaces only the container key used for file metadata, keeping pending writes intact - unlike `sync`,
+     * which discards `_dirtyChunks`. Lets a flush that failed on a superseded key be retried.
+     */
+    void rekey(const core::DecryptedEncKey& fileEncKey);
 
 private:
     struct UpdateChunkData {
@@ -127,6 +132,7 @@ public:
         return _file->sync(fileMeta, newParms, fileEncKey);
     }
     inline void flush() override { _file->flush(); }
+    inline void rekey(const core::DecryptedEncKey& fileEncKey) override { _file->rekey(fileEncKey); }
 
 private:
     std::shared_ptr<FileHandler> _file;

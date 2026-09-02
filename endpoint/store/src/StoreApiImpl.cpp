@@ -332,6 +332,13 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
     auto encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
     if (encryptionParams.fileMeta.internalFileMeta.randomWrite.value_or(false)) {
+        // A random-write handle is opened to be written through, and every write needs the container's current
+        // key. Re-key here rather than letting the first write fail
+        if (isRekeyNeeded(file_raw.store)) {
+            autoRotateStoreKeys(file_raw.store.id);
+            file_raw = _serverApi->storeFileGet(storeFileGetModel);
+            encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
+        }
         std::shared_ptr<FileReadWriteHandle> handle = _fileHandleManager.createFileReadWriteHandle(
             privmx::endpoint::store::FileInfo{
                 .contextId = file_raw.file.contextId,
@@ -424,9 +431,25 @@ void StoreApiImpl::syncFile(const int64_t handle) {
 
     std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
     if (rw_handle) {
-        rw_handle->file->sync(
-            encryptionParams.fileMeta, encryptionParams.fileDecryptionParams, encryptionParams.encKey
-        );
+        // `encryptionParams.encKey` is the key `file.keyId` points at - right for decrypting what is already
+        // stored, but the handle also uses it to stamp later writes, and the server rejects a superseded keyId.
+        auto writeKey = encryptionParams.encKey;
+        // Equal keyIds mean `encKey` already *is* the current key - skip decrypting the same entry a second
+        // time. `syncFile` runs on every sqlite lock escalation, so the saved ECIES + verify is worth having.
+        if (file_raw.file.keyId != file_raw.store.keyId) {
+            auto storeKey = storeToModuleKeys(file_raw.store);
+            setNewModuleKeysInCache(file_raw.store.id, storeKey, file_raw.store.version);
+            try {
+                auto currentKey = getAndValidateModuleCurrentEncKey(storeKey, _groupPrivKeyResolver);
+                if (currentKey.statusCode == 0) {
+                    writeKey = core::DecryptedEncKey(currentKey);
+                }
+            } catch (const core::Exception&) {
+                // A stale Store key throws out of `getAndValidateModuleCurrentEncKey`, and a sync is not the
+                // place to re-key. Keep the old key; `flushFile` re-keys and retries once the write is rejected.
+            }
+        }
+        rw_handle->file->sync(encryptionParams.fileMeta, encryptionParams.fileDecryptionParams, writeKey);
         return;
     }
     std::shared_ptr<FileReadHandle> handlePtr = _fileHandleManager.getFileReadHandle(handle);
@@ -445,7 +468,54 @@ void StoreApiImpl::flushFile(const int64_t handle) {
     if (!rw_handle) {
         throw InvalidFileReadWriteHandleException();
     }
-    rw_handle->file->flush();
+    // A write handle caches the container key it was opened with; a Store re-key leaves that key superseded.
+    // The finalize-write path recovers through `withKeyRefresh`, a flush had no equivalent.
+    auto refreshKeyAndRetry = [&](bool forceRekey) {
+        server::StoreFileGetModel storeFileGetModel;
+        storeFileGetModel.fileId = rw_handle->getFileId();
+        auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
+        if (forceRekey || isRekeyNeeded(file_raw.store)) {
+            autoRotateStoreKeys(file_raw.store.id);
+            file_raw = _serverApi->storeFileGet(storeFileGetModel);
+        }
+        auto storeKey = storeToModuleKeys(file_raw.store);
+        setNewModuleKeysInCache(file_raw.store.id, storeKey, file_raw.store.version);
+        // The Store's *current* key, not the one `file.keyId` points at: the server rejects a superseded keyId.
+        auto currentKey = getAndValidateModuleCurrentEncKey(storeKey, _groupPrivKeyResolver);
+        if (currentKey.statusCode != 0) {
+            throw core::EncryptionKeyValidationException(
+                "Current encryption key statusCode: " + std::to_string(currentKey.statusCode)
+            );
+        }
+        rw_handle->file->rekey(currentKey);
+        rw_handle->file->flush();
+    };
+    // `static`: these are compile-time constants, but reading one costs a full Exception construction (six
+    // std::strings, most past wasm32's SSO cap). `flushFile` runs on every sqlite commit - don't pay it twice
+    // per call just to compare two ints.
+    static const auto invalidKeyCode = privmx::endpoint::server::InvalidKeyException().getCode();
+    static const auto epochOutdatedCode = privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode();
+    // The same two recoverable codes `withKeyRefresh` handles; an outdated group epoch needs the re-key even
+    // when the re-fetched Store no longer reports `staleGroups`, hence the forced flag.
+    auto recover = [&](unsigned int code) {
+        if (code != invalidKeyCode && code != epochOutdatedCode) {
+            return false;
+        }
+        refreshKeyAndRetry(code == epochOutdatedCode);
+        return true;
+    };
+    // Both types are reachable: `FileHandler::flush` rethrows whichever one `updateOnServer` produced.
+    try {
+        rw_handle->file->flush();
+    } catch (const privmx::utils::PrivmxException& e) {
+        if (!recover(core::ExceptionConverter::convert(e).getCode())) {
+            throw;
+        }
+    } catch (const core::Exception& e) {
+        if (!recover(e.getCode())) {
+            throw;
+        }
+    }
 }
 
 uint64_t StoreApiImpl::getFileSize(const int64_t handle) {

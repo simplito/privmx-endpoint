@@ -21,6 +21,7 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
 
 std::shared_ptr<FullTextSearch> FullTextSearch::openDb(const std::string& filename, const IndexMode mode) {
+    clearStashedVfsException();
     sqlite3* db;
     int rc;
 
@@ -31,6 +32,7 @@ std::shared_ptr<FullTextSearch> FullTextSearch::openDb(const std::string& filena
 
     rc = sqlite3_open(":memory:", &db);
     if (rc) {
+        rethrowStashedVfsException();
         throw DatabaseOpenException();
     }
     std::shared_ptr<sqlite3> db2 = std::shared_ptr<sqlite3>(db, sqlite3_close);
@@ -39,6 +41,7 @@ std::shared_ptr<FullTextSearch> FullTextSearch::openDb(const std::string& filena
 
     rc = sqlite3_exec(db, (std::string("ATTACH 'file:") + filename + "?vfs=privmxvfs' AS pmx;").c_str(), 0, 0, 0);
     if (rc != SQLITE_OK) {
+        rethrowStashedVfsException();
         throw DatabaseAttachException(sqlite3_errmsg(db));
     }
 
@@ -48,9 +51,11 @@ std::shared_ptr<FullTextSearch> FullTextSearch::openDb(const std::string& filena
 FullTextSearch::FullTextSearch(std::shared_ptr<sqlite3> db, const IndexMode mode) : _db(std::move(db)), _mode(mode) {}
 
 int64_t FullTextSearch::addDocument(const std::string& name, const std::string& content) {
+    clearStashedVfsException();
     const char* insertSql = "INSERT INTO pmx.documents (name, content) VALUES (?, ?);";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(_db.get(), insertSql, -1, &stmt, nullptr) != SQLITE_OK) {
+        rethrowStashedVfsException();
         throw InsertPrepareException(sqlite3_errmsg(_db.get()));
     }
 
@@ -60,6 +65,7 @@ int64_t FullTextSearch::addDocument(const std::string& name, const std::string& 
     int status = sqlite3_step(stmt);
     if (status != SQLITE_DONE) {
         sqlite3_finalize(stmt);
+        rethrowStashedVfsException();
         throw InsertExecuteException(sqlite3_errmsg(_db.get()));
     }
 
@@ -69,17 +75,20 @@ int64_t FullTextSearch::addDocument(const std::string& name, const std::string& 
 }
 
 Document FullTextSearch::getDocument(const int64_t documentId) {
+    clearStashedVfsException();
     Document result;
     const char* searchSql = "SELECT rowid, name, content FROM pmx.documents WHERE rowid=?;";
 
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(_db.get(), searchSql, -1, &stmt, nullptr) != SQLITE_OK) {
+        rethrowStashedVfsException();
         throw SelectPrepareException(sqlite3_errmsg(_db.get()));
     }
 
     sqlite3_bind_int64(stmt, 1, documentId);
 
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+    int stepStatus;
+    while ((stepStatus = sqlite3_step(stmt)) == SQLITE_ROW) {
         Document document;
         sqlite3_int64 rowid = sqlite3_column_int64(stmt, 0);
         document.documentId = rowid;
@@ -96,23 +105,30 @@ Document FullTextSearch::getDocument(const int64_t documentId) {
     }
 
     sqlite3_finalize(stmt);
+    if (stepStatus != SQLITE_DONE) {
+        rethrowStashedVfsException();
+        throw SelectExecuteException(sqlite3_errmsg(_db.get()));
+    }
 
     return result;
 }
 
 core::PagingList<Document> FullTextSearch::listDocuments(const core::PagingQuery& pagingQuery) {
+    clearStashedVfsException();
     std::vector<Document> results;
     const char* searchSql = "SELECT rowid, name, content FROM pmx.documents LIMIT ? OFFSET ?;";
 
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(_db.get(), searchSql, -1, &stmt, nullptr) != SQLITE_OK) {
+        rethrowStashedVfsException();
         throw SelectPrepareException(sqlite3_errmsg(_db.get()));
     }
 
     sqlite3_bind_int64(stmt, 1, pagingQuery.limit);
     sqlite3_bind_int64(stmt, 2, pagingQuery.skip);
 
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+    int stepStatus;
+    while ((stepStatus = sqlite3_step(stmt)) == SQLITE_ROW) {
         Document document;
         sqlite3_int64 rowid = sqlite3_column_int64(stmt, 0);
         document.documentId = rowid;
@@ -129,14 +145,20 @@ core::PagingList<Document> FullTextSearch::listDocuments(const core::PagingQuery
     }
 
     sqlite3_finalize(stmt);
+    if (stepStatus != SQLITE_DONE) {
+        rethrowStashedVfsException();
+        throw SelectExecuteException(sqlite3_errmsg(_db.get()));
+    }
 
     return {getCountOfAll(), results};
 }
 
 void FullTextSearch::updateDocument(const Document& document) {
+    clearStashedVfsException();
     const char* updateSql = "UPDATE pmx.documents SET name=?, content=? WHERE rowid=?;";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(_db.get(), updateSql, -1, &stmt, nullptr) != SQLITE_OK) {
+        rethrowStashedVfsException();
         throw UpdatePrepareException(sqlite3_errmsg(_db.get()));
     }
 
@@ -147,6 +169,7 @@ void FullTextSearch::updateDocument(const Document& document) {
     int status = sqlite3_step(stmt);
     if (status != SQLITE_DONE) {
         sqlite3_finalize(stmt);
+        rethrowStashedVfsException();
         throw UpdateExecuteException(sqlite3_errmsg(_db.get()));
     }
 
@@ -160,9 +183,11 @@ void FullTextSearch::updateDocument(const Document& document) {
 }
 
 void FullTextSearch::deleteDocument(const int64_t documentId) {
+    clearStashedVfsException();
     const char* deleteSql = "DELETE FROM pmx.documents WHERE rowid=?;";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(_db.get(), deleteSql, -1, &stmt, nullptr) != SQLITE_OK) {
+        rethrowStashedVfsException();
         throw DeletePrepareException(sqlite3_errmsg(_db.get()));
     }
 
@@ -171,6 +196,7 @@ void FullTextSearch::deleteDocument(const int64_t documentId) {
     int status = sqlite3_step(stmt);
     if (status != SQLITE_DONE) {
         sqlite3_finalize(stmt);
+        rethrowStashedVfsException();
         throw DeleteExecuteException(sqlite3_errmsg(_db.get()));
     }
 
@@ -184,11 +210,13 @@ void FullTextSearch::deleteDocument(const int64_t documentId) {
 }
 
 core::PagingList<Document> FullTextSearch::search(const std::string& query, const core::PagingQuery& pagingQuery) {
+    clearStashedVfsException();
     std::vector<Document> results;
     const char* searchSql = "SELECT rowid, name, content FROM pmx.documents WHERE documents MATCH ? LIMIT ? OFFSET ?;";
 
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(_db.get(), searchSql, -1, &stmt, nullptr) != SQLITE_OK) {
+        rethrowStashedVfsException();
         throw SelectPrepareException(sqlite3_errmsg(_db.get()));
     }
 
@@ -196,7 +224,8 @@ core::PagingList<Document> FullTextSearch::search(const std::string& query, cons
     sqlite3_bind_int64(stmt, 2, pagingQuery.limit);
     sqlite3_bind_int64(stmt, 3, pagingQuery.skip);
 
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+    int stepStatus;
+    while ((stepStatus = sqlite3_step(stmt)) == SQLITE_ROW) {
         Document document;
         sqlite3_int64 rowid = sqlite3_column_int64(stmt, 0);
         document.documentId = rowid;
@@ -213,33 +242,43 @@ core::PagingList<Document> FullTextSearch::search(const std::string& query, cons
     }
 
     sqlite3_finalize(stmt);
+    if (stepStatus != SQLITE_DONE) {
+        rethrowStashedVfsException();
+        throw SelectExecuteException(sqlite3_errmsg(_db.get()));
+    }
 
     return {getCount(query), results};
 }
 
 void FullTextSearch::beginTransaction() {
+    clearStashedVfsException();
     char* err = nullptr;
     if (sqlite3_exec(_db.get(), "BEGIN TRANSACTION;", nullptr, nullptr, &err) != SQLITE_OK) {
         std::string msg = err;
         sqlite3_free(err);
+        rethrowStashedVfsException();
         throw TransactionBeginException(msg);
     }
 }
 
 void FullTextSearch::commit() {
+    clearStashedVfsException();
     char* err = nullptr;
     if (sqlite3_exec(_db.get(), "COMMIT;", nullptr, nullptr, &err) != SQLITE_OK) {
         std::string msg = err;
         sqlite3_free(err);
+        rethrowStashedVfsException();
         throw TransactionCommitException(msg);
     }
 }
 
 void FullTextSearch::rollback() {
+    clearStashedVfsException();
     char* err = nullptr;
     if (sqlite3_exec(_db.get(), "ROLLBACK;", nullptr, nullptr, &err) != SQLITE_OK) {
         std::string msg = err;
         sqlite3_free(err);
+        rethrowStashedVfsException();
         throw TransactionRollbackException(msg);
     }
 }
@@ -261,6 +300,7 @@ void FullTextSearch::ensureTableCreated() {
 }
 
 void FullTextSearch::createTable() {
+    clearStashedVfsException();
     const char* createTableSql1 = R"(
         CREATE VIRTUAL TABLE IF NOT EXISTS pmx.documents
         USING fts5(name UNINDEXED, content, tokenize='unicode61');
@@ -274,11 +314,13 @@ void FullTextSearch::createTable() {
     if (sqlite3_exec(_db.get(), createTableSql, nullptr, nullptr, &err) != SQLITE_OK) {
         std::string msg = err;
         sqlite3_free(err);
+        rethrowStashedVfsException();
         throw TableCreationException(msg);
     }
 }
 
 void FullTextSearch::close() {
+    clearStashedVfsException();
     _db.reset();
 }
 
@@ -290,17 +332,23 @@ int64_t FullTextSearch::getCount(const std::string& query) {
                       "WHERE documents MATCH ?;";
 
     if (sqlite3_prepare_v2(_db.get(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        rethrowStashedVfsException();
         throw SelectPrepareException(sqlite3_errmsg(_db.get()));
     }
 
     sqlite3_bind_text(stmt, 1, query.c_str(), -1, SQLITE_TRANSIENT);
 
     int64_t resultCount = 0;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
+    int stepStatus = sqlite3_step(stmt);
+    if (stepStatus == SQLITE_ROW) {
         resultCount = sqlite3_column_int64(stmt, 0);
     }
 
     sqlite3_finalize(stmt);
+    if (stepStatus != SQLITE_ROW && stepStatus != SQLITE_DONE) {
+        rethrowStashedVfsException();
+        throw SelectExecuteException(sqlite3_errmsg(_db.get()));
+    }
 
     return resultCount;
 }
@@ -312,15 +360,21 @@ int64_t FullTextSearch::getCountOfAll() {
                       "FROM pmx.documents;";
 
     if (sqlite3_prepare_v2(_db.get(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        rethrowStashedVfsException();
         throw SelectPrepareException(sqlite3_errmsg(_db.get()));
     }
 
     int64_t resultCount = 0;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
+    int stepStatus = sqlite3_step(stmt);
+    if (stepStatus == SQLITE_ROW) {
         resultCount = sqlite3_column_int64(stmt, 0);
     }
 
     sqlite3_finalize(stmt);
+    if (stepStatus != SQLITE_ROW && stepStatus != SQLITE_DONE) {
+        rethrowStashedVfsException();
+        throw SelectExecuteException(sqlite3_errmsg(_db.get()));
+    }
 
     return resultCount;
 }
