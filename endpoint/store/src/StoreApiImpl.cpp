@@ -332,6 +332,13 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
     auto encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
     if (encryptionParams.fileMeta.internalFileMeta.randomWrite.value_or(false)) {
+        // A random-write handle is opened to be written through, and every write needs the container's current
+        // key. Re-key here rather than letting the first write fail
+        if (isRekeyNeeded(file_raw.store)) {
+            autoRotateStoreKeys(file_raw.store.id);
+            file_raw = _serverApi->storeFileGet(storeFileGetModel);
+            encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
+        }
         std::shared_ptr<FileReadWriteHandle> handle = _fileHandleManager.createFileReadWriteHandle(
             privmx::endpoint::store::FileInfo{
                 .contextId = file_raw.file.contextId,
