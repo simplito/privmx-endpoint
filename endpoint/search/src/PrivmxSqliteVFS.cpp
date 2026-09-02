@@ -43,9 +43,13 @@ namespace search {
 // thread_local: a stashed cause belongs to the sqlite call that produced it, on that thread.
 static thread_local std::exception_ptr g_lastVfsException = nullptr;
 
-void stashVfsException(std::exception_ptr error) { g_lastVfsException = error; }
+void stashVfsException(std::exception_ptr error) {
+    g_lastVfsException = error;
+}
 
-void clearStashedVfsException() { g_lastVfsException = nullptr; }
+void clearStashedVfsException() {
+    g_lastVfsException = nullptr;
+}
 
 void rethrowStashedVfsException() {
     if (g_lastVfsException) {
