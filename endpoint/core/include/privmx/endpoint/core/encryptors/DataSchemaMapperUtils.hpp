@@ -156,7 +156,9 @@ public:
                 continue;
             }
             if constexpr (has_keys<TServer>::value) {
-                keyRequest.addOne(items[i].keys, items[i].data.back().keyId, getLocation(items[i]));
+                // Every key, not just the one `data.back()` names: a re-key can leave that pointer on a key the
+                // content was never encrypted with, and the older key is still served and still valid.
+                keyRequest.addAll(items[i].keys, getLocation(items[i]));
             }
             if constexpr (has_group_keys<TServer>::value) {
                 keyRequest.addGroupKeys(items[i].groupKeys, getLocation(items[i]));
@@ -171,7 +173,40 @@ public:
             }
             try {
                 if (auto it = allKeys.find(getLocation(items[i])); it != allKeys.end()) {
-                    auto [lib, dio] = decrypt(items[i], it->second.at(items[i].data.back().keyId));
+                    const std::string declaredKeyId = items[i].data.back().keyId;
+                    // A re-key can leave `data.back().keyId` naming a key the content was never encrypted with,
+                    // while the key that *did* encrypt it is still served and still valid. `decrypt` reports that
+                    // as a statusCode rather than by throwing, so a candidate counts only if it decodes cleanly.
+                    auto tryKey = [&](const DecryptedEncKey& key) -> std::optional<std::tuple<TLib, DataIntegrityObject>> {
+                        try {
+                            auto candidate = decrypt(items[i], key);
+                            if (std::get<0>(candidate).statusCode != 0) {
+                                return std::nullopt;
+                            }
+                            return candidate;
+                        } catch (...) {
+                            return std::nullopt;
+                        }
+                    };
+
+                    std::optional<std::tuple<TLib, DataIntegrityObject>> decrypted;
+                    if (auto declared = it->second.find(declaredKeyId); declared != it->second.end()) {
+                        decrypted = tryKey(declared->second);
+                    }
+                    if (!decrypted.has_value()) {
+                        for (const auto& [candidateId, candidate] : it->second) {
+                            if (candidateId == declaredKeyId) {
+                                continue;
+                            }
+                            decrypted = tryKey(candidate);
+                            if (decrypted.has_value()) {
+                                break;
+                            }
+                        }
+                    }
+                    // Nothing decoded it: fall back to the declared key so the reported failure is the original one.
+                    auto [lib, dio] = decrypted.has_value() ? decrypted.value()
+                                                            : decrypt(items[i], it->second.at(declaredKeyId));
                     result[i] = lib;
                     dios[i] = dio;
                     if (!seenRandomIds.insert(dio.randomId + "-" + std::to_string(dio.timestamp)).second) {

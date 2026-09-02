@@ -233,21 +233,49 @@ protected:
     ) {
         auto location{getModuleEncKeyLocation(container, resourceId)};
         auto containerKeys{getAndValidateModuleKeys(container, resourceId, groupPrivKeyResolver)};
+        // `entry.keyId` can name a key the entry was never encrypted with once the container has been re-keyed
+        // more than once; the key that *did* encrypt it is still among the container's keys. Try the declared one
+        // first, then the rest, and keep whichever yields a secret that verifies.
+        auto decryptSecret = [&](const core::DecryptedEncKey& key) -> std::optional<std::string> {
+            try {
+                std::string candidate;
+                if constexpr (std::is_same_v<std::decay_t<decltype(entry.data)>, Poco::Dynamic::Var>) {
+                    candidate = _moduleDataSchemaMapper->decryptInternalMeta(entry.data, key).secret;
+                } else {
+                    // Inbox special Case
+                    candidate = _moduleDataSchemaMapper->decryptInternalMeta(entry.data.toJSON(), key).secret;
+                }
+                if (candidate.empty() || !_keyProvider->verifyKeysSecret(containerKeys, location, candidate)) {
+                    return std::nullopt;
+                }
+                return candidate;
+            } catch (...) {
+                return std::nullopt;
+            }
+        };
+
         auto currentKey{findEncKeyByKeyId(containerKeys, entry.keyId)};
-        std::string secret;
-        if constexpr (std::is_same_v<std::decay_t<decltype(entry.data)>, Poco::Dynamic::Var>) {
-            secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data, currentKey).secret;
-        } else {
-            // Inbox special Case
-            secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data.toJSON(), currentKey).secret;
+        std::optional<std::string> resolvedSecret = decryptSecret(currentKey);
+        if (!resolvedSecret.has_value()) {
+            for (const auto& [candidateId, candidate] : containerKeys) {
+                if (candidateId == entry.keyId) {
+                    continue;
+                }
+                if (auto found = decryptSecret(candidate); found.has_value()) {
+                    resolvedSecret = found;
+                    currentKey = candidate;
+                    break;
+                }
+            }
         }
+        if (!resolvedSecret.has_value()) {
+            throw core::EncryptionKeyValidationException();
+        }
+        std::string secret = resolvedSecret.value();
         LOG_DEBUG("secret - ", secret)
         auto usersKeysResolver{
             core::UsersKeysResolver::create(container, users, managers, forceGenerateNewKey, currentKey)
         };
-        if (!_keyProvider->verifyKeysSecret(containerKeys, location, secret)) {
-            throw core::EncryptionKeyValidationException();
-        }
         core::EncKey key = currentKey;
         core::DataIntegrityObject dio = _connection.getImpl()->createDIO(container.contextId, resourceId);
         std::vector<core::server::KeyEntrySet> keyEntries;
@@ -577,6 +605,13 @@ auto ModuleBaseApi::getAndValidateModuleKeys(
     auto moduleKeys{
         _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolverOr(groupPrivKeyResolver)).at(location)
     };
+    if constexpr (module_has_keys<ModuleStruct>::value) {
+        std::string raw;
+        for (const auto& k : moduleObj.keys) raw += (raw.empty() ? "" : ",") + k.keyId.substr(0, 6);
+        std::string got;
+        for (const auto& k : moduleKeys) got += (got.empty() ? "" : ",") + k.first.substr(0, 6) + ":" + std::to_string(k.second.statusCode);
+        LOG_ERROR("DIAG keys fromServer=", std::to_string(moduleObj.keys.size()) + " [" + raw + "] validated=" + std::to_string(moduleKeys.size()) + " [" + got + "]")
+    }
     return moduleKeys;
 }
 
