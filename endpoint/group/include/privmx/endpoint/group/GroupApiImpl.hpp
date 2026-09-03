@@ -105,7 +105,6 @@ private:
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
     core::ModuleKeys groupToModuleKeys(const server::GroupInfo& group);
 
-    void withHistoryFrom(server::GroupGetModel& params, const std::string& groupId);
     static std::vector<keytree::TreeMember> toTreeMembers(
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers

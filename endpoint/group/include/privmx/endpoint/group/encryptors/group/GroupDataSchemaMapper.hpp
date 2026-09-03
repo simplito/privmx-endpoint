@@ -61,10 +61,6 @@ public:
         const std::vector<std::string>& managers
     );
 
-    // How much of this group's chain is already verified, so a read can ask for only the rest; zero when unseen.
-    // The caller turns it into `fromVersion`, and `assertDataIntegrity` checks the window chains into this point.
-    int64_t verifiedVersion(const std::string& groupId);
-
     uint32_t validateDataIntegrity(const server::GroupInfo& groupInfo);
 
     // Call when the group is gone or the session was reset.

@@ -254,11 +254,9 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
         .type = {},
         .scope = {},
         .forUserIds = {},
-        .forPosition = {},
         .forNewMembers = static_cast<std::int64_t>(newMembers.size()),
         .fromVersion = {}
     };
-    withHistoryFrom(getModel, groupId);
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -429,10 +427,9 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     // Every departing member's path, because one delta covers their union — and one epoch covers the batch, where
     // removing them one at a time would stale every container the group can read once per member.
     server::GroupGetModel getModel{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = userIds, .forPosition = {},
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = userIds,
         .forNewMembers = {}, .fromVersion = {}
     };
-    withHistoryFrom(getModel, groupId);
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -564,9 +561,8 @@ void GroupApiImpl::updateGroup(
 ) {
     // The default path view is enough: this submits no tree, and the roster it re-signs is the one it reads back.
     server::GroupGetModel getModel{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forPosition = {}, .forNewMembers = {}, .fromVersion = {}
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
     };
-    withHistoryFrom(getModel, groupId);
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
@@ -652,9 +648,8 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
 void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload) {
     // Verifies the winner's key entry and nothing else — no tree is submitted, so the default path view is enough.
     server::GroupGetModel getModel{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forPosition = {}, .forNewMembers = {}, .fromVersion = {}
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
     };
-    withHistoryFrom(getModel, groupId);
     auto updatedGroup = _serverApi.groupGet(getModel).group;
 
     std::vector<core::server::KeyEntry> winnerKeyVec{payload.winnerKeyEntry};
@@ -667,12 +662,18 @@ void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server:
         throw GroupDataIntegrityException("RotatedAlready: winner's key entry failed verification");
     }
 
+    // Without a tag there is nothing tying this epoch to a member: adopting it would mean re-wrapping against
+    // whatever key the answer named. Refusing is the only safe direction — an epoch that cannot be checked is
+    // not a smaller answer than one that can.
+    if (!payload.confirmationTag.has_value()) {
+        throw GroupDataIntegrityException("RotatedAlready: winner carries no confirmation tag to check");
+    }
     auto confInput = std::string("confirm") +
         groupId +
         std::to_string(payload.keyVersion) +
         payload.winnerKeyEntry.keyId;
     auto expectedTag = privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(winnerGk.key, confInput));
-    if (expectedTag != payload.confirmationTag) {
+    if (expectedTag != payload.confirmationTag.value()) {
         throw GroupDataIntegrityException("RotatedAlready: confirmation tag mismatch");
     }
 
@@ -680,20 +681,12 @@ void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server:
     invalidateModuleKeysInCache(groupId);
 }
 
-void GroupApiImpl::withHistoryFrom(server::GroupGetModel& params, const std::string& groupId) {
-    // Nothing to window any more: the bridge serves the head entry unless a caller asks for the audit trail, and
-    // the head is all a read verifies. Left as the one place that would change if that stopped being true.
-    (void)params;
-    (void)groupId;
-}
-
 Group GroupApiImpl::getGroup(const std::string& groupId) {
     server::GroupGetModel params{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forPosition = {}, .forNewMembers = {}, .fromVersion = {}
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
     };
     // Only the part of the chain this client has not verified yet — each entry carries its whole roster, so
     // re-sending proved versions is the bulk of a read. `assertDataIntegrity` insists the window chains in.
-    withHistoryFrom(params, groupId);
     auto group = _serverApi.groupGet(params).group;
     setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.version);
     return _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider, _groupPrivKeyResolver);
@@ -835,9 +828,8 @@ void GroupApiImpl::processDisconnectedEvent() {
 
 std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     server::GroupGetModel params{
-        .groupId = moduleId, .type = {}, .scope = {}, .forUserIds = {}, .forPosition = {}, .forNewMembers = {}, .fromVersion = {}
+        .groupId = moduleId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
     };
-    withHistoryFrom(params, moduleId);
     auto group = _serverApi.groupGet(params).group;
     _groupDataSchemaMapper->assertDataIntegrity(group);
     return std::make_pair(groupToModuleKeys(group), group.version);
@@ -876,9 +868,8 @@ std::string GroupApiImpl::buildSubscriptionQuery(
 
 privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& groupId, int64_t epoch) {
     server::GroupGetModel params{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forPosition = {}, .forNewMembers = {}, .fromVersion = {}
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
     };
-    withHistoryFrom(params, groupId);
     auto group = _serverApi.groupGet(params).group;
 
     const int64_t currentEpoch = group.keyVersion.value_or(1);

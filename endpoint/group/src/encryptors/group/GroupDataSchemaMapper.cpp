@@ -118,11 +118,6 @@ std::string GroupDataSchemaMapper::rosterTag(
     return privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(key, payload));
 }
 
-int64_t GroupDataSchemaMapper::verifiedVersion(const std::string& groupId) {
-    const auto checkpoint = _chainCheckpoints.get(groupId)->get();
-    return checkpoint.has_value() ? checkpoint->verifiedVersion : 0;
-}
-
 /**
  * Head-entry integrity, and nothing about the roster.
  *
@@ -268,8 +263,10 @@ std::string GroupDataSchemaMapper::getGroupPrivKey(
     const server::GroupInfo& groupInfo,
     const core::DecryptedEncKey& encKey
 ) {
-    // Search all data entries for the one encrypted with encKey (by matching keyId).
-    // Covers both the current entry and any historical epoch entry in group.keys[].
+    // Matched by keyId rather than assumed to be the head. A read is served the head alone, so in practice this
+    // finds it on the first step; the loop is what keeps the function honest when a caller passed `fromVersion`
+    // and the trail is present. An older *epoch's* grant key does not come from here at all — it comes down the
+    // Epoch Ladder, via `groupGetKeyArchive`.
     for (const auto& dataEntry : groupInfo.data) {
         if (dataEntry.keyId == encKey.id) {
             auto encData = dynamic::EncryptedGroupDataV5::fromJSON(dataEntry.data);

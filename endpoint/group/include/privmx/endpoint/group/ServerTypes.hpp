@@ -176,7 +176,6 @@ JSON_STRUCT(GroupDeleteModel, GROUP_DELETE_MODEL_FIELDS);
     F(type, std::optional<std::string>)                                                                                \
     F(scope, std::optional<std::string>)                                                                               \
     F(forUserIds, std::optional<std::vector<std::string>>)                                                             \
-    F(forPosition, std::optional<int64_t>)                                                                             \
     F(forNewMembers, std::optional<int64_t>)                                                                           \
     F(fromVersion, std::optional<int64_t>)
 JSON_STRUCT(GroupGetModel, GROUP_GET_MODEL_FIELDS);
@@ -261,11 +260,15 @@ JSON_STRUCT(GroupGetKeyArchiveModel, GROUP_GET_KEY_ARCHIVE_MODEL_FIELDS);
     F(rungs, std::vector<GroupArchiveRung>)
 JSON_STRUCT(GroupGetKeyArchiveResult, GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS);
 
+// `confirmationTag` is optional because the winning version may have been written by a client that sent none.
+// A missing tag is a state the loser has to handle — refuse to adopt — not a parse error:
+// `deserialize<std::string>` throws on an absent field, which would swallow the very ROTATED_ALREADY this
+// payload exists to recover from.
 #define ROTATED_ALREADY_PAYLOAD_FIELDS(F)                                                                              \
     F(keyVersion, int64_t)                                                                                             \
     F(groupPubKey, std::string)                                                                                        \
     F(winnerKeyEntry, core::server::KeyEntry)                                                                          \
-    F(confirmationTag, std::string)
+    F(confirmationTag, std::optional<std::string>)
 JSON_STRUCT(RotatedAlreadyPayload, ROTATED_ALREADY_PAYLOAD_FIELDS);
 
 } // namespace server
