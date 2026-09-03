@@ -51,24 +51,9 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
 
-    void addGroupMember(
-        const std::string& groupId,
-        const core::UserWithPubKey& newMember,
-        bool asManager,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta
-    );
+    void addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
 
-    void removeGroupMember(
-        const std::string& groupId,
-        const std::string& userId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta
-    );
+    void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     void updateGroup(
         const std::string& groupId,
@@ -126,9 +111,15 @@ private:
         const std::vector<core::UserWithPubKey>& managers
     );
 
-    static std::map<std::string, std::string> rosterKeyStrings(
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers
+    /** A roster split the way `prepareContainerUpdate` wants it. */
+    struct RosterAfterChange {
+        std::vector<core::UserWithPubKey> users;
+        std::vector<core::UserWithPubKey> managers;
+    };
+    static RosterAfterChange rosterOf(const Group& verified);
+    std::map<std::string, std::string> resolveMemberKeys(
+        const std::string& contextId,
+        const std::vector<std::string>& userIds
     );
 
     keytree::TreeGroupState climbForPlanning(

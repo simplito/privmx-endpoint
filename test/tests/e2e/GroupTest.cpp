@@ -326,7 +326,7 @@ TEST_F(GroupTest, updateGroup_correct_data) {
         EXPECT_EQ(group.managers[0], reader->getString("Login.user_1_id"));
     }
     // A second metadata update, and the roster is still the one the group was created with: updateGroup cannot
-    // reach it at all any more. Promoting somebody goes through addGroupMember/removeGroupMember.
+    // reach it at all any more. Promoting somebody goes through addGroupMembers/removeGroupMembers.
     EXPECT_NO_THROW({
         groupApi->updateGroup(
             reader->getString("Group_1.groupId"),

@@ -10,8 +10,8 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
     GroupApiVarInterface::methodMap = {
         {Create, &GroupApiVarInterface::create},
         {CreateGroup, &GroupApiVarInterface::createGroup},
-        {AddGroupMember, &GroupApiVarInterface::addGroupMember},
-        {RemoveGroupMember, &GroupApiVarInterface::removeGroupMember},
+        {AddGroupMembers, &GroupApiVarInterface::addGroupMembers},
+        {RemoveGroupMembers, &GroupApiVarInterface::removeGroupMembers},
         {UpdateGroup, &GroupApiVarInterface::updateGroup},
         {DeleteGroup, &GroupApiVarInterface::deleteGroup},
         {GetGroup, &GroupApiVarInterface::getGroup},
@@ -39,34 +39,25 @@ Poco::Dynamic::Var GroupApiVarInterface::createGroup(const Poco::Dynamic::Var& a
     return _serializer.serialize(result);
 }
 
-Poco::Dynamic::Var GroupApiVarInterface::addGroupMember(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
+Poco::Dynamic::Var GroupApiVarInterface::addGroupMembers(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
-    auto newMember = _deserializer.deserialize<core::UserWithPubKey>(argsArr->get(1), "newMember");
-    auto asManager = _deserializer.deserialize<bool>(argsArr->get(2), "asManager");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(3), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(4), "managers");
-    auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(5), "publicMeta");
-    auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(6), "privateMeta");
-    _groupApi.addGroupMember(groupId, newMember, asManager, users, managers, publicMeta, privateMeta);
+    auto newMembers = _deserializer.deserializeVector<GroupMemberToAdd>(argsArr->get(1), "newMembers");
+    _groupApi.addGroupMembers(groupId, newMembers);
     return {};
 }
 
-Poco::Dynamic::Var GroupApiVarInterface::removeGroupMember(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+Poco::Dynamic::Var GroupApiVarInterface::removeGroupMembers(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
-    auto userId = _deserializer.deserialize<std::string>(argsArr->get(1), "userId");
-    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "users");
-    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(3), "managers");
-    auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "publicMeta");
-    auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(5), "privateMeta");
-    _groupApi.removeGroupMember(groupId, userId, users, managers, publicMeta, privateMeta);
+    auto userIds = _deserializer.deserializeVector<std::string>(argsArr->get(1), "userIds");
+    _groupApi.removeGroupMembers(groupId, userIds);
     return {};
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::updateGroup(const Poco::Dynamic::Var& args) {
-    // No roster here: seating a member re-keys their path, so membership goes through addGroupMember /
-    // removeGroupMember and `updateGroup` is metadata only — which is also all the bridge's `groupUpdate` accepts.
+    // No roster here: seating a member re-keys their path, so membership goes through addGroupMembers /
+    // removeGroupMembers and `updateGroup` is metadata only — which is also all the bridge's `groupUpdate` accepts.
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "publicMeta");

@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <cstdint>
 #include <map>
+#include <set>
 #include <optional>
 #include <string>
 #include <vector>
@@ -52,7 +53,8 @@ public:
     // one-wrap shape needs the parent's private key, which a climb only ever recovers for the caller's own seat.
     AdditionPlan planAddition(
         const TreeGroupState& state,
-        const TreeMember& newMember,
+        const std::vector<TreeMember>& newMembers,
+        const std::vector<std::uint32_t>& positions,
         const privmx::crypto::PrivateKey& signer
     );
 
@@ -60,7 +62,7 @@ public:
     // edge. Blank subtrees are wrapped to anyway: unopenable, but skipping them would break the chain of edges.
     RemovalPlan planRemoval(
         const TreeGroupState& state,
-        const std::string& leavingUserId,
+        const std::vector<std::string>& leavingUserIds,
         const privmx::crypto::PrivateKey& signer
     );
 
@@ -72,10 +74,31 @@ public:
     // caller hands over the whole roster. Overrides any earlier `setMemberKeys`.
     void setMemberKeyStrings(std::map<std::string, std::string> membersByUserId);
 
-    // Lowest blank leaf, else append. Never moves anyone.
-    static std::uint32_t choosePosition(const TreeGroupState& state);
+    /**
+     * Seats for `count` newcomers: blanks a removal left, lowest first, then appended past the last leaf.
+     *
+     * The same answer `groupGet`'s `forNewMembers` gives server-side, and the client asks the server for it —
+     * this exists for planning against a `TreeGroupState` already in hand, which is what the tests and the
+     * state-dump tool do. Nothing on the live path calls it.
+     */
+    static std::vector<std::uint32_t> choosePositions(const TreeGroupState& state, std::uint32_t count);
 
     static std::optional<std::uint32_t> positionOf(const TreeGroupState& state, const std::string& userId);
+
+    /**
+     * Members a plan over `positions` will wrap to: the occupied leaves hanging off the refreshed frontier.
+     *
+     * `O(k log n)` of them, against a roster of `n`. The caller needs their public keys and the tree state does
+     * not carry any, so this is what says which ones to go and find — resolving the whole roster to use fourteen
+     * of it is the cost this exists to avoid. `excludedSeats` drops seats the operation is emptying: nobody wraps
+     * to a departing member, and looking their key up would fail if they have already left the context.
+     */
+    static std::vector<std::string> membersToWrapTo(
+        const TreeGroupState& state,
+        const std::vector<std::uint32_t>& positions,
+        std::uint32_t numLeaves,
+        const std::set<std::uint32_t>& excludedSeats = {}
+    );
 
     // ── Primitives, exposed for tests and for the ladder module ─────────────
 

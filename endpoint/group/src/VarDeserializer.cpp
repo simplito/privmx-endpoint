@@ -9,6 +9,19 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
 template<>
+group::GroupMemberToAdd VarDeserializer::deserialize<group::GroupMemberToAdd>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .user = deserialize<core::UserWithPubKey>(obj->get("user"), name + ".user"),
+        .role = deserialize<std::string>(obj->get("role"), name + ".role")
+    };
+}
+
+template<>
 group::EventType VarDeserializer::deserialize<group::EventType>(
     const Poco::Dynamic::Var& val,
     const std::string& name

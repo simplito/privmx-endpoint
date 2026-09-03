@@ -43,6 +43,24 @@ public:
 
     void assertDataIntegrity(const server::GroupInfo& groupInfo);
 
+    void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& encKey);
+
+    /**
+     * `HMAC(key, epoch | version | roster)` — what a membership change commits to and a reader checks.
+     *
+     * Both sides call this, so the canonical form cannot drift between them. Lists are sorted and length-prefixed:
+     * an unprefixed join would let one roster's tag match another's under a different split of the same names.
+     * No group id in the payload: the key is this group's own, so a tag made elsewhere cannot verify here anyway
+     * — and leaving it out is what lets `createGroup` tag a group whose id the bridge has not assigned yet.
+     */
+    static std::string rosterTag(
+        const std::string& key,
+        int64_t keyVersion,
+        int64_t version,
+        const std::vector<std::string>& users,
+        const std::vector<std::string>& managers
+    );
+
     // How much of this group's chain is already verified, so a read can ask for only the rest; zero when unseen.
     // The caller turns it into `fromVersion`, and `assertDataIntegrity` checks the window chains into this point.
     int64_t verifiedVersion(const std::string& groupId);
@@ -94,13 +112,6 @@ public:
 
 private:
     // Head fields against state this call actually verified — see the definition for why not against `history`.
-    void assertHeadMatchesVerifiedState(
-        const server::GroupInfo& groupInfo,
-        const std::set<std::string>& verifiedUsers,
-        const std::set<std::string>& verifiedManagers,
-        const std::string& verifiedGroupPubKey,
-        int64_t verifiedKeyVersion
-    );
 
     core::VersionStrategyMapper<server::GroupInfo, std::tuple<Group, core::DataIntegrityObject>> _strategyMapper;
     std::shared_ptr<GroupDataSchemaStrategyV5> _strategyV5;

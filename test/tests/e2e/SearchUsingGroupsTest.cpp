@@ -491,15 +491,9 @@ TEST_F(SearchUsingGroupsTest, rotateSearchIndexKeys_clears_staleGroups_after_the
     ASSERT_NO_THROW({ seedDocuments(indexId, {{"doc-1", "epoch one document"}}); });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
+        groupApi->removeGroupMembers(
             groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(SRConnectionType::SRUser1), userOf(SRConnectionType::SRUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
-            core::Buffer::from("idx_grp_removed_pub"),
-            core::Buffer::from("idx_grp_removed_priv")
+{reader->getString("Login.user_3_id")}
         );
     });
 

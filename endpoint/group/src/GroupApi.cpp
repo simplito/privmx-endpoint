@@ -57,43 +57,38 @@ std::string GroupApi::createGroup(
     }
 }
 
-void GroupApi::addGroupMember(
-    const std::string& groupId,
-    const core::UserWithPubKey& newMember,
-    bool asManager,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta
-) {
+void GroupApi::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    core::Validator::validateClass<core::UserWithPubKey>(newMember, "field:newMember ");
-    core::Validator::validateUserListFormat(users, "field:users ");
-    core::Validator::validateUserListFormat(managers, "field:managers ");
+    if (newMembers.empty()) {
+        // Caught here rather than on the wire: the seat request the impl derives from this size would be
+        // rejected by `groupGet`'s own bounds, naming a field the caller never set.
+        throw core::InvalidParamsException("field:newMembers must name at least one member");
+    }
+    std::vector<core::UserWithPubKey> asRoster;
+    for (const GroupMemberToAdd& newMember : newMembers) {
+        if (newMember.role != "user" && newMember.role != "manager") {
+            throw core::InvalidParamsException("field:newMembers.role must be \"user\" or \"manager\"");
+        }
+        asRoster.push_back(newMember.user);
+    }
+    core::Validator::validateUserListFormat(asRoster, "field:newMembers ");
     try {
-        impl->addGroupMember(groupId, newMember, asManager, users, managers, publicMeta, privateMeta);
+        impl->addGroupMembers(groupId, newMembers);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
-void GroupApi::removeGroupMember(
-    const std::string& groupId,
-    const std::string& userId,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta
-) {
+void GroupApi::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    core::Validator::validateId(userId, "field:userId ");
-    core::Validator::validateUserListFormat(users, "field:users ");
-    core::Validator::validateUserListFormat(managers, "field:managers ");
+    for (const std::string& userId : userIds) {
+        core::Validator::validateId(userId, "field:userIds ");
+    }
     try {
-        impl->removeGroupMember(groupId, userId, users, managers, publicMeta, privateMeta);
+        impl->removeGroupMembers(groupId, userIds);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

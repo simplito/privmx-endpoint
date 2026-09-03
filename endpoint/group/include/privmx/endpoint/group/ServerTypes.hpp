@@ -17,8 +17,6 @@ JSON_STRUCT_EXT(GroupDataEntry, core::server::ContainerDataEntry, GROUP_DATA_ENT
 #define GROUP_HISTORY_ENTRY_INFO_FIELDS(F)                                                                             \
     F(keyId, std::string)                                                                                              \
     F(groupPubKey, std::string)                                                                                        \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
     F(created, int64_t)                                                                                                \
     F(author, std::string)
 JSON_STRUCT(GroupHistoryEntryInfo, GROUP_HISTORY_ENTRY_INFO_FIELDS);
@@ -61,7 +59,7 @@ JSON_STRUCT(GroupTreeRefreshedNode, GROUP_TREE_REFRESHED_NODE_FIELDS);
 
 #define GROUP_TREE_TRANSITION_FIELDS(F)                                                                                \
     F(baseKeyVersion, int64_t)                                                                                         \
-    F(blankedPosition, int64_t)                                                                                        \
+    F(blankedPositions, std::vector<int64_t>)                                                                          \
     F(refreshedNodes, std::vector<GroupTreeRefreshedNode>)                                                             \
     F(edges, std::vector<GroupTreeEdge>)
 JSON_STRUCT(GroupTreeTransition, GROUP_TREE_TRANSITION_FIELDS);
@@ -75,7 +73,7 @@ JSON_STRUCT(GroupTreeSeatedNode, GROUP_TREE_SEATED_NODE_FIELDS);
 
 #define GROUP_TREE_ADDITION_TRANSITION_FIELDS(F)                                                                       \
     F(baseKeyVersion, int64_t)                                                                                         \
-    F(position, int64_t)                                                                                               \
+    F(positions, std::vector<int64_t>)                                                                                 \
     F(seatedNodes, std::vector<GroupTreeSeatedNode>)                                                                   \
     F(edges, std::vector<GroupTreeEdge>)
 JSON_STRUCT(GroupTreeAdditionTransition, GROUP_TREE_ADDITION_TRANSITION_FIELDS);
@@ -109,6 +107,8 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(numLeaves, std::optional<int64_t>)                                                                               \
     F(leafAssignment, std::optional<std::vector<std::string>>)                                                         \
     F(ownLeafPosition, std::optional<int64_t>)                                                                         \
+    F(subjectLeafPositions, std::optional<std::vector<int64_t>>)                                                       \
+    F(nextFreeSeats, std::optional<std::vector<int64_t>>)                                                              \
     F(treeNodes, std::optional<std::vector<GroupTreeNode>>)                                                            \
     F(treeEdges, std::optional<std::vector<GroupTreeEdge>>)                                                            \
     F(eraFloor, std::optional<int64_t>)                                                                                \
@@ -175,8 +175,9 @@ JSON_STRUCT(GroupDeleteModel, GROUP_DELETE_MODEL_FIELDS);
     F(groupId, std::string)                                                                                            \
     F(type, std::optional<std::string>)                                                                                \
     F(scope, std::optional<std::string>)                                                                               \
-    F(forUserId, std::optional<std::string>)                                                                           \
+    F(forUserIds, std::optional<std::vector<std::string>>)                                                             \
     F(forPosition, std::optional<int64_t>)                                                                             \
+    F(forNewMembers, std::optional<int64_t>)                                                                           \
     F(fromVersion, std::optional<int64_t>)
 JSON_STRUCT(GroupGetModel, GROUP_GET_MODEL_FIELDS);
 
@@ -203,20 +204,27 @@ JSON_STRUCT(GroupDeletedEventData, GROUP_DELETED_EVENT_DATA_FIELDS);
     F(changeKind, std::string)
 JSON_STRUCT(GroupChangedEventData, GROUP_CHANGED_EVENT_DATA_FIELDS);
 
-#define GROUP_ADD_MEMBER_MODEL_FIELDS(F)                                                                               \
-    F(id, std::string)                                                                                                 \
+// One newcomer. Their seat is `transition.positions[i]` — named in one place, so the two cannot disagree.
+// A batch is not k additions sent together: the newcomers' paths overlap, so the delta re-keys their union once.
+#define GROUP_ADD_MEMBER_ENTRY_FIELDS(F)                                                                               \
     F(userId, std::string)                                                                                             \
-    F(role, std::string)                                                                                               \
-    F(position, int64_t)                                                                                               \
+    F(role, std::string)
+JSON_STRUCT(GroupAddMemberEntry, GROUP_ADD_MEMBER_ENTRY_FIELDS);
+
+#define GROUP_ADD_MEMBERS_MODEL_FIELDS(F)                                                                              \
+    F(id, std::string)                                                                                                 \
+    F(members, std::vector<GroupAddMemberEntry>)                                                                       \
     F(keyId, std::string)                                                                                              \
     F(data, Poco::Dynamic::Var)                                                                                        \
     F(transition, GroupTreeAdditionTransition)                                                                         \
     F(expectedKeyVersion, int64_t)
-JSON_STRUCT(GroupAddMemberModel, GROUP_ADD_MEMBER_MODEL_FIELDS);
+JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
 
-#define GROUP_REMOVE_MEMBER_MODEL_FIELDS(F)                                                                            \
+// Removing several at once is not a convenience: done one at a time each removal advances the epoch on its own,
+// so every container the group can read goes stale k times and the rotation budget is charged k times.
+#define GROUP_REMOVE_MEMBERS_MODEL_FIELDS(F)                                                                           \
     F(id, std::string)                                                                                                 \
-    F(userId, std::string)                                                                                             \
+    F(userIds, std::vector<std::string>)                                                                               \
     F(groupPubKey, std::string)                                                                                        \
     F(keyId, std::string)                                                                                              \
     F(data, Poco::Dynamic::Var)                                                                                        \
@@ -225,7 +233,7 @@ JSON_STRUCT(GroupAddMemberModel, GROUP_ADD_MEMBER_MODEL_FIELDS);
     F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
     F(expectedKeyVersion, int64_t)                                                                                     \
     F(confirmationTag, std::optional<std::string>)
-JSON_STRUCT(GroupRemoveMemberModel, GROUP_REMOVE_MEMBER_MODEL_FIELDS);
+JSON_STRUCT(GroupRemoveMembersModel, GROUP_REMOVE_MEMBERS_MODEL_FIELDS);
 
 #define GROUP_CUT_ERA_MODEL_FIELDS(F)                                                                                  \
     F(id, std::string)                                                                                                 \

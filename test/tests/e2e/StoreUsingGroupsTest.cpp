@@ -701,18 +701,9 @@ TEST_F(StoreUsingGroupsTest, user_added_to_group_gains_access_to_store_and_files
     disconnect();
     connectAs(SUGConnectionType::SUGUser1);
     EXPECT_NO_THROW({
-        groupApi->addGroupMember(
-            reader->getString("Group_2.groupId"),
-            userOf(SUGConnectionType::SUGUser3),
-            false, // asManager
-            std::vector<core::UserWithPubKey>{
-                userOf(SUGConnectionType::SUGUser1),
-                userOf(SUGConnectionType::SUGUser2),
-                userOf(SUGConnectionType::SUGUser3)
-            },
-            std::vector<core::UserWithPubKey>{userOf(SUGConnectionType::SUGUser1)},
-            group_2.publicMeta,
-            group_2.privateMeta
+        groupApi->addGroupMembers(
+reader->getString("Group_2.groupId"),
+            {group::GroupMemberToAdd{.user = userOf(SUGConnectionType::SUGUser3), .role = "user"}}
         );
     });
 
@@ -970,15 +961,9 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_clears_staleGroups_after_the_group_
     ASSERT_FALSE(oldEpochFileId.empty());
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
+        groupApi->removeGroupMembers(
             groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(SUGConnectionType::SUGUser1), userOf(SUGConnectionType::SUGUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(SUGConnectionType::SUGUser1)},
-            core::Buffer::from("grp_removed_pub"),
-            core::Buffer::from("grp_removed_priv")
+{reader->getString("Login.user_3_id")}
         );
     });
 
@@ -1056,15 +1041,9 @@ TEST_F(StoreUsingGroupsTest, uploading_a_file_auto_rotates_a_stale_store_key) {
     ASSERT_FALSE(storeId.empty());
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
+        groupApi->removeGroupMembers(
             groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(SUGConnectionType::SUGUser1), userOf(SUGConnectionType::SUGUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(SUGConnectionType::SUGUser1)},
-            core::Buffer::from("auto_grp_removed_pub"),
-            core::Buffer::from("auto_grp_removed_priv")
+{reader->getString("Login.user_3_id")}
         );
     });
 

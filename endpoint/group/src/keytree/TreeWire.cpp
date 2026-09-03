@@ -155,12 +155,13 @@ TreeGroupState TreeWire::toRuntime(
 server::GroupTreeTransition TreeWire::toRemovalTransition(
     const server::GroupTreeState& before,
     const RemovalPlan& plan,
-    std::uint32_t position,
     std::int64_t baseKeyVersion
 ) {
     server::GroupTreeTransition transition;
     transition.baseKeyVersion = baseKeyVersion;
-    transition.blankedPosition = static_cast<std::int64_t>(position);
+    for (const std::uint32_t position : plan.blankedPositions) {
+        transition.blankedPositions.push_back(static_cast<std::int64_t>(position));
+    }
     for (const NodeRefresh& refresh : plan.pathRefresh) {
         // The generation the node was read at travels with the refresh: the server refuses the delta if the node
         // has moved since, rather than applying it to a base the client never saw.
@@ -193,7 +194,9 @@ server::GroupTreeAdditionTransition TreeWire::toAdditionTransition(
 ) {
     server::GroupTreeAdditionTransition transition;
     transition.baseKeyVersion = baseKeyVersion;
-    transition.position = static_cast<std::int64_t>(plan.position);
+    for (const std::uint32_t position : plan.positions) {
+        transition.positions.push_back(static_cast<std::int64_t>(position));
+    }
     for (const TreeNodeState& node : plan.nodes) {
         server::GroupTreeSeatedNode wire;
         wire.nodeIndex = static_cast<std::int64_t>(node.nodeIndex);
@@ -213,16 +216,19 @@ server::GroupTreeAdditionTransition TreeWire::toAdditionTransition(
 
 server::GroupTreeState TreeWire::afterRemoval(
     const server::GroupTreeState& before,
-    const RemovalPlan& plan,
-    std::uint32_t position
+    const RemovalPlan& plan
 ) {
     server::GroupTreeState after;
     after.numLeaves = before.numLeaves;
     after.leafAssignment = before.leafAssignment;
-    const std::string departing = position < after.leafAssignment.size() ? after.leafAssignment[position] :
-                                                                           std::string();
-    if (position < after.leafAssignment.size()) {
-        after.leafAssignment[position] = std::string();
+    std::set<std::string> departing;
+    for (const std::uint32_t position : plan.blankedPositions) {
+        if (position < after.leafAssignment.size() && !after.leafAssignment[position].empty()) {
+            // Guarded: an empty id in this set would match every node-kind edge's `value_or("")` below and drop
+            // edges the removal never touched.
+            departing.insert(after.leafAssignment[position]);
+            after.leafAssignment[position] = std::string();
+        }
     }
 
     std::set<std::uint32_t> refreshed;
@@ -251,7 +257,7 @@ server::GroupTreeState TreeWire::afterRemoval(
             // supplies the replacement; keeping this one would make the state fail the generation check.
             continue;
         }
-        if (edge.childKind == "user" && !departing.empty() && edge.childUserId.value_or("") == departing) {
+        if (edge.childKind == "user" && departing.count(edge.childUserId.value_or("")) > 0) {
             continue; // the whole point of the operation
         }
         after.edges.push_back(edge);
@@ -268,13 +274,15 @@ server::GroupTreeState TreeWire::afterRemoval(
 server::GroupTreeState TreeWire::afterAddition(
     const server::GroupTreeState& before,
     const AdditionPlan& plan,
-    const std::string& newMemberId
+    const std::vector<std::string>& newMemberIds
 ) {
     server::GroupTreeState after;
     after.numLeaves = static_cast<std::int64_t>(plan.newNumLeaves);
     after.leafAssignment = before.leafAssignment;
     after.leafAssignment.resize(plan.newNumLeaves, std::string());
-    after.leafAssignment[plan.position] = newMemberId;
+    for (std::size_t i = 0; i < plan.positions.size(); ++i) {
+        after.leafAssignment[plan.positions[i]] = newMemberIds[i];
+    }
     // The plan re-keys the new leaf's path, so its nodes REPLACE the ones held before rather than joining them:
     // appending would leave the state carrying two entries for one node index, one of them a key nobody holds.
     std::map<std::uint32_t, server::GroupTreeNode> nodesByIndex;

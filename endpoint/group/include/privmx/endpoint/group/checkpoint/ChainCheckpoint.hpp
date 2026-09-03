@@ -23,23 +23,14 @@ namespace endpoint {
 namespace group {
 namespace checkpoint {
 
-// A trust-on-first-use anchor into one group's verified history, so a re-read only verifies the entries above the
-// last verified one. A security anchor, not an optimisation — losing it is not free, and it only ever advances.
+// The highest version of one group this client has accepted.
+//
+// A trust-on-first-use pin, not an optimisation. The roster tag proves who a roster was attested by, but a tag
+// stays valid forever — so an older, genuinely tagged roster is something only a version pin can refuse.
 class ChainCheckpoint {
 public:
     struct Snapshot {
-        // Entries verified as of this checkpoint — equals `groupInfo.data.size()` at that time.
         int64_t verifiedVersion = 0;
-        // hex(sha256(encData.dio)) of the checkpoint entry — the anchor every entry above it must chain into.
-        std::string lastEntryDioHashHex;
-        // membership.managers as committed by the checkpoint entry.
-        std::set<std::string> verifiedManagers;
-        // membership.users as committed by the checkpoint entry.
-        std::set<std::string> verifiedUsers;
-        // membership.keyVersion as committed there — needed to resume epoch monotonicity.
-        int64_t keyVersionAtCheckpoint = 0;
-        // membership.groupPubKey as committed there — needed to resume epoch monotonicity.
-        std::string groupPubKeyAtCheckpoint;
     };
 
     // By value: a reference would outlive the lock.

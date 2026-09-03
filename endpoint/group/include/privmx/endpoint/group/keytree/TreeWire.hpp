@@ -49,7 +49,6 @@ public:
     static server::GroupTreeTransition toRemovalTransition(
         const server::GroupTreeState& before,
         const RemovalPlan& plan,
-        std::uint32_t position,
         std::int64_t baseKeyVersion
     );
 
@@ -65,8 +64,7 @@ public:
     // removed leaf's direct path is touched, which is what the bridge checks.
     static server::GroupTreeState afterRemoval(
         const server::GroupTreeState& before,
-        const RemovalPlan& plan,
-        std::uint32_t position
+        const RemovalPlan& plan
     );
 
     // The epoch does not move, which is what keeps every container the group can read valid. Edges the plan
@@ -74,7 +72,7 @@ public:
     static server::GroupTreeState afterAddition(
         const server::GroupTreeState& before,
         const AdditionPlan& plan,
-        const std::string& newMemberId
+        const std::vector<std::string>& newMemberIds
     );
 };
 
