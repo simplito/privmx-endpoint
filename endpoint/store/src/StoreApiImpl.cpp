@@ -332,6 +332,13 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
     auto encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
     if (encryptionParams.fileMeta.internalFileMeta.randomWrite.value_or(false)) {
+        // A random-write handle is opened to be written through, and every write needs the container's current
+        // key. Re-key here rather than letting the first write fail
+        if (isRekeyNeeded(file_raw.store)) {
+            autoRotateStoreKeys(file_raw.store.id);
+            file_raw = _serverApi->storeFileGet(storeFileGetModel);
+            encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
+        }
         std::shared_ptr<FileReadWriteHandle> handle = _fileHandleManager.createFileReadWriteHandle(
             privmx::endpoint::store::FileInfo{
                 .contextId = file_raw.file.contextId,
@@ -424,9 +431,25 @@ void StoreApiImpl::syncFile(const int64_t handle) {
 
     std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
     if (rw_handle) {
-        rw_handle->file->sync(
-            encryptionParams.fileMeta, encryptionParams.fileDecryptionParams, encryptionParams.encKey
-        );
+        // `encryptionParams.encKey` is the key `file.keyId` points at - right for decrypting what is already
+        // stored, but the handle also uses it to stamp later writes, and the server rejects a superseded keyId.
+        auto writeKey = encryptionParams.encKey;
+        // Equal keyIds mean `encKey` already *is* the current key - skip decrypting the same entry a second
+        // time. `syncFile` runs on every sqlite lock escalation, so the saved ECIES + verify is worth having.
+        if (file_raw.file.keyId != file_raw.store.keyId) {
+            auto storeKey = storeToModuleKeys(file_raw.store);
+            setNewModuleKeysInCache(file_raw.store.id, storeKey, file_raw.store.version);
+            try {
+                auto currentKey = getAndValidateModuleCurrentEncKey(storeKey, _groupPrivKeyResolver);
+                if (currentKey.statusCode == 0) {
+                    writeKey = core::DecryptedEncKey(currentKey);
+                }
+            } catch (const core::Exception&) {
+                // A stale Store key throws out of `getAndValidateModuleCurrentEncKey`, and a sync is not the
+                // place to re-key. Keep the old key; `flushFile` re-keys and retries once the write is rejected.
+            }
+        }
+        rw_handle->file->sync(encryptionParams.fileMeta, encryptionParams.fileDecryptionParams, writeKey);
         return;
     }
     std::shared_ptr<FileReadHandle> handlePtr = _fileHandleManager.getFileReadHandle(handle);

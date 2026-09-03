@@ -36,6 +36,33 @@ limitations under the License.
 
 using namespace privmx::endpoint::search;
 
+namespace privmx {
+namespace endpoint {
+namespace search {
+
+// thread_local: a stashed cause belongs to the sqlite call that produced it, on that thread.
+static thread_local std::exception_ptr g_lastVfsException = nullptr;
+
+void stashVfsException(std::exception_ptr error) {
+    g_lastVfsException = error;
+}
+
+void clearStashedVfsException() {
+    g_lastVfsException = nullptr;
+}
+
+void rethrowStashedVfsException() {
+    if (g_lastVfsException) {
+        auto error = g_lastVfsException;
+        g_lastVfsException = nullptr;
+        std::rethrow_exception(error);
+    }
+}
+
+} // namespace search
+} // namespace endpoint
+} // namespace privmx
+
 extern "C" {
 
 struct privmx_file {
@@ -75,12 +102,15 @@ int privmxClose(sqlite3_file* pFile) {
         }
     } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("privmxClose - ", e.getFull())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (const std::exception& e) {
         LOG_ERROR("privmxClose - ", e.what())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (...) {
         LOG_ERROR("privmxClose - unknown exception")
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     }
     return SQLITE_OK;
@@ -101,14 +131,17 @@ int privmxRead(sqlite3_file* pFile, void* zBuf, int iAmt, sqlite3_int64 iOfst) {
         }
     } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("privmxRead - ", e.getFull())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         std::memset(zBuf, 0, iAmt);
         return SQLITE_IOERR_READ;
     } catch (const std::exception& e) {
         LOG_ERROR("privmxRead - ", e.what())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         std::memset(zBuf, 0, iAmt);
         return SQLITE_IOERR_READ;
     } catch (...) {
         LOG_ERROR("privmxRead - unknown exception")
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         std::memset(zBuf, 0, iAmt);
         return SQLITE_IOERR_READ;
     }
@@ -121,12 +154,15 @@ int privmxWrite(sqlite3_file* pFile, const void* zBuf, int iAmt, sqlite3_int64 i
         file->write(privmx::endpoint::core::Buffer::from((char*)zBuf, iAmt), iOfst);
     } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("privmxWrite - ", e.getFull())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR_WRITE;
     } catch (const std::exception& e) {
         LOG_ERROR("privmxWrite - ", e.what())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR_WRITE;
     } catch (...) {
         LOG_ERROR("privmxWrite - unknown exception")
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR_WRITE;
     }
     return SQLITE_OK;
@@ -138,12 +174,15 @@ int privmxTruncate(sqlite3_file* pFile, sqlite3_int64 size) {
         file->truncate(size);
     } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("privmxTruncate - ", e.getFull())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (const std::exception& e) {
         LOG_ERROR("privmxTruncate - ", e.what())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (...) {
         LOG_ERROR("privmxTruncate - unknown exception")
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     }
     return SQLITE_OK;
@@ -155,12 +194,15 @@ int privmxSync(sqlite3_file* pFile, int /*flags*/) {
         file->sync();
     } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("privmxSync - ", e.getFull())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (const std::exception& e) {
         LOG_ERROR("privmxSync - ", e.what())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (...) {
         LOG_ERROR("privmxSync - unknown exception")
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     }
     return SQLITE_OK;
@@ -172,12 +214,15 @@ int privmxFileSize(sqlite3_file* pFile, sqlite3_int64* pSize) {
         *pSize = file->getFileSize();
     } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("privmxFileSize - ", e.getFull())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (const std::exception& e) {
         LOG_ERROR("privmxFileSize - ", e.what())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (...) {
         LOG_ERROR("privmxFileSize - unknown exception")
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     }
     return SQLITE_OK;
@@ -193,12 +238,15 @@ int privmxLock(sqlite3_file* pFile, int eLock) {
         }
     } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("privmxLock - ", e.getFull())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (const std::exception& e) {
         LOG_ERROR("privmxLock - ", e.what())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (...) {
         LOG_ERROR("privmxLock - unknown exception")
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     }
 }
@@ -213,12 +261,15 @@ int privmxUnlock(sqlite3_file* pFile, int eLock) {
         }
     } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("privmxUnlock - ", e.getFull())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (const std::exception& e) {
         LOG_ERROR("privmxUnlock - ", e.what())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (...) {
         LOG_ERROR("privmxUnlock - unknown exception")
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     }
 }
@@ -231,12 +282,15 @@ int privmxCheckReservedLock(sqlite3_file* pFile, int* pResOut) {
         return SQLITE_OK;
     } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("privmxCheckReservedLock - ", e.getFull())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (const std::exception& e) {
         LOG_ERROR("privmxCheckReservedLock - ", e.what())
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     } catch (...) {
         LOG_ERROR("privmxCheckReservedLock - unknown exception")
+        privmx::endpoint::search::stashVfsException(std::current_exception());
         return SQLITE_IOERR;
     }
 }
