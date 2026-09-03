@@ -36,7 +36,8 @@ using namespace privmx::endpoint;
  *  - Submitting an entry seals it to the Inbox's entries public key, taken from the public view, and never
  *    touches the container key. So no write auto-re-keys a stale Inbox the way sendMessage or setEntry does:
  *    `staleGroups` sits there until a manager calls rotateInboxKeys, and that is the only thing that moves the
- *    grants onto the Group's new epoch.
+ *    grants onto the Group's new epoch. Under `forwardSecrecy: "yes"` the bridge refuses submissions in the
+ *    meantime — the submitter may be anonymous and has no right to re-key, so refusing is all it can do.
  *
  * user_1 and user_2 hold subscriptions to every Inbox and Group event for the whole run, so the notification
  * path is exercised alongside the data path.
@@ -182,9 +183,12 @@ protected:
     // and a status code instead of an exception. Its entries are not: an Inbox policy carries no item policy
     // (createInbox hands the inner Thread and Store `{policies, std::nullopt}`), so those stay at the default
     // `user` scope and the bridge refuses a non-grantee outright.
+    // Forward secrecy is the bridge default, but stated here because the whole stale/re-key half of the
+    // scenario hangs off it: without it a submission under a superseded group epoch would just be accepted.
     core::ContainerPolicyWithoutItem inboxReadableByEveryone() {
         core::ContainerPolicyWithoutItem policy;
         policy.get = "all";
+        policy.forwardSecrecy = "yes";
         return policy;
     }
 
@@ -386,14 +390,18 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     ASSERT_EQ(staleInbox.staleGroups.size(), 1);
     EXPECT_EQ(staleInbox.staleGroups[0], groupId);
 
-    // ── Entry2, submitted while the Inbox is still stale ───────────────────────────────────────────────────
+    // ── Entry2, refused while the Inbox is still stale ─────────────────────────────────────────────────────
     // This is where the Inbox parts company with the other modules: the payload is sealed to the Inbox's
-    // entries public key, so the send never reaches for the container key and nothing auto-re-keys.
-    ASSERT_NO_THROW({ submitEntry(user2, inboxId, "entry2_data"); });
+    // entries public key, so the send never reaches for the container key and nothing auto-re-keys the way a
+    // Thread's sendMessage does. A submitter has no right to re-key either — they may not even be named on the
+    // Inbox — so under forward secrecy the bridge can only refuse until a manager rotates. The refusal reaches
+    // the caller as the same exception a stale key raises on a Thread or a Store, not as a raw server error.
+    EXPECT_THROW({ submitEntry(user2, inboxId, "entry2_data"); }, core::StaleKeyRekeyRequiredException)
+        << "a submission was accepted under a superseded group epoch";
     inbox::Inbox stillStale;
     ASSERT_NO_THROW({ stillStale = user1.inboxApi->getInbox(inboxId); });
     EXPECT_EQ(stillStale.staleGroups.size(), 1)
-        << "submitting an entry is not a container write and must not have re-keyed the inbox";
+        << "the refused submission left the inbox re-keyed — a submission must never be a container write";
 
     // ── user_1 re-keys, which is the only thing that moves the grants onto epoch 2 ─────────────────────────
     ASSERT_NO_THROW({
@@ -409,7 +417,9 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     ASSERT_EQ(freshInbox.groups.size(), 1);
     EXPECT_EQ(freshInbox.groups[0].groupId, groupId);
 
-    // ── Entry3, submitted after the re-key ─────────────────────────────────────────────────────────────────
+    // ── Entry2 and Entry3, submitted after the re-key ──────────────────────────────────────────────────────
+    // The submission the stale Inbox refused now lands, on the key the re-key just installed.
+    ASSERT_NO_THROW({ submitEntry(user2, inboxId, "entry2_data"); });
     ASSERT_NO_THROW({ submitEntry(user2, inboxId, "entry3_data"); });
 
     // ── user_2 is still in Group1 at epoch 2, and everything is readable to them across both key epochs ────
