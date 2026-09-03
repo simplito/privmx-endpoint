@@ -71,23 +71,18 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
         membershipRaw = _dataEncryptor.decodeAndVerify(
             encData.membership, privmx::crypto::PublicKey::fromBase58DER(encData.authorPubKey)
         );
-    } catch (...) {
-        throw GroupMembershipMismatchException();
-    }
+    } catch (...) { throw GroupMembershipMismatchException(); }
     dynamic::MembershipBlock membership;
     try {
         membership = dynamic::MembershipBlock::fromJSON(
             privmx::utils::Utils::parseJsonObject(membershipRaw.stdString())
         );
-    } catch (...) {
-        throw GroupMembershipMismatchException();
-    }
+    } catch (...) { throw GroupMembershipMismatchException(); }
     if (membership.groupPubKey != groupInfo.groupPubKey || membership.keyId != groupInfo.data.back().keyId) {
         throw GroupMembershipMismatchException();
     }
     const std::string expected = rosterTag(
-        encKey.key, membership.keyVersion.value_or(0), groupInfo.version,
-        groupInfo.users, groupInfo.managers
+        encKey.key, membership.keyVersion.value_or(0), groupInfo.version, groupInfo.users, groupInfo.managers
     );
     if (expected != membership.rosterTag) {
         throw GroupMembershipMismatchException();
@@ -134,9 +129,7 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     core::DataIntegrityObject dio;
     try {
         dio = _strategyV5->getDIOAndAssertIntegrity(encData);
-    } catch (...) {
-        throw GroupDataIntegrityException();
-    }
+    } catch (...) { throw GroupDataIntegrityException(); }
     if (dio.contextId != groupInfo.contextId || dio.resourceId != groupInfo.resourceId.value_or("")) {
         throw GroupDataIntegrityException();
     }

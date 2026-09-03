@@ -191,8 +191,7 @@ std::string GroupApiImpl::createGroup(
 
     dynamic::MembershipBlock membership{
         .rosterTag = GroupDataSchemaMapper::rosterTag(
-            ctx.key.key, 1, 1,
-            core::EndpointUtils::usersWithPubKeyToIds(users),
+            ctx.key.key, 1, 1, core::EndpointUtils::usersWithPubKeyToIds(users),
             core::EndpointUtils::usersWithPubKeyToIds(managers)
         ),
         .groupPubKey = groupPubKeyStr,
@@ -289,14 +288,14 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     keytree::TreeKeys tree(*cache);
     // Only the leaves the re-keying actually wraps to — `O(k log n)` of the roster, one listing round trip.
     const std::uint32_t grown = keytree::TreeMath::numLeavesToSeatAll(positions, state.numLeaves);
-    tree.setMemberKeyStrings(resolveMemberKeys(
-        currentGroup.contextId, keytree::TreeKeys::membersToWrapTo(state, positions, grown)
-    ));
+    tree.setMemberKeyStrings(
+        resolveMemberKeys(currentGroup.contextId, keytree::TreeKeys::membersToWrapTo(state, positions, grown))
+    );
     std::vector<keytree::TreeMember> treeNewcomers;
     for (const GroupMemberToAdd& newMember : newMembers) {
-        treeNewcomers.push_back(keytree::TreeMember{
-            newMember.user.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.user.pubKey)
-        });
+        treeNewcomers.push_back(
+            keytree::TreeMember{newMember.user.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.user.pubKey)}
+        );
     }
     const keytree::AdditionPlan plan = planOrThrow<keytree::AdditionPlan>([&] {
         return tree.planAddition(state, treeNewcomers, positions, _userPrivKey);
@@ -314,9 +313,8 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     // nothing here wraps a key to them, so the public keys the caller used to supply were never read.
     RosterAfterChange roster = rosterOf(verified);
     for (const GroupMemberToAdd& newMember : newMembers) {
-        (newMember.role == "manager" ? roster.managers : roster.users).push_back(
-            core::UserWithPubKey{.userId = newMember.user.userId, .pubKey = std::string()}
-        );
+        (newMember.role == "manager" ? roster.managers : roster.users)
+            .push_back(core::UserWithPubKey{.userId = newMember.user.userId, .pubKey = std::string()});
     }
 
     // No new epoch, `distributeToUsers = false`
@@ -349,9 +347,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     server::GroupAddMembersModel model;
     model.id = groupId;
     for (const GroupMemberToAdd& newMember : newMembers) {
-        model.members.push_back(server::GroupAddMemberEntry{
-            .userId = newMember.user.userId, .role = newMember.role
-        });
+        model.members.push_back(server::GroupAddMemberEntry{.userId = newMember.user.userId, .role = newMember.role});
     }
     model.keyId = ctx.key.id;
     model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
@@ -427,8 +423,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     // Every departing member's path, because one delta covers their union — and one epoch covers the batch, where
     // removing them one at a time would stale every container the group can read once per member.
     server::GroupGetModel getModel{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = userIds,
-        .forNewMembers = {}, .fromVersion = {}
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = userIds, .forNewMembers = {}, .fromVersion = {}
     };
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
@@ -459,8 +454,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
         leavingSeatSet.insert(seat.value());
     }
     tree.setMemberKeyStrings(resolveMemberKeys(
-        currentGroup.contextId,
-        keytree::TreeKeys::membersToWrapTo(state, leavingSeats, state.numLeaves, leavingSeatSet)
+        currentGroup.contextId, keytree::TreeKeys::membersToWrapTo(state, leavingSeats, state.numLeaves, leavingSeatSet)
     ));
     const keytree::RemovalPlan plan = planOrThrow<keytree::RemovalPlan>([&] {
         return tree.planRemoval(state, userIds, _userPrivKey);
@@ -474,9 +468,9 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     RosterAfterChange roster = rosterOf(verified);
     const auto drop = [&](std::vector<core::UserWithPubKey>& list) {
         list.erase(
-            std::remove_if(list.begin(), list.end(), [&](const core::UserWithPubKey& u) {
-                return leaving.count(u.userId) > 0;
-            }),
+            std::remove_if(
+                list.begin(), list.end(), [&](const core::UserWithPubKey& u) { return leaving.count(u.userId) > 0; }
+            ),
             list.end()
         );
     };
@@ -499,8 +493,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     const std::string newGroupPubKeyStr = plan.newGrantKey.getPublicKey().toBase58DER();
     dynamic::MembershipBlock membership{
         .rosterTag = GroupDataSchemaMapper::rosterTag(
-            ctx.key.key, newEpoch, currentGroup.version + 1,
-            core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+            ctx.key.key, newEpoch, currentGroup.version + 1, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
             core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
         ),
         .groupPubKey = newGroupPubKeyStr,

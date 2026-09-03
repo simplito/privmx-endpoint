@@ -214,10 +214,7 @@ server::GroupTreeAdditionTransition TreeWire::toAdditionTransition(
     return transition;
 }
 
-server::GroupTreeState TreeWire::afterRemoval(
-    const server::GroupTreeState& before,
-    const RemovalPlan& plan
-) {
+server::GroupTreeState TreeWire::afterRemoval(const server::GroupTreeState& before, const RemovalPlan& plan) {
     server::GroupTreeState after;
     after.numLeaves = before.numLeaves;
     after.leafAssignment = before.leafAssignment;
