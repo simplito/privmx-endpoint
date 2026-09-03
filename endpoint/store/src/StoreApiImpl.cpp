@@ -445,7 +445,47 @@ void StoreApiImpl::flushFile(const int64_t handle) {
     if (!rw_handle) {
         throw InvalidFileReadWriteHandleException();
     }
-    rw_handle->file->flush();
+    try {
+        rw_handle->file->flush();
+        return;
+    } catch (const core::Exception& e) {
+        if (e.getCode() != privmx::endpoint::server::InvalidKeyException().getCode()) {
+            e.rethrow();
+        }
+    } catch (const privmx::utils::PrivmxException& e) {
+        if (core::ExceptionConverter::convert(e).getCode() != privmx::endpoint::server::InvalidKeyException().getCode()) {
+            core::ExceptionConverter::rethrowAsCoreException(e);
+        }
+    }
+    try {
+        rw_handle->file->refreshEncKey(getCurrentFileEncKey(rw_handle->getFileId()));
+        rw_handle->file->flush();
+    } catch (const core::Exception& e) {
+        rw_handle->file->discardPending();
+        e.rethrow();
+    } catch (const privmx::utils::PrivmxException& e) {
+        rw_handle->file->discardPending();
+        e.rethrow();
+    } 
+}
+
+core::DecryptedEncKey StoreApiImpl::getCurrentFileEncKey(const std::string& fileId) {
+    server::StoreFileGetModel storeFileGetModel;
+    storeFileGetModel.fileId = fileId;
+    auto store = _serverApi->storeFileGet(storeFileGetModel).store;
+    if (isRekeyNeeded(store)) {
+        autoRotateStoreKeys(store.id);
+        store = _serverApi->storeFileGet(storeFileGetModel).store;
+    }
+    auto storeKey = storeToModuleKeys(store);
+    setNewModuleKeysInCache(store.id, storeKey, store.version);
+    auto key = getAndValidateModuleCurrentEncKey(storeKey, _groupPrivKeyResolver);
+    if (key.statusCode != 0) {
+        throw core::EncryptionKeyValidationException(
+            "Current encryption key statusCode: " + std::to_string(key.statusCode)
+        );
+    }
+    return key;
 }
 
 uint64_t StoreApiImpl::getFileSize(const int64_t handle) {

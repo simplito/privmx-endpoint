@@ -102,15 +102,15 @@ int privmxRead(sqlite3_file* pFile, void* zBuf, int iAmt, sqlite3_int64 iOfst) {
     } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("privmxRead - ", e.getFull())
         std::memset(zBuf, 0, iAmt);
-        return SQLITE_IOERR_SHORT_READ;
+        return SQLITE_IOERR_READ;
     } catch (const std::exception& e) {
         LOG_ERROR("privmxRead - ", e.what())
         std::memset(zBuf, 0, iAmt);
-        return SQLITE_IOERR_SHORT_READ;
+        return SQLITE_IOERR_READ;
     } catch (...) {
         LOG_ERROR("privmxRead - unknown exception")
         std::memset(zBuf, 0, iAmt);
-        return SQLITE_IOERR_SHORT_READ;
+        return SQLITE_IOERR_READ;
     }
     return SQLITE_OK;
 }
