@@ -2987,3 +2987,80 @@ TEST_F(StoreTest, falseUserVerifierInterface) {
         FAIL();
     }
 }
+
+TEST_F(StoreTest, getStore_after_two_key_rotations) {
+    const std::vector<core::UserWithPubKey> user_1{core::UserWithPubKey{
+        .userId = reader->getString("Login.user_1_id"),
+        .pubKey = reader->getString("Login.user_1_pubKey")
+    }};
+
+    std::string storeId;
+    ASSERT_NO_THROW({
+        storeId = storeApi->createStore(
+            reader->getString("Context_1.contextId"),
+            user_1,
+            user_1,
+            core::Buffer::from("rotated_public"),
+            core::Buffer::from("rotated_private")
+        );
+    });
+    ASSERT_FALSE(storeId.empty());
+
+    const std::string fileData = "file_data";
+    std::string fileId;
+    ASSERT_NO_THROW({
+        int64_t handle = storeApi->createFile(
+            storeId,
+            core::Buffer::from("file_public"),
+            core::Buffer::from("file_private"),
+            (int64_t)fileData.size()
+        );
+        storeApi->writeToFile(handle, core::Buffer::from(fileData));
+        fileId = storeApi->closeFile(handle);
+    });
+
+    ASSERT_NO_THROW({ storeApi->rotateStoreKeys(storeId, user_1, user_1, 0, true); });
+    store::Store afterFirstRotation;
+    ASSERT_NO_THROW({ afterFirstRotation = storeApi->getStore(storeId); });
+    ASSERT_EQ(afterFirstRotation.statusCode, 0); // a single rotation has always been readable
+
+    ASSERT_NO_THROW({ storeApi->rotateStoreKeys(storeId, user_1, user_1, 0, true); });
+
+    // Reconnect so ContainerKeyCache is empty — the reads below resolve purely from server state.
+    disconnect();
+    connectAs(ConnectionType::User1);
+
+    store::Store store;
+    EXPECT_NO_THROW({ store = storeApi->getStore(storeId); });
+    EXPECT_EQ(store.statusCode, 0);
+    EXPECT_EQ(store.publicMeta.stdString(), "rotated_public");
+    EXPECT_EQ(store.privateMeta.stdString(), "rotated_private");
+
+    // Same decrypt path, batched.
+    core::PagingList<store::Store> storeListResult;
+    EXPECT_NO_THROW({
+        storeListResult = storeApi->listStores(
+            reader->getString("Context_1.contextId"),
+            {.skip=0, .limit=100, .sortOrder="desc"}
+        );
+    });
+    bool foundInList = false;
+    for(const auto& listed : storeListResult.readItems) {
+        if(listed.storeId == storeId) {
+            foundInList = true;
+            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_EQ(listed.privateMeta.stdString(), "rotated_private");
+        }
+    }
+    EXPECT_TRUE(foundInList);
+
+    // Control: a file carries its own keyId, so it must stay readable across the rotations.
+    store::File file;
+    EXPECT_NO_THROW({ file = storeApi->getFile(fileId); });
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_NO_THROW({
+        int64_t handle = storeApi->openFile(fileId);
+        EXPECT_EQ(storeApi->readFromFile(handle, (int64_t)fileData.size()).stdString(), fileData);
+        storeApi->closeFile(handle);
+    });
+}

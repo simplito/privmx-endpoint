@@ -59,6 +59,10 @@ add_executable(test_e2e_LockUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2
 target_link_libraries(test_e2e_LockUsingGroupsTest privmx privmxendpointcore privmxendpointstore privmxendpointlock privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 add_executable(test_e2e_SearchUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/SearchUsingGroupsTest.cpp)
 target_link_libraries(test_e2e_SearchUsingGroupsTest privmx privmxendpointcore privmxendpointstore privmxendpointkvdb privmxendpointlock privmxendpointsearch privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+# A write the Bridge refuses must not take the Index down with it. Two sessions stay connected at once, so a
+# handle can outlive the group epoch it was opened under.
+add_executable(test_e2e_SearchGroupRejectedWriteTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/SearchGroupRejectedWriteTest.cpp)
+target_link_libraries(test_e2e_SearchGroupRejectedWriteTest privmx privmxendpointcore privmxendpointstore privmxendpointkvdb privmxendpointlock privmxendpointsearch privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 # One long Thread+Group flow across a member removal, with three sessions kept alive so their key caches carry over
 add_executable(test_e2e_ThreadGroupScenarioTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/ThreadGroupScenarioTest.cpp)
 target_link_libraries(test_e2e_ThreadGroupScenarioTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)

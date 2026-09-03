@@ -1644,3 +1644,74 @@ TEST_F(KvdbTest, falseUserVerifierInterface) {
         FAIL();
     }
 }
+
+TEST_F(KvdbTest, getKvdb_after_two_key_rotations) {
+    const std::vector<core::UserWithPubKey> user_1{core::UserWithPubKey{
+        .userId = reader->getString("Login.user_1_id"),
+        .pubKey = reader->getString("Login.user_1_pubKey")
+    }};
+
+    std::string kvdbId;
+    ASSERT_NO_THROW({
+        kvdbId = kvdbApi->createKvdb(
+            reader->getString("Context_1.contextId"),
+            user_1,
+            user_1,
+            core::Buffer::from("rotated_public"),
+            core::Buffer::from("rotated_private")
+        );
+    });
+    ASSERT_FALSE(kvdbId.empty());
+
+    ASSERT_NO_THROW({
+        kvdbApi->setEntry(
+            kvdbId,
+            "rotated_entry",
+            core::Buffer::from("entry_public"),
+            core::Buffer::from("entry_private"),
+            core::Buffer::from("entry_data"),
+            0
+        );
+    });
+
+    ASSERT_NO_THROW({ kvdbApi->rotateKvdbKeys(kvdbId, user_1, user_1, 0, true); });
+    kvdb::Kvdb afterFirstRotation;
+    ASSERT_NO_THROW({ afterFirstRotation = kvdbApi->getKvdb(kvdbId); });
+    ASSERT_EQ(afterFirstRotation.statusCode, 0); // a single rotation has always been readable
+
+    ASSERT_NO_THROW({ kvdbApi->rotateKvdbKeys(kvdbId, user_1, user_1, 0, true); });
+
+    // Reconnect so ContainerKeyCache is empty — the reads below resolve purely from server state.
+    disconnect();
+    connectAs(ConnectionType::User1);
+
+    kvdb::Kvdb kvdb;
+    EXPECT_NO_THROW({ kvdb = kvdbApi->getKvdb(kvdbId); });
+    EXPECT_EQ(kvdb.statusCode, 0);
+    EXPECT_EQ(kvdb.publicMeta.stdString(), "rotated_public");
+    EXPECT_EQ(kvdb.privateMeta.stdString(), "rotated_private");
+
+    // Same decrypt path, batched.
+    core::PagingList<kvdb::Kvdb> kvdbListResult;
+    EXPECT_NO_THROW({
+        kvdbListResult = kvdbApi->listKvdbs(
+            reader->getString("Context_1.contextId"),
+            {.skip=0, .limit=100, .sortOrder="desc"}
+        );
+    });
+    bool foundInList = false;
+    for(const auto& listed : kvdbListResult.readItems) {
+        if(listed.kvdbId == kvdbId) {
+            foundInList = true;
+            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_EQ(listed.privateMeta.stdString(), "rotated_private");
+        }
+    }
+    EXPECT_TRUE(foundInList);
+
+    // Control: an entry carries its own keyId, so it must stay readable across the rotations.
+    kvdb::KvdbEntry entry;
+    EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId, "rotated_entry"); });
+    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(entry.data.stdString(), "entry_data");
+}
