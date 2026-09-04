@@ -12,9 +12,9 @@ limitations under the License.
 /**
  * The roster attestation: `HMAC(metadata key, epoch | version | roster)` committed by whoever made the change.
  *
- * This replaced a signed chain walked back to genesis. What it keeps: a bridge cannot invent a member, because it
- * never holds the key. What it drops on purpose: who made the change, and whether they were a manager rather than
- * an ordinary member — holding the key is the authority now.
+ * What it gives: a bridge cannot invent a member, because it never holds the key. What it deliberately does not
+ * give: who made the change, or whether they were a manager rather than an ordinary member — holding the key is
+ * the authority.
  *
  * These tests exist because the verification is one HMAC. Cheap is only good if it still refuses everything it
  * ought to, and each case below is a lie a malicious bridge would tell.

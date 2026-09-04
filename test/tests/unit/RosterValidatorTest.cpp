@@ -78,9 +78,8 @@ TEST(RosterValidator, RefusesACorruptedKeyWhoseChecksumNoLongerMatches) {
 }
 
 TEST(RosterValidator, RefusesSomethingThatDecodesButIsNotAPointEncoding) {
-    // A valid base58-with-checksum string of the wrong length: the point at infinity is spelled exactly like this
-    // (a single zero byte), and `EC_POINT_oct2point` accepts it. A key of the wrong length has no business in a
-    // roster whatever the curve says about it.
+    // The point at infinity is spelled exactly like this — a single zero byte — and `EC_POINT_oct2point` accepts
+    // it. A key of the wrong length has no business in a roster whatever the curve says about it.
     auto users = roster(2);
     users[0].pubKey = privmx::utils::Base58::encodeWithChecksum(std::string(1, '\0'));
     EXPECT_THROW(Validator::validateUserListFormat(users, "field:users"), privmx::endpoint::core::Exception);
@@ -102,9 +101,8 @@ TEST(RosterValidator, AcceptsAnUncompressedEncodingToo) {
 }
 
 TEST(RosterValidator, WhatItDeliberatelyDoesNotDo) {
-    // A 33-byte string with a correct checksum whose x has no square root on the curve: well-formed, not a point.
-    // The cheap check passes it and the full check refuses it — that difference is the whole point of the split,
-    // and it is safe because such a key can only ever fail when something tries to use it.
+    // A 33-byte string with a correct checksum whose x has no square root on the curve: well-formed, not a
+    // point. The cheap check passes it and the full check refuses it, which is safe — it fails at first use.
     std::string der(33, '\0');
     der[0] = 0x02;
     for (std::size_t i = 1; i < der.size(); ++i) {
