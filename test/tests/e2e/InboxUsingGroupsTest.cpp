@@ -26,11 +26,8 @@ enum IUGConnectionType {
 class InboxUsingGroupsTest : public privmx::test::BaseTest {
 protected:
     InboxUsingGroupsTest() : BaseTest(privmx::test::BaseTestMode::online) {}
-    /**
-     * An Inbox keeps its entries in an inner Thread and their files in an inner Store, and grants/re-keys all
-     * three together — so the ThreadApi and StoreApi handed to InboxApi::create must carry the same GroupApi,
-     * or the inner containers end up granted to the groups but unreadable through them.
-     */
+    // An Inbox grants and re-keys its inner Thread and Store along with itself, so the ThreadApi and StoreApi
+    // handed to InboxApi::create must carry the same GroupApi or the inner containers stay unreadable.
     void buildApis() {
         groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
         threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection, *groupApi));
@@ -65,7 +62,7 @@ protected:
         threadApi.reset();
         groupApi.reset();
     }
-    /** One of the fixture's logins as a container names its members — id plus public key, from the same ini. */
+    // One of the fixture's logins as a container names its members - id plus public key, from the same ini.
     core::UserWithPubKey userOf(IUGConnectionType type) {
         std::string n;
         if (type == IUGConnectionType::IUGUser1) {
@@ -121,13 +118,8 @@ protected:
             }}
         );
     }
-    /**
-     * An Inbox whose direct members are `users` — as both users and managers, so any of them can update it —
-     * and whose grantee groups are `groups`, each granted at `role`.
-     *
-     * The grants carry no epoch: leaving `groupEpoch` at 0 is what makes the endpoint resolve each group's
-     * current epoch from the Bridge, which is the path these tests are about.
-     */
+    // An Inbox whose direct members are `users` (as both users and managers) and whose grantee groups are
+    // `groups`. Leaving `groupEpoch` at 0 makes the endpoint resolve each group's current epoch from the Bridge.
     std::string createInboxWithGroups(
         const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
@@ -175,12 +167,12 @@ protected:
             }}
         );
     }
-    /** Submits one entry. The payload is sealed to the Inbox's public key, so any connection can do this. */
+    // Submits one entry. The payload is sealed to the Inbox's public key, so any connection can do this.
     void submitEntry(const std::string& inboxId, const std::string& data) {
         int64_t handle = inboxApi->prepareEntry(inboxId, core::Buffer::from(data));
         inboxApi->sendEntry(handle);
     }
-    /** The id of the single entry in an Inbox, read through a member's connection. */
+    // The id of the single entry in an Inbox, read through a member's connection.
     std::string onlyEntryId(const std::string& inboxId) {
         auto list = inboxApi->listEntries(inboxId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"});
         if (list.readItems.size() != 1) {
@@ -513,7 +505,7 @@ TEST_F(InboxUsingGroupsTest, createInbox_with_invalid_group_pubkey_throws) {
 
 TEST_F(InboxUsingGroupsTest, readEntry_via_group_grant) {
     // user_1 creates an Inbox granted to Group_2; user_2 is a Group_2 member. Entries live in the Inbox's
-    // inner Thread, which createInbox grants to the same group — so this read exercises that propagation.
+    // inner Thread, which createInbox grants to the same group - so this read exercises that propagation.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_2.statusCode, 0);
@@ -645,7 +637,7 @@ TEST_F(InboxUsingGroupsTest, user_added_to_group_gains_access_to_inbox_and_entri
     EXPECT_NO_THROW({ iBefore = inboxApi->getInbox(inboxId); });
     EXPECT_NE(iBefore.statusCode, 0);
 
-    // Seat user_3's leaf in the key tree — updateGroup would only re-wrap the group's metadata key.
+    // Seat user_3's leaf in the key tree - updateGroup would only re-wrap the group's metadata key.
     disconnect();
     connectAs(IUGConnectionType::IUGUser1);
     EXPECT_NO_THROW({
@@ -668,10 +660,8 @@ TEST_F(InboxUsingGroupsTest, user_added_to_group_gains_access_to_inbox_and_entri
 }
 
 TEST_F(InboxUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
-    // user_1 is the only direct member of the Inbox *and* a member of granted Group_1, so every keyId opens
-    // from `keys` and the group branch is skipped. `updateInbox` is the interesting half: `verifyKeysSecret`
-    // fails on any non-zero status, so an unresolved group entry there is the difference between an update
-    // and an exception — and updateInbox runs it three times, once per container.
+    // Every keyId opens from `keys`, so the group branch is skipped. `updateInbox` is the interesting half:
+    // `verifyKeysSecret` fails on any non-zero status, and updateInbox runs it once per inner container.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
@@ -726,9 +716,8 @@ TEST_F(InboxUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 }
 
 TEST_F(InboxUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
-    // The Inbox grants Group_1, whose only member is user_1. user_2 is a direct member and belongs to no
-    // grantee group, so the bridge serves it `groupKeys: []` — the read has to be served entirely from its
-    // own key wrap.
+    // user_2 is a direct member of the Inbox and in no grantee group, so the bridge serves it `groupKeys: []`
+    // and the read has to come entirely from its own key wrap.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
@@ -766,9 +755,8 @@ TEST_F(InboxUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
 }
 
 TEST_F(InboxUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // The Inbox grants Group_2 and Group_3 and wraps its key to user_1 only. user_2 belongs to both grantee
-    // groups, so narrowing leaves it two entries at the same keyId — with no direct wrap to fall back on,
-    // one of them has to carry the read.
+    // The Inbox wraps its key to user_1 only, and user_2 belongs to both grantee groups: narrowing leaves it two
+    // entries at the same keyId, and with no direct wrap to fall back on one of them has to carry the read.
     group::Group group_2, group_3;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
@@ -804,15 +792,8 @@ TEST_F(InboxUsingGroupsTest, caller_in_two_granted_groups_reads) {
 }
 
 TEST_F(InboxUsingGroupsTest, rotateInboxKeys_covers_a_grantee_group_the_caller_did_not_name) {
-    // The Inbox grants Group_2. user_2 re-keys naming no groups at all, and the new key must still be re-wrapped
-    // to Group_2 across the Inbox and both inner containers — the grantee list comes from the containers, not
-    // from the caller's argument.
-    //
-    // The grantee is a group the caller belongs to, and that is a constraint rather than a convenience: wrapping
-    // a key to a group needs its current epoch and public key, and a Bridge running the default group policy
-    // (`get: "user"`, `listAll: "none"`) hands those to members only. Re-keying a container granted to a group
-    // the caller is not in therefore cannot work — `resolveGroupEpochs` throws `UnresolvedGroupGranteeException`
-    // — so do not "restore" this test to Group_1, which holds user_1 alone.
+    // user_2 re-keys naming no groups, so the grantee list comes from the containers - all three of them. The
+    // caller must be in that group: the default group policy hands a group's epoch and key to members only.
     group::Group granteeGroup;
     ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(granteeGroup.statusCode, 0);
@@ -872,9 +853,8 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_covers_a_grantee_group_the_caller_d
 }
 
 TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_advances_its_epoch) {
-    // Group G at epoch 1 is granted the Inbox. Removing a member advances G to epoch 2, which leaves the
-    // Inbox's key wrapped to a superseded epoch — the bridge reports that as `staleGroups`. A re-key
-    // re-wraps to the current epoch and must clear it.
+    // Removing a member advances G to epoch 2, leaving the Inbox's key wrapped to a superseded epoch - which
+    // the bridge reports as `staleGroups`. A re-key re-wraps to the current epoch and must clear it.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(
@@ -946,7 +926,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
     EXPECT_EQ(fresh.groups.size(), 1);
 
     // user_2 is still in G at epoch 2 and was never a direct Inbox member, so this read can only be served
-    // through the re-wrapped group entries — on the Inbox *and* on its inner Thread, where the entry lives.
+    // through the re-wrapped group entries - on the Inbox *and* on its inner Thread, where the entry lives.
     disconnect();
     connectAs(IUGConnectionType::IUGUser2);
     inbox::InboxEntry oldEpochEntry;

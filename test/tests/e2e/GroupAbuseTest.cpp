@@ -20,31 +20,28 @@ using namespace privmx::endpoint;
 
 /**
  * A hostile client trying to break the group key tree, using nothing but the public API and one Bridge
- * management call — registering a context user, which any integrator running their own Bridge can make.
+ * management call - registering a context user, which any integrator running their own Bridge can make.
  *
  * Most of these attempts come down to one idea: a group's identity key is an ordinary ECC public key, so it can
- * be presented as if it belonged to a person and offered to anything that accepts a member's key — a container
+ * be presented as if it belonged to a person and offered to anything that accepts a member's key - a container
  * roster, another group's tree.
  *
  * What a group's key is worth has to be read against the Epoch Ladder, which is the design's whole point and
  * also its sharpest edge: a member climbs the tree to the *current* epoch's grant key and descends the ladder
  * from there, so **whoever is a member now holds every epoch key the group has ever had**, down to its era
- * floor. That is by design — it is what lets a group read content written before the reader joined — but it
+ * floor. That is by design - it is what lets a group read content written before the reader joined - but it
  * means a group's public key is not a revocable capability. Anything ever wrapped to it stays readable by the
  * group's entire present *and future* membership, and rotating the group's epoch does not take that back.
  *
  * So the negative assertions here are deliberately narrow. Where a test says a group key worn as a user key
- * "opens nothing", it means the endpoint does not *follow* that route — the userId decides which leaf a caller
+ * "opens nothing", it means the endpoint does not *follow* that route - the userId decides which leaf a caller
  * may climb from, and nothing tries a group key against a user-addressed wrap. It does not mean the ciphertext
  * is safe: a client holding the group API can derive that key. `ladder_*` tests below pin the exposure that
  * follows from this, using only supported calls.
  *
  * Tests named SECURITY assert that something *cannot* happen. They fail silently at runtime if the guard
- * regresses — nothing breaks, access simply persists where it should have ended — so they must not be deleted
- * or weakened into positive assertions. The one exception is a premise the API has taken away — a test that can
- * no longer construct its own attack is dropped outright, with the reason in the commit that drops it, rather
- * than kept as a test that cannot fail. `removeGroupMembers` taking no roster retired one such test: the roster
- * lie it was built on has no field to live in any more.
+ * regresses - nothing breaks, access simply persists where it should have ended - so they must not be deleted
+ * or weakened into positive assertions.
  *
  * Where the fate of the abusive call itself is not part of the contract (the Bridge may refuse it outright, or
  * take it and leave the caller with a wrap the endpoint will not use), the test records which way it went and
@@ -107,7 +104,7 @@ protected:
         groupApi.reset();
     }
 
-    /** A tree-backed group with the given members, managed by the given managers (user_1 by default). */
+    // A tree-backed group with the given members, managed by the given managers (user_1 by default).
     std::string createTreeGroup(
         const std::vector<core::UserWithPubKey>& members,
         const std::vector<core::UserWithPubKey>& managers = {}
@@ -118,7 +115,7 @@ protected:
         );
     }
 
-    /** Everything readable by any context user, so a failed decryption shows up as a status and not as a refusal. */
+    // Everything readable by any context user, so a failed decryption shows up as a status and not as a refusal.
     core::ContainerPolicy readableByEverybody() {
         core::ContainerPolicy policy;
         policy.get = "all";
@@ -126,7 +123,7 @@ protected:
         return policy;
     }
 
-    /** A keypair nobody has ever used, for a member who joins a group after everything interesting happened. */
+    // A keypair nobody has ever used, for a member who joins a group after everything interesting happened.
     struct Identity {
         std::string userId;
         std::string privKey;
@@ -142,7 +139,7 @@ protected:
         return core::UserWithPubKey{.userId = identity.userId, .pubKey = identity.pubKey};
     }
 
-    /** A thread whose only direct member is user_1, readable by the group through a grant at its current epoch. */
+    // A thread whose only direct member is user_1, readable by the group through a grant at its current epoch.
     std::string createThreadGrantedTo(const group::Group& group) {
         return threadApi->createThread(
             contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<core::UserWithPubKey>{user(1)},
@@ -157,13 +154,8 @@ protected:
         );
     }
 
-    /**
-     * Rotates the thread's own content key and re-grants the group at its current epoch.
-     *
-     * Without this a group rotation changes nothing about a container: its one content key stays wrapped to the
-     * epoch it was granted at, so every message would keep needing the same group key. Re-keying per epoch is
-     * what makes each message depend on the epoch that was current when it was written.
-     */
+    // Rotates the thread's own content key and re-grants the group at its current epoch. Without it a container
+    // keeps one content key wrapped to the epoch it was granted at, so every message needs the same group key.
     void rekeyThreadForGroupEpoch(const std::string& threadId, const group::Group& group) {
         const thread::Thread current = threadApi->getThread(threadId);
         threadApi->updateThread(
@@ -178,18 +170,13 @@ protected:
         );
     }
 
-    /**
-     * The Bridge management API key, which the dataset's ini carries in its `[Api]` section.
-     *
-     * Registering a context user is the one step in these scenarios that no client key can perform. A dataset
-     * generated before that section existed simply cannot host those tests, hence the skip rather than a
-     * failure.
-     */
+    // Registering a context user is the one step here no client key can perform, so a dataset ini without an
+    // [Api] section cannot host those tests - hence a skip rather than a failure.
     bool hasManagementApi() {
         return reader->has("Api.apiKeyId") && reader->has("Api.apiKeySecret");
     }
 
-    /** Registers `userId` in Context_1 holding `pubKey` — no proof of possession is asked for anywhere. */
+    // Registers `userId` in Context_1 holding `pubKey` - no proof of possession is asked for anywhere.
     void registerContextUser(const std::string& userId, const std::string& pubKey) {
         const std::string params = "{\"contextId\": \"" + contextId() + "\", \"userId\": \"" + userId +
             "\", \"userPubKey\": \"" + pubKey + "\"}";
@@ -203,18 +190,8 @@ protected:
         ASSERT_EQ(response.find("\"error\""), std::string::npos) << response;
     }
 
-    /**
-     * Runs `body(groupApi, threadApi)` on a brand-new session for the given login.
-     *
-     * Whether somebody still has access has to be answered from the server's current state alone: a session
-     * that was open while the tree changed keeps the keys it already recovered, and would answer "yes" long
-     * after the answer became "no".
-     *
-     * One websocket carries at most one session per user key, and the endpoint shares a websocket per host, so
-     * a second live session for the login the fixture already holds is refused ("Websocket already
-     * authorized"). The fixture's session therefore steps aside for the probe and comes back afterwards —
-     * which also leaves it cold, so a later assertion cannot be answered out of a cache either.
-     */
+    // Runs `body(groupApi, threadApi)` on a brand-new session: a session open while the tree changed keeps the
+    // keys it already recovered, and would answer "still has access" long after the answer became no.
     template <typename Body>
     void onFreshSessionWith(const std::string& privKey, Body body) {
         auto freshConnection = connectWith(privKey);
@@ -224,6 +201,8 @@ protected:
         body(groups, threads);
     }
 
+    // A websocket carries one session per user key, so a second session for the login the fixture holds is
+    // refused ("Websocket already authorized") - the fixture steps aside for the probe and reconnects after.
     template <typename Body>
     void onFreshSession(int index, Body body) {
         const bool stepAside = index == fixtureUserIndex;
@@ -238,12 +217,8 @@ protected:
         onFreshSessionWith(reader->getString("Login.user_" + std::to_string(index) + "_privKey"), body);
     }
 
-    /**
-     * Whether a probe produced a verified read.
-     *
-     * A read the Bridge refuses outright counts as no access just as a non-zero status does — both mean the
-     * caller sees no plaintext. `lastReadError` holds why, for the expectations that wanted a yes.
-     */
+    // Whether a probe produced a verified read. A refused read counts as no access just as a non-zero status
+    // does - both mean the caller sees no plaintext.
     template <typename Probe>
     bool decrypts(Probe probe) {
         lastReadError.clear();
@@ -281,7 +256,7 @@ protected:
         return readable;
     }
 
-    /** The same probes for a login the ini knows nothing about — a member registered during the test. */
+    // The same probes for a login the ini knows nothing about - a member registered during the test.
     bool canReadGroupAs(const Identity& identity, const std::string& groupId) {
         bool readable = false;
         onFreshSessionWith(identity.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
@@ -298,13 +273,8 @@ protected:
         return readable;
     }
 
-    /**
-     * As `canReadGroupAs`, for a key the Bridge may no longer recognise as anybody at all.
-     *
-     * A key that has been rotated away belongs to no context user, so the session itself can be refused rather
-     * than just the read — which is still "no access", and has to be caught here instead of escaping as an
-     * environment error.
-     */
+    // As `canReadGroupAs`, for a key rotated away: it belongs to no context user, so the login itself can be
+    // refused rather than just the read - still "no access", and caught here instead of escaping.
     bool canReadGroupWithRetiredKey(const Identity& identity, const std::string& groupId) {
         try {
             bool readable = false;
@@ -320,7 +290,7 @@ protected:
         return false;
     }
 
-    /** The public key the Bridge currently reports for a context user, or empty when it knows no such user. */
+    // The public key the Bridge currently reports for a context user, or empty when it knows no such user.
     std::string pubKeyOnBridge(const std::string& userId) {
         const auto page = connection->listContextUsers(
             contextId(), core::PagingQuery{.skip = 0, .limit = 100, .sortOrder = "asc"}
@@ -337,9 +307,9 @@ protected:
         return std::find(haystack.begin(), haystack.end(), needle) != haystack.end();
     }
 
-    /** Why the last `canRead*` probe came back false, when it failed rather than just decrypting to nothing. */
+    // Why the last `canRead*` probe came back false, when it failed rather than just decrypting to nothing.
     std::string lastReadError;
-    /** Which login the fixture's own session holds — the one a probe has to make room for. */
+    // Which login the fixture's own session holds - the one a probe has to make room for.
     int fixtureUserIndex = 0;
     std::shared_ptr<core::Connection> connection;
     std::shared_ptr<group::GroupApi> groupApi;
@@ -351,20 +321,14 @@ protected:
 static constexpr const char* MANAGEMENT_API_MISSING =
     "dataset ini has no [Api] section; regenerate it with scripts/dataset.sh to run this test";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// a group's key worn as a user's key
-// ─────────────────────────────────────────────────────────────────────────────
+// -- a group's key worn as a user's key --
 
 TEST_F(GroupAbuseTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_the_endpoint_follows) {
     if (!hasManagementApi()) {
         GTEST_SKIP() << MANAGEMENT_API_MISSING;
     }
-    // G's members are user_1 and user_2, and its grant public key is then registered as a context user of its
-    // own. From here on nothing in a roster distinguishes "the group G" from "a person".
-    //
-    // What this pins is that the endpoint will not follow the wrap: a caller climbs from the leaf its *userId*
-    // is seated at, and no code path tries a group key against a user-addressed key entry. It is not a claim
-    // that the ciphertext is protected — see `ladder_*` below for what a group's key is actually worth.
+    // Once G's grant key is registered as a context user, nothing in a roster distinguishes "the group G" from
+    // "a person". A caller still climbs from the leaf its own userId is seated at, which is what this pins.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     group::Group g;
@@ -375,9 +339,8 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_th
     const std::string wornAsUser = "group_worn_as_user";
     ASSERT_NO_FATAL_FAILURE(registerContextUser(wornAsUser, g.groupPubKey));
 
-    // T wraps its content key to that "user" — that is, to G's epoch-1 grant key — while G is not a grantee of
-    // T at all. Nothing about T records that a group is behind the seat, so T is never re-keyed when G rotates,
-    // and the wrap stays addressed to an epoch key that G's whole membership can derive for good.
+    // T wraps its content key to that "user" - G's epoch-1 grant key - while G is not a grantee of T at all.
+    // Nothing about T records that a group is behind the seat, so T is never re-keyed when G rotates.
     const core::UserWithPubKey groupAsThreadMember{.userId = wornAsUser, .pubKey = g.groupPubKey};
     std::string threadId;
     try {
@@ -423,14 +386,8 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_in
     if (!hasManagementApi()) {
         GTEST_SKIP() << MANAGEMENT_API_MISSING;
     }
-    // A = user_1 + user_2, B = user_1 + user_3. A's grant key is registered as a context user and then seated
-    // in B's tree: a group nested inside a group, smuggled in as a person.
-    //
-    // The endpoint gives A's members nothing here, because which leaf a caller may climb from is decided by
-    // their userId and nobody can authenticate as the seat. The ciphertext is another matter: the edge into that
-    // leaf is wrapped to A's epoch-1 grant key, which every A member can derive for good, so seating a group's
-    // key in a tree leaves a standing cryptographic bridge between the two groups that B can neither see nor
-    // revoke. Removing the seat does not unpublish the edge either.
+    // A = user_1 + user_2, B = user_1 + user_3, with A's grant key seated in B's tree as if it were a person.
+    // The endpoint serves A's members nothing in B: the leaf a caller may climb from follows their userId.
     std::string groupA, groupB;
     ASSERT_NO_THROW({ groupA = createTreeGroup({user(1), user(2)}); });
     ASSERT_NO_THROW({ groupB = createTreeGroup({user(1), user(3)}); });
@@ -469,7 +426,7 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_in
     EXPECT_EQ(afterRemoval.statusCode, 0);
     EXPECT_EQ(afterRemoval.keyVersion, b.keyVersion + 1);
     EXPECT_TRUE(canReadGroup(1, groupB)) << "B's manager lost access to their own group; " << lastReadError;
-    // B rotating does not retire A's epoch-1 key — A's members keep it via the ladder — so this has to keep
+    // B rotating does not retire A's epoch-1 key - A's members keep it via the ladder - so this has to keep
     // holding for the same reason as before: the route, not the key, is what B's rotation does not grant.
     EXPECT_FALSE(canReadGroup(2, groupB)) << "the endpoint let a member of A into B through A's key after B rotated";
 }
@@ -506,7 +463,7 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_cannot_be_seated_as_a_member_of_another_
         core::Exception
     );
 
-    // A refused addition must leave B exactly as it was — no half-applied transition, no epoch drift.
+    // A refused addition must leave B exactly as it was - no half-applied transition, no epoch drift.
     group::Group afterAttempts;
     ASSERT_NO_THROW({ afterAttempts = groupApi->getGroup(groupB); });
     EXPECT_EQ(afterAttempts.statusCode, 0);
@@ -518,17 +475,14 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_cannot_be_seated_as_a_member_of_another_
         lastReadError;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// what a group's key is worth: the epoch ladder
-// ─────────────────────────────────────────────────────────────────────────────
+// -- what a group's key is worth: the epoch ladder --
 
 TEST_F(GroupAbuseTest, ladder_hands_a_newcomer_every_epoch_the_group_ever_read) {
     if (!hasManagementApi()) {
         GTEST_SKIP() << MANAGEMENT_API_MISSING;
     }
-    // G starts as user_1 (manager) plus user_2 and user_3. T grants G and is re-keyed at every one of G's
-    // epochs, so each message can only be opened with the group key of the epoch that was current when it was
-    // sent — otherwise T's single content key would make all three messages one and the same test.
+    // T is re-keyed at every one of G's epochs, so each message needs the group key current when it was sent -
+    // otherwise T's single content key would make all three messages one and the same test.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group atEpoch1;
@@ -590,9 +544,8 @@ TEST_F(GroupAbuseTest, ladder_hands_a_newcomer_every_epoch_the_group_ever_read) 
     ASSERT_NO_THROW({ afterJoin = groupApi->getGroup(groupId); });
     EXPECT_EQ(afterJoin.keyVersion, 3) << "an addition must not advance the epoch";
 
-    // The ladder hands them every epoch below the one they joined at. This is the design working as intended —
-    // and it is also the finding: T's owner granted G once, at epoch 1, and G's manager can hand T's entire
-    // history to an account created afterwards, without touching T and without T being able to tell.
+    // The ladder hands them every epoch below the one they joined at: G's manager can pass T's entire history
+    // to an account created afterwards, without touching T and without T being able to tell.
     EXPECT_TRUE(canReadMessageAs(newcomer, thirdEpochMessage)) << "the newcomer cannot read their own epoch; " <<
         lastReadError;
     EXPECT_TRUE(canReadMessageAs(newcomer, secondEpochMessage)) << "the ladder did not reach epoch 2; " <<
@@ -601,10 +554,8 @@ TEST_F(GroupAbuseTest, ladder_hands_a_newcomer_every_epoch_the_group_ever_read) 
         lastReadError;
     EXPECT_TRUE(canReadGroupAs(newcomer, groupId)) << "the newcomer cannot read the group itself; " << lastReadError;
 
-    // The other direction is not symmetric, and that asymmetry is the point: a removed member loses the *route*,
-    // so the endpoint will not serve them even the epoch they themselves were a member of. user_2 held the
-    // epoch-1 key while it was current; a cold session of theirs cannot climb G at all any more. What that key
-    // already opened it opened for good — these two probes say what is served, not what stays confidential.
+    // Not symmetric: a removed member loses the route, so the endpoint serves them nothing - not even the epoch
+    // they were a member of. These two probes say what is served, not what stays confidential.
     EXPECT_FALSE(canReadMessage(2, firstEpochMessage)) <<
         "a removed member is still served content from the epoch they were in";
     EXPECT_FALSE(canReadMessage(3, secondEpochMessage)) <<
@@ -612,10 +563,8 @@ TEST_F(GroupAbuseTest, ladder_hands_a_newcomer_every_epoch_the_group_ever_read) 
 }
 
 TEST_F(GroupAbuseTest, ladder_gives_a_re_added_member_back_what_was_written_while_they_were_out) {
-    // Removal looks like a durable act — the epoch moves, the member goes dark. It is not: re-seating them puts
-    // the current epoch key back in their hands, and the ladder turns that into every earlier epoch too. So the
-    // window in which they were excluded is handed back in full, including content written specifically while
-    // they were out.
+    // Re-seating a removed member puts the current epoch key back in their hands, and the ladder turns that into
+    // every earlier epoch too - so the window they were excluded from is handed back in full.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     group::Group atEpoch1;
@@ -649,11 +598,11 @@ TEST_F(GroupAbuseTest, ladder_gives_a_re_added_member_back_what_was_written_whil
         );
     });
 
-    // While out, both are closed to them — the group route is gone, and they were never a member of T.
+    // While out, both are closed to them - the group route is gone, and they were never a member of T.
     EXPECT_FALSE(canReadMessage(2, writtenWhileOut)) << "a removed member read content written after their removal";
     EXPECT_FALSE(canReadMessage(2, beforeRemoval)) << "a removed member kept the group route to older content";
 
-    // Re-seated at epoch 2 — no new epoch, nothing about T touched.
+    // Re-seated at epoch 2 - no new epoch, nothing about T touched.
     ASSERT_NO_THROW({
         groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(2), .role = "user"}});
     });
@@ -667,24 +616,8 @@ TEST_F(GroupAbuseTest, ladder_gives_a_re_added_member_back_what_was_written_whil
     EXPECT_TRUE(canReadMessage(2, beforeRemoval)) << "the ladder did not reach back to epoch 1; " << lastReadError;
 }
 
-/**
- * An epoch rotation is not post-compromise security: it does not take access back from a stolen member key.
- *
- * A removal refreshes the departing member's path and mints a new grant key, and every refreshed key is wrapped
- * to the *unchanged* long-term keys of the members who stay. So whoever holds user_2's private key climbs the new
- * epoch exactly as user_2 does, and reads content written after the rotation. That is intended — the tree cannot
- * tell a thief from the member, and nothing in the API rotates a member's own key — and the test exists so that
- * nobody makes it look fixed: should the first expectation below ever turn red, the reason had better be a real
- * re-seating of that member, not a refreshed path wrapped to the same stolen key.
- *
- * And removing that member ends less than it appears to. It closes the route to *new* epochs and nothing more:
- * the ladder's premise is that holding epoch N yields every epoch below it, so whatever a stolen key reached
- * before the removal, it reached for good — no rotation and no removal takes history back. The negative
- * expectations at the end are therefore narrow in the way this file's header describes: they say the endpoint
- * stops *following* the route, not that the ciphertext became safe.
- *
- * Every probe runs on a cold session, so what they show is that the key alone suffices, with no cached state.
- */
+// A refreshed grant key is wrapped to the *unchanged* long-term keys of the members who stay, so a stolen
+// member key climbs the new epoch exactly as its owner does. Every probe runs cold: the key alone suffices.
 TEST_F(GroupAbuseTest, rotating_the_epoch_does_not_take_back_a_compromised_members_key) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
@@ -705,7 +638,7 @@ TEST_F(GroupAbuseTest, rotating_the_epoch_does_not_take_back_a_compromised_membe
     ASSERT_TRUE(canReadMessage(2, beforeRotation)) << "the member could not read before the rotation; " <<
         lastReadError;
 
-    // The rotation: user_3 — somebody else entirely — is removed, which is the one call that mints a new epoch.
+    // The rotation: user_3 - somebody else entirely - is removed, which is the one call that mints a new epoch.
     ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); });
     group::Group atEpoch2;
     ASSERT_NO_THROW({ atEpoch2 = groupApi->getGroup(groupId); });
@@ -719,17 +652,14 @@ TEST_F(GroupAbuseTest, rotating_the_epoch_does_not_take_back_a_compromised_membe
         );
     });
 
-    // The finding: user_2's leaf was never re-wrapped, so their key opens the epoch the rotation minted — and
+    // The finding: user_2's leaf was never re-wrapped, so their key opens the epoch the rotation minted - and
     // with it content written afterwards, which needs that epoch's key and no earlier one.
     EXPECT_TRUE(canReadMessage(2, afterRotation)) <<
-        "expected the compromised key to keep reading — a rotation is not post-compromise security; " <<
+        "expected the compromised key to keep reading - a rotation is not post-compromise security; " <<
         lastReadError;
 
-    // Nor is there another rotation to reach for: `updateGroup` edits metadata and nothing else, and the epoch
-    // moves only where a member leaves. Which is the one thing that does end it — their path is refreshed and the
-    // new grant key reaches their leaf through nothing, so the stolen key stops being served: the new epoch and,
-    // through the endpoint, everything older with it. What removal does not do is take back what that key already
-    // read, which the ladder makes permanent.
+    // Removal is the one thing that does end it: the path is refreshed and the new grant key reaches that leaf
+    // through nothing, so the endpoint stops serving the key - the new epoch and everything older with it.
     ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(2).userId}); });
     group::Group atEpoch3;
     ASSERT_NO_THROW({ atEpoch3 = groupApi->getGroup(groupId); });
@@ -750,10 +680,8 @@ TEST_F(GroupAbuseTest, changing_a_members_public_key_locks_them_out_without_re_w
     if (!hasManagementApi()) {
         GTEST_SKIP() << MANAGEMENT_API_MISSING;
     }
-    // `context/addUserToContext` is an upsert: called twice for one userId it *replaces* the public key
-    // (`ContextUserRepository::insertOrUpdate`). That is the supported way to rotate a member's key — and
-    // nothing in it touches the groups that member sits in. Their leaf edge stays wrapped to the key that was
-    // current when they were seated, and no field anywhere records which key that was.
+    // `context/addUserToContext` is an upsert: a second call for one userId replaces the public key and touches
+    // none of that member's groups, so their leaf edge stays wrapped to the key they were seated with.
     const Identity firstKey = newIdentity("rotating_member");
     ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
 
@@ -790,19 +718,17 @@ TEST_F(GroupAbuseTest, changing_a_members_public_key_locks_them_out_without_re_w
     EXPECT_FALSE(canReadGroupAs(secondKey, groupId)) << "the rotated-in key opened a leaf it was never wrapped to";
     EXPECT_FALSE(canReadMessageAs(secondKey, messageId)) << "the rotated-in key opened content it has no route to";
 
-    // Meanwhile the roster still names them, so the Bridge's own answer to "who has access" is now wrong in
-    // both directions: it lists somebody who cannot read, and the tree still holds a wrap for a key the Bridge
-    // no longer recognises as anybody.
+    // The roster still names them, so the Bridge's answer to "who has access" is wrong in both directions: it
+    // lists somebody who cannot read, and the tree holds a wrap for a key that belongs to nobody.
     group::Group afterRotation;
     ASSERT_NO_THROW({ afterRotation = groupApi->getGroup(groupId); });
     EXPECT_EQ(afterRotation.statusCode, 0);
     EXPECT_EQ(afterRotation.keyVersion, 1) << "a key rotation must not be mistaken for a membership change";
     EXPECT_TRUE(contains(afterRotation.users, firstKey.userId)) <<
-        "the locked-out member is still on the roster — that is the mismatch this test is about";
+        "the locked-out member is still on the roster - that is the mismatch this test is about";
 
-    // The retired key gets no route either: it belongs to no context user any more, so the endpoint has nothing
-    // to serve it. What it still holds is the *ciphertext* — the leaf edge is unchanged and no rotation of the
-    // group's own epoch re-wraps it, which is the part this test cannot probe through the public API.
+    // The retired key gets no route either: it belongs to no context user, so the endpoint has nothing to serve
+    // it. The ciphertext is another matter - the leaf edge is unchanged, which the public API cannot probe.
     EXPECT_FALSE(canReadGroupWithRetiredKey(firstKey, groupId)) <<
         "a key the Bridge no longer knows still got served the group";
 
@@ -822,16 +748,11 @@ TEST_F(GroupAbuseTest, changing_a_members_public_key_locks_them_out_without_re_w
         "re-seating did not hand back the pre-rotation history; " << lastReadError;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// churning one member's seat
-// ─────────────────────────────────────────────────────────────────────────────
+// -- churning one member's seat --
 
 TEST_F(GroupAbuseTest, add_and_remove_the_same_member_repeatedly_keeps_the_tree_consistent) {
-    // Three add/remove cycles on the same member. Each removal blanks their leaf, refreshes its path and mints
-    // an epoch; each addition seats them again, reusing a blank, and must not advance the epoch. What this
-    // hunts for is residue: a leaf that stays half-blank, a generation that stops matching, an archive rung
-    // that leaves an earlier epoch unreachable — anything that would show up as a member losing access to a
-    // group nobody removed them from.
+    // Three add/remove cycles, hunting for residue: a half-blank leaf, a generation that stops matching, an
+    // archive rung that leaves an earlier epoch unreachable. A removal mints an epoch; an addition must not.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     int64_t epoch = 1;
@@ -875,9 +796,8 @@ TEST_F(GroupAbuseTest, add_and_remove_the_same_member_repeatedly_keeps_the_tree_
     EXPECT_EQ(finalState.keyVersion, 4);
     EXPECT_EQ(finalState.users.size(), 3);
 
-    // Reading again with nothing in between must give the same verified answer. The second call asks for history
-    // above the head, so the Bridge re-serves the head entry and the client has to accept a window that overlaps
-    // what it already verified instead of taking it for an unanchored one.
+    // The second read asks for history above the head, so the Bridge re-serves the head entry: the client has
+    // to accept a window overlapping what it already verified instead of taking it for an unanchored one.
     group::Group reread;
     ASSERT_NO_THROW({ reread = groupApi->getGroup(groupId); });
     EXPECT_EQ(reread.statusCode, 0) << "re-reading an unchanged group broke its verification";
@@ -891,13 +811,8 @@ TEST_F(GroupAbuseTest, add_and_remove_the_same_member_repeatedly_keeps_the_tree_
 }
 
 TEST_F(GroupAbuseTest, concurrent_add_and_remove_of_the_same_member_leaves_the_group_consistent) {
-    // Two managers go for the same seat at the same time: user_1 removes user_3 while user_2 adds them. Any
-    // serialisation of the two is acceptable — remove then add (both land), or add first and lose because
-    // user_3 is still a member. What is not acceptable is both landing on the same base state: the roster and
-    // the tree would then disagree, and somebody would be a member who cannot climb, or a non-member who can.
-    //
-    // The race needs two *different* logins because a websocket carries one session per user key, so a user
-    // cannot hold two sessions at once — which also makes this the more realistic version of the scenario.
+    // Any serialisation is acceptable; both landing on the same base state is not - the roster and the tree
+    // would then disagree. Two different logins, because a websocket carries one session per user key.
     const core::UserWithPubKey remover = user(1);
     const core::UserWithPubKey adder = user(2);
     const core::UserWithPubKey contested = user(3);
@@ -952,7 +867,7 @@ TEST_F(GroupAbuseTest, concurrent_add_and_remove_of_the_same_member_leaves_the_g
     // Only a removal advances the epoch, and only one removal was asked for.
     EXPECT_EQ(afterRace.keyVersion, removed ? 2 : 1) << "remove: " << removeFailure << " add: " << addFailure;
 
-    // The roster the Bridge serves and who can actually climb must agree — that is the corruption this race
+    // The roster the Bridge serves and who can actually climb must agree - that is the corruption this race
     // could produce, and it is invisible without asking both questions.
     const bool onRoster = contains(afterRace.users, user(3).userId) || contains(afterRace.managers, user(3).userId);
     EXPECT_EQ(canReadGroup(3, groupId), onRoster) <<
@@ -962,13 +877,8 @@ TEST_F(GroupAbuseTest, concurrent_add_and_remove_of_the_same_member_leaves_the_g
 }
 
 TEST_F(GroupAbuseTest, concurrent_update_and_removal_leaves_the_group_verifying) {
-    // A metadata update and a removal computed against the same head. Whichever lands second was built against a
-    // state that no longer exists, and its roster tag commits a version it will not land at — so the loser has to
-    // lose *before* it writes. The version pin is what does that, which is why the update cannot skip it: this
-    // test is the regression guard for removing that escape hatch.
-    //
-    // Any serialisation is acceptable. What is not is a group whose head stops verifying, or a call that reports
-    // success without landing.
+    // Both are computed against the same head, so the loser has to lose *before* it writes - its roster tag
+    // commits a version it never lands at. Either order is fine; a head that stops verifying is not.
     const core::UserWithPubKey remover = user(1);
     const core::UserWithPubKey updater = user(2);
     const std::vector<core::UserWithPubKey> managers{remover, updater};
@@ -1025,7 +935,7 @@ TEST_F(GroupAbuseTest, concurrent_update_and_removal_leaves_the_group_verifying)
     EXPECT_EQ(after.statusCode, 0) << "the race left the group's chain unverifiable; remove: " << removeFailure <<
         " update: " << updateFailure;
     // Only a removal moves the epoch; an update moves the version alone, and each call that reported success
-    // must have moved it exactly once — a retry is one landing, not two.
+    // must have moved it exactly once - a retry is one landing, not two.
     EXPECT_EQ(after.keyVersion, removed ? 2 : 1) << "remove: " << removeFailure << " update: " << updateFailure;
     EXPECT_EQ(after.version, before.version + (removed ? 1 : 0) + (updated ? 1 : 0)) << "remove: " <<
         removeFailure << " update: " << updateFailure;

@@ -37,7 +37,7 @@ using namespace privmx::endpoint;
  *    touches the container key. So no write auto-re-keys a stale Inbox the way sendMessage or setEntry does:
  *    `staleGroups` sits there until a manager calls rotateInboxKeys, and that is the only thing that moves the
  *    grants onto the Group's new epoch. Under `forwardSecrecy: "yes"` the bridge refuses submissions in the
- *    meantime — the submitter may be anonymous and has no right to re-key, so refusing is all it can do.
+ *    meantime - the submitter may be anonymous and has no right to re-key, so refusing is all it can do.
  *
  * user_1 and user_2 hold subscriptions to every Inbox and Group event for the whole run, so the notification
  * path is exercised alongside the data path.
@@ -179,12 +179,8 @@ protected:
         return counted == byConnection->second.end() ? 0 : counted->second;
     }
 
-    // The Inbox itself is downloadable context-wide, so a reader who loses the key keeps getting the ciphertext
-    // and a status code instead of an exception. Its entries are not: an Inbox policy carries no item policy
-    // (createInbox hands the inner Thread and Store `{policies, std::nullopt}`), so those stay at the default
-    // `user` scope and the bridge refuses a non-grantee outright.
-    // Forward secrecy is the bridge default, but stated here because the whole stale/re-key half of the
-    // scenario hangs off it: without it a submission under a superseded group epoch would just be accepted.
+    // The Inbox is downloadable context-wide, but its entries are not: an Inbox policy carries no item policy,
+    // so the inner containers stay at `user` scope. Forward secrecy is stated because the stale half needs it.
     core::ContainerPolicyWithoutItem inboxReadableByEveryone() {
         core::ContainerPolicyWithoutItem policy;
         policy.get = "all";
@@ -282,7 +278,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     subscribeToEverything(user1);
     subscribeToEverything(user2);
 
-    // ── Group1: user_2 and user_3 are the members, user_1 only manages it ──────────────────────────────────
+    // -- Group1: user_2 and user_3 are the members, user_1 only manages it --
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = user1.groupApi->createGroup(
@@ -297,7 +293,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     ASSERT_EQ(group1.statusCode, 0);
     ASSERT_EQ(group1.keyVersion, 1);
 
-    // ── Inbox1: user_1 manages it, Group1 reads it, anyone may fetch it ────────────────────────────────────
+    // -- Inbox1: user_1 manages it, Group1 reads it, anyone may fetch it --
     std::string inboxId;
     ASSERT_NO_THROW({
         inboxId = user1.inboxApi->createInbox(
@@ -308,7 +304,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     });
     ASSERT_FALSE(inboxId.empty());
 
-    // ── Entry1 by user_2, with a file attached — a Group member, named nowhere on the Inbox ────────────────
+    // -- Entry1 by user_2, with a file attached - a Group member, named nowhere on the Inbox --
     ASSERT_NO_THROW({
         submitEntryWithFile(user2, inboxId, "entry1_data", "file1_public", "file1_private", "file1_data");
     });
@@ -330,12 +326,12 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     EXPECT_EQ(file1DataAsUser3, "file1_data");
     const std::string entry1Id = entry1AsUser3.entryId;
 
-    // ── user_1 updates the Inbox, roster untouched ─────────────────────────────────────────────────────────
+    // -- user_1 updates the Inbox, roster untouched --
     inbox::Inbox beforeUpdate;
     ASSERT_NO_THROW({ beforeUpdate = user1.inboxApi->getInbox(inboxId); });
     ASSERT_EQ(beforeUpdate.statusCode, 0);
     ASSERT_NO_THROW({
-        // The grant has to be restated: an omitted `groups` means "no grantees", not "leave them alone" — and
+        // The grant has to be restated: an omitted `groups` means "no grantees", not "leave them alone" - and
         // updateInbox applies whatever it is told to all three containers.
         user1.inboxApi->updateInbox(
             inboxId, std::vector<core::UserWithPubKey>{user(1)}, std::vector<core::UserWithPubKey>{user(1)},
@@ -356,7 +352,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     EXPECT_EQ(entry1AfterUpdate.statusCode, 0) << "updateInbox lost the grant on one of the inner containers";
     EXPECT_EQ(entry1AfterUpdate.data.stdString(), "entry1_data");
 
-    // ── ENTRY_COUNT entries by user_3 ──────────────────────────────────────────────────────────────────────
+    // -- ENTRY_COUNT entries by user_3 --
     for (int i = 0; i < ENTRY_COUNT; ++i) {
         ASSERT_NO_THROW({ submitEntry(user3, inboxId, "user3_data_" + std::to_string(i)); })
             << "user_3 could not submit entry " << i;
@@ -372,7 +368,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     }
     pumpEvents();
 
-    // ── user_3 leaves Group1: the Group's epoch moves 1 → 2 ────────────────────────────────────────────────
+    // -- user_3 leaves Group1: the Group's epoch moves 1 → 2 --
     ASSERT_NO_THROW({
         user1.groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
@@ -386,20 +382,17 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     ASSERT_EQ(staleInbox.staleGroups.size(), 1);
     EXPECT_EQ(staleInbox.staleGroups[0], groupId);
 
-    // ── Entry2, refused while the Inbox is still stale ─────────────────────────────────────────────────────
-    // This is where the Inbox parts company with the other modules: the payload is sealed to the Inbox's
-    // entries public key, so the send never reaches for the container key and nothing auto-re-keys the way a
-    // Thread's sendMessage does. A submitter has no right to re-key either — they may not even be named on the
-    // Inbox — so under forward secrecy the bridge can only refuse until a manager rotates. The refusal reaches
-    // the caller as the same exception a stale key raises on a Thread or a Store, not as a raw server error.
+    // -- Entry2, refused while the Inbox is still stale --
+    // The payload is sealed to the Inbox's entries public key, so a send never reaches for the container key
+    // and nothing auto-re-keys. A submitter may not re-key either, so the bridge can only refuse.
     EXPECT_THROW({ submitEntry(user2, inboxId, "entry2_data"); }, core::StaleKeyRekeyRequiredException)
         << "a submission was accepted under a superseded group epoch";
     inbox::Inbox stillStale;
     ASSERT_NO_THROW({ stillStale = user1.inboxApi->getInbox(inboxId); });
     EXPECT_EQ(stillStale.staleGroups.size(), 1)
-        << "the refused submission left the inbox re-keyed — a submission must never be a container write";
+        << "the refused submission left the inbox re-keyed - a submission must never be a container write";
 
-    // ── user_1 re-keys, which is the only thing that moves the grants onto epoch 2 ─────────────────────────
+    // -- user_1 re-keys, which is the only thing that moves the grants onto epoch 2 --
     ASSERT_NO_THROW({
         user1.inboxApi->rotateInboxKeys(
             inboxId, std::vector<core::UserWithPubKey>{user(1)}, std::vector<core::UserWithPubKey>{user(1)},
@@ -413,12 +406,12 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     ASSERT_EQ(freshInbox.groups.size(), 1);
     EXPECT_EQ(freshInbox.groups[0].groupId, groupId);
 
-    // ── Entry2 and Entry3, submitted after the re-key ──────────────────────────────────────────────────────
+    // -- Entry2 and Entry3, submitted after the re-key --
     // The submission the stale Inbox refused now lands, on the key the re-key just installed.
     ASSERT_NO_THROW({ submitEntry(user2, inboxId, "entry2_data"); });
     ASSERT_NO_THROW({ submitEntry(user2, inboxId, "entry3_data"); });
 
-    // ── user_2 is still in Group1 at epoch 2, and everything is readable to them across both key epochs ────
+    // -- user_2 is still in Group1 at epoch 2, and everything is readable to them across both key epochs --
     auto asUser2 = byEntryData(listAllEntries(user2, inboxId, ENTRY_COUNT + PAGE_LIMIT));
     ASSERT_NE(asUser2.find("entry1_data"), asUser2.end());
     EXPECT_EQ(asUser2.at("entry1_data").statusCode, 0) << "the re-key cost a remaining member the oldest entry";
@@ -438,7 +431,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     ASSERT_NE(asUser2.find("entry3_data"), asUser2.end());
     EXPECT_EQ(asUser2.at("entry3_data").statusCode, 0);
 
-    // ── What user_3 can see now ────────────────────────────────────────────────────────────────────────────
+    // -- What user_3 can see now --
     // The public view needs no key and no membership at all, so it keeps working.
     inbox::InboxPublicView publicView;
     ASSERT_NO_THROW({ publicView = user3.inboxApi->getInboxPublicView(inboxId); });
@@ -474,7 +467,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     EXPECT_THROW({ user3.inboxApi->readEntry(entry1Id); }, core::Exception)
         << "a removed member read an inbox entry";
 
-    // ── user_1 deletes everything user_3 submitted, ten at a time ──────────────────────────────────────────
+    // -- user_1 deletes everything user_3 submitted, ten at a time --
     int deleted = 0;
     for (int pass = 0; pass < ENTRY_COUNT; ++pass) {
         core::PagingList<inbox::InboxEntry> page{};
@@ -506,7 +499,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     }
     EXPECT_EQ(deleted, ENTRY_COUNT);
 
-    // ── user_2 sees Entry1, Entry2 and Entry3, and nothing else ────────────────────────────────────────────
+    // -- user_2 sees Entry1, Entry2 and Entry3, and nothing else --
     auto remaining = listAllEntries(user2, inboxId, PAGE_LIMIT);
     ASSERT_EQ(remaining.size(), 3);
     auto remainingByData = byEntryData(remaining);
@@ -514,7 +507,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     EXPECT_NE(remainingByData.find("entry2_data"), remainingByData.end());
     EXPECT_NE(remainingByData.find("entry3_data"), remainingByData.end());
 
-    // ── Both watchers were told about all of it ────────────────────────────────────────────────────────────
+    // -- Both watchers were told about all of it --
     pumpUntil(
         [&] {
             return eventsSeen(user1, "inboxEntryDeleted") >= ENTRY_COUNT &&

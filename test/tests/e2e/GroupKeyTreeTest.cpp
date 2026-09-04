@@ -18,12 +18,12 @@ using namespace privmx::endpoint;
  *
  * The unit tests on either side each check one half of the contract: this client builds a state, the server
  * decides whether it is well-formed, and the conformance fixture proves the two agree on paper. What none of them
- * can show is that the whole round trip works — that a member removed here is really no longer served content
+ * can show is that the whole round trip works - that a member removed here is really no longer served content
  * written afterwards, and that a member added later really can reach content written before they existed. That
  * needs a server, so it lives here.
  *
  * Tests named SECURITY assert that somebody *cannot* do something. They fail silently at runtime if the guard
- * regresses — nothing breaks, access simply persists where it should have ended — so they must not be deleted or
+ * regresses - nothing breaks, access simply persists where it should have ended - so they must not be deleted or
  * weakened into positive assertions.
  */
 
@@ -88,7 +88,7 @@ protected:
         return reader->getString("Context_1.contextId");
     }
 
-    /** A tree-backed group with user_1 managing and the given users as members. */
+    // A tree-backed group with user_1 managing and the given users as members.
     std::string createTreeGroup(const std::vector<core::UserWithPubKey>& members) {
         return groupApi->createGroup(
             contextId(), members, std::vector<core::UserWithPubKey>{user(1)},
@@ -96,13 +96,8 @@ protected:
         );
     }
 
-    /**
-     * A thread whose content key is wrapped to the group, so group membership decides who can read it.
-     *
-     * `forwardSecrecy = "yes"` is what makes the bridge refuse content written under a superseded group epoch.
-     * It is a policy rather than a default because it forces every grantee container to re-key when a group
-     * rotates: worth it when a removal must bite immediately, a needless cost when it need not.
-     */
+    // A thread whose content key is wrapped to the group, so group membership decides who can read it.
+    // `forwardSecrecy = "yes"` is what makes the bridge refuse content written under a superseded group epoch.
     std::string createThreadGrantedTo(const group::Group& group, const std::string& forwardSecrecy = "no") {
         core::ContainerPolicy policy;
         policy.get = "all";
@@ -124,13 +119,8 @@ protected:
         );
     }
 
-    /**
-     * As `createThreadGrantedTo`, with forward secrecy on and user_2 able to write but not to re-key.
-     *
-     * A stale key normally repairs itself — `sendMessage` re-keys the thread and sends under the new key — so a
-     * caller who *may* re-key never sees the window at all. Pinning `rotateKeys` to managers and writing as a
-     * plain user is what still puts a writer inside it: refused, until somebody with the right to fix it does.
-     */
+    // As `createThreadGrantedTo`, with forward secrecy on and user_2 able to write but not to re-key: a caller
+    // who may re-key never sees the stale window, because `sendMessage` repairs the key and retries.
     std::string createThreadGrantedToWithManagerOnlyRekey(const group::Group& group) {
         core::ContainerPolicy policy;
         policy.get = "all";
@@ -160,9 +150,7 @@ protected:
     core::VarSerializer _serializer = core::VarSerializer({});
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// creation
-// ─────────────────────────────────────────────────────────────────────────────
+// -- creation --
 
 TEST_F(GroupKeyTreeTest, createGroup_starts_at_epoch_one) {
     std::string groupId;
@@ -180,7 +168,7 @@ TEST_F(GroupKeyTreeTest, createGroup_starts_at_epoch_one) {
 
 TEST_F(GroupKeyTreeTest, every_member_can_read_a_tree_backed_group) {
     // The group's metadata key is wrapped once, to the group itself. Each member gets at it by climbing the tree,
-    // which is the read path this whole design rests on — if it fails, nothing else works.
+    // which is the read path this whole design rests on - if it fails, nothing else works.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     disconnect();
@@ -217,9 +205,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_non_member_cannot_read_a_tree_backed_group) 
     connectAs(KeyTreeConnectionType::KTUser1);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// addition — the operation that must stay cheap
-// ─────────────────────────────────────────────────────────────────────────────
+// -- addition - the operation that must stay cheap --
 
 TEST_F(GroupKeyTreeTest, addGroupMembers_does_not_advance_the_epoch) {
     // The heart of the economy: adding a member leaves the epoch alone, so no container the group can read goes
@@ -258,9 +244,8 @@ TEST_F(GroupKeyTreeTest, an_added_member_can_read_the_group) {
 }
 
 TEST_F(GroupKeyTreeTest, addGroupMembers_seats_a_whole_batch_at_the_same_epoch) {
-    // Why the call takes a list at all: the newcomers' paths overlap, so one delta covers their union and lands
-    // under a single compare-and-swap. The role travels per member, which is what lets a manager and a plain
-    // member arrive together instead of as two of everything.
+    // Why the call takes a list: the newcomers' paths overlap, so one delta covers their union and lands under
+    // a single compare-and-swap. The role travels per member, so a manager and a plain user can arrive together.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1)}); });
     group::Group before;
@@ -301,9 +286,7 @@ TEST_F(GroupKeyTreeTest, addGroupMembers_seats_a_whole_batch_at_the_same_epoch) 
     connectAs(KeyTreeConnectionType::KTUser1);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// removal — the operation the whole design exists for
-// ─────────────────────────────────────────────────────────────────────────────
+// -- removal - the operation the whole design exists for --
 
 TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_and_replaces_the_grant_key) {
     std::string groupId;
@@ -324,9 +307,8 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_and_replaces_the_
 }
 
 TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_once_for_the_whole_batch) {
-    // The reason a batch removal exists: taking two members out one at a time costs two epochs, so every
-    // container the group can read goes stale twice and the group's rotation budget is charged twice. One call
-    // must cost exactly one epoch however many members leave — and both of them must actually be out.
+    // Taking two members out one at a time costs two epochs, so every grantee container goes stale twice. One
+    // call must cost exactly one epoch however many members leave - and all of them must actually be out.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group before;
@@ -345,7 +327,7 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_once_for_the_whol
     EXPECT_EQ(after.statusCode, 0) << "the manager cannot read the group they still manage";
     disconnect();
 
-    // Neither leaver climbs any more — a batch must not leave one of them holding a live path. The bridge may
+    // Neither leaver climbs any more - a batch must not leave one of them holding a live path. The bridge may
     // refuse the read outright or serve something undecryptable, so both count as "cannot read".
     const auto stillReads = [&](KeyTreeConnectionType who) {
         connectAs(who);
@@ -381,12 +363,8 @@ TEST_F(GroupKeyTreeTest, remaining_members_can_still_read_after_a_removal) {
 }
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_removed_member_cannot_read_content_written_afterwards) {
-    // The claim the whole construction makes: content wrapped at epoch 2 must not reach the member removed at
-    // epoch 2. It bites only because this test arranges all three conditions — `forwardSecrecy = "yes"` on the
-    // thread (the helper's argument, not the default), an explicit re-key to the new epoch, and a cold session
-    // for the probe. Nothing here says the epoch-1 message became safe: the removed member held that epoch's key
-    // while it was current and keeps whatever they kept. What ends is the route, and it ends for epoch 1 too — a
-    // cold session of theirs is served nothing at all (measured in `GroupAbuseTest.ladder_hands_a_newcomer_*`).
+    // Three conditions make this bite: `forwardSecrecy = "yes"` on the thread, an explicit re-key to the new
+    // epoch, and a cold session for the probe. What ends is the route, not the safety of the epoch-1 ciphertext.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group group;
@@ -405,9 +383,8 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_removed_member_cannot_read_content_written_a
         groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
 
-    // Re-key the thread to the new epoch, then write again. Until this happens no new content is accepted (see
-    // the ROTATE_REQUIRED test below), so this step is what makes the removal bite. Done explicitly rather than
-    // left to `sendMessage`'s automatic re-key, so what the removed member is denied is not in doubt.
+    // Until the thread is re-keyed no new content is accepted, so this step is what makes the removal bite.
+    // Done explicitly rather than left to `sendMessage`'s automatic re-key.
     group::Group rotated;
     ASSERT_NO_THROW({ rotated = groupApi->getGroup(groupId); });
     ASSERT_NO_THROW({
@@ -447,17 +424,11 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_removed_member_cannot_read_content_written_a
     connectAs(KeyTreeConnectionType::KTUser1);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// key cache
-// ─────────────────────────────────────────────────────────────────────────────
+// -- key cache --
 
 TEST_F(GroupKeyTreeTest, SECURITY_two_groups_at_the_same_epoch_do_not_share_cached_keys) {
-    // The client caches the grant key it recovers by climbing. Cached per group, that is a pure optimisation;
-    // cached per epoch alone it is a correctness bug, because every group starts at epoch 1. A reader in two such
-    // groups would get the first group's key handed back for the second, and the second's content would not open.
-    //
-    // The read has to go through a group grant to exercise it at all: a member with a personal key entry never
-    // climbs. Hence user_2, who is in both groups and named on neither thread.
+    // Every group starts at epoch 1, so a cache keyed on the epoch alone would hand the first group's grant key
+    // back for the second. Only a reader going through a group grant climbs at all - hence user_2.
     std::string groupIdA, groupIdB;
     ASSERT_NO_THROW({ groupIdA = createTreeGroup({user(1), user(2)}); });
     ASSERT_NO_THROW({ groupIdB = createTreeGroup({user(1), user(2)}); });
@@ -510,9 +481,8 @@ TEST_F(GroupKeyTreeTest, SECURITY_two_groups_at_the_same_epoch_do_not_share_cach
 }
 
 TEST_F(GroupKeyTreeTest, removeGroupMembers_leaves_the_same_session_able_to_read_both_epochs) {
-    // A removal drops the cached node keys, because their generations were just refreshed, and seeds the new
-    // epoch's grant key. It must not drop the *older* grant keys: the ladder descent to pre-removal content still
-    // needs them. Both halves are checked here, in the session that performed the removal — no reconnect.
+    // A removal drops the cached node keys, whose generations were just refreshed, and seeds the new epoch's
+    // grant key. It must not drop the older grant keys: the ladder descent to pre-removal content needs them.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group group;
@@ -598,16 +568,8 @@ TEST_F(GroupKeyTreeTest, reconnecting_rebuilds_the_key_cache_from_scratch) {
 }
 
 TEST_F(GroupKeyTreeTest, ROTATE_REQUIRED_blocks_writes_until_the_container_catches_up) {
-    // Lazy revocation: nobody re-keys a container behind its members' backs, and no new content is accepted
-    // under a superseded epoch. The window between the removal and the re-key is safe precisely because nothing
-    // can be written in it.
-    //
-    // Two things have to hold for that to be the assertion below. Enforcement is opt-in per container
-    // (`forwardSecrecy`), so the thread here asks for it — a container that has not asked keeps accepting writes
-    // after a group rotation, deliberately. And the writer has to be someone who cannot close the window
-    // themselves: `sendMessage` re-keys a stale thread and retries, so user_1 would never see the refusal. Hence
-    // `rotateKeys: "manager"` and a write from user_2, who is a thread user and not a manager. Putting user_1
-    // back here would make this test pass for the wrong reason.
+    // Lazy revocation: nothing can be written between a removal and the re-key. Enforcement is opt-in per
+    // container (`forwardSecrecy`), and the writer must be one who cannot re-key - hence user_2, not user_1.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group group;
@@ -639,7 +601,7 @@ TEST_F(GroupKeyTreeTest, ROTATE_REQUIRED_blocks_writes_until_the_container_catch
         );
     }, core::StaleKeyRekeyRequiredException) << "content was accepted under a superseded group epoch";
 
-    // And the refused write left the thread exactly where it was — no partial re-key on the way out.
+    // And the refused write left the thread exactly where it was - no partial re-key on the way out.
     thread::Thread afterWrite;
     ASSERT_NO_THROW({ afterWrite = threadApi->getThread(threadId); });
     EXPECT_EQ(afterWrite.version, beforeWrite.version);
@@ -649,13 +611,11 @@ TEST_F(GroupKeyTreeTest, ROTATE_REQUIRED_blocks_writes_until_the_container_catch
     connectAs(KeyTreeConnectionType::KTUser1);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// history — the Epoch Ladder, end to end
-// ─────────────────────────────────────────────────────────────────────────────
+// -- history - the Epoch Ladder, end to end --
 
 TEST_F(GroupKeyTreeTest, a_remaining_member_reads_content_from_before_a_removal) {
     // Reaching the old message needs the *previous* epoch's grant key, which no longer exists in the tree. It is
-    // recovered by descending the ladder — one rung — and this is the first place that path runs against a server.
+    // recovered by descending the ladder - one rung - and this is the first place that path runs against a server.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group group;
@@ -687,7 +647,7 @@ TEST_F(GroupKeyTreeTest, a_remaining_member_reads_content_from_before_a_removal)
 
 TEST_F(GroupKeyTreeTest, a_newcomer_reads_history_that_predates_them) {
     // The payoff of the Epoch Ladder: user_3 is seated *after* a removal bumped the epoch, and reads a message
-    // written before they were a member — with nothing in the archive addressed to them personally.
+    // written before they were a member - with nothing in the archive addressed to them personally.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     group::Group group;
@@ -740,7 +700,7 @@ TEST_F(GroupKeyTreeTest, several_removals_in_a_row_keep_the_whole_history_reacha
         );
     });
 
-    // remove user_3, then re-add and remove again, twice more — three epoch bumps in total.
+    // remove user_3, then re-add and remove again, twice more - three epoch bumps in total.
     for (int round = 0; round < 3; round++) {
         ASSERT_NO_THROW({
             groupApi->removeGroupMembers(groupId, {user(3).userId});
@@ -762,9 +722,7 @@ TEST_F(GroupKeyTreeTest, several_removals_in_a_row_keep_the_whole_history_reacha
     EXPECT_EQ(message.data.stdString(), "oldest");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// rejections the server owes us
-// ─────────────────────────────────────────────────────────────────────────────
+// -- rejections the server owes us --
 
 TEST_F(GroupKeyTreeTest, addGroupMembers_rejects_somebody_already_in_the_group) {
     std::string groupId;

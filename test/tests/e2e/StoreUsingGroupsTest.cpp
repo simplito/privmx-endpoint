@@ -49,7 +49,7 @@ protected:
         storeApi.reset();
         groupApi.reset();
     }
-    /** One of the fixture's logins as a container names its members — id plus public key, from the same ini. */
+    // One of the fixture's logins as a container names its members - id plus public key, from the same ini.
     core::UserWithPubKey userOf(SUGConnectionType type) {
         std::string n;
         if (type == SUGConnectionType::SUGUser1) {
@@ -103,13 +103,8 @@ protected:
             }}
         );
     }
-    /**
-     * A Store whose direct members are `users` — as both users and managers, so any of them can update it —
-     * and whose grantee groups are `groups`, each granted at `role`.
-     *
-     * The grants carry no epoch: leaving `groupEpoch` at 0 is what makes the endpoint resolve each group's
-     * current epoch from the Bridge, which is the path these tests are about.
-     */
+    // A Store whose direct members are `users` (as both users and managers) and whose grantee groups are
+    // `groups`. Leaving `groupEpoch` at 0 makes the endpoint resolve each group's current epoch from the Bridge.
     std::string createStoreWithGroups(
         const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
@@ -156,7 +151,7 @@ protected:
             }}
         );
     }
-    /** Uploads one file and returns its id. The whole payload goes in a single write. */
+    // Uploads one file and returns its id. The whole payload goes in a single write.
     std::string uploadFile(
         const std::string& storeId,
         const std::string& publicMeta,
@@ -172,7 +167,7 @@ protected:
         storeApi->writeToFile(handle, core::Buffer::from(data));
         return storeApi->closeFile(handle);
     }
-    /** Reads a whole file back through a read handle. */
+    // Reads a whole file back through a read handle.
     std::string downloadFile(const std::string& fileId, int64_t size) {
         int64_t handle = storeApi->openFile(fileId);
         auto data = storeApi->readFromFile(handle, size).stdString();
@@ -653,7 +648,7 @@ TEST_F(StoreUsingGroupsTest, getFile_lost_after_group_removal) {
     ASSERT_FALSE(newFileId.empty());
 
     // Historical group key entries are preserved for old key versions, so user_2 can still decrypt
-    // the file that was uploaded while the group had access — but not the one written after.
+    // the file that was uploaded while the group had access - but not the one written after.
     disconnect();
     connectAs(SUGConnectionType::SUGUser2);
     store::File afterRemoval;
@@ -697,7 +692,7 @@ TEST_F(StoreUsingGroupsTest, user_added_to_group_gains_access_to_store_and_files
     EXPECT_NO_THROW({ fBefore = storeApi->getFile(fileId); });
     EXPECT_NE(fBefore.statusCode, 0);
 
-    // Seat user_3's leaf in the key tree — updateGroup would only re-wrap the group's metadata key.
+    // Seat user_3's leaf in the key tree - updateGroup would only re-wrap the group's metadata key.
     disconnect();
     connectAs(SUGConnectionType::SUGUser1);
     EXPECT_NO_THROW({
@@ -719,10 +714,8 @@ TEST_F(StoreUsingGroupsTest, user_added_to_group_gains_access_to_store_and_files
 }
 
 TEST_F(StoreUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
-    // user_1 is the only direct member of the Store *and* a member of granted Group_1, so every keyId opens
-    // from `keys` and the group branch is skipped. `updateStore` is the interesting half: `verifyKeysSecret`
-    // fails on any non-zero status, so an unresolved group entry there is the difference between an update
-    // and an exception.
+    // Every keyId opens from `keys`, so the group branch is skipped. `updateStore` is the interesting half:
+    // `verifyKeysSecret` fails on any non-zero status, so an unresolved group entry throws instead of updating.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
@@ -777,9 +770,8 @@ TEST_F(StoreUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 }
 
 TEST_F(StoreUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
-    // The Store grants Group_1, whose only member is user_1. user_2 is a direct member and belongs to no
-    // grantee group, so the bridge serves it `groupKeys: []` — the read has to be served entirely from its
-    // own key wrap.
+    // user_2 is a direct member of the Store and in no grantee group, so the bridge serves it `groupKeys: []`
+    // and the read has to come entirely from its own key wrap.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
@@ -816,9 +808,8 @@ TEST_F(StoreUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
 }
 
 TEST_F(StoreUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // The Store grants Group_2 and Group_3 and wraps its key to user_1 only. user_2 belongs to both grantee
-    // groups, so narrowing leaves it two entries at the same keyId — with no direct wrap to fall back on,
-    // one of them has to carry the read.
+    // The Store wraps its key to user_1 only, and user_2 belongs to both grantee groups: narrowing leaves it two
+    // entries at the same keyId, and with no direct wrap to fall back on one of them has to carry the read.
     group::Group group_2, group_3;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
@@ -853,14 +844,8 @@ TEST_F(StoreUsingGroupsTest, caller_in_two_granted_groups_reads) {
 }
 
 TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_did_not_name) {
-    // The Store grants Group_2. user_2 re-keys naming no groups at all, and the new key must still be re-wrapped
-    // to Group_2 — the grantee list comes from the Store, not from the caller's argument.
-    //
-    // The grantee is a group the caller belongs to, and that is a constraint rather than a convenience: wrapping
-    // a key to a group needs its current epoch and public key, and a Bridge running the default group policy
-    // (`get: "user"`, `listAll: "none"`) hands those to members only. Re-keying a container granted to a group
-    // the caller is not in therefore cannot work — `resolveGroupEpochs` throws `UnresolvedGroupGranteeException`
-    // — so do not "restore" this test to Group_1, which holds user_1 alone.
+    // user_2 re-keys naming no groups, so the grantee list comes from the Store. The caller must be in that
+    // group: the default group policy hands a group's epoch and public key to members only.
     group::Group granteeGroup;
     ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(granteeGroup.statusCode, 0);
@@ -899,7 +884,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_d
         );
     });
 
-    // The grant survives the re-key, and user_1 — who reads through the group — still resolves the new key.
+    // The grant survives the re-key, and user_1 - who reads through the group - still resolves the new key.
     disconnect();
     connectAs(SUGConnectionType::SUGUser1);
     store::Store after;
@@ -920,9 +905,8 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_d
 }
 
 TEST_F(StoreUsingGroupsTest, rotateStoreKeys_clears_staleGroups_after_the_group_advances_its_epoch) {
-    // Group G at epoch 1 is granted the Store. Removing a member advances G to epoch 2, which leaves the
-    // Store's key wrapped to a superseded epoch — the bridge reports that as `staleGroups`. A re-key
-    // re-wraps to the current epoch and must clear it.
+    // Removing a member advances G to epoch 2, leaving the Store's key wrapped to a superseded epoch - which
+    // the bridge reports as `staleGroups`. A re-key re-wraps to the current epoch and must clear it.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(

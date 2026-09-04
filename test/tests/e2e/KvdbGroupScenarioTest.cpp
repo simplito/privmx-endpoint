@@ -31,7 +31,7 @@ using namespace privmx::endpoint;
  *
  * What this adds over the Thread scenario is the keyed, versioned item. A KVDB entry is addressed by its key
  * rather than by a server-assigned id and carries an optimistic-lock version, so overwriting one in place is
- * the module's own way of moving an item onto the current container key — and `deleteEntries` retires a whole
+ * the module's own way of moving an item onto the current container key - and `deleteEntries` retires a whole
  * page of them in a single request.
  *
  * user_1 and user_2 hold subscriptions to every KVDB and Group event for the whole run, so the notification
@@ -223,7 +223,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     subscribeToEverything(user1);
     subscribeToEverything(user2);
 
-    // ── Group1: user_2 and user_3 are the members, user_1 only manages it ──────────────────────────────────
+    // -- Group1: user_2 and user_3 are the members, user_1 only manages it --
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = user1.groupApi->createGroup(
@@ -238,7 +238,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     ASSERT_EQ(group1.statusCode, 0);
     ASSERT_EQ(group1.keyVersion, 1);
 
-    // ── Kvdb1: user_1 manages it, Group1 reads it, anyone may download it ──────────────────────────────────
+    // -- Kvdb1: user_1 manages it, Group1 reads it, anyone may download it --
     std::string kvdbId;
     ASSERT_NO_THROW({
         kvdbId = user1.kvdbApi->createKvdb(
@@ -249,7 +249,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     });
     ASSERT_FALSE(kvdbId.empty());
 
-    // ── Entry1, written by user_2 — a Group member, named nowhere on the KVDB ──────────────────────────────
+    // -- Entry1, written by user_2 - a Group member, named nowhere on the KVDB --
     ASSERT_NO_THROW({
         user2.kvdbApi->setEntry(
             kvdbId, "entry1", core::Buffer::from("entry1_public"), core::Buffer::from("entry1_private"),
@@ -265,7 +265,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     EXPECT_EQ(entry1AsUser3.data.stdString(), "entry1_data");
     EXPECT_EQ(entry1AsUser3.version, 1);
 
-    // ── user_1 updates the KVDB, roster untouched ──────────────────────────────────────────────────────────
+    // -- user_1 updates the KVDB, roster untouched --
     kvdb::Kvdb beforeUpdate;
     ASSERT_NO_THROW({ beforeUpdate = user1.kvdbApi->getKvdb(kvdbId); });
     ASSERT_EQ(beforeUpdate.statusCode, 0);
@@ -284,7 +284,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     ASSERT_EQ(afterUpdate.groups.size(), 1);
     EXPECT_EQ(afterUpdate.groups[0].groupId, groupId);
 
-    // ── ENTRY_COUNT entries by user_3, all under the KVDB key wrapped to the Group's epoch 1 ───────────────
+    // -- ENTRY_COUNT entries by user_3, all under the KVDB key wrapped to the Group's epoch 1 --
     std::vector<std::string> user3EntryKeys;
     user3EntryKeys.reserve(ENTRY_COUNT);
     for (int i = 0; i < ENTRY_COUNT; ++i) {
@@ -311,7 +311,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     }
     pumpEvents();
 
-    // ── user_3 leaves Group1: the Group's epoch moves 1 → 2 ────────────────────────────────────────────────
+    // -- user_3 leaves Group1: the Group's epoch moves 1 → 2 --
     ASSERT_NO_THROW({
         user1.groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
@@ -319,8 +319,8 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     ASSERT_NO_THROW({ rotatedGroup = user1.groupApi->getGroup(groupId); });
     ASSERT_EQ(rotatedGroup.keyVersion, 2);
 
-    // ── Entry2 by user_2. The KVDB's key is still wrapped to the epoch the Group just left, so the write
-    //    re-keys the KVDB first — that is what `staleGroups` on every read is there to drive ───────────────
+    // -- Entry2 by user_2. The KVDB's key is still wrapped to the epoch the Group just left, so the write
+    //    re-keys the KVDB first - that is what `staleGroups` on every read is there to drive --
     ASSERT_NO_THROW({
         user2.kvdbApi->setEntry(
             kvdbId, "entry2", core::Buffer::from("entry2_public"), core::Buffer::from("entry2_private"),
@@ -334,7 +334,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     EXPECT_TRUE(rekeyedKvdb.staleGroups.empty())
         << "writing after the group rotated should have re-keyed the kvdb to the new epoch";
 
-    // ── user_1 overwrites Entry1 in place, which moves it onto the new key ─────────────────────────────────
+    // -- user_1 overwrites Entry1 in place, which moves it onto the new key --
     kvdb::KvdbEntry entry1BeforeOverwrite;
     ASSERT_NO_THROW({ entry1BeforeOverwrite = user1.kvdbApi->getEntry(kvdbId, "entry1"); });
     ASSERT_EQ(entry1BeforeOverwrite.statusCode, 0);
@@ -346,7 +346,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
         );
     });
 
-    // ── What user_3 can see now: the re-encrypted entry is closed to them, its public half is not ──────────
+    // -- What user_3 can see now: the re-encrypted entry is closed to them, its public half is not --
     kvdb::KvdbEntry lostEntry;
     ASSERT_NO_THROW({ lostEntry = user3.kvdbApi->getEntry(kvdbId, "entry1"); });
     EXPECT_NE(lostEntry.statusCode, 0) << "a removed member decrypted content re-encrypted after their removal";
@@ -355,11 +355,8 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     EXPECT_TRUE(lostEntry.privateMeta.stdString().empty());
     EXPECT_TRUE(lostEntry.data.stdString().empty());
 
-    // ...and so is everything user_3 wrote before the removal, even though those entries were encrypted under
-    // the KVDB key of the Group's epoch 1 and this session read them all while it still held that grant. The
-    // next read after the re-key replaces the whole cache entry (ContainerKeyCache::set does insert_or_assign,
-    // not a merge), and the group key resolver has no group left to recover epoch 1 from. Same expectation as
-    // ThreadGroupScenarioTest.
+    // ...and so is everything user_3 wrote before the removal: the read after the re-key replaces the whole
+    // cache entry (ContainerKeyCache::set assigns, not merges) and no group is left to recover epoch 1 from.
     auto asUser3 = byEntryKey(listAllEntries(user3, kvdbId, ENTRY_COUNT));
     int unreadable = 0;
     for (int i = 0; i < ENTRY_COUNT; ++i) {
@@ -372,11 +369,11 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     // Reported as a count rather than per entry: a regression here moves all hundred at once.
     EXPECT_EQ(unreadable, ENTRY_COUNT) << "user_3 can still decrypt " << (ENTRY_COUNT - unreadable)
                                        << " of their own pre-removal entries";
-    // The listing still names them and their public halves survive — only the encrypted halves are gone.
+    // The listing still names them and their public halves survive - only the encrypted halves are gone.
     EXPECT_EQ(asUser3.at(user3EntryKeys[0]).publicMeta.stdString(), "user3_public_0");
     EXPECT_TRUE(asUser3.at(user3EntryKeys[0]).data.stdString().empty());
 
-    // ── user_1 deletes everything user_3 wrote, ten at a time ──────────────────────────────────────────────
+    // -- user_1 deletes everything user_3 wrote, ten at a time --
     int deleted = 0;
     for (int pass = 0; pass < ENTRY_COUNT; ++pass) {
         core::PagingList<kvdb::KvdbEntry> page{};
@@ -415,7 +412,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     }
     EXPECT_EQ(deleted, ENTRY_COUNT);
 
-    // ── user_2 sees Entry1 and Entry2, and nothing else ────────────────────────────────────────────────────
+    // -- user_2 sees Entry1 and Entry2, and nothing else --
     auto remaining = listAllEntries(user2, kvdbId, PAGE_LIMIT);
     ASSERT_EQ(remaining.size(), 2);
     auto asUser2 = byEntryKey(remaining);
@@ -427,7 +424,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     EXPECT_EQ(asUser2.at("entry2").statusCode, 0);
     EXPECT_EQ(asUser2.at("entry2").data.stdString(), "entry2_data");
 
-    // ── Both watchers were told about all of it ────────────────────────────────────────────────────────────
+    // -- Both watchers were told about all of it --
     pumpUntil(
         [&] {
             return eventsSeen(user1, "kvdbEntryDeleted") >= ENTRY_COUNT &&

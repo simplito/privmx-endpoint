@@ -50,7 +50,7 @@ protected:
         threadApi.reset();
         groupApi.reset();
     }
-    /** One of the fixture's logins as a container names its members — id plus public key, from the same ini. */
+    // One of the fixture's logins as a container names its members - id plus public key, from the same ini.
     core::UserWithPubKey userOf(TUGConnectionType type) {
         std::string n;
         if (type == TUGConnectionType::TUGUser1) {
@@ -104,13 +104,8 @@ protected:
             }}
         );
     }
-    /**
-     * A Thread whose direct members are `users` — as both users and managers, so any of them can update it —
-     * and whose grantee groups are `groups`, each granted at `role`.
-     *
-     * The grants carry no epoch: leaving `groupEpoch` at 0 is what makes the endpoint resolve each group's
-     * current epoch from the Bridge, which is the path these tests are about.
-     */
+    // A Thread whose direct members are `users` (as both users and managers) and whose grantee groups are
+    // `groups`. Leaving `groupEpoch` at 0 makes the endpoint resolve each group's current epoch from the Bridge.
     std::string createThreadWithGroups(
         const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
@@ -362,9 +357,8 @@ TEST_F(ThreadUsingGroupsTest, updateThread_remove_group) {
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_2.statusCode, 0);
 
-    // policy.get="all" so user_2 can always call getThread without throwing;
-    // after group removal they receive statusCode!=0 and empty privateMeta
-    // because they no longer hold the decryption key.
+    // policy.get="all" so user_2 can always call getThread without throwing; after the group removal they get
+    // statusCode!=0 and empty privateMeta instead, holding no decryption key.
     core::ContainerPolicy policy;
     policy.get = "all";
 
@@ -435,7 +429,7 @@ TEST_F(ThreadUsingGroupsTest, updateThread_remove_group) {
     EXPECT_EQ(updated.publicMeta.stdString(), "no_group_now");
     EXPECT_EQ(updated.groups.size(), 0);
 
-    // user_2 can still download (get="all") but cannot decrypt — key was not shared
+    // user_2 can still download (get="all") but cannot decrypt - key was not shared
     disconnect();
     connectAs(TUGConnectionType::TUGUser2);
     thread::Thread afterRemoval;
@@ -813,7 +807,7 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     });
     ASSERT_FALSE(messageId.empty());
 
-    // user_3 is not in Group_2 yet — can download (policy.get/item.get = "all") but not decrypt
+    // user_3 is not in Group_2 yet - can download (policy.get/item.get = "all") but not decrypt
     disconnect();
     connectAs(TUGConnectionType::TUGUser3);
     thread::Thread tBefore;
@@ -825,7 +819,7 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     EXPECT_NE(mBefore.statusCode, 0);
 
     // user_1 adds user_3 to Group_2 via the tree-aware path, seating user_3's leaf in the key tree
-    // (updateGroup would only re-wrap the group's own metadata key — it never touches tree leaf state)
+    // (updateGroup would only re-wrap the group's own metadata key - it never touches tree leaf state)
     disconnect();
     connectAs(TUGConnectionType::TUGUser1);
     EXPECT_NO_THROW({
@@ -841,7 +835,7 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
         );
     });
 
-    // user_3 is now a Group_2 member — can decrypt the thread and the existing message
+    // user_3 is now a Group_2 member - can decrypt the thread and the existing message
     disconnect();
     connectAs(TUGConnectionType::TUGUser3);
     thread::Thread tAfter;
@@ -880,9 +874,8 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
     ASSERT_EQ(group.statusCode, 0);
     ASSERT_EQ(group.keyVersion, 1);
 
-    // Thread T grants G access; user_1 is the only direct member — user_2's access to it is
-    // exclusively through the group grant (no personal key wrap), which matters below: a direct
-    // wrap would let KeyProvider's flat-key path succeed and mask whatever the group-epoch path does.
+    // user_1 is T's only direct member, so user_2 reads only through the group grant: a personal key wrap would
+    // let KeyProvider's flat-key path succeed and mask whatever the group-epoch path does.
     std::string threadId;
     ASSERT_NO_THROW({
         threadId = createThreadWithGroup(
@@ -894,7 +887,7 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
     });
     ASSERT_FALSE(threadId.empty());
 
-    // Sent while G is still at epoch 1 — its keyId is wrapped for G's epoch-1 grant key only.
+    // Sent while G is still at epoch 1 - its keyId is wrapped for G's epoch-1 grant key only.
     std::string oldEpochMessageId;
     ASSERT_NO_THROW({
         oldEpochMessageId = threadApi->sendMessage(
@@ -906,7 +899,7 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
     });
     ASSERT_FALSE(oldEpochMessageId.empty());
 
-    // Remove user_3 from G — advances G's epoch from 1 to 2. Thread T itself is untouched by this.
+    // Remove user_3 from G - advances G's epoch from 1 to 2. Thread T itself is untouched by this.
     ASSERT_NO_THROW({
         groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
@@ -916,13 +909,8 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
     ASSERT_EQ(rotatedGroup.statusCode, 0);
     ASSERT_EQ(rotatedGroup.keyVersion, 2);
 
-    // Force T's own container key to rotate while re-granting G at its now-current epoch (2).
-    // T's stored groupKeys[G] entry must keep the epoch-1 wrap resolvable at epoch 1 for
-    // oldEpochMessageId, alongside the new epoch-2 wrap — this is exactly the case the Epoch
-    // Ladder exists to cover ("historical group key entries stay reachable across a group's own
-    // epoch advances"). If groupKeys[G]'s epoch is instead tracked as one scalar for the whole
-    // entry and gets overwritten to 2 here, decrypting oldEpochMessageId below fails (statusCode
-    // 65553, UnknownEncryptionKeyVersionException) because the wrong grant key gets requested for it.
+    // Rotate T's key while re-granting G at epoch 2. T's groupKeys[G] must keep the epoch-1 wrap resolvable
+    // alongside the epoch-2 one; a single scalar epoch per entry would ask for the wrong grant key below.
     ASSERT_NO_THROW({
         threadApi->updateThread(
             threadId,
@@ -959,9 +947,8 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
     });
     ASSERT_FALSE(newEpochMessageId.empty());
 
-    // user_2 has never been a direct member of T, so this read cannot be served by a personal key
-    // wrap, and this is a freshly connected client, so ContainerKeyCache is empty — the very first
-    // cache-touching call below must resolve everything straight from the server's current state.
+    // user_2 has no personal key wrap on T, and a freshly connected client has an empty ContainerKeyCache - so
+    // the first cache-touching call below resolves everything straight from the server's current state.
     disconnect();
     connectAs(TUGConnectionType::TUGUser2);
 
@@ -979,10 +966,8 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
 }
 
 TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_thread_rotation) {
-    // Scenario: user_2 caches thread keyId K1 via getThread. user_1 then calls
-    // rotateThreadKeys → server advances to keyId K2. user_2's sendMessage sends
-    // with stale K1; bridge returns INVALID_THREAD_KEY; withKeyRefresh fetches K2
-    // and retries transparently → message succeeds.
+    // user_2 sends under the stale keyId it cached; the bridge answers INVALID_THREAD_KEY and `withKeyRefresh`
+    // fetches the new one and retries, so the send succeeds without the caller doing anything.
 
     // Create a dynamic group containing user_1 and user_2.
     std::string groupId;
@@ -1093,9 +1078,8 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_threa
 }
 
 TEST_F(ThreadUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
-    // user_1 is the only direct member of T *and* a member of granted Group_1, so every keyId opens from `keys`
-    // and the group branch is skipped. `updateThread` is the interesting half: `verifyKeysSecret` fails on any
-    // non-zero status, so an unresolved group entry there is the difference between an update and an exception.
+    // Every keyId opens from `keys`, so the group branch is skipped. `updateThread` is the interesting half:
+    // `verifyKeysSecret` fails on any non-zero status, so an unresolved group entry throws instead of updating.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
@@ -1163,9 +1147,8 @@ TEST_F(ThreadUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) 
 }
 
 TEST_F(ThreadUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
-    // T grants Group_1, whose only member is user_1. user_2 is a direct member of T and belongs to no grantee
-    // group, so the bridge serves it `groupKeys: []` — there is no group route to take, and the read has to be
-    // served entirely from its own key wrap.
+    // user_2 is a direct member of T and in no grantee group, so the bridge serves it `groupKeys: []` - there is
+    // no group route to take and the read has to come entirely from its own key wrap.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
@@ -1210,9 +1193,8 @@ TEST_F(ThreadUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
 }
 
 TEST_F(ThreadUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // T grants Group_2 and Group_3 and wraps its key to user_1 only. user_2 belongs to both grantee groups, so
-    // narrowing leaves it two entries at the same keyId — with no direct wrap to fall back on, one of them has
-    // to carry the read.
+    // T wraps its key to user_1 only, and user_2 belongs to both grantee groups: narrowing leaves it two entries
+    // at the same keyId, and with no direct wrap to fall back on one of them has to carry the read.
     group::Group group_2, group_3;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
@@ -1256,9 +1238,8 @@ TEST_F(ThreadUsingGroupsTest, caller_in_two_granted_groups_reads) {
 }
 
 TEST_F(ThreadUsingGroupsTest, group_only_member_still_reads_after_container_rekey) {
-    // The negative control for the filter: user_3's `keys` is empty on T, so every keyId — both the original
-    // and the one the forced rekey mints — must still go down the group route. Two keyIds under one grant is
-    // also the case where a filter keyed by keyId alone could drop the wrong half.
+    // user_3's `keys` is empty on T, so both keyIds - the original and the one the forced rekey mints - go down
+    // the group route. Two keyIds under one grant is where a filter keyed by keyId alone drops the wrong half.
     group::Group group_3;
     ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
     ASSERT_EQ(group_3.statusCode, 0);
@@ -1342,7 +1323,7 @@ TEST_F(ThreadUsingGroupsTest, group_only_member_still_reads_after_container_reke
 
 TEST_F(ThreadUsingGroupsTest, user_role_grantee_can_send_message) {
     // `item.create` is "user" and every grant splices the caller into `users`, so the weaker of the two roles
-    // is already enough to write new items — no manager grant, no direct membership.
+    // is already enough to write new items - no manager grant, no direct membership.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_2.statusCode, 0);
@@ -1380,7 +1361,7 @@ TEST_F(ThreadUsingGroupsTest, user_role_grantee_can_send_message) {
 }
 
 TEST_F(ThreadUsingGroupsTest, user_role_grantee_cannot_update_thread) {
-    // `update` is "manager", and a "user" grant never reaches `managers` — so the same grantee that can write
+    // `update` is "manager", and a "user" grant never reaches `managers` - so the same grantee that can write
     // items cannot touch the container itself.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
@@ -1425,15 +1406,8 @@ TEST_F(ThreadUsingGroupsTest, user_role_grantee_cannot_update_thread) {
 }
 
 TEST_F(ThreadUsingGroupsTest, manager_role_grantee_cannot_update_thread_keeping_manager_list) {
-    // The one place `"manager"` is not enough. `makeUpdateContainerCheck` runs
-    // `updaterIsRemovedFromManagersAndItIsForbidden` against the group-aware *copy* — in which the grant has
-    // already put user_2 into `managers` — while comparing it to the `managers` list the caller submitted. So
-    // `canUpdateContainer` passes and the update is then refused for "removing" a manager who was never on the
-    // stored list. `updaterCanBeRemovedFromManagers` defaults to "no", so this is the default outcome.
-    //
-    // The second half is the only way through: name yourself in `managers`. That is not a no-op — it makes the
-    // grantee a permanent *direct* manager with its own key wrap, which is exactly what the group grant was
-    // supposed to avoid. Contrast `manager_role_grantee_can_delete_thread`, where the same grant is enough.
+    // `updaterIsRemovedFromManagersAndItIsForbidden` compares the submitted `managers` against the group-aware
+    // copy the grant put user_2 into, so the only way through is to name yourself - as a permanent direct one.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_2.statusCode, 0);
@@ -1455,7 +1429,7 @@ TEST_F(ThreadUsingGroupsTest, manager_role_grantee_cannot_update_thread_keeping_
     thread::Thread t;
     ASSERT_NO_THROW({ t = threadApi->getThread(threadId); });
     ASSERT_EQ(t.statusCode, 0);
-    // user_2 holds no direct membership — everything it can do here, it does through the grant.
+    // user_2 holds no direct membership - everything it can do here, it does through the grant.
     ASSERT_EQ(std::count(t.managers.begin(), t.managers.end(), reader->getString("Login.user_2_id")), 0);
     ASSERT_EQ(std::count(t.users.begin(), t.users.end(), reader->getString("Login.user_2_id")), 0);
 
@@ -1478,7 +1452,7 @@ TEST_F(ThreadUsingGroupsTest, manager_role_grantee_cannot_update_thread_keeping_
         );
     }, server::AccessDeniedException);
 
-    // Same call, same version — the refusal above left the thread untouched — but now naming user_2 as a
+    // Same call, same version - the refusal above left the thread untouched - but now naming user_2 as a
     // manager of the container itself.
     EXPECT_NO_THROW({
         threadApi->updateThread(
@@ -1598,9 +1572,8 @@ TEST_F(ThreadUsingGroupsTest, user_role_grantee_cannot_update_others_message) {
 }
 
 TEST_F(ThreadUsingGroupsTest, manager_role_grantee_can_delete_thread) {
-    // `delete` is "manager" and this path is guarded by the policy atom alone — no
-    // `makeUpdateContainerCheck` — so the grant that cannot rename the thread
-    // (`manager_role_grantee_cannot_update_thread_keeping_manager_list`) can destroy it.
+    // `delete` is guarded by the policy atom alone - no `makeUpdateContainerCheck` - so the grant that cannot
+    // rename the thread can still destroy it.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_2.statusCode, 0);
@@ -1650,13 +1623,8 @@ TEST_F(ThreadUsingGroupsTest, user_role_grantee_cannot_delete_thread) {
 }
 
 TEST_F(ThreadUsingGroupsTest, group_manager_role_does_not_grant_container_manager_role) {
-    // The other direction of "the role inside the group is irrelevant". The dataset groups all have user_1 as
-    // their only manager, and user_1 is always a direct manager of the thread too, so proving this needs a
-    // group user_2 actually manages — hence the dynamic one. The thread then grants it as `"user"`.
-    //
-    // Being a manager of the grantee group buys nothing on the container: `getGroupsOfUser` matches `users` OR
-    // `managers` and returns a bare list of ids, so the grant's own role is the only thing the policy engine
-    // ever sees.
+    // `getGroupsOfUser` matches `users` OR `managers` and returns a bare list of ids, so the grant's own role is
+    // all the policy engine sees. Needs a group user_2 actually manages, hence the dynamic one.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(
@@ -1729,15 +1697,8 @@ TEST_F(ThreadUsingGroupsTest, group_manager_role_does_not_grant_container_manage
 }
 
 TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller_did_not_name) {
-    // The case a caller cannot describe for itself: T grants G, and the caller re-keying T passes no `groups` at
-    // all. The grantee list therefore has to come from `thread.groups`, which the bridge serves in full: a re-key
-    // that leaves G without an entry at the new keyId is refused outright, so getting this wrong fails the call.
-    //
-    // The caller is in G, and that is a constraint rather than a convenience: wrapping a key to a group needs its
-    // current epoch and public key, and a Bridge running the default group policy (`get: "user"`,
-    // `listAll: "none"`) hands those to members only. Re-keying a container granted to a group the caller is not
-    // in therefore cannot work — `resolveGroupEpochs` throws `UnresolvedGroupGranteeException` — so do not
-    // "restore" this test by dropping user_1 from G.
+    // The caller passes no `groups`, so the grantee list has to come from `thread.groups`. The caller must be in
+    // G: the default group policy hands a group's epoch and public key to members only, and a re-key needs both.
     disconnect();
     connectAs(TUGConnectionType::TUGUser2);
 
@@ -1760,7 +1721,7 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller
     ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(groupId); });
     ASSERT_EQ(granteeGroup.statusCode, 0);
 
-    // user_1 is a direct member — enough to re-key under the default `rotateKeys: "user"`.
+    // user_1 is a direct member - enough to re-key under the default `rotateKeys: "user"`.
     std::string threadId;
     ASSERT_NO_THROW({
         threadId = threadApi->createThread(
@@ -1796,12 +1757,12 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller
     thread::Thread t;
     ASSERT_NO_THROW({ t = threadApi->getThread(threadId); });
     ASSERT_EQ(t.statusCode, 0);
-    // The grant is there to be read off the thread — which is exactly where the re-key has to get it from.
+    // The grant is there to be read off the thread - which is exactly where the re-key has to get it from.
     ASSERT_EQ(t.groups.size(), 1);
     ASSERT_EQ(t.groups[0].groupId, granteeGroup.groupId);
     EXPECT_TRUE(t.staleGroups.empty());
 
-    // No `groups` argument at all — the whole point is that the caller does not have to supply one.
+    // No `groups` argument at all - the whole point is that the caller does not have to supply one.
     EXPECT_NO_THROW({
         threadApi->rotateThreadKeys(
             threadId,
@@ -1842,10 +1803,8 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller
 }
 
 TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_clears_staleGroups_after_the_group_advances_its_epoch) {
-    // `staleGroups` is the bridge's answer to "does this thread need re-keying", computed over every grant rather
-    // than over the entries the caller can decrypt. Removing a member from G advances its epoch and leaves T's
-    // current key wrapped to the epoch before it; the re-key has to close that gap without being told which
-    // epoch to wrap to.
+    // `staleGroups` is the bridge's answer to "does this thread need re-keying", computed over every grant and
+    // not over the entries the caller can decrypt. The re-key closes the gap without being told which epoch.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(
@@ -1923,8 +1882,8 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_clears_staleGroups_after_the_grou
 }
 
 TEST_F(ThreadUsingGroupsTest, sendMessage_auto_rotates_a_stale_thread_key) {
-    // The same setup as the test above, minus the rotateThreadKeys call: a stale key is no longer the caller's
-    // problem to notice. sendMessage sees it, re-keys T with T's own roster, and sends under the new key.
+    // The same setup as the test above, minus the rotateThreadKeys call: noticing a stale key is not the
+    // caller's job. sendMessage sees it, re-keys T with T's own roster, and sends under the new key.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(
@@ -1996,12 +1955,8 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_auto_rotates_a_stale_thread_key) {
 }
 
 TEST_F(ThreadUsingGroupsTest, auto_rotation_does_not_repeat_a_re_key_another_client_already_did) {
-    // Two clients both holding T at the same stale key. The first one's sendMessage re-keys; the second's must
-    // notice that the work is done and send under the winner's key rather than re-keying on top of it.
-    //
-    // The endpoint gets there by re-reading T before it rotates, which is the deterministic half of this. The
-    // narrower window — both clients past that read before either commits, where the Bridge answers the loser
-    // with CONTAINER_ROTATED_ALREADY — is covered by the Bridge's own ThreadRotateKeysTest.
+    // Two clients hold T at the same stale key; the second must send under the winner's key instead of re-keying
+    // on top of it. The endpoint gets there by re-reading T before it rotates.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(
@@ -2097,9 +2052,8 @@ TEST_F(ThreadUsingGroupsTest, auto_rotation_does_not_repeat_a_re_key_another_cli
 }
 
 TEST_F(ThreadUsingGroupsTest, sendMessage_still_reports_a_stale_key_when_the_re_key_is_denied) {
-    // Auto-rotation is not a way around the rotateKeys policy. A member who may write but may not re-key gets
-    // the same StaleKeyRekeyRequiredException they got before any of this existed — not an access error for a
-    // call they never made.
+    // Auto-rotation is not a way around the rotateKeys policy: a member who may write but may not re-key gets
+    // StaleKeyRekeyRequiredException, not an access error for a call they never made.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(

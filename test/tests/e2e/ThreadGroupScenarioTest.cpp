@@ -220,7 +220,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     subscribeToEverything(user1);
     subscribeToEverything(user2);
 
-    // ── Group1: user_2 and user_3 are the members, user_1 only manages it ──────────────────────────────────
+    // -- Group1: user_2 and user_3 are the members, user_1 only manages it --
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = user1.groupApi->createGroup(
@@ -235,7 +235,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     ASSERT_EQ(group1.statusCode, 0);
     ASSERT_EQ(group1.keyVersion, 1);
 
-    // ── Thread1: user_1 manages it, Group1 reads it, anyone may download it ────────────────────────────────
+    // -- Thread1: user_1 manages it, Group1 reads it, anyone may download it --
     std::string threadId;
     ASSERT_NO_THROW({
         threadId = user1.threadApi->createThread(
@@ -246,7 +246,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     });
     ASSERT_FALSE(threadId.empty());
 
-    // ── Message1, written by user_2 — a Group member, named nowhere on the Thread ──────────────────────────
+    // -- Message1, written by user_2 - a Group member, named nowhere on the Thread --
     std::string message1Id;
     ASSERT_NO_THROW({
         message1Id = user2.threadApi->sendMessage(
@@ -262,7 +262,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     EXPECT_EQ(message1AsUser3.privateMeta.stdString(), "message1_private");
     EXPECT_EQ(message1AsUser3.data.stdString(), "message1_data");
 
-    // ── user_1 updates the Thread, roster untouched ────────────────────────────────────────────────────────
+    // -- user_1 updates the Thread, roster untouched --
     thread::Thread beforeUpdate;
     ASSERT_NO_THROW({ beforeUpdate = user1.threadApi->getThread(threadId); });
     ASSERT_EQ(beforeUpdate.statusCode, 0);
@@ -281,7 +281,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     ASSERT_EQ(afterUpdate.groups.size(), 1);
     EXPECT_EQ(afterUpdate.groups[0].groupId, groupId);
 
-    // ── 100 messages by user_3, all under the Thread key wrapped to the Group's epoch 1 ────────────────────
+    // -- 100 messages by user_3, all under the Thread key wrapped to the Group's epoch 1 --
     std::vector<std::string> user3MessageIds;
     user3MessageIds.reserve(MESSAGE_COUNT);
     for (int i = 0; i < MESSAGE_COUNT; ++i) {
@@ -307,7 +307,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     }
     pumpEvents();
 
-    // ── user_3 leaves Group1: the Group's epoch moves 1 → 2 ────────────────────────────────────────────────
+    // -- user_3 leaves Group1: the Group's epoch moves 1 → 2 --
     ASSERT_NO_THROW({
         user1.groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
@@ -315,8 +315,8 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     ASSERT_NO_THROW({ rotatedGroup = user1.groupApi->getGroup(groupId); });
     ASSERT_EQ(rotatedGroup.keyVersion, 2);
 
-    // ── Message2 by user_2. The Thread's key is still wrapped to the epoch the Group just left, so the send
-    //    re-keys the Thread first — that is what `staleGroups` on every read is there to drive ──────────────
+    // -- Message2 by user_2. The Thread's key is still wrapped to the epoch the Group just left, so the send
+    //    re-keys the Thread first - that is what `staleGroups` on every read is there to drive --
     std::string message2Id;
     ASSERT_NO_THROW({
         message2Id = user2.threadApi->sendMessage(
@@ -331,7 +331,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     EXPECT_TRUE(rekeyedThread.staleGroups.empty())
         << "sending after the group rotated should have re-keyed the thread to the new epoch";
 
-    // ── user_1 rewrites Message1, which moves it onto the new key ──────────────────────────────────────────
+    // -- user_1 rewrites Message1, which moves it onto the new key --
     ASSERT_NO_THROW({
         user1.threadApi->updateMessage(
             message1Id, core::Buffer::from("message1_public_v2"), core::Buffer::from("message1_private_v2"),
@@ -339,7 +339,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
         );
     });
 
-    // ── What user_3 can see now: the re-encrypted message is closed to them, its public half is not ────────
+    // -- What user_3 can see now: the re-encrypted message is closed to them, its public half is not --
     thread::Message lostMessage;
     ASSERT_NO_THROW({ lostMessage = user3.threadApi->getMessage(message1Id); });
     EXPECT_NE(lostMessage.statusCode, 0) << "a removed member decrypted content re-encrypted after their removal";
@@ -370,12 +370,11 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
             ++unreadable;
         }
     }
-    // Pins the cached-epoch read: the container key cache has to serve a group-only reader and keep entries the
-    // bridge has stopped sending, and the group resolver has to answer from an epoch it already recovered.
-    // Reported as counts rather than per message: a regression here loses all hundred at once.
+    // The container key cache has to serve a group-only reader and keep entries the bridge has stopped sending,
+    // and the group resolver has to answer from an epoch it already recovered.
     EXPECT_EQ(unreadable, 100) << "user_3 can no longer decrypt " << unreadable;
 
-    // ── user_1 deletes everything user_3 wrote, ten at a time ──────────────────────────────────────────────
+    // -- user_1 deletes everything user_3 wrote, ten at a time --
     int deleted = 0;
     for (int pass = 0; pass < MESSAGE_COUNT; ++pass) {
         core::PagingList<thread::Message> page{};
@@ -407,7 +406,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     }
     EXPECT_EQ(deleted, MESSAGE_COUNT);
 
-    // ── user_2 sees Message1 and Message2, and nothing else ────────────────────────────────────────────────
+    // -- user_2 sees Message1 and Message2, and nothing else --
     auto remaining = listAllMessages(user2, threadId, PAGE_LIMIT);
     ASSERT_EQ(remaining.size(), 2);
     auto asUser2 = byMessageId(remaining);
@@ -418,7 +417,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     EXPECT_EQ(asUser2.at(message2Id).statusCode, 0);
     EXPECT_EQ(asUser2.at(message2Id).data.stdString(), "message2_data");
 
-    // ── Both watchers were told about all of it ────────────────────────────────────────────────────────────
+    // -- Both watchers were told about all of it --
     pumpUntil(
         [&] {
             return eventsSeen(user1, "threadMessageDeleted") >= MESSAGE_COUNT &&

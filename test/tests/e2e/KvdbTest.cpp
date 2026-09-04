@@ -1681,7 +1681,7 @@ TEST_F(KvdbTest, getKvdb_after_two_key_rotations) {
 
     ASSERT_NO_THROW({ kvdbApi->rotateKvdbKeys(kvdbId, user_1, user_1, 0, true); });
 
-    // Reconnect so ContainerKeyCache is empty — the reads below resolve purely from server state.
+    // Reconnect so ContainerKeyCache is empty - the reads below resolve purely from server state.
     disconnect();
     connectAs(ConnectionType::User1);
 

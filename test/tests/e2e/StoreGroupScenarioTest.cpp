@@ -30,7 +30,7 @@ using namespace privmx::endpoint;
  * erase exactly that.
  *
  * The file half is what this adds over the Thread scenario. A file's bytes are encrypted under a key of their
- * own, and that key lives in the file's internal meta, wrapped to the Store key — so losing the Store key costs
+ * own, and that key lives in the file's internal meta, wrapped to the Store key - so losing the Store key costs
  * a reader the metadata and the content in one step, through two different code paths (getFile decrypts the
  * meta and reports a status, openFile needs the internal meta and throws).
  *
@@ -264,7 +264,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     subscribeToEverything(user1);
     subscribeToEverything(user2);
 
-    // ── Group1: user_2 and user_3 are the members, user_1 only manages it ──────────────────────────────────
+    // -- Group1: user_2 and user_3 are the members, user_1 only manages it --
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = user1.groupApi->createGroup(
@@ -279,7 +279,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     ASSERT_EQ(group1.statusCode, 0);
     ASSERT_EQ(group1.keyVersion, 1);
 
-    // ── Store1: user_1 manages it, Group1 reads it, anyone may download it ─────────────────────────────────
+    // -- Store1: user_1 manages it, Group1 reads it, anyone may download it --
     std::string storeId;
     ASSERT_NO_THROW({
         storeId = user1.storeApi->createStore(
@@ -290,7 +290,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     });
     ASSERT_FALSE(storeId.empty());
 
-    // ── File1, uploaded by user_2 — a Group member, named nowhere on the Store ─────────────────────────────
+    // -- File1, uploaded by user_2 - a Group member, named nowhere on the Store --
     std::string file1Id;
     ASSERT_NO_THROW({
         file1Id = uploadFile(user2, storeId, "file1_public", "file1_private", "file1_data");
@@ -306,7 +306,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     ASSERT_NO_THROW({ file1DataAsUser3 = downloadFile(user3, file1Id, file1AsUser3.size); });
     EXPECT_EQ(file1DataAsUser3, "file1_data");
 
-    // ── user_1 updates the Store, roster untouched ─────────────────────────────────────────────────────────
+    // -- user_1 updates the Store, roster untouched --
     store::Store beforeUpdate;
     ASSERT_NO_THROW({ beforeUpdate = user1.storeApi->getStore(storeId); });
     ASSERT_EQ(beforeUpdate.statusCode, 0);
@@ -325,7 +325,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     ASSERT_EQ(afterUpdate.groups.size(), 1);
     EXPECT_EQ(afterUpdate.groups[0].groupId, groupId);
 
-    // ── FILE_COUNT files by user_3, all under the Store key wrapped to the Group's epoch 1 ─────────────────
+    // -- FILE_COUNT files by user_3, all under the Store key wrapped to the Group's epoch 1 --
     std::vector<std::string> user3FileIds;
     user3FileIds.reserve(FILE_COUNT);
     for (int i = 0; i < FILE_COUNT; ++i) {
@@ -356,7 +356,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     EXPECT_EQ(firstDataAsMember, "user3_data_0");
     pumpEvents();
 
-    // ── user_3 leaves Group1: the Group's epoch moves 1 → 2 ────────────────────────────────────────────────
+    // -- user_3 leaves Group1: the Group's epoch moves 1 → 2 --
     ASSERT_NO_THROW({
         user1.groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
@@ -364,8 +364,8 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     ASSERT_NO_THROW({ rotatedGroup = user1.groupApi->getGroup(groupId); });
     ASSERT_EQ(rotatedGroup.keyVersion, 2);
 
-    // ── File2 by user_2. The Store's key is still wrapped to the epoch the Group just left, so the upload
-    //    re-keys the Store first — that is what `staleGroups` on every read is there to drive ──────────────
+    // -- File2 by user_2. The Store's key is still wrapped to the epoch the Group just left, so the upload
+    //    re-keys the Store first - that is what `staleGroups` on every read is there to drive --
     std::string file2Id;
     ASSERT_NO_THROW({ file2Id = uploadFile(user2, storeId, "file2_public", "file2_private", "file2_data"); });
     store::Store rekeyedStore;
@@ -375,10 +375,10 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     EXPECT_TRUE(rekeyedStore.staleGroups.empty())
         << "uploading after the group rotated should have re-keyed the store to the new epoch";
 
-    // ── user_1 rewrites File1, which moves it onto the new key ─────────────────────────────────────────────
+    // -- user_1 rewrites File1, which moves it onto the new key --
     ASSERT_NO_THROW({ rewriteFile(user1, file1Id, "file1_public_v2", "file1_private_v2", "file1_data_v2"); });
 
-    // ── What user_3 can see now: the re-encrypted file is closed to them, its public half is not ───────────
+    // -- What user_3 can see now: the re-encrypted file is closed to them, its public half is not --
     store::File lostFile;
     ASSERT_NO_THROW({ lostFile = user3.storeApi->getFile(file1Id); });
     EXPECT_NE(lostFile.statusCode, 0) << "a removed member decrypted a file re-encrypted after their removal";
@@ -390,11 +390,8 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     EXPECT_THROW({ user3.storeApi->openFile(file1Id); }, core::Exception)
         << "a removed member opened a read handle on a file re-encrypted after their removal";
 
-    // ...and so is everything user_3 wrote before the removal, even though those files were encrypted under the
-    // Store key of the Group's epoch 1 and this session read them all while it still held that grant. The next
-    // read after the re-key replaces the whole cache entry (ContainerKeyCache::set does insert_or_assign, not a
-    // merge), and the group key resolver has no group left to recover epoch 1 from. Same expectation as
-    // ThreadGroupScenarioTest.
+    // ...and so is everything user_3 wrote before the removal: the read after the re-key replaces the whole
+    // cache entry (ContainerKeyCache::set assigns, not merges) and no group is left to recover epoch 1 from.
     auto asUser3 = byFileId(listAllFiles(user3, storeId, FILE_COUNT));
     int unreadable = 0;
     for (int i = 0; i < FILE_COUNT; ++i) {
@@ -407,13 +404,13 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     // Reported as a count rather than per file: a regression here moves all of them at once.
     EXPECT_EQ(unreadable, FILE_COUNT) << "user_3 can still decrypt " << (FILE_COUNT - unreadable)
                                       << " of their own pre-removal files";
-    // The listing still names them and their public halves survive — only the encrypted halves are gone.
+    // The listing still names them and their public halves survive - only the encrypted halves are gone.
     EXPECT_EQ(asUser3.at(user3FileIds[0]).publicMeta.stdString(), "user3_public_0");
     EXPECT_TRUE(asUser3.at(user3FileIds[0]).privateMeta.stdString().empty());
     EXPECT_THROW({ user3.storeApi->openFile(user3FileIds[0]); }, core::Exception)
         << "the bytes of a pre-removal file are still readable to the removed member";
 
-    // ── user_1 deletes everything user_3 uploaded, ten at a time ───────────────────────────────────────────
+    // -- user_1 deletes everything user_3 uploaded, ten at a time --
     int deleted = 0;
     for (int pass = 0; pass < FILE_COUNT; ++pass) {
         core::PagingList<store::File> page{};
@@ -445,7 +442,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     }
     EXPECT_EQ(deleted, FILE_COUNT);
 
-    // ── user_2 sees File1 and File2, and nothing else ──────────────────────────────────────────────────────
+    // -- user_2 sees File1 and File2, and nothing else --
     auto remaining = listAllFiles(user2, storeId, PAGE_LIMIT);
     ASSERT_EQ(remaining.size(), 2);
     auto asUser2 = byFileId(remaining);
@@ -457,7 +454,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     EXPECT_EQ(asUser2.at(file2Id).statusCode, 0);
     EXPECT_EQ(downloadFile(user2, file2Id, asUser2.at(file2Id).size), "file2_data");
 
-    // ── Both watchers were told about all of it ────────────────────────────────────────────────────────────
+    // -- Both watchers were told about all of it --
     pumpUntil(
         [&] {
             return eventsSeen(user1, "storeFileDeleted") >= FILE_COUNT &&

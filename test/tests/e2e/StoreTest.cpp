@@ -3026,7 +3026,7 @@ TEST_F(StoreTest, getStore_after_two_key_rotations) {
 
     ASSERT_NO_THROW({ storeApi->rotateStoreKeys(storeId, user_1, user_1, 0, true); });
 
-    // Reconnect so ContainerKeyCache is empty — the reads below resolve purely from server state.
+    // Reconnect so ContainerKeyCache is empty - the reads below resolve purely from server state.
     disconnect();
     connectAs(ConnectionType::User1);
 

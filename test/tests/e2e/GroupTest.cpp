@@ -389,9 +389,8 @@ TEST_F(GroupTest, updateGroup_chain_integrity) {
 }
 
 TEST_F(GroupTest, updateGroup_cannot_skip_the_version_check) {
-    // What `updateGroup_force` used to assert, inverted: the escape hatch is gone, so a wrong version is refused
-    // and the group is left exactly as it was. The refusal is the feature — an update built against a moved head
-    // commits a roster tag for a version it will not land at, and every reader would then reject the group.
+    // A refused update must leave the group exactly as it was: an update built against a moved head would commit
+    // a roster tag for a version it never lands at, and every reader would then reject the group.
     group::Group before;
     ASSERT_NO_THROW({ before = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     EXPECT_THROW({

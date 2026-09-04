@@ -25,7 +25,7 @@ using namespace privmx::endpoint;
  * A write the Bridge refuses must not destroy the Search Index.
  *
  * An Index is a SQLite database living in a Store file behind a custom VFS, and a random write carries the key id
- * its handle was opened under — the Bridge refuses one whose key id is not the Store's current key. A Group
+ * its handle was opened under - the Bridge refuses one whose key id is not the Store's current key. A Group
  * membership change moves that key underneath handles that are already open, so a member who is removed and added
  * back has a handle whose next write gets refused. The refusal itself is expected; what is under test here is
  * that it stays a refusal instead of taking the whole Index down with it.
@@ -118,11 +118,8 @@ protected:
         return reader->getString("Context_1.contextId");
     }
 
-    /**
-     * The real cause of a VFS failure only ever reached the log: every underlying exception was flattened into
-     * `disk I/O error`. Calls under test go through here so the message is on the test's own output, which is
-     * what identifies the refusal the Bridge actually sent.
-     */
+    // A VFS failure reaches the caller flattened into `disk I/O error`, so calls under test go through here and
+    // put the underlying message on the test's own output - which is what identifies the Bridge's refusal.
     std::optional<std::string> tryCall(const std::function<void()>& fn) {
         try {
             fn();
@@ -136,11 +133,8 @@ protected:
         }
     }
 
-    /**
-     * A Group holding alice and bob, and an Index whose only direct member is alice and whose sole grant is that
-     * Group at "manager" — bob's every route into the Index is the group grant, so the epoch is the only thing
-     * governing his access. Opening an Index writes to it, which is why "user" would not be enough.
-     */
+    // A Group holding alice and bob, and an Index alice alone is a direct member of, granted to that Group at
+    // "manager" - so bob's only route is the grant. Opening an Index writes to it, so "user" is not enough.
     void createGroupAndIndex(std::string& groupId, std::string& indexId) {
         ASSERT_NO_THROW({
             groupId = alice.groupApi->createGroup(
@@ -170,14 +164,8 @@ protected:
         ASSERT_FALSE(indexId.empty());
     }
 
-    /**
-     * What actually made it into the Index, as opposed to what was attempted.
-     *
-     * Every write in these flows is best-effort: which of them the Bridge refuses is the thing under
-     * investigation, so a flow that stops at the first refusal never reaches the question of what the refusal
-     * did to the data. Only a write that returned cleanly counts, and that count is the number every later read
-     * has to agree with.
-     */
+    // What actually made it into the Index, as opposed to what was attempted: every write here is best-effort,
+    // and only one that returned cleanly counts towards the number every later read has to agree with.
     struct Ledger {
         int64_t committed = 0;
         std::vector<std::string> refusals;
@@ -244,17 +232,8 @@ protected:
     Poco::Util::IniFileConfiguration::Ptr reader;
 };
 
-/**
- * The smallest form of the failure: one user, one handle, no re-add and nobody else writing.
- *
- * A random write carries the key id its handle was opened under, and a Group membership change rotates the
- * Index's key underneath it. `FileHandler::updateOnServer` keeps sending the old id, and
- * `StoreApiImpl::flushFile` is the only write path in the module with no `isRekeyNeeded` guard —
- * `updateFileMeta` and `storeFileFinalizeWrite` both re-key before writing. So alice, who is the Index's owner
- * and was never removed from anything, cannot write through her own open handle once the epoch moves.
- *
- * Everything else in this file is downstream of this.
- */
+// One user, one handle, no re-add: `StoreApiImpl::flushFile` is the only write path with no `isRekeyNeeded`
+// guard, so a handle opened before the epoch moved keeps sending the superseded key id.
 TEST_F(SearchGroupRejectedWriteTest, open_handle_can_still_write_after_the_group_epoch_changes) {
     std::string groupId, indexId;
     createGroupAndIndex(groupId, indexId);
@@ -272,15 +251,8 @@ TEST_F(SearchGroupRejectedWriteTest, open_handle_can_still_write_after_the_group
                                          << writeError.value_or("");
 }
 
-/**
- * The reported flow, and the invariant underneath it: a write the Bridge refuses must leave the Index exactly
- * as it was. Documents that were committed stay committed, and the Index still opens.
- *
- * Which of these writes gets refused is the open question, so none of them is asserted here — they are all
- * best-effort and the ledger counts only the ones that returned cleanly. That is deliberate: a flow that stops
- * at the first refusal never reaches the question of what the refusal did to everyone else's data, which is
- * where the severity actually is.
- */
+// Which of these writes gets refused is the open question, so none of them is asserted: they are best-effort
+// and the ledger counts only the ones that returned cleanly. What matters is what a refusal did to the rest.
 TEST_F(SearchGroupRejectedWriteTest, committed_documents_survive_a_refused_write) {
     std::string groupId, indexId;
     createGroupAndIndex(groupId, indexId);
@@ -315,14 +287,8 @@ TEST_F(SearchGroupRejectedWriteTest, committed_documents_survive_a_refused_write
     EXPECT_EQ(countFromFreshOpen(alice, indexId), ledger.committed) << "the Index no longer reads back correctly";
 }
 
-/**
- * The same cycle with nobody writing during the absence — reported to survive it, and measured here not to.
- *
- * Keeping it is what makes the condition list honest. The report has the write in the middle as required, but
- * that was measured against a build whose write path already refreshed a stale key, so alice's write there
- * succeeded and re-keyed the Index as a side effect. Without that refresh the epoch change alone is enough and
- * this flow loses the documents too, which says the write in the middle was never the trigger.
- */
+// The same remove/re-add cycle with nobody writing during the absence: the epoch change alone must not cost a
+// document, so a write in the middle is not what the Index's survival depends on.
 TEST_F(SearchGroupRejectedWriteTest, readd_without_a_write_during_the_absence_survives) {
     std::string groupId, indexId;
     createGroupAndIndex(groupId, indexId);
@@ -350,14 +316,8 @@ TEST_F(SearchGroupRejectedWriteTest, readd_without_a_write_during_the_absence_su
     EXPECT_EQ(countFromFreshOpen(alice, indexId), ledger.committed);
 }
 
-/**
- * The report's own claim, kept separate because it is about access rather than about data: a member who is added
- * back is a full member again, so his write is supposed to go through.
- *
- * Reaching it needs alice's write during the absence to succeed first, which is the previous test's subject — so
- * this one stays red until the write path refreshes a stale key, and its refusal message says which of the two
- * writes is still being turned away.
- */
+// About access rather than data: a member added back is a full member again, so his write goes through. Needs
+// alice's write during the absence to succeed first, and the refusal message says which of the two was denied.
 TEST_F(SearchGroupRejectedWriteTest, readd_member_can_write_again) {
     std::string groupId, indexId;
     createGroupAndIndex(groupId, indexId);
