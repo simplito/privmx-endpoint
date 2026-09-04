@@ -61,7 +61,6 @@ public:
         const core::Buffer& privateMeta,
         const int64_t version,
         const bool force,
-        const bool forceGenerateNewKey,
         const std::optional<core::ContainerPolicy>& policies,
         bool allowRotationRetry = true
     );

@@ -13,8 +13,6 @@
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
-#include "privmx/endpoint/group/checkpoint/ChainCheckpoint.hpp"
-#include "privmx/endpoint/group/checkpoint/ChainCheckpointRegistry.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
@@ -134,29 +132,26 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
         throw GroupDataIntegrityException();
     }
 
-    auto pinStore = _chainCheckpoints.get(groupInfo.id);
-    const auto pinned = pinStore->get();
-    if (pinned.has_value() && groupInfo.version < pinned->verifiedVersion) {
+    // Compare and store under one lock: two concurrent verifications must not both pass against the same stale
+    // pin, or the later one could accept a version older than the one already verified.
+    std::lock_guard lock(_pinMutex);
+    auto& pinned = _verifiedVersions[groupInfo.id];
+    if (groupInfo.version < pinned) {
         // A shorter answer than one already seen is a validly tagged *past* state — a rollback, not an error the
         // tag itself can catch, because that older tag was genuine when it was made.
         throw GroupHistoryForkException();
     }
-    pinStore->advance(checkpoint::ChainCheckpoint::Snapshot{.verifiedVersion = groupInfo.version});
+    pinned = groupInfo.version;
 }
 
-void GroupDataSchemaMapper::dropChainCheckpoint(const std::string& groupId) {
-    _chainCheckpoints.drop(groupId);
+void GroupDataSchemaMapper::dropVersionPin(const std::string& groupId) {
+    std::lock_guard lock(_pinMutex);
+    _verifiedVersions.erase(groupId);
 }
 
-void GroupDataSchemaMapper::dropAllChainCheckpoints() {
-    _chainCheckpoints.dropAll();
-}
-
-std::optional<checkpoint::ChainCheckpoint::Snapshot> GroupDataSchemaMapper::peekChainCheckpoint(
-    const std::string& groupId
-) const {
-    auto store = _chainCheckpoints.tryGet(groupId);
-    return store ? store->get() : std::nullopt;
+void GroupDataSchemaMapper::dropAllVersionPins() {
+    std::lock_guard lock(_pinMutex);
+    _verifiedVersions.clear();
 }
 
 uint32_t GroupDataSchemaMapper::validateDataIntegrity(const server::GroupInfo& groupInfo) {

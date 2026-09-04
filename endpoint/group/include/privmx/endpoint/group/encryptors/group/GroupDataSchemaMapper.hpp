@@ -2,8 +2,9 @@
 #define _PRIVMXLIB_ENDPOINT_GROUP_ENCRYPTORS_GROUP_GROUPDATASCHEMAMAPPER_HPP_
 
 #include <cstdint>
+#include <map>
 #include <memory>
-#include <set>
+#include <mutex>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -21,8 +22,6 @@
 
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include "privmx/endpoint/group/Types.hpp"
-#include "privmx/endpoint/group/checkpoint/ChainCheckpoint.hpp"
-#include "privmx/endpoint/group/checkpoint/ChainCheckpointRegistry.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataEncryptorV5.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataSchemaStrategyV5.hpp"
 
@@ -64,13 +63,10 @@ public:
     uint32_t validateDataIntegrity(const server::GroupInfo& groupInfo);
 
     // Call when the group is gone or the session was reset.
-    void dropChainCheckpoint(const std::string& groupId);
+    void dropVersionPin(const std::string& groupId);
 
     // Call on connect/disconnect, mirroring the tree-key cache.
-    void dropAllChainCheckpoints();
-
-    // For tests and diagnostics.
-    std::optional<checkpoint::ChainCheckpoint::Snapshot> peekChainCheckpoint(const std::string& groupId) const;
+    void dropAllVersionPins();
 
     std::vector<Group> validateDecryptAndConvertGroups(
         const std::vector<server::GroupInfo>& groups,
@@ -107,14 +103,14 @@ public:
     ) override;
 
 private:
-    // Head fields against state this call actually verified — see the definition for why not against `history`.
-
     core::VersionStrategyMapper<server::GroupInfo, std::tuple<Group, core::DataIntegrityObject>> _strategyMapper;
     std::shared_ptr<GroupDataSchemaStrategyV5> _strategyV5;
     core::DataEncryptorV4 _dataEncryptor;
     GroupDataEncryptorV5 _groupEncryptor;
-    // So a warm `assertDataIntegrity` skips already-verified entries instead of re-proving history from genesis.
-    checkpoint::ChainCheckpointRegistry _chainCheckpoints;
+    // Monotone version pin per group. A roster tag stays valid forever, so an older but genuinely tagged roster is
+    // a rollback that only a version pin can refuse.
+    std::mutex _pinMutex;
+    std::map<std::string, int64_t> _verifiedVersions;
 };
 
 } // namespace group

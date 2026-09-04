@@ -127,9 +127,13 @@ target_link_libraries(test_unit_LadderKeysTest privmx privmxendpointgroup Poco::
 add_executable(test_unit_GroupKeyResolverTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupKeyResolverTest.cpp)
 target_link_libraries(test_unit_GroupKeyResolverTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
-# Chain-verification checkpoint (builds signed server::GroupInfo chains by hand via GroupDataSchemaMapper::encrypt, no live bridge; exercises assertDataIntegrity's warm-read path)
-add_executable(test_unit_GroupChainCheckpointTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupChainCheckpointTest.cpp)
-target_link_libraries(test_unit_GroupChainCheckpointTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+# Roster attestation and the monotone version pin (builds signed server::GroupInfo by hand via GroupDataSchemaMapper::encrypt, no live bridge)
+add_executable(test_unit_GroupRosterTagTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupRosterTagTest.cpp)
+target_link_libraries(test_unit_GroupRosterTagTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+
+# Format-only roster validation (that "format only" still refuses malformed keys)
+add_executable(test_unit_RosterValidatorTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/RosterValidatorTest.cpp)
+target_link_libraries(test_unit_RosterValidatorTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
 # Merge from plans to a complete submitted state (real EC keys; each state is climbed to prove members who should still have access do)
 add_executable(test_unit_TreeWireTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeWireTest.cpp)

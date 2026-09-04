@@ -284,7 +284,6 @@ TEST_F(GroupTest, updateGroup_incorrect_data) {
             core::Buffer::from("public"),
             core::Buffer::from("private"),
             1,
-            false,
             false
         );
     }, core::Exception);
@@ -295,7 +294,6 @@ TEST_F(GroupTest, updateGroup_incorrect_data) {
             core::Buffer::from("public"),
             core::Buffer::from("private"),
             99,
-            false,
             false
         );
     }, core::Exception);
@@ -309,7 +307,6 @@ TEST_F(GroupTest, updateGroup_correct_data) {
             core::Buffer::from("updated_public"),
             core::Buffer::from("updated_private"),
             1,
-            false,
             false
         );
     });
@@ -333,7 +330,6 @@ TEST_F(GroupTest, updateGroup_correct_data) {
             core::Buffer::from("updated_public_2"),
             core::Buffer::from("updated_private_2"),
             2,
-            false,
             false
         );
     });
@@ -374,7 +370,6 @@ TEST_F(GroupTest, updateGroup_chain_integrity) {
             core::Buffer::from("v2"),
             core::Buffer::from("v2_priv"),
             1,
-            false,
             false
         );
     });
@@ -385,7 +380,6 @@ TEST_F(GroupTest, updateGroup_chain_integrity) {
             core::Buffer::from("v3"),
             core::Buffer::from("v3_priv"),
             2,
-            false,
             false
         );
     });
@@ -407,8 +401,7 @@ TEST_F(GroupTest, updateGroup_force) {
             core::Buffer::from("forced"),
             core::Buffer::from("forced_priv"),
             99,
-            true,
-            false
+            true
         );
     });
     EXPECT_NO_THROW({

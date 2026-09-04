@@ -548,7 +548,6 @@ void GroupApiImpl::updateGroup(
     const core::Buffer& privateMeta,
     const int64_t version,
     const bool force,
-    const bool forceGenerateNewKey,
     const std::optional<core::ContainerPolicy>& policies,
     bool allowRotationRetry
 ) {
@@ -571,7 +570,7 @@ void GroupApiImpl::updateGroup(
         unchangedManagers.push_back(core::UserWithPubKey{.userId = userId, .pubKey = std::string()});
     }
     auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, unchangedUsers, unchangedManagers, forceGenerateNewKey, false,
+        currentGroup, currentEntry, resourceId, unchangedUsers, unchangedManagers, false, false,
         _groupPrivKeyResolver
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
@@ -621,7 +620,7 @@ void GroupApiImpl::updateGroup(
         if (allowRotationRetry && (e.getCode() & 0x0000FFFF) == BRIDGE_GROUP_ROTATED_ALREADY) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
-            updateGroup(groupId, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, false);
+            updateGroup(groupId, publicMeta, privateMeta, version, force, policies, false);
             return;
         }
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -795,7 +794,7 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
         } else if (type == "groupDeleted") {
             auto raw = server::GroupDeletedEventData::fromJSON(notification.data);
             _treeKeyCaches.drop(raw.groupId);
-            _groupDataSchemaMapper->dropChainCheckpoint(raw.groupId);
+            _groupDataSchemaMapper->dropVersionPin(raw.groupId);
             invalidateModuleKeysInCache(raw.groupId);
             auto data = Mapper::mapToGroupDeletedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupDeletedEvent>("context", data, notification);
@@ -808,13 +807,13 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
 
 void GroupApiImpl::processConnectedEvent() {
     _treeKeyCaches.dropAll();
-    _groupDataSchemaMapper->dropAllChainCheckpoints();
+    _groupDataSchemaMapper->dropAllVersionPins();
     invalidateModuleKeysInCache();
 }
 
 void GroupApiImpl::processDisconnectedEvent() {
     _treeKeyCaches.dropAll();
-    _groupDataSchemaMapper->dropAllChainCheckpoints();
+    _groupDataSchemaMapper->dropAllVersionPins();
     invalidateModuleKeysInCache();
     privmx::utils::ManualManagedClass<GroupApiImpl>::cleanup();
 }
