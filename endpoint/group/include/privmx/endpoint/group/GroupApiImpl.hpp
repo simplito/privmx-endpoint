@@ -20,11 +20,13 @@
 #include "privmx/endpoint/group/GroupApi.hpp"
 #include "privmx/endpoint/group/ServerApi.hpp"
 #include "privmx/endpoint/group/SubscriberImpl.hpp"
+#include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp"
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCacheRegistry.hpp"
 #include <privmx/utils/ManualManagedClass.hpp>
+#include <privmx/utils/ThreadSaveMap.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -51,12 +53,12 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
 
-    void addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
+    void addGroupMembers(const GroupId& groupId, const std::vector<GroupMemberToAdd>& newMembers);
 
-    void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
+    void removeGroupMembers(const GroupId& groupId, const std::vector<std::string>& userIds);
 
     void updateGroup(
-        const std::string& groupId,
+        const GroupId& groupId,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const int64_t version,
@@ -65,9 +67,9 @@ public:
         const std::optional<core::ContainerPolicy>& policies,
         bool allowRotationRetry = true
     );
-    void deleteGroup(const std::string& groupId);
+    void deleteGroup(const GroupId& groupId);
 
-    Group getGroup(const std::string& groupId);
+    Group getGroup(const GroupId& groupId);
     core::PagingList<GroupSummary> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
     std::unordered_map<std::string, core::GroupEpochInfo> fetchGroupEpochs(
@@ -87,18 +89,51 @@ public:
         EventSelectorType selectorType,
         const std::string& selectorId
     );
-    privmx::crypto::PrivateKey resolveGroupPrivKey(const std::string& groupId, int64_t epoch = 0);
+    privmx::crypto::PrivateKey resolveGroupPrivKey(const GroupId& groupId, int64_t epoch = 0);
+
+    Envelope encrypt(const GroupId& groupId, const core::Buffer& content);
+    DecryptedEnvelope decrypt(const Envelope& envelope);
+    Envelope encryptAnonymously(
+        const GroupId& groupId,
+        const PubKey& groupPubKey,
+        const core::Buffer& content
+    );
+
+    FileHandle beginFileEncryption(const GroupId& groupId, FileSize size);
+    FileHandle beginFileEncryptionAnonymously(
+        const GroupId& groupId,
+        const PubKey& groupPubKey,
+        FileSize size
+    );
+    core::Buffer encryptFileChunk(FileHandle fileHandle, const core::Buffer& plainChunk);
+    FileHandle beginFileDecryption(const Envelope& envelope);
+    core::Buffer decryptFileChunk(FileHandle fileHandle, const core::Buffer& cipherChunk);
+    CipherOffset seekInEncryptedFile(FileHandle fileHandle, FilePosition position);
+    Envelope finishFileEncryption(FileHandle fileHandle);
+    DecryptedFileInfo finishFileDecryption(FileHandle fileHandle);
+
+    /**
+     * The routes to one key, out of every route the group publishes.
+     *
+     * Handing the whole archive to the key provider makes it resolve a grant key — and the server answer for
+     * one — per key the group has ever held, on every envelope opened. Narrowing it first is what keeps that
+     * cost at one.
+     */
+    static std::vector<core::server::GroupKeysEntry> onlyKeyId(
+        const std::vector<core::server::GroupKeysEntry>& all,
+        const KeyId& keyId
+    );
 
     static std::string describeResolveFailure(const keytree::ResolveResult& resolved);
 
     server::GroupGetKeyArchiveResult fetchKeyArchive(
-        const std::string& groupId,
+        const GroupId& groupId,
         int64_t targetEpoch,
         int64_t currentEpoch
     );
 
 private:
-    void adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload);
+    void adoptRotatedAlready(const GroupId& groupId, const server::RotatedAlreadyPayload& payload);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
@@ -135,7 +170,50 @@ private:
         keytree::TreeKeyCache& cache
     );
 
-    void dropNodeKeysIfEpochAdvanced(const std::string& groupId, std::uint32_t epoch);
+    void dropNodeKeysIfEpochAdvanced(const GroupId& groupId, std::uint32_t epoch);
+
+    /** The group's symmetric data key named by `keyId`, however far back in the archive it lives. */
+    core::DecryptedEncKeyV2 encKeyById(const GroupId& groupId, const KeyId& keyId);
+
+
+    /**
+     * The grant private key matching a public key an envelope names.
+     *
+     * The sender only ever held a public key, so the epoch it belongs to is recovered from the group's own
+     * published history rather than carried on the wire.
+     */
+    privmx::crypto::PrivateKey grantKeyForPubKey(
+        const GroupId& groupId,
+        const PubKey& groupPubKeyBase58
+    );
+
+    /**
+     * One in-flight encrypt or decrypt of a file.
+     *
+     * Individual handles are not locked — only the map is, which matches how Store treats its file handles.
+     * Driving one handle from two threads corrupts its buffer.
+     */
+    struct EnvelopeFileState {
+        bool reading;
+        EnvelopeType type;
+        std::string groupId;
+        std::string keyId;        //< member files only
+        std::string groupKey;     //< member files only
+        std::string groupPubKey;  //< anonymous seals only, base58-DER
+        std::string authorPubKey; //< opening only: provenance handed back at finish
+        std::string fileKey;
+        ChunkIndex index = 0;       //< next chunk to seal or open
+        ByteCount plainSize = 0;    //< declared plaintext length of the whole file
+        ByteCount written = 0;      //< write side: plaintext accepted so far
+        ByteCount skipInChunk = 0;  //< read side: bytes to drop off the next chunk after a seek
+        bool seeked = false;          //< read side: completeness is no longer checkable
+        std::string buffer;         //< bytes not yet forming a whole chunk
+    };
+    std::shared_ptr<EnvelopeFileState> getFileState(FileHandle fileHandle, bool wantReading);
+    void releaseFileHandle(FileHandle fileHandle);
+    core::Buffer drainChunks(const std::shared_ptr<EnvelopeFileState>& state);
+    /** Shared tail of both finishers: completeness check, then release whatever the outcome. */
+    std::shared_ptr<EnvelopeFileState> finishFile(FileHandle fileHandle, bool wantReading);
 
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
@@ -149,6 +227,17 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<GroupDataSchemaMapper> _groupDataSchemaMapper;
     keytree::TreeKeyCacheRegistry _treeKeyCaches;
+    GroupEnvelopeEncryptor _envelopeEncryptor;
+    /**
+     * Keys already unwrapped for envelopes, by `groupId + "\n" + keyId`.
+     *
+     * Sound because a keyId names one immutable piece of key material: unwrapping it twice can only ever give
+     * the same answer. Dropped alongside every other key cache on connect and disconnect, so a key cannot
+     * outlive the session that opened it — an era cut therefore takes effect at reconnect, exactly as it
+     * already does for the grant keys `TreeKeyCache` deliberately keeps.
+     */
+    privmx::utils::ThreadSaveMap<std::string, core::DecryptedEncKeyV2> _envelopeKeys;
+    privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<EnvelopeFileState>> _envelopeFiles;
 };
 
 } // namespace group

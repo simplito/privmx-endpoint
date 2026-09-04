@@ -601,6 +601,39 @@ private:
         {group_buildSubscriptionQuery, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->buildSubscriptionQuery(args);
         }},
+        {group_encrypt, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->encrypt(args);
+        }},
+        {group_decrypt, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->decrypt(args);
+        }},
+        {group_encryptAnonymously, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->encryptAnonymously(args);
+        }},
+        {group_beginFileEncryption, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->beginFileEncryption(args);
+        }},
+        {group_encryptFileChunk, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->encryptFileChunk(args);
+        }},
+        {group_beginFileDecryption, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->beginFileDecryption(args);
+        }},
+        {group_decryptFileChunk, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->decryptFileChunk(args);
+        }},
+        {group_finishFileEncryption, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->finishFileEncryption(args);
+        }},
+        {group_finishFileDecryption, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->finishFileDecryption(args);
+        }},
+        {group_beginFileEncryptionAnonymously, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->beginFileEncryptionAnonymously(args);
+        }},
+        {group_seekInEncryptedFile, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->seekInEncryptedFile(args);
+        }},
     };
 
     const std::unordered_map<func_enum, std::string> functions_endpoint_help_description = {
@@ -1677,6 +1710,75 @@ private:
             "\t\teventType [NUMBER] - type of event to listen for (group::EventType: 0 - GROUP_CREATE, 1 - GROUP_UPDATE, 2 - GROUP_DELETE)\n"
             "\t\tselectorType [NUMBER] - scope to listen on (group::EventSelectorType: 0 - CONTEXT_ID, 1 - GROUP_ID)\n"
             "\t\tselectorId [STRING] - ID of the selector"
+        },
+        {group_encrypt,
+            "encrypt JSON_ARRAY\n"
+            "\tjson format - [groupId, content]\n"
+            "\t\tgroupId [STRING] - ID of the Group to seal for\n"
+            "\t\tcontent [STRING] - data to encrypt"
+        },
+        {group_decrypt,
+            "decrypt JSON_ARRAY\n"
+            "\tjson format - [envelope]\n"
+            "\t\tenvelope [STRING] - envelope from group.encrypt or group.encryptAnonymously"
+        },
+        {group_encryptAnonymously,
+            "encryptAnonymously JSON_ARRAY\n"
+            "\tjson format - [groupId, groupPubKey, content]\n"
+            "\t\tgroupId [STRING] - ID of the Group to seal for\n"
+            "\t\tgroupPubKey [STRING] - the Group's identity public key (base58-DER)\n"
+            "\t\tcontent [STRING] - data to encrypt\n"
+            "\tuses a throwaway keypair - needs no membership and reveals no sender"
+        },
+        {group_beginFileEncryption,
+            "beginFileEncryption JSON_ARRAY\n"
+            "\tjson format - [groupId, size]\n"
+            "\t\tgroupId [STRING] - ID of the Group to seal for\n"
+            "\t\tsize [NUMBER] - total size of the plaintext file"
+        },
+        {group_encryptFileChunk,
+            "encryptFileChunk JSON_ARRAY\n"
+            "\tjson format - [fileHandle, plainChunk]\n"
+            "\t\tfileHandle [NUMBER] - handle from group.beginFileEncryption\n"
+            "\t\tplainChunk [STRING] - plaintext to append"
+        },
+        {group_beginFileDecryption,
+            "beginFileDecryption JSON_ARRAY\n"
+            "\tjson format - [envelope]\n"
+            "\t\tenvelope [STRING] - envelope from group.finishFileEncryption"
+        },
+        {group_decryptFileChunk,
+            "decryptFileChunk JSON_ARRAY\n"
+            "\tjson format - [fileHandle, cipherChunk]\n"
+            "\t\tfileHandle [NUMBER] - handle from group.beginFileDecryption\n"
+            "\t\tcipherChunk [STRING] - ciphertext to append"
+        },
+        {group_finishFileEncryption,
+            "finishFileEncryption JSON_ARRAY\n"
+            "\tjson format - [fileHandle]\n"
+            "\t\tfileHandle [NUMBER] - handle from group.beginFileEncryption\n"
+            "\treturns the envelope; throws if less plaintext arrived than was declared"
+        },
+        {group_finishFileDecryption,
+            "finishFileDecryption JSON_ARRAY\n"
+            "\tjson format - [fileHandle]\n"
+            "\t\tfileHandle [NUMBER] - handle from group.beginFileDecryption\n"
+            "\treturns {groupId, authorPubKey, type}; throws if the ciphertext was shorter than declared"
+        },
+        {group_beginFileEncryptionAnonymously,
+            "beginFileEncryptionAnonymously JSON_ARRAY\n"
+            "\tjson format - [groupId, groupPubKey, size]\n"
+            "\t\tgroupId [STRING] - ID of the Group to seal for\n"
+            "\t\tgroupPubKey [STRING] - the Group's identity public key (base58-DER)\n"
+            "\t\tsize [NUMBER] - total size of the plaintext file\n"
+            "\tneeds no membership and reveals no sender; finish with group.finishFileEncryption"
+        },
+        {group_seekInEncryptedFile,
+            "seekInEncryptedFile JSON_ARRAY\n"
+            "\tjson format - [fileHandle, position]\n"
+            "\t\tfileHandle [NUMBER] - handle from group.beginFileDecryption\n"
+            "\t\tposition [NUMBER] - new cursor position in the plaintext\n"
+            "\treturns the ciphertext offset to resume feeding from; gives up the completeness check"
         }
     };
 
@@ -1823,6 +1925,17 @@ private:
         {group_subscribeFor, "Subscribes for the Group events on the given subscription queries."},
         {group_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
         {group_buildSubscriptionQuery, "Generates a subscription query for Group events."},
+        {group_encrypt, "Seals content for a Group using that Group's symmetric key."},
+        {group_decrypt, "Opens an envelope sealed by group.encrypt or group.encryptAnonymously."},
+        {group_encryptAnonymously, "Seals content for a Group you are not a member of, anonymously."},
+        {group_beginFileEncryption, "Begins sealing a file for a Group, chunk by chunk."},
+        {group_encryptFileChunk, "Seals the next piece of a file."},
+        {group_beginFileDecryption, "Begins opening a file sealed by group.beginFileEncryption."},
+        {group_decryptFileChunk, "Opens the next piece of a file."},
+        {group_finishFileEncryption, "Finishes sealing a file and returns its envelope."},
+        {group_finishFileDecryption, "Finishes opening a file and reports where it came from."},
+        {group_beginFileEncryptionAnonymously, "Begins sealing a file for a Group anonymously."},
+        {group_seekInEncryptedFile, "Moves the read cursor within an encrypted file."},
     };
 
     const std::unordered_map<func_enum, std::string> functions_endpoint_action_description = {
@@ -1963,6 +2076,17 @@ private:
         {group_subscribeFor, "Subscribing for events"},
         {group_unsubscribeFrom, "Unsubscribing from events"},
         {group_buildSubscriptionQuery, "Building subscription query"},
+        {group_encrypt, "Encrypting for group"},
+        {group_decrypt, "Decrypting envelope"},
+        {group_encryptAnonymously, "Encrypting for group anonymously"},
+        {group_beginFileEncryption, "Opening encrypted file for write"},
+        {group_encryptFileChunk, "Writing encrypted file"},
+        {group_beginFileDecryption, "Opening encrypted file for read"},
+        {group_decryptFileChunk, "Reading encrypted file"},
+        {group_finishFileEncryption, "Finishing file encryption"},
+        {group_finishFileDecryption, "Finishing file decryption"},
+        {group_beginFileEncryptionAnonymously, "Opening anonymous file encryption"},
+        {group_seekInEncryptedFile, "Seeking in encrypted file"},
     };
 };
 
