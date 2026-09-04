@@ -13,6 +13,12 @@ namespace endpoint {
 namespace core {
 
 template<>
+group::GroupMemberToAdd VarDeserializer::deserialize<group::GroupMemberToAdd>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
+template<>
 group::EventType VarDeserializer::deserialize<group::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>

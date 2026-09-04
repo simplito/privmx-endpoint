@@ -538,18 +538,9 @@ TEST_F(StreamRoomUsingGroupsTest, user_added_to_group_gains_access_to_room) {
     disconnect();
     connectAs(SRUGConnectionType::SRUGUser1);
     EXPECT_NO_THROW({
-        groupApi->addGroupMember(
+        groupApi->addGroupMembers(
             reader->getString("Group_2.groupId"),
-            userOf(SRUGConnectionType::SRUGUser3),
-            false, // asManager
-            std::vector<core::UserWithPubKey>{
-                userOf(SRUGConnectionType::SRUGUser1),
-                userOf(SRUGConnectionType::SRUGUser2),
-                userOf(SRUGConnectionType::SRUGUser3)
-            },
-            std::vector<core::UserWithPubKey>{userOf(SRUGConnectionType::SRUGUser1)},
-            group_2.publicMeta,
-            group_2.privateMeta
+            {group::GroupMemberToAdd{.user = userOf(SRUGConnectionType::SRUGUser3), .role = "user"}}
         );
     });
 
@@ -763,16 +754,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_clears_staleGroups_after_
     ASSERT_FALSE(streamRoomId.empty());
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(SRUGConnectionType::SRUGUser1), userOf(SRUGConnectionType::SRUGUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(SRUGConnectionType::SRUGUser1)},
-            core::Buffer::from("grp_removed_pub"),
-            core::Buffer::from("grp_removed_priv")
-        );
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
 
     group::Group rotatedGroup;

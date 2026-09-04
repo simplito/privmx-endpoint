@@ -15,6 +15,18 @@ namespace group {
 /**
  * Holds all available information about a Group.
  */
+/**
+ * One member to seat, and the role they take.
+ *
+ * The role travels per member rather than per call: seating a manager and a user together is one delta over the
+ * union of their paths, and splitting it into two calls would be two of everything for no reason.
+ */
+struct GroupMemberToAdd {
+    core::UserWithPubKey user;
+    /** "user" or "manager". */
+    std::string role;
+};
+
 struct Group {
     /**
      * ID of the Context

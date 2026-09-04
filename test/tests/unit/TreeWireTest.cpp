@@ -125,8 +125,8 @@ protected:
             throw std::runtime_error("the remover could not climb");
         }
         RemovalPlan plan =
-            tree.planRemoval(fixture.state, fixture.members[position].userId, fixture.members[remover].priv);
-        server::GroupTreeState after = TreeWire::afterRemoval(fixture.tree, plan, position);
+            tree.planRemoval(fixture.state, {fixture.members[position].userId}, fixture.members[remover].priv);
+        server::GroupTreeState after = TreeWire::afterRemoval(fixture.tree, plan);
         return RemovalOutcome{after, plan};
     }
 
@@ -150,9 +150,10 @@ protected:
         TreeKeys planner(fixture.store);
         planner.setMemberKeys(withNewcomer);
         const AdditionPlan plan = planner.planAddition(
-            fixture.state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, fixture.members[0].priv
-        );
-        server::GroupTreeState after = TreeWire::afterAddition(fixture.tree, plan, newcomer.userId);
+fixture.state, std::vector<TreeMember>{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}},
+TreeKeys::choosePositions(fixture.state, 1), fixture.members[0].priv
+);
+        server::GroupTreeState after = TreeWire::afterAddition(fixture.tree, plan, {newcomer.userId});
         return AdditionOutcome{after, plan, newcomer};
     }
 };
@@ -410,7 +411,7 @@ TEST_F(TreeWireAddition, SeatingIntoABlankRekeysThePathAndAddsNoNode) {
     next.state = TreeWire::toRuntime(next.tree, next.epoch, next.grantKey.getPublicKey());
 
     const AdditionOutcome outcome = addMember(next, publicOf(next.members));
-    EXPECT_EQ(outcome.plan.position, 2u) << "the blank is filled before the tree grows";
+    EXPECT_EQ(outcome.plan.positions.at(0), 2u) << "the blank is filled before the tree grows";
     // Two nodes on the path of a four-leaf tree, two children each, plus the grant edge re-issued to the root.
     // Not one wrap: seating somebody under a node the caller cannot reach means re-keying the path to it.
     EXPECT_EQ(outcome.plan.wrapCount, 5u);

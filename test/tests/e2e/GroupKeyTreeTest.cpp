@@ -221,7 +221,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_non_member_cannot_read_a_tree_backed_group) 
 // addition — the operation that must stay cheap
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_F(GroupKeyTreeTest, addGroupMember_does_not_advance_the_epoch) {
+TEST_F(GroupKeyTreeTest, addGroupMembers_does_not_advance_the_epoch) {
     // The heart of the economy: adding a member leaves the epoch alone, so no container the group can read goes
     // stale and nobody else re-keys anything.
     std::string groupId;
@@ -230,12 +230,7 @@ TEST_F(GroupKeyTreeTest, addGroupMember_does_not_advance_the_epoch) {
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
 
     ASSERT_NO_THROW({
-        groupApi->addGroupMember(
-            groupId, user(3), false,
-            std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
     });
 
     group::Group after;
@@ -249,12 +244,7 @@ TEST_F(GroupKeyTreeTest, an_added_member_can_read_the_group) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     ASSERT_NO_THROW({
-        groupApi->addGroupMember(
-            groupId, user(3), false,
-            std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
     });
     disconnect();
 
@@ -267,23 +257,62 @@ TEST_F(GroupKeyTreeTest, an_added_member_can_read_the_group) {
     connectAs(KeyTreeConnectionType::KTUser1);
 }
 
+TEST_F(GroupKeyTreeTest, addGroupMembers_seats_a_whole_batch_at_the_same_epoch) {
+    // Why the call takes a list at all: the newcomers' paths overlap, so one delta covers their union and lands
+    // under a single compare-and-swap. The role travels per member, which is what lets a manager and a plain
+    // member arrive together instead of as two of everything.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1)}); });
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
+
+    ASSERT_NO_THROW({
+        groupApi->addGroupMembers(
+            groupId,
+            {
+                group::GroupMemberToAdd{.user = user(2), .role = "user"},
+                group::GroupMemberToAdd{.user = user(3), .role = "manager"}
+            }
+        );
+    });
+
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.keyVersion, before.keyVersion) << "a batch addition rotated the group key";
+    EXPECT_EQ(after.groupPubKey, before.groupPubKey) << "a batch addition replaced the grant key";
+    EXPECT_NE(std::find(after.users.begin(), after.users.end(), user(2).userId), after.users.end());
+    EXPECT_NE(std::find(after.managers.begin(), after.managers.end(), user(3).userId), after.managers.end()) <<
+        "the role named with the member was not the role they got";
+    disconnect();
+
+    // Both newcomers hold a seat of their own, not one shared re-wrap that happens to open for whoever asks
+    // first: each climbs to the group key from their own leaf, in a session of their own.
+    connectAs(KeyTreeConnectionType::KTUser2);
+    group::Group asUser2;
+    ASSERT_NO_THROW({ asUser2 = groupApi->getGroup(groupId); });
+    EXPECT_EQ(asUser2.statusCode, 0) << "the member seated first in the batch cannot climb";
+    disconnect();
+
+    connectAs(KeyTreeConnectionType::KTUser3);
+    group::Group asUser3;
+    ASSERT_NO_THROW({ asUser3 = groupApi->getGroup(groupId); });
+    EXPECT_EQ(asUser3.statusCode, 0) << "the member seated second in the batch cannot climb";
+    disconnect();
+    connectAs(KeyTreeConnectionType::KTUser1);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // removal — the operation the whole design exists for
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_F(GroupKeyTreeTest, removeGroupMember_advances_the_epoch_and_replaces_the_grant_key) {
+TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_and_replaces_the_grant_key) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group before;
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
 
     group::Group after;
@@ -294,16 +323,51 @@ TEST_F(GroupKeyTreeTest, removeGroupMember_advances_the_epoch_and_replaces_the_g
     EXPECT_EQ(after.statusCode, 0) << "a remaining member cannot read the group it still belongs to";
 }
 
+TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_once_for_the_whole_batch) {
+    // The reason a batch removal exists: taking two members out one at a time costs two epochs, so every
+    // container the group can read goes stale twice and the group's rotation budget is charged twice. One call
+    // must cost exactly one epoch however many members leave — and both of them must actually be out.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
+
+    ASSERT_NO_THROW({
+        groupApi->removeGroupMembers(groupId, {user(2).userId, user(3).userId});
+    });
+
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.keyVersion, before.keyVersion + 1) << "a batch removal advanced the epoch once per member";
+    EXPECT_NE(after.groupPubKey, before.groupPubKey) << "a removal must mint a new grant key";
+    EXPECT_EQ(std::find(after.users.begin(), after.users.end(), user(2).userId), after.users.end());
+    EXPECT_EQ(std::find(after.users.begin(), after.users.end(), user(3).userId), after.users.end());
+    EXPECT_EQ(after.statusCode, 0) << "the manager cannot read the group they still manage";
+    disconnect();
+
+    // Neither leaver climbs any more — a batch must not leave one of them holding a live path. The bridge may
+    // refuse the read outright or serve something undecryptable, so both count as "cannot read".
+    const auto stillReads = [&](KeyTreeConnectionType who) {
+        connectAs(who);
+        bool reads = false;
+        try {
+            reads = groupApi->getGroup(groupId).statusCode == 0;
+        } catch (const core::Exception&) {
+            reads = false;
+        }
+        disconnect();
+        return reads;
+    };
+    EXPECT_FALSE(stillReads(KeyTreeConnectionType::KTUser2)) << "the member removed first still reads the group";
+    EXPECT_FALSE(stillReads(KeyTreeConnectionType::KTUser3)) << "the member removed second still reads the group";
+    connectAs(KeyTreeConnectionType::KTUser1);
+}
+
 TEST_F(GroupKeyTreeTest, remaining_members_can_still_read_after_a_removal) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
     disconnect();
 
@@ -334,12 +398,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_removed_member_cannot_read_content_written_a
     });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
 
     // Re-key the thread to the new epoch, then write again. Until this happens no new content is accepted (see
@@ -446,7 +505,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_two_groups_at_the_same_epoch_do_not_share_cach
     connectAs(KeyTreeConnectionType::KTUser1);
 }
 
-TEST_F(GroupKeyTreeTest, removeGroupMember_leaves_the_same_session_able_to_read_both_epochs) {
+TEST_F(GroupKeyTreeTest, removeGroupMembers_leaves_the_same_session_able_to_read_both_epochs) {
     // A removal drops the cached node keys, because their generations were just refreshed, and seeds the new
     // epoch's grant key. It must not drop the *older* grant keys: the ladder descent to pre-removal content still
     // needs them. Both halves are checked here, in the session that performed the removal — no reconnect.
@@ -466,12 +525,7 @@ TEST_F(GroupKeyTreeTest, removeGroupMember_leaves_the_same_session_able_to_read_
     });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
 
     group::Group rotated;
@@ -564,12 +618,7 @@ TEST_F(GroupKeyTreeTest, ROTATE_REQUIRED_blocks_writes_until_the_container_catch
     });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
 
     thread::Thread beforeWrite;
@@ -619,12 +668,7 @@ TEST_F(GroupKeyTreeTest, a_remaining_member_reads_content_from_before_a_removal)
     });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
     disconnect();
 
@@ -657,21 +701,11 @@ TEST_F(GroupKeyTreeTest, a_newcomer_reads_history_that_predates_them) {
 
     // Rotate the epoch, so reaching the message requires a descent rather than the current key.
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(2).userId,
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(2).userId});
     });
     // Then seat user_3, who has never held any key of this group.
     ASSERT_NO_THROW({
-        groupApi->addGroupMember(
-            groupId, user(3), false,
-            std::vector<core::UserWithPubKey>{user(1), user(3)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
     });
     disconnect();
 
@@ -705,21 +739,11 @@ TEST_F(GroupKeyTreeTest, several_removals_in_a_row_keep_the_whole_history_reacha
     // remove user_3, then re-add and remove again, twice more — three epoch bumps in total.
     for (int round = 0; round < 3; round++) {
         ASSERT_NO_THROW({
-            groupApi->removeGroupMember(
-                groupId, user(3).userId,
-                std::vector<core::UserWithPubKey>{user(1), user(2)},
-                std::vector<core::UserWithPubKey>{user(1)},
-                core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-            );
+            groupApi->removeGroupMembers(groupId, {user(3).userId});
         }) << "removal round " << round;
         if (round < 2) {
             ASSERT_NO_THROW({
-                groupApi->addGroupMember(
-                    groupId, user(3), false,
-                    std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
-                    std::vector<core::UserWithPubKey>{user(1)},
-                    core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-                );
+                groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
             }) << "re-add round " << round;
         }
     }
@@ -738,29 +762,19 @@ TEST_F(GroupKeyTreeTest, several_removals_in_a_row_keep_the_whole_history_reacha
 // rejections the server owes us
 // ─────────────────────────────────────────────────────────────────────────────
 
-TEST_F(GroupKeyTreeTest, addGroupMember_rejects_somebody_already_in_the_group) {
+TEST_F(GroupKeyTreeTest, addGroupMembers_rejects_somebody_already_in_the_group) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     EXPECT_THROW({
-        groupApi->addGroupMember(
-            groupId, user(2), false,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(2), .role = "user"}});
     }, core::Exception);
 }
 
-TEST_F(GroupKeyTreeTest, removeGroupMember_rejects_somebody_who_is_not_a_member) {
+TEST_F(GroupKeyTreeTest, removeGroupMembers_rejects_somebody_who_is_not_a_member) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     EXPECT_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(3).userId});
     }, core::Exception);
 }
 
@@ -773,12 +787,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_remove_anybody) {
 
     connectAs(KeyTreeConnectionType::KTUser2);
     EXPECT_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(3).userId});
     }, core::Exception) << "a non-manager removed a member";
     disconnect();
     connectAs(KeyTreeConnectionType::KTUser1);

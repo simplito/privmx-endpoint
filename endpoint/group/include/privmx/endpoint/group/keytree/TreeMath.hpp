@@ -87,6 +87,19 @@ public:
     // Grows past the current count when appending at the end.
     static std::uint32_t numLeavesToSeat(std::uint32_t position, std::uint32_t currentNumLeaves);
 
+    // Union of several leaves' direct paths, ascending — the node set a batch operation must refresh.
+    //
+    // Nearby leaves share ancestors, so this is strictly smaller than their paths concatenated, and that is the
+    // point: a shared ancestor is refreshed ONCE. Refreshing it once per leaf would mint two keys claiming the
+    // same node and generation, and whichever landed second would orphan the other's edges.
+    static std::vector<std::uint32_t> frontier(const std::vector<std::uint32_t>& positions, std::uint32_t numLeaves);
+
+    // Leaves needed to seat every one of `positions`. Order-independent: seating is only ever an append.
+    static std::uint32_t numLeavesToSeatAll(
+        const std::vector<std::uint32_t>& positions,
+        std::uint32_t currentNumLeaves
+    );
+
     // Whether the grant edge must be re-linked. Growth must not advance the epoch, so keeping the grant keypair
     // separate from the root costs one re-linked edge instead of invalidating every container.
     static bool growthChangesRoot(std::uint32_t position, std::uint32_t currentNumLeaves);

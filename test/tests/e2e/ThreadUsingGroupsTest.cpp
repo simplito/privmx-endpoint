@@ -829,22 +829,15 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     disconnect();
     connectAs(TUGConnectionType::TUGUser1);
     EXPECT_NO_THROW({
-        groupApi->addGroupMember(
+        groupApi->addGroupMembers(
             reader->getString("Group_2.groupId"),
-            core::UserWithPubKey{
-                .userId = reader->getString("Login.user_3_id"), .pubKey = reader->getString("Login.user_3_pubKey")
-            },
-            false, // asManager
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
-                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")},
-                {.userId = reader->getString("Login.user_3_id"), .pubKey = reader->getString("Login.user_3_pubKey")}
-            },
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
-            },
-            group_2.publicMeta,
-            group_2.privateMeta
+            {group::GroupMemberToAdd{
+                .user = core::UserWithPubKey{
+                    .userId = reader->getString("Login.user_3_id"),
+                    .pubKey = reader->getString("Login.user_3_pubKey")
+                },
+                .role = "user"
+            }}
         );
     });
 
@@ -915,19 +908,7 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
 
     // Remove user_3 from G — advances G's epoch from 1 to 2. Thread T itself is untouched by this.
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")},
-                {.userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")}
-            },
-            std::vector<core::UserWithPubKey>{
-                {.userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")}
-            },
-            core::Buffer::from("grp_removed_pub"),
-            core::Buffer::from("grp_removed_priv")
-        );
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
 
     group::Group rotatedGroup;
@@ -1896,16 +1877,7 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_clears_staleGroups_after_the_grou
     ASSERT_FALSE(threadId.empty());
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
-            core::Buffer::from("stale_group_pub_2"),
-            core::Buffer::from("stale_group_priv_2")
-        );
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
 
     thread::Thread stale;
@@ -1983,16 +1955,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_auto_rotates_a_stale_thread_key) {
     ASSERT_FALSE(threadId.empty());
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
-            core::Buffer::from("auto_rotate_group_pub_2"),
-            core::Buffer::from("auto_rotate_group_priv_2")
-        );
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
 
     thread::Thread stale;
@@ -2072,16 +2035,7 @@ TEST_F(ThreadUsingGroupsTest, auto_rotation_does_not_repeat_a_re_key_another_cli
     ASSERT_FALSE(threadId.empty());
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
-            core::Buffer::from("concurrent_group_pub_2"),
-            core::Buffer::from("concurrent_group_priv_2")
-        );
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
 
     // A second, independent connection as user_2, kept alive throughout.
@@ -2187,16 +2141,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_still_reports_a_stale_key_when_the_re_
     ASSERT_FALSE(threadId.empty());
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(TUGConnectionType::TUGUser1), userOf(TUGConnectionType::TUGUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(TUGConnectionType::TUGUser1)},
-            core::Buffer::from("denied_group_pub_2"),
-            core::Buffer::from("denied_group_priv_2")
-        );
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
 
     thread::Thread stale;

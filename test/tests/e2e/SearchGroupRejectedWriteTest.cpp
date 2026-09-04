@@ -229,22 +229,13 @@ protected:
 
     void removeBobFromGroup(const std::string& groupId) {
         ASSERT_NO_THROW({
-            alice.groupApi->removeGroupMember(
-                groupId, reader->getString("Login.user_2_id"), std::vector<core::UserWithPubKey>{user(1)},
-                std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("rejected_write_grp_pub"),
-                core::Buffer::from("rejected_write_grp_priv")
-            );
+            alice.groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_2_id")});
         });
     }
 
     void addBobToGroup(const std::string& groupId) {
-        group::Group group;
-        ASSERT_NO_THROW({ group = alice.groupApi->getGroup(groupId); });
         ASSERT_NO_THROW({
-            alice.groupApi->addGroupMember(
-                groupId, user(2), false, std::vector<core::UserWithPubKey>{user(1), user(2)},
-                std::vector<core::UserWithPubKey>{user(1)}, group.publicMeta, group.privateMeta
-            );
+            alice.groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(2), .role = "user"}});
         });
     }
 

@@ -649,18 +649,9 @@ TEST_F(InboxUsingGroupsTest, user_added_to_group_gains_access_to_inbox_and_entri
     disconnect();
     connectAs(IUGConnectionType::IUGUser1);
     EXPECT_NO_THROW({
-        groupApi->addGroupMember(
+        groupApi->addGroupMembers(
             reader->getString("Group_2.groupId"),
-            userOf(IUGConnectionType::IUGUser3),
-            false, // asManager
-            std::vector<core::UserWithPubKey>{
-                userOf(IUGConnectionType::IUGUser1),
-                userOf(IUGConnectionType::IUGUser2),
-                userOf(IUGConnectionType::IUGUser3)
-            },
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            group_2.publicMeta,
-            group_2.privateMeta
+            {group::GroupMemberToAdd{.user = userOf(IUGConnectionType::IUGUser3), .role = "user"}}
         );
     });
 
@@ -921,16 +912,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
     ASSERT_FALSE(oldEpochEntryId.empty());
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(IUGConnectionType::IUGUser1), userOf(IUGConnectionType::IUGUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            core::Buffer::from("grp_removed_pub"),
-            core::Buffer::from("grp_removed_priv")
-        );
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
 
     group::Group rotatedGroup;

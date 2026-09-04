@@ -374,11 +374,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
 
     // ── user_3 leaves Group1: the Group's epoch moves 1 → 2 ────────────────────────────────────────────────
     ASSERT_NO_THROW({
-        user1.groupApi->removeGroupMember(
-            groupId, user(3).userId, std::vector<core::UserWithPubKey>{user(2)},
-            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("group1_public"),
-            core::Buffer::from("group1_private")
-        );
+        user1.groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
     group::Group rotatedGroup;
     ASSERT_NO_THROW({ rotatedGroup = user1.groupApi->getGroup(groupId); });

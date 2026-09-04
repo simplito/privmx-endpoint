@@ -30,12 +30,12 @@ server::GroupListResult ServerApi::groupList(server::GroupListModel model) {
     return request<server::GroupListResult>("groupList", model.toJSON());
 }
 
-void ServerApi::groupAddMember(server::GroupAddMemberModel model) {
-    request("groupAddMember", model.toJSON());
+void ServerApi::groupAddMembers(server::GroupAddMembersModel model) {
+    request("groupAddMembers", model.toJSON());
 }
 
-void ServerApi::groupRemoveMember(server::GroupRemoveMemberModel model) {
-    request("groupRemoveMember", model.toJSON());
+void ServerApi::groupRemoveMembers(server::GroupRemoveMembersModel model) {
+    request("groupRemoveMembers", model.toJSON());
 }
 
 void ServerApi::groupCutEra(server::GroupCutEraModel model) {

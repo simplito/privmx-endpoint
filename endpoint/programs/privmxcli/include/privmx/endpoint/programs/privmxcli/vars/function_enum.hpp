@@ -210,8 +210,8 @@ enum func_enum {
     kvdb_buildSubscriptionQueryForSelectedEntry,
     //  group
     group_createGroup,
-    group_addGroupMember,
-    group_removeGroupMember,
+    group_addGroupMembers,
+    group_removeGroupMembers,
     group_updateGroup,
     group_deleteGroup,
     group_getGroup,

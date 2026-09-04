@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
 
+#include <set>
 #include <stdexcept>
 #include <string>
 
@@ -204,6 +205,27 @@ std::uint32_t TreeMath::numLeavesToSeat(std::uint32_t position, std::uint32_t cu
         return currentNumLeaves;
     }
     return position + 1;
+}
+
+std::vector<std::uint32_t> TreeMath::frontier(const std::vector<std::uint32_t>& positions, std::uint32_t numLeaves) {
+    std::set<std::uint32_t> nodes;
+    for (const std::uint32_t position : positions) {
+        for (const std::uint32_t node : directPath(position, numLeaves)) {
+            nodes.insert(node);
+        }
+    }
+    return std::vector<std::uint32_t>(nodes.begin(), nodes.end());
+}
+
+std::uint32_t TreeMath::numLeavesToSeatAll(
+    const std::vector<std::uint32_t>& positions,
+    std::uint32_t currentNumLeaves
+) {
+    std::uint32_t numLeaves = currentNumLeaves;
+    for (const std::uint32_t position : positions) {
+        numLeaves = numLeavesToSeat(position, numLeaves);
+    }
+    return numLeaves;
 }
 
 bool TreeMath::growthChangesRoot(std::uint32_t position, std::uint32_t currentNumLeaves) {

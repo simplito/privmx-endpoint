@@ -802,16 +802,7 @@ TEST_F(SearchUsingGroupsTest, rotateSearchIndexKeys_clears_staleGroups_after_the
     ASSERT_NO_THROW({ seedDocuments(indexId, {{"doc-1", "epoch one document"}}); });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(SRConnectionType::SRUser1), userOf(SRConnectionType::SRUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
-            core::Buffer::from("idx_grp_removed_pub"),
-            core::Buffer::from("idx_grp_removed_priv")
-        );
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
 
     group::Group rotatedGroup;
@@ -959,11 +950,7 @@ TEST_F(SearchUsingGroupsTest, removing_the_worker_from_the_grantee_group_locks_t
     openAndSeed(worker, indexId, "beta", 3, ledger);
 
     ASSERT_NO_THROW({
-        owner.groupApi->removeGroupMember(
-            groupId, userOf(SRUser2).userId, std::vector<core::UserWithPubKey>{userOf(SRUser3)},
-            std::vector<core::UserWithPubKey>{userOf(SRUser1)}, core::Buffer::from("drop_member_grp_pub"),
-            core::Buffer::from("drop_member_grp_priv")
-        );
+        owner.groupApi->removeGroupMembers(groupId, {userOf(SRUser2).userId});
     });
     ASSERT_EQ(groupNow(groupId).keyVersion, 2);
 
@@ -1023,11 +1010,7 @@ TEST_F(SearchUsingGroupsTest, removing_another_member_from_the_grantee_group_kee
     openAndSeed(worker, indexId, "beta", 3, ledger);
 
     ASSERT_NO_THROW({
-        owner.groupApi->removeGroupMember(
-            groupId, userOf(SRUser3).userId, std::vector<core::UserWithPubKey>{userOf(SRUser2)},
-            std::vector<core::UserWithPubKey>{userOf(SRUser1)}, core::Buffer::from("other_out_grp_pub"),
-            core::Buffer::from("other_out_grp_priv")
-        );
+        owner.groupApi->removeGroupMembers(groupId, {userOf(SRUser3).userId});
     });
     ASSERT_EQ(groupNow(groupId).keyVersion, 2);
     search::SearchIndex stale;
@@ -1103,10 +1086,8 @@ TEST_F(SearchUsingGroupsTest, adding_a_member_to_the_grantee_group_disturbs_noth
     EXPECT_FALSE(outsider.opened) << "a caller in no granted group opened the Index";
 
     ASSERT_NO_THROW({
-        owner.groupApi->addGroupMember(
-            groupId, userOf(SRUser3), false,
-            std::vector<core::UserWithPubKey>{userOf(SRUser2), userOf(SRUser3)},
-            std::vector<core::UserWithPubKey>{userOf(SRUser1)}, group.publicMeta, group.privateMeta
+        owner.groupApi->addGroupMembers(
+            groupId, {group::GroupMemberToAdd{.user = userOf(SRUser3), .role = "user"}}
         );
     });
     group::Group grown;

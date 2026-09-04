@@ -41,7 +41,10 @@ using namespace privmx::endpoint;
  *
  * Tests named SECURITY assert that something *cannot* happen. They fail silently at runtime if the guard
  * regresses — nothing breaks, access simply persists where it should have ended — so they must not be deleted
- * or weakened into positive assertions.
+ * or weakened into positive assertions. The one exception is a premise the API has taken away — a test that can
+ * no longer construct its own attack is dropped outright, with the reason in the commit that drops it, rather
+ * than kept as a test that cannot fail. `removeGroupMembers` taking no roster retired one such test: the roster
+ * lie it was built on has no field to live in any more.
  *
  * Where the fate of the abusive call itself is not part of the contract (the Bridge may refuse it outright, or
  * take it and leave the caller with a wrap the endpoint will not use), the test records which way it went and
@@ -408,11 +411,7 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_th
     EXPECT_EQ(afterAbuse.statusCode, 0);
     EXPECT_EQ(afterAbuse.keyVersion, g.keyVersion);
     EXPECT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(2).userId, std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-            core::Buffer::from("abuse_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(2).userId});
     });
     group::Group afterRemoval;
     ASSERT_NO_THROW({ afterRemoval = groupApi->getGroup(groupId); });
@@ -448,11 +447,7 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_in
     bool seated = true;
     std::string refusal;
     try {
-        groupApi->addGroupMember(
-            groupB, nestedGroup, false, std::vector<core::UserWithPubKey>{user(1), user(3), nestedGroup},
-            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-            core::Buffer::from("abuse_private")
-        );
+        groupApi->addGroupMembers(groupB, {group::GroupMemberToAdd{.user = nestedGroup, .role = "user"}});
     } catch (const core::Exception& e) {
         seated = false;
         refusal = e.getFull();
@@ -465,16 +460,10 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_in
 
     // B's own members are unaffected, and B's tree still takes a removal: a rogue leaf must not wedge it.
     EXPECT_TRUE(canReadGroup(3, groupB)) << "a real member of B lost access; " << lastReadError;
-    std::vector<core::UserWithPubKey> remaining{user(1)};
-    if (seated) {
-        remaining.push_back(nestedGroup);
-    }
     EXPECT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupB, user(3).userId, remaining, std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("abuse_public"), core::Buffer::from("abuse_private")
-        );
-    });
+        groupApi->removeGroupMembers(groupB, {user(3).userId});
+    }) << "B's tree stopped taking removals with a rogue leaf in it (seat " <<
+        (seated ? "was accepted)" : "was refused)");
     group::Group afterRemoval;
     ASSERT_NO_THROW({ afterRemoval = groupApi->getGroup(groupB); });
     EXPECT_EQ(afterRemoval.statusCode, 0);
@@ -500,11 +489,7 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_cannot_be_seated_as_a_member_of_another_
 
     EXPECT_THROW(
         {
-            groupApi->addGroupMember(
-                groupB, groupAsMember, false, std::vector<core::UserWithPubKey>{user(1), user(3), groupAsMember},
-                std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-                core::Buffer::from("abuse_private")
-            );
+            groupApi->addGroupMembers(groupB, {group::GroupMemberToAdd{.user = groupAsMember, .role = "user"}});
         },
         core::Exception
     );
@@ -564,11 +549,7 @@ TEST_F(GroupAbuseTest, ladder_hands_a_newcomer_every_epoch_the_group_ever_read) 
 
     // user_2 out: epoch 2. T is re-keyed and re-granted there, so the next message needs the epoch-2 key.
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(2).userId, std::vector<core::UserWithPubKey>{user(1), user(3)},
-            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-            core::Buffer::from("abuse_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(2).userId});
     });
     group::Group atEpoch2;
     ASSERT_NO_THROW({ atEpoch2 = groupApi->getGroup(groupId); });
@@ -584,11 +565,7 @@ TEST_F(GroupAbuseTest, ladder_hands_a_newcomer_every_epoch_the_group_ever_read) 
 
     // user_3 out: epoch 3, same again.
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId, std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-            core::Buffer::from("abuse_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
     group::Group atEpoch3;
     ASSERT_NO_THROW({ atEpoch3 = groupApi->getGroup(groupId); });
@@ -607,12 +584,7 @@ TEST_F(GroupAbuseTest, ladder_hands_a_newcomer_every_epoch_the_group_ever_read) 
     const Identity newcomer = newIdentity("group_newcomer");
     ASSERT_NO_FATAL_FAILURE(registerContextUser(newcomer.userId, newcomer.pubKey));
     ASSERT_NO_THROW({
-        groupApi->addGroupMember(
-            groupId, asMember(newcomer), false,
-            std::vector<core::UserWithPubKey>{user(1), asMember(newcomer)},
-            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-            core::Buffer::from("abuse_private")
-        );
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = asMember(newcomer), .role = "user"}});
     });
     group::Group afterJoin;
     ASSERT_NO_THROW({ afterJoin = groupApi->getGroup(groupId); });
@@ -662,11 +634,7 @@ TEST_F(GroupAbuseTest, ladder_gives_a_re_added_member_back_what_was_written_whil
 
     // user_2 out: epoch 2, T re-keyed there, and one message written while they are excluded.
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(2).userId, std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-            core::Buffer::from("abuse_private")
-        );
+        groupApi->removeGroupMembers(groupId, {user(2).userId});
     });
     group::Group atEpoch2;
     ASSERT_NO_THROW({ atEpoch2 = groupApi->getGroup(groupId); });
@@ -686,11 +654,7 @@ TEST_F(GroupAbuseTest, ladder_gives_a_re_added_member_back_what_was_written_whil
 
     // Re-seated at epoch 2 — no new epoch, nothing about T touched.
     ASSERT_NO_THROW({
-        groupApi->addGroupMember(
-            groupId, user(2), false, std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-            core::Buffer::from("abuse_private")
-        );
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(2), .role = "user"}});
     });
     group::Group afterReadd;
     ASSERT_NO_THROW({ afterReadd = groupApi->getGroup(groupId); });
@@ -765,19 +729,10 @@ TEST_F(GroupAbuseTest, changing_a_members_public_key_locks_them_out_without_re_w
     // Only re-seating repairs it, and it repairs it completely: the removal refreshes the leaf's path and mints
     // epoch 2, the addition wraps the new leaf to the new key, and the ladder hands back the epoch-1 history.
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, firstKey.userId, std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-            core::Buffer::from("abuse_private")
-        );
+        groupApi->removeGroupMembers(groupId, {firstKey.userId});
     });
     ASSERT_NO_THROW({
-        groupApi->addGroupMember(
-            groupId, asMember(secondKey), false,
-            std::vector<core::UserWithPubKey>{user(1), asMember(secondKey)},
-            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-            core::Buffer::from("abuse_private")
-        );
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = asMember(secondKey), .role = "user"}});
     });
     group::Group afterReseat;
     ASSERT_NO_THROW({ afterReseat = groupApi->getGroup(groupId); });
@@ -806,11 +761,7 @@ TEST_F(GroupAbuseTest, add_and_remove_the_same_member_repeatedly_keeps_the_tree_
         SCOPED_TRACE("cycle " + std::to_string(cycle));
 
         ASSERT_NO_THROW({
-            groupApi->removeGroupMember(
-                groupId, user(3).userId, std::vector<core::UserWithPubKey>{user(1), user(2)},
-                std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-                core::Buffer::from("abuse_private")
-            );
+            groupApi->removeGroupMembers(groupId, {user(3).userId});
         });
         ++epoch;
         group::Group afterRemoval;
@@ -824,11 +775,7 @@ TEST_F(GroupAbuseTest, add_and_remove_the_same_member_repeatedly_keeps_the_tree_
             lastReadError;
 
         ASSERT_NO_THROW({
-            groupApi->addGroupMember(
-                groupId, user(3), false, std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
-                std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-                core::Buffer::from("abuse_private")
-            );
+            groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
         });
         group::Group afterAddition;
         ASSERT_NO_THROW({ afterAddition = groupApi->getGroup(groupId); });
@@ -875,7 +822,6 @@ TEST_F(GroupAbuseTest, concurrent_add_and_remove_of_the_same_member_leaves_the_g
     const core::UserWithPubKey adder = user(2);
     const core::UserWithPubKey contested = user(3);
     const std::vector<core::UserWithPubKey> managers{remover, adder};
-    const std::vector<core::UserWithPubKey> withoutContested{remover, adder};
     const std::vector<core::UserWithPubKey> withContested{remover, adder, contested};
 
     std::string groupId;
@@ -895,10 +841,7 @@ TEST_F(GroupAbuseTest, concurrent_add_and_remove_of_the_same_member_leaves_the_g
     std::string addFailure;
     std::thread removingThread([&] {
         try {
-            removerGroups.removeGroupMember(
-                groupId, contested.userId, withoutContested, managers, core::Buffer::from("abuse_public"),
-                core::Buffer::from("abuse_private")
-            );
+            removerGroups.removeGroupMembers(groupId, {contested.userId});
             removed = true;
         } catch (const core::Exception& e) {
             removeFailure = e.getFull();
@@ -908,10 +851,7 @@ TEST_F(GroupAbuseTest, concurrent_add_and_remove_of_the_same_member_leaves_the_g
     });
     std::thread addingThread([&] {
         try {
-            adderGroups.addGroupMember(
-                groupId, contested, false, withContested, managers, core::Buffer::from("abuse_public"),
-                core::Buffer::from("abuse_private")
-            );
+            adderGroups.addGroupMembers(groupId, {group::GroupMemberToAdd{.user = contested, .role = "user"}});
             added = true;
         } catch (const core::Exception& e) {
             addFailure = e.getFull();
@@ -941,60 +881,82 @@ TEST_F(GroupAbuseTest, concurrent_add_and_remove_of_the_same_member_leaves_the_g
     EXPECT_TRUE(canReadGroup(1, groupId)) << "the manager lost access to their own group; " << lastReadError;
 }
 
-TEST_F(GroupAbuseTest, SECURITY_a_roster_lying_about_a_members_key_hands_nobody_that_seat) {
-    // A removal re-wraps the surviving siblings' path keys to whatever public keys the caller claims those
-    // members hold — a claim the Bridge cannot check. Naming another *group's* key there is the closest thing
-    // to nesting a group in a tree the API allows: the target group would keep a leaf that says "user_3" while
-    // the edge into it opens with group A's key instead.
+TEST_F(GroupAbuseTest, concurrent_update_and_removal_leaves_the_group_verifying) {
+    // A metadata update and a removal computed against the same head. The removal mints an epoch, so by the time
+    // the update lands it is signed against a state that no longer exists; the Bridge answers "rotated already"
+    // and the endpoint adopts the winner's rotation and retries the update once. Any serialisation is acceptable
+    // — what is not is a group whose chain stops verifying, or an update that reports success without landing.
     //
-    // With three leaves (user_1, user_2, user_3 by id) removing user_2 refreshes the path [1, 3], and node 3
-    // re-wraps to its other child — user_3's leaf. So the lie is used, not ignored.
-    std::string borrowedFrom, target;
-    ASSERT_NO_THROW({ borrowedFrom = createTreeGroup({user(1), user(2)}); });
-    ASSERT_NO_THROW({ target = createTreeGroup({user(1), user(2), user(3)}); });
-    group::Group a;
-    ASSERT_NO_THROW({ a = groupApi->getGroup(borrowedFrom); });
-    ASSERT_EQ(a.statusCode, 0);
+    // The update is forced past the version check on purpose: the version pin is `GroupTest.updateGroup_*`'s
+    // subject, and leaving it on here would make the race decide itself with a version error before the epoch
+    // question is ever asked.
+    const core::UserWithPubKey remover = user(1);
+    const core::UserWithPubKey updater = user(2);
+    const std::vector<core::UserWithPubKey> managers{remover, updater};
 
-    bool accepted = true;
-    std::string refusal;
-    try {
-        groupApi->removeGroupMember(
-            target, user(2).userId,
-            std::vector<core::UserWithPubKey>{
-                user(1), core::UserWithPubKey{.userId = user(3).userId, .pubKey = a.groupPubKey}
-            },
-            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-            core::Buffer::from("abuse_private")
-        );
-    } catch (const core::Exception& e) {
-        accepted = false;
-        refusal = e.getFull();
-    }
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({remover, updater, user(3)}, managers); });
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
+    ASSERT_EQ(before.statusCode, 0);
 
-    // Either way the group stays usable for the manager who owns it: a lie in a roster must not be a way to
-    // make a group unreadable to everybody, including its author.
-    EXPECT_TRUE(canReadGroup(1, target)) << "the group became unreadable to its manager (removal " <<
-        (accepted ? "accepted)" : "refused: " + refusal + ")");
+    // user_1 removes from the fixture's session; user_2 updates from one of their own. Both are warmed up first,
+    // so what overlaps is the mutating call rather than two cold reads.
+    auto updaterConnection = connect(2);
+    auto updaterGroups = group::GroupApi::create(*updaterConnection);
+    ASSERT_EQ(updaterGroups.getGroup(groupId).statusCode, 0);
+    auto& removerGroups = *groupApi;
 
-    if (accepted) {
-        // The group whose key was borrowed gains nothing by it: user_2 belongs to it, and was just removed
-        // from the target. This is the half that would be an escalation rather than a foot-gun.
-        EXPECT_FALSE(canReadGroup(2, target)) << "a member of the group whose key was borrowed read the target";
-
-        // user_3 is left on the roster of a tree whose edge into their leaf may no longer open with their own
-        // key. Either way — locked out or untouched, depending on where their leaf sat relative to the removed
-        // one — the group must stay repairable: a lie in a roster cannot produce a group nobody can fix.
-        const bool lockedOut = !canReadGroup(3, target);
-        EXPECT_NO_THROW({
-            groupApi->removeGroupMember(
-                target, user(3).userId, std::vector<core::UserWithPubKey>{user(1)},
-                std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("abuse_public"),
-                core::Buffer::from("abuse_private")
+    bool removed = false;
+    bool updated = false;
+    std::string removeFailure;
+    std::string updateFailure;
+    std::thread removingThread([&] {
+        try {
+            removerGroups.removeGroupMembers(groupId, {user(3).userId});
+            removed = true;
+        } catch (const core::Exception& e) {
+            removeFailure = e.getFull();
+        } catch (const std::exception& e) {
+            removeFailure = e.what();
+        }
+    });
+    std::thread updatingThread([&] {
+        try {
+            updaterGroups.updateGroup(
+                groupId, core::Buffer::from("raced_public"), core::Buffer::from("raced_private"), before.version,
+                true
             );
-        }) << "the group could not be repaired after the roster lie (user_3 was " <<
-            (lockedOut ? "locked out)" : "unaffected)");
-        EXPECT_TRUE(canReadGroup(1, target)) << "the manager lost their own group while repairing it; " <<
-            lastReadError;
+            updated = true;
+        } catch (const core::Exception& e) {
+            updateFailure = e.getFull();
+        } catch (const std::exception& e) {
+            updateFailure = e.what();
+        }
+    });
+    removingThread.join();
+    updatingThread.join();
+    // user_2's session has to be gone before any probe reconnects as user_2.
+    updaterConnection->disconnect();
+
+    EXPECT_TRUE(removed || updated) << "both calls were dropped; remove: " << removeFailure << " update: " <<
+        updateFailure;
+
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0) << "the race left the group's chain unverifiable; remove: " << removeFailure <<
+        " update: " << updateFailure;
+    // Only a removal moves the epoch; an update moves the version alone, and each call that reported success
+    // must have moved it exactly once — a retry is one landing, not two.
+    EXPECT_EQ(after.keyVersion, removed ? 2 : 1) << "remove: " << removeFailure << " update: " << updateFailure;
+    EXPECT_EQ(after.version, before.version + (removed ? 1 : 0) + (updated ? 1 : 0)) << "remove: " <<
+        removeFailure << " update: " << updateFailure;
+    if (updated) {
+        EXPECT_EQ(after.publicMeta.stdString(), "raced_public") << "the update reported success without landing";
     }
+    EXPECT_EQ(contains(after.users, user(3).userId), !removed);
+    EXPECT_TRUE(canReadGroup(2, groupId)) << "the manager who updated the group lost access to it; " <<
+        lastReadError;
+    EXPECT_TRUE(canReadGroup(1, groupId)) << "the manager who removed a member lost access to the group; " <<
+        lastReadError;
 }

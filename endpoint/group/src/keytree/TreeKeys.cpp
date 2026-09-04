@@ -11,6 +11,8 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/TreeKeys.hpp"
 
+#include <algorithm>
+#include <set>
 #include <stdexcept>
 
 #include <privmx/crypto/EciesEncryptor.hpp>
@@ -99,15 +101,45 @@ std::optional<std::uint32_t> TreeKeys::positionOf(const TreeGroupState& state, c
     return std::nullopt;
 }
 
-std::uint32_t TreeKeys::choosePosition(const TreeGroupState& state) {
-    // Lowest blank first, then append. Never move anyone: that invariant is what removes the need to track
-    // which subtrees a member has ever occupied.
-    for (std::size_t i = 0; i < state.leafAssignment.size(); ++i) {
-        if (!state.leafAssignment[i].has_value()) {
-            return static_cast<std::uint32_t>(i);
+std::vector<std::string> TreeKeys::membersToWrapTo(
+    const TreeGroupState& state,
+    const std::vector<std::uint32_t>& positions,
+    std::uint32_t numLeaves,
+    const std::set<std::uint32_t>& excludedSeats
+) {
+    std::set<std::string> wanted;
+    for (const std::uint32_t node : TreeMath::frontier(positions, numLeaves)) {
+        for (const std::uint32_t child : TreeMath::children(node, numLeaves)) {
+            if (!TreeMath::isLeaf(child)) {
+                continue;
+            }
+            const std::uint32_t seat = TreeMath::leafPosition(child);
+            if (excludedSeats.count(seat) > 0 || seat >= state.leafAssignment.size()) {
+                continue;
+            }
+            if (state.leafAssignment[seat].has_value()) {
+                wanted.insert(state.leafAssignment[seat].value());
+            }
         }
     }
-    return static_cast<std::uint32_t>(state.leafAssignment.size());
+    return std::vector<std::string>(wanted.begin(), wanted.end());
+}
+
+std::vector<std::uint32_t> TreeKeys::choosePositions(const TreeGroupState& state, std::uint32_t count) {
+    // Lowest blank first, then append. Never move anyone: that invariant is what removes the need to track
+    // which subtrees a member has ever occupied.
+    std::vector<std::uint32_t> seats;
+    for (std::size_t i = 0; i < state.leafAssignment.size() && seats.size() < count; ++i) {
+        if (!state.leafAssignment[i].has_value()) {
+            seats.push_back(static_cast<std::uint32_t>(i));
+        }
+    }
+    // Appends have to be contiguous: a skipped seat is one nothing can ever reuse, and the bridge refuses it.
+    for (std::uint32_t position = static_cast<std::uint32_t>(state.leafAssignment.size()); seats.size() < count;
+         ++position) {
+        seats.push_back(position);
+    }
+    return seats;
 }
 
 ClimbResult TreeKeys::climbToGrantKey(
@@ -279,16 +311,43 @@ BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const privmx::
 
 AdditionPlan TreeKeys::planAddition(
     const TreeGroupState& state,
-    const TreeMember& newMember,
+    const std::vector<TreeMember>& newMembers,
+    const std::vector<std::uint32_t>& positions,
     const privmx::crypto::PrivateKey& signer
 ) {
+    if (newMembers.empty()) {
+        throw std::invalid_argument("an addition must name at least one member");
+    }
+    if (newMembers.size() != positions.size()) {
+        // Parallel lists: a mismatch would seat somebody at another newcomer's coordinate.
+        throw std::invalid_argument("every newcomer needs exactly one seat");
+    }
+
     AdditionPlan plan;
-    plan.position = choosePosition(state);
-    plan.newNumLeaves = TreeMath::numLeavesToSeat(plan.position, state.numLeaves);
+    plan.positions = positions;
+    plan.newNumLeaves = TreeMath::numLeavesToSeatAll(positions, state.numLeaves);
+
+    // Who ends up on which seat, so the leaf-edge branch below can answer it for any child it walks past.
+    std::map<std::uint32_t, const TreeMember*> newcomerAt;
+    std::set<std::string> named;
+    for (std::size_t i = 0; i < positions.size(); ++i) {
+        // Two seats for one userId would leave a second leaf nobody blanks: `positionOf` finds only the first,
+        // so a later removal re-keys one path and leaves the other climbing to the new grant key.
+        if (!named.insert(newMembers[i].userId).second) {
+            throw std::invalid_argument("member " + newMembers[i].userId + " is named twice");
+        }
+        if (positionOf(state, newMembers[i].userId).has_value()) {
+            throw std::invalid_argument("member " + newMembers[i].userId + " already holds a leaf in this tree");
+        }
+        if (!newcomerAt.emplace(positions[i], &newMembers[i]).second) {
+            throw std::invalid_argument("two newcomers cannot take the same seat");
+        }
+    }
 
     const std::uint32_t oldRoot = TreeMath::root(state.numLeaves);
     const std::uint32_t newRoot = TreeMath::root(plan.newNumLeaves);
-    const std::vector<std::uint32_t> newPath = TreeMath::directPath(plan.position, plan.newNumLeaves);
+    // The union, not the paths concatenated: an ancestor shared by two newcomers is re-keyed once.
+    const std::vector<std::uint32_t> newPath = TreeMath::frontier(positions, plan.newNumLeaves);
 
     // A fresh keypair for every node on the new leaf's path. Wrapping to an existing parent key would be one wrap
     // instead of `log n`, but needs that parent's private key — which a climb only yields for the seat beside you.
@@ -312,10 +371,10 @@ AdditionPlan TreeKeys::planAddition(
             edge.parentGeneration = generationOf.at(node);
             if (TreeMath::isLeaf(child)) {
                 const std::uint32_t position = TreeMath::leafPosition(child);
-                if (position == plan.position) {
+                if (const auto newcomer = newcomerAt.find(position); newcomer != newcomerAt.end()) {
                     edge.childKind = EdgeChildKind::User;
-                    edge.childUserId = newMember.userId;
-                    edge.blob = wrapKey(nodeKey, newMember.publicKey, signer);
+                    edge.childUserId = newcomer->second->userId;
+                    edge.blob = wrapKey(nodeKey, newcomer->second->publicKey, signer);
                 } else {
                     // A sibling leaf: the refresh replaced the key their climb runs through, so they need an edge
                     // to the new one. Their public key is not part of the tree state, so it comes from the roster.
@@ -386,18 +445,33 @@ AdditionPlan TreeKeys::planAddition(
 
 RemovalPlan TreeKeys::planRemoval(
     const TreeGroupState& state,
-    const std::string& leavingUserId,
+    const std::vector<std::string>& leavingUserIds,
     const privmx::crypto::PrivateKey& signer
 ) {
-    const auto position = positionOf(state, leavingUserId);
-    if (!position.has_value()) {
-        throw std::invalid_argument("member " + leavingUserId + " holds no leaf in this tree");
+    if (leavingUserIds.empty()) {
+        throw std::invalid_argument("a removal must name at least one member");
     }
 
     RemovalPlan plan;
     plan.newEpoch = state.epoch + 1;
-    const std::uint32_t leavingLeaf = TreeMath::leafNode(position.value());
-    const std::vector<std::uint32_t> path = TreeMath::directPath(position.value(), state.numLeaves);
+
+    std::set<std::uint32_t> leavingLeaves;
+    std::set<std::string> named;
+    for (const std::string& leavingUserId : leavingUserIds) {
+        if (!named.insert(leavingUserId).second) {
+            throw std::invalid_argument("member " + leavingUserId + " is named twice");
+        }
+        const auto position = positionOf(state, leavingUserId);
+        if (!position.has_value()) {
+            throw std::invalid_argument("member " + leavingUserId + " holds no leaf in this tree");
+        }
+        plan.blankedPositions.push_back(position.value());
+        leavingLeaves.insert(TreeMath::leafNode(position.value()));
+    }
+    std::sort(plan.blankedPositions.begin(), plan.blankedPositions.end());
+    // The union, so every ancestor shared by two departing members is refreshed once. Refreshing it per member
+    // would mint two keys for one node and generation, and the second write would orphan the first's edges.
+    const std::vector<std::uint32_t> path = TreeMath::frontier(plan.blankedPositions, state.numLeaves);
 
     // Every node on the path gets a fresh independent random keypair. Deriving it from the key it replaces would
     // let the removed member compute forward, and the server cannot detect that — it lives or dies on this line.
@@ -417,8 +491,11 @@ RemovalPlan TreeKeys::planRemoval(
         refresh.newKey = refreshed.at(node);
 
         for (const std::uint32_t child : TreeMath::children(node, state.numLeaves)) {
-            if (child == leavingLeaf) {
-                continue; // the blanked leaf gets no edge — that is the point of the whole operation
+            if (leavingLeaves.count(child) > 0) {
+                // A blanked leaf gets no edge — that is the point of the whole operation. When the batch blanks
+                // every leaf under this node it ends up owing none at all: it still takes a fresh key so the
+                // refresh reaches the root, but nothing can climb into it. The bridge accepts exactly that shape.
+                continue;
             }
             TreeEdge edge;
             edge.parentIndex = node;
