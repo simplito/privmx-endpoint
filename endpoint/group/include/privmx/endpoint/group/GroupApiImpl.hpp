@@ -60,7 +60,6 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const int64_t version,
-        const bool force,
         const std::optional<core::ContainerPolicy>& policies,
         bool allowRotationRetry = true
     );
