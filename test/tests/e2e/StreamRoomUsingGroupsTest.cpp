@@ -24,7 +24,7 @@ enum SRUGConnectionType {
 /**
  * Group coverage for StreamRooms. Publishing and subscribing need a WebRTC implementation, so these tests
  * stay at the container level: grants, decryption of room metadata through a group, re-keying, and the
- * staleGroups signal. The media keys derived from the room key are exercised indirectly — a room that
+ * staleGroups signal. The media keys derived from the room key are exercised indirectly - a room that
  * decrypts is a room whose key `extractStreamRoomKeys` could resolve.
  */
 class StreamRoomUsingGroupsTest : public privmx::test::BaseTest {
@@ -55,7 +55,7 @@ protected:
         streamApi.reset();
         groupApi.reset();
     }
-    /** One of the fixture's logins as a container names its members — id plus public key, from the same ini. */
+    // One of the fixture's logins as a container names its members - id plus public key, from the same ini.
     core::UserWithPubKey userOf(SRUGConnectionType type) {
         std::string n;
         if (type == SRUGConnectionType::SRUGUser1) {
@@ -89,13 +89,8 @@ protected:
         reader.reset();
         core::EventQueueImpl::getInstance()->clear();
     }
-    /**
-     * A StreamRoom whose direct members are `users` — as both users and managers, so any of them can update it —
-     * and whose grantee groups are `groups`, each granted at `role`.
-     *
-     * The grants carry no epoch: leaving `groupEpoch` at 0 is what makes the endpoint resolve each group's
-     * current epoch from the Bridge, which is the path these tests are about.
-     */
+    // A StreamRoom whose direct members are `users` (as both users and managers) and whose grantee groups are
+    // `groups`. Leaving `groupEpoch` at 0 makes the endpoint resolve each group's current epoch from the Bridge.
     std::string createStreamRoomWithGroups(
         const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
@@ -534,12 +529,12 @@ TEST_F(StreamRoomUsingGroupsTest, user_added_to_group_gains_access_to_room) {
     EXPECT_NO_THROW({ rBefore = streamApi->getStreamRoom(streamRoomId); });
     EXPECT_NE(rBefore.statusCode, 0);
 
-    // Seat user_3's leaf in the key tree — updateGroup would only re-wrap the group's metadata key.
+    // Seat user_3's leaf in the key tree - updateGroup would only re-wrap the group's metadata key.
     disconnect();
     connectAs(SRUGConnectionType::SRUGUser1);
     EXPECT_NO_THROW({
         groupApi->addGroupMembers(
-reader->getString("Group_2.groupId"),
+            reader->getString("Group_2.groupId"),
             {group::GroupMemberToAdd{.user = userOf(SRUGConnectionType::SRUGUser3), .role = "user"}}
         );
     });
@@ -553,10 +548,8 @@ reader->getString("Group_2.groupId"),
 }
 
 TEST_F(StreamRoomUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
-    // user_1 is the only direct member of the room *and* a member of granted Group_1, so every keyId opens
-    // from `keys` and the group branch is skipped. `updateStreamRoom` is the interesting half:
-    // `verifyKeysSecret` fails on any non-zero status, so an unresolved group entry there is the difference
-    // between an update and an exception.
+    // Every keyId opens from `keys`, so the group branch is skipped. `updateStreamRoom` is the interesting half:
+    // `verifyKeysSecret` fails on any non-zero status, so an unresolved group entry throws instead of updating.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
@@ -600,9 +593,8 @@ TEST_F(StreamRoomUsingGroupsTest, direct_member_of_granted_group_reads_and_updat
 }
 
 TEST_F(StreamRoomUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
-    // The room grants Group_1, whose only member is user_1. user_2 is a direct member and belongs to no
-    // grantee group, so the bridge serves it `groupKeys: []` — the read has to be served entirely from its
-    // own key wrap.
+    // user_2 is a direct member of the room and in no grantee group, so the bridge serves it `groupKeys: []`
+    // and the read has to come entirely from its own key wrap.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
@@ -631,9 +623,8 @@ TEST_F(StreamRoomUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_ke
 }
 
 TEST_F(StreamRoomUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // The room grants Group_2 and Group_3 and wraps its key to user_1 only. user_2 belongs to both grantee
-    // groups, so narrowing leaves it two entries at the same keyId — with no direct wrap to fall back on,
-    // one of them has to carry the read.
+    // The room wraps its key to user_1 only, and user_2 belongs to both grantee groups: narrowing leaves it two
+    // entries at the same keyId, and with no direct wrap to fall back on one of them has to carry the read.
     group::Group group_2, group_3;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
@@ -660,14 +651,8 @@ TEST_F(StreamRoomUsingGroupsTest, caller_in_two_granted_groups_reads) {
 }
 
 TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_the_caller_did_not_name) {
-    // The room grants Group_2. user_2 re-keys naming no groups at all, and the new key must still be re-wrapped
-    // to Group_2 — the grantee list comes from the room, not from the caller's argument.
-    //
-    // The grantee is a group the caller belongs to, and that is a constraint rather than a convenience: wrapping
-    // a key to a group needs its current epoch and public key, and a Bridge running the default group policy
-    // (`get: "user"`, `listAll: "none"`) hands those to members only. Re-keying a container granted to a group
-    // the caller is not in therefore cannot work — `resolveGroupEpochs` throws `UnresolvedGroupGranteeException`
-    // — so do not "restore" this test to Group_1, which holds user_1 alone.
+    // user_2 re-keys naming no groups, so the grantee list comes from the room. The caller must be in that
+    // group: the default group policy hands a group's epoch and public key to members only.
     group::Group granteeGroup;
     ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(granteeGroup.statusCode, 0);
@@ -705,7 +690,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_th
         );
     });
 
-    // The grant survives the re-key, and user_1 — who reads through the group — still resolves the new key.
+    // The grant survives the re-key, and user_1 - who reads through the group - still resolves the new key.
     disconnect();
     connectAs(SRUGConnectionType::SRUGUser1);
     stream::StreamRoom after;
@@ -719,9 +704,8 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_th
 }
 
 TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_clears_staleGroups_after_the_group_advances_its_epoch) {
-    // Group G at epoch 1 is granted the room. Removing a member advances G to epoch 2, which leaves the
-    // room's key wrapped to a superseded epoch — the bridge reports that as `staleGroups`. A re-key
-    // re-wraps to the current epoch and must clear it.
+    // Removing a member advances G to epoch 2, leaving the room's key wrapped to a superseded epoch - which
+    // the bridge reports as `staleGroups`. A re-key re-wraps to the current epoch and must clear it.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(
@@ -754,10 +738,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_clears_staleGroups_after_
     ASSERT_FALSE(streamRoomId.empty());
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMembers(
-            groupId,
-{reader->getString("Login.user_3_id")}
-        );
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
 
     group::Group rotatedGroup;

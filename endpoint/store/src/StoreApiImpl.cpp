@@ -468,54 +468,48 @@ void StoreApiImpl::flushFile(const int64_t handle) {
     if (!rw_handle) {
         throw InvalidFileReadWriteHandleException();
     }
-    // A write handle caches the container key it was opened with; a Store re-key leaves that key superseded.
-    // The finalize-write path recovers through `withKeyRefresh`, a flush had no equivalent.
-    auto refreshKeyAndRetry = [&](bool forceRekey) {
-        server::StoreFileGetModel storeFileGetModel;
-        storeFileGetModel.fileId = rw_handle->getFileId();
-        auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
-        if (forceRekey || isRekeyNeeded(file_raw.store)) {
-            autoRotateStoreKeys(file_raw.store.id);
-            file_raw = _serverApi->storeFileGet(storeFileGetModel);
-        }
-        auto storeKey = storeToModuleKeys(file_raw.store);
-        setNewModuleKeysInCache(file_raw.store.id, storeKey, file_raw.store.version);
-        // The Store's *current* key, not the one `file.keyId` points at: the server rejects a superseded keyId.
-        auto currentKey = getAndValidateModuleCurrentEncKey(storeKey, _groupPrivKeyResolver);
-        if (currentKey.statusCode != 0) {
-            throw core::EncryptionKeyValidationException(
-                "Current encryption key statusCode: " + std::to_string(currentKey.statusCode)
-            );
-        }
-        rw_handle->file->rekey(currentKey);
-        rw_handle->file->flush();
-    };
-    // `static`: these are compile-time constants, but reading one costs a full Exception construction (six
-    // std::strings, most past wasm32's SSO cap). `flushFile` runs on every sqlite commit - don't pay it twice
-    // per call just to compare two ints.
-    static const auto invalidKeyCode = privmx::endpoint::server::InvalidKeyException().getCode();
-    static const auto epochOutdatedCode = privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode();
-    // The same two recoverable codes `withKeyRefresh` handles; an outdated group epoch needs the re-key even
-    // when the re-fetched Store no longer reports `staleGroups`, hence the forced flag.
-    auto recover = [&](unsigned int code) {
-        if (code != invalidKeyCode && code != epochOutdatedCode) {
-            return false;
-        }
-        refreshKeyAndRetry(code == epochOutdatedCode);
-        return true;
-    };
-    // Both types are reachable: `FileHandler::flush` rethrows whichever one `updateOnServer` produced.
     try {
         rw_handle->file->flush();
-    } catch (const privmx::utils::PrivmxException& e) {
-        if (!recover(core::ExceptionConverter::convert(e).getCode())) {
-            throw;
-        }
+        return;
     } catch (const core::Exception& e) {
-        if (!recover(e.getCode())) {
-            throw;
+        if (e.getCode() != privmx::endpoint::server::InvalidKeyException().getCode()) {
+            e.rethrow();
+        }
+    } catch (const privmx::utils::PrivmxException& e) {
+        if (core::ExceptionConverter::convert(e).getCode() !=
+            privmx::endpoint::server::InvalidKeyException().getCode()) {
+            core::ExceptionConverter::rethrowAsCoreException(e);
         }
     }
+    try {
+        rw_handle->file->refreshEncKey(getCurrentFileEncKey(rw_handle->getFileId()));
+        rw_handle->file->flush();
+    } catch (const core::Exception& e) {
+        rw_handle->file->discardPending();
+        e.rethrow();
+    } catch (const privmx::utils::PrivmxException& e) {
+        rw_handle->file->discardPending();
+        e.rethrow();
+    }
+}
+
+core::DecryptedEncKey StoreApiImpl::getCurrentFileEncKey(const std::string& fileId) {
+    server::StoreFileGetModel storeFileGetModel;
+    storeFileGetModel.fileId = fileId;
+    auto store = _serverApi->storeFileGet(storeFileGetModel).store;
+    if (isRekeyNeeded(store)) {
+        autoRotateStoreKeys(store.id);
+        store = _serverApi->storeFileGet(storeFileGetModel).store;
+    }
+    auto storeKey = storeToModuleKeys(store);
+    setNewModuleKeysInCache(store.id, storeKey, store.version);
+    auto key = getAndValidateModuleCurrentEncKey(storeKey, _groupPrivKeyResolver);
+    if (key.statusCode != 0) {
+        throw core::EncryptionKeyValidationException(
+            "Current encryption key statusCode: " + std::to_string(key.statusCode)
+        );
+    }
+    return key;
 }
 
 uint64_t StoreApiImpl::getFileSize(const int64_t handle) {

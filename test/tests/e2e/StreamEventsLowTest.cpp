@@ -12,7 +12,7 @@
 using namespace privmx::endpoint;
 using privmx::test::ScopeExit;
 
-// Minimal WebRTC stub — returns empty strings so no real media session is needed.
+// Minimal WebRTC stub - returns empty strings so no real media session is needed.
 class FakeWebRTC : public stream::WebRTCInterface {
 public:
     virtual std::string createOfferAndSetLocalDescription(
@@ -169,7 +169,7 @@ protected:
     std::shared_ptr<stream::StreamApiLow> streamApi;
 };
 
-// ── StreamRoom lifecycle events ───────────────────────────────────────────────
+// -- StreamRoom lifecycle events --
 
 TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomCreated_two_users) {
     eventQueue.waitEvent();
@@ -377,7 +377,7 @@ TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomDeleted_disabled) {
     EXPECT_NO_THROW({ assertNoEventReceived(); });
 }
 
-// ── Diagnostic tests: isolate Bindings-vs-C++ failures ─────────────────────────────
+// -- Diagnostic tests: isolate Bindings-vs-C++ failures --
 
 TEST_F(StreamEventsLowTest, joinStreamRoom_second_join_throws) {
     auto user1 = fixtureClient();

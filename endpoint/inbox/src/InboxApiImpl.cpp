@@ -433,7 +433,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     model.message = serializedMessage;
     model.resourceId = messageDIO.resourceId;
     model.version = EntryDataSchema::Version::VERSION_1;
-    _serverApi->inboxSend(model);
+    runWithoutAutoRekey(handle->inboxId, [&] { _serverApi->inboxSend(model); });
 }
 
 inbox::InboxEntry InboxApiImpl::readEntry(const std::string& inboxEntryId) {

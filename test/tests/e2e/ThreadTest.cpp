@@ -2164,3 +2164,73 @@ TEST_F(ThreadTest, falseUserVerifierInterface) {
         FAIL();
     }
 }
+
+TEST_F(ThreadTest, getThread_after_two_key_rotations) {
+    const std::vector<core::UserWithPubKey> user_1{core::UserWithPubKey{
+        .userId = reader->getString("Login.user_1_id"),
+        .pubKey = reader->getString("Login.user_1_pubKey")
+    }};
+
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = threadApi->createThread(
+            reader->getString("Context_1.contextId"),
+            user_1,
+            user_1,
+            core::Buffer::from("rotated_public"),
+            core::Buffer::from("rotated_private")
+        );
+    });
+    ASSERT_FALSE(threadId.empty());
+
+    std::string messageId;
+    ASSERT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            threadId,
+            core::Buffer::from("msg_public"),
+            core::Buffer::from("msg_private"),
+            core::Buffer::from("msg_data")
+        );
+    });
+
+    ASSERT_NO_THROW({ threadApi->rotateThreadKeys(threadId, user_1, user_1, 0, true); });
+    thread::Thread afterFirstRotation;
+    ASSERT_NO_THROW({ afterFirstRotation = threadApi->getThread(threadId); });
+    ASSERT_EQ(afterFirstRotation.statusCode, 0); // a single rotation has always been readable
+
+    ASSERT_NO_THROW({ threadApi->rotateThreadKeys(threadId, user_1, user_1, 0, true); });
+
+    // Reconnect so ContainerKeyCache is empty - the reads below resolve purely from server state.
+    disconnect();
+    connectAs(ConnectionType::User1);
+
+    thread::Thread thread;
+    EXPECT_NO_THROW({ thread = threadApi->getThread(threadId); });
+    EXPECT_EQ(thread.statusCode, 0);
+    EXPECT_EQ(thread.publicMeta.stdString(), "rotated_public");
+    EXPECT_EQ(thread.privateMeta.stdString(), "rotated_private");
+
+    // Same decrypt path, batched.
+    core::PagingList<thread::Thread> threadListResult;
+    EXPECT_NO_THROW({
+        threadListResult = threadApi->listThreads(
+            reader->getString("Context_1.contextId"),
+            {.skip=0, .limit=100, .sortOrder="desc"}
+        );
+    });
+    bool foundInList = false;
+    for(const auto& listed : threadListResult.readItems) {
+        if(listed.threadId == threadId) {
+            foundInList = true;
+            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_EQ(listed.privateMeta.stdString(), "rotated_private");
+        }
+    }
+    EXPECT_TRUE(foundInList);
+
+    // Control: a message carries its own keyId, so it must stay readable across the rotations.
+    thread::Message message;
+    EXPECT_NO_THROW({ message = threadApi->getMessage(messageId); });
+    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(message.data.stdString(), "msg_data");
+}

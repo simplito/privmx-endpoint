@@ -148,6 +148,7 @@ private:
     core::ModuleKeys storeToModuleKeys(server::Store store);
 
     core::ModuleKeys getFileDecryptionKeys(server::File file);
+    core::DecryptedEncKey getCurrentFileEncKey(const std::string& fileId);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
     FileEncryptionParams getFileEncryptionParams(server::File file, const core::DecryptedEncKey& encKey);
     FileEncryptionParams getFileEncryptionParams(server::File file, server::Store store);
@@ -159,13 +160,6 @@ private:
         const FileMeta& fileMeta
     );
     void assertStoreExist(const std::string& storeId);
-
-    /**
-     * Re-keys a Store whose key has gone stale, without being asked to.
-     *
-     * The roster is the Store's own — a re-key changes nothing but the key — so unlike `rotateStoreKeys` this
-     * takes no arguments beyond the id and looks the members' public keys up itself.
-     */
     void autoRotateStoreKeys(const std::string& storeId);
     void assertFileExist(const std::string& fileId);
 

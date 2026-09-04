@@ -200,6 +200,26 @@ TEST_F(TreeKeysPrimitives, WrapDoesNotOpenWithTheWrongKey) {
     EXPECT_FALSE(TreeKeys::unwrapKey(blob, stranger).has_value());
 }
 
+// `unwrapKey` passes no `pubOfSignature`, so the signer's public key in the blob is carried and never compared.
+// Membership changes are attributable one layer up, on the signed group entry; a single edge is not.
+TEST_F(TreeKeysPrimitives, AnEdgeOpensWithoutRegardToWhoSignedIt) {
+    const PrivateKey secret = PrivateKey::generateRandom();
+    const PrivateKey recipient = PrivateKey::generateRandom();
+    const PrivateKey manager = PrivateKey::generateRandom();
+    const PrivateKey stranger = PrivateKey::generateRandom();
+
+    const auto byManager =
+        TreeKeys::unwrapKey(TreeKeys::wrapKey(secret, recipient.getPublicKey(), manager), recipient);
+    const auto byStranger =
+        TreeKeys::unwrapKey(TreeKeys::wrapKey(secret, recipient.getPublicKey(), stranger), recipient);
+
+    ASSERT_TRUE(byManager.has_value());
+    ASSERT_TRUE(byStranger.has_value())
+        << "an edge from an unexpected author was refused: authorship is checked now, so this boundary moved — "
+           "widen the test to say who is accepted rather than deleting it";
+    EXPECT_EQ(byManager->toWIF(), byStranger->toWIF());
+}
+
 TEST_F(TreeKeysPrimitives, GarbageBlobIsRejectedNotCrashed) {
     const PrivateKey key = PrivateKey::generateRandom();
     EXPECT_FALSE(TreeKeys::unwrapKey("not-a-blob", key).has_value());
@@ -298,7 +318,6 @@ TEST_F(TreeKeysClimb, SingleMemberGroupClimbsStraightToTheGrantKey) {
     EXPECT_EQ(result.grantKey->getPublicKey(), plan.grantKey.getPublicKey());
 }
 
-/** SECURITY — a corrupted edge must be detected, never allowed to yield a wrong key silently. */
 TEST_F(TreeKeysClimb, SECURITY_DetectsACorruptedEdge) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache buildStore;
@@ -343,6 +362,70 @@ TEST_F(TreeKeysClimb, ReportsAMissingEdgeDistinctlyFromTampering) {
     EXPECT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::MissingEdge);
 }
 
+/** The same authorship boundary inside a whole state: an edge re-issued by somebody else is followed as readily as the original, because the climb verifies recovered keys against the published node keys and asks nothing about who published either. */
+TEST_F(TreeKeysClimb, AnEdgeReissuedByAStrangerIsStillFollowed) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache buildStore;
+    TreeKeys builder(buildStore);
+    const BuildPlan plan = builder.build(publicOf(members), members[0].priv);
+    TreeGroupState state = stateFromBuild(plan, members);
+
+    // Re-issue member 1's leaf edge: same parent key, same recipient, a different author. Only somebody already
+    // holding the parent key can do this — a manager, or anyone whose own climb passes through that node.
+    const auto leafEdge = std::find_if(state.edges.begin(), state.edges.end(), [&](const TreeEdge& edge) {
+        return !edge.isGrantEdge && edge.childKind == EdgeChildKind::User && edge.childUserId == members[1].userId;
+    });
+    ASSERT_NE(leafEdge, state.edges.end());
+    const auto parentKey = std::find_if(plan.nodeKeys.begin(), plan.nodeKeys.end(), [&](const auto& entry) {
+        return entry.first == leafEdge->parentIndex;
+    });
+    ASSERT_NE(parentKey, plan.nodeKeys.end());
+    const PrivateKey stranger = PrivateKey::generateRandom();
+    leafEdge->blob = TreeKeys::wrapKey(parentKey->second, members[1].priv.getPublicKey(), stranger);
+
+    TreeKeyCache store;
+    TreeKeys keys(store);
+    const ClimbResult result = keys.climbToGrantKey(state, members[1].userId, members[1].priv);
+    EXPECT_EQ(result.failure, ClimbFailure::None);
+    ASSERT_TRUE(result.grantKey.has_value());
+    EXPECT_EQ(result.grantKey->getPublicKey(), plan.grantKey.getPublicKey());
+}
+
+// The victim gets the same `MissingEdge` a truncated response produces, nothing is marked tampered, and the
+// roster still seats them — so a manager cutting one member off cannot be told from a broken chain.
+TEST_F(TreeKeysClimb, AWithheldEdgeIsIndistinguishableFromABrokenState) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache buildStore;
+    TreeKeys builder(buildStore);
+    const BuildPlan plan = builder.build(publicOf(members), members[0].priv);
+    TreeGroupState state = stateFromBuild(plan, members);
+
+    std::vector<TreeEdge> published;
+    for (const TreeEdge& edge : state.edges) {
+        const bool cutOff = !edge.isGrantEdge && edge.childKind == EdgeChildKind::User &&
+            edge.childUserId == members[3].userId;
+        if (!cutOff) {
+            published.push_back(edge);
+        }
+    }
+    state.edges = published;
+
+    TreeKeyCache victimStore;
+    TreeKeys victim(victimStore);
+    const ClimbResult result = victim.climbToGrantKey(state, members[3].userId, members[3].priv);
+    EXPECT_EQ(result.failure, ClimbFailure::MissingEdge);
+    EXPECT_FALSE(result.grantKey.has_value());
+    EXPECT_FALSE(result.tamperedNode.has_value());
+
+    EXPECT_TRUE(state.leafAssignment[3].has_value()) << "the roster still names the member who was cut off";
+    for (std::size_t i = 0; i + 1 < members.size(); ++i) {
+        TreeKeyCache store;
+        TreeKeys keys(store);
+        EXPECT_EQ(keys.climbToGrantKey(state, members[i].userId, members[i].priv).failure, ClimbFailure::None)
+            << members[i].userId << " must be unaffected by another member's edge going missing";
+    }
+}
+
 // removal — the property that matters
 
 class TreeKeysRemoval : public TreeKeysTestBase {};
@@ -375,9 +458,8 @@ TEST_F(TreeKeysRemoval, RefreshesExactlyTheDirectPath) {
     for (const NodeRefresh& refresh : removal.pathRefresh) {
         refreshed.push_back(refresh.nodeIndex);
     }
-    // Compared as a set: the plan refreshes the union of the departing members' paths, which comes out ascending
-    // rather than bottom-up. Nothing depends on the order — every node's fresh key is minted before any edge is
-    // built, so a parent can wrap to a child whichever of them the loop reaches first.
+    // Compared as a set: nothing depends on the order, because every node's fresh key is minted before any edge
+    // is built, so a parent can wrap to a child whichever of them the loop reaches first.
     std::vector<std::uint32_t> expected = TreeMath::directPath(2, 8);
     std::sort(refreshed.begin(), refreshed.end());
     std::sort(expected.begin(), expected.end());
@@ -385,9 +467,8 @@ TEST_F(TreeKeysRemoval, RefreshesExactlyTheDirectPath) {
 }
 
 TEST_F(TreeKeysRemoval, BatchRefreshesTheUnionOfPathsOnceEach) {
-    // Seats 0 and 1 sit under one parent, so their paths differ only in that leaf-level node. Refreshing the
-    // shared ancestors once is the whole reason a batch is not k removals sent together: doing it per member
-    // would mint two keys claiming one node and generation, and the second write would orphan the first's edges.
+    // Seats 0 and 1 share every ancestor but the leaf-level node, and refreshing those once is why a batch is
+    // not k removals: per member it would mint two keys claiming one node and generation, orphaning the first.
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache store;
     TreeKeys keys(store);
@@ -461,6 +542,31 @@ TEST_F(TreeKeysRemoval, MintsIndependentKeysNotDerivedFromTheOldOnes) {
     EXPECT_NE(removal.newGrantKey.toWIF(), plan.grantKey.toWIF());
 }
 
+// What a removed member needs is predictability, so that is what has to be denied: any key derived from the
+// state being replaced is a function of that state and shows up here as an equality; entropy cannot collide.
+TEST_F(TreeKeysRemoval, SECURITY_ARemovedMemberCannotRecomputeWhatReplacedTheirPath) {
+    const std::vector<TestMember> members = makeMembers(8);
+    TreeKeyCache store;
+    TreeKeys keys(store);
+    const TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
+    keys.setMemberKeys(publicOf(members));
+
+    // Two plans for the same removal: the served state, the roster and the departing member are identical
+    // between them, so everything a removed member could feed a derivation is identical too.
+    const RemovalPlan first = keys.planRemoval(state, {members[7].userId}, members[0].priv);
+    const RemovalPlan second = keys.planRemoval(state, {members[7].userId}, members[0].priv);
+
+    ASSERT_EQ(first.pathRefresh.size(), second.pathRefresh.size());
+    for (std::size_t i = 0; i < first.pathRefresh.size(); ++i) {
+        ASSERT_EQ(first.pathRefresh[i].nodeIndex, second.pathRefresh[i].nodeIndex);
+        EXPECT_NE(first.pathRefresh[i].newKey.toWIF(), second.pathRefresh[i].newKey.toWIF())
+            << "node " << first.pathRefresh[i].nodeIndex
+            << " is a function of the state it replaces, so whoever held the old key computes the new one";
+    }
+    EXPECT_NE(first.newGrantKey.toWIF(), second.newGrantKey.toWIF())
+        << "the new epoch's grant key is a function of the old state: the removed member reads on";
+}
+
 TEST_F(TreeKeysRemoval, RejectsRemovingTheOnlyMember) {
     const std::vector<TestMember> members = makeMembers(1);
     TreeKeyCache store;
@@ -479,7 +585,6 @@ TEST_F(TreeKeysRemoval, RejectsANonMember) {
     EXPECT_THROW(keys.planRemoval(state, {"stranger"}, members[0].priv), std::invalid_argument);
 }
 
-/** SECURITY — the whole point of the construction: after a removal every surviving member must reach the new grant key, and the removed member must not. */
 TEST_F(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedMemberDoesNot) {
     for (const std::uint32_t count : {2u, 4u, 5u, 8u}) {
         const std::vector<TestMember> members = makeMembers(count);
@@ -513,7 +618,6 @@ TEST_F(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedMemberDoesN
     }
 }
 
-/** SECURITY — the removed member's old keys must not open anything in the new epoch. */
 TEST_F(TreeKeysRemoval, SECURITY_OldPathKeysDoNotOpenRefreshedEdges) {
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache ownerStore;
@@ -551,7 +655,7 @@ TEST_F(TreeKeysRemoval, SECURITY_OldPathKeysDoNotOpenRefreshedEdges) {
     EXPECT_FALSE(TreeKeys::unwrapKey(removal.grantEdge.blob, members[7].priv).has_value());
 }
 
-/** SECURITY — collusion: two members removed at different times must not pool their way in. */
+// The two were removed at different epochs, so between them they hold two generations of the shared path.
 TEST_F(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing) {
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache ownerStore;
@@ -642,9 +746,8 @@ TreeKeys::choosePositions(state, 1), members[0].priv
 }
 
 TEST_F(TreeKeysAddition, SeatsAMemberUnderANodeTheCallerCannotReach) {
-    // The case that a four-member group hides: with eight seats the blank at position 5 sits under node 11, and
-    // nothing on the caller's own climb from seat 0 ever yields that node's key. Wrapping to an existing parent
-    // key is therefore impossible here, and this is the shape production groups are almost entirely made of.
+    // With eight seats the blank at position 5 sits under node 11, and nothing on the caller's own climb from
+    // seat 0 yields that node's key — so wrapping to an existing parent key is impossible here.
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
@@ -687,8 +790,8 @@ TreeKeys::choosePositions(state, 1), members[0].priv
 }
 
 TEST_F(TreeKeysAddition, GrowsTheTreeWithoutBorrowingAnyExistingKey) {
-    // Growth re-parents leaves at the truncated right edge, which used to need several other members' node keys
-    // at once. Re-keying the new leaf's path removes that requirement entirely.
+    // Growth re-parents leaves at the truncated right edge, and re-keying the new leaf's path is what lets it
+    // do so without needing any other member's node key.
     const std::vector<TestMember> members = makeMembers(5);
     TreeKeyCache ownerStore;
     TreeKeys owner(ownerStore);
@@ -775,10 +878,46 @@ TreeKeys::choosePositions(state, 1), members[0].priv
     expectEveryoneClimbs(state, after);
 }
 
+// The path under a blank leaf is the one the member removed from that seat still holds every node key of, so a
+// seating that derived its keys from the ones it replaces would put them back inside the tree.
+TEST_F(TreeKeysAddition, SECURITY_RefillingASeatDoesNotRepeatTheKeysItReplaces) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+    owner.setMemberKeys(publicOf(members));
+
+    // Member 1 out, leaving a blank at position 1.
+    const RemovalPlan removal = owner.planRemoval(state, {members[1].userId}, members[0].priv);
+    applyRemoval(state, removal, members[1].userId);
+    ownerStore.clear();
+    ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+
+    const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
+    std::vector<TreeMember> roster = publicOf(members);
+    roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
+    owner.setMemberKeys(roster);
+    const TreeMember seated{newcomer.userId, newcomer.priv.getPublicKey()};
+
+    const AdditionPlan first =
+        owner.planAddition(state, {seated}, TreeKeys::choosePositions(state, 1), members[0].priv);
+    const AdditionPlan second =
+        owner.planAddition(state, {seated}, TreeKeys::choosePositions(state, 1), members[0].priv);
+
+    ASSERT_EQ(first.positions, second.positions) << "the same seating must land on the same seat";
+    ASSERT_EQ(first.nodeKeys.size(), second.nodeKeys.size());
+    ASSERT_FALSE(first.nodeKeys.empty());
+    for (std::size_t i = 0; i < first.nodeKeys.size(); ++i) {
+        ASSERT_EQ(first.nodeKeys[i].first, second.nodeKeys[i].first);
+        EXPECT_NE(first.nodeKeys[i].second.toWIF(), second.nodeKeys[i].second.toWIF())
+            << "node " << first.nodeKeys[i].first << " is a function of the key it replaces";
+    }
+}
+
 TEST_F(TreeKeysRemoval, ParsesOnlyTheRosterKeysItWrapsTo) {
-    // The roster arrives whole because the API takes it whole, but a removal wraps to the sibling leaf beside the
-    // departing one and to nothing else. Every other entry here is unparseable: if planning touched them it would
-    // throw, so this is the guard on the laziness rather than a claim about it.
+    // The roster arrives whole, but a removal wraps to the sibling leaf beside the departing one and nothing
+    // else. Every other entry here is unparseable, so planning throws the moment it touches one.
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache store;
     TreeKeys keys(store);
@@ -818,9 +957,8 @@ TEST_F(TreeKeysRemoval, StillFailsWhenTheKeyItDoesNeedIsUnusable) {
 }
 
 TEST_F(TreeKeysClimb, ReadsAServedStateWithoutParsingNodeKeys) {
-    // Climbing verifies each recovered key against the published one, which is a string comparison — so a state
-    // whose off-path nodes carry unparseable keys still climbs. That is what makes reading a 4000-member tree
-    // cost `log n` subgroup checks instead of 4000.
+    // Climbing verifies each recovered key against the published one by string comparison, so off-path nodes
+    // may carry unparseable keys — which is what makes reading a 4000-member tree cost `log n` subgroup checks.
     const std::vector<TestMember> members = makeMembers(8);
     TreeKeyCache store;
     TreeKeys keys(store);
@@ -1130,9 +1268,7 @@ TEST_F(TreeKeysClimb, TwoTreesAtTheSameEpochDoNotAliasThroughOneStore) {
     EXPECT_EQ(b.grantKey->getPublicKey(), planB.grantKey.getPublicKey())
         << "group B must not be handed group A's grant key";}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// batch additions
-// ─────────────────────────────────────────────────────────────────────────────
+// ── batch additions ──
 
 TEST_F(TreeKeysAddition, BatchSeatsSeveralAndRekeysTheUnionOnce) {
     // Two newcomers appended past the end of a four-leaf tree. Their paths meet at the root, so the root is
