@@ -133,6 +133,9 @@ struct NodeRefresh {
 
 // Everything a removal must submit, plus the wrap count so callers can assert the cost.
 struct RemovalPlan {
+    /** Seats being blanked, ascending. One epoch covers them all, however many there are. */
+    std::vector<std::uint32_t> blankedPositions;
+    /** The union of the blanked leaves' direct paths — each shared ancestor appears once. */
     std::vector<NodeRefresh> pathRefresh;
     privmx::crypto::PrivateKey newGrantKey;
     TreeEdge grantEdge;
@@ -143,7 +146,8 @@ struct RemovalPlan {
 
 // Everything an addition must submit: the new leaf's path re-keyed, `2*depth + 1` wraps.
 struct AdditionPlan {
-    std::uint32_t position = 0;
+    /** Seats taken, index-aligned with the newcomers the plan was built for. */
+    std::vector<std::uint32_t> positions;
     std::vector<TreeEdge> edges;
     // Every node on the new leaf's path: minted where the tree grew, one generation on where it existed.
     std::vector<TreeNodeState> nodes;

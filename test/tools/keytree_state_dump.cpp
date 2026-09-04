@@ -211,8 +211,8 @@ int main() {
                 return 1;
             }
             const RemovalPlan plan =
-                tree.planRemoval(group.state, group.members[position].userId, group.members[remover].priv);
-            const server::GroupTreeState after = TreeWire::afterRemoval(group.tree, plan, position);
+                tree.planRemoval(group.state, {group.members[position].userId}, group.members[remover].priv);
+            const server::GroupTreeState after = TreeWire::afterRemoval(group.tree, plan);
 
             LadderKeys ladder(store);
             // Unit rung only: the fixture group is minted straight at epoch 5, so there is no epoch history behind
@@ -255,14 +255,15 @@ int main() {
             tree.climbToGrantKey(group.state, group.members[0].userId, group.members[0].priv, false);
             const Member newcomer{"newcomer", PrivateKey::generateRandom()};
             const AdditionPlan plan = tree.planAddition(
-                group.state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, group.members[0].priv
+                group.state, std::vector<TreeMember>{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}},
+                TreeKeys::choosePositions(group.state, 1), group.members[0].priv
             );
-            const server::GroupTreeState after = TreeWire::afterAddition(group.tree, plan, newcomer.userId);
+            const server::GroupTreeState after = TreeWire::afterAddition(group.tree, plan, {newcomer.userId});
             std::vector<std::string> after_members = idsOf(group.members);
             after_members.push_back(newcomer.userId);
             cases.push_back(
                 "{\"kind\":\"add\",\"epoch\":5,\"added\":" + quote(newcomer.userId)
-                + ",\"position\":" + std::to_string(plan.position)
+                + ",\"position\":" + std::to_string(plan.positions.at(0))
                 + ",\"members\":" + membersToJson(idsOf(group.members))
                 + ",\"after_members\":" + membersToJson(after_members)
                 + ",\"before\":" + treeToJson(group.tree) + ",\"after\":" + treeToJson(after) + "}"
@@ -277,8 +278,8 @@ int main() {
             tree.climbToGrantKey(group.state, group.members[0].userId, group.members[0].priv, false);
             const std::uint32_t leaving = count - 1;
             const RemovalPlan removal =
-                tree.planRemoval(group.state, group.members[leaving].userId, group.members[0].priv);
-            server::GroupTreeState afterRemoval = TreeWire::afterRemoval(group.tree, removal, leaving);
+                tree.planRemoval(group.state, {group.members[leaving].userId}, group.members[0].priv);
+            server::GroupTreeState afterRemoval = TreeWire::afterRemoval(group.tree, removal);
             store.putGrantKey(removal.newEpoch, removal.newGrantKey);
             for (const NodeRefresh& refresh : removal.pathRefresh) {
                 store.putNodeKey(refresh.nodeIndex, refresh.newGeneration, refresh.newKey);
@@ -297,9 +298,10 @@ int main() {
             TreeKeys tree2(store);
             tree2.setMemberKeys(remainingMembers);
             const AdditionPlan plan = tree2.planAddition(
-                stateAfterRemoval, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, group.members[0].priv
+                stateAfterRemoval, std::vector<TreeMember>{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}},
+                TreeKeys::choosePositions(stateAfterRemoval, 1), group.members[0].priv
             );
-            const server::GroupTreeState after = TreeWire::afterAddition(afterRemoval, plan, newcomer.userId);
+            const server::GroupTreeState after = TreeWire::afterAddition(afterRemoval, plan, {newcomer.userId});
 
             std::vector<std::string> before_members;
             for (std::uint32_t i = 0; i < count; ++i) {
@@ -311,7 +313,7 @@ int main() {
             after_members.push_back(newcomer.userId);
             cases.push_back(
                 "{\"kind\":\"add\",\"epoch\":" + std::to_string(removal.newEpoch) + ",\"added\":"
-                + quote(newcomer.userId) + ",\"position\":" + std::to_string(plan.position)
+                + quote(newcomer.userId) + ",\"position\":" + std::to_string(plan.positions.at(0))
                 + ",\"members\":" + membersToJson(before_members)
                 + ",\"after_members\":" + membersToJson(after_members)
                 + ",\"before\":" + treeToJson(afterRemoval) + ",\"after\":" + treeToJson(after) + "}"

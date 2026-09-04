@@ -672,18 +672,9 @@ TEST_F(KvdbUsingGroupsTest, user_added_to_group_gains_access_to_kvdb_and_entries
     disconnect();
     connectAs(KUGConnectionType::KUGUser1);
     EXPECT_NO_THROW({
-        groupApi->addGroupMember(
-            reader->getString("Group_2.groupId"),
-            userOf(KUGConnectionType::KUGUser3),
-            false, // asManager
-            std::vector<core::UserWithPubKey>{
-                userOf(KUGConnectionType::KUGUser1),
-                userOf(KUGConnectionType::KUGUser2),
-                userOf(KUGConnectionType::KUGUser3)
-            },
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            group_2.publicMeta,
-            group_2.privateMeta
+        groupApi->addGroupMembers(
+reader->getString("Group_2.groupId"),
+            {group::GroupMemberToAdd{.user = userOf(KUGConnectionType::KUGUser3), .role = "user"}}
         );
     });
 
@@ -934,15 +925,9 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
     ASSERT_NO_THROW({ setNewEntry(kvdbId, "old_epoch_key", "old_epoch_pub", "old_epoch_priv", "old_epoch_data"); });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
+        groupApi->removeGroupMembers(
             groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(KUGConnectionType::KUGUser1), userOf(KUGConnectionType::KUGUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            core::Buffer::from("grp_removed_pub"),
-            core::Buffer::from("grp_removed_priv")
+{reader->getString("Login.user_3_id")}
         );
     });
 
@@ -1020,15 +1005,9 @@ TEST_F(KvdbUsingGroupsTest, setEntry_auto_rotates_a_stale_kvdb_key) {
     ASSERT_FALSE(kvdbId.empty());
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
+        groupApi->removeGroupMembers(
             groupId,
-            reader->getString("Login.user_3_id"),
-            std::vector<core::UserWithPubKey>{
-                userOf(KUGConnectionType::KUGUser1), userOf(KUGConnectionType::KUGUser2)
-            },
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            core::Buffer::from("auto_grp_removed_pub"),
-            core::Buffer::from("auto_grp_removed_priv")
+{reader->getString("Login.user_3_id")}
         );
     });
 

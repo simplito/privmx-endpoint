@@ -67,65 +67,47 @@ public:
     );
 
     /**
-     * Adds one member to a tree-backed Group, without advancing its key epoch.
+     * Adds members to a tree-backed Group, without advancing its key epoch.
      *
-     * Costs one wrap for the new member plus one metadata key entry. Because the epoch does not move, every
-     * container the Group can read stays valid and nobody else re-keys anything.
+     * Not `k` separate additions bundled: the newcomers' paths overlap, so this re-keys their union once and
+     * lands under a single compare-and-swap. Because the epoch does not move, every container the Group can read
+     * stays valid and nobody else re-keys anything.
+     *
+     * Incremental: only the newcomers are named. The resulting roster is derived from the Group's own verified
+     * history, and its metadata carries through untouched — seating a member is not a metadata edit, and
+     * `updateGroup` is where that happens.
      *
      * @param groupId ID of the Group
-     * @param newMember the member to add, with their public key
-     * @param asManager whether the new member joins as a manager
-     * @param users full member list *after* the addition
-     * @param managers full manager list *after* the addition
-     * @param publicMeta public (unencrypted) metadata to store with this change
-     * @param privateMeta private (encrypted) metadata to store with this change
+     * @param newMembers the members to add, each with their public key and the role they take
      */
-    void addGroupMember(
-        const std::string& groupId,
-        const core::UserWithPubKey& newMember,
-        bool asManager,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta
-    );
+    void addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
 
     /**
-     * Removes one member from a tree-backed Group and advances its key epoch.
+     * Removes several members at once, advancing the key epoch **once**.
      *
-     * Does everything a removal requires in one call: blanks the member's leaf, replaces every key on the path
-     * from it to the root, mints a new epoch key, publishes the archive rungs that keep older epochs reachable,
-     * and re-wraps the Group's metadata key once. Containers the Group can read must be re-keyed afterwards; the
-     * bridge refuses new content written under the superseded epoch until they are.
+     * This is why the batch exists. Removing them one at a time advances the epoch per member, so every container
+     * the Group can read goes stale `k` times and the Group's rotation budget is charged `k` times; a batch costs
+     * one epoch, one set of archive rungs and one metadata re-wrap however many members leave.
+     *
+     * Incremental: only the leavers are named, and the roster that remains is derived from the Group's own
+     * verified history. Metadata carries through untouched.
      *
      * @param groupId ID of the Group
-     * @param userId ID of the member to remove
-     * @param users member list that *remains*, without the removed member
-     * @param managers manager list that remains
-     * @param publicMeta public (unencrypted) metadata to store with this change
-     * @param privateMeta private (encrypted) metadata to store with this change
+     * @param userIds IDs of the members to remove
      */
-    void removeGroupMember(
-        const std::string& groupId,
-        const std::string& userId,
-        const std::vector<core::UserWithPubKey>& users,
-        const std::vector<core::UserWithPubKey>& managers,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta
-    );
+    void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     /**
      * Updates an existing Group's metadata.
      *
      * The membership is deliberately not updatable here: seating a member and re-keying their path is one
-     * operation on the Group's key tree, so it goes through addGroupMember/removeGroupMember instead.
+     * operation on the Group's key tree, so it goes through addGroupMembers/removeGroupMembers instead.
      *
      * @param groupId ID of the Group to update
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
      * @param version current version of the updated Group
      * @param force force update (without checking version)
-     * @param forceGenerateNewKey force to regenerate a key for the Group
      * @param policies Group's policies
      */
     void updateGroup(
@@ -134,7 +116,6 @@ public:
         const core::Buffer& privateMeta,
         const int64_t version,
         const bool force,
-        const bool forceGenerateNewKey,
         const std::optional<core::ContainerPolicy>& policies = std::nullopt
     );
 

@@ -230,11 +230,9 @@ TEST_F(GroupKeyTreeTest, addGroupMember_does_not_advance_the_epoch) {
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
 
     ASSERT_NO_THROW({
-        groupApi->addGroupMember(
-            groupId, user(3), false,
-            std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->addGroupMembers(
+            groupId,
+            {group::GroupMemberToAdd{.user = user(3), .role = "user"}}
         );
     });
 
@@ -249,11 +247,9 @@ TEST_F(GroupKeyTreeTest, an_added_member_can_read_the_group) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     ASSERT_NO_THROW({
-        groupApi->addGroupMember(
-            groupId, user(3), false,
-            std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->addGroupMembers(
+            groupId,
+            {group::GroupMemberToAdd{.user = user(3), .role = "user"}}
         );
     });
     disconnect();
@@ -278,11 +274,9 @@ TEST_F(GroupKeyTreeTest, removeGroupMember_advances_the_epoch_and_replaces_the_g
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->removeGroupMembers(
+            groupId,
+{user(3).userId}
         );
     });
 
@@ -298,11 +292,9 @@ TEST_F(GroupKeyTreeTest, remaining_members_can_still_read_after_a_removal) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->removeGroupMembers(
+            groupId,
+{user(3).userId}
         );
     });
     disconnect();
@@ -334,11 +326,9 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_removed_member_cannot_read_content_written_a
     });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->removeGroupMembers(
+            groupId,
+{user(3).userId}
         );
     });
 
@@ -466,11 +456,9 @@ TEST_F(GroupKeyTreeTest, removeGroupMember_leaves_the_same_session_able_to_read_
     });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->removeGroupMembers(
+            groupId,
+{user(3).userId}
         );
     });
 
@@ -564,11 +552,9 @@ TEST_F(GroupKeyTreeTest, ROTATE_REQUIRED_blocks_writes_until_the_container_catch
     });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->removeGroupMembers(
+            groupId,
+{user(3).userId}
         );
     });
 
@@ -619,11 +605,9 @@ TEST_F(GroupKeyTreeTest, a_remaining_member_reads_content_from_before_a_removal)
     });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->removeGroupMembers(
+            groupId,
+{user(3).userId}
         );
     });
     disconnect();
@@ -657,20 +641,16 @@ TEST_F(GroupKeyTreeTest, a_newcomer_reads_history_that_predates_them) {
 
     // Rotate the epoch, so reaching the message requires a descent rather than the current key.
     ASSERT_NO_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(2).userId,
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->removeGroupMembers(
+            groupId,
+{user(2).userId}
         );
     });
     // Then seat user_3, who has never held any key of this group.
     ASSERT_NO_THROW({
-        groupApi->addGroupMember(
-            groupId, user(3), false,
-            std::vector<core::UserWithPubKey>{user(1), user(3)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->addGroupMembers(
+            groupId,
+            {group::GroupMemberToAdd{.user = user(3), .role = "user"}}
         );
     });
     disconnect();
@@ -705,21 +685,17 @@ TEST_F(GroupKeyTreeTest, several_removals_in_a_row_keep_the_whole_history_reacha
     // remove user_3, then re-add and remove again, twice more — three epoch bumps in total.
     for (int round = 0; round < 3; round++) {
         ASSERT_NO_THROW({
-            groupApi->removeGroupMember(
-                groupId, user(3).userId,
-                std::vector<core::UserWithPubKey>{user(1), user(2)},
-                std::vector<core::UserWithPubKey>{user(1)},
-                core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-            );
+            groupApi->removeGroupMembers(
+            groupId,
+{user(3).userId}
+        );
         }) << "removal round " << round;
         if (round < 2) {
             ASSERT_NO_THROW({
-                groupApi->addGroupMember(
-                    groupId, user(3), false,
-                    std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
-                    std::vector<core::UserWithPubKey>{user(1)},
-                    core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
-                );
+                groupApi->addGroupMembers(
+            groupId,
+            {group::GroupMemberToAdd{.user = user(3), .role = "user"}}
+        );
             }) << "re-add round " << round;
         }
     }
@@ -742,11 +718,9 @@ TEST_F(GroupKeyTreeTest, addGroupMember_rejects_somebody_already_in_the_group) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     EXPECT_THROW({
-        groupApi->addGroupMember(
-            groupId, user(2), false,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->addGroupMembers(
+            groupId,
+            {group::GroupMemberToAdd{.user = user(2), .role = "user"}}
         );
     }, core::Exception);
 }
@@ -755,11 +729,9 @@ TEST_F(GroupKeyTreeTest, removeGroupMember_rejects_somebody_who_is_not_a_member)
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     EXPECT_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->removeGroupMembers(
+            groupId,
+{user(3).userId}
         );
     }, core::Exception);
 }
@@ -773,11 +745,9 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_remove_anybody) {
 
     connectAs(KeyTreeConnectionType::KTUser2);
     EXPECT_THROW({
-        groupApi->removeGroupMember(
-            groupId, user(3).userId,
-            std::vector<core::UserWithPubKey>{user(1), user(2)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        groupApi->removeGroupMembers(
+            groupId,
+{user(3).userId}
         );
     }, core::Exception) << "a non-manager removed a member";
     disconnect();

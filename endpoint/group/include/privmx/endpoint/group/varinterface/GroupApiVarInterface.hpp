@@ -16,8 +16,8 @@ public:
     enum METHOD {
         Create = 0,
         CreateGroup = 1,
-        AddGroupMember = 2,
-        RemoveGroupMember = 3,
+        AddGroupMembers = 2,
+        RemoveGroupMembers = 3,
         UpdateGroup = 4,
         DeleteGroup = 5,
         GetGroup = 6,
@@ -32,8 +32,8 @@ public:
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var createGroup(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var addGroupMember(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var removeGroupMember(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var addGroupMembers(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var removeGroupMembers(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateGroup(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteGroup(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getGroup(const Poco::Dynamic::Var& args);

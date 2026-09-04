@@ -109,7 +109,7 @@ protected:
         const std::vector<std::optional<std::string>> seatingBefore = state.leafAssignment;
         state.numLeaves = plan.newNumLeaves;
         state.leafAssignment.resize(plan.newNumLeaves, std::nullopt);
-        state.leafAssignment[plan.position] = newMemberId;
+        state.leafAssignment[plan.positions.at(0)] = newMemberId;
 
         std::set<std::uint32_t> rekeyed;
         for (const TreeNodeState& node : plan.nodes) {
@@ -355,7 +355,7 @@ TEST_F(TreeKeysRemoval, CostsTwoTimesDepthMinusOnePlusGrantEdge) {
     const TreeGroupState state = stateFromBuild(plan, members);
 
     keys.setMemberKeys(publicOf(members));
-    const RemovalPlan removal = keys.planRemoval(state, members[0].userId, members[1].priv);
+    const RemovalPlan removal = keys.planRemoval(state, {members[0].userId}, members[1].priv);
 
     EXPECT_EQ(removal.pathRefresh.size(), TreeMath::depth(8));
     // 2*depth - 1 tree wraps (bottom node skips the blanked leaf) + 1 grant edge
@@ -370,12 +370,76 @@ TEST_F(TreeKeysRemoval, RefreshesExactlyTheDirectPath) {
     const TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
     keys.setMemberKeys(publicOf(members));
 
-    const RemovalPlan removal = keys.planRemoval(state, members[2].userId, members[0].priv);
+    const RemovalPlan removal = keys.planRemoval(state, {members[2].userId}, members[0].priv);
     std::vector<std::uint32_t> refreshed;
     for (const NodeRefresh& refresh : removal.pathRefresh) {
         refreshed.push_back(refresh.nodeIndex);
     }
-    EXPECT_EQ(refreshed, TreeMath::directPath(2, 8));
+    // Compared as a set: the plan refreshes the union of the departing members' paths, which comes out ascending
+    // rather than bottom-up. Nothing depends on the order — every node's fresh key is minted before any edge is
+    // built, so a parent can wrap to a child whichever of them the loop reaches first.
+    std::vector<std::uint32_t> expected = TreeMath::directPath(2, 8);
+    std::sort(refreshed.begin(), refreshed.end());
+    std::sort(expected.begin(), expected.end());
+    EXPECT_EQ(refreshed, expected);
+}
+
+TEST_F(TreeKeysRemoval, BatchRefreshesTheUnionOfPathsOnceEach) {
+    // Seats 0 and 1 sit under one parent, so their paths differ only in that leaf-level node. Refreshing the
+    // shared ancestors once is the whole reason a batch is not k removals sent together: doing it per member
+    // would mint two keys claiming one node and generation, and the second write would orphan the first's edges.
+    const std::vector<TestMember> members = makeMembers(8);
+    TreeKeyCache store;
+    TreeKeys keys(store);
+    const TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
+    keys.setMemberKeys(publicOf(members));
+
+    const RemovalPlan removal = keys.planRemoval(state, {members[0].userId, members[1].userId}, members[2].priv);
+    std::vector<std::uint32_t> refreshed;
+    for (const NodeRefresh& refresh : removal.pathRefresh) {
+        refreshed.push_back(refresh.nodeIndex);
+    }
+    std::sort(refreshed.begin(), refreshed.end());
+    EXPECT_EQ(refreshed, (std::vector<std::uint32_t>{1, 3, 7})) << "the union, not the two paths concatenated";
+    EXPECT_EQ(removal.blankedPositions, (std::vector<std::uint32_t>{0, 1}));
+
+    // Both leaves under node 1 are leaving, so it owes no edge at all: it still takes a fresh key so the refresh
+    // reaches the root, but nothing can climb into it.
+    for (const NodeRefresh& refresh : removal.pathRefresh) {
+        if (refresh.nodeIndex == 1) {
+            EXPECT_TRUE(refresh.edges.empty()) << "a node whose every leaf is blanked has nobody to wrap to";
+        }
+    }
+    // And neither departing member is wrapped to anywhere in the plan.
+    for (const NodeRefresh& refresh : removal.pathRefresh) {
+        for (const TreeEdge& edge : refresh.edges) {
+            EXPECT_NE(edge.childUserId, members[0].userId);
+            EXPECT_NE(edge.childUserId, members[1].userId);
+        }
+    }
+}
+
+TEST_F(TreeKeysRemoval, BatchRefusesTheSameMemberTwice) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache store;
+    TreeKeys keys(store);
+    const TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
+    keys.setMemberKeys(publicOf(members));
+
+    EXPECT_THROW(
+        keys.planRemoval(state, {members[1].userId, members[1].userId}, members[0].priv),
+        std::invalid_argument
+    );
+}
+
+TEST_F(TreeKeysRemoval, BatchRefusesAnEmptyMemberList) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache store;
+    TreeKeys keys(store);
+    const TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
+    keys.setMemberKeys(publicOf(members));
+
+    EXPECT_THROW(keys.planRemoval(state, {}, members[0].priv), std::invalid_argument);
 }
 
 TEST_F(TreeKeysRemoval, MintsIndependentKeysNotDerivedFromTheOldOnes) {
@@ -386,7 +450,7 @@ TEST_F(TreeKeysRemoval, MintsIndependentKeysNotDerivedFromTheOldOnes) {
     const TreeGroupState state = stateFromBuild(plan, members);
     keys.setMemberKeys(publicOf(members));
 
-    const RemovalPlan removal = keys.planRemoval(state, members[0].userId, members[1].priv);
+    const RemovalPlan removal = keys.planRemoval(state, {members[0].userId}, members[1].priv);
     for (const NodeRefresh& refresh : removal.pathRefresh) {
         for (const auto& [nodeIndex, oldKey] : plan.nodeKeys) {
             if (nodeIndex == refresh.nodeIndex) {
@@ -403,7 +467,7 @@ TEST_F(TreeKeysRemoval, RejectsRemovingTheOnlyMember) {
     TreeKeys keys(store);
     const TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
     keys.setMemberKeys(publicOf(members));
-    EXPECT_THROW(keys.planRemoval(state, members[0].userId, members[0].priv), std::invalid_argument);
+    EXPECT_THROW(keys.planRemoval(state, {members[0].userId}, members[0].priv), std::invalid_argument);
 }
 
 TEST_F(TreeKeysRemoval, RejectsANonMember) {
@@ -412,7 +476,7 @@ TEST_F(TreeKeysRemoval, RejectsANonMember) {
     TreeKeys keys(store);
     const TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
     keys.setMemberKeys(publicOf(members));
-    EXPECT_THROW(keys.planRemoval(state, "stranger", members[0].priv), std::invalid_argument);
+    EXPECT_THROW(keys.planRemoval(state, {"stranger"}, members[0].priv), std::invalid_argument);
 }
 
 /** SECURITY — the whole point of the construction: after a removal every surviving member must reach the new grant key, and the removed member must not. */
@@ -429,7 +493,7 @@ TEST_F(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedMemberDoesN
         owner.setMemberKeys(publicOf(members));
 
         const std::string leaving = members[count - 1].userId;
-        const RemovalPlan removal = owner.planRemoval(state, leaving, members[0].priv);
+        const RemovalPlan removal = owner.planRemoval(state, {leaving}, members[0].priv);
         applyRemoval(state, removal, leaving);
 
         for (const TestMember& member : members) {
@@ -471,7 +535,7 @@ TEST_F(TreeKeysRemoval, SECURITY_OldPathKeysDoNotOpenRefreshedEdges) {
         heldKeys.push_back(key.value());
     }
 
-    const RemovalPlan removal = owner.planRemoval(state, members[7].userId, members[0].priv);
+    const RemovalPlan removal = owner.planRemoval(state, {members[7].userId}, members[0].priv);
 
     // Not one of the keys the leaver holds may open any refreshed edge.
     for (const NodeRefresh& refresh : removal.pathRefresh) {
@@ -497,11 +561,11 @@ TEST_F(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing)
     owner.setMemberKeys(publicOf(members));
 
     // Remove member 7, then member 6 — different subtrees, different epochs.
-    const RemovalPlan first = owner.planRemoval(state, members[7].userId, members[0].priv);
+    const RemovalPlan first = owner.planRemoval(state, {members[7].userId}, members[0].priv);
     applyRemoval(state, first, members[7].userId);
     ownerStore.clear();
     ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
-    const RemovalPlan second = owner.planRemoval(state, members[6].userId, members[0].priv);
+    const RemovalPlan second = owner.planRemoval(state, {members[6].userId}, members[0].priv);
     applyRemoval(state, second, members[6].userId);
 
     // Neither alone nor together can they climb in the current epoch.
@@ -537,7 +601,7 @@ TEST_F(TreeKeysAddition, FillingABlankRekeysThePathAndDoesNotRotate) {
     owner.setMemberKeys(publicOf(members));
 
     // Remove member 1, leaving a blank at position 1.
-    const RemovalPlan removal = owner.planRemoval(state, members[1].userId, members[0].priv);
+    const RemovalPlan removal = owner.planRemoval(state, {members[1].userId}, members[0].priv);
     applyRemoval(state, removal, members[1].userId);
     ownerStore.clear();
     ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
@@ -547,10 +611,11 @@ TEST_F(TreeKeysAddition, FillingABlankRekeysThePathAndDoesNotRotate) {
     roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
     owner.setMemberKeys(roster);
     const AdditionPlan addition = owner.planAddition(
-        state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv
-    );
+state, std::vector<TreeMember>{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}},
+TreeKeys::choosePositions(state, 1), members[0].priv
+);
 
-    EXPECT_EQ(addition.position, 1u) << "must reuse the blank rather than append";
+    EXPECT_EQ(addition.positions.at(0), 1u) << "must reuse the blank rather than append";
     EXPECT_EQ(addition.newNumLeaves, state.numLeaves) << "topology unchanged";
     EXPECT_FALSE(addition.newRoot.has_value());
     // Two nodes on the path for four leaves, each wrapping to two children, plus the grant edge.
@@ -587,7 +652,7 @@ TEST_F(TreeKeysAddition, SeatsAMemberUnderANodeTheCallerCannotReach) {
     owner.setMemberKeys(publicOf(members));
     ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
 
-    const RemovalPlan removal = owner.planRemoval(state, members[5].userId, members[0].priv);
+    const RemovalPlan removal = owner.planRemoval(state, {members[5].userId}, members[0].priv);
     applyRemoval(state, removal, members[5].userId);
     ownerStore.clear();
     ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
@@ -604,9 +669,10 @@ TEST_F(TreeKeysAddition, SeatsAMemberUnderANodeTheCallerCannotReach) {
     roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
     owner.setMemberKeys(roster);
     const AdditionPlan addition = owner.planAddition(
-        state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv
-    );
-    EXPECT_EQ(addition.position, 5u);
+state, std::vector<TreeMember>{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}},
+TreeKeys::choosePositions(state, 1), members[0].priv
+);
+    EXPECT_EQ(addition.positions.at(0), 5u);
     EXPECT_EQ(addition.nodes.size(), 3u) << "three nodes on the path of an eight-leaf tree";
 
     applyAddition(state, addition, newcomer.userId);
@@ -635,9 +701,10 @@ TEST_F(TreeKeysAddition, GrowsTheTreeWithoutBorrowingAnyExistingKey) {
     roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
     owner.setMemberKeys(roster);
     const AdditionPlan addition = owner.planAddition(
-        state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv
-    );
-    EXPECT_EQ(addition.position, 5u) << "every seat is taken, so the tree grows";
+state, std::vector<TreeMember>{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}},
+TreeKeys::choosePositions(state, 1), members[0].priv
+);
+    EXPECT_EQ(addition.positions.at(0), 5u) << "every seat is taken, so the tree grows";
     EXPECT_EQ(addition.newNumLeaves, 6u);
 
     const privmx::crypto::PublicKey grantBefore = state.grantPublicKey;
@@ -665,8 +732,9 @@ TEST_F(TreeKeysAddition, GrowsAcrossARootChangeAndKeepsEverybodyClimbing) {
     roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
     owner.setMemberKeys(roster);
     const AdditionPlan addition = owner.planAddition(
-        state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv
-    );
+state, std::vector<TreeMember>{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}},
+TreeKeys::choosePositions(state, 1), members[0].priv
+);
     ASSERT_TRUE(addition.newRoot.has_value()) << "growing from four to five leaves changes the root";
     EXPECT_EQ(addition.newRoot->nodeIndex, TreeMath::root(5));
 
@@ -693,9 +761,10 @@ TEST_F(TreeKeysAddition, SeatsTheSecondMemberOfAOneMemberGroup) {
     roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
     owner.setMemberKeys(roster);
     const AdditionPlan addition = owner.planAddition(
-        state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv
-    );
-    EXPECT_EQ(addition.position, 1u);
+state, std::vector<TreeMember>{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}},
+TreeKeys::choosePositions(state, 1), members[0].priv
+);
+    EXPECT_EQ(addition.positions.at(0), 1u);
     EXPECT_EQ(addition.nodes.size(), 1u);
 
     const privmx::crypto::PublicKey grantBefore = state.grantPublicKey;
@@ -727,7 +796,7 @@ TEST_F(TreeKeysRemoval, ParsesOnlyTheRosterKeysItWrapsTo) {
     keys.setMemberKeyStrings(roster);
 
     RemovalPlan plan;
-    ASSERT_NO_THROW({ plan = keys.planRemoval(state, members[leaving].userId, members[0].priv); });
+    ASSERT_NO_THROW({ plan = keys.planRemoval(state, {members[leaving].userId}, members[0].priv); });
     EXPECT_EQ(plan.newEpoch, state.epoch + 1);
 }
 
@@ -745,7 +814,7 @@ TEST_F(TreeKeysRemoval, StillFailsWhenTheKeyItDoesNeedIsUnusable) {
     }
     roster[members[4].userId] = "not-a-key";
     keys.setMemberKeyStrings(roster);
-    EXPECT_ANY_THROW(keys.planRemoval(state, members[5].userId, members[0].priv));
+    EXPECT_ANY_THROW(keys.planRemoval(state, {members[5].userId}, members[0].priv));
 }
 
 TEST_F(TreeKeysClimb, ReadsAServedStateWithoutParsingNodeKeys) {
@@ -769,10 +838,10 @@ TEST_F(TreeKeysAddition, ChoosesTheLowestBlankThenAppends) {
     TreeGroupState state;
     state.numLeaves = 4;
     state.leafAssignment = {std::string("a"), std::nullopt, std::string("c"), std::nullopt};
-    EXPECT_EQ(TreeKeys::choosePosition(state), 1u);
+    EXPECT_EQ(TreeKeys::choosePositions(state, 1).at(0), 1u);
 
     state.leafAssignment = {std::string("a"), std::string("b"), std::string("c"), std::string("d")};
-    EXPECT_EQ(TreeKeys::choosePosition(state), 4u) << "no blanks: append";
+    EXPECT_EQ(TreeKeys::choosePositions(state, 1).at(0), 4u) << "no blanks: append";
 }
 
 TEST_F(TreeKeysAddition, RequiresTheGrantKeyAndSaysSo) {
@@ -789,7 +858,10 @@ TEST_F(TreeKeysAddition, RequiresTheGrantKeyAndSaysSo) {
     keys.setMemberKeys(publicOf(members));
     const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
     EXPECT_THROW(
-        keys.planAddition(state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv),
+        keys.planAddition(
+state, std::vector<TreeMember>{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}},
+TreeKeys::choosePositions(state, 1), members[0].priv
+),
         std::invalid_argument
     );
 }
@@ -806,7 +878,10 @@ TEST_F(TreeKeysAddition, RequiresTheRosterForTheSiblingsItRewrapsTo) {
 
     const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
     EXPECT_THROW(
-        owner.planAddition(state, TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}, members[0].priv),
+        owner.planAddition(
+state, std::vector<TreeMember>{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}},
+TreeKeys::choosePositions(state, 1), members[0].priv
+),
         std::invalid_argument
     ) << "no setMemberKeys call, so the sibling leaves cannot be wrapped to";
 }
@@ -1054,3 +1129,139 @@ TEST_F(TreeKeysClimb, TwoTreesAtTheSameEpochDoNotAliasThroughOneStore) {
     ASSERT_EQ(b.failure, ClimbFailure::None);
     EXPECT_EQ(b.grantKey->getPublicKey(), planB.grantKey.getPublicKey())
         << "group B must not be handed group A's grant key";}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// batch additions
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST_F(TreeKeysAddition, BatchSeatsSeveralAndRekeysTheUnionOnce) {
+    // Two newcomers appended past the end of a four-leaf tree. Their paths meet at the root, so the root is
+    // re-keyed once — the same reason a batch removal is not k removals, applied to the cheap direction.
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    const BuildPlan plan = owner.build(publicOf(members), members[0].priv);
+    TreeGroupState state = stateFromBuild(plan, members);
+    ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+
+    const TestMember first{"newcomer-a", PrivateKey::generateRandom()};
+    const TestMember second{"newcomer-b", PrivateKey::generateRandom()};
+    std::vector<TreeMember> roster = publicOf(members);
+    roster.push_back(TreeMember{first.userId, first.priv.getPublicKey()});
+    roster.push_back(TreeMember{second.userId, second.priv.getPublicKey()});
+    owner.setMemberKeys(roster);
+
+    const std::vector<std::uint32_t> seats = TreeKeys::choosePositions(state, 2);
+    EXPECT_EQ(seats, (std::vector<std::uint32_t>{4, 5})) << "every seat is taken, so both append, contiguously";
+
+    const AdditionPlan addition = owner.planAddition(
+        state,
+        std::vector<TreeMember>{
+            TreeMember{first.userId, first.priv.getPublicKey()},
+            TreeMember{second.userId, second.priv.getPublicKey()},
+        },
+        seats, members[0].priv
+    );
+    EXPECT_EQ(addition.positions, seats);
+    EXPECT_EQ(addition.newNumLeaves, 6u) << "the tree grows once for the batch, not once per newcomer";
+
+    // Each node appears exactly once in the plan: that is what "union" means here.
+    std::vector<std::uint32_t> seated;
+    for (const TreeNodeState& node : addition.nodes) {
+        seated.push_back(node.nodeIndex);
+    }
+    std::vector<std::uint32_t> unique = seated;
+    std::sort(unique.begin(), unique.end());
+    unique.erase(std::unique(unique.begin(), unique.end()), unique.end());
+    EXPECT_EQ(seated.size(), unique.size()) << "a shared ancestor must not be re-keyed twice";
+
+    // Both newcomers are wrapped to, or one of them joins a group they cannot read.
+    bool wrappedFirst = false;
+    bool wrappedSecond = false;
+    for (const TreeEdge& edge : addition.edges) {
+        wrappedFirst = wrappedFirst || edge.childUserId == first.userId;
+        wrappedSecond = wrappedSecond || edge.childUserId == second.userId;
+    }
+    EXPECT_TRUE(wrappedFirst);
+    EXPECT_TRUE(wrappedSecond);
+}
+
+TEST_F(TreeKeysAddition, BatchRefusesMismatchedMembersAndSeats) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    const TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    owner.setMemberKeys(publicOf(members));
+
+    const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
+    const std::vector<TreeMember> one{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}};
+    EXPECT_THROW(owner.planAddition(state, one, {4, 5}, members[0].priv), std::invalid_argument);
+    EXPECT_THROW(owner.planAddition(state, {}, {}, members[0].priv), std::invalid_argument);
+}
+
+TEST_F(TreeKeysAddition, BatchRefusesTheSameNewcomerTwice) {
+    // Two seats for one userId leaves a second leaf nobody ever blanks: `positionOf` finds only the first, so a
+    // later removal re-keys one path and the other keeps climbing to the new grant key.
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    const TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
+    std::vector<TreeMember> roster = publicOf(members);
+    roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
+    owner.setMemberKeys(roster);
+
+    EXPECT_THROW(
+        owner.planAddition(
+            state,
+            std::vector<TreeMember>{
+                TreeMember{newcomer.userId, newcomer.priv.getPublicKey()},
+                TreeMember{newcomer.userId, newcomer.priv.getPublicKey()},
+            },
+            {4, 5}, members[0].priv
+        ),
+        std::invalid_argument
+    );
+}
+
+TEST_F(TreeKeysAddition, BatchRefusesSomebodyWhoAlreadyHoldsALeaf) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    const TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    owner.setMemberKeys(publicOf(members));
+
+    EXPECT_THROW(
+        owner.planAddition(
+            state,
+            std::vector<TreeMember>{TreeMember{members[1].userId, members[1].priv.getPublicKey()}},
+            {4}, members[0].priv
+        ),
+        std::invalid_argument
+    );
+}
+
+TEST_F(TreeKeysAddition, BatchRefusesTwoNewcomersOnOneSeat) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    const TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    const TestMember first{"newcomer-a", PrivateKey::generateRandom()};
+    const TestMember second{"newcomer-b", PrivateKey::generateRandom()};
+    std::vector<TreeMember> roster = publicOf(members);
+    roster.push_back(TreeMember{first.userId, first.priv.getPublicKey()});
+    roster.push_back(TreeMember{second.userId, second.priv.getPublicKey()});
+    owner.setMemberKeys(roster);
+
+    EXPECT_THROW(
+        owner.planAddition(
+            state,
+            std::vector<TreeMember>{
+                TreeMember{first.userId, first.priv.getPublicKey()},
+                TreeMember{second.userId, second.priv.getPublicKey()},
+            },
+            {4, 4}, members[0].priv
+        ),
+        std::invalid_argument
+    );
+}

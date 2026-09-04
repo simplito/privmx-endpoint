@@ -574,11 +574,11 @@ private:
         {group_createGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->createGroup(args);
         }},
-        {group_addGroupMember, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->group->addGroupMember(args);
+        {group_addGroupMembers, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->addGroupMembers(args);
         }},
-        {group_removeGroupMember, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->group->removeGroupMember(args);
+        {group_removeGroupMembers, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->removeGroupMembers(args);
         }},
         {group_updateGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->updateGroup(args);
@@ -1613,30 +1613,21 @@ private:
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
             "\t\tpolicies [OBJECT] - (optional) Group's policies (ContainerPolicy)"
         },
-        {group_addGroupMember,
-            "addGroupMember JSON_ARRAY\n"
-            "\tjson format - [groupId, newMember:{userId, pubKey}, asManager, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta]\n"
+        {group_addGroupMembers,
+            "addGroupMembers JSON_ARRAY\n"
+            "\tjson format - [groupId, newMembers:[{user:{userId, pubKey}, role}]]\n"
             "\t\tgroupId [STRING] - ID of the Group\n"
-            "\t\tnewMember [OBJECT] - the member to add, with their public key (UserWithPubKey)\n"
-            "\t\t\tuserId [STRING] - ID of the user\n"
-            "\t\t\tpubKey [STRING] - user's public key\n"
-            "\t\tasManager [BOOL] - whether the new member joins as a manager\n"
-            "\t\tusers [ARRAY] - full member list *after* the addition\n"
-            "\t\tmanagers [ARRAY] - full manager list *after* the addition\n"
-            "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata to store with this change\n"
-            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata to store with this change\n"
-            "\tdoes not advance the Group's key epoch"
+            "\t\tnewMembers [ARRAY] - the members to add (GroupMemberToAdd)\n"
+            "\t\t\tuser [OBJECT] - the member, with their public key (UserWithPubKey)\n"
+            "\t\t\trole [STRING] - \"user\" or \"manager\"\n"
+            "\tdoes not advance the Group's key epoch; the roster and metadata are derived, not passed"
         },
-        {group_removeGroupMember,
-            "removeGroupMember JSON_ARRAY\n"
-            "\tjson format - [groupId, userId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta]\n"
+        {group_removeGroupMembers,
+            "removeGroupMembers JSON_ARRAY\n"
+            "\tjson format - [groupId, userIds:[STRING]]\n"
             "\t\tgroupId [STRING] - ID of the Group\n"
-            "\t\tuserId [STRING] - ID of the member to remove\n"
-            "\t\tusers [ARRAY] - member list that *remains*, without the removed member\n"
-            "\t\tmanagers [ARRAY] - manager list that remains\n"
-            "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata to store with this change\n"
-            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata to store with this change\n"
-            "\tadvances the Group's key epoch; containers the Group can read must be re-keyed afterwards"
+            "\t\tuserIds [ARRAY] - IDs of the members to remove\n"
+            "\tthe roster that remains and the metadata are derived, not passed; advances the Group's key epoch; containers the Group can read must be re-keyed afterwards"
         },
         {group_updateGroup,
             "updateGroup JSON_ARRAY\n"
@@ -1823,8 +1814,8 @@ private:
         {kvdb_buildSubscriptionQuery, "Generates a subscription query for KVDB events."},
         {kvdb_buildSubscriptionQueryForSelectedEntry, "Generates a subscription query for events of a single KVDB entry."},
         {group_createGroup, "Creates a new Group whose key distribution is backed by a hidden key tree."},
-        {group_addGroupMember, "Adds one member to a tree-backed Group, without advancing its key epoch."},
-        {group_removeGroupMember, "Removes one member from a tree-backed Group and advances its key epoch."},
+        {group_addGroupMembers, "Adds one member to a tree-backed Group, without advancing its key epoch."},
+        {group_removeGroupMembers, "Removes one member from a tree-backed Group and advances its key epoch."},
         {group_updateGroup, "Updates an existing Group."},
         {group_deleteGroup, "Deletes a Group by given Group ID."},
         {group_getGroup, "Gets a Group by given Group ID."},
@@ -1963,8 +1954,8 @@ private:
         {kvdb_buildSubscriptionQuery, "Building subscription query"},
         {kvdb_buildSubscriptionQueryForSelectedEntry, "Building subscription query"},
         {group_createGroup, "Creating group"},
-        {group_addGroupMember, "Adding group member"},
-        {group_removeGroupMember, "Removing group member"},
+        {group_addGroupMembers, "Adding group member"},
+        {group_removeGroupMembers, "Removing group member"},
         {group_updateGroup, "Updating group"},
         {group_deleteGroup, "Deleting group"},
         {group_getGroup, "Getting group"},
