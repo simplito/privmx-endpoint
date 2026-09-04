@@ -18,9 +18,9 @@ using namespace privmx::endpoint;
  *
  * The unit tests on either side each check one half of the contract: this client builds a state, the server
  * decides whether it is well-formed, and the conformance fixture proves the two agree on paper. What none of them
- * can show is that the whole round trip works — that a member removed here really cannot read afterwards, and that
- * a member added later really can reach content written before they existed. That needs a server, so it lives
- * here.
+ * can show is that the whole round trip works — that a member removed here is really no longer served content
+ * written afterwards, and that a member added later really can reach content written before they existed. That
+ * needs a server, so it lives here.
  *
  * Tests named SECURITY assert that somebody *cannot* do something. They fail silently at runtime if the guard
  * regresses — nothing breaks, access simply persists where it should have ended — so they must not be deleted or
@@ -381,8 +381,12 @@ TEST_F(GroupKeyTreeTest, remaining_members_can_still_read_after_a_removal) {
 }
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_removed_member_cannot_read_content_written_afterwards) {
-    // The claim the whole construction makes. A thread wrapped to the group at epoch 1 stays readable to the
-    // removed member — they saw it while they were in — but content wrapped at epoch 2 must not be.
+    // The claim the whole construction makes: content wrapped at epoch 2 must not reach the member removed at
+    // epoch 2. It bites only because this test arranges all three conditions — `forwardSecrecy = "yes"` on the
+    // thread (the helper's argument, not the default), an explicit re-key to the new epoch, and a cold session
+    // for the probe. Nothing here says the epoch-1 message became safe: the removed member held that epoch's key
+    // while it was current and keeps whatever they kept. What ends is the route, and it ends for epoch 1 too — a
+    // cold session of theirs is served nothing at all (measured in `GroupAbuseTest.ladder_hands_a_newcomer_*`).
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group group;

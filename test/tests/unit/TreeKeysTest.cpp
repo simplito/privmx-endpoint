@@ -200,6 +200,33 @@ TEST_F(TreeKeysPrimitives, WrapDoesNotOpenWithTheWrongKey) {
     EXPECT_FALSE(TreeKeys::unwrapKey(blob, stranger).has_value());
 }
 
+/**
+ * The boundary of what a wrap proves about its author: nothing.
+ *
+ * `wrapKey` takes a signer and `EciesEncryptor::encrypt` puts that signer's public key in the blob in the clear,
+ * but `unwrapKey` passes no `pubOfSignature`, so the field is carried and never compared. Two wraps of the same
+ * key to the same recipient by two different authors are therefore equally acceptable. Membership changes are
+ * attributable one layer up — the group entry is signed and `GroupDataSchemaMapper` refuses an author who is not
+ * a manager — and this test records that a single edge inside such an entry is not.
+ */
+TEST_F(TreeKeysPrimitives, AnEdgeOpensWithoutRegardToWhoSignedIt) {
+    const PrivateKey secret = PrivateKey::generateRandom();
+    const PrivateKey recipient = PrivateKey::generateRandom();
+    const PrivateKey manager = PrivateKey::generateRandom();
+    const PrivateKey stranger = PrivateKey::generateRandom();
+
+    const auto byManager =
+        TreeKeys::unwrapKey(TreeKeys::wrapKey(secret, recipient.getPublicKey(), manager), recipient);
+    const auto byStranger =
+        TreeKeys::unwrapKey(TreeKeys::wrapKey(secret, recipient.getPublicKey(), stranger), recipient);
+
+    ASSERT_TRUE(byManager.has_value());
+    ASSERT_TRUE(byStranger.has_value())
+        << "an edge from an unexpected author was refused: authorship is checked now, so this boundary moved — "
+           "widen the test to say who is accepted rather than deleting it";
+    EXPECT_EQ(byManager->toWIF(), byStranger->toWIF());
+}
+
 TEST_F(TreeKeysPrimitives, GarbageBlobIsRejectedNotCrashed) {
     const PrivateKey key = PrivateKey::generateRandom();
     EXPECT_FALSE(TreeKeys::unwrapKey("not-a-blob", key).has_value());
@@ -343,6 +370,77 @@ TEST_F(TreeKeysClimb, ReportsAMissingEdgeDistinctlyFromTampering) {
     EXPECT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::MissingEdge);
 }
 
+/** The same authorship boundary inside a whole state: an edge re-issued by somebody else is followed as readily as the original, because the climb verifies recovered keys against the published node keys and asks nothing about who published either. */
+TEST_F(TreeKeysClimb, AnEdgeReissuedByAStrangerIsStillFollowed) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache buildStore;
+    TreeKeys builder(buildStore);
+    const BuildPlan plan = builder.build(publicOf(members), members[0].priv);
+    TreeGroupState state = stateFromBuild(plan, members);
+
+    // Re-issue member 1's leaf edge: same parent key, same recipient, a different author. Only somebody already
+    // holding the parent key can do this — a manager, or anyone whose own climb passes through that node.
+    const auto leafEdge = std::find_if(state.edges.begin(), state.edges.end(), [&](const TreeEdge& edge) {
+        return !edge.isGrantEdge && edge.childKind == EdgeChildKind::User && edge.childUserId == members[1].userId;
+    });
+    ASSERT_NE(leafEdge, state.edges.end());
+    const auto parentKey = std::find_if(plan.nodeKeys.begin(), plan.nodeKeys.end(), [&](const auto& entry) {
+        return entry.first == leafEdge->parentIndex;
+    });
+    ASSERT_NE(parentKey, plan.nodeKeys.end());
+    const PrivateKey stranger = PrivateKey::generateRandom();
+    leafEdge->blob = TreeKeys::wrapKey(parentKey->second, members[1].priv.getPublicKey(), stranger);
+
+    TreeKeyCache store;
+    TreeKeys keys(store);
+    const ClimbResult result = keys.climbToGrantKey(state, members[1].userId, members[1].priv);
+    EXPECT_EQ(result.failure, ClimbFailure::None);
+    ASSERT_TRUE(result.grantKey.has_value());
+    EXPECT_EQ(result.grantKey->getPublicKey(), plan.grantKey.getPublicKey());
+}
+
+/**
+ * What a member sees when the state they are served simply leaves their edge out.
+ *
+ * `ReportsAMissingEdgeDistinctlyFromTampering` covers the mechanics; the point here is the attribution. The
+ * victim gets the same `MissingEdge` a truncated response or a bug produces, with nothing marked as tampered
+ * because nothing was forged, while for every other member the state is entirely ordinary and the roster still
+ * seats the victim. A manager cutting one member off is therefore indistinguishable from a broken chain, and no
+ * assertion here says otherwise — it is the documented limit of what the tree alone can prove.
+ */
+TEST_F(TreeKeysClimb, AWithheldEdgeIsIndistinguishableFromABrokenState) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache buildStore;
+    TreeKeys builder(buildStore);
+    const BuildPlan plan = builder.build(publicOf(members), members[0].priv);
+    TreeGroupState state = stateFromBuild(plan, members);
+
+    std::vector<TreeEdge> published;
+    for (const TreeEdge& edge : state.edges) {
+        const bool cutOff = !edge.isGrantEdge && edge.childKind == EdgeChildKind::User &&
+            edge.childUserId == members[3].userId;
+        if (!cutOff) {
+            published.push_back(edge);
+        }
+    }
+    state.edges = published;
+
+    TreeKeyCache victimStore;
+    TreeKeys victim(victimStore);
+    const ClimbResult result = victim.climbToGrantKey(state, members[3].userId, members[3].priv);
+    EXPECT_EQ(result.failure, ClimbFailure::MissingEdge);
+    EXPECT_FALSE(result.grantKey.has_value());
+    EXPECT_FALSE(result.tamperedNode.has_value());
+
+    EXPECT_TRUE(state.leafAssignment[3].has_value()) << "the roster still names the member who was cut off";
+    for (std::size_t i = 0; i + 1 < members.size(); ++i) {
+        TreeKeyCache store;
+        TreeKeys keys(store);
+        EXPECT_EQ(keys.climbToGrantKey(state, members[i].userId, members[i].priv).failure, ClimbFailure::None)
+            << members[i].userId << " must be unaffected by another member's edge going missing";
+    }
+}
+
 // removal — the property that matters
 
 class TreeKeysRemoval : public TreeKeysTestBase {};
@@ -459,6 +557,39 @@ TEST_F(TreeKeysRemoval, MintsIndependentKeysNotDerivedFromTheOldOnes) {
         }
     }
     EXPECT_NE(removal.newGrantKey.toWIF(), plan.grantKey.toWIF());
+}
+
+/**
+ * SECURITY — the freshness line in `planRemoval`, pinned by the only property that survives a rewrite.
+ *
+ * The test above compares the new key with the one it replaces, which every derivation also passes: `sha256(old)`
+ * is a different key. And no unwrap test can catch a derivation either — the refreshed edges are encrypted to the
+ * new keys, so nothing the leaver holds opens them whether the new keys were minted or computed. What a removed
+ * member actually needs is *predictability*, so that is what has to be denied: planning the same removal twice
+ * from the same state must not produce the same keys. Any key derived from the state being replaced is a function
+ * of that state and lands here as an equality; entropy cannot collide.
+ */
+TEST_F(TreeKeysRemoval, SECURITY_ARemovedMemberCannotRecomputeWhatReplacedTheirPath) {
+    const std::vector<TestMember> members = makeMembers(8);
+    TreeKeyCache store;
+    TreeKeys keys(store);
+    const TreeGroupState state = stateFromBuild(keys.build(publicOf(members), members[0].priv), members);
+    keys.setMemberKeys(publicOf(members));
+
+    // Two plans for the same removal: the served state, the roster and the departing member are identical
+    // between them, so everything a removed member could feed a derivation is identical too.
+    const RemovalPlan first = keys.planRemoval(state, {members[7].userId}, members[0].priv);
+    const RemovalPlan second = keys.planRemoval(state, {members[7].userId}, members[0].priv);
+
+    ASSERT_EQ(first.pathRefresh.size(), second.pathRefresh.size());
+    for (std::size_t i = 0; i < first.pathRefresh.size(); ++i) {
+        ASSERT_EQ(first.pathRefresh[i].nodeIndex, second.pathRefresh[i].nodeIndex);
+        EXPECT_NE(first.pathRefresh[i].newKey.toWIF(), second.pathRefresh[i].newKey.toWIF())
+            << "node " << first.pathRefresh[i].nodeIndex
+            << " is a function of the state it replaces, so whoever held the old key computes the new one";
+    }
+    EXPECT_NE(first.newGrantKey.toWIF(), second.newGrantKey.toWIF())
+        << "the new epoch's grant key is a function of the old state: the removed member reads on";
 }
 
 TEST_F(TreeKeysRemoval, RejectsRemovingTheOnlyMember) {
@@ -773,6 +904,49 @@ TreeKeys::choosePositions(state, 1), members[0].priv
     std::vector<TestMember> after = members;
     after.push_back(newcomer);
     expectEveryoneClimbs(state, after);
+}
+
+/**
+ * SECURITY — the same freshness line in `planAddition`, where a blank is being refilled.
+ *
+ * The path under a blank leaf is the path the member removed from that seat used to climb, and they still hold
+ * every node key on it. Were a seating to derive its new keys from the ones it replaces, that member would
+ * recompute the refreshed path and be back inside the tree with nobody re-seating them. Same detector as the
+ * removal case: the same seating planned twice must not repeat itself.
+ */
+TEST_F(TreeKeysAddition, SECURITY_RefillingASeatDoesNotRepeatTheKeysItReplaces) {
+    const std::vector<TestMember> members = makeMembers(4);
+    TreeKeyCache ownerStore;
+    TreeKeys owner(ownerStore);
+    TreeGroupState state = stateFromBuild(owner.build(publicOf(members), members[0].priv), members);
+    ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+    owner.setMemberKeys(publicOf(members));
+
+    // Member 1 out, leaving a blank at position 1.
+    const RemovalPlan removal = owner.planRemoval(state, {members[1].userId}, members[0].priv);
+    applyRemoval(state, removal, members[1].userId);
+    ownerStore.clear();
+    ASSERT_EQ(owner.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
+
+    const TestMember newcomer{"newcomer", PrivateKey::generateRandom()};
+    std::vector<TreeMember> roster = publicOf(members);
+    roster.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
+    owner.setMemberKeys(roster);
+    const TreeMember seated{newcomer.userId, newcomer.priv.getPublicKey()};
+
+    const AdditionPlan first =
+        owner.planAddition(state, {seated}, TreeKeys::choosePositions(state, 1), members[0].priv);
+    const AdditionPlan second =
+        owner.planAddition(state, {seated}, TreeKeys::choosePositions(state, 1), members[0].priv);
+
+    ASSERT_EQ(first.positions, second.positions) << "the same seating must land on the same seat";
+    ASSERT_EQ(first.nodeKeys.size(), second.nodeKeys.size());
+    ASSERT_FALSE(first.nodeKeys.empty());
+    for (std::size_t i = 0; i < first.nodeKeys.size(); ++i) {
+        ASSERT_EQ(first.nodeKeys[i].first, second.nodeKeys[i].first);
+        EXPECT_NE(first.nodeKeys[i].second.toWIF(), second.nodeKeys[i].second.toWIF())
+            << "node " << first.nodeKeys[i].first << " is a function of the key it replaces";
+    }
 }
 
 TEST_F(TreeKeysRemoval, ParsesOnlyTheRosterKeysItWrapsTo) {

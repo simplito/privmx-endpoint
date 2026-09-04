@@ -602,12 +602,13 @@ TEST_F(GroupAbuseTest, ladder_hands_a_newcomer_every_epoch_the_group_ever_read) 
     EXPECT_TRUE(canReadGroupAs(newcomer, groupId)) << "the newcomer cannot read the group itself; " << lastReadError;
 
     // The other direction is not symmetric, and that asymmetry is the point: a removed member loses the *route*,
-    // so they cannot even reach the epoch they themselves were a member of. user_2 held the epoch-1 key while it
-    // was current; a cold session of theirs cannot climb G at all any more.
+    // so the endpoint will not serve them even the epoch they themselves were a member of. user_2 held the
+    // epoch-1 key while it was current; a cold session of theirs cannot climb G at all any more. What that key
+    // already opened it opened for good — these two probes say what is served, not what stays confidential.
     EXPECT_FALSE(canReadMessage(2, firstEpochMessage)) <<
-        "a removed member still reads content from the epoch they were in";
+        "a removed member is still served content from the epoch they were in";
     EXPECT_FALSE(canReadMessage(3, secondEpochMessage)) <<
-        "a removed member still reads content from the epoch they were in";
+        "a removed member is still served content from the epoch they were in";
 }
 
 TEST_F(GroupAbuseTest, ladder_gives_a_re_added_member_back_what_was_written_while_they_were_out) {
@@ -664,6 +665,85 @@ TEST_F(GroupAbuseTest, ladder_gives_a_re_added_member_back_what_was_written_whil
     EXPECT_TRUE(canReadMessage(2, writtenWhileOut)) <<
         "expected the re-added member to regain the gap (that is what the ladder does); " << lastReadError;
     EXPECT_TRUE(canReadMessage(2, beforeRemoval)) << "the ladder did not reach back to epoch 1; " << lastReadError;
+}
+
+/**
+ * An epoch rotation is not post-compromise security: it does not take access back from a stolen member key.
+ *
+ * A removal refreshes the departing member's path and mints a new grant key, and every refreshed key is wrapped
+ * to the *unchanged* long-term keys of the members who stay. So whoever holds user_2's private key climbs the new
+ * epoch exactly as user_2 does, and reads content written after the rotation. That is intended — the tree cannot
+ * tell a thief from the member, and nothing in the API rotates a member's own key — and the test exists so that
+ * nobody makes it look fixed: should the first expectation below ever turn red, the reason had better be a real
+ * re-seating of that member, not a refreshed path wrapped to the same stolen key.
+ *
+ * And removing that member ends less than it appears to. It closes the route to *new* epochs and nothing more:
+ * the ladder's premise is that holding epoch N yields every epoch below it, so whatever a stolen key reached
+ * before the removal, it reached for good — no rotation and no removal takes history back. The negative
+ * expectations at the end are therefore narrow in the way this file's header describes: they say the endpoint
+ * stops *following* the route, not that the ciphertext became safe.
+ *
+ * Every probe runs on a cold session, so what they show is that the key alone suffices, with no cached state.
+ */
+TEST_F(GroupAbuseTest, rotating_the_epoch_does_not_take_back_a_compromised_members_key) {
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
+    group::Group atEpoch1;
+    ASSERT_NO_THROW({ atEpoch1 = groupApi->getGroup(groupId); });
+    ASSERT_EQ(atEpoch1.statusCode, 0);
+    ASSERT_EQ(atEpoch1.keyVersion, 1);
+
+    std::string threadId;
+    ASSERT_NO_THROW({ threadId = createThreadGrantedTo(atEpoch1); });
+    std::string beforeRotation;
+    ASSERT_NO_THROW({
+        beforeRotation = threadApi->sendMessage(
+            threadId, core::Buffer::from("pre_public"), core::Buffer::from("pre_private"),
+            core::Buffer::from("before_rotation_data")
+        );
+    });
+    ASSERT_TRUE(canReadMessage(2, beforeRotation)) << "the member could not read before the rotation; " <<
+        lastReadError;
+
+    // The rotation: user_3 — somebody else entirely — is removed, which is the one call that mints a new epoch.
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); });
+    group::Group atEpoch2;
+    ASSERT_NO_THROW({ atEpoch2 = groupApi->getGroup(groupId); });
+    ASSERT_EQ(atEpoch2.keyVersion, 2) << "nothing rotated, so this test would prove nothing";
+    ASSERT_NO_THROW({ rekeyThreadForGroupEpoch(threadId, atEpoch2); });
+    std::string afterRotation;
+    ASSERT_NO_THROW({
+        afterRotation = threadApi->sendMessage(
+            threadId, core::Buffer::from("post_public"), core::Buffer::from("post_private"),
+            core::Buffer::from("after_rotation_data")
+        );
+    });
+
+    // The finding: user_2's leaf was never re-wrapped, so their key opens the epoch the rotation minted — and
+    // with it content written afterwards, which needs that epoch's key and no earlier one.
+    EXPECT_TRUE(canReadMessage(2, afterRotation)) <<
+        "expected the compromised key to keep reading — a rotation is not post-compromise security; " <<
+        lastReadError;
+
+    // Nor is there another rotation to reach for: `updateGroup` edits metadata and nothing else, and the epoch
+    // moves only where a member leaves. Which is the one thing that does end it — their path is refreshed and the
+    // new grant key reaches their leaf through nothing, so the stolen key stops being served: the new epoch and,
+    // through the endpoint, everything older with it. What removal does not do is take back what that key already
+    // read, which the ladder makes permanent.
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(2).userId}); });
+    group::Group atEpoch3;
+    ASSERT_NO_THROW({ atEpoch3 = groupApi->getGroup(groupId); });
+    ASSERT_EQ(atEpoch3.keyVersion, 3);
+    ASSERT_NO_THROW({ rekeyThreadForGroupEpoch(threadId, atEpoch3); });
+    std::string afterRemoval;
+    ASSERT_NO_THROW({
+        afterRemoval = threadApi->sendMessage(
+            threadId, core::Buffer::from("out_public"), core::Buffer::from("out_private"),
+            core::Buffer::from("after_removal_data")
+        );
+    });
+    EXPECT_FALSE(canReadMessage(2, afterRemoval)) << "the removed member's key is still served new content";
+    EXPECT_FALSE(canReadMessage(2, afterRotation)) << "the removed member's key is still served the group route";
 }
 
 TEST_F(GroupAbuseTest, changing_a_members_public_key_locks_them_out_without_re_wrapping_their_leaf) {
@@ -882,14 +962,13 @@ TEST_F(GroupAbuseTest, concurrent_add_and_remove_of_the_same_member_leaves_the_g
 }
 
 TEST_F(GroupAbuseTest, concurrent_update_and_removal_leaves_the_group_verifying) {
-    // A metadata update and a removal computed against the same head. The removal mints an epoch, so by the time
-    // the update lands it is signed against a state that no longer exists; the Bridge answers "rotated already"
-    // and the endpoint adopts the winner's rotation and retries the update once. Any serialisation is acceptable
-    // — what is not is a group whose chain stops verifying, or an update that reports success without landing.
+    // A metadata update and a removal computed against the same head. Whichever lands second was built against a
+    // state that no longer exists, and its roster tag commits a version it will not land at — so the loser has to
+    // lose *before* it writes. The version pin is what does that, which is why the update cannot skip it: this
+    // test is the regression guard for removing that escape hatch.
     //
-    // The update is forced past the version check on purpose: the version pin is `GroupTest.updateGroup_*`'s
-    // subject, and leaving it on here would make the race decide itself with a version error before the epoch
-    // question is ever asked.
+    // Any serialisation is acceptable. What is not is a group whose head stops verifying, or a call that reports
+    // success without landing.
     const core::UserWithPubKey remover = user(1);
     const core::UserWithPubKey updater = user(2);
     const std::vector<core::UserWithPubKey> managers{remover, updater};
@@ -924,8 +1003,7 @@ TEST_F(GroupAbuseTest, concurrent_update_and_removal_leaves_the_group_verifying)
     std::thread updatingThread([&] {
         try {
             updaterGroups.updateGroup(
-                groupId, core::Buffer::from("raced_public"), core::Buffer::from("raced_private"), before.version,
-                true
+                groupId, core::Buffer::from("raced_public"), core::Buffer::from("raced_private"), before.version
             );
             updated = true;
         } catch (const core::Exception& e) {
