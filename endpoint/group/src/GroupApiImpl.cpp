@@ -570,8 +570,7 @@ void GroupApiImpl::updateGroup(
         unchangedManagers.push_back(core::UserWithPubKey{.userId = userId, .pubKey = std::string()});
     }
     auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, unchangedUsers, unchangedManagers, false, false,
-        _groupPrivKeyResolver
+        currentGroup, currentEntry, resourceId, unchangedUsers, unchangedManagers, false, false, _groupPrivKeyResolver
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
 
