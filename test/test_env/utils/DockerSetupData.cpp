@@ -21,6 +21,8 @@
 #include <privmx/endpoint/inbox/VarSerializer.hpp>
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
 #include <privmx/endpoint/kvdb/VarSerializer.hpp>
+#include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/VarSerializer.hpp>
 #include <privmx/endpoint/search/SearchApi.hpp>
 #include <privmx/endpoint/lock/LockApi.hpp>
 #include <privmx/endpoint/search/Types.hpp>
@@ -67,6 +69,9 @@ int main(int argc, char** argv) {
         const string user_2_PrivKey = reader->getString("Login.user_2_privKey");
         const string user_2_PubKey = reader->getString("Login.user_2_pubKey");
         const string user_2_Id = reader->getString("Login.user_2_id");
+        const string user_3_PrivKey = reader->getString("Login.user_3_privKey");
+        const string user_3_PubKey = reader->getString("Login.user_3_pubKey");
+        const string user_3_Id = reader->getString("Login.user_3_id");
         const string solution = reader->getString("Login.solutionId");
         const string platformUrl = reader->getString("Login.instanceUrl");
         Poco::URI tmp = Poco::URI(platformUrl);
@@ -81,6 +86,7 @@ int main(int argc, char** argv) {
         endpoint::store::StoreApi storeApi = endpoint::store::StoreApi::create(connection);
         endpoint::inbox::InboxApi inboxApi = endpoint::inbox::InboxApi::create(connection, threadApi, storeApi);
         endpoint::kvdb::KvdbApi kvdbApi = endpoint::kvdb::KvdbApi::create(connection);
+        endpoint::group::GroupApi groupApi = endpoint::group::GroupApi::create(connection);
         endpoint::lock::LockApi lockApi = endpoint::lock::LockApi::create(connection);
         endpoint::search::SearchApi searchApi = endpoint::search::SearchApi::create(connection, storeApi, kvdbApi, lockApi);
         const std::vector<endpoint::core::UserWithPubKey> users_1 = {
@@ -89,6 +95,11 @@ int main(int argc, char** argv) {
         const std::vector<endpoint::core::UserWithPubKey> users_1_2 = {
             endpoint::core::UserWithPubKey{.userId=user_1_Id, .pubKey=user_1_PubKey},
             endpoint::core::UserWithPubKey{.userId=user_2_Id, .pubKey=user_2_PubKey}
+        };
+        const std::vector<endpoint::core::UserWithPubKey> users_1_2_3 = {
+            endpoint::core::UserWithPubKey{.userId=user_1_Id, .pubKey=user_1_PubKey},
+            endpoint::core::UserWithPubKey{.userId=user_2_Id, .pubKey=user_2_PubKey},
+            endpoint::core::UserWithPubKey{.userId=user_3_Id, .pubKey=user_3_PubKey}
         };
 
         LOG_INFO("Thread 1 - create")
@@ -287,8 +298,7 @@ int main(int argc, char** argv) {
         auto file_1_handle = storeApi.createFile(store_1_id, endpoint::core::Buffer::from(file_1_publicMeta), endpoint::core::Buffer::from(file_1_privateMeta), file_1_data.size());
         storeApi.writeToFile(file_1_handle, endpoint::core::Buffer::from(file_1_data));
         auto file_1_id = storeApi.closeFile(file_1_handle);
-        
-        LOG_INFO("File 2 - create")
+                LOG_INFO("File 2 - create")
         std::string file_2_publicMeta = "test_fileData_2_publicMeta";
         std::string file_2_privateMeta = "test_fileData_2_privateMeta";
         std::string file_2_data = "test_fileData_2_extraText";
@@ -328,6 +338,37 @@ int main(int argc, char** argv) {
             0
         );
         LOG_INFO("Kvdb Entry 2 - create")
+        //group_1 — user_1 only (user + manager)
+        auto group_1_publicMeta = endpoint::core::Buffer::from("test_group_1_publicMeta");
+        auto group_1_privateMeta = endpoint::core::Buffer::from("test_group_1_privateMeta");
+        auto group_1_id = groupApi.createGroup(
+            context_1_Id,
+            users_1,
+            users_1,
+            group_1_publicMeta,
+            group_1_privateMeta
+        );
+        //group_2 — user_1 + user_2 as members, user_1 as manager
+        auto group_2_publicMeta = endpoint::core::Buffer::from("test_group_2_publicMeta");
+        auto group_2_privateMeta = endpoint::core::Buffer::from("test_group_2_privateMeta");
+        auto group_2_id = groupApi.createGroup(
+            context_1_Id,
+            users_1_2,
+            users_1,
+            group_2_publicMeta,
+            group_2_privateMeta
+        );
+        //group_3 — user_1 + user_2 + user_3 as members, user_1 as manager
+        auto group_3_publicMeta = endpoint::core::Buffer::from("test_group_3_publicMeta");
+        auto group_3_privateMeta = endpoint::core::Buffer::from("test_group_3_privateMeta");
+        auto group_3_id = groupApi.createGroup(
+            context_1_Id,
+            users_1_2_3,
+            users_1,
+            group_3_publicMeta,
+            group_3_privateMeta
+        );
+        //kvdb_entry_2
         auto kvdb_entry_2_publicMeta = endpoint::core::Buffer::from("test_kvdb_entry_2_publicMeta");
         auto kvdb_entry_2_privateMeta = endpoint::core::Buffer::from("test_kvdb_entry_2_privateMeta");
         auto kvdb_entry_2_data = endpoint::core::Buffer::from("kvdb_entry_value_2");
@@ -340,6 +381,9 @@ int main(int argc, char** argv) {
             kvdb_entry_2_data,
             0
         );
+        auto group_1_server_data = groupApi.getGroup(group_1_id);
+        auto group_2_server_data = groupApi.getGroup(group_2_id);
+        auto group_3_server_data = groupApi.getGroup(group_3_id);
         LOG_INFO("Threads - server download")
         auto thread_1_server_data = threadApi.getThread(thread_1_id);
         auto thread_2_server_data = threadApi.getThread(thread_2_id);
@@ -377,6 +421,48 @@ int main(int argc, char** argv) {
         fstream iniFileWriter;
         iniFileWriter.open(iniFilePath, ios::app);
         if(iniFileWriter.is_open()) {
+            //Group_1
+            iniFileWriter << "[Group_1]" << std::endl;
+            iniFileWriter << "groupId = " << group_1_server_data.groupId << std::endl;
+            iniFileWriter << "contextId = " << group_1_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << group_1_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << group_1_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << group_1_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << group_1_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << group_1_server_data.version << std::endl;
+            iniFileWriter << "groupPubKey = " << group_1_server_data.groupPubKey << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(group_1_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(group_1_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << group_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << group_1_server_data.schemaVersion << std::endl;
+            //Group_2
+            iniFileWriter << "[Group_2]" << std::endl;
+            iniFileWriter << "groupId = " << group_2_server_data.groupId << std::endl;
+            iniFileWriter << "contextId = " << group_2_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << group_2_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << group_2_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << group_2_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << group_2_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << group_2_server_data.version << std::endl;
+            iniFileWriter << "groupPubKey = " << group_2_server_data.groupPubKey << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(group_2_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(group_2_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << group_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << group_2_server_data.schemaVersion << std::endl;
+            //Group_3
+            iniFileWriter << "[Group_3]" << std::endl;
+            iniFileWriter << "groupId = " << group_3_server_data.groupId << std::endl;
+            iniFileWriter << "contextId = " << group_3_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << group_3_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << group_3_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << group_3_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << group_3_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << group_3_server_data.version << std::endl;
+            iniFileWriter << "groupPubKey = " << group_3_server_data.groupPubKey << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(group_3_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(group_3_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << group_3_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << group_3_server_data.schemaVersion << std::endl;
             //Thread_1
             iniFileWriter << "[Thread_1]" << std::endl;
             iniFileWriter << "threadId = " << thread_1_server_data.threadId << std::endl;
@@ -651,6 +737,65 @@ int main(int argc, char** argv) {
             iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(searchIndex_3_server_data)) << std::endl;
             iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(searchIndex_3_publicMeta.stdString()) << std::endl;
             iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(searchIndex_3_privateMeta.stdString()) << std::endl;
+            // SearchIndex 1
+            iniFileWriter << "[SearchIndex_1]" << std::endl;
+            iniFileWriter << "indexId = " << searchIndex_1_server_data.indexId << std::endl;
+            iniFileWriter << "contextId = " << searchIndex_1_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << searchIndex_1_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << searchIndex_1_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << searchIndex_1_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << searchIndex_1_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << searchIndex_1_server_data.version << std::endl;
+            iniFileWriter << "mode = " <<  static_cast<int64_t>(searchIndex_1_server_data.mode) << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(searchIndex_1_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(searchIndex_1_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << searchIndex_1_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << searchIndex_1_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(searchIndex_1_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(searchIndex_1_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(searchIndex_1_privateMeta.stdString()) << std::endl;
+
+            iniFileWriter << "doc_1_id = " << searchIndex_1_doc_1_id << std::endl;
+            iniFileWriter << "doc_1_name = " << searchIndex_1_doc_1_name << std::endl;
+            iniFileWriter << "doc_1_content = " << searchIndex_1_doc_1_content << std::endl;
+            iniFileWriter << "doc_2_id = " << searchIndex_1_doc_2_id << std::endl;
+            iniFileWriter << "doc_2_name = " << searchIndex_1_doc_2_name << std::endl;
+            iniFileWriter << "doc_2_content = " << searchIndex_1_doc_2_content << std::endl;
+            iniFileWriter << "docs_common_content_part = " << searchIndex_1_docs_common_content_part << std::endl;
+            // SearchIndex 2
+            iniFileWriter << "[SearchIndex_2]" << std::endl;
+            iniFileWriter << "indexId = " << searchIndex_2_server_data.indexId << std::endl;
+            iniFileWriter << "contextId = " << searchIndex_2_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << searchIndex_2_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << searchIndex_2_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << searchIndex_2_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << searchIndex_2_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << searchIndex_2_server_data.version << std::endl;
+            iniFileWriter << "mode = " << static_cast<int64_t>(searchIndex_2_server_data.mode) << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(searchIndex_2_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(searchIndex_2_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << searchIndex_2_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << searchIndex_2_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(searchIndex_2_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(searchIndex_2_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(searchIndex_2_privateMeta.stdString()) << std::endl;
+            // SearchIndex 3
+            iniFileWriter << "[SearchIndex_3]" << std::endl;
+            iniFileWriter << "indexId = " << searchIndex_3_server_data.indexId << std::endl;
+            iniFileWriter << "contextId = " << searchIndex_3_server_data.contextId << std::endl;
+            iniFileWriter << "createDate = " << searchIndex_3_server_data.createDate << std::endl;
+            iniFileWriter << "creator = " << searchIndex_3_server_data.creator << std::endl;
+            iniFileWriter << "lastModificationDate = " << searchIndex_3_server_data.lastModificationDate << std::endl;
+            iniFileWriter << "lastModifier = " << searchIndex_3_server_data.lastModifier << std::endl;
+            iniFileWriter << "version = " << searchIndex_3_server_data.version << std::endl;
+            iniFileWriter << "mode = " << static_cast<int64_t>(searchIndex_3_server_data.mode) << std::endl;
+            iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(searchIndex_3_server_data.publicMeta.stdString()) << std::endl;
+            iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(searchIndex_3_server_data.privateMeta.stdString()) << std::endl;
+            iniFileWriter << "statusCode = " << searchIndex_3_server_data.statusCode << std::endl;
+            iniFileWriter << "schemaVersion = " << searchIndex_3_server_data.schemaVersion << std::endl;
+            iniFileWriter << "JSON_data = " << utils::Utils::stringifyVar(_serializer.serialize(searchIndex_3_server_data)) << std::endl;
+            iniFileWriter << "uploaded_publicMeta_inHex = " << utils::Hex::from(searchIndex_3_publicMeta.stdString()) << std::endl;
+            iniFileWriter << "uploaded_privateMeta_inHex = " << utils::Hex::from(searchIndex_3_privateMeta.stdString()) << std::endl;
             
             //Message_1
             iniFileWriter << "[Message_1]" << std::endl;
@@ -809,6 +954,7 @@ int main(int argc, char** argv) {
             
         }
         LOG_INFO("Writing data to json file")
+        LOG_INFO("Writing data to json file")
         iniFileWriter.open(iniFileJSONPath, ios::out | ios::trunc);
         if(iniFileWriter.is_open()) {
             Poco::JSON::Object::Ptr data = new Poco::JSON::Object();
@@ -860,6 +1006,7 @@ int main(int argc, char** argv) {
             data_store_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(store_3_publicMeta.stdString()));
             data_store_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(store_3_privateMeta.stdString()));
             data->set("Store_3", data_store_3);
+
             Poco::JSON::Object::Ptr data_inbox_1 = new Poco::JSON::Object();
             data_inbox_1->set("server_data", (_serializer.serialize(inbox_1_server_data)));
             data_inbox_1->set("uploaded_publicMeta_inBase64", utils::Base64::from(inbox_1_publicMeta.stdString()));
@@ -875,6 +1022,7 @@ int main(int argc, char** argv) {
             data_inbox_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(inbox_3_publicMeta.stdString()));
             data_inbox_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(inbox_3_privateMeta.stdString()));
             data->set("Inbox_3", data_inbox_3);
+
             Poco::JSON::Object::Ptr data_kvdb_1 = new Poco::JSON::Object();
             data_kvdb_1->set("server_data", (_serializer.serialize(kvdb_1_server_data)));
             data_kvdb_1->set("uploaded_publicMeta_inBase64", utils::Base64::from(kvdb_1_publicMeta.stdString()));
@@ -890,6 +1038,7 @@ int main(int argc, char** argv) {
             data_kvdb_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(kvdb_3_publicMeta.stdString()));
             data_kvdb_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(kvdb_3_privateMeta.stdString()));
             data->set("Kvdb_3", data_kvdb_3);
+
             Poco::JSON::Object::Ptr search_index_1 = new Poco::JSON::Object();
             search_index_1->set("server_data", (_serializer.serialize(searchIndex_1_server_data)));
             search_index_1->set("uploaded_publicMeta_inBase64", utils::Base64::from(searchIndex_1_publicMeta.stdString()));
@@ -912,7 +1061,7 @@ int main(int argc, char** argv) {
             search_index_3->set("uploaded_publicMeta_inBase64", utils::Base64::from(searchIndex_3_publicMeta.stdString()));
             search_index_3->set("uploaded_privateMeta_inBase64", utils::Base64::from(searchIndex_3_privateMeta.stdString()));
             data->set("SearchIndex_3", search_index_3);
-            
+                      
 
             Poco::JSON::Object::Ptr data_message_1 = new Poco::JSON::Object();
             data_message_1->set("server_data", (_serializer.serialize(message_1_server_data)));

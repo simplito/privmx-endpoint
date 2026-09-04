@@ -26,6 +26,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/thread/Mapper.hpp"
 #include "privmx/endpoint/thread/ServerTypes.hpp"
 #include "privmx/endpoint/thread/ThreadApiImpl.hpp"
@@ -33,7 +34,7 @@ limitations under the License.
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 
 using namespace privmx::endpoint;
-using namespace thread;
+using namespace privmx::endpoint::thread;
 
 ThreadApiImpl::ThreadApiImpl(
     const privfs::RpcGateway::Ptr& gateway,
@@ -41,7 +42,8 @@ ThreadApiImpl::ThreadApiImpl(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const core::Connection& connection
+    const core::Connection& connection,
+    const std::optional<group::GroupApi>& groupApi
 )
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
@@ -49,6 +51,7 @@ ThreadApiImpl::ThreadApiImpl(
       _messageDataSchemaMapper(userPrivKey, connection),
       _threadDataSchemaMapper(std::make_shared<ThreadDataSchemaMapper>(userPrivKey, connection)),
       _forbiddenChannelsNames({INTERNAL_EVENT_CHANNEL_NAME, "thread", "messages"}) {
+    initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi));
     initModuleDataSchemaMapper(_threadDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&ThreadApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -76,7 +79,8 @@ std::string ThreadApiImpl::createThread(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies,
-    const std::string& type
+    const std::string& type,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 threadDataToEncrypt{
@@ -89,7 +93,7 @@ std::string ThreadApiImpl::createThread(
     server::ThreadCreateModel create_thread_model;
     fillContainerCreateModel(
         create_thread_model, contextId, users, managers, ctx,
-        _threadDataSchemaMapper->encrypt(threadDataToEncrypt, ctx.key.key)
+        _threadDataSchemaMapper->encrypt(threadDataToEncrypt, ctx.key.key), groups
     );
     if (type.length() > 0) {
         create_thread_model.type = type;
@@ -110,7 +114,8 @@ void ThreadApiImpl::updateThread(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     // get current thread
     server::ThreadGetModel getModel;
@@ -120,10 +125,13 @@ void ThreadApiImpl::updateThread(
     auto currentThreadResourceId = currentThread.resourceId ? currentThread.resourceId.value() :
                                                               core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
-        currentThread, currentThreadEntry, currentThreadResourceId, users, managers, forceGenerateNewKey
+        currentThread, currentThreadEntry, currentThreadResourceId, users, managers,
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentThread, groups), true, _groupPrivKeyResolver
     );
     server::ThreadUpdateModel model;
-    fillContainerUpdateModel(model, threadId, currentThreadResourceId, users, managers, ctx, version, force);
+    // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
+    // revokes every grant the Thread had.
+    fillContainerUpdateModel(model, threadId, currentThreadResourceId, users, managers, ctx, version, force, groups);
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
@@ -141,6 +149,42 @@ void ThreadApiImpl::updateThread(
     invalidateModuleKeysInCache(threadId);
 }
 
+void ThreadApiImpl::rotateThreadKeys(
+    const std::string& threadId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    server::ThreadGetModel getModel;
+    getModel.threadId = threadId;
+    auto currentThread = _serverApi.threadGet(getModel).thread;
+    rotateContainerKeys<server::ThreadRotateKeysModel>(
+        threadId, currentThread, users, managers, version, force, groups,
+        [&](const server::ThreadRotateKeysModel& model) { _serverApi.threadRotateKeys(model); }
+    );
+}
+
+void ThreadApiImpl::autoRotateThreadKeys(const std::string& threadId) {
+    // A fresh read, not the cached keys: whatever triggered this may have been a stale snapshot, and the roster
+    // and version this re-key is built on have to be the ones the bridge will check it against.
+    server::ThreadGetModel getModel;
+    getModel.threadId = threadId;
+    auto currentThread = _serverApi.threadGet(getModel).thread;
+    if (!isRekeyNeeded(currentThread)) {
+        // Someone else already re-keyed it. The caller refetches the keys either way, so there is nothing to do.
+        return;
+    }
+    auto roster = resolveRosterPubKeys(currentThread.contextId, currentThread.users, currentThread.managers);
+    runAutoRekey(threadId, [&] {
+        rotateContainerKeys<server::ThreadRotateKeysModel>(
+            threadId, currentThread, roster.users, roster.managers, currentThread.version, false, {},
+            [&](const server::ThreadRotateKeysModel& model) { _serverApi.threadRotateKeys(model); }
+        );
+    });
+}
+
 void ThreadApiImpl::deleteThread(const std::string& threadId) {
     server::ThreadDeleteModel model{.threadId = threadId};
     _serverApi.threadDelete(model);
@@ -155,7 +199,7 @@ Thread ThreadApiImpl::getThread(const std::string& threadId, const std::string& 
     }
     auto thread = _serverApi.threadGet(params).thread;
     setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
-    auto result = _threadDataSchemaMapper->validateDecryptAndConvertThread(thread, _keyProvider);
+    auto result = _threadDataSchemaMapper->validateDecryptAndConvertThread(thread, _keyProvider, _groupPrivKeyResolver);
     return result;
 }
 
@@ -175,7 +219,7 @@ core::PagingList<Thread> ThreadApiImpl::listThreads(
         setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
     }
     std::vector<Thread> threads = _threadDataSchemaMapper->validateDecryptAndConvertThreads(
-        threadsList.threads, _keyProvider
+        threadsList.threads, _keyProvider, _groupPrivKeyResolver
     );
     return core::PagingList<Thread>({.totalAvailable = threadsList.count, .readItems = threads});
 }
@@ -185,7 +229,7 @@ Message ThreadApiImpl::getMessage(const std::string& messageId) {
     auto message = _serverApi.threadMessageGet(model).message;
     Message result;
     result = _messageDataSchemaMapper.validateDecryptAndConvertMessage(
-        message, getMessageDecryptionKeys(message), _keyProvider
+        message, getMessageDecryptionKeys(message), _keyProvider, _groupPrivKeyResolver
     );
     return result;
 }
@@ -202,7 +246,7 @@ core::PagingList<Message> ThreadApiImpl::listMessages(
     _threadDataSchemaMapper->assertDataIntegrity(thread);
     setNewModuleKeysInCache(thread.id, threadToModuleKeys(thread), thread.version);
     auto messages = _messageDataSchemaMapper.validateDecryptAndConvertMessages(
-        messagesList.messages, threadToModuleKeys(thread), _keyProvider
+        messagesList.messages, threadToModuleKeys(thread), _keyProvider, _groupPrivKeyResolver
     );
     return core::PagingList<Message>({.totalAvailable = messagesList.count, .readItems = messages});
 }
@@ -214,7 +258,8 @@ std::string ThreadApiImpl::sendMessage(
 ) {
     return withKeyRefresh<std::string>(
         threadId, privmx::endpoint::server::InvalidThreadKeyException().getCode(),
-        [&](const core::ModuleKeys& keys) { return sendMessageRequest(threadId, publicMeta, privateMeta, data, keys); }
+        [&](const core::ModuleKeys& keys) { return sendMessageRequest(threadId, publicMeta, privateMeta, data, keys); },
+        [&] { autoRotateThreadKeys(threadId); }
     );
 }
 
@@ -225,7 +270,7 @@ std::string ThreadApiImpl::sendMessageRequest(
     const core::Buffer& data,
     const core::ModuleKeys& keys
 ) {
-    core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys);
+    core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys, _groupPrivKeyResolver);
     if (msgKey.statusCode != 0) {
         throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(msgKey.statusCode)
@@ -259,7 +304,8 @@ void ThreadApiImpl::updateMessage(
         message.threadId, privmx::endpoint::server::InvalidThreadKeyException().getCode(),
         [&](const core::ModuleKeys& keys) {
             updateMessageRequest(messageId, resourceId, message.threadId, publicMeta, privateMeta, data, keys);
-        }
+        },
+        [&] { autoRotateThreadKeys(message.threadId); }
     );
 }
 
@@ -272,7 +318,7 @@ void ThreadApiImpl::updateMessageRequest(
     const core::Buffer& data,
     const core::ModuleKeys& keys
 ) {
-    core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys);
+    core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys, _groupPrivKeyResolver);
     if (msgKey.statusCode != 0) {
         throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(msgKey.statusCode)
@@ -295,7 +341,9 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             auto raw = server::ThreadInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, threadToModuleKeys(raw), raw.version);
-                auto data = _threadDataSchemaMapper->validateDecryptAndConvertThread(raw, _keyProvider);
+                auto data = _threadDataSchemaMapper->validateDecryptAndConvertThread(
+                    raw, _keyProvider, _groupPrivKeyResolver
+                );
                 auto event = core::EventBuilder::buildEvent<ThreadCreatedEvent>("thread", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -303,7 +351,9 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             auto raw = server::ThreadInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, threadToModuleKeys(raw), raw.version);
-                auto data = _threadDataSchemaMapper->validateDecryptAndConvertThread(raw, _keyProvider);
+                auto data = _threadDataSchemaMapper->validateDecryptAndConvertThread(
+                    raw, _keyProvider, _groupPrivKeyResolver
+                );
                 auto event = core::EventBuilder::buildEvent<ThreadUpdatedEvent>("thread", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -326,7 +376,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             auto raw = server::ThreadMessageEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
                 auto data = _messageDataSchemaMapper.validateDecryptAndConvertMessage(
-                    raw, getMessageDecryptionKeys(raw), _keyProvider
+                    raw, getMessageDecryptionKeys(raw), _keyProvider, _groupPrivKeyResolver
                 );
                 auto event = core::EventBuilder::buildEvent<ThreadNewMessageEvent>(
                     "thread/" + raw.threadId + "/messages", data, notification
@@ -337,7 +387,7 @@ void ThreadApiImpl::processNotificationEvent(const std::string& type, const core
             auto raw = server::ThreadMessageEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(THREAD_TYPE_FILTER_FLAG)) == THREAD_TYPE_FILTER_FLAG) {
                 auto data = _messageDataSchemaMapper.validateDecryptAndConvertMessage(
-                    raw, getMessageDecryptionKeys(raw), _keyProvider
+                    raw, getMessageDecryptionKeys(raw), _keyProvider, _groupPrivKeyResolver
                 );
                 auto event = core::EventBuilder::buildEvent<ThreadMessageUpdatedEvent>(
                     "thread/" + raw.threadId + "/messages", data, notification
@@ -392,7 +442,7 @@ Poco::Dynamic::Var ThreadApiImpl::encryptMessageData(
     const core::Buffer& data,
     const core::ModuleKeys& threadKeys
 ) {
-    core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(threadKeys);
+    core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(threadKeys, _groupPrivKeyResolver);
     return _messageDataSchemaMapper.encrypt(
         threadId, resourceId, threadKeys.contextId, threadKeys.moduleResourceId, publicMeta, privateMeta, data, msgKey
     );
@@ -413,13 +463,7 @@ std::pair<core::ModuleKeys, int64_t> ThreadApiImpl::getModuleKeysAndVersionFromS
 }
 
 core::ModuleKeys ThreadApiImpl::threadToModuleKeys(server::ThreadInfo thread) {
-    return core::ModuleKeys{
-        .keys = thread.keys,
-        .currentKeyId = thread.keyId,
-        .moduleSchemaVersion = _threadDataSchemaMapper->getDataStructureVersion(thread.data.back()),
-        .moduleResourceId = thread.resourceId.value_or(""),
-        .contextId = thread.contextId
-    };
+    return containerToModuleKeys(thread);
 }
 
 std::vector<std::string> ThreadApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

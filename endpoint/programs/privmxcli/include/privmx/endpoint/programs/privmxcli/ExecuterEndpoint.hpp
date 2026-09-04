@@ -37,6 +37,7 @@ limitations under the License.
 #include "privmx/endpoint/store/varinterface/StoreApiVarInterface.hpp"
 #include "privmx/endpoint/inbox/varinterface/InboxApiVarInterface.hpp"
 #include "privmx/endpoint/kvdb/varinterface/KvdbApiVarInterface.hpp"
+#include "privmx/endpoint/group/varinterface/GroupApiVarInterface.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 
@@ -58,8 +59,9 @@ struct ApiVar {
         std::shared_ptr<privmx::endpoint::store::StoreApiVarInterface> _store,
         std::shared_ptr<privmx::endpoint::inbox::InboxApiVarInterface> _inbox,
         std::shared_ptr<privmx::endpoint::kvdb::KvdbApiVarInterface> _kvdb,
+        std::shared_ptr<privmx::endpoint::group::GroupApiVarInterface> _group,
         std::shared_ptr<privmx::endpoint::event::EventApiVarInterface> _eventApi
-    ) : serializer(_serializer), event(_event), connection(_connection), backendRequester(_backendRequester), utils(_utils), crypto(_crypto), extKey(_extKey), thread(_thread), store(_store), inbox(_inbox), kvdb(_kvdb), eventApi(_eventApi) {}
+    ) : serializer(_serializer), event(_event), connection(_connection), backendRequester(_backendRequester), utils(_utils), crypto(_crypto), extKey(_extKey), thread(_thread), store(_store), inbox(_inbox), kvdb(_kvdb), group(_group), eventApi(_eventApi) {}
     core::VarSerializer serializer;
     std::shared_ptr<privmx::endpoint::core::EventQueueVarInterface> event;
     std::shared_ptr<privmx::endpoint::core::ConnectionVarInterface> connection;
@@ -71,6 +73,7 @@ struct ApiVar {
     std::shared_ptr<privmx::endpoint::store::StoreApiVarInterface> store;
     std::shared_ptr<privmx::endpoint::inbox::InboxApiVarInterface> inbox;
     std::shared_ptr<privmx::endpoint::kvdb::KvdbApiVarInterface> kvdb;
+    std::shared_ptr<privmx::endpoint::group::GroupApiVarInterface> group;
     std::shared_ptr<privmx::endpoint::event::EventApiVarInterface> eventApi;
 };
 
@@ -112,16 +115,20 @@ private:
         }},
         {core_connect, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             api->connection->connect(args);
-            std::shared_ptr<thread::ThreadApiVarInterface> thread = std::make_shared<thread::ThreadApiVarInterface>(api->connection->getApi(), api->serializer);
+            // Built first: every container API is handed the same GroupApi so they share one group key cache.
+            std::shared_ptr<group::GroupApiVarInterface> group = std::make_shared<group::GroupApiVarInterface>(api->connection->getApi(), api->serializer);
+            group->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->group = group;
+            std::shared_ptr<thread::ThreadApiVarInterface> thread = std::make_shared<thread::ThreadApiVarInterface>(api->connection->getApi(), api->serializer, api->group->getApi());
             thread->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->thread = thread;
-            std::shared_ptr<store::StoreApiVarInterface> store = std::make_shared<store::StoreApiVarInterface>(api->connection->getApi(), api->serializer);
+            std::shared_ptr<store::StoreApiVarInterface> store = std::make_shared<store::StoreApiVarInterface>(api->connection->getApi(), api->serializer, api->group->getApi());
             store->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->store = store;
-            std::shared_ptr<inbox::InboxApiVarInterface> inbox = std::make_shared<inbox::InboxApiVarInterface>(api->connection->getApi(), api->thread->getApi(), api->store->getApi(), api->serializer);
+            std::shared_ptr<inbox::InboxApiVarInterface> inbox = std::make_shared<inbox::InboxApiVarInterface>(api->connection->getApi(), api->thread->getApi(), api->store->getApi(), api->serializer, api->group->getApi());
             inbox->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->inbox = inbox;
-            std::shared_ptr<kvdb::KvdbApiVarInterface> kvdb = std::make_shared<kvdb::KvdbApiVarInterface>(api->connection->getApi(), api->serializer);
+            std::shared_ptr<kvdb::KvdbApiVarInterface> kvdb = std::make_shared<kvdb::KvdbApiVarInterface>(api->connection->getApi(), api->serializer, api->group->getApi());
             kvdb->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->kvdb = kvdb;
             std::shared_ptr<event::EventApiVarInterface> eventApi = std::make_shared<event::EventApiVarInterface>(api->connection->getApi(), api->serializer);
@@ -131,16 +138,20 @@ private:
         }},
         {core_connectPublic, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             api->connection->connectPublic(args);
-            std::shared_ptr<thread::ThreadApiVarInterface> thread = std::make_shared<thread::ThreadApiVarInterface>(api->connection->getApi(), api->serializer);
+            // Built first: every container API is handed the same GroupApi so they share one group key cache.
+            std::shared_ptr<group::GroupApiVarInterface> group = std::make_shared<group::GroupApiVarInterface>(api->connection->getApi(), api->serializer);
+            group->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
+            api->group = group;
+            std::shared_ptr<thread::ThreadApiVarInterface> thread = std::make_shared<thread::ThreadApiVarInterface>(api->connection->getApi(), api->serializer, api->group->getApi());
             thread->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->thread = thread;
-            std::shared_ptr<store::StoreApiVarInterface> store = std::make_shared<store::StoreApiVarInterface>(api->connection->getApi(), api->serializer);
+            std::shared_ptr<store::StoreApiVarInterface> store = std::make_shared<store::StoreApiVarInterface>(api->connection->getApi(), api->serializer, api->group->getApi());
             store->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->store = store;
-            std::shared_ptr<inbox::InboxApiVarInterface> inbox = std::make_shared<inbox::InboxApiVarInterface>(api->connection->getApi(), api->thread->getApi(), api->store->getApi(), api->serializer);
+            std::shared_ptr<inbox::InboxApiVarInterface> inbox = std::make_shared<inbox::InboxApiVarInterface>(api->connection->getApi(), api->thread->getApi(), api->store->getApi(), api->serializer, api->group->getApi());
             inbox->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->inbox = inbox;
-            std::shared_ptr<kvdb::KvdbApiVarInterface> kvdb = std::make_shared<kvdb::KvdbApiVarInterface>(api->connection->getApi(), api->serializer);
+            std::shared_ptr<kvdb::KvdbApiVarInterface> kvdb = std::make_shared<kvdb::KvdbApiVarInterface>(api->connection->getApi(), api->serializer, api->group->getApi());
             kvdb->create(Poco::JSON::Array::Ptr(new Poco::JSON::Array()));
             api->kvdb = kvdb;
             std::shared_ptr<event::EventApiVarInterface> eventApi = std::make_shared<event::EventApiVarInterface>(api->connection->getApi(), api->serializer);
@@ -344,6 +355,9 @@ private:
         {thread_updateThread, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->thread->updateThread(args);
         }},
+        {thread_rotateThreadKeys, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->thread->rotateThreadKeys(args);
+        }},
         {thread_getThread, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->thread->getThread(args);
         }},
@@ -382,6 +396,9 @@ private:
         }},
         {store_updateStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->store->updateStore(args);
+        }},
+        {store_rotateStoreKeys, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->store->rotateStoreKeys(args);
         }},
         {store_getStore, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->store->getStore(args);
@@ -442,6 +459,9 @@ private:
         }},
         {inbox_updateInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->inbox->updateInbox(args);
+        }},
+        {inbox_rotateInboxKeys, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->inbox->rotateInboxKeys(args);
         }},
         {inbox_getInbox, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->inbox->getInbox(args);
@@ -506,6 +526,9 @@ private:
         {kvdb_updateKvdb, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->kvdb->updateKvdb(args);
         }},
+        {kvdb_rotateKvdbKeys, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->kvdb->rotateKvdbKeys(args);
+        }},
         {kvdb_deleteKvdb, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->kvdb->deleteKvdb(args);
         }},
@@ -547,6 +570,36 @@ private:
         }},
         {kvdb_buildSubscriptionQueryForSelectedEntry, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->kvdb->buildSubscriptionQueryForSelectedEntry(args);
+        }},
+        {group_createGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->createGroup(args);
+        }},
+        {group_addGroupMembers, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->addGroupMembers(args);
+        }},
+        {group_removeGroupMembers, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->removeGroupMembers(args);
+        }},
+        {group_updateGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->updateGroup(args);
+        }},
+        {group_deleteGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->deleteGroup(args);
+        }},
+        {group_getGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->getGroup(args);
+        }},
+        {group_listGroups, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->listGroups(args);
+        }},
+        {group_subscribeFor, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->subscribeFor(args);
+        }},
+        {group_unsubscribeFrom, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->unsubscribeFrom(args);
+        }},
+        {group_buildSubscriptionQuery, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->buildSubscriptionQuery(args);
         }},
     };
 
@@ -670,7 +723,7 @@ private:
         },
         {thread_createThread,
             "createThread JSON_ARRAY\n"
-            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?]\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
             "\t\tcontextId [STRING] - ID of the Context to create the Thread in\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey structs which indicates who will have access to the created Thread\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -680,11 +733,16 @@ private:
             "\t\t\tpubKey [STRING] - user's public key\n"
             "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
-            "\t\tpolicies [OBJECT] - (optional) Thread's policies (ContainerPolicy)"
+            "\t\tpolicies [OBJECT] - (optional) Thread's policies (ContainerPolicy)\n"
+            "\t\tgroups [ARRAY] - groups granted access to the Thread; pass [] for none\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER); \"\" to read it from the Bridge\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at; 0 to read it from the Bridge"
         },
-        {thread_updateThread, 
+        {thread_updateThread,
             "updateThread JSON_ARRAY\n"
-            "\tjson format - [threadId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?]\n"
+            "\tjson format - [threadId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
             "\t\tthreadId [STRING] - ID of the Thread to update\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the updated Thread\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -697,8 +755,31 @@ private:
             "\t\tversion [NUMBER] - current version of the updated Thread\n"
             "\t\tforce [BOOL] - force update (without checking version)\n"
             "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Thread\n"
-            "\t\tpolicies [OBJECT] - (optional) Thread's policies (ContainerPolicy)"
+            "\t\tpolicies [OBJECT] - (optional) Thread's policies (ContainerPolicy)\n"
+            "\t\tgroups [ARRAY] - groups granted access to the Thread; authoritative, so [] revokes every group grant\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER); \"\" to read it from the Bridge\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at; 0 to read it from the Bridge"
             },
+        {thread_rotateThreadKeys,
+            "rotateThreadKeys JSON_ARRAY\n"
+            "\tjson format - [threadId, users:[{userId, pubKey}], managers:[{userId, pubKey}], version, force, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
+            "\t\tthreadId [STRING] - ID of the Thread to re-key\n"
+            "\t\tusers [ARRAY] - current Thread users with their public keys\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tmanagers [ARRAY] - current Thread managers with their public keys\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tversion [NUMBER] - current Thread version (optimistic lock guard)\n"
+            "\t\tforce [BOOL] - skip the version check\n"
+            "\t\tgroups [ARRAY] - epoch public keys the caller has verified itself; pass [] to read them all from the Bridge. A re-key changes no grants, so groups the Thread does not grant are ignored\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER)\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at"
+        },
         {thread_getThread, 
             "getThread JSON_ARRAY\n"
             "\tjson format - [threadId]\n"
@@ -757,7 +838,7 @@ private:
         },
         {store_createStore, 
             "createStore JSON_ARRAY\n"
-            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?]\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
             "\t\tcontextId [STRING] - ID of the Context to create the Store in\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey structs which indicates who will have access to the created Store\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -767,11 +848,16 @@ private:
             "\t\t\tpubKey [STRING] - user's public key\n"
             "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
-            "\t\tpolicies [OBJECT] - (optional) Store's policies (ContainerPolicy)"
+            "\t\tpolicies [OBJECT] - (optional) Store's policies (ContainerPolicy)\n"
+            "\t\tgroups [ARRAY] - groups granted access to the Store; pass [] for none\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER); \"\" to read it from the Bridge\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at; 0 to read it from the Bridge"
         },
-        {store_updateStore, 
+        {store_updateStore,
             "updateStore JSON_ARRAY\n"
-            "\tjson format - [storeId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?]\n"
+            "\tjson format - [storeId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
             "\t\tstoreId [STRING] - ID of the Store to update\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey structs which indicates who will have access to the updated Store\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -784,9 +870,32 @@ private:
             "\t\tversion [NUMBER] - current version of the updated Store\n"
             "\t\tforce [BOOL] - force update (without checking version)\n"
             "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Store\n"
-            "\t\tpolicies [OBJECT] - (optional) Store's policies (ContainerPolicy)"
+            "\t\tpolicies [OBJECT] - (optional) Store's policies (ContainerPolicy)\n"
+            "\t\tgroups [ARRAY] - groups granted access to the Store; authoritative, so [] revokes every group grant\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER); \"\" to read it from the Bridge\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at; 0 to read it from the Bridge"
         },
-        {store_getStore, 
+        {store_rotateStoreKeys,
+            "rotateStoreKeys JSON_ARRAY\n"
+            "\tjson format - [storeId, users:[{userId, pubKey}], managers:[{userId, pubKey}], version, force, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
+            "\t\tstoreId [STRING] - ID of the Store to re-key\n"
+            "\t\tusers [ARRAY] - current Store users with their public keys\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tmanagers [ARRAY] - current Store managers with their public keys\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tversion [NUMBER] - current Store version (optimistic lock guard)\n"
+            "\t\tforce [BOOL] - skip the version check\n"
+            "\t\tgroups [ARRAY] - epoch public keys the caller has verified itself; pass [] to read them all from the Bridge. A re-key changes no grants, so groups the Store does not grant are ignored\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER)\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at"
+        },
+        {store_getStore,
             "getStore JSON_ARRAY\n"
             "\tjson format - [storeId]\n"
             "\t\tstoreId [STRING] - ID of the Store to get"
@@ -879,7 +988,7 @@ private:
         },
         {inbox_createInbox, 
             "createInbox JSON_ARRAY\n"
-            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, filesConfig?:{minCount, maxCount, maxFileSize, maxWholeUploadSize}, policies?]\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, filesConfig?:{minCount, maxCount, maxFileSize, maxWholeUploadSize}, policies?, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
             "\t\tcontextId [STRING] - ID of the Context of the new Inbox\n"
             "\t\tusers [ARRAY] -  vector of UserWithPubKey which indicates who will have access to the created Inbox\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -894,11 +1003,16 @@ private:
             "\t\t\tmaxCount [NUMBER] - maximum number of files allowed when sending inbox entry\n"
             "\t\t\tmaxFileSize [NUMBER] - maximum file size allowed when sending inbox entry\n"
             "\t\t\tmaxWholeUploadSize [NUMBER] - maximum size of all files in total allowed when sending inbox entry\n"
-            "\t\tpolicies [OBJECT] - (optional) Inbox's policies (ContainerPolicyWithoutItem)"
+            "\t\tpolicies [OBJECT] - (optional) Inbox's policies (ContainerPolicyWithoutItem)\n"
+            "\t\tgroups [ARRAY] - groups granted access to the Inbox and to its inner Thread and Store; pass [] for none\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER); \"\" to read it from the Bridge\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at; 0 to read it from the Bridge"
         },
-        {inbox_updateInbox, 
+        {inbox_updateInbox,
             "updateInbox JSON_ARRAY\n"
-            "\tjson format - [inboxId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, filesConfig?:{minCount, maxCount, maxFileSize, maxWholeUploadSize}, version, force, forceGenerateNewKey, policies?]\n"
+            "\tjson format - [inboxId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, filesConfig?:{minCount, maxCount, maxFileSize, maxWholeUploadSize}, version, force, forceGenerateNewKey, policies?, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
             "\t\tinboxId [STRING] - ID of the Inbox to update\n"
             "\t\tusers [ARRAY] -  vector of UserWithPubKey which indicates who will have access to the updated Inbox\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -916,9 +1030,32 @@ private:
             "\t\tversion [NUMBER] - current version of the updated Inbox\n"
             "\t\tforce [BOOL] - force update (without checking version)\n"
             "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Inbox\n"
-            "\t\tpolicies [OBJECT] - (optional) Inbox's policies (ContainerPolicyWithoutItem)"
+            "\t\tpolicies [OBJECT] - (optional) Inbox's policies (ContainerPolicyWithoutItem)\n"
+            "\t\tgroups [ARRAY] - groups granted access to the Inbox and to its inner Thread and Store; authoritative, so [] revokes every group grant on all three\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER); \"\" to read it from the Bridge\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at; 0 to read it from the Bridge"
         },
-        {inbox_getInbox, 
+        {inbox_rotateInboxKeys,
+            "rotateInboxKeys JSON_ARRAY\n"
+            "\tjson format - [inboxId, users:[{userId, pubKey}], managers:[{userId, pubKey}], version, force, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
+            "\t\tinboxId [STRING] - ID of the Inbox to re-key; its inner Thread and Store are re-keyed too\n"
+            "\t\tusers [ARRAY] - current Inbox users with their public keys\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tmanagers [ARRAY] - current Inbox managers with their public keys\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tversion [NUMBER] - current Inbox version (optimistic lock guard); the inner Thread and Store are re-keyed at whatever version they currently hold\n"
+            "\t\tforce [BOOL] - skip the version check\n"
+            "\t\tgroups [ARRAY] - epoch public keys the caller has verified itself; pass [] to read them all from the Bridge. A re-key changes no grants, so groups the Inbox does not grant are ignored\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER)\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at"
+        },
+        {inbox_getInbox,
             "getInbox JSON_ARRAY\n"
             "\tjson format - [inboxId]\n"
             "\t\tinboxId [STRING] - ID of the Inbox to get"
@@ -1314,7 +1451,7 @@ private:
         },
         {kvdb_createKvdb,
             "createKvdb JSON_ARRAY\n"
-            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?]\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
             "\t\tcontextId [STRING] - ID of the Context to create the KVDB in\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the created KVDB\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -1324,11 +1461,16 @@ private:
             "\t\t\tpubKey [STRING] - user's public key\n"
             "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
-            "\t\tpolicies [OBJECT] - (optional) KVDB's policies (ContainerPolicy)"
+            "\t\tpolicies [OBJECT] - (optional) KVDB's policies (ContainerPolicy)\n"
+            "\t\tgroups [ARRAY] - groups granted access to the KVDB; pass [] for none\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER); \"\" to read it from the Bridge\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at; 0 to read it from the Bridge"
         },
         {kvdb_updateKvdb,
             "updateKvdb JSON_ARRAY\n"
-            "\tjson format - [kvdbId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?]\n"
+            "\tjson format - [kvdbId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
             "\t\tkvdbId [STRING] - ID of the KVDB to update\n"
             "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the updated KVDB\n"
             "\t\t\tuserId [STRING] - ID of the user\n"
@@ -1341,7 +1483,30 @@ private:
             "\t\tversion [NUMBER] - current version of the updated KVDB\n"
             "\t\tforce [BOOL] - force update (without checking version)\n"
             "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the KVDB\n"
-            "\t\tpolicies [OBJECT] - (optional) KVDB's policies (ContainerPolicy)"
+            "\t\tpolicies [OBJECT] - (optional) KVDB's policies (ContainerPolicy)\n"
+            "\t\tgroups [ARRAY] - groups granted access to the KVDB; authoritative, so [] revokes every group grant\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER); \"\" to read it from the Bridge\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at; 0 to read it from the Bridge"
+        },
+        {kvdb_rotateKvdbKeys,
+            "rotateKvdbKeys JSON_ARRAY\n"
+            "\tjson format - [kvdbId, users:[{userId, pubKey}], managers:[{userId, pubKey}], version, force, groups:[{groupId, role, groupPubKey, groupEpoch}]]\n"
+            "\t\tkvdbId [STRING] - ID of the KVDB to re-key\n"
+            "\t\tusers [ARRAY] - current KVDB users with their public keys\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tmanagers [ARRAY] - current KVDB managers with their public keys\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tversion [NUMBER] - current KVDB version (optimistic lock guard)\n"
+            "\t\tforce [BOOL] - skip the version check\n"
+            "\t\tgroups [ARRAY] - epoch public keys the caller has verified itself; pass [] to read them all from the Bridge. A re-key changes no grants, so groups the KVDB does not grant are ignored\n"
+            "\t\t\tgroupId [STRING] - ID of the group\n"
+            "\t\t\trole [STRING] - role held by the group (\"user\" or \"manager\")\n"
+            "\t\t\tgroupPubKey [STRING] - verified group epoch public key (base58-DER)\n"
+            "\t\t\tgroupEpoch [NUMBER] - epoch groupPubKey was verified at"
         },
         {kvdb_deleteKvdb,
             "deleteKvdb JSON_ARRAY\n"
@@ -1433,6 +1598,85 @@ private:
             "\t\teventType [NUMBER] - type of event to listen for (kvdb::EventType enum value)\n"
             "\t\tkvdbId [STRING] - ID of the KVDB\n"
             "\t\tkvdbEntryKey [STRING] - key of the KVDB entry"
+        },
+        {group_createGroup,
+            "createGroup JSON_ARRAY\n"
+            "\tjson format - [contextId, users:[{userId, pubKey}], managers:[{userId, pubKey}], publicMeta, privateMeta, policies?]\n"
+            "\t\tcontextId [STRING] - ID of the Context to create the Group in\n"
+            "\t\tusers [ARRAY] - vector of UserWithPubKey which indicates who will have access to the created Group\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tmanagers [ARRAY] - vector of UserWithPubKey which indicates who will have access (and management rights) to the created Group\n"
+            "\t\t\tuserId [STRING] - ID of the user\n"
+            "\t\t\tpubKey [STRING] - user's public key\n"
+            "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
+            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
+            "\t\tpolicies [OBJECT] - (optional) Group's policies (ContainerPolicy)"
+        },
+        {group_addGroupMembers,
+            "addGroupMembers JSON_ARRAY\n"
+            "\tjson format - [groupId, newMembers:[{user:{userId, pubKey}, role}]]\n"
+            "\t\tgroupId [STRING] - ID of the Group\n"
+            "\t\tnewMembers [ARRAY] - the members to add (GroupMemberToAdd)\n"
+            "\t\t\tuser [OBJECT] - the member, with their public key (UserWithPubKey)\n"
+            "\t\t\trole [STRING] - \"user\" or \"manager\"\n"
+            "\tdoes not advance the Group's key epoch; the roster and metadata are derived, not passed"
+        },
+        {group_removeGroupMembers,
+            "removeGroupMembers JSON_ARRAY\n"
+            "\tjson format - [groupId, userIds:[STRING]]\n"
+            "\t\tgroupId [STRING] - ID of the Group\n"
+            "\t\tuserIds [ARRAY] - IDs of the members to remove\n"
+            "\tthe roster that remains and the metadata are derived, not passed; advances the Group's key epoch; containers the Group can read must be re-keyed afterwards"
+        },
+        {group_updateGroup,
+            "updateGroup JSON_ARRAY\n"
+            "\tjson format - [groupId, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?]\n"
+            "\t\tgroupId [STRING] - ID of the Group to update\n"
+            "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
+            "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
+            "\t\tversion [NUMBER] - current version of the updated Group\n"
+            "\t\tforce [BOOL] - force update (without checking version)\n"
+            "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Group\n"
+            "\t\tpolicies [OBJECT] - (optional) Group's policies (ContainerPolicy)"
+        },
+        {group_deleteGroup,
+            "deleteGroup JSON_ARRAY\n"
+            "\tjson format - [groupId]\n"
+            "\t\tgroupId [STRING] - ID of the Group to delete"
+        },
+        {group_getGroup,
+            "getGroup JSON_ARRAY\n"
+            "\tjson format - [groupId]\n"
+            "\t\tgroupId [STRING] - ID of the Group to get"
+        },
+        {group_listGroups,
+            "listGroups JSON_ARRAY\n"
+            "\tjson format - [contextId, pagingQuery:{skip, limit, sortOrder, lastId?, sortBy?, queryAsJson?}]\n"
+            "\t\tcontextId [STRING] - ID of the Context to get the Groups from\n"
+            "\t\tpagingQuery [OBJECT] - struct with list query parameters\n"
+            "\t\t\tskip [NUMBER] - number of elements to skip from result\n"
+            "\t\t\tlimit [NUMBER] - limit of elements to return for query\n"
+            "\t\t\tsortOrder [STRING] - order of elements in result (\"asc\" or \"desc\")\n"
+            "\t\t\tlastId [STRING] - (optional) ID of the element from which query results should start\n"
+            "\tthe listing carries no publicMeta/privateMeta - call getGroup for those"
+        },
+        {group_subscribeFor,
+            "subscribeFor JSON_ARRAY\n"
+            "\tjson format - [subscriptionQueries:[STRING]]\n"
+            "\t\tsubscriptionQueries [ARRAY] - list of queries built with group.buildSubscriptionQuery"
+        },
+        {group_unsubscribeFrom,
+            "unsubscribeFrom JSON_ARRAY\n"
+            "\tjson format - [subscriptionIds:[STRING]]\n"
+            "\t\tsubscriptionIds [ARRAY] - list of subscriptionId"
+        },
+        {group_buildSubscriptionQuery,
+            "buildSubscriptionQuery JSON_ARRAY\n"
+            "\tjson format - [eventType, selectorType, selectorId]\n"
+            "\t\teventType [NUMBER] - type of event to listen for (group::EventType: 0 - GROUP_CREATE, 1 - GROUP_UPDATE, 2 - GROUP_DELETE)\n"
+            "\t\tselectorType [NUMBER] - scope to listen on (group::EventSelectorType: 0 - CONTEXT_ID, 1 - GROUP_ID)\n"
+            "\t\tselectorId [STRING] - ID of the selector"
         }
     };
 
@@ -1458,6 +1702,7 @@ private:
         {crypto_convertPEMKeytoWIFKey, "Converts given private key in PEM format to its WIF format."},
         {thread_createThread, "Creates a new Thread in given Context."},
         {thread_updateThread, "Updates an existing Thread."},
+        {thread_rotateThreadKeys, "Re-encrypts the Thread key for its current members and grantee groups."},
         {thread_getThread, "Gets a Thread by given Thread ID."},
         {thread_listThreads, "Gets a list of Threads in given Context."},
         {thread_deleteThread, "Deletes a Thread by given Thread ID."},
@@ -1468,6 +1713,7 @@ private:
         {thread_deleteMessage, "Deletes a message by given message ID."},
         {store_createStore, "Creates a new Store in given Context."},
         {store_updateStore, "Updates an existing Store."},
+        {store_rotateStoreKeys, "Re-encrypts the Store key for its current members and grantee groups."},
         {store_getStore, "Gets a single Store by given Store ID."},
         {store_listStores, "Gets a list of Stores in given Context."},
         {store_deleteStore, "Deletes a Store by given Store ID."},
@@ -1484,6 +1730,7 @@ private:
         {store_closeFile, "Closes the file handle."},
         {inbox_createInbox, "Creates a new Inbox."},
         {inbox_updateInbox, "Updates an existing Inbox."},
+        {inbox_rotateInboxKeys, "Re-encrypts the Inbox key, and its inner Thread's and Store's, for their current members and grantee groups."},
         {inbox_getInbox, "Gets a single Inbox by given Inbox ID."},
         {inbox_listInboxes, "Gets s list of Inboxes in given Context."},
         {inbox_deleteInbox, "Deletes an Inbox by given Inbox ID."},
@@ -1551,6 +1798,7 @@ private:
         {inbox_buildSubscriptionQuery, "Generates a subscription query for Inbox events."},
         {kvdb_createKvdb, "Creates a new KVDB in given Context."},
         {kvdb_updateKvdb, "Updates an existing KVDB."},
+        {kvdb_rotateKvdbKeys, "Re-encrypts the KVDB key for its current members and grantee groups."},
         {kvdb_deleteKvdb, "Deletes a KVDB by given KVDB ID."},
         {kvdb_getKvdb, "Gets a KVDB by given KVDB ID."},
         {kvdb_listKvdbs, "Gets a list of KVDBs in given Context."},
@@ -1565,6 +1813,16 @@ private:
         {kvdb_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
         {kvdb_buildSubscriptionQuery, "Generates a subscription query for KVDB events."},
         {kvdb_buildSubscriptionQueryForSelectedEntry, "Generates a subscription query for events of a single KVDB entry."},
+        {group_createGroup, "Creates a new Group whose key distribution is backed by a hidden key tree."},
+        {group_addGroupMembers, "Adds one member to a tree-backed Group, without advancing its key epoch."},
+        {group_removeGroupMembers, "Removes one member from a tree-backed Group and advances its key epoch."},
+        {group_updateGroup, "Updates an existing Group."},
+        {group_deleteGroup, "Deletes a Group by given Group ID."},
+        {group_getGroup, "Gets a Group by given Group ID."},
+        {group_listGroups, "Gets a list of Groups in given Context."},
+        {group_subscribeFor, "Subscribes for the Group events on the given subscription queries."},
+        {group_unsubscribeFrom, "Unsubscribes from events for the given subscriptionIds."},
+        {group_buildSubscriptionQuery, "Generates a subscription query for Group events."},
     };
 
     const std::unordered_map<func_enum, std::string> functions_endpoint_action_description = {
@@ -1589,11 +1847,13 @@ private:
         {crypto_convertPEMKeytoWIFKey, "Convert PEM key to WIF key"},
         {thread_createThread, "Creating thread"},
         {thread_updateThread, "Updating thread"},
+        {thread_rotateThreadKeys, "Rotating thread keys"},
         {thread_getThread, "Getting thread"},
         {thread_listThreads, "Getting threads"},
         {thread_deleteThread, "Deleting thread"},
         {store_createStore, "Creating store"},
         {store_updateStore, "Updating store"},
+        {store_rotateStoreKeys, "Rotating store keys"},
         {store_getStore, "Getting store"},
         {store_listStores, "Getting stores"},
         {store_deleteStore, "Deleting store"},
@@ -1610,6 +1870,7 @@ private:
         {store_closeFile, "Closing store file"},
         {inbox_createInbox, "Creating inbox"},
         {inbox_updateInbox, "Updating inbox"},
+        {inbox_rotateInboxKeys, "Rotating inbox keys"},
         {inbox_getInbox, "Getting inbox"},
         {inbox_listInboxes, "Getting inboxes"},
         {inbox_deleteInbox, "Deleting inbox"},
@@ -1677,6 +1938,7 @@ private:
         {inbox_buildSubscriptionQuery, "Building subscription query"},
         {kvdb_createKvdb, "Creating kvdb"},
         {kvdb_updateKvdb, "Updating kvdb"},
+        {kvdb_rotateKvdbKeys, "Rotating kvdb keys"},
         {kvdb_deleteKvdb, "Deleting kvdb"},
         {kvdb_getKvdb, "Getting kvdb"},
         {kvdb_listKvdbs, "Getting kvdbs"},
@@ -1691,6 +1953,16 @@ private:
         {kvdb_unsubscribeFrom, "Unsubscribing from events"},
         {kvdb_buildSubscriptionQuery, "Building subscription query"},
         {kvdb_buildSubscriptionQueryForSelectedEntry, "Building subscription query"},
+        {group_createGroup, "Creating group"},
+        {group_addGroupMembers, "Adding group member"},
+        {group_removeGroupMembers, "Removing group member"},
+        {group_updateGroup, "Updating group"},
+        {group_deleteGroup, "Deleting group"},
+        {group_getGroup, "Getting group"},
+        {group_listGroups, "Getting group list"},
+        {group_subscribeFor, "Subscribing for events"},
+        {group_unsubscribeFrom, "Unsubscribing from events"},
+        {group_buildSubscriptionQuery, "Building subscription query"},
     };
 };
 

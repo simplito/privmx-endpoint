@@ -12,6 +12,7 @@ limitations under the License.
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/utils/Logger.hpp>
 
 #include "privmx/endpoint/core/CoreConstants.hpp"
 #include "privmx/endpoint/core/EndpointUtils.hpp"
@@ -101,6 +102,46 @@ void KeyDecryptionAndVerificationRequest::addAll(
         requestData.insert(std::make_pair(location, toDecrypt));
     }
 }
+void KeyDecryptionAndVerificationRequest::addGroupKeys(
+    const std::optional<std::vector<server::GroupKeysEntry>>& groupKeys,
+    const EncKeyLocation& location
+) {
+    if (groupKeys.has_value()) {
+        addGroupKeys(groupKeys.value(), location);
+    }
+}
+
+void KeyDecryptionAndVerificationRequest::addGroupKeys(
+    const std::vector<server::GroupKeysEntry>& groupKeys,
+    const EncKeyLocation& location
+) {
+    if (_completed) {
+        throw KeyProviderRequestCompletedException();
+    }
+    for (const auto& groupEntry : groupKeys) {
+        for (const auto& keyEntry : groupEntry.keys) {
+            auto& candidates = groupRequestData[location][keyEntry.keyId];
+            bool known = false;
+            for (const auto& candidate : candidates) {
+                if (candidate.groupId == groupEntry.group) {
+                    known = true;
+                    break;
+                }
+            }
+            if (known) {
+                continue;
+            }
+            candidates.push_back(
+                GroupKeyCandidate{
+                    .keyEntry = server::KeyEntry{.keyId = keyEntry.keyId, .data = keyEntry.data},
+                    .groupId = groupEntry.group,
+                    .groupEpoch = keyEntry.groupEpoch.value_or(0)
+                }
+            );
+        }
+    }
+}
+
 void KeyDecryptionAndVerificationRequest::markAsCompleted() {
     _completed = true;
 }
@@ -123,12 +164,34 @@ std::string KeyProvider::generateSecret() {
 }
 
 std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>> KeyProvider::getKeysAndVerify(
-    const KeyDecryptionAndVerificationRequest& request
+    const KeyDecryptionAndVerificationRequest& request,
+    const GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>> result;
     for (auto locationKeyMap : request.requestData) {
         auto locationResult = decryptAndVerifyKeys(locationKeyMap.second, locationKeyMap.first);
         result.insert(std::make_pair(locationKeyMap.first, locationResult));
+    }
+    for (const auto& groupLocEntry : request.groupRequestData) {
+        const auto& location = groupLocEntry.first;
+        auto& locationResult = result[location];
+        std::unordered_map<std::string, std::vector<GroupKeyCandidate>> unresolved;
+        for (const auto& kv : groupLocEntry.second) {
+            auto it = locationResult.find(kv.first);
+            if (it == locationResult.end() || it->second.statusCode != 0) {
+                unresolved.insert(kv);
+            }
+        }
+        if (unresolved.empty()) {
+            continue;
+        }
+        auto groupResult = decryptAndVerifyGroupKeys(unresolved, location, groupPrivKeyResolver);
+        for (auto& kv : groupResult) {
+            auto it = locationResult.find(kv.first);
+            if (it == locationResult.end() || it->second.statusCode != 0) {
+                locationResult[kv.first] = kv.second;
+            }
+        }
     }
     verifyUserData(result);
     return result;
@@ -187,8 +250,8 @@ server::KeyEntrySet KeyProvider::createKeyEntrySet(
     // clang-format off
     key_entry_set.data = _encKeyEncryptorV2.encrypt(
         EncKeyV2ToEncrypt{
-            EncKey{.id = key.id, .key = key.key}, .dio = dio, .location = location, .keySecret = keySecret,
-            .secretHash = privmx::crypto::Crypto::hmacSha256(
+            EncKey{.id = key.id, .key = key.key}, dio, location, keySecret,
+            privmx::crypto::Crypto::hmacSha256(
                 containerSecret, keySecret + location.contextId + location.resourceId
             )
         },
@@ -216,50 +279,51 @@ bool KeyProvider::verifyKeysSecret(
     return true;
 }
 
+DecryptedEncKeyV2 KeyProvider::decryptKeyEntry(
+    const server::KeyEntry& keyEntry,
+    const privmx::crypto::PrivateKey& privKey
+) {
+    DecryptedEncKeyV2 decryptedEncKey;
+    decryptedEncKey.statusCode = 0;
+    if (keyEntry.data.type() == typeid(Poco::JSON::Object::Ptr)) {
+        dynamic::VersionedData versioned;
+        try {
+            versioned = dynamic::VersionedData::fromJSON(keyEntry.data);
+        } catch (const privmx::endpoint::core::Exception& e) {
+            decryptedEncKey.statusCode = e.getCode();
+            return decryptedEncKey;
+        } catch (const privmx::utils::PrivmxException& e) {
+            decryptedEncKey.statusCode = core::ExceptionConverter::convert(e).getCode();
+            return decryptedEncKey;
+        } catch (...) {
+            decryptedEncKey.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+            return decryptedEncKey;
+        }
+        if (versioned.version == EncryptionKeyDataSchema::Version::VERSION_2) {
+            return _encKeyEncryptorV2.decrypt(server::EncryptedKeyEntryDataV2::fromJSON(keyEntry.data), privKey);
+        } else {
+            decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
+            return decryptedEncKey;
+        }
+    } else if (keyEntry.data.isString()) {
+        decryptedEncKey.id = keyEntry.keyId;
+        decryptedEncKey.key = _encKeyEncryptorV1.decrypt(keyEntry.data, privKey);
+        decryptedEncKey.dataStructureVersion = EncryptionKeyDataSchema::Version::VERSION_1;
+        decryptedEncKey.secretHash = "";
+        return decryptedEncKey;
+    } else {
+        decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
+        return decryptedEncKey;
+    }
+}
+
 std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerifyKeys(
     std::unordered_map<std::string, server::KeyEntry> keys,
     const EncKeyLocation& location
 ) {
     std::unordered_map<std::string, DecryptedEncKeyV2> result;
-    for (auto key : keys) {
-        DecryptedEncKeyV2 decryptedEncKey;
-        decryptedEncKey.statusCode = 0;
-        if (key.second.data.type() == typeid(Poco::JSON::Object::Ptr)) {
-            dynamic::VersionedData versioned;
-            try {
-                versioned = dynamic::VersionedData::fromJSON(key.second.data);
-            } catch (const privmx::endpoint::core::Exception& e) {
-                decryptedEncKey.statusCode = e.getCode();
-                result.insert(std::make_pair(key.first, decryptedEncKey));
-                continue;
-            } catch (const privmx::utils::PrivmxException& e) {
-                decryptedEncKey.statusCode = core::ExceptionConverter::convert(e).getCode();
-                result.insert(std::make_pair(key.first, decryptedEncKey));
-                continue;
-            } catch (...) {
-                decryptedEncKey.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-                result.insert(std::make_pair(key.first, decryptedEncKey));
-                continue;
-            }
-            if (versioned.version == EncryptionKeyDataSchema::Version::VERSION_2) {
-                DecryptedEncKeyV2 decryptedEncKey = _encKeyEncryptorV2.decrypt(
-                    server::EncryptedKeyEntryDataV2::fromJSON(key.second.data), _key
-                );
-                result.insert(std::make_pair(key.first, decryptedEncKey));
-            } else {
-                decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
-                result.insert(std::make_pair(key.first, decryptedEncKey));
-            }
-        } else if (key.second.data.isString()) {
-            decryptedEncKey.id = key.second.keyId;
-            decryptedEncKey.key = _encKeyEncryptorV1.decrypt(key.second.data, _key);
-            decryptedEncKey.dataStructureVersion = EncryptionKeyDataSchema::Version::VERSION_1;
-            decryptedEncKey.secretHash = "";
-            result.insert(std::make_pair(key.first, decryptedEncKey));
-        } else {
-            decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
-            result.insert(std::make_pair(key.first, decryptedEncKey));
-        }
+    for (const auto& key : keys) {
+        result.insert(std::make_pair(key.first, decryptKeyEntry(key.second, _key)));
     }
     verifyData(result, location);
     if (result.size() > 1) {
@@ -268,18 +332,84 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
     return result;
 }
 
+DecryptedEncKeyV2 KeyProvider::decryptGroupKeyCandidate(
+    const GroupKeyCandidate& candidate,
+    const EncKeyLocation& location,
+    const GroupPrivKeyResolver& groupPrivKeyResolver
+) {
+    auto groupPrivKey = groupPrivKeyResolver ? groupPrivKeyResolver(candidate.groupId, candidate.groupEpoch) :
+                                               std::nullopt;
+    if (!groupPrivKey.has_value()) {
+        DecryptedEncKeyV2 failed;
+        failed.statusCode = UnknownEncryptionKeyVersionException().getCode();
+        return failed;
+    }
+    DecryptedEncKeyV2 decrypted = decryptKeyEntry(candidate.keyEntry, groupPrivKey.value());
+    verifyKeyLocation(decrypted, location);
+    return decrypted;
+}
+
+std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerifyGroupKeys(
+    const std::unordered_map<std::string, std::vector<GroupKeyCandidate>>& groupKeyMap,
+    const EncKeyLocation& location,
+    const GroupPrivKeyResolver& groupPrivKeyResolver
+) {
+    std::unordered_map<std::string, DecryptedEncKeyV2> result;
+    for (const auto& entry : groupKeyMap) {
+        std::optional<DecryptedEncKeyV2> firstFailure;
+        std::string firstFailureGroupId;
+        std::optional<DecryptedEncKeyV2> chosen;
+        for (const auto& candidate : entry.second) {
+            DecryptedEncKeyV2 decrypted = decryptGroupKeyCandidate(candidate, location, groupPrivKeyResolver);
+            if (decrypted.statusCode == 0) {
+                chosen = decrypted;
+                break;
+            }
+            if (!firstFailure.has_value()) {
+                firstFailure = decrypted;
+                firstFailureGroupId = candidate.groupId;
+            }
+        }
+        if (!chosen.has_value()) {
+            chosen = firstFailure;
+        }
+        if (!chosen.has_value()) {
+            continue;
+        }
+        if (firstFailure.has_value()) {
+            LOG_ERROR(
+                "Error on KeyProvider::decryptAndVerifyGroupKeys, group key route failed", "\nkeyId: ", entry.first,
+                "\ngroup: ", firstFailureGroupId, "\nstatusCode: ", firstFailure->statusCode,
+                "\nOpened by another route: ", (chosen->statusCode == 0 ? "yes" : "no"),
+                "\nContainer key marked unusable: yes"
+            )
+            chosen->statusCode = firstFailure->statusCode;
+        }
+        result.insert(std::make_pair(entry.first, chosen.value()));
+    }
+    verifyData(result, location);
+    if (result.size() > 1) {
+        verifyForDuplication(result);
+    }
+    return result;
+}
+
+void KeyProvider::verifyKeyLocation(DecryptedEncKeyV2& key, const EncKeyLocation& location) {
+    if (key.statusCode != 0 || key.dataStructureVersion != EncryptionKeyDataSchema::Version::VERSION_2) {
+        return;
+    }
+    if (key.dio.contextId != location.contextId || key.dio.resourceId != location.resourceId) {
+        key.statusCode = EncryptionKeyContainerValidationException().getCode();
+    }
+}
+
 void KeyProvider::verifyData(
     std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys,
     const EncKeyLocation& location
 ) {
     //create data validation request
     for (auto it = decryptedKeys.begin(); it != decryptedKeys.end(); ++it) {
-        if (it->second.statusCode == 0 &&
-            it->second.dataStructureVersion == EncryptionKeyDataSchema::Version::VERSION_2) {
-            if (it->second.dio.contextId != location.contextId || it->second.dio.resourceId != location.resourceId) {
-                it->second.statusCode = EncryptionKeyContainerValidationException().getCode();
-            }
-        }
+        verifyKeyLocation(it->second, location);
     }
 }
 

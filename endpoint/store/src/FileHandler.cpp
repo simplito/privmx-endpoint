@@ -279,6 +279,10 @@ void FileHandler::flush() {
     );
 }
 
+void FileHandler::rekey(const core::DecryptedEncKey& fileEncKey) {
+    _fileEncKey = fileEncKey;
+}
+
 void FileHandler::close() {
     flush();
 }

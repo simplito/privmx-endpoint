@@ -16,6 +16,7 @@ limitations under the License.
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
@@ -30,6 +31,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/ThreadApi.hpp"
 #include "privmx/endpoint/thread/encryptors/message/MessageDataSchemaMapper.hpp"
 #include "privmx/endpoint/thread/encryptors/thread/ThreadDataSchemaMapper.hpp"
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
@@ -44,7 +46,8 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const core::Connection& connection
+        const core::Connection& connection,
+        const std::optional<group::GroupApi>& groupApi = std::nullopt
     );
     ~ThreadApiImpl();
     std::string createThread(
@@ -54,7 +57,8 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicy>& policies,
-        const std::string& type = THREAD_TYPE_FILTER_FLAG
+        const std::string& type = THREAD_TYPE_FILTER_FLAG,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     void updateThread(
@@ -66,7 +70,16 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+    void rotateThreadKeys(
+        const std::string& threadId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
     void deleteThread(const std::string& threadId);
 
@@ -135,6 +148,14 @@ private:
     );
 
     void assertThreadExist(const std::string& threadId);
+
+    /**
+     * Re-keys a Thread whose key has gone stale, without being asked to.
+     *
+     * The roster is the Thread's own — a re-key changes nothing but the key — so unlike `rotateThreadKeys` this
+     * takes no arguments beyond the id and looks the members' public keys up itself.
+     */
+    void autoRotateThreadKeys(const std::string& threadId);
 
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;

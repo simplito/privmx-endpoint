@@ -35,6 +35,7 @@ public:
         const core::DecryptedEncKey& fileEncKey
     ) = 0;
     virtual void flush() = 0;
+    virtual void rekey(const core::DecryptedEncKey& fileEncKey) = 0;
 };
 
 } // namespace store

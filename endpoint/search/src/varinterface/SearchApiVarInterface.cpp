@@ -24,6 +24,7 @@ std::map<SearchApiVarInterface::METHOD, Poco::Dynamic::Var (SearchApiVarInterfac
         {Create, &SearchApiVarInterface::create},
         {CreateSearchIndex, &SearchApiVarInterface::createSearchIndex},
         {UpdateSearchIndex, &SearchApiVarInterface::updateSearchIndex},
+        {RotateSearchIndexKeys, &SearchApiVarInterface::rotateSearchIndexKeys},
         {DeleteSearchIndex, &SearchApiVarInterface::deleteSearchIndex},
         {GetSearchIndex, &SearchApiVarInterface::getSearchIndex},
         {ListSearchIndexes, &SearchApiVarInterface::listSearchIndexes},
@@ -47,7 +48,7 @@ Poco::Dynamic::Var SearchApiVarInterface::create(const Poco::Dynamic::Var& args)
 }
 
 Poco::Dynamic::Var SearchApiVarInterface::createSearchIndex(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 8);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
@@ -55,12 +56,15 @@ Poco::Dynamic::Var SearchApiVarInterface::createSearchIndex(const Poco::Dynamic:
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto mode = _deserializer.deserialize<search::IndexMode>(argsArr->get(5), "mode");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(6), "policies");
-    auto result = _searchApi.createSearchIndex(contextId, users, managers, publicMeta, privateMeta, mode, policies);
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(7), "groups");
+    auto result = _searchApi.createSearchIndex(
+        contextId, users, managers, publicMeta, privateMeta, mode, policies, groups
+    );
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var SearchApiVarInterface::updateSearchIndex(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 9);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 10);
     auto indexId = _deserializer.deserialize<std::string>(argsArr->get(0), "indexId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
@@ -70,9 +74,22 @@ Poco::Dynamic::Var SearchApiVarInterface::updateSearchIndex(const Poco::Dynamic:
     auto force = _deserializer.deserialize<bool>(argsArr->get(6), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(7), "forceGenerateNewKey");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(8), "policies");
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(9), "groups");
     _searchApi.updateSearchIndex(
-        indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+        indexId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
     );
+    return {};
+}
+
+Poco::Dynamic::Var SearchApiVarInterface::rotateSearchIndexKeys(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto indexId = _deserializer.deserialize<std::string>(argsArr->get(0), "indexId");
+    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto version = _deserializer.deserialize<int64_t>(argsArr->get(3), "version");
+    auto force = _deserializer.deserialize<bool>(argsArr->get(4), "force");
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(5), "groups");
+    _searchApi.rotateSearchIndexKeys(indexId, users, managers, version, force, groups);
     return {};
 }
 

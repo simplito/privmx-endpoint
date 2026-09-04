@@ -134,6 +134,7 @@ enum func_enum {
     //  thread
     thread_createThread,
     thread_updateThread,
+    thread_rotateThreadKeys,
     thread_getThread,
     thread_listThreads,
     thread_deleteThread,
@@ -148,6 +149,7 @@ enum func_enum {
     //  store
     store_createStore,
     store_updateStore,
+    store_rotateStoreKeys,
     store_getStore,
     store_listStores,
     store_deleteStore,
@@ -169,6 +171,7 @@ enum func_enum {
     //  inbox
     inbox_createInbox,
     inbox_updateInbox,
+    inbox_rotateInboxKeys,
     inbox_getInbox,
     inbox_listInboxes,
     inbox_deleteInbox,
@@ -190,6 +193,7 @@ enum func_enum {
     //  kvdb
     kvdb_createKvdb,
     kvdb_updateKvdb,
+    kvdb_rotateKvdbKeys,
     kvdb_deleteKvdb,
     kvdb_getKvdb,
     kvdb_listKvdbs,
@@ -204,6 +208,17 @@ enum func_enum {
     kvdb_unsubscribeFrom,
     kvdb_buildSubscriptionQuery,
     kvdb_buildSubscriptionQueryForSelectedEntry,
+    //  group
+    group_createGroup,
+    group_addGroupMembers,
+    group_removeGroupMembers,
+    group_updateGroup,
+    group_deleteGroup,
+    group_getGroup,
+    group_listGroups,
+    group_subscribeFor,
+    group_unsubscribeFrom,
+    group_buildSubscriptionQuery,
 };
 
 } // privmxcli

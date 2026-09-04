@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
 #include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
+#include <privmx/endpoint/group/GroupApi.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
@@ -30,12 +31,12 @@ KvdbApi& KvdbApi::operator=(const KvdbApi& obj) {
 KvdbApi::KvdbApi(KvdbApi&& obj) : ExtendedPointer(std::move(obj)) {};
 KvdbApi::~KvdbApi() {}
 
-KvdbApi KvdbApi::create(core::Connection& connection) {
+KvdbApi KvdbApi::create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<KvdbApiImpl> impl(new KvdbApiImpl(
             connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
-            connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection
+            connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection, groupApi
         ));
         impl->attach(impl);
         return KvdbApi(impl);
@@ -53,14 +54,16 @@ std::string KvdbApi::createKvdb(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
-        return impl->createKvdb(contextId, users, managers, publicMeta, privateMeta, policies);
+        return impl->createKvdb(contextId, users, managers, publicMeta, privateMeta, policies, groups);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -76,16 +79,39 @@ void KvdbApi::updateKvdb(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
         return impl->updateKvdb(
-            kvdbId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+            kvdbId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
         );
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void KvdbApi::rotateKvdbKeys(
+    const std::string& kvdbId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(kvdbId, "field:kvdbId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
+    try {
+        impl->rotateKvdbKeys(kvdbId, users, managers, version, force, groups);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

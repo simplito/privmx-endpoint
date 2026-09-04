@@ -10,6 +10,8 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/thread/ServerApi.hpp"
+#include "privmx/utils/Logger.hpp"
+#include "privmx/utils/Utils.hpp"
 #include <privmx/utils/JsonHelper.hpp>
 
 using namespace privmx::endpoint::thread;
@@ -23,6 +25,10 @@ server::ThreadCreateResult ServerApi::threadCreate(server::ThreadCreateModel mod
 
 void ServerApi::threadUpdate(server::ThreadUpdateModel model) {
     request("threadUpdate", model.toJSON());
+}
+
+void ServerApi::threadRotateKeys(server::ThreadRotateKeysModel model) {
+    request("threadRotateKeys", model.toJSON());
 }
 
 void ServerApi::threadDelete(server::ThreadDeleteModel model) {

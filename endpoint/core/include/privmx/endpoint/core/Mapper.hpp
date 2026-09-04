@@ -14,6 +14,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/Events.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include "privmx/endpoint/core/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -35,6 +36,7 @@ public:
         const server::ContextUsersStatusChangeEventData& data
     );
     static ContextUserEventData mapToContextUserEventData(const server::ContextUserEventData& data);
+    static std::vector<GroupGrant> mapToGroupGrants(const std::vector<server::GroupGrant>& data);
 };
 
 } // namespace core

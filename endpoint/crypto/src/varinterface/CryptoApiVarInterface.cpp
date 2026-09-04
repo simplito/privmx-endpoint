@@ -74,7 +74,10 @@ Poco::Dynamic::Var CryptoApiVarInterface::derivePrivateKey(const Poco::Dynamic::
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto password = _deserializer.deserialize<std::string>(argsArr->get(0), "password");
     auto salt = _deserializer.deserialize<std::string>(argsArr->get(1), "salt");
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     auto result = _cryptoApi.derivePrivateKey(password, salt);
+#pragma GCC diagnostic pop
     return _serializer.serialize(result);
 }
 

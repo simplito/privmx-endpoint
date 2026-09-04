@@ -14,6 +14,7 @@ DIRS=(
     endpoint/stream
     endpoint/search
     endpoint/lock
+    endpoint/group
 )
 
 FILES=$(find "${DIRS[@]}" \( -name "*.cpp" -o -name "*.hpp" \))

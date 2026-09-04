@@ -30,6 +30,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
+#include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/store/ChunkDataProvider.hpp"
 #include "privmx/endpoint/store/ChunkReader.hpp"
 #include "privmx/endpoint/store/FileHandler.hpp"
@@ -56,7 +57,8 @@ StoreApiImpl::StoreApiImpl(
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const std::shared_ptr<core::HandleManager>& handleManager,
     const core::Connection& connection,
-    size_t serverRequestChunkSize
+    size_t serverRequestChunkSize,
+    const std::optional<group::GroupApi>& groupApi
 )
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _keyProvider(keyProvider),
       _serverApi(serverApi), _host(host), _userPrivKey(userPrivKey), _requestApi(requestApi),
@@ -73,6 +75,7 @@ StoreApiImpl::StoreApiImpl(
       _subscriber(connection.getImpl()->getGateway(), STORE_TYPE_FILTER_FLAG),
       _storeDataSchemaMapper(std::make_shared<StoreDataSchemaMapper>(userPrivKey, connection)),
       _fileMetaDataSchemaMapper(userPrivKey, connection) {
+    initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi));
     initModuleDataSchemaMapper(_storeDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&StoreApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -100,7 +103,8 @@ std::string StoreApiImpl::createStore(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies,
-    const std::string& type
+    const std::string& type,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto ctx = prepareContainerCreate(contextId, users, managers);
     core::ModuleDataToEncryptV5 storeDataToEncrypt{
@@ -113,7 +117,7 @@ std::string StoreApiImpl::createStore(
     server::StoreCreateModel storeCreateModel;
     fillContainerCreateModel(
         storeCreateModel, contextId, users, managers, ctx,
-        _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key.key)
+        _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key.key), groups
     );
     if (type.length() > 0) {
         storeCreateModel.type = type;
@@ -134,7 +138,8 @@ void StoreApiImpl::updateStore(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
 
     server::StoreGetModel getModel;
@@ -144,10 +149,13 @@ void StoreApiImpl::updateStore(
     auto currentStoreResourceId = currentStore.resourceId.has_value() ? currentStore.resourceId.value() :
                                                                         core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
-        currentStore, currentStoreEntry, currentStoreResourceId, users, managers, forceGenerateNewKey
+        currentStore, currentStoreEntry, currentStoreResourceId, users, managers,
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentStore, groups), true, _groupPrivKeyResolver
     );
     server::StoreUpdateModel model;
-    fillContainerUpdateModel(model, storeId, currentStoreResourceId, users, managers, ctx, version, force);
+    // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
+    // revokes every grant the Store had.
+    fillContainerUpdateModel(model, storeId, currentStoreResourceId, users, managers, ctx, version, force, groups);
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
@@ -165,6 +173,42 @@ void StoreApiImpl::updateStore(
     invalidateModuleKeysInCache(storeId);
 }
 
+void StoreApiImpl::rotateStoreKeys(
+    const std::string& storeId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    server::StoreGetModel getModel;
+    getModel.storeId = storeId;
+    auto currentStore = _serverApi->storeGet(getModel).store;
+    rotateContainerKeys<server::StoreRotateKeysModel>(
+        storeId, currentStore, users, managers, version, force, groups,
+        [&](const server::StoreRotateKeysModel& model) { _serverApi->storeRotateKeys(model); }
+    );
+}
+
+void StoreApiImpl::autoRotateStoreKeys(const std::string& storeId) {
+    // A fresh read, not the cached keys: whatever triggered this may have been a stale snapshot, and the roster
+    // and version this re-key is built on have to be the ones the bridge will check it against.
+    server::StoreGetModel getModel;
+    getModel.storeId = storeId;
+    auto currentStore = _serverApi->storeGet(getModel).store;
+    if (!isRekeyNeeded(currentStore)) {
+        // Someone else already re-keyed it. The caller refetches the keys either way, so there is nothing to do.
+        return;
+    }
+    auto roster = resolveRosterPubKeys(currentStore.contextId, currentStore.users, currentStore.managers);
+    runAutoRekey(storeId, [&] {
+        rotateContainerKeys<server::StoreRotateKeysModel>(
+            storeId, currentStore, roster.users, roster.managers, currentStore.version, false, {},
+            [&](const server::StoreRotateKeysModel& model) { _serverApi->storeRotateKeys(model); }
+        );
+    });
+}
+
 void StoreApiImpl::deleteStore(const std::string& storeId) {
     server::StoreDeleteModel model;
     model.storeId = storeId;
@@ -180,7 +224,7 @@ Store StoreApiImpl::getStore(const std::string& storeId, const std::string& type
     }
     auto store = _serverApi->storeGet(model).store;
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
-    auto result = _storeDataSchemaMapper->validateDecryptAndConvertStore(store, _keyProvider);
+    auto result = _storeDataSchemaMapper->validateDecryptAndConvertStore(store, _keyProvider, _groupPrivKeyResolver);
     return result;
 }
 
@@ -199,7 +243,9 @@ core::PagingList<Store> StoreApiImpl::listStores(
     for (auto store : storesList.stores) {
         setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     }
-    auto stores = _storeDataSchemaMapper->validateDecryptAndConvertStores(storesList.stores, _keyProvider);
+    auto stores = _storeDataSchemaMapper->validateDecryptAndConvertStores(
+        storesList.stores, _keyProvider, _groupPrivKeyResolver
+    );
     return core::PagingList<Store>({.totalAvailable = storesList.count, .readItems = stores});
 }
 
@@ -219,7 +265,7 @@ File StoreApiImpl::getFile(const std::string& fileId) {
         return result;
     }
     auto ret{_fileMetaDataSchemaMapper.validateDecryptAndConvertFile(
-        serverFileResult.file, storeToModuleKeys(store), _keyProvider
+        serverFileResult.file, storeToModuleKeys(store), _keyProvider, _groupPrivKeyResolver
     )};
     return ret;
 }
@@ -233,7 +279,7 @@ core::PagingList<File> StoreApiImpl::listFiles(const std::string& storeId, const
     _storeDataSchemaMapper->assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
     auto files = _fileMetaDataSchemaMapper.validateDecryptAndConvertFiles(
-        serverFilesResult.files, storeToModuleKeys(store), _keyProvider
+        serverFilesResult.files, storeToModuleKeys(store), _keyProvider, _groupPrivKeyResolver
     );
     return core::PagingList<File>({.totalAvailable = serverFilesResult.count, .readItems = files});
 }
@@ -270,7 +316,7 @@ int64_t StoreApiImpl::updateFile(
     storeFileGetModel.fileId = fileId;
     auto result = _serverApi->storeFileGet(storeFileGetModel);
     auto internalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(
-        result.file, storeToModuleKeys(result.store), _keyProvider
+        result.file, storeToModuleKeys(result.store), _keyProvider, _groupPrivKeyResolver
     );
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         result.store.id, fileId, result.file.resourceId, (uint64_t)size, publicMeta, privateMeta, _CHUNK_SIZE,
@@ -286,6 +332,13 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
     auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
     auto encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
     if (encryptionParams.fileMeta.internalFileMeta.randomWrite.value_or(false)) {
+        // A random-write handle is opened to be written through, and every write needs the container's current
+        // key. Re-key here rather than letting the first write fail
+        if (isRekeyNeeded(file_raw.store)) {
+            autoRotateStoreKeys(file_raw.store.id);
+            file_raw = _serverApi->storeFileGet(storeFileGetModel);
+            encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
+        }
         std::shared_ptr<FileReadWriteHandle> handle = _fileHandleManager.createFileReadWriteHandle(
             privmx::endpoint::store::FileInfo{
                 .contextId = file_raw.file.contextId,
@@ -378,9 +431,25 @@ void StoreApiImpl::syncFile(const int64_t handle) {
 
     std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
     if (rw_handle) {
-        rw_handle->file->sync(
-            encryptionParams.fileMeta, encryptionParams.fileDecryptionParams, encryptionParams.encKey
-        );
+        // `encryptionParams.encKey` is the key `file.keyId` points at - right for decrypting what is already
+        // stored, but the handle also uses it to stamp later writes, and the server rejects a superseded keyId.
+        auto writeKey = encryptionParams.encKey;
+        // Equal keyIds mean `encKey` already *is* the current key - skip decrypting the same entry a second
+        // time. `syncFile` runs on every sqlite lock escalation, so the saved ECIES + verify is worth having.
+        if (file_raw.file.keyId != file_raw.store.keyId) {
+            auto storeKey = storeToModuleKeys(file_raw.store);
+            setNewModuleKeysInCache(file_raw.store.id, storeKey, file_raw.store.version);
+            try {
+                auto currentKey = getAndValidateModuleCurrentEncKey(storeKey, _groupPrivKeyResolver);
+                if (currentKey.statusCode == 0) {
+                    writeKey = core::DecryptedEncKey(currentKey);
+                }
+            } catch (const core::Exception&) {
+                // A stale Store key throws out of `getAndValidateModuleCurrentEncKey`, and a sync is not the
+                // place to re-key. Keep the old key; `flushFile` re-keys and retries once the write is rejected.
+            }
+        }
+        rw_handle->file->sync(encryptionParams.fileMeta, encryptionParams.fileDecryptionParams, writeKey);
         return;
     }
     std::shared_ptr<FileReadHandle> handlePtr = _fileHandleManager.getFileReadHandle(handle);
@@ -399,7 +468,54 @@ void StoreApiImpl::flushFile(const int64_t handle) {
     if (!rw_handle) {
         throw InvalidFileReadWriteHandleException();
     }
-    rw_handle->file->flush();
+    // A write handle caches the container key it was opened with; a Store re-key leaves that key superseded.
+    // The finalize-write path recovers through `withKeyRefresh`, a flush had no equivalent.
+    auto refreshKeyAndRetry = [&](bool forceRekey) {
+        server::StoreFileGetModel storeFileGetModel;
+        storeFileGetModel.fileId = rw_handle->getFileId();
+        auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
+        if (forceRekey || isRekeyNeeded(file_raw.store)) {
+            autoRotateStoreKeys(file_raw.store.id);
+            file_raw = _serverApi->storeFileGet(storeFileGetModel);
+        }
+        auto storeKey = storeToModuleKeys(file_raw.store);
+        setNewModuleKeysInCache(file_raw.store.id, storeKey, file_raw.store.version);
+        // The Store's *current* key, not the one `file.keyId` points at: the server rejects a superseded keyId.
+        auto currentKey = getAndValidateModuleCurrentEncKey(storeKey, _groupPrivKeyResolver);
+        if (currentKey.statusCode != 0) {
+            throw core::EncryptionKeyValidationException(
+                "Current encryption key statusCode: " + std::to_string(currentKey.statusCode)
+            );
+        }
+        rw_handle->file->rekey(currentKey);
+        rw_handle->file->flush();
+    };
+    // `static`: these are compile-time constants, but reading one costs a full Exception construction (six
+    // std::strings, most past wasm32's SSO cap). `flushFile` runs on every sqlite commit - don't pay it twice
+    // per call just to compare two ints.
+    static const auto invalidKeyCode = privmx::endpoint::server::InvalidKeyException().getCode();
+    static const auto epochOutdatedCode = privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode();
+    // The same two recoverable codes `withKeyRefresh` handles; an outdated group epoch needs the re-key even
+    // when the re-fetched Store no longer reports `staleGroups`, hence the forced flag.
+    auto recover = [&](unsigned int code) {
+        if (code != invalidKeyCode && code != epochOutdatedCode) {
+            return false;
+        }
+        refreshKeyAndRetry(code == epochOutdatedCode);
+        return true;
+    };
+    // Both types are reachable: `FileHandler::flush` rethrows whichever one `updateOnServer` produced.
+    try {
+        rw_handle->file->flush();
+    } catch (const privmx::utils::PrivmxException& e) {
+        if (!recover(core::ExceptionConverter::convert(e).getCode())) {
+            throw;
+        }
+    } catch (const core::Exception& e) {
+        if (!recover(e.getCode())) {
+            throw;
+        }
+    }
 }
 
 uint64_t StoreApiImpl::getFileSize(const int64_t handle) {
@@ -436,19 +552,20 @@ std::string StoreApiImpl::storeFileFinalizeWrite(const std::shared_ptr<FileWrite
     if (handle->getFileId().empty()) {
         return withKeyRefresh<std::string>(
             handle->getStoreId(), privmx::endpoint::server::InvalidKeyException().getCode(),
-            [&](const core::ModuleKeys& keys) { return storeFileFinalizeWriteRequest(handle, data, keys); }
+            [&](const core::ModuleKeys& keys) { return storeFileFinalizeWriteRequest(handle, data, keys); },
+            [&] { autoRotateStoreKeys(handle->getStoreId()); }
         );
     }
     server::StoreFileGetModel storeFileGetModel;
     storeFileGetModel.fileId = handle->getFileId();
     auto store = _serverApi->storeFileGet(storeFileGetModel).store;
-    auto storeKey = core::ModuleKeys{
-        .keys = store.keys,
-        .currentKeyId = store.keyId,
-        .moduleSchemaVersion = _storeDataSchemaMapper->getDataStructureVersion(store.data.back()),
-        .moduleResourceId = store.resourceId.value_or(""),
-        .contextId = store.contextId
-    };
+    // Overwriting an existing file reaches the Store through the file rather than through `withKeyRefresh`, so
+    // the stale key has to be caught by hand. Re-keying invalidates what was just cached, hence the re-read.
+    if (isRekeyNeeded(store)) {
+        autoRotateStoreKeys(store.id);
+        store = _serverApi->storeFileGet(storeFileGetModel).store;
+    }
+    auto storeKey = storeToModuleKeys(store);
     setNewModuleKeysInCache(store.id, storeKey, store.version);
     return storeFileFinalizeWriteRequest(handle, data, storeKey);
 }
@@ -459,7 +576,7 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(
     const core::ModuleKeys& storeKey
 ) {
     auto serverId = _host;
-    auto key = getAndValidateModuleCurrentEncKey(storeKey);
+    auto key = getAndValidateModuleCurrentEncKey(storeKey, _groupPrivKeyResolver);
     if (key.statusCode != 0) {
         throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(key.statusCode)
@@ -508,7 +625,9 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::Store::fromJSON(notification.data);
             if (raw.type.value_or(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, storeToModuleKeys(raw), raw.version);
-                auto data = _storeDataSchemaMapper->validateDecryptAndConvertStore(raw, _keyProvider);
+                auto data = _storeDataSchemaMapper->validateDecryptAndConvertStore(
+                    raw, _keyProvider, _groupPrivKeyResolver
+                );
                 auto event = core::EventBuilder::buildEvent<StoreCreatedEvent>("store", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -516,7 +635,9 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::Store::fromJSON(notification.data);
             if (raw.type.value_or(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, storeToModuleKeys(raw), raw.version);
-                auto data = _storeDataSchemaMapper->validateDecryptAndConvertStore(raw, _keyProvider);
+                auto data = _storeDataSchemaMapper->validateDecryptAndConvertStore(
+                    raw, _keyProvider, _groupPrivKeyResolver
+                );
                 auto event = core::EventBuilder::buildEvent<StoreUpdatedEvent>("store", data, notification);
                 _eventMiddleware->emitApiEvent(event);
             }
@@ -539,7 +660,7 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::StoreFileEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
                 auto file = _fileMetaDataSchemaMapper.validateDecryptAndConvertFile(
-                    raw, getFileDecryptionKeys(raw), _keyProvider
+                    raw, getFileDecryptionKeys(raw), _keyProvider, _groupPrivKeyResolver
                 );
                 auto event = core::EventBuilder::buildEvent<StoreFileCreatedEvent>(
                     "store/" + raw.storeId + "/files", file, notification
@@ -550,9 +671,11 @@ void StoreApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::StoreFileUpdatedEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(STORE_TYPE_FILTER_FLAG)) == STORE_TYPE_FILTER_FLAG) {
                 auto storeKeys = getFileDecryptionKeys(raw);
-                auto file = _fileMetaDataSchemaMapper.validateDecryptAndConvertFile(raw, storeKeys, _keyProvider);
+                auto file = _fileMetaDataSchemaMapper.validateDecryptAndConvertFile(
+                    raw, storeKeys, _keyProvider, _groupPrivKeyResolver
+                );
                 auto internalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(
-                    raw, storeKeys, _keyProvider
+                    raw, storeKeys, _keyProvider, _groupPrivKeyResolver
                 );
                 auto fileDecryptionParams = getFileDecryptionParams(raw, internalMeta);
                 auto data = Mapper::mapToStoreFileUpdatedEventData(raw, file, fileDecryptionParams);
@@ -614,7 +737,8 @@ FileEncryptionParams StoreApiImpl::getFileEncryptionParams(server::File file, se
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     core::EncKeyLocation location{.contextId = store.contextId, .resourceId = store.resourceId.value_or("")};
     keyProviderRequest.addOne(store.keys, file.keyId, location);
-    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(file.keyId);
+    keyProviderRequest.addGroupKeys(store.groupKeys, location);
+    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver).at(location).at(file.keyId);
     return getFileEncryptionParams(file, key);
 }
 
@@ -632,20 +756,31 @@ void StoreApiImpl::updateFileMeta(
 
     auto storeFileGetResult = _serverApi->storeFileGet(storeFileGetModel);
     server::Store store = storeFileGetResult.store;
-    setNewModuleKeysInCache(store.id, storeToModuleKeys(store), store.version);
+    // Like the overwrite path in `storeFileFinalizeWrite`: this reaches the Store through the file, so the stale
+    // key is caught by hand rather than by `withKeyRefresh`, and the re-key means the fetch has to be redone.
+    if (isRekeyNeeded(store)) {
+        autoRotateStoreKeys(store.id);
+        storeFileGetResult = _serverApi->storeFileGet(storeFileGetModel);
+        store = storeFileGetResult.store;
+    }
+    auto storeKey = storeToModuleKeys(store);
+    setNewModuleKeysInCache(store.id, storeKey, store.version);
     server::File file = storeFileGetResult.file;
     auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(file, store.resourceId.value_or(""));
     if (statusCode != 0) {
         throw FileDataIntegrityException("statusCode=" + std::to_string(statusCode));
     }
-    auto key = getAndValidateModuleCurrentEncKey(store);
+    // Still guarded: the server-struct key fetch, unlike the `ModuleKeys` one, does not assert, and the re-key
+    // above is not guaranteed to have happened — a caller who may not re-key never gets here.
+    assertRekeyNotNeeded(store);
+    auto key = getAndValidateModuleCurrentEncKey(store, _groupPrivKeyResolver);
     if (key.statusCode != 0) {
         throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(key.statusCode)
         );
     }
     auto fileInternalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(
-        file, storeToModuleKeys(store), _keyProvider
+        file, storeKey, _keyProvider, _groupPrivKeyResolver
     );
     auto internalMeta = core::Buffer::from(fileInternalMeta.serialize());
     auto encryptedMetaVar = _fileMetaDataSchemaMapper.encrypt(
@@ -677,13 +812,7 @@ std::pair<core::ModuleKeys, int64_t> StoreApiImpl::getModuleKeysAndVersionFromSe
 }
 
 core::ModuleKeys StoreApiImpl::storeToModuleKeys(server::Store store) {
-    return core::ModuleKeys{
-        .keys = store.keys,
-        .currentKeyId = store.keyId,
-        .moduleSchemaVersion = _storeDataSchemaMapper->getDataStructureVersion(store.data.back()),
-        .moduleResourceId = store.resourceId.value_or(""),
-        .contextId = store.contextId
-    };
+    return containerToModuleKeys(store);
 }
 
 std::vector<std::string> StoreApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

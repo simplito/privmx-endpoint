@@ -1,7 +1,7 @@
 [{
-	"_id": "73c297a1b8334119071dff74d3858fb6",
-	"created": 1.785736216113E+12,
-	"user": "6a702c18f07b746f1a6c1e2c",
+	"_id": "86db3ff8feb6aa06bb2c95f00b339399",
+	"created": 1.788511630072E+12,
+	"user": "6a9a858e0690a5e0d735a82d",
 	"name": "MainKey",
 	"scopes": [
 		"context",
@@ -14,7 +14,7 @@
 		"stream"
 	],
 	"enabled": true,
-	"secret": "0a4f71ef396009fa2d069f054dc315ce",
+	"secret": "b39dde68bd2c1497fa22cbb3c048bc94",
 	"publicKey": null,
 	"masterKey": true
 }]

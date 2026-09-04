@@ -29,7 +29,7 @@ class EntryDataEncryptorV5 {
 public:
     server::EncryptedKvdbEntryDataV5 encrypt(
         const KvdbEntryDataToEncryptV5& messageData,
-        const crypto::PrivateKey& authorPrivateKey,
+        const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     DecryptedKvdbEntryDataV5 decrypt(

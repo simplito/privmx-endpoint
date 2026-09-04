@@ -21,6 +21,7 @@ limitations under the License.
 #include "privmx/endpoint/store/VarSerializer.hpp"
 #include "privmx/endpoint/inbox/VarSerializer.hpp"
 #include "privmx/endpoint/kvdb/VarSerializer.hpp"
+#include "privmx/endpoint/group/VarSerializer.hpp"
 #include "privmx/endpoint/event/VarSerializer.hpp"
 
 using namespace std;
@@ -40,8 +41,9 @@ ExecuterEndpoint::ExecuterEndpoint(std::thread::id main_thread_id, std::shared_p
     std::shared_ptr<store::StoreApiVarInterface> store = std::make_shared<store::StoreApiVarInterface>(connection->getApi(),serializer);
     std::shared_ptr<inbox::InboxApiVarInterface> inbox = std::make_shared<inbox::InboxApiVarInterface>(connection->getApi(),thread->getApi(), store->getApi(),serializer);
     std::shared_ptr<kvdb::KvdbApiVarInterface> kvdb = std::make_shared<kvdb::KvdbApiVarInterface>(connection->getApi(),serializer);
+    std::shared_ptr<group::GroupApiVarInterface> group = std::make_shared<group::GroupApiVarInterface>(connection->getApi(),serializer);
     std::shared_ptr<event::EventApiVarInterface> eventApi = std::make_shared<event::EventApiVarInterface>(connection->getApi(),serializer);
-    _endpoint = std::make_shared<ApiVar>(serializer, event, connection, backendRequester, utils, crypto, extKey, thread, store, inbox, kvdb, eventApi);
+    _endpoint = std::make_shared<ApiVar>(serializer, event, connection, backendRequester, utils, crypto, extKey, thread, store, inbox, kvdb, group, eventApi);
 
 }
 bool ExecuterEndpoint::execute(const func_enum& fun_code, const Tokens &st) {

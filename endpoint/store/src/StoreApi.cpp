@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/store/StoreApiImpl.hpp"
 #include "privmx/endpoint/store/StoreValidator.hpp"
+#include <privmx/endpoint/group/GroupApi.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
@@ -30,7 +31,7 @@ StoreApi& StoreApi::operator=(const StoreApi& obj) {
 StoreApi::StoreApi(StoreApi&& obj) : ExtendedPointer(std::move(obj)) {};
 StoreApi::~StoreApi() {}
 
-StoreApi StoreApi::create(core::Connection& connection) {
+StoreApi StoreApi::create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<ServerApi> serverApi(new ServerApi(connectionImpl->getGateway()));
@@ -39,7 +40,7 @@ StoreApi StoreApi::create(core::Connection& connection) {
             connectionImpl->getKeyProvider(), serverApi, connectionImpl->getHost(), connectionImpl->getUserPrivKey(),
             requestApi, std::shared_ptr<FileDataProvider>(new FileDataProvider(serverApi)),
             connectionImpl->getEventMiddleware(), connectionImpl->getHandleManager(), connection,
-            connectionImpl->getServerConfig().requestChunkSize
+            connectionImpl->getServerConfig().requestChunkSize, groupApi
         ));
         impl->attach(impl);
         return StoreApi(impl);
@@ -57,14 +58,16 @@ std::string StoreApi::createStore(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
-        return impl->createStore(contextId, users, managers, publicMeta, privateMeta, policies);
+        return impl->createStore(contextId, users, managers, publicMeta, privateMeta, policies, "store", groups);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -80,16 +83,39 @@ void StoreApi::updateStore(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto impl = getImpl();
     core::Validator::validateId(storeId, "field:storeId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
         impl->updateStore(
-            storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+            storeId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
         );
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StoreApi::rotateStoreKeys(
+    const std::string& storeId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(storeId, "field:storeId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
+    try {
+        impl->rotateStoreKeys(storeId, users, managers, version, force, groups);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

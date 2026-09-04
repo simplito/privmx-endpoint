@@ -109,6 +109,12 @@ struct Thread {
     std::string lastModifier;
 
     /**
+     * ID of the user who last provided a new Thread key (may differ from lastModifier
+     * when key rotation was performed without a data change)
+     */
+    std::optional<std::string> keeper;
+
+    /**
      * list of users (their IDs) with access to the Thread
      */
     std::vector<std::string> users;
@@ -157,6 +163,18 @@ struct Thread {
      * Version of the Thread data structure and how it is encoded/encrypted
      */
     int64_t schemaVersion;
+
+    /**
+     * list of groups granted access to this Thread
+     */
+    std::vector<core::GroupGrant> groups;
+
+    /**
+     * IDs of the grantee groups that have rotated past the epoch this Thread's current key was wrapped to.
+     * Non-empty means the Thread needs re-keying — rotateThreadKeys() re-wraps its key to the current epoch of
+     * every grantee. Members of a stale group cannot read content written under the current key until then.
+     */
+    std::vector<std::string> staleGroups;
 };
 
 enum EventType : int64_t {

@@ -1,24 +1,24 @@
 {
     "Context_1": {
-        "contextId": "6432347f-64a0-415f-b691-ddb81a49487f"
+        "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079"
     },
     "Context_2": {
-        "contextId": "751a2cf1-3865-4176-b726-12fe0830d1fc"
+        "contextId": "038f250f-bb67-4a7a-aa15-257662b48396"
     },
     "Entry_1": {
         "server_data": {
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
-            "createDate": 1785736224043,
+            "createDate": 1788511638190,
             "data": "bWVzc2FnZV9mcm9tX2luYm94U2VuZENvbW1pdF8x",
-            "entryId": "6a702c203f0947412e125a0f",
+            "entryId": "6a9a8596966b4caf888bbfa4",
             "files": [
                 {
                     "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
                     "info": {
                         "author": "<anonymous>",
-                        "createDate": 1785736224041,
-                        "fileId": "6a702c203f0947412e125a10",
-                        "storeId": "6a702c1e3f0947412e1259e6"
+                        "createDate": 1788511638188,
+                        "fileId": "6a9a8596966b4caf888bbfa5",
+                        "storeId": "6a9a8594966b4caf888bbf7b"
                     },
                     "privateMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzBfcHJpdmF0ZU1ldGE=",
                     "publicMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzBfcHVibGljTWV0YQ==",
@@ -31,9 +31,9 @@
                     "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
                     "info": {
                         "author": "<anonymous>",
-                        "createDate": 1785736224041,
-                        "fileId": "6a702c203f0947412e125a11",
-                        "storeId": "6a702c1e3f0947412e1259e6"
+                        "createDate": 1788511638188,
+                        "fileId": "6a9a8596966b4caf888bbfa6",
+                        "storeId": "6a9a8594966b4caf888bbf7b"
                     },
                     "privateMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzFfcHJpdmF0ZU1ldGE=",
                     "publicMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzFfcHVibGljTWV0YQ==",
@@ -43,7 +43,7 @@
                     "statusCode": 0
                 }
             ],
-            "inboxId": "6a702c1e3f0947412e1259e8",
+            "inboxId": "6a9a8594966b4caf888bbf7d",
             "schemaVersion": 1,
             "statusCode": 0
         },
@@ -60,13 +60,13 @@
     "Entry_2": {
         "server_data": {
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
-            "createDate": 1785736224069,
+            "createDate": 1788511638214,
             "data": "bWVzc2FnZV9mcm9tX2luYm94U2VuZENvbW1pdF8y",
-            "entryId": "6a702c203f0947412e125a12",
+            "entryId": "6a9a8596966b4caf888bbfa7",
             "files": [
 
             ],
-            "inboxId": "6a702c1e3f0947412e1259e8",
+            "inboxId": "6a9a8594966b4caf888bbf7d",
             "schemaVersion": 1,
             "statusCode": 0
         },
@@ -77,9 +77,9 @@
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
             "info": {
                 "author": "user_1",
-                "createDate": 1785736223892,
-                "fileId": "6a702c1f3f0947412e125a08",
-                "storeId": "6a702c1e3f0947412e1259e3"
+                "createDate": 1788511638031,
+                "fileId": "6a9a8596966b4caf888bbf9d",
+                "storeId": "6a9a8594966b4caf888bbf78"
             },
             "privateMeta": "dGVzdF9maWxlRGF0YV8xX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9maWxlRGF0YV8xX3B1YmxpY01ldGE=",
@@ -98,9 +98,9 @@
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
             "info": {
                 "author": "user_1",
-                "createDate": 1785736223954,
-                "fileId": "6a702c1f3f0947412e125a0b",
-                "storeId": "6a702c1e3f0947412e1259e3"
+                "createDate": 1788511638089,
+                "fileId": "6a9a8596966b4caf888bbfa0",
+                "storeId": "6a9a8594966b4caf888bbf78"
             },
             "privateMeta": "dGVzdF9maWxlRGF0YV8yX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9maWxlRGF0YV8yX3B1YmxpY01ldGE=",
@@ -116,8 +116,8 @@
     },
     "Inbox_1": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222468,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636460,
             "creator": "user_1",
             "filesConfig": {
                 "maxCount": 10,
@@ -125,16 +125,21 @@
                 "maxWholeUploadSize": 1048576000,
                 "minCount": 0
             },
-            "inboxId": "6a702c1e3f0947412e1259e8",
-            "lastModificationDate": 1785736222468,
+            "groups": [
+
+            ],
+            "inboxId": "6a9a8594966b4caf888bbf7d",
+            "lastModificationDate": 1788511636460,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
             ],
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -142,6 +147,9 @@
             "privateMeta": "dGVzdF9pbmJveF8xX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9pbmJveF8xX3B1YmxpY01ldGE=",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
             "users": [
                 "user_1"
@@ -153,8 +161,8 @@
     },
     "Inbox_2": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222516,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636514,
             "creator": "user_1",
             "filesConfig": {
                 "maxCount": 2,
@@ -162,8 +170,11 @@
                 "maxWholeUploadSize": 267386880,
                 "minCount": 0
             },
-            "inboxId": "6a702c1e3f0947412e1259eb",
-            "lastModificationDate": 1785736222516,
+            "groups": [
+
+            ],
+            "inboxId": "6a9a8594966b4caf888bbf80",
+            "lastModificationDate": 1788511636514,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -171,8 +182,10 @@
             ],
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -180,6 +193,9 @@
             "privateMeta": "dGVzdF9pbmJveF8yX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9pbmJveF8yX3B1YmxpY01ldGE=",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
             "users": [
                 "user_1",
@@ -192,8 +208,8 @@
     },
     "Inbox_3": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222566,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636559,
             "creator": "user_1",
             "filesConfig": {
                 "maxCount": 10,
@@ -201,16 +217,21 @@
                 "maxWholeUploadSize": 1048576000,
                 "minCount": 0
             },
-            "inboxId": "6a702c1e3f0947412e1259ee",
-            "lastModificationDate": 1785736222566,
+            "groups": [
+
+            ],
+            "inboxId": "6a9a8594966b4caf888bbf83",
+            "lastModificationDate": 1788511636559,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
             ],
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -218,6 +239,9 @@
             "privateMeta": "dGVzdF9pbmJveF8zX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9pbmJveF8zX3B1YmxpY01ldGE=",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
             "users": [
                 "user_1",
@@ -233,9 +257,9 @@
             "data": "a3ZkYl9lbnRyeV92YWx1ZV8x",
             "info": {
                 "author": "user_1",
-                "createDate": 1785736224094,
+                "createDate": 1788511638238,
                 "key": "kvdb_entry_key_1",
-                "kvdbId": "6a702c1e3f0947412e1259ef"
+                "kvdbId": "6a9a8594966b4caf888bbf84"
             },
             "privateMeta": "dGVzdF9rdmRiX2VudHJ5XzFfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9rdmRiX2VudHJ5XzFfcHVibGljTWV0YQ==",
@@ -252,9 +276,9 @@
             "data": "a3ZkYl9lbnRyeV92YWx1ZV8y",
             "info": {
                 "author": "user_1",
-                "createDate": 1785736224117,
+                "createDate": 1788511638335,
                 "key": "kvdb_entry_key_2",
-                "kvdbId": "6a702c1e3f0947412e1259ef"
+                "kvdbId": "6a9a8594966b4caf888bbf84"
             },
             "privateMeta": "dGVzdF9rdmRiX2VudHJ5XzJfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9rdmRiX2VudHJ5XzJfcHVibGljTWV0YQ==",
@@ -268,21 +292,26 @@
     },
     "Kvdb_1": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222582,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636576,
             "creator": "user_1",
             "entries": 2,
-            "kvdbId": "6a702c1e3f0947412e1259ef",
-            "lastModificationDate": 1785736222582,
+            "groups": [
+
+            ],
+            "kvdbId": "6a9a8594966b4caf888bbf84",
+            "lastModificationDate": 1788511636576,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
             ],
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -290,6 +319,9 @@
             "privateMeta": "dGVzdF9rdmRiXzFfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9rdmRiXzFfcHVibGljTWV0YQ==",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
             "users": [
                 "user_1"
@@ -301,12 +333,15 @@
     },
     "Kvdb_2": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222597,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636595,
             "creator": "user_1",
             "entries": 0,
-            "kvdbId": "6a702c1e3f0947412e1259f0",
-            "lastModificationDate": 1785736222597,
+            "groups": [
+
+            ],
+            "kvdbId": "6a9a8594966b4caf888bbf85",
+            "lastModificationDate": 1788511636595,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -314,9 +349,11 @@
             ],
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -324,6 +361,9 @@
             "privateMeta": "dGVzdF9rdmRiXzJfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9rdmRiXzJfcHVibGljTWV0YQ==",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
             "users": [
                 "user_1",
@@ -336,21 +376,26 @@
     },
     "Kvdb_3": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222613,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636611,
             "creator": "user_1",
             "entries": 0,
-            "kvdbId": "6a702c1e3f0947412e1259f1",
-            "lastModificationDate": 1785736222613,
+            "groups": [
+
+            ],
+            "kvdbId": "6a9a8594966b4caf888bbf86",
+            "lastModificationDate": 1788511636611,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
             ],
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -358,6 +403,9 @@
             "privateMeta": "dGVzdF9rdmRiXzNfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9rdmRiXzNfcHVibGljTWV0YQ==",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
             "users": [
                 "user_1",
@@ -370,7 +418,7 @@
     },
     "Login": {
         "instanceUrl": "http://localhost/",
-        "solutionId": "61e03125-b05e-453e-8e27-38ecb89a1e0e",
+        "solutionId": "1184687c-1d93-4b8a-940b-7e42504d0d37",
         "user_1_id": "user_1",
         "user_1_privKey": "Kx9ftJtfa4Af941f9jYR44dKxv9uWMxkJBk3XgdSYy6M5i6zcXxS",
         "user_1_pubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
@@ -384,9 +432,9 @@
             "data": "bWVzc2FnZV9mcm9tX3NlbmRNZXNzYWdl",
             "info": {
                 "author": "user_1",
-                "createDate": 1785736223807,
-                "messageId": "6a702c1f3f0947412e125a04",
-                "threadId": "6a702c1e3f0947412e1259e0"
+                "createDate": 1788511637949,
+                "messageId": "6a9a8595966b4caf888bbf99",
+                "threadId": "6a9a8594966b4caf888bbf75"
             },
             "privateMeta": "dGVzdF9tZXNzYWdlXzFfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9tZXNzYWdlXzFfcHVibGljTWV0YQ==",
@@ -403,9 +451,9 @@
             "data": "bWVzc2FnZV9mcm9tX3NlbmRNZXNzYWdl",
             "info": {
                 "author": "user_1",
-                "createDate": 1785736223829,
-                "messageId": "6a702c1f3f0947412e125a05",
-                "threadId": "6a702c1e3f0947412e1259e0"
+                "createDate": 1788511637968,
+                "messageId": "6a9a8595966b4caf888bbf9a",
+                "threadId": "6a9a8594966b4caf888bbf75"
             },
             "privateMeta": "dGVzdF9tZXNzYWdlXzJfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9tZXNzYWdlXzJfcHVibGljTWV0YQ==",
@@ -425,11 +473,14 @@
         "doc_2_name": "doc-2",
         "docs_common_content_part": "ma kota",
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222624,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636629,
             "creator": "user_1",
-            "indexId": "6a702c1e3f0947412e1259f2",
-            "lastModificationDate": 1785736222624,
+            "groups": [
+
+            ],
+            "indexId": "6a9a8594966b4caf888bbf87",
+            "lastModificationDate": 1788511636629,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -437,9 +488,11 @@
             "mode": 1,
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -447,6 +500,9 @@
             "privateMeta": "dGVzdF9zZWFyY2hfaW5kZXhfMV9wcml2YXRlTWV0YQ==",
             "publicMeta": "dGVzdF9zZWFyY2hfaW5kZXhfMV9wdWJsaWNNZXRh",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
             "users": [
                 "user_1"
@@ -458,11 +514,14 @@
     },
     "SearchIndex_2": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736223680,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511637822,
             "creator": "user_1",
-            "indexId": "6a702c1f3f0947412e125a00",
-            "lastModificationDate": 1785736223680,
+            "groups": [
+
+            ],
+            "indexId": "6a9a8595966b4caf888bbf95",
+            "lastModificationDate": 1788511637822,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -471,9 +530,11 @@
             "mode": 2,
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -481,6 +542,9 @@
             "privateMeta": "dGVzdF9zZWFyY2hfaW5kZXhfMl9wcml2YXRlTWV0YQ==",
             "publicMeta": "dGVzdF9zZWFyY2hfaW5kZXhfMl9wdWJsaWNNZXRh",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
             "users": [
                 "user_1",
@@ -493,11 +557,14 @@
     },
     "SearchIndex_3": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736223738,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511637884,
             "creator": "user_1",
-            "indexId": "6a702c1f3f0947412e125a02",
-            "lastModificationDate": 1785736223738,
+            "groups": [
+
+            ],
+            "indexId": "6a9a8595966b4caf888bbf97",
+            "lastModificationDate": 1788511637884,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -505,9 +572,11 @@
             "mode": 1,
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -515,6 +584,9 @@
             "privateMeta": "dGVzdF9zZWFyY2hfaW5kZXhfM19wcml2YXRlTWV0YQ==",
             "publicMeta": "dGVzdF9zZWFyY2hfaW5kZXhfM19wdWJsaWNNZXRh",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
             "users": [
                 "user_1",
@@ -527,21 +599,26 @@
     },
     "Store_1": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222394,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636382,
             "creator": "user_1",
             "filesCount": 2,
-            "lastFileDate": 1785736223954,
-            "lastModificationDate": 1785736222394,
+            "groups": [
+
+            ],
+            "lastFileDate": 1788511638089,
+            "lastModificationDate": 1788511636382,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
             ],
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -549,8 +626,11 @@
             "privateMeta": "dGVzdF9zdG9yZV8xX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9zdG9yZV8xX3B1YmxpY01ldGE=",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
-            "storeId": "6a702c1e3f0947412e1259e3",
+            "storeId": "6a9a8594966b4caf888bbf78",
             "users": [
                 "user_1"
             ],
@@ -561,12 +641,15 @@
     },
     "Store_2": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222409,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636397,
             "creator": "user_1",
             "filesCount": 0,
-            "lastFileDate": 1785736222409,
-            "lastModificationDate": 1785736222409,
+            "groups": [
+
+            ],
+            "lastFileDate": 1788511636397,
+            "lastModificationDate": 1788511636397,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -574,9 +657,11 @@
             ],
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -584,8 +669,11 @@
             "privateMeta": "dGVzdF9zdG9yZV8yX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9zdG9yZV8yX3B1YmxpY01ldGE=",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
-            "storeId": "6a702c1e3f0947412e1259e4",
+            "storeId": "6a9a8594966b4caf888bbf79",
             "users": [
                 "user_1",
                 "user_2"
@@ -597,21 +685,26 @@
     },
     "Store_3": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222425,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636413,
             "creator": "user_1",
             "filesCount": 0,
-            "lastFileDate": 1785736222425,
-            "lastModificationDate": 1785736222425,
+            "groups": [
+
+            ],
+            "lastFileDate": 1788511636413,
+            "lastModificationDate": 1788511636413,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
             ],
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -619,8 +712,11 @@
             "privateMeta": "dGVzdF9zdG9yZV8zX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9zdG9yZV8zX3B1YmxpY01ldGE=",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
-            "storeId": "6a702c1e3f0947412e1259e5",
+            "storeId": "6a9a8594966b4caf888bbf7a",
             "users": [
                 "user_1",
                 "user_2"
@@ -632,21 +728,26 @@
     },
     "Thread_1": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222344,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636337,
             "creator": "user_1",
-            "lastModificationDate": 1785736222344,
+            "groups": [
+
+            ],
+            "lastModificationDate": 1788511636337,
             "lastModifier": "user_1",
-            "lastMsgDate": 1785736223829,
+            "lastMsgDate": 1788511637968,
             "managers": [
                 "user_1"
             ],
             "messagesCount": 2,
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -654,8 +755,11 @@
             "privateMeta": "dGVzdF90aHJlYWRfMV9wcml2YXRlTWV0YQ==",
             "publicMeta": "dGVzdF90aHJlYWRfMV9wdWJsaWNNZXRh",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
-            "threadId": "6a702c1e3f0947412e1259e0",
+            "threadId": "6a9a8594966b4caf888bbf75",
             "users": [
                 "user_1"
             ],
@@ -666,12 +770,15 @@
     },
     "Thread_2": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222362,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636353,
             "creator": "user_1",
-            "lastModificationDate": 1785736222362,
+            "groups": [
+
+            ],
+            "lastModificationDate": 1788511636353,
             "lastModifier": "user_1",
-            "lastMsgDate": 1785736222362,
+            "lastMsgDate": 1788511636353,
             "managers": [
                 "user_1",
                 "user_2"
@@ -679,9 +786,11 @@
             "messagesCount": 0,
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -689,8 +798,11 @@
             "privateMeta": "dGVzdF90aHJlYWRfMl9wcml2YXRlTWV0YQ==",
             "publicMeta": "dGVzdF90aHJlYWRfMl9wdWJsaWNNZXRh",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
-            "threadId": "6a702c1e3f0947412e1259e1",
+            "threadId": "6a9a8594966b4caf888bbf76",
             "users": [
                 "user_1",
                 "user_2"
@@ -702,21 +814,26 @@
     },
     "Thread_3": {
         "server_data": {
-            "contextId": "6432347f-64a0-415f-b691-ddb81a49487f",
-            "createDate": 1785736222379,
+            "contextId": "ec6479c6-19f6-4718-9b31-c4d3ba89c079",
+            "createDate": 1788511636368,
             "creator": "user_1",
-            "lastModificationDate": 1785736222379,
+            "groups": [
+
+            ],
+            "lastModificationDate": 1788511636368,
             "lastModifier": "user_1",
-            "lastMsgDate": 1785736222379,
+            "lastMsgDate": 1788511636368,
             "managers": [
                 "user_1"
             ],
             "messagesCount": 0,
             "policy": {
                 "delete_": null,
+                "forwardSecrecy": null,
                 "get": null,
                 "item": null,
                 "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
                 "update": null,
                 "updatePolicy": null,
                 "updaterCanBeRemovedFromManagers": null
@@ -724,8 +841,11 @@
             "privateMeta": "dGVzdF90aHJlYWRfM19wcml2YXRlTWV0YQ==",
             "publicMeta": "dGVzdF90aHJlYWRfM19wdWJsaWNNZXRh",
             "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
             "statusCode": 0,
-            "threadId": "6a702c1e3f0947412e1259e2",
+            "threadId": "6a9a8594966b4caf888bbf77",
             "users": [
                 "user_1",
                 "user_2"

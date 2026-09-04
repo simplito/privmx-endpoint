@@ -13,6 +13,8 @@ limitations under the License.
 
 #include <sqlite3.h>
 
+#include <exception>
+
 #define MAXPATHNAME 512
 
 namespace privmx {
@@ -23,6 +25,21 @@ extern "C" {
 
 sqlite3_vfs* sqlite3_privmxvfs();
 }
+
+/**
+ * A VFS callback can only answer sqlite with `SQLITE_IOERR*`, which turns any underlying failure into a
+ * misleading "disk I/O error". The original exception is stashed so the SearchApi boundary can rethrow it.
+ */
+void stashVfsException(std::exception_ptr error);
+
+/** Rethrows and clears the exception stashed by the last failing VFS callback, if any. No-op otherwise. */
+void rethrowStashedVfsException();
+
+/**
+ * Drops any stashed exception, on entering an operation: sqlite tolerates some VFS failures and returns
+ * SQLITE_OK anyway, leaving a stale cause that the next, unrelated failure would rethrow.
+ */
+void clearStashedVfsException();
 
 } // namespace search
 } // namespace endpoint

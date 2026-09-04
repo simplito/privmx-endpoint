@@ -24,9 +24,13 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApi StreamApi::create(core::Connection& connection, [[maybe_unused]] event::EventApi& _eventApi) {
+StreamApi StreamApi::create(
+    core::Connection& connection,
+    [[maybe_unused]] event::EventApi& _eventApi,
+    const std::optional<group::GroupApi>& groupApi
+) {
     try {
-        std::shared_ptr<StreamApiImpl> impl(new StreamApiImpl(connection));
+        std::shared_ptr<StreamApiImpl> impl(new StreamApiImpl(connection, groupApi));
         return StreamApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -43,14 +47,18 @@ std::string StreamApi::createStreamRoom(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicyWithoutItem>& policies,
-    const std::optional<int64_t>& emptyRoomTtl
+    const std::optional<int64_t>& emptyRoomTtl,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     validateEndpoint();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
-        return _impl->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl);
+        return _impl->createStreamRoom(
+            contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl, groups
+        );
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -66,16 +74,40 @@ void StreamApi::updateStreamRoom(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     validateEndpoint();
     core::Validator::validateId(streamRoomId, "field:streamRoomId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
         return _impl->updateStreamRoom(
-            streamRoomId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+            streamRoomId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies,
+            groups
         );
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void StreamApi::rotateStreamRoomKeys(
+    const std::string& streamRoomId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
+    try {
+        return _impl->rotateStreamRoomKeys(streamRoomId, users, managers, version, force, groups);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

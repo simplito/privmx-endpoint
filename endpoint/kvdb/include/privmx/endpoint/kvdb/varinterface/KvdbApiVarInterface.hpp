@@ -17,6 +17,8 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
 #include "privmx/endpoint/kvdb/VarDeserializer.hpp"
 #include "privmx/endpoint/kvdb/VarSerializer.hpp"
+#include <optional>
+#include <privmx/endpoint/group/GroupApi.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -47,14 +49,25 @@ public:
         BuildSubscriptionQuery = 19,
         BuildSubscriptionQueryForSelectedEntry = 20,
         FindEntry = 21,
+        RotateKvdbKeys = 22,
     };
 
-    KvdbApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
-        : _connection(std::move(connection)), _serializer(serializer) {}
+    /**
+     * `groupApi` is optional: without it the KvdbApi is group-unaware, exactly as when `KvdbApi::create` is
+     * called with no GroupApi. Passed through the constructor rather than as a `create` argument because a
+     * GroupApi is an object, not something that survives Var serialization.
+     */
+    KvdbApiVarInterface(
+        core::Connection connection,
+        const core::VarSerializer& serializer,
+        std::optional<group::GroupApi> groupApi = std::nullopt
+    )
+        : _connection(std::move(connection)), _groupApi(std::move(groupApi)), _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var createKvdb(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateKvdb(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var rotateKvdbKeys(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteKvdb(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getKvdb(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listKvdbs(const Poco::Dynamic::Var& args);
@@ -79,6 +92,7 @@ private:
     static std::map<METHOD, Poco::Dynamic::Var (KvdbApiVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     core::Connection _connection;
+    std::optional<group::GroupApi> _groupApi;
     KvdbApi _kvdbApi;
     core::VarDeserializer _deserializer;
     core::VarSerializer _serializer;

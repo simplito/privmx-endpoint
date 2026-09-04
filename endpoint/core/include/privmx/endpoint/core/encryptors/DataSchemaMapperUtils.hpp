@@ -41,6 +41,18 @@ struct type_identity {
 template<typename T>
 using type_identity_t = typename type_identity<T>::type;
 
+template<typename T, typename = void>
+struct has_group_keys : std::false_type {};
+
+template<typename T>
+struct has_group_keys<T, std::void_t<decltype(std::declval<T>().groupKeys)>> : std::true_type {};
+
+/** Whether a served module struct carries per-member key entries at all. A group carries none. */
+template<typename T, typename = void>
+struct has_keys : std::false_type {};
+template<typename T>
+struct has_keys<T, std::void_t<decltype(std::declval<T>().keys)>> : std::true_type {};
+
 class DataSchemaMapperUtils {
 public:
     static uint32_t toStatusCode(std::function<void()> fn) noexcept {
@@ -122,7 +134,8 @@ public:
             const type_identity_t<TServer>&,
             const DecryptedEncKey&
         )> decrypt,
-        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError
+        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError,
+        const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) {
         if (items.empty()) {
             return std::vector<TLib>{};
@@ -142,9 +155,14 @@ public:
             if (result[i].statusCode != 0) {
                 continue;
             }
-            keyRequest.addOne(items[i].keys, items[i].data.back().keyId, getLocation(items[i]));
+            if constexpr (has_keys<TServer>::value) {
+                keyRequest.addOne(items[i].keys, items[i].data.back().keyId, getLocation(items[i]));
+            }
+            if constexpr (has_group_keys<TServer>::value) {
+                keyRequest.addGroupKeys(items[i].groupKeys, getLocation(items[i]));
+            }
         }
-        auto allKeys = keyProvider->getKeysAndVerify(keyRequest);
+        auto allKeys = keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver);
         std::set<std::string> seenRandomIds;
 
         for (size_t i = 0; i < items.size(); i++) {
@@ -188,7 +206,7 @@ public:
         for (size_t j = 0; j < verifyIdxs.size(); j++) {
             result[verifyIdxs[j]].statusCode = verified[j] ?
                 0 :
-                ExceptionConverter::getCodeOfUserVerificationFailureException();
+                privmx::endpoint::core::UserVerificationFailureException().getCode();
         }
         return result;
     }
@@ -205,7 +223,8 @@ public:
             const type_identity_t<TServer>&,
             const DecryptedEncKey&
         )> decrypt,
-        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError
+        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError,
+        const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) {
         if (items.empty()) {
             return std::vector<TLib>{};
@@ -232,7 +251,8 @@ public:
             }
             keyRequest.addOne(moduleKeys.keys, items[i].keyId, location);
         }
-        auto allKeys = keyProvider->getKeysAndVerify(keyRequest);
+        keyRequest.addGroupKeys(moduleKeys.groupKeys, location);
+        auto allKeys = keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver);
         const auto keyMapIt = allKeys.find(location);
         const auto* keyMap = keyMapIt != allKeys.end() ? &keyMapIt->second : nullptr;
         std::set<std::string> seenRandomIds;
@@ -278,7 +298,7 @@ public:
         for (size_t j = 0; j < verifyIdxs.size(); j++) {
             result[verifyIdxs[j]].statusCode = verified[j] ?
                 0 :
-                ExceptionConverter::getCodeOfUserVerificationFailureException();
+                privmx::endpoint::core::UserVerificationFailureException().getCode();
         }
         return result;
     }
@@ -294,11 +314,13 @@ public:
             const type_identity_t<TServer>&,
             const DecryptedEncKey&
         )> decrypt,
-        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError
+        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError,
+        const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) {
         return batchValidateDecryptVerifyEntries<TLib, TServer>(
             items, moduleKeys, keyProvider, connection, validateIntegrity,
-            std::function<uint32_t(const TServer&)>([](const TServer&) -> uint32_t { return 0; }), decrypt, toLibError
+            std::function<uint32_t(const TServer&)>([](const TServer&) -> uint32_t { return 0; }), decrypt, toLibError,
+            groupPrivKeyResolver
         );
     }
 };

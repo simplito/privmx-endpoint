@@ -30,6 +30,7 @@ public:
 
     server::KvdbCreateResult kvdbCreate(server::KvdbCreateModel model);
     void kvdbUpdate(server::KvdbUpdateModel model);
+    void kvdbRotateKeys(server::KvdbRotateKeysModel model);
     void kvdbDelete(server::KvdbDeleteModel model);
     server::KvdbDeleteManyResult kvdbDeleteMany(server::KvdbDeleteManyModel model);
     server::KvdbGetResult kvdbGet(server::KvdbGetModel model);

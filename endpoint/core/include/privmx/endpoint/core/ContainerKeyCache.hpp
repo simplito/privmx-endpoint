@@ -30,6 +30,8 @@ public:
     ContainerKeyCache();
     struct CachedModuleKeys {
         std::vector<server::KeyEntry> keys;
+        std::vector<server::GroupKeysEntry> groupKeys;
+        std::vector<std::string> staleGroups;
         std::string currentKeyId;
         int64_t moduleSchemaVersion;
         std::string moduleResourceId;

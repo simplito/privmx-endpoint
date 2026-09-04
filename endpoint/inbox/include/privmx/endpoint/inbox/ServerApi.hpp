@@ -32,6 +32,7 @@ public:
 
     server::InboxCreateResult inboxCreate(server::InboxCreateModel model);
     void inboxUpdate(server::InboxUpdateModel model);
+    void inboxRotateKeys(server::InboxRotateKeysModel model);
     server::InboxGetResult inboxGet(server::InboxGetModel model);
     server::InboxGetPublicViewResult inboxGetPublicView(server::InboxGetModel model);
     server::InboxListResult inboxList(server::InboxListModel model);

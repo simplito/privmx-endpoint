@@ -29,6 +29,13 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
+/** One group-addressed route to a container key: the entry, its group, and the grant epoch it was wrapped at. */
+struct GroupKeyCandidate {
+    server::KeyEntry keyEntry;
+    std::string groupId;
+    int64_t groupEpoch;
+};
+
 class KeyDecryptionAndVerificationRequest {
 public:
     KeyDecryptionAndVerificationRequest() = default;
@@ -39,21 +46,37 @@ public:
         const EncKeyLocation& location
     );
     void addAll(const std::vector<server::KeyEntry>& keys, const EncKeyLocation& location);
+    void addGroupKeys(const std::vector<server::GroupKeysEntry>& groupKeys, const EncKeyLocation& location);
+    void addGroupKeys(
+        const std::optional<std::vector<server::GroupKeysEntry>>& groupKeys,
+        const EncKeyLocation& location
+    );
     void markAsCompleted();
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, server::KeyEntry>> requestData;
+    std::unordered_map<EncKeyLocation, std::unordered_map<std::string, std::vector<GroupKeyCandidate>>>
+        groupRequestData;
 
 private:
     bool _completed = false;
-    // vector<KeyId, ServerKey, ValidationData>
 };
 
 class KeyProvider {
 public:
+    /**
+     * Resolves a group's grant private key for a given epoch, on demand, for a single decrypt call.
+     *
+     * `KeyProvider` does not cache group keys itself — the resolver is supplied fresh by the caller each time,
+     * so any caching belongs to whoever owns the resolution logic (e.g. `GroupApiImpl`).
+     */
+    using GroupPrivKeyResolver = std::function<
+        std::optional<privmx::crypto::PrivateKey>(const std::string& groupId, int64_t epoch)>;
+
     KeyProvider(const privmx::crypto::PrivateKey& key, std::function<std::shared_ptr<UserVerifier>()> getUserVerifier);
     EncKey generateKey();
     std::string generateSecret();
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>> getKeysAndVerify(
-        const KeyDecryptionAndVerificationRequest& request
+        const KeyDecryptionAndVerificationRequest& request,
+        const GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
     std::vector<server::KeyEntrySet> prepareKeysList(
         const std::vector<UserWithPubKey>& users,
@@ -76,9 +99,20 @@ public:
     );
 
 private:
+    DecryptedEncKeyV2 decryptKeyEntry(const server::KeyEntry& keyEntry, const privmx::crypto::PrivateKey& privKey);
     std::unordered_map<std::string, DecryptedEncKeyV2> decryptAndVerifyKeys(
         std::unordered_map<std::string, server::KeyEntry> keys,
         const EncKeyLocation& location
+    );
+    std::unordered_map<std::string, DecryptedEncKeyV2> decryptAndVerifyGroupKeys(
+        const std::unordered_map<std::string, std::vector<GroupKeyCandidate>>& groupKeyMap,
+        const EncKeyLocation& location,
+        const GroupPrivKeyResolver& groupPrivKeyResolver
+    );
+    DecryptedEncKeyV2 decryptGroupKeyCandidate(
+        const GroupKeyCandidate& candidate,
+        const EncKeyLocation& location,
+        const GroupPrivKeyResolver& groupPrivKeyResolver
     );
     server::KeyEntrySet createKeyEntrySet(
         const UserWithPubKey& user,
@@ -88,6 +122,8 @@ private:
         const std::string& containerSecret
     );
     void verifyForDuplication(std::unordered_map<std::string, DecryptedEncKeyV2>& keys);
+    /** The per-key half of `verifyData`, so candidate selection applies the same test it is later judged by. */
+    static void verifyKeyLocation(DecryptedEncKeyV2& key, const EncKeyLocation& location);
     void verifyData(std::unordered_map<std::string, DecryptedEncKeyV2>& decryptedKeys, const EncKeyLocation& location);
     void verifyUserData(
         std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>>& decryptedKeys

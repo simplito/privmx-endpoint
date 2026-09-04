@@ -10,6 +10,7 @@
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/thread/Types.hpp"
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
+#include <privmx/endpoint/group/GroupApi.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -29,7 +30,10 @@ public:
      * 
      * @return ThreadApi object
      */
-    static ThreadApi create(core::Connection& connetion);
+    static ThreadApi create(
+        core::Connection& connection,
+        const std::optional<group::GroupApi>& groupApi = std::nullopt
+    );
 
     /**
      * //doc-gen:ignore
@@ -58,7 +62,8 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**
@@ -84,7 +89,39 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+
+    /**
+     * Re-encrypts the Thread key for all current members without changing data, membership, or policy.
+     * Unlike updateThread, this can be called by any Thread member (not just managers) when the
+     * default rotateKeys policy of "user" is in effect.
+     *
+     * The Thread's key is re-wrapped to every one of its grantee groups at that group's current epoch, whether or
+     * not it names the group in `groups`: the grantee list comes from the Thread itself, and any epoch public key
+     * missing from `groups` is read from the Bridge.
+     *
+     * That read is what bounds who may re-key: a group's epoch and public key are readable only by its members
+     * under the default group policy (`get: "user"`, `listAll: "none"`). A caller who belongs to none of the
+     * Thread's grantee groups, and cannot supply their epoch keys in `groups` either, gets
+     * `UnresolvedGroupGranteeException` naming the group it could not resolve.
+     *
+     * @param threadId ID of the Thread to re-key
+     * @param users current Thread users with their public keys
+     * @param managers current Thread managers with their public keys
+     * @param version current Thread version (optimistic lock guard)
+     * @param force skip the version check when true
+     * @param groups epoch public keys of grantee groups the caller has verified itself; optional, and groups the
+     * Thread does not grant are ignored — a re-key changes no grants
+     */
+    void rotateThreadKeys(
+        const std::string& threadId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**

@@ -177,6 +177,9 @@ Poco::Dynamic::Var VarSerializer::serialize<BridgeIdentity>(const BridgeIdentity
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<VerificationRequest>(const VerificationRequest& val);
 
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<GroupGrant>(const GroupGrant& val);
+
 } // namespace core
 } // namespace endpoint
 } // namespace privmx

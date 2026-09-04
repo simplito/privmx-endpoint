@@ -75,7 +75,8 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const IndexMode mode,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     void updateSearchIndex(
@@ -87,7 +88,17 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+
+    void rotateSearchIndexKeys(
+        const std::string& indexId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     void deleteSearchIndex(const std::string& indexId);
@@ -124,6 +135,7 @@ private:
     static const std::string SEARCH_TYPE_FILTER_FLAG;
 
     dynamic::IndexData getIndexData(const std::string& indexId);
+    int64_t storeVersionGuard(const std::string& storeId, bool force);
     void setIndexData(const std::string& indexId, const std::string& storeId, const IndexMode mode);
     SearchIndex mapSearchIndex(const kvdb::Kvdb& kvdb);
     std::vector<SearchIndex> mapSearchIndexes(const std::vector<kvdb::Kvdb>& kvdbs);

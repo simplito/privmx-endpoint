@@ -51,7 +51,8 @@ InboxEntryPublicDataResult InboxEntryDataSchemaStrategyV1::decryptPublicOnly(std
 InboxEntryResult InboxEntryDataSchemaStrategyV1::decryptEntry(
     const thread::server::Message& message,
     const core::ModuleKeys& inboxKeys,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) const {
     InboxEntryResult result;
     result.statusCode = 0;
@@ -66,9 +67,12 @@ InboxEntryResult InboxEntryDataSchemaStrategyV1::decryptEntry(
         core::KeyDecryptionAndVerificationRequest keyProviderRequest;
         core::EncKeyLocation location{.contextId = inboxKeys.contextId, .resourceId = inboxKeys.moduleResourceId};
         keyProviderRequest.addOne(inboxKeys.keys, msgPublicData.usedInboxKeyId, location);
-        auto encKey = keyProvider->getKeysAndVerify(keyProviderRequest).at(location).at(msgPublicData.usedInboxKeyId);
-        auto eccKey = crypto::ECC::fromPrivateKey(encKey.key);
-        auto privKeyECC = crypto::PrivateKey(eccKey);
+        keyProviderRequest.addGroupKeys(inboxKeys.groupKeys, location);
+        auto encKey = keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver)
+                          .at(location)
+                          .at(msgPublicData.usedInboxKeyId);
+        auto eccKey = privmx::crypto::ECC::fromPrivateKey(encKey.key);
+        auto privKeyECC = privmx::crypto::PrivateKey(eccKey);
         auto decrypted = decrypt(msgData, privKeyECC);
         result.statusCode = encKey.statusCode;
         result.publicData = decrypted.publicData;

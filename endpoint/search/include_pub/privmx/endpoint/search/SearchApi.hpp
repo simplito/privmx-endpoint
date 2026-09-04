@@ -38,7 +38,13 @@ public:
     /**
      * Creates an instance of 'SearchApi'.
      *
+     * A Search Index is a KVDB and a Store, so group support comes from the APIs given here: to read and write
+     * Indexes granted to groups, create `storeApi` and `kvdbApi` with a GroupApi of their own.
+     *
      * @param connection instance of 'Connection'
+     * @param storeApi instance of 'StoreApi', holds the Index's documents
+     * @param kvdbApi instance of 'KvdbApi', holds the Index's metadata
+     * @param lockApi instance of 'LockApi', serializes concurrent writes to the Index
      *
      * @return SearchApi object
      */
@@ -69,6 +75,8 @@ public:
      * @param privateMeta private (encrypted) metadata
      * @param mode mode the operational mode of the Serach Index
      * @param policies Index's policies
+     * @param groups groups granted access to the Index, with their verified epoch public keys; the same grants
+     * are applied to both containers backing the Index
      * @return ID of the created Search Index
      */
     std::string createSearchIndex(
@@ -78,7 +86,8 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const IndexMode mode,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**
@@ -94,6 +103,8 @@ public:
      * @param force force update (without checking version)
      * @param forceGenerateNewKey force to regenerate a key for the Index
      * @param policies Index's policies
+     * @param groups groups granted access to the Index, with their verified epoch public keys; the list is
+     * authoritative — an empty list revokes every group grant the Index had
      */
     void updateSearchIndex(
         const std::string& indexId,
@@ -104,7 +115,39 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+
+    /**
+     * Re-encrypts the Search Index keys for all current members without changing data, membership, or policy.
+     * Unlike updateSearchIndex, this can be called by any Index member (not just managers) when the default
+     * rotateKeys policy of "user" is in effect.
+     *
+     * Both containers backing the Index are re-keyed, each against its own current version, so a half that was
+     * already re-keyed on its own (see `SearchIndex::staleGroups`) does not fail the call.
+     *
+     * The keys are re-wrapped to every one of the Index's grantee groups at that group's current epoch, whether
+     * or not it names the group in `groups`: the grantee list comes from the Index itself, and any epoch public
+     * key missing from `groups` is read from the Bridge. A caller who belongs to none of the Index's grantee
+     * groups, and cannot supply their epoch keys in `groups` either, gets `UnresolvedGroupGranteeException`
+     * naming the group it could not resolve.
+     *
+     * @param indexId ID of the Index to re-key
+     * @param users current Index users with their public keys
+     * @param managers current Index managers with their public keys
+     * @param version current Index version (optimistic lock guard)
+     * @param force skip the version check when true
+     * @param groups epoch public keys of grantee groups the caller has verified itself; optional, and groups the
+     * Index does not grant are ignored — a re-key changes no grants
+     */
+    void rotateSearchIndexKeys(
+        const std::string& indexId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**

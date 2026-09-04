@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <Poco/JSON/Object.h>
 #include <privmx/endpoint/core/Factory.hpp>
+#include <privmx/endpoint/core/Mapper.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 #include "privmx/endpoint/thread/ThreadException.hpp"
@@ -93,6 +94,7 @@ Thread ThreadDataSchemaMapper::toLibThread(
         .creator = info.creator,
         .lastModificationDate = info.lastModificationDate,
         .lastModifier = info.lastModifier,
+        .keeper = info.keeper,
         .users = info.users,
         .managers = info.managers,
         .version = info.version,
@@ -102,13 +104,16 @@ Thread ThreadDataSchemaMapper::toLibThread(
         .policy = core::Factory::parsePolicyServerObject(info.policy),
         .messagesCount = info.messages,
         .statusCode = statusCode,
-        .schemaVersion = schemaVersion
+        .schemaVersion = schemaVersion,
+        .groups = core::Mapper::mapToGroupGrants(info.groups),
+        .staleGroups = info.staleGroups
     };
 }
 
 std::vector<Thread> ThreadDataSchemaMapper::validateDecryptAndConvertThreads(
     const std::vector<server::ThreadInfo>& threads,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Thread>(
         threads, keyProvider, _connection, [&](const server::ThreadInfo& t) { return validateDataIntegrity(t); },
@@ -118,13 +123,15 @@ std::vector<Thread> ThreadDataSchemaMapper::validateDecryptAndConvertThreads(
         [&](const server::ThreadInfo& t, const core::DecryptedEncKey& key) { return decrypt(t, key); },
         [](const server::ThreadInfo& t, uint32_t code) {
             return toLibThread(t, {}, {}, code, ThreadDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
 Thread ThreadDataSchemaMapper::validateDecryptAndConvertThread(
     const server::ThreadInfo& thread,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertThreads({thread}, keyProvider)[0];
+    return validateDecryptAndConvertThreads({thread}, keyProvider, groupPrivKeyResolver)[0];
 }

@@ -31,8 +31,8 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
 
-StreamApiImpl::StreamApiImpl(core::Connection& connection) {
-    std::shared_ptr<StreamApiLow> apiLow = std::make_shared<StreamApiLow>(StreamApiLow::create(connection));
+StreamApiImpl::StreamApiImpl(core::Connection& connection, const std::optional<group::GroupApi>& groupApi) {
+    std::shared_ptr<StreamApiLow> apiLow = std::make_shared<StreamApiLow>(StreamApiLow::create(connection, groupApi));
     _api = apiLow;
     auto credentials = _api->getTurnCredentials();
     libwebrtc::LibWebRTC::Initialize();
@@ -553,9 +553,10 @@ std::string StreamApiImpl::createStreamRoom(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicyWithoutItem>& policies,
-    const std::optional<int64_t>& emptyRoomTtl
+    const std::optional<int64_t>& emptyRoomTtl,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
-    return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl);
+    return _api->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl, groups);
 }
 
 void StreamApiImpl::updateStreamRoom(
@@ -567,11 +568,23 @@ void StreamApiImpl::updateStreamRoom(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     _api->updateStreamRoom(
-        streamRoomId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies
+        streamRoomId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
     );
+}
+
+void StreamApiImpl::rotateStreamRoomKeys(
+    const std::string& streamRoomId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    _api->rotateStreamRoomKeys(streamRoomId, users, managers, version, force, groups);
 }
 
 core::PagingList<StreamRoom> StreamApiImpl::listStreamRooms(

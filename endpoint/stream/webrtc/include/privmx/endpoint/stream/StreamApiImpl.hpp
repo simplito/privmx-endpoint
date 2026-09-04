@@ -31,6 +31,7 @@ limitations under the License.
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include <rtc_audio_device.h>
 #include <rtc_desktop_capturer.h>
 #include <rtc_desktop_device.h>
@@ -44,7 +45,7 @@ namespace stream {
 
 class StreamApiImpl {
 public:
-    StreamApiImpl(core::Connection& connection);
+    StreamApiImpl(core::Connection& connection, const std::optional<group::GroupApi>& groupApi = std::nullopt);
     ~StreamApiImpl();
 
     std::string createStreamRoom(
@@ -54,7 +55,8 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicyWithoutItem>& policies,
-        const std::optional<int64_t>& emptyRoomTtl
+        const std::optional<int64_t>& emptyRoomTtl,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     void updateStreamRoom(
@@ -66,7 +68,17 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+
+    void rotateStreamRoomKeys(
+        const std::string& streamRoomId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);

@@ -50,9 +50,17 @@ public:
     InboxEntryDataResult decrypt(std::string& data, privmx::crypto::PrivateKey& inboxPriv);
     InboxEntryPublicDataResult decryptPublicOnly(std::string& data);
 
-    InboxEntryResult decryptInboxEntry(thread::server::Message message, const core::ModuleKeys& inboxKeys);
+    InboxEntryResult decryptInboxEntry(
+        thread::server::Message message,
+        const core::ModuleKeys& inboxKeys,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+    );
     inbox::InboxEntry convertInboxEntry(thread::server::Message message, const InboxEntryResult& inboxEntry);
-    inbox::InboxEntry decryptAndConvertInboxEntry(thread::server::Message message, const core::ModuleKeys& inboxKeys);
+    inbox::InboxEntry decryptAndConvertInboxEntry(
+        thread::server::Message message,
+        const core::ModuleKeys& inboxKeys,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+    );
 
 private:
     std::string readInboxIdFromMessageKeyId(const std::string& keyId);

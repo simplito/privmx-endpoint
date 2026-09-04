@@ -39,6 +39,7 @@ limitations under the License.
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
@@ -57,7 +58,8 @@ public:
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
         const std::shared_ptr<core::HandleManager>& handleManager,
         const core::Connection& connection,
-        size_t serverRequestChunkSize
+        size_t serverRequestChunkSize,
+        const std::optional<group::GroupApi>& groupApi = std::nullopt
     );
     ~StoreApiImpl();
     std::string createStore(
@@ -67,7 +69,8 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicy>& policies,
-        const std::string& type = STORE_TYPE_FILTER_FLAG
+        const std::string& type = STORE_TYPE_FILTER_FLAG,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
     void updateStore(
         const std::string& storeId,
@@ -78,7 +81,16 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+    void rotateStoreKeys(
+        const std::string& storeId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
     void deleteStore(const std::string& storeId);
     Store getStore(const std::string& storeId, const std::string& type = STORE_TYPE_FILTER_FLAG);
@@ -147,6 +159,14 @@ private:
         const FileMeta& fileMeta
     );
     void assertStoreExist(const std::string& storeId);
+
+    /**
+     * Re-keys a Store whose key has gone stale, without being asked to.
+     *
+     * The roster is the Store's own — a re-key changes nothing but the key — so unlike `rotateStoreKeys` this
+     * takes no arguments beyond the id and looks the members' public keys up itself.
+     */
+    void autoRotateStoreKeys(const std::string& storeId);
     void assertFileExist(const std::string& fileId);
 
     static const size_t _CHUNK_SIZE;

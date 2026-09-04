@@ -32,7 +32,7 @@ class InboxDataProcessorV4 {
 public:
     server::InboxData packForServer(
         const InboxDataProcessorModelV4& plainData,
-        const crypto::PrivateKey& authorPrivateKey,
+        const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& inboxKey
     );
     InboxDataResultV4 unpackAll(const server::InboxData& encryptedData, const std::string& inboxKey);
