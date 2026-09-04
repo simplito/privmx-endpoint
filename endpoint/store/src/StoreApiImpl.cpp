@@ -476,7 +476,8 @@ void StoreApiImpl::flushFile(const int64_t handle) {
             e.rethrow();
         }
     } catch (const privmx::utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() != privmx::endpoint::server::InvalidKeyException().getCode()) {
+        if (core::ExceptionConverter::convert(e).getCode() !=
+            privmx::endpoint::server::InvalidKeyException().getCode()) {
             core::ExceptionConverter::rethrowAsCoreException(e);
         }
     }
@@ -489,7 +490,7 @@ void StoreApiImpl::flushFile(const int64_t handle) {
     } catch (const privmx::utils::PrivmxException& e) {
         rw_handle->file->discardPending();
         e.rethrow();
-    } 
+    }
 }
 
 core::DecryptedEncKey StoreApiImpl::getCurrentFileEncKey(const std::string& fileId) {

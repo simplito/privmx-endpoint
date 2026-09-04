@@ -129,9 +129,7 @@ public:
         return _file->sync(fileMeta, newParms, fileEncKey);
     }
     inline void flush() override { _file->flush(); }
-    inline void refreshEncKey(const core::DecryptedEncKey& fileEncKey) override {
-        _file->refreshEncKey(fileEncKey);
-    }
+    inline void refreshEncKey(const core::DecryptedEncKey& fileEncKey) override { _file->refreshEncKey(fileEncKey); }
     inline void discardPending() override { _file->discardPending(); }
 
 private:
