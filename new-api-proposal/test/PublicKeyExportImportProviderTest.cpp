@@ -58,13 +58,13 @@ TEST(PublicKeyTest, ExportProviderTests) {
     CryptoProviderRegistry::set(fromDriver);
 
     std::shared_ptr<IPrivateKey> priv1 = CryptoProviderRegistry::get().importPrivateKey(
-        Utils::s2b(wif1), KeyFormat::Wif, AsymAlg::EccSecp256k1);
+        Utils::s2b(wif1), KeyFormat::Wif, AsymAlg::SecP256r1);
     std::shared_ptr<IPrivateKey> priv2 = CryptoProviderRegistry::get().importPrivateKey(
-        Utils::s2b(wif2), KeyFormat::Wif, AsymAlg::EccSecp256k1);
+        Utils::s2b(wif2), KeyFormat::Wif, AsymAlg::SecP256r1);
     std::shared_ptr<IPrivateKey> priv3 = CryptoProviderRegistry::get().importPrivateKey(
-        Utils::s2b(wif3), KeyFormat::Wif, AsymAlg::EccSecp256k1);
+        Utils::s2b(wif3), KeyFormat::Wif, AsymAlg::SecP256r1);
     std::shared_ptr<IPrivateKey> priv4 = CryptoProviderRegistry::get().importPrivateKey(
-        Utils::s2b(wif4), KeyFormat::Wif, AsymAlg::EccSecp256k1);
+        Utils::s2b(wif4), KeyFormat::Wif, AsymAlg::SecP256r1);
 
     EXPECT_EQ(Utils::b2s(priv1->export_(KeyFormat::Wif)), wif1);
     EXPECT_EQ(Utils::b2s(priv2->export_(KeyFormat::Wif)), wif2);
@@ -77,22 +77,22 @@ TEST(PublicKeyTest, ExportProviderTests) {
     std::shared_ptr<IPublicKey> publ4 = priv4->publicKey();
 
     std::shared_ptr<IPublicKey> publ1d = CryptoProviderRegistry::get().importPublicKey(
-        Utils::s2b(expected_publ1Der), KeyFormat::Der, AsymAlg::EccSecp256k1);
+        Utils::s2b(expected_publ1Der), KeyFormat::Der, AsymAlg::SecP256r1);
     std::shared_ptr<IPublicKey> publ2d = CryptoProviderRegistry::get().importPublicKey(
-        Utils::s2b(expected_publ2Der), KeyFormat::Der, AsymAlg::EccSecp256k1);
+        Utils::s2b(expected_publ2Der), KeyFormat::Der, AsymAlg::SecP256r1);
     std::shared_ptr<IPublicKey> publ3d = CryptoProviderRegistry::get().importPublicKey(
-        Utils::s2b(expected_publ3Der), KeyFormat::Der, AsymAlg::EccSecp256k1);
+        Utils::s2b(expected_publ3Der), KeyFormat::Der, AsymAlg::SecP256r1);
     std::shared_ptr<IPublicKey> publ4d = CryptoProviderRegistry::get().importPublicKey(
-        Utils::s2b(expected_publ4Der), KeyFormat::Der, AsymAlg::EccSecp256k1);
+        Utils::s2b(expected_publ4Der), KeyFormat::Der, AsymAlg::SecP256r1);
 
     std::shared_ptr<IPublicKey> publ1b = CryptoProviderRegistry::get().importPublicKey(
-        Utils::s2b(expected_publ1Base58Der), KeyFormat::Base58Der, AsymAlg::EccSecp256k1);
+        Utils::s2b(expected_publ1Base58Der), KeyFormat::Base58Der, AsymAlg::SecP256r1);
     std::shared_ptr<IPublicKey> publ2b = CryptoProviderRegistry::get().importPublicKey(
-        Utils::s2b(expected_publ2Base58Der), KeyFormat::Base58Der, AsymAlg::EccSecp256k1);
+        Utils::s2b(expected_publ2Base58Der), KeyFormat::Base58Der, AsymAlg::SecP256r1);
     std::shared_ptr<IPublicKey> publ3b = CryptoProviderRegistry::get().importPublicKey(
-        Utils::s2b(expected_publ3Base58Der), KeyFormat::Base58Der, AsymAlg::EccSecp256k1);
+        Utils::s2b(expected_publ3Base58Der), KeyFormat::Base58Der, AsymAlg::SecP256r1);
     std::shared_ptr<IPublicKey> publ4b = CryptoProviderRegistry::get().importPublicKey(
-        Utils::s2b(expected_publ4Base58Der), KeyFormat::Base58Der, AsymAlg::EccSecp256k1);
+        Utils::s2b(expected_publ4Base58Der), KeyFormat::Base58Der, AsymAlg::SecP256r1);
 
     EXPECT_EQ(Utils::b2s(publ1->export_(KeyFormat::Der)), expected_publ1Der);
     EXPECT_EQ(Utils::b2s(publ2->export_(KeyFormat::Der)), expected_publ2Der);

@@ -27,7 +27,7 @@ limitations under the License.
 #include "CoreInterfaces.hpp"
 #include "ECC.hpp"
 #include "PublicKey.hpp"
-#include "PrivateKey.hpp"
+// #include "PrivateKey.hpp"
 
 namespace privmx {
 namespace cryptoservice {

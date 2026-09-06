@@ -120,12 +120,12 @@ public:
 class IKeyProvider {
 public:
     virtual ~IKeyProvider() = default;
-    virtual std::shared_ptr<IPrivateKey> generatePrivateKey(AsymAlg = AsymAlg::EccSecp256k1) = 0;
-    virtual std::shared_ptr<IPrivateKey> importPrivateKey(BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) = 0;
-    virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) = 0;
-    virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::EccSecp256k1) = 0;
+    virtual std::shared_ptr<IPrivateKey> generatePrivateKey(AsymAlg = AsymAlg::SecP256r1) = 0;
+    virtual std::shared_ptr<IPrivateKey> importPrivateKey(BytesView, KeyFormat, AsymAlg = AsymAlg::SecP256r1) = 0;
+    virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat, AsymAlg = AsymAlg::SecP256r1) = 0;
+    virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::SecP256r1) = 0;
 // or below:
-    virtual std::shared_ptr<IExtKey>  importExtKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) = 0;
+    virtual std::shared_ptr<IExtKey>  importExtKey (BytesView, KeyFormat, AsymAlg = AsymAlg::SecP256r1) = 0;
 };
 
 // ---- Provider facade (role aggregate) ----

@@ -33,11 +33,11 @@ public:
     virtual Bytes encrypt(const SymParams&, BytesView plaintext) override;
     virtual Bytes decrypt(const SymParams&, BytesView ciphertext) override;
     virtual Bytes derive(const KdfParams& opt, BytesView secretData) override;  
-    virtual std::shared_ptr<IPrivateKey> generatePrivateKey(AsymAlg = AsymAlg::EccSecp256k1) override;
-    virtual std::shared_ptr<IPrivateKey> importPrivateKey(BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) override;
-    virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) override;
-    virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::EccSecp256k1) override;
-    virtual std::shared_ptr<IExtKey>     importExtKey (BytesView, KeyFormat, AsymAlg = AsymAlg::EccSecp256k1) override;
+    virtual std::shared_ptr<IPrivateKey> generatePrivateKey(AsymAlg = AsymAlg::SecP256r1) override;
+    virtual std::shared_ptr<IPrivateKey> importPrivateKey(BytesView, KeyFormat, AsymAlg = AsymAlg::SecP256r1) override;
+    virtual std::shared_ptr<IPublicKey>  importPublicKey (BytesView, KeyFormat, AsymAlg = AsymAlg::SecP256r1) override;
+    virtual std::shared_ptr<IExtKey>     extKeyFromSeed(BytesView seed, AsymAlg = AsymAlg::SecP256r1) override;
+    virtual std::shared_ptr<IExtKey>     importExtKey (BytesView, KeyFormat, AsymAlg = AsymAlg::SecP256r1) override;
 
 protected:
     virtual Bytes digestConfStr(const char *config, BytesView data); 

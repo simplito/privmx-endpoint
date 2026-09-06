@@ -794,7 +794,7 @@ unsigned char* CryptoProviderFromDriver::store_u32_be(unsigned char* out, uint32
  */
 std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::generatePrivateKey(AsymAlg alg)
 {
-    if (alg ==  AsymAlg::EccSecp256k1) {
+    if (alg ==  AsymAlg::SecP256r1) {
         ecc::PrivateKey key = ecc::PrivateKey::generateRandom();
         key.setSymProvider(shared_from_this());
         return std::make_shared<ecc::PrivateKey>(std::move(key));
@@ -815,7 +815,7 @@ std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::generatePrivateKey(AsymAl
  */
 std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesView data, KeyFormat format, AsymAlg alg)
 {
-    if (alg ==  AsymAlg::EccSecp256k1) {
+    if (alg ==  AsymAlg::SecP256r1) {
         if (format ==  KeyFormat::Wif) {
             ecc::PrivateKey key = ecc::PrivateKey::fromWIFb(shared_from_this(),data);
             key.setSymProvider(shared_from_this());
@@ -839,7 +839,7 @@ std::shared_ptr<IPrivateKey> CryptoProviderFromDriver::importPrivateKey(BytesVie
  */
 std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView data, KeyFormat format, AsymAlg alg)
 {
-    if (alg ==  AsymAlg::EccSecp256k1) {
+    if (alg ==  AsymAlg::SecP256r1) {
         if (format ==  KeyFormat::Wif) {
             throw PrivmxDriverCryptoException("importPrivateKey: Format WIF is used only for private keys");    
         } else if (format ==  KeyFormat::Der) {
@@ -864,7 +864,7 @@ std::shared_ptr<IPublicKey> CryptoProviderFromDriver::importPublicKey(BytesView 
 
 std::shared_ptr<IExtKey> CryptoProviderFromDriver::importExtKey(BytesView data, KeyFormat format, AsymAlg alg)
 {
-    if (alg ==  AsymAlg::EccSecp256k1) {
+    if (alg ==  AsymAlg::SecP256r1) {
         if (format ==  KeyFormat::Base58) {
             ecc::ExtKey key = ecc::ExtKey::fromBase58(ecc::Utils::b2s(data));
             key.setSymProvider(shared_from_this());
@@ -880,7 +880,7 @@ std::shared_ptr<IExtKey> CryptoProviderFromDriver::importExtKey(BytesView data, 
 }
 
 std::shared_ptr<IExtKey> CryptoProviderFromDriver::extKeyFromSeed(BytesView seed, AsymAlg alg) {
-    if (alg == AsymAlg::EccSecp256k1) {
+    if (alg == AsymAlg::SecP256r1) {
         ecc::ExtKey key = ecc::ExtKey::fromSeed(ecc::Utils::b2s(seed));
         key.setSymProvider(shared_from_this());
         return std::make_shared<ecc::ExtKey>(std::move(key));

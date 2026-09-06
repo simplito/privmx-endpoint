@@ -233,7 +233,8 @@ Bytes PublicKey::encrypt(BytesView data, const PrivateKey& privForSignature) con
 Bytes PublicKey::eciesEncrypt(BytesView data, const PrivateKey& private_key) const {
     Bytes secret = private_key.deriveB(*this);
     Bytes _shared_key = _provider->digest(Hash::Sha512,secret);
-    Bytes _private_enc_key = Utils::s2b(private_key.getPrivateEncKey());
+    // Bytes _private_enc_key = Utils::s2b(private_key.getPrivateEncKey());
+    Bytes _private_enc_key = private_key.getPrivateEncKeyB();
 
     Bytes iv = _provider->hmac(Hash::Sha256,_private_enc_key, data);
     iv.resize(16);

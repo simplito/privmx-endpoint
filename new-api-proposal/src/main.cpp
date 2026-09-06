@@ -76,7 +76,7 @@ int main (int argc, char const *argv[])
      std::string serialized = priv.toWIF();
      std::cout << '"' << serialized << '"' << std::endl;
 
-    std::shared_ptr<IPrivateKey> privKey = CryptoProviderRegistry::get().generatePrivateKey(AsymAlg::EccSecp256k1);
+    std::shared_ptr<IPrivateKey> privKey = CryptoProviderRegistry::get().generatePrivateKey(AsymAlg::SecP256r1);
     std::shared_ptr<IPublicKey> publKey = privKey->publicKey();
 
 // ---- vector for testing public keys ---

@@ -82,7 +82,9 @@ enum class SigScheme {
  * @brief Types of implemented asymmetric algorithms
  */
 enum class AsymAlg {
-    EccSecp256k1     
+    SecP256r1,         // shared secret: ECDH P-256, signature: ECDSA-SHA2-256
+    SecP256r1MLKEM768, // shared secret: 32 byte EC + 32 byte ML-KEM (see https://docs.openssl.org/master/man7/EVP_PKEY-MLX-KEM/)
+    ECDSA256MLDSA65,   // signature: 3309 bytes ML-DSA-65 + 64-72 bytes ECDSA P-256
 };
 
 /**

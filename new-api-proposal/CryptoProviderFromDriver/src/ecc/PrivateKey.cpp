@@ -193,7 +193,7 @@ Bytes PrivateKey::deriveSharedSecret(const IPublicKey& publicKey) const {
 
 Bytes PrivateKey::open(BytesView sealed, const IPublicKey* expectedSender) const {
     if (expectedSender != nullptr && typeid(*expectedSender) != typeid(PublicKey)) {
-        throw PrivmxCryptoserviceEccPrivateKeyTypeKeyException("PrivateKey::deriveSharedSecret: Wrong type of public key");
+        throw PrivmxCryptoserviceEccPrivateKeyTypeKeyException("PrivateKey::open: Wrong type of public key");
     } else if (expectedSender != nullptr) {
         return decrypt(sealed);
     } else {
