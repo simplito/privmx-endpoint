@@ -108,6 +108,49 @@ public:
         return plainSize - offset < CHUNK_SIZE ? plainSize - offset : CHUNK_SIZE;
     }
 
+    /**
+     * What a reader's final state says about the file it just read.
+     *
+     * Pure and separate from the reader because the distinction is easy to get wrong in exactly one
+     * direction: after a seek, a partly-filled buffer is the *expected* outcome. A range reader stops as
+     * soon as it has the bytes it asked for, which is normally in the middle of a chunk — so treating
+     * leftover bytes as an error rejects the documented way of reading a range.
+     */
+    enum class ReadOutcome {
+        /** Every chunk the signed size called for arrived, and nothing followed them. */
+        Complete,
+        /** Fewer chunks arrived than the signed size calls for. A dropped tail, or an unfinished write. */
+        Truncated,
+        /** Every chunk arrived, and then more bytes followed. */
+        Overrun,
+        /** A seeked reader stopped early. Not an error — and not a whole-file guarantee either. */
+        PartialRange,
+    };
+
+    /**
+     * Classifies a finished read. `chunksOpened` is how many chunks were actually opened, `chunksExpected`
+     * what the envelope's signed size calls for.
+     */
+    static ReadOutcome classifyRead(
+        bool seeked,
+        ChunkCount chunksOpened,
+        ChunkCount chunksExpected,
+        bool bufferEmpty
+    ) {
+        // A seeked reader chose what to read, so neither "did it all arrive" nor "was there anything left
+        // over" is a question this handle can answer. Both checks below would misfire.
+        if (seeked) {
+            return ReadOutcome::PartialRange;
+        }
+        if (chunksOpened < chunksExpected) {
+            return ReadOutcome::Truncated;
+        }
+        if (!bufferEmpty) {
+            return ReadOutcome::Overrun;
+        }
+        return ReadOutcome::Complete;
+    }
+
     struct FileHeader {
         EnvelopeType type;
         std::string groupId;

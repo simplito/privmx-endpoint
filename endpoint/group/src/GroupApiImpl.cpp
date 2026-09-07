@@ -1238,15 +1238,21 @@ std::shared_ptr<GroupApiImpl::EnvelopeFileState> GroupApiImpl::finishFile(FileHa
         }
     } release{this, fileHandle};
 
-    if (!state->seeked && state->index < GroupEnvelopeEncryptor::chunkCount(state->plainSize)) {
+    switch (GroupEnvelopeEncryptor::classifyRead(
+        state->seeked, state->index, GroupEnvelopeEncryptor::chunkCount(state->plainSize),
+        state->buffer.empty()
+    )) {
+    case GroupEnvelopeEncryptor::ReadOutcome::Truncated:
         // Every chunk authenticates itself, but nothing in chunk N says how many were meant to follow. The
         // declared size is the only place a dropped tail — or an unfinished write — shows up.
         throw EnvelopeTruncatedFileException();
-    }
-    if (!state->buffer.empty()) {
+    case GroupEnvelopeEncryptor::ReadOutcome::Overrun:
         // The opposite complaint, and worth telling apart from the one above: every chunk the declared size
         // called for arrived, and then more bytes followed it.
         throw InvalidEnvelopeFormatException("more file data than the declared size accounts for");
+    case GroupEnvelopeEncryptor::ReadOutcome::PartialRange:
+    case GroupEnvelopeEncryptor::ReadOutcome::Complete:
+        break;
     }
     return state;
 }

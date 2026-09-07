@@ -779,15 +779,33 @@ TEST_F(GroupTest, envelope_file_range_read_as_documented) {
     const std::size_t encryptedChunk = 1 + 16 + (128 * 1024 + 16) + 16;
     EXPECT_EQ(api.seekInEncryptedFile(api.beginFileDecryption(envelope), from) % encryptedChunk, 0);
 
-    // ...and that a seeked handle gives up the whole-file guarantee, while a straight read keeps it.
-    FileHandle seeked = api.beginFileDecryption(envelope);
-    api.seekInEncryptedFile(seeked, from);
-    api.decryptFileChunk(seeked, core::Buffer::from(cipher.substr(at - (at % encryptedChunk))));
-    EXPECT_FALSE(api.finishFileDecryption(seeked).complete);
+    // A range reader that stops as soon as it has enough ends mid-chunk, with bytes still buffered and most
+    // of the file never opened. That is the documented way to read a range, so finishing must not call it an
+    // error — it once did, reporting "more file data than the declared size accounts for".
+    {
+        FileHandle partial = api.beginFileDecryption(envelope);
+        CipherOffset seekedTo = api.seekInEncryptedFile(partial, from);
+        // One block deliberately larger than a chunk and not a whole number of them, so it ends mid-chunk.
+        const std::size_t oneAndAHalfChunks = encryptedChunk + encryptedChunk / 2;
+        api.decryptFileChunk(
+            partial, core::Buffer::from(cipher.substr(seekedTo, oneAndAHalfChunks))
+        );
+        DecryptedFileInfo info;
+        EXPECT_NO_THROW({ info = api.finishFileDecryption(partial); });
+        // Not an error, but not a whole-file guarantee either.
+        EXPECT_FALSE(info.complete);
+        EXPECT_EQ(info.groupId, groupId);
+    }
 
+    // A straight read start to finish still earns the guarantee.
     FileHandle whole = api.beginFileDecryption(envelope);
     api.decryptFileChunk(whole, core::Buffer::from(cipher));
     EXPECT_TRUE(api.finishFileDecryption(whole).complete);
+
+    // And a straight read that is genuinely short is still refused.
+    FileHandle short_ = api.beginFileDecryption(envelope);
+    api.decryptFileChunk(short_, core::Buffer::from(cipher.substr(0, encryptedChunk)));
+    EXPECT_THROW({ api.finishFileDecryption(short_); }, core::Exception);
 
     // Seeking past the end is a caller error, not a silent clamp.
     FileHandle bad = api.beginFileDecryption(envelope);

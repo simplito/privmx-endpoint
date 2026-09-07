@@ -470,3 +470,45 @@ TEST_F(GroupEnvelope, ChunksOpenIndependentlyOfEachOther) {
             << "chunk " << i;
     }
 }
+
+// -- what a finished read means ------------------------------------------------------------------------
+
+/**
+ * The truth table `finishFileDecryption` acts on.
+ *
+ * Worth pinning in a unit test rather than only end to end, because the reader that owns this decision needs
+ * a live bridge to construct — which is precisely how the seeked case below shipped broken: the leftover
+ * check fired on a range read that had deliberately stopped mid-chunk.
+ */
+using Outcome = GroupEnvelopeEncryptor::ReadOutcome;
+
+TEST_F(GroupEnvelope, AStraightReadIsCompleteOnlyWhenEverythingArrived) {
+    // all five chunks, nothing left over
+    EXPECT_EQ(enc.classifyRead(false, 5, 5, true), Outcome::Complete);
+}
+
+TEST_F(GroupEnvelope, AStraightReadMissingChunksIsTruncated) {
+    EXPECT_EQ(enc.classifyRead(false, 4, 5, true), Outcome::Truncated);
+    EXPECT_EQ(enc.classifyRead(false, 0, 1, true), Outcome::Truncated);
+    // Truncation outranks leftover bytes: a short read is the more useful thing to report.
+    EXPECT_EQ(enc.classifyRead(false, 4, 5, false), Outcome::Truncated);
+}
+
+TEST_F(GroupEnvelope, AStraightReadWithBytesPastTheEndIsOverrun) {
+    EXPECT_EQ(enc.classifyRead(false, 5, 5, false), Outcome::Overrun);
+}
+
+TEST_F(GroupEnvelope, ASeekedReadIsNeverAnError) {
+    // The regression. A range reader stops as soon as it has the bytes it asked for, which is normally
+    // mid-chunk — so it ends with fewer chunks opened than the file holds *and* a partly-filled buffer.
+    // Both of those look exactly like the two failure cases above, and neither is a failure here.
+    EXPECT_EQ(enc.classifyRead(true, 2, 5, false), Outcome::PartialRange);  // stopped mid-chunk
+    EXPECT_EQ(enc.classifyRead(true, 2, 5, true), Outcome::PartialRange);   // stopped on a boundary
+    EXPECT_EQ(enc.classifyRead(true, 5, 5, false), Outcome::PartialRange);  // read to the end, bytes spare
+    EXPECT_EQ(enc.classifyRead(true, 0, 5, true), Outcome::PartialRange);   // read nothing at all
+}
+
+TEST_F(GroupEnvelope, AnEmptyFileNeedsNoChunks) {
+    EXPECT_EQ(GroupEnvelopeEncryptor::chunkCount(0), 0u);
+    EXPECT_EQ(enc.classifyRead(false, 0, 0, true), Outcome::Complete);
+}
