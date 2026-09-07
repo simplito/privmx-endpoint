@@ -92,10 +92,7 @@ public:
     // Nearby leaves share ancestors, so this is strictly smaller than their paths concatenated, and that is the
     // point: a shared ancestor is refreshed ONCE. Refreshing it once per leaf would mint two keys claiming the
     // same node and generation, and whichever landed second would orphan the other's edges.
-    static std::vector<std::uint32_t> frontier(
-        const std::vector<std::uint32_t>& positions,
-        std::uint32_t numLeaves
-    );
+    static std::vector<std::uint32_t> frontier(const std::vector<std::uint32_t>& positions, std::uint32_t numLeaves);
 
     // Leaves needed to seat every one of `positions`. Order-independent: seating is only ever an append.
     static std::uint32_t numLeavesToSeatAll(

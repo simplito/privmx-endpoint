@@ -192,8 +192,7 @@ std::string GroupApiImpl::createGroup(
 
     dynamic::MembershipBlock membership{
         .rosterTag = GroupDataSchemaMapper::rosterTag(
-            ctx.key.key, 1, 1,
-            core::EndpointUtils::usersWithPubKeyToIds(users),
+            ctx.key.key, 1, 1, core::EndpointUtils::usersWithPubKeyToIds(users),
             core::EndpointUtils::usersWithPubKeyToIds(managers)
         ),
         .groupPubKey = groupPubKeyStr,
@@ -290,14 +289,14 @@ void GroupApiImpl::addGroupMembers(const GroupId& groupId, const std::vector<Gro
     keytree::TreeKeys tree(*cache);
     // Only the leaves the re-keying actually wraps to — `O(k log n)` of the roster, one listing round trip.
     const std::uint32_t grown = keytree::TreeMath::numLeavesToSeatAll(positions, state.numLeaves);
-    tree.setMemberKeyStrings(resolveMemberKeys(
-        currentGroup.contextId, keytree::TreeKeys::membersToWrapTo(state, positions, grown)
-    ));
+    tree.setMemberKeyStrings(
+        resolveMemberKeys(currentGroup.contextId, keytree::TreeKeys::membersToWrapTo(state, positions, grown))
+    );
     std::vector<keytree::TreeMember> treeNewcomers;
     for (const GroupMemberToAdd& newMember : newMembers) {
-        treeNewcomers.push_back(keytree::TreeMember{
-            newMember.user.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.user.pubKey)
-        });
+        treeNewcomers.push_back(
+            keytree::TreeMember{newMember.user.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.user.pubKey)}
+        );
     }
     const keytree::AdditionPlan plan = planOrThrow<keytree::AdditionPlan>([&] {
         return tree.planAddition(state, treeNewcomers, positions, _userPrivKey);
@@ -315,9 +314,8 @@ void GroupApiImpl::addGroupMembers(const GroupId& groupId, const std::vector<Gro
     // nothing here wraps a key to them, so the public keys the caller used to supply were never read.
     RosterAfterChange roster = rosterOf(verified);
     for (const GroupMemberToAdd& newMember : newMembers) {
-        (newMember.role == "manager" ? roster.managers : roster.users).push_back(
-            core::UserWithPubKey{.userId = newMember.user.userId, .pubKey = std::string()}
-        );
+        (newMember.role == "manager" ? roster.managers : roster.users)
+            .push_back(core::UserWithPubKey{.userId = newMember.user.userId, .pubKey = std::string()});
     }
 
     // No new epoch, `distributeToUsers = false`
@@ -350,9 +348,7 @@ void GroupApiImpl::addGroupMembers(const GroupId& groupId, const std::vector<Gro
     server::GroupAddMembersModel model;
     model.id = groupId;
     for (const GroupMemberToAdd& newMember : newMembers) {
-        model.members.push_back(server::GroupAddMemberEntry{
-            .userId = newMember.user.userId, .role = newMember.role
-        });
+        model.members.push_back(server::GroupAddMemberEntry{.userId = newMember.user.userId, .role = newMember.role});
     }
     model.keyId = ctx.key.id;
     model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
@@ -428,8 +424,7 @@ void GroupApiImpl::removeGroupMembers(const GroupId& groupId, const std::vector<
     // Every departing member's path, because one delta covers their union — and one epoch covers the batch, where
     // removing them one at a time would stale every container the group can read once per member.
     server::GroupGetModel getModel{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = userIds,
-        .forNewMembers = {}, .fromVersion = {}
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = userIds, .forNewMembers = {}, .fromVersion = {}
     };
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
@@ -460,8 +455,7 @@ void GroupApiImpl::removeGroupMembers(const GroupId& groupId, const std::vector<
         leavingSeatSet.insert(seat.value());
     }
     tree.setMemberKeyStrings(resolveMemberKeys(
-        currentGroup.contextId,
-        keytree::TreeKeys::membersToWrapTo(state, leavingSeats, state.numLeaves, leavingSeatSet)
+        currentGroup.contextId, keytree::TreeKeys::membersToWrapTo(state, leavingSeats, state.numLeaves, leavingSeatSet)
     ));
     const keytree::RemovalPlan plan = planOrThrow<keytree::RemovalPlan>([&] {
         return tree.planRemoval(state, userIds, _userPrivKey);
@@ -475,9 +469,9 @@ void GroupApiImpl::removeGroupMembers(const GroupId& groupId, const std::vector<
     RosterAfterChange roster = rosterOf(verified);
     const auto drop = [&](std::vector<core::UserWithPubKey>& list) {
         list.erase(
-            std::remove_if(list.begin(), list.end(), [&](const core::UserWithPubKey& u) {
-                return leaving.count(u.userId) > 0;
-            }),
+            std::remove_if(
+                list.begin(), list.end(), [&](const core::UserWithPubKey& u) { return leaving.count(u.userId) > 0; }
+            ),
             list.end()
         );
     };
@@ -500,8 +494,7 @@ void GroupApiImpl::removeGroupMembers(const GroupId& groupId, const std::vector<
     const std::string newGroupPubKeyStr = plan.newGrantKey.getPublicKey().toBase58DER();
     dynamic::MembershipBlock membership{
         .rosterTag = GroupDataSchemaMapper::rosterTag(
-            ctx.key.key, newEpoch, currentGroup.version + 1,
-            core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+            ctx.key.key, newEpoch, currentGroup.version + 1, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
             core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
         ),
         .groupPubKey = newGroupPubKeyStr,
@@ -556,7 +549,6 @@ void GroupApiImpl::updateGroup(
     const core::Buffer& privateMeta,
     const int64_t version,
     const bool force,
-    const bool forceGenerateNewKey,
     const std::optional<core::ContainerPolicy>& policies,
     bool allowRotationRetry
 ) {
@@ -579,8 +571,7 @@ void GroupApiImpl::updateGroup(
         unchangedManagers.push_back(core::UserWithPubKey{.userId = userId, .pubKey = std::string()});
     }
     auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, unchangedUsers, unchangedManagers, forceGenerateNewKey, false,
-        _groupPrivKeyResolver
+        currentGroup, currentEntry, resourceId, unchangedUsers, unchangedManagers, false, false, _groupPrivKeyResolver
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
 
@@ -629,7 +620,7 @@ void GroupApiImpl::updateGroup(
         if (allowRotationRetry && (e.getCode() & 0x0000FFFF) == BRIDGE_GROUP_ROTATED_ALREADY) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
-            updateGroup(groupId, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, false);
+            updateGroup(groupId, publicMeta, privateMeta, version, force, policies, false);
             return;
         }
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -803,7 +794,7 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
         } else if (type == "groupDeleted") {
             auto raw = server::GroupDeletedEventData::fromJSON(notification.data);
             _treeKeyCaches.drop(raw.groupId);
-            _groupDataSchemaMapper->dropChainCheckpoint(raw.groupId);
+            _groupDataSchemaMapper->dropVersionPin(raw.groupId);
             invalidateModuleKeysInCache(raw.groupId);
             auto data = Mapper::mapToGroupDeletedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupDeletedEvent>("context", data, notification);
@@ -817,14 +808,14 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
 void GroupApiImpl::processConnectedEvent() {
     _treeKeyCaches.dropAll();
     _envelopeKeys.clear();
-    _groupDataSchemaMapper->dropAllChainCheckpoints();
+    _groupDataSchemaMapper->dropAllVersionPins();
     invalidateModuleKeysInCache();
 }
 
 void GroupApiImpl::processDisconnectedEvent() {
     _treeKeyCaches.dropAll();
     _envelopeKeys.clear();
-    _groupDataSchemaMapper->dropAllChainCheckpoints();
+    _groupDataSchemaMapper->dropAllVersionPins();
     invalidateModuleKeysInCache();
     privmx::utils::ManualManagedClass<GroupApiImpl>::cleanup();
 }

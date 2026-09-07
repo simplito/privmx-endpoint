@@ -207,10 +207,7 @@ std::uint32_t TreeMath::numLeavesToSeat(std::uint32_t position, std::uint32_t cu
     return position + 1;
 }
 
-std::vector<std::uint32_t> TreeMath::frontier(
-    const std::vector<std::uint32_t>& positions,
-    std::uint32_t numLeaves
-) {
+std::vector<std::uint32_t> TreeMath::frontier(const std::vector<std::uint32_t>& positions, std::uint32_t numLeaves) {
     std::set<std::uint32_t> nodes;
     for (const std::uint32_t position : positions) {
         for (const std::uint32_t node : directPath(position, numLeaves)) {

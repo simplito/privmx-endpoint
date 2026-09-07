@@ -135,7 +135,8 @@ std::vector<std::uint32_t> TreeKeys::choosePositions(const TreeGroupState& state
         }
     }
     // Appends have to be contiguous: a skipped seat is one nothing can ever reuse, and the bridge refuses it.
-    for (std::uint32_t position = static_cast<std::uint32_t>(state.leafAssignment.size()); seats.size() < count; ++position) {
+    for (std::uint32_t position = static_cast<std::uint32_t>(state.leafAssignment.size()); seats.size() < count;
+         ++position) {
         seats.push_back(position);
     }
     return seats;

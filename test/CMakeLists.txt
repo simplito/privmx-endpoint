@@ -127,9 +127,13 @@ target_link_libraries(test_unit_LadderKeysTest privmx privmxendpointgroup Poco::
 add_executable(test_unit_GroupKeyResolverTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupKeyResolverTest.cpp)
 target_link_libraries(test_unit_GroupKeyResolverTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
-# Chain-verification checkpoint (builds signed server::GroupInfo chains by hand via GroupDataSchemaMapper::encrypt, no live bridge; exercises assertDataIntegrity's warm-read path)
+# Roster attestation and the monotone version pin (builds signed server::GroupInfo by hand via GroupDataSchemaMapper::encrypt, no live bridge)
 add_executable(test_unit_GroupRosterTagTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupRosterTagTest.cpp)
 target_link_libraries(test_unit_GroupRosterTagTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+
+# Format-only roster validation (that "format only" still refuses malformed keys)
+add_executable(test_unit_RosterValidatorTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/RosterValidatorTest.cpp)
+target_link_libraries(test_unit_RosterValidatorTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
 # Group envelope wire format (pack/parse/crypto only, keys passed in, no bridge; pins the tamper, replay and
 # ladder-rung-confusion refusals the format exists for)

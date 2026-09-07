@@ -108,7 +108,6 @@ public:
      * @param privateMeta private (encrypted) metadata
      * @param version current version of the updated Group
      * @param force force update (without checking version)
-     * @param forceGenerateNewKey force to regenerate a key for the Group
      * @param policies Group's policies
      */
     void updateGroup(
@@ -117,7 +116,6 @@ public:
         const core::Buffer& privateMeta,
         const int64_t version,
         const bool force,
-        const bool forceGenerateNewKey,
         const std::optional<core::ContainerPolicy>& policies = std::nullopt
     );
 

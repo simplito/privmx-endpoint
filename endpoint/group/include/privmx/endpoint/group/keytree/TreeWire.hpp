@@ -62,10 +62,7 @@ public:
 
     // Refreshed nodes replace their predecessors and the edges they invalidated are dropped. Nothing off the
     // removed leaf's direct path is touched, which is what the bridge checks.
-    static server::GroupTreeState afterRemoval(
-        const server::GroupTreeState& before,
-        const RemovalPlan& plan
-    );
+    static server::GroupTreeState afterRemoval(const server::GroupTreeState& before, const RemovalPlan& plan);
 
     // The epoch does not move, which is what keeps every container the group can read valid. Edges the plan
     // supersedes are dropped, as are edges growth re-parented — those would describe a topology no longer there.
