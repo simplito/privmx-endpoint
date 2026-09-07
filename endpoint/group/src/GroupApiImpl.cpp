@@ -108,13 +108,16 @@ std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
     return members;
 }
 
-/** The verified head's roster, as bare ids — `prepareContainerUpdate` diffs names, it does not wrap to them. */
-GroupApiImpl::RosterAfterChange GroupApiImpl::rosterOf(const Group& verified) {
+/** The attested roster, as bare ids — `prepareContainerUpdate` diffs names, it does not wrap to them. */
+GroupApiImpl::RosterAfterChange GroupApiImpl::rosterOf(
+    const std::vector<std::string>& users,
+    const std::vector<std::string>& managers
+) {
     RosterAfterChange roster;
-    for (const std::string& userId : verified.users) {
+    for (const std::string& userId : users) {
         roster.users.push_back(core::UserWithPubKey{.userId = userId, .pubKey = std::string()});
     }
-    for (const std::string& managerId : verified.managers) {
+    for (const std::string& managerId : managers) {
         roster.managers.push_back(core::UserWithPubKey{.userId = managerId, .pubKey = std::string()});
     }
     return roster;
@@ -189,31 +192,48 @@ std::string GroupApiImpl::createGroup(
     const keytree::BuildPlan plan = builder.build(members, _userPrivKey);
     const std::string groupPubKeyStr = plan.grantKey.getPublicKey().toBase58DER();
 
-    dynamic::MembershipBlock membership{
-        .rosterTag = GroupDataSchemaMapper::rosterTag(
-            ctx.key.key, 1, 1, core::EndpointUtils::usersWithPubKeyToIds(users),
-            core::EndpointUtils::usersWithPubKeyToIds(managers)
-        ),
-        .groupPubKey = groupPubKeyStr,
-        .keyId = ctx.key.id,
-        .keyVersion = 1
+    // Both planes start at 1, under the same epoch-1 content key. `internalMeta` is the module's own identity, so
+    // it is the same in both — but the DIOs are two distinct signed objects and must not share a `randomId`, or a
+    // reader's replay check sees the group's own two entries as one entry served twice.
+    const core::ModuleInternalMetaV5 internalMeta{
+        .secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId
     };
-
-    GroupDataToEncryptV5 dataToEncrypt{
+    core::DataIntegrityObject metaDio = ctx.dio;
+    metaDio.randomId = core::EndpointUtils::generateDIORandomId();
+    GroupRosterToEncryptV5 rosterToEncrypt{
+        .internalMeta = internalMeta,
+        .dio = ctx.dio,
+        .membership =
+            dynamic::MembershipBlock{
+                .rosterTag = GroupDataSchemaMapper::rosterTag(
+                    ctx.key.key, 1, core::EndpointUtils::usersWithPubKeyToIds(users),
+                    core::EndpointUtils::usersWithPubKeyToIds(managers)
+                ),
+                .groupPubKey = groupPubKeyStr,
+                .keyId = ctx.key.id,
+                .keyVersion = 1
+            }
+    };
+    GroupMetaToEncryptV5 metaToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
-        .internalMeta = core::
-            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId},
-        .dio = ctx.dio,
-        .groupPrivKey = std::string(),
-        .membership = membership
+        .internalMeta = internalMeta,
+        .dio = metaDio,
+        .meta =
+            dynamic::MetaBlock{
+                .metaTag = GroupDataSchemaMapper::metaTag(ctx.key.key, 1, 1),
+                .keyId = ctx.key.id,
+                .keyVersion = 1,
+                .metaVersion = 1
+            }
     };
 
     server::GroupCreateModel model;
     model.resourceId = ctx.resourceId;
     model.contextId = contextId;
     model.keyId = ctx.key.id;
-    model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
+    model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
+    model.meta = _groupDataSchemaMapper->encryptMeta(metaToEncrypt, ctx.key.key);
     model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
     model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     model.groupPubKey = groupPubKeyStr;
@@ -254,17 +274,16 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
         .scope = {},
         .forUserIds = {},
         .forNewMembers = static_cast<std::int64_t>(newMembers.size()),
-        .fromVersion = {}
+        .fromRosterVersion = {}
     };
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
     const int64_t currentEpoch = currentGroup.keyVersion.value_or(1);
 
-    // Verifies the chain and decrypts the head in one pass. Both halves are needed: the roster this call signs
-    // has to be the one the signed history proves, not one the caller restated or the bridge asserted; and the
-    // metadata carries through untouched, because seating a member is not a metadata edit.
-    const Group verified = _groupDataSchemaMapper->validateDecryptAndConvertGroup(
+    // The roster this call signs has to be the one the head attests to, not one the caller restated or the bridge
+    // asserted. Roster plane only — seating a member is not a metadata edit, so it does not open that entry.
+    const auto [attestedUsers, attestedManagers] = _groupDataSchemaMapper->validateAndGetAttestedRoster(
         currentGroup, _keyProvider, _groupPrivKeyResolver
     );
 
@@ -311,7 +330,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
 
     // The roster after the change, derived rather than restated. Bare ids: with `distributeToUsers = false`
     // nothing here wraps a key to them, so the public keys the caller used to supply were never read.
-    RosterAfterChange roster = rosterOf(verified);
+    RosterAfterChange roster = rosterOf(attestedUsers, attestedManagers);
     for (const GroupMemberToAdd& newMember : newMembers) {
         (newMember.role == "manager" ? roster.managers : roster.users)
             .push_back(core::UserWithPubKey{.userId = newMember.user.userId, .pubKey = std::string()});
@@ -321,27 +340,22 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     auto ctx = prepareContainerUpdate(
         currentGroup, currentEntry, resourceId, roster.users, roster.managers, false, false, _groupPrivKeyResolver
     );
-    dynamic::MembershipBlock membership{
-        .rosterTag = GroupDataSchemaMapper::rosterTag(
-            ctx.key.key, currentEpoch, currentGroup.version + 1,
-            core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-            core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
-        ),
-        .groupPubKey = currentGroup.groupPubKey,
-        .keyId = ctx.key.id,
-        .keyVersion = currentEpoch
-    };
-
-    GroupDataToEncryptV5 dataToEncrypt{
-        // Carried through, not taken as a parameter: a membership change must not silently rewrite the group's
-        // metadata. `updateGroup` is where that happens.
-        .publicMeta = verified.publicMeta,
-        .privateMeta = verified.privateMeta,
+    // Roster only. The metadata entry is not read, not re-encrypted and not re-signed — that is the separation
+    // that stops a concurrent `updateGroup` from stranding this write at a version it never committed to.
+    GroupRosterToEncryptV5 rosterToEncrypt{
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
-        .groupPrivKey = std::string(),
-        .membership = membership
+        .membership =
+            dynamic::MembershipBlock{
+                .rosterTag = GroupDataSchemaMapper::rosterTag(
+                    ctx.key.key, currentEpoch, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+                    core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
+                ),
+                .groupPubKey = currentGroup.groupPubKey,
+                .keyId = ctx.key.id,
+                .keyVersion = currentEpoch
+            }
     };
 
     server::GroupAddMembersModel model;
@@ -350,7 +364,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
         model.members.push_back(server::GroupAddMemberEntry{.userId = newMember.user.userId, .role = newMember.role});
     }
     model.keyId = ctx.key.id;
-    model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
+    model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
     model.transition = keytree::TreeWire::toAdditionTransition(plan, previousGenerations, currentEpoch);
     model.expectedKeyVersion = currentEpoch;
 
@@ -423,14 +437,15 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     // Every departing member's path, because one delta covers their union — and one epoch covers the batch, where
     // removing them one at a time would stale every container the group can read once per member.
     server::GroupGetModel getModel{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = userIds, .forNewMembers = {}, .fromVersion = {}
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = userIds, .forNewMembers = {}, .fromRosterVersion = {}
     };
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
     const int64_t currentEpoch = currentGroup.keyVersion.value_or(1);
     const int64_t newEpoch = currentEpoch + 1;
-    const Group verified = _groupDataSchemaMapper->validateDecryptAndConvertGroup(
+    // Roster plane only: a removal must not wait on a metadata entry that may sit at an older epoch.
+    const auto [attestedUsers, attestedManagers] = _groupDataSchemaMapper->validateAndGetAttestedRoster(
         currentGroup, _keyProvider, _groupPrivKeyResolver
     );
 
@@ -465,7 +480,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     );
     // The roster that remains, derived from the verified head rather than restated by the caller.
     const std::set<std::string> leaving(userIds.begin(), userIds.end());
-    RosterAfterChange roster = rosterOf(verified);
+    RosterAfterChange roster = rosterOf(attestedUsers, attestedManagers);
     const auto drop = [&](std::vector<core::UserWithPubKey>& list) {
         list.erase(
             std::remove_if(
@@ -491,25 +506,23 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     );
 
     const std::string newGroupPubKeyStr = plan.newGrantKey.getPublicKey().toBase58DER();
-    dynamic::MembershipBlock membership{
-        .rosterTag = GroupDataSchemaMapper::rosterTag(
-            ctx.key.key, newEpoch, currentGroup.version + 1, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-            core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
-        ),
-        .groupPubKey = newGroupPubKeyStr,
-        .keyId = ctx.key.id,
-        .keyVersion = newEpoch
-    };
-
-    GroupDataToEncryptV5 dataToEncrypt{
-        // Carried through: removing a member is not a metadata edit either.
-        .publicMeta = verified.publicMeta,
-        .privateMeta = verified.privateMeta,
+    // Roster only. The metadata entry stays where it was written, under the epoch it was written at: a departing
+    // member already read it, and every later metadata write lands under an epoch they cannot reach. A member who
+    // joins after this descends the Epoch Ladder to open it — which is what they do for any older content anyway.
+    GroupRosterToEncryptV5 rosterToEncrypt{
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
-        .groupPrivKey = std::string(),
-        .membership = membership
+        .membership =
+            dynamic::MembershipBlock{
+                .rosterTag = GroupDataSchemaMapper::rosterTag(
+                    ctx.key.key, newEpoch, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+                    core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
+                ),
+                .groupPubKey = newGroupPubKeyStr,
+                .keyId = ctx.key.id,
+                .keyVersion = newEpoch
+            }
     };
 
     // Seats come from the plan, which resolved them from the roster the bridge served. `subjectLeafPositions`
@@ -519,7 +532,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     model.userIds = userIds;
     model.groupPubKey = newGroupPubKeyStr;
     model.keyId = ctx.key.id;
-    model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
+    model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
     model.transition = keytree::TreeWire::toRemovalTransition(
         keytree::TreeWire::fromGroupInfo(currentGroup), plan, currentEpoch
     );
@@ -550,16 +563,15 @@ void GroupApiImpl::updateGroup(
     const std::optional<core::ContainerPolicy>& policies,
     bool allowRotationRetry
 ) {
-    // The default path view is enough: this submits no tree, and the roster it re-signs is the one it reads back.
+    // The default path view is enough: this submits no tree and does not touch the roster at all.
     server::GroupGetModel getModel{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
     };
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
-    int64_t currentEpoch = currentGroup.keyVersion.value_or(0);
+    const int64_t currentEpoch = currentGroup.keyVersion.value_or(0);
 
-    auto currentDecryptedEncKey = getAndValidateModuleCurrentEncKey(currentGroup, _groupPrivKeyResolver);
     std::vector<core::UserWithPubKey> unchangedUsers;
     for (const auto& userId : currentGroup.users) {
         unchangedUsers.push_back(core::UserWithPubKey{.userId = userId, .pubKey = std::string()});
@@ -573,42 +585,38 @@ void GroupApiImpl::updateGroup(
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
 
-    std::string newGroupPrivKeyStr;
-    if (currentDecryptedEncKey.statusCode == 0) {
-        newGroupPrivKeyStr = _groupDataSchemaMapper->getGroupPrivKey(currentGroup, currentDecryptedEncKey);
+    // The roster head always sits at the current epoch, so the key selected off it is the current epoch's. If
+    // that ever stopped holding, this would write metadata under a superseded key — readable by whoever was
+    // removed at that boundary.
+    if (ctx.key.id != currentEntry.keyId) {
+        throw GroupDataIntegrityException("metadata write resolved a key that is not the current epoch's");
     }
-    std::string newGroupPubKeyStr = currentGroup.groupPubKey;
-    int64_t newEpoch = currentEpoch;
 
-    dynamic::MembershipBlock membership{
-        // Metadata only — but the tag still has to be re-issued, because it commits to the version and every
-        // write moves it.
-        .rosterTag = GroupDataSchemaMapper::rosterTag(
-            ctx.key.key, newEpoch, currentGroup.version + 1, currentGroup.users, currentGroup.managers
-        ),
-        .groupPubKey = newGroupPubKeyStr,
-        .keyId = ctx.key.id,
-        .keyVersion = newEpoch
-    };
-
-    GroupDataToEncryptV5 dataToEncrypt{
+    GroupMetaToEncryptV5 metaToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
-        .groupPrivKey = newGroupPrivKeyStr,
-        .membership = membership
+        .meta =
+            dynamic::MetaBlock{
+                // The same `version` feeds the CAS field below, so the version this commits to and the version
+                // the bridge checks cannot disagree.
+                .metaTag = GroupDataSchemaMapper::metaTag(ctx.key.key, currentEpoch, version + 1),
+                .keyId = ctx.key.id,
+                .keyVersion = currentEpoch,
+                .metaVersion = version + 1
+            }
     };
-    // Metadata only
+
     server::GroupUpdateModel model;
     model.id = groupId;
     model.resourceId = resourceId;
     model.keyId = ctx.key.id;
-    // No force field, unlike the other containers: the entry's roster tag commits the version it lands at, so a
-    // write that skipped the version check could only land a tag no reader will accept.
+    // No force field, unlike the other containers: the entry commits the version it lands at, so a write that
+    // skipped the version check could only land a tag no reader will accept.
     model.version = version;
-    model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
+    model.data = _groupDataSchemaMapper->encryptMeta(metaToEncrypt, ctx.key.key);
     if (policies.has_value()) {
         model.policy = core::Factory::createPolicyServerObject(policies.value());
     }
@@ -628,7 +636,7 @@ void GroupApiImpl::updateGroup(
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
-    // Rotates the metadata key but never the grant key or the tree.
+    // Rotates nothing — not the content key, not the grant key, not the tree. Only the cached view is stale.
     invalidateModuleKeysInCache(groupId);
 }
 
@@ -642,7 +650,7 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
 void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload) {
     // Verifies the winner's key entry and nothing else — no tree is submitted, so the default path view is enough.
     server::GroupGetModel getModel{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
     };
     auto updatedGroup = _serverApi.groupGet(getModel).group;
 
@@ -677,12 +685,12 @@ void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server:
 
 Group GroupApiImpl::getGroup(const std::string& groupId) {
     server::GroupGetModel params{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
     };
-    // Only the part of the chain this client has not verified yet — each entry carries its whole roster, so
-    // re-sending proved versions is the bulk of a read. `assertDataIntegrity` insists the window chains in.
+    // The head roster entry and the current metadata entry — two entries, whatever the group's age. The cache is
+    // keyed on the roster version, because that is the plane key material moves with.
     auto group = _serverApi.groupGet(params).group;
-    setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.version);
+    setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.rosterVersion);
     return _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider, _groupPrivKeyResolver);
 }
 
@@ -822,11 +830,12 @@ void GroupApiImpl::processDisconnectedEvent() {
 
 std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     server::GroupGetModel params{
-        .groupId = moduleId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
+        .groupId = moduleId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
     };
     auto group = _serverApi.groupGet(params).group;
     _groupDataSchemaMapper->assertDataIntegrity(group);
-    return std::make_pair(groupToModuleKeys(group), group.version);
+    // Roster version: key material moves with that plane, so a metadata-only write must not stale the cache.
+    return std::make_pair(groupToModuleKeys(group), group.rosterVersion);
 }
 
 core::ModuleKeys GroupApiImpl::groupToModuleKeys(const server::GroupInfo& group) {
@@ -862,7 +871,7 @@ std::string GroupApiImpl::buildSubscriptionQuery(
 
 privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& groupId, int64_t epoch) {
     server::GroupGetModel params{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
     };
     auto group = _serverApi.groupGet(params).group;
 

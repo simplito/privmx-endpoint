@@ -74,9 +74,14 @@ struct Group {
     std::vector<std::string> managers;
 
     /**
-     * version number (= number of history entries; changes on updates)
+     * Metadata version. Changes only on `updateGroup` — a membership change does not touch it.
      */
     int64_t version;
+
+    /**
+     * Roster version. Changes only on a membership change (`addGroupMembers`/`removeGroupMembers`).
+     */
+    int64_t rosterVersion;
 
     /**
      * Group's public metadata
@@ -172,9 +177,14 @@ struct GroupSummary {
     std::vector<std::string> managers;
 
     /**
-     * version number (= number of history entries; changes on updates)
+     * Metadata version. Changes only on `updateGroup` — a membership change does not touch it.
      */
     int64_t version;
+
+    /**
+     * Roster version. Changes only on a membership change (`addGroupMembers`/`removeGroupMembers`).
+     */
+    int64_t rosterVersion;
 
     /**
      * Group's policies

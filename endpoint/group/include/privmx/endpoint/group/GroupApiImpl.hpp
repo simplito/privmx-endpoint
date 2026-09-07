@@ -113,7 +113,10 @@ private:
         std::vector<core::UserWithPubKey> users;
         std::vector<core::UserWithPubKey> managers;
     };
-    static RosterAfterChange rosterOf(const Group& verified);
+    static RosterAfterChange rosterOf(
+        const std::vector<std::string>& users,
+        const std::vector<std::string>& managers
+    );
     std::map<std::string, std::string> resolveMemberKeys(
         const std::string& contextId,
         const std::vector<std::string>& userIds

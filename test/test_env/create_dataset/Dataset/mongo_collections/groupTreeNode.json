@@ -1,22 +1,22 @@
 [{
-	"_id": "6a9a8596966b4caf888bbfa9|1",
-	"groupId": "6a9a8596966b4caf888bbfa9",
+	"_id": "6a9e9fc2304d09d1cbac583c|1",
+	"groupId": "6a9e9fc2304d09d1cbac583c",
 	"nodeIndex": 1,
 	"generation": 0,
-	"publicKey": "4ub1s4P7szTqEovb8LAJiH4ax88s6iXT33RdFTjCULW8QxmdGd"
+	"publicKey": "64VNYa3owmSais6EWdMHVvLgDxhWDXd98hf7w66wZLVnMTj9XH"
 },
 {
-	"_id": "6a9a8596966b4caf888bbfaa|1",
-	"groupId": "6a9a8596966b4caf888bbfaa",
+	"_id": "6a9e9fc2304d09d1cbac583d|1",
+	"groupId": "6a9e9fc2304d09d1cbac583d",
 	"nodeIndex": 1,
 	"generation": 0,
-	"publicKey": "86u4y6d2qWTWjCmdwTh8kHEMqM3Bq4L9JHQsNHz2QhkX9uR8MB"
+	"publicKey": "5Zg6UamnpfN9omJAYbz7ZnDrg7GfpC8rejC22KYmoXLXLAhrmg"
 },
 {
-	"_id": "6a9a8596966b4caf888bbfaa|3",
-	"groupId": "6a9a8596966b4caf888bbfaa",
+	"_id": "6a9e9fc2304d09d1cbac583d|3",
+	"groupId": "6a9e9fc2304d09d1cbac583d",
 	"nodeIndex": 3,
 	"generation": 0,
-	"publicKey": "7sxDoxgXiZfzd7vGdMjvTJ2HZTjXYXhLuG1a5Rsye1LctZ3p4S"
+	"publicKey": "4ytcXWyqAGRMw73tHQGRyWxb96whDLRTVjY1yEASrvd5EFRJv3"
 }]
 

@@ -13,19 +13,38 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
+/**
+ * Two envelopes, one per plane. Each checks only its own field checksums, so neither can be validated
+ * against — or invalidated by — a field the other owns.
+ *
+ * The metadata half carries the unqualified names because `core::TypedDataSchemaStrategyV5` binds to them
+ * and declares `decrypt` final; the roster half is driven straight from `GroupDataSchemaMapper`.
+ */
 class GroupDataEncryptorV5 {
 public:
-    dynamic::EncryptedGroupDataV5 encrypt(
-        const GroupDataToEncryptV5& data,
+    dynamic::EncryptedGroupRosterV5 encryptRoster(
+        const GroupRosterToEncryptV5& data,
         const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedGroupDataV5 decrypt(const dynamic::EncryptedGroupDataV5& encryptedData, const std::string& encryptionKey);
-    DecryptedGroupDataV5 extractPublic(const dynamic::EncryptedGroupDataV5& encryptedData);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const dynamic::EncryptedGroupDataV5& encryptedData);
+    DecryptedGroupRosterV5 decryptRoster(
+        const dynamic::EncryptedGroupRosterV5& encryptedData,
+        const std::string& encryptionKey
+    );
+    core::DataIntegrityObject getRosterDIOAndAssertIntegrity(const dynamic::EncryptedGroupRosterV5& encryptedData);
+
+    dynamic::EncryptedGroupMetaV5 encrypt(
+        const GroupMetaToEncryptV5& data,
+        const privmx::crypto::PrivateKey& authorPrivateKey,
+        const std::string& encryptionKey
+    );
+    DecryptedGroupMetaV5 decrypt(const dynamic::EncryptedGroupMetaV5& encryptedData, const std::string& encryptionKey);
+    DecryptedGroupMetaV5 extractPublic(const dynamic::EncryptedGroupMetaV5& encryptedData);
+    core::DataIntegrityObject getDIOAndAssertIntegrity(const dynamic::EncryptedGroupMetaV5& encryptedData);
 
 private:
-    void assertDataFormat(const dynamic::EncryptedGroupDataV5& encryptedData);
+    void assertRosterFormat(const dynamic::EncryptedGroupRosterV5& encryptedData);
+    void assertMetaFormat(const dynamic::EncryptedGroupMetaV5& encryptedData);
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
 };
