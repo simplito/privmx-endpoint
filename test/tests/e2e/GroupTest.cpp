@@ -283,18 +283,17 @@ TEST_F(GroupTest, updateGroup_incorrect_data) {
             reader->getString("Context_1.contextId"),
             core::Buffer::from("public"),
             core::Buffer::from("private"),
-            1,
-            false
+            1
         );
     }, core::Exception);
-    // wrong version, force=false
+    // Wrong version. There is no way to push past this: the entry's roster tag commits the version it lands at,
+    // so an update built against a moved head could only land a tag no reader would accept.
     EXPECT_THROW({
         groupApi->updateGroup(
             reader->getString("Group_2.groupId"),
             core::Buffer::from("public"),
             core::Buffer::from("private"),
-            99,
-            false
+            99
         );
     }, core::Exception);
 }
@@ -306,8 +305,7 @@ TEST_F(GroupTest, updateGroup_correct_data) {
             reader->getString("Group_1.groupId"),
             core::Buffer::from("updated_public"),
             core::Buffer::from("updated_private"),
-            1,
-            false
+            1
         );
     });
     EXPECT_NO_THROW({
@@ -329,8 +327,7 @@ TEST_F(GroupTest, updateGroup_correct_data) {
             reader->getString("Group_1.groupId"),
             core::Buffer::from("updated_public_2"),
             core::Buffer::from("updated_private_2"),
-            2,
-            false
+            2
         );
     });
     EXPECT_NO_THROW({
@@ -369,8 +366,7 @@ TEST_F(GroupTest, updateGroup_chain_integrity) {
             groupId,
             core::Buffer::from("v2"),
             core::Buffer::from("v2_priv"),
-            1,
-            false
+            1
         );
     });
     // update v2→v3
@@ -379,8 +375,7 @@ TEST_F(GroupTest, updateGroup_chain_integrity) {
             groupId,
             core::Buffer::from("v3"),
             core::Buffer::from("v3_priv"),
-            2,
-            false
+            2
         );
     });
     group::Group group;
@@ -393,22 +388,25 @@ TEST_F(GroupTest, updateGroup_chain_integrity) {
     EXPECT_EQ(group.privateMeta.stdString(), "v3_priv");
 }
 
-TEST_F(GroupTest, updateGroup_force) {
-    group::Group group;
-    EXPECT_NO_THROW({
+TEST_F(GroupTest, updateGroup_cannot_skip_the_version_check) {
+    // What `updateGroup_force` used to assert, inverted: the escape hatch is gone, so a wrong version is refused
+    // and the group is left exactly as it was. The refusal is the feature — an update built against a moved head
+    // commits a roster tag for a version it will not land at, and every reader would then reject the group.
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(reader->getString("Group_2.groupId")); });
+    EXPECT_THROW({
         groupApi->updateGroup(
             reader->getString("Group_2.groupId"),
             core::Buffer::from("forced"),
             core::Buffer::from("forced_priv"),
-            99,
-            true
+            99
         );
-    });
-    EXPECT_NO_THROW({
-        group = groupApi->getGroup(reader->getString("Group_2.groupId"));
-    });
-    EXPECT_EQ(group.statusCode, 0);
-    EXPECT_EQ(group.publicMeta.stdString(), "forced");
+    }, core::Exception);
+    group::Group after;
+    EXPECT_NO_THROW({ after = groupApi->getGroup(reader->getString("Group_2.groupId")); });
+    EXPECT_EQ(after.statusCode, 0) << "a refused update must leave the group readable";
+    EXPECT_EQ(after.version, before.version);
+    EXPECT_EQ(after.publicMeta.stdString(), before.publicMeta.stdString());
 }
 
 TEST_F(GroupTest, deleteGroup) {
