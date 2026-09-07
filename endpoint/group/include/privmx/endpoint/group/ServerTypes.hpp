@@ -161,7 +161,6 @@ JSON_STRUCT(GroupCreateModel, GROUP_CREATE_MODEL_FIELDS);
     F(data, Poco::Dynamic::Var)                                                                                        \
     F(keyId, std::string)                                                                                              \
     F(version, int64_t)                                                                                                \
-    F(force, bool)                                                                                                     \
     F(policy, std::optional<Poco::Dynamic::Var>)
 JSON_STRUCT(GroupUpdateModel, GROUP_UPDATE_MODEL_FIELDS);
 

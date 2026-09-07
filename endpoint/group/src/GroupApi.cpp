@@ -100,13 +100,12 @@ void GroupApi::updateGroup(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const int64_t version,
-    const bool force,
     const std::optional<core::ContainerPolicy>& policies
 ) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     try {
-        impl->updateGroup(groupId, publicMeta, privateMeta, version, force, policies);
+        impl->updateGroup(groupId, publicMeta, privateMeta, version, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

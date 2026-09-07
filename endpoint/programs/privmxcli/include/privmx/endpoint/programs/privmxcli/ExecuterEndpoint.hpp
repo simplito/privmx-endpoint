@@ -1631,14 +1631,13 @@ private:
         },
         {group_updateGroup,
             "updateGroup JSON_ARRAY\n"
-            "\tjson format - [groupId, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies?]\n"
+            "\tjson format - [groupId, publicMeta, privateMeta, version, policies?]\n"
             "\t\tgroupId [STRING] - ID of the Group to update\n"
             "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
             "\t\tversion [NUMBER] - current version of the updated Group\n"
-            "\t\tforce [BOOL] - force update (without checking version)\n"
-            "\t\tforceGenerateNewKey [BOOL] - force to regenerate a key for the Group\n"
-            "\t\tpolicies [OBJECT] - (optional) Group's policies (ContainerPolicy)"
+            "\t\tpolicies [OBJECT] - (optional) Group's policies (ContainerPolicy)\n"
+            "\tthe version check cannot be skipped; an update built against a moved head has to be rebuilt"
         },
         {group_deleteGroup,
             "deleteGroup JSON_ARRAY\n"

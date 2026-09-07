@@ -547,7 +547,6 @@ void GroupApiImpl::updateGroup(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const int64_t version,
-    const bool force,
     const std::optional<core::ContainerPolicy>& policies,
     bool allowRotationRetry
 ) {
@@ -606,8 +605,9 @@ void GroupApiImpl::updateGroup(
     model.id = groupId;
     model.resourceId = resourceId;
     model.keyId = ctx.key.id;
+    // No force field, unlike the other containers: the entry's roster tag commits the version it lands at, so a
+    // write that skipped the version check could only land a tag no reader will accept.
     model.version = version;
-    model.force = force;
     model.data = _groupDataSchemaMapper->encrypt(dataToEncrypt, ctx.key.key);
     if (policies.has_value()) {
         model.policy = core::Factory::createPolicyServerObject(policies.value());
@@ -616,10 +616,13 @@ void GroupApiImpl::updateGroup(
     try {
         _serverApi.groupUpdate(model);
     } catch (const privmx::utils::PrivmxException& e) {
+        // Not reachable against the current bridge: `ROTATED_ALREADY` comes from the rotation family
+        // (`generateNewGroupKey` and friends), never from `groupUpdate`, which answers a moved head with a
+        // version error instead. Kept for the day that changes; the retry re-reads and re-tags on its own.
         if (allowRotationRetry && (e.getCode() & 0x0000FFFF) == BRIDGE_GROUP_ROTATED_ALREADY) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
-            updateGroup(groupId, publicMeta, privateMeta, version, force, policies, false);
+            updateGroup(groupId, publicMeta, privateMeta, version, policies, false);
             return;
         }
         core::ExceptionConverter::rethrowAsCoreException(e);
