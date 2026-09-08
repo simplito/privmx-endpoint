@@ -203,29 +203,27 @@ std::string GroupApiImpl::createGroup(
     GroupRosterToEncryptV5 rosterToEncrypt{
         .internalMeta = internalMeta,
         .dio = ctx.dio,
-        .membership =
-            dynamic::MembershipBlock{
-                .rosterTag = GroupDataSchemaMapper::rosterTag(
-                    ctx.key.key, 1, core::EndpointUtils::usersWithPubKeyToIds(users),
-                    core::EndpointUtils::usersWithPubKeyToIds(managers)
-                ),
-                .groupPubKey = groupPubKeyStr,
-                .keyId = ctx.key.id,
-                .keyVersion = 1
-            }
+        .membership = dynamic::MembershipBlock{
+            .rosterTag = GroupDataSchemaMapper::rosterTag(
+                ctx.key.key, 1, core::EndpointUtils::usersWithPubKeyToIds(users),
+                core::EndpointUtils::usersWithPubKeyToIds(managers)
+            ),
+            .groupPubKey = groupPubKeyStr,
+            .keyId = ctx.key.id,
+            .keyVersion = 1
+        }
     };
     GroupMetaToEncryptV5 metaToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
         .internalMeta = internalMeta,
         .dio = metaDio,
-        .meta =
-            dynamic::MetaBlock{
-                .metaTag = GroupDataSchemaMapper::metaTag(ctx.key.key, 1, 1),
-                .keyId = ctx.key.id,
-                .keyVersion = 1,
-                .metaVersion = 1
-            }
+        .meta = dynamic::MetaBlock{
+            .metaTag = GroupDataSchemaMapper::metaTag(ctx.key.key, 1, 1),
+            .keyId = ctx.key.id,
+            .keyVersion = 1,
+            .metaVersion = 1
+        }
     };
 
     server::GroupCreateModel model;
@@ -346,16 +344,15 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
-        .membership =
-            dynamic::MembershipBlock{
-                .rosterTag = GroupDataSchemaMapper::rosterTag(
-                    ctx.key.key, currentEpoch, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-                    core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
-                ),
-                .groupPubKey = currentGroup.groupPubKey,
-                .keyId = ctx.key.id,
-                .keyVersion = currentEpoch
-            }
+        .membership = dynamic::MembershipBlock{
+            .rosterTag = GroupDataSchemaMapper::rosterTag(
+                ctx.key.key, currentEpoch, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+                core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
+            ),
+            .groupPubKey = currentGroup.groupPubKey,
+            .keyId = ctx.key.id,
+            .keyVersion = currentEpoch
+        }
     };
 
     server::GroupAddMembersModel model;
@@ -513,16 +510,15 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
-        .membership =
-            dynamic::MembershipBlock{
-                .rosterTag = GroupDataSchemaMapper::rosterTag(
-                    ctx.key.key, newEpoch, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-                    core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
-                ),
-                .groupPubKey = newGroupPubKeyStr,
-                .keyId = ctx.key.id,
-                .keyVersion = newEpoch
-            }
+        .membership = dynamic::MembershipBlock{
+            .rosterTag = GroupDataSchemaMapper::rosterTag(
+                ctx.key.key, newEpoch, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+                core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
+            ),
+            .groupPubKey = newGroupPubKeyStr,
+            .keyId = ctx.key.id,
+            .keyVersion = newEpoch
+        }
     };
 
     // Seats come from the plan, which resolved them from the roster the bridge served. `subjectLeafPositions`
@@ -598,15 +594,14 @@ void GroupApiImpl::updateGroup(
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
-        .meta =
-            dynamic::MetaBlock{
-                // The same `version` feeds the CAS field below, so the version this commits to and the version
-                // the bridge checks cannot disagree.
-                .metaTag = GroupDataSchemaMapper::metaTag(ctx.key.key, currentEpoch, version + 1),
-                .keyId = ctx.key.id,
-                .keyVersion = currentEpoch,
-                .metaVersion = version + 1
-            }
+        .meta = dynamic::MetaBlock{
+            // The same `version` feeds the CAS field below, so the version this commits to and the version
+            // the bridge checks cannot disagree.
+            .metaTag = GroupDataSchemaMapper::metaTag(ctx.key.key, currentEpoch, version + 1),
+            .keyId = ctx.key.id,
+            .keyVersion = currentEpoch,
+            .metaVersion = version + 1
+        }
     };
 
     server::GroupUpdateModel model;

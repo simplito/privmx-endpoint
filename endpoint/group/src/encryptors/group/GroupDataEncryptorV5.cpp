@@ -21,9 +21,7 @@ std::string encodeInternalMeta(
     const std::string& encryptionKey
 ) {
     core::dynamic::ModuleInternalMetaV5 internalMetaObj{
-        .secret = internalMeta.secret,
-        .resourceId = internalMeta.resourceId,
-        .randomId = internalMeta.randomId
+        .secret = internalMeta.secret, .resourceId = internalMeta.resourceId, .randomId = internalMeta.randomId
     };
     return dataEncryptor.signAndEncryptAndEncode(
         core::Buffer::from(internalMetaObj.serialize()), authorPrivateKey, encryptionKey
@@ -37,13 +35,9 @@ core::ModuleInternalMetaV5 decodeInternalMeta(
     const std::string& encryptionKey
 ) {
     auto raw = dataEncryptor.decodeAndDecryptAndVerify(encoded, authorPublicKey, encryptionKey);
-    auto parsed = core::dynamic::ModuleInternalMetaV5::fromJSON(
-        privmx::utils::Utils::parseJsonObject(raw.stdString())
-    );
+    auto parsed = core::dynamic::ModuleInternalMetaV5::fromJSON(privmx::utils::Utils::parseJsonObject(raw.stdString()));
     return core::ModuleInternalMetaV5{
-        .secret = parsed.secret,
-        .resourceId = parsed.resourceId,
-        .randomId = parsed.randomId
+        .secret = parsed.secret, .resourceId = parsed.resourceId, .randomId = parsed.randomId
     };
 }
 

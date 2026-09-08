@@ -43,7 +43,9 @@ JSON_STRUCT_EXT(EncryptedGroupMetaV5, core::dynamic::VersionedData, ENCRYPTED_GR
     F(internalMeta, std::string)                                                                                       \
     F(authorPubKey, std::string)
 JSON_STRUCT_EXT(
-    EncryptedGroupInternalMetaViewV5, core::dynamic::VersionedData, ENCRYPTED_GROUP_INTERNAL_META_VIEW_V5_FIELDS
+    EncryptedGroupInternalMetaViewV5,
+    core::dynamic::VersionedData,
+    ENCRYPTED_GROUP_INTERNAL_META_VIEW_V5_FIELDS
 );
 
 /**

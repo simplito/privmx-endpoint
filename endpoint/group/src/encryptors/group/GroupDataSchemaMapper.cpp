@@ -123,7 +123,8 @@ void GroupDataSchemaMapper::assertMetaIsAttested(
     try {
         meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
     } catch (...) { throw GroupMembershipMismatchException(); }
-    if (meta.keyId != groupInfo.meta.keyId || meta.keyVersion.value_or(0) != groupInfo.meta.keyVersion ||
+    if (meta.keyId != groupInfo.meta.keyId ||
+        meta.keyVersion.value_or(0) != groupInfo.meta.keyVersion ||
         meta.keyVersion.value_or(0) > groupInfo.keyVersion.value_or(0)) {
         throw GroupMembershipMismatchException();
     }
@@ -407,9 +408,7 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
             privmx::utils::Utils::parseJsonObject(raw.stdString())
         );
         return core::ModuleInternalMetaV5{
-            .secret = parsed.secret,
-            .resourceId = parsed.resourceId,
-            .randomId = parsed.randomId
+            .secret = parsed.secret, .resourceId = parsed.resourceId, .randomId = parsed.randomId
         };
     } catch (...) { return {}; }
 }
