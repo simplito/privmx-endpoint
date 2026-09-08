@@ -17,6 +17,7 @@
 #include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
+#include "privmx/endpoint/core/Validator.hpp"
 #include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/group/GroupException.hpp"
 #include "privmx/endpoint/group/Mapper.hpp"
@@ -809,15 +810,27 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
 
 void GroupApiImpl::processConnectedEvent() {
     _treeKeyCaches.dropAll();
+    dropEnvelopeState();
     _groupDataSchemaMapper->dropAllVersionPins();
     invalidateModuleKeysInCache();
 }
 
 void GroupApiImpl::processDisconnectedEvent() {
     _treeKeyCaches.dropAll();
+    dropEnvelopeState();
     _groupDataSchemaMapper->dropAllVersionPins();
     invalidateModuleKeysInCache();
     privmx::utils::ManualManagedClass<GroupApiImpl>::cleanup();
+}
+
+void GroupApiImpl::dropEnvelopeState() {
+    _envelopeKeys.clear();
+    _envelopeGrantEpochs.clear();
+    // Open file handles too, not just the key caches: an `EnvelopeFileState` holds the group key and the file
+    // key as plainly as `_envelopeKeys` does, so leaving them behind would make "no key outlives the session
+    // that opened it" false for exactly the handles holding the most material. A handle used after this
+    // reports "not an open encrypted-file handle", which is what a reconnect has in fact made true.
+    _envelopeFiles.clear();
 }
 
 std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
@@ -933,4 +946,367 @@ std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& r
     default:
         return "Group key unavailable";
     }
+}
+
+// -- envelopes -------------------------------------------------------------------------------------------
+
+std::vector<core::server::GroupKeysEntry> GroupApiImpl::onlyKeyId(
+    const std::vector<core::server::GroupKeysEntry>& all,
+    const std::string& keyId
+) {
+    std::vector<core::server::GroupKeysEntry> filtered;
+    for (const auto& entry : all) {
+        core::server::GroupKeysEntry kept;
+        kept.group = entry.group;
+        for (const auto& key : entry.keys) {
+            if (key.keyId == keyId) {
+                kept.keys.push_back(key);
+            }
+        }
+        if (!kept.keys.empty()) {
+            filtered.push_back(kept);
+        }
+    }
+    return filtered;
+}
+
+std::string GroupApiImpl::memoKeyFor(const std::string& groupId, const std::string& suffix) {
+    // Length-prefixed rather than joined by a separator: `validateId` bounds a groupId's length but not its
+    // characters, so a plain join would let one pair collide with another under a different split. Same
+    // reason `rosterTag` length-prefixes its lists.
+    return std::to_string(groupId.size()) + ":" + groupId + suffix;
+}
+
+core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, const std::string& keyId) {
+    const std::string memoKey = memoKeyFor(groupId, keyId);
+    if (auto cached = _envelopeKeys.get(memoKey); cached.has_value()) {
+        return cached.value();
+    }
+
+    // Whatever an earlier `getGroup` or `encrypt` on this group already put in the key cache. Reading it
+    // costs nothing; only a keyId we have never seen forces a fetch.
+    core::ModuleKeys moduleKeys = getModuleKeys(groupId);
+    auto candidates = onlyKeyId(moduleKeys.groupKeys, keyId);
+    if (candidates.empty()) {
+        moduleKeys = getNewModuleKeysAndUpdateCache(groupId);
+        candidates = onlyKeyId(moduleKeys.groupKeys, keyId);
+    }
+    if (candidates.empty()) {
+        throw core::EncryptionKeyValidationException("Group " + groupId + " publishes no key " + keyId);
+    }
+
+    core::KeyDecryptionAndVerificationRequest request;
+    const auto location = core::EncKeyLocation{
+        .contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId
+    };
+    request.addGroupKeys(candidates, location);
+    const auto byLocation = _keyProvider->getKeysAndVerify(request, _groupPrivKeyResolver);
+
+    const auto atLocation = byLocation.find(location);
+    if (atLocation == byLocation.end() || atLocation->second.count(keyId) == 0) {
+        throw core::EncryptionKeyValidationException("Group key " + keyId + " could not be resolved");
+    }
+    const core::DecryptedEncKeyV2 found = atLocation->second.at(keyId);
+    if (found.statusCode != 0) {
+        // `findEncKeyByKeyId` and friends hand back entries whose decryption failed. Left unchecked, the empty
+        // key would surface downstream as a length complaint from the cipher instead of the real cause —
+        // usually that this key predates an era boundary and is gone for good.
+        throw core::EncryptionKeyValidationException(
+            "Group key " + keyId + " could not be decrypted (status " + std::to_string(found.statusCode) + ")"
+        );
+    }
+    _envelopeKeys.set(memoKey, found);
+    return found;
+}
+
+Envelope GroupApiImpl::encrypt(const std::string& groupId, const core::Buffer& content) {
+    auto key = getAndValidateModuleCurrentEncKey(getModuleKeys(groupId), _groupPrivKeyResolver);
+    return _envelopeEncryptor.packGroupKeyEnvelope(groupId, key.id, content, _userPrivKey, key.key);
+}
+
+DecryptedEnvelope GroupApiImpl::decrypt(const Envelope& envelope) {
+    auto routing = _envelopeEncryptor.peek(envelope);
+    // The group id comes off an envelope we have not authenticated yet. Validating it here keeps a hostile one
+    // from steering us into a `groupGet` and a tree climb against an id of its choosing.
+    core::Validator::validateId(routing.groupId, "field:envelope.groupId ");
+    if (routing.type == ENVELOPE_FROM_MEMBER) {
+        return _envelopeEncryptor.openGroupKeyEnvelope(envelope, encKeyById(routing.groupId, routing.keyId).key);
+    }
+
+    return _envelopeEncryptor.openAnonymousEnvelope(envelope, grantKeyForPubKey(routing.groupId, routing.groupPubKey));
+}
+
+privmx::crypto::PrivateKey GroupApiImpl::grantKeyForPubKey(
+    const std::string& groupId,
+    const std::string& groupPubKeyBase58
+) {
+    // Which epoch a published grant public key belongs to is immutable once published, so the lookup is
+    // memoized on the same terms as `_envelopeKeys`. Without it every anonymous envelope pays a `groupGet`
+    // here on top of the one `resolveGroupPrivKey` makes — two round trips per open, where the member path
+    // pays none after the first.
+    const std::string memoKey = memoKeyFor(groupId, groupPubKeyBase58);
+    if (auto cached = _envelopeGrantEpochs.get(memoKey); cached.has_value()) {
+        return resolveGroupPrivKey(groupId, cached.value());
+    }
+
+    server::GroupGetModel params{
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
+    };
+    auto group = _serverApi.groupGet(params).group;
+    auto target = privmx::crypto::PublicKey::fromBase58DER(groupPubKeyBase58);
+    for (const auto& entry : keytree::GroupKeyResolver::toRegistry(group)) {
+        if (entry.grantPublicKey == target) {
+            _envelopeGrantEpochs.set(memoKey, entry.epoch);
+            return resolveGroupPrivKey(groupId, entry.epoch);
+        }
+    }
+    throw InvalidEnvelopeFormatException("envelope names a group key that is not in this group's history");
+}
+
+Envelope GroupApiImpl::encryptAnonymously(
+    const std::string& groupId,
+    const std::string& groupPubKey,
+    const core::Buffer& content
+) {
+    // Public information only — no membership, no server call. That is the whole point: the sender is outside
+    // the group and must stay able to write into it knowing nothing but its id and its identity key.
+    return _envelopeEncryptor.packAnonymousEnvelope(
+        groupId, privmx::crypto::PublicKey::fromBase58DER(groupPubKey), content
+    );
+}
+
+// -- envelope files --------------------------------------------------------------------------------------
+
+std::shared_ptr<GroupApiImpl::EnvelopeFileState> GroupApiImpl::getFileState(FileHandle fileHandle, bool wantReading) {
+    auto state = _envelopeFiles.get(fileHandle);
+    if (!state.has_value()) {
+        throw core::InvalidParamsException("field:fileHandle is not an open encrypted-file handle");
+    }
+    if (state.value()->reading != wantReading) {
+        throw core::InvalidParamsException(
+            wantReading ? "field:fileHandle came from beginFileEncryption, not beginFileDecryption" :
+                          "field:fileHandle came from beginFileDecryption, not beginFileEncryption"
+        );
+    }
+    return state.value();
+}
+
+void GroupApiImpl::releaseFileHandle(FileHandle fileHandle) {
+    _envelopeFiles.erase(fileHandle);
+    // Both, always. Dropping only the local entry leaks the id in HandleManager's map for the process
+    // lifetime — the pair Store's FileHandleManager keeps together for the same reason.
+    _connection.getImpl()->getHandleManager()->removeHandle(fileHandle);
+}
+
+/**
+ * Emits every chunk the state's buffer now completes.
+ *
+ * A chunk's sealed length follows from its plaintext length, and that follows from the declared size — so
+ * both directions can be driven from arbitrary caller-chosen block sizes without either side having to
+ * signal where a chunk ends. It is also why the size is declared up front rather than discovered at the end:
+ * without it the short final chunk is indistinguishable from one still arriving.
+ */
+core::Buffer GroupApiImpl::drainChunks(const std::shared_ptr<EnvelopeFileState>& state) {
+    const ByteCount chunks = GroupEnvelopeEncryptor::chunkCount(state->plainSize);
+    std::string out;
+    while (state->index < chunks) {
+        const ByteCount plainLen = GroupEnvelopeEncryptor::plainChunkSizeAt(state->plainSize, state->index);
+        const ByteCount need = state->reading ? encryptedChunkSizeFor(plainLen) : plainLen;
+        if (state->buffer.size() < need) {
+            break;
+        }
+        core::Buffer piece = core::Buffer::from(state->buffer.substr(0, need));
+        std::string produced = (state->reading ? _envelopeEncryptor.decryptChunk(piece, state->fileKey, state->index) :
+                                                 _envelopeEncryptor.encryptChunk(piece, state->fileKey, state->index))
+                                   .stdString();
+        if (state->skipInChunk > 0) {
+            // A seek can land mid-chunk, but a chunk only opens whole. Drop the head the caller did not ask
+            // for, once, on the first chunk after the seek.
+            produced.erase(0, std::min<std::size_t>(state->skipInChunk, produced.size()));
+            state->skipInChunk = 0;
+        }
+        out.append(produced);
+        state->buffer.erase(0, need);
+        state->index++;
+    }
+    // Past the last chunk nothing drains, so whatever is left can only grow with every further call. Refuse
+    // it here rather than at the close: otherwise a caller fed a long ciphertext against a short declared
+    // size accumulates the entire remainder in `buffer` before `finishFileDecryption` finally calls it an
+    // overrun. Seeked readers included — bytes beyond the last chunk are past the end of the file and can
+    // never be opened, whichever position the reader started from. (What a range read may legitimately
+    // overshoot is its *plaintext* output, which is trimmed by the caller, not the ciphertext it feeds in.)
+    // The write side needs no equivalent; `encryptFileChunk` caps it against the declared size on the way in.
+    if (state->reading && state->index >= chunks && !state->buffer.empty()) {
+        throw InvalidEnvelopeFormatException("more file data than the declared size accounts for");
+    }
+    return core::Buffer::from(out);
+}
+
+FileHandle GroupApiImpl::beginFileEncryption(const std::string& groupId, FileSize size) {
+    auto key = getAndValidateModuleCurrentEncKey(getModuleKeys(groupId), _groupPrivKeyResolver);
+    FileHandle handle = _connection.getImpl()->getHandleManager()->createHandle("GroupEnvelope:Encrypt");
+    _envelopeFiles.set(
+        handle,
+        std::make_shared<EnvelopeFileState>(EnvelopeFileState{
+            .reading = false,
+            .type = ENVELOPE_FROM_MEMBER,
+            .groupId = groupId,
+            .keyId = key.id,
+            .groupKey = key.key,
+            // Per file, so a chunk lifted from one file is useless in any other.
+            .fileKey = privmx::crypto::Crypto::randomBytes(32),
+            .index = 0,
+            .plainSize = static_cast<ByteCount>(size),
+        })
+    );
+    return handle;
+}
+
+FileHandle GroupApiImpl::beginFileEncryptionAnonymously(
+    const std::string& groupId,
+    const std::string& groupPubKey,
+    FileSize size
+) {
+    // No server call and no membership, exactly like `encryptAnonymously`. The public key is enough to seal
+    // to, and the envelope is not built until the finish, so nothing here needs the group's own key.
+    privmx::crypto::PublicKey::fromBase58DER(groupPubKey); // reject a malformed key now, not at the finish
+    FileHandle handle = _connection.getImpl()->getHandleManager()->createHandle("GroupEnvelope:EncryptAnonymous");
+    _envelopeFiles.set(
+        handle,
+        std::make_shared<EnvelopeFileState>(EnvelopeFileState{
+            .reading = false,
+            .type = ENVELOPE_ANONYMOUS,
+            .groupId = groupId,
+            .groupPubKey = groupPubKey,
+            .fileKey = privmx::crypto::Crypto::randomBytes(32),
+            .index = 0,
+            .plainSize = static_cast<ByteCount>(size),
+        })
+    );
+    return handle;
+}
+
+core::Buffer GroupApiImpl::encryptFileChunk(FileHandle fileHandle, const core::Buffer& plainChunk) {
+    auto state = getFileState(fileHandle, false);
+    if (state->written + plainChunk.size() > state->plainSize) {
+        throw core::InvalidParamsException("field:plainChunk would exceed the declared file size");
+    }
+    state->written += plainChunk.size();
+    state->buffer.append(plainChunk.stdString());
+    return drainChunks(state);
+}
+
+FileHandle GroupApiImpl::beginFileDecryption(const Envelope& envelope) {
+    auto routing = _envelopeEncryptor.peekFile(envelope);
+    core::Validator::validateId(routing.groupId, "field:envelope.groupId ");
+
+    // Both kinds open into the same reader: only the header is wrapped differently, the body is not.
+    GroupEnvelopeEncryptor::FileHeader header;
+    std::string groupKey;
+    if (routing.type == ENVELOPE_FROM_MEMBER) {
+        groupKey = encKeyById(routing.groupId, routing.keyId).key;
+        header = _envelopeEncryptor.unpackFileEnvelope(envelope, groupKey);
+    } else {
+        header = _envelopeEncryptor.unpackAnonymousFileEnvelope(
+            envelope, grantKeyForPubKey(routing.groupId, routing.groupPubKey)
+        );
+    }
+
+    FileHandle handle = _connection.getImpl()->getHandleManager()->createHandle("GroupEnvelope:Decrypt");
+    _envelopeFiles.set(
+        handle,
+        std::make_shared<EnvelopeFileState>(EnvelopeFileState{
+            .reading = true,
+            .type = header.type,
+            .groupId = header.groupId,
+            .keyId = header.keyId,
+            .groupKey = groupKey,
+            .groupPubKey = routing.groupPubKey,
+            .authorPubKey = header.authorPubKey,
+            .fileKey = header.fileKey,
+            .index = 0,
+            .plainSize = header.plainSize,
+        })
+    );
+    return handle;
+}
+
+core::Buffer GroupApiImpl::decryptFileChunk(FileHandle fileHandle, const core::Buffer& cipherChunk) {
+    auto state = getFileState(fileHandle, true);
+    state->buffer.append(cipherChunk.stdString());
+    return drainChunks(state);
+}
+
+CipherOffset GroupApiImpl::seekInEncryptedFile(FileHandle fileHandle, FilePosition position) {
+    auto state = getFileState(fileHandle, true);
+    if (position < 0 || static_cast<ByteCount>(position) > state->plainSize) {
+        throw core::InvalidParamsException("field:position is outside the file");
+    }
+    const ByteCount target = static_cast<ByteCount>(position);
+    state->index = static_cast<ChunkIndex>(target / GroupEnvelopeEncryptor::CHUNK_SIZE);
+    state->skipInChunk = target % GroupEnvelopeEncryptor::CHUNK_SIZE;
+    // Whatever was half-collected belonged to the old position.
+    state->buffer.clear();
+    // From here on the caller decides what to read, so "did all of it arrive" is a question this handle can
+    // no longer answer. `finishFileDecryption` reports that rather than pretending otherwise.
+    state->seeked = true;
+    return static_cast<int64_t>(GroupEnvelopeEncryptor::cipherOffsetOfChunk(state->index));
+}
+
+std::shared_ptr<GroupApiImpl::EnvelopeFileState> GroupApiImpl::finishFile(FileHandle fileHandle, bool wantReading) {
+    auto state = getFileState(fileHandle, wantReading);
+    // Free the handle however this ends. A file that turns out to be short still throws, and holding its key
+    // resident for the life of the process because of that would be the worse failure. `state` is a
+    // shared_ptr, so the caller can still read it once the map has let go.
+    struct Release {
+        GroupApiImpl* self;
+        int64_t handle;
+        // This destructor exists to run during exception unwinding, so it must not throw out of one.
+        ~Release() {
+            try {
+                self->releaseFileHandle(handle);
+            } catch (...) {}
+        }
+    } release{this, fileHandle};
+
+    switch (GroupEnvelopeEncryptor::classifyRead(
+        state->seeked, state->index, GroupEnvelopeEncryptor::chunkCount(state->plainSize), state->buffer.empty()
+    )) {
+    case GroupEnvelopeEncryptor::ReadOutcome::Truncated:
+        // Every chunk authenticates itself, but nothing in chunk N says how many were meant to follow. The
+        // declared size is the only place a dropped tail — or an unfinished write — shows up.
+        throw EnvelopeTruncatedFileException();
+    case GroupEnvelopeEncryptor::ReadOutcome::Overrun:
+        // The opposite complaint, and worth telling apart from the one above: every chunk the declared size
+        // called for arrived, and then more bytes followed it. `drainChunks` refuses those bytes as they
+        // arrive so the memory is never held; this catches the caller who swallowed that and closed anyway.
+        throw InvalidEnvelopeFormatException("more file data than the declared size accounts for");
+    case GroupEnvelopeEncryptor::ReadOutcome::PartialRange:
+    case GroupEnvelopeEncryptor::ReadOutcome::Complete:
+        break;
+    }
+    return state;
+}
+
+Envelope GroupApiImpl::finishFileEncryption(FileHandle fileHandle) {
+    auto state = finishFile(fileHandle, false);
+    if (state->type == ENVELOPE_ANONYMOUS) {
+        return _envelopeEncryptor.packAnonymousFileEnvelope(
+            state->groupId, privmx::crypto::PublicKey::fromBase58DER(state->groupPubKey), state->plainSize,
+            state->fileKey
+        );
+    }
+    return _envelopeEncryptor.packFileEnvelope(
+        state->groupId, state->keyId, state->plainSize, state->fileKey, _userPrivKey, state->groupKey
+    );
+}
+
+DecryptedFileInfo GroupApiImpl::finishFileDecryption(FileHandle fileHandle) {
+    auto state = finishFile(fileHandle, true);
+    return DecryptedFileInfo{
+        .groupId = state->groupId,
+        .authorPubKey = state->authorPubKey,
+        .type = state->type,
+        .complete = !state->seeked,
+    };
 }

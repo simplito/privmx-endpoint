@@ -35,6 +35,32 @@ Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& va
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedEnvelope>(const group::DecryptedEnvelope& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$DecryptedEnvelope");
+    }
+    obj->set("data", serialize(val.data));
+    obj->set("groupId", serialize(val.groupId));
+    obj->set("authorPubKey", serialize(val.authorPubKey));
+    obj->set("type", serialize((int64_t)val.type));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedFileInfo>(const group::DecryptedFileInfo& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$DecryptedFileInfo");
+    }
+    obj->set("groupId", serialize(val.groupId));
+    obj->set("authorPubKey", serialize(val.authorPubKey));
+    obj->set("type", serialize((int64_t)val.type));
+    obj->set("complete", serialize(val.complete));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::GroupSummary>(const group::GroupSummary& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {

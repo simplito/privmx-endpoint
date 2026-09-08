@@ -217,6 +217,17 @@ inline const std::unordered_map<std::string, func_enum> functions_endpoint = {
     {"group.subscribeFor", group_subscribeFor},
     {"group.unsubscribeFrom", group_unsubscribeFrom},
     {"group.buildSubscriptionQuery", group_buildSubscriptionQuery},
+    {"group.encrypt", group_encrypt},
+    {"group.decrypt", group_decrypt},
+    {"group.encryptAnonymously", group_encryptAnonymously},
+    {"group.beginFileEncryption", group_beginFileEncryption},
+    {"group.encryptFileChunk", group_encryptFileChunk},
+    {"group.beginFileDecryption", group_beginFileDecryption},
+    {"group.decryptFileChunk", group_decryptFileChunk},
+    {"group.finishFileEncryption", group_finishFileEncryption},
+    {"group.finishFileDecryption", group_finishFileDecryption},
+    {"group.beginFileEncryptionAnonymously", group_beginFileEncryptionAnonymously},
+    {"group.seekInEncryptedFile", group_seekInEncryptedFile},
 };
 
 } // privmxcli

@@ -219,6 +219,17 @@ enum func_enum {
     group_subscribeFor,
     group_unsubscribeFrom,
     group_buildSubscriptionQuery,
+    group_encrypt,
+    group_decrypt,
+    group_encryptAnonymously,
+    group_beginFileEncryption,
+    group_encryptFileChunk,
+    group_beginFileDecryption,
+    group_decryptFileChunk,
+    group_finishFileEncryption,
+    group_finishFileDecryption,
+    group_beginFileEncryptionAnonymously,
+    group_seekInEncryptedFile,
 };
 
 } // privmxcli

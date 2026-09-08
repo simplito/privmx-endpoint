@@ -62,6 +62,25 @@ protected:
         reader.reset();
         core::EventQueueImpl::getInstance()->clear();
     }
+    /** `user_N` as a roster entry. */
+    core::UserWithPubKey user(int n) {
+        const std::string i = std::to_string(n);
+        return core::UserWithPubKey{
+            .userId = reader->getString("Login.user_" + i + "_id"),
+            .pubKey = reader->getString("Login.user_" + i + "_pubKey")
+        };
+    }
+
+    /** A group in Context_1 with the given members, managed by whoever is listed first. */
+    std::string createGroupOf(const std::vector<core::UserWithPubKey>& users) {
+        std::string groupId = groupApi->createGroup(
+            reader->getString("Context_1.contextId"), users, std::vector<core::UserWithPubKey>{users.front()},
+            core::Buffer::from("public"), core::Buffer::from("private")
+        );
+        EXPECT_FALSE(groupId.empty());
+        return groupId;
+    }
+
     std::shared_ptr<core::Connection> connection;
     std::shared_ptr<group::GroupApi> groupApi;
     Poco::Util::IniFileConfiguration::Ptr reader;
@@ -460,4 +479,320 @@ TEST_F(GroupTest, group_member_can_read) {
     EXPECT_EQ(group.publicMeta.stdString(), "shared_public");
     EXPECT_EQ(group.privateMeta.stdString(), "shared_private");
     EXPECT_EQ(group.groupId, groupId);
+}
+
+// -- the objects the documented examples talk to ------------------------------------------------------
+//
+// GroupApi.hpp documents the file API with three worked examples, and the tests below paste those examples
+// in unchanged rather than paraphrasing them. That is the point: a snippet that drifts from the API stops
+// compiling here, so the documentation cannot quietly rot into something that no longer works.
+//
+// These three types exist only to give the snippets something to read from and write to. They are as small
+// as they can be while still being the shapes the examples name: a plaintext source, a sink, and ciphertext
+// storage that can be read sequentially or at an offset.
+
+struct ByteSource {
+    std::string data;
+    std::size_t pos = 0;
+    bool hasMore() const { return pos < data.size(); }
+    core::Buffer read(std::size_t n) {
+        std::string out = data.substr(pos, n);
+        pos += out.size();
+        return core::Buffer::from(out);
+    }
+};
+
+struct ByteSink {
+    std::string data;
+    void write(const core::Buffer& block) { data.append(block.stdString()); }
+};
+
+struct CipherStorage {
+    std::string data;
+    std::size_t pos = 0;
+    bool hasMore() const { return pos < data.size(); }
+    /** Sequential, as the opening example uses it. */
+    core::Buffer read(std::size_t n) {
+        std::string out = data.substr(pos, n);
+        pos += out.size();
+        return core::Buffer::from(out);
+    }
+    /** Random access, as the range example uses it. */
+    core::Buffer read(std::size_t offset, std::size_t n) const {
+        return core::Buffer::from(offset >= data.size() ? std::string() : data.substr(offset, n));
+    }
+};
+
+// -- envelopes -----------------------------------------------------------------------------------------
+
+TEST_F(GroupTest, envelope_roundtrip_between_members) {
+    std::string groupId = createGroupOf({user(1), user(2)});
+
+    core::Buffer envelope;
+    EXPECT_NO_THROW({ envelope = groupApi->encrypt(groupId, core::Buffer::from("secret payload")); });
+    EXPECT_GT(envelope.size(), 0u);
+    // The point of an envelope: it travels alone, with nothing alongside it saying how to open it.
+    EXPECT_EQ(envelope.stdString().find("secret payload"), std::string::npos);
+
+    disconnect();
+    connectAs(GroupConnectionType::GUser2);
+
+    group::DecryptedEnvelope opened;
+    EXPECT_NO_THROW({ opened = groupApi->decrypt(envelope); });
+    EXPECT_EQ(opened.data.stdString(), "secret payload");
+    EXPECT_EQ(opened.groupId, groupId);
+    EXPECT_EQ(opened.type, group::ENVELOPE_FROM_MEMBER);
+    EXPECT_EQ(opened.authorPubKey, reader->getString("Login.user_1_pubKey"));
+}
+
+TEST_F(GroupTest, envelope_survives_a_key_rotation) {
+    // Removing a member advances the group's key epoch. An envelope sealed before that must still open
+    // afterwards — which is the whole reason the key id travels inside it.
+    std::string groupId = createGroupOf({user(1), user(2)});
+
+    core::Buffer before = groupApi->encrypt(groupId, core::Buffer::from("written before the rotation"));
+    const int64_t epochBefore = groupApi->getGroup(groupId).keyVersion;
+
+    EXPECT_NO_THROW({
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_2_id")});
+    });
+    EXPECT_GT(groupApi->getGroup(groupId).keyVersion, epochBefore);
+
+    group::DecryptedEnvelope opened;
+    EXPECT_NO_THROW({ opened = groupApi->decrypt(before); });
+    EXPECT_EQ(opened.data.stdString(), "written before the rotation");
+}
+
+TEST_F(GroupTest, envelope_from_a_non_member) {
+    // A group user_2 is deliberately not in.
+    std::string groupId = createGroupOf({user(1)});
+    const std::string groupPubKey = groupApi->getGroup(groupId).groupPubKey;
+    ASSERT_FALSE(groupPubKey.empty());
+
+    disconnect();
+    connectAs(GroupConnectionType::GUser2);
+
+    // Not a member: reading the group is refused, but sealing to it is not — that asymmetry is the feature.
+    EXPECT_ANY_THROW({ groupApi->getGroup(groupId); });
+    core::Buffer envelope;
+    EXPECT_NO_THROW({
+        envelope = groupApi->encryptAnonymously(groupId, groupPubKey, core::Buffer::from("a tip from outside"));
+    });
+    // The sender cannot read back what they wrote; only the group can.
+    EXPECT_ANY_THROW({ groupApi->decrypt(envelope); });
+
+    disconnect();
+    connectAs(GroupConnectionType::GUser1);
+    group::DecryptedEnvelope opened;
+    EXPECT_NO_THROW({ opened = groupApi->decrypt(envelope); });
+    EXPECT_EQ(opened.data.stdString(), "a tip from outside");
+    EXPECT_EQ(opened.type, group::ENVELOPE_ANONYMOUS);
+    // Anonymous means anonymous — no author is reported, not even the throwaway key that sealed it.
+    EXPECT_TRUE(opened.authorPubKey.empty());
+}
+
+TEST_F(GroupTest, envelope_file_roundtrip_as_documented) {
+    // The sealing and opening examples from GroupApi.hpp, run against a real bridge exactly as written.
+    // So the snippets below can be pasted in exactly as the header writes them.
+    using namespace privmx::endpoint::group;
+    auto& api = *groupApi;
+    std::string groupId = createGroupOf({user(1), user(2)});
+
+    // Deliberately not a whole number of chunks, so the short final chunk is exercised.
+    std::string plain;
+    for (int i = 0; plain.size() < 2 * 1024 * 1024 + 12345; ++i) {
+        plain.append("chunk-" + std::to_string(i) + "-payload;");
+    }
+    ByteSource source{plain};
+    ByteSink sink;
+    const std::size_t plaintextSize = plain.size();
+
+    // --- verbatim from GroupApi.hpp, beginFileEncryption ---
+    FileHandle h = api.beginFileEncryption(groupId, plaintextSize);
+    while (source.hasMore()) {
+        sink.write(api.encryptFileChunk(h, source.read(1 << 20)));  // may write nothing; that is normal
+    }
+    Envelope envelope = api.finishFileEncryption(h);  // keep this alongside the ciphertext
+    // --- end verbatim ---
+
+    EXPECT_GT(sink.data.size(), plain.size());
+    EXPECT_EQ(sink.data.find("chunk-0-payload"), std::string::npos);
+
+    // The ciphertext and the envelope travel to whoever reads it; nothing else is needed.
+    CipherStorage storage{sink.data};
+    disconnect();
+    connectAs(GroupConnectionType::GUser2);
+
+    // A scope of its own so `api`, `h` and `sink` name this connection's reader, letting the example below
+    // stay character-for-character what the header says.
+    {
+        auto& api = *groupApi;
+        ByteSink sink;
+
+        // --- verbatim from GroupApi.hpp, beginFileDecryption ---
+        FileHandle h = api.beginFileDecryption(envelope);
+        while (storage.hasMore()) {
+            sink.write(api.decryptFileChunk(h, storage.read(1 << 20)));
+        }
+        DecryptedFileInfo info = api.finishFileDecryption(h);  // who sent it, and was it whole
+        // --- end verbatim ---
+
+        EXPECT_EQ(sink.data, plain);
+        EXPECT_EQ(info.groupId, groupId);
+        EXPECT_EQ(info.type, ENVELOPE_FROM_MEMBER);
+        EXPECT_EQ(info.authorPubKey, reader->getString("Login.user_1_pubKey"));
+        // A straight read start to finish is exactly the case that keeps the whole-file guarantee.
+        EXPECT_TRUE(info.complete);
+    }
+}
+
+TEST_F(GroupTest, envelope_file_truncation_is_detected) {
+    std::string groupId = createGroupOf({user(1)});
+
+    const std::string plain(300 * 1024, 'x'); // three chunks
+    int64_t writeHandle = groupApi->beginFileEncryption(groupId, (int64_t)plain.size());
+    std::string cipher = groupApi->encryptFileChunk(writeHandle, core::Buffer::from(plain)).stdString();
+    core::Buffer envelope = groupApi->finishFileEncryption(writeHandle);
+
+    // Feed back everything but the final chunk. Each chunk that did arrive verifies on its own, so the only
+    // thing that can notice the missing tail is the size signed into the envelope.
+    int64_t readHandle = groupApi->beginFileDecryption(envelope);
+    const std::size_t twoChunks = 2 * (1 + 16 + (128 * 1024 + 16) + 16);
+    groupApi->decryptFileChunk(readHandle, core::Buffer::from(cipher.substr(0, twoChunks)));
+    EXPECT_THROW({ groupApi->finishFileDecryption(readHandle); }, core::Exception);
+    // The handle is gone even though the close threw — otherwise the file key would outlive the failure.
+    EXPECT_ANY_THROW({ groupApi->finishFileDecryption(readHandle); });
+}
+
+TEST_F(GroupTest, envelope_file_overrun_is_refused_as_it_arrives) {
+    // The mirror of truncation, and the reason it is caught on the way in rather than at the close: bytes
+    // past the last chunk can never be opened, so buffering them until `finishFileDecryption` would let a
+    // caller fed a long ciphertext against a short declared size accumulate the whole thing in memory first.
+    std::string groupId = createGroupOf({user(1)});
+
+    const std::string plain(200 * 1024, 'y'); // two chunks, the second short
+    int64_t writeHandle = groupApi->beginFileEncryption(groupId, (int64_t)plain.size());
+    std::string cipher = groupApi->encryptFileChunk(writeHandle, core::Buffer::from(plain)).stdString();
+    core::Buffer envelope = groupApi->finishFileEncryption(writeHandle);
+
+    // The whole file, and then a megabyte of anything at all.
+    int64_t readHandle = groupApi->beginFileDecryption(envelope);
+    EXPECT_THROW(
+        { groupApi->decryptFileChunk(readHandle, core::Buffer::from(cipher + std::string(1 << 20, 'z'))); },
+        core::Exception
+    );
+    // A caller that swallowed the throw and closed anyway still gets told: the excess is still buffered, so
+    // the close-time classification reaches the same verdict.
+    EXPECT_THROW({ groupApi->finishFileDecryption(readHandle); }, core::Exception);
+
+    // Exactly the declared length is still accepted, and still counts as whole.
+    int64_t exact = groupApi->beginFileDecryption(envelope);
+    groupApi->decryptFileChunk(exact, core::Buffer::from(cipher));
+    EXPECT_TRUE(groupApi->finishFileDecryption(exact).complete);
+}
+
+TEST_F(GroupTest, envelope_file_range_read_as_documented) {
+    // The range-reading example from GroupApi.hpp::seekInEncryptedFile, run as written.
+    // So the snippets below can be pasted in exactly as the header writes them.
+    using namespace privmx::endpoint::group;
+    auto& api = *groupApi;
+    std::string groupId = createGroupOf({user(1)});
+
+    std::string plain;
+    for (int i = 0; plain.size() < 600 * 1024; ++i) {
+        plain.append("seek-" + std::to_string(i) + "-marker;");
+    }
+
+    FileHandle writeHandle = api.beginFileEncryption(groupId, plain.size());
+    std::string cipher = api.encryptFileChunk(writeHandle, core::Buffer::from(plain)).stdString();
+    Envelope envelope = api.finishFileEncryption(writeHandle);
+
+    CipherStorage storage{cipher};
+    // Deliberately mid-chunk, so the promised head trim is what makes the result line up.
+    const std::size_t from = 300 * 1024 + 777;
+    const std::size_t length = 50 * 1024;
+
+    // --- verbatim from GroupApi.hpp, seekInEncryptedFile ---
+    FileHandle h = api.beginFileDecryption(envelope);
+    CipherOffset at = api.seekInEncryptedFile(h, from);
+
+    std::string out;
+    while (out.size() < length) {
+        core::Buffer block = storage.read(at, 1 << 20);  // your storage, your transport
+        if (block.size() == 0) break;                    // ran off the end of the ciphertext
+        at += block.size();
+        out += api.decryptFileChunk(h, block).stdString();
+    }
+    out.resize(length);                                  // front is exact, tail may overshoot
+    api.finishFileDecryption(h);
+    // --- end verbatim ---
+
+    // The documentation promises the output begins exactly at `from`, despite `from` landing mid-chunk.
+    EXPECT_EQ(out, plain.substr(from, length));
+    // ...and that the offset it hands back points at a chunk boundary, never into the middle of one.
+    const std::size_t encryptedChunk = 1 + 16 + (128 * 1024 + 16) + 16;
+    EXPECT_EQ(api.seekInEncryptedFile(api.beginFileDecryption(envelope), from) % encryptedChunk, 0);
+
+    // A range reader that stops as soon as it has enough ends mid-chunk, with bytes still buffered and most
+    // of the file never opened. That is the documented way to read a range, so finishing must not call it an
+    // error — it once did, reporting "more file data than the declared size accounts for".
+    {
+        FileHandle partial = api.beginFileDecryption(envelope);
+        CipherOffset seekedTo = api.seekInEncryptedFile(partial, from);
+        // One block deliberately larger than a chunk and not a whole number of them, so it ends mid-chunk.
+        const std::size_t oneAndAHalfChunks = encryptedChunk + encryptedChunk / 2;
+        api.decryptFileChunk(
+            partial, core::Buffer::from(cipher.substr(seekedTo, oneAndAHalfChunks))
+        );
+        DecryptedFileInfo info;
+        EXPECT_NO_THROW({ info = api.finishFileDecryption(partial); });
+        // Not an error, but not a whole-file guarantee either.
+        EXPECT_FALSE(info.complete);
+        EXPECT_EQ(info.groupId, groupId);
+    }
+
+    // A straight read start to finish still earns the guarantee.
+    FileHandle whole = api.beginFileDecryption(envelope);
+    api.decryptFileChunk(whole, core::Buffer::from(cipher));
+    EXPECT_TRUE(api.finishFileDecryption(whole).complete);
+
+    // And a straight read that is genuinely short is still refused.
+    FileHandle short_ = api.beginFileDecryption(envelope);
+    api.decryptFileChunk(short_, core::Buffer::from(cipher.substr(0, encryptedChunk)));
+    EXPECT_THROW({ api.finishFileDecryption(short_); }, core::Exception);
+
+    // Seeking past the end is a caller error, not a silent clamp.
+    FileHandle bad = api.beginFileDecryption(envelope);
+    EXPECT_THROW({ api.seekInEncryptedFile(bad, (int64_t)plain.size() + 1); }, core::Exception);
+    api.seekInEncryptedFile(bad, plain.size());
+    api.finishFileDecryption(bad);
+}
+
+TEST_F(GroupTest, envelope_repeated_decrypt_and_two_keys_in_one_session) {
+    // Opening many envelopes reuses one unwrapped key, and a rotation puts a second key in play alongside it.
+    // The risk this guards is not speed but the memo handing back the wrong key once two are cached at once.
+    std::string groupId = createGroupOf({user(1), user(2)});
+
+    std::vector<core::Buffer> envelopes;
+    for (int i = 0; i < 20; ++i) {
+        envelopes.push_back(groupApi->encrypt(groupId, core::Buffer::from("message " + std::to_string(i))));
+    }
+    // Every one of these but the first should be served from the unwrapped-key memo. Correctness is what is
+    // assertable here; that they cost no round trips is structural, not something the test can observe.
+    for (int i = 0; i < 20; ++i) {
+        group::DecryptedEnvelope opened;
+        EXPECT_NO_THROW({ opened = groupApi->decrypt(envelopes[i]); });
+        EXPECT_EQ(opened.data.stdString(), "message " + std::to_string(i));
+        EXPECT_EQ(opened.groupId, groupId);
+    }
+
+    // A removal mints a new metadata key, so from here two distinct keyIds are live in the same session.
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_2_id")}); });
+    core::Buffer afterRotation = groupApi->encrypt(groupId, core::Buffer::from("after the rotation"));
+
+    // Interleaved on purpose: an envelope under the new key, then one under the old, then the new one again.
+    EXPECT_EQ(groupApi->decrypt(afterRotation).data.stdString(), "after the rotation");
+    EXPECT_EQ(groupApi->decrypt(envelopes[7]).data.stdString(), "message 7");
+    EXPECT_EQ(groupApi->decrypt(afterRotation).data.stdString(), "after the rotation");
+    EXPECT_EQ(groupApi->decrypt(envelopes[19]).data.stdString(), "message 19");
 }

@@ -4,6 +4,7 @@
 #include <vector>
 #include <privmx/endpoint/core/Utils.hpp>
 #include <privmx/crypto/Crypto.hpp>
+#include <privmx/utils/BinaryBufferBE.hpp>
 
 using namespace privmx::endpoint;
 
@@ -55,4 +56,36 @@ TEST_F(UtilsTest, Utils) {
     EXPECT_EQ("test ", test);
     privmx::endpoint::core::Utils::rtrim(test);
     EXPECT_EQ("test", test);
+}
+/**
+ * `BinaryBufferBE`'s one-octet-length framing, on buffers it did not produce.
+ *
+ * Both directions used to fail silently on the two inputs below: a read past the end left the length octet
+ * uninitialized and short-read the payload without complaint, and a write of 256 bytes truncated the length
+ * to zero. Either one turns a malformed buffer into a well-formed buffer holding something else.
+ */
+TEST_F(UtilsTest, BinaryBufferBEOneOctetFramingRejectsMalformed) {
+    std::string value;
+
+    // Nothing at all: not even the length octet is there to read.
+    privmx::utils::BinaryBufferBE empty(std::string{});
+    EXPECT_THROW(empty.readOneOctetLengthBuffer(value), privmx::utils::BinaryBufferTruncatedException);
+
+    // A length octet promising 255 bytes, followed by one.
+    privmx::utils::BinaryBufferBE truncated(std::string("\xFF""a", 2));
+    EXPECT_THROW(truncated.readOneOctetLengthBuffer(value), privmx::utils::BinaryBufferTruncatedException);
+
+    // 256 bytes cannot be described by one octet; writing 0 instead would parse as an empty field.
+    privmx::utils::BinaryBufferBE tooLong;
+    EXPECT_THROW(
+        tooLong.writeOneOctetLengthBuffer(std::string(256, 'a')),
+        privmx::utils::BinaryBufferFieldTooLongException
+    );
+
+    // The round trip it is actually for still works, including a maximal field.
+    privmx::utils::BinaryBufferBE writer;
+    writer.writeOneOctetLengthBuffer(std::string(255, 'z'));
+    privmx::utils::BinaryBufferBE reader(writer.str());
+    reader.readOneOctetLengthBuffer(value);
+    EXPECT_EQ(value, std::string(255, 'z'));
 }
