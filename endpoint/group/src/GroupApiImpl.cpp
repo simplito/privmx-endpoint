@@ -16,8 +16,8 @@
 
 #include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
-#include "privmx/endpoint/core/Validator.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
+#include "privmx/endpoint/core/Validator.hpp"
 #include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/group/GroupException.hpp"
 #include "privmx/endpoint/group/Mapper.hpp"
@@ -996,8 +996,9 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
     }
 
     core::KeyDecryptionAndVerificationRequest request;
-    const auto location =
-        core::EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
+    const auto location = core::EncKeyLocation{
+        .contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId
+    };
     request.addGroupKeys(candidates, location);
     const auto byLocation = _keyProvider->getKeysAndVerify(request, _groupPrivKeyResolver);
 
@@ -1029,14 +1030,10 @@ DecryptedEnvelope GroupApiImpl::decrypt(const Envelope& envelope) {
     // from steering us into a `groupGet` and a tree climb against an id of its choosing.
     core::Validator::validateId(routing.groupId, "field:envelope.groupId ");
     if (routing.type == ENVELOPE_FROM_MEMBER) {
-        return _envelopeEncryptor.openGroupKeyEnvelope(
-            envelope, encKeyById(routing.groupId, routing.keyId).key
-        );
+        return _envelopeEncryptor.openGroupKeyEnvelope(envelope, encKeyById(routing.groupId, routing.keyId).key);
     }
 
-    return _envelopeEncryptor.openAnonymousEnvelope(
-        envelope, grantKeyForPubKey(routing.groupId, routing.groupPubKey)
-    );
+    return _envelopeEncryptor.openAnonymousEnvelope(envelope, grantKeyForPubKey(routing.groupId, routing.groupPubKey));
 }
 
 privmx::crypto::PrivateKey GroupApiImpl::grantKeyForPubKey(
@@ -1078,7 +1075,6 @@ Envelope GroupApiImpl::encryptAnonymously(
     );
 }
 
-
 // -- envelope files --------------------------------------------------------------------------------------
 
 std::shared_ptr<GroupApiImpl::EnvelopeFileState> GroupApiImpl::getFileState(FileHandle fileHandle, bool wantReading) {
@@ -1088,8 +1084,8 @@ std::shared_ptr<GroupApiImpl::EnvelopeFileState> GroupApiImpl::getFileState(File
     }
     if (state.value()->reading != wantReading) {
         throw core::InvalidParamsException(
-            wantReading ? "field:fileHandle came from beginFileEncryption, not beginFileDecryption"
-                        : "field:fileHandle came from beginFileDecryption, not beginFileEncryption"
+            wantReading ? "field:fileHandle came from beginFileEncryption, not beginFileDecryption" :
+                          "field:fileHandle came from beginFileDecryption, not beginFileEncryption"
         );
     }
     return state.value();
@@ -1120,10 +1116,9 @@ core::Buffer GroupApiImpl::drainChunks(const std::shared_ptr<EnvelopeFileState>&
             break;
         }
         core::Buffer piece = core::Buffer::from(state->buffer.substr(0, need));
-        std::string produced =
-            (state->reading ? _envelopeEncryptor.decryptChunk(piece, state->fileKey, state->index)
-                            : _envelopeEncryptor.encryptChunk(piece, state->fileKey, state->index))
-                .stdString();
+        std::string produced = (state->reading ? _envelopeEncryptor.decryptChunk(piece, state->fileKey, state->index) :
+                                                 _envelopeEncryptor.encryptChunk(piece, state->fileKey, state->index))
+                                   .stdString();
         if (state->skipInChunk > 0) {
             // A seek can land mid-chunk, but a chunk only opens whole. Drop the head the caller did not ask
             // for, once, on the first chunk after the seek.
@@ -1270,14 +1265,12 @@ std::shared_ptr<GroupApiImpl::EnvelopeFileState> GroupApiImpl::finishFile(FileHa
         ~Release() {
             try {
                 self->releaseFileHandle(handle);
-            } catch (...) {
-            }
+            } catch (...) {}
         }
     } release{this, fileHandle};
 
     switch (GroupEnvelopeEncryptor::classifyRead(
-        state->seeked, state->index, GroupEnvelopeEncryptor::chunkCount(state->plainSize),
-        state->buffer.empty()
+        state->seeked, state->index, GroupEnvelopeEncryptor::chunkCount(state->plainSize), state->buffer.empty()
     )) {
     case GroupEnvelopeEncryptor::ReadOutcome::Truncated:
         // Every chunk authenticates itself, but nothing in chunk N says how many were meant to follow. The

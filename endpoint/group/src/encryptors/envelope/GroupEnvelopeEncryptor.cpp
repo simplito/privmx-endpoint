@@ -147,8 +147,9 @@ std::pair<std::string, std::string> GroupEnvelopeEncryptor::wrapContentKey(
     // Throwaway, never retained: it exists only to carry out one ECDH with the group's identity key.
     privmx::crypto::PrivateKey ephemeralPrivKey = privmx::crypto::PrivateKey::generateRandom();
     std::string contentKey = privmx::crypto::Crypto::randomBytes(CONTENT_KEY_SIZE);
-    std::string wrap =
-        privmx::crypto::EciesEncryptor::encrypt(groupPubKey, ECIES_DOMAIN + contentKey, ephemeralPrivKey);
+    std::string wrap = privmx::crypto::EciesEncryptor::encrypt(
+        groupPubKey, ECIES_DOMAIN + contentKey, ephemeralPrivKey
+    );
     return {wrap, contentKey};
 }
 
@@ -181,8 +182,7 @@ core::Buffer GroupEnvelopeEncryptor::packGroupKeyEnvelope(
     const privmx::crypto::PrivateKey& authorPrivKey,
     const std::string& groupKey
 ) {
-    std::string header =
-        writeHeader(TYPE_GROUP_KEY, {groupId, keyId, authorPrivKey.getPublicKey().toDER()});
+    std::string header = writeHeader(TYPE_GROUP_KEY, {groupId, keyId, authorPrivKey.getPublicKey().toDER()});
     core::Buffer signed_ = _dataEncryptor.signAndPackDataWithSignature(
         core::Buffer::from(header + content.stdString()), authorPrivKey
     );
@@ -341,8 +341,7 @@ core::Buffer GroupEnvelopeEncryptor::packAnonymousFileEnvelope(
     // No signature, for the same reason as type 2: the sender is anonymous by construction. `plainSize` is
     // still covered — it sits inside this encrypt-then-MAC payload, so a dropped tail is detectable even
     // though its author is not.
-    out.append(
-        _dataEncryptor.encrypt(core::Buffer::from(header + toBE(plainSize, 8) + fileKey), contentKey).stdString()
+    out.append(_dataEncryptor.encrypt(core::Buffer::from(header + toBE(plainSize, 8) + fileKey), contentKey).stdString()
     );
     return core::Buffer::from(out);
 }

@@ -140,12 +140,7 @@ public:
      * Classifies a finished read. `chunksOpened` is how many chunks were actually opened, `chunksExpected`
      * what the envelope's signed size calls for.
      */
-    static ReadOutcome classifyRead(
-        bool seeked,
-        ByteCount chunksOpened,
-        ByteCount chunksExpected,
-        bool bufferEmpty
-    ) {
+    static ReadOutcome classifyRead(bool seeked, ByteCount chunksOpened, ByteCount chunksExpected, bool bufferEmpty) {
         // A seeked reader chose what to read, so neither "did it all arrive" nor "was there anything left
         // over" is a question this handle can answer. Both checks below would misfire.
         if (seeked) {

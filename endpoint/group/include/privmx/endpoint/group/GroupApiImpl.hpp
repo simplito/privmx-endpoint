@@ -185,10 +185,7 @@ private:
      * The sender only ever held a public key, so the epoch it belongs to is recovered from the group's own
      * published history rather than carried on the wire.
      */
-    privmx::crypto::PrivateKey grantKeyForPubKey(
-        const std::string& groupId,
-        const std::string& groupPubKeyBase58
-    );
+    privmx::crypto::PrivateKey grantKeyForPubKey(const std::string& groupId, const std::string& groupPubKeyBase58);
 
     /**
      * One in-flight encrypt or decrypt of a file.
@@ -205,12 +202,12 @@ private:
         std::string groupPubKey;  //< anonymous seals only, base58-DER
         std::string authorPubKey; //< opening only: provenance handed back at finish
         std::string fileKey;
-        ChunkIndex index = 0;       //< next chunk to seal or open
-        ByteCount plainSize = 0;    //< declared plaintext length of the whole file
-        ByteCount written = 0;      //< write side: plaintext accepted so far
-        ByteCount skipInChunk = 0;  //< read side: bytes to drop off the next chunk after a seek
-        bool seeked = false;          //< read side: completeness is no longer checkable
-        std::string buffer;         //< bytes not yet forming a whole chunk
+        ChunkIndex index = 0;      //< next chunk to seal or open
+        ByteCount plainSize = 0;   //< declared plaintext length of the whole file
+        ByteCount written = 0;     //< write side: plaintext accepted so far
+        ByteCount skipInChunk = 0; //< read side: bytes to drop off the next chunk after a seek
+        bool seeked = false;       //< read side: completeness is no longer checkable
+        std::string buffer;        //< bytes not yet forming a whole chunk
     };
     std::shared_ptr<EnvelopeFileState> getFileState(FileHandle fileHandle, bool wantReading);
     void releaseFileHandle(FileHandle fileHandle);
