@@ -103,11 +103,15 @@ public:
      * The membership is deliberately not updatable here: seating a member and re-keying their path is one
      * operation on the Group's key tree, so it goes through addGroupMembers/removeGroupMembers instead.
      *
+     * There is no way to skip the version check. A Group's entry commits a tag over the version it lands at, so
+     * an update computed against a head that has since moved cannot produce a tag any reader will accept — the
+     * version pin is what keeps such an update from landing at all. A caller who loses the check has to re-read
+     * the Group and build the update again.
+     *
      * @param groupId ID of the Group to update
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
      * @param version current version of the updated Group
-     * @param force force update (without checking version)
      * @param policies Group's policies
      */
     void updateGroup(
@@ -115,7 +119,6 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const int64_t version,
-        const bool force,
         const std::optional<core::ContainerPolicy>& policies = std::nullopt
     );
 
