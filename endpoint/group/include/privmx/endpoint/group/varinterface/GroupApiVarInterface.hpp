@@ -25,6 +25,18 @@ public:
         SubscribeFor = 8,
         UnsubscribeFrom = 9,
         BuildSubscriptionQuery = 10,
+        // Append only — these ints are the ABI the bindings dispatch on.
+        Encrypt = 11,
+        Decrypt = 12,
+        EncryptAnonymously = 13,
+        BeginFileEncryption = 14,
+        EncryptFileChunk = 15,
+        BeginFileDecryption = 16,
+        DecryptFileChunk = 17,
+        FinishFileEncryption = 18,
+        FinishFileDecryption = 19,
+        BeginFileEncryptionAnonymously = 20,
+        SeekInEncryptedFile = 21,
     };
 
     GroupApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -41,6 +53,17 @@ public:
     Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var encrypt(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var decrypt(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var encryptAnonymously(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginFileEncryption(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var encryptFileChunk(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginFileDecryption(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var decryptFileChunk(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var finishFileEncryption(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var finishFileDecryption(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginFileEncryptionAnonymously(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var seekInEncryptedFile(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

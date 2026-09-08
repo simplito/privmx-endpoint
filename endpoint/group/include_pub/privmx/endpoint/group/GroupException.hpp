@@ -52,6 +52,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, InvalidSubscriptionQueryExcep
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, RotatedAlreadyException, "Concurrent group key rotation: another manager won and one auto-retry did not resolve it", 0x000F)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupHistoryForkException, "Group history diverged from a previously verified state (version or keyVersion regressed)", 0x0010)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, IncompleteEpochLadderException, "Rotation aborted: the epoch ladder rung set for the new epoch would be incomplete", 0x0011)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, InvalidEnvelopeFormatException, "Malformed group envelope", 0x0012)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeTruncatedFileException, "Encrypted file is shorter than its envelope declares", 0x0013)
 // clang-format on
 } // namespace group
 } // namespace endpoint

@@ -135,6 +135,16 @@ target_link_libraries(test_unit_GroupRosterTagTest privmx privmxendpointcore pri
 add_executable(test_unit_RosterValidatorTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/RosterValidatorTest.cpp)
 target_link_libraries(test_unit_RosterValidatorTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
+# Group envelope wire format (pack/parse/crypto only, keys passed in, no bridge; pins the tamper, replay and
+# ladder-rung-confusion refusals the format exists for)
+add_executable(test_unit_GroupEnvelopeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupEnvelopeTest.cpp)
+target_link_libraries(test_unit_GroupEnvelopeTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+
+# Narrowing a group's key routes to the one an envelope names — what keeps opening an envelope O(1) rather
+# than costing one grant-key resolution per key the group has ever held
+add_executable(test_unit_GroupEnvelopeKeyFilterTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupEnvelopeKeyFilterTest.cpp)
+target_link_libraries(test_unit_GroupEnvelopeKeyFilterTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+
 # Merge from plans to a complete submitted state (real EC keys; each state is climbed to prove members who should still have access do)
 add_executable(test_unit_TreeWireTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeWireTest.cpp)
 target_link_libraries(test_unit_TreeWireTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)

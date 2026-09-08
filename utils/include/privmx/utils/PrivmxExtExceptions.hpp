@@ -75,6 +75,8 @@ DECLARE_PRIVMX_EXCEPTION_CHILD(VarIsNotObjectException, LibException, "Var is no
 DECLARE_PRIVMX_EXCEPTION_CHILD(VarIsNotArrayException, LibException, "Var is not array", 0x0004);
 DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidVersionFormatException, LibException, "Invalid version format", 0x0005);
 DECLARE_PRIVMX_EXCEPTION_CHILD(JSONParseException, LibException, "Cannot parse JSON", 0x0006);
+DECLARE_PRIVMX_EXCEPTION_CHILD(BinaryBufferTruncatedException, LibException, "Binary buffer ended mid-field", 0x0007);
+DECLARE_PRIVMX_EXCEPTION_CHILD(BinaryBufferFieldTooLongException, LibException, "Binary buffer field exceeds 255 bytes", 0x0008);
 
 
 DECLARE_PRIVMX_EXCEPTION(OperationCancelledException, BaseException, "Operation canceled", 0x000C);

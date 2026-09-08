@@ -149,6 +149,150 @@ core::PagingList<GroupSummary> GroupApi::listGroups(
     }
 }
 
+Envelope GroupApi::encrypt(const std::string& groupId, const core::Buffer& content) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    try {
+        return impl->encrypt(groupId, content);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+DecryptedEnvelope GroupApi::decrypt(const Envelope& envelope) {
+    auto impl = getImpl();
+    try {
+        return impl->decrypt(envelope);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+Envelope GroupApi::encryptAnonymously(
+    const std::string& groupId,
+    const std::string& groupPubKey,
+    const core::Buffer& content
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    core::Validator::validatePubKeyBase58DER(groupPubKey, "field:groupPubKey ");
+    try {
+        return impl->encryptAnonymously(groupId, groupPubKey, content);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+namespace {
+/**
+ * Ceiling on one block handed across the API, in either direction.
+ *
+ * Peak memory is otherwise the caller's discipline rather than a property of the API: one call carrying a
+ * whole file would hold the plaintext, the ciphertext and the binding's own copies at once. That is a hard
+ * failure in a WebAssembly build, where the address space is 4 GiB and the practical heap far smaller.
+ * `StoreApi` bounds its random-write path the same way.
+ */
+constexpr size_t MAX_FILE_BLOCK = 4 * 1024 * 1024;
+} // namespace
+
+FileHandle GroupApi::beginFileEncryption(const std::string& groupId, const FileSize size) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    if (size < 0) {
+        throw core::InvalidParamsException("field:size cannot be negative");
+    }
+    try {
+        return impl->beginFileEncryption(groupId, size);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+FileHandle GroupApi::beginFileEncryptionAnonymously(
+    const std::string& groupId,
+    const std::string& groupPubKey,
+    const FileSize size
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    core::Validator::validatePubKeyBase58DER(groupPubKey, "field:groupPubKey ");
+    if (size < 0) {
+        throw core::InvalidParamsException("field:size cannot be negative");
+    }
+    try {
+        return impl->beginFileEncryptionAnonymously(groupId, groupPubKey, size);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+core::Buffer GroupApi::encryptFileChunk(const FileHandle fileHandle, const core::Buffer& plainChunk) {
+    auto impl = getImpl();
+    core::Validator::validateBufferSize(plainChunk, 0, MAX_FILE_BLOCK, "field:plainChunk");
+    try {
+        return impl->encryptFileChunk(fileHandle, plainChunk);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+Envelope GroupApi::finishFileEncryption(const FileHandle fileHandle) {
+    auto impl = getImpl();
+    try {
+        return impl->finishFileEncryption(fileHandle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+FileHandle GroupApi::beginFileDecryption(const Envelope& envelope) {
+    auto impl = getImpl();
+    try {
+        return impl->beginFileDecryption(envelope);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+core::Buffer GroupApi::decryptFileChunk(const FileHandle fileHandle, const core::Buffer& cipherChunk) {
+    auto impl = getImpl();
+    core::Validator::validateBufferSize(cipherChunk, 0, MAX_FILE_BLOCK, "field:cipherChunk");
+    try {
+        return impl->decryptFileChunk(fileHandle, cipherChunk);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+CipherOffset GroupApi::seekInEncryptedFile(const FileHandle fileHandle, const FilePosition position) {
+    auto impl = getImpl();
+    try {
+        return impl->seekInEncryptedFile(fileHandle, position);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+DecryptedFileInfo GroupApi::finishFileDecryption(const FileHandle fileHandle) {
+    auto impl = getImpl();
+    try {
+        return impl->finishFileDecryption(fileHandle);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 std::vector<std::string> GroupApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto impl = getImpl();
     try {
