@@ -53,12 +53,12 @@ public:
         const std::optional<core::ContainerPolicy>& policies
     );
 
-    void addGroupMembers(const GroupId& groupId, const std::vector<GroupMemberToAdd>& newMembers);
+    void addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
 
-    void removeGroupMembers(const GroupId& groupId, const std::vector<std::string>& userIds);
+    void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     void updateGroup(
-        const GroupId& groupId,
+        const std::string& groupId,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const int64_t version,
@@ -66,9 +66,9 @@ public:
         const std::optional<core::ContainerPolicy>& policies,
         bool allowRotationRetry = true
     );
-    void deleteGroup(const GroupId& groupId);
+    void deleteGroup(const std::string& groupId);
 
-    Group getGroup(const GroupId& groupId);
+    Group getGroup(const std::string& groupId);
     core::PagingList<GroupSummary> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
     std::unordered_map<std::string, core::GroupEpochInfo> fetchGroupEpochs(
@@ -88,20 +88,20 @@ public:
         EventSelectorType selectorType,
         const std::string& selectorId
     );
-    privmx::crypto::PrivateKey resolveGroupPrivKey(const GroupId& groupId, int64_t epoch = 0);
+    privmx::crypto::PrivateKey resolveGroupPrivKey(const std::string& groupId, int64_t epoch = 0);
 
-    Envelope encrypt(const GroupId& groupId, const core::Buffer& content);
+    Envelope encrypt(const std::string& groupId, const core::Buffer& content);
     DecryptedEnvelope decrypt(const Envelope& envelope);
     Envelope encryptAnonymously(
-        const GroupId& groupId,
-        const PubKey& groupPubKey,
+        const std::string& groupId,
+        const std::string& groupPubKey,
         const core::Buffer& content
     );
 
-    FileHandle beginFileEncryption(const GroupId& groupId, FileSize size);
+    FileHandle beginFileEncryption(const std::string& groupId, FileSize size);
     FileHandle beginFileEncryptionAnonymously(
-        const GroupId& groupId,
-        const PubKey& groupPubKey,
+        const std::string& groupId,
+        const std::string& groupPubKey,
         FileSize size
     );
     core::Buffer encryptFileChunk(FileHandle fileHandle, const core::Buffer& plainChunk);
@@ -120,19 +120,19 @@ public:
      */
     static std::vector<core::server::GroupKeysEntry> onlyKeyId(
         const std::vector<core::server::GroupKeysEntry>& all,
-        const KeyId& keyId
+        const std::string& keyId
     );
 
     static std::string describeResolveFailure(const keytree::ResolveResult& resolved);
 
     server::GroupGetKeyArchiveResult fetchKeyArchive(
-        const GroupId& groupId,
+        const std::string& groupId,
         int64_t targetEpoch,
         int64_t currentEpoch
     );
 
 private:
-    void adoptRotatedAlready(const GroupId& groupId, const server::RotatedAlreadyPayload& payload);
+    void adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
@@ -169,11 +169,16 @@ private:
         keytree::TreeKeyCache& cache
     );
 
-    void dropNodeKeysIfEpochAdvanced(const GroupId& groupId, std::uint32_t epoch);
+    void dropNodeKeysIfEpochAdvanced(const std::string& groupId, std::uint32_t epoch);
+
+    /** Drops everything the envelope paths cache, including open file handles. */
+    void dropEnvelopeState();
+
+    /** Length-prefixed `groupId`, so one pair cannot collide with another under a different split. */
+    static std::string memoKeyFor(const std::string& groupId, const std::string& suffix);
 
     /** The group's symmetric data key named by `keyId`, however far back in the archive it lives. */
-    core::DecryptedEncKeyV2 encKeyById(const GroupId& groupId, const KeyId& keyId);
-
+    core::DecryptedEncKeyV2 encKeyById(const std::string& groupId, const std::string& keyId);
 
     /**
      * The grant private key matching a public key an envelope names.
@@ -182,8 +187,8 @@ private:
      * published history rather than carried on the wire.
      */
     privmx::crypto::PrivateKey grantKeyForPubKey(
-        const GroupId& groupId,
-        const PubKey& groupPubKeyBase58
+        const std::string& groupId,
+        const std::string& groupPubKeyBase58
     );
 
     /**
@@ -228,14 +233,16 @@ private:
     keytree::TreeKeyCacheRegistry _treeKeyCaches;
     GroupEnvelopeEncryptor _envelopeEncryptor;
     /**
-     * Keys already unwrapped for envelopes, by `groupId + "\n" + keyId`.
+     * Keys already unwrapped for envelopes, by `memoKeyFor(groupId, keyId)`.
      *
      * Sound because a keyId names one immutable piece of key material: unwrapping it twice can only ever give
-     * the same answer. Dropped alongside every other key cache on connect and disconnect, so a key cannot
-     * outlive the session that opened it — an era cut therefore takes effect at reconnect, exactly as it
-     * already does for the grant keys `TreeKeyCache` deliberately keeps.
+     * the same answer. Dropped by `dropEnvelopeState` on connect and disconnect, so a key cannot outlive the
+     * session that opened it — an era cut therefore takes effect at reconnect, exactly as it already does for
+     * the grant keys `TreeKeyCache` deliberately keeps.
      */
     privmx::utils::ThreadSaveMap<std::string, core::DecryptedEncKeyV2> _envelopeKeys;
+    /** Which epoch a published grant public key belongs to, by `memoKeyFor(groupId, pubKeyBase58)`. */
+    privmx::utils::ThreadSaveMap<std::string, int64_t> _envelopeGrantEpochs;
     privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<EnvelopeFileState>> _envelopeFiles;
 };
 

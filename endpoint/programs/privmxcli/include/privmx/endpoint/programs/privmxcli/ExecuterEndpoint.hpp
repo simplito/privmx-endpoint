@@ -1763,7 +1763,7 @@ private:
             "finishFileDecryption JSON_ARRAY\n"
             "\tjson format - [fileHandle]\n"
             "\t\tfileHandle [NUMBER] - handle from group.beginFileDecryption\n"
-            "\treturns {groupId, authorPubKey, type}; throws if the ciphertext was shorter than declared"
+            "\treturns {groupId, authorPubKey, type, complete}; throws if the ciphertext was shorter than declared"
         },
         {group_beginFileEncryptionAnonymously,
             "beginFileEncryptionAnonymously JSON_ARRAY\n"

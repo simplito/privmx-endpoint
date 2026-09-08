@@ -62,6 +62,25 @@ protected:
         reader.reset();
         core::EventQueueImpl::getInstance()->clear();
     }
+    /** `user_N` as a roster entry. */
+    core::UserWithPubKey user(int n) {
+        const std::string i = std::to_string(n);
+        return core::UserWithPubKey{
+            .userId = reader->getString("Login.user_" + i + "_id"),
+            .pubKey = reader->getString("Login.user_" + i + "_pubKey")
+        };
+    }
+
+    /** A group in Context_1 with the given members, managed by whoever is listed first. */
+    std::string createGroupOf(const std::vector<core::UserWithPubKey>& users) {
+        std::string groupId = groupApi->createGroup(
+            reader->getString("Context_1.contextId"), users, std::vector<core::UserWithPubKey>{users.front()},
+            core::Buffer::from("public"), core::Buffer::from("private")
+        );
+        EXPECT_FALSE(groupId.empty());
+        return groupId;
+    }
+
     std::shared_ptr<core::Connection> connection;
     std::shared_ptr<group::GroupApi> groupApi;
     Poco::Util::IniFileConfiguration::Ptr reader;
@@ -509,25 +528,7 @@ struct CipherStorage {
 // -- envelopes -----------------------------------------------------------------------------------------
 
 TEST_F(GroupTest, envelope_roundtrip_between_members) {
-    std::string groupId = groupApi->createGroup(
-        reader->getString("Context_1.contextId"),
-        std::vector<core::UserWithPubKey>{
-            core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            },
-            core::UserWithPubKey{
-                .userId = reader->getString("Login.user_2_id"),
-                .pubKey = reader->getString("Login.user_2_pubKey")
-            }
-        },
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-            .userId = reader->getString("Login.user_1_id"),
-            .pubKey = reader->getString("Login.user_1_pubKey")
-        }},
-        core::Buffer::from("public"), core::Buffer::from("private")
-    );
-    ASSERT_FALSE(groupId.empty());
+    std::string groupId = createGroupOf({user(1), user(2)});
 
     core::Buffer envelope;
     EXPECT_NO_THROW({ envelope = groupApi->encrypt(groupId, core::Buffer::from("secret payload")); });
@@ -549,25 +550,7 @@ TEST_F(GroupTest, envelope_roundtrip_between_members) {
 TEST_F(GroupTest, envelope_survives_a_key_rotation) {
     // Removing a member advances the group's key epoch. An envelope sealed before that must still open
     // afterwards — which is the whole reason the key id travels inside it.
-    std::string groupId = groupApi->createGroup(
-        reader->getString("Context_1.contextId"),
-        std::vector<core::UserWithPubKey>{
-            core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            },
-            core::UserWithPubKey{
-                .userId = reader->getString("Login.user_2_id"),
-                .pubKey = reader->getString("Login.user_2_pubKey")
-            }
-        },
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-            .userId = reader->getString("Login.user_1_id"),
-            .pubKey = reader->getString("Login.user_1_pubKey")
-        }},
-        core::Buffer::from("public"), core::Buffer::from("private")
-    );
-    ASSERT_FALSE(groupId.empty());
+    std::string groupId = createGroupOf({user(1), user(2)});
 
     core::Buffer before = groupApi->encrypt(groupId, core::Buffer::from("written before the rotation"));
     const int64_t epochBefore = groupApi->getGroup(groupId).keyVersion;
@@ -584,19 +567,7 @@ TEST_F(GroupTest, envelope_survives_a_key_rotation) {
 
 TEST_F(GroupTest, envelope_from_a_non_member) {
     // A group user_2 is deliberately not in.
-    std::string groupId = groupApi->createGroup(
-        reader->getString("Context_1.contextId"),
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-            .userId = reader->getString("Login.user_1_id"),
-            .pubKey = reader->getString("Login.user_1_pubKey")
-        }},
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-            .userId = reader->getString("Login.user_1_id"),
-            .pubKey = reader->getString("Login.user_1_pubKey")
-        }},
-        core::Buffer::from("public"), core::Buffer::from("private")
-    );
-    ASSERT_FALSE(groupId.empty());
+    std::string groupId = createGroupOf({user(1)});
     const std::string groupPubKey = groupApi->getGroup(groupId).groupPubKey;
     ASSERT_FALSE(groupPubKey.empty());
 
@@ -627,25 +598,7 @@ TEST_F(GroupTest, envelope_file_roundtrip_as_documented) {
     // So the snippets below can be pasted in exactly as the header writes them.
     using namespace privmx::endpoint::group;
     auto& api = *groupApi;
-    std::string groupId = api.createGroup(
-        reader->getString("Context_1.contextId"),
-        std::vector<core::UserWithPubKey>{
-            core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            },
-            core::UserWithPubKey{
-                .userId = reader->getString("Login.user_2_id"),
-                .pubKey = reader->getString("Login.user_2_pubKey")
-            }
-        },
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-            .userId = reader->getString("Login.user_1_id"),
-            .pubKey = reader->getString("Login.user_1_pubKey")
-        }},
-        core::Buffer::from("public"), core::Buffer::from("private")
-    );
-    ASSERT_FALSE(groupId.empty());
+    std::string groupId = createGroupOf({user(1), user(2)});
 
     // Deliberately not a whole number of chunks, so the short final chunk is exercised.
     std::string plain;
@@ -696,19 +649,7 @@ TEST_F(GroupTest, envelope_file_roundtrip_as_documented) {
 }
 
 TEST_F(GroupTest, envelope_file_truncation_is_detected) {
-    std::string groupId = groupApi->createGroup(
-        reader->getString("Context_1.contextId"),
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-            .userId = reader->getString("Login.user_1_id"),
-            .pubKey = reader->getString("Login.user_1_pubKey")
-        }},
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-            .userId = reader->getString("Login.user_1_id"),
-            .pubKey = reader->getString("Login.user_1_pubKey")
-        }},
-        core::Buffer::from("public"), core::Buffer::from("private")
-    );
-    ASSERT_FALSE(groupId.empty());
+    std::string groupId = createGroupOf({user(1)});
 
     const std::string plain(300 * 1024, 'x'); // three chunks
     int64_t writeHandle = groupApi->beginFileEncryption(groupId, (int64_t)plain.size());
@@ -725,24 +666,39 @@ TEST_F(GroupTest, envelope_file_truncation_is_detected) {
     EXPECT_ANY_THROW({ groupApi->finishFileDecryption(readHandle); });
 }
 
+TEST_F(GroupTest, envelope_file_overrun_is_refused_as_it_arrives) {
+    // The mirror of truncation, and the reason it is caught on the way in rather than at the close: bytes
+    // past the last chunk can never be opened, so buffering them until `finishFileDecryption` would let a
+    // caller fed a long ciphertext against a short declared size accumulate the whole thing in memory first.
+    std::string groupId = createGroupOf({user(1)});
+
+    const std::string plain(200 * 1024, 'y'); // two chunks, the second short
+    int64_t writeHandle = groupApi->beginFileEncryption(groupId, (int64_t)plain.size());
+    std::string cipher = groupApi->encryptFileChunk(writeHandle, core::Buffer::from(plain)).stdString();
+    core::Buffer envelope = groupApi->finishFileEncryption(writeHandle);
+
+    // The whole file, and then a megabyte of anything at all.
+    int64_t readHandle = groupApi->beginFileDecryption(envelope);
+    EXPECT_THROW(
+        { groupApi->decryptFileChunk(readHandle, core::Buffer::from(cipher + std::string(1 << 20, 'z'))); },
+        core::Exception
+    );
+    // A caller that swallowed the throw and closed anyway still gets told: the excess is still buffered, so
+    // the close-time classification reaches the same verdict.
+    EXPECT_THROW({ groupApi->finishFileDecryption(readHandle); }, core::Exception);
+
+    // Exactly the declared length is still accepted, and still counts as whole.
+    int64_t exact = groupApi->beginFileDecryption(envelope);
+    groupApi->decryptFileChunk(exact, core::Buffer::from(cipher));
+    EXPECT_TRUE(groupApi->finishFileDecryption(exact).complete);
+}
+
 TEST_F(GroupTest, envelope_file_range_read_as_documented) {
     // The range-reading example from GroupApi.hpp::seekInEncryptedFile, run as written.
     // So the snippets below can be pasted in exactly as the header writes them.
     using namespace privmx::endpoint::group;
     auto& api = *groupApi;
-    std::string groupId = api.createGroup(
-        reader->getString("Context_1.contextId"),
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-            .userId = reader->getString("Login.user_1_id"),
-            .pubKey = reader->getString("Login.user_1_pubKey")
-        }},
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-            .userId = reader->getString("Login.user_1_id"),
-            .pubKey = reader->getString("Login.user_1_pubKey")
-        }},
-        core::Buffer::from("public"), core::Buffer::from("private")
-    );
-    ASSERT_FALSE(groupId.empty());
+    std::string groupId = createGroupOf({user(1)});
 
     std::string plain;
     for (int i = 0; plain.size() < 600 * 1024; ++i) {
@@ -817,25 +773,7 @@ TEST_F(GroupTest, envelope_file_range_read_as_documented) {
 TEST_F(GroupTest, envelope_repeated_decrypt_and_two_keys_in_one_session) {
     // Opening many envelopes reuses one unwrapped key, and a rotation puts a second key in play alongside it.
     // The risk this guards is not speed but the memo handing back the wrong key once two are cached at once.
-    std::string groupId = groupApi->createGroup(
-        reader->getString("Context_1.contextId"),
-        std::vector<core::UserWithPubKey>{
-            core::UserWithPubKey{
-                .userId = reader->getString("Login.user_1_id"),
-                .pubKey = reader->getString("Login.user_1_pubKey")
-            },
-            core::UserWithPubKey{
-                .userId = reader->getString("Login.user_2_id"),
-                .pubKey = reader->getString("Login.user_2_pubKey")
-            }
-        },
-        std::vector<core::UserWithPubKey>{core::UserWithPubKey{
-            .userId = reader->getString("Login.user_1_id"),
-            .pubKey = reader->getString("Login.user_1_pubKey")
-        }},
-        core::Buffer::from("public"), core::Buffer::from("private")
-    );
-    ASSERT_FALSE(groupId.empty());
+    std::string groupId = createGroupOf({user(1), user(2)});
 
     std::vector<core::Buffer> envelopes;
     for (int i = 0; i < 20; ++i) {

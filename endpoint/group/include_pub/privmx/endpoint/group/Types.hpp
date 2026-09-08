@@ -12,22 +12,9 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
-/**
- * Names for the primitives this API passes around.
- *
- * These are aliases, not distinct types. `FileHandle` and `FileSize` are both `int64_t`, and nothing stops
- * you passing one where the other belongs — the compiler cannot help here, and pretending otherwise would be
- * worse than saying so. What they buy is a signature that states its own meaning, carried through to the
- * generated documentation and to the language bindings. Enforcement lives in argument validation and in the
- * tests, not in the type system.
- */
+// Aliases, not distinct types: nothing stops you passing a FileSize where a FileHandle belongs. They exist
+// so the file API's int64_t signatures state their own meaning in the generated docs and the bindings.
 
-/** ID of a Group. */
-using GroupId = std::string;
-/** ID of one of a Group's symmetric data keys. */
-using KeyId = std::string;
-/** A public key, base58-DER encoded. */
-using PubKey = std::string;
 /** A sealed envelope, as produced by `encrypt` / `encryptAnonymously` / `finishFileEncryption`. */
 using Envelope = core::Buffer;
 /** An open encrypted-file handle. Opaque — its numeric value carries no meaning. */

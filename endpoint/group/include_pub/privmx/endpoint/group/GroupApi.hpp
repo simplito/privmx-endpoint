@@ -80,7 +80,7 @@ public:
      * @param groupId ID of the Group
      * @param newMembers the members to add, each with their public key and the role they take
      */
-    void addGroupMembers(const GroupId& groupId, const std::vector<GroupMemberToAdd>& newMembers);
+    void addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
 
     /**
      * Removes several members at once, advancing the key epoch **once**.
@@ -95,7 +95,7 @@ public:
      * @param groupId ID of the Group
      * @param userIds IDs of the members to remove
      */
-    void removeGroupMembers(const GroupId& groupId, const std::vector<std::string>& userIds);
+    void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     /**
      * Updates an existing Group's metadata.
@@ -111,7 +111,7 @@ public:
      * @param policies Group's policies
      */
     void updateGroup(
-        const GroupId& groupId,
+        const std::string& groupId,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const int64_t version,
@@ -124,7 +124,7 @@ public:
      *
      * @param groupId ID of the Group to delete
      */
-    void deleteGroup(const GroupId& groupId);
+    void deleteGroup(const std::string& groupId);
 
     /**
      * Gets a Group by given Group ID.
@@ -132,7 +132,7 @@ public:
      * @param groupId ID of the Group to get
      * @return Group struct containing info about the Group
      */
-    Group getGroup(const GroupId& groupId);
+    Group getGroup(const std::string& groupId);
 
     /**
      * Gets a list of Groups in given Context.
@@ -159,7 +159,7 @@ public:
      * @param content data to encrypt
      * @return the envelope
      */
-    Envelope encrypt(const GroupId& groupId, const core::Buffer& content);
+    Envelope encrypt(const std::string& groupId, const core::Buffer& content);
 
     /**
      * Seals content for a Group without revealing, or proving, who sent it.
@@ -180,8 +180,8 @@ public:
      * @return the envelope
      */
     Envelope encryptAnonymously(
-        const GroupId& groupId,
-        const PubKey& groupPubKey,
+        const std::string& groupId,
+        const std::string& groupPubKey,
         const core::Buffer& content
     );
 
@@ -236,7 +236,7 @@ public:
      * @param size total size of the plaintext file, in bytes
      * @return handle to seal file data with
      */
-    FileHandle beginFileEncryption(const GroupId& groupId, const FileSize size);
+    FileHandle beginFileEncryption(const std::string& groupId, const FileSize size);
 
     /**
      * Begins sealing a file for a Group without revealing, or proving, who sent it.
@@ -258,8 +258,8 @@ public:
      * @return handle to seal file data with
      */
     FileHandle beginFileEncryptionAnonymously(
-        const GroupId& groupId,
-        const PubKey& groupPubKey,
+        const std::string& groupId,
+        const std::string& groupPubKey,
         const FileSize size
     );
 

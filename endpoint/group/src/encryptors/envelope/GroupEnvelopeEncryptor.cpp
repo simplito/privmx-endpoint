@@ -67,14 +67,13 @@ public:
         return value;
     }
 
+    void skip(std::size_t n) {
+        require(n);
+        _pos += n;
+    }
+
     /** Bytes consumed so far — i.e. the header, once the header fields have been read. */
     std::string consumed() const { return _buf.substr(0, _pos); }
-
-    void requireEnd() const {
-        if (_pos != _buf.size()) {
-            throw InvalidEnvelopeFormatException("trailing bytes after envelope payload");
-        }
-    }
 
 private:
     void require(std::size_t n) const {
@@ -105,6 +104,23 @@ std::string toBE(Poco::UInt64 value, int bytes) {
         value >>= 8;
     }
     return out;
+}
+
+/**
+ * The sealed tail both file types carry: the echoed header, then `u64be plainSize || fileKey32`.
+ *
+ * `plain` has already been checked to begin with `header` — that check is what authenticates the routing —
+ * so this only has to step past it and read what follows.
+ */
+std::pair<ByteCount, std::string> readFileBody(const std::string& plain, const std::string& header) {
+    Cursor inner(plain);
+    inner.skip(header.size());
+    ByteCount plainSize = inner.readU64();
+    std::string fileKey = inner.readRest();
+    if (fileKey.size() != CONTENT_KEY_SIZE) {
+        throw InvalidEnvelopeFormatException("file envelope carries a malformed file key");
+    }
+    return {plainSize, fileKey};
 }
 
 } // namespace
@@ -298,15 +314,7 @@ GroupEnvelopeEncryptor::FileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
         throw InvalidEnvelopeFormatException("envelope header does not match the signed header");
     }
 
-    Cursor inner(plain.stdString());
-    for (std::size_t i = 0; i < header.size(); ++i) {
-        inner.readU8();
-    }
-    ByteCount plainSize = inner.readU64();
-    std::string fileKey = inner.readRest();
-    if (fileKey.size() != CONTENT_KEY_SIZE) {
-        throw InvalidEnvelopeFormatException("file envelope carries a malformed file key");
-    }
+    auto [plainSize, fileKey] = readFileBody(plain.stdString(), header);
     return FileHeader{
         .type = ENVELOPE_FROM_MEMBER,
         .groupId = groupId,
@@ -361,15 +369,7 @@ GroupEnvelopeEncryptor::FileHeader GroupEnvelopeEncryptor::unpackAnonymousFileEn
         throw InvalidEnvelopeFormatException("envelope header does not match the sealed header");
     }
 
-    Cursor inner(plain.stdString());
-    for (std::size_t i = 0; i < header.size(); ++i) {
-        inner.readU8();
-    }
-    ByteCount plainSize = inner.readU64();
-    std::string fileKey = inner.readRest();
-    if (fileKey.size() != CONTENT_KEY_SIZE) {
-        throw InvalidEnvelopeFormatException("file envelope carries a malformed file key");
-    }
+    auto [plainSize, fileKey] = readFileBody(plain.stdString(), header);
     return FileHeader{
         .type = ENVELOPE_ANONYMOUS,
         .groupId = groupId,
@@ -399,29 +399,13 @@ core::Buffer GroupEnvelopeEncryptor::decryptChunk(
 
 // -- dispatch ------------------------------------------------------------------------------------------
 
-GroupEnvelopeEncryptor::Routing GroupEnvelopeEncryptor::peek(const core::Buffer& envelope) {
-    Cursor cursor(envelope.stdString());
-    if (cursor.readU8() != VERSION) {
-        throw InvalidEnvelopeFormatException("unsupported envelope version");
-    }
-    Poco::UInt8 type = cursor.readU8();
-    Routing routing;
-    routing.groupId = cursor.readField();
-    if (type == TYPE_GROUP_KEY) {
-        routing.type = ENVELOPE_FROM_MEMBER;
-        routing.keyId = cursor.readField();
-    } else if (type == TYPE_ANONYMOUS) {
-        routing.type = ENVELOPE_ANONYMOUS;
-        routing.groupPubKey = cursor.readField();
-    } else {
-        // File types included: those open through `beginFileDecryption`, which knows to expect a body.
-        // Letting one through here would mean handing back a file key as though it were message content.
-        throw InvalidEnvelopeFormatException("unsupported envelope type");
-    }
-    return routing;
-}
+GroupEnvelopeEncryptor::Routing GroupEnvelopeEncryptor::peekOf(const core::Buffer& envelope, bool wantFile) {
+    // The member and anonymous headers are shaped alike in both families, so the only thing that varies is
+    // which two type bytes are acceptable. Crossing the families is refused rather than tolerated: see the
+    // notes on `peek` and `peekFile` for what each direction would leak.
+    const Poco::UInt8 memberType = wantFile ? TYPE_FILE : TYPE_GROUP_KEY;
+    const Poco::UInt8 anonType = wantFile ? TYPE_ANON_FILE : TYPE_ANONYMOUS;
 
-GroupEnvelopeEncryptor::Routing GroupEnvelopeEncryptor::peekFile(const core::Buffer& envelope) {
     Cursor cursor(envelope.stdString());
     if (cursor.readU8() != VERSION) {
         throw InvalidEnvelopeFormatException("unsupported envelope version");
@@ -429,16 +413,14 @@ GroupEnvelopeEncryptor::Routing GroupEnvelopeEncryptor::peekFile(const core::Buf
     Poco::UInt8 type = cursor.readU8();
     Routing routing;
     routing.groupId = cursor.readField();
-    if (type == TYPE_FILE) {
+    if (type == memberType) {
         routing.type = ENVELOPE_FROM_MEMBER;
         routing.keyId = cursor.readField();
-    } else if (type == TYPE_ANON_FILE) {
+    } else if (type == anonType) {
         routing.type = ENVELOPE_ANONYMOUS;
         routing.groupPubKey = cursor.readField();
     } else {
-        // Types 1 and 2 included: a message envelope has no body to stream, and routing it here would leave
-        // the caller with a handle onto data that does not exist.
-        throw InvalidEnvelopeFormatException("not a file envelope");
+        throw InvalidEnvelopeFormatException(wantFile ? "not a file envelope" : "unsupported envelope type");
     }
     return routing;
 }

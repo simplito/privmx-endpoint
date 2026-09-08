@@ -57,7 +57,7 @@ std::string GroupApi::createGroup(
     }
 }
 
-void GroupApi::addGroupMembers(const GroupId& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
+void GroupApi::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     if (newMembers.empty()) {
@@ -81,7 +81,7 @@ void GroupApi::addGroupMembers(const GroupId& groupId, const std::vector<GroupMe
     }
 }
 
-void GroupApi::removeGroupMembers(const GroupId& groupId, const std::vector<std::string>& userIds) {
+void GroupApi::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     for (const std::string& userId : userIds) {
@@ -96,7 +96,7 @@ void GroupApi::removeGroupMembers(const GroupId& groupId, const std::vector<std:
 }
 
 void GroupApi::updateGroup(
-    const GroupId& groupId,
+    const std::string& groupId,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const int64_t version,
@@ -113,7 +113,7 @@ void GroupApi::updateGroup(
     }
 }
 
-void GroupApi::deleteGroup(const GroupId& groupId) {
+void GroupApi::deleteGroup(const std::string& groupId) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     try {
@@ -124,7 +124,7 @@ void GroupApi::deleteGroup(const GroupId& groupId) {
     }
 }
 
-Group GroupApi::getGroup(const GroupId& groupId) {
+Group GroupApi::getGroup(const std::string& groupId) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     try {
@@ -150,7 +150,7 @@ core::PagingList<GroupSummary> GroupApi::listGroups(
     }
 }
 
-Envelope GroupApi::encrypt(const GroupId& groupId, const core::Buffer& content) {
+Envelope GroupApi::encrypt(const std::string& groupId, const core::Buffer& content) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     try {
@@ -172,8 +172,8 @@ DecryptedEnvelope GroupApi::decrypt(const Envelope& envelope) {
 }
 
 Envelope GroupApi::encryptAnonymously(
-    const GroupId& groupId,
-    const PubKey& groupPubKey,
+    const std::string& groupId,
+    const std::string& groupPubKey,
     const core::Buffer& content
 ) {
     auto impl = getImpl();
@@ -199,7 +199,7 @@ namespace {
 constexpr size_t MAX_FILE_BLOCK = 4 * 1024 * 1024;
 } // namespace
 
-FileHandle GroupApi::beginFileEncryption(const GroupId& groupId, const FileSize size) {
+FileHandle GroupApi::beginFileEncryption(const std::string& groupId, const FileSize size) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     if (size < 0) {
@@ -214,8 +214,8 @@ FileHandle GroupApi::beginFileEncryption(const GroupId& groupId, const FileSize 
 }
 
 FileHandle GroupApi::beginFileEncryptionAnonymously(
-    const GroupId& groupId,
-    const PubKey& groupPubKey,
+    const std::string& groupId,
+    const std::string& groupPubKey,
     const FileSize size
 ) {
     auto impl = getImpl();

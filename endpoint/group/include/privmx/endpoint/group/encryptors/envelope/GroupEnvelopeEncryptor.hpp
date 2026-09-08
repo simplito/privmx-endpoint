@@ -1,8 +1,11 @@
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_ENCRYPTORS_ENVELOPE_GROUPENVELOPEENCRYPTOR_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_ENCRYPTORS_ENVELOPE_GROUPENVELOPEENCRYPTOR_HPP_
 
+#include <cassert>
 #include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <Poco/Types.h>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
@@ -16,17 +19,26 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
-/**
- * Names for the quantities the chunk arithmetic juggles.
- *
- * Aliases, not distinct types — but three different unsigned meanings pass through the same functions here
- * (which chunk, how many chunks, how many bytes), and a signature that says which one it wants is the
- * cheapest guard available. `ChunkIndex` is deliberately 32-bit: the wire writes it as `u32be` into the chunk
- * key, so that width is a format constraint rather than a choice.
- */
+/** Deliberately 32-bit: the wire writes it as `u32be` into the chunk key, so the width is a format constraint. */
 using ChunkIndex = Poco::UInt32;
-using ChunkCount = Poco::UInt64;
+/** A count of bytes, or of chunks. */
 using ByteCount = Poco::UInt64;
+
+/**
+ * Sealed size of a chunk holding `plainLen` bytes: type byte, the cipher's zero block, PKCS#7-padded
+ * ciphertext, tag. PKCS#7 pads an exact multiple of the block size out by a whole extra block.
+ *
+ * Every chunk's sealed length is a function of its plaintext length alone, and the plaintext length of chunk
+ * `i` follows from the signed `plainSize`. That is what lets the read side slice a stream it is being fed in
+ * arbitrary pieces — including the short final chunk, which is otherwise indistinguishable from a chunk that
+ * simply has not finished arriving.
+ *
+ * At namespace scope so `ENCRYPTED_CHUNK_SIZE` can be derived from it rather than restating it: an in-class
+ * initializer cannot call a member of the class it is initializing.
+ */
+constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
+    return 1 + 16 + (plainLen + 16 - (plainLen % 16)) + 16;
+}
 
 /**
  * The group envelope wire format: packing, parsing and the crypto, and nothing else.
@@ -60,8 +72,11 @@ using ByteCount = Poco::UInt64;
  * Type 2 carries no author signature. The sender is anonymous by construction, so a signature by their
  * throwaway key would attest to nothing; header integrity there rests on the payload's own encrypt-then-MAC.
  *
- * `encrypt`/`sign` are `core::DataInnerEncryptorV4`, i.e. CipherType 4 —
- * `0x04 | iv16 | aes-256-cbc | hmac-sha256 tag16`, random IV, encrypt-then-MAC, raw bytes with no base64.
+ * `encrypt`/`sign` are `core::DataInnerEncryptorV4`, i.e. CipherType 4 — encrypt-then-MAC, raw bytes with no
+ * base64. Its layout is `0x04 | cbc(zero16 || plain) | hmac-sha256 tag16`: the IV is random but *not*
+ * transmitted, because the cipher prepends a 16-byte zero block to the plaintext and decrypt reuses that
+ * block's ciphertext as the CBC IV for the rest. Sixteen bytes of overhead either way — see
+ * `encryptedChunkSizeFor`, whose arithmetic depends on this and is pinned by a test.
  */
 class GroupEnvelopeEncryptor {
 public:
@@ -74,23 +89,8 @@ public:
      */
     static constexpr ByteCount CHUNK_SIZE = 128 * 1024;
 
-    /**
-     * Sealed size of a full chunk: `0x04 | iv16 | cbc(CHUNK_SIZE) | tag16`. PKCS#7 pads an exact multiple of
-     * the block size out by a whole extra block, so this is CHUNK_SIZE + 16, not CHUNK_SIZE.
-     */
-    static constexpr ByteCount ENCRYPTED_CHUNK_SIZE = 1 + 16 + (CHUNK_SIZE + 16) + 16;
-
-    /**
-     * Sealed size of a chunk holding `plainLen` bytes.
-     *
-     * Every chunk's sealed length is a function of its plaintext length alone, and the plaintext length of
-     * chunk `i` follows from the signed `plainSize`. That is what lets the read side slice a stream it is
-     * being fed in arbitrary pieces — including the short final chunk, which is otherwise indistinguishable
-     * from a chunk that simply has not finished arriving.
-     */
-    static ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
-        return 1 + 16 + (plainLen + 16 - (plainLen % 16)) + 16;
-    }
+    /** Sealed size of a full chunk. Derived, so it cannot drift from `encryptedChunkSizeFor`. */
+    static constexpr ByteCount ENCRYPTED_CHUNK_SIZE = encryptedChunkSizeFor(CHUNK_SIZE);
 
     /**
      * Offset of chunk `index` in the ciphertext stream.
@@ -102,8 +102,17 @@ public:
         return static_cast<ByteCount>(index) * ENCRYPTED_CHUNK_SIZE;
     }
 
-    /** Plaintext bytes in chunk `index` of a file of `plainSize` bytes. */
+    /**
+     * Number of chunks a file of `plainSize` bytes occupies. An exact multiple of CHUNK_SIZE gets no trailing
+     * empty chunk and an empty file gets none at all; the off-by-one lives nowhere but here.
+     */
+    static constexpr ByteCount chunkCount(ByteCount plainSize) { return (plainSize + CHUNK_SIZE - 1) / CHUNK_SIZE; }
+
+    /** Plaintext bytes in chunk `index` of a file of `plainSize` bytes. `index` must be below `chunkCount`. */
     static ByteCount plainChunkSizeAt(ByteCount plainSize, ChunkIndex index) {
+        // Past the end the subtraction below wraps and hands back a full chunk, which desynchronises the
+        // stream several chunks later rather than here. Both callers loop under `chunkCount`; say so.
+        assert(index < chunkCount(plainSize));
         ByteCount offset = static_cast<ByteCount>(index) * CHUNK_SIZE;
         return plainSize - offset < CHUNK_SIZE ? plainSize - offset : CHUNK_SIZE;
     }
@@ -133,8 +142,8 @@ public:
      */
     static ReadOutcome classifyRead(
         bool seeked,
-        ChunkCount chunksOpened,
-        ChunkCount chunksExpected,
+        ByteCount chunksOpened,
+        ByteCount chunksExpected,
         bool bufferEmpty
     ) {
         // A seeked reader chose what to read, so neither "did it all arrive" nor "was there anything left
@@ -212,14 +221,6 @@ public:
     core::Buffer encryptChunk(const core::Buffer& plainChunk, const std::string& fileKey, ChunkIndex index);
     core::Buffer decryptChunk(const core::Buffer& cipherChunk, const std::string& fileKey, ChunkIndex index);
 
-    /**
-     * Number of chunks a file of `plainSize` bytes occupies.
-     *
-     * An exact multiple of CHUNK_SIZE gets no trailing empty chunk, and an empty file gets none at all.
-     * Stated here once so both sides agree; the off-by-one lives nowhere else.
-     */
-    static ChunkCount chunkCount(ByteCount plainSize) { return (plainSize + CHUNK_SIZE - 1) / CHUNK_SIZE; }
-
     // -- dispatch ----------------------------------------------------------------------------------------
 
     /** Reads the routing header without opening anything. Throws if the envelope is malformed. */
@@ -229,10 +230,18 @@ public:
         std::string keyId;       //< set for ENVELOPE_FROM_MEMBER only
         std::string groupPubKey; //< base58-DER; set for ENVELOPE_ANONYMOUS only
     };
-    Routing peek(const core::Buffer& envelope);
 
-    /** Peeks a file envelope's routing, member or anonymous. Rejects anything that is not a file envelope. */
-    Routing peekFile(const core::Buffer& envelope);
+    /**
+     * Routes a message envelope (type 1 or 2). A file envelope is refused: letting one through would mean
+     * handing back a file key as though it were message content.
+     */
+    Routing peek(const core::Buffer& envelope) { return peekOf(envelope, false); }
+
+    /**
+     * Routes a file envelope (type 3 or 4). A message envelope is refused: it has no body to stream, so
+     * routing it here would leave the caller with a handle onto data that does not exist.
+     */
+    Routing peekFile(const core::Buffer& envelope) { return peekOf(envelope, true); }
 
     DecryptedEnvelope openGroupKeyEnvelope(const core::Buffer& envelope, const std::string& groupKey);
     DecryptedEnvelope openAnonymousEnvelope(
@@ -243,6 +252,9 @@ public:
 private:
     /** Domain separator on the ECIES plaintext. See the note in the .cpp — it is load-bearing, not decoration. */
     static const std::string ECIES_DOMAIN;
+
+    /** Shared by `peek` and `peekFile`; `wantFile` picks which pair of type bytes is acceptable. */
+    static Routing peekOf(const core::Buffer& envelope, bool wantFile);
 
     static std::string writeHeader(Poco::UInt8 type, const std::vector<std::string>& fields);
     static std::string chunkKey(const std::string& fileKey, ChunkIndex index);

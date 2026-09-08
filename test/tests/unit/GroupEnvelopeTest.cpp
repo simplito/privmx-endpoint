@@ -29,6 +29,7 @@ limitations under the License.
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/Exception.hpp>
 
 #include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp>
@@ -181,6 +182,25 @@ TEST_F(GroupEnvelope, TamperedHeaderFieldsAreRejected) {
     }
 }
 
+TEST_F(GroupEnvelope, AMalformedSignatureFrameThrowsAPrivmxException) {
+    // The group key is symmetric, so a fellow member chooses the plaintext under the seal outright. A payload
+    // of `\x01\xff` claims a 255-byte signature and carries none: the frame parser used to run off the end
+    // and raise std::out_of_range, which neither `core::Exception` nor the endpoint's converter covers, so it
+    // crossed the public API — and the language bindings — as a bare standard-library error. What it throws
+    // instead does not matter much; that it is one of ours does.
+    core::DataInnerEncryptorV4 raw;
+    std::string header;
+    header.push_back(static_cast<char>(GroupEnvelopeEncryptor::VERSION));
+    header.push_back(1); // TYPE_GROUP_KEY
+    for (const std::string& field : {groupId, keyId, author.getPublicKey().toDER()}) {
+        header.push_back(static_cast<char>(field.size()));
+        header.append(field);
+    }
+    core::Buffer forged = buf(header + raw.encrypt(buf(std::string("\x01\xFF", 2)), groupKey).stdString());
+
+    EXPECT_THROW(enc.openGroupKeyEnvelope(forged, groupKey), core::Exception);
+}
+
 TEST_F(GroupEnvelope, WrongGroupKeyIsRejected) {
     core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupKey);
     EXPECT_ANY_THROW(enc.openGroupKeyEnvelope(env, privmx::crypto::Crypto::randomBytes(32)));
@@ -292,7 +312,7 @@ TEST_F(GroupEnvelope, StreamingRoundTripAtAwkwardSizes) {
 
         // Seal, slicing exactly the way the write path does.
         std::string cipher;
-        const ChunkCount chunks = GroupEnvelopeEncryptor::chunkCount(size);
+        const ByteCount chunks = GroupEnvelopeEncryptor::chunkCount(size);
         for (ChunkIndex i = 0; i < chunks; ++i) {
             const ByteCount len = GroupEnvelopeEncryptor::plainChunkSizeAt(size, i);
             cipher.append(enc.encryptChunk(buf(plain.substr(i * C, len)), fileKey, i).stdString());
@@ -302,7 +322,7 @@ TEST_F(GroupEnvelope, StreamingRoundTripAtAwkwardSizes) {
         std::string recovered;
         std::size_t offset = 0;
         for (ChunkIndex i = 0; i < chunks; ++i) {
-            const ByteCount need = GroupEnvelopeEncryptor::encryptedChunkSizeFor(
+            const ByteCount need = encryptedChunkSizeFor(
                 GroupEnvelopeEncryptor::plainChunkSizeAt(size, i)
             );
             ASSERT_LE(offset + need, cipher.size()) << "size " << size << " chunk " << i;
@@ -332,7 +352,7 @@ TEST_F(GroupEnvelope, DroppedTrailingChunkIsOnlyCaughtByTheDeclaredSize) {
     const std::size_t delivered = chunk0.size() + chunk1.size();
     std::size_t expected = 0;
     for (ChunkIndex i = 0; i < 3; ++i) {
-        expected += GroupEnvelopeEncryptor::encryptedChunkSizeFor(
+        expected += encryptedChunkSizeFor(
             GroupEnvelopeEncryptor::plainChunkSizeAt(size, i)
         );
     }

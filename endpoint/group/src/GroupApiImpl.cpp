@@ -47,7 +47,7 @@ GroupApiImpl::GroupApiImpl(
         core::ModuleBaseApi::GroupResolvers{
             // Resolves a group's own grant key by climbing its own tree — swallows a failed climb to nullopt.
             .groupPrivKey =
-                [this](const GroupId& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
+                [this](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
                 try {
                     return resolveGroupPrivKey(groupId, epoch);
                 } catch (...) {
@@ -245,7 +245,7 @@ std::string GroupApiImpl::createGroup(
     return result.groupId;
 }
 
-void GroupApiImpl::addGroupMembers(const GroupId& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
+void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
     // One read, not two. The bridge holds the roster, so it allocates the seats and serves the nodes seating them
     // needs in the same answer — where this used to fetch `leafAssignment` only to work out where a newcomer may
     // sit, then come back for the window around that seat.
@@ -420,7 +420,7 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
     });
 }
 
-void GroupApiImpl::removeGroupMembers(const GroupId& groupId, const std::vector<std::string>& userIds) {
+void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
     // Every departing member's path, because one delta covers their union — and one epoch covers the batch, where
     // removing them one at a time would stale every container the group can read once per member.
     server::GroupGetModel getModel{
@@ -544,7 +544,7 @@ void GroupApiImpl::removeGroupMembers(const GroupId& groupId, const std::vector<
 static constexpr unsigned int BRIDGE_GROUP_ROTATED_ALREADY = 0x621C;
 
 void GroupApiImpl::updateGroup(
-    const GroupId& groupId,
+    const std::string& groupId,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const int64_t version,
@@ -630,14 +630,14 @@ void GroupApiImpl::updateGroup(
     invalidateModuleKeysInCache(groupId);
 }
 
-void GroupApiImpl::deleteGroup(const GroupId& groupId) {
+void GroupApiImpl::deleteGroup(const std::string& groupId) {
     server::GroupDeleteModel model{.groupId = groupId};
     _serverApi.groupDelete(model);
     _treeKeyCaches.drop(groupId);
     invalidateModuleKeysInCache(groupId);
 }
 
-void GroupApiImpl::adoptRotatedAlready(const GroupId& groupId, const server::RotatedAlreadyPayload& payload) {
+void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload) {
     // Verifies the winner's key entry and nothing else — no tree is submitted, so the default path view is enough.
     server::GroupGetModel getModel{
         .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
@@ -673,7 +673,7 @@ void GroupApiImpl::adoptRotatedAlready(const GroupId& groupId, const server::Rot
     invalidateModuleKeysInCache(groupId);
 }
 
-Group GroupApiImpl::getGroup(const GroupId& groupId) {
+Group GroupApiImpl::getGroup(const std::string& groupId) {
     server::GroupGetModel params{
         .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
     };
@@ -751,7 +751,7 @@ core::ModuleBaseApi::GroupResolvers GroupApiImpl::makeGroupResolvers(
 ) {
     return core::ModuleBaseApi::GroupResolvers{
         .groupPrivKey =
-            [groupApiImpl](const GroupId& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
+            [groupApiImpl](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
             try {
                 return groupApiImpl->resolveGroupPrivKey(groupId, epoch);
             } catch (...) {
@@ -807,17 +807,27 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
 
 void GroupApiImpl::processConnectedEvent() {
     _treeKeyCaches.dropAll();
-    _envelopeKeys.clear();
+    dropEnvelopeState();
     _groupDataSchemaMapper->dropAllVersionPins();
     invalidateModuleKeysInCache();
 }
 
 void GroupApiImpl::processDisconnectedEvent() {
     _treeKeyCaches.dropAll();
-    _envelopeKeys.clear();
+    dropEnvelopeState();
     _groupDataSchemaMapper->dropAllVersionPins();
     invalidateModuleKeysInCache();
     privmx::utils::ManualManagedClass<GroupApiImpl>::cleanup();
+}
+
+void GroupApiImpl::dropEnvelopeState() {
+    _envelopeKeys.clear();
+    _envelopeGrantEpochs.clear();
+    // Open file handles too, not just the key caches: an `EnvelopeFileState` holds the group key and the file
+    // key as plainly as `_envelopeKeys` does, so leaving them behind would make "no key outlives the session
+    // that opened it" false for exactly the handles holding the most material. A handle used after this
+    // reports "not an open encrypted-file handle", which is what a reconnect has in fact made true.
+    _envelopeFiles.clear();
 }
 
 std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
@@ -860,7 +870,7 @@ std::string GroupApiImpl::buildSubscriptionQuery(
     return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
 }
 
-privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const GroupId& groupId, int64_t epoch) {
+privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& groupId, int64_t epoch) {
     server::GroupGetModel params{
         .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
     };
@@ -886,7 +896,7 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const GroupId& grou
     throw core::EncryptionKeyValidationException(describeResolveFailure(resolved));
 }
 
-void GroupApiImpl::dropNodeKeysIfEpochAdvanced(const GroupId& groupId, std::uint32_t epoch) {
+void GroupApiImpl::dropNodeKeysIfEpochAdvanced(const std::string& groupId, std::uint32_t epoch) {
     const auto cache = _treeKeyCaches.get(groupId);
     const auto known = cache->highestGrantEpoch();
     if (!known.has_value() || epoch > known.value()) {
@@ -895,7 +905,7 @@ void GroupApiImpl::dropNodeKeysIfEpochAdvanced(const GroupId& groupId, std::uint
 }
 
 privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKeyArchive(
-    const GroupId& groupId,
+    const std::string& groupId,
     int64_t targetEpoch,
     int64_t currentEpoch
 ) {
@@ -939,7 +949,7 @@ std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& r
 
 std::vector<core::server::GroupKeysEntry> GroupApiImpl::onlyKeyId(
     const std::vector<core::server::GroupKeysEntry>& all,
-    const KeyId& keyId
+    const std::string& keyId
 ) {
     std::vector<core::server::GroupKeysEntry> filtered;
     for (const auto& entry : all) {
@@ -957,11 +967,15 @@ std::vector<core::server::GroupKeysEntry> GroupApiImpl::onlyKeyId(
     return filtered;
 }
 
-core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const GroupId& groupId, const KeyId& keyId) {
+std::string GroupApiImpl::memoKeyFor(const std::string& groupId, const std::string& suffix) {
     // Length-prefixed rather than joined by a separator: `validateId` bounds a groupId's length but not its
-    // characters, so a plain join would let one (groupId, keyId) pair collide with another under a different
-    // split. Same reason `rosterTag` length-prefixes its lists.
-    const std::string memoKey = std::to_string(groupId.size()) + ":" + groupId + keyId;
+    // characters, so a plain join would let one pair collide with another under a different split. Same
+    // reason `rosterTag` length-prefixes its lists.
+    return std::to_string(groupId.size()) + ":" + groupId + suffix;
+}
+
+core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, const std::string& keyId) {
+    const std::string memoKey = memoKeyFor(groupId, keyId);
     if (auto cached = _envelopeKeys.get(memoKey); cached.has_value()) {
         return cached.value();
     }
@@ -969,10 +983,11 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const GroupId& groupId, const K
     // Whatever an earlier `getGroup` or `encrypt` on this group already put in the key cache. Reading it
     // costs nothing; only a keyId we have never seen forces a fetch.
     core::ModuleKeys moduleKeys = getModuleKeys(groupId);
-    if (onlyKeyId(moduleKeys.groupKeys, keyId).empty()) {
+    auto candidates = onlyKeyId(moduleKeys.groupKeys, keyId);
+    if (candidates.empty()) {
         moduleKeys = getNewModuleKeysAndUpdateCache(groupId);
+        candidates = onlyKeyId(moduleKeys.groupKeys, keyId);
     }
-    const auto candidates = onlyKeyId(moduleKeys.groupKeys, keyId);
     if (candidates.empty()) {
         throw core::EncryptionKeyValidationException("Group " + groupId + " publishes no key " + keyId);
     }
@@ -1000,7 +1015,7 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const GroupId& groupId, const K
     return found;
 }
 
-Envelope GroupApiImpl::encrypt(const GroupId& groupId, const core::Buffer& content) {
+Envelope GroupApiImpl::encrypt(const std::string& groupId, const core::Buffer& content) {
     auto key = getAndValidateModuleCurrentEncKey(getModuleKeys(groupId), _groupPrivKeyResolver);
     return _envelopeEncryptor.packGroupKeyEnvelope(groupId, key.id, content, _userPrivKey, key.key);
 }
@@ -1022,9 +1037,18 @@ DecryptedEnvelope GroupApiImpl::decrypt(const Envelope& envelope) {
 }
 
 privmx::crypto::PrivateKey GroupApiImpl::grantKeyForPubKey(
-    const GroupId& groupId,
-    const PubKey& groupPubKeyBase58
+    const std::string& groupId,
+    const std::string& groupPubKeyBase58
 ) {
+    // Which epoch a published grant public key belongs to is immutable once published, so the lookup is
+    // memoized on the same terms as `_envelopeKeys`. Without it every anonymous envelope pays a `groupGet`
+    // here on top of the one `resolveGroupPrivKey` makes — two round trips per open, where the member path
+    // pays none after the first.
+    const std::string memoKey = memoKeyFor(groupId, groupPubKeyBase58);
+    if (auto cached = _envelopeGrantEpochs.get(memoKey); cached.has_value()) {
+        return resolveGroupPrivKey(groupId, cached.value());
+    }
+
     server::GroupGetModel params{
         .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromVersion = {}
     };
@@ -1032,6 +1056,7 @@ privmx::crypto::PrivateKey GroupApiImpl::grantKeyForPubKey(
     auto target = privmx::crypto::PublicKey::fromBase58DER(groupPubKeyBase58);
     for (const auto& entry : keytree::GroupKeyResolver::toRegistry(group)) {
         if (entry.grantPublicKey == target) {
+            _envelopeGrantEpochs.set(memoKey, entry.epoch);
             return resolveGroupPrivKey(groupId, entry.epoch);
         }
     }
@@ -1039,8 +1064,8 @@ privmx::crypto::PrivateKey GroupApiImpl::grantKeyForPubKey(
 }
 
 Envelope GroupApiImpl::encryptAnonymously(
-    const GroupId& groupId,
-    const PubKey& groupPubKey,
+    const std::string& groupId,
+    const std::string& groupPubKey,
     const core::Buffer& content
 ) {
     // Public information only — no membership, no server call. That is the whole point: the sender is outside
@@ -1083,12 +1108,11 @@ void GroupApiImpl::releaseFileHandle(FileHandle fileHandle) {
  * without it the short final chunk is indistinguishable from one still arriving.
  */
 core::Buffer GroupApiImpl::drainChunks(const std::shared_ptr<EnvelopeFileState>& state) {
-    const ChunkCount chunks = GroupEnvelopeEncryptor::chunkCount(state->plainSize);
+    const ByteCount chunks = GroupEnvelopeEncryptor::chunkCount(state->plainSize);
     std::string out;
     while (state->index < chunks) {
         const ByteCount plainLen = GroupEnvelopeEncryptor::plainChunkSizeAt(state->plainSize, state->index);
-        const ByteCount need =
-            state->reading ? GroupEnvelopeEncryptor::encryptedChunkSizeFor(plainLen) : plainLen;
+        const ByteCount need = state->reading ? encryptedChunkSizeFor(plainLen) : plainLen;
         if (state->buffer.size() < need) {
             break;
         }
@@ -1107,10 +1131,20 @@ core::Buffer GroupApiImpl::drainChunks(const std::shared_ptr<EnvelopeFileState>&
         state->buffer.erase(0, need);
         state->index++;
     }
+    // Past the last chunk nothing drains, so whatever is left can only grow with every further call. Refuse
+    // it here rather than at the close: otherwise a caller fed a long ciphertext against a short declared
+    // size accumulates the entire remainder in `buffer` before `finishFileDecryption` finally calls it an
+    // overrun. Seeked readers included — bytes beyond the last chunk are past the end of the file and can
+    // never be opened, whichever position the reader started from. (What a range read may legitimately
+    // overshoot is its *plaintext* output, which is trimmed by the caller, not the ciphertext it feeds in.)
+    // The write side needs no equivalent; `encryptFileChunk` caps it against the declared size on the way in.
+    if (state->reading && state->index >= chunks && !state->buffer.empty()) {
+        throw InvalidEnvelopeFormatException("more file data than the declared size accounts for");
+    }
     return core::Buffer::from(out);
 }
 
-FileHandle GroupApiImpl::beginFileEncryption(const GroupId& groupId, FileSize size) {
+FileHandle GroupApiImpl::beginFileEncryption(const std::string& groupId, FileSize size) {
     auto key = getAndValidateModuleCurrentEncKey(getModuleKeys(groupId), _groupPrivKeyResolver);
     FileHandle handle = _connection.getImpl()->getHandleManager()->createHandle("GroupEnvelope:Encrypt");
     _envelopeFiles.set(
@@ -1131,8 +1165,8 @@ FileHandle GroupApiImpl::beginFileEncryption(const GroupId& groupId, FileSize si
 }
 
 FileHandle GroupApiImpl::beginFileEncryptionAnonymously(
-    const GroupId& groupId,
-    const PubKey& groupPubKey,
+    const std::string& groupId,
+    const std::string& groupPubKey,
     FileSize size
 ) {
     // No server call and no membership, exactly like `encryptAnonymously`. The public key is enough to seal
@@ -1248,7 +1282,8 @@ std::shared_ptr<GroupApiImpl::EnvelopeFileState> GroupApiImpl::finishFile(FileHa
         throw EnvelopeTruncatedFileException();
     case GroupEnvelopeEncryptor::ReadOutcome::Overrun:
         // The opposite complaint, and worth telling apart from the one above: every chunk the declared size
-        // called for arrived, and then more bytes followed it.
+        // called for arrived, and then more bytes followed it. `drainChunks` refuses those bytes as they
+        // arrive so the memory is never held; this catches the caller who swallowed that and closed anyway.
         throw InvalidEnvelopeFormatException("more file data than the declared size accounts for");
     case GroupEnvelopeEncryptor::ReadOutcome::PartialRange:
     case GroupEnvelopeEncryptor::ReadOutcome::Complete:
