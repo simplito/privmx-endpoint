@@ -21,6 +21,16 @@ std::string GroupDeletedEvent::toJSON() const {
     return core::JsonSerializer<GroupDeletedEvent>::serialize(*this);
 }
 
+std::string GroupCustomEvent::toJSON() const {
+    return core::JsonSerializer<GroupCustomEvent>::serialize(*this);
+}
+
+std::shared_ptr<core::SerializedEvent> GroupCustomEvent::serialize() const {
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
+}
+
 std::shared_ptr<core::SerializedEvent> GroupCreatedEvent::serialize() const {
     return std::make_shared<core::SerializedEvent>(
         core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
@@ -65,6 +75,23 @@ GroupUpdatedEvent Events::extractGroupUpdatedEvent(const core::EventHolder& even
         auto event = std::dynamic_pointer_cast<GroupUpdatedEvent>(eventHolder.get());
         if (!event) {
             throw CannotExtractGroupUpdatedEventException();
+        }
+        return *event;
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+bool Events::isGroupCustomEvent(const core::EventHolder& eventHolder) {
+    return eventHolder.type() == "groupCustom";
+}
+
+GroupCustomEvent Events::extractGroupCustomEvent(const core::EventHolder& eventHolder) {
+    try {
+        auto event = std::dynamic_pointer_cast<GroupCustomEvent>(eventHolder.get());
+        if (!event) {
+            throw CannotExtractGroupCustomEventException();
         }
         return *event;
     } catch (const privmx::utils::PrivmxException& e) {

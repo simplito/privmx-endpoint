@@ -50,6 +50,10 @@ server::GroupGetKeyArchiveResult ServerApi::groupGetKeyArchive(server::GroupGetK
     return request<server::GroupGetKeyArchiveResult>("groupGetKeyArchive", model.toJSON());
 }
 
+void ServerApi::groupSendCustomEvent(server::GroupSendCustomEventModel model) {
+    request("groupSendCustomEvent", model.toJSON());
+}
+
 template<class T>
 T ServerApi::request(const std::string& method, Poco::JSON::Object::Ptr params) {
     return T::fromJSON(_gateway->request("context." + method, params));

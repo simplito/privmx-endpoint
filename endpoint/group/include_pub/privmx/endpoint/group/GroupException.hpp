@@ -54,6 +54,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupHistoryForkException, "G
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, IncompleteEpochLadderException, "Rotation aborted: the epoch ladder rung set for the new epoch would be incomplete", 0x0011)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, InvalidEnvelopeFormatException, "Malformed group envelope", 0x0012)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeTruncatedFileException, "Encrypted file is shorter than its envelope declares", 0x0013)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, CannotExtractGroupCustomEventException, "Cannot extract GroupCustomEvent", 0x0014)
 // clang-format on
 } // namespace group
 } // namespace endpoint
