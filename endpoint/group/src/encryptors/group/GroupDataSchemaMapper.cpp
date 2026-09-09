@@ -425,8 +425,9 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
         return {};
     try {
         // Either envelope: `internalMeta`, `authorPubKey` and `dio` are fields both carry under the same
-        // encoding, and `JSON_STRUCT` ignores the rest — so the metadata shape parses a roster envelope too.
-        auto encData = dynamic::EncryptedGroupMetaV5::fromJSON(data);
+        // encoding, and the view parses only those — every caller here hands it a roster entry, which has none
+        // of the metadata plane's fields.
+        auto encData = dynamic::EncryptedGroupInternalMetaViewV5::fromJSON(data);
         if (encData.version != core::ModuleDataSchema::Version::VERSION_5)
             return {};
         // The signed DIO, not just a signature over the field. What comes out of here is the container's

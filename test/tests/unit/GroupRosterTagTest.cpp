@@ -382,3 +382,44 @@ TEST_F(GroupRosterTag, SECURITY_ARosterTagCannotBeReplayedAsAMetadataTag) {
     const std::string k = privmx::crypto::Crypto::randomBytes(32);
     EXPECT_NE(GroupDataSchemaMapper::rosterTag(k, 2, 7, {}, {}), GroupDataSchemaMapper::metaTag(k, 2, 7));
 }
+
+TEST_F(GroupRosterTag, TheInternalMetaViewReadsEitherPlane) {
+    // `prepareContainerUpdate` takes the container's `secret` from here and feeds it to `verifyKeysSecret`, and
+    // the entry it hands over is the roster head — the only plane a membership change opens. Reading it under
+    // the metadata shape throws on the fields a roster entry does not carry, and the empty secret that came back
+    // failed every roster write with EncryptionKeyValidationException.
+    GroupDataSchemaMapper mapper(author, core::Connection());
+    server::GroupInfo group;
+    group.contextId = "ctx1";
+    group.resourceId = "res1";
+    const core::ModuleInternalMetaV5 internalMeta{.secret = "s3cr3t", .resourceId = "res1", .randomId = "rnd"};
+
+    const Poco::Dynamic::Var roster = mapper.encryptRoster(
+        GroupRosterToEncryptV5{
+            .internalMeta = internalMeta,
+            .dio = dioFor(group, "alice", "rnd"),
+            .membership =
+                dynamic::MembershipBlock{
+                    .rosterTag = "tag",
+                    .groupPubKey = "pub0",
+                    .keyId = "key1",
+                    .keyVersion = 1,
+                    .rosterVersion = 1
+                }
+        },
+        encKey
+    );
+    EXPECT_EQ(mapper.decryptInternalMeta(roster, key(encKey)).secret, "s3cr3t");
+
+    const Poco::Dynamic::Var meta = mapper.encryptMeta(
+        GroupMetaToEncryptV5{
+            .publicMeta = core::Buffer::from(std::string("pub")),
+            .privateMeta = core::Buffer::from(std::string("priv")),
+            .internalMeta = internalMeta,
+            .dio = dioFor(group, "alice", "rnd2"),
+            .meta = dynamic::MetaBlock{.metaTag = "tag", .keyId = "key1", .keyVersion = 1, .metaVersion = 1}
+        },
+        encKey
+    );
+    EXPECT_EQ(mapper.decryptInternalMeta(meta, key(encKey)).secret, "s3cr3t");
+}
