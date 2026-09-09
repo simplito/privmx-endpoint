@@ -113,10 +113,12 @@ protected:
             .dio = dioFor(group, "alice", "rnd"),
             .membership =
                 dynamic::MembershipBlock{
-                    .rosterTag = GroupDataSchemaMapper::rosterTag(tagKey, keyVersion, users, managers),
+                    .rosterTag =
+                        GroupDataSchemaMapper::rosterTag(tagKey, keyVersion, rosterVersion, users, managers),
                     .groupPubKey = "pub0",
                     .keyId = "key1",
-                    .keyVersion = keyVersion
+                    .keyVersion = keyVersion,
+                    .rosterVersion = rosterVersion
                 }
         };
         server::GroupDataEntry entry;
@@ -165,6 +167,17 @@ TEST_F(GroupRosterTag, AnHonestRosterVerifies) {
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     EXPECT_NO_THROW(verifier.assertDataIntegrity(group));
     EXPECT_NO_THROW(verifier.assertRosterIsAttested(group, key(encKey)));
+}
+
+TEST_F(GroupRosterTag, ARosterServedUnderAnotherVersionIsRefused) {
+    // Within an epoch the roster only grows, so every earlier roster carries a genuine, still-valid tag. A
+    // bridge pairing the current `rosterVersion` with one of them would conceal whoever was added in between,
+    // and the monotone pin cannot see it — the counter it checks is not going down. Binding the counter into
+    // the preimage is what makes the pair checkable.
+    auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    group.rosterVersion = 5;
+    EXPECT_THROW(verifier.assertRosterIsAttested(group, key(encKey)), GroupMembershipMismatchException);
 }
 
 TEST_F(GroupRosterTag, RosterOrderDoesNotMatter) {
@@ -329,4 +342,43 @@ TEST_F(GroupRosterTag, SECURITY_AMissingMetadataKeyIsAFailureNotAPass) {
     noKey.statusCode = 1;
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     EXPECT_THROW(verifier.assertMetaIsAttested(group, noKey), GroupMembershipMismatchException);
+}
+
+TEST_F(GroupRosterTag, AMetadataEntryWrittenByASinceRemovedMemberStillVerifies) {
+    // Pinned deliberately, because it is what rules out the cheap fix for the forgery gap below. A former member
+    // is the *expected* author of an entry written before they left — the metadata plane is not rewritten on
+    // removal — so refusing an author who is off the current roster would make the group unreadable for everyone
+    // the moment its metadata writer is removed. Same failure shape as `updateGroup_by_a_different_manager`.
+    auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7);
+    group.meta.author = "dave"; // wrote the metadata at epoch 2, removed since
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    EXPECT_NO_THROW(verifier.assertMetaIsAttested(group, key(encKey)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// key separation
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST_F(GroupRosterTag, SECURITY_EachTagPurposeGetsItsOwnKey) {
+    // The content key is also the AES key for the metadata fields and the HMAC key behind three tags. The
+    // preimages happen to be prefix-disjoint, but that is a convention someone has to keep re-deriving; the
+    // subkeys make it structural. Nothing below may equal anything else below.
+    const std::string k = privmx::crypto::Crypto::randomBytes(32);
+    const std::string roster = GroupDataSchemaMapper::tagSubkey(k, "roster-tag");
+    const std::string meta = GroupDataSchemaMapper::tagSubkey(k, "meta-tag");
+    const std::string confirm = GroupDataSchemaMapper::tagSubkey(k, "confirm-tag");
+    EXPECT_EQ(roster.size(), 32u);
+    EXPECT_NE(roster, k);
+    EXPECT_NE(meta, k);
+    EXPECT_NE(confirm, k);
+    EXPECT_NE(roster, meta);
+    EXPECT_NE(roster, confirm);
+    EXPECT_NE(meta, confirm);
+}
+
+TEST_F(GroupRosterTag, SECURITY_ARosterTagCannotBeReplayedAsAMetadataTag) {
+    // Two tags over the same numbers under the same content key. Even if a future preimage change made the
+    // payloads coincide, the subkeys keep the tags apart.
+    const std::string k = privmx::crypto::Crypto::randomBytes(32);
+    EXPECT_NE(GroupDataSchemaMapper::rosterTag(k, 2, 7, {}, {}), GroupDataSchemaMapper::metaTag(k, 2, 7));
 }

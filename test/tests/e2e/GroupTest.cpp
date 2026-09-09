@@ -360,6 +360,52 @@ TEST_F(GroupTest, updateGroup_correct_data) {
     EXPECT_EQ(group.managers.size(), 1);
 }
 
+TEST_F(GroupTest, updateGroup_by_a_different_manager_keeps_the_group_readable) {
+    // The two planes have two authors. `updateGroup` moves the document's `lastModifier` and writes no roster
+    // entry, so verifying the roster plane's DIO against `lastModifier` fails here for an honest group — and
+    // fails for *every* member, permanently, until somebody makes a membership change as the metadata writer.
+    // The roster plane answers for the author of its own head entry.
+    std::string groupId;
+    const std::vector<core::UserWithPubKey> both{
+        core::UserWithPubKey{
+            .userId = reader->getString("Login.user_1_id"), .pubKey = reader->getString("Login.user_1_pubKey")
+        },
+        core::UserWithPubKey{
+            .userId = reader->getString("Login.user_2_id"), .pubKey = reader->getString("Login.user_2_pubKey")
+        }
+    };
+    // Both managers: the roster is written by user_1 here, and user_2 has to be allowed to update metadata.
+    EXPECT_NO_THROW({
+        groupId = groupApi->createGroup(
+            reader->getString("Context_1.contextId"), both, both, core::Buffer::from("public"),
+            core::Buffer::from("private")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    disconnect();
+    connectAs(GroupConnectionType::GUser2);
+    EXPECT_NO_THROW({
+        groupApi->updateGroup(groupId, core::Buffer::from("public2"), core::Buffer::from("private2"), 1);
+    });
+
+    // user_2 wrote the metadata; user_1 is still the roster head's author.
+    group::Group asUser2;
+    EXPECT_NO_THROW({ asUser2 = groupApi->getGroup(groupId); });
+    EXPECT_EQ(asUser2.statusCode, 0);
+    EXPECT_EQ(asUser2.publicMeta.stdString(), "public2");
+
+    // And the member who did not write the metadata reads it just the same.
+    disconnect();
+    connectAs(GroupConnectionType::GUser1);
+    group::Group asUser1;
+    EXPECT_NO_THROW({ asUser1 = groupApi->getGroup(groupId); });
+    EXPECT_EQ(asUser1.statusCode, 0);
+    EXPECT_EQ(asUser1.privateMeta.stdString(), "private2");
+    EXPECT_EQ(asUser1.version, 2);
+    EXPECT_EQ(asUser1.rosterVersion, 1);
+}
+
 TEST_F(GroupTest, updateGroup_chain_integrity) {
     // A three-entry group (create + 2 updates) must pass G1/G2 → statusCode=0
     std::string groupId;

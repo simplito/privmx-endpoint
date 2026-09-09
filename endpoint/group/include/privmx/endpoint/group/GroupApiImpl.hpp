@@ -57,6 +57,26 @@ public:
 
     void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
+    /**
+     * Moves the metadata entry up to the group's current epoch, if it is still behind.
+     *
+     * Called after a removal has committed, never as part of it. A metadata entry left at epoch N stays
+     * openable by whoever held `K_N` — including the member just removed — and its `metaTag` is keyed at N too,
+     * so with a colluding bridge they could author a *replacement* entry at N that every current member would
+     * accept: they hold the key, they sign the DIO, and they are still a real context user. Nothing a reader
+     * can check separates that from an entry written legitimately before they left.
+     *
+     * Rewriting the same `publicMeta`/`privateMeta` under the new epoch's key closes it, because from then on
+     * the entry's tag requires a key the removed member never had.
+     *
+     * Deliberately after the fact and deliberately best-effort. The removal's own write stays free of the
+     * metadata plane — that separation is what stops a concurrent `updateGroup` from stranding a tree write at
+     * a version it never took, and it is the reason this is a second call rather than a second field. If it
+     * fails the group is left exactly where a removal used to leave it, and the next `updateGroup` finishes
+     * the job.
+     */
+    void refreshMetadataEpochAfterRemoval(const std::string& groupId);
+
     void updateGroup(
         const std::string& groupId,
         const core::Buffer& publicMeta,

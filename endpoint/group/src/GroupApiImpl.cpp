@@ -206,12 +206,13 @@ std::string GroupApiImpl::createGroup(
         .dio = ctx.dio,
         .membership = dynamic::MembershipBlock{
             .rosterTag = GroupDataSchemaMapper::rosterTag(
-                ctx.key.key, 1, core::EndpointUtils::usersWithPubKeyToIds(users),
+                ctx.key.key, 1, 1, core::EndpointUtils::usersWithPubKeyToIds(users),
                 core::EndpointUtils::usersWithPubKeyToIds(managers)
             ),
             .groupPubKey = groupPubKeyStr,
             .keyId = ctx.key.id,
-            .keyVersion = 1
+            .keyVersion = 1,
+            .rosterVersion = 1
         }
     };
     GroupMetaToEncryptV5 metaToEncrypt{
@@ -278,7 +279,10 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
-    const int64_t currentEpoch = currentGroup.keyVersion.value_or(1);
+    const int64_t currentEpoch = currentGroup.keyVersion;
+    // The bridge pins this in its compare-and-swap, so the entry lands here or the call is refused — which is
+    // what lets the tag below commit to it.
+    const int64_t newRosterVersion = currentGroup.rosterVersion + 1;
 
     // The roster this call signs has to be the one the head attests to, not one the caller restated or the bridge
     // asserted. Roster plane only — seating a member is not a metadata edit, so it does not open that entry.
@@ -347,12 +351,14 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
         .dio = ctx.dio,
         .membership = dynamic::MembershipBlock{
             .rosterTag = GroupDataSchemaMapper::rosterTag(
-                ctx.key.key, currentEpoch, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+                ctx.key.key, currentEpoch, newRosterVersion,
+                core::EndpointUtils::usersWithPubKeyToIds(roster.users),
                 core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
             ),
             .groupPubKey = currentGroup.groupPubKey,
             .keyId = ctx.key.id,
-            .keyVersion = currentEpoch
+            .keyVersion = currentEpoch,
+            .rosterVersion = newRosterVersion
         }
     };
 
@@ -365,6 +371,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
     model.transition = keytree::TreeWire::toAdditionTransition(plan, previousGenerations, currentEpoch);
     model.expectedKeyVersion = currentEpoch;
+    model.expectedRosterVersion = currentGroup.rosterVersion;
 
     try {
         _serverApi.groupAddMembers(model);
@@ -440,8 +447,9 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
-    const int64_t currentEpoch = currentGroup.keyVersion.value_or(1);
+    const int64_t currentEpoch = currentGroup.keyVersion;
     const int64_t newEpoch = currentEpoch + 1;
+    const int64_t newRosterVersion = currentGroup.rosterVersion + 1;
     // Roster plane only: a removal must not wait on a metadata entry that may sit at an older epoch.
     const auto [attestedUsers, attestedManagers] = _groupDataSchemaMapper->validateAndGetAttestedRoster(
         currentGroup, _keyProvider, _groupPrivKeyResolver
@@ -513,12 +521,14 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
         .dio = ctx.dio,
         .membership = dynamic::MembershipBlock{
             .rosterTag = GroupDataSchemaMapper::rosterTag(
-                ctx.key.key, newEpoch, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+                ctx.key.key, newEpoch, newRosterVersion,
+                core::EndpointUtils::usersWithPubKeyToIds(roster.users),
                 core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
             ),
             .groupPubKey = newGroupPubKeyStr,
             .keyId = ctx.key.id,
-            .keyVersion = newEpoch
+            .keyVersion = newEpoch,
+            .rosterVersion = newRosterVersion
         }
     };
 
@@ -536,8 +546,11 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     model.rungs = keytree::TreeWire::toWire(rungs);
     model.groupKeys = selfAddressedKey.at(0);
     model.expectedKeyVersion = currentEpoch;
+    model.expectedRosterVersion = currentGroup.rosterVersion;
     const auto confInput = std::string("confirm") + groupId + std::to_string(newEpoch) + ctx.key.id;
-    model.confirmationTag = privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(ctx.key.key, confInput));
+    model.confirmationTag = privmx::utils::Hex::from(
+        privmx::crypto::Crypto::hmacSha256(GroupDataSchemaMapper::tagSubkey(ctx.key.key, "confirm-tag"), confInput)
+    );
 
     try {
         _serverApi.groupRemoveMembers(model);
@@ -548,6 +561,35 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     cache->clearNodeKeys();
     cache->putGrantKey(static_cast<std::uint32_t>(newEpoch), plan.newGrantKey);
     invalidateModuleKeysInCache(groupId);
+    // The removal is committed; the metadata entry is now one epoch behind, under a key the departed member
+    // still holds. Move it up. Outside the write above on purpose — see the header.
+    refreshMetadataEpochAfterRemoval(groupId);
+}
+
+void GroupApiImpl::refreshMetadataEpochAfterRemoval(const std::string& groupId) {
+    try {
+        server::GroupGetModel getModel{
+            .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {},
+            .fromRosterVersion = {}
+        };
+        const auto group = _serverApi.groupGet(getModel).group;
+        if (group.meta.keyVersion >= group.keyVersion) {
+            // Already current — a concurrent `updateGroup` got there first, which is the same outcome.
+            return;
+        }
+        // Read through the verifying path: re-signing metadata this client has not attested would launder
+        // whatever the bridge served into an entry under the new epoch's key, which is the opposite of the point.
+        const Group verified = getGroup(groupId);
+        if (verified.statusCode != 0) {
+            return;
+        }
+        // `policies` empty so the update leaves the policy alone, and `allowRotationRetry` false because a
+        // rotation is what got us here — retrying into another one would loop.
+        updateGroup(groupId, verified.publicMeta, verified.privateMeta, verified.version, std::nullopt, false);
+    } catch (...) {
+        // Best-effort by design. A failure leaves the group where a removal used to leave it, and the next
+        // `updateGroup` closes the window; throwing here would fail a removal that has already happened.
+    }
 }
 
 static constexpr unsigned int BRIDGE_GROUP_ROTATED_ALREADY = 0x621C;
@@ -567,7 +609,7 @@ void GroupApiImpl::updateGroup(
     auto currentGroup = _serverApi.groupGet(getModel).group;
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
-    const int64_t currentEpoch = currentGroup.keyVersion.value_or(0);
+    const int64_t currentEpoch = currentGroup.keyVersion;
 
     std::vector<core::UserWithPubKey> unchangedUsers;
     for (const auto& userId : currentGroup.users) {
@@ -670,7 +712,9 @@ void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server:
         groupId +
         std::to_string(payload.keyVersion) +
         payload.winnerKeyEntry.keyId;
-    auto expectedTag = privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(winnerGk.key, confInput));
+    auto expectedTag = privmx::utils::Hex::from(
+        privmx::crypto::Crypto::hmacSha256(GroupDataSchemaMapper::tagSubkey(winnerGk.key, "confirm-tag"), confInput)
+    );
     if (expectedTag != payload.confirmationTag.value()) {
         throw GroupDataIntegrityException("RotatedAlready: confirmation tag mismatch");
     }
@@ -883,7 +927,7 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
     };
     auto group = _serverApi.groupGet(params).group;
 
-    const int64_t currentEpoch = group.keyVersion.value_or(1);
+    const int64_t currentEpoch = group.keyVersion;
     // Every read learns the epoch here, so a client that missed the `groupUpdated` event still converges.
     dropNodeKeysIfEpochAdvanced(groupId, static_cast<std::uint32_t>(currentEpoch));
     const auto cache = _treeKeyCaches.get(groupId);

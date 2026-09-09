@@ -17,6 +17,7 @@
 #include <privmx/endpoint/core/DynamicTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
+#include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/core/encryptors/VersionStrategyMapper.hpp>
 
@@ -44,33 +45,51 @@ public:
     void assertMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& metaKey);
 
     /**
-     * `HMAC(key, epoch | roster)` — what a membership change commits to and a reader checks.
+     * `HMAC(subkey, epoch | rosterVersion | roster)` — what a membership change commits to and a reader checks.
      *
      * Both sides call this, so the canonical form cannot drift between them. Lists are sorted and length-prefixed:
      * an unprefixed join would let one roster's tag match another's under a different split of the same names.
      * No group id in the payload: the key is this group's own, so a tag made elsewhere cannot verify here anyway
      * — and leaving it out is what lets `createGroup` tag a group whose id the bridge has not assigned yet.
      *
-     * No version either. This plane's preconditions — the epoch CAS and the tree's per-node generations — guard
-     * the epoch and the roster, not the metadata counter, and committing a counter they do not guard is what let
-     * a concurrent `updateGroup` strand a membership change at a version it never landed at. Within one epoch the
-     * roster only grows, so `(epoch, roster)` is unambiguous without one.
+     * `rosterVersion` is in, and load-bearing. `(epoch, roster)` alone is unambiguous but leaves the counter
+     * unbound, and the counter is what the monotone pin checks — so a bridge could serve the current version
+     * beside any earlier roster from the same epoch and pass both tests. The caller may commit it because the
+     * bridge's compare-and-swap now pins `expectedRosterVersion` as well as the epoch, so the entry lands at
+     * the version this tag names or not at all.
      */
     static std::string rosterTag(
         const std::string& key,
         int64_t keyVersion,
+        int64_t rosterVersion,
         const std::vector<std::string>& users,
         const std::vector<std::string>& managers
     );
 
     /**
-     * `HMAC(key, "meta" | epoch | metaVersion)` — what a metadata write commits to and a reader checks.
+     * `HMAC(subkey, "meta" | epoch | metaVersion)` — what a metadata write commits to and a reader checks.
      *
-     * Key-bound rather than merely signed: `publicMeta` is signed but not encrypted, so a bridge holding a keypair
-     * of its own could otherwise re-author the envelope and forge it. `updateGroup` may commit `metaVersion`
-     * because it is CAS-guarded on exactly that counter, so the version it predicts is the version it lands at.
+     * Key-bound rather than merely signed, so a whole entry cannot be lifted to another epoch or version.
+     * `updateGroup` may commit `metaVersion` because it is CAS-guarded on exactly that counter, so the version it
+     * predicts is the version it lands at.
+     *
+     * What actually stops a bridge from re-authoring the envelope is not this tag: it is that `privateMeta` and
+     * `internalMeta` are sign-and-encrypt under the content key and every field has to verify against the one
+     * `authorPubKey` the DIO pins. A bridge can neither swap that key (the copied fields stop verifying) nor keep
+     * it (it cannot sign the fields it wants to replace).
      */
     static std::string metaTag(const std::string& key, int64_t keyVersion, int64_t metaVersion);
+
+    /**
+     * One subkey per tag purpose, derived from the epoch's content key.
+     *
+     * That key is also the AES key for `publicMeta`/`privateMeta`/`internalMeta` and the HMAC key behind three
+     * separate tags. The preimages happen to be prefix-disjoint today, so nothing collides — but that is a naming
+     * convention, and the next purpose added has to re-derive the argument by hand or fail silently. `Crypto::kdf`
+     * is HMAC-SHA256 in feedback mode over a NUL-separated, length-bound label, so distinct purposes get
+     * independent keys by construction and the labels cannot collide by prefix either.
+     */
+    static std::string tagSubkey(const std::string& contentKey, const std::string& purpose);
 
     uint32_t validateDataIntegrity(const server::GroupInfo& groupInfo);
 
@@ -135,7 +154,7 @@ private:
     core::VersionStrategyMapper<server::GroupInfo, std::tuple<Group, core::DataIntegrityObject>> _strategyMapper;
     std::shared_ptr<GroupDataSchemaStrategyV5> _strategyV5;
     core::DataEncryptorV4 _dataEncryptor;
-    GroupDataEncryptorV5 _groupEncryptor;
+    core::DIOEncryptorV1 _DIOEncryptor;
     // Monotone pins, one per plane. A tag stays valid forever, so an older but genuinely tagged state is a
     // rollback that only a pin can refuse — and the two counters move independently, so one pin over both would
     // reject legitimate states.

@@ -89,13 +89,20 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
         throw GroupMembershipMismatchException();
     }
     const std::string expected = rosterTag(
-        rosterKey.key, membership.keyVersion.value_or(0), groupInfo.users, groupInfo.managers
+        rosterKey.key, membership.keyVersion, membership.rosterVersion, groupInfo.users,
+        groupInfo.managers
     );
     if (expected != membership.rosterTag) {
         throw GroupMembershipMismatchException();
     }
-    if (membership.keyVersion.value_or(0) != groupInfo.keyVersion.value_or(0)) {
+    if (membership.keyVersion != groupInfo.keyVersion) {
         throw GroupDataIntegrityException();
+    }
+    // The counter the monotone pin checks, tied to the roster it labels. Without this the bridge could serve
+    // the current version beside an earlier same-epoch roster — every one of which has a genuine tag, since an
+    // addition only ever grows the roster — and conceal whoever was added in between.
+    if (membership.rosterVersion != groupInfo.rosterVersion) {
+        throw GroupMembershipMismatchException();
     }
 }
 
@@ -124,8 +131,8 @@ void GroupDataSchemaMapper::assertMetaIsAttested(
         meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
     } catch (...) { throw GroupMembershipMismatchException(); }
     if (meta.keyId != groupInfo.meta.keyId ||
-        meta.keyVersion.value_or(0) != groupInfo.meta.keyVersion ||
-        meta.keyVersion.value_or(0) > groupInfo.keyVersion.value_or(0)) {
+        meta.keyVersion != groupInfo.meta.keyVersion ||
+        meta.keyVersion > groupInfo.keyVersion) {
         throw GroupMembershipMismatchException();
     }
     const std::string expected = metaTag(metaKey.key, groupInfo.meta.keyVersion, groupInfo.meta.version);
@@ -134,14 +141,27 @@ void GroupDataSchemaMapper::assertMetaIsAttested(
     }
     // Without this a bridge could serve a stale entry under a rising counter — a content downgrade the monotone
     // pin cannot see, because the counter it checks keeps going up.
-    if (meta.metaVersion.value_or(0) != groupInfo.version) {
+    if (meta.metaVersion != groupInfo.version) {
         throw GroupMembershipMismatchException();
     }
+    // What is NOT checked here, because a reader cannot check it: that the author still holds the group. A
+    // member removed at epoch N keeps the content key the entry sitting at epoch N was tagged under, and a
+    // lagging `keyVersion` is legitimate, so with a colluding bridge they could author a new entry at epoch N
+    // after leaving — the tag is genuine, `creatorUserId` matches `author` because they signed the DIO, and the
+    // verifier still knows them as a context user. Checking `author` against the current roster does not fix
+    // it: a former member is the *expected* author of an entry written before they left, so that check would
+    // refuse honest groups (pinned by `AMetadataEntryWrittenByASinceRemovedMemberStillVerifies`).
+    //
+    // Nothing inside epoch N can order "written during N" against "written after N ended". So the fix lives on
+    // the write side instead: `refreshMetadataEpochAfterRemoval` moves the entry up to the new epoch once a
+    // removal has committed, which puts its tag under a key the departed member never had. Best-effort, so a
+    // lagging entry is still a state a reader must accept — it just stops being a state a removal leaves behind.
 }
 
 std::string GroupDataSchemaMapper::rosterTag(
     const std::string& key,
     int64_t keyVersion,
+    int64_t rosterVersion,
     const std::vector<std::string>& users,
     const std::vector<std::string>& managers
 ) {
@@ -153,15 +173,21 @@ std::string GroupDataSchemaMapper::rosterTag(
         }
         out += "\n";
     };
-    std::string payload = std::to_string(keyVersion) + "\n";
+    std::string payload = std::to_string(keyVersion) + "\n" + std::to_string(rosterVersion) + "\n";
     appendList(payload, users);
     appendList(payload, managers);
-    return privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(key, payload));
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(tagSubkey(key, "roster-tag"), payload));
 }
 
 std::string GroupDataSchemaMapper::metaTag(const std::string& key, int64_t keyVersion, int64_t metaVersion) {
+    // The `"meta"` prefix is redundant now that the subkey separates the purposes, and kept anyway: it makes the
+    // preimage say what it is without having to know which key signed it.
     const std::string payload = "meta\n" + std::to_string(keyVersion) + "\n" + std::to_string(metaVersion) + "\n";
-    return privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(key, payload));
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(tagSubkey(key, "meta-tag"), payload));
+}
+
+std::string GroupDataSchemaMapper::tagSubkey(const std::string& contentKey, const std::string& purpose) {
+    return privmx::crypto::Crypto::kdf(32, contentKey, "privmx/group/" + purpose);
 }
 
 /**
@@ -176,7 +202,9 @@ std::string GroupDataSchemaMapper::metaTag(const std::string& key, int64_t keyVe
  * membership change leaves `version` alone, so a single pin over both would refuse legitimate states.
  */
 void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupInfo) {
-    if (groupInfo.data.empty()) {
+    // `history` is the same set of entries `data` is projected from, so the head of one is the head of the
+    // other — and the roster plane's author comes out of `history`.
+    if (groupInfo.data.empty() || groupInfo.history.empty()) {
         throw UnknownGroupFormatException();
     }
     auto encData = dynamic::EncryptedGroupRosterV5::fromJSON(groupInfo.data.back().data);
@@ -243,7 +271,7 @@ Group GroupDataSchemaMapper::toLibGroup(
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
         .type = info.type,
-        .keyVersion = info.keyVersion.value_or(0)
+        .keyVersion = info.keyVersion
     };
 }
 
@@ -294,8 +322,6 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
 
     std::vector<Group> result(groups.size());
     std::vector<core::DataIntegrityObject> metaDios(groups.size());
-    std::vector<std::string> metaAuthors(groups.size());
-    std::vector<int64_t> metaDates(groups.size());
     std::vector<core::DataIntegrityObject> rosterDios(groups.size());
 
     for (size_t i = 0; i < groups.size(); i++) {
@@ -337,9 +363,11 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             auto [lib, dio] = decryptMetaPlane(g, metaKey);
             result[i] = lib;
             metaDios[i] = dio;
-            metaAuthors[i] = g.meta.author;
-            metaDates[i] = g.meta.created;
-            if (dio.creatorUserId != g.meta.author || rosterDios[i].creatorUserId != g.lastModifier) {
+            // Each plane answers for its own writer. `lastModifier` is the document's and `updateGroup` moves
+            // it without touching the roster, so pairing the roster DIO with it fails for an honest group as
+            // soon as the metadata writer is not the last roster writer.
+            if (dio.creatorUserId != g.meta.author ||
+                rosterDios[i].creatorUserId != g.history.back().author) {
                 result[i] = toError(g, GroupDataIntegrityException().getCode());
                 continue;
             }
@@ -356,27 +384,28 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
         } catch (...) { result[i] = toError(g, ENDPOINT_CORE_EXCEPTION_CODE); }
     }
 
-    // One request per plane per group: the roster entry answers for `lastModifier`, the metadata entry for
-    // whoever last wrote metadata. Both must pass for the group to count as verified.
+    // One request per plane per group, each against the author of the entry whose DIO it carries — the roster
+    // head's, and the metadata entry's. Both must pass for the group to count as verified.
     std::vector<core::VerificationRequest> verifyReqs;
     std::vector<size_t> verifyIdxs;
     for (size_t i = 0; i < result.size(); i++) {
         if (result[i].statusCode != 0) {
             continue;
         }
+        const auto& rosterHead = groups[i].history.back();
         verifyReqs.push_back(
             {.contextId = result[i].contextId,
-             .senderId = result[i].lastModifier,
+             .senderId = rosterHead.author,
              .senderPubKey = rosterDios[i].creatorPubKey,
-             .date = result[i].lastModificationDate,
+             .date = rosterHead.created,
              .bridgeIdentity = rosterDios[i].bridgeIdentity}
         );
         verifyIdxs.push_back(i);
         verifyReqs.push_back(
             {.contextId = result[i].contextId,
-             .senderId = metaAuthors[i],
+             .senderId = groups[i].meta.author,
              .senderPubKey = metaDios[i].creatorPubKey,
-             .date = metaDates[i],
+             .date = groups[i].meta.created,
              .bridgeIdentity = metaDios[i].bridgeIdentity}
         );
         verifyIdxs.push_back(i);
@@ -397,10 +426,21 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
     if (encKey.statusCode != 0)
         return {};
     try {
-        // Either envelope: `internalMeta` is the one field both carry, under the same encoding.
-        auto encData = dynamic::EncryptedGroupInternalMetaViewV5::fromJSON(data);
+        // Either envelope: `internalMeta`, `authorPubKey` and `dio` are fields both carry under the same
+        // encoding, and `JSON_STRUCT` ignores the rest — so the metadata shape parses a roster envelope too.
+        auto encData = dynamic::EncryptedGroupMetaV5::fromJSON(data);
         if (encData.version != core::ModuleDataSchema::Version::VERSION_5)
             return {};
+        // The signed DIO, not just a signature over the field. What comes out of here is the container's
+        // `secret` — `prepareContainerUpdate` feeds it to `verifyKeysSecret` and binds new key entries to it —
+        // so it has to stay tied to the identity, context and resource the DIO commits to. Verifying only the
+        // field against the envelope's own `authorPubKey` would let a holder of the epoch key restate it under
+        // a keypair bound to nothing.
+        auto dio = _DIOEncryptor.decodeAndVerify(encData.dio);
+        if (dio.creatorPubKey != encData.authorPubKey ||
+            dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encData.internalMeta)) {
+            return {};
+        }
         auto raw = _dataEncryptor.decodeAndDecryptAndVerify(
             encData.internalMeta, privmx::crypto::PublicKey::fromBase58DER(encData.authorPubKey), encKey.key
         );
