@@ -142,10 +142,8 @@ TEST_F(KeyProviderGroupKeysTest, dead_route_marks_the_key_even_though_a_later_ro
 }
 
 TEST_F(KeyProviderGroupKeysTest, opening_on_the_first_route_leaves_no_mark) {
-    // The case a single-entry map got wrong: it kept the *last* group, discarding the only openable route.
-    //
-    // Also the honest limit of the mark: the search stops on success, so a dead group_b is never attempted and
-    // never reported. Detection stays order-dependent until the key-free DIO checks run over every route first.
+    // The honest limit of the mark: the search stops on success, so a dead group_b is never attempted and never
+    // reported. Detection stays order-dependent until the key-free DIO checks run over every route first.
     const auto groupA = privmx::crypto::PrivateKey::generateRandom();
     const auto groupB = privmx::crypto::PrivateKey::generateRandom();
 

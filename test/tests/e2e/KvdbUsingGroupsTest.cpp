@@ -50,7 +50,7 @@ protected:
         kvdbApi.reset();
         groupApi.reset();
     }
-    /** One of the fixture's logins as a container names its members — id plus public key, from the same ini. */
+    // One of the fixture's logins as a container names its members - id plus public key, from the same ini.
     core::UserWithPubKey userOf(KUGConnectionType type) {
         std::string n;
         if (type == KUGConnectionType::KUGUser1) {
@@ -104,13 +104,8 @@ protected:
             }}
         );
     }
-    /**
-     * A KVDB whose direct members are `users` — as both users and managers, so any of them can update it —
-     * and whose grantee groups are `groups`, each granted at `role`.
-     *
-     * The grants carry no epoch: leaving `groupEpoch` at 0 is what makes the endpoint resolve each group's
-     * current epoch from the Bridge, which is the path these tests are about.
-     */
+    // A KVDB whose direct members are `users` (as both users and managers) and whose grantee groups are
+    // `groups`. Leaving `groupEpoch` at 0 makes the endpoint resolve each group's current epoch from the Bridge.
     std::string createKvdbWithGroups(
         const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
@@ -157,7 +152,7 @@ protected:
             }}
         );
     }
-    /** Writes a brand-new entry (version 0 means "must not exist yet"). */
+    // Writes a brand-new entry (version 0 means "must not exist yet").
     void setNewEntry(
         const std::string& kvdbId,
         const std::string& key,
@@ -626,7 +621,7 @@ TEST_F(KvdbUsingGroupsTest, getEntry_lost_after_group_removal) {
     ASSERT_NO_THROW({ setNewEntry(kvdbId, "new_key", "new_public", "new_private", "new_data"); });
 
     // Historical group key entries are preserved for old key versions, so user_2 can still decrypt the
-    // entry written while the group had access — but not the one written after.
+    // entry written while the group had access - but not the one written after.
     disconnect();
     connectAs(KUGConnectionType::KUGUser2);
     kvdb::KvdbEntry afterRemoval;
@@ -668,12 +663,12 @@ TEST_F(KvdbUsingGroupsTest, user_added_to_group_gains_access_to_kvdb_and_entries
     EXPECT_NO_THROW({ eBefore = kvdbApi->getEntry(kvdbId, "entry_key"); });
     EXPECT_NE(eBefore.statusCode, 0);
 
-    // Seat user_3's leaf in the key tree — updateGroup would only re-wrap the group's metadata key.
+    // Seat user_3's leaf in the key tree - updateGroup would only re-wrap the group's metadata key.
     disconnect();
     connectAs(KUGConnectionType::KUGUser1);
     EXPECT_NO_THROW({
         groupApi->addGroupMembers(
-reader->getString("Group_2.groupId"),
+            reader->getString("Group_2.groupId"),
             {group::GroupMemberToAdd{.user = userOf(KUGConnectionType::KUGUser3), .role = "user"}}
         );
     });
@@ -690,10 +685,8 @@ reader->getString("Group_2.groupId"),
 }
 
 TEST_F(KvdbUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
-    // user_1 is the only direct member of the KVDB *and* a member of granted Group_1, so every keyId opens
-    // from `keys` and the group branch is skipped. `updateKvdb` is the interesting half: `verifyKeysSecret`
-    // fails on any non-zero status, so an unresolved group entry there is the difference between an update
-    // and an exception.
+    // Every keyId opens from `keys`, so the group branch is skipped. `updateKvdb` is the interesting half:
+    // `verifyKeysSecret` fails on any non-zero status, so an unresolved group entry throws instead of updating.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
@@ -750,9 +743,8 @@ TEST_F(KvdbUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 }
 
 TEST_F(KvdbUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
-    // The KVDB grants Group_1, whose only member is user_1. user_2 is a direct member and belongs to no
-    // grantee group, so the bridge serves it `groupKeys: []` — the read has to be served entirely from its
-    // own key wrap.
+    // user_2 is a direct member of the KVDB and in no grantee group, so the bridge serves it `groupKeys: []`
+    // and the read has to come entirely from its own key wrap.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
@@ -787,9 +779,8 @@ TEST_F(KvdbUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
 }
 
 TEST_F(KvdbUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // The KVDB grants Group_2 and Group_3 and wraps its key to user_1 only. user_2 belongs to both grantee
-    // groups, so narrowing leaves it two entries at the same keyId — with no direct wrap to fall back on,
-    // one of them has to carry the read.
+    // The KVDB wraps its key to user_1 only, and user_2 belongs to both grantee groups: narrowing leaves it two
+    // entries at the same keyId, and with no direct wrap to fall back on one of them has to carry the read.
     group::Group group_2, group_3;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
@@ -824,14 +815,8 @@ TEST_F(KvdbUsingGroupsTest, caller_in_two_granted_groups_reads) {
 }
 
 TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_did_not_name) {
-    // The KVDB grants Group_2. user_2 re-keys naming no groups at all, and the new key must still be re-wrapped
-    // to Group_2 — the grantee list comes from the KVDB, not from the caller's argument.
-    //
-    // The grantee is a group the caller belongs to, and that is a constraint rather than a convenience: wrapping
-    // a key to a group needs its current epoch and public key, and a Bridge running the default group policy
-    // (`get: "user"`, `listAll: "none"`) hands those to members only. Re-keying a container granted to a group
-    // the caller is not in therefore cannot work — `resolveGroupEpochs` throws `UnresolvedGroupGranteeException`
-    // — so do not "restore" this test to Group_1, which holds user_1 alone.
+    // user_2 re-keys naming no groups, so the grantee list comes from the KVDB. The caller must be in that
+    // group: the default group policy hands a group's epoch and public key to members only.
     group::Group granteeGroup;
     ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(granteeGroup.statusCode, 0);
@@ -888,9 +873,8 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_did
 }
 
 TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_advances_its_epoch) {
-    // Group G at epoch 1 is granted the KVDB. Removing a member advances G to epoch 2, which leaves the
-    // KVDB's key wrapped to a superseded epoch — the bridge reports that as `staleGroups`. A re-key
-    // re-wraps to the current epoch and must clear it.
+    // Removing a member advances G to epoch 2, leaving the KVDB's key wrapped to a superseded epoch - which
+    // the bridge reports as `staleGroups`. A re-key re-wraps to the current epoch and must clear it.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(
@@ -925,10 +909,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
     ASSERT_NO_THROW({ setNewEntry(kvdbId, "old_epoch_key", "old_epoch_pub", "old_epoch_priv", "old_epoch_data"); });
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMembers(
-            groupId,
-{reader->getString("Login.user_3_id")}
-        );
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
 
     group::Group rotatedGroup;
@@ -1005,10 +986,7 @@ TEST_F(KvdbUsingGroupsTest, setEntry_auto_rotates_a_stale_kvdb_key) {
     ASSERT_FALSE(kvdbId.empty());
 
     ASSERT_NO_THROW({
-        groupApi->removeGroupMembers(
-            groupId,
-{reader->getString("Login.user_3_id")}
-        );
+        groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")});
     });
 
     kvdb::Kvdb stale;

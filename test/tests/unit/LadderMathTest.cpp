@@ -224,7 +224,6 @@ TEST_F(LadderDescent, FailsWhenTargetIsBelowEverythingAvailable) {
     EXPECT_FALSE(LadderMath::planDescent(20, 3, spansThrough(20, 10)).has_value());
 }
 
-/** SECURITY — a rung pointing upwards must never be traversed, even if it reached storage. */
 TEST_F(LadderDescent, SECURITY_IgnoresAnUpwardRungEntirely) {
     const Spans poisoned = {
         RungSpan{5, 9}, // upward: must be ignored
@@ -241,7 +240,6 @@ TEST_F(LadderDescent, SECURITY_IgnoresAnUpwardRungEntirely) {
     }
 }
 
-/** SECURITY — a self-referential rung must not cause an infinite walk. */
 TEST_F(LadderDescent, SECURITY_SelfLoopRungCannotHangTheWalk) {
     const Spans looped = {RungSpan{5, 5}, RungSpan{5, 5}};
     EXPECT_FALSE(LadderMath::planDescent(5, 1, looped).has_value());
