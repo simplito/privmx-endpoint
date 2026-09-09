@@ -11,6 +11,7 @@ GroupChangedEventData Mapper::mapToGroupChangedEventData(const server::GroupChan
         .groupId = data.groupId,
         .contextId = data.contextId,
         .version = data.version,
+        .rosterVersion = data.rosterVersion,
         .keyVersion = data.keyVersion,
         .changeKind = data.changeKind
     };

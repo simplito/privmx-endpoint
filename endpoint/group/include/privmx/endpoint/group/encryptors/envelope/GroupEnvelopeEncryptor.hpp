@@ -67,7 +67,7 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  *     TYPE 3 (member -> group, file header; the body is stored separately by the caller)
  *       header  = u8 ver | u8 type=3 | u8len groupId | u8len keyId | u8len authorPubKeyDER
  *       payload = encrypt(sign(header || u64be plainSize || fileKey32, authorPriv), groupKey32)
- *       body    = for each chunk i: encrypt(plain_i, sha256(fileKey || u32be i))
+ *       body    = for each chunk i: encrypt(plain_i, hmac-sha256(fileKey, CHUNK_KEY_LABEL || u32be i))
  *
  * Type 2 carries no author signature. The sender is anonymous by construction, so a signature by their
  * throwaway key would attest to nothing; header integrity there rests on the payload's own encrypt-then-MAC.
@@ -80,7 +80,15 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  */
 class GroupEnvelopeEncryptor {
 public:
-    static constexpr Poco::UInt8 VERSION = 1;
+    /**
+     * 2 since the per-chunk key derivation moved from `sha256(fileKey || i)` to a keyed, labelled HMAC.
+     *
+     * The header parses identically across the two, so without the bump a v1 file would open its header,
+     * resolve its file key, and then fail on the first chunk's MAC — a confusing error a long way from the
+     * cause. Nothing persists envelopes today (checked: no dataset artifact, no bridge storage, all consumers
+     * in-tree), so this costs nothing and buys a clean refusal for anything left over on a dev machine.
+     */
+    static constexpr Poco::UInt8 VERSION = 2;
 
     /**
      * Plaintext bytes per file chunk. Fixed rather than carried in the envelope: it is a constant that has
@@ -247,6 +255,9 @@ public:
 private:
     /** Domain separator on the ECIES plaintext. See the note in the .cpp — it is load-bearing, not decoration. */
     static const std::string ECIES_DOMAIN;
+
+    /** Domain label on the per-chunk key derivation. See `chunkKey` in the .cpp. */
+    static const std::string CHUNK_KEY_LABEL;
 
     /** Shared by `peek` and `peekFile`; `wantFile` picks which pair of type bytes is acceptable. */
     static Routing peekOf(const core::Buffer& envelope, bool wantFile);

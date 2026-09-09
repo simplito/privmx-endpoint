@@ -23,6 +23,9 @@ using namespace privmx::endpoint::group;
  */
 const std::string GroupEnvelopeEncryptor::ECIES_DOMAIN = "PMXENV1";
 
+/** Domain label on the per-chunk key derivation. See `chunkKey`. */
+const std::string GroupEnvelopeEncryptor::CHUNK_KEY_LABEL = "privmx/group/file-chunk";
+
 namespace {
 
 constexpr Poco::UInt8 TYPE_GROUP_KEY = 1;
@@ -138,7 +141,13 @@ std::string GroupEnvelopeEncryptor::writeHeader(Poco::UInt8 type, const std::vec
 std::string GroupEnvelopeEncryptor::chunkKey(const std::string& fileKey, ChunkIndex index) {
     // Binding the index into the key is what makes a chunk unusable in any other position, and binding the
     // per-file random key is what makes it unusable in any other file.
-    return privmx::crypto::Crypto::sha256(fileKey + toBE(index, 4));
+    //
+    // Keyed rather than `sha256(fileKey || index)`. The raw-hash form was not exploitable here — `fileKey` is
+    // 32 secret random bytes and the index is fixed-width, so a length extension yields nothing that is used
+    // as a key anywhere — but it was a hand-rolled derivation sitting next to the keyed one the tags use, and
+    // that is the kind of difference nobody re-derives correctly at 3am. The label keeps this separate from
+    // any future derivation off the same file key.
+    return privmx::crypto::Crypto::hmacSha256(fileKey, CHUNK_KEY_LABEL + toBE(index, 4));
 }
 
 std::pair<std::string, std::string> GroupEnvelopeEncryptor::wrapContentKey(

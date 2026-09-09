@@ -28,7 +28,7 @@ bool GroupKeyResolver::hasTree(const server::GroupInfo& group) {
 TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
     TreeGroupState state;
     state.numLeaves = static_cast<std::uint32_t>(group.numLeaves.value_or(0));
-    state.epoch = static_cast<std::uint32_t>(group.keyVersion.value_or(1));
+    state.epoch = static_cast<std::uint32_t>(group.keyVersion);
     state.grantPublicKey = privmx::crypto::PublicKey::fromBase58DER(group.groupPubKey);
 
     if (group.leafAssignment.has_value()) {
@@ -130,7 +130,7 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::toRegistry(
     }
     registry.push_back(
         EpochRegistryEntry{
-            static_cast<std::uint32_t>(group.keyVersion.value_or(1)),
+            static_cast<std::uint32_t>(group.keyVersion),
             privmx::crypto::PublicKey::fromBase58DER(group.groupPubKey),
         }
     );
@@ -153,7 +153,7 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::toRegistry(const server::Group
     }
     registry.push_back(
         EpochRegistryEntry{
-            static_cast<std::uint32_t>(group.keyVersion.value_or(1)),
+            static_cast<std::uint32_t>(group.keyVersion),
             privmx::crypto::PublicKey::fromBase58DER(group.groupPubKey),
         }
     );

@@ -13,23 +13,36 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
-struct GroupDataToEncryptV5 {
+// The roster/tree plane. `internalMeta` rides along so a tree op never has to read the metadata entry.
+struct GroupRosterToEncryptV5 {
+    core::ModuleInternalMetaV5 internalMeta;
+    core::DataIntegrityObject dio;
+    dynamic::MembershipBlock membership;
+};
+
+struct DecryptedGroupRosterV5 : public core::DecryptedVersionedData {
+    core::ModuleInternalMetaV5 internalMeta;
+    std::string authorPubKey;
+    core::DataIntegrityObject dio;
+    dynamic::MembershipBlock membership;
+};
+
+// The metadata plane, written only by `updateGroup`.
+struct GroupMetaToEncryptV5 {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     core::ModuleInternalMetaV5 internalMeta;
     core::DataIntegrityObject dio;
-    std::string groupPrivKey; // WIF private key string — will be encrypted
-    dynamic::MembershipBlock membership;
+    dynamic::MetaBlock meta;
 };
 
-struct DecryptedGroupDataV5 : public core::DecryptedVersionedData {
+struct DecryptedGroupMetaV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
     core::Buffer privateMeta;
     core::ModuleInternalMetaV5 internalMeta;
     std::string authorPubKey;
     core::DataIntegrityObject dio;
-    std::string groupPrivKey; // decrypted WIF private key (empty if only public extracted)
-    dynamic::MembershipBlock membership;
+    dynamic::MetaBlock meta;
 };
 
 } // namespace group

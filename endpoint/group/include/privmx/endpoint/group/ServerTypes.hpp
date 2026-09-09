@@ -18,8 +18,20 @@ JSON_STRUCT_EXT(GroupDataEntry, core::server::ContainerDataEntry, GROUP_DATA_ENT
     F(keyId, std::string)                                                                                              \
     F(groupPubKey, std::string)                                                                                        \
     F(created, int64_t)                                                                                                \
-    F(author, std::string)
+    F(author, std::string)                                                                                             \
+    F(version, int64_t)                                                                                                \
+    F(keyVersion, int64_t)
 JSON_STRUCT(GroupHistoryEntryInfo, GROUP_HISTORY_ENTRY_INFO_FIELDS);
+
+// The metadata plane's entry. `keyVersion` is the epoch its key belongs to — how far a later reader descends.
+#define GROUP_META_ENTRY_FIELDS(F)                                                                                     \
+    F(version, int64_t)                                                                                                \
+    F(keyId, std::string)                                                                                              \
+    F(keyVersion, int64_t)                                                                                             \
+    F(data, Poco::Dynamic::Var)                                                                                        \
+    F(created, int64_t)                                                                                                \
+    F(author, std::string)
+JSON_STRUCT(GroupMetaEntry, GROUP_META_ENTRY_FIELDS);
 
 #define GROUP_KEY_HISTORY_ENTRY_FIELDS(F)                                                                              \
     F(keyVersion, int64_t)                                                                                             \
@@ -101,8 +113,10 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(users, std::vector<std::string>)                                                                                 \
     F(managers, std::vector<std::string>)                                                                              \
     F(groupKeys, std::optional<std::vector<core::server::GroupKeysEntry>>)                                             \
+    F(meta, GroupMetaEntry)                                                                                            \
     F(version, int64_t)                                                                                                \
-    F(keyVersion, std::optional<int64_t>)                                                                              \
+    F(rosterVersion, int64_t)                                                                                          \
+    F(keyVersion, int64_t)                                                                                             \
     F(keyHistory, std::optional<std::vector<GroupKeyHistoryEntry>>)                                                    \
     F(numLeaves, std::optional<int64_t>)                                                                               \
     F(leafAssignment, std::optional<std::vector<std::string>>)                                                         \
@@ -114,8 +128,7 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(eraFloor, std::optional<int64_t>)                                                                                \
     F(archivePrunedBelow, std::optional<int64_t>)                                                                      \
     F(policy, Poco::Dynamic::Var)                                                                                      \
-    F(history, std::vector<GroupHistoryEntryInfo>)                                                                     \
-    F(firstServedVersion, std::optional<int64_t>)
+    F(history, std::vector<GroupHistoryEntryInfo>)
 JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
 
 #define GROUP_SUMMARY_FIELDS(F)                                                                                        \
@@ -131,6 +144,7 @@ JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
     F(users, std::vector<std::string>)                                                                                 \
     F(managers, std::vector<std::string>)                                                                              \
     F(version, int64_t)                                                                                                \
+    F(rosterVersion, int64_t)                                                                                          \
     F(keyVersion, int64_t)                                                                                             \
     F(policy, Poco::Dynamic::Var)
 JSON_STRUCT(GroupSummary, GROUP_SUMMARY_FIELDS);
@@ -147,6 +161,7 @@ JSON_STRUCT(GroupKeyEntrySetForNewGroup, GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELD
     F(users, std::vector<std::string>)                                                                                 \
     F(managers, std::vector<std::string>)                                                                              \
     F(data, Poco::Dynamic::Var)                                                                                        \
+    F(meta, Poco::Dynamic::Var)                                                                                        \
     F(keyId, std::string)                                                                                              \
     F(type, std::string)                                                                                               \
     F(policy, std::optional<Poco::Dynamic::Var>)                                                                       \
@@ -176,7 +191,7 @@ JSON_STRUCT(GroupDeleteModel, GROUP_DELETE_MODEL_FIELDS);
     F(scope, std::optional<std::string>)                                                                               \
     F(forUserIds, std::optional<std::vector<std::string>>)                                                             \
     F(forNewMembers, std::optional<int64_t>)                                                                           \
-    F(fromVersion, std::optional<int64_t>)
+    F(fromRosterVersion, std::optional<int64_t>)
 JSON_STRUCT(GroupGetModel, GROUP_GET_MODEL_FIELDS);
 
 #define GROUP_LIST_MODEL_EXTRA_FIELDS(F)
@@ -198,6 +213,7 @@ JSON_STRUCT(GroupDeletedEventData, GROUP_DELETED_EVENT_DATA_FIELDS);
     F(groupId, std::string)                                                                                            \
     F(contextId, std::string)                                                                                          \
     F(version, int64_t)                                                                                                \
+    F(rosterVersion, int64_t)                                                                                          \
     F(keyVersion, int64_t)                                                                                             \
     F(changeKind, std::string)
 JSON_STRUCT(GroupChangedEventData, GROUP_CHANGED_EVENT_DATA_FIELDS);
@@ -215,7 +231,8 @@ JSON_STRUCT(GroupAddMemberEntry, GROUP_ADD_MEMBER_ENTRY_FIELDS);
     F(keyId, std::string)                                                                                              \
     F(data, Poco::Dynamic::Var)                                                                                        \
     F(transition, GroupTreeAdditionTransition)                                                                         \
-    F(expectedKeyVersion, int64_t)
+    F(expectedKeyVersion, int64_t)                                                                                     \
+    F(expectedRosterVersion, int64_t)
 JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
 
 // Removing several at once is not a convenience: done one at a time each removal advances the epoch on its own,
@@ -230,6 +247,7 @@ JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
     F(rungs, std::vector<GroupArchiveRung>)                                                                            \
     F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
     F(expectedKeyVersion, int64_t)                                                                                     \
+    F(expectedRosterVersion, int64_t)                                                                                  \
     F(confirmationTag, std::optional<std::string>)
 JSON_STRUCT(GroupRemoveMembersModel, GROUP_REMOVE_MEMBERS_MODEL_FIELDS);
 
