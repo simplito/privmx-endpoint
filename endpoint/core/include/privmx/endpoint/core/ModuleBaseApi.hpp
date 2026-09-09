@@ -156,6 +156,17 @@ protected:
      */
     void runAutoRekey(const std::string& moduleId, const std::function<void()>& rotate);
 
+    /**
+     * Runs a write that has no re-key to fall back on, so the bridge's epoch refusal reaches the caller as the
+     * same `StaleKeyRekeyRequiredException` a stale container key raises everywhere else.
+     *
+     * The counterpart to `runAutoRekey` and to the `assertRekeyNotNeeded` a key fetch goes through: an Inbox
+     * submission does neither, because it seals to the entries public key rather than the container key and its
+     * sender may not be named on the container at all. Only the reporting differs — the way out is the same one
+     * `runAutoRekey` reports when it is denied: a manager has to call `rotate*Keys`.
+     */
+    void runWithoutAutoRekey(const std::string& moduleId, const std::function<void()>& write);
+
     /** Empty rosters build no per-user key entries — for a module that hands its key over some other way. */
     ContainerCreateContext prepareContainerCreate(
         const std::string& contextId,

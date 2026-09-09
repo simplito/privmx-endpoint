@@ -119,6 +119,18 @@ void ModuleBaseApi::runAutoRekey(const std::string& moduleId, const std::functio
     }
 }
 
+void ModuleBaseApi::runWithoutAutoRekey(const std::string& moduleId, const std::function<void()>& write) {
+    try {
+        write();
+    } catch (const privmx::utils::PrivmxException& e) {
+        auto code = ExceptionConverter::convert(e).getCode();
+        if (code == privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode()) {
+            throw StaleKeyRekeyRequiredException("moduleId=" + moduleId + " has to be re-keyed by a manager");
+        }
+        ExceptionConverter::rethrowAsCoreException(e);
+    }
+}
+
 ContainerCreateContext ModuleBaseApi::prepareContainerCreate(
     const std::string& contextId,
     const std::vector<UserWithPubKey>& users,
