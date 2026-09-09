@@ -38,17 +38,14 @@ JSON_STRUCT_EXT(EncryptedGroupRosterV5, core::dynamic::VersionedData, ENCRYPTED_
     F(dio, std::string)
 JSON_STRUCT_EXT(EncryptedGroupMetaV5, core::dynamic::VersionedData, ENCRYPTED_GROUP_META_V5_FIELDS);
 
-/**
- * Either envelope, narrowed to the fields both carry. `JSON_STRUCT` ignores what it is not told about but throws
- * on a field it is told about and does not find — so the metadata shape cannot stand in for this: a roster entry
- * has no `publicMeta`, and parsing one as `EncryptedGroupMetaV5` throws before it ever reaches `internalMeta`.
- */
 #define ENCRYPTED_GROUP_INTERNAL_META_VIEW_V5_FIELDS(F)                                                                \
     F(internalMeta, std::string)                                                                                       \
     F(authorPubKey, std::string)                                                                                       \
     F(dio, std::string)
 JSON_STRUCT_EXT(
-    EncryptedGroupInternalMetaViewV5, core::dynamic::VersionedData, ENCRYPTED_GROUP_INTERNAL_META_VIEW_V5_FIELDS
+    EncryptedGroupInternalMetaViewV5,
+    core::dynamic::VersionedData,
+    ENCRYPTED_GROUP_INTERNAL_META_VIEW_V5_FIELDS
 );
 
 /**
