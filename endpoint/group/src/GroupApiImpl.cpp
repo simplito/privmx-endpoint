@@ -847,9 +847,7 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 data.statusCode = e.getCode();
             } catch (const privmx::utils::PrivmxException& e) {
                 data.statusCode = core::ExceptionConverter::convert(e).getCode();
-            } catch (...) {
-                data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-            }
+            } catch (...) { data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
             auto event = core::EventBuilder::buildEvent<GroupCustomEvent>(
                 "group/" + raw.id + "/" + channelName, data, notification
             );
