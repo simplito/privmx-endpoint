@@ -89,8 +89,7 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
         throw GroupMembershipMismatchException();
     }
     const std::string expected = rosterTag(
-        rosterKey.key, membership.keyVersion, membership.rosterVersion, groupInfo.users,
-        groupInfo.managers
+        rosterKey.key, membership.keyVersion, membership.rosterVersion, groupInfo.users, groupInfo.managers
     );
     if (expected != membership.rosterTag) {
         throw GroupMembershipMismatchException();
@@ -366,8 +365,7 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             // Each plane answers for its own writer. `lastModifier` is the document's and `updateGroup` moves
             // it without touching the roster, so pairing the roster DIO with it fails for an honest group as
             // soon as the metadata writer is not the last roster writer.
-            if (dio.creatorUserId != g.meta.author ||
-                rosterDios[i].creatorUserId != g.history.back().author) {
+            if (dio.creatorUserId != g.meta.author || rosterDios[i].creatorUserId != g.history.back().author) {
                 result[i] = toError(g, GroupDataIntegrityException().getCode());
                 continue;
             }

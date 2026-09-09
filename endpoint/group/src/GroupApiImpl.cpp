@@ -351,8 +351,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
         .dio = ctx.dio,
         .membership = dynamic::MembershipBlock{
             .rosterTag = GroupDataSchemaMapper::rosterTag(
-                ctx.key.key, currentEpoch, newRosterVersion,
-                core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+                ctx.key.key, currentEpoch, newRosterVersion, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
                 core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
             ),
             .groupPubKey = currentGroup.groupPubKey,
@@ -521,8 +520,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
         .dio = ctx.dio,
         .membership = dynamic::MembershipBlock{
             .rosterTag = GroupDataSchemaMapper::rosterTag(
-                ctx.key.key, newEpoch, newRosterVersion,
-                core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+                ctx.key.key, newEpoch, newRosterVersion, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
                 core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
             ),
             .groupPubKey = newGroupPubKeyStr,
@@ -569,8 +567,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
 void GroupApiImpl::refreshMetadataEpochAfterRemoval(const std::string& groupId) {
     try {
         server::GroupGetModel getModel{
-            .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {},
-            .fromRosterVersion = {}
+            .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
         };
         const auto group = _serverApi.groupGet(getModel).group;
         if (group.meta.keyVersion >= group.keyVersion) {
