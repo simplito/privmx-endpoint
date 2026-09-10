@@ -10,7 +10,8 @@ GroupChangedEventData Mapper::mapToGroupChangedEventData(const server::GroupChan
     return GroupChangedEventData{
         .groupId = data.groupId,
         .contextId = data.contextId,
-        .version = data.version,
+        .publicMetaVersion = data.publicMetaVersion,
+        .privateMetaVersion = data.privateMetaVersion,
         .rosterVersion = data.rosterVersion,
         .keyVersion = data.keyVersion,
         .changeKind = data.changeKind

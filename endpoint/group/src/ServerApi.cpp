@@ -14,8 +14,16 @@ server::GroupCreateResult ServerApi::groupCreate(server::GroupCreateModel model)
     return request<server::GroupCreateResult>("groupCreate", json);
 }
 
-void ServerApi::groupUpdate(server::GroupUpdateModel model) {
-    request("groupUpdate", model.toJSON());
+void ServerApi::groupUpdatePublicMeta(server::GroupUpdatePublicMetaModel model) {
+    request("groupUpdatePublicMeta", model.toJSON());
+}
+
+void ServerApi::groupUpdatePrivateMeta(server::GroupUpdatePrivateMetaModel model) {
+    request("groupUpdatePrivateMeta", model.toJSON());
+}
+
+void ServerApi::groupUpdatePolicy(server::GroupUpdatePolicyModel model) {
+    request("groupUpdatePolicy", model.toJSON());
 }
 
 void ServerApi::groupDelete(server::GroupDeleteModel model) {

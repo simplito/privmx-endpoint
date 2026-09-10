@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -802,7 +803,8 @@ TEST_F(GroupKeyTreeIntegrityTest, add_and_remove_the_same_member_repeatedly_keep
     ASSERT_NO_THROW({ reread = groupApi->getGroup(groupId); });
     EXPECT_EQ(reread.statusCode, 0) << "re-reading an unchanged group broke its verification";
     EXPECT_EQ(reread.keyVersion, finalState.keyVersion);
-    EXPECT_EQ(reread.version, finalState.version);
+    EXPECT_EQ(reread.publicMetaVersion, finalState.publicMetaVersion);
+    EXPECT_EQ(reread.privateMetaVersion, finalState.privateMetaVersion);
     EXPECT_EQ(reread.privateMeta.stdString(), finalState.privateMeta.stdString());
     for (int index = 1; index <= 3; ++index) {
         EXPECT_TRUE(canReadGroup(index, groupId)) << "user_" << index << " cannot read the group; " <<
@@ -912,8 +914,8 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_removal_leaves_the_group
     });
     std::thread updatingThread([&] {
         try {
-            updaterGroups.updateGroup(
-                groupId, core::Buffer::from("raced_public"), core::Buffer::from("raced_private"), before.version
+            updaterGroups.updateGroupPublicMeta(
+                groupId, core::Buffer::from("raced_public"), before.publicMetaVersion
             );
             updated = true;
         } catch (const core::Exception& e) {
@@ -939,14 +941,24 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_removal_leaves_the_group
     EXPECT_EQ(after.keyVersion, removed ? 2 : 1) << "remove: " << removeFailure << " update: " << updateFailure;
     EXPECT_EQ(after.rosterVersion, before.rosterVersion + (removed ? 1 : 0)) << "an update must not move the "
         "roster version; remove: " << removeFailure << " update: " << updateFailure;
-    // The metadata counter moves for the update, and once more if the removal's follow-up carry-up landed - that
-    // one is best-effort and loses its own version check to a concurrent update, so either count is correct here.
+    // Each plane's counter moves for its own update, and once more if the removal's follow-up carry-up landed -
+    // that one is best-effort and loses its own version check to a concurrent update, so either count is correct
+    // here. The carry-up rewrites both planes, which is why the private one gets a range too even though nothing
+    // in this test writes it directly.
+    const int64_t carryUp = removed ? 1 : 0;
     const int64_t updateBump = updated ? 1 : 0;
-    EXPECT_GE(after.version, before.version + updateBump) << "the update reported success without moving the "
-        "metadata version; remove: " << removeFailure << " update: " << updateFailure;
-    EXPECT_LE(after.version, before.version + updateBump + (removed ? 1 : 0)) << "the metadata version moved "
-        "further than the update and the removal's carry-up together can move it; remove: " << removeFailure <<
-        " update: " << updateFailure;
+    EXPECT_GE(after.publicMetaVersion, before.publicMetaVersion + updateBump) << "the update reported success "
+        "without moving the public-metadata version; remove: " << removeFailure << " update: " << updateFailure;
+    EXPECT_LE(after.publicMetaVersion, before.publicMetaVersion + updateBump + carryUp) << "the public-metadata "
+        "version moved further than the update and the removal's carry-up together can move it; remove: " <<
+        removeFailure << " update: " << updateFailure;
+    EXPECT_GE(after.privateMetaVersion, before.privateMetaVersion) << "nothing here writes the private plane "
+        "directly; remove: " << removeFailure << " update: " << updateFailure;
+    EXPECT_LE(after.privateMetaVersion, before.privateMetaVersion + carryUp) << "the private-metadata version "
+        "moved further than the removal's carry-up can move it; remove: " << removeFailure << " update: " <<
+        updateFailure;
+    EXPECT_EQ(after.privateMeta.stdString(), before.privateMeta.stdString()) << "the private plane's bytes must "
+        "carry through untouched; remove: " << removeFailure << " update: " << updateFailure;
     if (updated) {
         EXPECT_EQ(after.publicMeta.stdString(), "raced_public") << "the update reported success without landing";
     }
@@ -992,8 +1004,8 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_addition_leaves_the_grou
     });
     std::thread updatingThread([&] {
         try {
-            updaterGroups.updateGroup(
-                groupId, core::Buffer::from("raced_public"), core::Buffer::from("raced_private"), before.version
+            updaterGroups.updateGroupPublicMeta(
+                groupId, core::Buffer::from("raced_public"), before.publicMetaVersion
             );
             updated = true;
         } catch (const core::Exception& e) {
@@ -1013,8 +1025,10 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_addition_leaves_the_grou
     EXPECT_EQ(after.statusCode, 0) << "the race left the group's roster unverifiable; add: " << addFailure <<
         " update: " << updateFailure;
     EXPECT_EQ(after.keyVersion, 1) << "neither call rotates the epoch; add: " << addFailure;
-    EXPECT_EQ(after.version, before.version + (updated ? 1 : 0)) << "an addition must not move the metadata "
-        "version; add: " << addFailure << " update: " << updateFailure;
+    EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion + (updated ? 1 : 0)) << "an addition must not "
+        "move the public-metadata version; add: " << addFailure << " update: " << updateFailure;
+    EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion) << "nothing here writes the private plane; "
+        "add: " << addFailure << " update: " << updateFailure;
     EXPECT_EQ(after.rosterVersion, before.rosterVersion + (added ? 1 : 0)) << "an update must not move the "
         "roster version; add: " << addFailure << " update: " << updateFailure;
     if (updated) {
@@ -1029,10 +1043,121 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_addition_leaves_the_grou
         lastReadError;
 }
 
-TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_the_metadata_entry_up_to_the_new_epoch) {
+TEST_F(GroupKeyTreeIntegrityTest, concurrent_public_and_private_meta_writes_both_land) {
+    // What the split buys, and the one assertion in this file that fails on the pre-split code: there the two
+    // writes CAS the same counter, so one of them always loses. Every other race test here says "either landed";
+    // this one says both did.
+    const core::UserWithPubKey publicWriter = user(1);
+    const core::UserWithPubKey privateWriter = user(2);
+    const std::vector<core::UserWithPubKey> managers{publicWriter, privateWriter};
+
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({publicWriter, privateWriter}, managers); });
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
+    ASSERT_EQ(before.statusCode, 0);
+
+    auto privateConnection = connect(2);
+    auto privateGroups = group::GroupApi::create(*privateConnection);
+    ASSERT_EQ(privateGroups.getGroup(groupId).statusCode, 0);
+    auto& publicGroups = *groupApi;
+
+    bool publicOk = false;
+    bool privateOk = false;
+    std::string publicFailure;
+    std::string privateFailure;
+    std::thread publicThread([&] {
+        try {
+            publicGroups.updateGroupPublicMeta(
+                groupId, core::Buffer::from("raced_public"), before.publicMetaVersion
+            );
+            publicOk = true;
+        } catch (const core::Exception& e) {
+            publicFailure = e.getFull();
+        } catch (const std::exception& e) {
+            publicFailure = e.what();
+        }
+    });
+    std::thread privateThread([&] {
+        try {
+            privateGroups.updateGroupPrivateMeta(
+                groupId, core::Buffer::from("raced_private"), before.privateMetaVersion
+            );
+            privateOk = true;
+        } catch (const core::Exception& e) {
+            privateFailure = e.getFull();
+        } catch (const std::exception& e) {
+            privateFailure = e.what();
+        }
+    });
+    publicThread.join();
+    privateThread.join();
+    privateConnection->disconnect();
+
+    EXPECT_TRUE(publicOk) << "the public-metadata write lost a race it shares no counter with; " << publicFailure;
+    EXPECT_TRUE(privateOk) << "the private-metadata write lost a race it shares no counter with; " <<
+        privateFailure;
+
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0) << "the race left the group unverifiable; public: " << publicFailure <<
+        " private: " << privateFailure;
+    EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion + 1);
+    EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion + 1);
+    EXPECT_EQ(after.rosterVersion, before.rosterVersion) << "a metadata write must not move the roster version";
+    EXPECT_EQ(after.keyVersion, before.keyVersion) << "neither call rotates the epoch";
+    // Both landed, and neither clobbered the other.
+    EXPECT_EQ(after.publicMeta.stdString(), "raced_public");
+    EXPECT_EQ(after.privateMeta.stdString(), "raced_private");
+    EXPECT_TRUE(canReadGroup(1, groupId)) << lastReadError;
+    EXPECT_TRUE(canReadGroup(2, groupId)) << lastReadError;
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, two_concurrent_public_meta_writes_still_serialise) {
+    // The mirror, for honesty: the split relaxed the coupling *between* planes, not the guarantee *inside* one.
+    // Two writers on the same plane still serialise, and exactly one of them lands.
+    const std::vector<core::UserWithPubKey> managers{user(1), user(2)};
+
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}, managers); });
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
+    ASSERT_EQ(before.statusCode, 0);
+
+    auto secondConnection = connect(2);
+    auto secondGroups = group::GroupApi::create(*secondConnection);
+    ASSERT_EQ(secondGroups.getGroup(groupId).statusCode, 0);
+    auto& firstGroups = *groupApi;
+
+    int landed = 0;
+    std::mutex landedMutex;
+    const auto write = [&](group::GroupApi& api, const std::string& content) {
+        try {
+            api.updateGroupPublicMeta(groupId, core::Buffer::from(content), before.publicMetaVersion);
+            std::lock_guard lock(landedMutex);
+            landed++;
+        } catch (const std::exception&) { /* losing the CAS is the expected outcome for one of the two */ }
+    };
+    std::thread firstThread([&] { write(firstGroups, "first"); });
+    std::thread secondThread([&] { write(secondGroups, "second"); });
+    firstThread.join();
+    secondThread.join();
+    secondConnection->disconnect();
+
+    EXPECT_EQ(landed, 1) << "exactly one writer may win a CAS on one counter";
+
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion + 1) << "one landing, one increment";
+    EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion) << "the other plane is untouched";
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_both_metadata_planes_up_to_the_new_epoch) {
     // An entry left at the epoch it was written under stays openable - and forgeable, its tag is keyed there
-    // too - by whoever held that epoch's key, the member just removed included. So a removal is followed by a
-    // metadata write carrying the same plaintext up to the new epoch, which is why it moves that counter too.
+    // too - by whoever held that epoch's key, the member just removed included. That goes for either plane, so a
+    // removal is followed by a write to both, carrying the same plaintext up to the new epoch and moving both
+    // counters with it.
     //
     // With the carry-up in place no supported call leaves metadata behind an epoch, so the ladder descent the
     // metadata read path still supports is unreachable from here and has no e2e coverage.
@@ -1041,9 +1166,10 @@ TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_the_metadata_entry_up_to_the
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}, managers); });
     ASSERT_NO_THROW({
-        groupApi->updateGroup(
-            groupId, core::Buffer::from("meta_at_epoch_1"), core::Buffer::from("private_at_epoch_1"),
-            groupApi->getGroup(groupId).version
+        const group::Group at1 = groupApi->getGroup(groupId);
+        groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("meta_at_epoch_1"), at1.publicMetaVersion);
+        groupApi->updateGroupPrivateMeta(
+            groupId, core::Buffer::from("private_at_epoch_1"), at1.privateMetaVersion
         );
     });
     group::Group written;
@@ -1059,12 +1185,31 @@ TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_the_metadata_entry_up_to_the
     EXPECT_EQ(afterRemovals.statusCode, 0);
     EXPECT_EQ(afterRemovals.keyVersion, 3) << "two removals, two rotations";
     EXPECT_EQ(afterRemovals.rosterVersion, written.rosterVersion + 2) << "two removals, two roster entries";
-    // A carry-up that never landed would leave this at `written`, with the entry still under a key a removed
-    // member holds. Two, rather than four, because a removal's own write stays off the metadata plane.
-    EXPECT_EQ(afterRemovals.version, written.version + 2) << "each removal carries the metadata entry up, and "
-        "that carry-up is a metadata write";
+    // A carry-up that never landed would leave these at `written`, with the entries still under a key a removed
+    // member holds. Two each, rather than four, because a removal's own write stays off both metadata planes.
+    EXPECT_EQ(afterRemovals.publicMetaVersion, written.publicMetaVersion + 2) << "each removal carries the public "
+        "plane up, and that carry-up is a metadata write";
+    EXPECT_EQ(afterRemovals.privateMetaVersion, written.privateMetaVersion + 2) << "each removal carries the "
+        "private plane up too";
     EXPECT_EQ(afterRemovals.publicMeta.stdString(), "meta_at_epoch_1") <<
         "the entry was to be carried up to epoch 3, not rewritten";
+    EXPECT_EQ(afterRemovals.privateMeta.stdString(), "private_at_epoch_1") <<
+        "the private plane was to be carried up to epoch 3, not rewritten";
+
+    // Only a write to a plane moves that plane's counter, so rewriting one leaves the other's counter and bytes
+    // exactly where the carry-up left them — a state the combined entry could not produce.
+    ASSERT_NO_THROW({
+        groupApi->updateGroupPublicMeta(
+            groupId, core::Buffer::from("meta_at_epoch_3"), afterRemovals.publicMetaVersion
+        );
+    });
+    group::Group divergent;
+    ASSERT_NO_THROW({ divergent = groupApi->getGroup(groupId); });
+    EXPECT_EQ(divergent.statusCode, 0) << "the two planes at different versions must still verify";
+    EXPECT_EQ(divergent.publicMeta.stdString(), "meta_at_epoch_3");
+    EXPECT_EQ(divergent.privateMetaVersion, afterRemovals.privateMetaVersion) << "a public-plane write must not "
+        "move the private counter";
+    EXPECT_EQ(divergent.privateMeta.stdString(), "private_at_epoch_1");
 
     // A newcomer seated at epoch 3 opens the entry with epoch 3's key - the carry-up is what put it there.
     ASSERT_NO_THROW({

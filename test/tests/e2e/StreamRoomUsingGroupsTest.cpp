@@ -529,7 +529,7 @@ TEST_F(StreamRoomUsingGroupsTest, user_added_to_group_gains_access_to_room) {
     EXPECT_NO_THROW({ rBefore = streamApi->getStreamRoom(streamRoomId); });
     EXPECT_NE(rBefore.statusCode, 0);
 
-    // Seat user_3's leaf in the key tree - updateGroup would only re-wrap the group's metadata key.
+    // Seat user_3's leaf in the key tree - a metadata write would only re-wrap the group's metadata key.
     disconnect();
     connectAs(SRUGConnectionType::SRUGUser1);
     EXPECT_NO_THROW({

@@ -18,7 +18,10 @@ public:
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
 
     server::GroupCreateResult groupCreate(server::GroupCreateModel model);
-    void groupUpdate(server::GroupUpdateModel model);
+    // One RPC per metadata plane, plus the policy on its own — each with its own ACL entry on the bridge.
+    void groupUpdatePublicMeta(server::GroupUpdatePublicMetaModel model);
+    void groupUpdatePrivateMeta(server::GroupUpdatePrivateMetaModel model);
+    void groupUpdatePolicy(server::GroupUpdatePolicyModel model);
     void groupDelete(server::GroupDeleteModel model);
     server::GroupGetResult groupGet(server::GroupGetModel model);
     server::GroupListResult groupList(server::GroupListModel model);

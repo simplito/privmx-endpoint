@@ -1,24 +1,24 @@
 {
     "Context_1": {
-        "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b"
+        "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e"
     },
     "Context_2": {
-        "contextId": "ef20019d-ae86-4b6b-83c3-74b9f18d2d0c"
+        "contextId": "29e3f4fb-78f9-420f-bc4f-d779a969d68b"
     },
     "Entry_1": {
         "server_data": {
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
-            "createDate": 1788960742468,
+            "createDate": 1789028438078,
             "data": "bWVzc2FnZV9mcm9tX2luYm94U2VuZENvbW1pdF8x",
-            "entryId": "6aa15fe69c33c8a8ab240aa8",
+            "entryId": "6aa26856cd73e22695aed0de",
             "files": [
                 {
                     "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
                     "info": {
                         "author": "<anonymous>",
-                        "createDate": 1788960742466,
-                        "fileId": "6aa15fe69c33c8a8ab240aa9",
-                        "storeId": "6aa15fe49c33c8a8ab240a7f"
+                        "createDate": 1789028438076,
+                        "fileId": "6aa26856cd73e22695aed0df",
+                        "storeId": "6aa26854cd73e22695aed0b5"
                     },
                     "privateMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzBfcHJpdmF0ZU1ldGE=",
                     "publicMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzBfcHVibGljTWV0YQ==",
@@ -31,9 +31,9 @@
                     "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
                     "info": {
                         "author": "<anonymous>",
-                        "createDate": 1788960742467,
-                        "fileId": "6aa15fe69c33c8a8ab240aaa",
-                        "storeId": "6aa15fe49c33c8a8ab240a7f"
+                        "createDate": 1789028438077,
+                        "fileId": "6aa26856cd73e22695aed0e0",
+                        "storeId": "6aa26854cd73e22695aed0b5"
                     },
                     "privateMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzFfcHJpdmF0ZU1ldGE=",
                     "publicMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzFfcHVibGljTWV0YQ==",
@@ -43,7 +43,7 @@
                     "statusCode": 0
                 }
             ],
-            "inboxId": "6aa15fe49c33c8a8ab240a81",
+            "inboxId": "6aa26854cd73e22695aed0b7",
             "schemaVersion": 1,
             "statusCode": 0
         },
@@ -60,13 +60,13 @@
     "Entry_2": {
         "server_data": {
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
-            "createDate": 1788960742494,
+            "createDate": 1789028438105,
             "data": "bWVzc2FnZV9mcm9tX2luYm94U2VuZENvbW1pdF8y",
-            "entryId": "6aa15fe69c33c8a8ab240aab",
+            "entryId": "6aa26856cd73e22695aed0e1",
             "files": [
 
             ],
-            "inboxId": "6aa15fe49c33c8a8ab240a81",
+            "inboxId": "6aa26854cd73e22695aed0b7",
             "schemaVersion": 1,
             "statusCode": 0
         },
@@ -77,9 +77,9 @@
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
             "info": {
                 "author": "user_1",
-                "createDate": 1788960742329,
-                "fileId": "6aa15fe69c33c8a8ab240aa1",
-                "storeId": "6aa15fe49c33c8a8ab240a7c"
+                "createDate": 1789028437924,
+                "fileId": "6aa26855cd73e22695aed0d7",
+                "storeId": "6aa26854cd73e22695aed0b2"
             },
             "privateMeta": "dGVzdF9maWxlRGF0YV8xX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9maWxlRGF0YV8xX3B1YmxpY01ldGE=",
@@ -98,9 +98,9 @@
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
             "info": {
                 "author": "user_1",
-                "createDate": 1788960742381,
-                "fileId": "6aa15fe69c33c8a8ab240aa4",
-                "storeId": "6aa15fe49c33c8a8ab240a7c"
+                "createDate": 1789028437981,
+                "fileId": "6aa26855cd73e22695aed0da",
+                "storeId": "6aa26854cd73e22695aed0b2"
             },
             "privateMeta": "dGVzdF9maWxlRGF0YV8yX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9maWxlRGF0YV8yX3B1YmxpY01ldGE=",
@@ -116,8 +116,8 @@
     },
     "Inbox_1": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740816,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436452,
             "creator": "user_1",
             "filesConfig": {
                 "maxCount": 10,
@@ -128,8 +128,8 @@
             "groups": [
 
             ],
-            "inboxId": "6aa15fe49c33c8a8ab240a81",
-            "lastModificationDate": 1788960740816,
+            "inboxId": "6aa26854cd73e22695aed0b7",
+            "lastModificationDate": 1789028436452,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -161,8 +161,8 @@
     },
     "Inbox_2": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740863,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436499,
             "creator": "user_1",
             "filesConfig": {
                 "maxCount": 2,
@@ -173,8 +173,8 @@
             "groups": [
 
             ],
-            "inboxId": "6aa15fe49c33c8a8ab240a84",
-            "lastModificationDate": 1788960740863,
+            "inboxId": "6aa26854cd73e22695aed0ba",
+            "lastModificationDate": 1789028436499,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -208,8 +208,8 @@
     },
     "Inbox_3": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740915,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436546,
             "creator": "user_1",
             "filesConfig": {
                 "maxCount": 10,
@@ -220,8 +220,8 @@
             "groups": [
 
             ],
-            "inboxId": "6aa15fe49c33c8a8ab240a87",
-            "lastModificationDate": 1788960740915,
+            "inboxId": "6aa26854cd73e22695aed0bd",
+            "lastModificationDate": 1789028436546,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -257,9 +257,9 @@
             "data": "a3ZkYl9lbnRyeV92YWx1ZV8x",
             "info": {
                 "author": "user_1",
-                "createDate": 1788960742521,
+                "createDate": 1789028438123,
                 "key": "kvdb_entry_key_1",
-                "kvdbId": "6aa15fe49c33c8a8ab240a88"
+                "kvdbId": "6aa26854cd73e22695aed0be"
             },
             "privateMeta": "dGVzdF9rdmRiX2VudHJ5XzFfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9rdmRiX2VudHJ5XzFfcHVibGljTWV0YQ==",
@@ -276,9 +276,9 @@
             "data": "a3ZkYl9lbnRyeV92YWx1ZV8y",
             "info": {
                 "author": "user_1",
-                "createDate": 1788960742608,
+                "createDate": 1789028438219,
                 "key": "kvdb_entry_key_2",
-                "kvdbId": "6aa15fe49c33c8a8ab240a88"
+                "kvdbId": "6aa26854cd73e22695aed0be"
             },
             "privateMeta": "dGVzdF9rdmRiX2VudHJ5XzJfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9rdmRiX2VudHJ5XzJfcHVibGljTWV0YQ==",
@@ -292,15 +292,15 @@
     },
     "Kvdb_1": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740931,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436564,
             "creator": "user_1",
             "entries": 2,
             "groups": [
 
             ],
-            "kvdbId": "6aa15fe49c33c8a8ab240a88",
-            "lastModificationDate": 1788960740931,
+            "kvdbId": "6aa26854cd73e22695aed0be",
+            "lastModificationDate": 1789028436564,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -333,15 +333,15 @@
     },
     "Kvdb_2": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740952,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436579,
             "creator": "user_1",
             "entries": 0,
             "groups": [
 
             ],
-            "kvdbId": "6aa15fe49c33c8a8ab240a89",
-            "lastModificationDate": 1788960740952,
+            "kvdbId": "6aa26854cd73e22695aed0bf",
+            "lastModificationDate": 1789028436579,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -376,15 +376,15 @@
     },
     "Kvdb_3": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740971,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436593,
             "creator": "user_1",
             "entries": 0,
             "groups": [
 
             ],
-            "kvdbId": "6aa15fe49c33c8a8ab240a8a",
-            "lastModificationDate": 1788960740971,
+            "kvdbId": "6aa26854cd73e22695aed0c0",
+            "lastModificationDate": 1789028436593,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -418,7 +418,7 @@
     },
     "Login": {
         "instanceUrl": "http://localhost/",
-        "solutionId": "9f962cd3-fc81-4302-9f0b-de1f5ff5bac5",
+        "solutionId": "1eb65805-de9f-4583-ad31-c35cff122fb5",
         "user_1_id": "user_1",
         "user_1_privKey": "Kx9ftJtfa4Af941f9jYR44dKxv9uWMxkJBk3XgdSYy6M5i6zcXxS",
         "user_1_pubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
@@ -432,9 +432,9 @@
             "data": "bWVzc2FnZV9mcm9tX3NlbmRNZXNzYWdl",
             "info": {
                 "author": "user_1",
-                "createDate": 1788960742248,
-                "messageId": "6aa15fe69c33c8a8ab240a9d",
-                "threadId": "6aa15fe49c33c8a8ab240a79"
+                "createDate": 1789028437840,
+                "messageId": "6aa26855cd73e22695aed0d3",
+                "threadId": "6aa26854cd73e22695aed0af"
             },
             "privateMeta": "dGVzdF9tZXNzYWdlXzFfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9tZXNzYWdlXzFfcHVibGljTWV0YQ==",
@@ -451,9 +451,9 @@
             "data": "bWVzc2FnZV9mcm9tX3NlbmRNZXNzYWdl",
             "info": {
                 "author": "user_1",
-                "createDate": 1788960742268,
-                "messageId": "6aa15fe69c33c8a8ab240a9e",
-                "threadId": "6aa15fe49c33c8a8ab240a79"
+                "createDate": 1789028437859,
+                "messageId": "6aa26855cd73e22695aed0d4",
+                "threadId": "6aa26854cd73e22695aed0af"
             },
             "privateMeta": "dGVzdF9tZXNzYWdlXzJfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9tZXNzYWdlXzJfcHVibGljTWV0YQ==",
@@ -473,14 +473,14 @@
         "doc_2_name": "doc-2",
         "docs_common_content_part": "ma kota",
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740987,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436605,
             "creator": "user_1",
             "groups": [
 
             ],
-            "indexId": "6aa15fe49c33c8a8ab240a8b",
-            "lastModificationDate": 1788960740987,
+            "indexId": "6aa26854cd73e22695aed0c1",
+            "lastModificationDate": 1789028436605,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -514,14 +514,14 @@
     },
     "SearchIndex_2": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960742119,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028437724,
             "creator": "user_1",
             "groups": [
 
             ],
-            "indexId": "6aa15fe69c33c8a8ab240a99",
-            "lastModificationDate": 1788960742119,
+            "indexId": "6aa26855cd73e22695aed0cf",
+            "lastModificationDate": 1789028437724,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -557,14 +557,14 @@
     },
     "SearchIndex_3": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960742181,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028437780,
             "creator": "user_1",
             "groups": [
 
             ],
-            "indexId": "6aa15fe69c33c8a8ab240a9b",
-            "lastModificationDate": 1788960742181,
+            "indexId": "6aa26855cd73e22695aed0d1",
+            "lastModificationDate": 1789028437780,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -599,15 +599,15 @@
     },
     "Store_1": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740742,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436381,
             "creator": "user_1",
             "filesCount": 2,
             "groups": [
 
             ],
-            "lastFileDate": 1788960742381,
-            "lastModificationDate": 1788960740742,
+            "lastFileDate": 1789028437981,
+            "lastModificationDate": 1789028436381,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -630,7 +630,7 @@
 
             ],
             "statusCode": 0,
-            "storeId": "6aa15fe49c33c8a8ab240a7c",
+            "storeId": "6aa26854cd73e22695aed0b2",
             "users": [
                 "user_1"
             ],
@@ -641,15 +641,15 @@
     },
     "Store_2": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740758,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436396,
             "creator": "user_1",
             "filesCount": 0,
             "groups": [
 
             ],
-            "lastFileDate": 1788960740758,
-            "lastModificationDate": 1788960740758,
+            "lastFileDate": 1789028436396,
+            "lastModificationDate": 1789028436396,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -673,7 +673,7 @@
 
             ],
             "statusCode": 0,
-            "storeId": "6aa15fe49c33c8a8ab240a7d",
+            "storeId": "6aa26854cd73e22695aed0b3",
             "users": [
                 "user_1",
                 "user_2"
@@ -685,15 +685,15 @@
     },
     "Store_3": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740772,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436411,
             "creator": "user_1",
             "filesCount": 0,
             "groups": [
 
             ],
-            "lastFileDate": 1788960740772,
-            "lastModificationDate": 1788960740772,
+            "lastFileDate": 1789028436411,
+            "lastModificationDate": 1789028436411,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -716,7 +716,7 @@
 
             ],
             "statusCode": 0,
-            "storeId": "6aa15fe49c33c8a8ab240a7e",
+            "storeId": "6aa26854cd73e22695aed0b4",
             "users": [
                 "user_1",
                 "user_2"
@@ -728,15 +728,15 @@
     },
     "Thread_1": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740678,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436281,
             "creator": "user_1",
             "groups": [
 
             ],
-            "lastModificationDate": 1788960740678,
+            "lastModificationDate": 1789028436281,
             "lastModifier": "user_1",
-            "lastMsgDate": 1788960742268,
+            "lastMsgDate": 1789028437859,
             "managers": [
                 "user_1"
             ],
@@ -759,7 +759,7 @@
 
             ],
             "statusCode": 0,
-            "threadId": "6aa15fe49c33c8a8ab240a79",
+            "threadId": "6aa26854cd73e22695aed0af",
             "users": [
                 "user_1"
             ],
@@ -770,15 +770,15 @@
     },
     "Thread_2": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740703,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436345,
             "creator": "user_1",
             "groups": [
 
             ],
-            "lastModificationDate": 1788960740703,
+            "lastModificationDate": 1789028436345,
             "lastModifier": "user_1",
-            "lastMsgDate": 1788960740703,
+            "lastMsgDate": 1789028436345,
             "managers": [
                 "user_1",
                 "user_2"
@@ -802,7 +802,7 @@
 
             ],
             "statusCode": 0,
-            "threadId": "6aa15fe49c33c8a8ab240a7a",
+            "threadId": "6aa26854cd73e22695aed0b0",
             "users": [
                 "user_1",
                 "user_2"
@@ -814,15 +814,15 @@
     },
     "Thread_3": {
         "server_data": {
-            "contextId": "efb850db-bb0c-4a06-98db-c1c14a8b4c3b",
-            "createDate": 1788960740724,
+            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
+            "createDate": 1789028436366,
             "creator": "user_1",
             "groups": [
 
             ],
-            "lastModificationDate": 1788960740724,
+            "lastModificationDate": 1789028436366,
             "lastModifier": "user_1",
-            "lastMsgDate": 1788960740724,
+            "lastMsgDate": 1789028436366,
             "managers": [
                 "user_1"
             ],
@@ -845,7 +845,7 @@
 
             ],
             "statusCode": 0,
-            "threadId": "6aa15fe49c33c8a8ab240a7b",
+            "threadId": "6aa26854cd73e22695aed0b1",
             "users": [
                 "user_1",
                 "user_2"

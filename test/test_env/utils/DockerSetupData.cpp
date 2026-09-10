@@ -429,7 +429,8 @@ int main(int argc, char** argv) {
             iniFileWriter << "creator = " << group_1_server_data.creator << std::endl;
             iniFileWriter << "lastModificationDate = " << group_1_server_data.lastModificationDate << std::endl;
             iniFileWriter << "lastModifier = " << group_1_server_data.lastModifier << std::endl;
-            iniFileWriter << "version = " << group_1_server_data.version << std::endl;
+            iniFileWriter << "publicMetaVersion = " << group_1_server_data.publicMetaVersion << std::endl;
+            iniFileWriter << "privateMetaVersion = " << group_1_server_data.privateMetaVersion << std::endl;
             iniFileWriter << "groupPubKey = " << group_1_server_data.groupPubKey << std::endl;
             iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(group_1_server_data.publicMeta.stdString()) << std::endl;
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(group_1_server_data.privateMeta.stdString()) << std::endl;
@@ -443,7 +444,8 @@ int main(int argc, char** argv) {
             iniFileWriter << "creator = " << group_2_server_data.creator << std::endl;
             iniFileWriter << "lastModificationDate = " << group_2_server_data.lastModificationDate << std::endl;
             iniFileWriter << "lastModifier = " << group_2_server_data.lastModifier << std::endl;
-            iniFileWriter << "version = " << group_2_server_data.version << std::endl;
+            iniFileWriter << "publicMetaVersion = " << group_2_server_data.publicMetaVersion << std::endl;
+            iniFileWriter << "privateMetaVersion = " << group_2_server_data.privateMetaVersion << std::endl;
             iniFileWriter << "groupPubKey = " << group_2_server_data.groupPubKey << std::endl;
             iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(group_2_server_data.publicMeta.stdString()) << std::endl;
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(group_2_server_data.privateMeta.stdString()) << std::endl;
@@ -457,7 +459,8 @@ int main(int argc, char** argv) {
             iniFileWriter << "creator = " << group_3_server_data.creator << std::endl;
             iniFileWriter << "lastModificationDate = " << group_3_server_data.lastModificationDate << std::endl;
             iniFileWriter << "lastModifier = " << group_3_server_data.lastModifier << std::endl;
-            iniFileWriter << "version = " << group_3_server_data.version << std::endl;
+            iniFileWriter << "publicMetaVersion = " << group_3_server_data.publicMetaVersion << std::endl;
+            iniFileWriter << "privateMetaVersion = " << group_3_server_data.privateMetaVersion << std::endl;
             iniFileWriter << "groupPubKey = " << group_3_server_data.groupPubKey << std::endl;
             iniFileWriter << "publicMeta_inHex = " << utils::Hex::from(group_3_server_data.publicMeta.stdString()) << std::endl;
             iniFileWriter << "privateMeta_inHex = " << utils::Hex::from(group_3_server_data.privateMeta.stdString()) << std::endl;

@@ -580,8 +580,14 @@ private:
         {group_removeGroupMembers, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->removeGroupMembers(args);
         }},
-        {group_updateGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->group->updateGroup(args);
+        {group_updateGroupPublicMeta, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->updateGroupPublicMeta(args);
+        }},
+        {group_updateGroupPrivateMeta, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->updateGroupPrivateMeta(args);
+        }},
+        {group_updateGroupPolicy, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->updateGroupPolicy(args);
         }},
         {group_deleteGroup, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->deleteGroup(args);
@@ -1662,15 +1668,29 @@ private:
             "\t\tuserIds [ARRAY] - IDs of the members to remove\n"
             "\tthe roster that remains and the metadata are derived, not passed; advances the Group's key epoch; containers the Group can read must be re-keyed afterwards"
         },
-        {group_updateGroup,
-            "updateGroup JSON_ARRAY\n"
-            "\tjson format - [groupId, publicMeta, privateMeta, version, policies?]\n"
+        {group_updateGroupPublicMeta,
+            "updateGroupPublicMeta JSON_ARRAY\n"
+            "\tjson format - [groupId, publicMeta, version]\n"
             "\t\tgroupId [STRING] - ID of the Group to update\n"
             "\t\tpublicMeta [BUFFER] - public (unencrypted) metadata\n"
+            "\t\tversion [NUMBER] - current publicMetaVersion of the updated Group\n"
+            "\tthe version check cannot be skipped; an update built against a moved head has to be rebuilt\n"
+            "\tchecks publicMetaVersion only, so a concurrent private-metadata write cannot make this one lose"
+        },
+        {group_updateGroupPrivateMeta,
+            "updateGroupPrivateMeta JSON_ARRAY\n"
+            "\tjson format - [groupId, privateMeta, version]\n"
+            "\t\tgroupId [STRING] - ID of the Group to update\n"
             "\t\tprivateMeta [BUFFER] - private (encrypted) metadata\n"
-            "\t\tversion [NUMBER] - current version of the updated Group\n"
-            "\t\tpolicies [OBJECT] - (optional) Group's policies (ContainerPolicy)\n"
+            "\t\tversion [NUMBER] - current privateMetaVersion of the updated Group\n"
             "\tthe version check cannot be skipped; an update built against a moved head has to be rebuilt"
+        },
+        {group_updateGroupPolicy,
+            "updateGroupPolicy JSON_ARRAY\n"
+            "\tjson format - [groupId, policies]\n"
+            "\t\tgroupId [STRING] - ID of the Group to update\n"
+            "\t\tpolicies [OBJECT] - Group's policies (ContainerPolicy)\n"
+            "\tno version and no version check: a policy change moves neither metadata counter"
         },
         {group_deleteGroup,
             "deleteGroup JSON_ARRAY\n"
@@ -1917,7 +1937,9 @@ private:
         {group_createGroup, "Creates a new Group whose key distribution is backed by a hidden key tree."},
         {group_addGroupMembers, "Adds one member to a tree-backed Group, without advancing its key epoch."},
         {group_removeGroupMembers, "Removes one member from a tree-backed Group and advances its key epoch."},
-        {group_updateGroup, "Updates an existing Group."},
+        {group_updateGroupPublicMeta, "Updates a Group's public metadata."},
+        {group_updateGroupPrivateMeta, "Updates a Group's private metadata."},
+        {group_updateGroupPolicy, "Updates a Group's policies."},
         {group_deleteGroup, "Deletes a Group by given Group ID."},
         {group_getGroup, "Gets a Group by given Group ID."},
         {group_listGroups, "Gets a list of Groups in given Context."},
@@ -2068,7 +2090,9 @@ private:
         {group_createGroup, "Creating group"},
         {group_addGroupMembers, "Adding group member"},
         {group_removeGroupMembers, "Removing group member"},
-        {group_updateGroup, "Updating group"},
+        {group_updateGroupPublicMeta, "Updating group public meta"},
+        {group_updateGroupPrivateMeta, "Updating group private meta"},
+        {group_updateGroupPolicy, "Updating group policy"},
         {group_deleteGroup, "Deleting group"},
         {group_getGroup, "Getting group"},
         {group_listGroups, "Getting group list"},

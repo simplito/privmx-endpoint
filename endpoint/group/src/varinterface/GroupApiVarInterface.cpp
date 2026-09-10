@@ -12,7 +12,6 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {CreateGroup, &GroupApiVarInterface::createGroup},
         {AddGroupMembers, &GroupApiVarInterface::addGroupMembers},
         {RemoveGroupMembers, &GroupApiVarInterface::removeGroupMembers},
-        {UpdateGroup, &GroupApiVarInterface::updateGroup},
         {DeleteGroup, &GroupApiVarInterface::deleteGroup},
         {GetGroup, &GroupApiVarInterface::getGroup},
         {ListGroups, &GroupApiVarInterface::listGroups},
@@ -31,7 +30,10 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {BeginFileEncryptionAnonymously, &GroupApiVarInterface::beginFileEncryptionAnonymously},
         {SeekInEncryptedFile, &GroupApiVarInterface::seekInEncryptedFile},
         {SendCustomEvent, &GroupApiVarInterface::sendCustomEvent},
-        {BuildCustomEventSubscriptionQuery, &GroupApiVarInterface::buildCustomEventSubscriptionQuery}
+        {BuildCustomEventSubscriptionQuery, &GroupApiVarInterface::buildCustomEventSubscriptionQuery},
+        {UpdateGroupPublicMeta, &GroupApiVarInterface::updateGroupPublicMeta},
+        {UpdateGroupPrivateMeta, &GroupApiVarInterface::updateGroupPrivateMeta},
+        {UpdateGroupPolicy, &GroupApiVarInterface::updateGroupPolicy}
 };
 
 Poco::Dynamic::Var GroupApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -68,16 +70,33 @@ Poco::Dynamic::Var GroupApiVarInterface::removeGroupMembers(const Poco::Dynamic:
     return {};
 }
 
-Poco::Dynamic::Var GroupApiVarInterface::updateGroup(const Poco::Dynamic::Var& args) {
-    // No roster here: seating a member re-keys their path, so membership goes through addGroupMembers /
-    // removeGroupMembers and `updateGroup` is metadata only — which is also all the bridge's `groupUpdate` accepts.
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 5);
+Poco::Dynamic::Var GroupApiVarInterface::updateGroupPublicMeta(const Poco::Dynamic::Var& args) {
+    // One plane per call, and no roster: seating a member re-keys their path, so membership goes through
+    // addGroupMembers / removeGroupMembers, and each metadata plane has an RPC and a permission of its own.
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "publicMeta");
-    auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "privateMeta");
-    auto version = _deserializer.deserialize<int64_t>(argsArr->get(3), "version");
-    auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(4), "policies");
-    _groupApi.updateGroup(groupId, publicMeta, privateMeta, version, policies);
+    auto version = _deserializer.deserialize<int64_t>(argsArr->get(2), "version");
+    _groupApi.updateGroupPublicMeta(groupId, publicMeta, version);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::updateGroupPrivateMeta(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "privateMeta");
+    auto version = _deserializer.deserialize<int64_t>(argsArr->get(2), "version");
+    _groupApi.updateGroupPrivateMeta(groupId, privateMeta, version);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::updateGroupPolicy(const Poco::Dynamic::Var& args) {
+    // Required, not optional: on a call that does nothing else, an absent policy is a request that asks for
+    // nothing — where on the old combined call it meant "leave the policy alone".
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto policies = _deserializer.deserialize<core::ContainerPolicy>(argsArr->get(1), "policies");
+    _groupApi.updateGroupPolicy(groupId, policies);
     return {};
 }
 

@@ -75,7 +75,7 @@ public:
      *
      * Incremental: only the newcomers are named. The resulting roster is derived from the Group's own verified
      * history, and its metadata carries through untouched — seating a member is not a metadata edit, and
-     * `updateGroup` is where that happens.
+     * `updateGroupPublicMeta`/`updateGroupPrivateMeta` are where that happens.
      *
      * @param groupId ID of the Group
      * @param newMembers the members to add, each with their public key and the role they take
@@ -98,29 +98,55 @@ public:
     void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     /**
-     * Updates an existing Group's metadata.
+     * Updates a Group's public (unencrypted) metadata, and nothing else.
      *
-     * The membership is deliberately not updatable here: seating a member and re-keying their path is one
-     * operation on the Group's key tree, so it goes through addGroupMembers/removeGroupMembers instead.
+     * The three things a Group's metadata used to be updated by one call — public metadata, private metadata
+     * and policies — are three separate calls, each with its own permission on the Bridge. This one cannot
+     * touch the other two: the request it sends has no field to carry them in, so the permission bounds what
+     * the call can *do*, not merely what it is meant for.
      *
-     * There is no way to skip the version check. A Group's entry commits a tag over the version it lands at, so
-     * an update computed against a head that has since moved cannot produce a tag any reader will accept — the
+     * The membership is not updatable here either: seating a member and re-keying their path is one operation
+     * on the Group's key tree, so it goes through addGroupMembers/removeGroupMembers instead.
+     *
+     * There is no way to skip the version check. The entry commits a tag over the version it lands at, so an
+     * update computed against a head that has since moved cannot produce a tag any reader will accept — the
      * version pin is what keeps such an update from landing at all. A caller who loses the check has to re-read
-     * the Group and build the update again.
+     * the Group and build the update again. The version checked is `Group::publicMetaVersion` alone, so a
+     * concurrent private-metadata write cannot make this one lose.
      *
      * @param groupId ID of the Group to update
      * @param publicMeta public (unencrypted) metadata
+     * @param version current `publicMetaVersion` of the updated Group
+     */
+    void updateGroupPublicMeta(const std::string& groupId, const core::Buffer& publicMeta, const int64_t version);
+
+    /**
+     * Updates a Group's private (encrypted) metadata, and nothing else.
+     *
+     * The counterpart of `updateGroupPublicMeta`, with its own permission on the Bridge and its own version
+     * counter: the version checked is `Group::privateMetaVersion` alone.
+     *
+     * @param groupId ID of the Group to update
      * @param privateMeta private (encrypted) metadata
-     * @param version current version of the updated Group
+     * @param version current `privateMetaVersion` of the updated Group
+     */
+    void updateGroupPrivateMeta(const std::string& groupId, const core::Buffer& privateMeta, const int64_t version);
+
+    /**
+     * Sets a Group's policies, and nothing else.
+     *
+     * Takes no version and performs no version check, unlike the two metadata calls. The policies live outside
+     * the Group's encrypted, signed metadata — they always have — so there is no counter for a caller to know
+     * and nothing for a reader to re-verify. Neither metadata version moves, and two callers racing here means
+     * the later write wins.
+     *
+     * That the policies now have a call of their own does **not** make them authenticated. They are held and
+     * enforced by the Bridge, covered by no signature and no tag, exactly as before this call existed.
+     *
+     * @param groupId ID of the Group to update
      * @param policies Group's policies
      */
-    void updateGroup(
-        const std::string& groupId,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const int64_t version,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
-    );
+    void updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies);
 
     /**
      * Deletes a Group by given Group ID.

@@ -107,7 +107,8 @@ TEST_F(GroupTest, getGroup) {
     EXPECT_EQ(group.creator, reader->getString("Group_1.creator"));
     EXPECT_EQ(group.lastModificationDate, reader->getInt64("Group_1.lastModificationDate"));
     EXPECT_EQ(group.lastModifier, reader->getString("Group_1.lastModifier"));
-    EXPECT_EQ(group.version, reader->getInt64("Group_1.version"));
+    EXPECT_EQ(group.publicMetaVersion, reader->getInt64("Group_1.publicMetaVersion"));
+    EXPECT_EQ(group.privateMetaVersion, reader->getInt64("Group_1.privateMetaVersion"));
     EXPECT_EQ(group.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Group_1.publicMeta_inHex")));
     EXPECT_EQ(group.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Group_1.privateMeta_inHex")));
     EXPECT_EQ(group.statusCode, 0);
@@ -259,7 +260,8 @@ TEST_F(GroupTest, createGroup) {
     EXPECT_EQ(group.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(group.publicMeta.stdString(), "public");
     EXPECT_EQ(group.privateMeta.stdString(), "private");
-    EXPECT_EQ(group.version, 1);
+    EXPECT_EQ(group.publicMetaVersion, 1);
+    EXPECT_EQ(group.privateMetaVersion, 1);
     EXPECT_NE(group.groupPubKey, "");
     EXPECT_EQ(group.users.size(), 1);
     if (group.users.size() == 1) {
@@ -292,79 +294,84 @@ TEST_F(GroupTest, createGroup) {
     EXPECT_EQ(group.statusCode, 0);
     EXPECT_EQ(group.publicMeta.stdString(), "public2");
     EXPECT_EQ(group.privateMeta.stdString(), "private2");
-    EXPECT_EQ(group.version, 1);
+    EXPECT_EQ(group.publicMetaVersion, 1);
+    EXPECT_EQ(group.privateMetaVersion, 1);
 }
 
-TEST_F(GroupTest, updateGroup_incorrect_data) {
+TEST_F(GroupTest, updateGroupPublicMeta_incorrect_data) {
     // incorrect groupId
     EXPECT_THROW({
-        groupApi->updateGroup(
-            reader->getString("Context_1.contextId"),
-            core::Buffer::from("public"),
-            core::Buffer::from("private"),
-            1
+        groupApi->updateGroupPublicMeta(
+            reader->getString("Context_1.contextId"), core::Buffer::from("public"), 1
         );
     }, core::Exception);
-    // Wrong version. There is no way to push past this: the entry's roster tag commits the version it lands at,
+    // Wrong version. There is no way to push past this: the entry commits a tag over the version it lands at,
     // so an update built against a moved head could only land a tag no reader would accept.
     EXPECT_THROW({
-        groupApi->updateGroup(
-            reader->getString("Group_2.groupId"),
-            core::Buffer::from("public"),
-            core::Buffer::from("private"),
-            99
-        );
+        groupApi->updateGroupPublicMeta(reader->getString("Group_2.groupId"), core::Buffer::from("public"), 99);
     }, core::Exception);
 }
 
-TEST_F(GroupTest, updateGroup_correct_data) {
-    group::Group group;
-    EXPECT_NO_THROW({
-        groupApi->updateGroup(
-            reader->getString("Group_1.groupId"),
-            core::Buffer::from("updated_public"),
-            core::Buffer::from("updated_private"),
-            1
+TEST_F(GroupTest, updateGroupPrivateMeta_incorrect_data) {
+    EXPECT_THROW({
+        groupApi->updateGroupPrivateMeta(
+            reader->getString("Context_1.contextId"), core::Buffer::from("private"), 1
         );
-    });
+    }, core::Exception);
+    EXPECT_THROW({
+        groupApi->updateGroupPrivateMeta(reader->getString("Group_2.groupId"), core::Buffer::from("private"), 99);
+    }, core::Exception);
+}
+
+TEST_F(GroupTest, updateGroupPolicy_incorrect_data) {
+    // Only the groupId can be wrong here — there is no version to get wrong, because a policy write moves
+    // neither metadata counter and so has nothing to compare against.
+    EXPECT_THROW({
+        groupApi->updateGroupPolicy(reader->getString("Context_1.contextId"), core::ContainerPolicy{});
+    }, core::Exception);
+}
+
+TEST_F(GroupTest, updateGroupPublicMeta_correct_data) {
+    const std::string groupId = reader->getString("Group_1.groupId");
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
+
     EXPECT_NO_THROW({
-        group = groupApi->getGroup(reader->getString("Group_1.groupId"));
+        groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("updated_public"), before.publicMetaVersion);
     });
+    group::Group group;
+    EXPECT_NO_THROW({ group = groupApi->getGroup(groupId); });
     EXPECT_EQ(group.statusCode, 0);
-    EXPECT_EQ(group.version, 2);
+    EXPECT_EQ(group.publicMetaVersion, before.publicMetaVersion + 1);
     EXPECT_EQ(group.publicMeta.stdString(), "updated_public");
-    EXPECT_EQ(group.privateMeta.stdString(), "updated_private");
+    // The whole point of the split: writing one plane leaves the other's counter and bytes untouched.
+    EXPECT_EQ(group.privateMetaVersion, before.privateMetaVersion);
+    EXPECT_EQ(group.privateMeta.stdString(), before.privateMeta.stdString());
+    // And the roster is still the one the group was created with: a metadata write cannot reach it at all.
+    // Promoting somebody goes through addGroupMembers/removeGroupMembers.
+    EXPECT_EQ(group.rosterVersion, before.rosterVersion);
     EXPECT_EQ(group.users.size(), 1);
     EXPECT_EQ(group.managers.size(), 1);
     if (group.managers.size() == 1) {
         EXPECT_EQ(group.managers[0], reader->getString("Login.user_1_id"));
     }
-    // A second metadata update, and the roster is still the one the group was created with: updateGroup cannot
-    // reach it at all any more. Promoting somebody goes through addGroupMembers/removeGroupMembers.
+
+    // A second write to the same plane, to show the counter keeps climbing on its own.
     EXPECT_NO_THROW({
-        groupApi->updateGroup(
-            reader->getString("Group_1.groupId"),
-            core::Buffer::from("updated_public_2"),
-            core::Buffer::from("updated_private_2"),
-            2
-        );
+        groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("updated_public_2"), group.publicMetaVersion);
     });
-    EXPECT_NO_THROW({
-        group = groupApi->getGroup(reader->getString("Group_1.groupId"));
-    });
+    EXPECT_NO_THROW({ group = groupApi->getGroup(groupId); });
     EXPECT_EQ(group.statusCode, 0);
-    EXPECT_EQ(group.version, 3);
+    EXPECT_EQ(group.publicMetaVersion, before.publicMetaVersion + 2);
     EXPECT_EQ(group.publicMeta.stdString(), "updated_public_2");
-    EXPECT_EQ(group.privateMeta.stdString(), "updated_private_2");
-    EXPECT_EQ(group.users.size(), 1);
-    EXPECT_EQ(group.managers.size(), 1);
+    EXPECT_EQ(group.privateMetaVersion, before.privateMetaVersion);
 }
 
-TEST_F(GroupTest, updateGroup_by_a_different_manager_keeps_the_group_readable) {
-    // The two planes have two authors. `updateGroup` moves the document's `lastModifier` and writes no roster
-    // entry, so verifying the roster plane's DIO against `lastModifier` fails here for an honest group — and
-    // fails for *every* member, permanently, until somebody makes a membership change as the metadata writer.
-    // The roster plane answers for the author of its own head entry.
+TEST_F(GroupTest, metadata_written_by_a_different_manager_keeps_the_group_readable) {
+    // Each plane has an author of its own. A metadata write moves the document's `lastModifier` and writes no
+    // roster entry, so verifying the roster plane's DIO against `lastModifier` fails here for an honest group —
+    // and fails for *every* member, permanently, until somebody makes a membership change as the metadata
+    // writer. Each plane answers for the author of its own head entry.
     std::string groupId;
     const std::vector<core::UserWithPubKey> both{
         core::UserWithPubKey{
@@ -385,11 +392,10 @@ TEST_F(GroupTest, updateGroup_by_a_different_manager_keeps_the_group_readable) {
 
     disconnect();
     connectAs(GroupConnectionType::GUser2);
-    EXPECT_NO_THROW({
-        groupApi->updateGroup(groupId, core::Buffer::from("public2"), core::Buffer::from("private2"), 1);
-    });
+    EXPECT_NO_THROW({ groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("public2"), 1); });
+    EXPECT_NO_THROW({ groupApi->updateGroupPrivateMeta(groupId, core::Buffer::from("private2"), 1); });
 
-    // user_2 wrote the metadata; user_1 is still the roster head's author.
+    // user_2 wrote both metadata planes; user_1 is still the roster head's author.
     group::Group asUser2;
     EXPECT_NO_THROW({ asUser2 = groupApi->getGroup(groupId); });
     EXPECT_EQ(asUser2.statusCode, 0);
@@ -402,12 +408,62 @@ TEST_F(GroupTest, updateGroup_by_a_different_manager_keeps_the_group_readable) {
     EXPECT_NO_THROW({ asUser1 = groupApi->getGroup(groupId); });
     EXPECT_EQ(asUser1.statusCode, 0);
     EXPECT_EQ(asUser1.privateMeta.stdString(), "private2");
-    EXPECT_EQ(asUser1.version, 2);
+    EXPECT_EQ(asUser1.publicMetaVersion, 2);
+    EXPECT_EQ(asUser1.privateMetaVersion, 2);
     EXPECT_EQ(asUser1.rosterVersion, 1);
 }
 
-TEST_F(GroupTest, updateGroup_chain_integrity) {
-    // A three-entry group (create + 2 updates) must pass G1/G2 → statusCode=0
+TEST_F(GroupTest, updateGroupPrivateMeta_correct_data) {
+    const std::string groupId = reader->getString("Group_1.groupId");
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
+
+    EXPECT_NO_THROW({
+        groupApi->updateGroupPrivateMeta(groupId, core::Buffer::from("updated_private"), before.privateMetaVersion);
+    });
+    group::Group group;
+    EXPECT_NO_THROW({ group = groupApi->getGroup(groupId); });
+    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(group.privateMetaVersion, before.privateMetaVersion + 1);
+    EXPECT_EQ(group.privateMeta.stdString(), "updated_private");
+    EXPECT_EQ(group.publicMetaVersion, before.publicMetaVersion);
+    EXPECT_EQ(group.publicMeta.stdString(), before.publicMeta.stdString());
+    EXPECT_EQ(group.rosterVersion, before.rosterVersion);
+}
+
+TEST_F(GroupTest, updateGroupPolicy_correct_data) {
+    // The cheapest statement that a policy write appends no metadata entry: neither counter moves and neither
+    // buffer changes, so no reader has anything to re-verify.
+    const std::string groupId = reader->getString("Group_1.groupId");
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
+
+    core::ContainerPolicy policy;
+    policy.get = "all";
+    EXPECT_NO_THROW({ groupApi->updateGroupPolicy(groupId, policy); });
+
+    group::Group after;
+    EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(after.policy.get.value_or(""), "all");
+    EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion);
+    EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion);
+    EXPECT_EQ(after.rosterVersion, before.rosterVersion);
+    EXPECT_EQ(after.publicMeta.stdString(), before.publicMeta.stdString());
+    EXPECT_EQ(after.privateMeta.stdString(), before.privateMeta.stdString());
+
+    // No CAS, so a second write in a row is not a lost race — it simply wins.
+    policy.get = "user";
+    EXPECT_NO_THROW({ groupApi->updateGroupPolicy(groupId, policy); });
+    EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.policy.get.value_or(""), "user");
+    EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion);
+    EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion);
+}
+
+TEST_F(GroupTest, both_planes_at_version_three_still_verify) {
+    // Interleaved writes, so each plane's committed `metaVersion` and the *other* plane's counter diverge —
+    // a state the combined entry could never produce.
     std::string groupId;
     EXPECT_NO_THROW({
         groupId = groupApi->createGroup(
@@ -425,52 +481,53 @@ TEST_F(GroupTest, updateGroup_chain_integrity) {
         );
     });
     ASSERT_FALSE(groupId.empty());
-    // update v1→v2
-    EXPECT_NO_THROW({
-        groupApi->updateGroup(
-            groupId,
-            core::Buffer::from("v2"),
-            core::Buffer::from("v2_priv"),
-            1
-        );
-    });
-    // update v2→v3
-    EXPECT_NO_THROW({
-        groupApi->updateGroup(
-            groupId,
-            core::Buffer::from("v3"),
-            core::Buffer::from("v3_priv"),
-            2
-        );
-    });
+    EXPECT_NO_THROW({ groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("v2"), 1); });
+    EXPECT_NO_THROW({ groupApi->updateGroupPrivateMeta(groupId, core::Buffer::from("v2_priv"), 1); });
+    EXPECT_NO_THROW({ groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("v3"), 2); });
+    EXPECT_NO_THROW({ groupApi->updateGroupPrivateMeta(groupId, core::Buffer::from("v3_priv"), 2); });
+
     group::Group group;
-    EXPECT_NO_THROW({
-        group = groupApi->getGroup(groupId);
-    });
-    EXPECT_EQ(group.version, 3);
+    EXPECT_NO_THROW({ group = groupApi->getGroup(groupId); });
     EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(group.publicMetaVersion, 3);
+    EXPECT_EQ(group.privateMetaVersion, 3);
     EXPECT_EQ(group.publicMeta.stdString(), "v3");
     EXPECT_EQ(group.privateMeta.stdString(), "v3_priv");
 }
 
-TEST_F(GroupTest, updateGroup_cannot_skip_the_version_check) {
+TEST_F(GroupTest, updateGroupPublicMeta_cannot_skip_the_version_check) {
     // A refused update must leave the group exactly as it was: an update built against a moved head would commit
-    // a roster tag for a version it never lands at, and every reader would then reject the group.
+    // a tag for a version it never lands at, and every reader would then reject the group. The new part is that
+    // a refused write to one plane must not disturb the other either.
+    const std::string groupId = reader->getString("Group_2.groupId");
     group::Group before;
-    ASSERT_NO_THROW({ before = groupApi->getGroup(reader->getString("Group_2.groupId")); });
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
     EXPECT_THROW({
-        groupApi->updateGroup(
-            reader->getString("Group_2.groupId"),
-            core::Buffer::from("forced"),
-            core::Buffer::from("forced_priv"),
-            99
-        );
+        groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("forced"), 99);
     }, core::Exception);
     group::Group after;
-    EXPECT_NO_THROW({ after = groupApi->getGroup(reader->getString("Group_2.groupId")); });
+    EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });
     EXPECT_EQ(after.statusCode, 0) << "a refused update must leave the group readable";
-    EXPECT_EQ(after.version, before.version);
+    EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion);
+    EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion);
     EXPECT_EQ(after.publicMeta.stdString(), before.publicMeta.stdString());
+    EXPECT_EQ(after.privateMeta.stdString(), before.privateMeta.stdString());
+}
+
+TEST_F(GroupTest, updateGroupPrivateMeta_cannot_skip_the_version_check) {
+    const std::string groupId = reader->getString("Group_2.groupId");
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
+    EXPECT_THROW({
+        groupApi->updateGroupPrivateMeta(groupId, core::Buffer::from("forced_priv"), 99);
+    }, core::Exception);
+    group::Group after;
+    EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0) << "a refused update must leave the group readable";
+    EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion);
+    EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion);
+    EXPECT_EQ(after.publicMeta.stdString(), before.publicMeta.stdString());
+    EXPECT_EQ(after.privateMeta.stdString(), before.privateMeta.stdString());
 }
 
 TEST_F(GroupTest, deleteGroup) {

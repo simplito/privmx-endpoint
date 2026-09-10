@@ -637,7 +637,7 @@ TEST_F(InboxUsingGroupsTest, user_added_to_group_gains_access_to_inbox_and_entri
     EXPECT_NO_THROW({ iBefore = inboxApi->getInbox(inboxId); });
     EXPECT_NE(iBefore.statusCode, 0);
 
-    // Seat user_3's leaf in the key tree - updateGroup would only re-wrap the group's metadata key.
+    // Seat user_3's leaf in the key tree - a metadata write would only re-wrap the group's metadata key.
     disconnect();
     connectAs(IUGConnectionType::IUGUser1);
     EXPECT_NO_THROW({

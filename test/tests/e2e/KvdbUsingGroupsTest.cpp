@@ -663,7 +663,7 @@ TEST_F(KvdbUsingGroupsTest, user_added_to_group_gains_access_to_kvdb_and_entries
     EXPECT_NO_THROW({ eBefore = kvdbApi->getEntry(kvdbId, "entry_key"); });
     EXPECT_NE(eBefore.statusCode, 0);
 
-    // Seat user_3's leaf in the key tree - updateGroup would only re-wrap the group's metadata key.
+    // Seat user_3's leaf in the key tree - a metadata write would only re-wrap the group's metadata key.
     disconnect();
     connectAs(KUGConnectionType::KUGUser1);
     EXPECT_NO_THROW({
