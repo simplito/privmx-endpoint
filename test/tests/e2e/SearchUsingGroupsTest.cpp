@@ -5,7 +5,7 @@
 #include <optional>
 #include <string>
 #include <vector>
-#include "../../utils/BaseTest.hpp"
+#include "../../utils/BaseGroupTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
@@ -39,87 +39,30 @@ using namespace privmx::endpoint;
  * See SearchGroupRejectedWriteTest for what a write the Bridge refuses does to the Index.
  */
 
-enum SRConnectionType {
-    SRUser1,
-    SRUser2,
-    SRUser3
-};
-
-class SearchUsingGroupsTest : public privmx::test::BaseTest {
+class SearchUsingGroupsTest : public privmx::test::BaseGroupTest {
 protected:
-    SearchUsingGroupsTest() : BaseTest(privmx::test::BaseTestMode::online) {}
-
-    // "1", "2" or "3" - the suffix each of the fixture's logins carries throughout the ini.
-    static std::string suffixOf(SRConnectionType type) {
-        if (type == SRConnectionType::SRUser1) {
-            return "1";
-        } else if (type == SRConnectionType::SRUser2) {
-            return "2";
-        }
-        return "3";
+    // An Index is a KVDB and a Store, so its group support comes from the APIs handed to `SearchApi::create` -
+    // both are built with a GroupApi here, which is what lets a grantee group's member open the Index at all.
+    void setUpModuleApis() override {
+        storeApi = std::make_shared<store::StoreApi>(store::StoreApi::create(*connection, *groupApi));
+        kvdbApi = std::make_shared<kvdb::KvdbApi>(kvdb::KvdbApi::create(*connection, *groupApi));
+        lockApi = std::make_shared<lock::LockApi>(lock::LockApi::create(*connection));
+        searchApi = std::make_shared<search::SearchApi>(
+            search::SearchApi::create(*connection, *storeApi, *kvdbApi, *lockApi)
+        );
     }
-
-    void connectAs(SRConnectionType type) {
-        connection = connectWith(type);
-        buildApis();
-    }
-    void disconnect() {
-        connection->disconnect();
+    void tearDownModuleApis() override {
         searchApi.reset();
         kvdbApi.reset();
         storeApi.reset();
         lockApi.reset();
-        groupApi.reset();
-        connection.reset();
-    }
-    std::shared_ptr<core::Connection> connectWith(SRConnectionType type) {
-        return std::make_shared<core::Connection>(
-            core::Connection::connect(
-                reader->getString("Login.user_" + suffixOf(type) + "_privKey"),
-                reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
-    }
-    // An Index is a KVDB and a Store, so its group support comes from the APIs handed to `SearchApi::create` -
-    // both are built with a GroupApi here, which is what lets a grantee group's member open the Index at all.
-    void buildApis() {
-        auto apis = apisOn(connection);
-        groupApi = apis.groupApi;
-        storeApi = apis.storeApi;
-        kvdbApi = apis.kvdbApi;
-        lockApi = apis.lockApi;
-        searchApi = apis.searchApi;
-    }
-    // One of the fixture's logins as a container names its members - id plus public key, from the same ini.
-    core::UserWithPubKey userOf(SRConnectionType type) {
-        const std::string n = suffixOf(type);
-        return core::UserWithPubKey{
-            .userId = reader->getString("Login.user_" + n + "_id"),
-            .pubKey = reader->getString("Login.user_" + n + "_pubKey")
-        };
-    }
-    std::string contextId() {
-        return reader->getString("Context_1.contextId");
-    }
-    void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
-        connection = connectWith(SRConnectionType::SRUser1);
-        buildApis();
     }
     void customTearDown() override {
         for (Client* client : {&owner, &worker, &other}) {
             closeHandle(*client);
             resetClient(*client);
         }
-        connection.reset();
-        searchApi.reset();
-        kvdbApi.reset();
-        storeApi.reset();
-        lockApi.reset();
-        groupApi.reset();
-        reader.reset();
-        core::EventQueueImpl::getInstance()->clear();
+        BaseGroupTest::customTearDown();
     }
     // An Index whose direct member is user_1 alone, granted to `groups` at `role` and at whatever epoch the
     // Bridge resolves. Opening an Index writes to it, so a group expected to open it must be granted "manager".
@@ -138,8 +81,8 @@ protected:
         }
         return searchApi->createSearchIndex(
             contextId,
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("group_index_public"),
             core::Buffer::from("group_index_private"),
             mode,
@@ -199,14 +142,14 @@ protected:
     // leaves or joins. The fixture's own connection steps aside - one websocket holds one session per user key.
     void openClients() {
         disconnect();
-        owner = connectClientAs(SRUser1);
-        worker = connectClientAs(SRUser2);
-        other = connectClientAs(SRUser3);
+        owner = connectClientAs(1);
+        worker = connectClientAs(2);
+        other = connectClientAs(3);
     }
 
-    Client connectClientAs(SRConnectionType type) {
-        Client client = apisOn(connectWith(type));
-        client.name = "user_" + suffixOf(type);
+    Client connectClientAs(int index) {
+        Client client = apisOn(connect(index));
+        client.name = "user_" + std::to_string(index);
         return client;
     }
 
@@ -254,7 +197,7 @@ protected:
                        std::string& groupId) {
         ASSERT_NO_THROW({
             groupId = owner.groupApi->createGroup(
-                contextId(), members, std::vector<core::UserWithPubKey>{userOf(SRUser1)},
+                contextId(), members, std::vector<core::UserWithPubKey>{user(1)},
                 core::Buffer::from(tag + "_grp_pub"), core::Buffer::from(tag + "_grp_priv")
             );
         });
@@ -418,17 +361,13 @@ protected:
         EXPECT_EQ(probe.matched, committed) << "committed documents are in the Index but no longer searchable";
     }
 
-    std::shared_ptr<core::Connection> connection;
     std::shared_ptr<store::StoreApi> storeApi;
     std::shared_ptr<kvdb::KvdbApi> kvdbApi;
     std::shared_ptr<lock::LockApi> lockApi;
     std::shared_ptr<search::SearchApi> searchApi;
-    std::shared_ptr<group::GroupApi> groupApi;
     Client owner;
     Client worker;
     Client other;
-    Poco::Util::IniFileConfiguration::Ptr reader;
-    core::VarSerializer _serializer = core::VarSerializer({});
 };
 
 TEST_F(SearchUsingGroupsTest, createSearchIndex_with_group_grants) {
@@ -486,8 +425,8 @@ TEST_F(SearchUsingGroupsTest, createSearchIndex_without_groups_has_empty_groups_
     EXPECT_NO_THROW({
         indexId = searchApi->createSearchIndex(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("no_group_public"),
             core::Buffer::from("no_group_private"),
             search::IndexMode::WITH_CONTENT
@@ -510,8 +449,8 @@ TEST_F(SearchUsingGroupsTest, createSearchIndex_with_invalid_group_pubkey_throws
     EXPECT_THROW({
         searchApi->createSearchIndex(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("bad_key_public"),
             core::Buffer::from("bad_key_private"),
             search::IndexMode::WITH_CONTENT,
@@ -562,8 +501,8 @@ TEST_F(SearchUsingGroupsTest, updateSearchIndex_add_group) {
     ASSERT_NO_THROW({
         indexId = searchApi->createSearchIndex(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("add_group_public"),
             core::Buffer::from("add_group_private"),
             search::IndexMode::WITH_CONTENT
@@ -578,8 +517,8 @@ TEST_F(SearchUsingGroupsTest, updateSearchIndex_add_group) {
     EXPECT_NO_THROW({
         searchApi->updateSearchIndex(
             indexId,
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("add_group_public_2"),
             core::Buffer::from("add_group_private_2"),
             before.version,
@@ -619,8 +558,8 @@ TEST_F(SearchUsingGroupsTest, updateSearchIndex_remove_group) {
     EXPECT_NO_THROW({
         searchApi->updateSearchIndex(
             indexId,
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("revoked_public"),
             core::Buffer::from("revoked_private"),
             granted.version,
@@ -638,7 +577,7 @@ TEST_F(SearchUsingGroupsTest, updateSearchIndex_remove_group) {
 
     // user_2's only route into the Index was Group_2, and the revocation forced a new key.
     disconnect();
-    connectAs(SRConnectionType::SRUser2);
+    connectAs(2);
     EXPECT_THROW({ searchApi->getSearchIndex(indexId); }, core::Exception);
 }
 
@@ -656,7 +595,7 @@ TEST_F(SearchUsingGroupsTest, group_member_reads_index_metadata) {
     ASSERT_FALSE(indexId.empty());
 
     disconnect();
-    connectAs(SRConnectionType::SRUser2);
+    connectAs(2);
     search::SearchIndex index;
     EXPECT_NO_THROW({ index = searchApi->getSearchIndex(indexId); });
     EXPECT_EQ(index.statusCode, 0);
@@ -681,7 +620,7 @@ TEST_F(SearchUsingGroupsTest, group_member_searches_documents) {
     });
 
     disconnect();
-    connectAs(SRConnectionType::SRUser2);
+    connectAs(2);
     EXPECT_EQ(countMatches(indexId, "beta"), 2);
     EXPECT_EQ(countMatches(indexId, "alpha"), 1);
     EXPECT_EQ(countMatches(indexId, "delta"), 0);
@@ -699,12 +638,12 @@ TEST_F(SearchUsingGroupsTest, documents_added_by_group_member_are_visible_to_the
 
     // user_3 is in Group_3 and is not a direct member of the Index.
     disconnect();
-    connectAs(SRConnectionType::SRUser3);
+    connectAs(3);
     ASSERT_NO_THROW({ seedDocuments(indexId, {{"doc-member", "member wrote this"}}); });
     EXPECT_EQ(countMatches(indexId, "wrote"), 2);
 
     disconnect();
-    connectAs(SRConnectionType::SRUser1);
+    connectAs(1);
     EXPECT_EQ(countMatches(indexId, "member"), 1);
     EXPECT_EQ(countMatches(indexId, "wrote"), 2);
 }
@@ -722,7 +661,7 @@ TEST_F(SearchUsingGroupsTest, caller_in_no_granted_group_cannot_read_the_index) 
     ASSERT_FALSE(indexId.empty());
 
     disconnect();
-    connectAs(SRConnectionType::SRUser3);
+    connectAs(3);
     EXPECT_THROW({ searchApi->getSearchIndex(indexId); }, core::Exception);
     EXPECT_THROW({ searchApi->openSearchIndex(indexId); }, core::Exception);
 }
@@ -735,11 +674,11 @@ TEST_F(SearchUsingGroupsTest, rotateSearchIndexKeys_clears_staleGroups_after_the
         groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
-                userOf(SRConnectionType::SRUser1),
-                userOf(SRConnectionType::SRUser2),
-                userOf(SRConnectionType::SRUser3)
+                user(1),
+                user(2),
+                user(3)
             },
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("idx_grp_pub"),
             core::Buffer::from("idx_grp_priv")
         );
@@ -774,8 +713,8 @@ TEST_F(SearchUsingGroupsTest, rotateSearchIndexKeys_clears_staleGroups_after_the
     EXPECT_NO_THROW({
         searchApi->rotateSearchIndexKeys(
             indexId,
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
-            std::vector<core::UserWithPubKey>{userOf(SRConnectionType::SRUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             stale.version,
             false,
             std::vector<core::GroupGrantWithKey>{}
@@ -791,7 +730,7 @@ TEST_F(SearchUsingGroupsTest, rotateSearchIndexKeys_clears_staleGroups_after_the
     // user_2 has no direct membership, so this read goes through the re-wrapped group entries of both halves.
     // A read deliberately: a random write carries the key id it was opened under, which a re-key supersedes.
     disconnect();
-    connectAs(SRConnectionType::SRUser2);
+    connectAs(2);
     EXPECT_EQ(countMatches(indexId, "epoch"), 1);
 }
 
@@ -803,18 +742,18 @@ TEST_F(SearchUsingGroupsTest, revoking_the_grantee_group_locks_out_a_member_work
     openClients();
 
     std::string groupId, indexId;
-    createGroupOf("revoke_grant", {userOf(SRUser2), userOf(SRUser3)}, groupId);
+    createGroupOf("revoke_grant", {user(2), user(3)}, groupId);
     group::Group group;
     ASSERT_NO_THROW({ group = groupNow(groupId); });
     ASSERT_EQ(group.statusCode, 0);
-    createIndexGranting("revoke_grant", {userOf(SRUser1)}, {userOf(SRUser1)}, grantsFor(group), indexId);
+    createIndexGranting("revoke_grant", {user(1)}, {user(1)}, grantsFor(group), indexId);
 
     // user_2's whole working session: open once, write, read back, and keep the handle.
     Ledger ledger;
     openAndSeed(worker, indexId, "beta", 3, ledger);
 
     // user_1 revokes the grant. The Group still holds user_2; the Index no longer names the Group.
-    setIndexAccess(indexId, {userOf(SRUser1)}, {userOf(SRUser1)}, {});
+    setIndexAccess(indexId, {user(1)}, {user(1)}, {});
     search::SearchIndex revoked;
     ASSERT_NO_THROW({ revoked = owner.searchApi->getSearchIndex(indexId); });
     ASSERT_EQ(revoked.statusCode, 0);
@@ -836,12 +775,12 @@ TEST_F(SearchUsingGroupsTest, removing_a_direct_member_locks_them_out_and_leaves
     openClients();
 
     std::string groupId, indexId;
-    createGroupOf("drop_user", {userOf(SRUser3)}, groupId);
+    createGroupOf("drop_user", {user(3)}, groupId);
     group::Group group;
     ASSERT_NO_THROW({ group = groupNow(groupId); });
     ASSERT_EQ(group.statusCode, 0);
     createIndexGranting(
-        "drop_user", {userOf(SRUser1), userOf(SRUser2)}, {userOf(SRUser1), userOf(SRUser2)}, grantsFor(group),
+        "drop_user", {user(1), user(2)}, {user(1), user(2)}, grantsFor(group),
         indexId
     );
 
@@ -854,7 +793,7 @@ TEST_F(SearchUsingGroupsTest, removing_a_direct_member_locks_them_out_and_leaves
     ASSERT_EQ(beforeChange.listed, ledger.committed);
 
     // user_1 drops user_2 from both lists and restates the grant, which is how it survives the update.
-    setIndexAccess(indexId, {userOf(SRUser1)}, {userOf(SRUser1)}, grantsFor(group));
+    setIndexAccess(indexId, {user(1)}, {user(1)}, grantsFor(group));
     search::SearchIndex trimmed;
     ASSERT_NO_THROW({ trimmed = owner.searchApi->getSearchIndex(indexId); });
     ASSERT_EQ(trimmed.statusCode, 0);
@@ -878,18 +817,18 @@ TEST_F(SearchUsingGroupsTest, removing_the_worker_from_the_grantee_group_locks_t
     openClients();
 
     std::string groupId, indexId;
-    createGroupOf("drop_member", {userOf(SRUser2), userOf(SRUser3)}, groupId);
+    createGroupOf("drop_member", {user(2), user(3)}, groupId);
     group::Group group;
     ASSERT_NO_THROW({ group = groupNow(groupId); });
     ASSERT_EQ(group.statusCode, 0);
     ASSERT_EQ(group.keyVersion, 1);
-    createIndexGranting("drop_member", {userOf(SRUser1)}, {userOf(SRUser1)}, grantsFor(group), indexId);
+    createIndexGranting("drop_member", {user(1)}, {user(1)}, grantsFor(group), indexId);
 
     Ledger ledger;
     openAndSeed(worker, indexId, "beta", 3, ledger);
 
     ASSERT_NO_THROW({
-        owner.groupApi->removeGroupMembers(groupId, {userOf(SRUser2).userId});
+        owner.groupApi->removeGroupMembers(groupId, {user(2).userId});
     });
     ASSERT_EQ(groupNow(groupId).keyVersion, 2);
 
@@ -903,8 +842,8 @@ TEST_F(SearchUsingGroupsTest, removing_the_worker_from_the_grantee_group_locks_t
     // The re-key changes no grants: the Group is still granted, at its new epoch.
     ASSERT_NO_THROW({
         owner.searchApi->rotateSearchIndexKeys(
-            indexId, std::vector<core::UserWithPubKey>{userOf(SRUser1)},
-            std::vector<core::UserWithPubKey>{userOf(SRUser1)}, stale.version, false,
+            indexId, std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)}, stale.version, false,
             std::vector<core::GroupGrantWithKey>{}
         );
     });
@@ -930,18 +869,18 @@ TEST_F(SearchUsingGroupsTest, removing_another_member_from_the_grantee_group_kee
     openClients();
 
     std::string groupId, indexId;
-    createGroupOf("other_out", {userOf(SRUser2), userOf(SRUser3)}, groupId);
+    createGroupOf("other_out", {user(2), user(3)}, groupId);
     group::Group group;
     ASSERT_NO_THROW({ group = groupNow(groupId); });
     ASSERT_EQ(group.statusCode, 0);
     ASSERT_EQ(group.keyVersion, 1);
-    createIndexGranting("other_out", {userOf(SRUser1)}, {userOf(SRUser1)}, grantsFor(group), indexId);
+    createIndexGranting("other_out", {user(1)}, {user(1)}, grantsFor(group), indexId);
 
     Ledger ledger;
     openAndSeed(worker, indexId, "beta", 3, ledger);
 
     ASSERT_NO_THROW({
-        owner.groupApi->removeGroupMembers(groupId, {userOf(SRUser3).userId});
+        owner.groupApi->removeGroupMembers(groupId, {user(3).userId});
     });
     ASSERT_EQ(groupNow(groupId).keyVersion, 2);
     search::SearchIndex stale;
@@ -966,8 +905,8 @@ TEST_F(SearchUsingGroupsTest, removing_another_member_from_the_grantee_group_kee
     ASSERT_NO_THROW({ stale = owner.searchApi->getSearchIndex(indexId); });
     ASSERT_NO_THROW({
         owner.searchApi->rotateSearchIndexKeys(
-            indexId, std::vector<core::UserWithPubKey>{userOf(SRUser1)},
-            std::vector<core::UserWithPubKey>{userOf(SRUser1)}, stale.version, false,
+            indexId, std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)}, stale.version, false,
             std::vector<core::GroupGrantWithKey>{}
         );
     });
@@ -991,12 +930,12 @@ TEST_F(SearchUsingGroupsTest, adding_a_member_to_the_grantee_group_disturbs_noth
     openClients();
 
     std::string groupId, indexId;
-    createGroupOf("other_in", {userOf(SRUser2)}, groupId);
+    createGroupOf("other_in", {user(2)}, groupId);
     group::Group group;
     ASSERT_NO_THROW({ group = groupNow(groupId); });
     ASSERT_EQ(group.statusCode, 0);
     ASSERT_EQ(group.keyVersion, 1);
-    createIndexGranting("other_in", {userOf(SRUser1)}, {userOf(SRUser1)}, grantsFor(group), indexId);
+    createIndexGranting("other_in", {user(1)}, {user(1)}, grantsFor(group), indexId);
 
     Ledger ledger;
     openAndSeed(worker, indexId, "beta", 3, ledger);
@@ -1012,7 +951,7 @@ TEST_F(SearchUsingGroupsTest, adding_a_member_to_the_grantee_group_disturbs_noth
 
     ASSERT_NO_THROW({
         owner.groupApi->addGroupMembers(
-            groupId, {group::GroupMemberToAdd{.user = userOf(SRUser3), .role = "user"}}
+            groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}}
         );
     });
     group::Group grown;

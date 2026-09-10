@@ -4,7 +4,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "../../utils/BaseTest.hpp"
+#include "../../utils/BaseGroupTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -52,60 +52,14 @@ using namespace privmx::endpoint;
  * the metadata read path still supports is unreachable from the public API and has no e2e coverage here.
  */
 
-class GroupKeyTreeIntegrityTest : public privmx::test::BaseTest {
+class GroupKeyTreeIntegrityTest : public privmx::test::BaseGroupTest {
 protected:
-    GroupKeyTreeIntegrityTest() : BaseTest(privmx::test::BaseTestMode::online) {}
-
-    void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
-        connectAs(1);
-    }
-
-    void customTearDown() override {
-        connection.reset();
-        threadApi.reset();
-        groupApi.reset();
-        reader.reset();
-        core::EventQueueImpl::getInstance()->clear();
-    }
-
-    std::string contextId() {
-        return reader->getString("Context_1.contextId");
-    }
-
-    core::UserWithPubKey user(int index) {
-        const std::string n = std::to_string(index);
-        return core::UserWithPubKey{
-            .userId = reader->getString("Login.user_" + n + "_id"),
-            .pubKey = reader->getString("Login.user_" + n + "_pubKey")
-        };
-    }
-
-    std::shared_ptr<core::Connection> connectWith(const std::string& privKey) {
-        return std::make_shared<core::Connection>(
-            core::Connection::connect(
-                privKey, reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
-    }
-
-    std::shared_ptr<core::Connection> connect(int index) {
-        return connectWith(reader->getString("Login.user_" + std::to_string(index) + "_privKey"));
-    }
-
-    void connectAs(int index) {
-        connection = connect(index);
-        groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
+    void setUpModuleApis() override {
         threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection, *groupApi));
-        fixtureUserIndex = index;
     }
 
-    void disconnect() {
-        connection->disconnect();
-        connection.reset();
+    void tearDownModuleApis() override {
         threadApi.reset();
-        groupApi.reset();
     }
 
     // A tree-backed group with the given members, managed by the given managers (user_1 by default).
@@ -209,7 +163,7 @@ protected:
     // refused ("Websocket already authorized") - the fixture steps aside for the probe and reconnects after.
     template <typename Body>
     void onFreshSession(int index, Body body) {
-        const bool stepAside = index == fixtureUserIndex;
+        const bool stepAside = index == connectedUserIndex;
         if (stepAside) {
             disconnect();
         }
@@ -313,13 +267,7 @@ protected:
 
     // Why the last `canRead*` probe came back false, when it failed rather than just decrypting to nothing.
     std::string lastReadError;
-    // Which login the fixture's own session holds - the one a probe has to make room for.
-    int fixtureUserIndex = 0;
-    std::shared_ptr<core::Connection> connection;
-    std::shared_ptr<group::GroupApi> groupApi;
     std::shared_ptr<thread::ThreadApi> threadApi;
-    Poco::Util::IniFileConfiguration::Ptr reader;
-    core::VarSerializer _serializer = core::VarSerializer({});
 };
 
 static constexpr const char* MANAGEMENT_API_MISSING =

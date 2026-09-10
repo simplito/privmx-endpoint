@@ -7,7 +7,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
+#include "../../utils/BaseGroupScenarioTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
@@ -43,10 +43,8 @@ using namespace privmx::endpoint;
  * path is exercised alongside the data path.
  */
 
-class InboxGroupScenarioTest : public privmx::test::BaseTest {
+class InboxGroupScenarioTest : public privmx::test::BaseGroupScenarioTest {
 protected:
-    InboxGroupScenarioTest() : BaseTest(privmx::test::BaseTestMode::online) {}
-
     // Lower than the Thread scenario's message count on purpose: one submission is prepareEntry + sendEntry and
     // lands a message in the inner Thread, so a hundred of them would dominate the suite's runtime.
     static constexpr int ENTRY_COUNT = 25;
@@ -54,18 +52,14 @@ protected:
 
     // One user's live session. The Inbox API needs a Thread and a Store API built on the same GroupApi, or the
     // inner containers end up granted to the groups but unreadable through them.
-    struct Client {
-        std::shared_ptr<core::Connection> connection;
-        std::shared_ptr<group::GroupApi> groupApi;
+    struct Client : privmx::test::GroupSession {
         std::shared_ptr<thread::ThreadApi> threadApi;
         std::shared_ptr<store::StoreApi> storeApi;
         std::shared_ptr<inbox::InboxApi> inboxApi;
-        std::string privKey;
-        int64_t connectionId = 0;
     };
 
     void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
+        openReader();
         user1 = connectAs(1);
         user2 = connectAs(2);
         user3 = connectAs(3);
@@ -80,16 +74,8 @@ protected:
     }
 
     Client connectAs(int index) {
-        const std::string n = std::to_string(index);
         Client client;
-        client.privKey = reader->getString("Login.user_" + n + "_privKey");
-        client.connection = std::make_shared<core::Connection>(
-            core::Connection::connect(
-                client.privKey, reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
-        client.groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*client.connection));
+        openSession(client, index);
         client.threadApi = std::make_shared<thread::ThreadApi>(
             thread::ThreadApi::create(*client.connection, *client.groupApi)
         );
@@ -99,28 +85,14 @@ protected:
         client.inboxApi = std::make_shared<inbox::InboxApi>(
             inbox::InboxApi::create(*client.connection, *client.threadApi, *client.storeApi, *client.groupApi)
         );
-        client.connectionId = client.connection->getConnectionId();
         return client;
     }
 
     void resetClient(Client& client) {
-        client.connection.reset();
         client.inboxApi.reset();
         client.storeApi.reset();
         client.threadApi.reset();
-        client.groupApi.reset();
-    }
-
-    core::UserWithPubKey user(int index) {
-        const std::string n = std::to_string(index);
-        return core::UserWithPubKey{
-            .userId = reader->getString("Login.user_" + n + "_id"),
-            .pubKey = reader->getString("Login.user_" + n + "_pubKey")
-        };
-    }
-
-    std::string contextId() {
-        return reader->getString("Context_1.contextId");
+        closeSession(client);
     }
 
     // Every event type both modules define, on the one selector that needs no container to exist yet.
@@ -144,39 +116,6 @@ protected:
             );
         }
         client.groupApi->subscribeFor(groupQueries);
-    }
-
-    // The queue is process-wide and carries every session's events, and this scenario makes a few hundred of
-    // them, so they are tallied by (connectionId, type) instead of being waited for one at a time.
-    void pumpEvents(const std::chrono::milliseconds& budget = std::chrono::milliseconds(500)) {
-        const auto deadline = std::chrono::steady_clock::now() + budget;
-        while (std::chrono::steady_clock::now() < deadline) {
-            auto eventHolder = eventQueue.getEvent();
-            if (!eventHolder.has_value()) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(25));
-                continue;
-            }
-            auto event = eventHolder.value().get();
-            if (event != nullptr) {
-                _tally[event->connectionId][event->type]++;
-            }
-        }
-    }
-
-    void pumpUntil(const std::function<bool()>& done, const std::chrono::milliseconds& timeout) {
-        const auto deadline = std::chrono::steady_clock::now() + timeout;
-        while (std::chrono::steady_clock::now() < deadline && !done()) {
-            pumpEvents(std::chrono::milliseconds(250));
-        }
-    }
-
-    int eventsSeen(const Client& client, const std::string& type) {
-        auto byConnection = _tally.find(client.connectionId);
-        if (byConnection == _tally.end()) {
-            return 0;
-        }
-        auto counted = byConnection->second.find(type);
-        return counted == byConnection->second.end() ? 0 : counted->second;
     }
 
     // The Inbox is downloadable context-wide, but its entries are not: an Inbox policy carries no item policy,
@@ -267,11 +206,6 @@ protected:
     Client user1;
     Client user2;
     Client user3;
-    Poco::Util::IniFileConfiguration::Ptr reader;
-    core::EventQueue eventQueue = core::EventQueue::getInstance();
-
-private:
-    std::map<int64_t, std::map<std::string, int>> _tally;
 };
 
 TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_and_a_rekey) {
