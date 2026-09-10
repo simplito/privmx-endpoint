@@ -45,6 +45,12 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupUpdatedEvent>(const grou
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::GroupDeletedEvent>(const group::GroupDeletedEvent& val);
 
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupCustomEventData>(const group::GroupCustomEventData& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupCustomEvent>(const group::GroupCustomEvent& val);
+
 } // namespace core
 } // namespace endpoint
 } // namespace privmx

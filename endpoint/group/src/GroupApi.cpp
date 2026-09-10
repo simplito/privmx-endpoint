@@ -326,3 +326,37 @@ std::string GroupApi::buildSubscriptionQuery(
         throw core::Exception("ExceptionConverter rethrow error");
     }
 }
+
+void GroupApi::sendCustomEvent(
+    const std::string& groupId,
+    const std::string& channelName,
+    const core::Buffer& eventData,
+    const std::vector<std::string>& users
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    core::Validator::validateBufferSize(eventData, 0, MAX_CUSTOM_EVENT_DATA, "field:eventData ");
+    for (const auto& user : users) {
+        core::Validator::validateId(user, "field:users ");
+    }
+    try {
+        return impl->sendCustomEvent(groupId, channelName, eventData, users);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+std::string GroupApi::buildCustomEventSubscriptionQuery(
+    const std::string& channelName,
+    EventSelectorType selectorType,
+    const std::string& selectorId
+) {
+    auto impl = getImpl();
+    try {
+        return impl->buildCustomEventSubscriptionQuery(channelName, selectorType, selectorId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}

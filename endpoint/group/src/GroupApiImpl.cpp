@@ -825,8 +825,33 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
     if (!subscriptionQuery.has_value()) {
         return;
     }
-    _guardedExecutor->exec([&, type, notification]() {
-        if (type == "groupCreated") {
+    _guardedExecutor->exec([&, type, notification, subscriptionQuery]() {
+        if (type == "custom") {
+            // The channel name is not in the notification — it is the fourth element of the query that matched.
+            const std::string channelName = SubscriberImpl::channelNameFromQuery(subscriptionQuery.value());
+            if (channelName.empty()) {
+                return; // matched on a change-event subscription, so not ours to open
+            }
+            auto raw = server::GroupCustomEventData::fromJSON(notification.data);
+            GroupCustomEventData data{
+                .groupId = raw.id, .channelName = channelName, .userId = raw.author.id, .statusCode = 0
+            };
+            // A failure here is reported, never thrown: the event loop has nobody to throw to, and one
+            // unreadable notification must not cost the caller the readable ones behind it.
+            try {
+                auto decrypted = decrypt(core::Buffer::from(privmx::utils::Base64::toString(raw.eventData)));
+                data.payload = decrypted.data;
+                data.authorPubKey = decrypted.authorPubKey;
+            } catch (const core::Exception& e) {
+                data.statusCode = e.getCode();
+            } catch (const privmx::utils::PrivmxException& e) {
+                data.statusCode = core::ExceptionConverter::convert(e).getCode();
+            } catch (...) { data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+            auto event = core::EventBuilder::buildEvent<GroupCustomEvent>(
+                "group/" + raw.id + "/" + channelName, data, notification
+            );
+            _eventMiddleware->emitApiEvent(event);
+        } else if (type == "groupCreated") {
             auto raw = server::GroupChangedEventData::fromJSON(notification.data);
             auto data = Mapper::mapToGroupChangedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupCreatedEvent>("context", data, notification);
@@ -915,6 +940,14 @@ std::string GroupApiImpl::buildSubscriptionQuery(
     const std::string& selectorId
 ) {
     return SubscriberImpl::buildQuery(eventType, selectorType, selectorId);
+}
+
+std::string GroupApiImpl::buildCustomEventSubscriptionQuery(
+    const std::string& channelName,
+    EventSelectorType selectorType,
+    const std::string& selectorId
+) {
+    return SubscriberImpl::buildCustomEventQuery(channelName, selectorType, selectorId);
 }
 
 privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& groupId, int64_t epoch) {
@@ -1066,6 +1099,27 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
 Envelope GroupApiImpl::encrypt(const std::string& groupId, const core::Buffer& content) {
     auto key = getAndValidateModuleCurrentEncKey(getModuleKeys(groupId), _groupPrivKeyResolver);
     return _envelopeEncryptor.packGroupKeyEnvelope(groupId, key.id, content, _userPrivKey, key.key);
+}
+
+/**
+ * Nothing new is sealed here: the notification is an ordinary member envelope, so it costs one `encrypt` — the
+ * Group's current key, resolved from cache after the first call — and travels as one request whatever the
+ * Group's size. The recipients already hold the key, so there is no key list to build.
+ */
+void GroupApiImpl::sendCustomEvent(
+    const std::string& groupId,
+    const std::string& channelName,
+    const core::Buffer& eventData,
+    const std::vector<std::string>& users
+) {
+    server::GroupSendCustomEventModel model;
+    model.groupId = groupId;
+    model.channel = channelName;
+    model.data = privmx::utils::Base64::from(encrypt(groupId, eventData).stdString());
+    if (!users.empty()) {
+        model.users = users;
+    }
+    _serverApi.groupSendCustomEvent(model);
 }
 
 DecryptedEnvelope GroupApiImpl::decrypt(const Envelope& envelope) {

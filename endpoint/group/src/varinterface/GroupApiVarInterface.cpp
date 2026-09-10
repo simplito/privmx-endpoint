@@ -29,7 +29,9 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {FinishFileEncryption, &GroupApiVarInterface::finishFileEncryption},
         {FinishFileDecryption, &GroupApiVarInterface::finishFileDecryption},
         {BeginFileEncryptionAnonymously, &GroupApiVarInterface::beginFileEncryptionAnonymously},
-        {SeekInEncryptedFile, &GroupApiVarInterface::seekInEncryptedFile}
+        {SeekInEncryptedFile, &GroupApiVarInterface::seekInEncryptedFile},
+        {SendCustomEvent, &GroupApiVarInterface::sendCustomEvent},
+        {BuildCustomEventSubscriptionQuery, &GroupApiVarInterface::buildCustomEventSubscriptionQuery}
 };
 
 Poco::Dynamic::Var GroupApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -207,6 +209,25 @@ Poco::Dynamic::Var GroupApiVarInterface::seekInEncryptedFile(const Poco::Dynamic
     auto fileHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "fileHandle");
     auto position = _deserializer.deserialize<int64_t>(argsArr->get(1), "position");
     auto result = _groupApi.seekInEncryptedFile(fileHandle, position);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::sendCustomEvent(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(1), "channelName");
+    auto eventData = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "eventData");
+    auto users = _deserializer.deserializeVector<std::string>(argsArr->get(3), "users");
+    _groupApi.sendCustomEvent(groupId, channelName, eventData, users);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::buildCustomEventSubscriptionQuery(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto channelName = _deserializer.deserialize<std::string>(argsArr->get(0), "channelName");
+    auto selectorType = _deserializer.deserialize<group::EventSelectorType>(argsArr->get(1), "selectorType");
+    auto selectorId = _deserializer.deserialize<std::string>(argsArr->get(2), "selectorId");
+    auto result = _groupApi.buildCustomEventSubscriptionQuery(channelName, selectorType, selectorId);
     return _serializer.serialize(result);
 }
 
