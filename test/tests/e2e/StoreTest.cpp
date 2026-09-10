@@ -225,7 +225,6 @@ TEST_F(StoreTest, listStores_incorrect_input_data) {
 
 TEST_F(StoreTest, listStores_correct_input_data) {
     core::PagingList<store::Store> listStores;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listStores = storeApi->listStores(
             reader->getString("Context_1.contextId"),
@@ -238,7 +237,6 @@ TEST_F(StoreTest, listStores_correct_input_data) {
     });
     EXPECT_EQ(listStores.totalAvailable, 3);
     EXPECT_EQ(listStores.readItems.size(), 0);
-    // {.skip=0, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listStores = storeApi->listStores(
             reader->getString("Context_1.contextId"),
@@ -280,7 +278,6 @@ TEST_F(StoreTest, listStores_correct_input_data) {
             EXPECT_EQ(store.managers[0], reader->getString("Login.user_1_id"));
         }
     }
-    // {.skip=1, .limit=3, .sortOrder="asc", .sortBy="createDate"}
     EXPECT_NO_THROW({
         listStores = storeApi->listStores(
             reader->getString("Context_1.contextId"),
@@ -997,7 +994,6 @@ TEST_F(StoreTest, listFiles_incorrect_input_data) {
 
 TEST_F(StoreTest, listFiles_correct_input_data) {
     core::PagingList<store::File> listFiles;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listFiles = storeApi->listFiles(
             reader->getString("Store_1.storeId"),
@@ -1010,7 +1006,6 @@ TEST_F(StoreTest, listFiles_correct_input_data) {
     });
     EXPECT_EQ(listFiles.totalAvailable, 2);
     EXPECT_EQ(listFiles.readItems.size(), 0);
-    // {.skip=1, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listFiles = storeApi->listFiles(
             reader->getString("Store_1.storeId"),
@@ -1040,7 +1035,7 @@ TEST_F(StoreTest, listFiles_correct_input_data) {
         );
         EXPECT_EQ(file.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("File_1.uploaded_publicMeta_inHex")));
     }
-    // {.skip=0, .limit=3, .sortOrder="asc", .sortBy="createDate"}, after force key generation on store
+    // after force key generation on store
     EXPECT_NO_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -1121,7 +1116,6 @@ TEST_F(StoreTest, deleteFile) {
             reader->getString("Store_1.storeId")
         );
     }, core::Exception);
-    // change privileges
     EXPECT_NO_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -1156,7 +1150,6 @@ TEST_F(StoreTest, deleteFile) {
             reader->getString("File_2.info_fileId")
         );
     }, core::Exception);
-    // change privileges
     disconnect();
     connectAs(ConnectionType::User1);
     EXPECT_NO_THROW({
@@ -1287,7 +1280,6 @@ TEST_F(StoreTest, openFile_readFromFile_seekInFile_closeFile) {
 
     int64_t handle = 0;
     std::string data;
-    // createFile correct file
     EXPECT_NO_THROW({
         handle = storeApi->openFile(
             reader->getString("File_1.info_fileId")
@@ -1335,13 +1327,11 @@ TEST_F(StoreTest, openFile_readFromFile_seekInFile_closeFile) {
             reader->getInt64("File_1.size")/2
         ).stdString() + data;
     });
-    // closeFile
     EXPECT_NO_THROW({
         storeApi->closeFile(
             handle
         );
     });
-    // validate read data
     EXPECT_EQ(data, privmx::utils::Hex::toString(reader->getString("File_1.uploaded_data_inHex")));
 }
 
@@ -1468,7 +1458,6 @@ TEST_F(StoreTest, createFile_writeToFile_closeFile) {
         EXPECT_THROW({
             storeApi->closeFile(handle);
         }, core::Exception);
-        // validate uploaded data
         if(!fileId.empty()) {
             store::File file;
             EXPECT_NO_THROW({
@@ -1565,7 +1554,6 @@ TEST_F(StoreTest, updateFile_writeToFile_closeFile) {
         EXPECT_THROW({
             storeApi->closeFile(handle);
         }, core::Exception);
-        // validate uploaded data
         if(!fileId.empty()) {
             store::File file;
             EXPECT_NO_THROW({
@@ -1620,11 +1608,9 @@ TEST_F(StoreTest, createFile_with_size_0) {
     EXPECT_EQ(handle, 1);
     if(handle == 1) {
         std::string fileId;
-        // closeFile
         EXPECT_NO_THROW({
             fileId = storeApi->closeFile(handle);
         });
-        // validate uploaded data
         if(!fileId.empty()) {
             store::File file;
             EXPECT_NO_THROW({
@@ -1660,11 +1646,9 @@ TEST_F(StoreTest, updateFile_with_size_0) {
     EXPECT_EQ(handle, 1);
     if(handle == 1) {
         std::string fileId;
-        // closeFile size
         EXPECT_NO_THROW({
             fileId = storeApi->closeFile(handle);
         });
-        // validate uploaded data
         if(!fileId.empty()) {
             store::File file;
             EXPECT_NO_THROW({
@@ -1717,13 +1701,11 @@ TEST_F(StoreTest, updateFileMeta) {
 TEST_F(StoreTest, Access_denaid_not_in_users_or_managers) {
     disconnect();
     connectAs(ConnectionType::User2);
-    // getStore
     EXPECT_THROW({
         storeApi->getStore(
             reader->getString("Store_1.storeId")
         );
     } ,core::Exception);
-    // updateStore
     EXPECT_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -1742,19 +1724,16 @@ TEST_F(StoreTest, Access_denaid_not_in_users_or_managers) {
             false
         );
     } ,core::Exception);
-    // deleteStore
     EXPECT_THROW({
         storeApi->deleteStore(
             reader->getString("Store_1.storeId")
         );
     } ,core::Exception);
-    // getFile
     EXPECT_THROW({
         storeApi->getFile(
             reader->getString("File_1.info_fileId")
         );
     } ,core::Exception);
-    // listFiles
     EXPECT_THROW({
         storeApi->listFiles(
             reader->getString("Store_1.storeId"),
@@ -1765,7 +1744,6 @@ TEST_F(StoreTest, Access_denaid_not_in_users_or_managers) {
             }
         );
     } ,core::Exception);
-    // createFile
     EXPECT_THROW({
         storeApi->createFile(
             reader->getString("Store_1.storeId"),
@@ -1774,7 +1752,6 @@ TEST_F(StoreTest, Access_denaid_not_in_users_or_managers) {
             64
         );
     } ,core::Exception);
-    // updateFile
     EXPECT_THROW({
         storeApi->updateFile(
             reader->getString("File_1.info_fileId"),
@@ -1783,7 +1760,6 @@ TEST_F(StoreTest, Access_denaid_not_in_users_or_managers) {
             64
         );
     } ,core::Exception);
-    // openFile
     EXPECT_THROW({
         storeApi->openFile(
             reader->getString("File_1.info_fileId")
@@ -1794,13 +1770,11 @@ TEST_F(StoreTest, Access_denaid_not_in_users_or_managers) {
 TEST_F(StoreTest, Access_denaid_Public) {
     disconnect();
     connectAs(ConnectionType::Public);
-    // getStore
     EXPECT_THROW({
         storeApi->getStore(
             reader->getString("Store_1.storeId")
         );
     } ,core::Exception);
-    // listStores
     EXPECT_THROW({
         storeApi->listStores(
             reader->getString("Context_1.contextId"),
@@ -1811,7 +1785,6 @@ TEST_F(StoreTest, Access_denaid_Public) {
             }
         );
     } ,core::Exception);
-    // createStore
     EXPECT_THROW({
         storeApi->createStore(
             reader->getString("Context_1.contextId"),
@@ -1827,7 +1800,6 @@ TEST_F(StoreTest, Access_denaid_Public) {
             core::Buffer::from("private")
         );
     } ,core::Exception);
-    // updateStore
     EXPECT_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -1846,19 +1818,16 @@ TEST_F(StoreTest, Access_denaid_Public) {
             false
         );
     } ,core::Exception);
-    // deleteStore
     EXPECT_THROW({
         storeApi->deleteStore(
             reader->getString("Store_1.storeId")
         );
     } ,core::Exception);
-    // getFile
     EXPECT_THROW({
         storeApi->getFile(
             reader->getString("File_1.info_fileId")
         );
     } ,core::Exception);
-    // listFiles
     EXPECT_THROW({
         storeApi->listFiles(
             reader->getString("Store_1.storeId"),
@@ -1869,7 +1838,6 @@ TEST_F(StoreTest, Access_denaid_Public) {
             }
         );
     } ,core::Exception);
-    // createFile
     EXPECT_THROW({
         storeApi->createFile(
             reader->getString("Store_1.storeId"),
@@ -1878,7 +1846,6 @@ TEST_F(StoreTest, Access_denaid_Public) {
             64
         );
     } ,core::Exception);
-    // updateFile
     EXPECT_THROW({
         storeApi->updateFile(
             reader->getString("File_1.info_fileId"),
@@ -1887,7 +1854,6 @@ TEST_F(StoreTest, Access_denaid_Public) {
             64
         );
     } ,core::Exception);
-    // openFile
     EXPECT_THROW({
         storeApi->openFile(
             reader->getString("File_1.info_fileId")
@@ -1899,7 +1865,6 @@ TEST_F(StoreTest, openFile_readFromFile_updateFile_closeFile_FileVersionMismatch
 
     int64_t handle = 0;
     std::string data;
-    // createFile correct file
     EXPECT_NO_THROW({
         handle = storeApi->openFile(
             reader->getString("File_1.info_fileId")
@@ -1920,7 +1885,6 @@ TEST_F(StoreTest, openFile_readFromFile_updateFile_closeFile_FileVersionMismatch
     });
 
 
-    // FileVersionMismatchHandleClosedException
     EXPECT_THROW({
         storeApi->readFromFile(
             handle,
@@ -2577,7 +2541,6 @@ TEST_F(StoreTest, sendMessage_cacheManipulation) {
     EXPECT_NO_THROW({
         storeApi->getStore(reader->getString("Store_1.storeId"));
     });
-    // update store
     EXPECT_NO_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -2628,7 +2591,6 @@ TEST_F(StoreTest, updateFile_cacheManipulation) {
     EXPECT_NO_THROW({
         storeApi->getStore(reader->getString("Store_1.storeId"));
     });
-    // update store
     EXPECT_NO_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -2679,7 +2641,6 @@ TEST_F(StoreTest, updateFileMeta_cacheManipulation) {
     EXPECT_NO_THROW({
         storeApi->getStore(reader->getString("Store_1.storeId"));
     });
-    // update store
     EXPECT_NO_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -2725,14 +2686,12 @@ TEST_F(StoreTest, updateFileMeta_cacheManipulation) {
 TEST_F(StoreTest, userValidator_false) {
     auto verifier = std::make_shared<core::FalseUserVerifierInterface>();
     connection->setUserVerifier(verifier);
-    // getStore
     EXPECT_NO_THROW({
         auto store = storeApi->getStore(
             reader->getString("Store_1.storeId")
         );
         EXPECT_FALSE(store.statusCode == 0);
     });
-    // listStore
     EXPECT_NO_THROW({
         auto stores = storeApi->listStores(
             reader->getString("Context_1.contextId"),
@@ -2744,7 +2703,6 @@ TEST_F(StoreTest, userValidator_false) {
         );
         EXPECT_FALSE(stores.readItems[0].statusCode == 0);
     });
-    // createStore
     EXPECT_THROW({
         storeApi->createStore(
             reader->getString("Context_1.contextId"),
@@ -2760,7 +2718,6 @@ TEST_F(StoreTest, userValidator_false) {
             core::Buffer::from("private")
         );
     }, core::Exception);
-    // updateStore
     EXPECT_THROW({
         storeApi->updateStore(
             reader->getString("Store_1.storeId"),
@@ -2779,20 +2736,17 @@ TEST_F(StoreTest, userValidator_false) {
             true
         );
     }, core::Exception);
-    // deleteStore
     EXPECT_NO_THROW({
         storeApi->deleteStore(
             reader->getString("Store_2.storeId")
         );
     });
-    // getFile
     EXPECT_NO_THROW({
         auto file = storeApi->getFile(
             reader->getString("File_1.info_fileId")
         );
         EXPECT_FALSE(file.statusCode == 0);
     });
-    // listFiles
     EXPECT_NO_THROW({
         auto files = storeApi->listFiles(
             reader->getString("Store_1.storeId"),
@@ -2804,7 +2758,6 @@ TEST_F(StoreTest, userValidator_false) {
         );
         EXPECT_FALSE(files.readItems[0].statusCode == 0);
     });
-    // createFile
     EXPECT_THROW({
         auto handle = storeApi->createFile(
             reader->getString("Store_1.storeId"),
@@ -2814,7 +2767,6 @@ TEST_F(StoreTest, userValidator_false) {
         );
         storeApi->closeFile(handle);
     }, core::Exception);
-    // updateFile
     EXPECT_THROW({
         auto handle = storeApi->updateFile(
             reader->getString("File_1.info_fileId"),
@@ -2824,13 +2776,11 @@ TEST_F(StoreTest, userValidator_false) {
         );
         storeApi->closeFile(handle);
     }, core::Exception);
-    // openFile
     EXPECT_THROW({
         storeApi->openFile(
             reader->getString("File_1.info_fileId")
         );
     }, core::Exception);
-    // deleteStore
     EXPECT_NO_THROW({
         storeApi->deleteFile(
             reader->getString("File_2.info_fileId")

@@ -383,6 +383,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     EXPECT_EQ(staleInbox.staleGroups[0], groupId);
 
     // -- Entry2, refused while the Inbox is still stale --
+
     // The payload is sealed to the Inbox's entries public key, so a send never reaches for the container key
     // and nothing auto-re-keys. A submitter may not re-key either, so the bridge can only refuse.
     EXPECT_THROW({ submitEntry(user2, inboxId, "entry2_data"); }, core::StaleKeyRekeyRequiredException)

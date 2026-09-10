@@ -100,10 +100,8 @@ TEST_F(GroupEnvelope, PeekRoutesWithoutOpening) {
 // -- the ladder-rung oracle ----------------------------------------------------------------------------
 
 TEST_F(GroupEnvelope, LadderRungIsNotAnEnvelope) {
-    // Exactly what `TreeKeys::wrapKey` produces: a past epoch's grant private key, ECIES-wrapped to the
-    // group's grant public key. Byte-identical in construction to a type 2 key wrap, addressed to the same
-    // key. If `openAnonymousEnvelope` accepted it, it would return that private key as message content and
-    // walk past every era-floor and pruning check the ladder exists to enforce.
+    // Exactly what `TreeKeys::wrapKey` produces, byte-identical to a type 2 key wrap. If `openAnonymousEnvelope`
+    // took it, it would return a past epoch's private key as content, past every era-floor and pruning check.
     PrivateKey pastEpochKey = PrivateKey::generateRandom();
     std::string rung = privmx::crypto::EciesEncryptor::encrypt(
         grantKey.getPublicKey(), pastEpochKey.toWIF(), PrivateKey::generateRandom()
@@ -134,9 +132,8 @@ TEST_F(GroupEnvelope, AnonymousRejectsAMismatchedGroupKey) {
 // -- header authentication -----------------------------------------------------------------------------
 
 TEST_F(GroupEnvelope, HeaderIsSignedSoAnEnvelopeCannotBeReplayedIntoAnotherGroup) {
-    // A member of both groups holds both keys. They open Alice's envelope in group A and re-seal the *same
-    // signed inner blob* under group B's key with a group B header. Alice's signature still verifies — so
-    // only the header being inside that signature stops her "yes" in one group becoming a "yes" in another.
+    // A member of both groups re-seals Alice's *same signed inner blob* under group B's key. Her signature still
+    // verifies, so only the header being inside that signature stops her "yes" in A becoming a "yes" in B.
     core::Buffer envA = enc.packGroupKeyEnvelope("groupA", keyId, buf("approve"), author, groupKey);
 
     std::string otherKey = privmx::crypto::Crypto::randomBytes(32);
@@ -183,11 +180,8 @@ TEST_F(GroupEnvelope, TamperedHeaderFieldsAreRejected) {
 }
 
 TEST_F(GroupEnvelope, AMalformedSignatureFrameThrowsAPrivmxException) {
-    // The group key is symmetric, so a fellow member chooses the plaintext under the seal outright. A payload
-    // of `\x01\xff` claims a 255-byte signature and carries none: the frame parser used to run off the end
-    // and raise std::out_of_range, which neither `core::Exception` nor the endpoint's converter covers, so it
-    // crossed the public API — and the language bindings — as a bare standard-library error. What it throws
-    // instead does not matter much; that it is one of ours does.
+    // A payload of `\x01\xff` claims a 255-byte signature and carries none. The frame parser once ran off the end
+    // with std::out_of_range, crossing the public API and the language bindings as a bare standard-library error.
     core::DataInnerEncryptorV4 raw;
     std::string header;
     header.push_back(static_cast<char>(GroupEnvelopeEncryptor::VERSION));
@@ -291,13 +285,8 @@ TEST_F(GroupEnvelope, FileEnvelopeRejectsAnUnsignedSizeChange) {
     EXPECT_ANY_THROW(enc.unpackFileEnvelope(buf(tampered), groupKey));
 }
 
-/**
- * The streaming boundary arithmetic, which `GroupApiImpl` drives but does not own.
- *
- * Both directions find chunk edges purely from the signed `plainSize` — no framing on the wire says where a
- * chunk ends. So the sizes have to agree exactly, at every awkward length, or a stream desynchronises and
- * every later chunk fails to open. That is what these exercise; the API-level plumbing is covered e2e.
- */
+// Both directions find chunk edges purely from the signed `plainSize` — nothing on the wire says where a chunk
+// ends — so the sizes must agree exactly at every awkward length or the stream desynchronises.
 TEST_F(GroupEnvelope, StreamingRoundTripAtAwkwardSizes) {
     constexpr ByteCount C = GroupEnvelopeEncryptor::CHUNK_SIZE;
     const std::vector<ByteCount> sizes = {0, 1, 15, 16, 17, C - 1, C, C + 1, 2 * C, 2 * C + 3, 3 * C - 1};
@@ -457,9 +446,8 @@ TEST_F(GroupEnvelope, PeekFileRoutesBothKindsAndRejectsMessages) {
 // -- random access -------------------------------------------------------------------------------------
 
 TEST_F(GroupEnvelope, CipherOffsetOfChunkMatchesAnActualStream) {
-    // The seek is a multiplication, not a lookup, and that is only sound because every chunk but the last is
-    // exactly ENCRYPTED_CHUNK_SIZE. If that ever stopped holding, seeking would land mid-chunk and every
-    // subsequent chunk would fail to open — so pin it against a stream actually produced.
+    // The seek is a multiplication, not a lookup, sound only because every chunk but the last is exactly
+    // ENCRYPTED_CHUNK_SIZE. If that stopped holding, seeks would land mid-chunk — so pin it against a real stream.
     constexpr ByteCount C = GroupEnvelopeEncryptor::CHUNK_SIZE;
     const ByteCount size = 4 * C + 77;
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
@@ -493,13 +481,8 @@ TEST_F(GroupEnvelope, ChunksOpenIndependentlyOfEachOther) {
 
 // -- what a finished read means ------------------------------------------------------------------------
 
-/**
- * The truth table `finishFileDecryption` acts on.
- *
- * Worth pinning in a unit test rather than only end to end, because the reader that owns this decision needs
- * a live bridge to construct — which is precisely how the seeked case below shipped broken: the leftover
- * check fired on a range read that had deliberately stopped mid-chunk.
- */
+// The truth table `finishFileDecryption` acts on, pinned here because the reader that owns the decision needs a
+// live bridge to construct — which is how the seeked case below shipped broken.
 using Outcome = GroupEnvelopeEncryptor::ReadOutcome;
 
 TEST_F(GroupEnvelope, AStraightReadIsCompleteOnlyWhenEverythingArrived) {
@@ -519,9 +502,8 @@ TEST_F(GroupEnvelope, AStraightReadWithBytesPastTheEndIsOverrun) {
 }
 
 TEST_F(GroupEnvelope, ASeekedReadIsNeverAnError) {
-    // The regression. A range reader stops as soon as it has the bytes it asked for, which is normally
-    // mid-chunk — so it ends with fewer chunks opened than the file holds *and* a partly-filled buffer.
-    // Both of those look exactly like the two failure cases above, and neither is a failure here.
+    // The regression. A range reader stopping mid-chunk ends with fewer chunks opened than the file holds *and*
+    // a partly-filled buffer — both look exactly like the two failure cases above, and neither is a failure.
     EXPECT_EQ(enc.classifyRead(true, 2, 5, false), Outcome::PartialRange);  // stopped mid-chunk
     EXPECT_EQ(enc.classifyRead(true, 2, 5, true), Outcome::PartialRange);   // stopped on a boundary
     EXPECT_EQ(enc.classifyRead(true, 5, 5, false), Outcome::PartialRange);  // read to the end, bytes spare

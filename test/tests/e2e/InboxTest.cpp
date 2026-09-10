@@ -231,7 +231,6 @@ TEST_F(InboxTest, listInboxes_incorrect_input_data) {
 TEST_F(InboxTest, listInboxes_correct_input_data) {
     core::PagingList<inbox::Inbox> listInboxes;
     inbox::Inbox inbox;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listInboxes = inboxApi->listInboxes(
             reader->getString("Context_1.contextId"),
@@ -242,7 +241,6 @@ TEST_F(InboxTest, listInboxes_correct_input_data) {
             }
         );
     });
-    // {.skip=0, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listInboxes = inboxApi->listInboxes(
             reader->getString("Context_1.contextId"),
@@ -279,7 +277,6 @@ TEST_F(InboxTest, listInboxes_correct_input_data) {
             EXPECT_EQ(inbox.managers[0], reader->getString("Login.user_1_id"));
         }
     }
-    // {.skip=1, .limit=3, .sortOrder="asc", .sortBy="createDate"}
     EXPECT_NO_THROW({
         listInboxes = inboxApi->listInboxes(
             reader->getString("Context_1.contextId"),
@@ -1022,7 +1019,6 @@ TEST_F(InboxTest, listEntries_incorrect_input_data) {
 TEST_F(InboxTest, listEntries_correct_input_data) {
     core::PagingList<inbox::InboxEntry> listEntries;
     inbox::InboxEntry entry;
-    //{.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listEntries = inboxApi->listEntries(
             reader->getString("Inbox_1.inboxId"),
@@ -1036,7 +1032,6 @@ TEST_F(InboxTest, listEntries_correct_input_data) {
 
     EXPECT_EQ(listEntries.totalAvailable, 2);
     EXPECT_EQ(listEntries.readItems.size(), 0);
-    //{.skip=1, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listEntries = inboxApi->listEntries(
             reader->getString("Inbox_1.inboxId"),
@@ -1090,7 +1085,7 @@ TEST_F(InboxTest, listEntries_correct_input_data) {
             EXPECT_EQ(file.size, reader->getInt64("Entry_1.uploaded_file_1_size"));
         }
     }
-    // {.skip=0, .limit=3, .sortOrder="asc", .sortBy="createDate"}, after force key generation on inbox
+    // after force key generation on inbox
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             reader->getString("Inbox_1.inboxId"),
@@ -1190,7 +1185,6 @@ TEST_F(InboxTest, deleteEntry) {
             reader->getString("Inbox_1.inboxId")
         );
     }, core::Exception);
-    // change privileges
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             reader->getString("Inbox_1.inboxId"),
@@ -1226,7 +1220,6 @@ TEST_F(InboxTest, deleteEntry) {
             reader->getString("Entry_2.entryId")
         );
     }, core::Exception);
-    // change privileges
     disconnect();
     connectAs(ConnectionType::User1);
     EXPECT_NO_THROW({
@@ -1413,13 +1406,11 @@ TEST_F(InboxTest, openFile_readFromFile_seekInFile_closeFile) {
             ).stdString() + fileData;
         });
         EXPECT_EQ(fileData.length(), reader->getInt64("Entry_1.file_0_size"));
-        // closeFile
         EXPECT_NO_THROW({
             inboxApi->closeFile(
                 fileHandle
             );
         });
-        // validate
         EXPECT_EQ(fileData.length(), reader->getInt64("Entry_1.file_0_size"));
         EXPECT_EQ(fileData.length(), reader->getInt64("Entry_1.uploaded_file_0_size"));
         EXPECT_EQ(fileData, Hex::toString(reader->getString("Entry_1.uploaded_file_0_data_inHex")));
@@ -1671,13 +1662,11 @@ TEST_F(InboxTest, createFileHandle_prepareEntry_writeToFile_sendEntry_as_user) {
 TEST_F(InboxTest, Access_denaid_not_in_users_or_managers) {
     disconnect();
     connectAs(ConnectionType::User2);
-    // getInbox
     EXPECT_THROW({
         inboxApi->getInbox(
             reader->getString("Inbox_1.inboxId")
         );
     }, core::Exception);
-    // updateInbox
     EXPECT_THROW({
         inboxApi->updateInbox(
             reader->getString("Inbox_1.inboxId"),
@@ -1697,19 +1686,16 @@ TEST_F(InboxTest, Access_denaid_not_in_users_or_managers) {
             false
         );
     }, core::Exception);
-    // deleteInbox
     EXPECT_THROW({
         inboxApi->deleteInbox(
             reader->getString("Inbox_1.inboxId")
         );
     }, core::Exception);
-    // readEntry
     EXPECT_THROW({
         inboxApi->readEntry(
             reader->getString("Entry_1.entryId")
         );
     }, core::Exception);
-    // listEntries
     EXPECT_THROW({
         inboxApi->listEntries(
             reader->getString("Inbox_1.inboxId"),
@@ -1720,7 +1706,6 @@ TEST_F(InboxTest, Access_denaid_not_in_users_or_managers) {
             }
         );
     }, core::Exception);
-    // openFile
     EXPECT_THROW({
         inboxApi->openFile(
             reader->getString("Entry_1.file_0_info_fileId")
@@ -1731,13 +1716,11 @@ TEST_F(InboxTest, Access_denaid_not_in_users_or_managers) {
 TEST_F(InboxTest, Access_denaid_Public) {
     disconnect();
     connectAs(ConnectionType::Public);
-    // getInbox
     EXPECT_THROW({
         inboxApi->getInbox(
             reader->getString("Inbox_1.inboxId")
         );
     }, core::Exception);
-    // listInboxes
     EXPECT_THROW({
         inboxApi->listInboxes(
             reader->getString("Context_1.contextId"),
@@ -1748,7 +1731,6 @@ TEST_F(InboxTest, Access_denaid_Public) {
             }
         );
     }, core::Exception);
-    // createInbox
     EXPECT_THROW({
         inboxApi->createInbox(
             reader->getString("Context_1.contextId"),
@@ -1765,7 +1747,6 @@ TEST_F(InboxTest, Access_denaid_Public) {
             std::nullopt
         );
     }, core::Exception);
-    // updateInbox
     EXPECT_THROW({
         inboxApi->updateInbox(
             reader->getString("Inbox_1.inboxId"),
@@ -1785,19 +1766,16 @@ TEST_F(InboxTest, Access_denaid_Public) {
             false
         );
     }, core::Exception);
-    // deleteInbox
     EXPECT_THROW({
         inboxApi->deleteInbox(
             reader->getString("Inbox_1.inboxId")
         );
     }, core::Exception);
-    // readEntry
     EXPECT_THROW({
         inboxApi->readEntry(
             reader->getString("Entry_1.entryId")
         );
     }, core::Exception);
-    // listEntries
     EXPECT_THROW({
         inboxApi->listEntries(
             reader->getString("Inbox_1.inboxId"),
@@ -1808,7 +1786,6 @@ TEST_F(InboxTest, Access_denaid_Public) {
             }
         );
     }, core::Exception);
-    // openFile
     EXPECT_THROW({
         inboxApi->openFile(
             reader->getString("Entry_1.file_0_info_fileId")
@@ -2060,7 +2037,6 @@ TEST_F(InboxTest, sendEntry_cacheManipulation) {
     EXPECT_NO_THROW({
         inboxApi->getInbox(reader->getString("Inbox_1.inboxId"));
     });
-    // update inbox
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             reader->getString("Inbox_1.inboxId"),

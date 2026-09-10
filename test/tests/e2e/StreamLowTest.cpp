@@ -327,7 +327,6 @@ TEST_F(StreamLowTest, listStreamRooms_correct_input_data) {
     auto streamRoomId_3 = fastStreamRoom(reader->getString("Context_1.contextId"));
 
     core::PagingList<stream::StreamRoom> listStreamRooms;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listStreamRooms = streamApiLow->listStreamRooms(
             reader->getString("Context_1.contextId"),
@@ -340,7 +339,6 @@ TEST_F(StreamLowTest, listStreamRooms_correct_input_data) {
     });
     EXPECT_EQ(listStreamRooms.totalAvailable, 3);
     EXPECT_EQ(listStreamRooms.readItems.size(), 0);
-    // {.skip=0, .limit=1, .sortOrder="asc"}
     EXPECT_NO_THROW({
         listStreamRooms = streamApiLow->listStreamRooms(
             reader->getString("Context_1.contextId"),
@@ -358,7 +356,6 @@ TEST_F(StreamLowTest, listStreamRooms_correct_input_data) {
         EXPECT_EQ(stream.streamRoomId, streamRoomId_3);
         EXPECT_EQ(stream.statusCode, 0);
     }
-    // {.skip=1, .limit=3, .sortOrder="asc"}
     EXPECT_NO_THROW({
         listStreamRooms = streamApiLow->listStreamRooms(
             reader->getString("Context_1.contextId"),
@@ -657,14 +654,12 @@ TEST_F(StreamLowTest, userValidator_false) {
     auto streamRoomId_2 = fastStreamRoom(reader->getString("Context_1.contextId"));
     auto verifier = std::make_shared<core::FalseUserVerifierInterface>();
     connection->setUserVerifier(verifier);
-    // getStreamRoom
     EXPECT_NO_THROW({
         auto Stream = streamApiLow->getStreamRoom(
             streamRoomId_1
         );
         EXPECT_FALSE(Stream.statusCode == 0);
     });
-    // listStreamRooms
     EXPECT_NO_THROW({
         auto Streams = streamApiLow->listStreamRooms(
             reader->getString("Context_1.contextId"),
@@ -676,7 +671,6 @@ TEST_F(StreamLowTest, userValidator_false) {
         );
         EXPECT_FALSE(Streams.readItems[0].statusCode == 0);
     });
-    // createStream
     EXPECT_NO_THROW({
         streamApiLow->createStreamRoom(
             reader->getString("Context_1.contextId"),
@@ -712,7 +706,6 @@ TEST_F(StreamLowTest, userValidator_false) {
             std::nullopt
         );
     }, core::Exception);
-    // deleteStream
     EXPECT_NO_THROW({
         streamApiLow->deleteStreamRoom(
             streamRoomId_2

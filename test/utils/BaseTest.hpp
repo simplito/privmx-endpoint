@@ -52,9 +52,6 @@ protected:
             return;
         }
         customTearDown();
-        // if(_mode == BaseTestMode::online) {
-        // _snapshoot_service.down();
-        // }
     }
     virtual void customSetUp() = 0;
     virtual void customTearDown() = 0;
@@ -65,7 +62,6 @@ protected:
     std::string getPlatformUrl(std::string url = "");
 private:
     BaseTestMode _mode;
-    // SnapshootService _snapshoot_service;
 };
 
 std::string BaseTest::randomReadableString(int max_length) {
@@ -75,19 +71,13 @@ std::string BaseTest::randomReadableString(int max_length) {
     std::uniform_int_distribution<> dist(0, possible_characters.size()-1);
     std::string ret = "";
     for(int i = 0; i < max_length; i++){
-        int random_index = dist(engine); //get index between 0 and possible_characters.size()-1
+        int random_index = dist(engine);
         ret += possible_characters[random_index];
     }
     return ret;
 }
 
 std::string BaseTest::getPlatformUrl(std::string url) {
-    // std::string path = Poco::URI(url).getPath();
-    // std::string address = _snapshoot_service.getAddress();
-    // std::string result = "http://" + address + path;
-    // return result;
-
-    // return "http://" + _snapshoot_service.getAddress();
     return "http://" + BRIDGE_URL;
 }
 

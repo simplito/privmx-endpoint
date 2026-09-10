@@ -82,14 +82,8 @@ protected:
         return dio;
     }
 
-    /**
-     * A group as the bridge would serve it: one roster head and one entry per metadata plane, all three through
-     * the real encrypt path.
-     *
-     * Each plane's key epoch defaults to the group's. Passing a lower one is the normal case after a rotation
-     * that no write to *that* plane followed — an entry stays where it was written. The two planes take their
-     * epochs separately, because they may legitimately sit at different ones.
-     */
+    // A group as the bridge would serve it, all three entries through the real encrypt path. Each plane's key
+    // epoch defaults to the group's; a lower one is normal after a rotation no write to *that* plane followed.
     server::GroupInfo serve(
         const std::vector<std::string>& users,
         const std::vector<std::string>& managers,
@@ -185,9 +179,7 @@ protected:
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// the roster plane
-// ─────────────────────────────────────────────────────────────────────────────
+// -- the roster plane --
 
 TEST_F(GroupRosterTag, AnHonestRosterVerifies) {
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
@@ -197,10 +189,8 @@ TEST_F(GroupRosterTag, AnHonestRosterVerifies) {
 }
 
 TEST_F(GroupRosterTag, ARosterServedUnderAnotherVersionIsRefused) {
-    // Within an epoch the roster only grows, so every earlier roster carries a genuine, still-valid tag. A
-    // bridge pairing the current `rosterVersion` with one of them would conceal whoever was added in between,
-    // and the monotone pin cannot see it — the counter it checks is not going down. Binding the counter into
-    // the preimage is what makes the pair checkable.
+    // Within an epoch the roster only grows, so every earlier roster still carries a valid tag. Pairing the
+    // current `rosterVersion` with an earlier roster would hide whoever was added between, unseen by the pin.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     group.rosterVersion = 5;
@@ -258,9 +248,8 @@ TEST_F(GroupRosterTag, SECURITY_AnEpochEchoedBackDifferentlyIsRejected) {
 }
 
 TEST_F(GroupRosterTag, AMetadataVersionEchoedBackDifferentlyLeavesTheRosterTagAlone) {
-    // This is the fix, stated as a test. The roster plane does not commit either metadata counter, so moving
-    // them cannot invalidate a membership change — which is exactly what used to brick a group when a metadata
-    // write interleaved between a removal's read and its write.
+    // The roster plane commits neither metadata counter, so moving them cannot invalidate a membership change —
+    // which is what used to brick a group when a metadata write interleaved with a removal's read and write.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
     group.publicMetaVersion = 99;
     group.privateMetaVersion = 99;
@@ -309,10 +298,8 @@ TEST_F(GroupRosterTag, AMovedPrivateMetaVersionLeavesThePublicPlaneAlone) {
 }
 
 TEST_F(GroupRosterTag, SECURITY_AMissingRosterKeyIsAFailureNotAPass) {
-    // It used to return quietly: no key meant "not a member here, nothing to check against". Since the planes
-    // split that inference is wrong — a member removed at epoch N may still hold the key to a metadata entry
-    // written at epoch N while having no way to reach the current epoch's roster key. Passing would hand them a
-    // group reported as verified.
+    // It used to return quietly, reading a missing key as "not a member, nothing to check". Since the split that
+    // is wrong: a member removed at epoch N still holds that epoch's metadata key but cannot reach the roster one.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
     group.users.push_back("mallory");
     core::DecryptedEncKey noKey;
@@ -321,9 +308,7 @@ TEST_F(GroupRosterTag, SECURITY_AMissingRosterKeyIsAFailureNotAPass) {
     EXPECT_THROW(verifier.assertRosterIsAttested(group, noKey), GroupMembershipMismatchException);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// the metadata plane
-// ─────────────────────────────────────────────────────────────────────────────
+// -- the metadata plane --
 
 TEST_F(GroupRosterTag, PublicAndPrivateMetaTagsAreDomainSeparated) {
     // Two lines, and the whole reason the prefixes exist: both planes carry the same `MetaBlock` shape, so at
@@ -350,9 +335,8 @@ TEST_F(GroupRosterTag, AMetadataEntryAtAnOlderEpochVerifies) {
 }
 
 TEST_F(GroupRosterTag, PlanesAtDifferentEpochsBothVerify) {
-    // Unreachable before the split, and routine after it: write the public plane, remove a member, write the
-    // private plane. Each plane stays at the epoch it was written under, and only a write to that same plane
-    // brings it forward.
+    // Unreachable before the split, routine after: each plane stays at the epoch it was written under, and only
+    // a write to that same plane brings it forward.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 3, encKey, 7, 1, 7, 3);
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     EXPECT_NO_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey)));
@@ -399,9 +383,8 @@ TEST_F(GroupRosterTag, SECURITY_AMetadataEntryNamingAnotherKeyIsRejected) {
 }
 
 TEST_F(GroupRosterTag, SECURITY_AReauthoredMetadataEnvelopeIsRejected) {
-    // Why the tag is key-bound rather than merely signed: the public plane is signed and not encrypted at all,
-    // so a bridge holding a keypair of its own could re-author the whole envelope — DIO included — and forge it.
-    // Only the content key, which the bridge never holds, refuses that.
+    // Why the tag is key-bound rather than merely signed: the public plane is not encrypted, so a bridge with
+    // its own keypair could re-author the envelope, DIO included. Only the content key it never holds refuses.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
     const std::string bridgeKey = privmx::crypto::Crypto::randomBytes(32);
     auto forged = serve({"bob", "carol"}, {"alice"}, 4, 2, bridgeKey, 7, std::nullopt, 7);
@@ -413,9 +396,8 @@ TEST_F(GroupRosterTag, SECURITY_AReauthoredMetadataEnvelopeIsRejected) {
 }
 
 TEST_F(GroupRosterTag, SECURITY_APublicMetaEnvelopeServedAsThePrivateOneIsRejected) {
-    // The substitution the domain prefixes exist to refuse. It is caught twice over — the private plane's
-    // envelope has no `privateMeta` field, so deserialisation refuses it before the tag is ever computed — and
-    // that first refusal is why the parse is wrapped: unwrapped it escapes as a bare JSON error.
+    // The substitution the domain prefixes exist to refuse, caught twice: deserialisation rejects it first, on
+    // the missing `privateMeta` field, which is why the parse is wrapped — unwrapped it escapes as a JSON error.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
     group.privateMeta = group.publicMeta;
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
@@ -439,11 +421,8 @@ TEST_F(GroupRosterTag, SECURITY_AMissingMetadataKeyIsAFailureNotAPass) {
 }
 
 TEST_F(GroupRosterTag, AMetadataEntryWrittenByASinceRemovedMemberStillVerifies) {
-    // Pinned deliberately, because it is what rules out the cheap fix for the forgery gap below. A former member
-    // is the *expected* author of an entry written before they left — a removal does not rewrite either metadata
-    // plane, only the carry-up afterwards does, and that is best-effort — so refusing an author who is off the
-    // current roster would make the group unreadable for everyone the moment its metadata writer is removed.
-    // Same failure shape as `metadata_written_by_a_different_manager_keeps_the_group_readable`.
+    // Pinned deliberately: it rules out the cheap fix for the forgery gap below. A former member is the *expected*
+    // author of an entry written before they left — refusing off-roster authors would make the group unreadable.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
     group.publicMeta.author = "dave";  // wrote the metadata at epoch 2, removed since
     group.privateMeta.author = "dave";
@@ -452,14 +431,11 @@ TEST_F(GroupRosterTag, AMetadataEntryWrittenByASinceRemovedMemberStillVerifies) 
     EXPECT_NO_THROW(verifier.assertPrivateMetaIsAttested(group, key(encKey)));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// key separation
-// ─────────────────────────────────────────────────────────────────────────────
+// -- key separation --
 
 TEST_F(GroupRosterTag, SECURITY_EachTagPurposeGetsItsOwnKey) {
-    // The content key is also the AES key for the metadata fields and the HMAC key behind three tags. The
-    // preimages happen to be prefix-disjoint, but that is a convention someone has to keep re-deriving; the
-    // subkeys make it structural. Nothing below may equal anything else below.
+    // The content key is also the AES key for the metadata fields and the HMAC key behind three tags. Disjoint
+    // preimages are a convention someone must keep re-deriving; the subkeys make the separation structural.
     const std::string k = privmx::crypto::Crypto::randomBytes(32);
     const std::string roster = GroupDataSchemaMapper::tagSubkey(k, "roster-tag");
     const std::string publicMeta = GroupDataSchemaMapper::tagSubkey(k, "publicMeta-tag");
@@ -479,9 +455,8 @@ TEST_F(GroupRosterTag, SECURITY_EachTagPurposeGetsItsOwnKey) {
 }
 
 TEST_F(GroupRosterTag, SECURITY_ARosterTagCannotBeReplayedAsAMetadataTag) {
-    // Three tags over the same numbers under the same content key. Even if a future preimage change made the
-    // payloads coincide, the subkeys keep the tags apart — including the two metadata planes from each other,
-    // which carry the same `MetaBlock` shape and so would otherwise be interchangeable at equal (epoch, version).
+    // Three tags over the same numbers under one content key. Even if a preimage change made the payloads
+    // coincide, the subkeys keep them apart — the two metadata planes included, identical in shape otherwise.
     const std::string k = privmx::crypto::Crypto::randomBytes(32);
     EXPECT_NE(GroupDataSchemaMapper::rosterTag(k, 2, 7, {}, {}), GroupDataSchemaMapper::publicMetaTag(k, 2, 7));
     EXPECT_NE(GroupDataSchemaMapper::rosterTag(k, 2, 7, {}, {}), GroupDataSchemaMapper::privateMetaTag(k, 2, 7));
@@ -489,11 +464,8 @@ TEST_F(GroupRosterTag, SECURITY_ARosterTagCannotBeReplayedAsAMetadataTag) {
 }
 
 TEST_F(GroupRosterTag, TheInternalMetaViewReadsTheRosterPlane) {
-    // `prepareContainerUpdate` takes the container's `secret` from here and feeds it to `verifyKeysSecret`, and
-    // the entry it hands over is the roster head — now the only plane that carries `internalMeta` at all, since
-    // neither metadata envelope has a module identity of its own. Reading it under the metadata shape threw on
-    // the fields a roster entry does not carry, and the empty secret that came back failed every roster write
-    // with EncryptionKeyValidationException.
+    // `prepareContainerUpdate` reads the container's `secret` from the roster head, now the only plane carrying
+    // `internalMeta`. Reading it under the metadata shape threw, and the empty secret failed every roster write.
     GroupDataSchemaMapper mapper(author, core::Connection());
     server::GroupInfo group;
     group.contextId = "ctx1";

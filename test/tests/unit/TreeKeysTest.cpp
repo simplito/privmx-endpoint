@@ -9,7 +9,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/** Unit tests for the hidden key tree with real EC keys and real ECIES; no server, no docker, no network, but no crypto stubs either — every wrap is a genuine ECIES encryption and every climb a genuine decryption, because the properties under test are cryptographic ones: that a removed member cannot reach a refreshed key, and that a corrupted edge is detected rather than silently producing the wrong key. Tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses. */
+/**
+ * The hidden key tree, with real EC keys and real ECIES.
+ *
+ * No server, no docker, no network, but no crypto stubs either — every wrap is a genuine ECIES encryption and
+ * every climb a genuine decryption, because the properties under test are cryptographic ones: that a removed
+ * member cannot reach a refreshed key, and that a corrupted edge is detected rather than silently producing the
+ * wrong key.
+ *
+ * Tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses.
+ */
 
 #include <gtest/gtest.h>
 
@@ -29,10 +38,10 @@ limitations under the License.
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group::keytree;
 
-/** Shared fixture base: a member together with the private half, and helpers to assemble tree state from a plan. */
+// Helpers to assemble tree state from a plan, shared by every suite below.
 class TreeKeysTestBase : public testing::Test {
 protected:
-    /** A member together with the private half, which only the test holds. */
+    // A member together with the private half, which only the test holds.
     struct TestMember {
         std::string userId;
         PrivateKey priv;
@@ -54,7 +63,7 @@ protected:
         return result;
     }
 
-    /** Assembles the state a bridge would serve after a build. */
+    // Assembles the state a bridge would serve after a build.
     TreeGroupState stateFromBuild(const BuildPlan& plan, const std::vector<TestMember>& members) {
         TreeGroupState state;
         state.numLeaves = plan.numLeaves;
@@ -68,7 +77,7 @@ protected:
         return state;
     }
 
-    /** Applies a removal plan to the state, the way the bridge would after accepting it. */
+    // Applies a removal plan to the state, the way the bridge would after accepting it.
     void applyRemoval(TreeGroupState& state, const RemovalPlan& plan, const std::string& leavingUserId) {
         for (std::size_t i = 0; i < state.leafAssignment.size(); ++i) {
             if (state.leafAssignment[i].has_value() && state.leafAssignment[i].value() == leavingUserId) {
@@ -104,7 +113,7 @@ protected:
         state.grantPublicKey = plan.newGrantKey.getPublicKey();
     }
 
-    /** Applies an addition plan the way the bridge would after accepting it. */
+    // Applies an addition plan the way the bridge would after accepting it.
     void applyAddition(TreeGroupState& state, const AdditionPlan& plan, const std::string& newMemberId) {
         const std::vector<std::optional<std::string>> seatingBefore = state.leafAssignment;
         state.numLeaves = plan.newNumLeaves;
@@ -154,7 +163,7 @@ protected:
         state.edges = kept;
     }
 
-    /** Every seated member reaches the grant key from a cold cache — the check that nobody was locked out. */
+    // Every seated member reaches the grant key from a cold cache — the check that nobody was locked out.
     void expectEveryoneClimbs(const TreeGroupState& state, const std::vector<TestMember>& members) {
         for (const TestMember& member : members) {
             const auto seated = std::find_if(
@@ -362,7 +371,8 @@ TEST_F(TreeKeysClimb, ReportsAMissingEdgeDistinctlyFromTampering) {
     EXPECT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::MissingEdge);
 }
 
-/** The same authorship boundary inside a whole state: an edge re-issued by somebody else is followed as readily as the original, because the climb verifies recovered keys against the published node keys and asks nothing about who published either. */
+// The same authorship boundary inside a whole state: an edge re-issued by somebody else is followed as readily
+// as the original — the climb verifies keys against the published node keys and asks nothing about who wrote them.
 TEST_F(TreeKeysClimb, AnEdgeReissuedByAStrangerIsStillFollowed) {
     const std::vector<TestMember> members = makeMembers(4);
     TreeKeyCache buildStore;
@@ -1123,7 +1133,8 @@ TEST_F(TreeKeyCacheBasics, ConcurrentReadersAndWritersDoNotRace) {
 class TreeKeyCacheRegistryTest : public testing::Test {};
 
 TEST_F(TreeKeyCacheRegistryTest, SECURITY_GivesEachGroupItsOwnStore) {
-    // The whole bug in one assertion: two groups both at epoch 1, sharing one registry, must not see each other's grant key. Node indices and epochs are small integers that every group reuses from 1.
+    // The whole bug in one assertion: two groups both at epoch 1, sharing one registry, must not see each
+    // other's grant key. Node indices and epochs are small integers that every group reuses from 1.
     const PrivateKey keyA = PrivateKey::generateRandom();
     const PrivateKey keyB = PrivateKey::generateRandom();
 
@@ -1185,7 +1196,8 @@ TEST_F(TreeKeyCacheRegistryTest, DropAllClearsEveryGroup) {
 }
 
 TEST_F(TreeKeyCacheRegistryTest, ConcurrentGetOfTheSameGroupYieldsOneStore) {
-    // Get-or-create has to be atomic: two stores for one group means one of them silently absorbs climbs nobody ever reads back.
+    // Get-or-create has to be atomic: two stores for one group means one of them silently absorbs climbs
+    // nobody ever reads back.
     TreeKeyCacheRegistry registry;
     std::vector<std::thread> threads;
     std::vector<TreeKeyCache*> seen(8, nullptr);
@@ -1237,7 +1249,8 @@ TEST_F(TreeKeysClimb, AMatchingCachedGrantKeyStillShortCircuitsTheWalk) {
     TreeKeys keys(store);
     ASSERT_EQ(keys.climbToGrantKey(state, members[0].userId, members[0].priv).failure, ClimbFailure::None);
 
-    // Drop the node keys but keep the grant key: if the second climb really short-circuits, it recovers no node key on the way and the count stays at zero. Counting equality alone would also pass if it re-walked.
+    // Drop the node keys but keep the grant key: if the second climb really short-circuits, it recovers no node
+    // key on the way and the count stays at zero. Counting equality alone would also pass if it re-walked.
     store.clearNodeKeys();
     const ClimbResult again = keys.climbToGrantKey(state, members[0].userId, members[0].priv);
     EXPECT_EQ(again.failure, ClimbFailure::None);
@@ -1245,7 +1258,8 @@ TEST_F(TreeKeysClimb, AMatchingCachedGrantKeyStillShortCircuitsTheWalk) {
 }
 
 TEST_F(TreeKeysClimb, TwoTreesAtTheSameEpochDoNotAliasThroughOneStore) {
-    // The unscoped-cache bug, reproduced at the climb level: two independent groups, both epoch 1. Even sharing a store, the verification on the hit path keeps each climb honest.
+    // The unscoped-cache bug, reproduced at the climb level: two independent groups, both epoch 1. Even
+    // sharing a store, the verification on the hit path keeps each climb honest.
     const std::vector<TestMember> membersA = makeMembers(4);
     const std::vector<TestMember> membersB = makeMembers(4);
     TreeKeyCache buildStoreA, buildStoreB;

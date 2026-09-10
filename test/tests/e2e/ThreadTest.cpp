@@ -224,7 +224,6 @@ TEST_F(ThreadTest, listThreads_incorrect_input_data) {
 
 TEST_F(ThreadTest, listThread_correct_input_data) {
     core::PagingList<thread::Thread> listThreads;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listThreads = threadApi->listThreads(
             reader->getString("Context_1.contextId"),
@@ -237,7 +236,6 @@ TEST_F(ThreadTest, listThread_correct_input_data) {
     });
     EXPECT_EQ(listThreads.totalAvailable, 3);
     EXPECT_EQ(listThreads.readItems.size(), 0);
-    // {.skip=0, .limit=1, .sortOrder="asc"}
     EXPECT_NO_THROW({
         listThreads = threadApi->listThreads(
             reader->getString("Context_1.contextId"),
@@ -279,7 +277,6 @@ TEST_F(ThreadTest, listThread_correct_input_data) {
             EXPECT_EQ(thread.managers[0], reader->getString("Login.user_1_id"));
         }
     }
-    // {.skip=1, .limit=3, .sortOrder="asc"}
     EXPECT_NO_THROW({
         listThreads = threadApi->listThreads(
             reader->getString("Context_1.contextId"),
@@ -978,7 +975,6 @@ TEST_F(ThreadTest, listMessages_incorrect_input_data) {
 
 TEST_F(ThreadTest, listMessages_correct_input_data) {
     core::PagingList<thread::Message> listMessages;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listMessages = threadApi->listMessages(
             reader->getString("Thread_1.threadId"),
@@ -991,7 +987,6 @@ TEST_F(ThreadTest, listMessages_correct_input_data) {
     });
     EXPECT_EQ(listMessages.totalAvailable, 2);
     EXPECT_EQ(listMessages.readItems.size(), 0);
-    // {.skip=1, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listMessages = threadApi->listMessages(
             reader->getString("Thread_1.threadId"),
@@ -1022,7 +1017,7 @@ TEST_F(ThreadTest, listMessages_correct_input_data) {
         EXPECT_EQ(message.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Message_1.uploaded_privateMeta_inHex")));
         EXPECT_EQ(message.data.stdString(), privmx::utils::Hex::toString(reader->getString("Message_1.uploaded_data_inHex")));
     }
-    // {.skip=0, .limit=3, .sortOrder="asc", .sortBy="createDate"}, after force key generation on thread
+    // after force key generation on thread
     EXPECT_NO_THROW({
         threadApi->updateThread(
             reader->getString("Thread_1.threadId"),
@@ -1209,7 +1204,6 @@ TEST_F(ThreadTest, deleteMessage) {
             reader->getString("Thread_1.threadId")
         );
     }, core::Exception);
-    // change privileges
     EXPECT_NO_THROW({
         threadApi->updateThread(
             reader->getString("Thread_1.threadId"),
@@ -1244,7 +1238,6 @@ TEST_F(ThreadTest, deleteMessage) {
             reader->getString("Message_2.info_messageId")
         );
     }, core::Exception);
-    // change privileges
     disconnect();
     connectAs(ConnectionType::User1);
     EXPECT_NO_THROW({
@@ -1326,13 +1319,11 @@ TEST_F(ThreadTest, deleteMessage) {
 TEST_F(ThreadTest, Access_denaid_not_in_users_or_managers) {
     disconnect();
     connectAs(ConnectionType::User2);
-    // getThread
     EXPECT_THROW({
         threadApi->getThread(
             reader->getString("Thread_1.threadId")
         );
     }, core::Exception);
-    // updateThread
     EXPECT_THROW({
         threadApi->updateThread(
             reader->getString("Thread_1.threadId"),
@@ -1351,19 +1342,16 @@ TEST_F(ThreadTest, Access_denaid_not_in_users_or_managers) {
             false
         );
     }, core::Exception);
-    // deleteThread
     EXPECT_THROW({
         threadApi->deleteThread(
             reader->getString("Thread_1.threadId")
         );
     }, core::Exception);
-    // getMessage
     EXPECT_THROW({
         threadApi->getMessage(
             reader->getString("Message_1.info_messageId")
         );
     }, core::Exception);
-    // listMessages
     EXPECT_THROW({
         threadApi->listMessages(
             reader->getString("Thread_1.threadId"),
@@ -1374,7 +1362,6 @@ TEST_F(ThreadTest, Access_denaid_not_in_users_or_managers) {
             }
         );
     }, core::Exception);
-    // sendMessage
     EXPECT_THROW({
         threadApi->sendMessage(
             reader->getString("Thread_1.threadId"),
@@ -1383,7 +1370,6 @@ TEST_F(ThreadTest, Access_denaid_not_in_users_or_managers) {
             core::Buffer::from("data")
         );
     }, core::Exception);
-    // sendMessage
     EXPECT_THROW({
         threadApi->updateMessage(
             reader->getString("Message_1.info_messageId"),
@@ -1392,7 +1378,6 @@ TEST_F(ThreadTest, Access_denaid_not_in_users_or_managers) {
             core::Buffer::from("data")
         );
     }, core::Exception);
-    // deleteMessage
     EXPECT_THROW({
         threadApi->deleteMessage(
             reader->getString("Message_1.info_messageId")
@@ -1403,13 +1388,11 @@ TEST_F(ThreadTest, Access_denaid_not_in_users_or_managers) {
 TEST_F(ThreadTest, Access_denaid_Public) {
     disconnect();
     connectAs(ConnectionType::Public);
-    // getThread
     EXPECT_THROW({
         threadApi->getThread(
             reader->getString("Thread_1.threadId")
         );
     }, core::Exception);
-    // getThread
     EXPECT_THROW({
         threadApi->listThreads(
             reader->getString("Context_1.contextId"),
@@ -1420,7 +1403,6 @@ TEST_F(ThreadTest, Access_denaid_Public) {
             }
         );
     }, core::Exception);
-    // createThread
     EXPECT_THROW({
         threadApi->createThread(
             reader->getString("Context_1.contextId"),
@@ -1436,7 +1418,6 @@ TEST_F(ThreadTest, Access_denaid_Public) {
             core::Buffer::from("private")
         );
     }, core::Exception);
-    // updateThread
     EXPECT_THROW({
         threadApi->updateThread(
             reader->getString("Thread_1.threadId"),
@@ -1455,19 +1436,16 @@ TEST_F(ThreadTest, Access_denaid_Public) {
             false
         );
     }, core::Exception);
-    // deleteThread
     EXPECT_THROW({
         threadApi->deleteThread(
             reader->getString("Thread_1.threadId")
         );
     }, core::Exception);
-    // getMessage
     EXPECT_THROW({
         threadApi->getMessage(
             reader->getString("Message_1.info_messageId")
         );
     }, core::Exception);
-    // listMessages
     EXPECT_THROW({
         threadApi->listMessages(
             reader->getString("Thread_1.threadId"),
@@ -1478,7 +1456,6 @@ TEST_F(ThreadTest, Access_denaid_Public) {
             }
         );
     }, core::Exception);
-    // sendMessage
     EXPECT_THROW({
         threadApi->sendMessage(
             reader->getString("Thread_1.threadId"),
@@ -1487,7 +1464,6 @@ TEST_F(ThreadTest, Access_denaid_Public) {
             core::Buffer::from("data")
         );
     }, core::Exception);
-    // updateMessage
     EXPECT_THROW({
         threadApi->updateMessage(
             reader->getString("Message_1.info_messageId"),
@@ -1496,7 +1472,6 @@ TEST_F(ThreadTest, Access_denaid_Public) {
             core::Buffer::from("data")
         );
     }, core::Exception);
-    // deleteMessage
     EXPECT_THROW({
         threadApi->deleteMessage(
             reader->getString("Message_1.info_messageId")
@@ -1914,7 +1889,6 @@ TEST_F(ThreadTest, sendMessage_cacheManipulation) {
     EXPECT_NO_THROW({
         threadApi->getThread(reader->getString("Thread_1.threadId"));
     });
-    // update thread
     EXPECT_NO_THROW({
         threadApi->updateThread(
             reader->getString("Thread_1.threadId"),
@@ -1964,7 +1938,6 @@ TEST_F(ThreadTest, updateMessage_cacheManipulation) {
     EXPECT_NO_THROW({
         threadApi->getThread(reader->getString("Thread_1.threadId"));
     });
-    // update thread
     EXPECT_NO_THROW({
         threadApi->updateThread(
             reader->getString("Thread_1.threadId"),
@@ -2011,14 +1984,12 @@ TEST_F(ThreadTest, updateMessage_cacheManipulation) {
 TEST_F(ThreadTest, userValidator_false) {
     auto verifier = std::make_shared<core::FalseUserVerifierInterface>();
     connection->setUserVerifier(verifier);
-    // getThread
     EXPECT_NO_THROW({
         auto thread = threadApi->getThread(
             reader->getString("Thread_1.threadId")
         );
         EXPECT_FALSE(thread.statusCode == 0);
     });
-    // listThreads
     EXPECT_NO_THROW({
         auto threads = threadApi->listThreads(
             reader->getString("Context_1.contextId"),
@@ -2030,7 +2001,6 @@ TEST_F(ThreadTest, userValidator_false) {
         );
         EXPECT_FALSE(threads.readItems[0].statusCode == 0);
     });
-    // createThread
     EXPECT_NO_THROW({
         threadApi->createThread(
             reader->getString("Context_1.contextId"),
@@ -2064,20 +2034,17 @@ TEST_F(ThreadTest, userValidator_false) {
             true
         );
     }, core::Exception);
-    // deleteThread
     EXPECT_NO_THROW({
         threadApi->deleteThread(
             reader->getString("Thread_2.threadId")
         );
     });
-    // getMessage
     EXPECT_NO_THROW({
         auto message = threadApi->getMessage(
             reader->getString("Message_1.info_messageId")
         );
         EXPECT_FALSE(message.statusCode == 0);
     });
-    // listMessages
     EXPECT_NO_THROW({
         auto messages = threadApi->listMessages(
             reader->getString("Thread_1.threadId"),
@@ -2089,7 +2056,6 @@ TEST_F(ThreadTest, userValidator_false) {
         );
         EXPECT_FALSE(messages.readItems[0].statusCode == 0);
     });
-    // sendMessage
     EXPECT_THROW({
         threadApi->sendMessage(
             reader->getString("Thread_1.threadId"),
@@ -2098,7 +2064,6 @@ TEST_F(ThreadTest, userValidator_false) {
             core::Buffer::from("data")
         );
     }, core::Exception);
-    // updateMessage
     EXPECT_THROW({
         threadApi->updateMessage(
             reader->getString("Message_1.info_messageId"),
@@ -2107,7 +2072,6 @@ TEST_F(ThreadTest, userValidator_false) {
             core::Buffer::from("data")
         );
     }, core::Exception);
-    // deleteMessage
     EXPECT_NO_THROW({
         threadApi->deleteMessage(
             reader->getString("Message_2.info_messageId")

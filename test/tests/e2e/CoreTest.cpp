@@ -76,7 +76,6 @@ TEST_F(CoreTest, platformConnect_multiple_instances) {
             )
         );
     }, core::Exception);
-    // platformConnect to user_2
     EXPECT_NO_THROW({
         connection_2 = std::make_shared<core::Connection>(
             core::Connection::connect(
@@ -86,7 +85,6 @@ TEST_F(CoreTest, platformConnect_multiple_instances) {
             )
         );
     });
-    // check connection using listContexts for user_1, user_2
     EXPECT_NO_THROW({
         listContexts = connection->listContexts(
             {
@@ -121,7 +119,6 @@ TEST_F(CoreTest, platformConnect_multiple_instances) {
 TEST_F(CoreTest, platformDisconnect) {
     std::shared_ptr<core::Connection> connection_2;
     core::PagingList<core::Context> listContexts;
-    // platformConnect to user_2
     EXPECT_NO_THROW({
         connection_2 = std::make_shared<core::Connection>(
             core::Connection::connect(
@@ -131,7 +128,6 @@ TEST_F(CoreTest, platformDisconnect) {
             )
         );
     });
-    // check connection using listContexts for user_1, user_2
     EXPECT_NO_THROW({
         listContexts = connection->listContexts(
             {
@@ -162,11 +158,9 @@ TEST_F(CoreTest, platformDisconnect) {
         auto context = listContexts.readItems[0];
         EXPECT_EQ(context.contextId, reader->getString("Context_2.contextId"));
     }
-    // platformDisconnect on user_2
     EXPECT_NO_THROW({
         connection_2->disconnect();
     });
-    // check connection using listContexts for user_1, user_2
     EXPECT_NO_THROW({
         connection->listContexts(
             {
@@ -191,11 +185,9 @@ TEST_F(CoreTest, platformDisconnect) {
             }
         );
     }, core::Exception);
-    // platformDisconnect on user_1
     EXPECT_NO_THROW({
         connection->disconnect();
     });
-    // check connection using listContexts for user_1
     EXPECT_THROW({
         listContexts = connection->listContexts(
             {
@@ -209,7 +201,6 @@ TEST_F(CoreTest, platformDisconnect) {
     EXPECT_THROW({
         connection->disconnect();
     }, core::Exception);
-    // platformConnect to user_2
     EXPECT_NO_THROW({
         connection_2 = std::make_shared<core::Connection>(
             core::Connection::connect(
@@ -223,9 +214,7 @@ TEST_F(CoreTest, platformDisconnect) {
 
 TEST_F(CoreTest, platformConnectPublic) {
     disconnect();
-    // platformConnectPublic
     connectAs(ConnectionType::Public);
-    // check connection using listContexts
     EXPECT_THROW({
         connection->listContexts(
             {
@@ -283,7 +272,6 @@ TEST_F(CoreTest, listContexts_incorrect_input_data) {
 
 
 TEST_F(CoreTest, listContexts_correct_data) {
-    // {.skip=3, .limit=1, .sortOrder="desc"}
     core::PagingList<core::Context> listContexts;
     EXPECT_NO_THROW({
         listContexts = connection->listContexts(
@@ -296,7 +284,6 @@ TEST_F(CoreTest, listContexts_correct_data) {
     });
     EXPECT_EQ(listContexts.totalAvailable, 2);
     EXPECT_EQ(listContexts.readItems.size(), 0);
-    // {.skip=1, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listContexts = connection->listContexts(
             {
@@ -312,7 +299,6 @@ TEST_F(CoreTest, listContexts_correct_data) {
         auto context = listContexts.readItems[0];
         EXPECT_EQ(context.contextId, reader->getString("Context_1.contextId"));
     }
-    // {.skip=0, .limit=3, .sortOrder="asc"}
     EXPECT_NO_THROW({
         listContexts = connection->listContexts(
             {
@@ -363,7 +349,6 @@ TEST_F(CoreTest, listContextUsers) {
     EXPECT_EQ(userInfo.readItems[1].isActive, false);
     EXPECT_EQ(userInfo.readItems[1].user.userId, reader->getString("Login.user_2_id"));
     EXPECT_EQ(userInfo.readItems[1].user.pubKey, reader->getString("Login.user_2_pubKey"));
-    //connect second user
     std::shared_ptr<core::Connection> connection_2;
     EXPECT_NO_THROW({
         connection_2 = std::make_shared<core::Connection>(
