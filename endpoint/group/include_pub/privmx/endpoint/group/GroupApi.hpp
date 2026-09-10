@@ -447,6 +447,46 @@ public:
         const std::string& selectorId
     );
 
+    /**
+     * Sends an ephemeral notification to the Group's members — "I am typing", "I moved the cursor", "the call
+     * has started".
+     *
+     * The content is sealed with the Group's own key, exactly as `encrypt` would seal it, and the recipients
+     * open it with the key they already hold. So one call sends one request no matter how large the Group is,
+     * and members receive it as a `GroupCustomEvent` with the payload already opened and the sender's
+     * signature already verified.
+     *
+     * A notification is not a record: whoever is not connected and subscribed at the time misses it. Anything
+     * that has to survive belongs in a Store or a Thread.
+     *
+     * Requires membership. `eventData` is capped at about 11 KB after sealing and encoding.
+     *
+     * @param groupId ID of the Group to notify
+     * @param channelName name of the channel, chosen by you; recipients subscribe to it with
+     *        `buildCustomEventSubscriptionQuery`. Must not contain '/', '|', ',' or '='.
+     * @param eventData payload to send
+     * @param users IDs of the members to reach; empty means every member
+     */
+    void sendCustomEvent(
+        const std::string& groupId,
+        const std::string& channelName,
+        const core::Buffer& eventData,
+        const std::vector<std::string>& users = {}
+    );
+
+    /**
+     * Generate subscription Query for custom notifications sent with `sendCustomEvent`.
+     *
+     * @param channelName name of the channel to listen on — the same name the sender passed
+     * @param selectorType scope on which you listen for events
+     * @param selectorId ID of the selector
+     */
+    std::string buildCustomEventSubscriptionQuery(
+        const std::string& channelName,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
+
 private:
     GroupApi(const std::shared_ptr<GroupApiImpl>& impl);
 };

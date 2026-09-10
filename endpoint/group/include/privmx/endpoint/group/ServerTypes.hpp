@@ -288,6 +288,22 @@ JSON_STRUCT(GroupGetKeyArchiveResult, GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS);
     F(confirmationTag, std::optional<std::string>)
 JSON_STRUCT(RotatedAlreadyPayload, ROTATED_ALREADY_PAYLOAD_FIELDS);
 
+// `data` is a base64 group envelope, so it carries its own keyId — no `keyId` field beside it, and no key list:
+// the recipients already hold the key that opens it. That is what keeps the request a fixed size whatever the
+// Group's size, where `contextSendCustomEvent` grows a wrapped key per recipient.
+#define GROUP_SEND_CUSTOM_EVENT_MODEL_FIELDS(F)                                                                        \
+    F(groupId, std::string)                                                                                            \
+    F(channel, std::string)                                                                                            \
+    F(data, std::string)                                                                                               \
+    F(users, std::optional<std::vector<std::string>>)
+JSON_STRUCT(GroupSendCustomEventModel, GROUP_SEND_CUSTOM_EVENT_MODEL_FIELDS);
+
+#define GROUP_CUSTOM_EVENT_DATA_FIELDS(F)                                                                              \
+    F(id, std::string)                                                                                                 \
+    F(eventData, std::string)                                                                                          \
+    F(author, core::server::UserIdentity)
+JSON_STRUCT(GroupCustomEventData, GROUP_CUSTOM_EVENT_DATA_FIELDS);
+
 } // namespace server
 } // namespace group
 } // namespace endpoint

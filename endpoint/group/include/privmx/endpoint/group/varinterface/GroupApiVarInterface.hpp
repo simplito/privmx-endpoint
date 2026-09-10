@@ -37,6 +37,8 @@ public:
         FinishFileDecryption = 19,
         BeginFileEncryptionAnonymously = 20,
         SeekInEncryptedFile = 21,
+        SendCustomEvent = 22,
+        BuildCustomEventSubscriptionQuery = 23,
     };
 
     GroupApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -64,6 +66,8 @@ public:
     Poco::Dynamic::Var finishFileDecryption(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var beginFileEncryptionAnonymously(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var seekInEncryptedFile(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var sendCustomEvent(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var buildCustomEventSubscriptionQuery(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);
 

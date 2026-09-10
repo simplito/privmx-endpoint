@@ -31,6 +31,8 @@ public:
     // The Epoch Ladder, fetched only when a client is actually reaching for an older epoch.
     server::GroupGetKeyArchiveResult groupGetKeyArchive(server::GroupGetKeyArchiveModel model);
 
+    void groupSendCustomEvent(server::GroupSendCustomEventModel model);
+
 private:
     template<typename T>
     T request(const std::string& method, Poco::JSON::Object::Ptr params);

@@ -107,7 +107,19 @@ public:
         EventSelectorType selectorType,
         const std::string& selectorId
     );
+    std::string buildCustomEventSubscriptionQuery(
+        const std::string& channelName,
+        EventSelectorType selectorType,
+        const std::string& selectorId
+    );
     privmx::crypto::PrivateKey resolveGroupPrivKey(const std::string& groupId, int64_t epoch = 0);
+
+    void sendCustomEvent(
+        const std::string& groupId,
+        const std::string& channelName,
+        const core::Buffer& eventData,
+        const std::vector<std::string>& users
+    );
 
     Envelope encrypt(const std::string& groupId, const core::Buffer& content);
     DecryptedEnvelope decrypt(const Envelope& envelope);
