@@ -18,6 +18,8 @@ public:
         CreateGroup = 1,
         AddGroupMembers = 2,
         RemoveGroupMembers = 3,
+        // 4 was UpdateGroup, which split into 22/23/24. Burned, not reused, and left out of `methodMap` so a
+        // stale wrapper calling it fails loudly instead of dispatching to whatever lands here next.
         UpdateGroup = 4,
         DeleteGroup = 5,
         GetGroup = 6,
@@ -39,6 +41,9 @@ public:
         SeekInEncryptedFile = 21,
         SendCustomEvent = 22,
         BuildCustomEventSubscriptionQuery = 23,
+        UpdateGroupPublicMeta = 24,
+        UpdateGroupPrivateMeta = 25,
+        UpdateGroupPolicy = 26,
     };
 
     GroupApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -48,7 +53,9 @@ public:
     Poco::Dynamic::Var createGroup(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var addGroupMembers(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var removeGroupMembers(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var updateGroup(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var updateGroupPublicMeta(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var updateGroupPrivateMeta(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var updateGroupPolicy(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteGroup(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getGroup(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listGroups(const Poco::Dynamic::Var& args);

@@ -23,7 +23,8 @@ JSON_STRUCT_EXT(GroupDataEntry, core::server::ContainerDataEntry, GROUP_DATA_ENT
     F(keyVersion, int64_t)
 JSON_STRUCT(GroupHistoryEntryInfo, GROUP_HISTORY_ENTRY_INFO_FIELDS);
 
-// The metadata plane's entry. `keyVersion` is the epoch its key belongs to — how far a later reader descends.
+// One metadata plane's entry. `keyVersion` is the epoch its key belongs to — how far a later reader descends.
+// Instantiated twice, once per plane, and the two may legitimately sit at different epochs.
 #define GROUP_META_ENTRY_FIELDS(F)                                                                                     \
     F(version, int64_t)                                                                                                \
     F(keyId, std::string)                                                                                              \
@@ -113,8 +114,10 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(users, std::vector<std::string>)                                                                                 \
     F(managers, std::vector<std::string>)                                                                              \
     F(groupKeys, std::optional<std::vector<core::server::GroupKeysEntry>>)                                             \
-    F(meta, GroupMetaEntry)                                                                                            \
-    F(version, int64_t)                                                                                                \
+    F(publicMeta, GroupMetaEntry)                                                                                      \
+    F(privateMeta, GroupMetaEntry)                                                                                     \
+    F(publicMetaVersion, int64_t)                                                                                      \
+    F(privateMetaVersion, int64_t)                                                                                     \
     F(rosterVersion, int64_t)                                                                                          \
     F(keyVersion, int64_t)                                                                                             \
     F(keyHistory, std::optional<std::vector<GroupKeyHistoryEntry>>)                                                    \
@@ -143,7 +146,8 @@ JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
     F(lastModifier, std::string)                                                                                       \
     F(users, std::vector<std::string>)                                                                                 \
     F(managers, std::vector<std::string>)                                                                              \
-    F(version, int64_t)                                                                                                \
+    F(publicMetaVersion, int64_t)                                                                                      \
+    F(privateMetaVersion, int64_t)                                                                                     \
     F(rosterVersion, int64_t)                                                                                          \
     F(keyVersion, int64_t)                                                                                             \
     F(policy, Poco::Dynamic::Var)
@@ -161,7 +165,8 @@ JSON_STRUCT(GroupKeyEntrySetForNewGroup, GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELD
     F(users, std::vector<std::string>)                                                                                 \
     F(managers, std::vector<std::string>)                                                                              \
     F(data, Poco::Dynamic::Var)                                                                                        \
-    F(meta, Poco::Dynamic::Var)                                                                                        \
+    F(publicMeta, Poco::Dynamic::Var)                                                                                  \
+    F(privateMeta, Poco::Dynamic::Var)                                                                                 \
     F(keyId, std::string)                                                                                              \
     F(type, std::string)                                                                                               \
     F(policy, std::optional<Poco::Dynamic::Var>)                                                                       \
@@ -170,14 +175,38 @@ JSON_STRUCT(GroupKeyEntrySetForNewGroup, GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELD
     F(tree, GroupTreeState)
 JSON_STRUCT(GroupCreateModel, GROUP_CREATE_MODEL_FIELDS);
 
-#define GROUP_UPDATE_MODEL_FIELDS(F)                                                                                   \
+/**
+ * The public metadata plane's write. CAS-guarded on `publicMetaVersion` and nothing else, so a concurrent
+ * private-metadata write commits a different counter and the two cannot strand each other.
+ *
+ * No `force` field, as the combined model had none: the entry commits the version it lands at, so a write that
+ * skipped the version check could only publish a tag no reader will accept.
+ */
+#define GROUP_UPDATE_PUBLIC_META_MODEL_FIELDS(F)                                                                       \
     F(id, std::string)                                                                                                 \
     F(resourceId, std::string)                                                                                         \
     F(data, Poco::Dynamic::Var)                                                                                        \
     F(keyId, std::string)                                                                                              \
-    F(version, int64_t)                                                                                                \
-    F(policy, std::optional<Poco::Dynamic::Var>)
-JSON_STRUCT(GroupUpdateModel, GROUP_UPDATE_MODEL_FIELDS);
+    F(version, int64_t)
+JSON_STRUCT(GroupUpdatePublicMetaModel, GROUP_UPDATE_PUBLIC_META_MODEL_FIELDS);
+
+// The private metadata plane's write, CAS-guarded on `privateMetaVersion`.
+#define GROUP_UPDATE_PRIVATE_META_MODEL_FIELDS(F)                                                                      \
+    F(id, std::string)                                                                                                 \
+    F(resourceId, std::string)                                                                                         \
+    F(data, Poco::Dynamic::Var)                                                                                        \
+    F(keyId, std::string)                                                                                              \
+    F(version, int64_t)
+JSON_STRUCT(GroupUpdatePrivateMetaModel, GROUP_UPDATE_PRIVATE_META_MODEL_FIELDS);
+
+/**
+ * The policy write. No version and no CAS: the policy touches neither metadata counter, appends no entry, and
+ * is covered by no tag — as it never was. A dedicated RPC does not make it authenticated.
+ */
+#define GROUP_UPDATE_POLICY_MODEL_FIELDS(F)                                                                            \
+    F(id, std::string)                                                                                                 \
+    F(policy, Poco::Dynamic::Var)
+JSON_STRUCT(GroupUpdatePolicyModel, GROUP_UPDATE_POLICY_MODEL_FIELDS);
 
 #define GROUP_CREATE_RESULT_FIELDS(F) F(groupId, std::string)
 JSON_STRUCT(GroupCreateResult, GROUP_CREATE_RESULT_FIELDS);
@@ -212,7 +241,8 @@ JSON_STRUCT(GroupDeletedEventData, GROUP_DELETED_EVENT_DATA_FIELDS);
 #define GROUP_CHANGED_EVENT_DATA_FIELDS(F)                                                                             \
     F(groupId, std::string)                                                                                            \
     F(contextId, std::string)                                                                                          \
-    F(version, int64_t)                                                                                                \
+    F(publicMetaVersion, int64_t)                                                                                      \
+    F(privateMetaVersion, int64_t)                                                                                     \
     F(rosterVersion, int64_t)                                                                                          \
     F(keyVersion, int64_t)                                                                                             \
     F(changeKind, std::string)

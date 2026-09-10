@@ -14,11 +14,12 @@ namespace endpoint {
 namespace group {
 
 /**
- * Two envelopes, one per plane. Each checks only its own field checksums, so neither can be validated
- * against — or invalidated by — a field the other owns.
+ * Three envelopes, one per plane. Each checks only its own field checksums, so no plane can be validated
+ * against — or invalidated by — a field another one owns. That is what lets the three be written separately,
+ * and what makes the bridge's per-plane grant an enforceable one rather than a declarative one.
  *
- * The metadata half carries the unqualified names because `core::TypedDataSchemaStrategyV5` binds to them
- * and declares `decrypt` final; the roster half is driven straight from `GroupDataSchemaMapper`.
+ * All three are driven straight from `GroupDataSchemaMapper`: `core::TypedDataSchemaStrategyV5` routes one
+ * envelope under one key and declares `decrypt` final, which cannot express two independently-keyed planes.
  */
 class GroupDataEncryptorV5 {
 public:
@@ -33,18 +34,35 @@ public:
     );
     core::DataIntegrityObject getRosterDIOAndAssertIntegrity(const dynamic::EncryptedGroupRosterV5& encryptedData);
 
-    dynamic::EncryptedGroupMetaV5 encrypt(
-        const GroupMetaToEncryptV5& data,
+    // Takes no encryption key, and there is nothing for one to do: every field of the public plane is signed
+    // and none is encrypted. What the key still decides is whether the entry is *attested* — that is the
+    // `publicMetaTag` check in `GroupDataSchemaMapper`, and it is not optional for a caller that has the key.
+    dynamic::EncryptedGroupPublicMetaV5 encryptPublicMeta(
+        const GroupPublicMetaToEncryptV5& data,
+        const privmx::crypto::PrivateKey& authorPrivateKey
+    );
+    DecryptedGroupPublicMetaV5 extractPublicMeta(const dynamic::EncryptedGroupPublicMetaV5& encryptedData);
+    core::DataIntegrityObject getPublicMetaDIOAndAssertIntegrity(
+        const dynamic::EncryptedGroupPublicMetaV5& encryptedData
+    );
+
+    dynamic::EncryptedGroupPrivateMetaV5 encryptPrivateMeta(
+        const GroupPrivateMetaToEncryptV5& data,
         const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    DecryptedGroupMetaV5 decrypt(const dynamic::EncryptedGroupMetaV5& encryptedData, const std::string& encryptionKey);
-    DecryptedGroupMetaV5 extractPublic(const dynamic::EncryptedGroupMetaV5& encryptedData);
-    core::DataIntegrityObject getDIOAndAssertIntegrity(const dynamic::EncryptedGroupMetaV5& encryptedData);
+    DecryptedGroupPrivateMetaV5 decryptPrivateMeta(
+        const dynamic::EncryptedGroupPrivateMetaV5& encryptedData,
+        const std::string& encryptionKey
+    );
+    core::DataIntegrityObject getPrivateMetaDIOAndAssertIntegrity(
+        const dynamic::EncryptedGroupPrivateMetaV5& encryptedData
+    );
 
 private:
     void assertRosterFormat(const dynamic::EncryptedGroupRosterV5& encryptedData);
-    void assertMetaFormat(const dynamic::EncryptedGroupMetaV5& encryptedData);
+    void assertPublicMetaFormat(const dynamic::EncryptedGroupPublicMetaV5& encryptedData);
+    void assertPrivateMetaFormat(const dynamic::EncryptedGroupPrivateMetaV5& encryptedData);
     core::DataEncryptorV4 _dataEncryptor;
     core::DIOEncryptorV1 _DIOEncryptor;
 };

@@ -692,7 +692,7 @@ TEST_F(StoreUsingGroupsTest, user_added_to_group_gains_access_to_store_and_files
     EXPECT_NO_THROW({ fBefore = storeApi->getFile(fileId); });
     EXPECT_NE(fBefore.statusCode, 0);
 
-    // Seat user_3's leaf in the key tree - updateGroup would only re-wrap the group's metadata key.
+    // Seat user_3's leaf in the key tree - a metadata write would only re-wrap the group's metadata key.
     disconnect();
     connectAs(SUGConnectionType::SUGUser1);
     EXPECT_NO_THROW({

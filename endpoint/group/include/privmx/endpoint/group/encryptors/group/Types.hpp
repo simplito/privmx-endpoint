@@ -27,19 +27,30 @@ struct DecryptedGroupRosterV5 : public core::DecryptedVersionedData {
     dynamic::MembershipBlock membership;
 };
 
-// The metadata plane, written only by `updateGroup`.
-struct GroupMetaToEncryptV5 {
+// The public metadata plane, written only by `updateGroupPublicMeta`. No `internalMeta`: the module's own
+// identity is read from the roster head, which is the only place anything reads it from.
+struct GroupPublicMetaToEncryptV5 {
     core::Buffer publicMeta;
-    core::Buffer privateMeta;
-    core::ModuleInternalMetaV5 internalMeta;
     core::DataIntegrityObject dio;
     dynamic::MetaBlock meta;
 };
 
-struct DecryptedGroupMetaV5 : public core::DecryptedVersionedData {
+struct DecryptedGroupPublicMetaV5 : public core::DecryptedVersionedData {
     core::Buffer publicMeta;
+    std::string authorPubKey;
+    core::DataIntegrityObject dio;
+    dynamic::MetaBlock meta;
+};
+
+// The private metadata plane, written only by `updateGroupPrivateMeta`.
+struct GroupPrivateMetaToEncryptV5 {
     core::Buffer privateMeta;
-    core::ModuleInternalMetaV5 internalMeta;
+    core::DataIntegrityObject dio;
+    dynamic::MetaBlock meta;
+};
+
+struct DecryptedGroupPrivateMetaV5 : public core::DecryptedVersionedData {
+    core::Buffer privateMeta;
     std::string authorPubKey;
     core::DataIntegrityObject dio;
     dynamic::MetaBlock meta;

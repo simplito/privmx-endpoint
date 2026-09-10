@@ -19,12 +19,10 @@
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
-#include <privmx/endpoint/core/encryptors/VersionStrategyMapper.hpp>
 
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include "privmx/endpoint/group/Types.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataEncryptorV5.hpp"
-#include "privmx/endpoint/group/encryptors/group/GroupDataSchemaStrategyV5.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -34,7 +32,11 @@ class GroupDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
     GroupDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
 
-    Poco::Dynamic::Var encryptMeta(const GroupMetaToEncryptV5& data, const std::string& key);
+    // Takes no key: every field of the public plane is signed and none is encrypted. The content key is still
+    // what binds the entry to its epoch and version, through the `publicMetaTag` the caller puts in `data.meta`.
+    Poco::Dynamic::Var encryptPublicMeta(const GroupPublicMetaToEncryptV5& data);
+
+    Poco::Dynamic::Var encryptPrivateMeta(const GroupPrivateMetaToEncryptV5& data, const std::string& key);
 
     Poco::Dynamic::Var encryptRoster(const GroupRosterToEncryptV5& data, const std::string& key);
 
@@ -42,7 +44,9 @@ public:
 
     void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& rosterKey);
 
-    void assertMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& metaKey);
+    void assertPublicMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& publicMetaKey);
+
+    void assertPrivateMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& privateMetaKey);
 
     /**
      * `HMAC(subkey, epoch | rosterVersion | roster)` — what a membership change commits to and a reader checks.
@@ -67,18 +71,28 @@ public:
     );
 
     /**
-     * `HMAC(subkey, "meta" | epoch | metaVersion)` — what a metadata write commits to and a reader checks.
+     * `HMAC(subkey, "publicMeta" | epoch | publicMetaVersion)` — what a public-metadata write commits to and a
+     * reader checks.
      *
-     * Key-bound rather than merely signed, so a whole entry cannot be lifted to another epoch or version.
-     * `updateGroup` may commit `metaVersion` because it is CAS-guarded on exactly that counter, so the version it
-     * predicts is the version it lands at.
+     * Key-bound rather than merely signed: nothing in this plane is encrypted, so a bridge holding a keypair of
+     * its own could otherwise re-author the whole envelope and forge it. `updateGroupPublicMeta` may commit
+     * `publicMetaVersion` because it is CAS-guarded on exactly that counter, so the version it predicts is the
+     * version it lands at.
      *
-     * What actually stops a bridge from re-authoring the envelope is not this tag: it is that `privateMeta` and
-     * `internalMeta` are sign-and-encrypt under the content key and every field has to verify against the one
-     * `authorPubKey` the DIO pins. A bridge can neither swap that key (the copied fields stop verifying) nor keep
-     * it (it cannot sign the fields it wants to replace).
+     * Each plane derives its own subkey, so one plane's entry cannot verify in the other's position even though
+     * both carry the same `MetaBlock` shape. The domain prefix in the preimage says the same thing and is kept
+     * anyway: it makes the payload legible without having to know which key signed it.
      */
-    static std::string metaTag(const std::string& key, int64_t keyVersion, int64_t metaVersion);
+    static std::string publicMetaTag(const std::string& key, int64_t keyVersion, int64_t metaVersion);
+
+    /**
+     * `HMAC(subkey, "privateMeta" | epoch | privateMetaVersion)` — the private plane's counterpart.
+     *
+     * This plane has a second line of defence the public one lacks: `privateMeta` is sign-and-encrypt under the
+     * content key and every field verifies against the one `authorPubKey` the DIO pins, so a bridge can neither
+     * swap that key (the copied fields stop verifying) nor keep it (it cannot sign what it wants to replace).
+     */
+    static std::string privateMetaTag(const std::string& key, int64_t keyVersion, int64_t metaVersion);
 
     /**
      * One subkey per tag purpose, derived from the epoch's content key.
@@ -139,28 +153,40 @@ public:
     // to decrypt, verify or checkpoint here.
     static GroupSummary toLibGroupSummary(const server::GroupSummary& info);
 
-    // Overrides base to parse either group envelope instead of EncryptedModuleDataV5.
+    // Overrides base to parse the group's roster envelope instead of EncryptedModuleDataV5.
     core::ModuleInternalMetaV5 decryptInternalMeta(
         const Poco::Dynamic::Var& data,
         const core::DecryptedEncKey& encKey
     ) override;
 
 private:
-    std::tuple<Group, core::DataIntegrityObject> decryptMetaPlane(
-        const server::GroupInfo& groupInfo,
-        const core::DecryptedEncKey& metaKey
+    // One preimage builder for both metadata planes, so the canonical form cannot drift between them. `domain`
+    // names the plane in both the subkey label and the payload.
+    static std::string metaPlaneTag(
+        const char* domain,
+        const std::string& key,
+        int64_t keyVersion,
+        int64_t metaVersion
     );
 
-    core::VersionStrategyMapper<server::GroupInfo, std::tuple<Group, core::DataIntegrityObject>> _strategyMapper;
-    std::shared_ptr<GroupDataSchemaStrategyV5> _strategyV5;
+    // Both metadata planes at once. Only the private plane needs a key; the public plane's key is what attests
+    // it, and that already ran. Returns the lib object plus each plane's DIO, for the duplicate-randomId sweep.
+    std::tuple<Group, core::DataIntegrityObject, core::DataIntegrityObject> decryptMetaPlanes(
+        const server::GroupInfo& groupInfo,
+        const core::DecryptedEncKey& privateMetaKey
+    );
+
     core::DataEncryptorV4 _dataEncryptor;
+    // Own DIO encryptor, for the one envelope `GroupDataEncryptorV5` has no method for: the internal-meta view.
     core::DIOEncryptorV1 _DIOEncryptor;
+    GroupDataEncryptorV5 _groupEncryptor;
     // Monotone pins, one per plane. A tag stays valid forever, so an older but genuinely tagged state is a
-    // rollback that only a pin can refuse — and the two counters move independently, so one pin over both would
-    // reject legitimate states.
+    // rollback that only a pin can refuse — and the three counters move independently, so one pin over all of
+    // them would reject legitimate states.
     std::mutex _pinMutex;
     std::map<std::string, int64_t> _verifiedRosterVersions;
-    std::map<std::string, int64_t> _verifiedMetaVersions;
+    std::map<std::string, int64_t> _verifiedPublicMetaVersions;
+    std::map<std::string, int64_t> _verifiedPrivateMetaVersions;
 };
 
 } // namespace group

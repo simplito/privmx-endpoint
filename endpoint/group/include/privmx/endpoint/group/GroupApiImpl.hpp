@@ -58,7 +58,7 @@ public:
     void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     /**
-     * Moves the metadata entry up to the group's current epoch, if it is still behind.
+     * Moves each metadata plane up to the group's current epoch, if it is still behind.
      *
      * Called after a removal has committed, never as part of it. A metadata entry left at epoch N stays
      * openable by whoever held `K_N` — including the member just removed — and its `metaTag` is keyed at N too,
@@ -67,24 +67,30 @@ public:
      * can check separates that from an entry written legitimately before they left.
      *
      * Rewriting the same `publicMeta`/`privateMeta` under the new epoch's key closes it, because from then on
-     * the entry's tag requires a key the removed member never had.
+     * each entry's tag requires a key the removed member never had. Both planes need it, and each is checked
+     * and written on its own — they sit at epochs of their own.
      *
-     * Deliberately after the fact and deliberately best-effort. The removal's own write stays free of the
-     * metadata plane — that separation is what stops a concurrent `updateGroup` from stranding a tree write at
-     * a version it never took, and it is the reason this is a second call rather than a second field. If it
-     * fails the group is left exactly where a removal used to leave it, and the next `updateGroup` finishes
-     * the job.
+     * Deliberately after the fact and deliberately best-effort. The removal's own write stays free of both
+     * metadata planes — that separation is what stops a concurrent metadata update from stranding a tree write
+     * at a version it never took, and it is the reason this is a second call rather than a second field. If it
+     * fails the group is left exactly where a removal used to leave it, and the next
+     * `updateGroupPublicMeta`/`updateGroupPrivateMeta` finishes the job.
      */
     void refreshMetadataEpochAfterRemoval(const std::string& groupId);
 
-    void updateGroup(
+    void updateGroupPublicMeta(
         const std::string& groupId,
         const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
         const int64_t version,
-        const std::optional<core::ContainerPolicy>& policies,
         bool allowRotationRetry = true
     );
+    void updateGroupPrivateMeta(
+        const std::string& groupId,
+        const core::Buffer& privateMeta,
+        const int64_t version,
+        bool allowRotationRetry = true
+    );
+    void updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies);
     void deleteGroup(const std::string& groupId);
 
     Group getGroup(const std::string& groupId);
@@ -181,6 +187,21 @@ private:
         std::vector<core::UserWithPubKey> managers;
     };
     static RosterAfterChange rosterOf(const std::vector<std::string>& users, const std::vector<std::string>& managers);
+
+    /** The head, the resource id, the epoch, and a key proven to be the current epoch's. */
+    struct MetaWriteContext {
+        std::string resourceId;
+        int64_t currentEpoch;
+        core::ContainerUpdateContext ctx;
+    };
+    /**
+     * Everything both metadata writes need before they can tag.
+     *
+     * Neither plane reads the other's envelope — that is the whole point of the split — so this is the entire
+     * shared prologue. Kept in one place so the epoch guard cannot drift between the two callers.
+     */
+    MetaWriteContext prepareMetaWrite(const std::string& groupId);
+
     std::map<std::string, std::string> resolveMemberKeys(
         const std::string& contextId,
         const std::vector<std::string>& userIds

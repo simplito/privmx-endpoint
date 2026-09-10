@@ -26,7 +26,7 @@ struct GroupDeletedEventData {
  * Holds what changed about a Group, and nothing that grows with it.
  *
  * A Group event no longer carries the Group: the state was serialized once per recipient, so a Group of a
- * thousand members shipped its tree and history a thousand times for one membership change. The three counters
+ * thousand members shipped its tree and history a thousand times for one membership change. The four counters
  * are enough to decide whether the change matters — and which plane moved; call `getGroup` when it does.
  */
 struct GroupChangedEventData {
@@ -42,9 +42,14 @@ struct GroupChangedEventData {
     std::string contextId;
 
     /**
-     * Metadata version after the change. Moves only on `updateGroup`.
+     * Public-metadata version after the change. Moves only on `updateGroupPublicMeta`.
      */
-    int64_t version;
+    int64_t publicMetaVersion;
+
+    /**
+     * Private-metadata version after the change. Moves only on `updateGroupPrivateMeta`.
+     */
+    int64_t privateMetaVersion;
 
     /**
      * Roster version after the change. Moves only on a membership change.
@@ -57,8 +62,8 @@ struct GroupChangedEventData {
     int64_t keyVersion;
 
     /**
-     * Which operation changed the Group: "created", "updated", "keyRotated", "memberAdded", "memberRemoved",
-     * "eraCut" or "archivePruned"
+     * Which operation changed the Group: "created", "publicMetaUpdated", "privateMetaUpdated",
+     * "policyUpdated", "keyRotated", "memberAdded", "memberRemoved", "eraCut" or "archivePruned"
      */
     std::string changeKind;
 };

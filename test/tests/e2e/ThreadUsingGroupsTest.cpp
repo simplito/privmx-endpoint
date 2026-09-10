@@ -819,7 +819,7 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     EXPECT_NE(mBefore.statusCode, 0);
 
     // user_1 adds user_3 to Group_2 via the tree-aware path, seating user_3's leaf in the key tree
-    // (updateGroup would only re-wrap the group's own metadata key - it never touches tree leaf state)
+    // (a metadata write would only re-wrap the group's own metadata key - it never touches tree leaf state)
     disconnect();
     connectAs(TUGConnectionType::TUGUser1);
     EXPECT_NO_THROW({

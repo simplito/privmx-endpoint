@@ -95,17 +95,41 @@ void GroupApi::removeGroupMembers(const std::string& groupId, const std::vector<
     }
 }
 
-void GroupApi::updateGroup(
+void GroupApi::updateGroupPublicMeta(
     const std::string& groupId,
     const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const int64_t version,
-    const std::optional<core::ContainerPolicy>& policies
+    const int64_t version
 ) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     try {
-        impl->updateGroup(groupId, publicMeta, privateMeta, version, policies);
+        impl->updateGroupPublicMeta(groupId, publicMeta, version);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void GroupApi::updateGroupPrivateMeta(
+    const std::string& groupId,
+    const core::Buffer& privateMeta,
+    const int64_t version
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    try {
+        impl->updateGroupPrivateMeta(groupId, privateMeta, version);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void GroupApi::updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    try {
+        impl->updateGroupPolicy(groupId, policies);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

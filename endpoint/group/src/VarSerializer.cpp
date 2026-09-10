@@ -21,7 +21,8 @@ Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& va
     obj->set("lastModifier", serialize(val.lastModifier));
     obj->set("users", serialize(val.users));
     obj->set("managers", serialize(val.managers));
-    obj->set("version", serialize(val.version));
+    obj->set("publicMetaVersion", serialize(val.publicMetaVersion));
+    obj->set("privateMetaVersion", serialize(val.privateMetaVersion));
     obj->set("rosterVersion", serialize(val.rosterVersion));
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("privateMeta", serialize(val.privateMeta));
@@ -76,7 +77,8 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupSummary>(const group::Gr
     obj->set("lastModifier", serialize(val.lastModifier));
     obj->set("users", serialize(val.users));
     obj->set("managers", serialize(val.managers));
-    obj->set("version", serialize(val.version));
+    obj->set("publicMetaVersion", serialize(val.publicMetaVersion));
+    obj->set("privateMetaVersion", serialize(val.privateMetaVersion));
     obj->set("rosterVersion", serialize(val.rosterVersion));
     obj->set("policy", serialize(val.policy));
     obj->set("keyVersion", serialize(val.keyVersion));
@@ -118,7 +120,8 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupChangedEventData>(const 
     }
     obj->set("groupId", serialize(val.groupId));
     obj->set("contextId", serialize(val.contextId));
-    obj->set("version", serialize(val.version));
+    obj->set("publicMetaVersion", serialize(val.publicMetaVersion));
+    obj->set("privateMetaVersion", serialize(val.privateMetaVersion));
     obj->set("rosterVersion", serialize(val.rosterVersion));
     obj->set("keyVersion", serialize(val.keyVersion));
     obj->set("changeKind", serialize(val.changeKind));

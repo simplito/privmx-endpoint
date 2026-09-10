@@ -193,14 +193,17 @@ std::string GroupApiImpl::createGroup(
     const keytree::BuildPlan plan = builder.build(members, _userPrivKey);
     const std::string groupPubKeyStr = plan.grantKey.getPublicKey().toBase58DER();
 
-    // Both planes start at 1, under the same epoch-1 content key. `internalMeta` is the module's own identity, so
-    // it is the same in both — but the DIOs are two distinct signed objects and must not share a `randomId`, or a
-    // reader's replay check sees the group's own two entries as one entry served twice.
+    // All three planes start at 1, under the same epoch-1 content key. `internalMeta` rides on the roster only —
+    // it is the module's own identity and nothing reads it from a metadata entry. The DIOs are three distinct
+    // signed objects and must not share a `randomId`, or a reader's replay check sees the group's own three
+    // entries as one entry served three times.
     const core::ModuleInternalMetaV5 internalMeta{
         .secret = ctx.secret, .resourceId = ctx.resourceId, .randomId = ctx.dio.randomId
     };
-    core::DataIntegrityObject metaDio = ctx.dio;
-    metaDio.randomId = core::EndpointUtils::generateDIORandomId();
+    core::DataIntegrityObject publicMetaDio = ctx.dio;
+    publicMetaDio.randomId = core::EndpointUtils::generateDIORandomId();
+    core::DataIntegrityObject privateMetaDio = ctx.dio;
+    privateMetaDio.randomId = core::EndpointUtils::generateDIORandomId();
     GroupRosterToEncryptV5 rosterToEncrypt{
         .internalMeta = internalMeta,
         .dio = ctx.dio,
@@ -215,13 +218,21 @@ std::string GroupApiImpl::createGroup(
             .rosterVersion = 1
         }
     };
-    GroupMetaToEncryptV5 metaToEncrypt{
+    GroupPublicMetaToEncryptV5 publicMetaToEncrypt{
         .publicMeta = publicMeta,
-        .privateMeta = privateMeta,
-        .internalMeta = internalMeta,
-        .dio = metaDio,
+        .dio = publicMetaDio,
         .meta = dynamic::MetaBlock{
-            .metaTag = GroupDataSchemaMapper::metaTag(ctx.key.key, 1, 1),
+            .metaTag = GroupDataSchemaMapper::publicMetaTag(ctx.key.key, 1, 1),
+            .keyId = ctx.key.id,
+            .keyVersion = 1,
+            .metaVersion = 1
+        }
+    };
+    GroupPrivateMetaToEncryptV5 privateMetaToEncrypt{
+        .privateMeta = privateMeta,
+        .dio = privateMetaDio,
+        .meta = dynamic::MetaBlock{
+            .metaTag = GroupDataSchemaMapper::privateMetaTag(ctx.key.key, 1, 1),
             .keyId = ctx.key.id,
             .keyVersion = 1,
             .metaVersion = 1
@@ -233,7 +244,8 @@ std::string GroupApiImpl::createGroup(
     model.contextId = contextId;
     model.keyId = ctx.key.id;
     model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
-    model.meta = _groupDataSchemaMapper->encryptMeta(metaToEncrypt, ctx.key.key);
+    model.publicMeta = _groupDataSchemaMapper->encryptPublicMeta(publicMetaToEncrypt);
+    model.privateMeta = _groupDataSchemaMapper->encryptPrivateMeta(privateMetaToEncrypt, ctx.key.key);
     model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
     model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     model.groupPubKey = groupPubKeyStr;
@@ -344,7 +356,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
         currentGroup, currentEntry, resourceId, roster.users, roster.managers, false, false, _groupPrivKeyResolver
     );
     // Roster only. The metadata entry is not read, not re-encrypted and not re-signed — that is the separation
-    // that stops a concurrent `updateGroup` from stranding this write at a version it never committed to.
+    // that stops a concurrent metadata write from stranding this write at a version it never committed to.
     GroupRosterToEncryptV5 rosterToEncrypt{
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
@@ -569,8 +581,12 @@ void GroupApiImpl::refreshMetadataEpochAfterRemoval(const std::string& groupId) 
             .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
         };
         const auto group = _serverApi.groupGet(getModel).group;
-        if (group.meta.keyVersion >= group.keyVersion) {
-            // Already current — a concurrent `updateGroup` got there first, which is the same outcome.
+        // Per plane, because the two sit at epochs of their own: one may already have been carried up by a
+        // concurrent write while the other is still behind.
+        const bool publicBehind = group.publicMeta.keyVersion < group.keyVersion;
+        const bool privateBehind = group.privateMeta.keyVersion < group.keyVersion;
+        if (!publicBehind && !privateBehind) {
+            // Already current — a concurrent metadata write got there first, which is the same outcome.
             return;
         }
         // Read through the verifying path: re-signing metadata this client has not attested would launder
@@ -579,25 +595,24 @@ void GroupApiImpl::refreshMetadataEpochAfterRemoval(const std::string& groupId) 
         if (verified.statusCode != 0) {
             return;
         }
-        // `policies` empty so the update leaves the policy alone, and `allowRotationRetry` false because a
-        // rotation is what got us here — retrying into another one would loop.
-        updateGroup(groupId, verified.publicMeta, verified.privateMeta, verified.version, std::nullopt, false);
+        // One write per plane that is behind, each with `allowRotationRetry` false because a rotation is what got
+        // us here — retrying into another one would loop. A plane already at the current epoch is left alone
+        // rather than rewritten, so a concurrent writer does not lose its entry to a carry-up.
+        if (publicBehind) {
+            updateGroupPublicMeta(groupId, verified.publicMeta, verified.publicMetaVersion, false);
+        }
+        if (privateBehind) {
+            updateGroupPrivateMeta(groupId, verified.privateMeta, verified.privateMetaVersion, false);
+        }
     } catch (...) {
         // Best-effort by design. A failure leaves the group where a removal used to leave it, and the next
-        // `updateGroup` closes the window; throwing here would fail a removal that has already happened.
+        // metadata write closes the window; throwing here would fail a removal that has already happened.
     }
 }
 
 static constexpr unsigned int BRIDGE_GROUP_ROTATED_ALREADY = 0x621C;
 
-void GroupApiImpl::updateGroup(
-    const std::string& groupId,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const int64_t version,
-    const std::optional<core::ContainerPolicy>& policies,
-    bool allowRotationRetry
-) {
+GroupApiImpl::MetaWriteContext GroupApiImpl::prepareMetaWrite(const std::string& groupId) {
     // The default path view is enough: this submits no tree and does not touch the roster at all.
     server::GroupGetModel getModel{
         .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
@@ -607,16 +622,11 @@ void GroupApiImpl::updateGroup(
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
     const int64_t currentEpoch = currentGroup.keyVersion;
 
-    std::vector<core::UserWithPubKey> unchangedUsers;
-    for (const auto& userId : currentGroup.users) {
-        unchangedUsers.push_back(core::UserWithPubKey{.userId = userId, .pubKey = std::string()});
-    }
-    std::vector<core::UserWithPubKey> unchangedManagers;
-    for (const auto& userId : currentGroup.managers) {
-        unchangedManagers.push_back(core::UserWithPubKey{.userId = userId, .pubKey = std::string()});
-    }
+    // Names no diff, so `UsersKeysResolver` sees no reason to mint a key: the pub keys are deliberately empty
+    // because nothing here is wrapped to anybody.
+    const auto roster = rosterOf(currentGroup.users, currentGroup.managers);
     auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, unchangedUsers, unchangedManagers, false, false, _groupPrivKeyResolver
+        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false, false, _groupPrivKeyResolver
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
 
@@ -626,45 +636,48 @@ void GroupApiImpl::updateGroup(
     if (ctx.key.id != currentEntry.keyId) {
         throw GroupDataIntegrityException("metadata write resolved a key that is not the current epoch's");
     }
+    return MetaWriteContext{.resourceId = resourceId, .currentEpoch = currentEpoch, .ctx = ctx};
+}
 
-    GroupMetaToEncryptV5 metaToEncrypt{
+void GroupApiImpl::updateGroupPublicMeta(
+    const std::string& groupId,
+    const core::Buffer& publicMeta,
+    const int64_t version,
+    bool allowRotationRetry
+) {
+    auto w = prepareMetaWrite(groupId);
+    GroupPublicMetaToEncryptV5 toEncrypt{
         .publicMeta = publicMeta,
-        .privateMeta = privateMeta,
-        .internalMeta = core::
-            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
-        .dio = ctx.dio,
+        .dio = w.ctx.dio,
         .meta = dynamic::MetaBlock{
             // The same `version` feeds the CAS field below, so the version this commits to and the version
             // the bridge checks cannot disagree.
-            .metaTag = GroupDataSchemaMapper::metaTag(ctx.key.key, currentEpoch, version + 1),
-            .keyId = ctx.key.id,
-            .keyVersion = currentEpoch,
+            .metaTag = GroupDataSchemaMapper::publicMetaTag(w.ctx.key.key, w.currentEpoch, version + 1),
+            .keyId = w.ctx.key.id,
+            .keyVersion = w.currentEpoch,
             .metaVersion = version + 1
         }
     };
 
-    server::GroupUpdateModel model;
+    server::GroupUpdatePublicMetaModel model;
     model.id = groupId;
-    model.resourceId = resourceId;
-    model.keyId = ctx.key.id;
+    model.resourceId = w.resourceId;
+    model.keyId = w.ctx.key.id;
     // No force field, unlike the other containers: the entry commits the version it lands at, so a write that
     // skipped the version check could only land a tag no reader will accept.
     model.version = version;
-    model.data = _groupDataSchemaMapper->encryptMeta(metaToEncrypt, ctx.key.key);
-    if (policies.has_value()) {
-        model.policy = core::Factory::createPolicyServerObject(policies.value());
-    }
+    model.data = _groupDataSchemaMapper->encryptPublicMeta(toEncrypt);
 
     try {
-        _serverApi.groupUpdate(model);
+        _serverApi.groupUpdatePublicMeta(model);
     } catch (const privmx::utils::PrivmxException& e) {
         // Not reachable against the current bridge: `ROTATED_ALREADY` comes from the rotation family
-        // (`generateNewGroupKey` and friends), never from `groupUpdate`, which answers a moved head with a
+        // (`generateNewGroupKey` and friends), never from a metadata write, which answers a moved head with a
         // version error instead. Kept for the day that changes; the retry re-reads and re-tags on its own.
         if (allowRotationRetry && (e.getCode() & 0x0000FFFF) == BRIDGE_GROUP_ROTATED_ALREADY) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
-            updateGroup(groupId, publicMeta, privateMeta, version, policies, false);
+            updateGroupPublicMeta(groupId, publicMeta, version, false);
             return;
         }
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -672,6 +685,62 @@ void GroupApiImpl::updateGroup(
     }
     // Rotates nothing — not the content key, not the grant key, not the tree. Only the cached view is stale.
     invalidateModuleKeysInCache(groupId);
+}
+
+void GroupApiImpl::updateGroupPrivateMeta(
+    const std::string& groupId,
+    const core::Buffer& privateMeta,
+    const int64_t version,
+    bool allowRotationRetry
+) {
+    auto w = prepareMetaWrite(groupId);
+    GroupPrivateMetaToEncryptV5 toEncrypt{
+        .privateMeta = privateMeta,
+        .dio = w.ctx.dio,
+        .meta = dynamic::MetaBlock{
+            .metaTag = GroupDataSchemaMapper::privateMetaTag(w.ctx.key.key, w.currentEpoch, version + 1),
+            .keyId = w.ctx.key.id,
+            .keyVersion = w.currentEpoch,
+            .metaVersion = version + 1
+        }
+    };
+
+    server::GroupUpdatePrivateMetaModel model;
+    model.id = groupId;
+    model.resourceId = w.resourceId;
+    model.keyId = w.ctx.key.id;
+    model.version = version;
+    model.data = _groupDataSchemaMapper->encryptPrivateMeta(toEncrypt, w.ctx.key.key);
+
+    try {
+        _serverApi.groupUpdatePrivateMeta(model);
+    } catch (const privmx::utils::PrivmxException& e) {
+        if (allowRotationRetry && (e.getCode() & 0x0000FFFF) == BRIDGE_GROUP_ROTATED_ALREADY) {
+            auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
+            adoptRotatedAlready(groupId, payload);
+            updateGroupPrivateMeta(groupId, privateMeta, version, false);
+            return;
+        }
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+    invalidateModuleKeysInCache(groupId);
+}
+
+void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies) {
+    // No read, no key, no envelope. The policy has never been inside one — it is a bare bridge-held field — so
+    // there is nothing here to tag, nothing to encrypt, and no epoch to have to be current at.
+    //
+    // `groupGet` and `prepareContainerUpdate` are on the metadata paths to resolve the epoch's content key and
+    // prove the writer holds it before signing under it. A policy write signs nothing, so both would buy only a
+    // local membership check the bridge's own policy check already performs — at the cost of a round trip and a
+    // tree climb, which is exactly the coupling this split exists to remove.
+    //
+    // No cache invalidation either: neither metadata counter moves, `rosterVersion` does not move and no key
+    // changes, and the module key cache is versioned on `rosterVersion`.
+    _serverApi.groupUpdatePolicy(
+        server::GroupUpdatePolicyModel{.id = groupId, .policy = core::Factory::createPolicyServerObject(policies)}
+    );
 }
 
 void GroupApiImpl::deleteGroup(const std::string& groupId) {

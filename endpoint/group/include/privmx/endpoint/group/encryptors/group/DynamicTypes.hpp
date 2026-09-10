@@ -25,19 +25,37 @@ namespace dynamic {
 JSON_STRUCT_EXT(EncryptedGroupRosterV5, core::dynamic::VersionedData, ENCRYPTED_GROUP_ROSTER_V5_FIELDS);
 
 /**
- * The metadata plane's entry, written only by `updateGroup`. Sits at the epoch it was written under and stays
- * there — a later reader descends the Epoch Ladder to its key rather than having it rewritten on every removal.
+ * The public metadata plane's entry, written only by `updateGroupPublicMeta`.
+ *
+ * Its DIO checksums cover `publicMeta` and `meta` and nothing else, so this plane can neither be validated
+ * against nor invalidated by a field the private plane owns — which is what makes the two separately writable,
+ * and what makes the bridge's per-plane grant an enforceable one rather than a declarative one.
+ *
+ * Sits at the epoch it was written under and stays there; a later reader descends the Epoch Ladder to its key
+ * rather than having it rewritten on every removal. The two planes therefore may sit at different epochs.
  */
-#define ENCRYPTED_GROUP_META_V5_FIELDS(F)                                                                              \
+#define ENCRYPTED_GROUP_PUBLIC_META_V5_FIELDS(F)                                                                       \
     F(publicMeta, std::string)                                                                                         \
     F(publicMetaObject, Poco::Dynamic::Var)                                                                            \
-    F(privateMeta, std::string)                                                                                        \
-    F(internalMeta, std::string)                                                                                       \
     F(meta, std::string)                                                                                               \
     F(authorPubKey, std::string)                                                                                       \
     F(dio, std::string)
-JSON_STRUCT_EXT(EncryptedGroupMetaV5, core::dynamic::VersionedData, ENCRYPTED_GROUP_META_V5_FIELDS);
+JSON_STRUCT_EXT(EncryptedGroupPublicMetaV5, core::dynamic::VersionedData, ENCRYPTED_GROUP_PUBLIC_META_V5_FIELDS);
 
+/**
+ * The private metadata plane's entry, written only by `updateGroupPrivateMeta`.
+ *
+ * The mirror of the public plane: its DIO checksums cover `privateMeta` and `meta` only. Carries no
+ * `internalMeta` — the module's own identity is read from the roster head, the only place anything reads it.
+ */
+#define ENCRYPTED_GROUP_PRIVATE_META_V5_FIELDS(F)                                                                      \
+    F(privateMeta, std::string)                                                                                        \
+    F(meta, std::string)                                                                                               \
+    F(authorPubKey, std::string)                                                                                       \
+    F(dio, std::string)
+JSON_STRUCT_EXT(EncryptedGroupPrivateMetaV5, core::dynamic::VersionedData, ENCRYPTED_GROUP_PRIVATE_META_V5_FIELDS);
+
+// Parses the roster envelope for `internalMeta`, the only plane that carries it — `JSON_STRUCT` ignores the rest.
 #define ENCRYPTED_GROUP_INTERNAL_META_VIEW_V5_FIELDS(F)                                                                \
     F(internalMeta, std::string)                                                                                       \
     F(authorPubKey, std::string)                                                                                       \
@@ -81,12 +99,15 @@ JSON_STRUCT_EXT(
 JSON_STRUCT(MembershipBlock, MEMBERSHIP_BLOCK_FIELDS);
 
 /**
- * The metadata entry pinned to the version it landed at, under a key only members of that epoch hold.
+ * One metadata plane's entry pinned to the version it landed at, under a key only members of that epoch hold.
  *
- * `metaTag` is `HMAC(content key of keyVersion, "meta" | keyVersion | metaVersion)`. Key-bound rather than
- * merely signed, because `publicMeta` is signed but not encrypted: a bridge with a keypair of its own could
- * otherwise re-author the whole envelope and forge it. `updateGroup` may commit `metaVersion` because it is
- * CAS-guarded on exactly that counter, so the version it predicts is the version it lands at.
+ * `metaTag` is `HMAC(content key of keyVersion, "publicMeta" or "privateMeta" | keyVersion | metaVersion)`.
+ * Key-bound rather than merely signed, because a bridge with a keypair of its own could otherwise re-author a
+ * whole envelope and forge it — the public plane is signed and not encrypted at all. The domain prefix is what
+ * stops one plane's entry being served as the other's, since both planes carry this same block shape.
+ *
+ * A metadata write may commit `metaVersion` because it is CAS-guarded on exactly its own counter, so the
+ * version it predicts is the version it lands at.
  */
 #define META_BLOCK_FIELDS(F)                                                                                           \
     F(metaTag, std::string)                                                                                            \

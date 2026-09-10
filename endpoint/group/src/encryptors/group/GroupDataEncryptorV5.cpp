@@ -13,7 +13,8 @@ using namespace privmx::endpoint;
 
 namespace {
 
-// Both envelopes carry `internalMeta` under the same encoding, so the round trip lives in one place.
+// Only the roster envelope carries `internalMeta` — the module's own identity is read from nowhere else — but
+// the round trip stays factored out, since encrypt and decrypt must agree on the encoding.
 std::string encodeInternalMeta(
     core::DataEncryptorV4& dataEncryptor,
     const core::ModuleInternalMetaV5& internalMeta,
@@ -122,12 +123,11 @@ void GroupDataEncryptorV5::assertRosterFormat(const dynamic::EncryptedGroupRoste
     }
 }
 
-dynamic::EncryptedGroupMetaV5 GroupDataEncryptorV5::encrypt(
-    const GroupMetaToEncryptV5& data,
-    const privmx::crypto::PrivateKey& authorPrivateKey,
-    const std::string& encryptionKey
+dynamic::EncryptedGroupPublicMetaV5 GroupDataEncryptorV5::encryptPublicMeta(
+    const GroupPublicMetaToEncryptV5& data,
+    const privmx::crypto::PrivateKey& authorPrivateKey
 ) {
-    dynamic::EncryptedGroupMetaV5 result;
+    dynamic::EncryptedGroupPublicMetaV5 result;
     result.version = core::ModuleDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
 
@@ -137,11 +137,91 @@ dynamic::EncryptedGroupMetaV5 GroupDataEncryptorV5::encrypt(
         result.publicMetaObject = privmx::utils::Utils::parseJsonObject(data.publicMeta.stdString());
     } catch (...) { result.publicMetaObject = Poco::Dynamic::Var(); }
 
+    result.meta = _dataEncryptor.signAndEncode(
+        core::Buffer::from(privmx::utils::Utils::stringifyVar(data.meta.toJSON())), authorPrivateKey
+    );
+    fieldChecksums.insert(std::make_pair("meta", privmx::crypto::Crypto::sha256(result.meta)));
+
+    result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
+    // Only this plane's fields, so the private plane can be rewritten without invalidating this entry.
+    core::ExpandedDataIntegrityObject expandedDio = {data.dio, .structureVersion = 5, .fieldChecksums = fieldChecksums};
+    result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
+    return result;
+}
+
+DecryptedGroupPublicMetaV5 GroupDataEncryptorV5::extractPublicMeta(
+    const dynamic::EncryptedGroupPublicMetaV5& encryptedData
+) {
+    DecryptedGroupPublicMetaV5 result;
+    result.statusCode = 0;
+    result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
+    try {
+        result.dio = getPublicMetaDIOAndAssertIntegrity(encryptedData);
+        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedData.authorPubKey);
+        result.authorPubKey = encryptedData.authorPubKey;
+
+        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedData.publicMeta, authorPublicKey);
+        // The plaintext copy the bridge is allowed to query on is not checksummed, so it is compared instead.
+        if (!encryptedData.publicMetaObject.isEmpty()) {
+            auto tmp_1 = privmx::utils::Utils::stringifyVar(
+                privmx::utils::Utils::parseJsonObject(result.publicMeta.stdString())
+            );
+            auto tmp_2 = privmx::utils::Utils::stringifyVar(encryptedData.publicMetaObject);
+            if (tmp_1 != tmp_2) {
+                auto e = core::ModulePublicDataMismatchException();
+                result.statusCode = e.getCode();
+            }
+        }
+
+        auto metaRaw = _dataEncryptor.decodeAndVerify(encryptedData.meta, authorPublicKey);
+        result.meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
+    } catch (const privmx::endpoint::core::Exception& e) {
+        result.statusCode = e.getCode();
+    } catch (const privmx::utils::PrivmxException& e) {
+        result.statusCode = core::ExceptionConverter::convert(e).getCode();
+    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    return result;
+}
+
+core::DataIntegrityObject GroupDataEncryptorV5::getPublicMetaDIOAndAssertIntegrity(
+    const dynamic::EncryptedGroupPublicMetaV5& encryptedData
+) {
+    assertPublicMetaFormat(encryptedData);
+    auto dio = _DIOEncryptor.decodeAndVerify(encryptedData.dio);
+    if (dio.structureVersion != core::ModuleDataSchema::Version::VERSION_5 ||
+        dio.creatorPubKey != encryptedData.authorPubKey ||
+        dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedData.publicMeta) ||
+        dio.fieldChecksums.at("meta") != privmx::crypto::Crypto::sha256(encryptedData.meta)) {
+        throw core::InvalidDataIntegrityObjectChecksumException();
+    }
+    return dio;
+}
+
+void GroupDataEncryptorV5::assertPublicMetaFormat(const dynamic::EncryptedGroupPublicMetaV5& encryptedData) {
+    if (encryptedData.version != core::ModuleDataSchema::Version::VERSION_5 ||
+        encryptedData.publicMeta.empty() ||
+        encryptedData.meta.empty() ||
+        encryptedData.authorPubKey.empty() ||
+        encryptedData.dio.empty()) {
+        throw InvalidEncryptedGroupDataVersionException(
+            std::to_string(encryptedData.version) +
+            " expected version: " +
+            std::to_string(core::ModuleDataSchema::Version::VERSION_5)
+        );
+    }
+}
+
+dynamic::EncryptedGroupPrivateMetaV5 GroupDataEncryptorV5::encryptPrivateMeta(
+    const GroupPrivateMetaToEncryptV5& data,
+    const privmx::crypto::PrivateKey& authorPrivateKey,
+    const std::string& encryptionKey
+) {
+    dynamic::EncryptedGroupPrivateMetaV5 result;
+    result.version = core::ModuleDataSchema::Version::VERSION_5;
+    std::unordered_map<std::string, std::string> fieldChecksums;
+
     result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(data.privateMeta, authorPrivateKey, encryptionKey);
     fieldChecksums.insert(std::make_pair("privateMeta", privmx::crypto::Crypto::sha256(result.privateMeta)));
-
-    result.internalMeta = encodeInternalMeta(_dataEncryptor, data.internalMeta, authorPrivateKey, encryptionKey);
-    fieldChecksums.insert(std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(result.internalMeta)));
 
     result.meta = _dataEncryptor.signAndEncode(
         core::Buffer::from(privmx::utils::Utils::stringifyVar(data.meta.toJSON())), authorPrivateKey
@@ -154,38 +234,22 @@ dynamic::EncryptedGroupMetaV5 GroupDataEncryptorV5::encrypt(
     return result;
 }
 
-DecryptedGroupMetaV5 GroupDataEncryptorV5::decrypt(
-    const dynamic::EncryptedGroupMetaV5& encryptedData,
+DecryptedGroupPrivateMetaV5 GroupDataEncryptorV5::decryptPrivateMeta(
+    const dynamic::EncryptedGroupPrivateMetaV5& encryptedData,
     const std::string& encryptionKey
 ) {
-    DecryptedGroupMetaV5 result;
+    DecryptedGroupPrivateMetaV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
     try {
-        result.dio = getDIOAndAssertIntegrity(encryptedData);
+        result.dio = getPrivateMetaDIOAndAssertIntegrity(encryptedData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedData.authorPubKey);
         result.authorPubKey = encryptedData.authorPubKey;
-
-        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedData.publicMeta, authorPublicKey);
-        if (!encryptedData.publicMetaObject.isEmpty()) {
-            auto tmp_1 = privmx::utils::Utils::stringifyVar(
-                privmx::utils::Utils::parseJsonObject(result.publicMeta.stdString())
-            );
-            auto tmp_2 = privmx::utils::Utils::stringifyVar(encryptedData.publicMetaObject);
-            if (tmp_1 != tmp_2) {
-                auto e = core::ModulePublicDataMismatchException();
-                result.statusCode = e.getCode();
-            }
-        }
 
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(
             encryptedData.privateMeta, authorPublicKey, encryptionKey
         );
 
-        result.internalMeta = decodeInternalMeta(
-            _dataEncryptor, encryptedData.internalMeta, authorPublicKey, encryptionKey
-        );
-
         auto metaRaw = _dataEncryptor.decodeAndVerify(encryptedData.meta, authorPublicKey);
         result.meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
     } catch (const privmx::endpoint::core::Exception& e) {
@@ -196,58 +260,23 @@ DecryptedGroupMetaV5 GroupDataEncryptorV5::decrypt(
     return result;
 }
 
-DecryptedGroupMetaV5 GroupDataEncryptorV5::extractPublic(const dynamic::EncryptedGroupMetaV5& encryptedData) {
-    DecryptedGroupMetaV5 result;
-    result.statusCode = 0;
-    result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
-    try {
-        result.dio = getDIOAndAssertIntegrity(encryptedData);
-        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedData.authorPubKey);
-        result.authorPubKey = encryptedData.authorPubKey;
-
-        result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedData.publicMeta, authorPublicKey);
-        if (!encryptedData.publicMetaObject.isEmpty()) {
-            auto tmp_1 = privmx::utils::Utils::stringifyVar(
-                privmx::utils::Utils::parseJsonObject(result.publicMeta.stdString())
-            );
-            auto tmp_2 = privmx::utils::Utils::stringifyVar(encryptedData.publicMetaObject);
-            if (tmp_1 != tmp_2) {
-                auto e = core::ModulePublicDataMismatchException();
-                result.statusCode = e.getCode();
-            }
-        }
-
-        auto metaRaw = _dataEncryptor.decodeAndVerify(encryptedData.meta, authorPublicKey);
-        result.meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
-    return result;
-}
-
-core::DataIntegrityObject GroupDataEncryptorV5::getDIOAndAssertIntegrity(
-    const dynamic::EncryptedGroupMetaV5& encryptedData
+core::DataIntegrityObject GroupDataEncryptorV5::getPrivateMetaDIOAndAssertIntegrity(
+    const dynamic::EncryptedGroupPrivateMetaV5& encryptedData
 ) {
-    assertMetaFormat(encryptedData);
+    assertPrivateMetaFormat(encryptedData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedData.dio);
     if (dio.structureVersion != core::ModuleDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedData.authorPubKey ||
-        dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedData.publicMeta) ||
         dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedData.privateMeta) ||
-        dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedData.internalMeta) ||
         dio.fieldChecksums.at("meta") != privmx::crypto::Crypto::sha256(encryptedData.meta)) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;
 }
 
-void GroupDataEncryptorV5::assertMetaFormat(const dynamic::EncryptedGroupMetaV5& encryptedData) {
+void GroupDataEncryptorV5::assertPrivateMetaFormat(const dynamic::EncryptedGroupPrivateMetaV5& encryptedData) {
     if (encryptedData.version != core::ModuleDataSchema::Version::VERSION_5 ||
-        encryptedData.publicMeta.empty() ||
         encryptedData.privateMeta.empty() ||
-        encryptedData.internalMeta.empty() ||
         encryptedData.meta.empty() ||
         encryptedData.authorPubKey.empty() ||
         encryptedData.dio.empty()) {
