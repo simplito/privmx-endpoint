@@ -32,12 +32,8 @@ protected:
         PrivateKey priv;
     };
 
-    /**
-     * Builds a tree-backed group exactly as the bridge would serve it after `createGroup`.
-     *
-     * `archive` mirrors the split in the real API: `groupGet` serves the tree, `groupGetKeyArchive` serves the
-     * ladder, and the caller hands both to `resolve()`.
-     */
+    // A tree-backed group as the bridge would serve it after `createGroup`. `archive` mirrors the split in the
+    // real API: `groupGet` serves the tree, `groupGetKeyArchive` the ladder, and both go to `resolve()`.
     struct Fixture {
         std::vector<TestMember> members;
         server::GroupInfo group;
@@ -390,7 +386,6 @@ TEST_F(ResolverCurrentEpoch, AWrongKeyForTheGivenLeafFails) {
     EXPECT_FALSE(result.key.has_value());
 }
 
-/** SECURITY — a corrupted edge on the caller's path must be detected, not silently mis-decrypted. */
 TEST_F(ResolverCurrentEpoch, SECURITY_DetectsACorruptedEdge) {
     Fixture fixture = buildFixture(4);
     setOwnLeafPosition(fixture.group, 0);
@@ -526,7 +521,6 @@ TEST_F(ResolverOldEpoch, ReportsPruningDistinctlyFromAnEraBoundary) {
         << "retention and entitlement must read differently to the user";
 }
 
-/** SECURITY — a substituted rung is detected during resolution and attributed. */
 TEST_F(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
     Fixture fixture = buildFixture(4);
     const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);

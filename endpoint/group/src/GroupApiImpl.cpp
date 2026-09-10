@@ -511,9 +511,8 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     );
 
     const std::string newGroupPubKeyStr = plan.newGrantKey.getPublicKey().toBase58DER();
-    // Roster only. The metadata entry stays where it was written, under the epoch it was written at: a departing
-    // member already read it, and every later metadata write lands under an epoch they cannot reach. A member who
-    // joins after this descends the Epoch Ladder to open it — which is what they do for any older content anyway.
+    // Roster plane only — the metadata entry is not part of this write. `refreshMetadataEpochAfterRemoval`
+    // carries it up to the new epoch once this has committed; see its header for why that is a second call.
     GroupRosterToEncryptV5 rosterToEncrypt{
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},

@@ -19,7 +19,7 @@ enum LKConnectionType {
 };
 
 /**
- * LockApi itself knows nothing about groups — it locks a resource id and holds no keys. What it does inherit is
+ * LockApi itself knows nothing about groups - it locks a resource id and holds no keys. What it does inherit is
  * the Store's access check: a lock is only granted to a caller who may write the file, so whether a grantee
  * group's member can lock is decided by the same policy that decides whether they can write.
  */
@@ -89,7 +89,7 @@ protected:
         reader.reset();
         core::EventQueueImpl::getInstance()->clear();
     }
-    /** A Store whose only direct member is user_1, granted to `group` at `role`. */
+    // A Store whose only direct member is user_1, granted to `group` at `role`.
     std::string createStoreWithGroup(const group::Group& group, const std::string& role) {
         return storeApi->createStore(
             reader->getString("Context_1.contextId"),
@@ -103,7 +103,7 @@ protected:
             }
         );
     }
-    /** Only files with random write support can be locked. */
+    // Only files with random write support can be locked.
     std::string createLockableResource(const std::string& storeId) {
         auto handle = storeApi->createFile(
             storeId,
@@ -128,7 +128,7 @@ protected:
 
 TEST_F(LockUsingGroupsTest, lock_via_group_manager_grant) {
     // Group_2 holds user_1 and user_2. user_2 is not a direct member of the Store, so the lock can only be
-    // granted through the grant — the check behind lockLock has to account for group membership.
+    // granted through the grant - the check behind lockLock has to account for group membership.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_2.statusCode, 0);
@@ -158,7 +158,7 @@ TEST_F(LockUsingGroupsTest, lock_via_group_manager_grant) {
 }
 
 TEST_F(LockUsingGroupsTest, lock_on_own_file_via_group_user_grant) {
-    // "user" is the weaker grant, and the default item policy is "itemOwner&user,manager" — enough for the file
+    // "user" is the weaker grant, and the default item policy is "itemOwner&user,manager" - enough for the file
     // this caller created itself.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
@@ -184,7 +184,7 @@ TEST_F(LockUsingGroupsTest, lock_on_own_file_via_group_user_grant) {
 
 TEST_F(LockUsingGroupsTest, lock_on_another_users_file_denied_for_group_user_grant) {
     // Same grant, someone else's file: "itemOwner&user,manager" is satisfied by neither half, so the lock is
-    // refused. This is the policy talking, not the group — a direct member with the same role fares the same.
+    // refused. This is the policy talking, not the group - a direct member with the same role fares the same.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_2.statusCode, 0);

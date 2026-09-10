@@ -116,11 +116,8 @@ TEST_F(LadderKeysBuild, EmitsAlignedSkipRungsWhenTheKeysAreHeld) {
     EXPECT_EQ(targetsAtEight, std::vector<std::uint32_t>({4, 6, 7}));
 }
 
-/**
- * SECURITY — a skip rung can only ever be published at the moment its own epoch is created, so a set committed
- * without one is a hole no later rotation can fill. Enough holes and the ladder is a chain of unit rungs, which
- * puts history further back than `descend`'s bound out of reach for everyone. Refusing is the only safe answer.
- */
+// A skip rung can only be published at the moment its own epoch is created, so a set committed without one is
+// a hole no later rotation can fill — and enough holes put history past `descend`'s bound out of everyone's reach.
 TEST_F(LadderKeysBuild, SECURITY_RefusesToBuildAnIncompleteSkipSet) {
     TreeKeyCache store;
     LadderKeys ladder(store);
@@ -179,10 +176,8 @@ TEST_F(LadderKeysBuild, CostsAboutTwoRungsPerEpoch) {
 
 // gathering the older keys a rotation owes rungs to
 
-/**
- * The case the gather exists for: a manager whose client started a moment ago holds one grant key. Without the
- * gather it would publish one rung; with it, the same full set a long-running client would.
- */
+// The case the gather exists for: a manager whose client started a moment ago holds one grant key, and has to
+// publish the same full set a long-running client would.
 TEST_F(LadderKeysGather, ColdCacheStillPublishesTheFullSet) {
     const EpochHistory history = simulateEpochHistory(7, 1);
 
@@ -205,11 +200,8 @@ TEST_F(LadderKeysGather, ColdCacheStillPublishesTheFullSet) {
     EXPECT_EQ(targets, std::vector<std::uint32_t>({4, 6, 7}));
 }
 
-/**
- * The cost claim: one unwrap per skip target, not one walk per target. It holds because the targets are
- * `newEpoch - 2^j` and each of those is divisible by `2^j`, so it published a skip rung landing exactly on the
- * next target down — the gather chains through them instead of restarting at `newEpoch-1` each time.
- */
+// One unwrap per skip target rather than one walk per target: each target `newEpoch - 2^j` is divisible by
+// `2^j`, so its skip rung lands on the next target down and the gather chains through them.
 TEST_F(LadderKeysGather, CostsOneUnwrapPerSkipTarget) {
     const EpochHistory history = simulateEpochHistory(255, 1);
 
@@ -237,10 +229,8 @@ TEST_F(LadderKeysGather, SkipsTargetsAlreadyInTheCache) {
     EXPECT_EQ(gathered.unwraps, 0u) << "nothing to recover, so nothing to unwrap";
 }
 
-/**
- * A ladder that already lost its skip rungs is exactly what the old behaviour produced, and it is still walkable
- * one rung at a time. The gather pays that cost once so the set it then publishes restores the fast path.
- */
+// A ladder with no skip rungs is still walkable one rung at a time. The gather pays that cost once, so the set
+// it then publishes restores the fast path.
 TEST_F(LadderKeysGather, WalksALinearLadderRatherThanGivingUpOnIt) {
     const EpochHistory history = simulateEpochHistory(63, 1, /*withSkips*/ false);
 
@@ -450,7 +440,6 @@ TEST_F(LadderKeysDescend, EnforcesTheWalkBound) {
     EXPECT_EQ(result.failure, DescentFailure::TooLong);
 }
 
-/** SECURITY — a substituted rung must be detected, never allowed to yield a wrong key. */
 TEST_F(LadderKeysDescend, SECURITY_DetectsASubstitutedRung) {
     EpochHistory history = simulateEpochHistory(8, 1);
     const PrivateKey impostor = PrivateKey::generateRandom();
@@ -475,7 +464,6 @@ TEST_F(LadderKeysDescend, SECURITY_DetectsASubstitutedRung) {
     EXPECT_FALSE(store.getGrantKey(7).has_value()) << "a key failing verification must never be cached";
 }
 
-/** SECURITY — with skip rungs a single corrupted unit rung must not sever the chain. */
 TEST_F(LadderKeysDescend, SECURITY_RoutesAroundACorruptedUnitRungViaASkip) {
     EpochHistory history = simulateEpochHistory(8, 1);
     for (ArchiveRung& rung : history.rungs) {
@@ -493,7 +481,7 @@ TEST_F(LadderKeysDescend, SECURITY_RoutesAroundACorruptedUnitRungViaASkip) {
     EXPECT_EQ(result.key->toWIF(), keyOf(history, 4, 1).toWIF());
 }
 
-/** SECURITY — an upward rung must be ignored even if it reached storage. */
+// The rung is placed in storage directly, because a client that validates on write would never emit one.
 TEST_F(LadderKeysDescend, SECURITY_IgnoresAnUpwardRung) {
     EpochHistory history = simulateEpochHistory(8, 1);
     const PrivateKey signer = PrivateKey::generateRandom();
@@ -640,9 +628,8 @@ TEST_F(LadderKeysEras, RejectsAnEraLinkAddressedToAnEpoch) {
 }
 
 TEST_F(LadderKeysEras, RejectsAnEraLinkThatNamesNoRecipient) {
-    // The bridge pairs the two fields: an `epoch` rung names nobody, the era-crossing kinds must name who they
-    // are for, and both go into the rung's stored identity. A link built without an id would be refused there,
-    // so it is refused here instead — with a reason the caller can act on.
+    // The bridge pairs the two fields: an `epoch` rung names nobody, an era-crossing kind must name who it is
+    // for. A link built without an id would be refused there, so it is refused here with an actionable reason.
     TreeKeyCache store;
     LadderKeys ladder(store);
     const PrivateKey key = PrivateKey::generateRandom();
@@ -656,7 +643,6 @@ TEST_F(LadderKeysEras, RejectsAnEraLinkThatNamesNoRecipient) {
     );
 }
 
-/** SECURITY — a tampered era link is detected and attributed, not silently accepted. */
 TEST_F(LadderKeysEras, SECURITY_DetectsATamperedEraLink) {
     const EpochHistory closed = simulateEpochHistory(6, 1);
     const PrivateKey member = PrivateKey::generateRandom();
