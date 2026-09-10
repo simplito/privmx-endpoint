@@ -45,6 +45,9 @@ target_link_libraries(test_e2e_KvdbModuleEventsTest privmx privmxendpointcore pr
 # Group
 add_executable(test_e2e_GroupTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupTest.cpp)
 target_link_libraries(test_e2e_GroupTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+add_executable(test_e2e_GroupCustomEventsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupCustomEventsTest.cpp)
+target_link_libraries(test_e2e_GroupCustomEventsTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+
 add_executable(test_e2e_ThreadUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/ThreadUsingGroupsTest.cpp)
 target_link_libraries(test_e2e_ThreadUsingGroupsTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 add_executable(test_e2e_StoreUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/StoreUsingGroupsTest.cpp)
@@ -59,15 +62,11 @@ add_executable(test_e2e_LockUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2
 target_link_libraries(test_e2e_LockUsingGroupsTest privmx privmxendpointcore privmxendpointstore privmxendpointlock privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 add_executable(test_e2e_SearchUsingGroupsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/SearchUsingGroupsTest.cpp)
 target_link_libraries(test_e2e_SearchUsingGroupsTest privmx privmxendpointcore privmxendpointstore privmxendpointkvdb privmxendpointlock privmxendpointsearch privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
-# A write the Bridge refuses must not take the Index down with it. Two sessions stay connected at once, so a
-# handle can outlive the group epoch it was opened under.
 add_executable(test_e2e_SearchGroupRejectedWriteTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/SearchGroupRejectedWriteTest.cpp)
 target_link_libraries(test_e2e_SearchGroupRejectedWriteTest privmx privmxendpointcore privmxendpointstore privmxendpointkvdb privmxendpointlock privmxendpointsearch privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
-# One long Thread+Group flow across a member removal, with three sessions kept alive so their key caches carry over
+# One long Module+Group flow across a member removal, with three sessions kept alive so their key caches carry over
 add_executable(test_e2e_ThreadGroupScenarioTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/ThreadGroupScenarioTest.cpp)
 target_link_libraries(test_e2e_ThreadGroupScenarioTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
-# The same flow for the other container modules; each adds what its own items make possible (file bytes, keyed
-# and versioned entries, an Inbox's three containers and its manual re-key)
 add_executable(test_e2e_StoreGroupScenarioTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/StoreGroupScenarioTest.cpp)
 target_link_libraries(test_e2e_StoreGroupScenarioTest privmx privmxendpointcore privmxendpointstore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 add_executable(test_e2e_KvdbGroupScenarioTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/KvdbGroupScenarioTest.cpp)
@@ -77,13 +76,10 @@ target_link_libraries(test_e2e_InboxGroupScenarioTest privmx privmxendpointcore 
 # Tree-backed groups end to end (only place the full round trip runs; unit tests and the conformance fixture each cover just one side)
 add_executable(test_e2e_GroupKeyTreeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupKeyTreeTest.cpp)
 target_link_libraries(test_e2e_GroupKeyTreeTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
-add_executable(test_e2e_GroupCustomEventsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupCustomEventsTest.cpp)
-target_link_libraries(test_e2e_GroupCustomEventsTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
-
 # A hostile client against the key tree: a group's key worn as a user's, nested groups, seat churn, a concurrent
 # add and remove of one member. Needs the Bridge management API key from the dataset ini to register context users.
-add_executable(test_e2e_GroupAbuseTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupAbuseTest.cpp)
-target_link_libraries(test_e2e_GroupAbuseTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+add_executable(test_e2e_GroupKeyTreeIntegrityTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupKeyTreeIntegrityTest.cpp)
+target_link_libraries(test_e2e_GroupKeyTreeIntegrityTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 # Lock
 add_executable(test_e2e_LockTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/LockTest.cpp)
 target_link_libraries(test_e2e_LockTest privmx privmxendpointcore privmxendpointstore privmxendpointlock Poco::Foundation Poco::Util GTest::GTest)

@@ -48,9 +48,9 @@ using namespace privmx::endpoint;
  * asserts the invariant that has to hold either way.
  */
 
-class GroupAbuseTest : public privmx::test::BaseTest {
+class GroupKeyTreeIntegrityTest : public privmx::test::BaseTest {
 protected:
-    GroupAbuseTest() : BaseTest(privmx::test::BaseTestMode::online) {}
+    GroupKeyTreeIntegrityTest() : BaseTest(privmx::test::BaseTestMode::online) {}
 
     void customSetUp() override {
         reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
@@ -323,7 +323,7 @@ static constexpr const char* MANAGEMENT_API_MISSING =
 
 // -- a group's key worn as a user's key --
 
-TEST_F(GroupAbuseTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_the_endpoint_follows) {
+TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_the_endpoint_follows) {
     if (!hasManagementApi()) {
         GTEST_SKIP() << MANAGEMENT_API_MISSING;
     }
@@ -382,7 +382,7 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_th
     EXPECT_EQ(afterRemoval.keyVersion, g.keyVersion + 1);
 }
 
-TEST_F(GroupAbuseTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_into_another_group) {
+TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_into_another_group) {
     if (!hasManagementApi()) {
         GTEST_SKIP() << MANAGEMENT_API_MISSING;
     }
@@ -431,7 +431,7 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_key_worn_as_a_user_key_is_not_a_route_in
     EXPECT_FALSE(canReadGroup(2, groupB)) << "the endpoint let a member of A into B through A's key after B rotated";
 }
 
-TEST_F(GroupAbuseTest, SECURITY_a_group_cannot_be_seated_as_a_member_of_another_group) {
+TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_group_cannot_be_seated_as_a_member_of_another_group) {
     // The straightforward reach for nested groups: name the group by its own id and its own public key. No
     // context user was registered for it, so there is no person behind the seat at all.
     std::string groupA, groupB;
@@ -477,7 +477,7 @@ TEST_F(GroupAbuseTest, SECURITY_a_group_cannot_be_seated_as_a_member_of_another_
 
 // -- what a group's key is worth: the epoch ladder --
 
-TEST_F(GroupAbuseTest, ladder_hands_a_newcomer_every_epoch_the_group_ever_read) {
+TEST_F(GroupKeyTreeIntegrityTest, ladder_hands_a_newcomer_every_epoch_the_group_ever_read) {
     if (!hasManagementApi()) {
         GTEST_SKIP() << MANAGEMENT_API_MISSING;
     }
@@ -562,7 +562,7 @@ TEST_F(GroupAbuseTest, ladder_hands_a_newcomer_every_epoch_the_group_ever_read) 
         "a removed member still reads content from the epoch they were in";
 }
 
-TEST_F(GroupAbuseTest, ladder_gives_a_re_added_member_back_what_was_written_while_they_were_out) {
+TEST_F(GroupKeyTreeIntegrityTest, ladder_gives_a_re_added_member_back_what_was_written_while_they_were_out) {
     // Re-seating a removed member puts the current epoch key back in their hands, and the ladder turns that into
     // every earlier epoch too - so the window they were excluded from is handed back in full.
     std::string groupId;
@@ -618,7 +618,7 @@ TEST_F(GroupAbuseTest, ladder_gives_a_re_added_member_back_what_was_written_whil
 
 // A refreshed grant key is wrapped to the *unchanged* long-term keys of the members who stay, so a stolen
 // member key climbs the new epoch exactly as its owner does. Every probe runs cold: the key alone suffices.
-TEST_F(GroupAbuseTest, rotating_the_epoch_does_not_take_back_a_compromised_members_key) {
+TEST_F(GroupKeyTreeIntegrityTest, rotating_the_epoch_does_not_take_back_a_compromised_members_key) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group atEpoch1;
@@ -676,7 +676,7 @@ TEST_F(GroupAbuseTest, rotating_the_epoch_does_not_take_back_a_compromised_membe
     EXPECT_FALSE(canReadMessage(2, afterRotation)) << "the removed member's key is still served the group route";
 }
 
-TEST_F(GroupAbuseTest, changing_a_members_public_key_locks_them_out_without_re_wrapping_their_leaf) {
+TEST_F(GroupKeyTreeIntegrityTest, changing_a_members_public_key_locks_them_out_without_re_wrapping_their_leaf) {
     if (!hasManagementApi()) {
         GTEST_SKIP() << MANAGEMENT_API_MISSING;
     }
@@ -750,7 +750,7 @@ TEST_F(GroupAbuseTest, changing_a_members_public_key_locks_them_out_without_re_w
 
 // -- churning one member's seat --
 
-TEST_F(GroupAbuseTest, add_and_remove_the_same_member_repeatedly_keeps_the_tree_consistent) {
+TEST_F(GroupKeyTreeIntegrityTest, add_and_remove_the_same_member_repeatedly_keeps_the_tree_consistent) {
     // Three add/remove cycles, hunting for residue: a half-blank leaf, a generation that stops matching, an
     // archive rung that leaves an earlier epoch unreachable. A removal mints an epoch; an addition must not.
     std::string groupId;
@@ -810,7 +810,7 @@ TEST_F(GroupAbuseTest, add_and_remove_the_same_member_repeatedly_keeps_the_tree_
     }
 }
 
-TEST_F(GroupAbuseTest, concurrent_add_and_remove_of_the_same_member_leaves_the_group_consistent) {
+TEST_F(GroupKeyTreeIntegrityTest, concurrent_add_and_remove_of_the_same_member_leaves_the_group_consistent) {
     // Any serialisation is acceptable; both landing on the same base state is not - the roster and the tree
     // would then disagree. Two different logins, because a websocket carries one session per user key.
     const core::UserWithPubKey remover = user(1);
@@ -876,7 +876,7 @@ TEST_F(GroupAbuseTest, concurrent_add_and_remove_of_the_same_member_leaves_the_g
     EXPECT_TRUE(canReadGroup(1, groupId)) << "the manager lost access to their own group; " << lastReadError;
 }
 
-TEST_F(GroupAbuseTest, concurrent_update_and_removal_leaves_the_group_verifying) {
+TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_removal_leaves_the_group_verifying) {
     // Both are computed against the same head, so the loser has to lose *before* it writes - its roster tag
     // commits a version it never lands at. Either order is fine; a head that stops verifying is not.
     const core::UserWithPubKey remover = user(1);
@@ -957,7 +957,7 @@ TEST_F(GroupAbuseTest, concurrent_update_and_removal_leaves_the_group_verifying)
         lastReadError;
 }
 
-TEST_F(GroupAbuseTest, concurrent_update_and_addition_leaves_the_group_verifying) {
+TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_addition_leaves_the_group_verifying) {
     // The other pair the tree's own guards cannot see. An addition is checked against the epoch and the node
     // generations, neither of which a metadata update touches - so before the planes were split, an update
     // landing first left the addition committing to a version it never reached.
@@ -1029,7 +1029,7 @@ TEST_F(GroupAbuseTest, concurrent_update_and_addition_leaves_the_group_verifying
         lastReadError;
 }
 
-TEST_F(GroupAbuseTest, a_removal_carries_the_metadata_entry_up_to_the_new_epoch) {
+TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_the_metadata_entry_up_to_the_new_epoch) {
     // An entry left at the epoch it was written under stays openable - and forgeable, its tag is keyed there
     // too - by whoever held that epoch's key, the member just removed included. So a removal is followed by a
     // metadata write carrying the same plaintext up to the new epoch, which is why it moves that counter too.
