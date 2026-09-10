@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
+#include "../../utils/BaseGroupTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
@@ -27,65 +27,15 @@ using namespace privmx::endpoint;
  * weakened into positive assertions.
  */
 
-enum KeyTreeConnectionType {
-    KTUser1,
-    KTUser2,
-    KTUser3
-};
 
-class GroupKeyTreeTest : public privmx::test::BaseTest {
+class GroupKeyTreeTest : public privmx::test::BaseGroupTest {
 protected:
-    GroupKeyTreeTest() : BaseTest(privmx::test::BaseTestMode::online) {}
-
-    void connectAs(KeyTreeConnectionType type) {
-        std::string privKey;
-        if (type == KeyTreeConnectionType::KTUser1) {
-            privKey = reader->getString("Login.user_1_privKey");
-        } else if (type == KeyTreeConnectionType::KTUser2) {
-            privKey = reader->getString("Login.user_2_privKey");
-        } else {
-            privKey = reader->getString("Login.user_3_privKey");
-        }
-        connection = std::make_shared<core::Connection>(
-            core::Connection::connect(
-                privKey, reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
-        groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
+    void setUpModuleApis() override {
         threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection, *groupApi));
     }
 
-    void disconnect() {
-        connection->disconnect();
-        connection.reset();
+    void tearDownModuleApis() override {
         threadApi.reset();
-        groupApi.reset();
-    }
-
-    void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
-        connectAs(KeyTreeConnectionType::KTUser1);
-    }
-
-    void customTearDown() override {
-        connection.reset();
-        threadApi.reset();
-        groupApi.reset();
-        reader.reset();
-        core::EventQueueImpl::getInstance()->clear();
-    }
-
-    core::UserWithPubKey user(int index) {
-        const std::string n = std::to_string(index);
-        return core::UserWithPubKey{
-            .userId = reader->getString("Login.user_" + n + "_id"),
-            .pubKey = reader->getString("Login.user_" + n + "_pubKey")
-        };
-    }
-
-    std::string contextId() {
-        return reader->getString("Context_1.contextId");
     }
 
     // A tree-backed group with user_1 managing and the given users as members.
@@ -143,11 +93,7 @@ protected:
         );
     }
 
-    std::shared_ptr<core::Connection> connection;
     std::shared_ptr<thread::ThreadApi> threadApi;
-    std::shared_ptr<group::GroupApi> groupApi;
-    Poco::Util::IniFileConfiguration::Ptr reader;
-    core::VarSerializer _serializer = core::VarSerializer({});
 };
 
 // -- creation --
@@ -173,15 +119,15 @@ TEST_F(GroupKeyTreeTest, every_member_can_read_a_tree_backed_group) {
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     disconnect();
 
-    for (const auto type : {KeyTreeConnectionType::KTUser2, KeyTreeConnectionType::KTUser3}) {
-        connectAs(type);
+    for (const int index : {2, 3}) {
+        connectAs(index);
         group::Group group;
         ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
         EXPECT_EQ(group.statusCode, 0) << "a member could not decrypt the group";
         EXPECT_EQ(group.privateMeta.stdString(), "keytree_private");
         disconnect();
     }
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_non_member_cannot_read_a_tree_backed_group) {
@@ -190,7 +136,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_non_member_cannot_read_a_tree_backed_group) 
     disconnect();
 
     // user_3 holds no leaf: no edge is addressed to them, so there is nothing to climb.
-    connectAs(KeyTreeConnectionType::KTUser3);
+    connectAs(3);
     group::Group group;
     bool threw = false;
     try {
@@ -202,7 +148,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_non_member_cannot_read_a_tree_backed_group) 
         EXPECT_NE(group.statusCode, 0) << "a non-member decrypted the group's metadata";
     }
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 
 // -- addition - the operation that must stay cheap --
@@ -234,13 +180,13 @@ TEST_F(GroupKeyTreeTest, an_added_member_can_read_the_group) {
     });
     disconnect();
 
-    connectAs(KeyTreeConnectionType::KTUser3);
+    connectAs(3);
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
     EXPECT_EQ(group.statusCode, 0) << "the newly seated member cannot climb to the group key";
     EXPECT_EQ(group.privateMeta.stdString(), "keytree_private");
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 
 TEST_F(GroupKeyTreeTest, addGroupMembers_seats_a_whole_batch_at_the_same_epoch) {
@@ -272,18 +218,18 @@ TEST_F(GroupKeyTreeTest, addGroupMembers_seats_a_whole_batch_at_the_same_epoch) 
 
     // Both newcomers hold a seat of their own, not one shared re-wrap that happens to open for whoever asks
     // first: each climbs to the group key from their own leaf, in a session of their own.
-    connectAs(KeyTreeConnectionType::KTUser2);
+    connectAs(2);
     group::Group asUser2;
     ASSERT_NO_THROW({ asUser2 = groupApi->getGroup(groupId); });
     EXPECT_EQ(asUser2.statusCode, 0) << "the member seated first in the batch cannot climb";
     disconnect();
 
-    connectAs(KeyTreeConnectionType::KTUser3);
+    connectAs(3);
     group::Group asUser3;
     ASSERT_NO_THROW({ asUser3 = groupApi->getGroup(groupId); });
     EXPECT_EQ(asUser3.statusCode, 0) << "the member seated second in the batch cannot climb";
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 
 // -- removal - the operation the whole design exists for --
@@ -329,7 +275,7 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_once_for_the_whol
 
     // Neither leaver climbs any more - a batch must not leave one of them holding a live path. The bridge may
     // refuse the read outright or serve something undecryptable, so both count as "cannot read".
-    const auto stillReads = [&](KeyTreeConnectionType who) {
+    const auto stillReads = [&](int who) {
         connectAs(who);
         bool reads = false;
         try {
@@ -340,9 +286,9 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_once_for_the_whol
         disconnect();
         return reads;
     };
-    EXPECT_FALSE(stillReads(KeyTreeConnectionType::KTUser2)) << "the member removed first still reads the group";
-    EXPECT_FALSE(stillReads(KeyTreeConnectionType::KTUser3)) << "the member removed second still reads the group";
-    connectAs(KeyTreeConnectionType::KTUser1);
+    EXPECT_FALSE(stillReads(2)) << "the member removed first still reads the group";
+    EXPECT_FALSE(stillReads(3)) << "the member removed second still reads the group";
+    connectAs(1);
 }
 
 TEST_F(GroupKeyTreeTest, remaining_members_can_still_read_after_a_removal) {
@@ -353,13 +299,13 @@ TEST_F(GroupKeyTreeTest, remaining_members_can_still_read_after_a_removal) {
     });
     disconnect();
 
-    connectAs(KeyTreeConnectionType::KTUser2);
+    connectAs(2);
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
     EXPECT_EQ(group.statusCode, 0) << "the refresh locked out a member who should have kept access";
     EXPECT_EQ(group.privateMeta.stdString(), "keytree_private");
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_removed_member_cannot_read_content_written_afterwards) {
@@ -407,7 +353,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_removed_member_cannot_read_content_written_a
     });
     disconnect();
 
-    connectAs(KeyTreeConnectionType::KTUser3);
+    connectAs(3);
     thread::Message message;
     bool threw = false;
     try {
@@ -421,7 +367,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_removed_member_cannot_read_content_written_a
         EXPECT_NE(message.data.stdString(), "data_after");
     }
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 
 // -- key cache --
@@ -458,7 +404,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_two_groups_at_the_same_epoch_do_not_share_cach
     });
     disconnect();
 
-    connectAs(KeyTreeConnectionType::KTUser2);
+    connectAs(2);
     thread::Message fromA;
     ASSERT_NO_THROW({ fromA = threadApi->getMessage(messageIdA); });
     ASSERT_EQ(fromA.statusCode, 0);
@@ -477,7 +423,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_two_groups_at_the_same_epoch_do_not_share_cach
     EXPECT_EQ(fromAAgain.statusCode, 0);
     EXPECT_EQ(fromAAgain.data.stdString(), "data_A");
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 
 TEST_F(GroupKeyTreeTest, removeGroupMembers_leaves_the_same_session_able_to_read_both_epochs) {
@@ -552,19 +498,19 @@ TEST_F(GroupKeyTreeTest, reconnecting_rebuilds_the_key_cache_from_scratch) {
     });
     disconnect();
 
-    connectAs(KeyTreeConnectionType::KTUser2);
+    connectAs(2);
     thread::Message first;
     ASSERT_NO_THROW({ first = threadApi->getMessage(messageId); });
     ASSERT_EQ(first.statusCode, 0);
     disconnect();
 
-    connectAs(KeyTreeConnectionType::KTUser2);
+    connectAs(2);
     thread::Message second;
     ASSERT_NO_THROW({ second = threadApi->getMessage(messageId); });
     EXPECT_EQ(second.statusCode, 0) << "the cache was emptied on reconnect and the re-climb failed";
     EXPECT_EQ(second.data.stdString(), "data_x");
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 
 TEST_F(GroupKeyTreeTest, ROTATE_REQUIRED_blocks_writes_until_the_container_catches_up) {
@@ -592,7 +538,7 @@ TEST_F(GroupKeyTreeTest, ROTATE_REQUIRED_blocks_writes_until_the_container_catch
     ASSERT_EQ(beforeWrite.staleGroups.size(), 1);
 
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser2);
+    connectAs(2);
 
     // The thread still holds a key wrapped to epoch 1 while the group is at epoch 2, and user_2 may not re-key.
     EXPECT_THROW({
@@ -608,7 +554,7 @@ TEST_F(GroupKeyTreeTest, ROTATE_REQUIRED_blocks_writes_until_the_container_catch
     EXPECT_EQ(afterWrite.staleGroups.size(), 1);
 
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 
 // -- history - the Epoch Ladder, end to end --
@@ -636,13 +582,13 @@ TEST_F(GroupKeyTreeTest, a_remaining_member_reads_content_from_before_a_removal)
     });
     disconnect();
 
-    connectAs(KeyTreeConnectionType::KTUser2);
+    connectAs(2);
     thread::Message message;
     ASSERT_NO_THROW({ message = threadApi->getMessage(oldMessageId); });
     EXPECT_EQ(message.statusCode, 0) << "a remaining member lost the group's history at the removal";
     EXPECT_EQ(message.data.stdString(), "data_old");
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 
 TEST_F(GroupKeyTreeTest, a_newcomer_reads_history_that_predates_them) {
@@ -673,14 +619,14 @@ TEST_F(GroupKeyTreeTest, a_newcomer_reads_history_that_predates_them) {
     });
     disconnect();
 
-    connectAs(KeyTreeConnectionType::KTUser3);
+    connectAs(3);
     thread::Message message;
     ASSERT_NO_THROW({ message = threadApi->getMessage(oldMessageId); });
     EXPECT_EQ(message.statusCode, 0)
         << "a newcomer could not descend the ladder to content that predates them";
     EXPECT_EQ(message.data.stdString(), "data_hist");
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 
 TEST_F(GroupKeyTreeTest, several_removals_in_a_row_keep_the_whole_history_reachable) {
@@ -747,11 +693,11 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_remove_anybody) {
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     disconnect();
 
-    connectAs(KeyTreeConnectionType::KTUser2);
+    connectAs(2);
     EXPECT_THROW({
         groupApi->removeGroupMembers(groupId, {user(3).userId});
     }, core::Exception) << "a non-manager removed a member";
     disconnect();
-    connectAs(KeyTreeConnectionType::KTUser1);
+    connectAs(1);
 }
 

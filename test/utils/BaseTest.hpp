@@ -48,7 +48,7 @@ protected:
         }
     }
     void TearDown() override {
-        if(std::getenv("INI_FILE_PATH") == NULL) {
+        if(INI_FILE_PATH.empty()) {
             return;
         }
         customTearDown();

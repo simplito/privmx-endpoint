@@ -5,7 +5,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
+#include "../../utils/BaseGroupTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
@@ -36,10 +36,10 @@ using namespace privmx::endpoint;
  * See SearchUsingGroupsTest for the ordinary group-grant behaviour; this file only covers the refused write.
  */
 
-class SearchGroupRejectedWriteTest : public privmx::test::BaseTest {
+// Two sessions and no fixture session of its own, so this one takes only the dataset and identity half of the
+// base - BaseGroupTest would open a user_1 session that collides with alice's.
+class SearchGroupRejectedWriteTest : public privmx::test::BaseGroupIdentityTest {
 protected:
-    SearchGroupRejectedWriteTest() : BaseTest(privmx::test::BaseTestMode::online) {}
-
     // One user's live session, with every API an Index needs.
     struct Client {
         std::shared_ptr<core::Connection> connection;
@@ -52,7 +52,7 @@ protected:
     };
 
     void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
+        openReader();
         alice = connectAs(1);
         bob = connectAs(2);
     }
@@ -67,14 +67,8 @@ protected:
     }
 
     Client connectAs(int index) {
-        const std::string n = std::to_string(index);
         Client client;
-        client.connection = std::make_shared<core::Connection>(
-            core::Connection::connect(
-                reader->getString("Login.user_" + n + "_privKey"), reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
+        client.connection = connect(index);
         client.groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*client.connection));
         client.storeApi = std::make_shared<store::StoreApi>(
             store::StoreApi::create(*client.connection, *client.groupApi)
@@ -106,17 +100,6 @@ protected:
         client.connection.reset();
     }
 
-    core::UserWithPubKey user(int index) {
-        const std::string n = std::to_string(index);
-        return core::UserWithPubKey{
-            .userId = reader->getString("Login.user_" + n + "_id"),
-            .pubKey = reader->getString("Login.user_" + n + "_pubKey")
-        };
-    }
-
-    std::string contextId() {
-        return reader->getString("Context_1.contextId");
-    }
 
     // A VFS failure reaches the caller flattened into `disk I/O error`, so calls under test go through here and
     // put the underlying message on the test's own output - which is what identifies the Bridge's refusal.
@@ -229,7 +212,6 @@ protected:
 
     Client alice;
     Client bob;
-    Poco::Util::IniFileConfiguration::Ptr reader;
 };
 
 // One user, one handle, no re-add: `StoreApiImpl::flushFile` is the only write path with no `isRekeyNeeded`

@@ -7,7 +7,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
+#include "../../utils/BaseGroupScenarioTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
@@ -38,25 +38,20 @@ using namespace privmx::endpoint;
  * path is exercised alongside the data path.
  */
 
-class StoreGroupScenarioTest : public privmx::test::BaseTest {
+class StoreGroupScenarioTest : public privmx::test::BaseGroupScenarioTest {
 protected:
-    StoreGroupScenarioTest() : BaseTest(privmx::test::BaseTestMode::online) {}
-
     // Lower than the Thread scenario's message count on purpose: one upload is createFile + writeToFile +
     // closeFile, so a hundred of them would dominate the suite's runtime without pinning anything more.
     static constexpr int FILE_COUNT = 25;
     static constexpr int64_t PAGE_LIMIT = 10;
 
     // One user's live session.
-    struct Client {
-        std::shared_ptr<core::Connection> connection;
-        std::shared_ptr<group::GroupApi> groupApi;
+    struct Client : privmx::test::GroupSession {
         std::shared_ptr<store::StoreApi> storeApi;
-        int64_t connectionId = 0;
     };
 
     void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
+        openReader();
         user1 = connectAs(1);
         user2 = connectAs(2);
         user3 = connectAs(3);
@@ -71,38 +66,17 @@ protected:
     }
 
     Client connectAs(int index) {
-        const std::string n = std::to_string(index);
         Client client;
-        client.connection = std::make_shared<core::Connection>(
-            core::Connection::connect(
-                reader->getString("Login.user_" + n + "_privKey"), reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
-        client.groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*client.connection));
+        openSession(client, index);
         client.storeApi = std::make_shared<store::StoreApi>(
             store::StoreApi::create(*client.connection, *client.groupApi)
         );
-        client.connectionId = client.connection->getConnectionId();
         return client;
     }
 
     void resetClient(Client& client) {
-        client.connection.reset();
         client.storeApi.reset();
-        client.groupApi.reset();
-    }
-
-    core::UserWithPubKey user(int index) {
-        const std::string n = std::to_string(index);
-        return core::UserWithPubKey{
-            .userId = reader->getString("Login.user_" + n + "_id"),
-            .pubKey = reader->getString("Login.user_" + n + "_pubKey")
-        };
-    }
-
-    std::string contextId() {
-        return reader->getString("Context_1.contextId");
+        closeSession(client);
     }
 
     // Every event type both modules define, on the one selector that needs no container to exist yet.
@@ -126,39 +100,6 @@ protected:
             );
         }
         client.groupApi->subscribeFor(groupQueries);
-    }
-
-    // The queue is process-wide and carries every session's events, and this scenario makes several hundred of
-    // them, so they are tallied by (connectionId, type) instead of being waited for one at a time.
-    void pumpEvents(const std::chrono::milliseconds& budget = std::chrono::milliseconds(500)) {
-        const auto deadline = std::chrono::steady_clock::now() + budget;
-        while (std::chrono::steady_clock::now() < deadline) {
-            auto eventHolder = eventQueue.getEvent();
-            if (!eventHolder.has_value()) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(25));
-                continue;
-            }
-            auto event = eventHolder.value().get();
-            if (event != nullptr) {
-                _tally[event->connectionId][event->type]++;
-            }
-        }
-    }
-
-    void pumpUntil(const std::function<bool()>& done, const std::chrono::milliseconds& timeout) {
-        const auto deadline = std::chrono::steady_clock::now() + timeout;
-        while (std::chrono::steady_clock::now() < deadline && !done()) {
-            pumpEvents(std::chrono::milliseconds(250));
-        }
-    }
-
-    int eventsSeen(const Client& client, const std::string& type) {
-        auto byConnection = _tally.find(client.connectionId);
-        if (byConnection == _tally.end()) {
-            return 0;
-        }
-        auto counted = byConnection->second.find(type);
-        return counted == byConnection->second.end() ? 0 : counted->second;
     }
 
     // The container and its files are downloadable context-wide, so a reader who loses the key keeps getting
@@ -253,11 +194,6 @@ protected:
     Client user1;
     Client user2;
     Client user3;
-    Poco::Util::IniFileConfiguration::Ptr reader;
-    core::EventQueue eventQueue = core::EventQueue::getInstance();
-
-private:
-    std::map<int64_t, std::map<std::string, int>> _tally;
 };
 
 TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal) {

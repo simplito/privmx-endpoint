@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <algorithm>
-#include "../../utils/BaseTest.hpp"
+#include "../../utils/BaseGroupTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
@@ -17,85 +17,21 @@
 #include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint;
 
-enum IUGConnectionType {
-    IUGUser1,
-    IUGUser2,
-    IUGUser3
-};
-
-class InboxUsingGroupsTest : public privmx::test::BaseTest {
+class InboxUsingGroupsTest : public privmx::test::BaseGroupTest {
 protected:
-    InboxUsingGroupsTest() : BaseTest(privmx::test::BaseTestMode::online) {}
     // An Inbox grants and re-keys its inner Thread and Store along with itself, so the ThreadApi and StoreApi
     // handed to InboxApi::create must carry the same GroupApi or the inner containers stay unreadable.
-    void buildApis() {
-        groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
+    void setUpModuleApis() override {
         threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection, *groupApi));
         storeApi = std::make_shared<store::StoreApi>(store::StoreApi::create(*connection, *groupApi));
         inboxApi = std::make_shared<inbox::InboxApi>(
             inbox::InboxApi::create(*connection, *threadApi, *storeApi, *groupApi)
         );
     }
-    void connectAs(IUGConnectionType type) {
-        std::string privKey;
-        if (type == IUGConnectionType::IUGUser1) {
-            privKey = reader->getString("Login.user_1_privKey");
-        } else if (type == IUGConnectionType::IUGUser2) {
-            privKey = reader->getString("Login.user_2_privKey");
-        } else {
-            privKey = reader->getString("Login.user_3_privKey");
-        }
-        connection = std::make_shared<core::Connection>(
-            core::Connection::connect(
-                privKey,
-                reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
-        buildApis();
-    }
-    void disconnect() {
-        connection->disconnect();
-        connection.reset();
+    void tearDownModuleApis() override {
         inboxApi.reset();
         storeApi.reset();
         threadApi.reset();
-        groupApi.reset();
-    }
-    // One of the fixture's logins as a container names its members - id plus public key, from the same ini.
-    core::UserWithPubKey userOf(IUGConnectionType type) {
-        std::string n;
-        if (type == IUGConnectionType::IUGUser1) {
-            n = "1";
-        } else if (type == IUGConnectionType::IUGUser2) {
-            n = "2";
-        } else {
-            n = "3";
-        }
-        return core::UserWithPubKey{
-            .userId = reader->getString("Login.user_" + n + "_id"),
-            .pubKey = reader->getString("Login.user_" + n + "_pubKey")
-        };
-    }
-    void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
-        connection = std::make_shared<core::Connection>(
-            core::Connection::connect(
-                reader->getString("Login.user_1_privKey"),
-                reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
-        buildApis();
-    }
-    void customTearDown() override {
-        connection.reset();
-        inboxApi.reset();
-        storeApi.reset();
-        threadApi.reset();
-        groupApi.reset();
-        reader.reset();
-        core::EventQueueImpl::getInstance()->clear();
     }
     std::string createInboxWithGroup(
         const std::string& contextId,
@@ -181,13 +117,9 @@ protected:
         return list.readItems[0].entryId;
     }
 
-    std::shared_ptr<core::Connection> connection;
     std::shared_ptr<inbox::InboxApi> inboxApi;
     std::shared_ptr<store::StoreApi> storeApi;
     std::shared_ptr<thread::ThreadApi> threadApi;
-    std::shared_ptr<group::GroupApi> groupApi;
-    Poco::Util::IniFileConfiguration::Ptr reader;
-    core::VarSerializer _serializer = core::VarSerializer({});
 };
 
 TEST_F(InboxUsingGroupsTest, createInbox_with_group_grants) {
@@ -200,8 +132,8 @@ TEST_F(InboxUsingGroupsTest, createInbox_with_group_grants) {
     EXPECT_NO_THROW({
         inboxId = inboxApi->createInbox(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("public_meta"),
             core::Buffer::from("private_meta"),
             std::nullopt,
@@ -237,8 +169,8 @@ TEST_F(InboxUsingGroupsTest, createInbox_with_multiple_group_grants) {
     EXPECT_NO_THROW({
         inboxId = inboxApi->createInbox(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("two_groups_public"),
             core::Buffer::from("two_groups_private"),
             std::nullopt,
@@ -273,8 +205,8 @@ TEST_F(InboxUsingGroupsTest, createInbox_without_groups_has_empty_groups_field) 
     EXPECT_NO_THROW({
         inboxId = inboxApi->createInbox(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("no_groups_public"),
             core::Buffer::from("no_groups_private"),
             std::nullopt
@@ -293,8 +225,8 @@ TEST_F(InboxUsingGroupsTest, updateInbox_add_group) {
     EXPECT_NO_THROW({
         inboxId = inboxApi->createInbox(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("before_group"),
             core::Buffer::from("before_group_private"),
             std::nullopt
@@ -313,8 +245,8 @@ TEST_F(InboxUsingGroupsTest, updateInbox_add_group) {
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             inboxId,
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("after_group"),
             core::Buffer::from("after_group_private"),
             std::nullopt,
@@ -353,8 +285,8 @@ TEST_F(InboxUsingGroupsTest, updateInbox_remove_group) {
     EXPECT_NO_THROW({
         inboxId = inboxApi->createInbox(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("with_group"),
             core::Buffer::from("with_group_private"),
             std::nullopt,
@@ -367,19 +299,19 @@ TEST_F(InboxUsingGroupsTest, updateInbox_remove_group) {
     ASSERT_FALSE(inboxId.empty());
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser2);
+    connectAs(2);
     inbox::Inbox beforeRemoval;
     EXPECT_NO_THROW({ beforeRemoval = inboxApi->getInbox(inboxId); });
     EXPECT_EQ(beforeRemoval.statusCode, 0);
     EXPECT_FALSE(beforeRemoval.privateMeta.stdString().empty());
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser1);
+    connectAs(1);
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             inboxId,
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("no_group_now"),
             core::Buffer::from("no_group_private"),
             std::nullopt,
@@ -397,7 +329,7 @@ TEST_F(InboxUsingGroupsTest, updateInbox_remove_group) {
     EXPECT_EQ(updated.groups.size(), 0);
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser2);
+    connectAs(2);
     inbox::Inbox afterRemoval;
     EXPECT_NO_THROW({ afterRemoval = inboxApi->getInbox(inboxId); });
     EXPECT_NE(afterRemoval.statusCode, 0);
@@ -413,7 +345,7 @@ TEST_F(InboxUsingGroupsTest, updateInbox_change_group_role) {
     ASSERT_NO_THROW({
         inboxId = createInboxWithGroups(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             std::vector<group::Group>{group_1}
         );
     });
@@ -422,8 +354,8 @@ TEST_F(InboxUsingGroupsTest, updateInbox_change_group_role) {
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             inboxId,
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("role_change"),
             core::Buffer::from("role_change_private"),
             std::nullopt,
@@ -455,7 +387,7 @@ TEST_F(InboxUsingGroupsTest, listInboxes_includes_groups_field) {
     ASSERT_NO_THROW({
         inboxId = createInboxWithGroups(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             std::vector<group::Group>{group_1}
         );
     });
@@ -488,8 +420,8 @@ TEST_F(InboxUsingGroupsTest, createInbox_with_invalid_group_pubkey_throws) {
     EXPECT_THROW({
         inboxApi->createInbox(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("public"),
             core::Buffer::from("private"),
             std::nullopt,
@@ -524,7 +456,7 @@ TEST_F(InboxUsingGroupsTest, readEntry_via_group_grant) {
     ASSERT_NO_THROW({ submitEntry(inboxId, "entry_data"); });
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser2);
+    connectAs(2);
     std::string entryId;
     ASSERT_NO_THROW({ entryId = onlyEntryId(inboxId); });
     ASSERT_FALSE(entryId.empty());
@@ -555,7 +487,7 @@ TEST_F(InboxUsingGroupsTest, listEntries_via_group_grant) {
     ASSERT_NO_THROW({ submitEntry(inboxId, "data2"); });
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser2);
+    connectAs(2);
     core::PagingList<inbox::InboxEntry> list;
     EXPECT_NO_THROW({
         list = inboxApi->listEntries(inboxId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"});
@@ -587,7 +519,7 @@ TEST_F(InboxUsingGroupsTest, entries_accessible_by_all_group_members) {
     ASSERT_NO_THROW({ submitEntry(inboxId, "shared_data"); });
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser2);
+    connectAs(2);
     std::string entryIdUser2;
     ASSERT_NO_THROW({ entryIdUser2 = onlyEntryId(inboxId); });
     ASSERT_FALSE(entryIdUser2.empty());
@@ -597,7 +529,7 @@ TEST_F(InboxUsingGroupsTest, entries_accessible_by_all_group_members) {
     EXPECT_EQ(entryUser2.data.stdString(), "shared_data");
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser3);
+    connectAs(3);
     std::string entryIdUser3;
     ASSERT_NO_THROW({ entryIdUser3 = onlyEntryId(inboxId); });
     ASSERT_FALSE(entryIdUser3.empty());
@@ -632,23 +564,23 @@ TEST_F(InboxUsingGroupsTest, user_added_to_group_gains_access_to_inbox_and_entri
     ASSERT_FALSE(entryId.empty());
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser3);
+    connectAs(3);
     inbox::Inbox iBefore;
     EXPECT_NO_THROW({ iBefore = inboxApi->getInbox(inboxId); });
     EXPECT_NE(iBefore.statusCode, 0);
 
     // Seat user_3's leaf in the key tree - a metadata write would only re-wrap the group's metadata key.
     disconnect();
-    connectAs(IUGConnectionType::IUGUser1);
+    connectAs(1);
     EXPECT_NO_THROW({
         groupApi->addGroupMembers(
             reader->getString("Group_2.groupId"),
-            {group::GroupMemberToAdd{.user = userOf(IUGConnectionType::IUGUser3), .role = "user"}}
+            {group::GroupMemberToAdd{.user = user(3), .role = "user"}}
         );
     });
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser3);
+    connectAs(3);
     inbox::Inbox iAfter;
     EXPECT_NO_THROW({ iAfter = inboxApi->getInbox(inboxId); });
     EXPECT_EQ(iAfter.statusCode, 0);
@@ -670,7 +602,7 @@ TEST_F(InboxUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
     ASSERT_NO_THROW({
         inboxId = createInboxWithGroups(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             std::vector<group::Group>{group_1}
         );
     });
@@ -694,8 +626,8 @@ TEST_F(InboxUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             inboxId,
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("direct_updated_public"),
             core::Buffer::from("direct_updated_private"),
             std::nullopt,
@@ -727,7 +659,7 @@ TEST_F(InboxUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
         inboxId = createInboxWithGroups(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
-                userOf(IUGConnectionType::IUGUser1), userOf(IUGConnectionType::IUGUser2)
+                user(1), user(2)
             },
             std::vector<group::Group>{group_1}
         );
@@ -737,7 +669,7 @@ TEST_F(InboxUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
     ASSERT_NO_THROW({ submitEntry(inboxId, "nogroup_data"); });
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser2);
+    connectAs(2);
 
     inbox::Inbox i;
     EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
@@ -767,7 +699,7 @@ TEST_F(InboxUsingGroupsTest, caller_in_two_granted_groups_reads) {
     ASSERT_NO_THROW({
         inboxId = createInboxWithGroups(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             std::vector<group::Group>{group_2, group_3}
         );
     });
@@ -776,7 +708,7 @@ TEST_F(InboxUsingGroupsTest, caller_in_two_granted_groups_reads) {
     ASSERT_NO_THROW({ submitEntry(inboxId, "twogroups_data"); });
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser2);
+    connectAs(2);
 
     inbox::Inbox i;
     EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
@@ -803,7 +735,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_covers_a_grantee_group_the_caller_d
         inboxId = createInboxWithGroups(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
-                userOf(IUGConnectionType::IUGUser1), userOf(IUGConnectionType::IUGUser2)
+                user(1), user(2)
             },
             std::vector<group::Group>{granteeGroup}
         );
@@ -815,15 +747,15 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_covers_a_grantee_group_the_caller_d
     ASSERT_EQ(before.statusCode, 0);
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser2);
+    connectAs(2);
     EXPECT_NO_THROW({
         inboxApi->rotateInboxKeys(
             inboxId,
             std::vector<core::UserWithPubKey>{
-                userOf(IUGConnectionType::IUGUser1), userOf(IUGConnectionType::IUGUser2)
+                user(1), user(2)
             },
             std::vector<core::UserWithPubKey>{
-                userOf(IUGConnectionType::IUGUser1), userOf(IUGConnectionType::IUGUser2)
+                user(1), user(2)
             },
             before.version,
             false,
@@ -832,7 +764,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_covers_a_grantee_group_the_caller_d
     });
 
     disconnect();
-    connectAs(IUGConnectionType::IUGUser1);
+    connectAs(1);
     inbox::Inbox after;
     EXPECT_NO_THROW({ after = inboxApi->getInbox(inboxId); });
     EXPECT_EQ(after.statusCode, 0);
@@ -860,11 +792,11 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
         groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
-                userOf(IUGConnectionType::IUGUser1),
-                userOf(IUGConnectionType::IUGUser2),
-                userOf(IUGConnectionType::IUGUser3)
+                user(1),
+                user(2),
+                user(3)
             },
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("grp_pub"),
             core::Buffer::from("grp_priv")
         );
@@ -880,7 +812,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
     ASSERT_NO_THROW({
         inboxId = createInboxWithGroups(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             std::vector<group::Group>{group}
         );
     });
@@ -911,8 +843,8 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
     EXPECT_NO_THROW({
         inboxApi->rotateInboxKeys(
             inboxId,
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(IUGConnectionType::IUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             stale.version,
             false,
             std::vector<core::GroupGrantWithKey>{}
@@ -928,7 +860,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
     // user_2 is still in G at epoch 2 and was never a direct Inbox member, so this read can only be served
     // through the re-wrapped group entries - on the Inbox *and* on its inner Thread, where the entry lives.
     disconnect();
-    connectAs(IUGConnectionType::IUGUser2);
+    connectAs(2);
     inbox::InboxEntry oldEpochEntry;
     EXPECT_NO_THROW({ oldEpochEntry = inboxApi->readEntry(oldEpochEntryId); });
     EXPECT_EQ(oldEpochEntry.statusCode, 0);

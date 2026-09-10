@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
+#include "../../utils/BaseGroupTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <chrono>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -29,43 +29,8 @@ using namespace privmx::endpoint;
  * weakened into positive assertions.
  */
 
-class GroupCustomEventsTest : public privmx::test::BaseTest {
+class GroupCustomEventsTest : public privmx::test::BaseGroupTest {
 protected:
-    GroupCustomEventsTest() : BaseTest(privmx::test::BaseTestMode::online) {}
-
-    void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
-        connection = std::make_shared<core::Connection>(connectAs(1));
-        groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
-    }
-
-    void customTearDown() override {
-        connection.reset();
-        groupApi.reset();
-        reader.reset();
-        core::EventQueueImpl::getInstance()->clear();
-    }
-
-    core::Connection connectAs(int index) {
-        return core::Connection::connect(
-            reader->getString("Login.user_" + std::to_string(index) + "_privKey"),
-            reader->getString("Login.solutionId"),
-            getPlatformUrl(reader->getString("Login.instanceUrl"))
-        );
-    }
-
-    core::UserWithPubKey user(int index) {
-        const std::string n = std::to_string(index);
-        return core::UserWithPubKey{
-            .userId = reader->getString("Login.user_" + n + "_id"),
-            .pubKey = reader->getString("Login.user_" + n + "_pubKey")
-        };
-    }
-
-    std::string userId(int index) { return reader->getString("Login.user_" + std::to_string(index) + "_id"); }
-
-    std::string contextId() { return reader->getString("Context_1.contextId"); }
-
     std::string createGroup(const std::vector<core::UserWithPubKey>& members) {
         return groupApi->createGroup(
             contextId(), members, std::vector<core::UserWithPubKey>{user(1)},
@@ -89,16 +54,13 @@ protected:
         return std::nullopt;
     }
 
-    std::shared_ptr<core::Connection> connection;
-    std::shared_ptr<group::GroupApi> groupApi;
     core::EventQueue eventQueue = core::EventQueue::getInstance();
-    Poco::Util::IniFileConfiguration::Ptr reader;
 };
 
 TEST_F(GroupCustomEventsTest, a_member_receives_the_notification_opened_and_attributed) {
     const std::string groupId = createGroup({user(1), user(2)});
-    auto connection2 = connectAs(2);
-    auto groupApi2 = group::GroupApi::create(connection2);
+    auto connection2 = connect(2);
+    auto groupApi2 = group::GroupApi::create(*connection2);
     groupApi2.subscribeFor(
         {groupApi2.buildCustomEventSubscriptionQuery("typing", group::EventSelectorType::GROUP_ID, groupId)}
     );
@@ -117,15 +79,15 @@ TEST_F(GroupCustomEventsTest, a_member_receives_the_notification_opened_and_attr
     EXPECT_EQ(received->channel, "group/" + groupId + "/typing");
     EXPECT_EQ(received->subscriptions.size(), 1);
 
-    connection2.disconnect();
+    connection2->disconnect();
 }
 
 TEST_F(GroupCustomEventsTest, a_notification_still_opens_after_the_group_key_has_rotated) {
     // The envelope names the epoch it was sealed under, so a recipient who has moved on climbs to the older key
     // rather than failing. Otherwise every rotation would drop in-flight notifications, exactly when chattiest.
     const std::string groupId = createGroup({user(1), user(2), user(3)});
-    auto connection2 = connectAs(2);
-    auto groupApi2 = group::GroupApi::create(connection2);
+    auto connection2 = connect(2);
+    auto groupApi2 = group::GroupApi::create(*connection2);
     groupApi2.subscribeFor(
         {groupApi2.buildCustomEventSubscriptionQuery("typing", group::EventSelectorType::GROUP_ID, groupId)}
     );
@@ -144,13 +106,13 @@ TEST_F(GroupCustomEventsTest, a_notification_still_opens_after_the_group_key_has
     // And the epoch-1 envelope is still readable — the same key path the notification travels.
     EXPECT_EQ(groupApi2.decrypt(sealedUnderEpoch1).data.stdString(), "sealed before rotation");
 
-    connection2.disconnect();
+    connection2->disconnect();
 }
 
 TEST_F(GroupCustomEventsTest, a_notification_narrowed_to_one_member_reaches_only_them) {
     const std::string groupId = createGroup({user(1), user(2), user(3)});
-    auto connection3 = connectAs(3);
-    auto groupApi3 = group::GroupApi::create(connection3);
+    auto connection3 = connect(3);
+    auto groupApi3 = group::GroupApi::create(*connection3);
     groupApi3.subscribeFor(
         {groupApi3.buildCustomEventSubscriptionQuery("typing", group::EventSelectorType::GROUP_ID, groupId)}
     );
@@ -159,13 +121,13 @@ TEST_F(GroupCustomEventsTest, a_notification_narrowed_to_one_member_reaches_only
 
     EXPECT_FALSE(awaitCustomEvent(6).has_value());
 
-    connection3.disconnect();
+    connection3->disconnect();
 }
 
 TEST_F(GroupCustomEventsTest, subscribing_to_one_channel_does_not_deliver_another) {
     const std::string groupId = createGroup({user(1), user(2)});
-    auto connection2 = connectAs(2);
-    auto groupApi2 = group::GroupApi::create(connection2);
+    auto connection2 = connect(2);
+    auto groupApi2 = group::GroupApi::create(*connection2);
     groupApi2.subscribeFor(
         {groupApi2.buildCustomEventSubscriptionQuery("typing", group::EventSelectorType::GROUP_ID, groupId)}
     );
@@ -180,13 +142,13 @@ TEST_F(GroupCustomEventsTest, subscribing_to_one_channel_does_not_deliver_anothe
     ASSERT_TRUE(received.has_value());
     EXPECT_EQ(received->data.channelName, "typing");
 
-    connection2.disconnect();
+    connection2->disconnect();
 }
 
 TEST_F(GroupCustomEventsTest, SECURITY_a_removed_member_receives_nothing_sent_afterwards) {
     const std::string groupId = createGroup({user(1), user(2)});
-    auto connection2 = connectAs(2);
-    auto groupApi2 = group::GroupApi::create(connection2);
+    auto connection2 = connect(2);
+    auto groupApi2 = group::GroupApi::create(*connection2);
     groupApi2.subscribeFor(
         {groupApi2.buildCustomEventSubscriptionQuery("typing", group::EventSelectorType::GROUP_ID, groupId)}
     );
@@ -196,21 +158,21 @@ TEST_F(GroupCustomEventsTest, SECURITY_a_removed_member_receives_nothing_sent_af
 
     EXPECT_FALSE(awaitCustomEvent(6).has_value());
 
-    connection2.disconnect();
+    connection2->disconnect();
 }
 
 TEST_F(GroupCustomEventsTest, SECURITY_a_context_user_outside_the_group_cannot_send) {
     // user_3 belongs to the Context and holds the same ACL, so the ACL alone would let this through. It is
     // membership that stops it, and it is stopped on the bridge — the client cannot even seal the payload.
     const std::string groupId = createGroup({user(1), user(2)});
-    auto connection3 = connectAs(3);
-    auto groupApi3 = group::GroupApi::create(connection3);
+    auto connection3 = connect(3);
+    auto groupApi3 = group::GroupApi::create(*connection3);
 
     EXPECT_THROW(
         groupApi3.sendCustomEvent(groupId, "typing", core::Buffer::from("let me in")), core::Exception
     );
 
-    connection3.disconnect();
+    connection3->disconnect();
 }
 
 TEST_F(GroupCustomEventsTest, a_notification_cannot_be_aimed_outside_the_group) {

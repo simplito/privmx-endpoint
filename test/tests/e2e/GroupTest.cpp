@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
+#include "../../utils/BaseGroupTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
@@ -21,65 +21,8 @@ using namespace privmx::endpoint;
  * API stops compiling here, so the documentation cannot quietly rot into something that no longer works.
  */
 
-enum GroupConnectionType {
-    GUser1,
-    GUser2
-};
-
-class GroupTest : public privmx::test::BaseTest {
+class GroupTest : public privmx::test::BaseGroupTest {
 protected:
-    GroupTest() : BaseTest(privmx::test::BaseTestMode::online) {}
-    void connectAs(GroupConnectionType type) {
-        if (type == GroupConnectionType::GUser1) {
-            connection = std::make_shared<core::Connection>(
-                core::Connection::connect(
-                    reader->getString("Login.user_1_privKey"),
-                    reader->getString("Login.solutionId"),
-                    getPlatformUrl(reader->getString("Login.instanceUrl"))
-                )
-            );
-        } else {
-            connection = std::make_shared<core::Connection>(
-                core::Connection::connect(
-                    reader->getString("Login.user_2_privKey"),
-                    reader->getString("Login.solutionId"),
-                    getPlatformUrl(reader->getString("Login.instanceUrl"))
-                )
-            );
-        }
-        groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
-    }
-    void disconnect() {
-        connection->disconnect();
-        connection.reset();
-        groupApi.reset();
-    }
-    void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
-        connection = std::make_shared<core::Connection>(
-            core::Connection::connect(
-                reader->getString("Login.user_1_privKey"),
-                reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
-        groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
-    }
-    void customTearDown() override {
-        connection.reset();
-        groupApi.reset();
-        reader.reset();
-        core::EventQueueImpl::getInstance()->clear();
-    }
-    // `user_N` as a roster entry.
-    core::UserWithPubKey user(int n) {
-        const std::string i = std::to_string(n);
-        return core::UserWithPubKey{
-            .userId = reader->getString("Login.user_" + i + "_id"),
-            .pubKey = reader->getString("Login.user_" + i + "_pubKey")
-        };
-    }
-
     // A group in Context_1 with the given members, managed by whoever is listed first.
     std::string createGroupOf(const std::vector<core::UserWithPubKey>& users) {
         std::string groupId = groupApi->createGroup(
@@ -89,11 +32,6 @@ protected:
         EXPECT_FALSE(groupId.empty());
         return groupId;
     }
-
-    std::shared_ptr<core::Connection> connection;
-    std::shared_ptr<group::GroupApi> groupApi;
-    Poco::Util::IniFileConfiguration::Ptr reader;
-    core::VarSerializer _serializer = core::VarSerializer({});
 };
 
 TEST_F(GroupTest, setup) {
@@ -398,7 +336,7 @@ TEST_F(GroupTest, metadata_written_by_a_different_manager_keeps_the_group_readab
     ASSERT_FALSE(groupId.empty());
 
     disconnect();
-    connectAs(GroupConnectionType::GUser2);
+    connectAs(2);
     EXPECT_NO_THROW({ groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("public2"), 1); });
     EXPECT_NO_THROW({ groupApi->updateGroupPrivateMeta(groupId, core::Buffer::from("private2"), 1); });
 
@@ -410,7 +348,7 @@ TEST_F(GroupTest, metadata_written_by_a_different_manager_keeps_the_group_readab
 
     // And the member who did not write the metadata reads it just the same.
     disconnect();
-    connectAs(GroupConnectionType::GUser1);
+    connectAs(1);
     group::Group asUser1;
     EXPECT_NO_THROW({ asUser1 = groupApi->getGroup(groupId); });
     EXPECT_EQ(asUser1.statusCode, 0);
@@ -578,7 +516,7 @@ TEST_F(GroupTest, group_member_can_read) {
     ASSERT_FALSE(groupId.empty());
     // Connect as user_2 (member, not manager) and read the group
     disconnect();
-    connectAs(GroupConnectionType::GUser2);
+    connectAs(2);
     group::Group group;
     EXPECT_NO_THROW({
         group = groupApi->getGroup(groupId);
@@ -635,7 +573,7 @@ TEST_F(GroupTest, envelope_roundtrip_between_members) {
     EXPECT_EQ(envelope.stdString().find("secret payload"), std::string::npos);
 
     disconnect();
-    connectAs(GroupConnectionType::GUser2);
+    connectAs(2);
 
     group::DecryptedEnvelope opened;
     EXPECT_NO_THROW({ opened = groupApi->decrypt(envelope); });
@@ -670,7 +608,7 @@ TEST_F(GroupTest, envelope_from_a_non_member) {
     ASSERT_FALSE(groupPubKey.empty());
 
     disconnect();
-    connectAs(GroupConnectionType::GUser2);
+    connectAs(2);
 
     // Not a member: reading the group is refused, but sealing to it is not — that asymmetry is the feature.
     EXPECT_ANY_THROW({ groupApi->getGroup(groupId); });
@@ -682,7 +620,7 @@ TEST_F(GroupTest, envelope_from_a_non_member) {
     EXPECT_ANY_THROW({ groupApi->decrypt(envelope); });
 
     disconnect();
-    connectAs(GroupConnectionType::GUser1);
+    connectAs(1);
     group::DecryptedEnvelope opened;
     EXPECT_NO_THROW({ opened = groupApi->decrypt(envelope); });
     EXPECT_EQ(opened.data.stdString(), "a tip from outside");
@@ -721,7 +659,7 @@ TEST_F(GroupTest, envelope_file_roundtrip_as_documented) {
     // The ciphertext and the envelope travel to whoever reads it; nothing else is needed.
     CipherStorage storage{sink.data};
     disconnect();
-    connectAs(GroupConnectionType::GUser2);
+    connectAs(2);
 
     // A scope of its own so `api`, `h` and `sink` name this connection's reader, letting the example below
     // stay character-for-character what the header says.
