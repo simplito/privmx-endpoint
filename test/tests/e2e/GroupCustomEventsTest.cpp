@@ -128,7 +128,7 @@ TEST_F(GroupCustomEventsTest, a_notification_still_opens_after_the_group_key_has
     // The envelope names the epoch it was sealed under, so a recipient who has already moved on resolves the
     // older key by climbing rather than failing. Without that, every rotation would drop notifications in
     // flight — and clients rotate on membership changes, which is exactly when they are chattiest.
-    const std::string groupId = createGroup({user(1), user(2)});
+    const std::string groupId = createGroup({user(1), user(2), user(3)});
     auto connection2 = connectAs(2);
     auto groupApi2 = group::GroupApi::create(connection2);
     groupApi2.subscribeFor(
@@ -136,7 +136,9 @@ TEST_F(GroupCustomEventsTest, a_notification_still_opens_after_the_group_key_has
     );
 
     const auto sealedUnderEpoch1 = groupApi->encrypt(groupId, core::Buffer::from("sealed before rotation"));
-    groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
+    // Removal, not addition: seating a member re-keys their path but keeps the epoch, so a removal is the only
+    // public call that advances it.
+    groupApi->removeGroupMembers(groupId, {userId(3)});
     ASSERT_GT(groupApi->getGroup(groupId).keyVersion, 1);
 
     groupApi->sendCustomEvent(groupId, "typing", core::Buffer::from("sent after rotation"));
