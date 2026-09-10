@@ -19,13 +19,8 @@ namespace {
 constexpr char GROUP_ID[] = "664f1c8f5e2a4b0012345678";
 constexpr char CONTEXT_ID[] = "664f1c8f5e2a4b0087654321";
 
-/**
- * Reaches `assertQuery`, which is a private virtual invoked by `subscribeFor`.
- *
- * A rejected query throws before the gateway is touched, so the whole validation path runs with no connection.
- * A query that passes validation would then dereference the null gateway — which is why every case here is a
- * rejection, and why the accepting cases live in the e2e suite.
- */
+// Reaches `assertQuery`, a private virtual invoked by `subscribeFor`. A rejected query throws before the gateway
+// is touched; one that passes would dereference the null gateway, so every case here is a rejection.
 class ProbeSubscriber : public group::SubscriberImpl {
 public:
     ProbeSubscriber() : SubscriberImpl(nullptr) {}

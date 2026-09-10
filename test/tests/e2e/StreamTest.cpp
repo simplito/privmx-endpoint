@@ -497,7 +497,6 @@ TEST_F(StreamTest, listStreamRooms_correct_input_data) {
     auto streamRoomId_3 = fastStreamRoom(reader->getString("Context_1.contextId"));
 
     core::PagingList<stream::StreamRoom> listStreamRooms;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listStreamRooms = streamApi->listStreamRooms(
             reader->getString("Context_1.contextId"),
@@ -510,7 +509,6 @@ TEST_F(StreamTest, listStreamRooms_correct_input_data) {
     });
     EXPECT_EQ(listStreamRooms.totalAvailable, 3);
     EXPECT_EQ(listStreamRooms.readItems.size(), 0);
-    // {.skip=0, .limit=1, .sortOrder="asc"}
     EXPECT_NO_THROW({
         listStreamRooms = streamApi->listStreamRooms(
             reader->getString("Context_1.contextId"),
@@ -528,7 +526,6 @@ TEST_F(StreamTest, listStreamRooms_correct_input_data) {
         EXPECT_EQ(stream.streamRoomId, streamRoomId_3);
         EXPECT_EQ(stream.statusCode, 0);
     }
-    // {.skip=1, .limit=3, .sortOrder="asc"}
     EXPECT_NO_THROW({
         listStreamRooms = streamApi->listStreamRooms(
             reader->getString("Context_1.contextId"),
@@ -827,14 +824,12 @@ TEST_F(StreamTest, userValidator_false) {
     auto streamRoomId_2 = fastStreamRoom(reader->getString("Context_1.contextId"));
     auto verifier = std::make_shared<core::FalseUserVerifierInterface>();
     connection->setUserVerifier(verifier);
-    // getStreamRoom
     EXPECT_NO_THROW({
         auto Stream = streamApi->getStreamRoom(
             streamRoomId_1
         );
         EXPECT_FALSE(Stream.statusCode == 0);
     });
-    // listStreamRooms
     EXPECT_NO_THROW({
         auto Streams = streamApi->listStreamRooms(
             reader->getString("Context_1.contextId"),
@@ -846,7 +841,6 @@ TEST_F(StreamTest, userValidator_false) {
         );
         EXPECT_FALSE(Streams.readItems[0].statusCode == 0);
     });
-    // createStream
     EXPECT_NO_THROW({
         streamApi->createStreamRoom(
             reader->getString("Context_1.contextId"),
@@ -882,7 +876,6 @@ TEST_F(StreamTest, userValidator_false) {
             std::nullopt
         );
     }, core::Exception);
-    // deleteStream
     EXPECT_NO_THROW({
         streamApi->deleteStreamRoom(
             streamRoomId_2
@@ -999,7 +992,6 @@ TEST_F(StreamTest, adding_Track_no_publish) {
     EXPECT_NO_THROW({
         handle = streamApi->createStream(streamRoomId_1);
     });
-    // Load Fake video track
     EXPECT_NO_THROW({
         streamApi->getImpl()->addFakeVideoTrack(handle);
     });
@@ -1028,7 +1020,6 @@ TEST_F(StreamTest, publish_with_tracks) {
     EXPECT_NO_THROW({
         handle = streamApi->createStream(streamRoomId_1);
     });
-    // Load Fake video track
     EXPECT_NO_THROW({
         streamApi->getImpl()->addFakeVideoTrack(handle);
     });
@@ -1055,7 +1046,6 @@ TEST_F(StreamTest, publish_with_multiple_instance_of_same_track) {
     EXPECT_NO_THROW({
         handle = streamApi->createStream(streamRoomId_1);
     });
-    // Load Fake video tracks
     EXPECT_NO_THROW({
         streamApi->getImpl()->addFakeVideoTrack(handle);
         streamApi->getImpl()->addFakeVideoTrack(handle);
@@ -1164,7 +1154,6 @@ TEST_F(StreamTest, updateStream_no_publish) {
     EXPECT_NO_THROW({
         handle = streamApi->createStream(streamRoomId_1);
     });
-    // Load Fake video track
     EXPECT_NO_THROW({
         streamApi->getImpl()->addFakeVideoTrack(handle);
     });
@@ -1182,7 +1171,6 @@ TEST_F(StreamTest, updateStream_remove_all_tracks) {
     EXPECT_NO_THROW({
         handle = streamApi->createStream(streamRoomId_1);
     });
-    // Load Fake video track
     EXPECT_NO_THROW({
         streamApi->getImpl()->addFakeVideoTrack(handle);
     });
@@ -1209,14 +1197,12 @@ TEST_F(StreamTest, updateStream_adding_track) {
     EXPECT_NO_THROW({
         handle = streamApi->createStream(streamRoomId_1);
     });
-    // Load Fake video track
     EXPECT_NO_THROW({
         streamApi->getImpl()->addFakeVideoTrack(handle);
     });
     EXPECT_NO_THROW({
         streamApi->publishStream(handle);
     });
-    // Load Fake video track
     EXPECT_NO_THROW({
         streamApi->getImpl()->addFakeVideoTrack(handle);
     });
@@ -1237,7 +1223,6 @@ TEST_F(StreamTest, updateStream_no_changes) {
     EXPECT_NO_THROW({
         handle = streamApi->createStream(streamRoomId_1);
     });
-    // Load Fake video track
     EXPECT_NO_THROW({
         streamApi->getImpl()->addFakeVideoTrack(handle);
     });
@@ -1261,7 +1246,6 @@ TEST_F(StreamTest, updateStream_after_failed_add_track) {
     EXPECT_NO_THROW({
         handle = streamApi->createStream(streamRoomId_1);
     });
-    // Load Fake video track
     EXPECT_NO_THROW({
         streamApi->getImpl()->addFakeVideoTrack(handle);
     });
@@ -1288,7 +1272,6 @@ TEST_F(StreamTest, updateStream_after_unpublishing) {
     EXPECT_NO_THROW({
         handle = streamApi->createStream(streamRoomId_1);
     });
-    // Load Fake video track
     EXPECT_NO_THROW({
         streamApi->getImpl()->addFakeVideoTrack(handle);
     });
@@ -1520,7 +1503,6 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
         client2.streamApi->createSubscriberStream(streamRoomId_1, streamsId);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     });
-    //Send data
     EXPECT_NO_THROW({
         streamApi->sendData(handle_USER_1, core::Buffer::from(dataToSend));
     });

@@ -73,12 +73,8 @@ protected:
         );
     }
 
-    /**
-     * Drains the queue until a `groupCustom` event shows up, or the budget runs out.
-     *
-     * Draining rather than taking the head is not defensive padding: connecting emits `libConnected`, and
-     * subscribing may emit more, so the notification is never first in the queue.
-     */
+    // Drains rather than taking the head: connecting emits `libConnected` and subscribing may emit more, so the
+    // notification is never first in the queue.
     std::optional<group::GroupCustomEvent> awaitCustomEvent(int attempts = 20) {
         for (int i = 0; i < attempts; ++i) {
             auto holder = eventQueue.getEvent();
@@ -125,9 +121,8 @@ TEST_F(GroupCustomEventsTest, a_member_receives_the_notification_opened_and_attr
 }
 
 TEST_F(GroupCustomEventsTest, a_notification_still_opens_after_the_group_key_has_rotated) {
-    // The envelope names the epoch it was sealed under, so a recipient who has already moved on resolves the
-    // older key by climbing rather than failing. Without that, every rotation would drop notifications in
-    // flight — and clients rotate on membership changes, which is exactly when they are chattiest.
+    // The envelope names the epoch it was sealed under, so a recipient who has moved on climbs to the older key
+    // rather than failing. Otherwise every rotation would drop in-flight notifications, exactly when chattiest.
     const std::string groupId = createGroup({user(1), user(2), user(3)});
     auto connection2 = connectAs(2);
     auto groupApi2 = group::GroupApi::create(connection2);

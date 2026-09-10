@@ -19,11 +19,13 @@
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
-// Several granted groups mean several routes to one container key, under one `keyId`. Two properties are
-// pinned here, and they pull against each other: every route is kept and tried, yet any route that failed
-// still marks the key — so one dead route among several denies the container, deliberately.
-//
-// Stubbing the resolver is the only way to make a route dead on demand and to assert one was not attempted.
+/**
+ * Several granted groups mean several routes to one container key, under one `keyId`. Two properties are
+ * pinned here, and they pull against each other: every route is kept and tried, yet any route that failed
+ * still marks the key — so one dead route among several denies the container, deliberately.
+ *
+ * Stubbing the resolver is the only way to make a route dead on demand and to assert one was not attempted.
+ */
 
 namespace {
 
@@ -40,7 +42,7 @@ public:
     }
 };
 
-/** Records which groups the resolver was asked about, so a test can assert on attempts not made. */
+// Records which groups the resolver was asked about, so a test can assert on attempts not made.
 struct ResolverLog {
     std::vector<std::string> attempted;
 };
@@ -54,7 +56,7 @@ protected:
         });
     }
 
-    /** One group-addressed wrapping of the shared container key, shaped as `buildGroupKeyEntries` emits it. */
+    // One group-addressed wrapping of the shared container key, shaped as `buildGroupKeyEntries` emits it.
     server::GroupKeyEntry wrapFor(const privmx::crypto::PublicKey& groupPubKey, int64_t groupEpoch) {
         const std::string keySecret = "key-secret-at-epoch-" + std::to_string(groupEpoch);
 
@@ -86,7 +88,7 @@ protected:
         };
     }
 
-    /** Two granted groups covering one keyId, served in A-then-B order, as the bridge stores them. */
+    // Two granted groups covering one keyId, served in A-then-B order, as the bridge stores them.
     std::vector<server::GroupKeysEntry> twoRoutes(
         const privmx::crypto::PrivateKey& groupA,
         const privmx::crypto::PrivateKey& groupB
@@ -97,7 +99,7 @@ protected:
         };
     }
 
-    /** Resolves only the listed groups; every call is recorded, in order. */
+    // Resolves only the listed groups; every call is recorded, in order.
     static KeyProvider::GroupPrivKeyResolver resolverOver(
         const std::map<std::string, privmx::crypto::PrivateKey>& openable,
         ResolverLog& log

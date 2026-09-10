@@ -224,7 +224,6 @@ TEST_F(KvdbTest, listKvdbs_incorrect_input_data) {
 
 TEST_F(KvdbTest, listKvdbs_correct_input_data) {
     core::PagingList<kvdb::Kvdb> listKvdbs;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listKvdbs = kvdbApi->listKvdbs(
             reader->getString("Context_1.contextId"),
@@ -237,7 +236,6 @@ TEST_F(KvdbTest, listKvdbs_correct_input_data) {
     });
     EXPECT_EQ(listKvdbs.totalAvailable, 3);
     EXPECT_EQ(listKvdbs.readItems.size(), 0);
-    // {.skip=0, .limit=1, .sortOrder="asc"}
     EXPECT_NO_THROW({
         listKvdbs = kvdbApi->listKvdbs(
             reader->getString("Context_1.contextId"),
@@ -279,7 +277,6 @@ TEST_F(KvdbTest, listKvdbs_correct_input_data) {
             EXPECT_EQ(kvdb.managers[0], reader->getString("Login.user_1_id"));
         }
     }
-    // {.skip=1, .limit=3, .sortOrder="asc"}
     EXPECT_NO_THROW({
         listKvdbs = kvdbApi->listKvdbs(
             reader->getString("Context_1.contextId"),
@@ -912,7 +909,6 @@ TEST_F(KvdbTest, listEntriesKeys_incorrect_input_data) {
 
 TEST_F(KvdbTest, listEntriesKeys_correct_input_data) {
     core::PagingList<std::string> listEntriesKeys;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listEntriesKeys = kvdbApi->listEntriesKeys(
             reader->getString("Kvdb_1.kvdbId"),
@@ -925,7 +921,6 @@ TEST_F(KvdbTest, listEntriesKeys_correct_input_data) {
     });
     EXPECT_EQ(listEntriesKeys.totalAvailable, 2);
     EXPECT_EQ(listEntriesKeys.readItems.size(), 0);
-    // {.skip=1, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listEntriesKeys = kvdbApi->listEntriesKeys(
             reader->getString("Kvdb_1.kvdbId"),
@@ -942,7 +937,7 @@ TEST_F(KvdbTest, listEntriesKeys_correct_input_data) {
         auto entry = listEntriesKeys.readItems[0];
         EXPECT_EQ(entry, reader->getString("KvdbEntry_1.info_key"));
     }
-    // {.skip=0, .limit=3, .sortOrder="asc", .sortBy="createDate"}, after force key generation on kvdb
+    // after force key generation on kvdb
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
             reader->getString("Kvdb_1.kvdbId"),
@@ -1058,7 +1053,6 @@ TEST_F(KvdbTest, listEntries_incorrect_input_data) {
 
 TEST_F(KvdbTest, listEntries_correct_input_data) {
     core::PagingList<kvdb::KvdbEntry> listEntries;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listEntries = kvdbApi->listEntries(
             reader->getString("Kvdb_1.kvdbId"),
@@ -1071,7 +1065,6 @@ TEST_F(KvdbTest, listEntries_correct_input_data) {
     });
     EXPECT_EQ(listEntries.totalAvailable, 2);
     EXPECT_EQ(listEntries.readItems.size(), 0);
-    // {.skip=1, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listEntries = kvdbApi->listEntries(
             reader->getString("Kvdb_1.kvdbId"),
@@ -1102,7 +1095,7 @@ TEST_F(KvdbTest, listEntries_correct_input_data) {
         EXPECT_EQ(entry.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("KvdbEntry_1.uploaded_privateMeta_inHex")));
         EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("KvdbEntry_1.uploaded_data_inHex")));
     }
-    // {.skip=0, .limit=3, .sortOrder="asc"}, after force key generation on kvdb
+    // after force key generation on kvdb
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
             reader->getString("Kvdb_1.kvdbId"),
@@ -1186,7 +1179,6 @@ TEST_F(KvdbTest, deleteEntry) {
             reader->getString("Kvdb_1.kvdbId")
         );
     }, core::Exception);
-    // change privileges
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
             reader->getString("Kvdb_1.kvdbId"),
@@ -1222,7 +1214,6 @@ TEST_F(KvdbTest, deleteEntry) {
             reader->getString("KvdbEntry_2.info_key")
         );
     }, core::Exception);
-    // change privileges
     disconnect();
     connectAs(ConnectionType::User1);
     EXPECT_NO_THROW({
@@ -1305,7 +1296,6 @@ TEST_F(KvdbTest, deleteEntry) {
 
 TEST_F(KvdbTest, setEntry) {
     kvdb::KvdbEntry entry;
-    //Creating new entry
     EXPECT_NO_THROW({
         kvdbApi->setEntry(
             reader->getString("Kvdb_2.kvdbId"),
@@ -1369,7 +1359,6 @@ TEST_F(KvdbTest, setEntry) {
     // Modifing by other user
     disconnect();
     connectAs(ConnectionType::User2);
-    //Access denied
     EXPECT_THROW({
         kvdbApi->setEntry(
             reader->getString("Kvdb_1.kvdbId"),
@@ -1426,7 +1415,6 @@ TEST_F(KvdbTest, deleteEntries) {
     EXPECT_EQ(deleteResult[reader->getString("KvdbEntry_1.info_key")], true);
     EXPECT_EQ(deleteResult[reader->getString("KvdbEntry_2.info_key")], true);
 
-    //check if entries not exist
     EXPECT_THROW({
         kvdbApi->getEntry(
             reader->getString("Kvdb_1.kvdbId"),
@@ -1446,7 +1434,6 @@ TEST_F(KvdbTest, sendMessage_cacheManipulation) {
     EXPECT_NO_THROW({
         kvdbApi->getKvdb(reader->getString("Kvdb_1.kvdbId"));
     });
-    // update kvdb
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
             reader->getString("Kvdb_1.kvdbId"),
@@ -1497,14 +1484,12 @@ TEST_F(KvdbTest, sendMessage_cacheManipulation) {
 TEST_F(KvdbTest, userValidator_false) {
     auto verifier = std::make_shared<core::FalseUserVerifierInterface>();
     connection->setUserVerifier(verifier);
-    // getKvdb
     EXPECT_NO_THROW({
         auto Kvdb = kvdbApi->getKvdb(
             reader->getString("Kvdb_1.KvdbId")
         );
         EXPECT_FALSE(Kvdb.statusCode == 0);
     });
-    // listKvdbs
     EXPECT_NO_THROW({
         auto Kvdbs = kvdbApi->listKvdbs(
             reader->getString("Context_1.contextId"),
@@ -1516,7 +1501,6 @@ TEST_F(KvdbTest, userValidator_false) {
         );
         EXPECT_FALSE(Kvdbs.readItems[0].statusCode == 0);
     });
-    // createKvdb
     EXPECT_NO_THROW({
         kvdbApi->createKvdb(
             reader->getString("Context_1.contextId"),
@@ -1550,13 +1534,11 @@ TEST_F(KvdbTest, userValidator_false) {
             true
         );
     }, core::Exception);
-    // deleteKvdb
     EXPECT_NO_THROW({
         kvdbApi->deleteKvdb(
             reader->getString("Kvdb_2.KvdbId")
         );
     });
-    // getEntry
     EXPECT_NO_THROW({
         auto entry = kvdbApi->getEntry(
             reader->getString("KvdbEntry_1.info_kvdbId"),
@@ -1564,7 +1546,6 @@ TEST_F(KvdbTest, userValidator_false) {
         );
         EXPECT_FALSE(entry.statusCode == 0);
     });
-    // listMessages
     EXPECT_NO_THROW({
         auto entries = kvdbApi->listEntries(
             reader->getString("Kvdb_1.KvdbId"),
@@ -1576,7 +1557,6 @@ TEST_F(KvdbTest, userValidator_false) {
         );
         EXPECT_FALSE(entries.readItems[0].statusCode == 0);
     });
-    // setEntry
     EXPECT_THROW({
         kvdbApi->setEntry(
             reader->getString("Kvdb_1.KvdbId"),
@@ -1586,7 +1566,6 @@ TEST_F(KvdbTest, userValidator_false) {
             core::Buffer::from("data")
         );
     }, core::Exception);
-    // deleteEntry
     EXPECT_NO_THROW({
         kvdbApi->deleteEntry(
             reader->getString("KvdbEntry_2.info_kvdbId"),

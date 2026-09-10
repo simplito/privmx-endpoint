@@ -796,6 +796,7 @@ TEST_F(SearchUsingGroupsTest, rotateSearchIndexKeys_clears_staleGroups_after_the
 }
 
 // -- the Index's access list, case 1: the grantee group user_2 belongs to is revoked --
+
 // The Group is untouched; what goes away is the Index's grant, and with it user_2's only route to its key.
 // Revoking a grant mints a new key (`doesGroupStateForceNewKey`), so a warm session's cached key is worthless.
 TEST_F(SearchUsingGroupsTest, revoking_the_grantee_group_locks_out_a_member_working_in_the_index) {
@@ -828,6 +829,7 @@ TEST_F(SearchUsingGroupsTest, revoking_the_grantee_group_locks_out_a_member_work
 }
 
 // -- the Index's access list, case 2: user_2 is dropped from the roster --
+
 // Removing a user mints a new key too (`UsersKeysResolver`), and the update carries the surviving grant along -
 // so the same call that locks user_2 out has to re-wrap the new key to the Group, which user_3's read proves.
 TEST_F(SearchUsingGroupsTest, removing_a_direct_member_locks_them_out_and_leaves_the_grant_working) {
@@ -869,6 +871,7 @@ TEST_F(SearchUsingGroupsTest, removing_a_direct_member_locks_them_out_and_leaves
 }
 
 // -- the Group's membership, case 1: user_2 is removed from the Group --
+
 // Nothing about the Index changes, so the re-key is what closes the door: until then user_2's warm session
 // still holds the epoch-1 key it read with. user_1 performs it without touching a single grant.
 TEST_F(SearchUsingGroupsTest, removing_the_worker_from_the_grantee_group_locks_them_out) {
@@ -920,6 +923,7 @@ TEST_F(SearchUsingGroupsTest, removing_the_worker_from_the_grantee_group_locks_t
 }
 
 // -- the Group's membership, case 2: user_3 is removed, user_2 stays --
+
 // The epoch still moves, so user_2's next write through its long-held handle has to notice the superseded key
 // and re-key the Store itself (`StoreApiImpl::flushFile`) rather than hand the caller the Bridge's refusal.
 TEST_F(SearchUsingGroupsTest, removing_another_member_from_the_grantee_group_keeps_the_worker_writing) {
@@ -980,6 +984,7 @@ TEST_F(SearchUsingGroupsTest, removing_another_member_from_the_grantee_group_kee
 }
 
 // -- the Group's membership, case 3: user_3 is added, user_2 stays --
+
 // Adding a member does not advance the epoch, so nothing needs re-keying and no open handle is disturbed. The
 // new member then reads documents written before they joined - the other half of not moving the epoch.
 TEST_F(SearchUsingGroupsTest, adding_a_member_to_the_grantee_group_disturbs_nothing) {

@@ -9,7 +9,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/** Unit tests for turning removal and addition plans into the complete tree state the bridge receives, with real EC keys, checking both the shape of the state and that the members who should still be able to climb it actually can, since a mistake here does not produce a wrong key but a state the server rejects or, worse, accepts while a member can no longer climb; the server's own view of the same states is checked from the bridge's test suite against fixtures emitted by test/tools/keytree_state_dump.cpp, and tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses. */
+/**
+ * Turning removal and addition plans into the complete tree state the bridge receives, with real EC keys.
+ *
+ * Both the shape of the state and the ability of the members who should still climb it are checked: a mistake
+ * here does not produce a wrong key but a state the server rejects or, worse, accepts while a member can no
+ * longer climb. The server's own view of the same states is checked from the bridge's test suite, against
+ * fixtures emitted by test/tools/keytree_state_dump.cpp.
+ *
+ * Tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses.
+ */
 
 #include <gtest/gtest.h>
 
@@ -53,7 +62,7 @@ protected:
         return result;
     }
 
-    /** A tree-backed group, with the store that holds the builder's node keys. */
+    // A tree-backed group, with the store that holds the builder's node keys.
     struct Fixture {
         std::vector<Member> members;
         TreeKeyCache store;
@@ -81,7 +90,7 @@ protected:
         return fixture;
     }
 
-    /** Whether the given member can climb the state to the grant key, from a store holding nothing. */
+    // Whether the given member can climb the state to the grant key, from a store holding nothing.
     bool canClimb(const server::GroupTreeState& tree, std::uint32_t epoch, const privmx::crypto::PublicKey& grantPub,
                   const Member& member) {
         TreeKeyCache store;
@@ -170,7 +179,8 @@ TEST_F(TreeWireBuild, SeatsEveryMemberAndPublishesEveryInternalNode) {
         for (std::uint32_t i = 0; i < count; ++i) {
             EXPECT_EQ(fixture->tree.leafAssignment[i], fixture->members[i].userId);
         }
-        // Internal nodes are the odd indices below 2N-1: one keypair each, leaves carrying none because a member's own long-term key already is the leaf.
+        // Internal nodes are the odd indices below 2N-1: one keypair each, leaves carrying none because a
+        // member's own long-term key already is the leaf.
         const std::size_t expectedNodes = count == 1 ? 0 : (count - 1);
         EXPECT_EQ(fixture->tree.nodes.size(), expectedNodes) << "N=" << count;
     }
@@ -190,7 +200,8 @@ TEST_F(TreeWireBuild, StaysWithinTheBridgesPerTreeSubmissionCaps) {
 }
 
 TEST_F(TreeWireBuild, EveryMemberCanClimbTheStateThatWasSubmitted) {
-    // The functional counterpart to the shape checks: a state that looks right but nobody can climb is worse than one the server rejects.
+    // The functional counterpart to the shape checks: a state that looks right but nobody can climb is worse
+    // than one the server rejects.
     const auto fixture = build(5);
     for (const Member& member : fixture->members) {
         EXPECT_TRUE(canClimb(fixture->tree, fixture->epoch, fixture->grantKey.getPublicKey(), member))
@@ -297,7 +308,8 @@ TEST_F(TreeWireRemoval, TheGrantEdgeMovesToTheNewEpoch) {
 }
 
 TEST_F(TreeWireRemoval, EveryEdgeNamesTheCurrentGenerationOfBothEndpoints) {
-    // This is the rule the server leans on to make refresh coverage automatic, so the client has to satisfy it exactly rather than approximately.
+    // This is the rule the server leans on to make refresh coverage automatic, so the client has to satisfy it
+    // exactly rather than approximately.
     auto fixture = build(8, 5);
     const RemovalOutcome outcome = removeMember(*fixture, 5, 0);
     std::map<std::uint32_t, std::int64_t> generations;
@@ -324,7 +336,8 @@ TEST_F(TreeWireRemoval, EveryEdgeNamesTheCurrentGenerationOfBothEndpoints) {
 class TreeWireAddition : public TreeWireTestBase {};
 
 TEST_F(TreeWireAddition, SECURITY_DoesNotMoveTheEpoch) {
-    // If an addition rotated the grant key, every container the group can read would go stale — one new member would force the whole group to re-key, which is the cost the grant indirection exists to avoid.
+    // If an addition rotated the grant key, every container the group can read would go stale — one new member
+    // would force the whole group to re-key, the cost the grant indirection exists to avoid.
     auto fixture = build(4, 5);
     const AdditionOutcome outcome = addMember(*fixture, publicOf(fixture->members));
     const server::GroupTreeEdge* grant = grantEdgeOf(outcome.after);
@@ -361,7 +374,8 @@ TEST_F(TreeWireAddition, TheNewcomerAndEveryoneElseCanClimb) {
 }
 
 TEST_F(TreeWireAddition, GrowthThatReParentsALeafDropsTheSupersededEdge) {
-    // N=3 -> 4 moves leaf 2 under a node that did not exist. The edge naming its old parent describes a topology that is gone, and a state carrying both would be rejected — and rightly, since only one of them is real.
+    // N=3 -> 4 moves leaf 2 under a node that did not exist. The edge naming its old parent describes a gone
+    // topology, and a state carrying both would be rejected — rightly, since only one of them is real.
     auto fixture = build(3, 5);
     const AdditionOutcome outcome = addMember(*fixture, publicOf(fixture->members));
     EXPECT_EQ(outcome.after.numLeaves, 4);

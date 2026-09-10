@@ -37,9 +37,6 @@ static vector<string_view> getParamsList(int argc, char* argv[]) {
     return args;
 }
 static string readFile(const string filePath) {
-    // string homeDir{getenv("HOME")};
-    // string fName{"testImg.png"};
-    // string fPath{homeDir + "/" + fName};
     ifstream input(filePath, ios::binary);
     stringstream strStream;
     strStream << input.rdbuf();

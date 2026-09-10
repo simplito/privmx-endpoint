@@ -9,7 +9,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/** Unit tests for the Epoch Ladder rules; needs no server, no docker and no network, and mirrors the bridge's LadderMath tests, which must agree with this implementation since the server enforces the same invariants on submitted rung sets — tests named SECURITY guard confidentiality and must not be deleted or relaxed even though they fail silently at runtime if the guard regresses. */
+/**
+ * The Epoch Ladder rules. Needs no server, no docker and no network.
+ *
+ * Mirrors the bridge's LadderMath tests, which must agree with this implementation since the server enforces the
+ * same invariants on submitted rung sets.
+ *
+ * Tests named SECURITY guard confidentiality and must not be deleted or relaxed, even though they fail silently
+ * at runtime if the guard regresses.
+ */
 
 #include <gtest/gtest.h>
 
@@ -296,7 +304,7 @@ TEST_F(LadderValidate, AcceptsANonAlignedSkipBecauseAlignmentIsAdvisory) {
     EXPECT_TRUE(LadderMath::validateRungSet({RungSpan{8, 7}, RungSpan{8, 5}}, 8, 1).ok);
 }
 
-/** SECURITY — the single check that stops a removed member reading forward. */
+// SECURITY — the single check that stops a removed member reading forward.
 TEST_F(LadderValidate, SECURITY_RejectsUpwardAndSelfRungs) {
     for (const std::uint32_t target : {8u, 9u, 100u}) {
         const auto result = LadderMath::validateRungSet({RungSpan{8, target}}, 8, 1);
@@ -305,7 +313,7 @@ TEST_F(LadderValidate, SECURITY_RejectsUpwardAndSelfRungs) {
     }
 }
 
-/** SECURITY — a missing unit rung is an unrepairable hole, so it must fail at write time. */
+// SECURITY — a missing unit rung is an unrepairable hole, so it must fail at write time.
 TEST_F(LadderValidate, SECURITY_RejectsASetWithoutTheUnitRung) {
     auto result = LadderMath::validateRungSet({}, 8, 1);
     EXPECT_FALSE(result.ok);

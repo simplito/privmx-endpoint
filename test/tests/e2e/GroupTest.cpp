@@ -12,6 +12,15 @@
 
 using namespace privmx::endpoint;
 
+/**
+ * End-to-end coverage of GroupApi against a running bridge: group lifecycle, roster changes, envelopes, and the
+ * file API.
+ *
+ * The worked examples. GroupApi.hpp documents the file API with three worked examples, and the tests below paste
+ * those examples in unchanged rather than paraphrasing them. That is the point: a snippet that drifts from the
+ * API stops compiling here, so the documentation cannot quietly rot into something that no longer works.
+ */
+
 enum GroupConnectionType {
     GUser1,
     GUser2
@@ -62,7 +71,7 @@ protected:
         reader.reset();
         core::EventQueueImpl::getInstance()->clear();
     }
-    /** `user_N` as a roster entry. */
+    // `user_N` as a roster entry.
     core::UserWithPubKey user(int n) {
         const std::string i = std::to_string(n);
         return core::UserWithPubKey{
@@ -71,7 +80,7 @@ protected:
         };
     }
 
-    /** A group in Context_1 with the given members, managed by whoever is listed first. */
+    // A group in Context_1 with the given members, managed by whoever is listed first.
     std::string createGroupOf(const std::vector<core::UserWithPubKey>& users) {
         std::string groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"), users, std::vector<core::UserWithPubKey>{users.front()},
@@ -368,10 +377,8 @@ TEST_F(GroupTest, updateGroupPublicMeta_correct_data) {
 }
 
 TEST_F(GroupTest, metadata_written_by_a_different_manager_keeps_the_group_readable) {
-    // Each plane has an author of its own. A metadata write moves the document's `lastModifier` and writes no
-    // roster entry, so verifying the roster plane's DIO against `lastModifier` fails here for an honest group —
-    // and fails for *every* member, permanently, until somebody makes a membership change as the metadata
-    // writer. Each plane answers for the author of its own head entry.
+    // Each plane answers for the author of its own head entry. A metadata write moves `lastModifier` and writes
+    // no roster entry, so checking the roster plane against it would fail permanently for an honest group.
     std::string groupId;
     const std::vector<core::UserWithPubKey> both{
         core::UserWithPubKey{
@@ -496,9 +503,8 @@ TEST_F(GroupTest, both_planes_at_version_three_still_verify) {
 }
 
 TEST_F(GroupTest, updateGroupPublicMeta_cannot_skip_the_version_check) {
-    // A refused update must leave the group exactly as it was: an update built against a moved head would commit
-    // a tag for a version it never lands at, and every reader would then reject the group. The new part is that
-    // a refused write to one plane must not disturb the other either.
+    // A refused update must leave the group exactly as it was — a tag committed for a version it never lands at
+    // would make every reader reject the group — and a refused write to one plane must not disturb the other.
     const std::string groupId = reader->getString("Group_2.groupId");
     group::Group before;
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
@@ -583,15 +589,7 @@ TEST_F(GroupTest, group_member_can_read) {
     EXPECT_EQ(group.groupId, groupId);
 }
 
-// -- the objects the documented examples talk to ------------------------------------------------------
-//
-// GroupApi.hpp documents the file API with three worked examples, and the tests below paste those examples
-// in unchanged rather than paraphrasing them. That is the point: a snippet that drifts from the API stops
-// compiling here, so the documentation cannot quietly rot into something that no longer works.
-//
-// These three types exist only to give the snippets something to read from and write to. They are as small
-// as they can be while still being the shapes the examples name: a plaintext source, a sink, and ciphertext
-// storage that can be read sequentially or at an offset.
+// -- the objects the documented examples talk to --
 
 struct ByteSource {
     std::string data;
@@ -613,13 +611,13 @@ struct CipherStorage {
     std::string data;
     std::size_t pos = 0;
     bool hasMore() const { return pos < data.size(); }
-    /** Sequential, as the opening example uses it. */
+    // Sequential, as the opening example uses it.
     core::Buffer read(std::size_t n) {
         std::string out = data.substr(pos, n);
         pos += out.size();
         return core::Buffer::from(out);
     }
-    /** Random access, as the range example uses it. */
+    // Random access, as the range example uses it.
     core::Buffer read(std::size_t offset, std::size_t n) const {
         return core::Buffer::from(offset >= data.size() ? std::string() : data.substr(offset, n));
     }
@@ -767,9 +765,8 @@ TEST_F(GroupTest, envelope_file_truncation_is_detected) {
 }
 
 TEST_F(GroupTest, envelope_file_overrun_is_refused_as_it_arrives) {
-    // The mirror of truncation, and the reason it is caught on the way in rather than at the close: bytes
-    // past the last chunk can never be opened, so buffering them until `finishFileDecryption` would let a
-    // caller fed a long ciphertext against a short declared size accumulate the whole thing in memory first.
+    // The mirror of truncation, caught on the way in rather than at the close: bytes past the last chunk can
+    // never be opened, so buffering them would let a long ciphertext against a short declared size exhaust memory.
     std::string groupId = createGroupOf({user(1)});
 
     const std::string plain(200 * 1024, 'y'); // two chunks, the second short
@@ -835,9 +832,8 @@ TEST_F(GroupTest, envelope_file_range_read_as_documented) {
     const std::size_t encryptedChunk = 1 + 16 + (128 * 1024 + 16) + 16;
     EXPECT_EQ(api.seekInEncryptedFile(api.beginFileDecryption(envelope), from) % encryptedChunk, 0);
 
-    // A range reader that stops as soon as it has enough ends mid-chunk, with bytes still buffered and most
-    // of the file never opened. That is the documented way to read a range, so finishing must not call it an
-    // error — it once did, reporting "more file data than the declared size accounts for".
+    // A range reader that stops once it has enough ends mid-chunk, with bytes buffered and most of the file
+    // never opened. Documented usage, so finishing must not error — it once did, on the declared-size check.
     {
         FileHandle partial = api.beginFileDecryption(envelope);
         CipherOffset seekedTo = api.seekInEncryptedFile(partial, from);

@@ -296,7 +296,6 @@ TEST_F(SearchTest, listSearchIndexes_incorrect_input_data) {
 TEST_F(SearchTest, listSearchIndexes_correct_input_data) {
     core::PagingList<search::SearchIndex> listSearchIndexes;
     search::SearchIndex searchIndex;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listSearchIndexes = searchApi->listSearchIndexes(
             reader->getString("Context_1.contextId"),
@@ -307,7 +306,6 @@ TEST_F(SearchTest, listSearchIndexes_correct_input_data) {
             }
         );
     });
-    // {.skip=0, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listSearchIndexes = searchApi->listSearchIndexes(
             reader->getString("Context_1.contextId"),
@@ -345,7 +343,6 @@ TEST_F(SearchTest, listSearchIndexes_correct_input_data) {
             EXPECT_EQ(searchIndex.managers[0], reader->getString("Login.user_1_id"));
         }
     }
-    // {.skip=1, .limit=3, .sortOrder="asc", .sortBy="createDate"}
     EXPECT_NO_THROW({
         listSearchIndexes = searchApi->listSearchIndexes(
             reader->getString("Context_1.contextId"),
