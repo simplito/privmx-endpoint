@@ -23,26 +23,6 @@ protected:
     void tearDownModuleApis() override {
         storeApi.reset();
     }
-    std::string createStoreWithGroup(
-        const std::string& contextId,
-        const std::string& userId,
-        const std::string& userPubKey,
-        const group::Group& group
-    ) {
-        return storeApi->createStore(
-            contextId,
-            std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
-            std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
-            core::Buffer::from("group_store_public"),
-            core::Buffer::from("group_store_private"),
-            core::ContainerPolicy(),
-            std::vector<core::GroupGrantWithKey>{{
-                .groupId = group.groupId,
-                .role = "user",
-                .groupPubKey = group.groupPubKey
-            }}
-        );
-    }
     // A Store whose direct members are `users` (as both users and managers) and whose grantee groups are
     // `groups`. Leaving `groupEpoch` at 0 makes the endpoint resolve each group's current epoch from the Bridge.
     std::string createStoreWithGroups(
@@ -429,63 +409,31 @@ TEST_F(StoreUsingGroupsTest, createStore_with_invalid_group_pubkey_throws) {
 }
 
 TEST_F(StoreUsingGroupsTest, getFile_via_group_grant) {
-    // user_1 creates a store granted to Group_2; user_2 is a Group_2 member.
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string storeId;
-    ASSERT_NO_THROW({
-        storeId = createStoreWithGroup(
-            reader->getString("Context_1.contextId"),
-            reader->getString("Login.user_1_id"),
-            reader->getString("Login.user_1_pubKey"),
-            group_2
-        );
-    });
-    ASSERT_FALSE(storeId.empty());
-
-    std::string fileId;
-    ASSERT_NO_THROW({ fileId = uploadFile(storeId, "file_public", "file_private", "file_data"); });
-    ASSERT_FALSE(fileId.empty());
-
-    // user_2 can read the file meta and its contents via the group key.
+    // Store_4 and File_3 come from the dataset, so this reads bytes an earlier build wrote. user_2 holds no
+    // entry in Store_4's own roster: the Group_4 grant is the only route to the key.
     disconnect();
     connectAs(2);
+
+    const std::string fileId = reader->getString("File_3.info_fileId");
     store::File f;
     EXPECT_NO_THROW({ f = storeApi->getFile(fileId); });
     EXPECT_EQ(f.statusCode, 0);
-    EXPECT_EQ(f.privateMeta.stdString(), "file_private");
+    EXPECT_EQ(f.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("File_3.privateMeta_inHex")));
 
     std::string content;
     EXPECT_NO_THROW({ content = downloadFile(fileId, f.size); });
-    EXPECT_EQ(content, "file_data");
+    EXPECT_EQ(content, privmx::utils::Hex::toString(reader->getString("File_3.uploaded_data_inHex")));
 }
 
 TEST_F(StoreUsingGroupsTest, listFiles_via_group_grant) {
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string storeId;
-    ASSERT_NO_THROW({
-        storeId = createStoreWithGroup(
-            reader->getString("Context_1.contextId"),
-            reader->getString("Login.user_1_id"),
-            reader->getString("Login.user_1_pubKey"),
-            group_2
-        );
-    });
-    ASSERT_FALSE(storeId.empty());
-
-    ASSERT_NO_THROW({ uploadFile(storeId, "pub1", "priv1", "data1"); });
-    ASSERT_NO_THROW({ uploadFile(storeId, "pub2", "priv2", "data2"); });
-
+    // Store_4 is seeded with File_3 and File_4 in it, so the paging path has more than one row to return.
     disconnect();
     connectAs(2);
     core::PagingList<store::File> list;
     EXPECT_NO_THROW({
-        list = storeApi->listFiles(storeId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"});
+        list = storeApi->listFiles(
+            reader->getString("Store_4.storeId"), core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"}
+        );
     });
     EXPECT_EQ(list.totalAvailable, 2);
     for (const auto& f : list.readItems) {
@@ -495,45 +443,23 @@ TEST_F(StoreUsingGroupsTest, listFiles_via_group_grant) {
 }
 
 TEST_F(StoreUsingGroupsTest, files_accessible_by_all_group_members) {
-    // Group_3 has user_1, user_2 and user_3.
-    group::Group group_3;
-    ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_3.statusCode, 0);
+    // Store_4 is granted to Group_4 (user_1, user_2) and Group_6 (all three), so user_2 reaches it through
+    // either and user_3 only through Group_6. Neither holds a direct roster entry.
+    const std::string fileId = reader->getString("File_3.info_fileId");
+    const std::string privateMeta = privmx::utils::Hex::toString(reader->getString("File_3.privateMeta_inHex"));
+    const std::string data = privmx::utils::Hex::toString(reader->getString("File_3.uploaded_data_inHex"));
 
-    std::string storeId;
-    ASSERT_NO_THROW({
-        storeId = createStoreWithGroup(
-            reader->getString("Context_1.contextId"),
-            reader->getString("Login.user_1_id"),
-            reader->getString("Login.user_1_pubKey"),
-            group_3
-        );
-    });
-    ASSERT_FALSE(storeId.empty());
-
-    std::string fileId;
-    ASSERT_NO_THROW({ fileId = uploadFile(storeId, "shared_public", "shared_private", "shared_data"); });
-    ASSERT_FALSE(fileId.empty());
-
-    disconnect();
-    connectAs(2);
-    store::File fUser2;
-    EXPECT_NO_THROW({ fUser2 = storeApi->getFile(fileId); });
-    EXPECT_EQ(fUser2.statusCode, 0);
-    EXPECT_EQ(fUser2.privateMeta.stdString(), "shared_private");
-    std::string contentUser2;
-    EXPECT_NO_THROW({ contentUser2 = downloadFile(fileId, fUser2.size); });
-    EXPECT_EQ(contentUser2, "shared_data");
-
-    disconnect();
-    connectAs(3);
-    store::File fUser3;
-    EXPECT_NO_THROW({ fUser3 = storeApi->getFile(fileId); });
-    EXPECT_EQ(fUser3.statusCode, 0);
-    EXPECT_EQ(fUser3.privateMeta.stdString(), "shared_private");
-    std::string contentUser3;
-    EXPECT_NO_THROW({ contentUser3 = downloadFile(fileId, fUser3.size); });
-    EXPECT_EQ(contentUser3, "shared_data");
+    for (const int index : {2, 3}) {
+        disconnect();
+        connectAs(index);
+        store::File f;
+        EXPECT_NO_THROW({ f = storeApi->getFile(fileId); }) << "user_" << index << " could not read the file";
+        EXPECT_EQ(f.statusCode, 0);
+        EXPECT_EQ(f.privateMeta.stdString(), privateMeta);
+        std::string content;
+        EXPECT_NO_THROW({ content = downloadFile(fileId, f.size); });
+        EXPECT_EQ(content, data);
+    }
 }
 
 TEST_F(StoreUsingGroupsTest, getFile_lost_after_group_removal) {
@@ -706,77 +632,38 @@ TEST_F(StoreUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 }
 
 TEST_F(StoreUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
-    // user_2 is a direct member of the Store and in no grantee group, so the bridge serves it `groupKeys: []`
-    // and the read has to come entirely from its own key wrap.
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-
-    std::string storeId;
-    ASSERT_NO_THROW({
-        storeId = createStoreWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{
-                user(1), user(2)
-            },
-            std::vector<group::Group>{group_1}
-        );
-    });
-    ASSERT_FALSE(storeId.empty());
-
-    std::string fileId;
-    ASSERT_NO_THROW({ fileId = uploadFile(storeId, "nogroup_public", "nogroup_private", "nogroup_data"); });
-    ASSERT_FALSE(fileId.empty());
-
+    // user_2 is a direct member of Store_5 and is in no grantee group - Group_7 holds user_1 alone - so the
+    // bridge serves it `groupKeys: []` and the read has to come entirely from its own key wrap.
     disconnect();
     connectAs(2);
 
     store::Store s;
-    EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
+    EXPECT_NO_THROW({ s = storeApi->getStore(reader->getString("Store_5.storeId")); });
     EXPECT_EQ(s.statusCode, 0);
     // `groups` stays unnarrowed, so user_2 still sees the grant it is not part of.
     EXPECT_EQ(s.groups.size(), 1);
 
     store::File f;
-    EXPECT_NO_THROW({ f = storeApi->getFile(fileId); });
+    EXPECT_NO_THROW({ f = storeApi->getFile(reader->getString("File_5.info_fileId")); });
     EXPECT_EQ(f.statusCode, 0);
-    EXPECT_EQ(f.privateMeta.stdString(), "nogroup_private");
+    EXPECT_EQ(f.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("File_5.privateMeta_inHex")));
 }
 
 TEST_F(StoreUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // The Store wraps its key to user_1 only, and user_2 belongs to both grantee groups: narrowing leaves it two
-    // entries at the same keyId, and with no direct wrap to fall back on one of them has to carry the read.
-    group::Group group_2, group_3;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-    ASSERT_EQ(group_3.statusCode, 0);
-
-    std::string storeId;
-    ASSERT_NO_THROW({
-        storeId = createStoreWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<group::Group>{group_2, group_3}
-        );
-    });
-    ASSERT_FALSE(storeId.empty());
-
-    std::string fileId;
-    ASSERT_NO_THROW({ fileId = uploadFile(storeId, "twogroups_public", "twogroups_private", "twogroups_data"); });
-    ASSERT_FALSE(fileId.empty());
-
+    // Store_4 wraps its key to user_1 only and is granted to Group_4 and Group_6, both of which user_2 belongs
+    // to: that leaves two entries at the same keyId, and with no direct wrap one of them has to carry the read.
     disconnect();
     connectAs(2);
 
     store::Store s;
-    EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
+    EXPECT_NO_THROW({ s = storeApi->getStore(reader->getString("Store_4.storeId")); });
     EXPECT_EQ(s.statusCode, 0);
+    EXPECT_EQ(s.groups.size(), 2);
 
     store::File f;
-    EXPECT_NO_THROW({ f = storeApi->getFile(fileId); });
+    EXPECT_NO_THROW({ f = storeApi->getFile(reader->getString("File_3.info_fileId")); });
     EXPECT_EQ(f.statusCode, 0);
-    EXPECT_EQ(f.privateMeta.stdString(), "twogroups_private");
+    EXPECT_EQ(f.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("File_3.privateMeta_inHex")));
 }
 
 TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_did_not_name) {

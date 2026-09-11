@@ -516,69 +516,27 @@ TEST_F(ThreadUsingGroupsTest, createThread_with_invalid_group_pubkey_throws) {
 }
 
 TEST_F(ThreadUsingGroupsTest, getMessage_via_group_grant) {
-    // user_1 creates thread with Group_2 grant; user_2 is a Group_2 member
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string threadId;
-    ASSERT_NO_THROW({
-        threadId = createThreadWithGroup(
-            reader->getString("Context_1.contextId"),
-            reader->getString("Login.user_1_id"),
-            reader->getString("Login.user_1_pubKey"),
-            group_2
-        );
-    });
-    ASSERT_FALSE(threadId.empty());
-
-    std::string messageId;
-    ASSERT_NO_THROW({
-        messageId = threadApi->sendMessage(
-            threadId,
-            core::Buffer::from("msg_public"),
-            core::Buffer::from("msg_private"),
-            core::Buffer::from("msg_data")
-        );
-    });
-    ASSERT_FALSE(messageId.empty());
-
-    // user_2 can download and decrypt the message via group key
+    // Thread_4 and Message_3 come from the dataset, so this reads bytes an earlier build wrote. user_2 holds no
+    // entry in Thread_4's own roster: the group grant is the only route to the key.
     disconnect();
     connectAs(2);
     thread::Message msg;
-    EXPECT_NO_THROW({ msg = threadApi->getMessage(messageId); });
+    EXPECT_NO_THROW({ msg = threadApi->getMessage(reader->getString("Message_3.info_messageId")); });
     EXPECT_EQ(msg.statusCode, 0);
-    EXPECT_EQ(msg.privateMeta.stdString(), "msg_private");
-    EXPECT_EQ(msg.data.stdString(), "msg_data");
+    EXPECT_EQ(
+        msg.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Message_3.privateMeta_inHex"))
+    );
+    EXPECT_EQ(msg.data.stdString(), privmx::utils::Hex::toString(reader->getString("Message_3.data_inHex")));
 }
 
 TEST_F(ThreadUsingGroupsTest, listMessages_via_group_grant) {
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string threadId;
-    ASSERT_NO_THROW({
-        threadId = createThreadWithGroup(
-            reader->getString("Context_1.contextId"),
-            reader->getString("Login.user_1_id"),
-            reader->getString("Login.user_1_pubKey"),
-            group_2
-        );
-    });
-    ASSERT_FALSE(threadId.empty());
-
-    ASSERT_NO_THROW({ threadApi->sendMessage(threadId, core::Buffer::from("pub1"), core::Buffer::from("priv1"), core::Buffer::from("data1")); });
-    ASSERT_NO_THROW({ threadApi->sendMessage(threadId, core::Buffer::from("pub2"), core::Buffer::from("priv2"), core::Buffer::from("data2")); });
-
-    // user_2 can list and decrypt messages via group key
+    // Thread_4 is seeded with Message_3 and Message_4, so the paging path has more than one row to return.
     disconnect();
     connectAs(2);
     core::PagingList<thread::Message> list;
     EXPECT_NO_THROW({
         list = threadApi->listMessages(
-            threadId,
+            reader->getString("Thread_4.threadId"),
             core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"}
         );
     });
@@ -669,50 +627,21 @@ TEST_F(ThreadUsingGroupsTest, getMessage_lost_after_group_removal) {
 }
 
 TEST_F(ThreadUsingGroupsTest, messages_accessible_by_all_group_members) {
-    // Group_3 has user_1, user_2, user_3 as members (pre-created in dataset)
-    group::Group group_3;
-    ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_3.statusCode, 0);
+    // Thread_4 is granted to Group_4 (user_1, user_2) and Group_6 (all three), so user_2 reaches it through
+    // either and user_3 only through Group_6. Neither holds a direct roster entry.
+    const std::string messageId = reader->getString("Message_3.info_messageId");
+    const std::string privateMeta = privmx::utils::Hex::toString(reader->getString("Message_3.privateMeta_inHex"));
+    const std::string data = privmx::utils::Hex::toString(reader->getString("Message_3.data_inHex"));
 
-    std::string threadId;
-    ASSERT_NO_THROW({
-        threadId = createThreadWithGroup(
-            reader->getString("Context_1.contextId"),
-            reader->getString("Login.user_1_id"),
-            reader->getString("Login.user_1_pubKey"),
-            group_3
-        );
-    });
-    ASSERT_FALSE(threadId.empty());
-
-    std::string messageId;
-    ASSERT_NO_THROW({
-        messageId = threadApi->sendMessage(
-            threadId,
-            core::Buffer::from("shared_public"),
-            core::Buffer::from("shared_private"),
-            core::Buffer::from("shared_data")
-        );
-    });
-    ASSERT_FALSE(messageId.empty());
-
-    // user_2 (Group_3 member) can decrypt
-    disconnect();
-    connectAs(2);
-    thread::Message msgUser2;
-    EXPECT_NO_THROW({ msgUser2 = threadApi->getMessage(messageId); });
-    EXPECT_EQ(msgUser2.statusCode, 0);
-    EXPECT_EQ(msgUser2.privateMeta.stdString(), "shared_private");
-    EXPECT_EQ(msgUser2.data.stdString(), "shared_data");
-
-    // user_3 (Group_3 member) can decrypt
-    disconnect();
-    connectAs(3);
-    thread::Message msgUser3;
-    EXPECT_NO_THROW({ msgUser3 = threadApi->getMessage(messageId); });
-    EXPECT_EQ(msgUser3.statusCode, 0);
-    EXPECT_EQ(msgUser3.privateMeta.stdString(), "shared_private");
-    EXPECT_EQ(msgUser3.data.stdString(), "shared_data");
+    for (const int index : {2, 3}) {
+        disconnect();
+        connectAs(index);
+        thread::Message msg;
+        EXPECT_NO_THROW({ msg = threadApi->getMessage(messageId); }) << "user_" << index << " could not read it";
+        EXPECT_EQ(msg.statusCode, 0);
+        EXPECT_EQ(msg.privateMeta.stdString(), privateMeta);
+        EXPECT_EQ(msg.data.stdString(), data);
+    }
 }
 
 TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_messages) {
@@ -1083,94 +1012,44 @@ TEST_F(ThreadUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) 
 }
 
 TEST_F(ThreadUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
-    // user_2 is a direct member of T and in no grantee group, so the bridge serves it `groupKeys: []` - there is
-    // no group route to take and the read has to come entirely from its own key wrap.
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-
-    std::string threadId;
-    ASSERT_NO_THROW({
-        threadId = createThreadWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{
-                user(1), user(2)
-            },
-            std::vector<group::Group>{group_1}
-        );
-    });
-    ASSERT_FALSE(threadId.empty());
-
-    std::string messageId;
-    ASSERT_NO_THROW({
-        messageId = threadApi->sendMessage(
-            threadId,
-            core::Buffer::from("nogroup_public"),
-            core::Buffer::from("nogroup_private"),
-            core::Buffer::from("nogroup_data")
-        );
-    });
-    ASSERT_FALSE(messageId.empty());
-
+    // user_2 is a direct member of Thread_6 and is in no grantee group - Group_7 holds user_1 alone - so the
+    // bridge serves it `groupKeys: []` and the read has to come entirely from its own key wrap.
     disconnect();
     connectAs(2);
 
     thread::Thread t;
-    EXPECT_NO_THROW({ t = threadApi->getThread(threadId); });
+    EXPECT_NO_THROW({ t = threadApi->getThread(reader->getString("Thread_6.threadId")); });
     EXPECT_EQ(t.statusCode, 0);
     // `groups` stays unnarrowed, so user_2 still sees the grant it is not part of.
     EXPECT_EQ(t.groups.size(), 1);
 
     thread::Message msg;
-    EXPECT_NO_THROW({ msg = threadApi->getMessage(messageId); });
+    EXPECT_NO_THROW({ msg = threadApi->getMessage(reader->getString("Message_6.info_messageId")); });
     EXPECT_EQ(msg.statusCode, 0);
-    EXPECT_EQ(msg.privateMeta.stdString(), "nogroup_private");
-    EXPECT_EQ(msg.data.stdString(), "nogroup_data");
+    EXPECT_EQ(
+        msg.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Message_6.privateMeta_inHex"))
+    );
+    EXPECT_EQ(msg.data.stdString(), privmx::utils::Hex::toString(reader->getString("Message_6.data_inHex")));
 }
 
 TEST_F(ThreadUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // T wraps its key to user_1 only, and user_2 belongs to both grantee groups: narrowing leaves it two entries
-    // at the same keyId, and with no direct wrap to fall back on one of them has to carry the read.
-    group::Group group_2, group_3;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-    ASSERT_EQ(group_3.statusCode, 0);
-
-    std::string threadId;
-    ASSERT_NO_THROW({
-        threadId = createThreadWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<group::Group>{group_2, group_3}
-        );
-    });
-    ASSERT_FALSE(threadId.empty());
-
-    std::string messageId;
-    ASSERT_NO_THROW({
-        messageId = threadApi->sendMessage(
-            threadId,
-            core::Buffer::from("twogroups_public"),
-            core::Buffer::from("twogroups_private"),
-            core::Buffer::from("twogroups_data")
-        );
-    });
-    ASSERT_FALSE(messageId.empty());
-
+    // Thread_4 wraps its key to user_1 only and is granted to Group_4 and Group_6, both of which user_2 belongs
+    // to: that leaves two entries at the same keyId, and with no direct wrap one of them has to carry the read.
     disconnect();
     connectAs(2);
 
     thread::Thread t;
-    EXPECT_NO_THROW({ t = threadApi->getThread(threadId); });
+    EXPECT_NO_THROW({ t = threadApi->getThread(reader->getString("Thread_4.threadId")); });
     EXPECT_EQ(t.statusCode, 0);
     EXPECT_EQ(t.groups.size(), 2);
 
     thread::Message msg;
-    EXPECT_NO_THROW({ msg = threadApi->getMessage(messageId); });
+    EXPECT_NO_THROW({ msg = threadApi->getMessage(reader->getString("Message_3.info_messageId")); });
     EXPECT_EQ(msg.statusCode, 0);
-    EXPECT_EQ(msg.privateMeta.stdString(), "twogroups_private");
-    EXPECT_EQ(msg.data.stdString(), "twogroups_data");
+    EXPECT_EQ(
+        msg.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Message_3.privateMeta_inHex"))
+    );
+    EXPECT_EQ(msg.data.stdString(), privmx::utils::Hex::toString(reader->getString("Message_3.data_inHex")));
 }
 
 TEST_F(ThreadUsingGroupsTest, group_only_member_still_reads_after_container_rekey) {

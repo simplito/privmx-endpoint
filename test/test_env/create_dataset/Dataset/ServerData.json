@@ -1,24 +1,24 @@
 {
     "Context_1": {
-        "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e"
+        "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a"
     },
     "Context_2": {
-        "contextId": "29e3f4fb-78f9-420f-bc4f-d779a969d68b"
+        "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50"
     },
     "Entry_1": {
         "server_data": {
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
-            "createDate": 1789028438078,
+            "createDate": 1789117302003,
             "data": "bWVzc2FnZV9mcm9tX2luYm94U2VuZENvbW1pdF8x",
-            "entryId": "6aa26856cd73e22695aed0de",
+            "entryId": "6aa3c3757442a344f262d187",
             "files": [
                 {
                     "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
                     "info": {
                         "author": "<anonymous>",
-                        "createDate": 1789028438076,
-                        "fileId": "6aa26856cd73e22695aed0df",
-                        "storeId": "6aa26854cd73e22695aed0b5"
+                        "createDate": 1789117302000,
+                        "fileId": "6aa3c3757442a344f262d188",
+                        "storeId": "6aa3c3757442a344f262d181"
                     },
                     "privateMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzBfcHJpdmF0ZU1ldGE=",
                     "publicMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzBfcHVibGljTWV0YQ==",
@@ -31,9 +31,9 @@
                     "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
                     "info": {
                         "author": "<anonymous>",
-                        "createDate": 1789028438077,
-                        "fileId": "6aa26856cd73e22695aed0e0",
-                        "storeId": "6aa26854cd73e22695aed0b5"
+                        "createDate": 1789117302000,
+                        "fileId": "6aa3c3767442a344f262d189",
+                        "storeId": "6aa3c3757442a344f262d181"
                     },
                     "privateMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzFfcHJpdmF0ZU1ldGE=",
                     "publicMeta": "dGVzdF9lbnRyeV8xX0ZpbGVEYXRhXzFfcHVibGljTWV0YQ==",
@@ -43,7 +43,7 @@
                     "statusCode": 0
                 }
             ],
-            "inboxId": "6aa26854cd73e22695aed0b7",
+            "inboxId": "6aa3c3757442a344f262d183",
             "schemaVersion": 1,
             "statusCode": 0
         },
@@ -60,26 +60,71 @@
     "Entry_2": {
         "server_data": {
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
-            "createDate": 1789028438105,
+            "createDate": 1789117302059,
             "data": "bWVzc2FnZV9mcm9tX2luYm94U2VuZENvbW1pdF8y",
-            "entryId": "6aa26856cd73e22695aed0e1",
+            "entryId": "6aa3c3767442a344f262d18a",
             "files": [
 
             ],
-            "inboxId": "6aa26854cd73e22695aed0b7",
+            "inboxId": "6aa3c3757442a344f262d183",
             "schemaVersion": 1,
             "statusCode": 0
         },
         "uploaded_data_inBase64": "bWVzc2FnZV9mcm9tX2luYm94U2VuZENvbW1pdF8y"
+    },
+    "Entry_3": {
+        "server_data": {
+            "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+            "createDate": 1789117304506,
+            "data": "aW5ib3hfZW50cnlfcmVhZGFibGVfdGhyb3VnaF9hX2dyb3Vw",
+            "entryId": "6aa3c3787442a344f262d1bb",
+            "files": [
+
+            ],
+            "inboxId": "6aa3c3787442a344f262d1ba",
+            "schemaVersion": 1,
+            "statusCode": 0
+        },
+        "uploaded_data_inBase64": "aW5ib3hfZW50cnlfcmVhZGFibGVfdGhyb3VnaF9hX2dyb3Vw"
+    },
+    "Entry_4": {
+        "server_data": {
+            "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+            "createDate": 1789117304549,
+            "data": "c2Vjb25kX2luYm94X2VudHJ5X3JlYWRhYmxlX3Rocm91Z2hfYV9ncm91cA==",
+            "entryId": "6aa3c3787442a344f262d1bc",
+            "files": [
+
+            ],
+            "inboxId": "6aa3c3787442a344f262d1ba",
+            "schemaVersion": 1,
+            "statusCode": 0
+        },
+        "uploaded_data_inBase64": "c2Vjb25kX2luYm94X2VudHJ5X3JlYWRhYmxlX3Rocm91Z2hfYV9ncm91cA=="
+    },
+    "Entry_5": {
+        "server_data": {
+            "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+            "createDate": 1789117304909,
+            "data": "aW5ib3hfZW50cnlfcmVhZGFibGVfdGhyb3VnaF9hX2RpcmVjdF9rZXk=",
+            "entryId": "6aa3c3787442a344f262d1c7",
+            "files": [
+
+            ],
+            "inboxId": "6aa3c3787442a344f262d1c6",
+            "schemaVersion": 1,
+            "statusCode": 0
+        },
+        "uploaded_data_inBase64": "aW5ib3hfZW50cnlfcmVhZGFibGVfdGhyb3VnaF9hX2RpcmVjdF9rZXk="
     },
     "File_1": {
         "server_data": {
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
             "info": {
                 "author": "user_1",
-                "createDate": 1789028437924,
-                "fileId": "6aa26855cd73e22695aed0d7",
-                "storeId": "6aa26854cd73e22695aed0b2"
+                "createDate": 1789117301728,
+                "fileId": "6aa3c3757442a344f262d17b",
+                "storeId": "6aa3c3757442a344f262d178"
             },
             "privateMeta": "dGVzdF9maWxlRGF0YV8xX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9maWxlRGF0YV8xX3B1YmxpY01ldGE=",
@@ -98,9 +143,9 @@
             "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
             "info": {
                 "author": "user_1",
-                "createDate": 1789028437981,
-                "fileId": "6aa26855cd73e22695aed0da",
-                "storeId": "6aa26854cd73e22695aed0b2"
+                "createDate": 1789117301795,
+                "fileId": "6aa3c3757442a344f262d17e",
+                "storeId": "6aa3c3757442a344f262d178"
             },
             "privateMeta": "dGVzdF9maWxlRGF0YV8yX3ByaXZhdGVNZXRh",
             "publicMeta": "dGVzdF9maWxlRGF0YV8yX3B1YmxpY01ldGE=",
@@ -114,10 +159,359 @@
         "uploaded_publicMeta_inBase64": "dGVzdF9maWxlRGF0YV8yX3B1YmxpY01ldGE=",
         "uploaded_size": 25
     },
-    "Inbox_1": {
+    "File_3": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436452,
+            "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+            "info": {
+                "author": "user_1",
+                "createDate": 1789117304232,
+                "fileId": "6aa3c3787442a344f262d1b3",
+                "storeId": "6aa3c3787442a344f262d1b0"
+            },
+            "privateMeta": "dGVzdF9maWxlRGF0YV8zX3ByaXZhdGVNZXRh",
+            "publicMeta": "dGVzdF9maWxlRGF0YV8zX3B1YmxpY01ldGE=",
+            "randomWrite": false,
+            "schemaVersion": 5,
+            "size": 29,
+            "statusCode": 0
+        },
+        "uploaded_data_inBase64": "ZmlsZV9yZWFkYWJsZV90aHJvdWdoX2FfZ3JvdXA=",
+        "uploaded_privateMeta_inBase64": "dGVzdF9maWxlRGF0YV8zX3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9maWxlRGF0YV8zX3B1YmxpY01ldGE=",
+        "uploaded_size": 29
+    },
+    "File_4": {
+        "server_data": {
+            "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+            "info": {
+                "author": "user_1",
+                "createDate": 1789117304299,
+                "fileId": "6aa3c3787442a344f262d1b6",
+                "storeId": "6aa3c3787442a344f262d1b0"
+            },
+            "privateMeta": "dGVzdF9maWxlRGF0YV80X3ByaXZhdGVNZXRh",
+            "publicMeta": "dGVzdF9maWxlRGF0YV80X3B1YmxpY01ldGE=",
+            "randomWrite": false,
+            "schemaVersion": 5,
+            "size": 36,
+            "statusCode": 0
+        },
+        "uploaded_data_inBase64": "c2Vjb25kX2ZpbGVfcmVhZGFibGVfdGhyb3VnaF9hX2dyb3Vw",
+        "uploaded_privateMeta_inBase64": "dGVzdF9maWxlRGF0YV80X3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9maWxlRGF0YV80X3B1YmxpY01ldGE=",
+        "uploaded_size": 36
+    },
+    "File_5": {
+        "server_data": {
+            "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+            "info": {
+                "author": "user_1",
+                "createDate": 1789117304734,
+                "fileId": "6aa3c3787442a344f262d1c2",
+                "storeId": "6aa3c3787442a344f262d1bf"
+            },
+            "privateMeta": "dGVzdF9maWxlRGF0YV81X3ByaXZhdGVNZXRh",
+            "publicMeta": "dGVzdF9maWxlRGF0YV81X3B1YmxpY01ldGE=",
+            "randomWrite": false,
+            "schemaVersion": 5,
+            "size": 34,
+            "statusCode": 0
+        },
+        "uploaded_data_inBase64": "ZmlsZV9yZWFkYWJsZV90aHJvdWdoX2FfZGlyZWN0X2tleQ==",
+        "uploaded_privateMeta_inBase64": "dGVzdF9maWxlRGF0YV81X3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9maWxlRGF0YV81X3B1YmxpY01ldGE=",
+        "uploaded_size": 34
+    },
+    "Group_1": {
+        "server_data": {
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117303701,
+            "creator": "user_1",
+            "groupId": "6aa3c3777442a344f262d1a6",
+            "groupPubKey": "51hsrhwqTCRPL5oiwBbKh2oTKX6KsyyqyKJJhipoQWramG6bKE",
+            "keyVersion": 1,
+            "lastModificationDate": 1789117303701,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9ncm91cF8xX3ByaXZhdGVNZXRh",
+            "privateMetaVersion": 1,
+            "publicMeta": "dGVzdF9ncm91cF8xX3B1YmxpY01ldGE=",
+            "publicMetaVersion": 1,
+            "rosterVersion": 1,
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "type": "group",
+            "users": [
+                "user_1"
+            ]
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9ncm91cF8xX3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9ncm91cF8xX3B1YmxpY01ldGE="
+    },
+    "Group_2": {
+        "server_data": {
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117303756,
+            "creator": "user_1",
+            "groupId": "6aa3c3777442a344f262d1a7",
+            "groupPubKey": "8WFZ7MrD9vEgBr8hinoCPzEBQ3NJWJwxXf3EgMm65A3yy7zjo8",
+            "keyVersion": 1,
+            "lastModificationDate": 1789117303756,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9ncm91cF8yX3ByaXZhdGVNZXRh",
+            "privateMetaVersion": 1,
+            "publicMeta": "dGVzdF9ncm91cF8yX3B1YmxpY01ldGE=",
+            "publicMetaVersion": 1,
+            "rosterVersion": 1,
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "type": "group",
+            "users": [
+                "user_1",
+                "user_2"
+            ]
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9ncm91cF8yX3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9ncm91cF8yX3B1YmxpY01ldGE="
+    },
+    "Group_3": {
+        "server_data": {
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117303808,
+            "creator": "user_1",
+            "groupId": "6aa3c3777442a344f262d1a8",
+            "groupPubKey": "6SWspXvpwAZPuGX1dygcgt76sP4KHnisdFHV5DR7UNfSTJJNoY",
+            "keyVersion": 1,
+            "lastModificationDate": 1789117303808,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9ncm91cF8zX3ByaXZhdGVNZXRh",
+            "privateMetaVersion": 1,
+            "publicMeta": "dGVzdF9ncm91cF8zX3B1YmxpY01ldGE=",
+            "publicMetaVersion": 1,
+            "rosterVersion": 1,
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "type": "group",
+            "users": [
+                "user_1",
+                "user_2",
+                "user_3"
+            ]
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9ncm91cF8zX3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9ncm91cF8zX3B1YmxpY01ldGE="
+    },
+    "Group_4": {
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117303869,
+            "creator": "user_1",
+            "groupId": "6aa3c3777442a344f262d1a9",
+            "groupPubKey": "5AE7ctbb9EEPoLAdiKBwfr2dvi3LdhuL3eUXDpSfbHUvZoxkJG",
+            "keyVersion": 1,
+            "lastModificationDate": 1789117303869,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9ncm91cF80X3ByaXZhdGVNZXRh",
+            "privateMetaVersion": 1,
+            "publicMeta": "dGVzdF9ncm91cF80X3B1YmxpY01ldGE=",
+            "publicMetaVersion": 1,
+            "rosterVersion": 1,
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "type": "group",
+            "users": [
+                "user_1",
+                "user_2"
+            ]
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9ncm91cF80X3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9ncm91cF80X3B1YmxpY01ldGE="
+    },
+    "Group_5": {
+        "preRotation_groupPubKey": "6qGC55KQbUkBMF6Yo9ECkaVZT8qLfxYs9k8dT5se71Eamb1VPf",
+        "removedUserId": "user_3",
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117303892,
+            "creator": "user_1",
+            "groupId": "6aa3c3777442a344f262d1aa",
+            "groupPubKey": "5DtZG92t86fDamzAp1kAWmoxAsBbGx2iEhPGc3qEuYBrhNx8rF",
+            "keyVersion": 2,
+            "lastModificationDate": 1789117305192,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9ncm91cF81X3ByaXZhdGVNZXRh",
+            "privateMetaVersion": 2,
+            "publicMeta": "dGVzdF9ncm91cF81X3B1YmxpY01ldGE=",
+            "publicMetaVersion": 2,
+            "rosterVersion": 2,
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "type": "group",
+            "users": [
+                "user_1",
+                "user_2"
+            ]
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9ncm91cF81X3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9ncm91cF81X3B1YmxpY01ldGE="
+    },
+    "Group_6": {
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117303919,
+            "creator": "user_1",
+            "groupId": "6aa3c3777442a344f262d1ab",
+            "groupPubKey": "7hh1VnkbPeY5mkGqTsenHJarPCHn5S5DX7mHtdW3nbCba9psLx",
+            "keyVersion": 1,
+            "lastModificationDate": 1789117303919,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9ncm91cF82X3ByaXZhdGVNZXRh",
+            "privateMetaVersion": 1,
+            "publicMeta": "dGVzdF9ncm91cF82X3B1YmxpY01ldGE=",
+            "publicMetaVersion": 1,
+            "rosterVersion": 1,
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "type": "group",
+            "users": [
+                "user_1",
+                "user_2",
+                "user_3"
+            ]
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9ncm91cF82X3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9ncm91cF82X3B1YmxpY01ldGE="
+    },
+    "Group_7": {
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117303944,
+            "creator": "user_1",
+            "groupId": "6aa3c3777442a344f262d1ac",
+            "groupPubKey": "62LS9YUhsqutzreom5ekBmcBgbWBYNUYjzg671eUCmdyp64XQU",
+            "keyVersion": 1,
+            "lastModificationDate": 1789117303944,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9ncm91cF83X3ByaXZhdGVNZXRh",
+            "privateMetaVersion": 1,
+            "publicMeta": "dGVzdF9ncm91cF83X3B1YmxpY01ldGE=",
+            "publicMetaVersion": 1,
+            "rosterVersion": 1,
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "type": "group",
+            "users": [
+                "user_1"
+            ]
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9ncm91cF83X3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9ncm91cF83X3B1YmxpY01ldGE="
+    },
+    "Inbox_1": {
+        "filesConfig_maxCount": 10,
+        "filesConfig_maxFileSize": 104857600,
+        "filesConfig_maxWholeUploadSize": 1048576000,
+        "filesConfig_minCount": 0,
+        "server_data": {
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117301925,
             "creator": "user_1",
             "filesConfig": {
                 "maxCount": 10,
@@ -128,8 +522,8 @@
             "groups": [
 
             ],
-            "inboxId": "6aa26854cd73e22695aed0b7",
-            "lastModificationDate": 1789028436452,
+            "inboxId": "6aa3c3757442a344f262d183",
+            "lastModificationDate": 1789117301925,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -160,9 +554,13 @@
         "uploaded_publicMeta_inBase64": "dGVzdF9pbmJveF8xX3B1YmxpY01ldGE="
     },
     "Inbox_2": {
+        "filesConfig_maxCount": 2,
+        "filesConfig_maxFileSize": 134217728,
+        "filesConfig_maxWholeUploadSize": 267386880,
+        "filesConfig_minCount": 0,
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436499,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117302142,
             "creator": "user_1",
             "filesConfig": {
                 "maxCount": 2,
@@ -173,8 +571,8 @@
             "groups": [
 
             ],
-            "inboxId": "6aa26854cd73e22695aed0ba",
-            "lastModificationDate": 1789028436499,
+            "inboxId": "6aa3c3767442a344f262d18d",
+            "lastModificationDate": 1789117302142,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -207,9 +605,13 @@
         "uploaded_publicMeta_inBase64": "dGVzdF9pbmJveF8yX3B1YmxpY01ldGE="
     },
     "Inbox_3": {
+        "filesConfig_maxCount": 10,
+        "filesConfig_maxFileSize": 104857600,
+        "filesConfig_maxWholeUploadSize": 1048576000,
+        "filesConfig_minCount": 0,
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436546,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117302206,
             "creator": "user_1",
             "filesConfig": {
                 "maxCount": 10,
@@ -220,8 +622,8 @@
             "groups": [
 
             ],
-            "inboxId": "6aa26854cd73e22695aed0bd",
-            "lastModificationDate": 1789028436546,
+            "inboxId": "6aa3c3767442a344f262d190",
+            "lastModificationDate": 1789117302206,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -252,14 +654,123 @@
         "uploaded_privateMeta_inBase64": "dGVzdF9pbmJveF8zX3ByaXZhdGVNZXRh",
         "uploaded_publicMeta_inBase64": "dGVzdF9pbmJveF8zX3B1YmxpY01ldGE="
     },
+    "Inbox_4": {
+        "filesConfig_maxCount": 10,
+        "filesConfig_maxFileSize": 104857600,
+        "filesConfig_maxWholeUploadSize": 1048576000,
+        "filesConfig_minCount": 0,
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117304486,
+            "creator": "user_1",
+            "filesConfig": {
+                "maxCount": 10,
+                "maxFileSize": 104857600,
+                "maxWholeUploadSize": 1048576000,
+                "minCount": 0
+            },
+            "groups": [
+                {
+                    "groupId": "6aa3c3777442a344f262d1a9",
+                    "role": "user"
+                },
+                {
+                    "groupId": "6aa3c3777442a344f262d1ab",
+                    "role": "user"
+                }
+            ],
+            "inboxId": "6aa3c3787442a344f262d1ba",
+            "lastModificationDate": 1789117304486,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9pbmJveF80X3ByaXZhdGVNZXRh",
+            "publicMeta": "dGVzdF9pbmJveF80X3B1YmxpY01ldGE=",
+            "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
+            "statusCode": 0,
+            "users": [
+                "user_1"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9pbmJveF80X3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9pbmJveF80X3B1YmxpY01ldGE="
+    },
+    "Inbox_5": {
+        "filesConfig_maxCount": 10,
+        "filesConfig_maxFileSize": 104857600,
+        "filesConfig_maxWholeUploadSize": 1048576000,
+        "filesConfig_minCount": 0,
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117304889,
+            "creator": "user_1",
+            "filesConfig": {
+                "maxCount": 10,
+                "maxFileSize": 104857600,
+                "maxWholeUploadSize": 1048576000,
+                "minCount": 0
+            },
+            "groups": [
+                {
+                    "groupId": "6aa3c3777442a344f262d1ac",
+                    "role": "user"
+                }
+            ],
+            "inboxId": "6aa3c3787442a344f262d1c6",
+            "lastModificationDate": 1789117304889,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9pbmJveF81X3ByaXZhdGVNZXRh",
+            "publicMeta": "dGVzdF9pbmJveF81X3B1YmxpY01ldGE=",
+            "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
+            "statusCode": 0,
+            "users": [
+                "user_1",
+                "user_2"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9pbmJveF81X3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9pbmJveF81X3B1YmxpY01ldGE="
+    },
     "KvdbEntry_1": {
         "server_data": {
             "data": "a3ZkYl9lbnRyeV92YWx1ZV8x",
             "info": {
                 "author": "user_1",
-                "createDate": 1789028438123,
+                "createDate": 1789117302256,
                 "key": "kvdb_entry_key_1",
-                "kvdbId": "6aa26854cd73e22695aed0be"
+                "kvdbId": "6aa3c3767442a344f262d191"
             },
             "privateMeta": "dGVzdF9rdmRiX2VudHJ5XzFfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9rdmRiX2VudHJ5XzFfcHVibGljTWV0YQ==",
@@ -276,9 +787,9 @@
             "data": "a3ZkYl9lbnRyeV92YWx1ZV8y",
             "info": {
                 "author": "user_1",
-                "createDate": 1789028438219,
+                "createDate": 1789117302289,
                 "key": "kvdb_entry_key_2",
-                "kvdbId": "6aa26854cd73e22695aed0be"
+                "kvdbId": "6aa3c3767442a344f262d191"
             },
             "privateMeta": "dGVzdF9rdmRiX2VudHJ5XzJfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9rdmRiX2VudHJ5XzJfcHVibGljTWV0YQ==",
@@ -290,17 +801,74 @@
         "uploaded_privateMeta_inBase64": "dGVzdF9rdmRiX2VudHJ5XzJfcHJpdmF0ZU1ldGE=",
         "uploaded_publicMeta_inBase64": "dGVzdF9rdmRiX2VudHJ5XzJfcHVibGljTWV0YQ=="
     },
+    "KvdbEntry_3": {
+        "server_data": {
+            "data": "ZW50cnlfcmVhZGFibGVfdGhyb3VnaF9hX2dyb3Vw",
+            "info": {
+                "author": "user_1",
+                "createDate": 1789117304372,
+                "key": "kvdb_entry_key_3",
+                "kvdbId": "6aa3c3787442a344f262d1b7"
+            },
+            "privateMeta": "dGVzdF9rdmRiX2VudHJ5XzNfcHJpdmF0ZU1ldGE=",
+            "publicMeta": "dGVzdF9rdmRiX2VudHJ5XzNfcHVibGljTWV0YQ==",
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "version": 1
+        },
+        "uploaded_data_inBase64": "ZW50cnlfcmVhZGFibGVfdGhyb3VnaF9hX2dyb3Vw",
+        "uploaded_privateMeta_inBase64": "dGVzdF9rdmRiX2VudHJ5XzNfcHJpdmF0ZU1ldGE=",
+        "uploaded_publicMeta_inBase64": "dGVzdF9rdmRiX2VudHJ5XzNfcHVibGljTWV0YQ=="
+    },
+    "KvdbEntry_4": {
+        "server_data": {
+            "data": "c2Vjb25kX2VudHJ5X3JlYWRhYmxlX3Rocm91Z2hfYV9ncm91cA==",
+            "info": {
+                "author": "user_1",
+                "createDate": 1789117304403,
+                "key": "kvdb_entry_key_4",
+                "kvdbId": "6aa3c3787442a344f262d1b7"
+            },
+            "privateMeta": "dGVzdF9rdmRiX2VudHJ5XzRfcHJpdmF0ZU1ldGE=",
+            "publicMeta": "dGVzdF9rdmRiX2VudHJ5XzRfcHVibGljTWV0YQ==",
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "version": 1
+        },
+        "uploaded_data_inBase64": "c2Vjb25kX2VudHJ5X3JlYWRhYmxlX3Rocm91Z2hfYV9ncm91cA==",
+        "uploaded_privateMeta_inBase64": "dGVzdF9rdmRiX2VudHJ5XzRfcHJpdmF0ZU1ldGE=",
+        "uploaded_publicMeta_inBase64": "dGVzdF9rdmRiX2VudHJ5XzRfcHVibGljTWV0YQ=="
+    },
+    "KvdbEntry_5": {
+        "server_data": {
+            "data": "ZW50cnlfcmVhZGFibGVfdGhyb3VnaF9hX2RpcmVjdF9rZXk=",
+            "info": {
+                "author": "user_1",
+                "createDate": 1789117304802,
+                "key": "kvdb_entry_key_5",
+                "kvdbId": "6aa3c3787442a344f262d1c3"
+            },
+            "privateMeta": "dGVzdF9rdmRiX2VudHJ5XzVfcHJpdmF0ZU1ldGE=",
+            "publicMeta": "dGVzdF9rdmRiX2VudHJ5XzVfcHVibGljTWV0YQ==",
+            "schemaVersion": 5,
+            "statusCode": 0,
+            "version": 1
+        },
+        "uploaded_data_inBase64": "ZW50cnlfcmVhZGFibGVfdGhyb3VnaF9hX2RpcmVjdF9rZXk=",
+        "uploaded_privateMeta_inBase64": "dGVzdF9rdmRiX2VudHJ5XzVfcHJpdmF0ZU1ldGE=",
+        "uploaded_publicMeta_inBase64": "dGVzdF9rdmRiX2VudHJ5XzVfcHVibGljTWV0YQ=="
+    },
     "Kvdb_1": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436564,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117302232,
             "creator": "user_1",
             "entries": 2,
             "groups": [
 
             ],
-            "kvdbId": "6aa26854cd73e22695aed0be",
-            "lastModificationDate": 1789028436564,
+            "kvdbId": "6aa3c3767442a344f262d191",
+            "lastModificationDate": 1789117302232,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -333,15 +901,15 @@
     },
     "Kvdb_2": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436579,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117302330,
             "creator": "user_1",
             "entries": 0,
             "groups": [
 
             ],
-            "kvdbId": "6aa26854cd73e22695aed0bf",
-            "lastModificationDate": 1789028436579,
+            "kvdbId": "6aa3c3767442a344f262d192",
+            "lastModificationDate": 1789117302330,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -376,15 +944,15 @@
     },
     "Kvdb_3": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436593,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117302357,
             "creator": "user_1",
             "entries": 0,
             "groups": [
 
             ],
-            "kvdbId": "6aa26854cd73e22695aed0c0",
-            "lastModificationDate": 1789028436593,
+            "kvdbId": "6aa3c3767442a344f262d193",
+            "lastModificationDate": 1789117302357,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -416,15 +984,111 @@
         "uploaded_privateMeta_inBase64": "dGVzdF9rdmRiXzNfcHJpdmF0ZU1ldGE=",
         "uploaded_publicMeta_inBase64": "dGVzdF9rdmRiXzNfcHVibGljTWV0YQ=="
     },
+    "Kvdb_4": {
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117304348,
+            "creator": "user_1",
+            "entries": 2,
+            "groups": [
+                {
+                    "groupId": "6aa3c3777442a344f262d1a9",
+                    "role": "user"
+                },
+                {
+                    "groupId": "6aa3c3777442a344f262d1ab",
+                    "role": "user"
+                }
+            ],
+            "kvdbId": "6aa3c3787442a344f262d1b7",
+            "lastModificationDate": 1789117304348,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9rdmRiXzRfcHJpdmF0ZU1ldGE=",
+            "publicMeta": "dGVzdF9rdmRiXzRfcHVibGljTWV0YQ==",
+            "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
+            "statusCode": 0,
+            "users": [
+                "user_1"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9rdmRiXzRfcHJpdmF0ZU1ldGE=",
+        "uploaded_publicMeta_inBase64": "dGVzdF9rdmRiXzRfcHVibGljTWV0YQ=="
+    },
+    "Kvdb_5": {
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117304780,
+            "creator": "user_1",
+            "entries": 1,
+            "groups": [
+                {
+                    "groupId": "6aa3c3777442a344f262d1ac",
+                    "role": "user"
+                }
+            ],
+            "kvdbId": "6aa3c3787442a344f262d1c3",
+            "lastModificationDate": 1789117304780,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9rdmRiXzVfcHJpdmF0ZU1ldGE=",
+            "publicMeta": "dGVzdF9rdmRiXzVfcHVibGljTWV0YQ==",
+            "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
+            "statusCode": 0,
+            "users": [
+                "user_1",
+                "user_2"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9rdmRiXzVfcHJpdmF0ZU1ldGE=",
+        "uploaded_publicMeta_inBase64": "dGVzdF9rdmRiXzVfcHVibGljTWV0YQ=="
+    },
     "Login": {
         "instanceUrl": "http://localhost/",
-        "solutionId": "1eb65805-de9f-4583-ad31-c35cff122fb5",
+        "solutionId": "092b869f-1bc5-4786-99e9-7f12466e5e1f",
         "user_1_id": "user_1",
         "user_1_privKey": "Kx9ftJtfa4Af941f9jYR44dKxv9uWMxkJBk3XgdSYy6M5i6zcXxS",
         "user_1_pubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
         "user_2_id": "user_2",
         "user_2_privKey": "L2KX5JrHkGBzGvMJ41bDhwgwN1JpqGKYk8feJEyri8bdqkqd84kt",
-        "user_2_pubKey": "86uPnTCSQ2WzEoM1EYGWt2dEc1jmR51HrVw5wTydxiDyuHDMty"
+        "user_2_pubKey": "86uPnTCSQ2WzEoM1EYGWt2dEc1jmR51HrVw5wTydxiDyuHDMty",
+        "user_3_id": "user_3",
+        "user_3_privKey": "KxViitzdcW4unZxZPEiTzU2mzAaEPipXyeS7j7jB2fDnHNKM2LJe",
+        "user_3_pubKey": "6KYkRBd2GxTFBKchyLmXVtGP88TSwGobZ9Y4Ve1fnhKauSk7x5"
     },
     "Message_1": {
         "server_data": {
@@ -432,9 +1096,9 @@
             "data": "bWVzc2FnZV9mcm9tX3NlbmRNZXNzYWdl",
             "info": {
                 "author": "user_1",
-                "createDate": 1789028437840,
-                "messageId": "6aa26855cd73e22695aed0d3",
-                "threadId": "6aa26854cd73e22695aed0af"
+                "createDate": 1789117301514,
+                "messageId": "6aa3c3757442a344f262d174",
+                "threadId": "6aa3c3757442a344f262d173"
             },
             "privateMeta": "dGVzdF9tZXNzYWdlXzFfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9tZXNzYWdlXzFfcHVibGljTWV0YQ==",
@@ -451,9 +1115,9 @@
             "data": "bWVzc2FnZV9mcm9tX3NlbmRNZXNzYWdl",
             "info": {
                 "author": "user_1",
-                "createDate": 1789028437859,
-                "messageId": "6aa26855cd73e22695aed0d4",
-                "threadId": "6aa26854cd73e22695aed0af"
+                "createDate": 1789117301549,
+                "messageId": "6aa3c3757442a344f262d175",
+                "threadId": "6aa3c3757442a344f262d173"
             },
             "privateMeta": "dGVzdF9tZXNzYWdlXzJfcHJpdmF0ZU1ldGE=",
             "publicMeta": "dGVzdF9tZXNzYWdlXzJfcHVibGljTWV0YQ==",
@@ -464,6 +1128,82 @@
         "uploaded_privateMeta_inBase64": "dGVzdF9tZXNzYWdlXzJfcHJpdmF0ZU1ldGE=",
         "uploaded_publicMeta_inBase64": "dGVzdF9tZXNzYWdlXzJfcHVibGljTWV0YQ=="
     },
+    "Message_3": {
+        "server_data": {
+            "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+            "data": "bWVzc2FnZV9yZWFkYWJsZV90aHJvdWdoX2FfZ3JvdXA=",
+            "info": {
+                "author": "user_1",
+                "createDate": 1789117304088,
+                "messageId": "6aa3c3787442a344f262d1ae",
+                "threadId": "6aa3c3787442a344f262d1ad"
+            },
+            "privateMeta": "dGVzdF9tZXNzYWdlXzNfcHJpdmF0ZU1ldGE=",
+            "publicMeta": "dGVzdF9tZXNzYWdlXzNfcHVibGljTWV0YQ==",
+            "schemaVersion": 5,
+            "statusCode": 0
+        },
+        "uploaded_data_inBase64": "bWVzc2FnZV9yZWFkYWJsZV90aHJvdWdoX2FfZ3JvdXA=",
+        "uploaded_privateMeta_inBase64": "dGVzdF9tZXNzYWdlXzNfcHJpdmF0ZU1ldGE=",
+        "uploaded_publicMeta_inBase64": "dGVzdF9tZXNzYWdlXzNfcHVibGljTWV0YQ=="
+    },
+    "Message_4": {
+        "server_data": {
+            "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+            "data": "c2Vjb25kX21lc3NhZ2VfcmVhZGFibGVfdGhyb3VnaF9hX2dyb3Vw",
+            "info": {
+                "author": "user_1",
+                "createDate": 1789117304124,
+                "messageId": "6aa3c3787442a344f262d1af",
+                "threadId": "6aa3c3787442a344f262d1ad"
+            },
+            "privateMeta": "dGVzdF9tZXNzYWdlXzRfcHJpdmF0ZU1ldGE=",
+            "publicMeta": "dGVzdF9tZXNzYWdlXzRfcHVibGljTWV0YQ==",
+            "schemaVersion": 5,
+            "statusCode": 0
+        },
+        "uploaded_data_inBase64": "c2Vjb25kX21lc3NhZ2VfcmVhZGFibGVfdGhyb3VnaF9hX2dyb3Vw",
+        "uploaded_privateMeta_inBase64": "dGVzdF9tZXNzYWdlXzRfcHJpdmF0ZU1ldGE=",
+        "uploaded_publicMeta_inBase64": "dGVzdF9tZXNzYWdlXzRfcHVibGljTWV0YQ=="
+    },
+    "Message_5": {
+        "server_data": {
+            "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+            "data": "bWVzc2FnZV93cml0dGVuX2JlZm9yZV90aGVfcm90YXRpb24=",
+            "info": {
+                "author": "user_1",
+                "createDate": 1789117304981,
+                "messageId": "6aa3c3787442a344f262d1c9",
+                "threadId": "6aa3c3787442a344f262d1c8"
+            },
+            "privateMeta": "dGVzdF9tZXNzYWdlXzVfcHJpdmF0ZU1ldGE=",
+            "publicMeta": "dGVzdF9tZXNzYWdlXzVfcHVibGljTWV0YQ==",
+            "schemaVersion": 5,
+            "statusCode": 0
+        },
+        "uploaded_data_inBase64": "bWVzc2FnZV93cml0dGVuX2JlZm9yZV90aGVfcm90YXRpb24=",
+        "uploaded_privateMeta_inBase64": "dGVzdF9tZXNzYWdlXzVfcHJpdmF0ZU1ldGE=",
+        "uploaded_publicMeta_inBase64": "dGVzdF9tZXNzYWdlXzVfcHVibGljTWV0YQ=="
+    },
+    "Message_6": {
+        "server_data": {
+            "authorPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+            "data": "bWVzc2FnZV9yZWFkYWJsZV90aHJvdWdoX2FfZGlyZWN0X2tleQ==",
+            "info": {
+                "author": "user_1",
+                "createDate": 1789117304638,
+                "messageId": "6aa3c3787442a344f262d1be",
+                "threadId": "6aa3c3787442a344f262d1bd"
+            },
+            "privateMeta": "dGVzdF9tZXNzYWdlXzZfcHJpdmF0ZU1ldGE=",
+            "publicMeta": "dGVzdF9tZXNzYWdlXzZfcHVibGljTWV0YQ==",
+            "schemaVersion": 5,
+            "statusCode": 0
+        },
+        "uploaded_data_inBase64": "bWVzc2FnZV9yZWFkYWJsZV90aHJvdWdoX2FfZGlyZWN0X2tleQ==",
+        "uploaded_privateMeta_inBase64": "dGVzdF9tZXNzYWdlXzZfcHJpdmF0ZU1ldGE=",
+        "uploaded_publicMeta_inBase64": "dGVzdF9tZXNzYWdlXzZfcHVibGljTWV0YQ=="
+    },
     "SearchIndex_1": {
         "doc_1_content": "Ala ma kota",
         "doc_1_id": 1,
@@ -473,14 +1213,14 @@
         "doc_2_name": "doc-2",
         "docs_common_content_part": "ma kota",
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436605,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117302380,
             "creator": "user_1",
             "groups": [
 
             ],
-            "indexId": "6aa26854cd73e22695aed0c1",
-            "lastModificationDate": 1789028436605,
+            "indexId": "6aa3c3767442a344f262d194",
+            "lastModificationDate": 1789117302380,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -514,14 +1254,14 @@
     },
     "SearchIndex_2": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028437724,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117303527,
             "creator": "user_1",
             "groups": [
 
             ],
-            "indexId": "6aa26855cd73e22695aed0cf",
-            "lastModificationDate": 1789028437724,
+            "indexId": "6aa3c3777442a344f262d1a2",
+            "lastModificationDate": 1789117303527,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -557,14 +1297,14 @@
     },
     "SearchIndex_3": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028437780,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117303605,
             "creator": "user_1",
             "groups": [
 
             ],
-            "indexId": "6aa26855cd73e22695aed0d1",
-            "lastModificationDate": 1789028437780,
+            "indexId": "6aa3c3777442a344f262d1a4",
+            "lastModificationDate": 1789117303605,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -599,15 +1339,15 @@
     },
     "Store_1": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436381,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117301666,
             "creator": "user_1",
             "filesCount": 2,
             "groups": [
 
             ],
-            "lastFileDate": 1789028437981,
-            "lastModificationDate": 1789028436381,
+            "lastFileDate": 1789117301795,
+            "lastModificationDate": 1789117301666,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -630,7 +1370,7 @@
 
             ],
             "statusCode": 0,
-            "storeId": "6aa26854cd73e22695aed0b2",
+            "storeId": "6aa3c3757442a344f262d178",
             "users": [
                 "user_1"
             ],
@@ -641,15 +1381,15 @@
     },
     "Store_2": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436396,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117301840,
             "creator": "user_1",
             "filesCount": 0,
             "groups": [
 
             ],
-            "lastFileDate": 1789028436396,
-            "lastModificationDate": 1789028436396,
+            "lastFileDate": 1789117301840,
+            "lastModificationDate": 1789117301840,
             "lastModifier": "user_1",
             "managers": [
                 "user_1",
@@ -673,7 +1413,7 @@
 
             ],
             "statusCode": 0,
-            "storeId": "6aa26854cd73e22695aed0b3",
+            "storeId": "6aa3c3757442a344f262d17f",
             "users": [
                 "user_1",
                 "user_2"
@@ -685,15 +1425,15 @@
     },
     "Store_3": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436411,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117301872,
             "creator": "user_1",
             "filesCount": 0,
             "groups": [
 
             ],
-            "lastFileDate": 1789028436411,
-            "lastModificationDate": 1789028436411,
+            "lastFileDate": 1789117301872,
+            "lastModificationDate": 1789117301872,
             "lastModifier": "user_1",
             "managers": [
                 "user_1"
@@ -716,7 +1456,7 @@
 
             ],
             "statusCode": 0,
-            "storeId": "6aa26854cd73e22695aed0b4",
+            "storeId": "6aa3c3757442a344f262d180",
             "users": [
                 "user_1",
                 "user_2"
@@ -726,17 +1466,112 @@
         "uploaded_privateMeta_inBase64": "dGVzdF9zdG9yZV8zX3ByaXZhdGVNZXRh",
         "uploaded_publicMeta_inBase64": "dGVzdF9zdG9yZV8zX3B1YmxpY01ldGE="
     },
+    "Store_4": {
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117304171,
+            "creator": "user_1",
+            "filesCount": 2,
+            "groups": [
+                {
+                    "groupId": "6aa3c3777442a344f262d1a9",
+                    "role": "user"
+                },
+                {
+                    "groupId": "6aa3c3777442a344f262d1ab",
+                    "role": "user"
+                }
+            ],
+            "lastFileDate": 1789117304299,
+            "lastModificationDate": 1789117304171,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9zdG9yZV80X3ByaXZhdGVNZXRh",
+            "publicMeta": "dGVzdF9zdG9yZV80X3B1YmxpY01ldGE=",
+            "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
+            "statusCode": 0,
+            "storeId": "6aa3c3787442a344f262d1b0",
+            "users": [
+                "user_1"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9zdG9yZV80X3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9zdG9yZV80X3B1YmxpY01ldGE="
+    },
+    "Store_5": {
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117304679,
+            "creator": "user_1",
+            "filesCount": 1,
+            "groups": [
+                {
+                    "groupId": "6aa3c3777442a344f262d1ac",
+                    "role": "user"
+                }
+            ],
+            "lastFileDate": 1789117304734,
+            "lastModificationDate": 1789117304679,
+            "lastModifier": "user_1",
+            "managers": [
+                "user_1"
+            ],
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF9zdG9yZV81X3ByaXZhdGVNZXRh",
+            "publicMeta": "dGVzdF9zdG9yZV81X3B1YmxpY01ldGE=",
+            "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
+            "statusCode": 0,
+            "storeId": "6aa3c3787442a344f262d1bf",
+            "users": [
+                "user_1",
+                "user_2"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF9zdG9yZV81X3ByaXZhdGVNZXRh",
+        "uploaded_publicMeta_inBase64": "dGVzdF9zdG9yZV81X3B1YmxpY01ldGE="
+    },
     "Thread_1": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436281,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117301482,
             "creator": "user_1",
             "groups": [
 
             ],
-            "lastModificationDate": 1789028436281,
+            "lastModificationDate": 1789117301482,
             "lastModifier": "user_1",
-            "lastMsgDate": 1789028437859,
+            "lastMsgDate": 1789117301549,
             "managers": [
                 "user_1"
             ],
@@ -759,7 +1594,7 @@
 
             ],
             "statusCode": 0,
-            "threadId": "6aa26854cd73e22695aed0af",
+            "threadId": "6aa3c3757442a344f262d173",
             "users": [
                 "user_1"
             ],
@@ -770,15 +1605,15 @@
     },
     "Thread_2": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436345,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117301602,
             "creator": "user_1",
             "groups": [
 
             ],
-            "lastModificationDate": 1789028436345,
+            "lastModificationDate": 1789117301602,
             "lastModifier": "user_1",
-            "lastMsgDate": 1789028436345,
+            "lastMsgDate": 1789117301602,
             "managers": [
                 "user_1",
                 "user_2"
@@ -802,7 +1637,7 @@
 
             ],
             "statusCode": 0,
-            "threadId": "6aa26854cd73e22695aed0b0",
+            "threadId": "6aa3c3757442a344f262d176",
             "users": [
                 "user_1",
                 "user_2"
@@ -814,15 +1649,15 @@
     },
     "Thread_3": {
         "server_data": {
-            "contextId": "6a9da051-d5e9-4d31-b450-b1a17adce52e",
-            "createDate": 1789028436366,
+            "contextId": "9abe5bdf-e69e-4107-b1fc-b8b44e747c1a",
+            "createDate": 1789117301630,
             "creator": "user_1",
             "groups": [
 
             ],
-            "lastModificationDate": 1789028436366,
+            "lastModificationDate": 1789117301630,
             "lastModifier": "user_1",
-            "lastMsgDate": 1789028436366,
+            "lastMsgDate": 1789117301630,
             "managers": [
                 "user_1"
             ],
@@ -845,7 +1680,7 @@
 
             ],
             "statusCode": 0,
-            "threadId": "6aa26854cd73e22695aed0b1",
+            "threadId": "6aa3c3757442a344f262d177",
             "users": [
                 "user_1",
                 "user_2"
@@ -854,5 +1689,145 @@
         },
         "uploaded_privateMeta_inBase64": "dGVzdF90aHJlYWRfM19wcml2YXRlTWV0YQ==",
         "uploaded_publicMeta_inBase64": "dGVzdF90aHJlYWRfM19wdWJsaWNNZXRh"
+    },
+    "Thread_4": {
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117304058,
+            "creator": "user_1",
+            "groups": [
+                {
+                    "groupId": "6aa3c3777442a344f262d1a9",
+                    "role": "user"
+                },
+                {
+                    "groupId": "6aa3c3777442a344f262d1ab",
+                    "role": "user"
+                }
+            ],
+            "lastModificationDate": 1789117304058,
+            "lastModifier": "user_1",
+            "lastMsgDate": 1789117304124,
+            "managers": [
+                "user_1"
+            ],
+            "messagesCount": 2,
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF90aHJlYWRfNF9wcml2YXRlTWV0YQ==",
+            "publicMeta": "dGVzdF90aHJlYWRfNF9wdWJsaWNNZXRh",
+            "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
+            "statusCode": 0,
+            "threadId": "6aa3c3787442a344f262d1ad",
+            "users": [
+                "user_1"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF90aHJlYWRfNF9wcml2YXRlTWV0YQ==",
+        "uploaded_publicMeta_inBase64": "dGVzdF90aHJlYWRfNF9wdWJsaWNNZXRh"
+    },
+    "Thread_5": {
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117304956,
+            "creator": "user_1",
+            "groups": [
+                {
+                    "groupId": "6aa3c3777442a344f262d1aa",
+                    "role": "user"
+                }
+            ],
+            "lastModificationDate": 1789117304956,
+            "lastModifier": "user_1",
+            "lastMsgDate": 1789117304981,
+            "managers": [
+                "user_1"
+            ],
+            "messagesCount": 1,
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF90aHJlYWRfNV9wcml2YXRlTWV0YQ==",
+            "publicMeta": "dGVzdF90aHJlYWRfNV9wdWJsaWNNZXRh",
+            "schemaVersion": 5,
+            "staleGroups": [
+                "6aa3c3777442a344f262d1aa"
+            ],
+            "statusCode": 0,
+            "threadId": "6aa3c3787442a344f262d1c8",
+            "users": [
+                "user_1"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF90aHJlYWRfNV9wcml2YXRlTWV0YQ==",
+        "uploaded_publicMeta_inBase64": "dGVzdF90aHJlYWRfNV9wdWJsaWNNZXRh"
+    },
+    "Thread_6": {
+        "server_data": {
+            "contextId": "67d0fe84-de75-496a-8f4a-ed25e29e2a50",
+            "createDate": 1789117304610,
+            "creator": "user_1",
+            "groups": [
+                {
+                    "groupId": "6aa3c3777442a344f262d1ac",
+                    "role": "user"
+                }
+            ],
+            "lastModificationDate": 1789117304610,
+            "lastModifier": "user_1",
+            "lastMsgDate": 1789117304638,
+            "managers": [
+                "user_1"
+            ],
+            "messagesCount": 1,
+            "policy": {
+                "delete_": null,
+                "forwardSecrecy": null,
+                "get": null,
+                "item": null,
+                "ownerCanBeRemovedFromManagers": null,
+                "rotateKeys": null,
+                "update": null,
+                "updatePolicy": null,
+                "updaterCanBeRemovedFromManagers": null
+            },
+            "privateMeta": "dGVzdF90aHJlYWRfNl9wcml2YXRlTWV0YQ==",
+            "publicMeta": "dGVzdF90aHJlYWRfNl9wdWJsaWNNZXRh",
+            "schemaVersion": 5,
+            "staleGroups": [
+
+            ],
+            "statusCode": 0,
+            "threadId": "6aa3c3787442a344f262d1bd",
+            "users": [
+                "user_1",
+                "user_2"
+            ],
+            "version": 1
+        },
+        "uploaded_privateMeta_inBase64": "dGVzdF90aHJlYWRfNl9wcml2YXRlTWV0YQ==",
+        "uploaded_publicMeta_inBase64": "dGVzdF90aHJlYWRfNl9wdWJsaWNNZXRh"
     }
 }
