@@ -18,8 +18,8 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
-constexpr char ENDPOINT_VERSION[] = "2.6.0";
-constexpr char MINIMUM_REQUIRED_BRIDGE_VERSION[] = "2.36.2";
+constexpr char ENDPOINT_VERSION[] = "2.9.0-alpha1";
+constexpr char MINIMUM_REQUIRED_BRIDGE_VERSION[] = "3.1.0";
 
 } // namespace core
 } // namespace endpoint
