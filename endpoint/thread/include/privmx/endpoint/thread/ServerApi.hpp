@@ -30,6 +30,7 @@ public:
 
     server::ThreadCreateResult threadCreate(server::ThreadCreateModel model);
     void threadUpdate(server::ThreadUpdateModel model);
+    void threadRotateKeys(server::ThreadRotateKeysModel model);
     void threadDelete(server::ThreadDeleteModel model);
     server::ThreadGetResult threadGet(server::ThreadGetModel model);
     server::ThreadListResult threadList(server::ThreadListModel model);

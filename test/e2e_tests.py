@@ -38,7 +38,7 @@ def list_tests(test_file_path: str, passthrough_args: Sequence[str]) -> list[str
 
 def pre_test(index: int, dataset_dir_path: str, test_name: str) -> BridgeInfo:
     e2e_common.log(f"[PRE-TEST] {test_name}")
-    bridge_info = create_bridge_docker(index, "hub.simplito.com/privmx/privmx-bridge:dev")
+    bridge_info = create_bridge_docker(index, e2e_common.DEFAULT_BRIDGE_DOCKER_IMAGE, dataset_dir_path)
     try:
         prepare_bridge_context(bridge_info, dataset_dir_path)
         return bridge_info

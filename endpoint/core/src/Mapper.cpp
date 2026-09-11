@@ -18,6 +18,15 @@ CollectionItemChange Mapper::mapToCollectionItemChange(const server::CollectionI
     return {.itemId = data.itemId, .action = data.action};
 }
 
+std::vector<GroupGrant> Mapper::mapToGroupGrants(const std::vector<server::GroupGrant>& data) {
+    std::vector<GroupGrant> result;
+    result.reserve(data.size());
+    for (const auto& grant : data) {
+        result.push_back({.groupId = grant.groupId, .role = grant.role});
+    }
+    return result;
+}
+
 std::vector<CollectionItemChange> Mapper::mapToCollectionItemChanges(
     const std::vector<server::CollectionItemChange>& data
 ) {

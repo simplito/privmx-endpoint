@@ -17,7 +17,9 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/StreamVarSerializer.hpp"
 #include <mutex>
+#include <optional>
 #include <privmx/endpoint/core/VarDeserializer.hpp>
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/stream/StreamVarDeserializer.hpp>
 #include <shared_mutex>
 namespace privmx {
@@ -57,15 +59,26 @@ public:
         ListStreamRoomParticipants = 23,
         EncryptDataChannelMessage = 24,
         DecryptDataChannelMessage = 25,
+        RotateStreamRoomKeys = 26,
     };
 
-    StreamApiLowVarInterface(core::Connection connection, const core::VarSerializer& serializer)
-        : _connection(std::move(connection)), _serializer(serializer) {}
+    /**
+     * `groupApi` is optional: without it the StreamApiLow is group-unaware, exactly as when `StreamApiLow::create`
+     * is called with no GroupApi. Passed through the constructor rather than as a `create` argument because a
+     * GroupApi is an object, not something that survives Var serialization.
+     */
+    StreamApiLowVarInterface(
+        core::Connection connection,
+        const core::VarSerializer& serializer,
+        std::optional<group::GroupApi> groupApi = std::nullopt
+    )
+        : _connection(std::move(connection)), _groupApi(std::move(groupApi)), _serializer(serializer) {}
 
     Poco::Dynamic::Var create(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getTurnCredentials(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var createStreamRoom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateStreamRoom(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var rotateStreamRoomKeys(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var listStreamRooms(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getStreamRoom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var deleteStreamRoom(const Poco::Dynamic::Var& args);
@@ -105,6 +118,7 @@ private:
     static std::map<METHOD, Poco::Dynamic::Var (StreamApiLowVarInterface::*)(const Poco::Dynamic::Var&)> methodMap;
 
     core::Connection _connection;
+    std::optional<group::GroupApi> _groupApi;
     StreamApiLow _streamApi;
     core::VarSerializer _serializer;
     core::VarDeserializer _deserializer;

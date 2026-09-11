@@ -27,7 +27,7 @@ class FileMetaEncryptorV4 {
 public:
     store::server::EncryptedFileMetaV4 encrypt(
         const store::FileMetaToEncryptV4& fileMeta,
-        const crypto::PrivateKey& authorPrivateKey,
+        const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     store::DecryptedFileMetaV4 decrypt(

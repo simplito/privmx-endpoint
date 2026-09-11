@@ -5,12 +5,19 @@ import importlib.util
 import os
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Sequence
 
 import e2e_common
-from e2e_bridge import check_backend_ready, load_runtime_dependencies
+from e2e_bridge import (
+    check_backend_ready,
+    create_bridge_docker,
+    destroy_bridge_docker,
+    load_runtime_dependencies,
+    prepare_bridge_context,
+)
 from e2e_tests import (
     build_list_passthrough_args,
     discover_test_files,
@@ -179,7 +186,8 @@ def parse_cli_args(argv: Sequence[str]) -> tuple[argparse.Namespace, str | None,
             "  python3 e2e_runner.py --setup-python\n"
             "  python3 e2e_runner.py\n"
             "  python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset --gtest_filter=CoreTest.*\n"
-            "  python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset -- --gtest_repeat=2"
+            "  python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset -- --gtest_repeat=2\n"
+            "  python3 e2e_runner.py --start-bridge --dataset-dir test_env/create_dataset/Dataset"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -202,6 +210,27 @@ def parse_cli_args(argv: Sequence[str]) -> tuple[argparse.Namespace, str | None,
     parser.add_argument(
         "--dataset-dir",
         help=f"Dataset directory used to seed the bridge (default: {DEFAULT_DATASET_DIR}).",
+    )
+    parser.add_argument(
+        "--start-bridge",
+        action="store_true",
+        help=(
+            "Start a single bridge container with --dataset-dir loaded and leave it running "
+            "for manual testing (e.g. against tools in __DEBUG/). Blocks until interrupted with "
+            "Ctrl+C, then tears the container and its database down. No tests are run."
+        ),
+    )
+    parser.add_argument(
+        "--index",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Worker index for --start-bridge; controls container name and host port (3001 + N). Default: 0.",
+    )
+    parser.add_argument(
+        "--docker-image",
+        default=e2e_common.DEFAULT_BRIDGE_DOCKER_IMAGE,
+        help=f"Bridge docker image for --start-bridge (default: {e2e_common.DEFAULT_BRIDGE_DOCKER_IMAGE}).",
     )
 
     args, passthrough_args = parser.parse_known_args(argv)
@@ -232,6 +261,42 @@ def resolve_dataset_ini_path(dataset_dir_path: str) -> str:
     if not ini_path.exists():
         raise SystemExit(f"ServerData.ini not found in dataset directory: {dataset_dir_path}")
     return str(ini_path)
+
+
+def run_standalone_bridge(index: int, docker_image: str, dataset_dir_path: str) -> int:
+    try:
+        check_backend_ready()
+    except RuntimeError as exc:
+        print(f"Backend not ready: {exc}")
+        return 1
+
+    ini_file_path = resolve_dataset_ini_path(dataset_dir_path)
+
+    print(f"Starting bridge (index={index}, image={docker_image}) with dataset {dataset_dir_path} ...")
+    bridge_info = create_bridge_docker(index, docker_image, dataset_dir_path)
+    try:
+        prepare_bridge_context(bridge_info, dataset_dir_path)
+    except Exception:
+        destroy_bridge_docker(bridge_info)
+        raise
+
+    print("\n=========================")
+    print(f"Bridge URL  : http://localhost:{bridge_info.host_port}")
+    print(f"Container   : {bridge_info.container_name}")
+    print(f"Dataset ini : {ini_file_path}")
+    print("Bridge is running. Press Ctrl+C to stop it and tear it down.")
+    print("=========================\n")
+
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print("\nStopping bridge...")
+        destroy_bridge_docker(bridge_info)
+
+    return 0
 
 
 def main(
@@ -301,10 +366,16 @@ def main(
 
 if __name__ == "__main__":
     args, selected_filter, run_passthrough_args = parse_cli_args(sys.argv[1:])
-    has_explicit_targets = any(value is not None for value in (args.tests_dir, args.dataset_dir))
+    has_explicit_targets = (
+        any(value is not None for value in (args.tests_dir, args.dataset_dir)) or args.start_bridge
+    )
 
     ensure_python_environment(sys.argv[1:], args.setup_python, has_explicit_targets)
     load_runtime_dependencies()
+
+    if args.start_bridge:
+        dataset_dir_path = resolve_input_path(args.dataset_dir or DEFAULT_DATASET_DIR)
+        raise SystemExit(run_standalone_bridge(args.index, args.docker_image, dataset_dir_path))
 
     test_dir_path = resolve_tests_dir_path(args.tests_dir or DEFAULT_TESTS_DIR)
     dataset_dir_path = resolve_input_path(args.dataset_dir or DEFAULT_DATASET_DIR)

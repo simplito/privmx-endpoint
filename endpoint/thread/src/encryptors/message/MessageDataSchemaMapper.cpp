@@ -152,7 +152,8 @@ Message MessageDataSchemaMapper::toLibMessage(
 std::vector<Message> MessageDataSchemaMapper::validateDecryptAndConvertMessages(
     const std::vector<server::Message>& messages,
     const core::ModuleKeys& threadKeys,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyEntries<Message>(
         messages, threadKeys, keyProvider, _connection,
@@ -165,14 +166,16 @@ std::vector<Message> MessageDataSchemaMapper::validateDecryptAndConvertMessages(
         [&](const server::Message& msg, const core::DecryptedEncKey& key) { return decrypt(msg, key); },
         [](const server::Message& msg, uint32_t code) {
             return toLibMessage(msg, {}, {}, {}, {}, code, MessageDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
 Message MessageDataSchemaMapper::validateDecryptAndConvertMessage(
     const server::Message& message,
     const core::ModuleKeys& threadKeys,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertMessages({message}, threadKeys, keyProvider)[0];
+    return validateDecryptAndConvertMessages({message}, threadKeys, keyProvider, groupPrivKeyResolver)[0];
 }

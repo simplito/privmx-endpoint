@@ -73,6 +73,21 @@ UserWithPubKey VarDeserializer::deserialize<UserWithPubKey>(const Poco::Dynamic:
 }
 
 template<>
+GroupGrantWithKey VarDeserializer::deserialize<GroupGrantWithKey>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .groupId = deserialize<std::string>(obj->get("groupId"), name + ".groupId"),
+        .role = deserialize<std::string>(obj->get("role"), name + ".role"),
+        .groupPubKey = deserialize<std::string>(obj->get("groupPubKey"), name + ".groupPubKey"),
+        .groupEpoch = deserialize<int64_t>(obj->get("groupEpoch"), name + ".groupEpoch")
+    };
+}
+
+template<>
 PagingQuery VarDeserializer::deserialize<PagingQuery>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateObject(val, name);
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
@@ -104,6 +119,8 @@ ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutIt
         .ownerCanBeRemovedFromManagers = deserializeOptional<std::string>(
             obj->get("ownerCanBeRemovedFromManagers"), name + ".ownerCanBeRemovedFromManagers"
         ),
+        .rotateKeys = deserializeOptional<std::string>(obj->get("rotateKeys"), name + ".rotateKeys"),
+        .forwardSecrecy = deserializeOptional<std::string>(obj->get("forwardSecrecy"), name + ".forwardSecrecy"),
     };
 }
 

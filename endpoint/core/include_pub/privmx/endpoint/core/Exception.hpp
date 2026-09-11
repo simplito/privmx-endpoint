@@ -122,6 +122,7 @@ inline void Exception::rethrow() const {
 // 0x000A - Kvdb
 // 0x000B - Search
 // 0x000C - Lock
+// 0x000D - Group
 // Form 0xE000 to 0xEFFF - Internal (PrivmxExtException)
 // Form 0xF000 to 0xFFFF - Server
 //

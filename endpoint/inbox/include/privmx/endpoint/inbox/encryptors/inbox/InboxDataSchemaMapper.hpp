@@ -63,12 +63,14 @@ public:
 
     std::vector<Inbox> validateDecryptAndConvertInboxes(
         const std::vector<server::InboxInfo>& inboxes,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     Inbox validateDecryptAndConvertInbox(
         const server::InboxInfo& inbox,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     static Inbox toLibInbox(

@@ -66,13 +66,15 @@ public:
     KvdbEntry validateDecryptAndConvertEntryDataToEntry(
         const server::KvdbEntryInfo& entry,
         const core::ModuleKeys& kvdbKeys,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     std::vector<KvdbEntry> validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
         const std::vector<server::KvdbEntryInfo>& entries,
         const core::ModuleKeys& kvdbKeys,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     static KvdbEntry toLibKvdbEntry(

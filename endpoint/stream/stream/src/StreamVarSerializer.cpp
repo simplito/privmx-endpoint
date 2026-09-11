@@ -65,6 +65,8 @@ Poco::Dynamic::Var VarSerializer::serialize<stream::StreamRoom>(const stream::St
     obj->set("schemaVersion", serialize(val.schemaVersion));
     obj->set("state", serialize(val.state));
     obj->set("emptyRoomTtl", serialize(val.emptyRoomTtl));
+    obj->set("groups", serialize(val.groups));
+    obj->set("staleGroups", serialize(val.staleGroups));
     return obj;
 }
 

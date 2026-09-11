@@ -28,6 +28,7 @@ public:
     ServerApi(const privmx::privfs::RpcGateway::Ptr& gateway);
     server::StoreCreateResult storeCreate(const server::StoreCreateModel& model);
     void storeUpdate(const server::StoreUpdateModel& model);
+    void storeRotateKeys(const server::StoreRotateKeysModel& model);
     void storeDelete(const server::StoreDeleteModel& model);
     server::StoreGetResult storeGet(const server::StoreGetModel& model);
     server::StoreListResult storeList(const server::StoreListModel& model);

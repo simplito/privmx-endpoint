@@ -75,13 +75,19 @@ core::Buffer DataInnerEncryptorV4::packDataWithSignature(const DataWithSignature
 
 DataInnerEncryptorV4::DataWithSignature DataInnerEncryptorV4::extractDataWithSignature(const core::Buffer& signedData) {
     const std::string& buf = signedData.stdString();
-    if (buf[0] == 1) {
-        size_t signatureLength = reinterpret_cast<const uint8_t&>(buf[1]);
-        auto signature = buf.substr(2, signatureLength);
-        auto data = buf.substr(2 + signatureLength);
-        return DataWithSignature{.signature = core::Buffer::from(signature), .data = core::Buffer::from(data)};
+    // The caller has decrypted this, not validated it — anyone holding the symmetric key can choose these
+    // bytes. Unchecked, a two-byte `\x01\xff` payload sends `substr(2 + 255)` past the end and throws
+    // std::out_of_range, which is not a PrivmxException and so escapes the endpoint APIs unconverted.
+    if (buf.size() < 2 || buf[0] != 1) {
+        throw UnsupportedTypeException();
     }
-    throw UnsupportedTypeException();
+    size_t signatureLength = reinterpret_cast<const uint8_t&>(buf[1]);
+    if (buf.size() < 2 + signatureLength) {
+        throw UnsupportedTypeException();
+    }
+    auto signature = buf.substr(2, signatureLength);
+    auto data = buf.substr(2 + signatureLength);
+    return DataWithSignature{.signature = core::Buffer::from(signature), .data = core::Buffer::from(data)};
 }
 
 bool DataInnerEncryptorV4::verifySignature(

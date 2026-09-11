@@ -112,6 +112,23 @@ public:
     static void validateId(const std::string& value, const std::string& stack_trace = "");
     static void validatePrivKeyWIF(const std::string& value, const std::string& stack_trace = "");
     static void validatePubKeyBase58DER(const std::string& value, const std::string& stack_trace = "");
+
+    /**
+     * Checks that a public key is well-formed **without building the curve point**.
+     *
+     * Base58 alphabet, checksum and the length a DER-encoded point has — measured at 0.001 ms against 0.199 ms
+     * for the full check, because the expensive part is a scalar multiplication inside the ECC driver
+     * (`EC_KEY_check_key`, which proves subgroup membership).
+     *
+     * Use this for a **list** of keys the caller supplies wholesale, where the operation uses only a handful:
+     * a membership change in a tree-backed group wraps to the `log n` leaves beside one path and passes the rest
+     * only to derive user ids, which is why validating all of them cost 3 s at 16 384 members. Every key that
+     * does take part in an operation is still fully validated at the moment it is turned into a point.
+     */
+    static void validatePubKeyFormat(const std::string& value, const std::string& stack_trace = "");
+
+    /** `validatePubKeyFormat` plus the user id, for every entry of a roster. */
+    static void validateUserListFormat(const std::vector<UserWithPubKey>& users, const std::string& stack_trace = "");
     static void validateSignature(const std::string& value, const std::string& stack_trace = "");
     static void validateEventType(const Event& value, const std::string& type, const std::string& stack_trace = "");
     static void validateJSON(const std::string& value, const std::string& stack_trace = "");
@@ -166,6 +183,13 @@ class StructValidator<PKIVerificationOptions> {
 public:
     static void validate(const PKIVerificationOptions& value, const std::string& stack_trace = "");
     static std::string getReadableType() { return "PKIVerificationOptions"; }
+};
+
+template<>
+class StructValidator<GroupGrantWithKey> {
+public:
+    static void validate(const GroupGrantWithKey& value, const std::string& stack_trace = "");
+    static std::string getReadableType() { return "GroupGrantWithKey"; }
 };
 
 } // namespace core

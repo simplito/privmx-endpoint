@@ -38,6 +38,8 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::Kvdb>(const kvdb::Kvdb& val) {
     obj->set("entries", serialize(val.entries));
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("schemaVersion", serialize(val.schemaVersion));
+    obj->set("groups", serialize(val.groups));
+    obj->set("staleGroups", serialize(val.staleGroups));
     return obj;
 }
 

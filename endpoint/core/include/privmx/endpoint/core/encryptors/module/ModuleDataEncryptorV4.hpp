@@ -29,7 +29,7 @@ class ModuleDataEncryptorV4 {
 public:
     dynamic::EncryptedModuleDataV4 encrypt(
         const ModuleDataToEncryptV4& moduleData,
-        const crypto::PrivateKey& authorPrivateKey,
+        const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     DecryptedModuleDataV4 decrypt(

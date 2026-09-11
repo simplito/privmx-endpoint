@@ -106,6 +106,12 @@ template<>
 UserWithPubKey VarDeserializer::deserialize<UserWithPubKey>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
+GroupGrantWithKey VarDeserializer::deserialize<GroupGrantWithKey>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
+template<>
 PagingQuery VarDeserializer::deserialize<PagingQuery>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>

@@ -33,7 +33,12 @@ InboxApi& InboxApi::operator=(const InboxApi& obj) {
 InboxApi::InboxApi(InboxApi&& obj) : ExtendedPointer(std::move(obj)) {};
 InboxApi::~InboxApi() {}
 
-InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threadApi, store::StoreApi& storeApi) {
+InboxApi InboxApi::create(
+    core::Connection& connection,
+    thread::ThreadApi& threadApi,
+    store::StoreApi& storeApi,
+    const std::optional<group::GroupApi>& groupApi
+) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<store::RequestApi> requestApi{new store::RequestApi(connectionImpl->getGateway())};
@@ -42,7 +47,7 @@ InboxApi InboxApi::create(core::Connection& connection, thread::ThreadApi& threa
         std::shared_ptr<InboxApiImpl> impl(new InboxApiImpl(
             connection, threadApi, storeApi, connectionImpl->getKeyProvider(), serverApi, requestApi,
             connectionImpl->getHost(), connectionImpl->getUserPrivKey(), connectionImpl->getEventMiddleware(),
-            connectionImpl->getHandleManager(), connectionImpl->getServerConfig().requestChunkSize
+            connectionImpl->getHandleManager(), connectionImpl->getServerConfig().requestChunkSize, groupApi
         ));
         impl->attach(impl);
         return InboxApi(impl);
@@ -61,14 +66,16 @@ std::string InboxApi::createInbox(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<inbox::FilesConfig>& filesConfig,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
-        return impl->createInbox(contextId, users, managers, publicMeta, privateMeta, filesConfig, policies);
+        return impl->createInbox(contextId, users, managers, publicMeta, privateMeta, filesConfig, policies, groups);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
@@ -85,17 +92,40 @@ void InboxApi::updateInbox(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicyWithoutItem>& policies
+    const std::optional<core::ContainerPolicyWithoutItem>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
     auto impl = getImpl();
     core::Validator::validateId(inboxId, "field:inboxId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
     try {
         return impl->updateInbox(
             inboxId, users, managers, publicMeta, privateMeta, filesConfig, version, force, forceGenerateNewKey,
-            policies
+            policies, groups
         );
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
+void InboxApi::rotateInboxKeys(
+    const std::string& inboxId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(inboxId, "field:inboxId ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
+    core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
+    core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
+    try {
+        impl->rotateInboxKeys(inboxId, users, managers, version, force, groups);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");

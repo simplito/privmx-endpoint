@@ -248,6 +248,26 @@ void Validator::validatePubKeyBase58DER(const string& value, const string& stack
     } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER")); }
 }
 
+void Validator::validatePubKeyFormat(const string& value, const string& stack_trace) {
+    // A DER-encoded point is 33 bytes compressed or 65 uncompressed; the decode itself enforces
+    // the base58 alphabet and checksum, so corrupted keys fail here instead of at decryption time.
+    std::string der;
+    try {
+        der = privmx::utils::Base58::decodeWithChecksum(value);
+    } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER")); }
+    if (der.size() != 33 && der.size() != 65) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER length"));
+    }
+}
+
+void Validator::validateUserListFormat(const std::vector<UserWithPubKey>& users, const string& stack_trace) {
+    for (std::size_t i = 0; i < users.size(); ++i) {
+        const std::string where = stack_trace + "." + std::to_string(i);
+        Validator::validateId(users[i].userId, where + ".userId");
+        Validator::validatePubKeyFormat(users[i].pubKey, where + ".pubKey");
+    }
+}
+
 void Validator::validateSignature(const std::string& value, const std::string& stack_trace) {
     if (value.size() != 65 || value.front() < 27 || value.front() > 42) {
         throw InvalidParamsException(stack_trace + " | " + ("Invalid signature"));
@@ -342,4 +362,10 @@ void StructValidator<PKIVerificationOptions>::validate(
             ("Invalid PKIVerificationOptions, bridgePubKey cannot be Null, when bridgeInstanceId is not Null")
         );
     }
+}
+
+void StructValidator<GroupGrantWithKey>::validate(const GroupGrantWithKey& value, const std::string& stack_trace) {
+    Validator::validateId(value.groupId, stack_trace + ".groupId");
+    Validator::validateEnumParamString(value.role, {"user", "manager"}, "role", stack_trace + ".role");
+    Validator::validatePubKeyBase58DER(value.groupPubKey, stack_trace + ".groupPubKey");
 }

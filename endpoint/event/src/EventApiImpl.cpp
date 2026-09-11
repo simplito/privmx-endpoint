@@ -132,8 +132,9 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
         Poco::JSON::Object::Ptr data = notification.data.extract<Poco::JSON::Object::Ptr>();
         auto rawEvent = server::ContextCustomEventData::fromJSON(data);
         // fix if not internal check
-        if (channel == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + rawEvent.id)
+        if (channel == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + rawEvent.id) {
             return;
+        }
         auto resultEventData = _eventDataSchemaMapper.decrypt(rawEvent);
         auto customChannelName = privmx::utils::Utils::split(privmx::utils::Utils::split(channel, "/")[2], "|")[0];
         auto event = core::EventBuilder::buildEvent<privmx::endpoint::event::ContextCustomEvent>(

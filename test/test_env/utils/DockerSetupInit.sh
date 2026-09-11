@@ -75,6 +75,9 @@ user_3_pubKey = $user_3_pubKey
 user_3_id = $user_3_id
 solutionId = $solutionId
 instanceUrl = http://localhost/
+[Api]
+apiKeyId = $API_KEY_ID
+apiKeySecret = $API_KEY_SECRET
 [Context_1]
 contextId = $contextId_1
 [Context_2]

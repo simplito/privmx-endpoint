@@ -55,6 +55,7 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointSearchException, "Unknown endpoint sear
     X(DeletePrepareException, "Error preparing DELETE", 0x0205)                                                        \
     X(DeleteExecuteException, "Error executing DELETE", 0x0206)                                                        \
     X(SelectPrepareException, "Error preparing SELECT", 0x0207)                                                        \
+    X(SelectExecuteException, "Error executing SELECT", 0x020A)                                                        \
     X(QueryPrepareException, "Error preparing query", 0x0208)                                                          \
     X(TableCreationException, "Error creating table", 0x0209)                                                          \
     X(TransactionBeginException, "Error beginning transaction", 0x0301)                                                \

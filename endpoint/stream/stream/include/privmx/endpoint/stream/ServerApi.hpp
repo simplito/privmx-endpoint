@@ -30,6 +30,7 @@ public:
 
     server::StreamRoomCreateResult streamRoomCreate(server::StreamRoomCreateModel model);
     void streamRoomUpdate(server::StreamRoomUpdateModel model);
+    void streamRoomRotateKeys(server::StreamRoomRotateKeysModel model);
     server::StreamRoomListResult streamRoomList(server::StreamRoomListModel model);
     server::StreamRoomGetResult streamRoomGet(server::StreamRoomGetModel model);
     void streamRoomDelete(server::StreamRoomDeleteModel model);

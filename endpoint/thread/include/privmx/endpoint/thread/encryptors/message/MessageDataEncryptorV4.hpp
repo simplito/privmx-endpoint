@@ -28,7 +28,7 @@ class MessageDataEncryptorV4 {
 public:
     server::EncryptedMessageDataV4 encrypt(
         const MessageDataToEncryptV4& messageData,
-        const crypto::PrivateKey& authorPrivateKey,
+        const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     DecryptedMessageDataV4 decrypt(

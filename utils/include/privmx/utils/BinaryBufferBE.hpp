@@ -17,6 +17,8 @@ limitations under the License.
 #include <Poco/BinaryWriter.h>
 #include <Poco/Types.h>
 
+#include <privmx/utils/PrivmxExtExceptions.hpp>
+
 namespace privmx {
 namespace utils {
 
@@ -37,8 +39,17 @@ public:
 };
 
 inline void BinaryBufferBE::readOneOctetLengthBuffer(std::string& value) {
-    Poco::UInt8 len;
+    // Both halves used to fail silently on a truncated buffer: at EOF the extraction left `len` uninitialized,
+    // and Poco's `readRaw` short-reads without complaint. Together they turned a two-byte buffer into a field
+    // of garbage length holding garbage bytes. Callers parse attacker-supplied buffers with this.
+    if (available() < 1) {
+        throw BinaryBufferTruncatedException();
+    }
+    Poco::UInt8 len = 0;
     (*this) >> len;
+    if (available() < static_cast<std::streamsize>(len)) {
+        throw BinaryBufferTruncatedException();
+    }
     readRaw(len, value);
 }
 
@@ -50,7 +61,12 @@ inline void BinaryBufferBE::readBool(bool& value) {
 
 
 inline void BinaryBufferBE::writeOneOctetLengthBuffer(const std::string& value) {
-    Poco::UInt8 len = value.length();
+    // One length octet on the wire: a value of 256 would otherwise write a length of 0 and produce a buffer
+    // that parses cleanly into something else entirely.
+    if (value.length() > 255) {
+        throw BinaryBufferFieldTooLongException();
+    }
+    Poco::UInt8 len = static_cast<Poco::UInt8>(value.length());
     (*this) << len;
     writeRaw(value);
 }

@@ -22,6 +22,7 @@ std::map<InboxApiVarInterface::METHOD, Poco::Dynamic::Var (InboxApiVarInterface:
         {Create, &InboxApiVarInterface::create},
         {CreateInbox, &InboxApiVarInterface::createInbox},
         {UpdateInbox, &InboxApiVarInterface::updateInbox},
+        {RotateInboxKeys, &InboxApiVarInterface::rotateInboxKeys},
         {GetInbox, &InboxApiVarInterface::getInbox},
         {ListInboxes, &InboxApiVarInterface::listInboxes},
         {GetInboxPublicView, &InboxApiVarInterface::getInboxPublicView},
@@ -44,12 +45,12 @@ std::map<InboxApiVarInterface::METHOD, Poco::Dynamic::Var (InboxApiVarInterface:
 
 Poco::Dynamic::Var InboxApiVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
-    _inboxApi = InboxApi::create(_connection, _threadApi, _storeApi);
+    _inboxApi = InboxApi::create(_connection, _threadApi, _storeApi, _groupApi);
     return {};
 }
 
 Poco::Dynamic::Var InboxApiVarInterface::createInbox(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 7);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 8);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
@@ -57,12 +58,15 @@ Poco::Dynamic::Var InboxApiVarInterface::createInbox(const Poco::Dynamic::Var& a
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto filesConfig = _deserializer.deserializeOptional<inbox::FilesConfig>(argsArr->get(5), "filesConfig");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(6), "policies");
-    auto result = _inboxApi.createInbox(contextId, users, managers, publicMeta, privateMeta, filesConfig, policies);
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(7), "groups");
+    auto result = _inboxApi.createInbox(
+        contextId, users, managers, publicMeta, privateMeta, filesConfig, policies, groups
+    );
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var InboxApiVarInterface::updateInbox(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 10);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 11);
     auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
@@ -73,9 +77,23 @@ Poco::Dynamic::Var InboxApiVarInterface::updateInbox(const Poco::Dynamic::Var& a
     auto force = _deserializer.deserialize<bool>(argsArr->get(7), "force");
     auto forceGenerateNewKey = _deserializer.deserialize<bool>(argsArr->get(8), "forceGenerateNewKey");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicyWithoutItem>(argsArr->get(9), "policies");
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(10), "groups");
     _inboxApi.updateInbox(
-        inboxId, users, managers, publicMeta, privateMeta, filesConfig, version, force, forceGenerateNewKey, policies
+        inboxId, users, managers, publicMeta, privateMeta, filesConfig, version, force, forceGenerateNewKey, policies,
+        groups
     );
+    return {};
+}
+
+Poco::Dynamic::Var InboxApiVarInterface::rotateInboxKeys(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto inboxId = _deserializer.deserialize<std::string>(argsArr->get(0), "inboxId");
+    auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
+    auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
+    auto version = _deserializer.deserialize<int64_t>(argsArr->get(3), "version");
+    auto force = _deserializer.deserialize<bool>(argsArr->get(4), "force");
+    auto groups = _deserializer.deserializeVector<core::GroupGrantWithKey>(argsArr->get(5), "groups");
+    _inboxApi.rotateInboxKeys(inboxId, users, managers, version, force, groups);
     return {};
 }
 

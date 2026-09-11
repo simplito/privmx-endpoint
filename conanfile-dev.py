@@ -189,6 +189,17 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "privmxdrvnet::privmxdrvnet",
         ]
 
+        self.cpp_info.components["privmxendpointgroup"].libs = ["privmxendpointgroup"]
+        self.cpp_info.components["privmxendpointgroup"].set_property("cmake_target_name", "privmxendpoint::privmxendpointgroup")
+        self.cpp_info.components["privmxendpointgroup"].requires = [
+            "gmp::gmp",
+            "pson::Pson",
+            "poco::poco",
+            "privmxdrvcrypto::privmxdrvcrypto",
+            "privmxdrvecc::privmxdrvecc",
+            "privmxdrvnet::privmxdrvnet",
+        ]
+
         self.cpp_info.components["privmxendpointstream"].libs = ["privmxendpointstream"]
         self.cpp_info.components["privmxendpointstream"].set_property("cmake_target_name", "privmxendpoint::privmxendpointstream")
         if self.options.with_webrtc:

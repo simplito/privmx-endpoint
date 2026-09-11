@@ -115,7 +115,8 @@ uint32_t EntryDataSchemaMapper::validateEntryDataIntegrity(
 std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
     const std::vector<server::KvdbEntryInfo>& entries,
     const core::ModuleKeys& kvdbKeys,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyEntries<KvdbEntry>(
         entries, kvdbKeys, keyProvider, _connection,
@@ -123,16 +124,20 @@ std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntri
         [&](const server::KvdbEntryInfo& e, const core::DecryptedEncKey& key) { return decrypt(e, key); },
         [](const server::KvdbEntryInfo& e, uint32_t code) {
             return toLibKvdbEntry(e, {}, {}, {}, {}, code, KvdbEntryDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
 KvdbEntry EntryDataSchemaMapper::validateDecryptAndConvertEntryDataToEntry(
     const server::KvdbEntryInfo& entry,
     const core::ModuleKeys& kvdbKeys,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertKvdbEntriesDataToKvdbEntries({entry}, kvdbKeys, keyProvider)[0];
+    return validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
+        {entry}, kvdbKeys, keyProvider, groupPrivKeyResolver
+    )[0];
 }
 
 KvdbEntry EntryDataSchemaMapper::toLibKvdbEntry(

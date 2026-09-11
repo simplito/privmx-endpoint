@@ -137,18 +137,42 @@ def wait_for_server_ready(port: int, container_name: str, timeout_seconds: int =
     raise RuntimeError(f"Server failed to start on port {port} within {timeout_seconds}s")
 
 
-def create_bridge_docker(index: int, docker_image: str) -> BridgeInfo:
+def resolve_dataset_migration_id(dataset_dir_path: str) -> str | None:
+    migration_file = Path(dataset_dir_path) / "migration.json"
+    if not migration_file.exists():
+        return None
+
+    try:
+        with open(migration_file, "r", encoding="utf-8") as file_handle:
+            migrations = json.load(file_handle)
+    except Exception as exc:
+        print(f"Failed to read {migration_file}: {exc}")
+        return None
+
+    if not isinstance(migrations, list):
+        return None
+
+    successful = [entry for entry in migrations if entry.get("status") == "SUCCESS" and entry.get("_id")]
+    if not successful:
+        return None
+
+    latest = max(successful, key=lambda entry: entry.get("endDate") or entry.get("startDate") or 0)
+    return latest["_id"]
+
+
+def create_bridge_docker(index: int, docker_image: str, dataset_dir_path: str) -> BridgeInfo:
     host_port = 3001 + index
     container_name = f"privmx_e2e_worker_{index}"
     db_name = f"privmx_e2e_db_{index}"
     internal_mongo_url = f"mongodb://test_mongodb:27017/{db_name}"
     local_mongo_url = f"mongodb://localhost:27017/{db_name}?directConnection=true"
 
+    migration_id = resolve_dataset_migration_id(dataset_dir_path)
+
     env_list = [
         "PRIVMX_PORT=3000",
         f"PRIVMX_MONGO_URL={internal_mongo_url}",
         "PRIVMX_WORKERS=1",
-        "PMX_MIGRATION=Migration_069_Indexes_for_session",
         "PMX_MEDIA_SERVER_ALLOW_SELF_SIGNED_CERTS=true",
         "PMX_STREAM_ENABLED=true",
         "PRIVMX_HOSTNAME=0.0.0.0",
@@ -156,6 +180,8 @@ def create_bridge_docker(index: int, docker_image: str) -> BridgeInfo:
         "PMX_STREAMS_TURN_SERVER=turn:127.0.0.1:3478",
         "PMX_STREAMS_TURN_SERVER_SECRET=my-secret-key",
     ]
+    if migration_id:
+        env_list.append(f"PMX_MIGRATION={migration_id}")
 
     mongo_client = MongoClient(local_mongo_url)
     e2e_common.run_command(["docker", "rm", "-f", container_name])

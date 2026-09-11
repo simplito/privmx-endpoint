@@ -25,6 +25,10 @@ void ServerApi::inboxUpdate(server::InboxUpdateModel model) {
     request("inboxUpdate", model.toJSON());
 }
 
+void ServerApi::inboxRotateKeys(server::InboxRotateKeysModel model) {
+    request("inboxRotateKeys", model.toJSON());
+}
+
 server::InboxGetResult ServerApi::inboxGet(server::InboxGetModel model) {
     return request<server::InboxGetResult>("inboxGet", model.toJSON());
 }

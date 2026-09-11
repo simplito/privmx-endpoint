@@ -149,10 +149,18 @@ struct ContainerPolicyWithoutItem {
      * Determine whether the updater can be removed from the list of managers 
      */
     std::optional<std::string> updaterCanBeRemovedFromManagers;
-    /** 
-     * Determine whether the owner can be removed from the list of managers 
+    /**
+     * Determine whether the owner can be removed from the list of managers
      */
     std::optional<std::string> ownerCanBeRemovedFromManagers;
+    /**
+     * Determine who can rotate container keys (re-encrypt for current members without changing data or membership)
+     */
+    std::optional<std::string> rotateKeys;
+    /**
+     * Enforce forward secrecy: block writes when group grants are stale after a group key rotation
+     */
+    std::optional<std::string> forwardSecrecy;
 };
 
 /**
@@ -235,6 +243,48 @@ enum EventType : int64_t {
 
 enum EventSelectorType : int64_t {
     CONTEXT_ID = 0
+};
+
+/**
+ * Represents a group granted access to a container.
+ */
+struct GroupGrant {
+    /**
+     * ID of the group
+     */
+    std::string groupId;
+
+    /**
+     * Role held by the group in the container ("user" or "manager")
+     */
+    std::string role;
+};
+
+/**
+ * Carries the group's verified public key along with grant info,
+ * used when granting a group access to a container.
+ */
+struct GroupGrantWithKey {
+    /**
+     * ID of the group
+     */
+    std::string groupId;
+
+    /**
+     * Role held by the group in the container ("user" or "manager")
+     */
+    std::string role;
+
+    /**
+     * Verified group identity public key (base58-DER encoded)
+     */
+    std::string groupPubKey;
+
+    /**
+     * Epoch at which groupPubKey was verified (= group.keyVersion; required for Phase 2
+     * lazy re-key so the bridge can enforce per-epoch coverage). Default 0 for Phase-1 compat.
+     */
+    int64_t groupEpoch = 0;
 };
 
 } // namespace core

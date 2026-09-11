@@ -65,6 +65,8 @@ Poco::Dynamic::Var VarSerializer::serialize<inbox::Inbox>(const inbox::Inbox& va
     obj->set("policy", serialize(val.policy));
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("schemaVersion", serialize(val.schemaVersion));
+    obj->set("groups", serialize(val.groups));
+    obj->set("staleGroups", serialize(val.staleGroups));
     return obj;
 }
 

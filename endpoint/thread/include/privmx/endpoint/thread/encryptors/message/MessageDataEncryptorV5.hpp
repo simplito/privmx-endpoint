@@ -29,7 +29,7 @@ class MessageDataEncryptorV5 {
 public:
     server::EncryptedMessageDataV5 encrypt(
         const MessageDataToEncryptV5& messageData,
-        const crypto::PrivateKey& authorPrivateKey,
+        const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     DecryptedMessageDataV5 decrypt(

@@ -45,7 +45,8 @@ public:
     InboxEntryResult decryptEntry(
         const thread::server::Message& message,
         const core::ModuleKeys& inboxKeys,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) const;
     inbox::InboxEntry convertToFinal(
         const thread::server::Message& message,

@@ -66,13 +66,15 @@ public:
     std::vector<Message> validateDecryptAndConvertMessages(
         const std::vector<server::Message>& messages,
         const core::ModuleKeys& threadKeys,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     Message validateDecryptAndConvertMessage(
         const server::Message& message,
         const core::ModuleKeys& threadKeys,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     static Message toLibMessage(

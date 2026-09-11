@@ -14,6 +14,7 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
 #include <Poco/JSON/Object.h>
 #include <privmx/endpoint/core/Factory.hpp>
+#include <privmx/endpoint/core/Mapper.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 
 using namespace privmx::endpoint;
@@ -72,7 +73,8 @@ uint32_t KvdbDataSchemaMapper::validateDataIntegrity(const server::KvdbInfo& kvd
 
 std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
     const std::vector<server::KvdbInfo>& kvdbs,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Kvdb>(
         kvdbs, keyProvider, _connection, [&](const server::KvdbInfo& k) { return validateDataIntegrity(k); },
@@ -82,15 +84,17 @@ std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
         [&](const server::KvdbInfo& k, const core::DecryptedEncKey& key) { return decrypt(k, key); },
         [](const server::KvdbInfo& k, uint32_t code) {
             return toLibKvdb(k, {}, {}, code, KvdbDataSchema::Version::UNKNOWN);
-        }
+        },
+        groupPrivKeyResolver
     );
 }
 
 Kvdb KvdbDataSchemaMapper::validateDecryptAndConvertKvdb(
     const server::KvdbInfo& kvdb,
-    const std::shared_ptr<core::KeyProvider>& keyProvider
+    const std::shared_ptr<core::KeyProvider>& keyProvider,
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertKvdbs({kvdb}, keyProvider)[0];
+    return validateDecryptAndConvertKvdbs({kvdb}, keyProvider, groupPrivKeyResolver)[0];
 }
 
 Kvdb KvdbDataSchemaMapper::toLibKvdb(
@@ -116,6 +120,8 @@ Kvdb KvdbDataSchemaMapper::toLibKvdb(
         .lastEntryDate = info.lastEntryDate,
         .policy = core::Factory::parsePolicyServerObject(info.policy),
         .statusCode = statusCode,
-        .schemaVersion = schemaVersion
+        .schemaVersion = schemaVersion,
+        .groups = core::Mapper::mapToGroupGrants(info.groups),
+        .staleGroups = info.staleGroups
     };
 }

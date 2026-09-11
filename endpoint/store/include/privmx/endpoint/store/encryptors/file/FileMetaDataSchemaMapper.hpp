@@ -69,19 +69,22 @@ public:
     std::vector<File> validateDecryptAndConvertFiles(
         const std::vector<server::File>& files,
         const core::ModuleKeys& storeKeys,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     File validateDecryptAndConvertFile(
         const server::File& file,
         const core::ModuleKeys& storeKeys,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     dynamic::InternalStoreFileMeta validateDecryptFileInternalMeta(
         const server::File& file,
         const core::ModuleKeys& storeKeys,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     static File toLibFile(

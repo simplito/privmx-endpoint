@@ -301,6 +301,16 @@ void FileHandler::sync(
     _pendingTruncateBoundary = UINT64_MAX;
 }
 
+void FileHandler::refreshEncKey(const core::DecryptedEncKey& fileEncKey) {
+    _fileEncKey = fileEncKey;
+}
+
+void FileHandler::discardPending() {
+    _dirtyChunks.clear();
+    _pendingPlainfileSize = _plainfileSize;
+    _pendingTruncateBoundary = UINT64_MAX;
+}
+
 void FileHandler::loadChunkIntoDirty(uint64_t chunkIndex) {
     uint64_t numCommitted = committedChunkCount();
     // hasMidTruncate: truncate happened during the session but the file was later extended beyond it
@@ -313,18 +323,18 @@ void FileHandler::loadChunkIntoDirty(uint64_t chunkIndex) {
     } else {
         std::string hash = _hashList->getHash(chunkIndex);
         std::string enc = _chunkDataProvider->getChunk(chunkIndex, _version, hash);
-        _dirtyChunks[chunkIndex] = _chunkEncryptor->decrypt(chunkIndex, {.data = enc, .hmac = hash});
+        std::string plain = _chunkEncryptor->decrypt(chunkIndex, {.data = enc, .hmac = hash});
         // If this is the mid-truncate boundary chunk, zero out data beyond the truncate point
         if (hasMidTruncate) {
             uint64_t boundaryChunk = _pendingTruncateBoundary / _plainChunkSize;
             uint64_t offsetInChunk = _pendingTruncateBoundary % _plainChunkSize;
             if (chunkIndex == boundaryChunk && offsetInChunk > 0) {
-                auto& data = _dirtyChunks[chunkIndex];
-                if (data.size() > offsetInChunk)
-                    data.resize(offsetInChunk);
-                data.resize(_plainChunkSize, '\0');
+                if (plain.size() > offsetInChunk)
+                    plain.resize(offsetInChunk);
+                plain.resize(_plainChunkSize, '\0');
             }
         }
+        _dirtyChunks[chunkIndex] = std::move(plain);
     }
 }
 

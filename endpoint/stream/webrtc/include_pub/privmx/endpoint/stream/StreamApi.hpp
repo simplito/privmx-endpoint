@@ -19,6 +19,7 @@ limitations under the License.
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include <string>
 #include <vector>
 
@@ -38,10 +39,15 @@ public:
      *
      * @param connection instance of 'Connection'
      * @param eventApi (deprecated) instance of 'EventApi'
+     * @param groupApi instance of 'GroupApi', required to read and write Stream Rooms granted to groups
      *
      * @return StreamApi object
      */
-    static StreamApi create(core::Connection& connection, event::EventApi& eventApi);
+    static StreamApi create(
+        core::Connection& connection,
+        event::EventApi& eventApi,
+        const std::optional<group::GroupApi>& groupApi = std::nullopt
+    );
 
     /**
      * //doc-gen:ignore
@@ -60,6 +66,7 @@ public:
      * @param policies Stream Room's policies (pass std::nullopt to use defaults)
      * @param emptyRoomTtl grace period (ms) the room stays open after the last participant leaves before being
      * closed; 0 closes it immediately (pass std::nullopt to use the server default)
+     * @param groups groups granted access to the Stream Room, with their verified epoch public keys
      *
      * @return created Stream Room ID
      */
@@ -70,7 +77,8 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicyWithoutItem>& policies,
-        const std::optional<int64_t>& emptyRoomTtl = std::nullopt
+        const std::optional<int64_t>& emptyRoomTtl = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**
@@ -86,6 +94,8 @@ public:
      * @param force force update (without checking version)
      * @param forceGenerateNewKey force to regenerate a key for the Stream Room
      * @param policies Stream Room's policies (pass std::nullopt to keep current/defaults)
+     * @param groups groups granted access to the Stream Room, with their verified epoch public keys; the list is
+     * authoritative — an empty list revokes every group grant the Stream Room had
      */
     void updateStreamRoom(
         const std::string& streamRoomId,
@@ -96,7 +106,30 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+
+    /**
+     * Re-encrypts the Stream Room key for all current members without changing data, membership, or policy.
+     * Unlike updateStreamRoom, this can be called by any Stream Room member (not just managers) when the
+     * default rotateKeys policy of "user" is in effect.
+     *
+     * @param streamRoomId ID of the Stream Room to re-key
+     * @param users current Stream Room users with their public keys
+     * @param managers current Stream Room managers with their public keys
+     * @param version current Stream Room version (optimistic lock guard)
+     * @param force skip the version check when true
+     * @param groups epoch public keys of grantee groups the caller has verified itself; optional, and groups the
+     * Stream Room does not grant are ignored — a re-key changes no grants
+     */
+    void rotateStreamRoomKeys(
+        const std::string& streamRoomId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     /**

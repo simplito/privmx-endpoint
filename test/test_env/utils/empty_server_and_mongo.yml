@@ -34,4 +34,8 @@ services:
       test: pmxbridge_up
       start_period: 20s
       start_interval: 1s
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
 

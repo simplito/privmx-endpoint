@@ -52,12 +52,14 @@ public:
 
     std::vector<Store> validateDecryptAndConvertStores(
         const std::vector<server::Store>& stores,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     Store validateDecryptAndConvertStore(
         const server::Store& store,
-        const std::shared_ptr<core::KeyProvider>& keyProvider
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     );
 
     static Store toLibStore(

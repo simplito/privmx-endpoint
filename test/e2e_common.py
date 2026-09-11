@@ -16,6 +16,7 @@ MAX_WORKERS = 4
 TIMEOUT_PER_TEST = 300
 RETRY_COUNT = 1
 RETRY_DELAY = 5
+DEFAULT_BRIDGE_DOCKER_IMAGE = "hub.simplito.com/privmx/privmx-bridge:dev"
 
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 LOG_FILE = LOG_DIR / f"{timestamp}.log"

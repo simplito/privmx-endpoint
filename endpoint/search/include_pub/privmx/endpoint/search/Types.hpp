@@ -124,6 +124,18 @@ struct SearchIndex {
      * Version of the Search Index data structure and how it is encoded/encrypted
      */
     int64_t schemaVersion;
+
+    /**
+     * list of groups granted access to this Search Index
+     */
+    std::vector<core::GroupGrant> groups;
+
+    /**
+     * IDs of the grantee groups that have rotated past the epoch this Index's current key was wrapped to.
+     * Non-empty means the Index needs re-keying — rotateSearchIndexKeys() re-wraps the keys of both containers
+     * backing it. Members of a stale group cannot read documents written under the current key until then.
+     */
+    std::vector<std::string> staleGroups;
 };
 
 /**

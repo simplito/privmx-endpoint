@@ -47,6 +47,13 @@ JSON_STRUCT(StreamRoomCreateResult, STREAM_ROOM_CREATE_RESULT_FIELDS);
 #define STREAM_ROOM_UPDATE_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(StreamRoomUpdateModel, core::server::ContainerUpdateModelBase, STREAM_ROOM_UPDATE_MODEL_EXTRA_FIELDS);
 
+#define STREAM_ROOM_ROTATE_KEYS_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(
+    StreamRoomRotateKeysModel,
+    core::server::ContainerRotateKeysModelBase,
+    STREAM_ROOM_ROTATE_KEYS_MODEL_EXTRA_FIELDS
+);
+
 #define STREAM_ROOM_GET_MODEL_FIELDS(F)                                                                                \
     F(id, std::string)                                                                                                 \
     F(type, std::optional<std::string>)

@@ -19,6 +19,7 @@ limitations under the License.
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ExtendedPointer.hpp>
 #include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include <string>
 #include <vector>
 
@@ -30,7 +31,18 @@ class StreamApiLowImpl;
 
 class StreamApiLow : public privmx::endpoint::core::ExtendedPointer<StreamApiLowImpl> {
 public:
-    static StreamApiLow create(const core::Connection& connection);
+    /**
+     * Creates an instance of 'StreamApiLow'.
+     *
+     * @param connection instance of 'Connection'
+     * @param groupApi instance of 'GroupApi', required to read and write StreamRooms granted to groups
+     *
+     * @return StreamApiLow object
+     */
+    static StreamApiLow create(
+        const core::Connection& connection,
+        const std::optional<group::GroupApi>& groupApi = std::nullopt
+    );
     StreamApiLow();
     StreamApiLow(const StreamApiLow& obj);
     StreamApiLow& operator=(const StreamApiLow& obj);
@@ -46,7 +58,8 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicyWithoutItem>& policies,
-        const std::optional<int64_t>& emptyRoomTtl = std::nullopt
+        const std::optional<int64_t>& emptyRoomTtl = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     void updateStreamRoom(
@@ -58,7 +71,39 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicyWithoutItem>& policies
+        const std::optional<core::ContainerPolicyWithoutItem>& policies,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+
+    /**
+     * Re-encrypts the StreamRoom key for all current members without changing data, membership, or policy.
+     * Unlike updateStreamRoom, this can be called by any StreamRoom member (not just managers) when the
+     * default rotateKeys policy of "user" is in effect.
+     *
+     * The StreamRoom's key is re-wrapped to every one of its grantee groups at that group's current epoch, whether
+     * or not it names the group in `groups`: the grantee list comes from the StreamRoom itself, and any epoch
+     * public key missing from `groups` is read from the Bridge.
+     *
+     * That read is what bounds who may re-key: a group's epoch and public key are readable only by its members
+     * under the default group policy (`get: "user"`, `listAll: "none"`). A caller who belongs to none of the
+     * room's grantee groups, and cannot supply their epoch keys in `groups` either, gets
+     * `UnresolvedGroupGranteeException` naming the group it could not resolve.
+     *
+     * @param streamRoomId ID of the StreamRoom to re-key
+     * @param users current StreamRoom users with their public keys
+     * @param managers current StreamRoom managers with their public keys
+     * @param version current StreamRoom version (optimistic lock guard)
+     * @param force skip the version check when true
+     * @param groups epoch public keys of grantee groups the caller has verified itself; optional, and groups the
+     * StreamRoom does not grant are ignored — a re-key changes no grants
+     */
+    void rotateStreamRoomKeys(
+        const std::string& streamRoomId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
 
     core::PagingList<StreamRoom> listStreamRooms(const std::string& contextId, const core::PagingQuery& query);

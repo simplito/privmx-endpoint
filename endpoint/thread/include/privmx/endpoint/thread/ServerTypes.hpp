@@ -28,11 +28,19 @@ JSON_STRUCT_EXT(ThreadCreateModel, core::server::ContainerCreateModelBase, THREA
 #define THREAD_UPDATE_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(ThreadUpdateModel, core::server::ContainerUpdateModelBase, THREAD_UPDATE_MODEL_EXTRA_FIELDS);
 
+#define THREAD_ROTATE_KEYS_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(
+    ThreadRotateKeysModel,
+    core::server::ContainerRotateKeysModelBase,
+    THREAD_ROTATE_KEYS_MODEL_EXTRA_FIELDS
+);
+
 #define THREAD2_DATA_ENTRY_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(Thread2DataEntry, core::server::ContainerDataEntry, THREAD2_DATA_ENTRY_EXTRA_FIELDS);
 
 #define THREAD_INFO_EXTRA_FIELDS(F)                                                                                    \
     F(data, std::vector<Thread2DataEntry>)                                                                             \
+    F(keeper, std::optional<std::string>)                                                                              \
     F(lastMsgDate, int64_t)                                                                                            \
     F(messages, int64_t)
 JSON_STRUCT_EXT(ThreadInfo, core::server::ContainerInfoBase, THREAD_INFO_EXTRA_FIELDS);

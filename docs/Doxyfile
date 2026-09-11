@@ -194,6 +194,7 @@ STRIP_FROM_PATH        =    ../endpoint/                            \
                             ../endpoint/core/include_pub            \
                             ../endpoint/crypto/include_pub          \
                             ../endpoint/event/include_pub           \
+                            ../endpoint/group/include_pub           \
                             ../endpoint/inbox/include_pub           \
                             ../endpoint/kvdb/include_pub            \
                             ../endpoint/store/include_pub           \
@@ -212,6 +213,7 @@ STRIP_FROM_INC_PATH    =    ../endpoint/                            \
                             ../endpoint/core/include_pub            \
                             ../endpoint/crypto/include_pub          \
                             ../endpoint/event/include_pub           \
+                            ../endpoint/group/include_pub           \
                             ../endpoint/inbox/include_pub           \
                             ../endpoint/kvdb/include_pub            \
                             ../endpoint/store/include_pub           \
@@ -1048,6 +1050,7 @@ INPUT                  =    ./index.md                                \
                             ../endpoint/core/include_pub            \
                             ../endpoint/crypto/include_pub          \
                             ../endpoint/event/include_pub           \
+                            ../endpoint/group/include_pub           \
                             ../endpoint/inbox/include_pub           \
                             ../endpoint/kvdb/include_pub            \
                             ../endpoint/store/include_pub           \

@@ -32,6 +32,7 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/SubscriberImpl.hpp"
 #include "privmx/endpoint/kvdb/encryptors/entry/EntryDataSchemaMapper.hpp"
 #include "privmx/endpoint/kvdb/encryptors/kvdb/KvdbDataSchemaMapper.hpp"
+#include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
@@ -46,7 +47,8 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-        const core::Connection& connection
+        const core::Connection& connection,
+        const std::optional<group::GroupApi>& groupApi = std::nullopt
     );
     ~KvdbApiImpl();
     std::string createKvdb(
@@ -56,6 +58,7 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {},
         const std::string& type = KVDB_TYPE_FILTER_FLAG
     );
     void updateKvdb(
@@ -67,7 +70,16 @@ public:
         const int64_t version,
         const bool force,
         const bool forceGenerateNewKey,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
+    );
+    void rotateKvdbKeys(
+        const std::string& kvdbId,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers,
+        const int64_t version,
+        const bool force,
+        const std::vector<core::GroupGrantWithKey>& groups = {}
     );
     void deleteKvdb(const std::string& kvdbId);
     Kvdb getKvdb(const std::string& kvdbId, const std::string& type = KVDB_TYPE_FILTER_FLAG);
@@ -137,6 +149,14 @@ private:
     );
 
     void assertKvdbExist(const std::string& kvdbId);
+
+    /**
+     * Re-keys a Kvdb whose key has gone stale, without being asked to.
+     *
+     * The roster is the Kvdb's own — a re-key changes nothing but the key — so unlike `rotateKvdbKeys` this
+     * takes no arguments beyond the id and looks the members' public keys up itself.
+     */
+    void autoRotateKvdbKeys(const std::string& kvdbId);
     privfs::RpcGateway::Ptr _gateway;
     privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;

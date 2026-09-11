@@ -212,6 +212,8 @@ Poco::Dynamic::Var VarSerializer::serialize<ContainerPolicyWithoutItem>(const Co
     obj->set("updatePolicy", serialize(val.updatePolicy));
     obj->set("updaterCanBeRemovedFromManagers", serialize(val.updaterCanBeRemovedFromManagers));
     obj->set("ownerCanBeRemovedFromManagers", serialize(val.ownerCanBeRemovedFromManagers));
+    obj->set("rotateKeys", serialize(val.rotateKeys));
+    obj->set("forwardSecrecy", serialize(val.forwardSecrecy));
     return obj;
 }
 
@@ -309,5 +311,16 @@ Poco::Dynamic::Var VarSerializer::serialize<VerificationRequest>(const Verificat
     obj->set("senderPubKey", serialize(val.senderPubKey));
     obj->set("date", serialize(val.date));
     obj->set("bridgeIdentity", serialize(val.bridgeIdentity));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<GroupGrant>(const GroupGrant& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$GroupGrant");
+    }
+    obj->set("groupId", serialize(val.groupId));
+    obj->set("role", serialize(val.role));
     return obj;
 }

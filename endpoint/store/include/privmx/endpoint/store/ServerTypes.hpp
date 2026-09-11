@@ -43,6 +43,9 @@ JSON_STRUCT_EXT(StoreCreateModel, core::server::ContainerCreateModelBase, STORE_
 #define STORE_UPDATE_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(StoreUpdateModel, core::server::ContainerUpdateModelBase, STORE_UPDATE_MODEL_EXTRA_FIELDS);
 
+#define STORE_ROTATE_KEYS_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(StoreRotateKeysModel, core::server::ContainerRotateKeysModelBase, STORE_ROTATE_KEYS_MODEL_EXTRA_FIELDS);
+
 #define FILE_THUMB_FIELDS(F) F(size, int64_t)
 JSON_STRUCT(FileThumb, FILE_THUMB_FIELDS);
 

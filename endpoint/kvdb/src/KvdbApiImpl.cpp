@@ -24,6 +24,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
+#include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/kvdb/KvdbApiImpl.hpp"
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
 #include "privmx/endpoint/kvdb/Mapper.hpp"
@@ -39,13 +40,15 @@ KvdbApiImpl::KvdbApiImpl(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
-    const core::Connection& connection
+    const core::Connection& connection,
+    const std::optional<group::GroupApi>& groupApi
 )
     : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
       _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway, KVDB_TYPE_FILTER_FLAG),
       _kvdbDataSchemaMapper(std::make_shared<KvdbDataSchemaMapper>(userPrivKey, connection)),
       _entryDataSchemaMapper(userPrivKey, connection) {
+    initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi));
     initModuleDataSchemaMapper(_kvdbDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&KvdbApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -73,6 +76,7 @@ std::string KvdbApiImpl::createKvdb(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups,
     const std::string& type
 ) {
     auto ctx = prepareContainerCreate(contextId, users, managers);
@@ -86,7 +90,7 @@ std::string KvdbApiImpl::createKvdb(
     server::KvdbCreateModel create_kvdb_model;
     fillContainerCreateModel(
         create_kvdb_model, contextId, users, managers, ctx,
-        _kvdbDataSchemaMapper->encrypt(kvdbDataToEncrypt, ctx.key.key)
+        _kvdbDataSchemaMapper->encrypt(kvdbDataToEncrypt, ctx.key.key), groups
     );
     create_kvdb_model.type = type;
     if (policies.has_value()) {
@@ -105,7 +109,8 @@ void KvdbApiImpl::updateKvdb(
     const int64_t version,
     const bool force,
     const bool forceGenerateNewKey,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::vector<core::GroupGrantWithKey>& groups
 ) {
 
     // get current kvdb
@@ -115,10 +120,13 @@ void KvdbApiImpl::updateKvdb(
     auto currentKvdbEntry = currentKvdb.data.back();
     auto currentKvdbResourceId = currentKvdb.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
-        currentKvdb, currentKvdbEntry, currentKvdbResourceId, users, managers, forceGenerateNewKey
+        currentKvdb, currentKvdbEntry, currentKvdbResourceId, users, managers,
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentKvdb, groups), true, _groupPrivKeyResolver
     );
     server::KvdbUpdateModel model;
-    fillContainerUpdateModel(model, kvdbId, currentKvdbResourceId, users, managers, ctx, version, force);
+    // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
+    // revokes every grant the KVDB had.
+    fillContainerUpdateModel(model, kvdbId, currentKvdbResourceId, users, managers, ctx, version, force, groups);
     if (policies.has_value()) {
         model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
     }
@@ -137,6 +145,42 @@ void KvdbApiImpl::updateKvdb(
     invalidateModuleKeysInCache(kvdbId);
 }
 
+void KvdbApiImpl::rotateKvdbKeys(
+    const std::string& kvdbId,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers,
+    const int64_t version,
+    const bool force,
+    const std::vector<core::GroupGrantWithKey>& groups
+) {
+    server::KvdbGetModel getModel;
+    getModel.kvdbId = kvdbId;
+    auto currentKvdb = _serverApi.kvdbGet(getModel).kvdb;
+    rotateContainerKeys<server::KvdbRotateKeysModel>(
+        kvdbId, currentKvdb, users, managers, version, force, groups,
+        [&](const server::KvdbRotateKeysModel& model) { _serverApi.kvdbRotateKeys(model); }
+    );
+}
+
+void KvdbApiImpl::autoRotateKvdbKeys(const std::string& kvdbId) {
+    // A fresh read, not the cached keys: whatever triggered this may have been a stale snapshot, and the roster
+    // and version this re-key is built on have to be the ones the bridge will check it against.
+    server::KvdbGetModel getModel;
+    getModel.kvdbId = kvdbId;
+    auto currentKvdb = _serverApi.kvdbGet(getModel).kvdb;
+    if (!isRekeyNeeded(currentKvdb)) {
+        // Someone else already re-keyed it. The caller refetches the keys either way, so there is nothing to do.
+        return;
+    }
+    auto roster = resolveRosterPubKeys(currentKvdb.contextId, currentKvdb.users, currentKvdb.managers);
+    runAutoRekey(kvdbId, [&] {
+        rotateContainerKeys<server::KvdbRotateKeysModel>(
+            kvdbId, currentKvdb, roster.users, roster.managers, currentKvdb.version, false, {},
+            [&](const server::KvdbRotateKeysModel& model) { _serverApi.kvdbRotateKeys(model); }
+        );
+    });
+}
+
 void KvdbApiImpl::deleteKvdb(const std::string& kvdbId) {
     server::KvdbDeleteModel model{.kvdbId = kvdbId};
     _serverApi.kvdbDelete(model);
@@ -149,7 +193,7 @@ Kvdb KvdbApiImpl::getKvdb(const std::string& kvdbId, const std::string& type) {
     params.type = type;
     auto kvdb = _serverApi.kvdbGet(params).kvdb;
     setNewModuleKeysInCache(kvdb.id, kvdbToModuleKeys(kvdb), kvdb.version);
-    auto result = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdb(kvdb, _keyProvider);
+    auto result = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdb(kvdb, _keyProvider, _groupPrivKeyResolver);
     return result;
 }
 
@@ -166,7 +210,9 @@ core::PagingList<Kvdb> KvdbApiImpl::listKvdbs(
     for (auto kvdb : kvdbsList.kvdbs) {
         setNewModuleKeysInCache(kvdb.id, kvdbToModuleKeys(kvdb), kvdb.version);
     }
-    std::vector<Kvdb> kvdbs = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdbs(kvdbsList.kvdbs, _keyProvider);
+    std::vector<Kvdb> kvdbs = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdbs(
+        kvdbsList.kvdbs, _keyProvider, _groupPrivKeyResolver
+    );
     return core::PagingList<Kvdb>({.totalAvailable = kvdbsList.count, .readItems = kvdbs});
 }
 
@@ -175,7 +221,7 @@ KvdbEntry KvdbApiImpl::getEntry(const std::string& kvdbId, const std::string& ke
     auto entry = _serverApi.kvdbEntryGet(model).kvdbEntry;
     KvdbEntry result;
     result = _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(
-        entry, getEntryDecryptionKeys(entry), _keyProvider
+        entry, getEntryDecryptionKeys(entry), _keyProvider, _groupPrivKeyResolver
     );
     return result;
 }
@@ -187,7 +233,7 @@ std::optional<KvdbEntry> KvdbApiImpl::findEntry(const std::string& kvdbId, const
         return std::nullopt;
     }
     return _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(
-        entryOpt.value(), getEntryDecryptionKeys(entryOpt.value()), _keyProvider
+        entryOpt.value(), getEntryDecryptionKeys(entryOpt.value()), _keyProvider, _groupPrivKeyResolver
     );
 }
 
@@ -229,7 +275,7 @@ core::PagingList<KvdbEntry> KvdbApiImpl::listEntries(const std::string& kvdbId, 
     _kvdbDataSchemaMapper->assertDataIntegrity(kvdb);
     setNewModuleKeysInCache(kvdb.id, kvdbToModuleKeys(kvdb), kvdb.version);
     auto entries = _entryDataSchemaMapper.validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
-        entriesList.kvdbEntries, kvdbToModuleKeys(kvdb), _keyProvider
+        entriesList.kvdbEntries, kvdbToModuleKeys(kvdb), _keyProvider, _groupPrivKeyResolver
     );
     return core::PagingList<KvdbEntry>({.totalAvailable = entriesList.count, .readItems = entries});
 }
@@ -246,7 +292,8 @@ void KvdbApiImpl::setEntry(
         kvdbId, privmx::endpoint::server::InvalidKeyIdException().getCode(),
         [&](const core::ModuleKeys& keys) {
             setEntryRequest(kvdbId, key, publicMeta, privateMeta, data, version, keys);
-        }
+        },
+        [&] { autoRotateKvdbKeys(kvdbId); }
     );
 }
 
@@ -259,7 +306,7 @@ void KvdbApiImpl::setEntryRequest(
     int64_t version,
     const core::ModuleKeys& keys
 ) {
-    auto msgKey = getAndValidateModuleCurrentEncKey(keys);
+    auto msgKey = getAndValidateModuleCurrentEncKey(keys, _groupPrivKeyResolver);
     if (msgKey.statusCode != 0) {
         throw core::EncryptionKeyValidationException(
             "Current encryption key statusCode: " + std::to_string(msgKey.statusCode)
@@ -309,7 +356,7 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             if (raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, kvdbToModuleKeys(raw), raw.version);
                 privmx::endpoint::kvdb::Kvdb data = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdb(
-                    raw, _keyProvider
+                    raw, _keyProvider, _groupPrivKeyResolver
                 );
                 auto event = core::EventBuilder::buildEvent<KvdbCreatedEvent>("kvdb", data, notification);
                 _eventMiddleware->emitApiEvent(event);
@@ -319,7 +366,7 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             if (raw.type.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 setNewModuleKeysInCache(raw.id, kvdbToModuleKeys(raw), raw.version);
                 privmx::endpoint::kvdb::Kvdb data = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdb(
-                    raw, _keyProvider
+                    raw, _keyProvider, _groupPrivKeyResolver
                 );
                 auto event = core::EventBuilder::buildEvent<KvdbUpdatedEvent>("kvdb", data, notification);
                 _eventMiddleware->emitApiEvent(event);
@@ -343,7 +390,7 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             auto raw = server::KvdbEntryEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 auto data = _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(
-                    raw, getEntryDecryptionKeys(raw), _keyProvider
+                    raw, getEntryDecryptionKeys(raw), _keyProvider, _groupPrivKeyResolver
                 );
                 auto event = core::EventBuilder::buildEvent<KvdbNewEntryEvent>(
                     "kvdb/" + raw.kvdbId + "/entries", data, notification
@@ -354,7 +401,7 @@ void KvdbApiImpl::processNotificationEvent(const std::string& type, const core::
             auto raw = server::KvdbEntryEventData::fromJSON(notification.data);
             if (raw.containerType.value_or(std::string(KVDB_TYPE_FILTER_FLAG)) == KVDB_TYPE_FILTER_FLAG) {
                 auto data = _entryDataSchemaMapper.validateDecryptAndConvertEntryDataToEntry(
-                    raw, getEntryDecryptionKeys(raw), _keyProvider
+                    raw, getEntryDecryptionKeys(raw), _keyProvider, _groupPrivKeyResolver
                 );
                 auto event = core::EventBuilder::buildEvent<KvdbEntryUpdatedEvent>(
                     "kvdb/" + raw.kvdbId + "/entries", data, notification
@@ -422,7 +469,7 @@ Poco::Dynamic::Var KvdbApiImpl::encryptEntryData(
     const core::Buffer& data,
     const core::ModuleKeys& kvdbKeys
 ) {
-    core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(kvdbKeys);
+    core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(kvdbKeys, _groupPrivKeyResolver);
     return _entryDataSchemaMapper.encrypt(
         kvdbId, resourceId, kvdbKeys.contextId, kvdbKeys.moduleResourceId, publicMeta, privateMeta, data, msgKey
     );
@@ -442,13 +489,7 @@ std::pair<core::ModuleKeys, int64_t> KvdbApiImpl::getModuleKeysAndVersionFromSer
 }
 
 core::ModuleKeys KvdbApiImpl::kvdbToModuleKeys(server::KvdbInfo kvdb) {
-    return core::ModuleKeys{
-        .keys = kvdb.keys,
-        .currentKeyId = kvdb.keyId,
-        .moduleSchemaVersion = _kvdbDataSchemaMapper->getDataStructureVersion(kvdb.data.back()),
-        .moduleResourceId = kvdb.resourceId.value_or(""),
-        .contextId = kvdb.contextId
-    };
+    return containerToModuleKeys(kvdb);
 }
 
 std::vector<std::string> KvdbApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
