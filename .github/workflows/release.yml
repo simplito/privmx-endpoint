@@ -46,6 +46,13 @@ jobs:
             fi
 
             prerelease="true"
+          elif [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha[0-9A-Za-z.-]*$ ]]; then
+            if ! printf '%s\n' "$remote_branches" | grep -Eq '^origin/rc-'; then
+              echo "Alpha tag ${release_tag} does not point to a commit reachable from origin/rc-*." >&2
+              exit 1
+            fi
+
+            prerelease="true"
           else
             echo "Unsupported tag format: ${release_tag}" >&2
             echo "Supported formats: v1.2.3 and v1.2.3-rc1" >&2
