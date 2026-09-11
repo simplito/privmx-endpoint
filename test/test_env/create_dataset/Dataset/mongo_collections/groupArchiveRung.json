@@ -1,2 +1,10 @@
-[]
+[{
+	"_id": "6aa3c3777442a344f262d1aa|2|1|epoch|",
+	"groupId": "6aa3c3777442a344f262d1aa",
+	"atKeyVersion": 2,
+	"targetKeyVersion": 1,
+	"data": "ZQK1+zJuBWgXQU1EAC24+zGY1ilQhLAHDr1O7mXjY19zwAIsDNpTr5bl+oN+a887bzvNLPA09K5wU87I9iSkD/Y/1dCNVM2dV3qm03/IxVoXup576YOupqYtgcWe+nn+sO4tydNdj/N4zhUst8H3XPCFTU24+zxl3W8f4JCPKgGOqeu7PuwxhTayvY0zDL3rFNa/2sA2fA==",
+	"recipientKind": "epoch",
+	"author": "user_1"
+}]
 

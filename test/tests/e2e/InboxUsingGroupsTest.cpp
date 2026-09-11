@@ -468,29 +468,14 @@ TEST_F(InboxUsingGroupsTest, readEntry_via_group_grant) {
 }
 
 TEST_F(InboxUsingGroupsTest, listEntries_via_group_grant) {
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string inboxId;
-    ASSERT_NO_THROW({
-        inboxId = createInboxWithGroup(
-            reader->getString("Context_1.contextId"),
-            reader->getString("Login.user_1_id"),
-            reader->getString("Login.user_1_pubKey"),
-            group_2
-        );
-    });
-    ASSERT_FALSE(inboxId.empty());
-
-    ASSERT_NO_THROW({ submitEntry(inboxId, "data1"); });
-    ASSERT_NO_THROW({ submitEntry(inboxId, "data2"); });
-
+    // Inbox_4 is seeded with Entry_3 and Entry_4, so the paging path has more than one row to return.
     disconnect();
     connectAs(2);
     core::PagingList<inbox::InboxEntry> list;
     EXPECT_NO_THROW({
-        list = inboxApi->listEntries(inboxId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"});
+        list = inboxApi->listEntries(
+            reader->getString("Inbox_4.inboxId"), core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"}
+        );
     });
     EXPECT_EQ(list.totalAvailable, 2);
     for (const auto& entry : list.readItems) {
@@ -500,43 +485,19 @@ TEST_F(InboxUsingGroupsTest, listEntries_via_group_grant) {
 }
 
 TEST_F(InboxUsingGroupsTest, entries_accessible_by_all_group_members) {
-    // Group_3 has user_1, user_2 and user_3.
-    group::Group group_3;
-    ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_3.statusCode, 0);
+    // Inbox_4 is granted to Group_4 (user_1, user_2) and Group_6 (all three), so user_2 reaches it through
+    // either and user_3 only through Group_6. Neither holds a direct roster entry.
+    const std::string entryId = reader->getString("Entry_3.entryId");
+    const std::string data = privmx::utils::Hex::toString(reader->getString("Entry_3.data_inHex"));
 
-    std::string inboxId;
-    ASSERT_NO_THROW({
-        inboxId = createInboxWithGroup(
-            reader->getString("Context_1.contextId"),
-            reader->getString("Login.user_1_id"),
-            reader->getString("Login.user_1_pubKey"),
-            group_3
-        );
-    });
-    ASSERT_FALSE(inboxId.empty());
-
-    ASSERT_NO_THROW({ submitEntry(inboxId, "shared_data"); });
-
-    disconnect();
-    connectAs(2);
-    std::string entryIdUser2;
-    ASSERT_NO_THROW({ entryIdUser2 = onlyEntryId(inboxId); });
-    ASSERT_FALSE(entryIdUser2.empty());
-    inbox::InboxEntry entryUser2;
-    EXPECT_NO_THROW({ entryUser2 = inboxApi->readEntry(entryIdUser2); });
-    EXPECT_EQ(entryUser2.statusCode, 0);
-    EXPECT_EQ(entryUser2.data.stdString(), "shared_data");
-
-    disconnect();
-    connectAs(3);
-    std::string entryIdUser3;
-    ASSERT_NO_THROW({ entryIdUser3 = onlyEntryId(inboxId); });
-    ASSERT_FALSE(entryIdUser3.empty());
-    inbox::InboxEntry entryUser3;
-    EXPECT_NO_THROW({ entryUser3 = inboxApi->readEntry(entryIdUser3); });
-    EXPECT_EQ(entryUser3.statusCode, 0);
-    EXPECT_EQ(entryUser3.data.stdString(), "shared_data");
+    for (const int index : {2, 3}) {
+        disconnect();
+        connectAs(index);
+        inbox::InboxEntry entry;
+        EXPECT_NO_THROW({ entry = inboxApi->readEntry(entryId); }) << "user_" << index << " could not read it";
+        EXPECT_EQ(entry.statusCode, 0);
+        EXPECT_EQ(entry.data.stdString(), data);
+    }
 }
 
 TEST_F(InboxUsingGroupsTest, user_added_to_group_gains_access_to_inbox_and_entries) {
@@ -648,79 +609,38 @@ TEST_F(InboxUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 }
 
 TEST_F(InboxUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
-    // user_2 is a direct member of the Inbox and in no grantee group, so the bridge serves it `groupKeys: []`
-    // and the read has to come entirely from its own key wrap.
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-
-    std::string inboxId;
-    ASSERT_NO_THROW({
-        inboxId = createInboxWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{
-                user(1), user(2)
-            },
-            std::vector<group::Group>{group_1}
-        );
-    });
-    ASSERT_FALSE(inboxId.empty());
-
-    ASSERT_NO_THROW({ submitEntry(inboxId, "nogroup_data"); });
-
+    // user_2 is a direct member of Inbox_5 and is in no grantee group - Group_7 holds user_1 alone - so the
+    // bridge serves it `groupKeys: []` and the read has to come entirely from its own key wrap.
     disconnect();
     connectAs(2);
 
     inbox::Inbox i;
-    EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
+    EXPECT_NO_THROW({ i = inboxApi->getInbox(reader->getString("Inbox_5.inboxId")); });
     EXPECT_EQ(i.statusCode, 0);
     // `groups` stays unnarrowed, so user_2 still sees the grant it is not part of.
     EXPECT_EQ(i.groups.size(), 1);
 
-    std::string entryId;
-    ASSERT_NO_THROW({ entryId = onlyEntryId(inboxId); });
-    ASSERT_FALSE(entryId.empty());
     inbox::InboxEntry entry;
-    EXPECT_NO_THROW({ entry = inboxApi->readEntry(entryId); });
+    EXPECT_NO_THROW({ entry = inboxApi->readEntry(reader->getString("Entry_5.entryId")); });
     EXPECT_EQ(entry.statusCode, 0);
-    EXPECT_EQ(entry.data.stdString(), "nogroup_data");
+    EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Entry_5.data_inHex")));
 }
 
 TEST_F(InboxUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // The Inbox wraps its key to user_1 only, and user_2 belongs to both grantee groups: narrowing leaves it two
-    // entries at the same keyId, and with no direct wrap to fall back on one of them has to carry the read.
-    group::Group group_2, group_3;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-    ASSERT_EQ(group_3.statusCode, 0);
-
-    std::string inboxId;
-    ASSERT_NO_THROW({
-        inboxId = createInboxWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<group::Group>{group_2, group_3}
-        );
-    });
-    ASSERT_FALSE(inboxId.empty());
-
-    ASSERT_NO_THROW({ submitEntry(inboxId, "twogroups_data"); });
-
+    // Inbox_4 wraps its key to user_1 only and is granted to Group_4 and Group_6, both of which user_2 belongs
+    // to: that leaves two entries at the same keyId, and with no direct wrap one of them has to carry the read.
     disconnect();
     connectAs(2);
 
     inbox::Inbox i;
-    EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
+    EXPECT_NO_THROW({ i = inboxApi->getInbox(reader->getString("Inbox_4.inboxId")); });
     EXPECT_EQ(i.statusCode, 0);
+    EXPECT_EQ(i.groups.size(), 2);
 
-    std::string entryId;
-    ASSERT_NO_THROW({ entryId = onlyEntryId(inboxId); });
-    ASSERT_FALSE(entryId.empty());
     inbox::InboxEntry entry;
-    EXPECT_NO_THROW({ entry = inboxApi->readEntry(entryId); });
+    EXPECT_NO_THROW({ entry = inboxApi->readEntry(reader->getString("Entry_3.entryId")); });
     EXPECT_EQ(entry.statusCode, 0);
-    EXPECT_EQ(entry.data.stdString(), "twogroups_data");
+    EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Entry_3.data_inHex")));
 }
 
 TEST_F(InboxUsingGroupsTest, rotateInboxKeys_covers_a_grantee_group_the_caller_did_not_name) {

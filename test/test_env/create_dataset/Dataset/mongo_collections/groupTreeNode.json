@@ -1,22 +1,57 @@
 [{
-	"_id": "6aa26856cd73e22695aed0e3|1",
-	"groupId": "6aa26856cd73e22695aed0e3",
+	"_id": "6aa3c3777442a344f262d1a7|1",
+	"groupId": "6aa3c3777442a344f262d1a7",
 	"nodeIndex": 1,
 	"generation": 0,
-	"publicKey": "5fG2fc2iV2L5MYPg6dD133NXwfzxz21ZXRe2JtD4Fi7U2Sp1Gg"
+	"publicKey": "7KZxGxbnQun9aLpsMn5Wi8nJQP8nDFvFpfgKVd5KVsdWVmdy74"
 },
 {
-	"_id": "6aa26856cd73e22695aed0e4|1",
-	"groupId": "6aa26856cd73e22695aed0e4",
+	"_id": "6aa3c3777442a344f262d1a8|1",
+	"groupId": "6aa3c3777442a344f262d1a8",
 	"nodeIndex": 1,
 	"generation": 0,
-	"publicKey": "8ZXvZuEk7c9kwHtwiGBMPUDmAZLjMQs1inEUimMkHkXw2BNpCT"
+	"publicKey": "7cDvtcZxUD6jV1QTc9ntPX3pNqbMMogeaPMQUQQizngwhAudsf"
 },
 {
-	"_id": "6aa26856cd73e22695aed0e4|3",
-	"groupId": "6aa26856cd73e22695aed0e4",
+	"_id": "6aa3c3777442a344f262d1a8|3",
+	"groupId": "6aa3c3777442a344f262d1a8",
 	"nodeIndex": 3,
 	"generation": 0,
-	"publicKey": "86ze3FHQofy4ivWVC2Cd8Jc1osUGwskmWkEguh5J35vx13vQxn"
+	"publicKey": "7NH49iCpWnUN4JixXqC6d3PHv1W8rYVgrdKrDEG5tznca6XhyZ"
+},
+{
+	"_id": "6aa3c3777442a344f262d1a9|1",
+	"groupId": "6aa3c3777442a344f262d1a9",
+	"nodeIndex": 1,
+	"generation": 0,
+	"publicKey": "6hoWKks1djfSwYJ2VvhQyu4A4b9zX5ReRxwSX18Mu2KRzME2Tj"
+},
+{
+	"_id": "6aa3c3777442a344f262d1aa|1",
+	"groupId": "6aa3c3777442a344f262d1aa",
+	"nodeIndex": 1,
+	"generation": 0,
+	"publicKey": "8ZamJ6Bx15dY6WawrRKa2FW5WKmWTPSvzPsh1PJkREwQjMBb7y"
+},
+{
+	"_id": "6aa3c3777442a344f262d1aa|3",
+	"groupId": "6aa3c3777442a344f262d1aa",
+	"nodeIndex": 3,
+	"generation": 1,
+	"publicKey": "55qbgRsvadP94sBCep5SvfLskEAWwzH1CoBanRkskaoKhKZDyG"
+},
+{
+	"_id": "6aa3c3777442a344f262d1ab|1",
+	"groupId": "6aa3c3777442a344f262d1ab",
+	"nodeIndex": 1,
+	"generation": 0,
+	"publicKey": "7PjXuamaAbEowQ3Vvn6kjsAiECkveikAfTeHD26GKeqQ2GEKYH"
+},
+{
+	"_id": "6aa3c3777442a344f262d1ab|3",
+	"groupId": "6aa3c3777442a344f262d1ab",
+	"nodeIndex": 3,
+	"generation": 0,
+	"publicKey": "7uBQM3iekk3dCMyC3VzCUwf5ZvVZasWG4MnQFFQANyemxebNGf"
 }]
 
