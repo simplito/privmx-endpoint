@@ -1,0 +1,107 @@
+/*
+PrivMX Endpoint.
+Copyright © 2024 Simplito sp. z o.o.
+
+This file is part of the PrivMX Platform (https://privmx.dev).
+This software is Licensed under the PrivMX Free License.
+
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+#ifndef _PRIVMXLIB_CRYPTOSERVICE_ASYNCKEYUTILS_HPP_
+#define _PRIVMXLIB_CRYPTOSERVICE_ASYNCKEYUTILS_HPP_
+
+// #include <functional>
+#include <memory>
+#include <string>
+#include <optional>
+#include <map>
+
+#include <openssl/evp.h>
+#include <openssl/param_build.h>
+#include <openssl/ec.h>
+#include <openssl/engine.h>
+
+#include "CoreTypes.hpp"
+#include "CoreInterfaces.hpp"
+
+namespace privmx {
+namespace cryptoservice {
+// namespace ecc {
+
+
+class AsyncKeyUtils 
+{
+public:
+    using evp_pkey_unique_ptr = std::unique_ptr<EVP_PKEY, std::function<decltype(EVP_PKEY_free)>>;
+    using evp_pkey_ctx_unique_ptr = std::unique_ptr<EVP_PKEY_CTX, std::function<decltype(EVP_PKEY_CTX_free)>>;
+    // using ossl_param_unique_ptr = std::unique_ptr<OSSL_PARAM, std::function<decltype(OSSL_PARAM_clear_free)>>;
+    using ossl_param_unique_ptr = std::unique_ptr<OSSL_PARAM, std::function<decltype(OSSL_PARAM_free)>>;
+    using ossl_param_bld_unique_ptr = std::unique_ptr<OSSL_PARAM_BLD, std::function<decltype(OSSL_PARAM_BLD_free)>>;
+    using bignum_unique_ptr = std::unique_ptr<BIGNUM, std::function<decltype(BN_free)>>;
+    // using evp_md_ctx_unique_ptr = std::unique_ptr<EVP_MD_CTX, std::function<decltype(EVP_MD_CTX_destroy)>>;
+    using evp_md_ctx_unique_ptr = std::unique_ptr<EVP_MD_CTX, std::function<decltype(EVP_MD_CTX_free)>>;
+
+    using evp_signature_unique_ptr = std::unique_ptr<EVP_SIGNATURE, std::function<decltype(EVP_SIGNATURE_free)>>;
+
+    // temporary - for testing only
+    static void showParams(std::shared_ptr<EVP_PKEY> key);
+
+    static std::shared_ptr<EVP_PKEY> getRandomKey(AsymAlg);
+    static std::shared_ptr<EVP_PKEY> getKeyFromId(int id);
+    static std::shared_ptr<EVP_PKEY> getKeyFromName(const char *name);
+    static std::shared_ptr<EVP_PKEY> getKeyFromNameAndSeed(const char *name, BytesView seed);
+
+    static Bytes toRaw(AsymAlg, std::shared_ptr<EVP_PKEY> key, bool includePrivate = true);
+    static Bytes toRawP256(std::shared_ptr<EVP_PKEY> key, bool includePrivate = true);
+    static Bytes toRaw25519(std::shared_ptr<EVP_PKEY> key, bool includePrivate = true);
+    static Bytes toRawPQ(std::shared_ptr<EVP_PKEY> key, bool includePrivate = true);
+
+    static std::shared_ptr<EVP_PKEY> fromRaw(AsymAlg, BytesView data, bool includePrivate = true);
+    static std::shared_ptr<EVP_PKEY> fromRawP256(BytesView data, const char *groupname, bool includePrivate = true);
+    // static std::shared_ptr<EVP_PKEY> fromRawP256Reverse(BytesView data, bool includePrivate = true);
+    // static std::shared_ptr<EVP_PKEY> fromRawP256Test(BytesView data, bool includePrivate = true);
+    // static std::shared_ptr<EVP_PKEY> fromRaw25519(BytesView data, bool includePrivate = true);
+    static std::shared_ptr<EVP_PKEY> fromRaw25519(const char *name, BytesView data, bool includePrivate = true);
+    static std::shared_ptr<EVP_PKEY> fromRawPQ(const char *name, BytesView data, size_t publen, size_t privlen = 0, size_t seedlen = 0);
+
+    static std::shared_ptr<EVP_PKEY> fromRawP256PrivateOnly(BytesView rawdata, const char *groupname);
+
+    // not work as expected - for tests only
+    static std::shared_ptr<EVP_PKEY> fromRawPrivateP256(const char *groupname, BytesView data);
+    
+    // based on example from https://github.com/openssl/openssl/issues/18437
+    static Bytes GetPubKeyFromPrivKey(EVP_PKEY* ec_key);
+
+
+    static Bytes sign(AsymAlg, EVP_PKEY *raw_pkey, BytesView message);
+
+    static bool verify(AsymAlg, EVP_PKEY *raw_pkey, BytesView message, BytesView signature);
+
+// protected:
+private:
+    static Bytes sign_ds(EVP_PKEY *raw_pkey, BytesView message, 
+        const EVP_MD *digest_type = NULL, ENGINE *e = NULL);
+    static Bytes sign_ds_ex(EVP_PKEY *raw_pkey, BytesView message, 
+        const char *mdname = NULL, const OSSL_PARAM *params = NULL);
+    // static Bytes sign_ms(EVP_PKEY *raw_pkey, BytesView message, 
+    //     const char *algorithm, const OSSL_PARAM *params = NULL);
+
+    static bool verify_ds(EVP_PKEY *raw_pkey, BytesView message, BytesView signature, 
+        const EVP_MD *digest_type = NULL, ENGINE *e = NULL);
+    static bool verify_ds_ex(EVP_PKEY *raw_pkey, BytesView message, BytesView signature, 
+        const char *mdname = NULL, const OSSL_PARAM *params = NULL);
+
+    static Bytes derive(EVP_PKEY *hostkey, EVP_PKEY* peerkey);
+    // static std::map<Bytes, Bytes> encapsulate(EVP_PKEY* peerkey);
+    static std::pair<Bytes, Bytes> encapsulate(EVP_PKEY* peerkey);
+
+    static Bytes decapsulate(EVP_PKEY* hostkey, BytesView ciphertext);
+};
+
+// } // ecc
+} // cryptoservice
+} // privmx
+
+#endif // _PRIVMXLIB_CRYPTOSERVICE_ASYNCKEYUTILS_HPP_

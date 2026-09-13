@@ -498,6 +498,15 @@ public:
     ) : PrivmxCryptoserviceKdfException(std::string(msg)) {}
 };
 
+class PrivmxCryptoserviceAsyncKeyException : public PrivmxCryptoserviceException {
+public:
+    PrivmxCryptoserviceAsyncKeyException(
+        const std::string& msg = std::string()
+    ) : PrivmxCryptoserviceException(msg) {}
+    PrivmxCryptoserviceAsyncKeyException(
+        const char * msg 
+    ) : PrivmxCryptoserviceException(std::string(msg)) {}
+};
 // } // namespace core
 } // namespace cryptoservice
 } // namespace privmx
