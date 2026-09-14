@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mkdir -p ./build
 BUILD_TYPE="Debug"
 conan install . --output-folder=build --build=missing -s build_type=$BUILD_TYPE

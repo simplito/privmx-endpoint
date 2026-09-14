@@ -7,7 +7,7 @@
  * API refuses to downgrade or parks the caller on PENDING, which is the interesting half of the contract.
  */
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
+#include "BaseTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>

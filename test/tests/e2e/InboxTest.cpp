@@ -11,7 +11,7 @@
  * Kvdb modules each have one for their equivalent.
  */
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
+#include "BaseTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/crypto/Crypto.hpp>

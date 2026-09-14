@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Sequence
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parent
+TEST_DIR = SCRIPT_DIR.parent
+REPO_ROOT = TEST_DIR.parent
 LOG_DIR = SCRIPT_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 

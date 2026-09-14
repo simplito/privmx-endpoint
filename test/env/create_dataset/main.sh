@@ -1,7 +1,6 @@
 #!/bin/bash
 SCRIPT_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )
-UTILS_PATH="${SCRIPT_PATH}/../utils"
-source "${UTILS_PATH}/default_values.sh"
+source "${SCRIPT_PATH}/default_values.sh"
 cd $SCRIPT_PATH
 
 outputPath=Dataset_$(date '+%Y-%m-%d_%H-%M')
@@ -67,13 +66,13 @@ done
 
 set -e
 
-"${UTILS_PATH}/setup_docker.sh"
+"${SCRIPT_PATH}/setup_docker.sh"
 set +e
 echo Creating dataset
 sleep 5s
 {
-    "${SCRIPT_PATH}/create-dataset.sh" "${UTILS_PATH}/volumes/bridge/storage" empty_server_and_mongo-mongodb-1 "${outputPath}"
+    "${SCRIPT_PATH}/create-dataset.sh" "${SCRIPT_PATH}/volumes/bridge/storage" empty_server_and_mongo-mongodb-1 "${outputPath}"
 } || {
     echo Failed to create Snapshot
 }
-"${UTILS_PATH}/stop_docker.sh"
+"${SCRIPT_PATH}/stop_docker.sh"

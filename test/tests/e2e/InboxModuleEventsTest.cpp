@@ -7,7 +7,7 @@
  * in which operation they triggered - and two of them were byte-identical, because the collectionChanged one
  * subscribed to ENTRY_CREATE instead of COLLECTION_CHANGE and so could never have failed.
  */
-#include "../../utils/BaseEndpointEventTest.hpp"
+#include "BaseEndpointEventTest.hpp"
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/thread/Events.hpp>
 #include <privmx/endpoint/thread/ThreadException.hpp>

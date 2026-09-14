@@ -34,7 +34,7 @@ Conan resolves all dependencies automatically: `poco`, `openssl`, `gmp`, `pson`,
 
 **Quick start:**
 ```bash
-./build.sh
+./scripts/build.sh
 ```
 
 **Manual steps:**
@@ -103,6 +103,18 @@ cmake --build . -- -j$(nproc)
 | `PRIVMX_LOGGER_OUTPUT_STDERR` | OFF | Log to stderr |
 | `PRIVMX_LOGGER_OUTPUT_FILE` | OFF | Log to a file |
 | `PRIVMX_LOGGER_OUTPUT_FILE_PATH` | — | Path for the log file (e.g. `output.log`) |
+
+## Scripts
+
+Helper scripts for building, testing and tooling live in [`scripts/`](scripts/) and are meant to be run from the repository root:
+
+```bash
+./scripts/build.sh        # Debug build via Conan, with tests enabled
+./scripts/run_tests.sh    # unit + e2e test suites
+./scripts/bridge.sh       # one Bridge seeded with a dataset, for manual testing
+```
+
+See [scripts/README.md](scripts/README.md) for the full list, their options, datasets, and shell completion.
 
 ## Resources
 

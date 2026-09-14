@@ -11,8 +11,8 @@
  * no rejected input where its Thread and Store counterparts check four cases.
  */
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
-#include "../../utils/FalseUserVerifierInterface.hpp"
+#include "BaseTest.hpp"
+#include "FalseUserVerifierInterface.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>

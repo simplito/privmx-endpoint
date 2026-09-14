@@ -16,7 +16,7 @@ if [ -n "$3" ]; then
 else
     DATASET_NAME=$(date '+%Y%m%d%H%M')
 fi
-DATASET_DIR=$SCRIPT_DIR/$DATASET_NAME
+DATASET_DIR=$SCRIPT_DIR/../datasets/$DATASET_NAME
 
 mkdir -p $DATASET_DIR
 cp -r $PRIVMX_BRIDGE_STORAGE_DIR $DATASET_DIR

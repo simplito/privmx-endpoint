@@ -1,8 +1,8 @@
 // Owns stream-room coverage for both stream APIs: StreamApiImpl forwards every room call to StreamApiLow,
 // so a copy of these tests against StreamApi would run the same code behind a WebRTC-only build.
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
-#include "../../utils/FalseUserVerifierInterface.hpp"
+#include "BaseTest.hpp"
+#include "FalseUserVerifierInterface.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>

@@ -4,7 +4,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "../../utils/BaseGroupTest.hpp"
+#include "BaseGroupTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/Connection.hpp>

@@ -6,7 +6,7 @@
  * that is the same call. The seven "_disabled" tests this replaces differed only in which operation they
  * triggered afterwards.
  */
-#include "../../utils/BaseEndpointEventTest.hpp"
+#include "BaseEndpointEventTest.hpp"
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/thread/Events.hpp>
 #include <privmx/endpoint/thread/ThreadException.hpp>

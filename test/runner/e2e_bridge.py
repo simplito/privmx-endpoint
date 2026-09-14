@@ -38,7 +38,7 @@ def load_runtime_dependencies() -> None:
 
 
 def check_backend_ready() -> None:
-    hint = "Start it with 'docker compose up -d' from the test/ directory (see test/compose.yaml)."
+    hint = "Start it with 'docker compose up -d' from the test/env/ directory (see test/env/compose.yaml)."
 
     try:
         client = MongoClient(

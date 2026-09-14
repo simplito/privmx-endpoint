@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "../../utils/BaseGroupTest.hpp"
+#include "BaseGroupTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>

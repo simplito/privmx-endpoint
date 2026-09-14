@@ -36,7 +36,7 @@ jobs:
       run: conan remote login -p "${{ secrets.CONAN_PASSWORD }}" privmx "${{ vars.CONAN_USER }}"
 
     - name: Build library
-      run: ./build-with-streams.sh
+      run: ./scripts/build-with-streams.sh
 
     - name: Upload binaries
       run: conan upload "*" --remote=privmx --confirm
@@ -44,4 +44,4 @@ jobs:
     - name: Run e2e tests
       run: |
         source build/build/Debug/generators/conanrun.sh
-        ./scripts/run_tests.sh --e2e-only --e2e-workers 2 --build-dir "build" --dataset-dir "test/test_env/create_dataset/Dataset"
+        ./scripts/run_tests.sh --e2e-only --e2e-workers 2 --build-dir "build" --dataset-dir "test/env/datasets/Dataset"

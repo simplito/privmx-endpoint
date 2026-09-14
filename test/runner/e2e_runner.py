@@ -30,7 +30,7 @@ REQUIRED_MODULES = ("requests", "pymongo")
 MANAGED_VENV_DIR = e2e_common.SCRIPT_DIR / ".venv"
 REQUIREMENTS_FILE = e2e_common.SCRIPT_DIR / "requirements.txt"
 DEFAULT_TESTS_DIR = "build"
-DEFAULT_DATASET_DIR = "test/test_env/create_dataset/Dataset"
+DEFAULT_DATASET_DIR = "test/env/datasets/Dataset"
 
 
 def managed_python_path() -> Path:
@@ -101,7 +101,7 @@ def candidate_input_paths(path_arg: str) -> list[Path]:
 
     candidates: list[Path] = []
     seen: set[Path] = set()
-    for base_dir in (Path.cwd(), e2e_common.SCRIPT_DIR, e2e_common.REPO_ROOT):
+    for base_dir in (Path.cwd(), e2e_common.SCRIPT_DIR, e2e_common.TEST_DIR, e2e_common.REPO_ROOT):
         candidate = (base_dir / path).resolve()
         if candidate not in seen:
             seen.add(candidate)
@@ -183,18 +183,18 @@ def parse_cli_args(argv: Sequence[str]) -> tuple[argparse.Namespace, str | None,
         description="Run privmx endpoint e2e GTest binaries with managed Docker fixtures.",
         epilog=(
             "Examples:\n"
-            "  python3 e2e_runner.py --setup-python\n"
-            "  python3 e2e_runner.py\n"
-            "  python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset --gtest_filter=CoreTest.*\n"
-            "  python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset -- --gtest_repeat=2\n"
-            "  python3 e2e_runner.py --start-bridge --dataset-dir test_env/create_dataset/Dataset"
+            "  python3 test/runner/e2e_runner.py --setup-python\n"
+            "  python3 test/runner/e2e_runner.py\n"
+            "  python3 test/runner/e2e_runner.py --tests-dir build --dataset-dir test/env/datasets/Dataset --gtest_filter=CoreTest.*\n"
+            "  python3 test/runner/e2e_runner.py --tests-dir build --dataset-dir test/env/datasets/Dataset -- --gtest_repeat=2\n"
+            "  python3 test/runner/e2e_runner.py --start-bridge --dataset-dir test/env/datasets/Dataset"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--setup-python",
         action="store_true",
-        help="Create/update test/.venv and install Python dependencies before running tests.",
+        help="Create/update test/runner/.venv and install Python dependencies before running tests.",
     )
     parser.add_argument(
         "--max-workers",

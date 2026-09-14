@@ -5,7 +5,7 @@
  * event type: the store channel and the per-store files channel are built differently, everything past that
  * is the same call. The seven "_disabled" tests this replaces differed only in which operation they triggered.
  */
-#include "../../utils/BaseEndpointEventTest.hpp"
+#include "BaseEndpointEventTest.hpp"
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/store/Events.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>

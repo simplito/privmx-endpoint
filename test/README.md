@@ -1,44 +1,54 @@
-# Creating dataset
-Given version of endpoint comes with working dataset in `test/test_env/create_dataset/Dataset` and ini file `test/test_env/create_dataset/ServerData.ini`
-If you changes data on server creating new data set is recommended, but also run it with older to chec backward capability
+# Test environment
 
-To create the dataset required for testing run:
+[`scripts/run_tests.sh`](../scripts/README.md) is the front door for running the suites, and [`scripts/bridge.sh`](../scripts/README.md#running-a-bridge-manually) for a Bridge to poke at by hand. This document describes what sits underneath them — the e2e runner, the backend it needs, and the datasets — for when you want to drive them directly.
+
+## Layout
+
+| Path | Contents |
+|------|----------|
+| `tests/unit/` | Unit tests: no backend, no Docker |
+| `tests/e2e/` | E2E tests: each one runs against its own Bridge |
+| `fixtures/` | Shared fixtures and test bases (`BaseTest.hpp`, `BaseGroupTest.hpp`, …), on the include path |
+| `runner/e2e_runner.py` | Runner entry point: discovers binaries, schedules tests, manages Bridges |
+| `runner/e2e_bridge.py`, `e2e_tests.py`, `e2e_common.py` | Runner internals |
+| `runner/logs/` | One log file per runner invocation |
+| `env/compose.yaml` | Backend containers: MongoDB (replica set), Janus, Coturn, and the shared docker network |
+| `env/datasets/` | The Bridge snapshots tests are seeded from |
+| `env/create_dataset/` | The tool that produces those snapshots |
+| `tools/` | Key tree dump utilities (see [tools/README.md](tools/README.md)) |
+
+## Prerequisites
+
+Build with `PRIVMX_ENABLE_TESTS` and `PRIVMX_ENABLE_TESTS_E2E` (both are on in the build scripts). When you built with Conan, source the run environment first or every test will fail:
+
 ```bash
-./test_env/create_dataset/main.sh
+source build/build/Debug/generators/conanrun.sh
 ```
 
-To list advanced options in the dataset creation tool run:
+### Backend
+
+E2E tests need MongoDB on `localhost:27017` and the `endpoint_e2e_testing_network` docker network — the runner refuses to start without them. Both come from `env/compose.yaml`:
+
 ```bash
-./test_env/create_dataset/main.sh --help
+docker compose up -d      # from test/env/
+docker compose down
 ```
 
-The dataset is created by default in `test_env/create_dataset` with a name like `Dataset_YYYY-mm-dd_HH-MM`.
+`run_tests.sh` and `bridge.sh` bring this up and tear it down for you; do it by hand only when driving `e2e_runner.py` yourself.
 
-# Running tests
-When you use conan, remember to use `conanrun.sh` or all tests will fail.
+### Python
 
-## Python setup
-The runner manages a local virtual environment in `test/.venv` and installs dependencies from `test/requirements.txt`.
+The runner keeps its own virtual environment in `test/runner/.venv`, built from `runner/requirements.txt` (`requests`, `pymongo`). It bootstraps and re-executes itself on the first run that finds the dependencies missing, so setup is usually automatic. To do it up front:
 
-Initial setup only:
 ```bash
-python3 e2e_runner.py --setup-python
+python3 test/runner/e2e_runner.py --setup-python
 ```
 
-On the first regular run, if Python dependencies are missing, `e2e_runner.py` will create `test/.venv`, install the required packages and restart itself automatically.
+### Stream API
 
-## Setup mongo docker
-```bash
-docker compose up -d
-```
-
-### Stream API requirements
-Minimum one video device that is streaming data.
-
-### Example setup
+Stream tests need at least one video device that is actually streaming. A virtual camera works — for example [akvcam](https://github.com/webcamoid/akvcam):
 
 ```bash
-# Installing akvcam
 git clone https://github.com/webcamoid/akvcam.git
 cd akvcam/src/
 make
@@ -81,46 +91,69 @@ sudo chmod -vf 644 /etc/akvcam/config.ini
 ```
 
 ```bash
-# Running Camera
 sudo modprobe videodev
 sudo insmod akvcam.ko
 ```
 
-## Running all tests
-```bash
-python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM
-```
+## Driving the e2e runner directly
 
-`--tests-dir` may point either directly to the directory with `test_e2e_*` binaries or to the CMake build root such as `build`. In the latter case, the runner will automatically use `build/test` when it exists. Defaults to `build` when omitted.
-
-`--dataset-dir` is the dataset directory produced by `create-dataset.sh`; the runner reads `ServerData.ini` directly from inside it, so it does not need to be passed separately. Defaults to `test/test_env/create_dataset/Dataset` when omitted.
-
-Running with no flags at all uses both defaults:
-```bash
-python3 e2e_runner.py
-```
-
-## Running a single GTest or a pattern
-All extra arguments after the recognized flags are forwarded to each test executable.
+`run_tests.sh` calls this for you; call it yourself when you need flags it does not expose. With no arguments it uses both defaults:
 
 ```bash
-python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM --gtest_filter=CoreTest.listContextUsers
+python3 test/runner/e2e_runner.py
 ```
+
+| Option | Description |
+|--------|-------------|
+| `--tests-dir DIR` | Directory with the `test_e2e_*` binaries, or a CMake build root — `build/test` is used automatically when it exists (default: `build`) |
+| `--dataset-dir DIR` | Dataset to seed each Bridge with; `ServerData.ini` is read from inside it, so it is never passed separately (default: `test/env/datasets/Dataset`) |
+| `--max-workers N` | Tests in parallel (default: 4) |
+| `--setup-python` | Create/update `test/runner/.venv` and exit |
+| `--start-bridge` | Start one seeded Bridge and block until `Ctrl+C` instead of running tests — this is what `bridge.sh` wraps |
+| `--index N` | Worker index for `--start-bridge`: container name and host port `3001 + N` |
+| `--docker-image IMAGE` | Bridge image (default: `hub.simplito.com/privmx/privmx-bridge:dev`) |
+
+Each test gets a **freshly created Bridge container and database**, seeded from the dataset and dropped afterwards, and a failing test is retried once. Paths are resolved relative to the current directory, then `test/runner/`, then `test/`, then the repository root, so both of these work:
 
 ```bash
-python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM --gtest_filter=CoreTest.*
+python3 test/runner/e2e_runner.py --tests-dir build --dataset-dir env/datasets/Dataset
+python3 test/runner/e2e_runner.py --tests-dir build --dataset-dir test/env/datasets/Dataset
 ```
 
-## Passing other GTest flags
-You can also pass any other GTest arguments, for example:
+### GTest arguments
+
+`--gtest_filter` is handled by the runner itself: it decides which binaries and which tests get scheduled, so it must be passed to the runner rather than to the binaries.
 
 ```bash
-python3 e2e_runner.py --tests-dir build --dataset-dir test_env/create_dataset/Dataset_YYYY-mm-dd_HH-MM -- --gtest_repeat=2 --gtest_break_on_failure
+python3 test/runner/e2e_runner.py --gtest_filter=CoreTest.listContextUsers
+python3 test/runner/e2e_runner.py --gtest_filter=CoreTest.*
 ```
 
-`--gtest_filter` is handled specially by the runner to decide which tests should be scheduled.
+Any other argument is forwarded verbatim to each test executable:
 
-## Stopping mongo docker after tests
 ```bash
-docker compose down
+python3 test/runner/e2e_runner.py -- --gtest_repeat=2 --gtest_break_on_failure
 ```
+
+`--ini_file_path`/`-i` and `--bridge_url`/`-b` are managed by the runner and rejected if you try to forward them: each test is pointed at its own Bridge.
+
+## Datasets
+
+A dataset is a snapshot of a seeded Bridge. The runner recreates that state for every test, from:
+
+| Entry | Purpose |
+|-------|---------|
+| `ServerData.ini` | Solution, context ids, API key, and user keys the tests log in with |
+| `mongo_collections/*.json` | Collections inserted into the fresh per-test database |
+| `storage/` | Files copied into the Bridge container |
+| `migration.json` | Pins the Bridge to the migration the dataset was created at |
+
+This repository ships a working dataset in `env/datasets/Dataset`. Create new ones with [`scripts/dataset.sh`](../scripts/README.md#datasets), which wraps the tool in `env/create_dataset/`:
+
+```bash
+./env/create_dataset/main.sh --help     # advanced options
+```
+
+Without a name, a dataset is created as `env/datasets/Dataset_YYYY-mm-dd_HH-MM`.
+
+When you change the data the server produces, generating a new dataset is recommended — but keep running the tests against the older ones too, to check backward compatibility.

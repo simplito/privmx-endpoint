@@ -12,8 +12,8 @@
  * caller class (non-member, public connection, failing user verifier), which is one subject, not ten.
  */
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
-#include "../../utils/FalseUserVerifierInterface.hpp"
+#include "BaseTest.hpp"
+#include "FalseUserVerifierInterface.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <Poco/Util/IniFileConfiguration.h>

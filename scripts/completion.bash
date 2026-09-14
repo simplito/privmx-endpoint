@@ -18,7 +18,7 @@ _privmx_gtest_names() {
 
 _privmx_datasets() {
     local ini
-    for ini in "$1"/test/test_env/create_dataset/*/ServerData.ini; do
+    for ini in "$1"/test/env/datasets/*/ServerData.ini; do
         [[ -f "$ini" ]] && basename "$(dirname "$ini")"
     done
 }

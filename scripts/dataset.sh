@@ -8,13 +8,13 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CREATE_DATASET_DIR="$SCRIPT_DIR/../test/test_env/create_dataset"
+CREATE_DATASET_DIR="$SCRIPT_DIR/../test/env/create_dataset"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     cat <<EOF
 Usage: $0 [name] [main.sh options...]
 
-  name    Dataset directory name under test/test_env/create_dataset/. An existing name is
+  name    Dataset directory name under test/env/datasets/. An existing name is
           refreshed in place (update); omit it to create a fresh Dataset_<timestamp>.
 
 Remaining options are forwarded to main.sh: -i/--docker-image, -v/--docker-version, -p/--docker-port.

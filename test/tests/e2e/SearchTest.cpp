@@ -9,7 +9,7 @@
  * nothing - fixing it needs an index user_2 can reach, which SearchIndex_1 (user_1 only) is not.
  */
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
+#include "BaseTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>

@@ -9,7 +9,7 @@ from typing import Sequence
 import e2e_common
 from e2e_bridge import BridgeInfo, create_bridge_docker, destroy_bridge_docker, prepare_bridge_context
 
-TEST_CMAKE_FILE = e2e_common.SCRIPT_DIR / "CMakeLists.txt"
+TEST_CMAKE_FILE = e2e_common.TEST_DIR / "CMakeLists.txt"
 
 
 def normalize_gtest_entry(entry: str) -> str:

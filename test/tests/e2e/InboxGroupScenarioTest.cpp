@@ -7,7 +7,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include "../../utils/BaseGroupScenarioTest.hpp"
+#include "BaseGroupScenarioTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>

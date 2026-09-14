@@ -5,7 +5,7 @@
  * event type: the kvdb channel and the per-kvdb entries channel are built differently, everything past that
  * is the same call. The seven "_disabled" tests this replaces differed only in which operation they triggered.
  */
-#include "../../utils/BaseEndpointEventTest.hpp"
+#include "BaseEndpointEventTest.hpp"
 #include <privmx/endpoint/kvdb/KvdbApi.hpp>
 #include <privmx/endpoint/kvdb/Events.hpp>
 #include <privmx/endpoint/kvdb/KvdbException.hpp>

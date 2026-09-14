@@ -17,7 +17,7 @@ Both require a live Bridge to connect to and a user identity supplied through an
 
 The benchmark is **not** built by default. Enable it with `-DPRIVMX_BUILD_BENCHMARK=ON` (it also requires `PRIVMX_BUILD_ENDPOINT_ENDPOINT=ON`, which is on by default).
 
-Starting from the standard build (see the repo `build.sh`), add the flag to the CMake configure step:
+Starting from the standard build (see the repo `scripts/build.sh`), add the flag to the CMake configure step:
 
 ```bash
 cmake .. -G "Unix Makefiles" \
@@ -55,7 +55,7 @@ instanceUrl    = http://localhost/
 ```
 
 The repo ships a ready-made dataset you can point at:
-`test/test_env/create_dataset/Dataset/ServerData.ini` (used by the E2E tests; start the Bridge with `cd test && docker compose up -d`).
+`test/env/datasets/Dataset/ServerData.ini` (used by the E2E tests; start the Bridge with `cd test/env && docker compose up -d`).
 
 ### Environment variables
 
@@ -66,7 +66,7 @@ The repo ships a ready-made dataset you can point at:
 
 ```bash
 source build/build/Debug/generators/conanrun.sh   # so the shared libs are found
-export INI_FILE_PATH="$PWD/test/test_env/create_dataset/Dataset/ServerData.ini"
+export INI_FILE_PATH="$PWD/test/env/datasets/Dataset/ServerData.ini"
 ```
 
 The tools always connect as `user_1` and run against the **first** Context returned by `listContexts`. Make sure that user has access to at least one Context.
@@ -242,7 +242,7 @@ Events are emitted on the `benchmark` channel to the connected user; `buildSubsc
 A self-contained suite that creates one Thread / Store / Inbox up-front and then times a fixed set of operations, each repeated 100 times. It takes **no arguments** — just the `INI_FILE_PATH` (and optional `PLATFORM_URL`) environment.
 
 ```bash
-export INI_FILE_PATH="$PWD/test/test_env/create_dataset/Dataset/ServerData.ini"
+export INI_FILE_PATH="$PWD/test/env/datasets/Dataset/ServerData.ini"
 build/endpoint/programs/benchmark/privmxPerformanceTester
 ```
 

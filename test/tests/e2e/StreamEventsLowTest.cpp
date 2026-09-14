@@ -5,7 +5,7 @@
 #include <thread>
 #include <vector>
 #include <gtest/gtest.h>
-#include "../../utils/BaseEndpointEventTest.hpp"
+#include "BaseEndpointEventTest.hpp"
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/stream/Events.hpp>
 #include <privmx/endpoint/stream/StreamApiLow.hpp>

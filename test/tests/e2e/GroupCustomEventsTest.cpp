@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "../../utils/BaseGroupTest.hpp"
+#include "BaseGroupTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <chrono>
 #include <privmx/endpoint/core/Connection.hpp>
