@@ -37,17 +37,21 @@ namespace privmx {
 namespace cryptoservice {
 // namespace ecc {
 
-
+/**
+ * TO BE REMOVED
+ * @brief Temporary method for checking the structure of EC keys 
+ * @param key EVP_PKEY initialized with EC algorithm
+ */
 void AsyncKeyUtils::showParams(std::shared_ptr<EVP_PKEY> key) {
     EVP_PKEY *pkey = key.get();
 
      if (pkey == NULL) {
-           std::cout << "   struktura klucza nie zainicjalizowana!\n";
+           std::cout << "   Key structure not initialized!\n";
            return;
         }
  
-        std::cout << "id typu klucza = " << EVP_PKEY_get_id(pkey) << "\n";
-        std::cout << "lista parametrow klucza, ich typów i rozmiarów:\n";
+        std::cout << "id (type of key) = " << EVP_PKEY_get_id(pkey) << "\n";
+        std::cout << "list of parameters of the key, their types, and sizes:\n";
         OSSL_PARAM *param_array;
         if (EVP_PKEY_todata(pkey, EVP_PKEY_KEYPAIR, &param_array) == 0)
             throw std::runtime_error("cannot read parameters");
@@ -87,10 +91,16 @@ void AsyncKeyUtils::showParams(std::shared_ptr<EVP_PKEY> key) {
         }
 
         }
-        std::cout << "(koniec parametrów)\n\n"; 
+        std::cout << "(end of parameters)\n\n"; 
     OSSL_PARAM_free(param_array);
 }
-
+/**
+ * @brief Method for creating a key pair or a public key from uncompressed raw data
+ * @param algorithm Algorithm for which the key is to be created
+ * @param rawdata Vector containing public key data, and optionally private key data
+ * @param includePrivate Argument indicating whether the key to be created should contain both public and private parts or only the public part.
+ * @return Pointer to the created key
+ */
 std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRaw(AsymAlg algorithm, BytesView rawdata, bool includePrivate) {
     switch (algorithm)
     {
@@ -116,11 +126,13 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRaw(AsymAlg algorithm, BytesView ra
     throw PrivmxCryptoserviceAsyncKeyException("Key import function: Unknown protocol");
 }
 
-/// @brief Create private key from from private and public keys data
-/// @param rawdata Raw 65 bytes of public key data optionally followed by 32 bytes of private key data  
-/// @param groupname Name of the curve group ("secp256k1", "prime256v1" or "brainpoolP256r1")
-/// @param includePrivate Include public part if true and if rawdata contain private part 
-/// @return Shared pointer to the EVP_PKEY structure with desired key
+/**
+ * @brief Create private key from from private and public keys data
+ * @param rawdata Raw 65 bytes of public key data optionally followed by 32 bytes of private key data  
+ * @param groupname Name of the curve group ("secp256k1", "prime256v1" or "brainpoolP256r1")
+ * @param includePrivate Include public part if true and if rawdata contain private part 
+ * @return Shared pointer to the EVP_PKEY structure with desired key
+ */
 std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawP256(BytesView rawdata, const char *groupname, bool includePrivate)  {
 
     if (rawdata.size() != 32+65 && rawdata.size() != 65) {
@@ -186,11 +198,12 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawP256(BytesView rawdata, const ch
     return std::move(result);
 }
 
-
-/// @brief Create private key from from private and public keys data
-/// @param rawdata Raw 32 bytes of private key data  
-/// @param groupname Name of the curve group ("secp256k1", "prime256v1" or "brainpoolP256r1")
-/// @return Shared pointer to the EVP_PKEY structure with desired key
+/**
+ * @brief Create private key from from private data
+ * @param rawdata Raw 32 bytes of private key data  
+ * @param groupname Name of the curve group ("secp256k1", "prime256v1" or "brainpoolP256r1")
+ * @return Shared pointer to the EVP_PKEY structure with desired key
+ */
 std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawP256PrivateOnly(BytesView rawdata, const char *groupname)  {
     if (rawdata.size() != 32) {
         throw PrivmxCryptoserviceAsyncKeyException("Incorrect input data size");
@@ -243,11 +256,13 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawP256PrivateOnly(BytesView rawdat
     return std::move(result);
 }
 
-/// NOT WORK AS DESIRED
-/// @brief Create private key from from private key data
-/// @param rawdata Raw 32 bytes of private key data  
-/// @param groupname Name of the curve group ("secp256k1", "prime256v1" or "brainpoolP256r1")
-/// @return Shared pointer to the EVP_PKEY structure with desired key
+/**
+ * NOT WORK AS DESIRED - TO BE REMOVED OR REWRITED
+ * @brief Create private key from from private key data
+ * @param rawdata Raw 32 bytes of private key data  
+ * @param groupname Name of the curve group ("secp256k1", "prime256v1" or "brainpoolP256r1")
+ * @return Shared pointer to the EVP_PKEY structure with desired key
+ */
 std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawPrivateP256(const char *groupname, BytesView rawdata)  {
 
     if (rawdata.size() != 32) {
@@ -310,11 +325,13 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawPrivateP256(const char *groupnam
     return std::move(result);
 }
 
-/// @brief Create private key from from private and public keys data
-/// @param name Name of the key algorithm (X25519 or ED25519)
-/// @param rawdata Raw 32 bytes of public key data optionally followed by 32 bytes of private key data  
-/// @param includePrivate Include public part if true and if rawdata contain private part 
-/// @return Shared pointer to the EVP_PKEY structure with desired key
+/**
+ * @brief Create private key from from private and public keys data
+ * @param name Name of the key algorithm (X25519 or ED25519)
+ * @param rawdata Raw 32 bytes of public key data optionally followed by 32 bytes of private key data  
+ * @param includePrivate Include public part if true and if rawdata contain private part 
+ * @return Shared pointer to the EVP_PKEY structure with desired key
+ */
 std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRaw25519(const char *name, BytesView rawdata, bool includePrivate) {
 
     if (rawdata.size() != 32+32 && rawdata.size() != 32) {
@@ -365,6 +382,16 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRaw25519(const char *name, BytesVie
     return std::move(result);
 }
 
+/**
+ * @brief Create private key from from private and public keys data
+ * @param name Name of the post-quantum key algorithm (usually "ML-KEM-768" or "ML-DSA-65")
+ * @param rawdata Raw public key data optionally followed by private key data and seed data
+ * @param publen Length of the public portion of the key data
+ * @param privlen Length of the private portion of the key data
+ * @param seedlen Size of the seed
+ * @param includePrivate Include public part if true and if rawdata contain private part 
+ * @return Shared pointer to the EVP_PKEY structure with desired key
+ */
 std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawPQ(const char *name, BytesView rawdata, size_t publen, size_t privlen, size_t seedlen) {
 
     if (rawdata.size() != publen + privlen + seedlen && rawdata.size() != publen) {
@@ -420,9 +447,11 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawPQ(const char *name, BytesView r
     return std::move(result);
 }
 
-/// @brief Agnostic method to generate random keypair
-/// @param algorithm Assymetric algorithm
-/// @return Generated EVP_PKEY key containing both public and private parts
+/**
+ * @brief Agnostic method to generate random keypair
+ * @param algorithm Assymetric algorithm
+ * @return Pointer to the key containing both public and private parts
+ */
 std::shared_ptr<EVP_PKEY> AsyncKeyUtils::getRandomKey(AsymAlg algorithm) {
     // if (algorithm == AsymAlg::SecP256r1) {
     //     evp_pkey_unique_ptr pkey(EVP_EC_gen("P-256"), EVP_PKEY_free);
@@ -459,6 +488,11 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::getRandomKey(AsymAlg algorithm) {
     throw PrivmxCryptoserviceAsyncKeyException("Key generate function: Unknown protocol");
 }
 
+/**
+ * @brief Agnostic method to generate random keypair for a given assymetric algorithm identifier
+ * @param id Identifier of the asynchronous algorithm (note that some post-quantu algorithms do not have their own identifiers)
+ * @return Pointer to the key containing both public and private parts
+ */
 std::shared_ptr<EVP_PKEY> AsyncKeyUtils::getKeyFromId(int id) {
     evp_pkey_ctx_unique_ptr ctx(EVP_PKEY_CTX_new_id(id, NULL), EVP_PKEY_CTX_free);
     EVP_PKEY_CTX *ctx_raw = ctx.get();
@@ -478,6 +512,11 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::getKeyFromId(int id) {
     return std::move(evp_pkey_unique_ptr(pkey, EVP_PKEY_free));
 }
 
+/**
+ * @brief Agnostic method to generate random keypair for a given assymetric algorithm name
+ * @param name Name of the asynchronous algorithm 
+ * @return Pointer to the key containing both public and private parts
+ */
 std::shared_ptr<EVP_PKEY> AsyncKeyUtils::getKeyFromName(const char *name) {
     evp_pkey_ctx_unique_ptr ctx(EVP_PKEY_CTX_new_from_name(NULL, name, NULL), EVP_PKEY_CTX_free);
     EVP_PKEY_CTX *ctx_raw = ctx.get();
@@ -497,18 +536,13 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::getKeyFromName(const char *name) {
     return std::move(evp_pkey_unique_ptr(pkey, EVP_PKEY_free));
 }
 
+/**
+ * @brief Method to generate keypair for a given assymetric algorithm and seed
+ * @param name Name of the asynchronous algorithm 
+ * @param seed Seed
+ * @return Pointer to the key containing both public and private parts
+ */
 std::shared_ptr<EVP_PKEY> AsyncKeyUtils::getKeyFromNameAndSeed(const char *name, BytesView seed) {
-// EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_from_name(NULL, "ML-KEM-768", NULL);
-// EVP_PKEY_keygen_init(pctx);
-// // seed_bytes is a 64-byte unsigned char array
-// OSSL_PARAM params[2];
-// params[0] = OSSL_PARAM_construct_octet_string("seed", seed_bytes, 64);
-// params[1] = OSSL_PARAM_end();
-
-// EVP_PKEY_CTX_set_params(pctx, params);
-// EVP_PKEY *pkey = NULL;
-// EVP_PKEY_keygen(pctx, &pkey);
-
     evp_pkey_ctx_unique_ptr ctx(EVP_PKEY_CTX_new_from_name(NULL, name, NULL), EVP_PKEY_CTX_free);
     EVP_PKEY_CTX *ctx_raw = ctx.get();
     if (ctx_raw == NULL) {
@@ -543,10 +577,15 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::getKeyFromNameAndSeed(const char *name,
     return std::move(evp_pkey_unique_ptr(pkey, EVP_PKEY_free));
 }
 
-
-
+/**
+ * @brief Agnostic method for serializing key data
+ * @param algorithm Algorithm used to create the key from which data is to be extracted
+ * @param key Key from which data is to be extracted
+ * @param includePrivate Flag indicating whether to include private key data
+ * @return Sequence of uncompressed raw key data
+ */
 Bytes AsyncKeyUtils::toRaw(AsymAlg algorithm, std::shared_ptr<EVP_PKEY> key, bool includePrivate) {
-    // The following construction will not work in general
+    // Note that the following construction will not work in general
     // because EVP_PKEY_get_id() will return -1 for MLKEM and MLDSA algorithms
     // 
     // switch (EVP_PKEY_get_id(key.get()) 
@@ -574,6 +613,12 @@ Bytes AsyncKeyUtils::toRaw(AsymAlg algorithm, std::shared_ptr<EVP_PKEY> key, boo
     throw PrivmxCryptoserviceAsyncKeyException("Key generate function: Unknown protocol");
 }
 
+/**
+ * @brief Method for serializing key data for 256-bits EC algorithms
+ * @param key Key from which data is to be extracted
+ * @param includePrivate Flag indicating whether to include private key data
+ * @return Sequence of uncompressed raw key data
+ */
 Bytes AsyncKeyUtils::toRawP256(std::shared_ptr<EVP_PKEY> key, bool includePrivate) {
     EVP_PKEY *pkey = key.get();
     OSSL_PARAM *params_raw = NULL;
@@ -624,6 +669,12 @@ Bytes AsyncKeyUtils::toRawP256(std::shared_ptr<EVP_PKEY> key, bool includePrivat
     return result;
 }
 
+/**
+ * @brief Method for serializing key data for X25519 and ED25519 algorithms
+ * @param key Key from which data is to be extracted
+ * @param includePrivate Flag indicating whether to include private key data
+ * @return Sequence of uncompressed raw key data
+ */
 Bytes AsyncKeyUtils::toRaw25519(std::shared_ptr<EVP_PKEY> key, bool includePrivate) {
     EVP_PKEY *pkey = key.get();
     OSSL_PARAM *params_raw = NULL;
@@ -669,6 +720,12 @@ Bytes AsyncKeyUtils::toRaw25519(std::shared_ptr<EVP_PKEY> key, bool includePriva
     return result;
 }
 
+/**
+ * @brief Method for serializing key data for post-quantum (ML-KEM and ML-DSA) algorithms
+ * @param key Key from which data is to be extracted
+ * @param includePrivate Flag indicating whether to include private key data
+ * @return Sequence of uncompressed raw key data
+ */
 Bytes AsyncKeyUtils::toRawPQ(std::shared_ptr<EVP_PKEY> key, bool includePrivate) {
     EVP_PKEY *pkey = key.get();
     OSSL_PARAM *params_raw = NULL;
@@ -739,9 +796,17 @@ Bytes AsyncKeyUtils::toRawPQ(std::shared_ptr<EVP_PKEY> key, bool includePrivate)
     return result;
 }
 
+/**
+ * @brief Agnostic method for creating a message signature
+ * @param algorithm Algorithm for which the signature is to be created
+ * @param raw_pkey Key to be used for the signature
+ * @param message Message to be signed
+ * @return Signature
+ */
 Bytes AsyncKeyUtils::sign(AsymAlg algorithm, EVP_PKEY *raw_pkey, BytesView message) {
     switch (algorithm)
     {
+    case AsymAlg::secp256k1:
     case AsymAlg::prime256v1:
         return sign_ds(raw_pkey, message, EVP_sha256());
     case AsymAlg::X25519:
@@ -759,32 +824,22 @@ Bytes AsyncKeyUtils::sign(AsymAlg algorithm, EVP_PKEY *raw_pkey, BytesView messa
     throw PrivmxCryptoserviceAsyncKeyException("Signature function: Unknown protocol");
 }
 
-/// @brief Agnostic method to sign a message which initialize signing operation with EVP_DigestSignInit() method
-/// @param raw_pkey Pointer to the "raw" EVP_PKEY structure of private key
-/// @param message Message to sign
-/// @param mdname Message digest algorithm name (optional)
-/// @param params Array of additional parameters (optional)
-/// @return Signature of the message
+/**
+ * @brief Agnostic method to sign a message which initialize signing operation with EVP_DigestSignInit() method
+ * @param raw_pkey Pointer to the "raw" EVP_PKEY structure of private key
+ * @param message Message to sign
+ * @param mdname Message digest algorithm name (optional)
+ * @param params Array of additional parameters (optional)
+ * @return Signature of the message
+ */
 Bytes AsyncKeyUtils::sign_ds_ex(EVP_PKEY *raw_pkey, BytesView message, 
-        const char *mdname, const OSSL_PARAM *params) 
-// void do_sign(EVP_PKEY *ed_key, unsigned char *msg, size_t msg_len)
-{
-    // EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
+        const char *mdname, const OSSL_PARAM *params) {
     evp_md_ctx_unique_ptr mdctx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
     EVP_MD_CTX *ctx_raw = mdctx.get();
     if (ctx_raw == NULL) {
         throw PrivmxCryptoserviceAsyncKeyException("Create of message digest context fail");
     }
 
-    // const OSSL_PARAM params[] = {
-    //     OSSL_PARAM_utf8_string ("instance", "Ed25519ctx", 10),
-    //     OSSL_PARAM_octet_string("context-string", (unsigned char *)"A protocol defined context string", 33),
-    //     OSSL_PARAM_END
-    // };
-
-    /* The input "params" is not needed if default options are acceptable.
-       Use NULL in place of "params" in that case. */
-    ;
     /* Initialise the DigestSign operation - mdname has been selected as the message digest function */
     if(EVP_DigestSignInit_ex(ctx_raw, NULL, mdname, NULL, NULL, raw_pkey, params) != 1) {
         throw PrivmxCryptoserviceAsyncKeyException("Initialization of message digest context fail");
@@ -824,24 +879,25 @@ Bytes AsyncKeyUtils::sign_ds_ex(EVP_PKEY *raw_pkey, BytesView message,
     return signature;
 }
 
-/// @brief Agnostic method to sign a message which initialize signing operation with EVP_DigestSignInit() method
-/// @param raw_pkey Pointer to the "raw" EVP_PKEY structure of private key
-/// @param message Message to sign
-/// @param digest_type Optional pointer to the digest algorithm (for example obtained by invoking "EVP_sha256()")
-/// @param e Optional pointer to the provider engine
-/// @return Signature of the message
+/**
+ * @brief Agnostic method to sign a message which initialize signing operation with EVP_DigestSignInit() method
+ * @param raw_pkey Pointer to the "raw" EVP_PKEY structure of private key
+ * @param message Message to sign
+ * @param digest_type Optional pointer to the digest algorithm (for example obtained by invoking "EVP_sha256()")
+ * @param e Optional pointer to the provider engine
+ * @return Signature of the message
+ */
 Bytes AsyncKeyUtils::sign_ds(EVP_PKEY *raw_pkey, BytesView message, 
     const EVP_MD *digest_type, ENGINE *e) {
-// Bytes PrivateKey2::sign(BytesView data) const {
     /* Create the Message Digest Context */
-    // evp_md_ctx_unique_ptr mdctx(EVP_MD_CTX_create(), EVP_MD_CTX_destroy);
+    // evp_md_ctx_unique_ptr mdctx(EVP_MD_CTX_create(), EVP_MD_CTX_destroy); // from v4.0
     evp_md_ctx_unique_ptr mdctx(EVP_MD_CTX_create(), EVP_MD_CTX_free);
     EVP_MD_CTX *ctx_raw = mdctx.get();
     if (ctx_raw == NULL) {
         throw PrivmxCryptoserviceAsyncKeyException("Create of message digest context fail");
     }
  
-    /* Initialise the DigestSign operation - SHA-256 has been selected as the message digest function */
+    /* Initialise the DigestSign operation - usually SHA-256 is selected as the message digest function */
     // if(EVP_DigestSignInit(ctx_raw, NULL, EVP_sha256(), NULL, raw_pkey) != 1) {
     if(EVP_DigestSignInit(ctx_raw, NULL, digest_type, NULL, raw_pkey) != 1) {
         throw PrivmxCryptoserviceAsyncKeyException("Initialization of message digest context fail");
@@ -884,12 +940,16 @@ Bytes AsyncKeyUtils::sign_ds(EVP_PKEY *raw_pkey, BytesView message,
     return signature;
 }
 
-// /// @brief Agnostic method to sign a message which initialize signing operation with EVP_DigestSignInit() method
-// /// @param raw_pkey Pointer to the "raw" EVP_PKEY structure of private key
-// /// @param message Message to sign
-// /// @param algorithm Name of the signing algorithm (i.e. "ML-DSA-65")
-// /// @param params Array of additional parameters (optional)
-// /// @return Signature of the message
+// Temporary commented out because contains elements valid only in version >= 3.4
+
+// /**
+//  * @brief Agnostic method to sign a message which initialize signing operation with EVP_DigestSignInit() method
+//  * @param raw_pkey Pointer to the "raw" EVP_PKEY structure of private key
+//  * @param message Message to sign
+//  * @param algorithm Name of the signing algorithm (i.e. "ML-DSA-65")
+//  * @param params Array of additional parameters (optional)
+//  * @return Signature of the message
+//  */
 // Bytes AsyncKeyUtils::sign_ms(EVP_PKEY *raw_pkey, BytesView message, 
 //     const char *algorithm, const OSSL_PARAM *params) 
 // // void do_sign(EVP_PKEY *key, const unsigned char *msg, size_t msg_len)
@@ -956,8 +1016,14 @@ Bytes AsyncKeyUtils::sign_ds(EVP_PKEY *raw_pkey, BytesView message,
 //     return signature;
 // }
 
-
-
+/**
+ * @brief Agnostic method for verifying a message signature
+ * @param algorithm Algorithm used to generate the signature
+ * @param raw_pkey Key used to generate the signature
+ * @param message Signed message
+ * @param signature Signature
+ * @return Information on whether the signature is valid
+ */
 bool AsyncKeyUtils::verify(AsymAlg algorithm, EVP_PKEY *raw_pkey, BytesView message, BytesView signature) {
     switch (algorithm)
     {
@@ -981,6 +1047,15 @@ bool AsyncKeyUtils::verify(AsymAlg algorithm, EVP_PKEY *raw_pkey, BytesView mess
     throw PrivmxCryptoserviceAsyncKeyException("Signature function: Unknown protocol");
 }
 
+/**
+ * @brief Agnostic method for verifying a signature generated by sign_ds() method
+ * @param raw_pkey Key used to generate the signature
+ * @param message Signed message
+ * @param signature Signature
+ * @param digest_type Optional pointer to the digest algorithm (for example obtained by invoking "EVP_sha256()")
+ * @param e Optional pointer to the provider engine
+ * @return Information on whether the signature is valid
+ */
 bool AsyncKeyUtils::verify_ds(EVP_PKEY *raw_pkey, BytesView message, BytesView signature, 
     const EVP_MD *digest_type, ENGINE *e) {
 // Bytes PrivateKey2::sign(BytesView data) const {
@@ -1012,6 +1087,15 @@ bool AsyncKeyUtils::verify_ds(EVP_PKEY *raw_pkey, BytesView message, BytesView s
     return result == 1;
 }
 
+/**
+ * @brief Agnostic method for verifying a signature generated by sign_ds_ex() method
+ * @param raw_pkey Key used to generate the signature
+ * @param message Signed message
+ * @param signature Signature
+ * @param mdname Message digest algorithm name (optional)
+ * @param params Array of additional parameters (optional)
+ * @return Information on whether the signature is valid
+ */
 bool AsyncKeyUtils::verify_ds_ex(EVP_PKEY *raw_pkey, BytesView message, BytesView signature, 
         const char *mdname, const OSSL_PARAM *params) 
 {
@@ -1036,7 +1120,12 @@ bool AsyncKeyUtils::verify_ds_ex(EVP_PKEY *raw_pkey, BytesView message, BytesVie
     return result == 1;
 }
 
-
+/**
+ * @brief Key derivation function
+ * @param hostkey Local host private key
+ * @param peerkey Peer host public key
+ * @return Derived key data
+ */
 Bytes AsyncKeyUtils::derive(EVP_PKEY *hostkey, EVP_PKEY* peerkey) {
     // ENGINE *eng = ...;
     // ctx = EVP_PKEY_CTX_new(pkey, engine);
@@ -1071,9 +1160,11 @@ Bytes AsyncKeyUtils::derive(EVP_PKEY *hostkey, EVP_PKEY* peerkey) {
     return skey;
 }
 
-/// @brief 
-/// @param peerkey public peer key
-/// @return 
+/**
+ * @brief Key encapsulation method 
+ * @param peerkey Public peer key
+ * @return Pair consisting of an encapsulated key and a ciphertext to be sent to the peer
+ */
 std::pair<Bytes, Bytes> AsyncKeyUtils::encapsulate(EVP_PKEY* peerkey) {
     // evp_pkey_ctx_unique_ptr ctx(EVP_PKEY_CTX_new(peerkey, NULL), EVP_PKEY_CTX_free);
     evp_pkey_ctx_unique_ptr ctx(EVP_PKEY_CTX_new_from_pkey(NULL, peerkey, NULL), EVP_PKEY_CTX_free);
@@ -1087,7 +1178,7 @@ std::pair<Bytes, Bytes> AsyncKeyUtils::encapsulate(EVP_PKEY* peerkey) {
     }
 
     // // Note: EVP_PKEY_CTX_set_kem_op for algorithm ML-KEM ignores KEM options
-    // //       for algorithms X25519 and EC acceptable option is "DHKEM"
+    // //       for algorithms X25519 and EC acceptable option is "DHKEM" - i.e.
     // if (EVP_PKEY_CTX_set_kem_op(ctx, "DHKEM") <= 0) {
     //     throw PrivmxCryptoserviceAsyncKeyException("Setting KEM option fail");
     // }
@@ -1114,9 +1205,12 @@ std::pair<Bytes, Bytes> AsyncKeyUtils::encapsulate(EVP_PKEY* peerkey) {
     return std::make_pair(sharedsecret, ciphertext);
 }
 
-/// @brief 
-/// @param hostkey private local host key
-/// @return 
+/**
+ * @brief Key decapsulation method 
+ * @param hostkey Private local host key
+ * @param ciphertext Ciphertext to be send from the peer
+ * @return Shared secret key
+ */
 Bytes AsyncKeyUtils::decapsulate(EVP_PKEY* hostkey, BytesView ciphertext) {
     // evp_pkey_ctx_unique_ptr ctx(EVP_PKEY_CTX_new(hostkey, NULL), EVP_PKEY_CTX_free);
     evp_pkey_ctx_unique_ptr ctx(EVP_PKEY_CTX_new_from_pkey(NULL, hostkey, NULL), EVP_PKEY_CTX_free);
@@ -1156,100 +1250,88 @@ Bytes AsyncKeyUtils::decapsulate(EVP_PKEY* hostkey, BytesView ciphertext) {
     return sharedsecret;
 }
 
-Bytes AsyncKeyUtils::GetPubKeyFromPrivKey(EVP_PKEY* ec_key)
+/**
+ * Based on the example from https://github.com/openssl/openssl/issues/18437
+ * @brief Method for generating the public part of an EC EVP_PKEY key from the private part
+ * @param ec_key EC EVP_PKEY key containing the private part ("priv" parameter)
+ * @param toCompress Flag indicating whether the key should be generated in compressed form
+ * @param toSet Flag indicating whether to set or overwrite public part of the key in given compression format
+ * @return Sequence of bytes representing the public key (in given compression form)
+ */
+Bytes AsyncKeyUtils::GetPubKeyFromPrivKey(EVP_PKEY* ec_key, bool toCompress, bool toSet)
 {
+    point_conversion_form_t conv_form = toCompress ? POINT_CONVERSION_COMPRESSED 
+                                                   : POINT_CONVERSION_UNCOMPRESSED;
 	size_t pub_key_size = 0;
-	EVP_PKEY_get_octet_string_param(ec_key, OSSL_PKEY_PARAM_PUB_KEY, nullptr, 0, &pub_key_size);
+    if (EVP_PKEY_get_octet_string_param(ec_key, OSSL_PKEY_PARAM_PUB_KEY, nullptr, 0, &pub_key_size) <= 0) {
+        throw PrivmxCryptoserviceAsyncKeyException("Determining key public part maximal size fail");
+    }
 	Bytes pub_key_buffer(pub_key_size);
-	if (!EVP_PKEY_get_octet_string_param(ec_key, OSSL_PKEY_PARAM_PUB_KEY, pub_key_buffer.data(), pub_key_buffer.size(),
-	                                     &pub_key_size))
-	{
-		size_t group_name_size = 0;
-		EVP_PKEY_get_utf8_string_param(ec_key, OSSL_PKEY_PARAM_GROUP_NAME, nullptr, 0, &group_name_size);
-		std::vector<char> group_name(group_name_size + 1);
-		if (!EVP_PKEY_get_utf8_string_param(ec_key, OSSL_PKEY_PARAM_GROUP_NAME, group_name.data(), group_name.size(),
-		                                    &group_name_size))
-		{
-			return {};
-		}
 
-		int group_nid = OBJ_sn2nid(group_name.data());
-		if (group_nid == NID_undef)
-		{
-			return {};
-		}
+    size_t group_name_size = 0;
+	if (EVP_PKEY_get_utf8_string_param(ec_key, OSSL_PKEY_PARAM_GROUP_NAME, nullptr, 0, &group_name_size) <= 0) {
+        throw PrivmxCryptoserviceAsyncKeyException("Determining curve group name parameter size fail");
+    }
+	std::vector<char> group_name(group_name_size + 1);
+	if (!EVP_PKEY_get_utf8_string_param(ec_key, OSSL_PKEY_PARAM_GROUP_NAME, group_name.data(), group_name.size(),
+	                                        &group_name_size)) {
+        throw PrivmxCryptoserviceAsyncKeyException("Retrieve curve group name parameter fail");
+	}
 
-		auto* ec_group = EC_GROUP_new_by_curve_name(group_nid);
-		if (ec_group == nullptr)
-		{
-			return {};
-		}
+	int group_nid = OBJ_sn2nid(group_name.data());
+	if (group_nid == NID_undef) {
+        throw PrivmxCryptoserviceAsyncKeyException("Retrieve curve group numeric identifier fail");
+	}
 
-		auto* pub_key = EC_POINT_new(ec_group);
-		if (pub_key == nullptr)
-		{
-			EC_GROUP_free(ec_group);
+	ec_group_unique_ptr ec_group (EC_GROUP_new_by_curve_name(group_nid), EC_GROUP_free);
+	if (ec_group.get() == nullptr) {
+        throw PrivmxCryptoserviceAsyncKeyException("Retrieve curve group fail");
+	}
+    EC_GROUP *ec_group_raw = ec_group.get();
 
-			return {};
-		}
-		BIGNUM* priv_key = nullptr;
-		if (!EVP_PKEY_get_bn_param(ec_key, OSSL_PKEY_PARAM_PRIV_KEY, &priv_key))
-		{
-			EC_POINT_free(pub_key);
-			EC_GROUP_free(ec_group);
+	ec_point_unique_ptr pub_key(EC_POINT_new(ec_group_raw), EC_POINT_free);
+	if (pub_key.get() == nullptr) {
+        throw PrivmxCryptoserviceAsyncKeyException("Creating new point fail");
+	}
+    EC_POINT *pub_key_raw = pub_key.get();
 
-			return {};
-		}
+	BIGNUM* priv_key_raw = nullptr;
+	if (!EVP_PKEY_get_bn_param(ec_key, OSSL_PKEY_PARAM_PRIV_KEY, &priv_key_raw)) {
+        throw PrivmxCryptoserviceAsyncKeyException("Retrieve key private part fail");
+	}
+    bignum_unique_ptr priv_key(priv_key_raw, BN_free); 
+	if (!EC_POINT_mul(ec_group_raw, pub_key_raw, priv_key_raw, nullptr, nullptr, nullptr)) {
+        throw PrivmxCryptoserviceAsyncKeyException("Point multiplication fail");
+	}
 
-		if (!EC_POINT_mul(ec_group, pub_key, priv_key, nullptr, nullptr, nullptr))
-		{
-			EC_POINT_free(pub_key);
-			EC_GROUP_free(ec_group);
+	pub_key_size = EC_POINT_point2oct(ec_group_raw, pub_key_raw, conv_form, nullptr, 0, nullptr);
+	if (pub_key_size == 0) {
+        throw PrivmxCryptoserviceAsyncKeyException("Retrieve key public part size fail");
+	}
+	pub_key_buffer.resize(pub_key_size);
+	if (!EC_POINT_point2oct(ec_group_raw, pub_key_raw, conv_form, pub_key_buffer.data(),
+	                        pub_key_buffer.size(), nullptr)) {
+        throw PrivmxCryptoserviceAsyncKeyException("Retrieve key public part fail");
+	}
 
-			return {};
-		}
-
-		pub_key_size = EC_POINT_point2oct(ec_group, pub_key, POINT_CONVERSION_COMPRESSED, nullptr, 0, nullptr);
-		if (pub_key_size == 0)
-		{
-			EC_POINT_free(pub_key);
-			EC_GROUP_free(ec_group);
-
-			return {};
-		}
-		pub_key_buffer.resize(pub_key_size);
-		if (!EC_POINT_point2oct(ec_group, pub_key, POINT_CONVERSION_COMPRESSED, pub_key_buffer.data(),
-		                        pub_key_buffer.size(), nullptr))
-		{
-			EC_POINT_free(pub_key);
-			EC_GROUP_free(ec_group);
-
-			return {};
-		}
-
-		EC_POINT_free(pub_key);
-		EC_GROUP_free(ec_group);
-
-		if (!EVP_PKEY_set_octet_string_param(ec_key, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, pub_key_buffer.data(),
+    if (toSet) { // to set or overwrite public part of the key in given compression format
+	    if (!EVP_PKEY_set_octet_string_param(ec_key, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, pub_key_buffer.data(),
 		                                     pub_key_buffer.size()))
 		{
-			return {};
+            throw PrivmxCryptoserviceAsyncKeyException("Setting key public part parameter fail");
 		}
 
-		auto* pCtx = EVP_PKEY_CTX_new_from_pkey(nullptr, ec_key, nullptr);
-		if (pCtx == nullptr)
+        evp_pkey_ctx_unique_ptr pCtx(EVP_PKEY_CTX_new_from_pkey(nullptr, ec_key, nullptr), EVP_PKEY_CTX_free);
+		EVP_PKEY_CTX *pCtx_raw = pCtx.get();
+		if (pCtx_raw == nullptr)
 		{
-			return {};
+            throw PrivmxCryptoserviceAsyncKeyException("Retrieve key context fail");
 		}
 
-		if (!EVP_PKEY_public_check_quick(pCtx))
+		if (!EVP_PKEY_public_check_quick(pCtx_raw))
 		{
-			EVP_PKEY_CTX_free(pCtx);
-
-			return {};
+            throw PrivmxCryptoserviceAsyncKeyException("Key public part verification fail");
 		}
-
-		EVP_PKEY_CTX_free(pCtx);
 	}
 
 	return pub_key_buffer;
