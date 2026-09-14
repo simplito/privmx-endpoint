@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <algorithm>
 #include "../../utils/BaseGroupTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
@@ -60,12 +59,32 @@ protected:
 };
 
 TEST_F(StreamRoomUsingGroupsTest, createStreamRoom_with_group_grants) {
-    group::Group group_1;
+    group::Group group_1, group_2;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
+    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(group_2.statusCode, 0);
     ASSERT_FALSE(group_1.groupPubKey.empty());
 
+    // no grants
     std::string streamRoomId;
+    stream::StreamRoom r;
+    EXPECT_NO_THROW({
+        streamRoomId = streamApi->createStreamRoom(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("no_groups_public"),
+            core::Buffer::from("no_groups_private"),
+            std::nullopt
+        );
+    });
+    ASSERT_FALSE(streamRoomId.empty());
+    EXPECT_NO_THROW({ r = streamApi->getStreamRoom(streamRoomId); });
+    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(r.groups.size(), 0);
+
+    // one grant
     EXPECT_NO_THROW({
         streamRoomId = streamApi->createStreamRoom(
             reader->getString("Context_1.contextId"),
@@ -83,26 +102,14 @@ TEST_F(StreamRoomUsingGroupsTest, createStreamRoom_with_group_grants) {
         );
     });
     ASSERT_FALSE(streamRoomId.empty());
-
-    stream::StreamRoom r;
     EXPECT_NO_THROW({ r = streamApi->getStreamRoom(streamRoomId); });
     EXPECT_EQ(r.statusCode, 0);
     EXPECT_EQ(r.publicMeta.stdString(), "public_meta");
-    EXPECT_EQ(r.groups.size(), 1);
-    if (r.groups.size() == 1) {
-        EXPECT_EQ(r.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(r.groups[0].role, "user");
-    }
-}
+    ASSERT_EQ(r.groups.size(), 1);
+    EXPECT_EQ(r.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(r.groups[0].role, "user");
 
-TEST_F(StreamRoomUsingGroupsTest, createStreamRoom_with_multiple_group_grants) {
-    group::Group group_1, group_2;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string streamRoomId;
+    // two grants, each carrying its own role
     EXPECT_NO_THROW({
         streamRoomId = streamApi->createStreamRoom(
             reader->getString("Context_1.contextId"),
@@ -123,8 +130,6 @@ TEST_F(StreamRoomUsingGroupsTest, createStreamRoom_with_multiple_group_grants) {
         );
     });
     ASSERT_FALSE(streamRoomId.empty());
-
-    stream::StreamRoom r;
     EXPECT_NO_THROW({ r = streamApi->getStreamRoom(streamRoomId); });
     EXPECT_EQ(r.statusCode, 0);
     EXPECT_EQ(r.groups.size(), 2);
@@ -135,29 +140,27 @@ TEST_F(StreamRoomUsingGroupsTest, createStreamRoom_with_multiple_group_grants) {
     }
     EXPECT_TRUE(found1);
     EXPECT_TRUE(found2);
-}
 
-TEST_F(StreamRoomUsingGroupsTest, createStreamRoom_without_groups_has_empty_groups_field) {
-    std::string streamRoomId;
-    EXPECT_NO_THROW({
-        streamRoomId = streamApi->createStreamRoom(
+    // a grant whose public key is not a key
+    EXPECT_THROW({
+        streamApi->createStreamRoom(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{user(1)},
             std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("no_groups_public"),
-            core::Buffer::from("no_groups_private"),
-            std::nullopt
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            std::nullopt,
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
+                .groupId = reader->getString("Group_1.groupId"),
+                .role = "user",
+                .groupPubKey = "not_a_valid_base58der_pubkey"
+            }}
         );
-    });
-    ASSERT_FALSE(streamRoomId.empty());
-
-    stream::StreamRoom r;
-    EXPECT_NO_THROW({ r = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
-    EXPECT_EQ(r.groups.size(), 0);
+    }, core::Exception);
 }
 
-TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_add_group) {
+TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_add_and_promote_group) {
     std::string streamRoomId;
     EXPECT_NO_THROW({
         streamRoomId = streamApi->createStreamRoom(
@@ -200,11 +203,31 @@ TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_add_group) {
     EXPECT_NO_THROW({ updated = streamApi->getStreamRoom(streamRoomId); });
     EXPECT_EQ(updated.statusCode, 0);
     EXPECT_EQ(updated.publicMeta.stdString(), "after_group");
-    EXPECT_EQ(updated.groups.size(), 1);
-    if (updated.groups.size() == 1) {
-        EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(updated.groups[0].role, "user");
-    }
+    ASSERT_EQ(updated.groups.size(), 1);
+    EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(updated.groups[0].role, "user");
+
+    // promote it from "user" to "manager"
+    EXPECT_NO_THROW({
+        streamApi->updateStreamRoom(
+            streamRoomId,
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("role_change"),
+            core::Buffer::from("role_change_private"),
+            updated.version,
+            false,
+            false,
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
+                .groupId = group_1.groupId, .role = "manager", .groupPubKey = group_1.groupPubKey
+            }}
+        );
+    });
+    EXPECT_NO_THROW({ updated = streamApi->getStreamRoom(streamRoomId); });
+    ASSERT_EQ(updated.groups.size(), 1);
+    EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(updated.groups[0].role, "manager");
 }
 
 TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_remove_group) {
@@ -275,51 +298,6 @@ TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_remove_group) {
     EXPECT_TRUE(afterRemoval.privateMeta.stdString().empty());
 }
 
-TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_change_group_role) {
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-
-    std::string streamRoomId;
-    ASSERT_NO_THROW({
-        streamRoomId = createStreamRoomWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<group::Group>{group_1}
-        );
-    });
-    ASSERT_FALSE(streamRoomId.empty());
-
-    stream::StreamRoom created;
-    ASSERT_NO_THROW({ created = streamApi->getStreamRoom(streamRoomId); });
-    ASSERT_EQ(created.statusCode, 0);
-
-    EXPECT_NO_THROW({
-        streamApi->updateStreamRoom(
-            streamRoomId,
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("role_change"),
-            core::Buffer::from("role_change_private"),
-            created.version,
-            false,
-            false,
-            std::nullopt,
-            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
-                .groupId = group_1.groupId, .role = "manager", .groupPubKey = group_1.groupPubKey
-            }}
-        );
-    });
-
-    stream::StreamRoom updated;
-    EXPECT_NO_THROW({ updated = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(updated.groups.size(), 1);
-    if (updated.groups.size() == 1) {
-        EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(updated.groups[0].role, "manager");
-    }
-}
-
 TEST_F(StreamRoomUsingGroupsTest, listStreamRooms_includes_groups_field) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
@@ -358,79 +336,58 @@ TEST_F(StreamRoomUsingGroupsTest, listStreamRooms_includes_groups_field) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(StreamRoomUsingGroupsTest, createStreamRoom_with_invalid_group_pubkey_throws) {
-    EXPECT_THROW({
-        streamApi->createStreamRoom(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("public"),
-            core::Buffer::from("private"),
-            std::nullopt,
-            std::nullopt,
-            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
-                .groupId = reader->getString("Group_1.groupId"),
-                .role = "user",
-                .groupPubKey = "not_a_valid_base58der_pubkey"
-            }}
-        );
-    }, core::Exception);
-}
-
-TEST_F(StreamRoomUsingGroupsTest, getStreamRoom_via_group_grant) {
-    // user_1 creates a room granted to Group_2; user_2 is a Group_2 member and no direct member of the room,
-    // so this read can only be served through the group entry.
-    group::Group group_2;
+TEST_F(StreamRoomUsingGroupsTest, reads_through_a_group_grant) {
+    // Three rooms, all wrapping their key to user_1 alone, so every read below is served by a group entry and
+    // never by a direct wrap: one granted to Group_2, one to both Group_2 and Group_3 - which leaves user_2
+    // two entries at the same keyId, and one of them has to carry the read - and one to Group_3, whose three
+    // members must all reach it.
+    group::Group group_2, group_3;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
+    ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
     ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(group_3.statusCode, 0);
 
-    std::string streamRoomId;
+    std::string oneGrantRoomId, twoGrantRoomId, allMembersRoomId;
     ASSERT_NO_THROW({
-        streamRoomId = createStreamRoomWithGroups(
+        oneGrantRoomId = createStreamRoomWithGroups(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{user(1)},
             std::vector<group::Group>{group_2}
         );
-    });
-    ASSERT_FALSE(streamRoomId.empty());
-
-    disconnect();
-    connectAs(2);
-    stream::StreamRoom r;
-    EXPECT_NO_THROW({ r = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
-    EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
-}
-
-TEST_F(StreamRoomUsingGroupsTest, room_accessible_by_all_group_members) {
-    // Group_3 has user_1, user_2 and user_3.
-    group::Group group_3;
-    ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_3.statusCode, 0);
-
-    std::string streamRoomId;
-    ASSERT_NO_THROW({
-        streamRoomId = createStreamRoomWithGroups(
+        twoGrantRoomId = createStreamRoomWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<group::Group>{group_2, group_3}
+        );
+        allMembersRoomId = createStreamRoomWithGroups(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{user(1)},
             std::vector<group::Group>{group_3}
         );
     });
-    ASSERT_FALSE(streamRoomId.empty());
+    ASSERT_FALSE(oneGrantRoomId.empty());
+    ASSERT_FALSE(twoGrantRoomId.empty());
+    ASSERT_FALSE(allMembersRoomId.empty());
 
     disconnect();
     connectAs(2);
-    stream::StreamRoom rUser2;
-    EXPECT_NO_THROW({ rUser2 = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(rUser2.statusCode, 0);
-    EXPECT_EQ(rUser2.privateMeta.stdString(), "group_room_private");
+    stream::StreamRoom r;
+    EXPECT_NO_THROW({ r = streamApi->getStreamRoom(oneGrantRoomId); });
+    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
+    EXPECT_NO_THROW({ r = streamApi->getStreamRoom(twoGrantRoomId); });
+    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
+    EXPECT_NO_THROW({ r = streamApi->getStreamRoom(allMembersRoomId); });
+    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
 
+    // user_3 is in Group_3 only
     disconnect();
     connectAs(3);
-    stream::StreamRoom rUser3;
-    EXPECT_NO_THROW({ rUser3 = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(rUser3.statusCode, 0);
-    EXPECT_EQ(rUser3.privateMeta.stdString(), "group_room_private");
+    EXPECT_NO_THROW({ r = streamApi->getStreamRoom(allMembersRoomId); });
+    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
 }
 
 TEST_F(StreamRoomUsingGroupsTest, user_added_to_group_gains_access_to_room) {
@@ -556,34 +513,6 @@ TEST_F(StreamRoomUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_ke
     EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
     // `groups` stays unnarrowed, so user_2 still sees the grant it is not part of.
     EXPECT_EQ(r.groups.size(), 1);
-}
-
-TEST_F(StreamRoomUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // The room wraps its key to user_1 only, and user_2 belongs to both grantee groups: narrowing leaves it two
-    // entries at the same keyId, and with no direct wrap to fall back on one of them has to carry the read.
-    group::Group group_2, group_3;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-    ASSERT_EQ(group_3.statusCode, 0);
-
-    std::string streamRoomId;
-    ASSERT_NO_THROW({
-        streamRoomId = createStreamRoomWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<group::Group>{group_2, group_3}
-        );
-    });
-    ASSERT_FALSE(streamRoomId.empty());
-
-    disconnect();
-    connectAs(2);
-
-    stream::StreamRoom r;
-    EXPECT_NO_THROW({ r = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
-    EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
 }
 
 TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_the_caller_did_not_name) {

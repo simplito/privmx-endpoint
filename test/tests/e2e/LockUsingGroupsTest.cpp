@@ -56,19 +56,42 @@ protected:
         return randomReadableString(32);
     }
 
+    void expectLockGranted(
+        const std::string& resourceId, const std::string& uuid, lock::LockLevel want, lock::LockLevel after
+    ) {
+        lock::LockOperationResult result{false, lock::LockLevel::NONE};
+        EXPECT_NO_THROW({ result = lockApi->lock(resourceId, uuid, want); });
+        EXPECT_TRUE(result.success);
+        EXPECT_EQ(result.currentLevel, after);
+    }
+
+    void expectUnlockTo(
+        const std::string& resourceId, const std::string& uuid, lock::LockLevel to, lock::LockLevel after
+    ) {
+        lock::LockOperationResult result{false, lock::LockLevel::NONE};
+        EXPECT_NO_THROW({ result = lockApi->unlock(resourceId, uuid, to); });
+        EXPECT_TRUE(result.success);
+        EXPECT_EQ(result.currentLevel, after);
+    }
+
+    // A Store whose only direct member is user_1, granted at `role` to Group_2 - which holds user_1 and user_2.
+    std::string grantedStore(const std::string& role) {
+        group::Group group_2;
+        EXPECT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
+        EXPECT_EQ(group_2.statusCode, 0);
+        std::string storeId;
+        EXPECT_NO_THROW({ storeId = createStoreWithGroup(group_2, role); });
+        return storeId;
+    }
+
     std::shared_ptr<store::StoreApi> storeApi;
     std::shared_ptr<lock::LockApi> lockApi;
 };
 
 TEST_F(LockUsingGroupsTest, lock_via_group_manager_grant) {
-    // Group_2 holds user_1 and user_2. user_2 is not a direct member of the Store, so the lock can only be
-    // granted through the grant - the check behind lockLock has to account for group membership.
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string storeId;
-    ASSERT_NO_THROW({ storeId = createStoreWithGroup(group_2, "manager"); });
+    // user_2 is not a direct member of the Store, so the lock can only be granted through the grant - the
+    // check behind lockLock has to account for group membership.
+    const std::string storeId = grantedStore("manager");
     ASSERT_FALSE(storeId.empty());
     std::string resourceId;
     ASSERT_NO_THROW({ resourceId = createLockableResource(storeId); });
@@ -76,72 +99,39 @@ TEST_F(LockUsingGroupsTest, lock_via_group_manager_grant) {
 
     disconnect();
     connectAs(2);
-    auto uuid = newUuid();
-    lock::LockOperationResult result{false, lock::LockLevel::NONE};
-    EXPECT_NO_THROW({ result = lockApi->lock(resourceId, uuid, lock::LockLevel::SHARED); });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::SHARED);
-
-    EXPECT_NO_THROW({ result = lockApi->lock(resourceId, uuid, lock::LockLevel::EXCLUSIVE); });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::EXCLUSIVE);
-
-    EXPECT_NO_THROW({ result = lockApi->unlock(resourceId, uuid, lock::LockLevel::NONE); });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::NONE);
+    const std::string uuid = newUuid();
+    expectLockGranted(resourceId, uuid, lock::LockLevel::SHARED, lock::LockLevel::SHARED);
+    expectLockGranted(resourceId, uuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::EXCLUSIVE);
+    expectUnlockTo(resourceId, uuid, lock::LockLevel::NONE, lock::LockLevel::NONE);
 }
 
-TEST_F(LockUsingGroupsTest, lock_on_own_file_via_group_user_grant) {
-    // "user" is the weaker grant, and the default item policy is "itemOwner&user,manager" - enough for the file
-    // this caller created itself.
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string storeId;
-    ASSERT_NO_THROW({ storeId = createStoreWithGroup(group_2, "user"); });
+TEST_F(LockUsingGroupsTest, lock_via_group_user_grant) {
+    // "user" is the weaker grant and the default item policy is "itemOwner&user,manager", so it reaches a file
+    // the caller wrote itself and nothing else. That is the policy talking, not the group - a direct member
+    // with the same role fares the same.
+    const std::string storeId = grantedStore("user");
     ASSERT_FALSE(storeId.empty());
+    // written by user_1, so user_2 does not own it
+    std::string othersResourceId;
+    ASSERT_NO_THROW({ othersResourceId = createLockableResource(storeId); });
+    ASSERT_FALSE(othersResourceId.empty());
 
     disconnect();
     connectAs(2);
-    std::string resourceId;
-    ASSERT_NO_THROW({ resourceId = createLockableResource(storeId); });
-    ASSERT_FALSE(resourceId.empty());
+    // someone else's file: neither half of "itemOwner&user,manager" is satisfied
+    EXPECT_THROW({ lockApi->lock(othersResourceId, newUuid(), lock::LockLevel::SHARED); }, core::Exception);
 
-    auto uuid = newUuid();
-    lock::LockOperationResult result{false, lock::LockLevel::NONE};
-    EXPECT_NO_THROW({ result = lockApi->lock(resourceId, uuid, lock::LockLevel::EXCLUSIVE); });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::EXCLUSIVE);
-    EXPECT_NO_THROW({ lockApi->unlock(resourceId, uuid, lock::LockLevel::NONE); });
-}
-
-TEST_F(LockUsingGroupsTest, lock_on_another_users_file_denied_for_group_user_grant) {
-    // Same grant, someone else's file: "itemOwner&user,manager" is satisfied by neither half, so the lock is
-    // refused. This is the policy talking, not the group - a direct member with the same role fares the same.
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string storeId;
-    ASSERT_NO_THROW({ storeId = createStoreWithGroup(group_2, "user"); });
-    ASSERT_FALSE(storeId.empty());
-    std::string resourceId;
-    ASSERT_NO_THROW({ resourceId = createLockableResource(storeId); });
-    ASSERT_FALSE(resourceId.empty());
-
-    disconnect();
-    connectAs(2);
-    EXPECT_THROW({ lockApi->lock(resourceId, newUuid(), lock::LockLevel::SHARED); }, core::Exception);
+    // its own file, in the same store: `itemOwner&user` is
+    std::string ownResourceId;
+    ASSERT_NO_THROW({ ownResourceId = createLockableResource(storeId); });
+    ASSERT_FALSE(ownResourceId.empty());
+    const std::string uuid = newUuid();
+    expectLockGranted(ownResourceId, uuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::EXCLUSIVE);
+    expectUnlockTo(ownResourceId, uuid, lock::LockLevel::NONE, lock::LockLevel::NONE);
 }
 
 TEST_F(LockUsingGroupsTest, checkReservedLock_via_group_grant) {
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string storeId;
-    ASSERT_NO_THROW({ storeId = createStoreWithGroup(group_2, "manager"); });
+    const std::string storeId = grantedStore("manager");
     ASSERT_FALSE(storeId.empty());
     std::string resourceId;
     ASSERT_NO_THROW({ resourceId = createLockableResource(storeId); });
@@ -175,12 +165,7 @@ TEST_F(LockUsingGroupsTest, checkReservedLock_via_group_grant) {
 
 TEST_F(LockUsingGroupsTest, lock_denied_for_caller_in_no_granted_group) {
     // user_3 is in neither the Store's roster nor Group_2.
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string storeId;
-    ASSERT_NO_THROW({ storeId = createStoreWithGroup(group_2, "manager"); });
+    const std::string storeId = grantedStore("manager");
     ASSERT_FALSE(storeId.empty());
     std::string resourceId;
     ASSERT_NO_THROW({ resourceId = createLockableResource(storeId); });
@@ -194,12 +179,7 @@ TEST_F(LockUsingGroupsTest, lock_denied_for_caller_in_no_granted_group) {
 }
 
 TEST_F(LockUsingGroupsTest, lock_lost_after_the_grant_is_revoked) {
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string storeId;
-    ASSERT_NO_THROW({ storeId = createStoreWithGroup(group_2, "manager"); });
+    const std::string storeId = grantedStore("manager");
     ASSERT_FALSE(storeId.empty());
     std::string resourceId;
     ASSERT_NO_THROW({ resourceId = createLockableResource(storeId); });
@@ -208,10 +188,8 @@ TEST_F(LockUsingGroupsTest, lock_lost_after_the_grant_is_revoked) {
     disconnect();
     connectAs(2);
     auto uuid = newUuid();
-    lock::LockOperationResult result{false, lock::LockLevel::NONE};
-    ASSERT_NO_THROW({ result = lockApi->lock(resourceId, uuid, lock::LockLevel::SHARED); });
-    ASSERT_TRUE(result.success);
-    ASSERT_NO_THROW({ lockApi->unlock(resourceId, uuid, lock::LockLevel::NONE); });
+    expectLockGranted(resourceId, uuid, lock::LockLevel::SHARED, lock::LockLevel::SHARED);
+    expectUnlockTo(resourceId, uuid, lock::LockLevel::NONE, lock::LockLevel::NONE);
 
     disconnect();
     connectAs(1);

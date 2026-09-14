@@ -371,57 +371,16 @@ protected:
 };
 
 TEST_F(SearchUsingGroupsTest, createSearchIndex_with_group_grants) {
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-    ASSERT_FALSE(group_1.groupPubKey.empty());
-
-    std::string indexId;
-    EXPECT_NO_THROW({
-        indexId = createIndexWithGroups(reader->getString("Context_1.contextId"), {group_1});
-    });
-    ASSERT_FALSE(indexId.empty());
-
-    search::SearchIndex index;
-    EXPECT_NO_THROW({ index = searchApi->getSearchIndex(indexId); });
-    EXPECT_EQ(index.statusCode, 0);
-    EXPECT_EQ(index.publicMeta.stdString(), "group_index_public");
-    EXPECT_EQ(index.staleGroups.size(), 0);
-    EXPECT_EQ(index.groups.size(), 1);
-    if (index.groups.size() == 1) {
-        EXPECT_EQ(index.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(index.groups[0].role, "manager");
-    }
-}
-
-TEST_F(SearchUsingGroupsTest, createSearchIndex_with_multiple_group_grants) {
     group::Group group_1, group_2;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
     ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_FALSE(group_1.groupPubKey.empty());
 
+    // no grants
     std::string indexId;
-    EXPECT_NO_THROW({
-        indexId = createIndexWithGroups(reader->getString("Context_1.contextId"), {group_1, group_2}, "user");
-    });
-    ASSERT_FALSE(indexId.empty());
-
     search::SearchIndex index;
-    EXPECT_NO_THROW({ index = searchApi->getSearchIndex(indexId); });
-    EXPECT_EQ(index.statusCode, 0);
-    EXPECT_EQ(index.groups.size(), 2);
-    bool found1 = false, found2 = false;
-    for (const auto& g : index.groups) {
-        if (g.groupId == group_1.groupId && g.role == "user") found1 = true;
-        if (g.groupId == group_2.groupId && g.role == "user") found2 = true;
-    }
-    EXPECT_TRUE(found1);
-    EXPECT_TRUE(found2);
-}
-
-TEST_F(SearchUsingGroupsTest, createSearchIndex_without_groups_has_empty_groups_field) {
-    std::string indexId;
     EXPECT_NO_THROW({
         indexId = searchApi->createSearchIndex(
             reader->getString("Context_1.contextId"),
@@ -433,19 +392,41 @@ TEST_F(SearchUsingGroupsTest, createSearchIndex_without_groups_has_empty_groups_
         );
     });
     ASSERT_FALSE(indexId.empty());
-
-    search::SearchIndex index;
     EXPECT_NO_THROW({ index = searchApi->getSearchIndex(indexId); });
     EXPECT_EQ(index.statusCode, 0);
     EXPECT_EQ(index.groups.size(), 0);
     EXPECT_EQ(index.staleGroups.size(), 0);
-}
 
-TEST_F(SearchUsingGroupsTest, createSearchIndex_with_invalid_group_pubkey_throws) {
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    // one grant
+    EXPECT_NO_THROW({
+        indexId = createIndexWithGroups(reader->getString("Context_1.contextId"), {group_1});
+    });
+    ASSERT_FALSE(indexId.empty());
+    EXPECT_NO_THROW({ index = searchApi->getSearchIndex(indexId); });
+    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(index.publicMeta.stdString(), "group_index_public");
+    EXPECT_EQ(index.staleGroups.size(), 0);
+    ASSERT_EQ(index.groups.size(), 1);
+    EXPECT_EQ(index.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(index.groups[0].role, "manager");
 
+    // two grants
+    EXPECT_NO_THROW({
+        indexId = createIndexWithGroups(reader->getString("Context_1.contextId"), {group_1, group_2}, "user");
+    });
+    ASSERT_FALSE(indexId.empty());
+    EXPECT_NO_THROW({ index = searchApi->getSearchIndex(indexId); });
+    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(index.groups.size(), 2);
+    bool found1 = false, found2 = false;
+    for (const auto& g : index.groups) {
+        if (g.groupId == group_1.groupId && g.role == "user") found1 = true;
+        if (g.groupId == group_2.groupId && g.role == "user") found2 = true;
+    }
+    EXPECT_TRUE(found1);
+    EXPECT_TRUE(found2);
+
+    // a grant whose public key is not a key
     EXPECT_THROW({
         searchApi->createSearchIndex(
             reader->getString("Context_1.contextId"),
@@ -581,49 +562,43 @@ TEST_F(SearchUsingGroupsTest, updateSearchIndex_remove_group) {
     EXPECT_THROW({ searchApi->getSearchIndex(indexId); }, core::Exception);
 }
 
-TEST_F(SearchUsingGroupsTest, group_member_reads_index_metadata) {
-    // "user" is enough for the Index's own metadata: that read is served by the KVDB half alone, and proves its
-    // key was wrapped to the group.
+TEST_F(SearchUsingGroupsTest, group_member_reads_the_index_and_its_documents) {
+    // A Search Index is a KVDB half holding its metadata and a Store half holding the documents. The weaker
+    // "user" grant is enough for the metadata, which proves the KVDB half's key was wrapped to the group;
+    // finding the documents proves the Store half was granted too, every step of the open - SQLite's table,
+    // its journal, its locks - having gone through the grant.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_2.statusCode, 0);
 
-    std::string indexId;
+    std::string userGrantedId;
     ASSERT_NO_THROW({
-        indexId = createIndexWithGroups(reader->getString("Context_1.contextId"), {group_2}, "user");
+        userGrantedId = createIndexWithGroups(reader->getString("Context_1.contextId"), {group_2}, "user");
     });
-    ASSERT_FALSE(indexId.empty());
+    ASSERT_FALSE(userGrantedId.empty());
+
+    std::string managerGrantedId;
+    ASSERT_NO_THROW({
+        managerGrantedId = createIndexWithGroups(reader->getString("Context_1.contextId"), {group_2});
+    });
+    ASSERT_FALSE(managerGrantedId.empty());
+    ASSERT_NO_THROW({
+        seedDocuments(managerGrantedId, {{"doc-1", "alpha beta"}, {"doc-2", "gamma beta"}});
+    });
 
     disconnect();
     connectAs(2);
     search::SearchIndex index;
-    EXPECT_NO_THROW({ index = searchApi->getSearchIndex(indexId); });
+    EXPECT_NO_THROW({ index = searchApi->getSearchIndex(userGrantedId); });
     EXPECT_EQ(index.statusCode, 0);
-    EXPECT_EQ(index.indexId, indexId);
+    EXPECT_EQ(index.indexId, userGrantedId);
     EXPECT_EQ(index.publicMeta.stdString(), "group_index_public");
     EXPECT_EQ(index.privateMeta.stdString(), "group_index_private");
     EXPECT_EQ(static_cast<int64_t>(index.mode), static_cast<int64_t>(search::IndexMode::WITH_CONTENT));
-}
 
-TEST_F(SearchUsingGroupsTest, group_member_searches_documents) {
-    // The documents live in the Store half, so finding them proves that half was granted too - and every step
-    // of the open (SQLite's table, its journal, its locks) went through the group grant.
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string indexId;
-    ASSERT_NO_THROW({ indexId = createIndexWithGroups(reader->getString("Context_1.contextId"), {group_2}); });
-    ASSERT_FALSE(indexId.empty());
-    ASSERT_NO_THROW({
-        seedDocuments(indexId, {{"doc-1", "alpha beta"}, {"doc-2", "gamma beta"}});
-    });
-
-    disconnect();
-    connectAs(2);
-    EXPECT_EQ(countMatches(indexId, "beta"), 2);
-    EXPECT_EQ(countMatches(indexId, "alpha"), 1);
-    EXPECT_EQ(countMatches(indexId, "delta"), 0);
+    EXPECT_EQ(countMatches(managerGrantedId, "beta"), 2);
+    EXPECT_EQ(countMatches(managerGrantedId, "alpha"), 1);
+    EXPECT_EQ(countMatches(managerGrantedId, "delta"), 0);
 }
 
 TEST_F(SearchUsingGroupsTest, documents_added_by_group_member_are_visible_to_the_owner) {

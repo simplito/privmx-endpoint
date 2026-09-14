@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <algorithm>
 #include "../../utils/BaseGroupTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
@@ -123,49 +122,44 @@ protected:
 };
 
 TEST_F(InboxUsingGroupsTest, createInbox_with_group_grants) {
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-    ASSERT_FALSE(group_1.groupPubKey.empty());
-
-    std::string inboxId;
-    EXPECT_NO_THROW({
-        inboxId = inboxApi->createInbox(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("public_meta"),
-            core::Buffer::from("private_meta"),
-            std::nullopt,
-            std::nullopt,
-            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
-                .groupId = group_1.groupId,
-                .role = "user",
-                .groupPubKey = group_1.groupPubKey
-            }}
-        );
-    });
-    ASSERT_FALSE(inboxId.empty());
-
-    inbox::Inbox i;
-    EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(i.statusCode, 0);
-    EXPECT_EQ(i.publicMeta.stdString(), "public_meta");
-    EXPECT_EQ(i.groups.size(), 1);
-    if (i.groups.size() == 1) {
-        EXPECT_EQ(i.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(i.groups[0].role, "user");
-    }
-}
-
-TEST_F(InboxUsingGroupsTest, createInbox_with_multiple_group_grants) {
     group::Group group_1, group_2;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
     ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_FALSE(group_1.groupPubKey.empty());
 
+    // no grants
     std::string inboxId;
+    inbox::Inbox i;
+    EXPECT_NO_THROW({
+        inboxId = createInboxWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<group::Group>{}
+        );
+    });
+    ASSERT_FALSE(inboxId.empty());
+    EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
+    EXPECT_EQ(i.statusCode, 0);
+    EXPECT_EQ(i.groups.size(), 0);
+
+    // one grant
+    EXPECT_NO_THROW({
+        inboxId = createInboxWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<group::Group>{group_1}
+        );
+    });
+    ASSERT_FALSE(inboxId.empty());
+    EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
+    EXPECT_EQ(i.statusCode, 0);
+    ASSERT_EQ(i.groups.size(), 1);
+    EXPECT_EQ(i.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(i.groups[0].role, "user");
+
+    // two grants, each carrying its own role
     EXPECT_NO_THROW({
         inboxId = inboxApi->createInbox(
             reader->getString("Context_1.contextId"),
@@ -186,8 +180,6 @@ TEST_F(InboxUsingGroupsTest, createInbox_with_multiple_group_grants) {
         );
     });
     ASSERT_FALSE(inboxId.empty());
-
-    inbox::Inbox i;
     EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
     EXPECT_EQ(i.statusCode, 0);
     EXPECT_EQ(i.groups.size(), 2);
@@ -198,50 +190,46 @@ TEST_F(InboxUsingGroupsTest, createInbox_with_multiple_group_grants) {
     }
     EXPECT_TRUE(found1);
     EXPECT_TRUE(found2);
-}
 
-TEST_F(InboxUsingGroupsTest, createInbox_without_groups_has_empty_groups_field) {
-    std::string inboxId;
-    EXPECT_NO_THROW({
-        inboxId = inboxApi->createInbox(
+    // a grant whose public key is not a key
+    EXPECT_THROW({
+        inboxApi->createInbox(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{user(1)},
             std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("no_groups_public"),
-            core::Buffer::from("no_groups_private"),
-            std::nullopt
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            std::nullopt,
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
+                .groupId = reader->getString("Group_1.groupId"),
+                .role = "user",
+                .groupPubKey = "not_a_valid_base58der_pubkey"
+            }}
         );
-    });
-    ASSERT_FALSE(inboxId.empty());
-
-    inbox::Inbox i;
-    EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(i.statusCode, 0);
-    EXPECT_EQ(i.groups.size(), 0);
+    }, core::Exception);
 }
 
-TEST_F(InboxUsingGroupsTest, updateInbox_add_group) {
-    std::string inboxId;
-    EXPECT_NO_THROW({
-        inboxId = inboxApi->createInbox(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("before_group"),
-            core::Buffer::from("before_group_private"),
-            std::nullopt
-        );
-    });
-    ASSERT_FALSE(inboxId.empty());
-
-    inbox::Inbox i;
-    EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(i.groups.size(), 0);
-
+TEST_F(InboxUsingGroupsTest, updateInbox_add_and_promote_group) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
 
+    // an inbox that starts with no grantee group
+    std::string inboxId;
+    EXPECT_NO_THROW({
+        inboxId = createInboxWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<group::Group>{}
+        );
+    });
+    ASSERT_FALSE(inboxId.empty());
+    inbox::Inbox i;
+    EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
+    EXPECT_EQ(i.groups.size(), 0);
+
+    // add one
     EXPECT_NO_THROW({
         inboxApi->updateInbox(
             inboxId,
@@ -259,16 +247,36 @@ TEST_F(InboxUsingGroupsTest, updateInbox_add_group) {
             }}
         );
     });
-
     inbox::Inbox updated;
     EXPECT_NO_THROW({ updated = inboxApi->getInbox(inboxId); });
     EXPECT_EQ(updated.statusCode, 0);
     EXPECT_EQ(updated.publicMeta.stdString(), "after_group");
-    EXPECT_EQ(updated.groups.size(), 1);
-    if (updated.groups.size() == 1) {
-        EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(updated.groups[0].role, "user");
-    }
+    ASSERT_EQ(updated.groups.size(), 1);
+    EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(updated.groups[0].role, "user");
+
+    // promote it from "user" to "manager"
+    EXPECT_NO_THROW({
+        inboxApi->updateInbox(
+            inboxId,
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("role_change"),
+            core::Buffer::from("role_change_private"),
+            std::nullopt,
+            updated.version,
+            false,
+            false,
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
+                .groupId = group_1.groupId, .role = "manager", .groupPubKey = group_1.groupPubKey
+            }}
+        );
+    });
+    EXPECT_NO_THROW({ updated = inboxApi->getInbox(inboxId); });
+    ASSERT_EQ(updated.groups.size(), 1);
+    EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(updated.groups[0].role, "manager");
 }
 
 TEST_F(InboxUsingGroupsTest, updateInbox_remove_group) {
@@ -336,48 +344,6 @@ TEST_F(InboxUsingGroupsTest, updateInbox_remove_group) {
     EXPECT_TRUE(afterRemoval.privateMeta.stdString().empty());
 }
 
-TEST_F(InboxUsingGroupsTest, updateInbox_change_group_role) {
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-
-    std::string inboxId;
-    ASSERT_NO_THROW({
-        inboxId = createInboxWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<group::Group>{group_1}
-        );
-    });
-    ASSERT_FALSE(inboxId.empty());
-
-    EXPECT_NO_THROW({
-        inboxApi->updateInbox(
-            inboxId,
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("role_change"),
-            core::Buffer::from("role_change_private"),
-            std::nullopt,
-            1,
-            false,
-            false,
-            std::nullopt,
-            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
-                .groupId = group_1.groupId, .role = "manager", .groupPubKey = group_1.groupPubKey
-            }}
-        );
-    });
-
-    inbox::Inbox updated;
-    EXPECT_NO_THROW({ updated = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(updated.groups.size(), 1);
-    if (updated.groups.size() == 1) {
-        EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(updated.groups[0].role, "manager");
-    }
-}
-
 TEST_F(InboxUsingGroupsTest, listInboxes_includes_groups_field) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
@@ -416,25 +382,6 @@ TEST_F(InboxUsingGroupsTest, listInboxes_includes_groups_field) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(InboxUsingGroupsTest, createInbox_with_invalid_group_pubkey_throws) {
-    EXPECT_THROW({
-        inboxApi->createInbox(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("public"),
-            core::Buffer::from("private"),
-            std::nullopt,
-            std::nullopt,
-            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
-                .groupId = reader->getString("Group_1.groupId"),
-                .role = "user",
-                .groupPubKey = "not_a_valid_base58der_pubkey"
-            }}
-        );
-    }, core::Exception);
-}
-
 TEST_F(InboxUsingGroupsTest, readEntry_via_group_grant) {
     // user_1 creates an Inbox granted to Group_2; user_2 is a Group_2 member. Entries live in the Inbox's
     // inner Thread, which createInbox grants to the same group - so this read exercises that propagation.
@@ -467,36 +414,42 @@ TEST_F(InboxUsingGroupsTest, readEntry_via_group_grant) {
     EXPECT_EQ(entry.data.stdString(), "entry_data");
 }
 
-TEST_F(InboxUsingGroupsTest, listEntries_via_group_grant) {
-    // Inbox_4 is seeded with Entry_3 and Entry_4, so the paging path has more than one row to return.
-    disconnect();
-    connectAs(2);
-    core::PagingList<inbox::InboxEntry> list;
-    EXPECT_NO_THROW({
-        list = inboxApi->listEntries(
-            reader->getString("Inbox_4.inboxId"), core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"}
-        );
-    });
-    EXPECT_EQ(list.totalAvailable, 2);
-    for (const auto& entry : list.readItems) {
-        EXPECT_EQ(entry.statusCode, 0);
-        EXPECT_FALSE(entry.data.stdString().empty());
-    }
-}
-
-TEST_F(InboxUsingGroupsTest, entries_accessible_by_all_group_members) {
-    // Inbox_4 is granted to Group_4 (user_1, user_2) and Group_6 (all three), so user_2 reaches it through
-    // either and user_3 only through Group_6. Neither holds a direct roster entry.
-    const std::string entryId = reader->getString("Entry_3.entryId");
+TEST_F(InboxUsingGroupsTest, reads_through_a_group_grant) {
+    // Inbox_4, Entry_3 and Entry_4 come from the dataset, so this reads bytes an earlier build wrote. Inbox_4
+    // wraps its key to user_1 only and is granted to Group_4 (user_1, user_2) and Group_6 (all three): user_2
+    // arrives through two grants at one keyId, user_3 through one, and neither holds a direct wrap.
+    const std::string dataEntryId = reader->getString("Entry_3.entryId");
     const std::string data = privmx::utils::Hex::toString(reader->getString("Entry_3.data_inHex"));
 
     for (const int index : {2, 3}) {
         disconnect();
         connectAs(index);
+
+        inbox::Inbox i;
+        EXPECT_NO_THROW({ i = inboxApi->getInbox(reader->getString("Inbox_4.inboxId")); })
+            << "user_" << index << " could not open the inbox";
+        EXPECT_EQ(i.statusCode, 0);
+        EXPECT_EQ(i.groups.size(), 2);
+
         inbox::InboxEntry entry;
-        EXPECT_NO_THROW({ entry = inboxApi->readEntry(entryId); }) << "user_" << index << " could not read it";
+        EXPECT_NO_THROW({ entry = inboxApi->readEntry(dataEntryId); })
+            << "user_" << index << " could not read the entry";
         EXPECT_EQ(entry.statusCode, 0);
         EXPECT_EQ(entry.data.stdString(), data);
+
+        // the paging path, which decrypts a batch rather than one row
+        core::PagingList<inbox::InboxEntry> list;
+        EXPECT_NO_THROW({
+            list = inboxApi->listEntries(
+                reader->getString("Inbox_4.inboxId"),
+                core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"}
+            );
+        });
+        EXPECT_EQ(list.totalAvailable, 2);
+        for (const auto& listed : list.readItems) {
+            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_FALSE(listed.data.stdString().empty());
+        }
     }
 }
 
@@ -624,23 +577,6 @@ TEST_F(InboxUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
     EXPECT_NO_THROW({ entry = inboxApi->readEntry(reader->getString("Entry_5.entryId")); });
     EXPECT_EQ(entry.statusCode, 0);
     EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Entry_5.data_inHex")));
-}
-
-TEST_F(InboxUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // Inbox_4 wraps its key to user_1 only and is granted to Group_4 and Group_6, both of which user_2 belongs
-    // to: that leaves two entries at the same keyId, and with no direct wrap one of them has to carry the read.
-    disconnect();
-    connectAs(2);
-
-    inbox::Inbox i;
-    EXPECT_NO_THROW({ i = inboxApi->getInbox(reader->getString("Inbox_4.inboxId")); });
-    EXPECT_EQ(i.statusCode, 0);
-    EXPECT_EQ(i.groups.size(), 2);
-
-    inbox::InboxEntry entry;
-    EXPECT_NO_THROW({ entry = inboxApi->readEntry(reader->getString("Entry_3.entryId")); });
-    EXPECT_EQ(entry.statusCode, 0);
-    EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Entry_3.data_inHex")));
 }
 
 TEST_F(InboxUsingGroupsTest, rotateInboxKeys_covers_a_grantee_group_the_caller_did_not_name) {

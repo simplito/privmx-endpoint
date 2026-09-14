@@ -1,3 +1,5 @@
+// Owns stream-room coverage for both stream APIs: StreamApiImpl forwards every room call to StreamApiLow,
+// so a copy of these tests against StreamApi would run the same code behind a WebRTC-only build.
 #include <gtest/gtest.h>
 #include "../../utils/BaseTest.hpp"
 #include "../../utils/FalseUserVerifierInterface.hpp"
@@ -11,17 +13,9 @@
 #include <privmx/endpoint/stream/StreamApiLow.hpp>
 #include <privmx/endpoint/stream/StreamVarSerializer.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
-#include <privmx/endpoint/core/UserVerifierInterface.hpp>
 #include <privmx/endpoint/stream/WebRTCInterface.hpp>
 
 using namespace privmx::endpoint;
-
-class FalseUserVerifierInterface: public virtual core::UserVerifierInterface {
-public:
-    std::vector<bool> verify(const std::vector<core::VerificationRequest>& request) override {
-        return std::vector<bool>(request.size(), false);
-    };
-};
 
 enum ConnectionType {
     User1,
@@ -235,7 +229,7 @@ TEST_F(StreamLowTest, createStream) {
     }
 }
 
-TEST_F(StreamLowTest, listStreamRooms_incorrect_input_data) {
+TEST_F(StreamLowTest, listStreamRooms) {
     // incorrect contextId
     EXPECT_THROW({
         streamApiLow->listStreamRooms(
@@ -319,9 +313,7 @@ TEST_F(StreamLowTest, listStreamRooms_incorrect_input_data) {
             }
         );
     }, core::InvalidParamsException);
-}
 
-TEST_F(StreamLowTest, listStreamRooms_correct_input_data) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     auto streamRoomId_2 = fastStreamRoom(reader->getString("Context_1.contextId"));
     auto streamRoomId_3 = fastStreamRoom(reader->getString("Context_1.contextId"));
@@ -381,7 +373,7 @@ TEST_F(StreamLowTest, listStreamRooms_correct_input_data) {
 
 }
 
-TEST_F(StreamLowTest, updateStreamRoom_incorrect_data) {
+TEST_F(StreamLowTest, updateStreamRoom) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     // incorrect streamRoomId
     EXPECT_THROW({
@@ -480,10 +472,8 @@ TEST_F(StreamLowTest, updateStreamRoom_incorrect_data) {
             std::nullopt
         );
     }, core::Exception);
-}
 
-TEST_F(StreamLowTest, updateStreamRoom_correct_data) {
-    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+    // every update above was refused, so streamRoomId_1 is still at version 1 and the accepted ones can use it
     auto streamRoomId_2 = fastStreamRoom(reader->getString("Context_1.contextId"));
     stream::StreamRoom streamRoom;
     // less users
@@ -628,7 +618,7 @@ TEST_F(StreamLowTest, updateStreamRoom_correct_data) {
     }
 }
 
-TEST_F(StreamLowTest, deleteStream) {
+TEST_F(StreamLowTest, deleteStreamRoom) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     // incorrect streamRoomId
     EXPECT_THROW({
@@ -711,39 +701,8 @@ TEST_F(StreamLowTest, userValidator_false) {
             streamRoomId_2
         );
     });
-}
 
-TEST_F(StreamLowTest, falseUserVerifierInterface) {
-    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
-    EXPECT_NO_THROW({
-        streamApiLow->updateStreamRoom(
-            streamRoomId_1,
-            std::vector<core::UserWithPubKey>{
-                core::UserWithPubKey{
-                    .userId=reader->getString("Login.user_1_id"),
-                    .pubKey=reader->getString("Login.user_1_pubKey")
-                }
-            },
-            std::vector<core::UserWithPubKey>{
-                core::UserWithPubKey{
-                    .userId=reader->getString("Login.user_1_id"),
-                    .pubKey=reader->getString("Login.user_1_pubKey")
-                }
-            },
-            core::Buffer::from("public"),
-            core::Buffer::from("private"),
-            1,
-            false,
-            false,
-            std::nullopt
-        );
-    });
-
-    EXPECT_NO_THROW({
-        std::shared_ptr<FalseUserVerifierInterface> falseUserVerifierInterface = std::make_shared<FalseUserVerifierInterface>();
-        connection->setUserVerifier(falseUserVerifierInterface);
-    });
-
+    // the same rejection, asserted on the exact failure code rather than just "not zero"
     core::PagingList<stream::StreamRoom> streamListResult;
     EXPECT_NO_THROW({
         streamListResult = streamApiLow->listStreamRooms(reader->getString("Context_1.contextId"),{.skip=0, .limit=1, .sortOrder="desc"});

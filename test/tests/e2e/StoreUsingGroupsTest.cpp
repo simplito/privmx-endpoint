@@ -99,48 +99,44 @@ protected:
 };
 
 TEST_F(StoreUsingGroupsTest, createStore_with_group_grants) {
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-    ASSERT_FALSE(group_1.groupPubKey.empty());
-
-    std::string storeId;
-    EXPECT_NO_THROW({
-        storeId = storeApi->createStore(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("public_meta"),
-            core::Buffer::from("private_meta"),
-            std::nullopt,
-            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
-                .groupId = group_1.groupId,
-                .role = "user",
-                .groupPubKey = group_1.groupPubKey
-            }}
-        );
-    });
-    ASSERT_FALSE(storeId.empty());
-
-    store::Store s;
-    EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
-    EXPECT_EQ(s.statusCode, 0);
-    EXPECT_EQ(s.publicMeta.stdString(), "public_meta");
-    EXPECT_EQ(s.groups.size(), 1);
-    if (s.groups.size() == 1) {
-        EXPECT_EQ(s.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(s.groups[0].role, "user");
-    }
-}
-
-TEST_F(StoreUsingGroupsTest, createStore_with_multiple_group_grants) {
     group::Group group_1, group_2;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
     ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_FALSE(group_1.groupPubKey.empty());
 
+    // no grants
     std::string storeId;
+    store::Store s;
+    EXPECT_NO_THROW({
+        storeId = createStoreWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<group::Group>{}
+        );
+    });
+    ASSERT_FALSE(storeId.empty());
+    EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
+    EXPECT_EQ(s.statusCode, 0);
+    EXPECT_EQ(s.groups.size(), 0);
+
+    // one grant
+    EXPECT_NO_THROW({
+        storeId = createStoreWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<group::Group>{group_1}
+        );
+    });
+    ASSERT_FALSE(storeId.empty());
+    EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
+    EXPECT_EQ(s.statusCode, 0);
+    ASSERT_EQ(s.groups.size(), 1);
+    EXPECT_EQ(s.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(s.groups[0].role, "user");
+
+    // two grants, each carrying its own role
     EXPECT_NO_THROW({
         storeId = storeApi->createStore(
             reader->getString("Context_1.contextId"),
@@ -160,8 +156,6 @@ TEST_F(StoreUsingGroupsTest, createStore_with_multiple_group_grants) {
         );
     });
     ASSERT_FALSE(storeId.empty());
-
-    store::Store s;
     EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
     EXPECT_EQ(s.statusCode, 0);
     EXPECT_EQ(s.groups.size(), 2);
@@ -172,48 +166,45 @@ TEST_F(StoreUsingGroupsTest, createStore_with_multiple_group_grants) {
     }
     EXPECT_TRUE(found1);
     EXPECT_TRUE(found2);
-}
 
-TEST_F(StoreUsingGroupsTest, createStore_without_groups_has_empty_groups_field) {
-    std::string storeId;
-    EXPECT_NO_THROW({
-        storeId = storeApi->createStore(
+    // a grant whose public key is not a key
+    EXPECT_THROW({
+        storeApi->createStore(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{user(1)},
             std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("no_groups_public"),
-            core::Buffer::from("no_groups_private")
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
+                .groupId = reader->getString("Group_1.groupId"),
+                .role = "user",
+                .groupPubKey = "not_a_valid_base58der_pubkey"
+            }}
         );
-    });
-    ASSERT_FALSE(storeId.empty());
-
-    store::Store s;
-    EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
-    EXPECT_EQ(s.statusCode, 0);
-    EXPECT_EQ(s.groups.size(), 0);
+    }, core::Exception);
 }
 
-TEST_F(StoreUsingGroupsTest, updateStore_add_group) {
-    std::string storeId;
-    EXPECT_NO_THROW({
-        storeId = storeApi->createStore(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("before_group"),
-            core::Buffer::from("before_group_private")
-        );
-    });
-    ASSERT_FALSE(storeId.empty());
-
-    store::Store s;
-    EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
-    EXPECT_EQ(s.groups.size(), 0);
-
+TEST_F(StoreUsingGroupsTest, updateStore_add_and_promote_group) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
 
+    // a store that starts with no grantee group
+    std::string storeId;
+    EXPECT_NO_THROW({
+        storeId = createStoreWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<group::Group>{}
+        );
+    });
+    ASSERT_FALSE(storeId.empty());
+    store::Store s;
+    EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
+    EXPECT_EQ(s.groups.size(), 0);
+
+    // add one
     EXPECT_NO_THROW({
         storeApi->updateStore(
             storeId,
@@ -230,16 +221,35 @@ TEST_F(StoreUsingGroupsTest, updateStore_add_group) {
             }}
         );
     });
-
     store::Store updated;
     EXPECT_NO_THROW({ updated = storeApi->getStore(storeId); });
     EXPECT_EQ(updated.statusCode, 0);
     EXPECT_EQ(updated.publicMeta.stdString(), "after_group");
-    EXPECT_EQ(updated.groups.size(), 1);
-    if (updated.groups.size() == 1) {
-        EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(updated.groups[0].role, "user");
-    }
+    ASSERT_EQ(updated.groups.size(), 1);
+    EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(updated.groups[0].role, "user");
+
+    // promote it from "user" to "manager"
+    EXPECT_NO_THROW({
+        storeApi->updateStore(
+            storeId,
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("role_change"),
+            core::Buffer::from("role_change_private"),
+            updated.version,
+            false,
+            false,
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
+                .groupId = group_1.groupId, .role = "manager", .groupPubKey = group_1.groupPubKey
+            }}
+        );
+    });
+    EXPECT_NO_THROW({ updated = storeApi->getStore(storeId); });
+    ASSERT_EQ(updated.groups.size(), 1);
+    EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(updated.groups[0].role, "manager");
 }
 
 TEST_F(StoreUsingGroupsTest, updateStore_remove_group) {
@@ -311,47 +321,6 @@ TEST_F(StoreUsingGroupsTest, updateStore_remove_group) {
     EXPECT_TRUE(afterRemoval.privateMeta.stdString().empty());
 }
 
-TEST_F(StoreUsingGroupsTest, updateStore_change_group_role) {
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-
-    std::string storeId;
-    ASSERT_NO_THROW({
-        storeId = createStoreWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<group::Group>{group_1}
-        );
-    });
-    ASSERT_FALSE(storeId.empty());
-
-    EXPECT_NO_THROW({
-        storeApi->updateStore(
-            storeId,
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("role_change"),
-            core::Buffer::from("role_change_private"),
-            1,
-            false,
-            false,
-            std::nullopt,
-            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
-                .groupId = group_1.groupId, .role = "manager", .groupPubKey = group_1.groupPubKey
-            }}
-        );
-    });
-
-    store::Store updated;
-    EXPECT_NO_THROW({ updated = storeApi->getStore(storeId); });
-    EXPECT_EQ(updated.groups.size(), 1);
-    if (updated.groups.size() == 1) {
-        EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(updated.groups[0].role, "manager");
-    }
-}
-
 TEST_F(StoreUsingGroupsTest, listStores_includes_groups_field) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
@@ -390,75 +359,46 @@ TEST_F(StoreUsingGroupsTest, listStores_includes_groups_field) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(StoreUsingGroupsTest, createStore_with_invalid_group_pubkey_throws) {
-    EXPECT_THROW({
-        storeApi->createStore(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("public"),
-            core::Buffer::from("private"),
-            std::nullopt,
-            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
-                .groupId = reader->getString("Group_1.groupId"),
-                .role = "user",
-                .groupPubKey = "not_a_valid_base58der_pubkey"
-            }}
-        );
-    }, core::Exception);
-}
-
-TEST_F(StoreUsingGroupsTest, getFile_via_group_grant) {
-    // Store_4 and File_3 come from the dataset, so this reads bytes an earlier build wrote. user_2 holds no
-    // entry in Store_4's own roster: the Group_4 grant is the only route to the key.
-    disconnect();
-    connectAs(2);
-
-    const std::string fileId = reader->getString("File_3.info_fileId");
-    store::File f;
-    EXPECT_NO_THROW({ f = storeApi->getFile(fileId); });
-    EXPECT_EQ(f.statusCode, 0);
-    EXPECT_EQ(f.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("File_3.privateMeta_inHex")));
-
-    std::string content;
-    EXPECT_NO_THROW({ content = downloadFile(fileId, f.size); });
-    EXPECT_EQ(content, privmx::utils::Hex::toString(reader->getString("File_3.uploaded_data_inHex")));
-}
-
-TEST_F(StoreUsingGroupsTest, listFiles_via_group_grant) {
-    // Store_4 is seeded with File_3 and File_4 in it, so the paging path has more than one row to return.
-    disconnect();
-    connectAs(2);
-    core::PagingList<store::File> list;
-    EXPECT_NO_THROW({
-        list = storeApi->listFiles(
-            reader->getString("Store_4.storeId"), core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"}
-        );
-    });
-    EXPECT_EQ(list.totalAvailable, 2);
-    for (const auto& f : list.readItems) {
-        EXPECT_EQ(f.statusCode, 0);
-        EXPECT_FALSE(f.privateMeta.stdString().empty());
-    }
-}
-
-TEST_F(StoreUsingGroupsTest, files_accessible_by_all_group_members) {
-    // Store_4 is granted to Group_4 (user_1, user_2) and Group_6 (all three), so user_2 reaches it through
-    // either and user_3 only through Group_6. Neither holds a direct roster entry.
-    const std::string fileId = reader->getString("File_3.info_fileId");
+TEST_F(StoreUsingGroupsTest, reads_through_a_group_grant) {
+    // Store_4, File_3 and File_4 come from the dataset, so this reads bytes an earlier build wrote. Store_4
+    // wraps its key to user_1 only and is granted to Group_4 (user_1, user_2) and Group_6 (all three): user_2
+    // arrives through two grants at one keyId, user_3 through one, and neither holds a direct wrap.
+    const std::string dataFileId = reader->getString("File_3.info_fileId");
     const std::string privateMeta = privmx::utils::Hex::toString(reader->getString("File_3.privateMeta_inHex"));
     const std::string data = privmx::utils::Hex::toString(reader->getString("File_3.uploaded_data_inHex"));
 
     for (const int index : {2, 3}) {
         disconnect();
         connectAs(index);
+
+        store::Store s;
+        EXPECT_NO_THROW({ s = storeApi->getStore(reader->getString("Store_4.storeId")); })
+            << "user_" << index << " could not open the store";
+        EXPECT_EQ(s.statusCode, 0);
+        EXPECT_EQ(s.groups.size(), 2);
+
         store::File f;
-        EXPECT_NO_THROW({ f = storeApi->getFile(fileId); }) << "user_" << index << " could not read the file";
+        EXPECT_NO_THROW({ f = storeApi->getFile(dataFileId); })
+            << "user_" << index << " could not read the file";
         EXPECT_EQ(f.statusCode, 0);
         EXPECT_EQ(f.privateMeta.stdString(), privateMeta);
         std::string content;
-        EXPECT_NO_THROW({ content = downloadFile(fileId, f.size); });
+        EXPECT_NO_THROW({ content = downloadFile(dataFileId, f.size); });
         EXPECT_EQ(content, data);
+
+        // the paging path, which decrypts a batch rather than one row
+        core::PagingList<store::File> list;
+        EXPECT_NO_THROW({
+            list = storeApi->listFiles(
+                reader->getString("Store_4.storeId"),
+                core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"}
+            );
+        });
+        EXPECT_EQ(list.totalAvailable, 2);
+        for (const auto& listed : list.readItems) {
+            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_FALSE(listed.privateMeta.stdString().empty());
+        }
     }
 }
 
@@ -647,23 +587,6 @@ TEST_F(StoreUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
     EXPECT_NO_THROW({ f = storeApi->getFile(reader->getString("File_5.info_fileId")); });
     EXPECT_EQ(f.statusCode, 0);
     EXPECT_EQ(f.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("File_5.privateMeta_inHex")));
-}
-
-TEST_F(StoreUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // Store_4 wraps its key to user_1 only and is granted to Group_4 and Group_6, both of which user_2 belongs
-    // to: that leaves two entries at the same keyId, and with no direct wrap one of them has to carry the read.
-    disconnect();
-    connectAs(2);
-
-    store::Store s;
-    EXPECT_NO_THROW({ s = storeApi->getStore(reader->getString("Store_4.storeId")); });
-    EXPECT_EQ(s.statusCode, 0);
-    EXPECT_EQ(s.groups.size(), 2);
-
-    store::File f;
-    EXPECT_NO_THROW({ f = storeApi->getFile(reader->getString("File_3.info_fileId")); });
-    EXPECT_EQ(f.statusCode, 0);
-    EXPECT_EQ(f.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("File_3.privateMeta_inHex")));
 }
 
 TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_did_not_name) {
