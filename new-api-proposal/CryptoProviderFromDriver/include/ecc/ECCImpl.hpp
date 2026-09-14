@@ -79,7 +79,6 @@ public:
     bool verify(BytesView data, BytesView signature) const;
     bool verify2(BytesView data, const Signature& signature) const;
     Bytes getOrderB() const;
-    EC_KEY* checkIfInitializedKeyAndGet() const;
 
  private:
     using bignum_unique_ptr = std::unique_ptr<BIGNUM, std::function<decltype(BN_free)>>;
@@ -102,7 +101,7 @@ public:
     static bignum_unique_ptr bin2bignum(const std::string& bin);
     static ec_point_unique_ptr oct2point(const ec_key_unique_ptr& key, const std::string& oct);
     static ec_group_unique_ptr getEcGroup();
-    // EC_KEY* checkIfInitializedKeyAndGet() const;
+    EC_KEY* checkIfInitializedKeyAndGet() const;
 
     ec_key_unique_ptr _key;
     bool _has_priv = false;

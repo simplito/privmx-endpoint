@@ -70,16 +70,10 @@ public:
     Signature sign2(BytesView data) const;
     bool verify(BytesView data, BytesView signature) const;
     Bytes getOrderB() const;
-    EC_KEY* checkIfInitializedKeyAndGet() const;
-
 private:
     ECCImpl::Ptr _impl;
 
 };
-
-inline EC_KEY* ECC::checkIfInitializedKeyAndGet() const {
-    return _impl->checkIfInitializedKeyAndGet();
-}
 
 inline ECC ECC::genPair() {
     return ECC(ECCImpl::genPair());

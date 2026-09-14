@@ -62,11 +62,11 @@ public:
     static Bytes toRawPQ(std::shared_ptr<EVP_PKEY> key, bool includePrivate = true);
 
     static std::shared_ptr<EVP_PKEY> fromRaw(AsymAlg, BytesView data, bool includePrivate = true);
-    static std::shared_ptr<EVP_PKEY> fromRawP256(BytesView data, const char *groupname, bool includePrivate = true);
+    static std::shared_ptr<EVP_PKEY> fromRawP256(const char *groupname, BytesView data, bool includePrivate = true);
     static std::shared_ptr<EVP_PKEY> fromRaw25519(const char *name, BytesView data, bool includePrivate = true);
     static std::shared_ptr<EVP_PKEY> fromRawPQ(const char *name, BytesView data, size_t publen, size_t privlen = 0, size_t seedlen = 0);
 
-    static std::shared_ptr<EVP_PKEY> fromRawP256PrivateOnly(BytesView rawdata, const char *groupname);
+    static std::shared_ptr<EVP_PKEY> fromRawP256PrivateOnly(const char *groupname, BytesView rawdata);
 
     // not work as expected - for tests only - TO REMOVE (or replace)
     static std::shared_ptr<EVP_PKEY> fromRawPrivateP256(const char *groupname, BytesView data);

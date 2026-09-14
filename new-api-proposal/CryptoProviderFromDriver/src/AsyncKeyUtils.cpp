@@ -105,12 +105,12 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRaw(AsymAlg algorithm, BytesView ra
     switch (algorithm)
     {
     case AsymAlg::secp256k1:
-        return fromRawP256(rawdata, "secp256k1", includePrivate);
+        return fromRawP256("secp256k1", rawdata, includePrivate);
     case AsymAlg::prime256v1:
-//        return fromRawP256(rawdata, "P-256", includePrivate);
-        return fromRawP256(rawdata, "prime256v1", includePrivate);
+//        return fromRawP256("P-256", rawdata, includePrivate);
+        return fromRawP256("prime256v1", rawdata, includePrivate);
     case AsymAlg::brainpoolP256r1:
-        return fromRawP256(rawdata, "brainpoolP256r1", includePrivate);
+        return fromRawP256("brainpoolP256r1", rawdata, includePrivate);
     case AsymAlg::X25519:
         return fromRaw25519("X25519", rawdata, includePrivate);
     case AsymAlg::ED25519:
@@ -128,12 +128,12 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRaw(AsymAlg algorithm, BytesView ra
 
 /**
  * @brief Create private key from from private and public keys data
- * @param rawdata Raw 65 bytes of public key data optionally followed by 32 bytes of private key data  
  * @param groupname Name of the curve group ("secp256k1", "prime256v1" or "brainpoolP256r1")
+ * @param rawdata Raw 65 bytes of public key data optionally followed by 32 bytes of private key data  
  * @param includePrivate Include public part if true and if rawdata contain private part 
  * @return Shared pointer to the EVP_PKEY structure with desired key
  */
-std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawP256(BytesView rawdata, const char *groupname, bool includePrivate)  {
+std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawP256(const char *groupname, BytesView rawdata, bool includePrivate)  {
 
     if (rawdata.size() != 32+65 && rawdata.size() != 65) {
         throw PrivmxCryptoserviceAsyncKeyException("Incorrect input data size");
@@ -200,11 +200,11 @@ std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawP256(BytesView rawdata, const ch
 
 /**
  * @brief Create private key from from private data
- * @param rawdata Raw 32 bytes of private key data  
  * @param groupname Name of the curve group ("secp256k1", "prime256v1" or "brainpoolP256r1")
+ * @param rawdata Raw 32 bytes of private key data  
  * @return Shared pointer to the EVP_PKEY structure with desired key
  */
-std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawP256PrivateOnly(BytesView rawdata, const char *groupname)  {
+std::shared_ptr<EVP_PKEY> AsyncKeyUtils::fromRawP256PrivateOnly(const char *groupname, BytesView rawdata)  {
     if (rawdata.size() != 32) {
         throw PrivmxCryptoserviceAsyncKeyException("Incorrect input data size");
     }
@@ -1263,10 +1263,10 @@ Bytes AsyncKeyUtils::GetPubKeyFromPrivKey(EVP_PKEY* ec_key, bool toCompress, boo
     point_conversion_form_t conv_form = toCompress ? POINT_CONVERSION_COMPRESSED 
                                                    : POINT_CONVERSION_UNCOMPRESSED;
 	size_t pub_key_size = 0;
-    if (EVP_PKEY_get_octet_string_param(ec_key, OSSL_PKEY_PARAM_PUB_KEY, nullptr, 0, &pub_key_size) <= 0) {
-        throw PrivmxCryptoserviceAsyncKeyException("Determining key public part maximal size fail");
-    }
-	Bytes pub_key_buffer(pub_key_size);
+    // if (EVP_PKEY_get_octet_string_param(ec_key, OSSL_PKEY_PARAM_PUB_KEY, nullptr, 0, &pub_key_size) <= 0) {
+    //     throw PrivmxCryptoserviceAsyncKeyException("Determining key public part maximal size fail");
+    // }
+	// Bytes pub_key_buffer(pub_key_size);
 
     size_t group_name_size = 0;
 	if (EVP_PKEY_get_utf8_string_param(ec_key, OSSL_PKEY_PARAM_GROUP_NAME, nullptr, 0, &group_name_size) <= 0) {
@@ -1308,7 +1308,8 @@ Bytes AsyncKeyUtils::GetPubKeyFromPrivKey(EVP_PKEY* ec_key, bool toCompress, boo
 	if (pub_key_size == 0) {
         throw PrivmxCryptoserviceAsyncKeyException("Retrieve key public part size fail");
 	}
-	pub_key_buffer.resize(pub_key_size);
+   	// pub_key_buffer.resize(pub_key_size);
+	Bytes pub_key_buffer(pub_key_size);
 	if (!EC_POINT_point2oct(ec_group_raw, pub_key_raw, conv_form, pub_key_buffer.data(),
 	                        pub_key_buffer.size(), nullptr)) {
         throw PrivmxCryptoserviceAsyncKeyException("Retrieve key public part fail");
