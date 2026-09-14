@@ -661,7 +661,8 @@ Bytes AsyncKeyUtils::toRawP256(std::shared_ptr<EVP_PKEY> key, bool includePrivat
            PrivmxCryptoserviceAsyncKeyException("Wrong private key size");
         } 
         unsigned char *res_priv_d = reinterpret_cast<unsigned char*>(result.data()+pub_key_len);
-        if(priv_key_len != BN_bn2bin(priv.get(), res_priv_d)) {
+        // if(priv_key_len != BN_bn2bin(priv.get(), res_priv_d)) {
+        if(priv_key_len != BN_bn2binpad(priv.get(), res_priv_d, 32)) {
             PrivmxCryptoserviceAsyncKeyException("Wrong private key size");
         } 
     }
