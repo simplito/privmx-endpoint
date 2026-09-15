@@ -3,6 +3,7 @@
 
 #include <Pson/pson.h>
 #include <privmx/endpoint/core/cinterface/core.h>
+#include <privmx/endpoint/group/cinterface/group.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,7 +11,7 @@ extern "C" {
 
 typedef struct StoreApi StoreApi;
 
-int privmx_endpoint_newStoreApi(Connection* connectionPtr, StoreApi** outPtr);
+int privmx_endpoint_newStoreApi(Connection* connectionPtr, GroupApi* groupApiPtr, StoreApi** outPtr);
 int privmx_endpoint_freeStoreApi(StoreApi* ptr);
 int privmx_endpoint_execStoreApi(StoreApi* ptr, int method, const pson_value* args, pson_value** res);
 
