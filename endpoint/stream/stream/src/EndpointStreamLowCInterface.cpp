@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include <Poco/Dynamic/Var.h>
+#include <optional>
 #include <string>
 
 #include <privmx/utils/Utils.hpp>
@@ -20,15 +21,18 @@ limitations under the License.
 #include <privmx/endpoint/core/cinterface/CApiExecutor.hpp>
 #include <privmx/endpoint/core/cinterface/InterfaceException.hpp>
 #include <privmx/endpoint/core/varinterface/ConnectionVarInterface.hpp>
+#include <privmx/endpoint/group/varinterface/GroupApiVarInterface.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::cinterface;
 
-int privmx_endpoint_newStreamApiLow(Connection* connectionPtr, StreamApiLow** outPtr) {
+int privmx_endpoint_newStreamApiLow(Connection* connectionPtr, GroupApi* groupApiPtr, StreamApiLow** outPtr) {
     core::ConnectionVarInterface* _connectionPtr = (core::ConnectionVarInterface*)connectionPtr;
+    group::GroupApiVarInterface* _groupApiPtr = (group::GroupApiVarInterface*)groupApiPtr;
     stream::StreamApiLowVarInterface* ptr = new stream::StreamApiLowVarInterface(
         _connectionPtr->getApi(),
-        core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::PSON_BINARYSTRING}
+        core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::PSON_BINARYSTRING},
+        _groupApiPtr ? std::make_optional(_groupApiPtr->getApi()) : std::nullopt
     );
     *outPtr = (StreamApiLow*)ptr;
     return 1;
