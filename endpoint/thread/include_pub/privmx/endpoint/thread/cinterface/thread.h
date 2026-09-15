@@ -3,6 +3,7 @@
 
 #include <Pson/pson.h>
 #include <privmx/endpoint/core/cinterface/core.h>
+#include <privmx/endpoint/group/cinterface/group.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,7 +11,7 @@ extern "C" {
 
 typedef struct ThreadApi ThreadApi;
 
-int privmx_endpoint_newThreadApi(Connection* connectionPtr, ThreadApi** outPtr);
+int privmx_endpoint_newThreadApi(Connection* connectionPtr, GroupApi* groupApiPtr, ThreadApi** outPtr);
 int privmx_endpoint_freeThreadApi(ThreadApi* ptr);
 int privmx_endpoint_execThreadApi(ThreadApi* ptr, int method, const pson_value* args, pson_value** res);
 
