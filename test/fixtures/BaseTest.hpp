@@ -1,0 +1,88 @@
+#ifndef _PRIVMXLIB_TEST_BASETEST_HPP_
+#define _PRIVMXLIB_TEST_BASETEST_HPP_
+
+#include "./Main.hpp"
+
+#include <functional>
+#include <gtest/gtest.h>
+#include <random>
+#include <Poco/URI.h>
+#include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/endpoint/core/BackendRequester.hpp>
+#include <privmx/utils/PrivmxException.hpp>
+
+
+namespace privmx {
+namespace test {
+
+class ScopeExit {
+public:
+    explicit ScopeExit(std::function<void()> callback) : _callback(std::move(callback)) {}
+    ~ScopeExit() { if(_callback) _callback(); }
+private:
+    std::function<void()> _callback;
+};
+
+enum BaseTestMode {
+    online,
+    offline
+};
+
+
+
+class BaseTest : public testing::Test {
+
+protected:
+    BaseTest(const BaseTestMode& mode = BaseTestMode::online) : _mode(mode) {}
+    void SetUp() override {
+        try {
+            customSetUp();
+        } catch (const privmx::endpoint::core::Exception& e) {
+            std::cout << e.getFull() << std::endl;
+            FAIL();
+        } catch (const privmx::utils::PrivmxException& e) {
+            std::cout << e.what() << " | " << e.getData() << std::endl;
+            FAIL();
+        } catch (const std::exception& e) {
+            std::cout << e.what() << std::endl;
+        }
+    }
+    void TearDown() override {
+        if(INI_FILE_PATH.empty()) {
+            return;
+        }
+        customTearDown();
+    }
+    virtual void customSetUp() = 0;
+    virtual void customTearDown() = 0;
+    void serverCLI(const std::string& metod, const std::string& stringParamsJSON) {
+        privmx::endpoint::core::BackendRequester::backendRequest(getPlatformUrl(), "api_key_id", "api_key_secret", 0, metod, stringParamsJSON);
+    }
+    std::string randomReadableString(int max_length);
+    std::string getPlatformUrl(std::string url = "");
+private:
+    BaseTestMode _mode;
+};
+
+std::string BaseTest::randomReadableString(int max_length) {
+    std::string possible_characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    std::random_device rd;
+    std::mt19937 engine(rd());
+    std::uniform_int_distribution<> dist(0, possible_characters.size()-1);
+    std::string ret = "";
+    for(int i = 0; i < max_length; i++){
+        int random_index = dist(engine);
+        ret += possible_characters[random_index];
+    }
+    return ret;
+}
+
+std::string BaseTest::getPlatformUrl(std::string url) {
+    return "http://" + BRIDGE_URL;
+}
+
+} // test
+} // privmx
+
+
+#endif // _PRIVMXLIB_TEST_BASETEST_HPP_

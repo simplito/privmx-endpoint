@@ -5,10 +5,10 @@ message(STATUS "Conan build - PRIVMX_CONAN=${PRIVMX_CONAN}")
 project(privmx_testing)
 
 find_package(GTest REQUIRED)
-set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/utils ${CMAKE_CURRENT_BINARY_DIR}/utils)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fixtures)
 
 # Data set Generator
-add_executable(test_env_DockerSetupData ${CMAKE_CURRENT_SOURCE_DIR}/test_env/utils/DockerSetupData.cpp)
+add_executable(test_env_DockerSetupData ${CMAKE_CURRENT_SOURCE_DIR}/env/create_dataset/DockerSetupData.cpp)
 target_link_libraries(test_env_DockerSetupData privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent privmxendpointkvdb privmxendpointlock privmxendpointsearch privmxendpointgroup Poco::Foundation Poco::Util)
 
 

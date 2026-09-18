@@ -19,6 +19,12 @@ limitations under the License.
  * production validator on the other. A disagreement shows up as a rejected state rather than as a subtle
  * divergence discovered in production.
  *
+ * Wrapped blobs are reduced to a length and a digest by `shorten`. The consumer checks only that an edge
+ * carries a ciphertext, never what is inside one, so whole ECIES blobs would multiply the fixture's size for no
+ * added coverage. A prefix would be worse than useless, and was: the first 46 base64 characters of an ECIES blob
+ * are a fixed header — version byte plus the signer's public key — so a truncated fixture showed the identical
+ * string on all 33 edges of a tree.
+ *
  * Usage: keytree_state_dump > src/test/fixtures/keytree-states.json   (paths relative to the bridge repo)
  * See test/tools/README.md.
  */
@@ -63,19 +69,8 @@ std::vector<TreeMember> publicOf(const std::vector<Member>& members) {
     return result;
 }
 
-/**
- * Reduces a wrapped blob to its length and a digest.
- *
- * The consumer of this dump is a *structural* validator: it checks that an edge carries a ciphertext, never what
- * is inside one, because the server cannot decrypt anything. Whole ECIES blobs would multiply the fixture's size
- * for no added coverage.
- *
- * A **prefix** would be worse than useless here, and was: the first 46 base64 characters of an ECIES blob are a
- * fixed header — version byte plus the signer's public key, which is the same for every edge one client writes —
- * so a truncated fixture showed the identical string on all 33 edges of a tree. A digest keeps the file small
- * while staying distinct per ciphertext, which lets the consumer assert that a state does not repeat one wrap
- * where it should carry many.
- */
+// A digest keeps the fixture small while staying distinct per ciphertext, so the consumer can assert that a
+// state does not repeat one wrap where it should carry many.
 std::string shorten(const std::string& blob) {
     return "b64:" + std::to_string(blob.size()) + ":"
         + privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(blob)).substr(0, 16);
@@ -146,7 +141,7 @@ std::vector<std::string> idsOf(const std::vector<Member>& members) {
     return ids;
 }
 
-/** Builds a fresh tree-backed group and returns the state, keeping the store so plans can be computed. */
+// Builds a fresh tree-backed group and returns the state, keeping the store so plans can be computed.
 struct Group {
     std::vector<Member> members;
     server::GroupTreeState tree;
@@ -219,7 +214,7 @@ int main() {
             // it and no archive to gather the aligned skip targets from. A real rotation owes the full set.
             const std::vector<ArchiveRung> rungs = ladder.buildRungs(
                 plan.newEpoch, plan.newGrantKey.getPublicKey(), store.getGrantKey(5), 1,
-                group.members[remover].userId, group.members[remover].priv, /*includeSkipRungs*/ false
+                group.members[remover].userId, group.members[remover].priv, false
             );
             std::string rungJson = "[";
             for (std::size_t i = 0; i < rungs.size(); ++i) {

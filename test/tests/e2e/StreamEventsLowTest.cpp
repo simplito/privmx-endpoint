@@ -1,9 +1,11 @@
+// Owns streamRoom event coverage for both stream APIs: StreamApiImpl forwards subscribeFor and every room
+// call to StreamApiLow, so a copy against StreamApi would run the same code behind a WebRTC-only build.
 #include <chrono>
 #include <string>
 #include <thread>
 #include <vector>
 #include <gtest/gtest.h>
-#include "../../utils/BaseEndpointEventTest.hpp"
+#include "BaseEndpointEventTest.hpp"
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/stream/Events.hpp>
 #include <privmx/endpoint/stream/StreamApiLow.hpp>
@@ -309,71 +311,24 @@ TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomLeft) {
     EXPECT_EQ(stream::Events::extractStreamRoomLeftEvent(eventHolder.value()).data.userId, user2.userId);
 }
 
-TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomCreated_disabled) {
+TEST_F(StreamEventsLowTest, unsubscribeFrom_silences_the_stream_channel) {
+    // Every stream event arrives on the one "stream" channel, so unsubscribing is tested once rather than
+    // once per event type - the three tests this replaces differed only in the operation they triggered.
     auto user1 = fixtureClient();
     auto user2 = user2Client();
     ScopeExit cleanup([&user2]() { user2.disconnect(); });
     drainEventQueue();
     EXPECT_NO_THROW({
-        auto tmp = user1.streamApi->subscribeFor({
+        auto ids = user1.streamApi->subscribeFor({
             user1.streamApi->buildSubscriptionQuery(
                 stream::EventType::STREAMROOM_CREATE,
                 stream::EventSelectorType::CONTEXT_ID,
                 reader->getString("Context_1.contextId")
             )
         });
-        user1.streamApi->unsubscribeFrom(tmp);
+        user1.streamApi->unsubscribeFrom(ids);
     });
     EXPECT_NO_THROW({ createStreamRoomFor(user1, user2); });
-    EXPECT_NO_THROW({ assertNoEventReceived(); });
-}
-
-TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomUpdated_disabled) {
-    auto user1 = fixtureClient();
-    auto user2 = user2Client();
-    ScopeExit cleanup([&user2]() { user2.disconnect(); });
-    auto streamRoomId = createStreamRoomFor(user1, user2);
-    drainEventQueue();
-    EXPECT_NO_THROW({
-        auto tmp = user1.streamApi->subscribeFor({
-            user1.streamApi->buildSubscriptionQuery(
-                stream::EventType::STREAMROOM_UPDATE,
-                stream::EventSelectorType::STREAMROOM_ID,
-                streamRoomId
-            )
-        });
-        user1.streamApi->unsubscribeFrom(tmp);
-    });
-    EXPECT_NO_THROW({
-        user1.streamApi->updateStreamRoom(
-            streamRoomId,
-            usersFor(user1, user2),
-            std::vector<core::UserWithPubKey>{{.userId = user1.userId, .pubKey = user1.pubKey}},
-            core::Buffer::from("public"),
-            core::Buffer::from("private"),
-            1, false, false, std::nullopt
-        );
-    });
-    EXPECT_NO_THROW({ assertNoEventReceived(); });
-}
-
-TEST_F(StreamEventsLowTest, waitEvent_getEvent_streamRoomDeleted_disabled) {
-    auto user1 = fixtureClient();
-    auto user2 = user2Client();
-    ScopeExit cleanup([&user2]() { user2.disconnect(); });
-    auto streamRoomId = createStreamRoomFor(user1, user2);
-    drainEventQueue();
-    EXPECT_NO_THROW({
-        auto tmp = user1.streamApi->subscribeFor({
-            user1.streamApi->buildSubscriptionQuery(
-                stream::EventType::STREAMROOM_DELETE,
-                stream::EventSelectorType::STREAMROOM_ID,
-                streamRoomId
-            )
-        });
-        user1.streamApi->unsubscribeFrom(tmp);
-    });
-    EXPECT_NO_THROW({ user1.streamApi->deleteStreamRoom(streamRoomId); });
     EXPECT_NO_THROW({ assertNoEventReceived(); });
 }
 
@@ -390,59 +345,29 @@ TEST_F(StreamEventsLowTest, joinStreamRoom_second_join_throws) {
     EXPECT_THROW({ user1.joinStreamRoom(streamRoomId); }, core::Exception);
 }
 
-TEST_F(StreamEventsLowTest, subscribeFor_stream_subscribe_eventtype_noThrow) {
+TEST_F(StreamEventsLowTest, subscribeFor_every_stream_eventtype_noThrow) {
+    // buildSubscriptionQuery has to accept every stream-level EventType. The three tests this replaces stood
+    // up two connections and a room each to check one enum value.
     auto user1 = fixtureClient();
     auto user2 = user2Client();
     ScopeExit cleanup([&user2]() { user2.disconnect(); });
 
     auto streamRoomId = createStreamRoomFor(user1, user2);
 
-    EXPECT_NO_THROW({
-        auto ids = user1.streamApi->subscribeFor({
-            user1.streamApi->buildSubscriptionQuery(
-                stream::EventType::STREAM_SUBSCRIBE,
-                stream::EventSelectorType::STREAMROOM_ID,
-                streamRoomId
-            )
+    for(const auto eventType : {
+        stream::EventType::STREAM_SUBSCRIBE,
+        stream::EventType::STREAM_UNSUBSCRIBE,
+        stream::EventType::STREAM_UPDATE
+    }) {
+        EXPECT_NO_THROW({
+            auto ids = user1.streamApi->subscribeFor({
+                user1.streamApi->buildSubscriptionQuery(
+                    eventType,
+                    stream::EventSelectorType::STREAMROOM_ID,
+                    streamRoomId
+                )
+            });
+            user1.streamApi->unsubscribeFrom(ids);
         });
-        user1.streamApi->unsubscribeFrom(ids);
-    });
-}
-
-TEST_F(StreamEventsLowTest, subscribeFor_stream_unsubscribe_eventtype_noThrow) {
-    auto user1 = fixtureClient();
-    auto user2 = user2Client();
-    ScopeExit cleanup([&user2]() { user2.disconnect(); });
-
-    auto streamRoomId = createStreamRoomFor(user1, user2);
-
-    EXPECT_NO_THROW({
-        auto ids = user1.streamApi->subscribeFor({
-            user1.streamApi->buildSubscriptionQuery(
-                stream::EventType::STREAM_UNSUBSCRIBE,
-                stream::EventSelectorType::STREAMROOM_ID,
-                streamRoomId
-            )
-        });
-        user1.streamApi->unsubscribeFrom(ids);
-    });
-}
-
-TEST_F(StreamEventsLowTest, subscribeFor_stream_update_eventtype_noThrow) {
-    auto user1 = fixtureClient();
-    auto user2 = user2Client();
-    ScopeExit cleanup([&user2]() { user2.disconnect(); });
-
-    auto streamRoomId = createStreamRoomFor(user1, user2);
-
-    EXPECT_NO_THROW({
-        auto ids = user1.streamApi->subscribeFor({
-            user1.streamApi->buildSubscriptionQuery(
-                stream::EventType::STREAM_UPDATE,
-                stream::EventSelectorType::STREAMROOM_ID,
-                streamRoomId
-            )
-        });
-        user1.streamApi->unsubscribeFrom(ids);
-    });
+    }
 }

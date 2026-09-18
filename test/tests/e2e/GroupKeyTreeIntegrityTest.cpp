@@ -4,7 +4,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "../../utils/BaseTest.hpp"
+#include "BaseGroupTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -47,62 +47,19 @@ using namespace privmx::endpoint;
  * Where the fate of the abusive call itself is not part of the contract (the Bridge may refuse it outright, or
  * take it and leave the caller with a wrap the endpoint will not use), the test records which way it went and
  * asserts the invariant that has to hold either way.
+ *
+ * With the removal carry-up in place no supported call leaves metadata behind an epoch, so the ladder descent
+ * the metadata read path still supports is unreachable from the public API and has no e2e coverage here.
  */
 
-class GroupKeyTreeIntegrityTest : public privmx::test::BaseTest {
+class GroupKeyTreeIntegrityTest : public privmx::test::BaseGroupTest {
 protected:
-    GroupKeyTreeIntegrityTest() : BaseTest(privmx::test::BaseTestMode::online) {}
-
-    void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
-        connectAs(1);
-    }
-
-    void customTearDown() override {
-        connection.reset();
-        threadApi.reset();
-        groupApi.reset();
-        reader.reset();
-        core::EventQueueImpl::getInstance()->clear();
-    }
-
-    std::string contextId() {
-        return reader->getString("Context_1.contextId");
-    }
-
-    core::UserWithPubKey user(int index) {
-        const std::string n = std::to_string(index);
-        return core::UserWithPubKey{
-            .userId = reader->getString("Login.user_" + n + "_id"),
-            .pubKey = reader->getString("Login.user_" + n + "_pubKey")
-        };
-    }
-
-    std::shared_ptr<core::Connection> connectWith(const std::string& privKey) {
-        return std::make_shared<core::Connection>(
-            core::Connection::connect(
-                privKey, reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
-    }
-
-    std::shared_ptr<core::Connection> connect(int index) {
-        return connectWith(reader->getString("Login.user_" + std::to_string(index) + "_privKey"));
-    }
-
-    void connectAs(int index) {
-        connection = connect(index);
-        groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
+    void setUpModuleApis() override {
         threadApi = std::make_shared<thread::ThreadApi>(thread::ThreadApi::create(*connection, *groupApi));
-        fixtureUserIndex = index;
     }
 
-    void disconnect() {
-        connection->disconnect();
-        connection.reset();
+    void tearDownModuleApis() override {
         threadApi.reset();
-        groupApi.reset();
     }
 
     // A tree-backed group with the given members, managed by the given managers (user_1 by default).
@@ -206,7 +163,7 @@ protected:
     // refused ("Websocket already authorized") - the fixture steps aside for the probe and reconnects after.
     template <typename Body>
     void onFreshSession(int index, Body body) {
-        const bool stepAside = index == fixtureUserIndex;
+        const bool stepAside = index == connectedUserIndex;
         if (stepAside) {
             disconnect();
         }
@@ -310,13 +267,7 @@ protected:
 
     // Why the last `canRead*` probe came back false, when it failed rather than just decrypting to nothing.
     std::string lastReadError;
-    // Which login the fixture's own session holds - the one a probe has to make room for.
-    int fixtureUserIndex = 0;
-    std::shared_ptr<core::Connection> connection;
-    std::shared_ptr<group::GroupApi> groupApi;
     std::shared_ptr<thread::ThreadApi> threadApi;
-    Poco::Util::IniFileConfiguration::Ptr reader;
-    core::VarSerializer _serializer = core::VarSerializer({});
 };
 
 static constexpr const char* MANAGEMENT_API_MISSING =
@@ -941,10 +892,8 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_removal_leaves_the_group
     EXPECT_EQ(after.keyVersion, removed ? 2 : 1) << "remove: " << removeFailure << " update: " << updateFailure;
     EXPECT_EQ(after.rosterVersion, before.rosterVersion + (removed ? 1 : 0)) << "an update must not move the "
         "roster version; remove: " << removeFailure << " update: " << updateFailure;
-    // Each plane's counter moves for its own update, and once more if the removal's follow-up carry-up landed -
-    // that one is best-effort and loses its own version check to a concurrent update, so either count is correct
-    // here. The carry-up rewrites both planes, which is why the private one gets a range too even though nothing
-    // in this test writes it directly.
+    // Each plane's counter moves for its own update, plus one if the removal's best-effort carry-up landed — it
+    // can lose its version check to a concurrent update, so either count is correct, and it rewrites both planes.
     const int64_t carryUp = removed ? 1 : 0;
     const int64_t updateBump = updated ? 1 : 0;
     EXPECT_GE(after.publicMetaVersion, before.publicMetaVersion + updateBump) << "the update reported success "
@@ -970,9 +919,8 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_removal_leaves_the_group
 }
 
 TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_addition_leaves_the_group_verifying) {
-    // The other pair the tree's own guards cannot see. An addition is checked against the epoch and the node
-    // generations, neither of which a metadata update touches - so before the planes were split, an update
-    // landing first left the addition committing to a version it never reached.
+    // The other pair the tree's guards cannot see: an addition is checked against the epoch and node generations,
+    // neither of which a metadata update touches - so pre-split, an update landing first broke the addition.
     const core::UserWithPubKey adder = user(1);
     const core::UserWithPubKey updater = user(2);
     const std::vector<core::UserWithPubKey> managers{adder, updater};
@@ -1044,9 +992,8 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_addition_leaves_the_grou
 }
 
 TEST_F(GroupKeyTreeIntegrityTest, concurrent_public_and_private_meta_writes_both_land) {
-    // What the split buys, and the one assertion in this file that fails on the pre-split code: there the two
-    // writes CAS the same counter, so one of them always loses. Every other race test here says "either landed";
-    // this one says both did.
+    // What the split buys, and the one assertion here that fails on pre-split code: there both writes CAS the
+    // same counter so one always loses. Every other race test says "either landed"; this one says both did.
     const core::UserWithPubKey publicWriter = user(1);
     const core::UserWithPubKey privateWriter = user(2);
     const std::vector<core::UserWithPubKey> managers{publicWriter, privateWriter};
@@ -1136,7 +1083,9 @@ TEST_F(GroupKeyTreeIntegrityTest, two_concurrent_public_meta_writes_still_serial
             api.updateGroupPublicMeta(groupId, core::Buffer::from(content), before.publicMetaVersion);
             std::lock_guard lock(landedMutex);
             landed++;
-        } catch (const std::exception&) { /* losing the CAS is the expected outcome for one of the two */ }
+        } catch (const std::exception&) {
+            // losing the CAS is the expected outcome for one of the two
+        }
     };
     std::thread firstThread([&] { write(firstGroups, "first"); });
     std::thread secondThread([&] { write(secondGroups, "second"); });
@@ -1154,13 +1103,8 @@ TEST_F(GroupKeyTreeIntegrityTest, two_concurrent_public_meta_writes_still_serial
 }
 
 TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_both_metadata_planes_up_to_the_new_epoch) {
-    // An entry left at the epoch it was written under stays openable - and forgeable, its tag is keyed there
-    // too - by whoever held that epoch's key, the member just removed included. That goes for either plane, so a
-    // removal is followed by a write to both, carrying the same plaintext up to the new epoch and moving both
-    // counters with it.
-    //
-    // With the carry-up in place no supported call leaves metadata behind an epoch, so the ladder descent the
-    // metadata read path still supports is unreachable from here and has no e2e coverage.
+    // An entry left at the epoch it was written under stays openable, and forgeable, by whoever held that
+    // epoch's key - the member just removed included - so a removal carries both planes up to the new epoch.
     const std::vector<core::UserWithPubKey> managers{user(1)};
 
     std::string groupId;
