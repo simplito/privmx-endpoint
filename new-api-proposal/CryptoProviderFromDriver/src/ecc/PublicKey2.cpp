@@ -185,10 +185,10 @@ Bytes PublicKey2::eciesEncrypt(BytesView data, const PrivateKey2& private_key) c
 bool PublicKey2::verify(BytesView data, BytesView signature, SigScheme scheme) const {
     // TO BE COMPLETED
     // switch (scheme) {
-    // case SigScheme::EcdsaSecp256k1Compact:
+    // case SigScheme::Compact:
     //     // return verifyCompactSignature(Utils::b2s(data), Utils::b2s(signature));
     //     return verifyCompactSignature(data, signature);
-    // case SigScheme::EcdsaSecp256k1CompactWithHash:
+    // case SigScheme::CompactWithHash:
     //     // return verifyCompactSignatureWithHash(Utils::b2s(data), Utils::b2s(signature));
     //     return verifyCompactSignatureWithHash(data, signature);
     // default:

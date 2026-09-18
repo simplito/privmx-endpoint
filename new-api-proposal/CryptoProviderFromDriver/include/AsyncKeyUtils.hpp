@@ -48,6 +48,10 @@ public:
     using ec_group_unique_ptr = std::unique_ptr<EC_GROUP, std::function<decltype(EC_GROUP_free)>>;
     using ec_point_unique_ptr = std::unique_ptr<EC_POINT, std::function<decltype(EC_POINT_free)>>;
 
+    // for ECDSA 
+    using ecdsa_sig_unique_ptr = std::unique_ptr<ECDSA_SIG, std::function<decltype(ECDSA_SIG_free)>>;
+
+
     // temporary - for testing only - TO REMOVE
     static void showParams(std::shared_ptr<EVP_PKEY> key);
 
@@ -74,10 +78,21 @@ public:
     // based on example from https://github.com/openssl/openssl/issues/18437
     static Bytes GetPubKeyFromPrivKey(EVP_PKEY* ec_key, bool toCompress = false, bool toSet = false);
 
+    static Bytes sign(AsymAlg alg, SigScheme scheme, EVP_PKEY *raw_pkey, BytesView message);
     static Bytes sign(AsymAlg, EVP_PKEY *raw_pkey, BytesView message);
 
+    static bool verify(AsymAlg algorithm, SigScheme scheme, EVP_PKEY *raw_pkey, BytesView message, BytesView signature);
     static bool verify(AsymAlg, EVP_PKEY *raw_pkey, BytesView message, BytesView signature);
 
+    static Bytes compressPublic(Bytes rawdata);
+
+    static Bytes signAsn2rs(BytesView signatureANS1);
+    static Bytes signRS2Asn(BytesView signatureRS);
+
+    static Bytes sign64to65(BytesView sign64);
+    static Bytes sign65to64(BytesView sign65);
+
+    
 // protected:
 private:
     static Bytes sign_ds(EVP_PKEY *raw_pkey, BytesView message, 

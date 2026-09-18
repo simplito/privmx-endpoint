@@ -148,10 +148,10 @@ Bytes PrivateKey::toWIFb() const {
 
 Bytes PrivateKey::sign(BytesView data, SigScheme scheme) const {
     switch (scheme) {
-        case SigScheme::EcdsaSecp256k1CompactWithHash: // first we need to obtain hash
+        case SigScheme::CompactWithHash: // first we need to obtain hash
             // return Utils::s2b(_key.sign(Utils::b2s(_provider->digest(Hash::Sha256, data))));
             return _key.sign(_provider->digest(Hash::Sha256, data));
-        case SigScheme::EcdsaSecp256k1Compact:  // in both cases we compute signature
+        case SigScheme::Compact:  // in both cases we compute signature
             // return Utils::s2b(_key.sign(Utils::b2s(data)));
             return _key.sign(data);
         default:

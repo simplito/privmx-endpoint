@@ -29,6 +29,8 @@ limitations under the License.
 #include "CoreTypes.hpp"
 // #include "CoreInterfaces.hpp"
 
+#include "CryptoProviderFromDriver.hpp"
+
 #include "AsyncKeyUtils.hpp"
 
 #include "Exceptions.hpp"
@@ -81,14 +83,6 @@ void AsyncKeyUtils::showParams(std::shared_ptr<EVP_PKEY> key) {
         }
             std::cout << " * " << std::string(p->key) << " [type = ";
             std::cout << datatype << " (size: " << p-> data_size << ")]\n";
-        if (p->data_type == OSSL_PARAM_UTF8_STRING) {
-            char buffer[200], *buffer_ptr = buffer;
-            if (OSSL_PARAM_get_utf8_string(p, &buffer_ptr, sizeof buffer) != 1) {
-                std::cout << "     [ failed to read parameter ]\n";
-            } else {
-                std::cout << "    \"" << buffer << "\"\n";
-            }
-        }
 
         }
         std::cout << "(end of parameters)\n\n"; 
@@ -800,6 +794,34 @@ Bytes AsyncKeyUtils::toRawPQ(std::shared_ptr<EVP_PKEY> key, bool includePrivate)
 /**
  * @brief Agnostic method for creating a message signature
  * @param algorithm Algorithm for which the signature is to be created
+ * @param scheme Signing scheme
+ * @param raw_pkey Key to be used for the signature
+ * @param message Message to be signed
+ * @return Signature
+ */
+Bytes AsyncKeyUtils::sign(AsymAlg alg, SigScheme scheme, EVP_PKEY *raw_pkey, BytesView message) {
+    if (scheme == SigScheme::Default) {
+        return sign(alg, raw_pkey, message);
+    } else if (scheme == SigScheme::Compact) {
+        if (alg == AsymAlg::ED25519) {
+            return sign64to65(sign(alg, raw_pkey, message));
+        }
+        if (alg == AsymAlg::secp256k1 || alg == AsymAlg::prime256v1 || alg == AsymAlg::brainpoolP256r1) {
+            return signAsn2rs(sign(alg, raw_pkey, message));
+        }
+        PrivmxCryptoserviceAsyncKeyException("Key algorithm not compatibile with signing scheme");
+    }  else if (scheme == SigScheme::CompactWithHash) {
+        CryptoProviderFromDriver p;
+        Bytes hash = p.digest(Hash::Sha256, message);
+        return sign(alg, SigScheme::Compact, raw_pkey, hash);
+    }
+    throw PrivmxCryptoserviceAsyncKeyException("Signing scheme not implemented");
+}
+
+
+/**
+ * @brief Agnostic method for creating a message signature
+ * @param algorithm Algorithm for which the signature is to be created
  * @param raw_pkey Key to be used for the signature
  * @param message Message to be signed
  * @return Signature
@@ -809,6 +831,7 @@ Bytes AsyncKeyUtils::sign(AsymAlg algorithm, EVP_PKEY *raw_pkey, BytesView messa
     {
     case AsymAlg::secp256k1:
     case AsymAlg::prime256v1:
+    case AsymAlg::brainpoolP256r1:
         return sign_ds(raw_pkey, message, EVP_sha256());
     case AsymAlg::X25519:
         throw PrivmxCryptoserviceAsyncKeyException("Signature function: Unsupported operation for X25519 key");
@@ -934,6 +957,7 @@ Bytes AsyncKeyUtils::sign_ds(EVP_PKEY *raw_pkey, BytesView message,
                   + std::to_string(signlen);
         if (signlen > 0 && signlen < signature.size())
             signature.resize(signlen);
+            // std::cout << "!";
         else
             throw PrivmxCryptoserviceAsyncKeyException(msg);
     }
@@ -1016,6 +1040,34 @@ Bytes AsyncKeyUtils::sign_ds(EVP_PKEY *raw_pkey, BytesView message,
 //     // EVP_PKEY_CTX_free(sctx);
 //     return signature;
 // }
+
+/**
+ * @brief Agnostic method for verifying a message signature
+ * @param algorithm Algorithm used to generate the signature
+ * @param scheme Signing scheme
+ * @param raw_pkey Key used to generate the signature
+ * @param message Signed message
+ * @param signature Signature
+ * @return Information on whether the signature is valid
+ */
+bool AsyncKeyUtils::verify(AsymAlg algorithm, SigScheme scheme, EVP_PKEY *raw_pkey, BytesView message, BytesView signature) {
+    if (scheme == SigScheme::Default) {
+        return verify(algorithm, raw_pkey, message, signature);
+    } else if (scheme == SigScheme::Compact) {
+        if (algorithm == AsymAlg::ED25519) {
+            return verify(algorithm, raw_pkey, message, sign65to64(signature));
+        }
+        if (algorithm == AsymAlg::secp256k1 || algorithm == AsymAlg::prime256v1 || algorithm == AsymAlg::brainpoolP256r1) {
+            return verify(algorithm, raw_pkey, message, signRS2Asn(signature));
+        }
+        PrivmxCryptoserviceAsyncKeyException("Key algorithm not compatibile with signing scheme");
+    }  else if (scheme == SigScheme::CompactWithHash) {
+        CryptoProviderFromDriver p;
+        Bytes hash = p.digest(Hash::Sha256, message);
+        return verify(algorithm, SigScheme::Compact, raw_pkey, hash, signature);
+    }
+    throw PrivmxCryptoserviceAsyncKeyException("Signing scheme not implemented");
+}
 
 /**
  * @brief Agnostic method for verifying a message signature
@@ -1337,6 +1389,127 @@ Bytes AsyncKeyUtils::GetPubKeyFromPrivKey(EVP_PKEY* ec_key, bool toCompress, boo
 	}
 
 	return pub_key_buffer;
+}
+
+Bytes AsyncKeyUtils::compressPublic(Bytes rawdata) {
+    if (rawdata.size() == 33 && (rawdata[0] == 2 || rawdata[0] == 3)) {
+        return rawdata; // public data is already in compressed form
+    }
+    if (rawdata.size() == 65 && rawdata[0] == 4) { // uncompressed form
+        rawdata[0] == 2 | (rawdata[64] & 1); // compressed form + parity bit of Y coordinate
+        rawdata.resize(33); // remove Y coordinate (only X coordinate remains)
+        return rawdata;
+    }
+    // hybrid (POINT_CONVERSION_HYBRID) or unknown format or corrupted data 
+    throw PrivmxCryptoserviceAsyncKeyException("Unknown point conversion form");    
+}
+
+/**
+ * @brief Convert signature from ASN.1 DER format to 65-bytes <27>+R+S form
+ * @param signatureANS1 
+ * @return Singnature in "legacy" 65-bytes <27> + R + S form
+ */
+Bytes AsyncKeyUtils::signAsn2rs(BytesView signatureANS1) {  
+    // const crv_ord_len = 32;            
+    const unsigned char *dgst =  reinterpret_cast<const unsigned char *>(signatureANS1.data());
+    size_t dgst_len = signatureANS1.size();
+
+    ecdsa_sig_unique_ptr sig(d2i_ECDSA_SIG(NULL, &dgst, dgst_len), ECDSA_SIG_free);
+    const ECDSA_SIG* raw_sig = sig.get();
+    if (raw_sig == NULL) {
+        throw PrivmxCryptoserviceAsyncKeyException("Decode ANS.1 signature failure");
+    }
+
+    const BIGNUM *r, *s;
+    ECDSA_SIG_get0(raw_sig, &r, &s);
+
+    Bytes result(65,0); 
+    unsigned char *rs =  reinterpret_cast<unsigned char *>(result.data());
+    result[0] = 27;
+    if (BN_bn2binpad(r, rs + 1, 32) <= 0 ||
+        BN_bn2binpad(s, rs + 1 + 32, 32) <= 0) {
+        throw PrivmxCryptoserviceAsyncKeyException("Signature conversion failure");
+    }
+
+    return result;
+}
+
+/**
+ * @brief Convert signature from 65-byte <tag>+R+S form to ASN.1 DER format
+ * @param signatureRS Signature in "raw" <tag>+R+S 65-byte format
+ * @return Signature in ASN.1 DER format (of size 70-72 bytes)
+ */
+Bytes AsyncKeyUtils::signRS2Asn(BytesView signatureRS) {  
+    if (signatureRS.size() != 65) {
+        throw PrivmxCryptoserviceAsyncKeyException("Invalid signature size");
+//        throw PrivmxCryptoserviceEccImplInvalidSignatureSizeException("verify: Invalid Signature Size");
+    }
+    if (signatureRS.front() < 27 || signatureRS.front() > 42) {
+        throw PrivmxCryptoserviceAsyncKeyException("Invalid signature header");
+        // throw PrivmxCryptoserviceEccImplInvalidSignatureHeaderException("verify: Invalid Signature Header");
+    }
+    const unsigned char* sign = reinterpret_cast<const unsigned char*>(signatureRS.data());
+    ecdsa_sig_unique_ptr sig(ECDSA_SIG_new(), ECDSA_SIG_free);
+    ECDSA_SIG* raw_sig = sig.get();
+    if (raw_sig == NULL) {
+        throw PrivmxCryptoserviceAsyncKeyException("initialize ECDSA_SIG signature failure");
+    }
+    bignum_unique_ptr r (BN_new(), BN_free);
+    bignum_unique_ptr s (BN_new(), BN_free);
+    BIGNUM* raw_r = r.get();
+    BIGNUM* raw_s = s.get();
+    if (raw_r == NULL || raw_s == NULL) {
+        throw PrivmxCryptoserviceAsyncKeyException("Creating bignum failure");
+    }
+    if (BN_bin2bn(&sign[1], 32, raw_r) == NULL) {
+        throw PrivmxCryptoserviceAsyncKeyException("Signature part R conversion failure");
+    }
+    if (BN_bin2bn(&sign[33], 32, raw_s) == NULL) {
+        throw PrivmxCryptoserviceAsyncKeyException("Signature part S conversion failure");
+    }
+    if (ECDSA_SIG_set0(raw_sig, raw_r, raw_s) == 0) {
+        throw PrivmxCryptoserviceAsyncKeyException("ECDSA_SIG_set0 failure");
+    }
+    // Release r and s, cause calling ECDSA_SIG_set0() transfers
+    // the memory management of the values to the ECDSA_SIG object
+    r.release();
+    s.release();
+
+    Bytes result(72,0);
+    unsigned char *asn1 =  reinterpret_cast<unsigned char *>(result.data());
+
+    size_t sig_len = i2d_ECDSA_SIG(raw_sig, &asn1);
+    if (sig_len == 0) {
+        throw PrivmxCryptoserviceAsyncKeyException("i2d_ECDSA_SIG failure");
+    }
+    if (sig_len > 72) {
+        throw PrivmxCryptoserviceAsyncKeyException("Invalid signature size");
+    }
+
+    result.resize(sig_len);
+
+    return result;
+}
+
+/**
+ * @brief Convert signature from raw ED25519 64 bytes to 65-bytes borm
+ * @param sign64 64 bytes raw ED25519 signature
+ * @return 65 bytes singnature encapsuled with 1-bit tag
+ */
+Bytes AsyncKeyUtils::sign64to65(BytesView sign64) {  
+    Bytes result(1,27);
+    result.reserve(65);
+    result.insert(result.end(), sign64.begin(), sign64.end());
+    return result;
+}
+
+/**
+ * @brief Convert encapsuled 65-bit ED25519 signature to raw 64-byte ED25519 signature
+ * @param sign64 65-byte encapsuled ED25519 signature
+ * @return raw 64-byte ED25519 signature
+ */
+Bytes AsyncKeyUtils::sign65to64(BytesView sign65) {  
+    return Bytes(sign65.begin()+1, sign65.end());
 }
 
 // } // ecc

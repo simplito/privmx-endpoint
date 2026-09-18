@@ -74,8 +74,9 @@ enum class KeyFormat {
  * @brief Signing schemes (Todo: shorten label names)
  */
 enum class SigScheme { 
-    EcdsaSecp256k1Compact, 
-    EcdsaSecp256k1CompactWithHash 
+    Default,                // 70-72 bytes ASN.1 DER for all "EC", raw 64-bytes for ED25519, 3309 bytes ML-DSA-65
+    Compact,  // raw 65 bytes: 1 byte tag + 32 bytes "R" + 32 bytes "S"
+    CompactWithHash 
 };
 
 /**

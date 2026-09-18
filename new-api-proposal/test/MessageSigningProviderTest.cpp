@@ -68,38 +68,38 @@ TEST(PrivateKeyTest, SigningVerifyingProviderTests) {
     std::shared_ptr<IPublicKey> publ3 = priv3->publicKey();
     std::shared_ptr<IPublicKey> publ4 = priv4->publicKey();
 
-    Bytes sign1(priv1->sign(data,SigScheme::EcdsaSecp256k1Compact));
-    Bytes sign2(priv2->sign(data,SigScheme::EcdsaSecp256k1Compact));
-    Bytes sign3(priv3->sign(data,SigScheme::EcdsaSecp256k1Compact));
-    Bytes sign4(priv4->sign(data,SigScheme::EcdsaSecp256k1Compact));
+    Bytes sign1(priv1->sign(data,SigScheme::Compact));
+    Bytes sign2(priv2->sign(data,SigScheme::Compact));
+    Bytes sign3(priv3->sign(data,SigScheme::Compact));
+    Bytes sign4(priv4->sign(data,SigScheme::Compact));
 
-    Bytes sign1wh(priv1->sign(data,SigScheme::EcdsaSecp256k1CompactWithHash));
-    Bytes sign2wh(priv2->sign(data,SigScheme::EcdsaSecp256k1CompactWithHash));
-    Bytes sign3wh(priv3->sign(data,SigScheme::EcdsaSecp256k1CompactWithHash));
-    Bytes sign4wh(priv4->sign(data,SigScheme::EcdsaSecp256k1CompactWithHash));
+    Bytes sign1wh(priv1->sign(data,SigScheme::CompactWithHash));
+    Bytes sign2wh(priv2->sign(data,SigScheme::CompactWithHash));
+    Bytes sign3wh(priv3->sign(data,SigScheme::CompactWithHash));
+    Bytes sign4wh(priv4->sign(data,SigScheme::CompactWithHash));
      
-    // EXPECT_TRUE(publ1->verify(data, Utils::s2b(((const PrivateKey&) (*priv1)).signToCompactSignature(messageToSign)), SigScheme::EcdsaSecp256k1Compact));
-    // EXPECT_TRUE(publ2->verify(data, Utils::s2b(((const PrivateKey&) (*priv2)).signToCompactSignature(messageToSign)), SigScheme::EcdsaSecp256k1Compact));
+    // EXPECT_TRUE(publ1->verify(data, Utils::s2b(((const PrivateKey&) (*priv1)).signToCompactSignature(messageToSign)), SigScheme::Compact));
+    // EXPECT_TRUE(publ2->verify(data, Utils::s2b(((const PrivateKey&) (*priv2)).signToCompactSignature(messageToSign)), SigScheme::Compact));
 
-    EXPECT_TRUE(publ1->verify(data, sign1, SigScheme::EcdsaSecp256k1Compact));
-    EXPECT_TRUE(publ2->verify(data, sign2, SigScheme::EcdsaSecp256k1Compact));
-    EXPECT_TRUE(publ3->verify(data, sign3, SigScheme::EcdsaSecp256k1Compact));
-    EXPECT_TRUE(publ4->verify(data, sign4, SigScheme::EcdsaSecp256k1Compact));
+    EXPECT_TRUE(publ1->verify(data, sign1, SigScheme::Compact));
+    EXPECT_TRUE(publ2->verify(data, sign2, SigScheme::Compact));
+    EXPECT_TRUE(publ3->verify(data, sign3, SigScheme::Compact));
+    EXPECT_TRUE(publ4->verify(data, sign4, SigScheme::Compact));
     
-    EXPECT_TRUE(publ1->verify(data, sign1wh, SigScheme::EcdsaSecp256k1CompactWithHash));
-    EXPECT_TRUE(publ2->verify(data, sign2wh, SigScheme::EcdsaSecp256k1CompactWithHash));
-    EXPECT_TRUE(publ3->verify(data, sign3wh, SigScheme::EcdsaSecp256k1CompactWithHash));
-    EXPECT_TRUE(publ4->verify(data, sign4wh, SigScheme::EcdsaSecp256k1CompactWithHash));    
+    EXPECT_TRUE(publ1->verify(data, sign1wh, SigScheme::CompactWithHash));
+    EXPECT_TRUE(publ2->verify(data, sign2wh, SigScheme::CompactWithHash));
+    EXPECT_TRUE(publ3->verify(data, sign3wh, SigScheme::CompactWithHash));
+    EXPECT_TRUE(publ4->verify(data, sign4wh, SigScheme::CompactWithHash));    
 
-    EXPECT_FALSE(publ1->verify(data, sign2, SigScheme::EcdsaSecp256k1Compact));
-    EXPECT_FALSE(publ2->verify(data, sign1, SigScheme::EcdsaSecp256k1Compact));
-    EXPECT_FALSE(publ3->verify(data, sign4, SigScheme::EcdsaSecp256k1Compact));
-    EXPECT_FALSE(publ4->verify(data, sign3, SigScheme::EcdsaSecp256k1Compact));
+    EXPECT_FALSE(publ1->verify(data, sign2, SigScheme::Compact));
+    EXPECT_FALSE(publ2->verify(data, sign1, SigScheme::Compact));
+    EXPECT_FALSE(publ3->verify(data, sign4, SigScheme::Compact));
+    EXPECT_FALSE(publ4->verify(data, sign3, SigScheme::Compact));
     
-    EXPECT_FALSE(publ1->verify(data, sign2wh, SigScheme::EcdsaSecp256k1CompactWithHash));
-    EXPECT_FALSE(publ2->verify(data, sign1wh, SigScheme::EcdsaSecp256k1CompactWithHash));
-    EXPECT_FALSE(publ3->verify(data, sign4wh, SigScheme::EcdsaSecp256k1CompactWithHash));
-    EXPECT_FALSE(publ4->verify(data, sign3wh, SigScheme::EcdsaSecp256k1CompactWithHash));    
+    EXPECT_FALSE(publ1->verify(data, sign2wh, SigScheme::CompactWithHash));
+    EXPECT_FALSE(publ2->verify(data, sign1wh, SigScheme::CompactWithHash));
+    EXPECT_FALSE(publ3->verify(data, sign4wh, SigScheme::CompactWithHash));
+    EXPECT_FALSE(publ4->verify(data, sign3wh, SigScheme::CompactWithHash));    
 }
 
 } // namespace ecc

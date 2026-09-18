@@ -117,10 +117,10 @@ bool PublicKey::verifyCompactSignatureWithHash(BytesView message, BytesView sign
 
 bool PublicKey::verify(BytesView data, BytesView signature, SigScheme scheme) const {
     switch (scheme) {
-    case SigScheme::EcdsaSecp256k1Compact:
+    case SigScheme::Compact:
         // return verifyCompactSignature(Utils::b2s(data), Utils::b2s(signature));
         return verifyCompactSignature(data, signature);
-    case SigScheme::EcdsaSecp256k1CompactWithHash:
+    case SigScheme::CompactWithHash:
         // return verifyCompactSignatureWithHash(Utils::b2s(data), Utils::b2s(signature));
         return verifyCompactSignatureWithHash(data, signature);
     default:
