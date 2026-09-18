@@ -5,6 +5,7 @@
 #include "privmx/endpoint/core/cinterface/core.h"
 #include "privmx/endpoint/thread/cinterface/thread.h"
 #include "privmx/endpoint/store/cinterface/store.h"
+#include "privmx/endpoint/group/cinterface/group.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,7 +13,7 @@ extern "C" {
 
 typedef struct InboxApi InboxApi;
 
-int privmx_endpoint_newInboxApi(Connection* connectionPtr, ThreadApi* threadApi, StoreApi* storeApi, InboxApi** outPtr);
+int privmx_endpoint_newInboxApi(Connection* connectionPtr, ThreadApi* threadApi, StoreApi* storeApi, GroupApi* groupApi, InboxApi** outPtr);
 int privmx_endpoint_freeInboxApi(InboxApi* ptr);
 int privmx_endpoint_execInboxApi(InboxApi* ptr, int method, const pson_value* args, pson_value** res);
 
