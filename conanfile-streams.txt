@@ -43,6 +43,7 @@ poco*:enable_apacheconnector=False
 poco*:enable_data_postgresql=False
 poco*:enable_activerecord_compiler=False
 poco*:enable_pagecompiler_file2page=False
+sqlite3*:enable_fts5=True
 
 [generators]
 CMakeDeps
