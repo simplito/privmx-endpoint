@@ -21,6 +21,6 @@ cmake .. -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=$GENERATORS_DIR/conan_toolch
        -DPRIVMX_ENABLE_TESTS_E2E=ON \
        -DPRIVMX_BUILD_ENDPOINT_ENDPOINT=ON \
        -DPRIVMX_BUILD_WITH_WEBRTC=ON
-cmake --build . -- -j20
+cmake --build . --parallel "$(nproc)"
 source $GENERATORS_DIR/deactivate_conanbuild.sh
 source $GENERATORS_DIR/conanrun.sh
