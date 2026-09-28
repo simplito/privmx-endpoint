@@ -17,8 +17,7 @@ limitations under the License.
 #include <mutex>
 #include <shared_mutex>
 #include <functional>
-#include <iostream>
-
+#include <algorithm>
 
 namespace privmx {
 namespace utils {
@@ -114,3 +113,4 @@ inline size_t ThreadSaveMap<KEY, VALUE>::size() {
 } // privmx
 
 #endif // _PRIVMXLIB_UTILS_THREAD_SAVE_MAP_HPP_
+
