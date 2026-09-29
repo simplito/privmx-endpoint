@@ -13,6 +13,7 @@ limitations under the License.
 #include <Poco/JSON/Array.h>
 #include <Pson/BinaryString.hpp>
 #include <functional>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -23,6 +24,7 @@ limitations under the License.
 #include <privmx/endpoint/core/cinterface/CApiExecutor.hpp>
 #include <privmx/endpoint/core/cinterface/InterfaceException.hpp>
 #include <privmx/endpoint/core/varinterface/ConnectionVarInterface.hpp>
+#include <privmx/endpoint/group/varinterface/GroupApiVarInterface.hpp>
 #include <privmx/endpoint/store/varinterface/StoreApiVarInterface.hpp>
 #include <privmx/endpoint/thread/varinterface/ThreadApiVarInterface.hpp>
 
@@ -33,14 +35,17 @@ int privmx_endpoint_newInboxApi(
     Connection* connectionPtr,
     ThreadApi* threadApiPtr,
     StoreApi* storeApiPtr,
+    GroupApi* groupApiPtr,
     InboxApi** outPtr
 ) {
     core::ConnectionVarInterface* _connectionPtr = (core::ConnectionVarInterface*)connectionPtr;
     thread::ThreadApiVarInterface* _threadApiPtr = (thread::ThreadApiVarInterface*)threadApiPtr;
     store::StoreApiVarInterface* _storeApiPtr = (store::StoreApiVarInterface*)storeApiPtr;
+    group::GroupApiVarInterface* _groupApiPtr = (group::GroupApiVarInterface*)groupApiPtr;
     inbox::InboxApiVarInterface* ptr = new inbox::InboxApiVarInterface(
         _connectionPtr->getApi(), _threadApiPtr->getApi(), _storeApiPtr->getApi(),
-        core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::PSON_BINARYSTRING}
+        core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::PSON_BINARYSTRING},
+        _groupApiPtr ? std::make_optional(_groupApiPtr->getApi()) : std::nullopt
     );
     *outPtr = (InboxApi*)ptr;
     return 1;
