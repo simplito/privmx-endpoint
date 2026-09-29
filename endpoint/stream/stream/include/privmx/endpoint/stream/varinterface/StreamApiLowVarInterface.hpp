@@ -53,12 +53,12 @@ public:
         UpdateSubscriberStream = 17,
         RemoveSubscriberStream = 18,
         Trickle = 19,
-        KeyManagement = 20,
-        UpdateStream = 21,
-        JoinStreamRoomEx = 22,
-        ListStreamRoomParticipants = 23,
-        EncryptDataChannelMessage = 24,
-        DecryptDataChannelMessage = 25,
+        UpdateStream = 20,
+        JoinStreamRoomEx = 21,
+        ListStreamRoomParticipants = 22,
+        EncryptDataChannelMessage = 23,
+        DecryptDataChannelMessage = 24,
+        SetNewOfferOnReconfigure = 25,
         RotateStreamRoomKeys = 26,
     };
 

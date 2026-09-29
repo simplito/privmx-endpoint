@@ -50,7 +50,9 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
         {ListStreamRoomParticipants, &StreamApiLowVarInterface::listStreamRoomParticipants},
 
         {EncryptDataChannelMessage, &StreamApiLowVarInterface::encryptDataChannelMessage},
-        {DecryptDataChannelMessage, &StreamApiLowVarInterface::decryptDataChannelMessage}
+        {DecryptDataChannelMessage, &StreamApiLowVarInterface::decryptDataChannelMessage},
+
+        {SetNewOfferOnReconfigure, &StreamApiLowVarInterface::setNewOfferOnReconfigure}
 };
 Poco::Dynamic::Var StreamApiLowVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
