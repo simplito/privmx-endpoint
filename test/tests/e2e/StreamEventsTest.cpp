@@ -1,7 +1,6 @@
 #include <chrono>
 #include <string>
 #include <thread>
-#include <vector>
 #include <gtest/gtest.h>
 #include "BaseEndpointEventTest.hpp"
 #include <privmx/endpoint/core/Types.hpp>
