@@ -88,7 +88,7 @@ std::string problemName(LadderProblemKind problem) {
     }
 }
 
-/** Every rung published across epochs `floor+1 .. upTo` — a client's local archive. */
+// Every rung published across epochs `floor+1 .. upTo` — a client's local archive.
 std::vector<RungSpan> spansThrough(std::uint32_t upTo, std::uint32_t floor) {
     std::vector<RungSpan> all;
     for (std::uint32_t epoch = floor + 1; epoch <= upTo; ++epoch) {

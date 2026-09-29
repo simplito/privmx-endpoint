@@ -9,7 +9,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/** Unit tests for the Epoch Ladder with real EC keys and real ECIES; no server, no docker, no network, and no crypto stubs, since the properties under test are cryptographic — that a member holding only a recent epoch key can reach older ones, that a removed member cannot walk forward, and that a substituted rung is detected rather than silently yielding a wrong key — and tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses. */
+/**
+ * The Epoch Ladder, with real EC keys and real ECIES.
+ *
+ * No server, no docker, no network, and no crypto stubs, since the properties under test are cryptographic:
+ * that a member holding only a recent epoch key can reach older ones, that a removed member cannot walk
+ * forward, and that a substituted rung is detected rather than silently yielding a wrong key.
+ *
+ * Tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses.
+ */
 
 #include <gtest/gtest.h>
 
@@ -29,9 +37,9 @@ class LadderKeysTestBase : public testing::Test {
 protected:
     static constexpr char AUTHOR[] = "alice";
 
-    /** A group's epoch history: one grant keypair per epoch, all independently random. */
+    // A group's epoch history: one grant keypair per epoch, all independently random.
     struct EpochHistory {
-        std::vector<PrivateKey> keys; ///< index i holds the key for epoch i+1
+        std::vector<PrivateKey> keys; // index i holds the key for epoch i+1
         std::vector<EpochRegistryEntry> registry;
         std::vector<ArchiveRung> rungs;
     };
@@ -83,7 +91,7 @@ TEST_F(LadderKeysBuild, EmitsNothingAtTheEraFloor) {
     EXPECT_TRUE(ladder.buildRungs(20, key.getPublicKey(), std::nullopt, 20, AUTHOR, key).empty());
 }
 
-/** SECURITY — a missing unit rung would be an unrepairable hole, so it must fail loudly. */
+// SECURITY — a missing unit rung would be an unrepairable hole, so it must fail loudly.
 TEST_F(LadderKeysBuild, SECURITY_RefusesToBuildWithoutThePreviousEpochKey) {
     TreeKeyCache store;
     LadderKeys ladder(store);
@@ -135,7 +143,7 @@ TEST_F(LadderKeysBuild, EmitsTheUnitRungAloneOnlyWhenAskedTo) {
     const PrivateKey previous = PrivateKey::generateRandom();
     const PrivateKey current = PrivateKey::generateRandom();
     const std::vector<ArchiveRung> rungs =
-        ladder.buildRungs(8, current.getPublicKey(), previous, 1, AUTHOR, current, /*includeSkipRungs*/ false);
+        ladder.buildRungs(8, current.getPublicKey(), previous, 1, AUTHOR, current, false);
     ASSERT_EQ(rungs.size(), 1u);
     EXPECT_EQ(rungs[0].span.target, 7u);
 }
@@ -232,7 +240,7 @@ TEST_F(LadderKeysGather, SkipsTargetsAlreadyInTheCache) {
 // A ladder with no skip rungs is still walkable one rung at a time. The gather pays that cost once, so the set
 // it then publishes restores the fast path.
 TEST_F(LadderKeysGather, WalksALinearLadderRatherThanGivingUpOnIt) {
-    const EpochHistory history = simulateEpochHistory(63, 1, /*withSkips*/ false);
+    const EpochHistory history = simulateEpochHistory(63, 1, false);
 
     TreeKeyCache cold;
     LadderKeys ladder(cold);
@@ -278,7 +286,7 @@ TEST_F(LadderKeysGather, ReportsNoStartingKeyAsSuch) {
     EXPECT_EQ(gathered.missingTargets, std::vector<std::uint32_t>({6, 4}));
 }
 
-/** SECURITY — the gather verifies at every hop, exactly as a reader's descent does, and names the publisher. */
+// SECURITY — the gather verifies at every hop, exactly as a reader's descent does, and names the publisher.
 TEST_F(LadderKeysGather, SECURITY_DetectsASubstitutedRungAndRefusesToCacheIt) {
     const EpochHistory history = simulateEpochHistory(7, 1);
     const PrivateKey attacker = PrivateKey::generateRandom();
@@ -503,7 +511,8 @@ TEST_F(LadderKeysDescend, SECURITY_IgnoresAnUpwardRung) {
     EXPECT_FALSE(store.getGrantKey(9).has_value()) << "an upward rung must never be traversed";
 }
 
-/** SECURITY — the ladder must not let a removed member walk forward: a member removed after epoch 5 holds epochs 1..5, and every rung published at 6 and above is wrapped to a grant key they never received, so none of them opens. */
+// SECURITY — the ladder must not let a removed member walk forward: a member removed after epoch 5 holds epochs
+// 1..5, and every rung published at 6 and above is wrapped to a grant key they never received, so none opens.
 TEST_F(LadderKeysDescend, SECURITY_RemovedMemberCannotWalkForward) {
     const EpochHistory history = simulateEpochHistory(10, 1);
     const std::uint32_t removedAfter = 5;
@@ -528,7 +537,7 @@ TEST_F(LadderKeysDescend, SECURITY_RemovedMemberCannotWalkForward) {
     EXPECT_EQ(result.failure, DescentFailure::NotEntitled);
 }
 
-/** The payoff: a member who joins late reads old content with zero ciphertexts created for them. */
+// The payoff: a member who joins late reads old content with zero ciphertexts created for them.
 TEST_F(LadderKeysDescend, ANewcomerReachesOldEpochsWithNothingWrappedToThem) {
     const EpochHistory history = simulateEpochHistory(12, 1);
 
@@ -674,7 +683,7 @@ TEST_F(LadderKeysRegistry, LooksUpAnEpochsPublicKey) {
     EXPECT_FALSE(LadderKeys::publicKeyOfEpoch(99, history.registry).has_value());
 }
 
-/** SECURITY — a key for an epoch absent from the registry cannot be vouched for, so it must be refused. */
+// SECURITY — a key for an epoch absent from the registry cannot be vouched for, so it must be refused.
 TEST_F(LadderKeysRegistry, SECURITY_RefusesAKeyForAnUnknownEpoch) {
     EpochHistory history = simulateEpochHistory(8, 1);
     // Drop epoch 7 from the registry, leaving the rung 8->7 unverifiable.

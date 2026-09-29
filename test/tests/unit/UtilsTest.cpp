@@ -57,13 +57,8 @@ TEST_F(UtilsTest, Utils) {
     privmx::endpoint::core::Utils::rtrim(test);
     EXPECT_EQ("test", test);
 }
-/**
- * `BinaryBufferBE`'s one-octet-length framing, on buffers it did not produce.
- *
- * Both directions used to fail silently on the two inputs below: a read past the end left the length octet
- * uninitialized and short-read the payload without complaint, and a write of 256 bytes truncated the length
- * to zero. Either one turns a malformed buffer into a well-formed buffer holding something else.
- */
+// `BinaryBufferBE`'s one-octet framing on buffers it did not produce. Both directions once failed silently: a
+// read past the end left the length octet uninitialized, and a write of 256 bytes truncated the length to zero.
 TEST_F(UtilsTest, BinaryBufferBEOneOctetFramingRejectsMalformed) {
     std::string value;
 

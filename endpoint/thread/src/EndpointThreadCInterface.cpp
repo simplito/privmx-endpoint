@@ -13,6 +13,7 @@ limitations under the License.
 #include <Poco/JSON/Array.h>
 #include <Pson/BinaryString.hpp>
 #include <functional>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -23,15 +24,18 @@ limitations under the License.
 #include <privmx/endpoint/core/cinterface/CApiExecutor.hpp>
 #include <privmx/endpoint/core/cinterface/InterfaceException.hpp>
 #include <privmx/endpoint/core/varinterface/ConnectionVarInterface.hpp>
+#include <privmx/endpoint/group/varinterface/GroupApiVarInterface.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::cinterface;
 
-int privmx_endpoint_newThreadApi(Connection* connectionPtr, ThreadApi** outPtr) {
+int privmx_endpoint_newThreadApi(Connection* connectionPtr, GroupApi* groupApiPtr, ThreadApi** outPtr) {
     core::ConnectionVarInterface* _connectionPtr = (core::ConnectionVarInterface*)connectionPtr;
+    group::GroupApiVarInterface* _groupApiPtr = (group::GroupApiVarInterface*)groupApiPtr;
     thread::ThreadApiVarInterface* ptr = new thread::ThreadApiVarInterface(
         _connectionPtr->getApi(),
-        core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::PSON_BINARYSTRING}
+        core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::PSON_BINARYSTRING},
+        _groupApiPtr ? std::make_optional(_groupApiPtr->getApi()) : std::nullopt
     );
     *outPtr = (ThreadApi*)ptr;
     return 1;

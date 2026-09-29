@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <algorithm>
-#include "../../utils/BaseTest.hpp"
+#include "BaseGroupTest.hpp"
 #include "privmx/utils/Logger.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
@@ -16,93 +16,13 @@
 #include <privmx/endpoint/core/CoreException.hpp>
 using namespace privmx::endpoint;
 
-enum KUGConnectionType {
-    KUGUser1,
-    KUGUser2,
-    KUGUser3
-};
-
-class KvdbUsingGroupsTest : public privmx::test::BaseTest {
+class KvdbUsingGroupsTest : public privmx::test::BaseGroupTest {
 protected:
-    KvdbUsingGroupsTest() : BaseTest(privmx::test::BaseTestMode::online) {}
-    void connectAs(KUGConnectionType type) {
-        std::string privKey;
-        if (type == KUGConnectionType::KUGUser1) {
-            privKey = reader->getString("Login.user_1_privKey");
-        } else if (type == KUGConnectionType::KUGUser2) {
-            privKey = reader->getString("Login.user_2_privKey");
-        } else {
-            privKey = reader->getString("Login.user_3_privKey");
-        }
-        connection = std::make_shared<core::Connection>(
-            core::Connection::connect(
-                privKey,
-                reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
-        groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
+    void setUpModuleApis() override {
         kvdbApi = std::make_shared<kvdb::KvdbApi>(kvdb::KvdbApi::create(*connection, *groupApi));
     }
-    void disconnect() {
-        connection->disconnect();
-        connection.reset();
+    void tearDownModuleApis() override {
         kvdbApi.reset();
-        groupApi.reset();
-    }
-    // One of the fixture's logins as a container names its members - id plus public key, from the same ini.
-    core::UserWithPubKey userOf(KUGConnectionType type) {
-        std::string n;
-        if (type == KUGConnectionType::KUGUser1) {
-            n = "1";
-        } else if (type == KUGConnectionType::KUGUser2) {
-            n = "2";
-        } else {
-            n = "3";
-        }
-        return core::UserWithPubKey{
-            .userId = reader->getString("Login.user_" + n + "_id"),
-            .pubKey = reader->getString("Login.user_" + n + "_pubKey")
-        };
-    }
-    void customSetUp() override {
-        reader = new Poco::Util::IniFileConfiguration(INI_FILE_PATH);
-        connection = std::make_shared<core::Connection>(
-            core::Connection::connect(
-                reader->getString("Login.user_1_privKey"),
-                reader->getString("Login.solutionId"),
-                getPlatformUrl(reader->getString("Login.instanceUrl"))
-            )
-        );
-        groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
-        kvdbApi = std::make_shared<kvdb::KvdbApi>(kvdb::KvdbApi::create(*connection, *groupApi));
-    }
-    void customTearDown() override {
-        connection.reset();
-        kvdbApi.reset();
-        groupApi.reset();
-        reader.reset();
-        core::EventQueueImpl::getInstance()->clear();
-    }
-    std::string createKvdbWithGroup(
-        const std::string& contextId,
-        const std::string& userId,
-        const std::string& userPubKey,
-        const group::Group& group
-    ) {
-        return kvdbApi->createKvdb(
-            contextId,
-            std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
-            std::vector<core::UserWithPubKey>{{.userId = userId, .pubKey = userPubKey}},
-            core::Buffer::from("group_kvdb_public"),
-            core::Buffer::from("group_kvdb_private"),
-            core::ContainerPolicy(),
-            std::vector<core::GroupGrantWithKey>{{
-                .groupId = group.groupId,
-                .role = "user",
-                .groupPubKey = group.groupPubKey
-            }}
-        );
     }
     // A KVDB whose direct members are `users` (as both users and managers) and whose grantee groups are
     // `groups`. Leaving `groupEpoch` at 0 makes the endpoint resolve each group's current epoch from the Bridge.
@@ -170,63 +90,53 @@ protected:
         );
     }
 
-    std::shared_ptr<core::Connection> connection;
     std::shared_ptr<kvdb::KvdbApi> kvdbApi;
-    std::shared_ptr<group::GroupApi> groupApi;
-    Poco::Util::IniFileConfiguration::Ptr reader;
-    core::VarSerializer _serializer = core::VarSerializer({});
 };
 
 TEST_F(KvdbUsingGroupsTest, createKvdb_with_group_grants) {
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-    ASSERT_FALSE(group_1.groupPubKey.empty());
-
-    std::string kvdbId;
-
-    EXPECT_NO_THROW({
-        kvdbId = kvdbApi->createKvdb(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            core::Buffer::from("public_meta"),
-            core::Buffer::from("private_meta"),
-            std::nullopt,
-            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
-                .groupId = group_1.groupId,
-                .role = "user",
-                .groupPubKey = group_1.groupPubKey
-            }}
-        );
-    });
-    ASSERT_FALSE(kvdbId.empty());
-
-    kvdb::Kvdb k;
-
-    EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(k.statusCode, 0);
-    EXPECT_EQ(k.publicMeta.stdString(), "public_meta");
-    EXPECT_EQ(k.groups.size(), 1);
-    if (k.groups.size() == 1) {
-        EXPECT_EQ(k.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(k.groups[0].role, "user");
-    }
-}
-
-TEST_F(KvdbUsingGroupsTest, createKvdb_with_multiple_group_grants) {
     group::Group group_1, group_2;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
     ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_FALSE(group_1.groupPubKey.empty());
 
+    // no grants
     std::string kvdbId;
+    kvdb::Kvdb k;
+    EXPECT_NO_THROW({
+        kvdbId = createKvdbWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<group::Group>{}
+        );
+    });
+    ASSERT_FALSE(kvdbId.empty());
+    EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
+    EXPECT_EQ(k.statusCode, 0);
+    EXPECT_EQ(k.groups.size(), 0);
+
+    // one grant
+    EXPECT_NO_THROW({
+        kvdbId = createKvdbWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<group::Group>{group_1}
+        );
+    });
+    ASSERT_FALSE(kvdbId.empty());
+    EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
+    EXPECT_EQ(k.statusCode, 0);
+    ASSERT_EQ(k.groups.size(), 1);
+    EXPECT_EQ(k.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(k.groups[0].role, "user");
+
+    // two grants, each carrying its own role
     EXPECT_NO_THROW({
         kvdbId = kvdbApi->createKvdb(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("two_groups_public"),
             core::Buffer::from("two_groups_private"),
             std::nullopt,
@@ -241,8 +151,6 @@ TEST_F(KvdbUsingGroupsTest, createKvdb_with_multiple_group_grants) {
         );
     });
     ASSERT_FALSE(kvdbId.empty());
-
-    kvdb::Kvdb k;
     EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
     EXPECT_EQ(k.statusCode, 0);
     EXPECT_EQ(k.groups.size(), 2);
@@ -253,53 +161,50 @@ TEST_F(KvdbUsingGroupsTest, createKvdb_with_multiple_group_grants) {
     }
     EXPECT_TRUE(found1);
     EXPECT_TRUE(found2);
+
+    // a grant whose public key is not a key
+    EXPECT_THROW({
+        kvdbApi->createKvdb(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
+                .groupId = reader->getString("Group_1.groupId"),
+                .role = "user",
+                .groupPubKey = "not_a_valid_base58der_pubkey"
+            }}
+        );
+    }, core::Exception);
 }
 
-TEST_F(KvdbUsingGroupsTest, createKvdb_without_groups_has_empty_groups_field) {
-    std::string kvdbId;
-    EXPECT_NO_THROW({
-        kvdbId = kvdbApi->createKvdb(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            core::Buffer::from("no_groups_public"),
-            core::Buffer::from("no_groups_private")
-        );
-    });
-    ASSERT_FALSE(kvdbId.empty());
-
-    kvdb::Kvdb k;
-    EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(k.statusCode, 0);
-    EXPECT_EQ(k.groups.size(), 0);
-}
-
-TEST_F(KvdbUsingGroupsTest, updateKvdb_add_group) {
-    std::string kvdbId;
-    EXPECT_NO_THROW({
-        kvdbId = kvdbApi->createKvdb(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            core::Buffer::from("before_group"),
-            core::Buffer::from("before_group_private")
-        );
-    });
-    ASSERT_FALSE(kvdbId.empty());
-
-    kvdb::Kvdb k;
-    EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(k.groups.size(), 0);
-
+TEST_F(KvdbUsingGroupsTest, updateKvdb_add_and_promote_group) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_EQ(group_1.statusCode, 0);
 
+    // a kvdb that starts with no grantee group
+    std::string kvdbId;
+    EXPECT_NO_THROW({
+        kvdbId = createKvdbWithGroups(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<group::Group>{}
+        );
+    });
+    ASSERT_FALSE(kvdbId.empty());
+    kvdb::Kvdb k;
+    EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
+    EXPECT_EQ(k.groups.size(), 0);
+
+    // add one
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
             kvdbId,
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("after_group"),
             core::Buffer::from("after_group_private"),
             1,
@@ -311,16 +216,35 @@ TEST_F(KvdbUsingGroupsTest, updateKvdb_add_group) {
             }}
         );
     });
-
     kvdb::Kvdb updated;
     EXPECT_NO_THROW({ updated = kvdbApi->getKvdb(kvdbId); });
     EXPECT_EQ(updated.statusCode, 0);
     EXPECT_EQ(updated.publicMeta.stdString(), "after_group");
-    EXPECT_EQ(updated.groups.size(), 1);
-    if (updated.groups.size() == 1) {
-        EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(updated.groups[0].role, "user");
-    }
+    ASSERT_EQ(updated.groups.size(), 1);
+    EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(updated.groups[0].role, "user");
+
+    // promote it from "user" to "manager"
+    EXPECT_NO_THROW({
+        kvdbApi->updateKvdb(
+            kvdbId,
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("role_change"),
+            core::Buffer::from("role_change_private"),
+            updated.version,
+            false,
+            false,
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
+                .groupId = group_1.groupId, .role = "manager", .groupPubKey = group_1.groupPubKey
+            }}
+        );
+    });
+    EXPECT_NO_THROW({ updated = kvdbApi->getKvdb(kvdbId); });
+    ASSERT_EQ(updated.groups.size(), 1);
+    EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
+    EXPECT_EQ(updated.groups[0].role, "manager");
 }
 
 TEST_F(KvdbUsingGroupsTest, updateKvdb_remove_group) {
@@ -337,8 +261,8 @@ TEST_F(KvdbUsingGroupsTest, updateKvdb_remove_group) {
     EXPECT_NO_THROW({
         kvdbId = kvdbApi->createKvdb(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("with_group"),
             core::Buffer::from("with_group_private"),
             policy,
@@ -350,19 +274,19 @@ TEST_F(KvdbUsingGroupsTest, updateKvdb_remove_group) {
     ASSERT_FALSE(kvdbId.empty());
 
     disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
+    connectAs(2);
     kvdb::Kvdb beforeRemoval;
     EXPECT_NO_THROW({ beforeRemoval = kvdbApi->getKvdb(kvdbId); });
     EXPECT_EQ(beforeRemoval.statusCode, 0);
     EXPECT_FALSE(beforeRemoval.privateMeta.stdString().empty());
 
     disconnect();
-    connectAs(KUGConnectionType::KUGUser1);
+    connectAs(1);
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
             kvdbId,
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("no_group_now"),
             core::Buffer::from("no_group_private"),
             1,
@@ -379,52 +303,11 @@ TEST_F(KvdbUsingGroupsTest, updateKvdb_remove_group) {
     EXPECT_EQ(updated.groups.size(), 0);
 
     disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
+    connectAs(2);
     kvdb::Kvdb afterRemoval;
     EXPECT_NO_THROW({ afterRemoval = kvdbApi->getKvdb(kvdbId); });
     EXPECT_NE(afterRemoval.statusCode, 0);
     EXPECT_TRUE(afterRemoval.privateMeta.stdString().empty());
-}
-
-TEST_F(KvdbUsingGroupsTest, updateKvdb_change_group_role) {
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-
-    std::string kvdbId;
-    ASSERT_NO_THROW({
-        kvdbId = createKvdbWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<group::Group>{group_1}
-        );
-    });
-    ASSERT_FALSE(kvdbId.empty());
-
-    EXPECT_NO_THROW({
-        kvdbApi->updateKvdb(
-            kvdbId,
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            core::Buffer::from("role_change"),
-            core::Buffer::from("role_change_private"),
-            1,
-            false,
-            false,
-            std::nullopt,
-            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
-                .groupId = group_1.groupId, .role = "manager", .groupPubKey = group_1.groupPubKey
-            }}
-        );
-    });
-
-    kvdb::Kvdb updated;
-    EXPECT_NO_THROW({ updated = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(updated.groups.size(), 1);
-    if (updated.groups.size() == 1) {
-        EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
-        EXPECT_EQ(updated.groups[0].role, "manager");
-    }
 }
 
 TEST_F(KvdbUsingGroupsTest, listKvdbs_includes_groups_field) {
@@ -436,7 +319,7 @@ TEST_F(KvdbUsingGroupsTest, listKvdbs_includes_groups_field) {
     ASSERT_NO_THROW({
         kvdbId = createKvdbWithGroups(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             std::vector<group::Group>{group_1}
         );
     });
@@ -465,117 +348,47 @@ TEST_F(KvdbUsingGroupsTest, listKvdbs_includes_groups_field) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(KvdbUsingGroupsTest, createKvdb_with_invalid_group_pubkey_throws) {
-    EXPECT_THROW({
-        kvdbApi->createKvdb(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            core::Buffer::from("public"),
-            core::Buffer::from("private"),
-            std::nullopt,
-            std::vector<core::GroupGrantWithKey>{core::GroupGrantWithKey{
-                .groupId = reader->getString("Group_1.groupId"),
-                .role = "user",
-                .groupPubKey = "not_a_valid_base58der_pubkey"
-            }}
-        );
-    }, core::Exception);
-}
+TEST_F(KvdbUsingGroupsTest, reads_through_a_group_grant) {
+    // Kvdb_4, KvdbEntry_3 and KvdbEntry_4 come from the dataset, so this reads bytes an earlier build wrote.
+    // Kvdb_4 wraps its key to user_1 only and is granted to Group_4 (user_1, user_2) and Group_6 (all three):
+    // user_2 arrives through two grants at one keyId, user_3 through one, and neither holds a direct wrap.
+    const std::string dataKvdbId = reader->getString("Kvdb_4.kvdbId");
+    const std::string key = reader->getString("KvdbEntry_3.info_key");
+    const std::string privateMeta =
+        privmx::utils::Hex::toString(reader->getString("KvdbEntry_3.privateMeta_inHex"));
+    const std::string data = privmx::utils::Hex::toString(reader->getString("KvdbEntry_3.data_inHex"));
 
-TEST_F(KvdbUsingGroupsTest, getEntry_via_group_grant) {
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    for (const int index : {2, 3}) {
+        disconnect();
+        connectAs(index);
 
-    std::string kvdbId;
-    ASSERT_NO_THROW({
-        kvdbId = createKvdbWithGroup(
-            reader->getString("Context_1.contextId"),
-            reader->getString("Login.user_1_id"),
-            reader->getString("Login.user_1_pubKey"),
-            group_2
-        );
-    });
-    ASSERT_FALSE(kvdbId.empty());
+        kvdb::Kvdb k;
+        EXPECT_NO_THROW({ k = kvdbApi->getKvdb(dataKvdbId); })
+            << "user_" << index << " could not open the kvdb";
+        EXPECT_EQ(k.statusCode, 0);
+        EXPECT_EQ(k.groups.size(), 2);
 
-    ASSERT_NO_THROW({ setNewEntry(kvdbId, "entry_key", "entry_public", "entry_private", "entry_data"); });
-
-    // user_2 can download and decrypt the entry via the group key.
-    disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
-    kvdb::KvdbEntry entry;
-    EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId, "entry_key"); });
-    EXPECT_EQ(entry.statusCode, 0);
-    EXPECT_EQ(entry.privateMeta.stdString(), "entry_private");
-    EXPECT_EQ(entry.data.stdString(), "entry_data");
-}
-
-TEST_F(KvdbUsingGroupsTest, listEntries_via_group_grant) {
-    group::Group group_2;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-
-    std::string kvdbId;
-    ASSERT_NO_THROW({
-        kvdbId = createKvdbWithGroup(
-            reader->getString("Context_1.contextId"),
-            reader->getString("Login.user_1_id"),
-            reader->getString("Login.user_1_pubKey"),
-            group_2
-        );
-    });
-    ASSERT_FALSE(kvdbId.empty());
-
-    ASSERT_NO_THROW({ setNewEntry(kvdbId, "key1", "pub1", "priv1", "data1"); });
-    ASSERT_NO_THROW({ setNewEntry(kvdbId, "key2", "pub2", "priv2", "data2"); });
-
-    disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
-    core::PagingList<kvdb::KvdbEntry> list;
-    EXPECT_NO_THROW({
-        list = kvdbApi->listEntries(kvdbId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"});
-    });
-    EXPECT_EQ(list.totalAvailable, 2);
-    for (const auto& entry : list.readItems) {
+        kvdb::KvdbEntry entry;
+        EXPECT_NO_THROW({ entry = kvdbApi->getEntry(dataKvdbId, key); })
+            << "user_" << index << " could not read the entry";
         EXPECT_EQ(entry.statusCode, 0);
-        EXPECT_FALSE(entry.privateMeta.stdString().empty());
-        EXPECT_FALSE(entry.data.stdString().empty());
+        EXPECT_EQ(entry.privateMeta.stdString(), privateMeta);
+        EXPECT_EQ(entry.data.stdString(), data);
+
+        // the paging path, which decrypts a batch rather than one row
+        core::PagingList<kvdb::KvdbEntry> list;
+        EXPECT_NO_THROW({
+            list = kvdbApi->listEntries(
+                dataKvdbId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "desc"}
+            );
+        });
+        EXPECT_EQ(list.totalAvailable, 2);
+        for (const auto& listed : list.readItems) {
+            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_FALSE(listed.privateMeta.stdString().empty());
+            EXPECT_FALSE(listed.data.stdString().empty());
+        }
     }
-}
-
-TEST_F(KvdbUsingGroupsTest, entries_accessible_by_all_group_members) {
-    // Group_3 has user_1, user_2 and user_3.
-    group::Group group_3;
-    ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_3.statusCode, 0);
-
-    std::string kvdbId;
-    ASSERT_NO_THROW({
-        kvdbId = createKvdbWithGroup(
-            reader->getString("Context_1.contextId"),
-            reader->getString("Login.user_1_id"),
-            reader->getString("Login.user_1_pubKey"),
-            group_3
-        );
-    });
-    ASSERT_FALSE(kvdbId.empty());
-
-    ASSERT_NO_THROW({ setNewEntry(kvdbId, "shared_key", "shared_public", "shared_private", "shared_data"); });
-
-    disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
-    kvdb::KvdbEntry entryUser2;
-    EXPECT_NO_THROW({ entryUser2 = kvdbApi->getEntry(kvdbId, "shared_key"); });
-    EXPECT_EQ(entryUser2.statusCode, 0);
-    EXPECT_EQ(entryUser2.data.stdString(), "shared_data");
-
-    disconnect();
-    connectAs(KUGConnectionType::KUGUser3);
-    kvdb::KvdbEntry entryUser3;
-    EXPECT_NO_THROW({ entryUser3 = kvdbApi->getEntry(kvdbId, "shared_key"); });
-    EXPECT_EQ(entryUser3.statusCode, 0);
-    EXPECT_EQ(entryUser3.data.stdString(), "shared_data");
 }
 
 TEST_F(KvdbUsingGroupsTest, getEntry_lost_after_group_removal) {
@@ -597,19 +410,19 @@ TEST_F(KvdbUsingGroupsTest, getEntry_lost_after_group_removal) {
     ASSERT_NO_THROW({ setNewEntry(kvdbId, "old_key", "old_public", "secret_private", "secret_data"); });
 
     disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
+    connectAs(2);
     kvdb::KvdbEntry beforeRemoval;
     EXPECT_NO_THROW({ beforeRemoval = kvdbApi->getEntry(kvdbId, "old_key"); });
     EXPECT_EQ(beforeRemoval.statusCode, 0);
     EXPECT_EQ(beforeRemoval.privateMeta.stdString(), "secret_private");
 
     disconnect();
-    connectAs(KUGConnectionType::KUGUser1);
+    connectAs(1);
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
             kvdbId,
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("no_group"),
             core::Buffer::from("no_group_private"),
             1, false, false,
@@ -623,7 +436,7 @@ TEST_F(KvdbUsingGroupsTest, getEntry_lost_after_group_removal) {
     // Historical group key entries are preserved for old key versions, so user_2 can still decrypt the
     // entry written while the group had access - but not the one written after.
     disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
+    connectAs(2);
     kvdb::KvdbEntry afterRemoval;
     EXPECT_NO_THROW({ afterRemoval = kvdbApi->getEntry(kvdbId, "old_key"); });
     EXPECT_EQ(afterRemoval.statusCode, 0);
@@ -655,7 +468,7 @@ TEST_F(KvdbUsingGroupsTest, user_added_to_group_gains_access_to_kvdb_and_entries
     ASSERT_NO_THROW({ setNewEntry(kvdbId, "entry_key", "entry_pub", "entry_priv", "entry_data"); });
 
     disconnect();
-    connectAs(KUGConnectionType::KUGUser3);
+    connectAs(3);
     kvdb::Kvdb kBefore;
     EXPECT_NO_THROW({ kBefore = kvdbApi->getKvdb(kvdbId); });
     EXPECT_NE(kBefore.statusCode, 0);
@@ -665,16 +478,16 @@ TEST_F(KvdbUsingGroupsTest, user_added_to_group_gains_access_to_kvdb_and_entries
 
     // Seat user_3's leaf in the key tree - a metadata write would only re-wrap the group's metadata key.
     disconnect();
-    connectAs(KUGConnectionType::KUGUser1);
+    connectAs(1);
     EXPECT_NO_THROW({
         groupApi->addGroupMembers(
             reader->getString("Group_2.groupId"),
-            {group::GroupMemberToAdd{.user = userOf(KUGConnectionType::KUGUser3), .role = "user"}}
+            {group::GroupMemberToAdd{.user = user(3), .role = "user"}}
         );
     });
 
     disconnect();
-    connectAs(KUGConnectionType::KUGUser3);
+    connectAs(3);
     kvdb::Kvdb kAfter;
     EXPECT_NO_THROW({ kAfter = kvdbApi->getKvdb(kvdbId); });
     EXPECT_EQ(kAfter.statusCode, 0);
@@ -695,7 +508,7 @@ TEST_F(KvdbUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
     ASSERT_NO_THROW({
         kvdbId = createKvdbWithGroups(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             std::vector<group::Group>{group_1}
         );
     });
@@ -722,8 +535,8 @@ TEST_F(KvdbUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
     EXPECT_NO_THROW({
         kvdbApi->updateKvdb(
             kvdbId,
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("direct_updated_public"),
             core::Buffer::from("direct_updated_private"),
             k.version,
@@ -743,29 +556,12 @@ TEST_F(KvdbUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 }
 
 TEST_F(KvdbUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
-    // user_2 is a direct member of the KVDB and in no grantee group, so the bridge serves it `groupKeys: []`
-    // and the read has to come entirely from its own key wrap.
-    group::Group group_1;
-    ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-
-    std::string kvdbId;
-    ASSERT_NO_THROW({
-        kvdbId = createKvdbWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{
-                userOf(KUGConnectionType::KUGUser1), userOf(KUGConnectionType::KUGUser2)
-            },
-            std::vector<group::Group>{group_1}
-        );
-    });
-    ASSERT_FALSE(kvdbId.empty());
-
-    ASSERT_NO_THROW({ setNewEntry(kvdbId, "nogroup_key", "nogroup_public", "nogroup_private", "nogroup_data"); });
-
+    // user_2 is a direct member of Kvdb_5 and is in no grantee group - Group_7 holds user_1 alone - so the
+    // bridge serves it `groupKeys: []` and the read has to come entirely from its own key wrap.
     disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
+    connectAs(2);
 
+    const std::string kvdbId = reader->getString("Kvdb_5.kvdbId");
     kvdb::Kvdb k;
     EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
     EXPECT_EQ(k.statusCode, 0);
@@ -773,45 +569,9 @@ TEST_F(KvdbUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
     EXPECT_EQ(k.groups.size(), 1);
 
     kvdb::KvdbEntry entry;
-    EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId, "nogroup_key"); });
+    EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId, reader->getString("KvdbEntry_5.info_key")); });
     EXPECT_EQ(entry.statusCode, 0);
-    EXPECT_EQ(entry.data.stdString(), "nogroup_data");
-}
-
-TEST_F(KvdbUsingGroupsTest, caller_in_two_granted_groups_reads) {
-    // The KVDB wraps its key to user_1 only, and user_2 belongs to both grantee groups: narrowing leaves it two
-    // entries at the same keyId, and with no direct wrap to fall back on one of them has to carry the read.
-    group::Group group_2, group_3;
-    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-    ASSERT_EQ(group_3.statusCode, 0);
-
-    std::string kvdbId;
-    ASSERT_NO_THROW({
-        kvdbId = createKvdbWithGroups(
-            reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<group::Group>{group_2, group_3}
-        );
-    });
-    ASSERT_FALSE(kvdbId.empty());
-
-    ASSERT_NO_THROW({
-        setNewEntry(kvdbId, "twogroups_key", "twogroups_public", "twogroups_private", "twogroups_data");
-    });
-
-    disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
-
-    kvdb::Kvdb k;
-    EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(k.statusCode, 0);
-
-    kvdb::KvdbEntry entry;
-    EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId, "twogroups_key"); });
-    EXPECT_EQ(entry.statusCode, 0);
-    EXPECT_EQ(entry.data.stdString(), "twogroups_data");
+    EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("KvdbEntry_5.data_inHex")));
 }
 
 TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_did_not_name) {
@@ -826,7 +586,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_did
         kvdbId = createKvdbWithGroups(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
-                userOf(KUGConnectionType::KUGUser1), userOf(KUGConnectionType::KUGUser2)
+                user(1), user(2)
             },
             std::vector<group::Group>{granteeGroup}
         );
@@ -838,15 +598,15 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_did
     ASSERT_EQ(before.statusCode, 0);
 
     disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
+    connectAs(2);
     EXPECT_NO_THROW({
         kvdbApi->rotateKvdbKeys(
             kvdbId,
             std::vector<core::UserWithPubKey>{
-                userOf(KUGConnectionType::KUGUser1), userOf(KUGConnectionType::KUGUser2)
+                user(1), user(2)
             },
             std::vector<core::UserWithPubKey>{
-                userOf(KUGConnectionType::KUGUser1), userOf(KUGConnectionType::KUGUser2)
+                user(1), user(2)
             },
             before.version,
             false,
@@ -855,7 +615,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_did
     });
 
     disconnect();
-    connectAs(KUGConnectionType::KUGUser1);
+    connectAs(1);
     kvdb::Kvdb after;
     EXPECT_NO_THROW({ after = kvdbApi->getKvdb(kvdbId); });
     EXPECT_EQ(after.statusCode, 0);
@@ -880,11 +640,11 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
         groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
-                userOf(KUGConnectionType::KUGUser1),
-                userOf(KUGConnectionType::KUGUser2),
-                userOf(KUGConnectionType::KUGUser3)
+                user(1),
+                user(2),
+                user(3)
             },
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("grp_pub"),
             core::Buffer::from("grp_priv")
         );
@@ -900,7 +660,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
     ASSERT_NO_THROW({
         kvdbId = createKvdbWithGroups(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             std::vector<group::Group>{group}
         );
     });
@@ -928,8 +688,8 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
     EXPECT_NO_THROW({
         kvdbApi->rotateKvdbKeys(
             kvdbId,
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             stale.version,
             false,
             std::vector<core::GroupGrantWithKey>{}
@@ -945,7 +705,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
     // user_2 is still in G at epoch 2 and was never a direct KVDB member, so this read can only be served
     // through the re-wrapped group entry.
     disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
+    connectAs(2);
     kvdb::KvdbEntry oldEpochEntry;
     EXPECT_NO_THROW({ oldEpochEntry = kvdbApi->getEntry(kvdbId, "old_epoch_key"); });
     EXPECT_EQ(oldEpochEntry.statusCode, 0);
@@ -960,11 +720,11 @@ TEST_F(KvdbUsingGroupsTest, setEntry_auto_rotates_a_stale_kvdb_key) {
         groupId = groupApi->createGroup(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{
-                userOf(KUGConnectionType::KUGUser1),
-                userOf(KUGConnectionType::KUGUser2),
-                userOf(KUGConnectionType::KUGUser3)
+                user(1),
+                user(2),
+                user(3)
             },
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             core::Buffer::from("auto_grp_pub"),
             core::Buffer::from("auto_grp_priv")
         );
@@ -979,7 +739,7 @@ TEST_F(KvdbUsingGroupsTest, setEntry_auto_rotates_a_stale_kvdb_key) {
     ASSERT_NO_THROW({
         kvdbId = createKvdbWithGroups(
             reader->getString("Context_1.contextId"),
-            std::vector<core::UserWithPubKey>{userOf(KUGConnectionType::KUGUser1)},
+            std::vector<core::UserWithPubKey>{user(1)},
             std::vector<group::Group>{group}
         );
     });
@@ -1009,7 +769,7 @@ TEST_F(KvdbUsingGroupsTest, setEntry_auto_rotates_a_stale_kvdb_key) {
     // user_2 is in G at its new epoch and holds no direct entry: reading proves the new key was wrapped to the
     // epoch G actually moved to, not the one the KVDB was stuck on.
     disconnect();
-    connectAs(KUGConnectionType::KUGUser2);
+    connectAs(2);
     kvdb::KvdbEntry entry;
     EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId, "auto_key"); });
     EXPECT_EQ(entry.statusCode, 0);

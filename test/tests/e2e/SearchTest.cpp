@@ -1,6 +1,15 @@
+/**
+ * One test per SearchApi function, each covering that function's whole contract: rejected input, accepted
+ * input, and the state it leaves behind. Every other SearchApi function is assumed to work, so
+ * openSearchIndex and getSearchIndex are used freely as setup and oracle without counting as a subject.
+ *
+ * Gaps this file does not close, all pre-existing: rotateSearchIndexKeys, beginTransaction, commit, rollback,
+ * getDocument and listDocuments have no test of their own. And openSearchIndex's "opens by multiple user"
+ * section builds its second SearchApi on the *first* user's connection, so it re-opens as user_1 and proves
+ * nothing - fixing it needs an index user_2 can reach, which SearchIndex_1 (user_1 only) is not.
+ */
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
-#include "../../utils/FalseUserVerifierInterface.hpp"
+#include "BaseTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
@@ -207,7 +216,7 @@ TEST_F(SearchTest, getSearchIndex) {
     }
 }
 
-TEST_F(SearchTest, listSearchIndexes_incorrect_input_data) {
+TEST_F(SearchTest, listSearchIndexes) {
     // incorrect contextId
     EXPECT_THROW({
         searchApi->listSearchIndexes(
@@ -291,12 +300,10 @@ TEST_F(SearchTest, listSearchIndexes_incorrect_input_data) {
             }
         );
     }, core::InvalidParamsException);
-}
 
-TEST_F(SearchTest, listSearchIndexes_correct_input_data) {
     core::PagingList<search::SearchIndex> listSearchIndexes;
     search::SearchIndex searchIndex;
-    // {.skip=4, .limit=1, .sortOrder="desc"}
+    // skip past the end
     EXPECT_NO_THROW({
         listSearchIndexes = searchApi->listSearchIndexes(
             reader->getString("Context_1.contextId"),
@@ -307,7 +314,6 @@ TEST_F(SearchTest, listSearchIndexes_correct_input_data) {
             }
         );
     });
-    // {.skip=0, .limit=1, .sortOrder="desc"}
     EXPECT_NO_THROW({
         listSearchIndexes = searchApi->listSearchIndexes(
             reader->getString("Context_1.contextId"),
@@ -345,7 +351,6 @@ TEST_F(SearchTest, listSearchIndexes_correct_input_data) {
             EXPECT_EQ(searchIndex.managers[0], reader->getString("Login.user_1_id"));
         }
     }
-    // {.skip=1, .limit=3, .sortOrder="asc", .sortBy="createDate"}
     EXPECT_NO_THROW({
         listSearchIndexes = searchApi->listSearchIndexes(
             reader->getString("Context_1.contextId"),
@@ -555,7 +560,7 @@ TEST_F(SearchTest, createSearchIndex) {
     }
 }
 
-TEST_F(SearchTest, updateSearchIndex_incorrect_data) {
+TEST_F(SearchTest, updateSearchIndex) {
     // incorrect indexId
     EXPECT_THROW({
         searchApi->updateSearchIndex(
@@ -648,9 +653,7 @@ TEST_F(SearchTest, updateSearchIndex_incorrect_data) {
             false
         );
     }, core::Exception);
-}
 
-TEST_F(SearchTest, updateSearchIndex_correct_data) {
     search::SearchIndex index;
     // new users
     EXPECT_NO_THROW({
@@ -1016,53 +1019,6 @@ TEST_F(SearchTest, updateDocument) {
             search::Document{
                 .documentId=reader->getInt64("SearchIndex_1.doc_1_id"), 
                 .name=reader->getString("SearchIndex_1.doc_1_name"), 
-                .content="New Document Content"
-            }
-        );
-    }, core::Exception);
-    // correct indexHandle
-    int64_t indexHandle_1;
-    EXPECT_NO_THROW({
-        indexHandle_1 = searchApi->openSearchIndex(
-            reader->getString("SearchIndex_1.indexId")
-        );
-    });
-    EXPECT_NO_THROW({
-        searchApi->updateDocument(
-            indexHandle_1, 
-            search::Document{
-                .documentId=reader->getInt64("SearchIndex_1.doc_1_id"), 
-                .name=reader->getString("SearchIndex_1.doc_1_name"), 
-                .content="New Document Content"
-            }
-        );
-    });
-    // using closed index
-    EXPECT_NO_THROW({
-        searchApi->closeSearchIndex(
-            indexHandle_1
-        );
-    });
-    EXPECT_THROW({
-        searchApi->updateDocument(
-            indexHandle_1, 
-            search::Document{
-                .documentId=reader->getInt64("SearchIndex_1.doc_1_id"), 
-                .name=reader->getString("SearchIndex_1.doc_1_name"), 
-                .content="New Document Content"
-            }
-        );
-    }, core::Exception);
-}
-
-TEST_F(SearchTest, updateDocument2) {
-    //incorect handle
-    EXPECT_THROW({
-        searchApi->updateDocument(
-            0, 
-            search::Document{
-                .documentId=reader->getInt64("SearchIndex_1.doc_1_id"), 
-                .name=reader->getString("SearchIndex_1.doc_1_name"), 
                 .content="Invalid Handle"
             }
         );
@@ -1155,7 +1111,7 @@ TEST_F(SearchTest, deleteDocument) {
     }, core::Exception);
 }
 
-TEST_F(SearchTest, searchDocuments_invalidData) {
+TEST_F(SearchTest, searchDocuments) {
     int64_t indexHandle_1;
     EXPECT_NO_THROW({
         indexHandle_1 = searchApi->openSearchIndex(
@@ -1240,16 +1196,8 @@ TEST_F(SearchTest, searchDocuments_invalidData) {
             }
         );
     }, core::Exception);
-}
 
-TEST_F(SearchTest, searchDocuments_correctData) {
-    int64_t indexHandle_1;
-    EXPECT_NO_THROW({
-        indexHandle_1 = searchApi->openSearchIndex(
-            reader->getString("SearchIndex_1.indexId")
-        );
-    });
-    // Non found
+    // a phrase in neither document
     core::PagingList<search::Document> documents;
     EXPECT_NO_THROW({
         documents = searchApi->searchDocuments(

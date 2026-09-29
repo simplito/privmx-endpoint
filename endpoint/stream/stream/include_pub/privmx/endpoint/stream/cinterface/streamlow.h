@@ -3,6 +3,7 @@
 
 #include <Pson/pson.h>
 #include "privmx/endpoint/core/cinterface/core.h"
+#include <privmx/endpoint/group/cinterface/group.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,7 +11,7 @@ extern "C" {
 
 typedef struct StreamApiLow StreamApiLow;
 
-int privmx_endpoint_newStreamApiLow(Connection* connectionPtr, StreamApiLow** outPtr);
+int privmx_endpoint_newStreamApiLow(Connection* connectionPtr, GroupApi* groupApiPtr, StreamApiLow** outPtr);
 int privmx_endpoint_freeStreamApiLow(StreamApiLow* ptr);
 int privmx_endpoint_execStreamApiLow(StreamApiLow* ptr, int method, const pson_value* args, pson_value** res);
 

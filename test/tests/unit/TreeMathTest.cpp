@@ -9,7 +9,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/** Unit tests for the hidden key tree arithmetic; needs no server, no docker and no network — pure arithmetic. Reference tables are the same ones used by the bridge's TreeMath tests, deliberately: the two implementations must agree exactly, or the server will either reject valid removals or accept ones that leave a removed member holding a current node key. The truncated cases (leaf count not a power of two) are what break naive implementations, so they carry the most coverage. */
+/**
+ * The hidden key tree arithmetic. Needs no server, no docker and no network — pure arithmetic.
+ *
+ * Reference tables are the same ones used by the bridge's TreeMath tests, deliberately: the two implementations
+ * must agree exactly, or the server will either reject valid removals or accept ones that leave a removed member
+ * holding a current node key.
+ *
+ * The truncated cases (leaf count not a power of two) are what break naive implementations, so they carry the
+ * most coverage.
+ */
 
 #include <gtest/gtest.h>
 
@@ -115,7 +124,8 @@ TEST_F(TreeMathParent, RootHasNoParent) {
 }
 
 TEST_F(TreeMathParent, WalksPastNonExistentParentWhenRightEdgeIsTruncated) {
-    // N=3: nodes 0..4, root=3. Node 5 does not exist, so node 4's naive parent must be walked past; this is the case that breaks implementations using the bare formula.
+    // N=3: nodes 0..4, root=3. Node 5 does not exist, so node 4's naive parent must be walked past; this is the
+    // case that breaks implementations using the bare formula.
     EXPECT_EQ(TreeMath::parentStep(4), 5u) << "naive parent is out of range";
     EXPECT_FALSE(TreeMath::exists(5, 3));
     EXPECT_EQ(TreeMath::parent(4, 3), 3u);

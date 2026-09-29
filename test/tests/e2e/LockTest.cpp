@@ -1,5 +1,13 @@
+/**
+ * One test per LockApi function - lock, unlock, checkReservedLock - plus one for the whole surface seen from
+ * a second user, since a lock is server-side state and that is the only way to observe it as such.
+ *
+ * A lock level is only ever asserted through expectLockGranted / expectLockRefused / expectUnlockTo, which
+ * carry both the level asked for and the level the resource ends up at: those two differ exactly where the
+ * API refuses to downgrade or parks the caller on PENDING, which is the interesting half of the contract.
+ */
 #include <gtest/gtest.h>
-#include "../../utils/BaseTest.hpp"
+#include "BaseTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -66,6 +74,7 @@ protected:
         reader.reset();
         core::EventQueueImpl::getInstance()->clear();
     }
+
     // only files with random write support can be locked
     std::string createLockableResource(const std::string& storeId) {
         auto handle = storeApi->createFile(
@@ -77,9 +86,46 @@ protected:
         );
         return storeApi->closeFile(handle);
     }
+
+    // Store_2 is used throughout because both user_1 and user_2 are its managers.
+    std::string lockableResource() {
+        std::string resourceId;
+        EXPECT_NO_THROW({ resourceId = createLockableResource(reader->getString("Store_2.storeId")); });
+        EXPECT_FALSE(resourceId.empty());
+        return resourceId;
+    }
+
     std::string newUuid() {
         return randomReadableString(32);
     }
+
+    void expectLockGranted(
+        const std::string& resourceId, const std::string& uuid, lock::LockLevel want, lock::LockLevel after
+    ) {
+        lock::LockOperationResult result{false, lock::LockLevel::NONE};
+        EXPECT_NO_THROW({ result = lockApi->lock(resourceId, uuid, want); });
+        EXPECT_TRUE(result.success);
+        EXPECT_EQ(result.currentLevel, after);
+    }
+
+    void expectLockRefused(
+        const std::string& resourceId, const std::string& uuid, lock::LockLevel want, lock::LockLevel after
+    ) {
+        lock::LockOperationResult result{true, lock::LockLevel::NONE};
+        EXPECT_NO_THROW({ result = lockApi->lock(resourceId, uuid, want); });
+        EXPECT_FALSE(result.success);
+        EXPECT_EQ(result.currentLevel, after);
+    }
+
+    void expectUnlockTo(
+        const std::string& resourceId, const std::string& uuid, lock::LockLevel to, lock::LockLevel after
+    ) {
+        lock::LockOperationResult result{false, lock::LockLevel::NONE};
+        EXPECT_NO_THROW({ result = lockApi->unlock(resourceId, uuid, to); });
+        EXPECT_TRUE(result.success);
+        EXPECT_EQ(result.currentLevel, after);
+    }
+
     std::shared_ptr<core::Connection> connection;
     std::shared_ptr<store::StoreApi> storeApi;
     std::shared_ptr<lock::LockApi> lockApi;
@@ -87,546 +133,180 @@ protected:
     core::VarSerializer _serializer = core::VarSerializer({});
 };
 
-TEST_F(LockTest, lock_incorrect_input_data) {
-    auto uuid = newUuid();
+TEST_F(LockTest, lock) {
+    // the ladder one holder can climb
+    const std::string resourceId = lockableResource();
+    ASSERT_FALSE(resourceId.empty());
+    const std::string uuid = newUuid();
+    expectLockGranted(resourceId, uuid, lock::LockLevel::SHARED, lock::LockLevel::SHARED);
+    // SHARED again - renews the lease
+    expectLockGranted(resourceId, uuid, lock::LockLevel::SHARED, lock::LockLevel::SHARED);
+    expectLockGranted(resourceId, uuid, lock::LockLevel::RESERVED, lock::LockLevel::RESERVED);
+    // RESERVED -> EXCLUSIVE, no other readers
+    expectLockGranted(resourceId, uuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::EXCLUSIVE);
+    // a weaker level - lock() never downgrades
+    expectLockGranted(resourceId, uuid, lock::LockLevel::SHARED, lock::LockLevel::EXCLUSIVE);
+    expectUnlockTo(resourceId, uuid, lock::LockLevel::NONE, lock::LockLevel::NONE);
+
+    // what happens with more than one holder
+    const std::string sharedResourceId = lockableResource();
+    ASSERT_FALSE(sharedResourceId.empty());
+    const std::string writerUuid = newUuid();
+    const std::string readerUuid = newUuid();
+    const std::string otherReaderUuid = newUuid();
+    // RESERVED still admits new readers
+    expectLockGranted(sharedResourceId, writerUuid, lock::LockLevel::RESERVED, lock::LockLevel::RESERVED);
+    expectLockGranted(sharedResourceId, readerUuid, lock::LockLevel::SHARED, lock::LockLevel::SHARED);
+    // EXCLUSIVE with a reader present - refused, but the writer parks on PENDING
+    expectLockRefused(sharedResourceId, writerUuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::PENDING);
+    // PENDING blocks new readers
+    expectLockRefused(sharedResourceId, otherReaderUuid, lock::LockLevel::SHARED, lock::LockLevel::NONE);
+    // the reader that was already in drains, and the writer gets its turn
+    expectUnlockTo(sharedResourceId, readerUuid, lock::LockLevel::NONE, lock::LockLevel::NONE);
+    expectLockGranted(sharedResourceId, writerUuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::EXCLUSIVE);
+    expectUnlockTo(sharedResourceId, writerUuid, lock::LockLevel::NONE, lock::LockLevel::NONE);
+
+    // input the api refuses outright
+    const std::string rejectedUuid = newUuid();
     // incorrect resourceId
     EXPECT_THROW({
-        lockApi->lock(
-            reader->getString("Context_1.contextId"),
-            uuid,
-            lock::LockLevel::SHARED
-        );
+        lockApi->lock(reader->getString("Context_1.contextId"), rejectedUuid, lock::LockLevel::SHARED);
     }, core::Exception);
     // resourceId out of the allowed charset
     EXPECT_THROW({
-        lockApi->lock(
-            "resource:id",
-            uuid,
-            lock::LockLevel::SHARED
-        );
+        lockApi->lock("resource:id", rejectedUuid, lock::LockLevel::SHARED);
     }, core::Exception);
     // resourceId too long
     EXPECT_THROW({
-        lockApi->lock(
-            randomReadableString(61),
-            uuid,
-            lock::LockLevel::SHARED
-        );
+        lockApi->lock(randomReadableString(61), rejectedUuid, lock::LockLevel::SHARED);
     }, core::Exception);
     // uuid out of the allowed charset
     EXPECT_THROW({
-        lockApi->lock(
-            reader->getString("File_1.info_fileId"),
-            "uuid:1",
-            lock::LockLevel::SHARED
-        );
+        lockApi->lock(reader->getString("File_1.info_fileId"), "uuid:1", lock::LockLevel::SHARED);
     }, core::Exception);
-    // file without random write support
+    // a file without random write support
     EXPECT_THROW({
-        lockApi->lock(
-            reader->getString("File_1.info_fileId"),
-            uuid,
-            lock::LockLevel::SHARED
-        );
+        lockApi->lock(reader->getString("File_1.info_fileId"), rejectedUuid, lock::LockLevel::SHARED);
     }, core::Exception);
-    std::string resourceId;
-    EXPECT_NO_THROW({
-        resourceId = createLockableResource(reader->getString("Store_2.storeId"));
-    });
-    if(resourceId.empty()) {
-        FAIL();
-    }
     // lockLevel NONE - lock() only acquires, it never releases
     EXPECT_THROW({
-        lockApi->lock(
-            resourceId,
-            uuid,
-            lock::LockLevel::NONE
-        );
+        lockApi->lock(resourceId, rejectedUuid, lock::LockLevel::NONE);
     }, core::Exception);
     // lockLevel out of the enum
     EXPECT_THROW({
-        lockApi->lock(
-            resourceId,
-            uuid,
-            static_cast<lock::LockLevel>(99)
-        );
+        lockApi->lock(resourceId, rejectedUuid, static_cast<lock::LockLevel>(99));
     }, lock::InvalidLockLevelException);
-    // as user without access to the store
+
+    // as a user without access to the store - last, because it leaves the connection on user_2
     std::string privateResourceId;
-    EXPECT_NO_THROW({
-        privateResourceId = createLockableResource(reader->getString("Store_1.storeId"));
-    });
+    EXPECT_NO_THROW({ privateResourceId = createLockableResource(reader->getString("Store_1.storeId")); });
     disconnect();
     connectAs(ConnectionType::User2);
     EXPECT_THROW({
-        lockApi->lock(
-            privateResourceId,
-            uuid,
-            lock::LockLevel::SHARED
-        );
+        lockApi->lock(privateResourceId, rejectedUuid, lock::LockLevel::SHARED);
     }, core::Exception);
 }
 
-TEST_F(LockTest, lock_correct_input_data) {
-    std::string resourceId;
-    EXPECT_NO_THROW({
-        resourceId = createLockableResource(reader->getString("Store_2.storeId"));
-    });
-    if(resourceId.empty()) {
-        FAIL();
-    }
-    auto uuid = newUuid();
-    lock::LockOperationResult result{false, lock::LockLevel::NONE};
-    // NONE -> SHARED
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            uuid,
-            lock::LockLevel::SHARED
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::SHARED);
-    // SHARED again - renews the lease
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            uuid,
-            lock::LockLevel::SHARED
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::SHARED);
-    // SHARED -> RESERVED
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            uuid,
-            lock::LockLevel::RESERVED
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::RESERVED);
-    // RESERVED -> EXCLUSIVE, no other readers
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            uuid,
-            lock::LockLevel::EXCLUSIVE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::EXCLUSIVE);
-    // weaker level - lock() never downgrades
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            uuid,
-            lock::LockLevel::SHARED
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::EXCLUSIVE);
-    EXPECT_NO_THROW({
-        lockApi->unlock(
-            resourceId,
-            uuid,
-            lock::LockLevel::NONE
-        );
-    });
-}
+TEST_F(LockTest, unlock) {
+    const std::string resourceId = lockableResource();
+    ASSERT_FALSE(resourceId.empty());
+    const std::string uuid = newUuid();
+    const std::string unknownUuid = newUuid();
 
-TEST_F(LockTest, lock_multiple_holders) {
-    std::string resourceId;
-    EXPECT_NO_THROW({
-        resourceId = createLockableResource(reader->getString("Store_2.storeId"));
-    });
-    if(resourceId.empty()) {
-        FAIL();
-    }
-    auto writerUuid = newUuid();
-    auto readerUuid = newUuid();
-    auto otherReaderUuid = newUuid();
-    lock::LockOperationResult result{false, lock::LockLevel::NONE};
-    // RESERVED still admits new readers
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            writerUuid,
-            lock::LockLevel::RESERVED
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::RESERVED);
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            readerUuid,
-            lock::LockLevel::SHARED
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::SHARED);
-    // EXCLUSIVE with a reader present - refused, but the writer parks on PENDING
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            writerUuid,
-            lock::LockLevel::EXCLUSIVE
-        );
-    });
-    EXPECT_FALSE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::PENDING);
-    // PENDING blocks new readers
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            otherReaderUuid,
-            lock::LockLevel::SHARED
-        );
-    });
-    EXPECT_FALSE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::NONE);
-    // the reader that was already in drains
-    EXPECT_NO_THROW({
-        result = lockApi->unlock(
-            resourceId,
-            readerUuid,
-            lock::LockLevel::NONE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::NONE);
-    // PENDING -> EXCLUSIVE
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            writerUuid,
-            lock::LockLevel::EXCLUSIVE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::EXCLUSIVE);
-    EXPECT_NO_THROW({
-        lockApi->unlock(
-            resourceId,
-            writerUuid,
-            lock::LockLevel::NONE
-        );
-    });
-}
-
-TEST_F(LockTest, unlock_incorrect_input_data) {
-    std::string resourceId;
-    EXPECT_NO_THROW({
-        resourceId = createLockableResource(reader->getString("Store_2.storeId"));
-    });
-    if(resourceId.empty()) {
-        FAIL();
-    }
-    auto uuid = newUuid();
     // incorrect resourceId
     EXPECT_THROW({
-        lockApi->unlock(
-            reader->getString("Context_1.contextId"),
-            uuid,
-            lock::LockLevel::NONE
-        );
+        lockApi->unlock(reader->getString("Context_1.contextId"), uuid, lock::LockLevel::NONE);
     }, core::Exception);
-    // lockLevel RESERVED - unlock() only downgrades to NONE or SHARED
-    EXPECT_THROW({
-        lockApi->unlock(
-            resourceId,
-            uuid,
-            lock::LockLevel::RESERVED
-        );
-    }, core::Exception);
-    // lockLevel PENDING
-    EXPECT_THROW({
-        lockApi->unlock(
-            resourceId,
-            uuid,
-            lock::LockLevel::PENDING
-        );
-    }, core::Exception);
-    // lockLevel EXCLUSIVE
-    EXPECT_THROW({
-        lockApi->unlock(
-            resourceId,
-            uuid,
-            lock::LockLevel::EXCLUSIVE
-        );
-    }, core::Exception);
+    // unlock() only downgrades to NONE or SHARED
+    EXPECT_THROW({ lockApi->unlock(resourceId, uuid, lock::LockLevel::RESERVED); }, core::Exception);
+    EXPECT_THROW({ lockApi->unlock(resourceId, uuid, lock::LockLevel::PENDING); }, core::Exception);
+    EXPECT_THROW({ lockApi->unlock(resourceId, uuid, lock::LockLevel::EXCLUSIVE); }, core::Exception);
     // lockLevel out of the enum
     EXPECT_THROW({
-        lockApi->unlock(
-            resourceId,
-            uuid,
-            static_cast<lock::LockLevel>(99)
-        );
+        lockApi->unlock(resourceId, uuid, static_cast<lock::LockLevel>(99));
     }, lock::InvalidLockLevelException);
-}
 
-TEST_F(LockTest, unlock_correct_input_data) {
-    std::string resourceId;
-    EXPECT_NO_THROW({
-        resourceId = createLockableResource(reader->getString("Store_2.storeId"));
-    });
-    if(resourceId.empty()) {
-        FAIL();
-    }
-    auto uuid = newUuid();
-    auto unknownUuid = newUuid();
-    lock::LockOperationResult result{false, lock::LockLevel::NONE};
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            uuid,
-            lock::LockLevel::EXCLUSIVE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::EXCLUSIVE);
-    // EXCLUSIVE -> SHARED
-    EXPECT_NO_THROW({
-        result = lockApi->unlock(
-            resourceId,
-            uuid,
-            lock::LockLevel::SHARED
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::SHARED);
-    // SHARED -> NONE
-    EXPECT_NO_THROW({
-        result = lockApi->unlock(
-            resourceId,
-            uuid,
-            lock::LockLevel::NONE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::NONE);
-    // already released - no-op, not an error
-    EXPECT_NO_THROW({
-        result = lockApi->unlock(
-            resourceId,
-            uuid,
-            lock::LockLevel::NONE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::NONE);
-    // uuid holding nothing - no-op
-    EXPECT_NO_THROW({
-        result = lockApi->unlock(
-            resourceId,
-            unknownUuid,
-            lock::LockLevel::SHARED
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::NONE);
+    // the ladder back down
+    expectLockGranted(resourceId, uuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::EXCLUSIVE);
+    expectUnlockTo(resourceId, uuid, lock::LockLevel::SHARED, lock::LockLevel::SHARED);
+    expectUnlockTo(resourceId, uuid, lock::LockLevel::NONE, lock::LockLevel::NONE);
+    // already released - a no-op, not an error
+    expectUnlockTo(resourceId, uuid, lock::LockLevel::NONE, lock::LockLevel::NONE);
+    // a uuid holding nothing - also a no-op
+    expectUnlockTo(resourceId, unknownUuid, lock::LockLevel::SHARED, lock::LockLevel::NONE);
 }
 
 TEST_F(LockTest, checkReservedLock) {
-    std::string resourceId;
-    EXPECT_NO_THROW({
-        resourceId = createLockableResource(reader->getString("Store_2.storeId"));
-    });
-    if(resourceId.empty()) {
-        FAIL();
-    }
-    auto holderUuid = newUuid();
-    auto observerUuid = newUuid();
-    lock::LockOperationResult result{false, lock::LockLevel::NONE};
+    const std::string resourceId = lockableResource();
+    ASSERT_FALSE(resourceId.empty());
+    const std::string holderUuid = newUuid();
+    const std::string observerUuid = newUuid();
+
     // incorrect resourceId
     EXPECT_THROW({
-        lockApi->checkReservedLock(
-            reader->getString("Context_1.contextId"),
-            observerUuid
-        );
+        lockApi->checkReservedLock(reader->getString("Context_1.contextId"), observerUuid);
     }, core::Exception);
     // nothing held
-    EXPECT_NO_THROW({
-        EXPECT_FALSE(lockApi->checkReservedLock(resourceId, observerUuid));
-    });
+    EXPECT_NO_THROW({ EXPECT_FALSE(lockApi->checkReservedLock(resourceId, observerUuid)); });
+
     // SHARED is below RESERVED, it does not count
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            holderUuid,
-            lock::LockLevel::SHARED
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_NO_THROW({
-        EXPECT_FALSE(lockApi->checkReservedLock(resourceId, observerUuid));
-    });
+    expectLockGranted(resourceId, holderUuid, lock::LockLevel::SHARED, lock::LockLevel::SHARED);
+    EXPECT_NO_THROW({ EXPECT_FALSE(lockApi->checkReservedLock(resourceId, observerUuid)); });
+
     // RESERVED is reported to everyone but the holder itself
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            holderUuid,
-            lock::LockLevel::RESERVED
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::RESERVED);
+    expectLockGranted(resourceId, holderUuid, lock::LockLevel::RESERVED, lock::LockLevel::RESERVED);
     EXPECT_NO_THROW({
         EXPECT_TRUE(lockApi->checkReservedLock(resourceId, observerUuid));
         EXPECT_FALSE(lockApi->checkReservedLock(resourceId, holderUuid));
     });
+
     // PENDING is above RESERVED, it counts
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            holderUuid,
-            lock::LockLevel::PENDING
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::PENDING);
-    EXPECT_NO_THROW({
-        EXPECT_TRUE(lockApi->checkReservedLock(resourceId, observerUuid));
-    });
-    // EXCLUSIVE counts
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            holderUuid,
-            lock::LockLevel::EXCLUSIVE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::EXCLUSIVE);
-    EXPECT_NO_THROW({
-        EXPECT_TRUE(lockApi->checkReservedLock(resourceId, observerUuid));
-    });
-    // downgrade to SHARED clears the writer lock
-    EXPECT_NO_THROW({
-        result = lockApi->unlock(
-            resourceId,
-            holderUuid,
-            lock::LockLevel::SHARED
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::SHARED);
-    EXPECT_NO_THROW({
-        EXPECT_FALSE(lockApi->checkReservedLock(resourceId, observerUuid));
-    });
+    expectLockGranted(resourceId, holderUuid, lock::LockLevel::PENDING, lock::LockLevel::PENDING);
+    EXPECT_NO_THROW({ EXPECT_TRUE(lockApi->checkReservedLock(resourceId, observerUuid)); });
+
+    // and so does EXCLUSIVE
+    expectLockGranted(resourceId, holderUuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::EXCLUSIVE);
+    EXPECT_NO_THROW({ EXPECT_TRUE(lockApi->checkReservedLock(resourceId, observerUuid)); });
+
+    // downgrading to SHARED clears the writer lock
+    expectUnlockTo(resourceId, holderUuid, lock::LockLevel::SHARED, lock::LockLevel::SHARED);
+    EXPECT_NO_THROW({ EXPECT_FALSE(lockApi->checkReservedLock(resourceId, observerUuid)); });
+
     // full release
     EXPECT_NO_THROW({
-        lockApi->unlock(
-            resourceId,
-            holderUuid,
-            lock::LockLevel::NONE
-        );
+        lockApi->unlock(resourceId, holderUuid, lock::LockLevel::NONE);
         EXPECT_FALSE(lockApi->checkReservedLock(resourceId, observerUuid));
     });
 }
 
 TEST_F(LockTest, lock_unlock_other_user) {
-    // Store_2 is used because both user_1 and user_2 are its managers
-    std::string resourceId;
-    EXPECT_NO_THROW({
-        resourceId = createLockableResource(reader->getString("Store_2.storeId"));
-    });
-    if(resourceId.empty()) {
-        FAIL();
-    }
-    auto firstUuid = newUuid();
-    auto secondUuid = newUuid();
-    lock::LockOperationResult result{false, lock::LockLevel::NONE};
-    // first holder takes EXCLUSIVE
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            firstUuid,
-            lock::LockLevel::EXCLUSIVE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::EXCLUSIVE);
-    // lock is server side state, the other user sees it
+    const std::string resourceId = lockableResource();
+    ASSERT_FALSE(resourceId.empty());
+    const std::string firstUuid = newUuid();
+    const std::string secondUuid = newUuid();
+
+    // the first holder takes EXCLUSIVE
+    expectLockGranted(resourceId, firstUuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::EXCLUSIVE);
+
+    // a lock is server side state, so the other user sees it
     disconnect();
     connectAs(ConnectionType::User2);
-    EXPECT_NO_THROW({
-        EXPECT_TRUE(lockApi->checkReservedLock(resourceId, secondUuid));
-    });
-    // second holder is refused and stays at NONE
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            secondUuid,
-            lock::LockLevel::EXCLUSIVE
-        );
-    });
-    EXPECT_FALSE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::NONE);
-    // an EXCLUSIVE holder blocks readers too
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            secondUuid,
-            lock::LockLevel::SHARED
-        );
-    });
-    EXPECT_FALSE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::NONE);
+    EXPECT_NO_THROW({ EXPECT_TRUE(lockApi->checkReservedLock(resourceId, secondUuid)); });
+    // the second holder is refused and stays at NONE, readers included
+    expectLockRefused(resourceId, secondUuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::NONE);
+    expectLockRefused(resourceId, secondUuid, lock::LockLevel::SHARED, lock::LockLevel::NONE);
+
     // the first holder keeps its lock through the failed attempts, then releases
     disconnect();
     connectAs(ConnectionType::User1);
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            firstUuid,
-            lock::LockLevel::EXCLUSIVE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::EXCLUSIVE);
-    EXPECT_NO_THROW({
-        result = lockApi->unlock(
-            resourceId,
-            firstUuid,
-            lock::LockLevel::NONE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::NONE);
-    // now the second holder gets it
+    expectLockGranted(resourceId, firstUuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::EXCLUSIVE);
+    expectUnlockTo(resourceId, firstUuid, lock::LockLevel::NONE, lock::LockLevel::NONE);
+
+    // now the second holder gets it, and the roles reverse
     disconnect();
     connectAs(ConnectionType::User2);
-    EXPECT_NO_THROW({
-        result = lockApi->lock(
-            resourceId,
-            secondUuid,
-            lock::LockLevel::EXCLUSIVE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::EXCLUSIVE);
-    // and the roles are reversed - the first uuid is the one being blocked now
-    EXPECT_NO_THROW({
-        EXPECT_TRUE(lockApi->checkReservedLock(resourceId, firstUuid));
-        result = lockApi->lock(
-            resourceId,
-            firstUuid,
-            lock::LockLevel::EXCLUSIVE
-        );
-    });
-    EXPECT_FALSE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::NONE);
-    EXPECT_NO_THROW({
-        result = lockApi->unlock(
-            resourceId,
-            secondUuid,
-            lock::LockLevel::NONE
-        );
-    });
-    EXPECT_TRUE(result.success);
-    EXPECT_EQ(result.currentLevel, lock::LockLevel::NONE);
+    expectLockGranted(resourceId, secondUuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::EXCLUSIVE);
+    EXPECT_NO_THROW({ EXPECT_TRUE(lockApi->checkReservedLock(resourceId, firstUuid)); });
+    expectLockRefused(resourceId, firstUuid, lock::LockLevel::EXCLUSIVE, lock::LockLevel::NONE);
+    expectUnlockTo(resourceId, secondUuid, lock::LockLevel::NONE, lock::LockLevel::NONE);
 }

@@ -9,7 +9,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/** Unit tests for resolving a group's grant key through the wire types with real EC keys, going through `server::GroupInfo` rather than the runtime structs since that conversion is exactly where a field mismatch would hide; no server is involved, the group info is assembled here the way the bridge would serve it — with the Epoch Ladder in a separate `server::GroupGetKeyArchiveResult`, because `groupGet` does not carry it — and tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses. */
+/**
+ * Resolving a group's grant key through the wire types, with real EC keys.
+ *
+ * These go through `server::GroupInfo` rather than the runtime structs, since that conversion is exactly where a
+ * field mismatch would hide. No server is involved: the group info is assembled here the way the bridge would
+ * serve it, with the Epoch Ladder in a separate `server::GroupGetKeyArchiveResult`, because `groupGet` does not
+ * carry it.
+ *
+ * Tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses.
+ */
 
 #include <gtest/gtest.h>
 
@@ -41,7 +50,7 @@ protected:
         PrivateKey grantKey;
     };
 
-    /** The archive as the bridge serves it for a group that has never rotated: no rungs, no history. */
+    // The archive as the bridge serves it for a group that has never rotated: no rungs, no history.
     server::GroupGetKeyArchiveResult emptyArchive(std::int64_t keyVersion = 1) {
         server::GroupGetKeyArchiveResult archive;
         archive.keyVersion = keyVersion;
@@ -66,7 +75,7 @@ protected:
         return result;
     }
 
-    /** Serialises a runtime edge into the wire shape the bridge would send. */
+    // Serialises a runtime edge into the wire shape the bridge would send.
     server::GroupTreeEdge toWire(const TreeEdge& edge) {
         server::GroupTreeEdge wire;
         wire.isGrantEdge = edge.isGrantEdge;
@@ -146,7 +155,7 @@ class ResolverCurrentEpoch : public GroupKeyResolverTestBase {};
 
 class ResolverOldEpoch : public GroupKeyResolverTestBase {
 protected:
-    /** Advances a tree-backed group through epochs, publishing rungs, and returns the epoch keys. */
+    // Advances a tree-backed group through epochs, publishing rungs, and returns the epoch keys.
     std::vector<PrivateKey> advanceEpochs(Fixture& fixture, std::uint32_t upTo) {
         std::vector<PrivateKey> epochKeys{fixture.grantKey};
         std::vector<server::GroupArchiveRung> wireRungs;
@@ -174,7 +183,8 @@ protected:
             store.putGrantKey(epoch, next);
         }
 
-        // The tree still hands out epoch 1's grant key, so re-link it: the grant edge is what the climb ends on, and the newest epoch key must be what it yields.
+        // The tree still hands out epoch 1's grant key, so re-link it: the grant edge is what the climb ends
+        // on, and the newest epoch key must be what it yields.
         auto edges = fixture.group.treeEdges.value();
         for (server::GroupTreeEdge& edge : edges) {
             if (edge.isGrantEdge.value_or(false)) {
@@ -279,7 +289,8 @@ TEST_F(ResolverConversion, RegistryIncludesTheCurrentEpochNotJustHistory) {
 
     const std::vector<EpochRegistryEntry> registry = GroupKeyResolver::toRegistry(fixture.group);
     ASSERT_EQ(registry.size(), 2u);
-    // The newest epoch lives in `groupPubKey`, not in `keyHistory`; missing that would leave it unverifiable, and an unverifiable key is one the client refuses.
+    // The newest epoch lives in `groupPubKey`, not in `keyHistory`; missing that would leave it unverifiable,
+    // and an unverifiable key is one the client refuses.
     const auto current = LadderKeys::publicKeyOfEpoch(5, registry);
     ASSERT_TRUE(current.has_value());
     EXPECT_EQ(current.value(), fixture.grantKey.getPublicKey());
@@ -288,7 +299,7 @@ TEST_F(ResolverConversion, RegistryIncludesTheCurrentEpochNotJustHistory) {
     EXPECT_EQ(past.value(), older.getPublicKey());
 }
 
-/** The overload `resolve()` actually calls: history from the archive, current epoch from the group. */
+// The overload `resolve()` actually calls: history from the archive, current epoch from the group.
 TEST_F(ResolverConversion, RegistryFromAnArchiveTakesTheCurrentEpochFromTheGroup) {
     Fixture fixture = buildFixture(2);
     const PrivateKey older = PrivateKey::generateRandom();
@@ -301,7 +312,8 @@ TEST_F(ResolverConversion, RegistryFromAnArchiveTakesTheCurrentEpochFromTheGroup
     const std::vector<EpochRegistryEntry> registry =
         GroupKeyResolver::toRegistry(fixture.group, fixture.archive);
     ASSERT_EQ(registry.size(), 2u);
-    // The archive carries past epochs only, so an archive-built registry that did not reach into the group would leave the newest epoch unverifiable — and the client accepts no key it cannot verify.
+    // The archive carries past epochs only, so an archive-built registry that did not reach into the group
+    // would leave the newest epoch unverifiable — and the client accepts no key it cannot verify.
     const auto current = LadderKeys::publicKeyOfEpoch(5, registry);
     ASSERT_TRUE(current.has_value());
     EXPECT_EQ(current.value(), fixture.grantKey.getPublicKey());
@@ -310,7 +322,7 @@ TEST_F(ResolverConversion, RegistryFromAnArchiveTakesTheCurrentEpochFromTheGroup
     EXPECT_EQ(past.value(), older.getPublicKey());
 }
 
-/** SECURITY — the client must not take the server's word on rung direction. */
+// SECURITY — the client must not take the server's word on rung direction.
 TEST_F(ResolverConversion, SECURITY_DropsUpwardRungsDuringConversion) {
     server::GroupGetKeyArchiveResult archive = emptyArchive(8);
     archive.rungs = std::vector<server::GroupArchiveRung>{
@@ -427,7 +439,8 @@ TEST_F(ResolverOldEpoch, ClimbsThenDescendsToReachAnOlderEpoch) {
     }
 }
 
-/** The ladder rides in the archive, not on the group, so an archive that does not cover the target is a broken chain rather than a silent fall back to the current epoch. */
+// The ladder rides in the archive, not on the group, so an archive that does not cover the target is a broken
+// chain rather than a silent fall back to the current epoch.
 TEST_F(ResolverOldEpoch, AnArchiveWithoutTheNeededRungsReportsABrokenChain) {
     Fixture fixture = buildFixture(4);
     advanceEpochs(fixture, 12);
@@ -442,7 +455,8 @@ TEST_F(ResolverOldEpoch, AnArchiveWithoutTheNeededRungsReportsABrokenChain) {
     EXPECT_FALSE(result.key.has_value()) << "an unreachable epoch must yield no key at all, not the current one";
 }
 
-/** The payoff of the whole design, end to end through the wire types: a newcomer holding nothing but a leaf reaches content from epoch 1, and no ciphertext in the archive is addressed to them. */
+// The payoff of the whole design, end to end through the wire types: a newcomer holding nothing but a leaf
+// reaches content from epoch 1, and no ciphertext in the archive is addressed to them.
 TEST_F(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem) {
     Fixture fixture = buildFixture(4);
     const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 12);
@@ -453,7 +467,8 @@ TEST_F(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem)
     leaves[3] = newcomer.userId;
     fixture.group.leafAssignment = leaves;
 
-    // The seat's parent is on leaf 2's direct path but not on leaf 0's, so the one wrap is authored by the member sharing the blank's parent — the cheap case the design aims for: seating into a blank whose parent key the adder already holds costs exactly one wrap and refreshes nothing.
+    // The seat's parent is on leaf 2's direct path but not on leaf 0's, so the one wrap is authored by the
+    // member sharing the blank's parent — the cheap case the design aims for: one wrap, nothing refreshed.
     const TreeGroupState state = GroupKeyResolver::toTreeState(fixture.group);
     const std::uint32_t parentIndex = TreeMath::parent(TreeMath::leafNode(3), state.numLeaves);
     std::uint32_t parentGeneration = 0;
@@ -548,7 +563,8 @@ TEST_F(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
 // caching — the seam GroupApiImpl::resolveGroupPrivKey actually calls on every read
 
 TEST_F(ResolverCurrentEpoch, ASecondResolveIsServedFromTheCacheWithoutClimbing) {
-    // GroupApiImpl keeps one TreeKeyCache alive per group for the whole connection and passes it into every resolve() call; every other test in this file hands resolve() a fresh cache, which proves resolve() is correct but never proves it is cache-backed, so this reuses one cache across two calls, then makes a real second climb impossible (no edges left), so a pass can only mean the cached grant key answered it.
+    // Every other test hands resolve() a fresh cache, proving it correct but never cache-backed. This reuses one
+    // cache across two calls, then removes the edges, so a pass can only mean the cached grant key answered.
     Fixture fixture = buildFixture(8);
     setOwnLeafPosition(fixture.group, 0);
     TreeKeyCache store;

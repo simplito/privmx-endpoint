@@ -27,13 +27,14 @@ class PrivmxEndpointDevRecipe(ConanFile):
 
     def requirements(self):
         self.requires("privmxdrvcrypto/1.0.3")
-        self.requires("privmxdrvecc/1.0.2")
+        self.requires("privmxdrvecc/1.0.3")
         self.requires("privmxdrvnet/1.0.3")
         self.requires("gmp/6.3.0")
         if self.options.with_webrtc:
-            self.requires("libwebrtc/m125")
+            self.requires("libwebrtc/m125.1.0")
         self.requires("poco/1.13.2")
         self.requires("pson/1.0.7")
+        self.requires("sqlite3/3.50.4")
 
     def config_options(self):
         if self.settings.os == "Windows":
@@ -67,6 +68,7 @@ class PrivmxEndpointDevRecipe(ConanFile):
         self.options["poco/*"].enable_data_postgresql = False
         self.options["poco/*"].enable_activerecord_compiler = False
         self.options["poco/*"].enable_pagecompiler_file2page = False
+        self.options["sqlite3/*"].enable_fts5 = True
 
     def configure(self):
         if self.options.shared:
@@ -221,3 +223,26 @@ class PrivmxEndpointDevRecipe(ConanFile):
                 "privmxdrvecc::privmxdrvecc",
                 "privmxdrvnet::privmxdrvnet",
             ]
+
+        self.cpp_info.components["privmxendpointsearch"].libs = ["privmxendpointsearch"]
+        self.cpp_info.components["privmxendpointsearch"].set_property("cmake_target_name", "privmxendpoint::privmxendpointsearch")
+        self.cpp_info.components["privmxendpointsearch"].requires = [
+            "gmp::gmp",
+            "pson::Pson",
+            "poco::poco",
+            "privmxdrvcrypto::privmxdrvcrypto",
+            "privmxdrvecc::privmxdrvecc",
+            "privmxdrvnet::privmxdrvnet",
+            "sqlite3::SQLite3",
+        ]
+
+        self.cpp_info.components["privmxendpointlock"].libs = ["privmxendpointlock"]
+        self.cpp_info.components["privmxendpointlock"].set_property("cmake_target_name", "privmxendpoint::privmxendpointlock")
+        self.cpp_info.components["privmxendpointlock"].requires = [
+            "gmp::gmp",
+            "pson::Pson",
+            "poco::poco",
+            "privmxdrvcrypto::privmxdrvcrypto",
+            "privmxdrvecc::privmxdrvecc",
+            "privmxdrvnet::privmxdrvnet",
+        ]
