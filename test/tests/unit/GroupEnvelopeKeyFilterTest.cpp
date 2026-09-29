@@ -22,7 +22,7 @@ limitations under the License.
 #include <gtest/gtest.h>
 
 #include <string>
-#include <vector>
+#include <utility>
 
 #include <privmx/endpoint/group/GroupApiImpl.hpp>
 

@@ -29,6 +29,7 @@ limitations under the License.
  * See test/tools/README.md.
  */
 
+#include <cstdint>
 #include <iostream>
 #include <string>
 #include <vector>

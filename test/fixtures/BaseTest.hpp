@@ -3,9 +3,13 @@
 
 #include "./Main.hpp"
 
+#include <exception>
 #include <functional>
 #include <gtest/gtest.h>
+#include <iostream>
 #include <random>
+#include <string>
+#include <utility>
 #include <Poco/URI.h>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/BackendRequester.hpp>
