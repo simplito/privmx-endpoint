@@ -75,7 +75,7 @@ public:
     // False only at the era floor.
     static bool requiresUnitRung(std::uint32_t newEpoch, std::uint32_t eraFloor);
 
-    // Total rungs written across epochs `1..upToEpoch` under the aligned rule. Makes the cost claim testable.
+    // Under the aligned rule. Exists to make the cost claim testable.
     static std::uint32_t totalRungsThrough(std::uint32_t upToEpoch);
 
     // Greedy: the smallest target not below `to`, which is optimal for an aligned set and needs no shortest-path

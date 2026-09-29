@@ -74,12 +74,12 @@ public:
     // The bridge rejects upward rungs too, but trusting it on that would trust the one party assumed hostile.
     static std::vector<ArchiveRung> toDownwardRungs(const server::GroupGetKeyArchiveResult& archive);
 
-    // Assembled from `groupPubKey` (current epoch) plus `keyHistory` (past ones).
-    static std::vector<EpochRegistryEntry> toRegistry(const server::GroupInfo& group);
+    // `groupPubKey` is the current epoch, `keyHistory` the past ones.
+    static std::vector<EpochRegistryEntry> registryFromGroupHistory(const server::GroupInfo& group);
 
-    // The current epoch comes from the group, not the archive: `keyHistory` holds past epochs only, and an epoch
-    // this client cannot verify is one it refuses to accept a key for.
-    static std::vector<EpochRegistryEntry> toRegistry(
+    // The current epoch still comes from the group, not the archive, because an epoch this client cannot
+    // verify is one it refuses to accept a key for.
+    static std::vector<EpochRegistryEntry> registryFromArchive(
         const server::GroupInfo& group,
         const server::GroupGetKeyArchiveResult& archive
     );

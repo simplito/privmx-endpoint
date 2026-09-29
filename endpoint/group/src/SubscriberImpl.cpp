@@ -44,12 +44,8 @@ std::vector<std::string> SubscriberImpl::getCustomChannelPath(const std::string&
     return {std::string(_moduleName), std::string(_collectionName), std::string(_customItemName), channelName};
 }
 
-/**
- * The channel name becomes one element of a subscription query, and the query is parsed by splitting on these
- * very characters. A name carrying one of them would not round-trip — worse, it would let a caller write extra
- * path elements or selectors into a query the bridge then honours. The bridge's own `wsChannelName` pattern
- * permits them, so this is the gate.
- */
+// A query is parsed by splitting on these characters, so a name carrying one could write extra path elements
+// or selectors into a query the bridge honours. The bridge's `wsChannelName` pattern permits them.
 void SubscriberImpl::assertChannelName(const std::string& channelName) {
     if (channelName.empty()) {
         throw core::InvalidParamsException("field:channelName must not be empty");
@@ -130,9 +126,8 @@ void SubscriberImpl::assertQuery(const std::vector<core::SubscriptionQueryObj>& 
             throw InvalidSubscriptionQueryException();
         }
         const auto path = subscriptionQuery.channelPath();
-        // Length first, and before anything indexes into it: the path was split out of a caller-supplied
-        // string, so a short one is an ordinary input, not an impossibility. Three elements is a change event
-        // (create/update/delete); four is a custom-event channel, whose fourth element the caller names.
+        // Length first, before anything indexes in: the path came from a caller-supplied string. Three
+        // elements is a change event, four a custom-event channel whose fourth element the caller names.
         if (path.size() != CHANGE_QUERY_PATH_SIZE && path.size() != CUSTOM_QUERY_PATH_SIZE) {
             throw InvalidSubscriptionQueryException();
         }

@@ -81,20 +81,17 @@ public:
     // is where collusion resistance comes from.
     static std::vector<std::uint32_t> copath(std::uint32_t position, std::uint32_t numLeaves);
 
-    // All leaf positions under a node, ascending. Used to decide whether a subtree is entirely blank.
+    // Ascending. Used to decide whether a subtree is entirely blank.
     static std::vector<std::uint32_t> leavesUnder(std::uint32_t nodeIndex, std::uint32_t numLeaves);
 
     // Grows past the current count when appending at the end.
     static std::uint32_t numLeavesToSeat(std::uint32_t position, std::uint32_t currentNumLeaves);
 
-    // Union of several leaves' direct paths, ascending — the node set a batch operation must refresh.
-    //
-    // Nearby leaves share ancestors, so this is strictly smaller than their paths concatenated, and that is the
-    // point: a shared ancestor is refreshed ONCE. Refreshing it once per leaf would mint two keys claiming the
-    // same node and generation, and whichever landed second would orphan the other's edges.
+    // Union of several leaves' direct paths, ascending — the node set a batch operation must refresh. A shared
+    // ancestor appears ONCE; refreshing it per leaf would mint two keys for the same node and generation.
     static std::vector<std::uint32_t> frontier(const std::vector<std::uint32_t>& positions, std::uint32_t numLeaves);
 
-    // Leaves needed to seat every one of `positions`. Order-independent: seating is only ever an append.
+    // Order-independent: seating is only ever an append.
     static std::uint32_t numLeavesToSeatAll(
         const std::vector<std::uint32_t>& positions,
         std::uint32_t currentNumLeaves

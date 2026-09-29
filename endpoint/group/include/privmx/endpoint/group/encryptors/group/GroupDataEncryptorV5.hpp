@@ -13,14 +13,8 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
-/**
- * Three envelopes, one per plane. Each checks only its own field checksums, so no plane can be validated
- * against — or invalidated by — a field another one owns. That is what lets the three be written separately,
- * and what makes the bridge's per-plane grant an enforceable one rather than a declarative one.
- *
- * All three are driven straight from `GroupDataSchemaMapper`: `core::TypedDataSchemaStrategyV5` routes one
- * envelope under one key and declares `decrypt` final, which cannot express two independently-keyed planes.
- */
+// Three envelopes, one per plane, each checking only its own field checksums so the three stay separately
+// writable. Driven from `GroupDataSchemaMapper`: `TypedDataSchemaStrategyV5` routes one envelope under one key.
 class GroupDataEncryptorV5 {
 public:
     dynamic::EncryptedGroupRosterV5 encryptRoster(
@@ -34,9 +28,8 @@ public:
     );
     core::DataIntegrityObject getRosterDIOAndAssertIntegrity(const dynamic::EncryptedGroupRosterV5& encryptedData);
 
-    // Takes no encryption key, and there is nothing for one to do: every field of the public plane is signed
-    // and none is encrypted. What the key still decides is whether the entry is *attested* — that is the
-    // `publicMetaTag` check in `GroupDataSchemaMapper`, and it is not optional for a caller that has the key.
+    // Takes no encryption key: every field of the public plane is signed and none is encrypted. Whether the
+    // entry is attested is the `publicMetaTag` check in `GroupDataSchemaMapper`, not optional for a key holder.
     dynamic::EncryptedGroupPublicMetaV5 encryptPublicMeta(
         const GroupPublicMetaToEncryptV5& data,
         const privmx::crypto::PrivateKey& authorPrivateKey

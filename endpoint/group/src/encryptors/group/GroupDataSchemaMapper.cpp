@@ -39,17 +39,8 @@ Poco::Dynamic::Var GroupDataSchemaMapper::encryptRoster(const GroupRosterToEncry
     return _groupEncryptor.encryptRoster(data, _userPrivKey, key).toJSON();
 }
 
-/**
- * Both metadata planes, merged into one lib object.
- *
- * No `VersionStrategyMapper` here, unlike every other container: `core::TypedDataSchemaStrategyV5` routes one
- * envelope under one key and declares `decrypt` final, and a group needs two envelopes under two keys that may
- * sit at different epochs. The version guard it used to provide is the explicit check below, and it now covers
- * both entries rather than only the one the strategy was bound to.
- *
- * Its key-unavailable fallback is not reproduced, because for a group it was already unreachable: both planes
- * are attested before this runs, and attestation throws on a key it could not get.
- */
+// No `VersionStrategyMapper` here, unlike every other container: it routes one envelope under one key, and a
+// group needs two that may sit at different epochs. Its version guard is the explicit check below.
 std::tuple<Group, core::DataIntegrityObject, core::DataIntegrityObject> GroupDataSchemaMapper::decryptMetaPlanes(
     const server::GroupInfo& groupInfo,
     const core::DecryptedEncKey& privateMetaKey
@@ -83,17 +74,8 @@ std::tuple<Group, core::DataIntegrityObject, core::DataIntegrityObject> GroupDat
     };
 }
 
-/**
- * The roster the bridge served is the one a member attested to.
- *
- * Checked here rather than in `assertDataIntegrity` because it needs the epoch's content key, and this is the
- * path that has one.
- *
- * A missing key is a failure, not a pass. It used to mean "the caller is not a member here and has nothing to
- * check against" — but the planes are separate now, and a member removed at epoch N may still hold the key to a
- * metadata entry written at epoch N while having no way to reach the current epoch's roster key. Returning
- * quietly would hand them a group reported as verified. If the metadata opened, the roster must attest.
- */
+// Checked here rather than in `assertDataIntegrity` because it needs the epoch's content key. A missing key
+// is a failure, not a pass: if the metadata opened, the roster must attest.
 void GroupDataSchemaMapper::assertRosterIsAttested(
     const server::GroupInfo& groupInfo,
     const core::DecryptedEncKey& rosterKey
@@ -128,24 +110,15 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
     if (membership.keyVersion != groupInfo.keyVersion) {
         throw GroupDataIntegrityException();
     }
-    // The counter the monotone pin checks, tied to the roster it labels. Without this the bridge could serve
-    // the current version beside an earlier same-epoch roster — every one of which has a genuine tag, since an
-    // addition only ever grows the roster — and conceal whoever was added in between.
+    // The counter the monotone pin checks, tied to the roster it labels. Without it the bridge could serve the
+    // current version beside an earlier same-epoch roster and conceal whoever was added in between.
     if (membership.rosterVersion != groupInfo.rosterVersion) {
         throw GroupMembershipMismatchException();
     }
 }
 
-/**
- * The public metadata entry the bridge served is the one an updater wrote, at the version they wrote it at.
- *
- * `keyVersion` may legitimately lag the group's current epoch — that is the point of leaving metadata where it
- * was written — but it can never lead it, which would name a key that does not exist yet.
- *
- * The two planes carry the same `MetaBlock` shape, so what keeps one from being served in the other's position
- * is the domain-separated tag, plus the parse below: the private plane's envelope has no `publicMeta` field and
- * deserialisation refuses it outright.
- */
+// `keyVersion` may legitimately lag the group's current epoch, but never lead it. What keeps the other plane
+// from being served here is the domain-separated tag, plus a parse that refuses an envelope with no `publicMeta`.
 void GroupDataSchemaMapper::assertPublicMetaIsAttested(
     const server::GroupInfo& groupInfo,
     const core::DecryptedEncKey& publicMetaKey
@@ -183,19 +156,8 @@ void GroupDataSchemaMapper::assertPublicMetaIsAttested(
     if (meta.metaVersion != groupInfo.publicMetaVersion) {
         throw GroupMembershipMismatchException();
     }
-    // What is NOT checked here, because a reader cannot check it: that the author still holds the group. This
-    // goes for either metadata plane. A member removed at epoch N keeps the content key the entry sitting at
-    // epoch N was tagged under, and a lagging `keyVersion` is legitimate, so with a colluding bridge they could
-    // author a new entry at epoch N after leaving — the tag is genuine, `creatorUserId` matches `author` because
-    // they signed the DIO, and the verifier still knows them as a context user. Checking `author` against the
-    // current roster does not fix it: a former member is the *expected* author of an entry written before they
-    // left, so that check would refuse honest groups (pinned by
-    // `AMetadataEntryWrittenByASinceRemovedMemberStillVerifies`).
-    //
-    // Nothing inside epoch N can order "written during N" against "written after N ended". So the fix lives on
-    // the write side instead: `refreshMetadataEpochAfterRemoval` moves both entries up to the new epoch once a
-    // removal has committed, which puts their tags under a key the departed member never had. Best-effort, so a
-    // lagging entry is still a state a reader must accept — it just stops being a state a removal leaves behind.
+    // Not checked, because a reader cannot: that the author still holds the group. Nothing inside epoch N
+    // orders "written during N" against "written after N ended" — `refreshMetadataEpochAfterRemoval` is the fix.
 }
 
 // The private plane's counterpart, against its own entry, its own tag domain and its own counter. The epoch
@@ -267,8 +229,7 @@ std::string GroupDataSchemaMapper::metaPlaneTag(
     int64_t metaVersion
 ) {
     // Each plane gets its own subkey, so separation does not rest on the preimages happening to be disjoint.
-    // The domain prefix in the payload is therefore redundant, and kept anyway: it makes the preimage say what
-    // it is without having to know which key signed it.
+    // The domain prefix is redundant, and kept anyway: it makes the preimage say what it is.
     const std::string payload = std::string(domain) +
         "\n" +
         std::to_string(keyVersion) +
@@ -292,17 +253,8 @@ std::string GroupDataSchemaMapper::privateMetaTag(const std::string& key, int64_
     return metaPlaneTag("privateMeta", key, keyVersion, metaVersion);
 }
 
-/**
- * Head-entry integrity, and nothing about either tag.
- *
- * There is no chain to walk any more: a membership change commits `rosterTag`, which a reader checks against the
- * key it already holds. What is left here is what a reader needs before trusting the head's *content* — the DIO
- * signature and its field checksums — plus the monotone version pins, which are the one thing a per-entry tag
- * cannot do on its own: without them a bridge could serve an older, correctly tagged state.
- *
- * Three pins, because the counters move independently: a public-metadata write moves only its own counter, and
- * so does each of the other two, so a single pin over all of them would refuse legitimate states.
- */
+// Head-entry integrity only: the DIO signature and field checksums, plus the monotone version pins that a
+// per-entry tag cannot provide. Three pins, because the three counters move independently.
 void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupInfo) {
     // `history` is the same set of entries `data` is projected from, so the head of one is the head of the
     // other — and the roster plane's author comes out of `history`.
@@ -404,19 +356,8 @@ GroupSummary GroupDataSchemaMapper::toLibGroupSummary(const server::GroupSummary
     };
 }
 
-/**
- * Three keys and three identities per group, which is why this does not use
- * `batchValidateDecryptVerifyContainers`.
- *
- * That helper hardcodes `data.back().keyId` as *the* key and issues one verification request against the
- * document's `lastModifier`. Both assumptions break here: each metadata plane has a key of its own, possibly at
- * an older epoch and possibly not the same epoch as the other plane's, and each plane's author is whoever last
- * wrote *that* plane — not necessarily whoever last touched the document. Verifying a metadata DIO against
- * `lastModifier` would fail for an honest group.
- *
- * One key request still covers all three planes: `addGroupKeys` submits every epoch in `groupKeys`, and the
- * resolver descends the Epoch Ladder per candidate.
- */
+// Three keys and three identities per group, so `batchValidateDecryptVerifyContainers` does not fit: it
+// hardcodes one key and verifies against the document's `lastModifier`, which no plane here need match.
 std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     const std::vector<server::GroupInfo>& groups,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -464,9 +405,8 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
                 result[i] = toError(g, ENDPOINT_CORE_EXCEPTION_CODE);
                 continue;
             }
-            // Three key lookups, and the two metadata ones may resolve different epochs at different ladder
-            // depths. `find` rather than `at`: an absent key here is a legible status, not an out_of_range
-            // escaping into the catch-all below as a bare internal error.
+            // Three key lookups; the two metadata ones may resolve different epochs. `find` rather than `at`,
+            // so an absent key is a legible status, not an out_of_range escaping as a bare internal error.
             const auto keyOf = [&](const std::string& keyId) -> const core::DecryptedEncKey* {
                 auto found = it->second.find(keyId);
                 return found == it->second.end() ? nullptr : &found->second;
@@ -490,10 +430,8 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             result[i] = lib;
             publicMetaDios[i] = publicDio;
             privateMetaDios[i] = privateDio;
-            // Each plane's DIO answers for whoever wrote *that* plane. The roster's author is the head entry's,
-            // not the document's `lastModifier`: that field moves on any write, so once metadata has its own
-            // methods a metadata write by anyone but the last roster author would fail this check on an
-            // otherwise honest group. `history` is non-empty here — `assertDataIntegrity` refuses it otherwise.
+            // Each plane's DIO answers for whoever wrote that plane, so the roster's author is the head
+            // entry's, not the document's `lastModifier`, which moves on any write.
             if (publicDio.creatorUserId != g.publicMeta.author ||
                 privateDio.creatorUserId != g.privateMeta.author ||
                 rosterDios[i].creatorUserId != g.history.back().author) {
@@ -524,9 +462,8 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             continue;
         }
         const server::GroupInfo& g = groups[i];
-        // The roster head's author and its own timestamp, for the same reason the integrity check above uses
-        // them: `lastModifier`/`lastModificationDate` describe the document's last write of any kind, so
-        // verifying the roster DIO against them asks the wrong identity as soon as a metadata write lands last.
+        // The roster head's author and timestamp: `lastModifier`/`lastModificationDate` describe the document's
+        // last write of any kind, so verifying against them asks the wrong identity after a metadata write.
         verifyReqs.push_back(
             {.contextId = result[i].contextId,
              .senderId = g.history.back().author,
@@ -573,11 +510,8 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
         auto encData = dynamic::EncryptedGroupInternalMetaViewV5::fromJSON(data);
         if (encData.version != core::ModuleDataSchema::Version::VERSION_5)
             return {};
-        // The signed DIO, not just a signature over the field. What comes out of here is the container's
-        // `secret` — `prepareContainerUpdate` feeds it to `verifyKeysSecret` and binds new key entries to it —
-        // so it has to stay tied to the identity, context and resource the DIO commits to. Verifying only the
-        // field against the envelope's own `authorPubKey` would let a holder of the epoch key restate it under
-        // a keypair bound to nothing.
+        // The signed DIO, not just a signature over the field: this yields the container's `secret`, which
+        // must stay tied to the identity, context and resource the DIO commits to.
         auto dio = _DIOEncryptor.decodeAndVerify(encData.dio);
         if (dio.creatorPubKey != encData.authorPubKey ||
             dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encData.internalMeta)) {

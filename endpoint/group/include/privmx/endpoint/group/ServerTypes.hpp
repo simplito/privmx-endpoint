@@ -175,13 +175,8 @@ JSON_STRUCT(GroupKeyEntrySetForNewGroup, GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELD
     F(tree, GroupTreeState)
 JSON_STRUCT(GroupCreateModel, GROUP_CREATE_MODEL_FIELDS);
 
-/**
- * The public metadata plane's write. CAS-guarded on `publicMetaVersion` and nothing else, so a concurrent
- * private-metadata write commits a different counter and the two cannot strand each other.
- *
- * No `force` field, as the combined model had none: the entry commits the version it lands at, so a write that
- * skipped the version check could only publish a tag no reader will accept.
- */
+// The public metadata plane's write. CAS-guarded on `publicMetaVersion` and nothing else, so a concurrent
+// private-metadata write commits a different counter and the two cannot strand each other.
 #define GROUP_UPDATE_PUBLIC_META_MODEL_FIELDS(F)                                                                       \
     F(id, std::string)                                                                                                 \
     F(resourceId, std::string)                                                                                         \
@@ -199,10 +194,8 @@ JSON_STRUCT(GroupUpdatePublicMetaModel, GROUP_UPDATE_PUBLIC_META_MODEL_FIELDS);
     F(version, int64_t)
 JSON_STRUCT(GroupUpdatePrivateMetaModel, GROUP_UPDATE_PRIVATE_META_MODEL_FIELDS);
 
-/**
- * The policy write. No version and no CAS: the policy touches neither metadata counter, appends no entry, and
- * is covered by no tag — as it never was. A dedicated RPC does not make it authenticated.
- */
+// No version and no CAS: the policy touches neither metadata counter, appends no entry, and is covered by no
+// tag — as it never was. A dedicated RPC does not make it authenticated.
 #define GROUP_UPDATE_POLICY_MODEL_FIELDS(F)                                                                            \
     F(id, std::string)                                                                                                 \
     F(policy, Poco::Dynamic::Var)
@@ -307,10 +300,8 @@ JSON_STRUCT(GroupGetKeyArchiveModel, GROUP_GET_KEY_ARCHIVE_MODEL_FIELDS);
     F(rungs, std::vector<GroupArchiveRung>)
 JSON_STRUCT(GroupGetKeyArchiveResult, GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS);
 
-// `confirmationTag` is optional because the winning version may have been written by a client that sent none.
-// A missing tag is a state the loser has to handle — refuse to adopt — not a parse error:
-// `deserialize<std::string>` throws on an absent field, which would swallow the very ROTATED_ALREADY this
-// payload exists to recover from.
+// `confirmationTag` is optional because the winner may have been a client that sent none. A missing tag is a
+// state the loser refuses to adopt, not a parse error that would swallow the ROTATED_ALREADY being recovered.
 #define ROTATED_ALREADY_PAYLOAD_FIELDS(F)                                                                              \
     F(keyVersion, int64_t)                                                                                             \
     F(groupPubKey, std::string)                                                                                        \
@@ -318,9 +309,8 @@ JSON_STRUCT(GroupGetKeyArchiveResult, GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS);
     F(confirmationTag, std::optional<std::string>)
 JSON_STRUCT(RotatedAlreadyPayload, ROTATED_ALREADY_PAYLOAD_FIELDS);
 
-// `data` is a base64 group envelope, so it carries its own keyId — no `keyId` field beside it, and no key list:
-// the recipients already hold the key that opens it. That is what keeps the request a fixed size whatever the
-// Group's size, where `contextSendCustomEvent` grows a wrapped key per recipient.
+// `data` is a base64 group envelope carrying its own keyId, so no `keyId` field and no key list: that keeps
+// the request a fixed size, where `contextSendCustomEvent` grows a wrapped key per recipient.
 #define GROUP_SEND_CUSTOM_EVENT_MODEL_FIELDS(F)                                                                        \
     F(groupId, std::string)                                                                                            \
     F(channel, std::string)                                                                                            \

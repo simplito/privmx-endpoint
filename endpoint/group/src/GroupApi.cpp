@@ -211,14 +211,8 @@ Envelope GroupApi::encryptAnonymously(
 }
 
 namespace {
-/**
- * Ceiling on one block handed across the API, in either direction.
- *
- * Peak memory is otherwise the caller's discipline rather than a property of the API: one call carrying a
- * whole file would hold the plaintext, the ciphertext and the binding's own copies at once. That is a hard
- * failure in a WebAssembly build, where the address space is 4 GiB and the practical heap far smaller.
- * `StoreApi` bounds its random-write path the same way.
- */
+// Ceiling on one block handed across the API, so peak memory is a property of the API rather than the
+// caller's discipline — a whole-file call would be a hard failure under WebAssembly's 4 GiB address space.
 constexpr size_t MAX_FILE_BLOCK = 4 * 1024 * 1024;
 } // namespace
 

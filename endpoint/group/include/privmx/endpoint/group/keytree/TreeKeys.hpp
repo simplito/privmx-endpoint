@@ -74,25 +74,14 @@ public:
     // caller hands over the whole roster. Overrides any earlier `setMemberKeys`.
     void setMemberKeyStrings(std::map<std::string, std::string> membersByUserId);
 
-    /**
-     * Seats for `count` newcomers: blanks a removal left, lowest first, then appended past the last leaf.
-     *
-     * The same answer `groupGet`'s `forNewMembers` gives server-side, and the client asks the server for it —
-     * this exists for planning against a `TreeGroupState` already in hand, which is what the tests and the
-     * state-dump tool do. Nothing on the live path calls it.
-     */
+    // Seats for `count` newcomers: blanks a removal left, lowest first, then appended past the last leaf.
+    // The live path asks the server for this instead; here for planning against a state already in hand.
     static std::vector<std::uint32_t> choosePositions(const TreeGroupState& state, std::uint32_t count);
 
     static std::optional<std::uint32_t> positionOf(const TreeGroupState& state, const std::string& userId);
 
-    /**
-     * Members a plan over `positions` will wrap to: the occupied leaves hanging off the refreshed frontier.
-     *
-     * `O(k log n)` of them, against a roster of `n`. The caller needs their public keys and the tree state does
-     * not carry any, so this is what says which ones to go and find — resolving the whole roster to use fourteen
-     * of it is the cost this exists to avoid. `excludedSeats` drops seats the operation is emptying: nobody wraps
-     * to a departing member, and looking their key up would fail if they have already left the context.
-     */
+    // The occupied leaves hanging off the refreshed frontier — `O(k log n)` keys to find, not the whole roster.
+    // `excludedSeats` drops seats the operation is emptying; a departing member's key may no longer resolve.
     static std::vector<std::string> membersToWrapTo(
         const TreeGroupState& state,
         const std::vector<std::uint32_t>& positions,
@@ -123,7 +112,7 @@ private:
     static const TreeEdge* findGrantEdge(const TreeGroupState& state);
     static const TreeNodeState* findNode(const TreeGroupState& state, std::uint32_t nodeIndex);
 
-    // The public key of a member's leaf, parsed on first use.
+    // Parsed on first use.
     std::optional<privmx::crypto::PublicKey> memberKey(const std::string& userId);
 
     TreeKeyCache& _cache;

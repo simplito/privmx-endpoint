@@ -115,7 +115,7 @@ std::vector<ArchiveRung> GroupKeyResolver::toDownwardRungs(const server::GroupGe
     return rungs;
 }
 
-std::vector<EpochRegistryEntry> GroupKeyResolver::toRegistry(
+std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromArchive(
     const server::GroupInfo& group,
     const server::GroupGetKeyArchiveResult& archive
 ) {
@@ -137,7 +137,7 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::toRegistry(
     return registry;
 }
 
-std::vector<EpochRegistryEntry> GroupKeyResolver::toRegistry(const server::GroupInfo& group) {
+std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromGroupHistory(const server::GroupInfo& group) {
     std::vector<EpochRegistryEntry> registry;
     // `keyHistory` holds the PAST epochs only; the current one lives in `groupPubKey`. Missing that distinction
     // would leave the newest epoch unverifiable, and an unverifiable key is one this client refuses to accept.
@@ -239,7 +239,7 @@ ResolveResult GroupKeyResolver::resolve(
         std::optional<std::uint32_t>(static_cast<std::uint32_t>(archive.archivePrunedBelow.value())) :
         std::nullopt;
     return resolveWith(
-        group, epoch, ownUserKey, toDownwardRungs(archive), toRegistry(group, archive),
+        group, epoch, ownUserKey, toDownwardRungs(archive), registryFromArchive(group, archive),
         static_cast<std::uint32_t>(archive.eraFloor), prunedBelow
     );
 }
