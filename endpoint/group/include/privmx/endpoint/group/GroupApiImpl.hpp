@@ -12,9 +12,9 @@
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 
+#include "privmx/endpoint/core/ContainerBaseApi.hpp"
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/group/Constants.hpp"
 #include "privmx/endpoint/group/Events.hpp"
 #include "privmx/endpoint/group/GroupApi.hpp"
@@ -32,7 +32,7 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
-class GroupApiImpl : public privmx::utils::ManualManagedClass<GroupApiImpl>, protected core::ModuleBaseApi {
+class GroupApiImpl : public privmx::utils::ManualManagedClass<GroupApiImpl>, protected core::ContainerBaseApi {
 public:
     GroupApiImpl(
         const privfs::RpcGateway::Ptr& gateway,
@@ -82,11 +82,6 @@ public:
     std::unordered_map<std::string, core::GroupEpochInfo> fetchGroupEpochs(
         const std::string& contextId,
         const std::vector<std::string>& groupIds
-    );
-
-    static core::ModuleBaseApi::GroupResolvers makeGroupResolvers(const std::shared_ptr<GroupApiImpl>& groupApiImpl);
-    static std::optional<core::ModuleBaseApi::GroupResolvers> makeGroupResolvers(
-        const std::optional<GroupApi>& groupApi
     );
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);

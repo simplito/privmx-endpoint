@@ -11,30 +11,22 @@ limitations under the License.
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
-#include <algorithm>
 #include <privmx/utils/Utils.hpp>
 #include <set>
-#include <type_traits>
 
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 
-#include "privmx/endpoint/core/ListQueryMapper.hpp"
-#include "privmx/endpoint/core/ModuleBaseApi.hpp"
+#include "privmx/endpoint/core/ContainerBaseApi.hpp"
 #include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
-#include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/Types.hpp>
-#include <privmx/endpoint/core/Utils.hpp>
-#include <privmx/endpoint/core/VarDeserializer.hpp>
-#include <privmx/endpoint/core/VarSerializer.hpp>
 
 using namespace privmx::endpoint::core;
 
-ModuleBaseApi::ModuleBaseApi(
+ContainerBaseApi::ContainerBaseApi(
     const privmx::crypto::PrivateKey& userPrivKey,
     const std::shared_ptr<KeyProvider>& keyProvider,
     const std::string& host,
@@ -44,15 +36,11 @@ ModuleBaseApi::ModuleBaseApi(
     : _guardedExecutor(std::make_shared<privmx::utils::GuardedExecutor>()), _userPrivKey(userPrivKey),
       _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware), _connection(connection) {}
 
-void ModuleBaseApi::initGroupResolvers(const std::optional<GroupResolvers>& resolvers) {
-    if (!resolvers.has_value()) {
-        return;
-    }
-    _groupPrivKeyResolver = resolvers->groupPrivKey;
-    _groupEpochResolver = resolvers->groupEpochs;
+void ContainerBaseApi::initGroupPrivKeyResolver(const KeyProvider::GroupPrivKeyResolver& resolver) {
+    _groupPrivKeyResolver = resolver;
 }
 
-ModuleBaseApi::ContainerRoster ModuleBaseApi::resolveRosterPubKeys(
+ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
     const std::string& contextId,
     const std::vector<std::string>& userIds,
     const std::vector<std::string>& managerIds
@@ -103,35 +91,7 @@ ModuleBaseApi::ContainerRoster ModuleBaseApi::resolveRosterPubKeys(
     return {.users = resolve(userIds), .managers = resolve(managerIds)};
 }
 
-void ModuleBaseApi::runAutoRekey(const std::string& moduleId, const std::function<void()>& rotate) {
-    try {
-        rotate();
-    } catch (const privmx::utils::PrivmxException& e) {
-        auto code = ExceptionConverter::convert(e).getCode();
-        if (code == privmx::endpoint::server::ContainerRotatedAlreadyException().getCode()) {
-            invalidateModuleKeysInCache(moduleId);
-            return;
-        } else if (code == privmx::endpoint::server::AccessDeniedException().getCode()) {
-            throw StaleKeyRekeyRequiredException("automatic re-key of moduleId=" + moduleId + " was denied");
-        }
-        ExceptionConverter::rethrowAsCoreException(e);
-        throw Exception("ExceptionConverter rethrow error");
-    }
-}
-
-void ModuleBaseApi::runWithoutAutoRekey(const std::string& moduleId, const std::function<void()>& write) {
-    try {
-        write();
-    } catch (const privmx::utils::PrivmxException& e) {
-        auto code = ExceptionConverter::convert(e).getCode();
-        if (code == privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode()) {
-            throw StaleKeyRekeyRequiredException("moduleId=" + moduleId + " has to be re-keyed by a manager");
-        }
-        ExceptionConverter::rethrowAsCoreException(e);
-    }
-}
-
-ContainerCreateContext ModuleBaseApi::prepareContainerCreate(
+ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
     const std::string& contextId,
     const std::vector<UserWithPubKey>& users,
     const std::vector<UserWithPubKey>& managers
@@ -147,7 +107,43 @@ ContainerCreateContext ModuleBaseApi::prepareContainerCreate(
     return {key, resourceId, dio, secret, keyEntries};
 }
 
-DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(
+std::vector<server::KeyEntrySet> ContainerBaseApi::buildRosterKeyEntries(const ContainerUpdatePlan& plan) {
+    std::vector<server::KeyEntrySet> keyEntries;
+    if (plan.needNewKey) {
+        keyEntries = _keyProvider->prepareKeysList(
+            plan.roster->getNewUsers(), plan.ctx.key, plan.ctx.dio, plan.ctx.location, plan.ctx.secret
+        );
+    }
+    auto usersToAddMissingKey{plan.roster->getUsersToAddKey()};
+    if (!usersToAddMissingKey.empty()) {
+        auto tmp = _keyProvider->prepareMissingKeysForNewUsers(
+            plan.containerKeys, usersToAddMissingKey, plan.ctx.dio, plan.ctx.location, plan.ctx.secret
+        );
+        keyEntries.insert(keyEntries.end(), tmp.begin(), tmp.end());
+    }
+    return keyEntries;
+}
+
+void ContainerBaseApi::assertRekeyNotNeeded(const server::ContainerInfoBase& container) {
+    assertNoStaleGroups(container.staleGroups);
+}
+
+void ContainerBaseApi::assertRekeyNotNeeded(const ModuleKeys& moduleKeys) {
+    assertNoStaleGroups(moduleKeys.staleGroups);
+}
+
+void ContainerBaseApi::assertNoStaleGroups(const std::vector<std::string>& staleGroups) {
+    if (staleGroups.empty()) {
+        return;
+    }
+    std::string names;
+    for (const auto& groupId : staleGroups) {
+        names += names.empty() ? groupId : "," + groupId;
+    }
+    throw StaleKeyRekeyRequiredException("staleGroups=" + names);
+}
+
+DecryptedEncKeyV2 ContainerBaseApi::findEncKeyByKeyId(
     std::unordered_map<std::string, DecryptedEncKeyV2> keys,
     const std::string& keyId
 ) {
@@ -159,50 +155,18 @@ DecryptedEncKeyV2 ModuleBaseApi::findEncKeyByKeyId(
     throw UnknownModuleEncryptionKeyException();
 }
 
-DecryptedEncKeyV2 ModuleBaseApi::getAndValidateModuleCurrentEncKey(
-    ModuleKeys moduleKeys,
-    const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
-) {
+DecryptedEncKeyV2 ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys) {
     assertRekeyNotNeeded(moduleKeys);
     KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location = EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
     keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolverOr(groupPrivKeyResolver))
+    return _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver)
         .at(location)
         .at(moduleKeys.currentKeyId);
 }
 
-void ModuleBaseApi::resolveGroupEpochs(
-    const std::string& contextId,
-    std::vector<GroupGrantWithKey>& grants,
-    std::unordered_map<std::string, GroupEpochInfo>& groupCache
-) {
-    auto isComplete = [](const GroupGrantWithKey& g) { return g.groupEpoch > 0 && !g.groupPubKey.empty(); };
-    std::vector<std::string> toFetch;
-    for (const auto& g : grants) {
-        if (isComplete(g) || groupCache.find(g.groupId) != groupCache.end())
-            continue;
-        if (std::find(toFetch.begin(), toFetch.end(), g.groupId) == toFetch.end())
-            toFetch.push_back(g.groupId);
-    }
-    if (!toFetch.empty() && _groupEpochResolver) {
-        auto fetched = _groupEpochResolver(contextId, toFetch);
-        groupCache.insert(fetched.begin(), fetched.end());
-    }
-    for (auto& g : grants) {
-        if (isComplete(g))
-            continue;
-        auto resolved = groupCache.find(g.groupId);
-        if (resolved == groupCache.end()) {
-            throw UnresolvedGroupGranteeException("groupId=" + g.groupId);
-        }
-        g.groupPubKey = resolved->second.groupPubKey;
-        g.groupEpoch = resolved->second.keyVersion;
-    }
-}
-
-ModuleKeys ModuleBaseApi::getModuleKeys(
+ModuleKeys ContainerBaseApi::getModuleKeys(
     const std::string& moduleId,
     const std::optional<std::set<std::string>>& keyIds,
     const std::optional<int64_t>& minimumSchemaVersion
@@ -214,7 +178,7 @@ ModuleKeys ModuleBaseApi::getModuleKeys(
     return convertContainerKeyCacheModuleKeysToModuleApiFormat(keys.value());
 }
 
-void ModuleBaseApi::setNewModuleKeysInCache(
+void ContainerBaseApi::setNewModuleKeysInCache(
     const std::string& moduleId,
     const ModuleKeys& newKeys,
     int64_t moduleVersion
@@ -223,11 +187,11 @@ void ModuleBaseApi::setNewModuleKeysInCache(
     _keyCache.set(moduleId, keys);
 }
 
-void ModuleBaseApi::invalidateModuleKeysInCache(const std::optional<std::string>& moduleId) {
+void ContainerBaseApi::invalidateModuleKeysInCache(const std::optional<std::string>& moduleId) {
     _keyCache.clear(moduleId);
 }
 
-ModuleKeys ModuleBaseApi::getNewModuleKeysAndUpdateCache(const std::string& moduleId) {
+ModuleKeys ContainerBaseApi::getNewModuleKeysAndUpdateCache(const std::string& moduleId) {
     LOG_DEBUG("PlatformModule", "getNewModuleKeysAndUpdateCache")
     auto moduleKeys = getModuleKeysAndVersionFromServer(moduleId);
     auto keys = convertModuleKeysToContainerKeyCacheFormat(moduleKeys.first, moduleKeys.second);
@@ -235,7 +199,7 @@ ModuleKeys ModuleBaseApi::getNewModuleKeysAndUpdateCache(const std::string& modu
     return moduleKeys.first;
 }
 
-ContainerKeyCache::CachedModuleKeys ModuleBaseApi::convertModuleKeysToContainerKeyCacheFormat(
+ContainerKeyCache::CachedModuleKeys ContainerBaseApi::convertModuleKeysToContainerKeyCacheFormat(
     const ModuleKeys& moduleKeys,
     int64_t moduleVersion
 ) {
@@ -251,7 +215,7 @@ ContainerKeyCache::CachedModuleKeys ModuleBaseApi::convertModuleKeysToContainerK
     };
 }
 
-ModuleKeys ModuleBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat(
+ModuleKeys ContainerBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat(
     const ContainerKeyCache::CachedModuleKeys& moduleKeys
 ) {
     return ModuleKeys{
@@ -265,7 +229,7 @@ ModuleKeys ModuleBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat(
     };
 }
 
-std::vector<server::GroupKeyEntrySet> ModuleBaseApi::buildGroupKeyEntries(
+std::vector<server::GroupKeyEntrySet> ContainerBaseApi::buildGroupKeyEntries(
     const std::vector<GroupGrantWithKey>& groups,
     const EncKey& key,
     const DataIntegrityObject& dio,

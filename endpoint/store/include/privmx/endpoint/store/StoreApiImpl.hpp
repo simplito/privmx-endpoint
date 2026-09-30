@@ -21,7 +21,6 @@ limitations under the License.
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/Events.hpp"
@@ -40,13 +39,14 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class StoreApiImpl : public privmx::utils::ManualManagedClass<StoreApiImpl>, protected core::ModuleBaseApi {
+class StoreApiImpl : public privmx::utils::ManualManagedClass<StoreApiImpl>, protected group::GroupAwareModuleApi {
 public:
     StoreApiImpl(
         const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -145,7 +145,6 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys storeToModuleKeys(server::Store store);
 
     core::ModuleKeys getFileDecryptionKeys(server::File file);
     core::DecryptedEncKey getCurrentFileEncKey(const std::string& fileId);

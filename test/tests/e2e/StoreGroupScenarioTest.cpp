@@ -307,7 +307,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     store::Store rekeyedStore;
     ASSERT_NO_THROW({ rekeyedStore = user1.storeApi->getStore(storeId); });
     // Pins the forced auto re-key: a warm key cache whose staleGroups predates the rotation must not talk the
-    // uploader out of it (ModuleBaseApi::withKeyRefresh, reached from closeFile).
+    // uploader out of it (GroupAwareModuleApi::withKeyRefresh, reached from closeFile).
     EXPECT_TRUE(rekeyedStore.staleGroups.empty())
         << "uploading after the group rotated should have re-keyed the store to the new epoch";
 

@@ -21,7 +21,6 @@ limitations under the License.
 #include <privmx/endpoint/core/ContainerKeyCache.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
-#include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 #include "privmx/endpoint/core/Factory.hpp"
@@ -33,13 +32,14 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/encryptors/entry/EntryDataSchemaMapper.hpp"
 #include "privmx/endpoint/kvdb/encryptors/kvdb/KvdbDataSchemaMapper.hpp"
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-class KvdbApiImpl : public privmx::utils::ManualManagedClass<KvdbApiImpl>, protected core::ModuleBaseApi {
+class KvdbApiImpl : public privmx::utils::ManualManagedClass<KvdbApiImpl>, protected group::GroupAwareModuleApi {
 public:
     KvdbApiImpl(
         const privfs::RpcGateway::Ptr& gateway,
@@ -127,7 +127,6 @@ private:
         const core::DecryptedEncKey& encKey
     );
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys kvdbToModuleKeys(server::KvdbInfo kvdb);
 
     core::ModuleKeys getEntryDecryptionKeys(server::KvdbEntryInfo entry);
     Poco::Dynamic::Var encryptEntryData(

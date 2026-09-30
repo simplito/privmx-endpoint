@@ -266,7 +266,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     kvdb::Kvdb rekeyedKvdb;
     ASSERT_NO_THROW({ rekeyedKvdb = user1.kvdbApi->getKvdb(kvdbId); });
     // Pins the forced auto re-key: a warm key cache whose staleGroups predates the rotation must not talk the
-    // writer out of it (ModuleBaseApi::withKeyRefresh).
+    // writer out of it (GroupAwareModuleApi::withKeyRefresh).
     EXPECT_TRUE(rekeyedKvdb.staleGroups.empty())
         << "writing after the group rotated should have re-keyed the kvdb to the new epoch";
 

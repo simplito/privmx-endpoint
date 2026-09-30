@@ -23,7 +23,6 @@ limitations under the License.
 
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/thread/ServerApi.hpp"
@@ -32,13 +31,14 @@ limitations under the License.
 #include "privmx/endpoint/thread/encryptors/message/MessageDataSchemaMapper.hpp"
 #include "privmx/endpoint/thread/encryptors/thread/ThreadDataSchemaMapper.hpp"
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace thread {
 
-class ThreadApiImpl : public privmx::utils::ManualManagedClass<ThreadApiImpl>, protected core::ModuleBaseApi {
+class ThreadApiImpl : public privmx::utils::ManualManagedClass<ThreadApiImpl>, protected group::GroupAwareModuleApi {
 public:
     ThreadApiImpl(
         const privfs::RpcGateway::Ptr& gateway,
@@ -119,7 +119,6 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys threadToModuleKeys(server::ThreadInfo thread);
 
     core::ModuleKeys getMessageDecryptionKeys(server::Message message);
     Poco::Dynamic::Var encryptMessageData(

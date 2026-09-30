@@ -263,7 +263,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     thread::Thread rekeyedThread;
     ASSERT_NO_THROW({ rekeyedThread = user1.threadApi->getThread(threadId); });
     // Pins the forced auto re-key: a warm key cache whose staleGroups predates the rotation must not talk the
-    // sender out of it (ModuleBaseApi::withKeyRefresh).
+    // sender out of it (GroupAwareModuleApi::withKeyRefresh).
     EXPECT_TRUE(rekeyedThread.staleGroups.empty())
         << "sending after the group rotated should have re-keyed the thread to the new epoch";
 

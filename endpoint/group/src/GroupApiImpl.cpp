@@ -39,25 +39,19 @@ GroupApiImpl::GroupApiImpl(
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const core::Connection& connection
 )
-    : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
+    : ContainerBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
       _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
       _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway),
       _groupDataSchemaMapper(std::make_shared<GroupDataSchemaMapper>(userPrivKey, connection)) {
-    initGroupResolvers(
-        core::ModuleBaseApi::GroupResolvers{
-            // Resolves a group's own grant key by climbing its own tree — swallows a failed climb to nullopt.
-            .groupPrivKey =
-                [this](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
-                try {
-                    return resolveGroupPrivKey(groupId, epoch);
-                } catch (...) {
-                    // caller holds no leaf in this group's tree at this epoch — skip
-                    return std::nullopt;
-                }
-            },
-            .groupEpochs = [this](
-                               const std::string& contextId, const std::vector<std::string>& groupIds
-                           ) { return fetchGroupEpochs(contextId, groupIds); }
+    // A group opens its own metadata key by climbing its own tree, so it resolves its grant key for itself.
+    initGroupPrivKeyResolver(
+        [this](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
+            try {
+                return resolveGroupPrivKey(groupId, epoch);
+            } catch (...) {
+                // caller holds no leaf in this group's tree at this epoch — skip
+                return std::nullopt;
+            }
         }
     );
     initModuleDataSchemaMapper(_groupDataSchemaMapper);
@@ -109,7 +103,7 @@ std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
     return members;
 }
 
-// The attested roster, as bare ids — `prepareContainerUpdate` diffs names, it does not wrap to them.
+// The attested roster, as bare ids — the update preparation diffs names, it does not wrap to them.
 GroupApiImpl::RosterAfterChange GroupApiImpl::rosterFromUserIds(
     const std::vector<std::string>& users,
     const std::vector<std::string>& managers
@@ -340,17 +334,17 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
         }
     }
 
-    // The roster after the change, derived rather than restated. Bare ids: with `distributeToUsers = false`
-    // nothing here wraps a key to them, so the public keys the caller used to supply were never read.
+    // The roster after the change, derived rather than restated. Bare ids: nothing here wraps a key to them,
+    // so the public keys the caller used to supply were never read.
     RosterAfterChange roster = rosterFromUserIds(attestedUsers, attestedManagers);
     for (const GroupMemberToAdd& newMember : newMembers) {
         (newMember.role == "manager" ? roster.managers : roster.users)
             .push_back(core::UserWithPubKey{.userId = newMember.user.userId, .pubKey = std::string()});
     }
 
-    // No new epoch, `distributeToUsers = false`
-    auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false, false, _groupPrivKeyResolver
+    // No new epoch
+    auto ctx = prepareContainerUpdateWithoutKeyEntries(
+        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false
     );
     // Roster only. The metadata entry is not read, not re-encrypted and not re-signed — that is the separation
     // that stops a concurrent metadata write from stranding this write at a version it never committed to.
@@ -505,8 +499,8 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     drop(roster.users);
     drop(roster.managers);
 
-    auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, roster.users, roster.managers, true, false, _groupPrivKeyResolver
+    auto ctx = prepareContainerUpdateWithoutKeyEntries(
+        currentGroup, currentEntry, resourceId, roster.users, roster.managers, true
     );
     const auto selfAddressedKey = buildGroupKeyEntries(
         {core::GroupGrantWithKey{
@@ -620,8 +614,8 @@ GroupApiImpl::MetaWriteContext GroupApiImpl::prepareMetaWrite(const std::string&
     // Names no diff, so `UsersKeysResolver` sees no reason to mint a key: the pub keys are deliberately empty
     // because nothing here is wrapped to anybody.
     const auto roster = rosterFromUserIds(currentGroup.users, currentGroup.managers);
-    auto ctx = prepareContainerUpdate(
-        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false, false, _groupPrivKeyResolver
+    auto ctx = prepareContainerUpdateWithoutKeyEntries(
+        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false
     );
     LOG_DEBUG("ctx.secret - ", ctx.secret)
 
@@ -843,34 +837,6 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
         } catch (const std::exception& e) { LOG_WARN("[fetchGroupEpochs] cannot read group ", id, ": ", e.what()) }
     }
     return epochs;
-}
-
-core::ModuleBaseApi::GroupResolvers GroupApiImpl::makeGroupResolvers(
-    const std::shared_ptr<GroupApiImpl>& groupApiImpl
-) {
-    return core::ModuleBaseApi::GroupResolvers{
-        .groupPrivKey =
-            [groupApiImpl](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
-            try {
-                return groupApiImpl->resolveGroupPrivKey(groupId, epoch);
-            } catch (...) {
-                // not a member of this group at this epoch — skip
-                return std::nullopt;
-            }
-        },
-        .groupEpochs = [groupApiImpl](
-                           const std::string& contextId, const std::vector<std::string>& groupIds
-                       ) { return groupApiImpl->fetchGroupEpochs(contextId, groupIds); }
-    };
-}
-
-std::optional<core::ModuleBaseApi::GroupResolvers> GroupApiImpl::makeGroupResolvers(
-    const std::optional<GroupApi>& groupApi
-) {
-    if (!groupApi.has_value()) {
-        return std::nullopt;
-    }
-    return makeGroupResolvers(groupApi->getImpl());
 }
 
 void GroupApiImpl::processNotificationEvent(const std::string& type, const core::NotificationEvent& notification) {
@@ -1146,7 +1112,7 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
 }
 
 Envelope GroupApiImpl::encrypt(const std::string& groupId, const core::Buffer& content) {
-    auto key = getAndValidateModuleCurrentEncKey(getModuleKeys(groupId), _groupPrivKeyResolver);
+    auto key = getAndValidateModuleCurrentEncKey(getModuleKeys(groupId));
     return _envelopeEncryptor.packGroupKeyEnvelope(groupId, key.id, content, _userPrivKey, key.key);
 }
 
@@ -1274,7 +1240,7 @@ core::Buffer GroupApiImpl::drainChunks(const std::shared_ptr<EnvelopeFileState>&
 }
 
 FileHandle GroupApiImpl::beginFileEncryption(const std::string& groupId, FileSize size) {
-    auto key = getAndValidateModuleCurrentEncKey(getModuleKeys(groupId), _groupPrivKeyResolver);
+    auto key = getAndValidateModuleCurrentEncKey(getModuleKeys(groupId));
     FileHandle handle = _connection.getImpl()->getHandleManager()->createHandle("GroupEnvelope:Encrypt");
     _envelopeFiles.set(
         handle,

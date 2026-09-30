@@ -30,7 +30,6 @@ limitations under the License.
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/UsersKeysResolver.hpp"
-#include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/inbox/InboxApiImpl.hpp"
 #include "privmx/endpoint/inbox/InboxDataHelper.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
@@ -56,7 +55,8 @@ InboxApiImpl::InboxApiImpl(
     size_t serverRequestChunkSize,
     const std::optional<group::GroupApi>& groupApi
 )
-    : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _connection(connection),
+    : GroupAwareModuleApi(userPrivKey, keyProvider, host, eventMiddleware, connection, groupApi),
+      _connection(connection),
       _threadApi(threadApi), _storeApi(storeApi), _keyProvider(keyProvider), _serverApi(serverApi),
       _requestApi(requestApi), _host(host), _userPrivKey(userPrivKey), _eventMiddleware(eventMiddleware),
       _handleManager(handleManager), _chunksCache(
@@ -71,7 +71,6 @@ InboxApiImpl::InboxApiImpl(
       _subscriber(connection.getImpl()->getGateway(), INBOX_TYPE_FILTER_FLAG),
       _inboxDataSchemaMapper(std::make_shared<InboxDataSchemaMapper>(userPrivKey, connection)),
       _inboxEntryDataSchemaMapper(keyProvider, serverApi, storeApi) {
-    initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi));
     initModuleDataSchemaMapper(_inboxDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&InboxApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -187,7 +186,7 @@ void InboxApiImpl::updateInbox(
                                                                         core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
         currentInbox, currentInboxEntry, currentInboxResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentInbox, groups), true, _groupPrivKeyResolver
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentInbox, groups)
     );
     auto eccKey = privmx::crypto::ECC::fromPrivateKey(ctx.key.key);
     auto privateKey = privmx::crypto::PrivateKey(eccKey);
@@ -285,7 +284,7 @@ void InboxApiImpl::rotateInboxKeys(
 
 Inbox InboxApiImpl::getInbox(const std::string& inboxId, const std::string& type) {
     auto inbox = getServerInbox(inboxId, type);
-    setNewModuleKeysInCache(inbox.id, inboxToModuleKeys(inbox), inbox.version);
+    setNewModuleKeysInCache(inbox.id, containerToModuleKeys(inbox), inbox.version);
     auto result = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(inbox, _keyProvider, _groupPrivKeyResolver);
     return result;
 }
@@ -311,7 +310,7 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
     core::ListQueryMapper::map(model, query);
     auto inboxesListResult = _serverApi->inboxList(model);
     for (auto inbox : inboxesListResult.inboxes) {
-        setNewModuleKeysInCache(inbox.id, inboxToModuleKeys(inbox), inbox.version);
+        setNewModuleKeysInCache(inbox.id, containerToModuleKeys(inbox), inbox.version);
     }
     std::vector<Inbox> inboxes = _inboxDataSchemaMapper->validateDecryptAndConvertInboxes(
         inboxesListResult.inboxes, _keyProvider, _groupPrivKeyResolver
@@ -452,7 +451,7 @@ core::PagingList<inbox::InboxEntry> InboxApiImpl::listEntries(
         throw InboxModuleDoesNotSupportQueriesYetException();
     }
     auto inboxRaw{getServerInbox(inboxId)};
-    setNewModuleKeysInCache(inboxRaw.id, inboxToModuleKeys(inboxRaw), inboxRaw.version);
+    setNewModuleKeysInCache(inboxRaw.id, containerToModuleKeys(inboxRaw), inboxRaw.version);
     auto inboxData{getInboxCurrentDataEntry(inboxRaw).data};
     auto threadId = inboxData.threadId;
     thread::server::ThreadMessagesGetModel model;
@@ -607,7 +606,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
         if (type == "inboxCreated") {
             auto raw = server::InboxInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
-                setNewModuleKeysInCache(raw.id, inboxToModuleKeys(raw), raw.version);
+                setNewModuleKeysInCache(raw.id, containerToModuleKeys(raw), raw.version);
                 auto data = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(
                     raw, _keyProvider, _groupPrivKeyResolver
                 );
@@ -617,7 +616,7 @@ void InboxApiImpl::processNotificationEvent(const std::string& type, const core:
         } else if (type == "inboxUpdated") {
             auto raw = server::InboxInfo::fromJSON(notification.data);
             if (raw.type.value_or(std::string(INBOX_TYPE_FILTER_FLAG)) == INBOX_TYPE_FILTER_FLAG) {
-                setNewModuleKeysInCache(raw.id, inboxToModuleKeys(raw), raw.version);
+                setNewModuleKeysInCache(raw.id, containerToModuleKeys(raw), raw.version);
                 auto data = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(
                     raw, _keyProvider, _groupPrivKeyResolver
                 );
@@ -735,11 +734,7 @@ core::ModuleKeys InboxApiImpl::getEntryDecryptionKeys(thread::server::Message me
 std::pair<core::ModuleKeys, int64_t> InboxApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     auto inbox = getServerInbox(moduleId);
     _inboxDataSchemaMapper->assertDataIntegrity(inbox);
-    return std::make_pair(inboxToModuleKeys(inbox), inbox.version);
-}
-
-core::ModuleKeys InboxApiImpl::inboxToModuleKeys(inbox::server::InboxInfo inbox) {
-    return containerToModuleKeys(inbox);
+    return std::make_pair(containerToModuleKeys(inbox), inbox.version);
 }
 
 std::vector<std::string> InboxApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
