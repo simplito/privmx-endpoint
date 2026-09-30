@@ -2,12 +2,12 @@
 #define _PRIVMXLIB_ENDPOINT_GROUP_ENCRYPTORS_ENVELOPE_GROUPENVELOPEENCRYPTOR_HPP_
 
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include <Poco/Types.h>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
@@ -20,9 +20,9 @@ namespace endpoint {
 namespace group {
 
 // Deliberately 32-bit: the wire writes it as `u32be` into the chunk key, so the width is a format constraint.
-using ChunkIndex = Poco::UInt32;
+using ChunkIndex = std::uint32_t;
 // A count of bytes, or of chunks.
-using ByteCount = Poco::UInt64;
+using ByteCount = std::uint64_t;
 
 // Sealed size of a chunk holding `plainLen` bytes: type byte, zero block, PKCS#7-padded ciphertext, tag.
 // At namespace scope so `ENCRYPTED_CHUNK_SIZE` derives from it instead of restating the arithmetic.
@@ -41,7 +41,7 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  * ## Notation
  *
  *   u8 x            one octet
- *   u8len x         one length octet, then x; `putField` refuses anything above 255 bytes
+ *   u8len x         one length octet, then x; `EnvelopeWriter::putField` refuses anything above 255 bytes
  *   u32be / u64be   fixed-width big-endian integer
  *   encrypt(p, k)   `core::DataInnerEncryptorV4`, CipherType 4: `0x04 | cbc(zero16 || p) | hmac tag16`. The
  *                   IV is random but not transmitted — the cipher prepends a 16-byte zero block and decrypt
@@ -112,7 +112,7 @@ class GroupEnvelopeEncryptor {
 public:
     // 2 since the per-chunk key derivation moved from `sha256(fileKey || i)` to a keyed, labelled HMAC.
     // Headers parse identically across the two, so without the bump a v1 file fails late, at the first MAC.
-    static constexpr Poco::UInt8 VERSION = 2;
+    static constexpr std::uint8_t VERSION = 2;
 
     // Plaintext bytes per file chunk. Fixed rather than carried in the envelope, so a hostile header cannot
     // force a divide-by-zero or an allocation bomb. `VERSION` is the upgrade path if it ever has to change.
@@ -242,6 +242,14 @@ public:
     );
 
 private:
+    // The type octet of each envelope type, as the format notes above spell them out.
+    static constexpr std::uint8_t TYPE_GROUP_KEY = 1;
+    static constexpr std::uint8_t TYPE_ANONYMOUS = 2;
+    static constexpr std::uint8_t TYPE_FILE = 3;
+    static constexpr std::uint8_t TYPE_ANON_FILE = 4;
+
+    static constexpr std::size_t CONTENT_KEY_SIZE = 32;
+
     // Domain separator on the ECIES plaintext. See the note in the .cpp — it is load-bearing, not decoration.
     static const std::string ECIES_DOMAIN;
 
@@ -252,8 +260,12 @@ private:
 
     static Routing peekFamily(const core::Buffer& envelope, EnvelopeFamily family);
 
-    static std::string writeHeader(Poco::UInt8 type, const std::vector<std::string>& fields);
+    static std::string writeHeader(std::uint8_t type, const std::vector<std::string>& fields);
     static std::string chunkKey(const std::string& fileKey, ChunkIndex index);
+
+    // The sealed tail both file types carry: the echoed header, then `u64be plainSize || fileKey32`.
+    // `plain` must already have been checked to begin with `header`. Returns `{plainSize, fileKey}`.
+    static std::pair<ByteCount, std::string> readFileBody(const std::string& plain, const std::string& header);
 
     // ECIES key wrap shared by the two anonymous types. Returns `{wrap, contentKey}`.
     static std::pair<std::string, std::string> wrapContentKey(const privmx::crypto::PublicKey& groupPubKey);

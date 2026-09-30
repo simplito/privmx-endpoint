@@ -24,8 +24,6 @@ namespace stream {
 
 class ServerApi {
 public:
-    using Ptr = Poco::SharedPtr<ServerApi>;
-
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
 
     server::StreamRoomCreateResult streamRoomCreate(server::StreamRoomCreateModel model);

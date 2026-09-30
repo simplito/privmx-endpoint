@@ -48,7 +48,7 @@ public:
     static std::tuple<Pson::BinaryString, Pson::BinaryString> extractSignAndDataBuff(const Pson::BinaryString& data) {
         Pson::BinaryString plain = data;
         if (plain[0] == 1) {
-            size_t signature_length = reinterpret_cast<Poco::UInt8&>(plain[1]);
+            size_t signature_length = reinterpret_cast<uint8_t&>(plain[1]);
             auto signature = plain.substr(2, signature_length);
             auto data_buf = plain.substr(2 + signature_length);
             return {signature, data_buf};

@@ -23,7 +23,7 @@ using namespace privmx::endpoint::core;
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<int64_t>(const int64_t& val) {
-    return Poco::Int64(val);
+    return static_cast<int64_t>(val);
 }
 
 template<>

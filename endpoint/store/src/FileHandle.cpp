@@ -179,7 +179,7 @@ void FileWriteHandle::createRequestData() {
 void FileWriteHandle::setRequestData(
     const std::string& requestId,
     const std::string& key,
-    const Poco::Int64& fileIndex
+    const int64_t& fileIndex
 ) {
     _streamer.setRequestData(requestId, key, fileIndex);
 }

@@ -110,7 +110,7 @@ public:
     core::Buffer getPrivateMeta();
     privmx::endpoint::store::FileSizeResult getEncryptedFileSize();
     void createRequestData();
-    void setRequestData(const std::string& requestId, const std::string& key, const Poco::Int64& fileIndex);
+    void setRequestData(const std::string& requestId, const std::string& key, const int64_t& fileIndex);
     bool isWriteHandle() const override { return true; }
 
 private:

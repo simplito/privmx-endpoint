@@ -169,7 +169,7 @@ private:
     thread::server::Message getServerMessage(const std::string& messageId);
     void assertInboxExist(const std::string& inboxId);
 
-    static const Poco::Int64 _CHUNK_SIZE;
+    static const int64_t _CHUNK_SIZE;
     core::Connection _connection;
     endpoint::thread::ThreadApi _threadApi;
     endpoint::store::StoreApi _storeApi;

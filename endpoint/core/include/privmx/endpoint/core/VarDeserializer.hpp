@@ -81,7 +81,7 @@ std::shared_ptr<T>* VarDeserializer::deserializePointer(const Poco::Dynamic::Var
     if (!value.isInteger()) {
         throw InvalidArgumentTypeException(name + " | Expected pointer, value has type " + value.type().name());
     }
-    return reinterpret_cast<std::shared_ptr<T>*>(static_cast<uintptr_t>(value.convert<Poco::Int64>()));
+    return reinterpret_cast<std::shared_ptr<T>*>(static_cast<uintptr_t>(value.convert<int64_t>()));
 }
 
 template<>

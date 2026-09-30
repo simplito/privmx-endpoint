@@ -24,8 +24,6 @@ namespace thread {
 
 class ServerApi {
 public:
-    using Ptr = Poco::SharedPtr<ServerApi>;
-
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
 
     server::ThreadCreateResult threadCreate(server::ThreadCreateModel model);

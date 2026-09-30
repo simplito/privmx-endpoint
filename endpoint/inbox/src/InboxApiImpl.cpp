@@ -40,7 +40,7 @@ using namespace privmx::endpoint::inbox;
 using namespace privmx::endpoint;
 using namespace privmx::utils;
 
-const Poco::Int64 InboxApiImpl::_CHUNK_SIZE = 128 * 1024;
+const int64_t InboxApiImpl::_CHUNK_SIZE = 128 * 1024;
 
 InboxApiImpl::InboxApiImpl(
     const core::Connection& connection,

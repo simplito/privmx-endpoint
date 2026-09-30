@@ -160,7 +160,7 @@ InboxPrivateDataV5AsResult InboxDataProcessorV5::unpackPrivate(
 
 void InboxDataProcessorV5::validateVersion(const Poco::Dynamic::Var& data) {
     Poco::JSON::Object::Ptr obj = data.extract<Poco::JSON::Object::Ptr>();
-    if (obj->get("version").convert<Poco::Int64>() != InboxDataSchema::Version::VERSION_5) {
+    if (obj->get("version").convert<int64_t>() != InboxDataSchema::Version::VERSION_5) {
         throw InvalidEncryptedInboxDataVersionException();
     }
 }

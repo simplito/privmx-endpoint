@@ -24,7 +24,7 @@ using namespace privmx::endpoint::core;
 template<>
 int64_t VarDeserializer::deserialize<int64_t>(const Poco::Dynamic::Var& val, const std::string& name) {
     TypeValidator::validateInteger(val, name);
-    return val.convert<Poco::Int64>();
+    return val.convert<int64_t>();
 }
 
 template<>
