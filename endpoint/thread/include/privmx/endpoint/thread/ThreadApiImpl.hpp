@@ -157,11 +157,6 @@ private:
     void autoRotateThreadKeys(const std::string& threadId);
 
     privfs::RpcGateway::Ptr _gateway;
-    privmx::crypto::PrivateKey _userPrivKey;
-    std::shared_ptr<core::KeyProvider> _keyProvider;
-    std::string _host;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    core::Connection _connection;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
 

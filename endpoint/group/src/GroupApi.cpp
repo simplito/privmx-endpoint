@@ -4,6 +4,7 @@
 
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
 #include "privmx/endpoint/core/Validator.hpp"
+#include "privmx/endpoint/group/Constants.hpp"
 #include "privmx/endpoint/group/GroupApi.hpp"
 #include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/group/GroupException.hpp"

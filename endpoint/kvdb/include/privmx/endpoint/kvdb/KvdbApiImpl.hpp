@@ -157,11 +157,6 @@ private:
      */
     void autoRotateKvdbKeys(const std::string& kvdbId);
     privfs::RpcGateway::Ptr _gateway;
-    privmx::crypto::PrivateKey _userPrivKey;
-    std::shared_ptr<core::KeyProvider> _keyProvider;
-    std::string _host;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    core::Connection _connection;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
     std::shared_ptr<KvdbDataSchemaMapper> _kvdbDataSchemaMapper;

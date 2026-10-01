@@ -60,10 +60,8 @@ StoreApiImpl::StoreApiImpl(
     const std::optional<group::GroupApi>& groupApi
 )
     : GroupAwareModuleApi(userPrivKey, keyProvider, host, eventMiddleware, connection, groupApi),
-      _keyProvider(keyProvider),
-      _serverApi(serverApi), _host(host), _userPrivKey(userPrivKey), _requestApi(requestApi),
-      _fileDataProvider(fileDataProvider), _eventMiddleware(eventMiddleware), _handleManager(handleManager),
-      _connection(connection), _serverRequestChunkSize(serverRequestChunkSize),
+      _serverApi(serverApi), _requestApi(requestApi), _fileDataProvider(fileDataProvider),
+      _handleManager(handleManager), _serverRequestChunkSize(serverRequestChunkSize),
       _chunksCache(
           std::make_shared<CacheScopedNamespace>(
               host + ";" + userPrivKey.getPublicKey().toBase58DER() + ";",

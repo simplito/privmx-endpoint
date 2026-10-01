@@ -46,8 +46,6 @@ StreamApiLowImpl::StreamApiLowImpl(
     const std::optional<group::GroupApi>& groupApi
 )
     : GroupAwareModuleApi(userPrivKey, keyProvider, host, eventMiddleware, connection, groupApi),
-      _connection(connection.getImpl()),
-      _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
       _serverApi(std::make_shared<ServerApi>(gateway)),
       _subscriber(stream::SubscriberImpl(gateway, STREAM_TYPE_FILTER_FLAG)),
       _streamRoomDataSchemaMapper(std::make_shared<StreamRoomDataSchemaMapper>(userPrivKey, connection)) {

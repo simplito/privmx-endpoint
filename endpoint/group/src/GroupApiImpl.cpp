@@ -18,6 +18,7 @@
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/Validator.hpp"
+#include "privmx/endpoint/group/Constants.hpp"
 #include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/group/GroupException.hpp"
 #include "privmx/endpoint/group/Mapper.hpp"
@@ -39,9 +40,8 @@ GroupApiImpl::GroupApiImpl(
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const core::Connection& connection
 )
-    : ContainerBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _gateway(gateway),
-      _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
-      _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway),
+    : ContainerBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
+      _serverApi(ServerApi(gateway)), _subscriber(gateway),
       _groupDataSchemaMapper(std::make_shared<GroupDataSchemaMapper>(userPrivKey, connection)) {
     // A group opens its own metadata key by climbing its own tree, so it resolves its grant key for itself.
     initGroupPrivKeyResolver(
@@ -77,6 +77,26 @@ static void rejectConflictingRosterKey(const std::string& userId) {
     throw core::InvalidParamsException("user '" + userId + "' is listed with two different public keys");
 }
 
+dynamic::MembershipBlock GroupApiImpl::buildMembershipBlock(
+    const core::EncKey& key,
+    const std::string& groupPubKey,
+    int64_t keyVersion,
+    int64_t rosterVersion,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers
+) {
+    return dynamic::MembershipBlock{
+        .rosterTag = GroupDataSchemaMapper::rosterTag(
+            key.key, keyVersion, rosterVersion, core::EndpointUtils::usersWithPubKeyToIds(users),
+            core::EndpointUtils::usersWithPubKeyToIds(managers)
+        ),
+        .groupPubKey = groupPubKey,
+        .keyId = key.id,
+        .keyVersion = keyVersion,
+        .rosterVersion = rosterVersion
+    };
+}
+
 std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
     const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers
@@ -104,7 +124,7 @@ std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
 }
 
 // The attested roster, as bare ids — the update preparation diffs names, it does not wrap to them.
-GroupApiImpl::RosterAfterChange GroupApiImpl::rosterFromUserIds(
+RosterAfterChange GroupApiImpl::rosterFromUserIds(
     const std::vector<std::string>& users,
     const std::vector<std::string>& managers
 ) {
@@ -199,16 +219,7 @@ std::string GroupApiImpl::createGroup(
     GroupRosterToEncryptV5 rosterToEncrypt{
         .internalMeta = internalMeta,
         .dio = ctx.dio,
-        .membership = dynamic::MembershipBlock{
-            .rosterTag = GroupDataSchemaMapper::rosterTag(
-                ctx.key.key, 1, 1, core::EndpointUtils::usersWithPubKeyToIds(users),
-                core::EndpointUtils::usersWithPubKeyToIds(managers)
-            ),
-            .groupPubKey = groupPubKeyStr,
-            .keyId = ctx.key.id,
-            .keyVersion = 1,
-            .rosterVersion = 1
-        }
+        .membership = buildMembershipBlock(ctx.key, groupPubKeyStr, 1, 1, users, managers)
     };
     GroupPublicMetaToEncryptV5 publicMetaToEncrypt{
         .publicMeta = publicMeta,
@@ -352,16 +363,9 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
-        .membership = dynamic::MembershipBlock{
-            .rosterTag = GroupDataSchemaMapper::rosterTag(
-                ctx.key.key, currentEpoch, newRosterVersion, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-                core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
-            ),
-            .groupPubKey = currentGroup.groupPubKey,
-            .keyId = ctx.key.id,
-            .keyVersion = currentEpoch,
-            .rosterVersion = newRosterVersion
-        }
+        .membership = buildMembershipBlock(
+            ctx.key, currentGroup.groupPubKey, currentEpoch, newRosterVersion, roster.users, roster.managers
+        )
     };
 
     server::GroupAddMembersModel model;
@@ -519,16 +523,9 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
-        .membership = dynamic::MembershipBlock{
-            .rosterTag = GroupDataSchemaMapper::rosterTag(
-                ctx.key.key, newEpoch, newRosterVersion, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-                core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
-            ),
-            .groupPubKey = newGroupPubKeyStr,
-            .keyId = ctx.key.id,
-            .keyVersion = newEpoch,
-            .rosterVersion = newRosterVersion
-        }
+        .membership = buildMembershipBlock(
+            ctx.key, newGroupPubKeyStr, newEpoch, newRosterVersion, roster.users, roster.managers
+        )
     };
 
     // Seats come from the plan, which resolved them from the roster the bridge served. `subjectLeafPositions`
@@ -599,9 +596,7 @@ void GroupApiImpl::refreshMetadataEpochAfterRemoval(const std::string& groupId) 
     }
 }
 
-static constexpr unsigned int BRIDGE_GROUP_ROTATED_ALREADY = 0x621C;
-
-GroupApiImpl::MetaWriteContext GroupApiImpl::prepareMetaWrite(const std::string& groupId) {
+MetaWriteContext GroupApiImpl::prepareMetaWrite(const std::string& groupId) {
     // The default path view is enough: this submits no tree and does not touch the roster at all.
     server::GroupGetModel getModel{
         .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
@@ -617,7 +612,6 @@ GroupApiImpl::MetaWriteContext GroupApiImpl::prepareMetaWrite(const std::string&
     auto ctx = prepareContainerUpdateWithoutKeyEntries(
         currentGroup, currentEntry, resourceId, roster.users, roster.managers, false
     );
-    LOG_DEBUG("ctx.secret - ", ctx.secret)
 
     // The roster head always sits at the current epoch, so the key selected off it is the current epoch's.
     // Were that to stop holding, metadata would be written under a key a removed member still holds.
@@ -661,7 +655,8 @@ void GroupApiImpl::updateGroupPublicMeta(
     } catch (const privmx::utils::PrivmxException& e) {
         // Not reachable against the current bridge: `ROTATED_ALREADY` comes from the rotation family, never
         // from a metadata write. Kept for the day that changes; the retry re-reads and re-tags on its own.
-        if (allowRotationRetry && (e.getCode() & 0x0000FFFF) == BRIDGE_GROUP_ROTATED_ALREADY) {
+        auto code = core::ExceptionConverter::convert(e).getCode();
+        if (allowRotationRetry && code == endpoint::server::GroupRotatedAlreadyException().getCode()) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
             updateGroupPublicMeta(groupId, publicMeta, version, false);
@@ -702,7 +697,8 @@ void GroupApiImpl::updateGroupPrivateMeta(
     try {
         _serverApi.groupUpdatePrivateMeta(model);
     } catch (const privmx::utils::PrivmxException& e) {
-        if (allowRotationRetry && (e.getCode() & 0x0000FFFF) == BRIDGE_GROUP_ROTATED_ALREADY) {
+        auto code = core::ExceptionConverter::convert(e).getCode();
+        if (allowRotationRetry && code == endpoint::server::GroupRotatedAlreadyException().getCode()) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
             updateGroupPrivateMeta(groupId, privateMeta, version, false);
@@ -853,7 +849,12 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
             }
             auto raw = server::GroupCustomEventData::fromJSON(notification.data);
             GroupCustomEventData data{
-                .groupId = raw.id, .channelName = channelName, .userId = raw.author.id, .statusCode = 0
+                .groupId = raw.id,
+                .channelName = channelName,
+                .userId = raw.author.id,
+                .authorPubKey = {},
+                .payload = {},
+                .statusCode = 0
             };
             // A failure here is reported, never thrown: the event loop has nobody to throw to, and one
             // unreadable notification must not cost the caller the readable ones behind it.
@@ -1185,7 +1186,7 @@ Envelope GroupApiImpl::encryptAnonymously(
 
 // -- envelope files --------------------------------------------------------------------------------------
 
-std::shared_ptr<GroupApiImpl::EnvelopeFileState> GroupApiImpl::getFileState(FileHandle fileHandle, bool wantReading) {
+std::shared_ptr<EnvelopeFileState> GroupApiImpl::getFileState(FileHandle fileHandle, bool wantReading) {
     auto state = _envelopeFiles.get(fileHandle);
     if (!state.has_value()) {
         throw core::InvalidParamsException("field:fileHandle is not an open encrypted-file handle");
@@ -1298,7 +1299,7 @@ FileHandle GroupApiImpl::beginFileDecryption(const Envelope& envelope) {
     core::Validator::validateId(routing.groupId, "field:envelope.groupId ");
 
     // Both kinds open into the same reader: only the header is wrapped differently, the body is not.
-    GroupEnvelopeEncryptor::FileHeader header;
+    EnvelopeFileHeader header;
     std::string groupKey;
     if (routing.type == ENVELOPE_FROM_MEMBER) {
         groupKey = encKeyById(routing.groupId, routing.keyId).key;
@@ -1350,7 +1351,7 @@ CipherOffset GroupApiImpl::seekInEncryptedFile(FileHandle fileHandle, FilePositi
     return static_cast<int64_t>(GroupEnvelopeEncryptor::cipherOffsetOfChunk(state->index));
 }
 
-std::shared_ptr<GroupApiImpl::EnvelopeFileState> GroupApiImpl::finishFile(FileHandle fileHandle, bool wantReading) {
+std::shared_ptr<EnvelopeFileState> GroupApiImpl::finishFile(FileHandle fileHandle, bool wantReading) {
     auto state = getFileState(fileHandle, wantReading);
     // Free the handle however this ends, rather than hold a key resident because a file turned out short.
     // `state` is a shared_ptr, so the caller can still read it once the map has let go.

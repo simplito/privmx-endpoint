@@ -122,7 +122,7 @@ void GroupAwareModuleApi::fillContainerUpdateModel(
     }
 }
 
-GroupAwareModuleApi::ResolvedGroupGrants GroupAwareModuleApi::resolveGroupGrants(
+ResolvedGroupGrants GroupAwareModuleApi::resolveGroupGrants(
     const std::string& contextId,
     const std::string& resourceId,
     const core::EncKey& key,

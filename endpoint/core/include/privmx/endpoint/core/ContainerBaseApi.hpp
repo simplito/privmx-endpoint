@@ -206,6 +206,13 @@ protected:
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
     core::KeyProvider::GroupPrivKeyResolver _groupPrivKeyResolver;
 
+    // The connection's constants, held here so every module reads one copy rather than keeping its own.
+    privmx::crypto::PrivateKey _userPrivKey;
+    std::shared_ptr<core::KeyProvider> _keyProvider;
+    std::string _host;
+    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
+    core::Connection _connection;
+
 private:
     // Everything an update needs decided before any key entry is built, so a module that distributes its key
     // some other way stops here.
@@ -238,11 +245,6 @@ private:
         const core::ContainerKeyCache::CachedModuleKeys& moduleKeys
     );
 
-    privmx::crypto::PrivateKey _userPrivKey;
-    std::shared_ptr<core::KeyProvider> _keyProvider;
-    std::string _host;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    core::Connection _connection;
     std::shared_ptr<core::BaseModuleDataSchemaMapper> _moduleDataSchemaMapper;
     core::ContainerKeyCache _keyCache;
 };
@@ -305,7 +307,6 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
         // Inbox special Case
         secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data.toJSON(), currentKey).secret;
     }
-    LOG_DEBUG("secret - ", secret)
     auto roster{core::UsersKeysResolver::create(container, users, managers, forceGenerateNewKey, currentKey)};
     if (!_keyProvider->verifyKeysSecret(containerKeys, location, secret)) {
         throw core::EncryptionKeyValidationException();

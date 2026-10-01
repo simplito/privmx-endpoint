@@ -164,15 +164,10 @@ private:
 
     static const size_t _CHUNK_SIZE;
 
-    std::shared_ptr<core::KeyProvider> _keyProvider;
     std::shared_ptr<ServerApi> _serverApi;
-    std::string _host;
-    privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<RequestApi> _requestApi;
     std::shared_ptr<FileDataProvider> _fileDataProvider;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<core::HandleManager> _handleManager;
-    core::Connection _connection;
     size_t _serverRequestChunkSize;
 
     std::shared_ptr<CacheInterface> _chunksCache;

@@ -43,8 +43,7 @@ KvdbApiImpl::KvdbApiImpl(
     const std::optional<group::GroupApi>& groupApi
 )
     : GroupAwareModuleApi(userPrivKey, keyProvider, host, eventMiddleware, connection, groupApi), _gateway(gateway),
-      _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
-      _connection(connection), _serverApi(ServerApi(gateway)), _subscriber(gateway, KVDB_TYPE_FILTER_FLAG),
+      _serverApi(ServerApi(gateway)), _subscriber(gateway, KVDB_TYPE_FILTER_FLAG),
       _kvdbDataSchemaMapper(std::make_shared<KvdbDataSchemaMapper>(userPrivKey, connection)),
       _entryDataSchemaMapper(userPrivKey, connection) {
     initModuleDataSchemaMapper(_kvdbDataSchemaMapper);

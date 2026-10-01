@@ -195,7 +195,7 @@ core::Buffer GroupEnvelopeEncryptor::packFileEnvelope(
     return core::Buffer::from(header + _dataEncryptor.encrypt(signed_, groupKey).stdString());
 }
 
-GroupEnvelopeEncryptor::FileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
+EnvelopeFileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
     const core::Buffer& envelope,
     const std::string& groupKey
 ) {
@@ -220,7 +220,7 @@ GroupEnvelopeEncryptor::FileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
     }
 
     auto [plainSize, fileKey] = readFileBody(plain.stdString(), header);
-    return FileHeader{
+    return EnvelopeFileHeader{
         .type = ENVELOPE_FROM_MEMBER,
         .groupId = groupId,
         .keyId = keyId,
@@ -253,7 +253,7 @@ core::Buffer GroupEnvelopeEncryptor::packAnonymousFileEnvelope(
     return core::Buffer::from(out);
 }
 
-GroupEnvelopeEncryptor::FileHeader GroupEnvelopeEncryptor::unpackAnonymousFileEnvelope(
+EnvelopeFileHeader GroupEnvelopeEncryptor::unpackAnonymousFileEnvelope(
     const core::Buffer& envelope,
     const privmx::crypto::PrivateKey& groupPrivKey
 ) {
@@ -276,7 +276,7 @@ GroupEnvelopeEncryptor::FileHeader GroupEnvelopeEncryptor::unpackAnonymousFileEn
     }
 
     auto [plainSize, fileKey] = readFileBody(plain.stdString(), header);
-    return FileHeader{
+    return EnvelopeFileHeader{
         .type = ENVELOPE_ANONYMOUS,
         .groupId = groupId,
         .keyId = std::string(),
@@ -305,7 +305,7 @@ core::Buffer GroupEnvelopeEncryptor::decryptChunk(
 
 // -- dispatch ------------------------------------------------------------------------------------------
 
-GroupEnvelopeEncryptor::Routing GroupEnvelopeEncryptor::peekFamily(
+EnvelopeRouting GroupEnvelopeEncryptor::peekFamily(
     const core::Buffer& envelope,
     EnvelopeFamily family
 ) {
@@ -320,7 +320,7 @@ GroupEnvelopeEncryptor::Routing GroupEnvelopeEncryptor::peekFamily(
         throw InvalidEnvelopeFormatException("unsupported envelope version");
     }
     std::uint8_t type = cursor.readU8();
-    Routing routing;
+    EnvelopeRouting routing;
     routing.groupId = cursor.readField();
     if (type == memberType) {
         routing.type = ENVELOPE_FROM_MEMBER;

@@ -56,9 +56,7 @@ InboxApiImpl::InboxApiImpl(
     const std::optional<group::GroupApi>& groupApi
 )
     : GroupAwareModuleApi(userPrivKey, keyProvider, host, eventMiddleware, connection, groupApi),
-      _connection(connection),
-      _threadApi(threadApi), _storeApi(storeApi), _keyProvider(keyProvider), _serverApi(serverApi),
-      _requestApi(requestApi), _host(host), _userPrivKey(userPrivKey), _eventMiddleware(eventMiddleware),
+      _threadApi(threadApi), _storeApi(storeApi), _serverApi(serverApi), _requestApi(requestApi),
       _handleManager(handleManager), _chunksCache(
                                          std::make_shared<store::CacheScopedNamespace>(
                                              host + ";" + userPrivKey.getPublicKey().toBase58DER() + ";",

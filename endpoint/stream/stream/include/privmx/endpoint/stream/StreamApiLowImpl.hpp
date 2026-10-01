@@ -209,11 +209,6 @@ private:
     static int32_t nextIdCounter;
     static int32_t nextId() { return nextIdCounter++; }
 
-    std::shared_ptr<core::ConnectionImpl> _connection;
-    privmx::crypto::PrivateKey _userPrivKey;
-    std::shared_ptr<core::KeyProvider> _keyProvider;
-    std::string _host;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<ServerApi> _serverApi;
     stream::SubscriberImpl _subscriber;
     std::shared_ptr<StreamRoomDataSchemaMapper> _streamRoomDataSchemaMapper;

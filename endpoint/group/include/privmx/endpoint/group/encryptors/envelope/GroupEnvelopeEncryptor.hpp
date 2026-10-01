@@ -13,16 +13,12 @@
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp>
 
+#include "privmx/endpoint/group/GroupTypes.hpp"
 #include "privmx/endpoint/group/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace group {
-
-// Deliberately 32-bit: the wire writes it as `u32be` into the chunk key, so the width is a format constraint.
-using ChunkIndex = std::uint32_t;
-// A count of bytes, or of chunks.
-using ByteCount = std::uint64_t;
 
 // Sealed size of a chunk holding `plainLen` bytes: type byte, zero block, PKCS#7-padded ciphertext, tag.
 // At namespace scope so `ENCRYPTED_CHUNK_SIZE` derives from it instead of restating the arithmetic.
@@ -168,15 +164,6 @@ public:
         return ReadOutcome::Complete;
     }
 
-    struct FileHeader {
-        EnvelopeType type;
-        std::string groupId;
-        std::string keyId;        // set for ENVELOPE_FROM_MEMBER only
-        std::string authorPubKey; // base58-DER, signature verified; EMPTY for ENVELOPE_ANONYMOUS
-        ByteCount plainSize;
-        std::string fileKey; // 32 raw bytes
-    };
-
     core::Buffer packGroupKeyEnvelope(
         const std::string& groupId,
         const std::string& keyId,
@@ -200,7 +187,7 @@ public:
         const std::string& groupKey
     );
 
-    FileHeader unpackFileEnvelope(const core::Buffer& envelope, const std::string& groupKey);
+    EnvelopeFileHeader unpackFileEnvelope(const core::Buffer& envelope, const std::string& groupKey);
 
     core::Buffer packAnonymousFileEnvelope(
         const std::string& groupId,
@@ -209,7 +196,7 @@ public:
         const std::string& fileKey
     );
 
-    FileHeader unpackAnonymousFileEnvelope(
+    EnvelopeFileHeader unpackAnonymousFileEnvelope(
         const core::Buffer& envelope,
         const privmx::crypto::PrivateKey& groupPrivKey
     );
@@ -219,21 +206,13 @@ public:
 
     // -- dispatch ----------------------------------------------------------------------------------------
 
-    // The routing header, read without opening anything.
-    struct Routing {
-        EnvelopeType type;
-        std::string groupId;
-        std::string keyId;       // set for ENVELOPE_FROM_MEMBER only
-        std::string groupPubKey; // base58-DER; set for ENVELOPE_ANONYMOUS only
-    };
-
     // Message envelopes (type 1 or 2) only. A file envelope is refused: letting one through would hand back
     // a file key as though it were message content.
-    Routing peek(const core::Buffer& envelope) { return peekFamily(envelope, EnvelopeFamily::Message); }
+    EnvelopeRouting peek(const core::Buffer& envelope) { return peekFamily(envelope, EnvelopeFamily::Message); }
 
     // File envelopes (type 3 or 4) only. A message envelope is refused: it has no body to stream, so the
     // caller would be left with a handle onto data that does not exist.
-    Routing peekFile(const core::Buffer& envelope) { return peekFamily(envelope, EnvelopeFamily::File); }
+    EnvelopeRouting peekFile(const core::Buffer& envelope) { return peekFamily(envelope, EnvelopeFamily::File); }
 
     DecryptedEnvelope openGroupKeyEnvelope(const core::Buffer& envelope, const std::string& groupKey);
     DecryptedEnvelope openAnonymousEnvelope(
@@ -258,7 +237,7 @@ private:
 
     enum class EnvelopeFamily { Message, File };
 
-    static Routing peekFamily(const core::Buffer& envelope, EnvelopeFamily family);
+    static EnvelopeRouting peekFamily(const core::Buffer& envelope, EnvelopeFamily family);
 
     static std::string writeHeader(std::uint8_t type, const std::vector<std::string>& fields);
     static std::string chunkKey(const std::string& fileKey, ChunkIndex index);

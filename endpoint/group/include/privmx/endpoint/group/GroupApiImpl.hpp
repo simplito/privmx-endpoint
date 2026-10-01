@@ -1,7 +1,6 @@
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPIIMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPIIMPL_HPP_
 
-#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -13,11 +12,8 @@
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 
 #include "privmx/endpoint/core/ContainerBaseApi.hpp"
-#include "privmx/endpoint/core/ContainerKeyCache.hpp"
-#include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/group/Constants.hpp"
-#include "privmx/endpoint/group/Events.hpp"
 #include "privmx/endpoint/group/GroupApi.hpp"
+#include "privmx/endpoint/group/GroupTypes.hpp"
 #include "privmx/endpoint/group/ServerApi.hpp"
 #include "privmx/endpoint/group/SubscriberImpl.hpp"
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp"
@@ -154,22 +150,22 @@ private:
         const std::vector<core::UserWithPubKey>& managers
     );
 
-    // A roster split the way `prepareContainerUpdate` wants it.
-    struct RosterAfterChange {
-        std::vector<core::UserWithPubKey> users;
-        std::vector<core::UserWithPubKey> managers;
-    };
+    // `rosterTag` has to be computed over exactly the fields the block declares. One builder for all three
+    // roster writers, so the tag inputs and the declared values cannot drift apart.
+    static dynamic::MembershipBlock buildMembershipBlock(
+        const core::EncKey& key,
+        const std::string& groupPubKey,
+        int64_t keyVersion,
+        int64_t rosterVersion,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers
+    );
+
     static RosterAfterChange rosterFromUserIds(
         const std::vector<std::string>& users,
         const std::vector<std::string>& managers
     );
 
-    // The head, the resource id, the epoch, and a key proven to be the current epoch's.
-    struct MetaWriteContext {
-        std::string resourceId;
-        int64_t currentEpoch;
-        core::ContainerUpdateContext ctx;
-    };
     // The entire shared prologue of both metadata writes; neither plane reads the other's envelope.
     // Kept in one place so the epoch guard cannot drift between the two callers.
     MetaWriteContext prepareMetaWrite(const std::string& groupId);
@@ -208,36 +204,12 @@ private:
     // rather than carried on the wire.
     privmx::crypto::PrivateKey grantKeyForPubKey(const std::string& groupId, const std::string& groupPubKeyBase58);
 
-    // Individual handles are not locked — only the map is, as in Store. Driving one handle from two threads
-    // corrupts its buffer.
-    struct EnvelopeFileState {
-        bool reading;
-        EnvelopeType type;
-        std::string groupId;
-        std::string keyId;        // member files only
-        std::string groupKey;     // member files only
-        std::string groupPubKey;  // anonymous seals only, base58-DER
-        std::string authorPubKey; // opening only: provenance handed back at finish
-        std::string fileKey;
-        ChunkIndex index = 0;      // next chunk to seal or open
-        ByteCount plainSize = 0;   // declared plaintext length of the whole file
-        ByteCount written = 0;     // write side: plaintext accepted so far
-        ByteCount skipInChunk = 0; // read side: bytes to drop off the next chunk after a seek
-        bool seeked = false;       // read side: completeness is no longer checkable
-        std::string buffer;        // bytes not yet forming a whole chunk
-    };
     std::shared_ptr<EnvelopeFileState> getFileState(FileHandle fileHandle, bool wantReading);
     void releaseFileHandle(FileHandle fileHandle);
     core::Buffer drainChunks(const std::shared_ptr<EnvelopeFileState>& state);
     // Shared tail of both finishers: completeness check, then release whatever the outcome.
     std::shared_ptr<EnvelopeFileState> finishFile(FileHandle fileHandle, bool wantReading);
 
-    privfs::RpcGateway::Ptr _gateway;
-    privmx::crypto::PrivateKey _userPrivKey;
-    std::shared_ptr<core::KeyProvider> _keyProvider;
-    std::string _host;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    core::Connection _connection;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
 

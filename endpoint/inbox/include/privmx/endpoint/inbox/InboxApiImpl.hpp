@@ -168,15 +168,10 @@ private:
     void assertInboxExist(const std::string& inboxId);
 
     static const int64_t _CHUNK_SIZE;
-    core::Connection _connection;
     endpoint::thread::ThreadApi _threadApi;
     endpoint::store::StoreApi _storeApi;
-    std::shared_ptr<core::KeyProvider> _keyProvider;
     std::shared_ptr<ServerApi> _serverApi;
     std::shared_ptr<store::RequestApi> _requestApi;
-    std::string _host;
-    privmx::crypto::PrivateKey _userPrivKey;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<core::HandleManager> _handleManager;
     std::shared_ptr<store::CacheInterface> _chunksCache;
     InboxHandleManager _inboxHandleManager;

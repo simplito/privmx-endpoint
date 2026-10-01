@@ -22,6 +22,7 @@ limitations under the License.
 
 #include <privmx/endpoint/core/ContainerBaseApi.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupTypes.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -205,11 +206,6 @@ protected:
     }
 
 private:
-    struct ResolvedGroupGrants {
-        std::vector<core::server::GroupGrant> grants;
-        std::vector<core::server::GroupKeyEntrySet> keyEntries;
-    };
-
     ResolvedGroupGrants resolveGroupGrants(
         const std::string& contextId,
         const std::string& resourceId,
