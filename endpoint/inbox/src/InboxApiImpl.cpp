@@ -256,12 +256,12 @@ void InboxApiImpl::rotateInboxKeys(
     const std::vector<core::UserWithPubKey>& managers,
     const int64_t version,
     const bool force,
-    const std::vector<core::GroupGrantWithKey>& groups
+    const std::vector<core::GroupGrantWithKey>& knownGroupKeys
 ) {
     auto currentInbox = getServerInbox(inboxId);
     auto currentInboxData = getInboxCurrentDataEntry(currentInbox).data;
     rotateContainerKeys<server::InboxRotateKeysModel>(
-        inboxId, currentInbox, users, managers, version, force, groups,
+        inboxId, currentInbox, users, managers, version, force, knownGroupKeys,
         [&](const server::InboxRotateKeysModel& model) { _serverApi->inboxRotateKeys(model); }
     );
 
@@ -273,13 +273,17 @@ void InboxApiImpl::rotateInboxKeys(
     // container, and a re-key needs nothing but the version.
     store::server::StoreGetModel storeGetModel{.storeId = currentInboxData.storeId, .type = INBOX_TYPE_FILTER_FLAG};
     auto storeVersion = _serverApi->storeGet(storeGetModel).store.version;
-    _storeApi.getImpl()->rotateStoreKeys(currentInboxData.storeId, users, managers, storeVersion, force, groups);
+    _storeApi.getImpl()->rotateStoreKeys(
+        currentInboxData.storeId, users, managers, storeVersion, force, knownGroupKeys
+    );
 
     thread::server::ThreadGetModel threadGetModel{
         .threadId = currentInboxData.threadId, .type = INBOX_TYPE_FILTER_FLAG
     };
     auto threadVersion = _serverApi->threadGet(threadGetModel).thread.version;
-    _threadApi.getImpl()->rotateThreadKeys(currentInboxData.threadId, users, managers, threadVersion, force, groups);
+    _threadApi.getImpl()->rotateThreadKeys(
+        currentInboxData.threadId, users, managers, threadVersion, force, knownGroupKeys
+    );
 }
 
 Inbox InboxApiImpl::getInbox(const std::string& inboxId, const std::string& type) {
@@ -432,7 +436,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     model.message = serializedMessage;
     model.resourceId = messageDIO.resourceId;
     model.version = EntryDataSchema::Version::VERSION_1;
-    runWithoutAutoRekey(handle->inboxId, [&] { _serverApi->inboxSend(model); });
+    runRequiringCurrentKey(handle->inboxId, [&] { _serverApi->inboxSend(model); });
 }
 
 inbox::InboxEntry InboxApiImpl::readEntry(const std::string& inboxEntryId) {

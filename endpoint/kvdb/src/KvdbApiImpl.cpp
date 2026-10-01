@@ -149,13 +149,13 @@ void KvdbApiImpl::rotateKvdbKeys(
     const std::vector<core::UserWithPubKey>& managers,
     const int64_t version,
     const bool force,
-    const std::vector<core::GroupGrantWithKey>& groups
+    const std::vector<core::GroupGrantWithKey>& knownGroupKeys
 ) {
     server::KvdbGetModel getModel;
     getModel.kvdbId = kvdbId;
     auto currentKvdb = _serverApi.kvdbGet(getModel).kvdb;
     rotateContainerKeys<server::KvdbRotateKeysModel>(
-        kvdbId, currentKvdb, users, managers, version, force, groups,
+        kvdbId, currentKvdb, users, managers, version, force, knownGroupKeys,
         [&](const server::KvdbRotateKeysModel& model) { _serverApi.kvdbRotateKeys(model); }
     );
 }

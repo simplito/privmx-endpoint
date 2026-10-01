@@ -629,13 +629,13 @@ void StreamApiLowImpl::rotateStreamRoomKeys(
     const std::vector<core::UserWithPubKey>& managers,
     const int64_t version,
     const bool force,
-    const std::vector<core::GroupGrantWithKey>& groups
+    const std::vector<core::GroupGrantWithKey>& knownGroupKeys
 ) {
     server::StreamRoomGetModel getModel;
     getModel.id = streamRoomId;
     auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
     rotateContainerKeys<server::StreamRoomRotateKeysModel>(
-        streamRoomId, currentStreamRoom, users, managers, version, force, groups,
+        streamRoomId, currentStreamRoom, users, managers, version, force, knownGroupKeys,
         [&](const server::StreamRoomRotateKeysModel& model) { _serverApi->streamRoomRotateKeys(model); }
     );
 }

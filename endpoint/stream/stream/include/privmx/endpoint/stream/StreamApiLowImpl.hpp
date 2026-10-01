@@ -82,7 +82,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const int64_t version,
         const bool force,
-        const std::vector<core::GroupGrantWithKey>& groups = {}
+        const std::vector<core::GroupGrantWithKey>& knownGroupKeys = {}
     );
     core::PagingList<StreamRoom> listStreamRooms(
         const std::string& contextId,

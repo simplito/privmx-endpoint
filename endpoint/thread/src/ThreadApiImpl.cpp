@@ -153,13 +153,13 @@ void ThreadApiImpl::rotateThreadKeys(
     const std::vector<core::UserWithPubKey>& managers,
     const int64_t version,
     const bool force,
-    const std::vector<core::GroupGrantWithKey>& groups
+    const std::vector<core::GroupGrantWithKey>& knownGroupKeys
 ) {
     server::ThreadGetModel getModel;
     getModel.threadId = threadId;
     auto currentThread = _serverApi.threadGet(getModel).thread;
     rotateContainerKeys<server::ThreadRotateKeysModel>(
-        threadId, currentThread, users, managers, version, force, groups,
+        threadId, currentThread, users, managers, version, force, knownGroupKeys,
         [&](const server::ThreadRotateKeysModel& model) { _serverApi.threadRotateKeys(model); }
     );
 }

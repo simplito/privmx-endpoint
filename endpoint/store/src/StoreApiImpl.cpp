@@ -178,13 +178,13 @@ void StoreApiImpl::rotateStoreKeys(
     const std::vector<core::UserWithPubKey>& managers,
     const int64_t version,
     const bool force,
-    const std::vector<core::GroupGrantWithKey>& groups
+    const std::vector<core::GroupGrantWithKey>& knownGroupKeys
 ) {
     server::StoreGetModel getModel;
     getModel.storeId = storeId;
     auto currentStore = _serverApi->storeGet(getModel).store;
     rotateContainerKeys<server::StoreRotateKeysModel>(
-        storeId, currentStore, users, managers, version, force, groups,
+        storeId, currentStore, users, managers, version, force, knownGroupKeys,
         [&](const server::StoreRotateKeysModel& model) { _serverApi->storeRotateKeys(model); }
     );
 }

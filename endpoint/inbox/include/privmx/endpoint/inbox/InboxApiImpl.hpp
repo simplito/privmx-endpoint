@@ -103,7 +103,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const int64_t version,
         const bool force,
-        const std::vector<core::GroupGrantWithKey>& groups = {}
+        const std::vector<core::GroupGrantWithKey>& knownGroupKeys = {}
     );
 
     inbox::Inbox getInbox(const std::string& inboxId, const std::string& type = std::string());

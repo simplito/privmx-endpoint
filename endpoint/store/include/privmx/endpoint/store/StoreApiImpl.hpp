@@ -90,7 +90,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const int64_t version,
         const bool force,
-        const std::vector<core::GroupGrantWithKey>& groups = {}
+        const std::vector<core::GroupGrantWithKey>& knownGroupKeys = {}
     );
     void deleteStore(const std::string& storeId);
     Store getStore(const std::string& storeId, const std::string& type = STORE_TYPE_FILTER_FLAG);

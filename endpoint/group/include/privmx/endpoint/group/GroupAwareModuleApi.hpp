@@ -27,11 +27,7 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
-// The base for every container module that can be granted to a group. It sits in the group module rather than in
-// core because it reads a group's published epoch and grant key, which only `GroupApiImpl` can serve.
-//
-// Every served container here inherits `core::server::ContainerInfoBase`, so most of this takes it by reference
-// rather than by template — only `data`, whose entry type differs per module, still needs one.
+// The base for every container module that can be granted to a group.
 class GroupAwareModuleApi : public core::ContainerBaseApi {
 public:
     GroupAwareModuleApi(
@@ -46,16 +42,13 @@ public:
     ~GroupAwareModuleApi() override;
 
 protected:
-    // Runs a re-key the library started on its own, absorbing the two outcomes that are not failures: a lost race
-    // (somebody else did the work) and a refusal, which becomes the `StaleKeyRekeyRequiredException` the caller
-    // would have been given before any of this existed. `UnresolvedGroupGranteeException` is deliberately a real
-    // failure: a caller in none of the grantee groups cannot read their epoch keys and so cannot re-key at all.
-    void runAutoRekey(const std::string& moduleId, const std::function<void()>& rotate);
+    // The two outcomes of a self-started re-key that are not failures: a lost race, and a refusal, which becomes
+    // `StaleKeyRekeyRequiredException`. An unresolved grantee group stays a failure — it cannot re-key at all.
+    void absorbAutoRekeyFailure(const std::string& moduleId, const privmx::utils::PrivmxException& e);
 
-    // A write with no re-key to fall back on, so the bridge's epoch refusal reaches the caller as the same
-    // `StaleKeyRekeyRequiredException` a stale container key raises everywhere else. An Inbox submission is the
-    // case: it seals to the entries public key and its sender may not be named on the container at all.
-    void runWithoutAutoRekey(const std::string& moduleId, const std::function<void()>& write);
+    // For a write that cannot re-key its way out: an Inbox submission seals to the entries public key and its
+    // sender may not be named on the container at all, so only a manager can clear a stale epoch.
+    void runRequiringCurrentKey(const std::string& moduleId, const std::function<void()>& operation);
 
     // Puts a public key and current epoch to each grantee group named on a create or an update.
     void resolveGroupEpochs(
@@ -137,20 +130,22 @@ protected:
         const std::vector<core::GroupGrantWithKey>& groups
     );
 
+    // The container's own grantee list, each entry carrying the epoch public key to seal the new key to.
+    // `knownGroupKeys` only pre-fills those the caller already verified; the rest are read from the Bridge.
     std::vector<core::GroupGrantWithKey> resolveGranteesForRekey(
         const core::server::ContainerInfoBase& container,
-        const std::vector<core::GroupGrantWithKey>& callerSupplied
+        const std::vector<core::GroupGrantWithKey>& knownGroupKeys
     );
 
     std::optional<std::vector<core::server::GroupKeyEntrySet>> buildRekeyGroupKeyEntries(
         const core::server::ContainerInfoBase& container,
         const std::string& resourceId,
         const core::ContainerUpdateContext& ctx,
-        const std::vector<core::GroupGrantWithKey>& callerSupplied
+        const std::vector<core::GroupGrantWithKey>& knownGroupKeys
     );
 
-    // Re-encrypts a container's key for its current members and grantee groups, changing nothing else. The caller
-    // fetches the container and supplies `sendRotateRequest`; everything between is the same for every type.
+    // `knownGroupKeys` grants and revokes nothing — the grantee list is the container's own, and these only save
+    // a round trip. Contrast `fillContainerUpdateModel`, whose `groups` *is* the new grantee list.
     template<typename TRotateModel, typename TContainer>
     void rotateContainerKeys(
         const std::string& id,
@@ -159,7 +154,7 @@ protected:
         const std::vector<core::UserWithPubKey>& managers,
         int64_t version,
         bool force,
-        const std::vector<core::GroupGrantWithKey>& groups,
+        const std::vector<core::GroupGrantWithKey>& knownGroupKeys,
         const std::function<void(const TRotateModel&)>& sendRotateRequest
     ) {
         static_assert(
@@ -181,15 +176,14 @@ protected:
         model.version = version;
         model.force = force;
 
-        model.groupKeys = buildRekeyGroupKeyEntries(container, resourceId, ctx, groups);
+        model.groupKeys = buildRekeyGroupKeyEntries(container, resourceId, ctx, knownGroupKeys);
 
         sendRotateRequest(model);
         invalidateModuleKeysInCache(id);
     }
 
-    // A re-key the library starts on its own, after a write met a stale container key. `fetchContainer` re-reads
-    // the container: whatever triggered this may have been a stale snapshot, and the roster and version this
-    // re-key is built on have to be the ones the bridge will check it against.
+    // `fetchContainer` must re-read rather than reuse a snapshot: the roster and version this re-key is built on
+    // have to be the ones the bridge will check it against.
     template<typename TRotateModel, typename TContainer>
     void autoRotateContainerKeys(
         const std::string& moduleId,
@@ -198,19 +192,19 @@ protected:
     ) {
         auto container = fetchContainer();
         if (!isRekeyNeeded(container)) {
-            // Someone else already re-keyed it. The caller refetches the keys either way, so there is nothing to do.
             return;
         }
         auto roster = resolveRosterPubKeys(container.contextId, container.users, container.managers);
-        runAutoRekey(moduleId, [&] {
+        try {
             rotateContainerKeys<TRotateModel>(
                 moduleId, container, roster.users, roster.managers, container.version, false, {}, sendRotateRequest
             );
-        });
+        } catch (const privmx::utils::PrivmxException& e) {
+            absorbAutoRekeyFailure(moduleId, e);
+        }
     }
 
 private:
-    // Grantee groups resolved to the epoch and public key each holds right now, with the module key sealed to it.
     struct ResolvedGroupGrants {
         std::vector<core::server::GroupGrant> grants;
         std::vector<core::server::GroupKeyEntrySet> keyEntries;
@@ -225,8 +219,6 @@ private:
         const std::vector<core::GroupGrantWithKey>& groups
     );
 
-    // Null when the module was created without a GroupApi, which leaves it group-unaware: a container granted to
-    // a group then cannot be read or written, and `resolveGroupEpochs` refuses rather than guessing.
     std::shared_ptr<GroupApiImpl> _groupApi;
 };
 

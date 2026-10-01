@@ -46,31 +46,32 @@ GroupAwareModuleApi::GroupAwareModuleApi(
 
 GroupAwareModuleApi::~GroupAwareModuleApi() = default;
 
-void GroupAwareModuleApi::runAutoRekey(const std::string& moduleId, const std::function<void()>& rotate) {
-    try {
-        rotate();
-    } catch (const privmx::utils::PrivmxException& e) {
-        auto code = core::ExceptionConverter::convert(e).getCode();
-        if (code == privmx::endpoint::server::ContainerRotatedAlreadyException().getCode()) {
-            invalidateModuleKeysInCache(moduleId);
-            return;
-        } else if (code == privmx::endpoint::server::AccessDeniedException().getCode()) {
-            throw core::StaleKeyRekeyRequiredException("automatic re-key of moduleId=" + moduleId + " was denied");
-        }
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+void GroupAwareModuleApi::absorbAutoRekeyFailure(
+    const std::string& moduleId,
+    const privmx::utils::PrivmxException& e
+) {
+    auto code = core::ExceptionConverter::convert(e).getCode();
+    if (code == privmx::endpoint::server::ContainerRotatedAlreadyException().getCode()) {
+        invalidateModuleKeysInCache(moduleId);
+        return;
     }
+    if (code == privmx::endpoint::server::AccessDeniedException().getCode()) {
+        throw core::StaleKeyRekeyRequiredException("automatic re-key of moduleId=" + moduleId + " was denied");
+    }
+    core::ExceptionConverter::rethrowAsCoreException(e);
+    throw core::Exception("ExceptionConverter rethrow error");
 }
 
-void GroupAwareModuleApi::runWithoutAutoRekey(const std::string& moduleId, const std::function<void()>& write) {
+void GroupAwareModuleApi::runRequiringCurrentKey(const std::string& moduleId, const std::function<void()>& operation) {
     try {
-        write();
+        operation();
     } catch (const privmx::utils::PrivmxException& e) {
         auto code = core::ExceptionConverter::convert(e).getCode();
         if (code == privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode()) {
             throw core::StaleKeyRekeyRequiredException("moduleId=" + moduleId + " has to be re-keyed by a manager");
         }
         core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
     }
 }
 
@@ -160,16 +161,16 @@ bool GroupAwareModuleApi::doesGroupStateForceNewKey(
 
 std::vector<core::GroupGrantWithKey> GroupAwareModuleApi::resolveGranteesForRekey(
     const core::server::ContainerInfoBase& container,
-    const std::vector<core::GroupGrantWithKey>& callerSupplied
+    const std::vector<core::GroupGrantWithKey>& knownGroupKeys
 ) {
     std::vector<core::GroupGrantWithKey> grants;
     grants.reserve(container.groups.size());
     for (const auto& grant : container.groups) {
         auto supplied = std::find_if(
-            callerSupplied.begin(), callerSupplied.end(),
+            knownGroupKeys.begin(), knownGroupKeys.end(),
             [&](const core::GroupGrantWithKey& g) { return g.groupId == grant.groupId; }
         );
-        if (supplied != callerSupplied.end()) {
+        if (supplied != knownGroupKeys.end()) {
             grants.push_back(
                 core::GroupGrantWithKey{
                     .groupId = grant.groupId,
@@ -184,7 +185,7 @@ std::vector<core::GroupGrantWithKey> GroupAwareModuleApi::resolveGranteesForReke
             );
         }
     }
-    for (const auto& g : callerSupplied) {
+    for (const auto& g : knownGroupKeys) {
         auto granted = std::find_if(
             container.groups.begin(), container.groups.end(),
             [&](const core::server::GroupGrant& grant) { return grant.groupId == g.groupId; }
@@ -202,9 +203,9 @@ std::optional<std::vector<core::server::GroupKeyEntrySet>> GroupAwareModuleApi::
     const core::server::ContainerInfoBase& container,
     const std::string& resourceId,
     const core::ContainerUpdateContext& ctx,
-    const std::vector<core::GroupGrantWithKey>& callerSupplied
+    const std::vector<core::GroupGrantWithKey>& knownGroupKeys
 ) {
-    auto grantees = resolveGranteesForRekey(container, callerSupplied);
+    auto grantees = resolveGranteesForRekey(container, knownGroupKeys);
     if (grantees.empty()) {
         return std::nullopt;
     }
