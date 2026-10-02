@@ -12,16 +12,13 @@ class SubscriberImpl : public privmx::endpoint::core::Subscriber {
 public:
     SubscriberImpl(privmx::privfs::RpcGateway::Ptr gateway) : Subscriber(gateway) {}
     static std::string buildQuery(EventType eventType, EventSelectorType selectorType, const std::string& selectorId);
-    /**
-     * A custom-event channel is named by the caller, so it cannot ride the `EventType` enum. Both selector
-     * types are allowed: a whole Context's worth of Groups, or one Group.
-     */
+    // A custom-event channel is named by the caller, so it cannot ride the `EventType` enum. Both selector
+    // types are allowed: a whole Context's worth of Groups, or one Group.
     static std::string buildCustomEventQuery(
         const std::string& channelName,
         EventSelectorType selectorType,
         const std::string& selectorId
     );
-    /** Reads the channel name back out of a custom-event subscription query. */
     static std::string channelNameFromQuery(const std::string& subscriptionQuery);
 
 private:

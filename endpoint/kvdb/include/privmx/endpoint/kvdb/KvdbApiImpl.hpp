@@ -21,7 +21,6 @@ limitations under the License.
 #include <privmx/endpoint/core/ContainerKeyCache.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
-#include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 #include "privmx/endpoint/core/Factory.hpp"
@@ -33,13 +32,14 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/encryptors/entry/EntryDataSchemaMapper.hpp"
 #include "privmx/endpoint/kvdb/encryptors/kvdb/KvdbDataSchemaMapper.hpp"
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-class KvdbApiImpl : public privmx::utils::ManualManagedClass<KvdbApiImpl>, protected core::ModuleBaseApi {
+class KvdbApiImpl : public privmx::utils::ManualManagedClass<KvdbApiImpl>, protected group::GroupAwareModuleApi {
 public:
     KvdbApiImpl(
         const privfs::RpcGateway::Ptr& gateway,
@@ -79,7 +79,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const int64_t version,
         const bool force,
-        const std::vector<core::GroupGrantWithKey>& groups = {}
+        const std::vector<core::GroupGrantWithKey>& knownGroupKeys = {}
     );
     void deleteKvdb(const std::string& kvdbId);
     Kvdb getKvdb(const std::string& kvdbId, const std::string& type = KVDB_TYPE_FILTER_FLAG);
@@ -127,7 +127,6 @@ private:
         const core::DecryptedEncKey& encKey
     );
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys kvdbToModuleKeys(server::KvdbInfo kvdb);
 
     core::ModuleKeys getEntryDecryptionKeys(server::KvdbEntryInfo entry);
     Poco::Dynamic::Var encryptEntryData(
@@ -158,11 +157,6 @@ private:
      */
     void autoRotateKvdbKeys(const std::string& kvdbId);
     privfs::RpcGateway::Ptr _gateway;
-    privmx::crypto::PrivateKey _userPrivKey;
-    std::shared_ptr<core::KeyProvider> _keyProvider;
-    std::string _host;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    core::Connection _connection;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
     std::shared_ptr<KvdbDataSchemaMapper> _kvdbDataSchemaMapper;

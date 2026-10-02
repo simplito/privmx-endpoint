@@ -24,8 +24,6 @@ namespace event {
 
 class ServerApi {
 public:
-    using Ptr = Poco::SharedPtr<ServerApi>;
-
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
     void contextSendCustomEvent(server::ContextEmitCustomEventModel model);
 

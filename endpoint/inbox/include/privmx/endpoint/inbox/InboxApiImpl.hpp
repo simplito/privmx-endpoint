@@ -21,7 +21,6 @@ limitations under the License.
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/inbox/Constants.hpp"
 #include "privmx/endpoint/inbox/Events.hpp"
 #include "privmx/endpoint/inbox/FileKeyIdFormatValidator.hpp"
@@ -36,10 +35,10 @@ limitations under the License.
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
-#include <privmx/endpoint/core/ModuleBaseApi.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
 #include <privmx/endpoint/store/DynamicTypes.hpp>
 #include <privmx/endpoint/store/FileHandle.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
@@ -53,7 +52,7 @@ namespace privmx {
 namespace endpoint {
 namespace inbox {
 
-class InboxApiImpl : public privmx::utils::ManualManagedClass<InboxApiImpl>, protected core::ModuleBaseApi {
+class InboxApiImpl : public privmx::utils::ManualManagedClass<InboxApiImpl>, protected group::GroupAwareModuleApi {
 public:
     InboxApiImpl(
         const core::Connection& connection,
@@ -104,7 +103,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const int64_t version,
         const bool force,
-        const std::vector<core::GroupGrantWithKey>& groups = {}
+        const std::vector<core::GroupGrantWithKey>& knownGroupKeys = {}
     );
 
     inbox::Inbox getInbox(const std::string& inboxId, const std::string& type = std::string());
@@ -151,7 +150,6 @@ private:
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
     inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::InboxInfo inbox);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys inboxToModuleKeys(inbox::server::InboxInfo inbox);
 
     store::FileMetaToEncryptV4 prepareMeta(const inbox::CommitFileInfo& commitFileInfo);
     core::ModuleKeys getEntryDecryptionKeys(thread::server::Message message);
@@ -169,16 +167,11 @@ private:
     thread::server::Message getServerMessage(const std::string& messageId);
     void assertInboxExist(const std::string& inboxId);
 
-    static const Poco::Int64 _CHUNK_SIZE;
-    core::Connection _connection;
+    static const int64_t _CHUNK_SIZE;
     endpoint::thread::ThreadApi _threadApi;
     endpoint::store::StoreApi _storeApi;
-    std::shared_ptr<core::KeyProvider> _keyProvider;
     std::shared_ptr<ServerApi> _serverApi;
     std::shared_ptr<store::RequestApi> _requestApi;
-    std::string _host;
-    privmx::crypto::PrivateKey _userPrivKey;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<core::HandleManager> _handleManager;
     std::shared_ptr<store::CacheInterface> _chunksCache;
     InboxHandleManager _inboxHandleManager;

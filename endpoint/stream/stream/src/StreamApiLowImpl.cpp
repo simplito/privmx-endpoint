@@ -27,7 +27,6 @@ limitations under the License.
 #include <privmx/utils/Logger.hpp>
 
 #include "privmx/endpoint/core/EventBuilder.hpp"
-#include "privmx/endpoint/group/GroupApiImpl.hpp"
 #include "privmx/endpoint/stream/Events.hpp"
 #include "privmx/endpoint/stream/Mapper.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
@@ -46,12 +45,10 @@ StreamApiLowImpl::StreamApiLowImpl(
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const std::optional<group::GroupApi>& groupApi
 )
-    : ModuleBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _connection(connection.getImpl()),
-      _userPrivKey(userPrivKey), _keyProvider(keyProvider), _host(host), _eventMiddleware(eventMiddleware),
+    : GroupAwareModuleApi(userPrivKey, keyProvider, host, eventMiddleware, connection, groupApi),
       _serverApi(std::make_shared<ServerApi>(gateway)),
       _subscriber(stream::SubscriberImpl(gateway, STREAM_TYPE_FILTER_FLAG)),
       _streamRoomDataSchemaMapper(std::make_shared<StreamRoomDataSchemaMapper>(userPrivKey, connection)) {
-    initGroupResolvers(group::GroupApiImpl::makeGroupResolvers(groupApi));
     initModuleDataSchemaMapper(_streamRoomDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&StreamApiLowImpl::onNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -599,7 +596,7 @@ void StreamApiLowImpl::updateStreamRoom(
     auto currentStreamRoomResourceId = currentStreamRoom.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
         currentStreamRoom, currentStreamRoomEntry, currentStreamRoomResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentStreamRoom, groups), true, _groupPrivKeyResolver
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentStreamRoom, groups)
     );
     server::StreamRoomUpdateModel model;
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
@@ -630,13 +627,13 @@ void StreamApiLowImpl::rotateStreamRoomKeys(
     const std::vector<core::UserWithPubKey>& managers,
     const int64_t version,
     const bool force,
-    const std::vector<core::GroupGrantWithKey>& groups
+    const std::vector<core::GroupGrantWithKey>& knownGroupKeys
 ) {
     server::StreamRoomGetModel getModel;
     getModel.id = streamRoomId;
     auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
     rotateContainerKeys<server::StreamRoomRotateKeysModel>(
-        streamRoomId, currentStreamRoom, users, managers, version, force, groups,
+        streamRoomId, currentStreamRoom, users, managers, version, force, knownGroupKeys,
         [&](const server::StreamRoomRotateKeysModel& model) { _serverApi->streamRoomRotateKeys(model); }
     );
 }
@@ -653,24 +650,15 @@ void StreamApiLowImpl::ensureRoomKeyIsFresh(const std::string& streamRoomId) {
 }
 
 void StreamApiLowImpl::autoRotateStreamRoomKeys(const std::string& streamRoomId) {
-    // A fresh read, not the cached keys: whatever triggered this may have been a stale snapshot, and the roster
-    // and version this re-key is built on have to be the ones the bridge will check it against.
-    server::StreamRoomGetModel getModel;
-    getModel.id = streamRoomId;
-    auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
-    if (!isRekeyNeeded(currentStreamRoom)) {
-        // Someone else already re-keyed it. The caller refetches the keys either way, so there is nothing to do.
-        return;
-    }
-    auto roster = resolveRosterPubKeys(
-        currentStreamRoom.contextId, currentStreamRoom.users, currentStreamRoom.managers
+    autoRotateContainerKeys<server::StreamRoomRotateKeysModel, server::StreamRoomInfo>(
+        streamRoomId,
+        [&] {
+            server::StreamRoomGetModel getModel;
+            getModel.id = streamRoomId;
+            return _serverApi->streamRoomGet(getModel).streamRoom;
+        },
+        [&](const server::StreamRoomRotateKeysModel& model) { _serverApi->streamRoomRotateKeys(model); }
     );
-    runAutoRekey(streamRoomId, [&] {
-        rotateContainerKeys<server::StreamRoomRotateKeysModel>(
-            streamRoomId, currentStreamRoom, roster.users, roster.managers, currentStreamRoom.version, false, {},
-            [&](const server::StreamRoomRotateKeysModel& model) { _serverApi->streamRoomRotateKeys(model); }
-        );
-    });
 }
 
 core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(
@@ -749,11 +737,7 @@ std::pair<core::ModuleKeys, int64_t> StreamApiLowImpl::getModuleKeysAndVersionFr
     auto stream = _serverApi->streamRoomGet(params).streamRoom;
     // validate stream Data before returning data
     _streamRoomDataSchemaMapper->assertDataIntegrity(stream);
-    return std::make_pair(streamRoomToModuleKeys(stream), stream.version);
-}
-
-core::ModuleKeys StreamApiLowImpl::streamRoomToModuleKeys(server::StreamRoomInfo stream) {
-    return containerToModuleKeys(stream);
+    return std::make_pair(containerToModuleKeys(stream), stream.version);
 }
 
 void StreamApiLowImpl::assertTurnServerUri(const std::string& uri) {

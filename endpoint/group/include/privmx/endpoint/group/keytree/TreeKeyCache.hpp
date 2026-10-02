@@ -35,7 +35,7 @@ public:
     void putGrantKey(std::uint32_t epoch, const privmx::crypto::PrivateKey& key);
     std::optional<privmx::crypto::PrivateKey> getGrantKey(std::uint32_t epoch) const;
 
-    // Evicts an entry that failed verification against the served tree.
+    // For an entry that failed verification against the served tree.
     void forgetGrantKey(std::uint32_t epoch);
 
     // Exactly what a removal invalidates. Grant keys stay: within a group `epoch -> key` is immutable, and

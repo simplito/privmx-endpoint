@@ -57,6 +57,8 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
             throw server::ContainerGroupEpochOutdatedException(std::string(e.what()) + "\n" + e.getData());
         case 0x600F: // CONTAINER_ROTATED_ALREADY
             throw server::ContainerRotatedAlreadyException(std::string(e.what()) + "\n" + e.getData());
+        case 0x621C: // ROTATED_ALREADY (group)
+            throw server::GroupRotatedAlreadyException(std::string(e.what()) + "\n" + e.getData());
         case 0x600D: // THREAD_MESSAGE_DOES_NOT_EXIST
             throw server::ThreadMessageDoesNotExistException(std::string(e.what()) + "\n" + e.getData());
         case 0x6015: // INVALID_KEY_ID

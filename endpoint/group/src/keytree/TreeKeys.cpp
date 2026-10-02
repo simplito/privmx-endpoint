@@ -492,9 +492,8 @@ RemovalPlan TreeKeys::planRemoval(
 
         for (const std::uint32_t child : TreeMath::children(node, state.numLeaves)) {
             if (leavingLeaves.count(child) > 0) {
-                // A blanked leaf gets no edge — that is the point of the whole operation. When the batch blanks
-                // every leaf under this node it ends up owing none at all: it still takes a fresh key so the
-                // refresh reaches the root, but nothing can climb into it. The bridge accepts exactly that shape.
+                // A blanked leaf gets no edge. A node whose every leaf is blanked owes none at all: it still
+                // takes a fresh key so the refresh reaches the root, but nothing can climb into it.
                 continue;
             }
             TreeEdge edge;

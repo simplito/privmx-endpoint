@@ -13,8 +13,6 @@ namespace group {
 
 class ServerApi {
 public:
-    using Ptr = Poco::SharedPtr<ServerApi>;
-
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
 
     server::GroupCreateResult groupCreate(server::GroupCreateModel model);

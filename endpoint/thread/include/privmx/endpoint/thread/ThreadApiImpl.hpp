@@ -23,7 +23,6 @@ limitations under the License.
 
 #include "privmx/endpoint/core/ContainerKeyCache.hpp"
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
 #include "privmx/endpoint/thread/Events.hpp"
 #include "privmx/endpoint/thread/ServerApi.hpp"
@@ -32,13 +31,14 @@ limitations under the License.
 #include "privmx/endpoint/thread/encryptors/message/MessageDataSchemaMapper.hpp"
 #include "privmx/endpoint/thread/encryptors/thread/ThreadDataSchemaMapper.hpp"
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace thread {
 
-class ThreadApiImpl : public privmx::utils::ManualManagedClass<ThreadApiImpl>, protected core::ModuleBaseApi {
+class ThreadApiImpl : public privmx::utils::ManualManagedClass<ThreadApiImpl>, protected group::GroupAwareModuleApi {
 public:
     ThreadApiImpl(
         const privfs::RpcGateway::Ptr& gateway,
@@ -79,7 +79,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const int64_t version,
         const bool force,
-        const std::vector<core::GroupGrantWithKey>& groups = {}
+        const std::vector<core::GroupGrantWithKey>& knownGroupKeys = {}
     );
     void deleteThread(const std::string& threadId);
 
@@ -119,7 +119,6 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys threadToModuleKeys(server::ThreadInfo thread);
 
     core::ModuleKeys getMessageDecryptionKeys(server::Message message);
     Poco::Dynamic::Var encryptMessageData(
@@ -158,11 +157,6 @@ private:
     void autoRotateThreadKeys(const std::string& threadId);
 
     privfs::RpcGateway::Ptr _gateway;
-    privmx::crypto::PrivateKey _userPrivKey;
-    std::shared_ptr<core::KeyProvider> _keyProvider;
-    std::string _host;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    core::Connection _connection;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
 

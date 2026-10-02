@@ -26,8 +26,6 @@ namespace inbox {
 
 class ServerApi : public thread::ServerApi, public store::ServerApi {
 public:
-    using Ptr = Poco::SharedPtr<ServerApi>;
-
     ServerApi(const privmx::privfs::RpcGateway::Ptr gateway);
 
     server::InboxCreateResult inboxCreate(server::InboxCreateModel model);

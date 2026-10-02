@@ -78,7 +78,7 @@ ChunksSentInfo ChunkStreamer::finalize(const std::string& data) {
 }
 
 void ChunkStreamer::prepareAndSendChunk(const std::string& data) {
-    if (_dataProcessed + static_cast<Poco::Int64>(data.size()) > _fileSize) {
+    if (_dataProcessed + static_cast<uint64_t>(data.size()) > _fileSize) {
         throw InvalidFileChunkSizeException();
     }
 
@@ -162,6 +162,6 @@ void ChunkStreamer::sendChunkToServer(std::string&& data) {
     ++_serverSeq;
 }
 
-Poco::UInt64 ChunkStreamer::getUploadedFileSize() {
+uint64_t ChunkStreamer::getUploadedFileSize() {
     return _uploadedFileSize;
 }

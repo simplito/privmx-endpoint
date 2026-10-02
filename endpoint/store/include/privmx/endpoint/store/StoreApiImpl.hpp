@@ -21,7 +21,6 @@ limitations under the License.
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 #include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/core/ModuleBaseApi.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
 #include "privmx/endpoint/store/DynamicTypes.hpp"
 #include "privmx/endpoint/store/Events.hpp"
@@ -40,13 +39,14 @@ limitations under the License.
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
 #include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class StoreApiImpl : public privmx::utils::ManualManagedClass<StoreApiImpl>, protected core::ModuleBaseApi {
+class StoreApiImpl : public privmx::utils::ManualManagedClass<StoreApiImpl>, protected group::GroupAwareModuleApi {
 public:
     StoreApiImpl(
         const std::shared_ptr<core::KeyProvider>& keyProvider,
@@ -90,7 +90,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const int64_t version,
         const bool force,
-        const std::vector<core::GroupGrantWithKey>& groups = {}
+        const std::vector<core::GroupGrantWithKey>& knownGroupKeys = {}
     );
     void deleteStore(const std::string& storeId);
     Store getStore(const std::string& storeId, const std::string& type = STORE_TYPE_FILTER_FLAG);
@@ -145,7 +145,6 @@ private:
     void processConnectedEvent();
     void processDisconnectedEvent();
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
-    core::ModuleKeys storeToModuleKeys(server::Store store);
 
     core::ModuleKeys getFileDecryptionKeys(server::File file);
     core::DecryptedEncKey getCurrentFileEncKey(const std::string& fileId);
@@ -165,15 +164,10 @@ private:
 
     static const size_t _CHUNK_SIZE;
 
-    std::shared_ptr<core::KeyProvider> _keyProvider;
     std::shared_ptr<ServerApi> _serverApi;
-    std::string _host;
-    privmx::crypto::PrivateKey _userPrivKey;
     std::shared_ptr<RequestApi> _requestApi;
     std::shared_ptr<FileDataProvider> _fileDataProvider;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<core::HandleManager> _handleManager;
-    core::Connection _connection;
     size_t _serverRequestChunkSize;
 
     std::shared_ptr<CacheInterface> _chunksCache;

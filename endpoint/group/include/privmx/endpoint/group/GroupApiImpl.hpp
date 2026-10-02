@@ -1,7 +1,6 @@
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPIIMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPIIMPL_HPP_
 
-#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -12,12 +11,9 @@
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 
-#include "privmx/endpoint/core/ContainerKeyCache.hpp"
-#include "privmx/endpoint/core/Factory.hpp"
-#include "privmx/endpoint/core/ModuleBaseApi.hpp"
-#include "privmx/endpoint/group/Constants.hpp"
-#include "privmx/endpoint/group/Events.hpp"
+#include "privmx/endpoint/core/ContainerBaseApi.hpp"
 #include "privmx/endpoint/group/GroupApi.hpp"
+#include "privmx/endpoint/group/GroupTypes.hpp"
 #include "privmx/endpoint/group/ServerApi.hpp"
 #include "privmx/endpoint/group/SubscriberImpl.hpp"
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp"
@@ -32,7 +28,7 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
-class GroupApiImpl : public privmx::utils::ManualManagedClass<GroupApiImpl>, protected core::ModuleBaseApi {
+class GroupApiImpl : public privmx::utils::ManualManagedClass<GroupApiImpl>, protected core::ContainerBaseApi {
 public:
     GroupApiImpl(
         const privfs::RpcGateway::Ptr& gateway,
@@ -57,25 +53,8 @@ public:
 
     void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
-    /**
-     * Moves each metadata plane up to the group's current epoch, if it is still behind.
-     *
-     * Called after a removal has committed, never as part of it. A metadata entry left at epoch N stays
-     * openable by whoever held `K_N` — including the member just removed — and its `metaTag` is keyed at N too,
-     * so with a colluding bridge they could author a *replacement* entry at N that every current member would
-     * accept: they hold the key, they sign the DIO, and they are still a real context user. Nothing a reader
-     * can check separates that from an entry written legitimately before they left.
-     *
-     * Rewriting the same `publicMeta`/`privateMeta` under the new epoch's key closes it, because from then on
-     * each entry's tag requires a key the removed member never had. Both planes need it, and each is checked
-     * and written on its own — they sit at epochs of their own.
-     *
-     * Deliberately after the fact and deliberately best-effort. The removal's own write stays free of both
-     * metadata planes — that separation is what stops a concurrent metadata update from stranding a tree write
-     * at a version it never took, and it is the reason this is a second call rather than a second field. If it
-     * fails the group is left exactly where a removal used to leave it, and the next
-     * `updateGroupPublicMeta`/`updateGroupPrivateMeta` finishes the job.
-     */
+    // Called after a removal commits, never as part of it: an entry left at epoch N is still openable and
+    // re-taggable by the removed member, and best-effort here keeps the removal's own write single-plane.
     void refreshMetadataEpochAfterRemoval(const std::string& groupId);
 
     void updateGroupPublicMeta(
@@ -99,11 +78,6 @@ public:
     std::unordered_map<std::string, core::GroupEpochInfo> fetchGroupEpochs(
         const std::string& contextId,
         const std::vector<std::string>& groupIds
-    );
-
-    static core::ModuleBaseApi::GroupResolvers makeGroupResolvers(const std::shared_ptr<GroupApiImpl>& groupApiImpl);
-    static std::optional<core::ModuleBaseApi::GroupResolvers> makeGroupResolvers(
-        const std::optional<GroupApi>& groupApi
     );
 
     std::vector<std::string> subscribeFor(const std::vector<std::string>& subscriptionQueries);
@@ -148,14 +122,9 @@ public:
     Envelope finishFileEncryption(FileHandle fileHandle);
     DecryptedFileInfo finishFileDecryption(FileHandle fileHandle);
 
-    /**
-     * The routes to one key, out of every route the group publishes.
-     *
-     * Handing the whole archive to the key provider makes it resolve a grant key — and the server answer for
-     * one — per key the group has ever held, on every envelope opened. Narrowing it first is what keeps that
-     * cost at one.
-     */
-    static std::vector<core::server::GroupKeysEntry> onlyKeyId(
+    // Narrowing the archive first keeps the key provider to one grant-key resolution per envelope opened,
+    // rather than one per key the group has ever held.
+    static std::vector<core::server::GroupKeysEntry> filterToKeyId(
         const std::vector<core::server::GroupKeysEntry>& all,
         const std::string& keyId
     );
@@ -181,25 +150,24 @@ private:
         const std::vector<core::UserWithPubKey>& managers
     );
 
-    /** A roster split the way `prepareContainerUpdate` wants it. */
-    struct RosterAfterChange {
-        std::vector<core::UserWithPubKey> users;
-        std::vector<core::UserWithPubKey> managers;
-    };
-    static RosterAfterChange rosterOf(const std::vector<std::string>& users, const std::vector<std::string>& managers);
+    // `rosterTag` has to be computed over exactly the fields the block declares. One builder for all three
+    // roster writers, so the tag inputs and the declared values cannot drift apart.
+    static dynamic::MembershipBlock buildMembershipBlock(
+        const core::EncKey& key,
+        const std::string& groupPubKey,
+        int64_t keyVersion,
+        int64_t rosterVersion,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers
+    );
 
-    /** The head, the resource id, the epoch, and a key proven to be the current epoch's. */
-    struct MetaWriteContext {
-        std::string resourceId;
-        int64_t currentEpoch;
-        core::ContainerUpdateContext ctx;
-    };
-    /**
-     * Everything both metadata writes need before they can tag.
-     *
-     * Neither plane reads the other's envelope — that is the whole point of the split — so this is the entire
-     * shared prologue. Kept in one place so the epoch guard cannot drift between the two callers.
-     */
+    static RosterAfterChange rosterFromUserIds(
+        const std::vector<std::string>& users,
+        const std::vector<std::string>& managers
+    );
+
+    // The entire shared prologue of both metadata writes; neither plane reads the other's envelope.
+    // Kept in one place so the epoch guard cannot drift between the two callers.
     MetaWriteContext prepareMetaWrite(const std::string& groupId);
 
     std::map<std::string, std::string> resolveMemberKeys(
@@ -223,57 +191,25 @@ private:
 
     void dropNodeKeysIfEpochAdvanced(const std::string& groupId, std::uint32_t epoch);
 
-    /** Drops everything the envelope paths cache, including open file handles. */
+    // Includes open file handles, not just the key caches.
     void dropEnvelopeState();
 
-    /** Length-prefixed `groupId`, so one pair cannot collide with another under a different split. */
+    // Length-prefixed `groupId`, so one pair cannot collide with another under a different split.
     static std::string memoKeyFor(const std::string& groupId, const std::string& suffix);
 
-    /** The group's symmetric data key named by `keyId`, however far back in the archive it lives. */
+    // Reaches back through the whole archive, however old the key is.
     core::DecryptedEncKeyV2 encKeyById(const std::string& groupId, const std::string& keyId);
 
-    /**
-     * The grant private key matching a public key an envelope names.
-     *
-     * The sender only ever held a public key, so the epoch it belongs to is recovered from the group's own
-     * published history rather than carried on the wire.
-     */
+    // The sender only ever held a public key, so its epoch is recovered from the group's published history
+    // rather than carried on the wire.
     privmx::crypto::PrivateKey grantKeyForPubKey(const std::string& groupId, const std::string& groupPubKeyBase58);
 
-    /**
-     * One in-flight encrypt or decrypt of a file.
-     *
-     * Individual handles are not locked — only the map is, which matches how Store treats its file handles.
-     * Driving one handle from two threads corrupts its buffer.
-     */
-    struct EnvelopeFileState {
-        bool reading;
-        EnvelopeType type;
-        std::string groupId;
-        std::string keyId;        //< member files only
-        std::string groupKey;     //< member files only
-        std::string groupPubKey;  //< anonymous seals only, base58-DER
-        std::string authorPubKey; //< opening only: provenance handed back at finish
-        std::string fileKey;
-        ChunkIndex index = 0;      //< next chunk to seal or open
-        ByteCount plainSize = 0;   //< declared plaintext length of the whole file
-        ByteCount written = 0;     //< write side: plaintext accepted so far
-        ByteCount skipInChunk = 0; //< read side: bytes to drop off the next chunk after a seek
-        bool seeked = false;       //< read side: completeness is no longer checkable
-        std::string buffer;        //< bytes not yet forming a whole chunk
-    };
     std::shared_ptr<EnvelopeFileState> getFileState(FileHandle fileHandle, bool wantReading);
     void releaseFileHandle(FileHandle fileHandle);
     core::Buffer drainChunks(const std::shared_ptr<EnvelopeFileState>& state);
-    /** Shared tail of both finishers: completeness check, then release whatever the outcome. */
+    // Shared tail of both finishers: completeness check, then release whatever the outcome.
     std::shared_ptr<EnvelopeFileState> finishFile(FileHandle fileHandle, bool wantReading);
 
-    privfs::RpcGateway::Ptr _gateway;
-    privmx::crypto::PrivateKey _userPrivKey;
-    std::shared_ptr<core::KeyProvider> _keyProvider;
-    std::string _host;
-    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
-    core::Connection _connection;
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
 
@@ -281,16 +217,10 @@ private:
     std::shared_ptr<GroupDataSchemaMapper> _groupDataSchemaMapper;
     keytree::TreeKeyCacheRegistry _treeKeyCaches;
     GroupEnvelopeEncryptor _envelopeEncryptor;
-    /**
-     * Keys already unwrapped for envelopes, by `memoKeyFor(groupId, keyId)`.
-     *
-     * Sound because a keyId names one immutable piece of key material: unwrapping it twice can only ever give
-     * the same answer. Dropped by `dropEnvelopeState` on connect and disconnect, so a key cannot outlive the
-     * session that opened it — an era cut therefore takes effect at reconnect, exactly as it already does for
-     * the grant keys `TreeKeyCache` deliberately keeps.
-     */
+    // Keys already unwrapped for envelopes, by `memoKeyFor(groupId, keyId)`; a keyId names one immutable piece
+    // of key material. Dropped on connect and disconnect, so an era cut takes effect at reconnect.
     privmx::utils::ThreadSaveMap<std::string, core::DecryptedEncKeyV2> _envelopeKeys;
-    /** Which epoch a published grant public key belongs to, by `memoKeyFor(groupId, pubKeyBase58)`. */
+    // Which epoch a published grant public key belongs to, by `memoKeyFor(groupId, pubKeyBase58)`.
     privmx::utils::ThreadSaveMap<std::string, int64_t> _envelopeGrantEpochs;
     privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<EnvelopeFileState>> _envelopeFiles;
 };

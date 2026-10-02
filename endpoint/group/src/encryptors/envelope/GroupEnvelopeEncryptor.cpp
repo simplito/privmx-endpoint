@@ -5,118 +5,33 @@
 #include <privmx/endpoint/core/CoreException.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
+#include "privmx/endpoint/group/encryptors/envelope/EnvelopeWire.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
-/**
- * Domain separator on the ECIES plaintext of a type 2 envelope. Load-bearing.
- *
- * The epoch ladder wraps a *previous epoch's grant private key* to the group's grant public key with
- * `EciesEncryptor` — see `TreeKeys::wrapKey`. Those rungs are therefore byte-identical in construction to a
- * type 2 key wrap and addressed to the very same key. Without a marker distinguishing the two, an attacker
- * could lift a rung off the wire, present it as a type 2 envelope, and have `openAnonymousEnvelope` resolve
- * the grant key, unwrap it and hand back a past private key as "message content" — walking straight past the
- * era-floor, pruning and registry checks that `LadderKeys` exists to enforce.
- *
- * Requiring this prefix closes it: a rung's plaintext is a WIF and can never carry it.
- */
+// Load-bearing: epoch-ladder rungs wrap a past grant private key to the same key with the same `EciesEncryptor`,
+// so without this prefix a rung could be replayed as a type 2 envelope and opened as message content.
 const std::string GroupEnvelopeEncryptor::ECIES_DOMAIN = "PMXENV1";
 
-/** Domain label on the per-chunk key derivation. See `chunkKey`. */
+// Domain label on the per-chunk key derivation. See `chunkKey`.
 const std::string GroupEnvelopeEncryptor::CHUNK_KEY_LABEL = "privmx/group/file-chunk";
 
-namespace {
-
-constexpr Poco::UInt8 TYPE_GROUP_KEY = 1;
-constexpr Poco::UInt8 TYPE_ANONYMOUS = 2;
-constexpr Poco::UInt8 TYPE_FILE = 3;
-constexpr Poco::UInt8 TYPE_ANON_FILE = 4;
-
-constexpr std::size_t CONTENT_KEY_SIZE = 32;
-
-// Hand-rolled rather than `utils::BinaryBufferBE`: that helper leaves its length octet *uninitialized* when
-// the stream is already at EOF and its `readRaw` returns a short string without complaint, so a three-byte
-// envelope "parses" into garbage. Every read here is bounds-checked against the real buffer instead.
-class Cursor {
-public:
-    Cursor(const std::string& buf) : _buf(buf) {}
-
-    Poco::UInt8 readU8() {
-        require(1);
-        return static_cast<Poco::UInt8>(_buf[_pos++]);
+std::string GroupEnvelopeEncryptor::writeHeader(std::uint8_t type, const std::vector<std::string>& fields) {
+    std::string header;
+    header.push_back(static_cast<char>(VERSION));
+    header.push_back(static_cast<char>(type));
+    for (const std::string& field : fields) {
+        EnvelopeWriter::putField(header, field);
     }
-
-    Poco::UInt64 readU64() {
-        require(8);
-        Poco::UInt64 value = 0;
-        for (int i = 0; i < 8; ++i) {
-            value = (value << 8) | static_cast<Poco::UInt8>(_buf[_pos++]);
-        }
-        return value;
-    }
-
-    std::string readField() {
-        std::size_t len = readU8();
-        require(len);
-        std::string value = _buf.substr(_pos, len);
-        _pos += len;
-        return value;
-    }
-
-    std::string readRest() {
-        std::string value = _buf.substr(_pos);
-        _pos = _buf.size();
-        return value;
-    }
-
-    void skip(std::size_t n) {
-        require(n);
-        _pos += n;
-    }
-
-    /** Bytes consumed so far — i.e. the header, once the header fields have been read. */
-    std::string consumed() const { return _buf.substr(0, _pos); }
-
-private:
-    void require(std::size_t n) const {
-        if (_buf.size() - _pos < n) {
-            throw InvalidEnvelopeFormatException("envelope truncated");
-        }
-    }
-
-    const std::string& _buf;
-    std::size_t _pos = 0;
-};
-
-void putField(std::string& out, const std::string& value) {
-    if (value.size() > 255) {
-        // The wire uses a single length octet, and a silent truncation here would produce an envelope that
-        // parses cleanly into the wrong thing. Real fields are far below this (`groupId` is capped at 128 by
-        // `Validator::validateId`, `keyId` is 32 hex chars, a DER public key is 33 bytes).
-        throw InvalidEnvelopeFormatException("envelope field exceeds 255 bytes");
-    }
-    out.push_back(static_cast<char>(value.size()));
-    out.append(value);
+    return header;
 }
 
-std::string toBE(Poco::UInt64 value, int bytes) {
-    std::string out(bytes, '\0');
-    for (int i = bytes - 1; i >= 0; --i) {
-        out[i] = static_cast<char>(value & 0xFF);
-        value >>= 8;
-    }
-    return out;
-}
-
-/**
- * The sealed tail both file types carry: the echoed header, then `u64be plainSize || fileKey32`.
- *
- * `plain` has already been checked to begin with `header` — that check is what authenticates the routing —
- * so this only has to step past it and read what follows.
- */
-std::pair<ByteCount, std::string> readFileBody(const std::string& plain, const std::string& header) {
-    Cursor inner(plain);
+std::pair<ByteCount, std::string> GroupEnvelopeEncryptor::readFileBody(
+    const std::string& plain,
+    const std::string& header
+) {
+    EnvelopeReader inner(plain);
     inner.skip(header.size());
     ByteCount plainSize = inner.readU64();
     std::string fileKey = inner.readRest();
@@ -126,28 +41,10 @@ std::pair<ByteCount, std::string> readFileBody(const std::string& plain, const s
     return {plainSize, fileKey};
 }
 
-} // namespace
-
-std::string GroupEnvelopeEncryptor::writeHeader(Poco::UInt8 type, const std::vector<std::string>& fields) {
-    std::string header;
-    header.push_back(static_cast<char>(VERSION));
-    header.push_back(static_cast<char>(type));
-    for (const std::string& field : fields) {
-        putField(header, field);
-    }
-    return header;
-}
-
 std::string GroupEnvelopeEncryptor::chunkKey(const std::string& fileKey, ChunkIndex index) {
-    // Binding the index into the key is what makes a chunk unusable in any other position, and binding the
-    // per-file random key is what makes it unusable in any other file.
-    //
-    // Keyed rather than `sha256(fileKey || index)`. The raw-hash form was not exploitable here — `fileKey` is
-    // 32 secret random bytes and the index is fixed-width, so a length extension yields nothing that is used
-    // as a key anywhere — but it was a hand-rolled derivation sitting next to the keyed one the tags use, and
-    // that is the kind of difference nobody re-derives correctly at 3am. The label keeps this separate from
-    // any future derivation off the same file key.
-    return privmx::crypto::Crypto::hmacSha256(fileKey, CHUNK_KEY_LABEL + toBE(index, 4));
+    // Binding the index makes a chunk unusable in any other position; binding the per-file key makes it
+    // unusable in any other file. The label keeps this separate from future derivations off the same key.
+    return privmx::crypto::Crypto::hmacSha256(fileKey, CHUNK_KEY_LABEL + EnvelopeWriter::toBE(index, 4));
 }
 
 std::pair<std::string, std::string> GroupEnvelopeEncryptor::wrapContentKey(
@@ -167,9 +64,8 @@ std::string GroupEnvelopeEncryptor::unwrapContentKey(
     const std::string& groupPubKeyBase58,
     const std::string& wrap
 ) {
-    // The key we resolved must be the key the envelope names. Otherwise a hostile server could steer us onto
-    // some other epoch's key and leave the ECIES 4-byte checksum as the only thing standing between us and a
-    // wrong answer.
+    // The key we resolved must be the key the envelope names, or a hostile server could steer us onto another
+    // epoch's key with only the ECIES 4-byte checksum between us and a wrong answer.
     if (groupPrivKey.getPublicKey() != privmx::crypto::PublicKey::fromBase58DER(groupPubKeyBase58)) {
         throw InvalidEnvelopeFormatException("resolved group key does not match the key named by the envelope");
     }
@@ -202,7 +98,7 @@ DecryptedEnvelope GroupEnvelopeEncryptor::openGroupKeyEnvelope(
     const core::Buffer& envelope,
     const std::string& groupKey
 ) {
-    Cursor cursor(envelope.stdString());
+    EnvelopeReader cursor(envelope.stdString());
     if (cursor.readU8() != VERSION) {
         throw InvalidEnvelopeFormatException("unsupported envelope version");
     }
@@ -242,7 +138,7 @@ core::Buffer GroupEnvelopeEncryptor::packAnonymousEnvelope(
     std::string header = writeHeader(TYPE_ANONYMOUS, {groupId, groupPubKey.toBase58DER()});
 
     std::string out = header;
-    putField(out, wrap);
+    EnvelopeWriter::putField(out, wrap);
     // No author signature: the sender is anonymous by construction, so a signature by the throwaway key would
     // attest to nothing. The header is authenticated by being inside this encrypt-then-MAC payload.
     out.append(_dataEncryptor.encrypt(core::Buffer::from(header + content.stdString()), contentKey).stdString());
@@ -253,7 +149,7 @@ DecryptedEnvelope GroupEnvelopeEncryptor::openAnonymousEnvelope(
     const core::Buffer& envelope,
     const privmx::crypto::PrivateKey& groupPrivKey
 ) {
-    Cursor cursor(envelope.stdString());
+    EnvelopeReader cursor(envelope.stdString());
     if (cursor.readU8() != VERSION) {
         throw InvalidEnvelopeFormatException("unsupported envelope version");
     }
@@ -294,16 +190,16 @@ core::Buffer GroupEnvelopeEncryptor::packFileEnvelope(
     std::string header = writeHeader(TYPE_FILE, {groupId, keyId, authorPrivKey.getPublicKey().toDER()});
     // `plainSize` inside the signature is the only thing that makes a dropped trailing chunk detectable —
     // each chunk authenticates itself, but nothing about chunk N says how many were supposed to follow.
-    std::string body = header + toBE(plainSize, 8) + fileKey;
+    std::string body = header + EnvelopeWriter::toBE(plainSize, 8) + fileKey;
     core::Buffer signed_ = _dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(body), authorPrivKey);
     return core::Buffer::from(header + _dataEncryptor.encrypt(signed_, groupKey).stdString());
 }
 
-GroupEnvelopeEncryptor::FileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
+EnvelopeFileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
     const core::Buffer& envelope,
     const std::string& groupKey
 ) {
-    Cursor cursor(envelope.stdString());
+    EnvelopeReader cursor(envelope.stdString());
     if (cursor.readU8() != VERSION) {
         throw InvalidEnvelopeFormatException("unsupported envelope version");
     }
@@ -324,7 +220,7 @@ GroupEnvelopeEncryptor::FileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
     }
 
     auto [plainSize, fileKey] = readFileBody(plain.stdString(), header);
-    return FileHeader{
+    return EnvelopeFileHeader{
         .type = ENVELOPE_FROM_MEMBER,
         .groupId = groupId,
         .keyId = keyId,
@@ -346,20 +242,20 @@ core::Buffer GroupEnvelopeEncryptor::packAnonymousFileEnvelope(
     std::string header = writeHeader(TYPE_ANON_FILE, {groupId, groupPubKey.toBase58DER()});
 
     std::string out = header;
-    putField(out, wrap);
-    // No signature, for the same reason as type 2: the sender is anonymous by construction. `plainSize` is
-    // still covered — it sits inside this encrypt-then-MAC payload, so a dropped tail is detectable even
-    // though its author is not.
-    out.append(_dataEncryptor.encrypt(core::Buffer::from(header + toBE(plainSize, 8) + fileKey), contentKey).stdString()
-    );
+    EnvelopeWriter::putField(out, wrap);
+    // No signature, for the same reason as type 2: the sender is anonymous by construction. `plainSize` still
+    // sits inside this encrypt-then-MAC payload, so a dropped tail stays detectable.
+    out.append(_dataEncryptor
+                   .encrypt(core::Buffer::from(header + EnvelopeWriter::toBE(plainSize, 8) + fileKey), contentKey)
+                   .stdString());
     return core::Buffer::from(out);
 }
 
-GroupEnvelopeEncryptor::FileHeader GroupEnvelopeEncryptor::unpackAnonymousFileEnvelope(
+EnvelopeFileHeader GroupEnvelopeEncryptor::unpackAnonymousFileEnvelope(
     const core::Buffer& envelope,
     const privmx::crypto::PrivateKey& groupPrivKey
 ) {
-    Cursor cursor(envelope.stdString());
+    EnvelopeReader cursor(envelope.stdString());
     if (cursor.readU8() != VERSION) {
         throw InvalidEnvelopeFormatException("unsupported envelope version");
     }
@@ -378,7 +274,7 @@ GroupEnvelopeEncryptor::FileHeader GroupEnvelopeEncryptor::unpackAnonymousFileEn
     }
 
     auto [plainSize, fileKey] = readFileBody(plain.stdString(), header);
-    return FileHeader{
+    return EnvelopeFileHeader{
         .type = ENVELOPE_ANONYMOUS,
         .groupId = groupId,
         .keyId = std::string(),
@@ -407,19 +303,19 @@ core::Buffer GroupEnvelopeEncryptor::decryptChunk(
 
 // -- dispatch ------------------------------------------------------------------------------------------
 
-GroupEnvelopeEncryptor::Routing GroupEnvelopeEncryptor::peekOf(const core::Buffer& envelope, bool wantFile) {
-    // The member and anonymous headers are shaped alike in both families, so the only thing that varies is
-    // which two type bytes are acceptable. Crossing the families is refused rather than tolerated: see the
-    // notes on `peek` and `peekFile` for what each direction would leak.
-    const Poco::UInt8 memberType = wantFile ? TYPE_FILE : TYPE_GROUP_KEY;
-    const Poco::UInt8 anonType = wantFile ? TYPE_ANON_FILE : TYPE_ANONYMOUS;
+EnvelopeRouting GroupEnvelopeEncryptor::peekFamily(const core::Buffer& envelope, EnvelopeFamily family) {
+    // The member and anonymous headers are shaped alike in both families, so only the acceptable type bytes
+    // vary. Crossing the families is refused — see the notes on `peek` and `peekFile`.
+    const bool wantFile = family == EnvelopeFamily::File;
+    const std::uint8_t memberType = wantFile ? TYPE_FILE : TYPE_GROUP_KEY;
+    const std::uint8_t anonType = wantFile ? TYPE_ANON_FILE : TYPE_ANONYMOUS;
 
-    Cursor cursor(envelope.stdString());
+    EnvelopeReader cursor(envelope.stdString());
     if (cursor.readU8() != VERSION) {
         throw InvalidEnvelopeFormatException("unsupported envelope version");
     }
-    Poco::UInt8 type = cursor.readU8();
-    Routing routing;
+    std::uint8_t type = cursor.readU8();
+    EnvelopeRouting routing;
     routing.groupId = cursor.readField();
     if (type == memberType) {
         routing.type = ENVELOPE_FROM_MEMBER;

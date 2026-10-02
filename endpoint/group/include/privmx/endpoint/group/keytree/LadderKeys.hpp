@@ -118,7 +118,7 @@ public:
     );
 
 private:
-    // Confirms a recovered key really is the epoch's grant key. Invariant B.
+    // Invariant B: a recovered key really is the epoch's grant key.
     bool verifyAgainstRegistry(
         const privmx::crypto::PrivateKey& recovered,
         std::uint32_t epoch,

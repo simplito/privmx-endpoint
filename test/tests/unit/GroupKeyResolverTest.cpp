@@ -287,7 +287,7 @@ TEST_F(ResolverConversion, RegistryIncludesTheCurrentEpochNotJustHistory) {
         server::GroupKeyHistoryEntry{4, older.getPublicKey().toBase58DER()},
     };
 
-    const std::vector<EpochRegistryEntry> registry = GroupKeyResolver::toRegistry(fixture.group);
+    const std::vector<EpochRegistryEntry> registry = GroupKeyResolver::registryFromGroupHistory(fixture.group);
     ASSERT_EQ(registry.size(), 2u);
     // The newest epoch lives in `groupPubKey`, not in `keyHistory`; missing that would leave it unverifiable,
     // and an unverifiable key is one the client refuses.
@@ -310,7 +310,7 @@ TEST_F(ResolverConversion, RegistryFromAnArchiveTakesTheCurrentEpochFromTheGroup
     };
 
     const std::vector<EpochRegistryEntry> registry =
-        GroupKeyResolver::toRegistry(fixture.group, fixture.archive);
+        GroupKeyResolver::registryFromArchive(fixture.group, fixture.archive);
     ASSERT_EQ(registry.size(), 2u);
     // The archive carries past epochs only, so an archive-built registry that did not reach into the group
     // would leave the newest epoch unverifiable — and the client accepts no key it cannot verify.

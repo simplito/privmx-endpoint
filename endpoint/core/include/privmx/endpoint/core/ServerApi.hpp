@@ -23,8 +23,6 @@ namespace core {
 
 class ServerApi {
 public:
-    using Ptr = Poco::SharedPtr<ServerApi>;
-
     ServerApi(privmx::privfs::RpcGateway::Ptr gateway);
 
     server::ContextGetResult contextGet(server::ContextGetModel model);

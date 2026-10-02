@@ -65,7 +65,8 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointServerException, "Unknown server except
     X(ThreadMessageDoesNotExistException, "Thread message does not exist", 0x600D)                                    \
     X(ContainerGroupEpochOutdatedException, "Container group epoch outdated", 0x600E)                                   \
     X(ContainerRotatedAlreadyException, "Container keys were already rotated by a concurrent request", 0x600F)        \
-    X(InvalidKeyIdException, "Invalid key id", 0x6015)                                                                \
+    X(GroupRotatedAlreadyException, "Group key was already rotated by a concurrent request", 0x621C)                 \
+    X(InvalidKeyIdException, "Invalid key id", 0x6015)                                                              \
     X(ContextDoesNotExistException, "Context does not exist", 0x6116)                                                 \
     X(StoreDoesNotExistException, "Store does not exist", 0x6117)                                                     \
     X(StoreFileDoesNotExistException, "Store file does not exist", 0x6118)                                            \

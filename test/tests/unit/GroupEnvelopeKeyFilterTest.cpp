@@ -61,7 +61,7 @@ TEST(GroupEnvelopeKeyFilter, KeepsOnlyTheKeyAskedFor) {
     auto all = std::vector<core::server::GroupKeysEntry>{
         route("grp", {key("aaa", 1), key("bbb", 2), key("ccc", 3)})
     };
-    auto filtered = GroupApiImpl::onlyKeyId(all, "bbb");
+    auto filtered = GroupApiImpl::filterToKeyId(all, "bbb");
 
     ASSERT_EQ(filtered.size(), 1u);
     ASSERT_EQ(filtered[0].keys.size(), 1u);
@@ -78,7 +78,7 @@ TEST(GroupEnvelopeKeyFilter, KeepsEveryRouteToTheSameKey) {
         route("grpB", {key("shared", 2)}),
         route("grpC", {key("unrelated", 2)}),
     };
-    auto filtered = GroupApiImpl::onlyKeyId(all, "shared");
+    auto filtered = GroupApiImpl::filterToKeyId(all, "shared");
 
     EXPECT_EQ(filtered.size(), 2u);
     EXPECT_EQ(totalKeys(filtered), 2u);
@@ -96,7 +96,7 @@ TEST(GroupEnvelopeKeyFilter, DropsEntriesLeftEmpty) {
         route("grpA", {key("aaa", 1)}),
         route("grpB", {key("bbb", 1)}),
     };
-    auto filtered = GroupApiImpl::onlyKeyId(all, "aaa");
+    auto filtered = GroupApiImpl::filterToKeyId(all, "aaa");
 
     ASSERT_EQ(filtered.size(), 1u);
     EXPECT_EQ(filtered[0].group, "grpA");
@@ -106,6 +106,6 @@ TEST(GroupEnvelopeKeyFilter, UnknownKeyYieldsNothing) {
     // The caller reads this as "this group publishes no such key" and reports it, rather than fetching and
     // resolving its way through the whole archive to discover the same thing.
     auto all = std::vector<core::server::GroupKeysEntry>{route("grp", {key("aaa", 1), key("bbb", 2)})};
-    EXPECT_TRUE(GroupApiImpl::onlyKeyId(all, "missing").empty());
-    EXPECT_TRUE(GroupApiImpl::onlyKeyId({}, "aaa").empty());
+    EXPECT_TRUE(GroupApiImpl::filterToKeyId(all, "missing").empty());
+    EXPECT_TRUE(GroupApiImpl::filterToKeyId({}, "aaa").empty());
 }
