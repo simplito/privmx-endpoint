@@ -10,7 +10,7 @@
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/kvdb/Types.hpp"
-#include <privmx/endpoint/core/ExtendedPointer.hpp>
+#include <privmx/endpoint/core/BaseApiClass.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 
 namespace privmx {
@@ -22,7 +22,7 @@ class KvdbApiImpl;
 /**
  * 'KvdbApi' is a class representing Endpoint's API for Kvdbs and their messages.
  */
-class KvdbApi : public privmx::endpoint::core::ExtendedPointer<KvdbApiImpl> {
+class KvdbApi : public privmx::endpoint::core::BaseApiClass<KvdbApiImpl> {
 public:
     /**
      * Creates an instance of 'KvdbApi'.
@@ -37,11 +37,7 @@ public:
     /**
      * //doc-gen:ignore
      */
-    KvdbApi();
-    KvdbApi(const KvdbApi& obj);
-    KvdbApi& operator=(const KvdbApi& obj);
-    KvdbApi(KvdbApi&& obj);
-    ~KvdbApi();
+    KvdbApi() = default;
 
     /**
      * Creates a new KVDB in given Context.

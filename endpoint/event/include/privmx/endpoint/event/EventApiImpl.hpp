@@ -13,13 +13,12 @@
 #include <privmx/endpoint/event/EventKeyProvider.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/utils/GuardedExecutor.hpp>
-#include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace event {
 
-class EventApiImpl : public privmx::utils::ManualManagedClass<EventApiImpl> {
+class EventApiImpl {
 public:
     EventApiImpl(
         const core::Connection& connection,

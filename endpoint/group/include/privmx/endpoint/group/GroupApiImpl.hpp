@@ -21,14 +21,13 @@
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCacheRegistry.hpp"
-#include <privmx/utils/ManualManagedClass.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace group {
 
-class GroupApiImpl : public privmx::utils::ManualManagedClass<GroupApiImpl>, protected core::ContainerBaseApi {
+class GroupApiImpl : protected core::ContainerBaseApi {
 public:
     GroupApiImpl(
         const privfs::RpcGateway::Ptr& gateway,

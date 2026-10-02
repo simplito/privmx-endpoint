@@ -239,7 +239,6 @@ void StreamApiLowImpl::processConnectedEvent() {}
 
 void StreamApiLowImpl::processDisconnectedEvent() {
     LOG_TRACE("StreamApiLowImpl recived DisconnectedEvent");
-    privmx::utils::ManualManagedClass<StreamApiLowImpl>::cleanup();
 }
 
 std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::createEmptyStreamRoomData(

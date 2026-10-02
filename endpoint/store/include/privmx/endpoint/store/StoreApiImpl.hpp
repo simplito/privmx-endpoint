@@ -40,13 +40,12 @@ limitations under the License.
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
-#include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace store {
 
-class StoreApiImpl : public privmx::utils::ManualManagedClass<StoreApiImpl>, protected group::GroupAwareModuleApi {
+class StoreApiImpl : protected group::GroupAwareModuleApi {
 public:
     StoreApiImpl(
         const std::shared_ptr<core::KeyProvider>& keyProvider,

@@ -8,7 +8,7 @@
 
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/store/Types.hpp"
-#include <privmx/endpoint/core/ExtendedPointer.hpp>
+#include <privmx/endpoint/core/BaseApiClass.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 
 namespace privmx {
@@ -20,7 +20,7 @@ class StoreApiImpl;
 /**
  * 'StoreApi' is a class representing Endpoint's API for Stores and their files.
  */
-class StoreApi : public privmx::endpoint::core::ExtendedPointer<StoreApiImpl> {
+class StoreApi : public privmx::endpoint::core::BaseApiClass<StoreApiImpl> {
 public:
     /**
      * Creates an instance of 'StoreApi'.
@@ -35,11 +35,7 @@ public:
     /**
      * //doc-gen:ignore
      */
-    StoreApi();
-    StoreApi(const StoreApi& obj);
-    StoreApi& operator=(const StoreApi& obj);
-    StoreApi(StoreApi&& obj);
-    ~StoreApi();
+    StoreApi() = default;
 
     /**
      * Creates a new Store in given Context.

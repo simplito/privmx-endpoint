@@ -23,15 +23,6 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
-ThreadApi::ThreadApi() {};
-ThreadApi::ThreadApi(const ThreadApi& obj) : ExtendedPointer(obj) {};
-ThreadApi& ThreadApi::operator=(const ThreadApi& obj) {
-    this->ExtendedPointer::operator=(obj);
-    return *this;
-};
-ThreadApi::ThreadApi(ThreadApi&& obj) : ExtendedPointer(std::move(obj)) {};
-ThreadApi::~ThreadApi() {}
-
 ThreadApi ThreadApi::create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
@@ -39,7 +30,6 @@ ThreadApi ThreadApi::create(core::Connection& connection, const std::optional<gr
             connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
             connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection, groupApi
         ));
-        impl->attach(impl);
         return ThreadApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -47,7 +37,7 @@ ThreadApi ThreadApi::create(core::Connection& connection, const std::optional<gr
     }
 }
 
-ThreadApi::ThreadApi(const std::shared_ptr<ThreadApiImpl>& impl) : ExtendedPointer(impl) {}
+ThreadApi::ThreadApi(const std::shared_ptr<ThreadApiImpl>& impl) : BaseApiClass(impl) {}
 
 std::string ThreadApi::createThread(
     const std::string& contextId,

@@ -13,8 +13,6 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/StreamApiLowImpl.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
-#include <iostream>
-#include <ostream>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
@@ -33,7 +31,6 @@ StreamApiLow StreamApiLow::create(const core::Connection& connection, const std:
             connection, connectionImpl->getGateway(), connectionImpl->getUserPrivKey(),
             connectionImpl->getKeyProvider(), connectionImpl->getHost(), connectionImpl->getEventMiddleware(), groupApi
         ));
-        impl->attach(impl);
         return StreamApiLow(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -41,15 +38,7 @@ StreamApiLow StreamApiLow::create(const core::Connection& connection, const std:
     }
 }
 
-StreamApiLow::StreamApiLow() {};
-StreamApiLow::StreamApiLow(const StreamApiLow& obj) : ExtendedPointer(obj) {};
-StreamApiLow& StreamApiLow::operator=(const StreamApiLow& obj) {
-    this->ExtendedPointer::operator=(obj);
-    return *this;
-};
-StreamApiLow::StreamApiLow(StreamApiLow&& obj) : ExtendedPointer(std::move(obj)) {};
-StreamApiLow::~StreamApiLow() {}
-StreamApiLow::StreamApiLow(const std::shared_ptr<StreamApiLowImpl>& impl) : ExtendedPointer(impl) {}
+StreamApiLow::StreamApiLow(const std::shared_ptr<StreamApiLowImpl>& impl) : BaseApiClass(impl) {}
 
 std::vector<TurnCredentials> StreamApiLow::getTurnCredentials() {
     auto impl = getImpl();

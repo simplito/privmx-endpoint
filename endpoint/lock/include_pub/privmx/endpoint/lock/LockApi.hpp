@@ -16,7 +16,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/lock/Types.hpp"
-#include <privmx/endpoint/core/ExtendedPointer.hpp>
+#include <privmx/endpoint/core/BaseApiClass.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -28,7 +28,7 @@ class LockApiImpl;
  * 'LockApi' provides distributed locking of arbitrary resources identified by a string ID.
  * Lock levels follow the SQLite locking model: NONE < SHARED < RESERVED < PENDING < EXCLUSIVE.
  */
-class LockApi : public privmx::endpoint::core::ExtendedPointer<LockApiImpl> {
+class LockApi : public privmx::endpoint::core::BaseApiClass<LockApiImpl> {
 public:
     /**
      * Creates an instance of 'LockApi'.

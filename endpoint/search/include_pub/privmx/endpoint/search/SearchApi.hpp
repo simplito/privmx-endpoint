@@ -16,8 +16,8 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include "privmx/endpoint/core/BaseApiClass.hpp"
 #include "privmx/endpoint/core/Connection.hpp"
-#include "privmx/endpoint/core/ExtendedPointer.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/kvdb/KvdbApi.hpp"
 #include "privmx/endpoint/lock/LockApi.hpp"
@@ -33,7 +33,7 @@ class SearchApiImpl;
 /**
  * 'SearchApi' is a class representing Endpoint's API for Search Indexes and their Documents.
  */
-class SearchApi : public privmx::endpoint::core::ExtendedPointer<SearchApiImpl> {
+class SearchApi : public privmx::endpoint::core::BaseApiClass<SearchApiImpl> {
 public:
     /**
      * Creates an instance of 'SearchApi'.

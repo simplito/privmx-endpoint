@@ -28,7 +28,6 @@ limitations under the License.
 #include "privmx/endpoint/search/DynamicTypes.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
 #include "privmx/endpoint/search/SearchTypes.hpp"
-#include "privmx/utils/ManualManagedClass.hpp"
 #include "privmx/utils/ThreadSaveMap.hpp"
 
 namespace privmx {
@@ -58,7 +57,7 @@ private:
     privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<FullTextSearch>> _ftsMap;
 };
 
-class SearchApiImpl : public privmx::utils::ManualManagedClass<SearchApiImpl> {
+class SearchApiImpl {
 public:
     SearchApiImpl(
         const core::Connection& connection,

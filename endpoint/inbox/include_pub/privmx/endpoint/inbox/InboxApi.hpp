@@ -12,7 +12,7 @@
 #include "privmx/endpoint/inbox/Types.hpp"
 #include "privmx/endpoint/store/StoreApi.hpp"
 #include "privmx/endpoint/thread/ThreadApi.hpp"
-#include <privmx/endpoint/core/ExtendedPointer.hpp>
+#include <privmx/endpoint/core/BaseApiClass.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 
 namespace privmx {
@@ -24,7 +24,7 @@ class InboxApiImpl;
 /**
  * 'InboxApi' is a class representing Endpoint's API for Inboxes and their entries.
  */
-class InboxApi : public privmx::endpoint::core::ExtendedPointer<InboxApiImpl> {
+class InboxApi : public privmx::endpoint::core::BaseApiClass<InboxApiImpl> {
 public:
     /**
      * Creates an instance of 'InboxApi'.
@@ -49,11 +49,7 @@ public:
     /**
      * //doc-gen:ignore
      */
-    InboxApi();
-    InboxApi(const InboxApi& obj);
-    InboxApi& operator=(const InboxApi& obj);
-    InboxApi(InboxApi&& obj);
-    ~InboxApi();
+    InboxApi() = default;
 
     /**
      * Creates a new Inbox.

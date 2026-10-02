@@ -907,7 +907,6 @@ void GroupApiImpl::processDisconnectedEvent() {
     dropEnvelopeState();
     _groupDataSchemaMapper->dropAllVersionPins();
     invalidateModuleKeysInCache();
-    privmx::utils::ManualManagedClass<GroupApiImpl>::cleanup();
 }
 
 void GroupApiImpl::dropEnvelopeState() {

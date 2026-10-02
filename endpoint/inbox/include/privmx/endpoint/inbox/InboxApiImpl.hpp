@@ -46,13 +46,12 @@ limitations under the License.
 #include <privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp>
 #include <privmx/endpoint/thread/ServerTypes.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
-#include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace inbox {
 
-class InboxApiImpl : public privmx::utils::ManualManagedClass<InboxApiImpl>, protected group::GroupAwareModuleApi {
+class InboxApiImpl : protected group::GroupAwareModuleApi {
 public:
     InboxApiImpl(
         const core::Connection& connection,

@@ -21,12 +21,12 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::search;
 
 SearchApi::SearchApi() {};
-SearchApi::SearchApi(const SearchApi& obj) : ExtendedPointer(obj) {};
+SearchApi::SearchApi(const SearchApi& obj) : BaseApiClass(obj) {};
 SearchApi& SearchApi::operator=(const SearchApi& obj) {
-    this->ExtendedPointer::operator=(obj);
+    this->BaseApiClass::operator=(obj);
     return *this;
 };
-SearchApi::SearchApi(SearchApi&& obj) : ExtendedPointer(std::move(obj)) {};
+SearchApi::SearchApi(SearchApi&& obj) : BaseApiClass(std::move(obj)) {};
 SearchApi::~SearchApi() {}
 
 SearchApi SearchApi::create(
@@ -37,7 +37,6 @@ SearchApi SearchApi::create(
 ) {
     try {
         std::shared_ptr<SearchApiImpl> impl = std::make_shared<SearchApiImpl>(connection, storeApi, kvdbApi, lockApi);
-        impl->attach(impl);
         return SearchApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -45,7 +44,7 @@ SearchApi SearchApi::create(
     }
 }
 
-SearchApi::SearchApi(const std::shared_ptr<SearchApiImpl>& impl) : ExtendedPointer(impl) {}
+SearchApi::SearchApi(const std::shared_ptr<SearchApiImpl>& impl) : BaseApiClass(impl) {}
 
 std::string SearchApi::createSearchIndex(
     const std::string& contextId,
