@@ -22,15 +22,6 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
-EventApi::EventApi() {};
-EventApi::EventApi(const EventApi& obj) : ExtendedPointer(obj) {};
-EventApi& EventApi::operator=(const EventApi& obj) {
-    this->ExtendedPointer::operator=(obj);
-    return *this;
-};
-EventApi::EventApi(EventApi&& obj) : ExtendedPointer(std::move(obj)) {};
-EventApi::~EventApi() {}
-
 EventApi EventApi::create(core::Connection& connection) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
@@ -38,7 +29,6 @@ EventApi EventApi::create(core::Connection& connection) {
             connection, connectionImpl->getUserPrivKey(), connectionImpl->getGateway(),
             connectionImpl->getEventMiddleware()
         ));
-        impl->attach(impl);
         return EventApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -46,7 +36,7 @@ EventApi EventApi::create(core::Connection& connection) {
     }
 }
 
-EventApi::EventApi(const std::shared_ptr<EventApiImpl>& impl) : ExtendedPointer(impl) {}
+EventApi::EventApi(const std::shared_ptr<EventApiImpl>& impl) : BaseApiClass(impl) {}
 
 void EventApi::emitEvent(
     const std::string& contextId,

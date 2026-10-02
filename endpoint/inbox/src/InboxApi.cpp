@@ -24,15 +24,6 @@ limitations under the License.
 using namespace privmx::endpoint::inbox;
 using namespace privmx::endpoint;
 
-InboxApi::InboxApi() {};
-InboxApi::InboxApi(const InboxApi& obj) : ExtendedPointer(obj) {};
-InboxApi& InboxApi::operator=(const InboxApi& obj) {
-    this->ExtendedPointer::operator=(obj);
-    return *this;
-};
-InboxApi::InboxApi(InboxApi&& obj) : ExtendedPointer(std::move(obj)) {};
-InboxApi::~InboxApi() {}
-
 InboxApi InboxApi::create(
     core::Connection& connection,
     thread::ThreadApi& threadApi,
@@ -49,7 +40,6 @@ InboxApi InboxApi::create(
             connectionImpl->getHost(), connectionImpl->getUserPrivKey(), connectionImpl->getEventMiddleware(),
             connectionImpl->getHandleManager(), connectionImpl->getServerConfig().requestChunkSize, groupApi
         ));
-        impl->attach(impl);
         return InboxApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -57,7 +47,7 @@ InboxApi InboxApi::create(
     }
 }
 
-InboxApi::InboxApi(const std::shared_ptr<InboxApiImpl>& impl) : ExtendedPointer(impl) {}
+InboxApi::InboxApi(const std::shared_ptr<InboxApiImpl>& impl) : BaseApiClass(impl) {}
 
 std::string InboxApi::createInbox(
     const std::string& contextId,

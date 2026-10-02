@@ -15,7 +15,6 @@ limitations under the License.
 #include <string>
 
 #include <privmx/privfs/gateway/RpcGateway.hpp>
-#include <privmx/utils/ManualManagedClass.hpp>
 
 #include "privmx/endpoint/lock/LockApi.hpp"
 #include "privmx/endpoint/lock/ServerApi.hpp"
@@ -25,7 +24,7 @@ namespace privmx {
 namespace endpoint {
 namespace lock {
 
-class LockApiImpl : public privmx::utils::ManualManagedClass<LockApiImpl> {
+class LockApiImpl {
 public:
     LockApiImpl(const privfs::RpcGateway::Ptr& gateway);
 

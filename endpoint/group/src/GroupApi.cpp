@@ -12,15 +12,6 @@
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
-GroupApi::GroupApi() {}
-GroupApi::GroupApi(const GroupApi& obj) : ExtendedPointer(obj) {}
-GroupApi& GroupApi::operator=(const GroupApi& obj) {
-    this->ExtendedPointer::operator=(obj);
-    return *this;
-}
-GroupApi::GroupApi(GroupApi&& obj) : ExtendedPointer(std::move(obj)) {}
-GroupApi::~GroupApi() {}
-
 GroupApi GroupApi::create(core::Connection& connection) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
@@ -28,7 +19,6 @@ GroupApi GroupApi::create(core::Connection& connection) {
             connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
             connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection
         ));
-        impl->attach(impl);
         return GroupApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -36,7 +26,7 @@ GroupApi GroupApi::create(core::Connection& connection) {
     }
 }
 
-GroupApi::GroupApi(const std::shared_ptr<GroupApiImpl>& impl) : ExtendedPointer(impl) {}
+GroupApi::GroupApi(const std::shared_ptr<GroupApiImpl>& impl) : BaseApiClass(impl) {}
 
 std::string GroupApi::createGroup(
     const std::string& contextId,

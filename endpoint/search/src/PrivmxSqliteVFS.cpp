@@ -24,8 +24,6 @@ limitations under the License.
 #include <sqlite3.h>
 
 #include <exception>
-#include <iostream>
-#include <stdexcept>
 #include <unistd.h>
 
 #include "privmx/endpoint/search/PrivmxFS.hpp"

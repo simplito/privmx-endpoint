@@ -16,8 +16,8 @@ limitations under the License.
 #include "privmx/endpoint/stream/WebRTCInterface.hpp"
 #include <memory>
 #include <optional>
+#include <privmx/endpoint/core/BaseApiClass.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/core/ExtendedPointer.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <string>
@@ -40,7 +40,7 @@ class StreamApiLowImpl;
  * media and/or createSubscriberStream to receive it, and finally leaveStreamRoom. Managing the Stream Rooms
  * themselves (creating, updating, listing, deleting) does not require joining them.
  */
-class StreamApiLow : public privmx::endpoint::core::ExtendedPointer<StreamApiLowImpl> {
+class StreamApiLow : public privmx::endpoint::core::BaseApiClass<StreamApiLowImpl> {
 public:
     /**
      * Creates an instance of 'StreamApiLow'.
@@ -58,11 +58,7 @@ public:
     /**
      * //doc-gen:ignore
      */
-    StreamApiLow();
-    StreamApiLow(const StreamApiLow& obj);
-    StreamApiLow& operator=(const StreamApiLow& obj);
-    StreamApiLow(StreamApiLow&& obj);
-    ~StreamApiLow();
+    StreamApiLow() = default;
 
     /**
      * Gets credentials of the TURN servers.

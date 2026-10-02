@@ -16,6 +16,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
 #include <memory>
 #include <optional>
+#include <privmx/endpoint/core/BaseApiClass.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/event/EventApi.hpp>
@@ -41,7 +42,7 @@ class StreamApiImpl;
  * Managing the Stream Rooms themselves, that is creating, updating, listing, and deleting them, works without
  * joining them.
  */
-class StreamApi {
+class StreamApi : public privmx::endpoint::core::BaseApiClass<StreamApiImpl> {
 public:
     /**
      * Creates an instance of `StreamApi`.
@@ -435,15 +436,8 @@ public:
      */
     void sendData(const StreamHandle& streamHandle, core::Buffer data);
 
-    /**
-     * //doc-gen:ignore
-     */
-    std::shared_ptr<StreamApiImpl> getImpl() const { return _impl; }
-
 private:
-    void validateEndpoint();
     StreamApi(const std::shared_ptr<StreamApiImpl>& impl);
-    std::shared_ptr<StreamApiImpl> _impl;
 };
 
 } // namespace stream

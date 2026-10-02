@@ -23,13 +23,13 @@ limitations under the License.
 using namespace privmx::endpoint::core;
 
 Connection::Connection() {};
-Connection::Connection(const Connection& obj) : ExtendedPointer(obj), _connectionId(obj._connectionId) {};
+Connection::Connection(const Connection& obj) : BaseApiClass(obj), _connectionId(obj._connectionId) {};
 Connection& Connection::operator=(const Connection& obj) {
-    this->ExtendedPointer::operator=(obj);
+    this->BaseApiClass::operator=(obj);
     this->_connectionId = obj._connectionId;
     return *this;
 };
-Connection::Connection(Connection&& obj) : ExtendedPointer(std::move(obj)), _connectionId(obj._connectionId) {};
+Connection::Connection(Connection&& obj) : BaseApiClass(std::move(obj)), _connectionId(obj._connectionId) {};
 Connection::~Connection() {}
 
 Connection Connection::connect(
@@ -43,7 +43,7 @@ Connection Connection::connect(
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
-        impl->connect(impl, userPrivKey, solutionId, platformUrl, verificationOptions);
+        impl->connect(userPrivKey, solutionId, platformUrl, verificationOptions);
         return Connection(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -59,7 +59,7 @@ Connection Connection::connectPublic(
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
     try {
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
-        impl->connectPublic(impl, solutionId, platformUrl, verificationOptions);
+        impl->connectPublic(solutionId, platformUrl, verificationOptions);
         return Connection(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -68,11 +68,17 @@ Connection Connection::connectPublic(
 }
 
 Connection::Connection(const std::shared_ptr<ConnectionImpl>& impl)
-    : ExtendedPointer(impl), _connectionId(std::move(impl->getConnectionId())) {}
+    : BaseApiClass(impl), _connectionId(std::move(impl->getConnectionId())) {}
+
+void Connection::assertGateway(const std::shared_ptr<ConnectionImpl>& impl) {
+    if (impl->getGateway().isNull())
+        throw core::NotConnectedException();
+}
 
 void Connection::assertConnection(const std::shared_ptr<ConnectionImpl>& impl) {
-    if (impl->getGateway().isNull())
-        throw core::NotInitializedException();
+    assertGateway(impl);
+    if (!impl->isConnected())
+        throw core::NotConnectedException();
 }
 
 int64_t Connection::getConnectionId() {
@@ -159,7 +165,7 @@ std::string Connection::buildSubscriptionQuery(
 
 void Connection::disconnect() {
     auto impl = getImpl();
-    assertConnection(impl);
+    assertGateway(impl);
     try {
         impl->disconnect();
     } catch (const privmx::utils::PrivmxException& e) {

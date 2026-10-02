@@ -9,7 +9,7 @@
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/thread/Types.hpp"
-#include <privmx/endpoint/core/ExtendedPointer.hpp>
+#include <privmx/endpoint/core/BaseApiClass.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 
 namespace privmx {
@@ -21,7 +21,7 @@ class ThreadApiImpl;
 /**
  * 'ThreadApi' is a class representing Endpoint's API for Threads and their messages.
  */
-class ThreadApi : public privmx::endpoint::core::ExtendedPointer<ThreadApiImpl> {
+class ThreadApi : public privmx::endpoint::core::BaseApiClass<ThreadApiImpl> {
 public:
     /**
      * Creates an instance of 'ThreadApi'.
@@ -38,11 +38,7 @@ public:
     /**
      * //doc-gen:ignore
      */
-    ThreadApi();
-    ThreadApi(const ThreadApi& obj);
-    ThreadApi& operator=(const ThreadApi& obj);
-    ThreadApi(ThreadApi&& obj);
-    ~ThreadApi();
+    ThreadApi() = default;
 
     /**
      * Creates a new Thread in given Context.

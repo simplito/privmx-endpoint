@@ -22,15 +22,6 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-StoreApi::StoreApi() {};
-StoreApi::StoreApi(const StoreApi& obj) : ExtendedPointer(obj) {};
-StoreApi& StoreApi::operator=(const StoreApi& obj) {
-    this->ExtendedPointer::operator=(obj);
-    return *this;
-};
-StoreApi::StoreApi(StoreApi&& obj) : ExtendedPointer(std::move(obj)) {};
-StoreApi::~StoreApi() {}
-
 StoreApi StoreApi::create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
@@ -42,7 +33,6 @@ StoreApi StoreApi::create(core::Connection& connection, const std::optional<grou
             connectionImpl->getEventMiddleware(), connectionImpl->getHandleManager(), connection,
             connectionImpl->getServerConfig().requestChunkSize, groupApi
         ));
-        impl->attach(impl);
         return StoreApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -50,7 +40,7 @@ StoreApi StoreApi::create(core::Connection& connection, const std::optional<grou
     }
 }
 
-StoreApi::StoreApi(const std::shared_ptr<StoreApiImpl>& impl) : ExtendedPointer(impl) {}
+StoreApi::StoreApi(const std::shared_ptr<StoreApiImpl>& impl) : BaseApiClass(impl) {}
 
 std::string StoreApi::createStore(
     const std::string& contextId,

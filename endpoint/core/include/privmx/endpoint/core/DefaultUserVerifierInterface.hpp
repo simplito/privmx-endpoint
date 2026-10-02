@@ -2,8 +2,6 @@
 #define _PRIVMXLIB_ENDPOINT_CORE_DEFAULTUSERVERIFIERINTERFACE_HPP_
 
 #include <atomic>
-#include <iostream>
-#include <optional>
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
 #include <privmx/utils/Logger.hpp>
 #include <string>

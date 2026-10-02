@@ -9,7 +9,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
-#include <iostream>
 #include <privmx/utils/Logger.hpp>
 #include <rtc_video_frame.h>
 

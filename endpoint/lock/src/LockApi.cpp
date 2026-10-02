@@ -21,19 +21,18 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::lock;
 
 LockApi::LockApi() {}
-LockApi::LockApi(const LockApi& obj) : ExtendedPointer(obj) {}
+LockApi::LockApi(const LockApi& obj) : BaseApiClass(obj) {}
 LockApi& LockApi::operator=(const LockApi& obj) {
-    this->ExtendedPointer::operator=(obj);
+    this->BaseApiClass::operator=(obj);
     return *this;
 }
-LockApi::LockApi(LockApi&& obj) : ExtendedPointer(std::move(obj)) {}
+LockApi::LockApi(LockApi&& obj) : BaseApiClass(std::move(obj)) {}
 LockApi::~LockApi() {}
 
 LockApi LockApi::create(core::Connection& connection) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<LockApiImpl> impl(new LockApiImpl(connectionImpl->getGateway()));
-        impl->attach(impl);
         return LockApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -41,7 +40,7 @@ LockApi LockApi::create(core::Connection& connection) {
     }
 }
 
-LockApi::LockApi(const std::shared_ptr<LockApiImpl>& impl) : ExtendedPointer(impl) {}
+LockApi::LockApi(const std::shared_ptr<LockApiImpl>& impl) : BaseApiClass(impl) {}
 
 LockOperationResult LockApi::lock(const std::string& resourceId, const std::string& uuid, LockLevel lockLevel) {
     auto impl = getImpl();

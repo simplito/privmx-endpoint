@@ -427,7 +427,6 @@ void KvdbApiImpl::processConnectedEvent() {
 void KvdbApiImpl::processDisconnectedEvent() {
     LOG_TRACE("KvdbApiImpl recived DisconnectedEvent");
     invalidateModuleKeysInCache();
-    privmx::utils::ManualManagedClass<KvdbApiImpl>::cleanup();
 }
 
 std::tuple<Kvdb, core::DataIntegrityObject> KvdbApiImpl::decryptAndConvertKvdbDataToKvdb(
