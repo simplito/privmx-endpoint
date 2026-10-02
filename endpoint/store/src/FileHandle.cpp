@@ -176,11 +176,7 @@ void FileWriteHandle::createRequestData() {
     _streamer.createRequest(getRandomWriteSupport());
 }
 
-void FileWriteHandle::setRequestData(
-    const std::string& requestId,
-    const std::string& key,
-    const int64_t& fileIndex
-) {
+void FileWriteHandle::setRequestData(const std::string& requestId, const std::string& key, const int64_t& fileIndex) {
     _streamer.setRequestData(requestId, key, fileIndex);
 }
 

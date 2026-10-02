@@ -148,8 +148,7 @@ protected:
     template<typename TContainer>
     ModuleKeys containerToModuleKeys(const TContainer& container) {
         static_assert(
-            std::is_base_of_v<server::ContainerInfoBase, TContainer>,
-            "TContainer must inherit from ContainerInfoBase"
+            std::is_base_of_v<server::ContainerInfoBase, TContainer>, "TContainer must inherit from ContainerInfoBase"
         );
         return ModuleKeys{
             .keys = container.keys,

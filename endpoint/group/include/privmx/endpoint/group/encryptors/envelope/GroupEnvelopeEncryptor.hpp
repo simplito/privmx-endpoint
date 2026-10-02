@@ -235,7 +235,10 @@ private:
     // Domain label on the per-chunk key derivation. See `chunkKey` in the .cpp.
     static const std::string CHUNK_KEY_LABEL;
 
-    enum class EnvelopeFamily { Message, File };
+    enum class EnvelopeFamily {
+        Message,
+        File
+    };
 
     static EnvelopeRouting peekFamily(const core::Buffer& envelope, EnvelopeFamily family);
 

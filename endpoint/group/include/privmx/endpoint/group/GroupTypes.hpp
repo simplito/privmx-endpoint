@@ -58,12 +58,12 @@ struct EnvelopeFileState {
     std::string groupPubKey{};  // anonymous seals only, base58-DER
     std::string authorPubKey{}; // opening only: provenance handed back at finish
     std::string fileKey{};
-    ChunkIndex index = 0;       // next chunk to seal or open
-    ByteCount plainSize = 0;    // declared plaintext length of the whole file
-    ByteCount written = 0;      // write side: plaintext accepted so far
-    ByteCount skipInChunk = 0;  // read side: bytes to drop off the next chunk after a seek
-    bool seeked = false;        // read side: completeness is no longer checkable
-    std::string buffer{};       // bytes not yet forming a whole chunk
+    ChunkIndex index = 0;      // next chunk to seal or open
+    ByteCount plainSize = 0;   // declared plaintext length of the whole file
+    ByteCount written = 0;     // write side: plaintext accepted so far
+    ByteCount skipInChunk = 0; // read side: bytes to drop off the next chunk after a seek
+    bool seeked = false;       // read side: completeness is no longer checkable
+    std::string buffer{};      // bytes not yet forming a whole chunk
 };
 
 // A roster split the way `prepareContainerUpdate` wants it.

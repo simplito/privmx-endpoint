@@ -4,8 +4,8 @@
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 
-#include "privmx/endpoint/group/encryptors/envelope/EnvelopeWire.hpp"
 #include "privmx/endpoint/group/GroupException.hpp"
+#include "privmx/endpoint/group/encryptors/envelope/EnvelopeWire.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
@@ -245,11 +245,9 @@ core::Buffer GroupEnvelopeEncryptor::packAnonymousFileEnvelope(
     EnvelopeWriter::putField(out, wrap);
     // No signature, for the same reason as type 2: the sender is anonymous by construction. `plainSize` still
     // sits inside this encrypt-then-MAC payload, so a dropped tail stays detectable.
-    out.append(
-        _dataEncryptor
-            .encrypt(core::Buffer::from(header + EnvelopeWriter::toBE(plainSize, 8) + fileKey), contentKey)
-            .stdString()
-    );
+    out.append(_dataEncryptor
+                   .encrypt(core::Buffer::from(header + EnvelopeWriter::toBE(plainSize, 8) + fileKey), contentKey)
+                   .stdString());
     return core::Buffer::from(out);
 }
 
@@ -305,10 +303,7 @@ core::Buffer GroupEnvelopeEncryptor::decryptChunk(
 
 // -- dispatch ------------------------------------------------------------------------------------------
 
-EnvelopeRouting GroupEnvelopeEncryptor::peekFamily(
-    const core::Buffer& envelope,
-    EnvelopeFamily family
-) {
+EnvelopeRouting GroupEnvelopeEncryptor::peekFamily(const core::Buffer& envelope, EnvelopeFamily family) {
     // The member and anonymous headers are shaped alike in both families, so only the acceptable type bytes
     // vary. Crossing the families is refused — see the notes on `peek` and `peekFile`.
     const bool wantFile = family == EnvelopeFamily::File;

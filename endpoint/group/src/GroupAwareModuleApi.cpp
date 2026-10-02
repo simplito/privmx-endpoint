@@ -46,10 +46,7 @@ GroupAwareModuleApi::GroupAwareModuleApi(
 
 GroupAwareModuleApi::~GroupAwareModuleApi() = default;
 
-void GroupAwareModuleApi::absorbAutoRekeyFailure(
-    const std::string& moduleId,
-    const privmx::utils::PrivmxException& e
-) {
+void GroupAwareModuleApi::absorbAutoRekeyFailure(const std::string& moduleId, const privmx::utils::PrivmxException& e) {
     auto code = core::ExceptionConverter::convert(e).getCode();
     if (code == privmx::endpoint::server::ContainerRotatedAlreadyException().getCode()) {
         invalidateModuleKeysInCache(moduleId);
@@ -181,7 +178,9 @@ std::vector<core::GroupGrantWithKey> GroupAwareModuleApi::resolveGranteesForReke
             );
         } else {
             grants.push_back(
-                core::GroupGrantWithKey{.groupId = grant.groupId, .role = grant.role, .groupPubKey = {}, .groupEpoch = 0}
+                core::GroupGrantWithKey{
+                    .groupId = grant.groupId, .role = grant.role, .groupPubKey = {}, .groupEpoch = 0
+                }
             );
         }
     }

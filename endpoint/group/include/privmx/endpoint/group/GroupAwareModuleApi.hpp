@@ -200,9 +200,7 @@ protected:
             rotateContainerKeys<TRotateModel>(
                 moduleId, container, roster.users, roster.managers, container.version, false, {}, sendRotateRequest
             );
-        } catch (const privmx::utils::PrivmxException& e) {
-            absorbAutoRekeyFailure(moduleId, e);
-        }
+        } catch (const privmx::utils::PrivmxException& e) { absorbAutoRekeyFailure(moduleId, e); }
     }
 
 private:

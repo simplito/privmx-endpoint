@@ -55,14 +55,14 @@ InboxApiImpl::InboxApiImpl(
     size_t serverRequestChunkSize,
     const std::optional<group::GroupApi>& groupApi
 )
-    : GroupAwareModuleApi(userPrivKey, keyProvider, host, eventMiddleware, connection, groupApi),
-      _threadApi(threadApi), _storeApi(storeApi), _serverApi(serverApi), _requestApi(requestApi),
-      _handleManager(handleManager), _chunksCache(
-                                         std::make_shared<store::CacheScopedNamespace>(
-                                             host + ";" + userPrivKey.getPublicKey().toBase58DER() + ";",
-                                             store::GlobalCache::getChunksCacheInstance()
-                                         )
-                                     ),
+    : GroupAwareModuleApi(userPrivKey, keyProvider, host, eventMiddleware, connection, groupApi), _threadApi(threadApi),
+      _storeApi(storeApi), _serverApi(serverApi), _requestApi(requestApi), _handleManager(handleManager),
+      _chunksCache(
+          std::make_shared<store::CacheScopedNamespace>(
+              host + ";" + userPrivKey.getPublicKey().toBase58DER() + ";",
+              store::GlobalCache::getChunksCacheInstance()
+          )
+      ),
       _inboxHandleManager(InboxHandleManager(handleManager)),
       _messageKeyIdFormatValidator(MessageKeyIdFormatValidator()),
       _fileKeyIdFormatValidator(FileKeyIdFormatValidator()), _serverRequestChunkSize(serverRequestChunkSize),

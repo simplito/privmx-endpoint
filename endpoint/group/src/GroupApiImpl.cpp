@@ -40,9 +40,8 @@ GroupApiImpl::GroupApiImpl(
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const core::Connection& connection
 )
-    : ContainerBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection),
-      _serverApi(ServerApi(gateway)), _subscriber(gateway),
-      _groupDataSchemaMapper(std::make_shared<GroupDataSchemaMapper>(userPrivKey, connection)) {
+    : ContainerBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _serverApi(ServerApi(gateway)),
+      _subscriber(gateway), _groupDataSchemaMapper(std::make_shared<GroupDataSchemaMapper>(userPrivKey, connection)) {
     // A group opens its own metadata key by climbing its own tree, so it resolves its grant key for itself.
     initGroupPrivKeyResolver(
         [this](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
