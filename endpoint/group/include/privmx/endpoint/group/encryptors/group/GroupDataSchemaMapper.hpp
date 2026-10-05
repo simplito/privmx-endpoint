@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
@@ -40,7 +41,8 @@ public:
 
     Poco::Dynamic::Var encryptRoster(const GroupRosterToEncryptV5& data, const std::string& key);
 
-    void assertDataIntegrity(const server::GroupInfo& groupInfo);
+    // Returns the roster head's DIO it had to decode anyway, so a caller that needs it does not verify twice.
+    core::DataIntegrityObject assertDataIntegrity(const server::GroupInfo& groupInfo);
 
     void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& rosterKey);
 
@@ -70,7 +72,8 @@ public:
     // planes. `Crypto::kdf` gives distinct purposes independent keys, so preimages cannot collide by prefix.
     static std::string tagSubkey(const std::string& contentKey, const std::string& purpose);
 
-    uint32_t validateDataIntegrity(const server::GroupInfo& groupInfo);
+    // The status code, plus the roster head's DIO when that code is 0.
+    std::pair<uint32_t, core::DataIntegrityObject> validateDataIntegrity(const server::GroupInfo& groupInfo);
 
     // Call when the group is gone or the session was reset.
     void dropVersionPin(const std::string& groupId);

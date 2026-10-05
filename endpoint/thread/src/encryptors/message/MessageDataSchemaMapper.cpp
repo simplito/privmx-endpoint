@@ -55,7 +55,8 @@ Poco::Dynamic::Var MessageDataSchemaMapper::encrypt(
 
 std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaMapper::decrypt(
     const server::Message& message,
-    const core::DecryptedEncKey& encKey
+    const core::DecryptedEncKey& encKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getMessagesDataStructureVersion(message)), message, encKey,
@@ -67,7 +68,8 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaMapper::decrypt(
                 ),
                 {}
             };
-        }
+        },
+        verifiedDio
     );
 }
 
@@ -87,11 +89,12 @@ MessageDataSchema::Version MessageDataSchemaMapper::getMessagesDataStructureVers
     );
 }
 
-uint32_t MessageDataSchemaMapper::validateMessageDataIntegrity(
+std::pair<uint32_t, std::optional<core::DataIntegrityObject>> MessageDataSchemaMapper::validateMessageDataIntegrity(
     const server::Message& message,
     const std::string& threadResourceId
 ) {
-    return core::DataSchemaMapperUtils::toStatusCode([&] {
+    std::optional<core::DataIntegrityObject> verifiedDio;
+    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
         switch (getMessagesDataStructureVersion(message)) {
         case MessageDataSchema::Version::VERSION_4:
             return;
@@ -104,12 +107,14 @@ uint32_t MessageDataSchemaMapper::validateMessageDataIntegrity(
                 dio, message.contextId, message.resourceId, message.threadId, threadResourceId, lastModifier, lastDate,
                 [] { throw MessageDataIntegrityException(); }
             );
+            verifiedDio = dio;
             return;
         }
         default:
             throw UnknowMessageFormatException();
         }
     });
+    return {statusCode, verifiedDio};
 }
 
 ThreadDataSchema::Version MessageDataSchemaMapper::getMinimumContainerSchemaVersionForMessage(
@@ -163,7 +168,8 @@ std::vector<Message> MessageDataSchemaMapper::validateDecryptAndConvertMessages(
                 _messageKeyIdFormatValidator.assertKeyIdFormat(msg.keyId);
             });
         },
-        [&](const server::Message& msg, const core::DecryptedEncKey& key) { return decrypt(msg, key); },
+        [&](const server::Message& msg, const core::DecryptedEncKey& key,
+            const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(msg, key, verifiedDio); },
         [](const server::Message& msg, uint32_t code) {
             return toLibMessage(msg, {}, {}, {}, {}, code, MessageDataSchema::Version::UNKNOWN);
         },

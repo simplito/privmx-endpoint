@@ -14,8 +14,10 @@ limitations under the License.
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <Poco/JSON/Object.h>
@@ -100,15 +102,19 @@ public:
         }
     }
 
+    // Hands back the DIO it decoded, so the decrypt that follows can take it instead of verifying the same
+    // signature and checksums over again.
     template<typename TContainer, typename TStrategyV5>
-    static void assertContainerV5DIOIntegrity(
+    static DataIntegrityObject assertContainerV5DIOIntegrity(
         const Poco::Dynamic::Var& data,
         const TContainer& container,
         const std::shared_ptr<TStrategyV5>& strategyV5,
         std::function<void()> throwOnFail
     ) {
         auto encData = dynamic::EncryptedModuleDataV5::fromJSON(data);
-        assertContainerDIOIntegrity(strategyV5->getDIOAndAssertIntegrity(encData), container, throwOnFail);
+        auto dio = strategyV5->getDIOAndAssertIntegrity(encData);
+        assertContainerDIOIntegrity(dio, container, throwOnFail);
+        return dio;
     }
 
     template<typename VersionEnum>
@@ -128,11 +134,13 @@ public:
         const std::vector<TServer>& items,
         const std::shared_ptr<KeyProvider>& keyProvider,
         const Connection& connection,
-        std::function<uint32_t(const type_identity_t<TServer>&)> validateIntegrity,
+        std::function<std::pair<uint32_t, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
+            validateIntegrity,
         std::function<EncKeyLocation(const type_identity_t<TServer>&)> getLocation,
         std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
             const type_identity_t<TServer>&,
-            const DecryptedEncKey&
+            const DecryptedEncKey&,
+            const std::optional<DataIntegrityObject>&
         )> decrypt,
         std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError,
         const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
@@ -143,11 +151,16 @@ public:
 
         std::vector<TLib> result(items.size());
         std::vector<DataIntegrityObject> dios(items.size());
+        // Empty for a schema with no DIO to carry over, which leaves `decrypt` to do exactly what it did before.
+        std::vector<std::optional<DataIntegrityObject>> verifiedDios(items.size());
 
         for (size_t i = 0; i < items.size(); i++) {
-            if (auto code = validateIntegrity(items[i]); code != 0) {
+            auto [code, verifiedDio] = validateIntegrity(items[i]);
+            if (code != 0) {
                 result[i] = toLibError(items[i], code);
+                continue;
             }
+            verifiedDios[i] = verifiedDio;
         }
 
         KeyDecryptionAndVerificationRequest keyRequest;
@@ -171,7 +184,7 @@ public:
             }
             try {
                 if (auto it = allKeys.find(getLocation(items[i])); it != allKeys.end()) {
-                    auto [lib, dio] = decrypt(items[i], it->second.at(items[i].data.back().keyId));
+                    auto [lib, dio] = decrypt(items[i], it->second.at(items[i].data.back().keyId), verifiedDios[i]);
                     result[i] = lib;
                     dios[i] = dio;
                     if (!seenRandomIds.insert(dio.randomId + "-" + std::to_string(dio.timestamp)).second) {
@@ -217,11 +230,13 @@ public:
         const ModuleKeys& moduleKeys,
         const std::shared_ptr<KeyProvider>& keyProvider,
         const Connection& connection,
-        std::function<uint32_t(const type_identity_t<TServer>&)> validateIntegrity,
+        std::function<std::pair<uint32_t, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
+            validateIntegrity,
         std::function<uint32_t(const type_identity_t<TServer>&)> validateKeyId,
         std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
             const type_identity_t<TServer>&,
-            const DecryptedEncKey&
+            const DecryptedEncKey&,
+            const std::optional<DataIntegrityObject>&
         )> decrypt,
         std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError,
         const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
@@ -232,11 +247,16 @@ public:
 
         std::vector<TLib> result(items.size());
         std::vector<DataIntegrityObject> dios(items.size());
+        // Empty for a schema with no DIO to carry over, which leaves `decrypt` to do exactly what it did before.
+        std::vector<std::optional<DataIntegrityObject>> verifiedDios(items.size());
 
         for (size_t i = 0; i < items.size(); i++) {
-            if (auto code = validateIntegrity(items[i]); code != 0) {
+            auto [code, verifiedDio] = validateIntegrity(items[i]);
+            if (code != 0) {
                 result[i] = toLibError(items[i], code);
+                continue;
             }
+            verifiedDios[i] = verifiedDio;
         }
 
         const EncKeyLocation location{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
@@ -266,7 +286,7 @@ public:
                     result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE);
                     continue;
                 }
-                auto [lib, dio] = decrypt(items[i], keyMap->at(items[i].keyId));
+                auto [lib, dio] = decrypt(items[i], keyMap->at(items[i].keyId), verifiedDios[i]);
                 result[i] = lib;
                 dios[i] = dio;
                 if (!seenRandomIds.insert(dio.randomId + "-" + std::to_string(dio.timestamp)).second) {
@@ -309,10 +329,12 @@ public:
         const ModuleKeys& moduleKeys,
         const std::shared_ptr<KeyProvider>& keyProvider,
         const Connection& connection,
-        std::function<uint32_t(const type_identity_t<TServer>&)> validateIntegrity,
+        std::function<std::pair<uint32_t, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
+            validateIntegrity,
         std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
             const type_identity_t<TServer>&,
-            const DecryptedEncKey&
+            const DecryptedEncKey&,
+            const std::optional<DataIntegrityObject>&
         )> decrypt,
         std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError,
         const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr

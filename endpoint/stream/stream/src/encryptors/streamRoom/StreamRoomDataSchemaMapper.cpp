@@ -39,7 +39,8 @@ Poco::Dynamic::Var StreamRoomDataSchemaMapper::encrypt(
 
 std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaMapper::decrypt(
     const server::StreamRoomInfo& streamRoom,
-    const core::DecryptedEncKey& encKey
+    const core::DecryptedEncKey& encKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getDataStructureVersion(streamRoom.data.back())), streamRoom, encKey,
@@ -51,11 +52,14 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaMapper::de
                 ),
                 {}
             };
-        }
+        },
+        verifiedDio
     );
 }
 
-void StreamRoomDataSchemaMapper::assertDataIntegrity(const server::StreamRoomInfo& streamRoom) {
+std::optional<core::DataIntegrityObject> StreamRoomDataSchemaMapper::assertDataIntegrity(
+    const server::StreamRoomInfo& streamRoom
+) {
     const auto& entry = streamRoom.data.back();
     switch (getDataStructureVersion(entry)) {
     case core::ModuleDataSchema::Version::UNKNOWN:
@@ -71,7 +75,7 @@ void StreamRoomDataSchemaMapper::assertDataIntegrity(const server::StreamRoomInf
             !core::TimestampValidator::validate(dio.timestamp, streamRoom.lastModificationDate)) {
             throw StreamRoomDataIntegrityException();
         }
-        return;
+        return dio;
     }
     default:
         throw UnknowStreamRoomFormatException(
@@ -80,8 +84,14 @@ void StreamRoomDataSchemaMapper::assertDataIntegrity(const server::StreamRoomInf
     }
 }
 
-uint32_t StreamRoomDataSchemaMapper::validateDataIntegrity(const server::StreamRoomInfo& streamRoom) {
-    return core::DataSchemaMapperUtils::toStatusCode([&] { assertDataIntegrity(streamRoom); });
+std::pair<uint32_t, std::optional<core::DataIntegrityObject>> StreamRoomDataSchemaMapper::validateDataIntegrity(
+    const server::StreamRoomInfo& streamRoom
+) {
+    std::optional<core::DataIntegrityObject> verifiedDio;
+    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+        verifiedDio = assertDataIntegrity(streamRoom);
+    });
+    return {statusCode, verifiedDio};
 }
 
 std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStreamRooms(
@@ -95,7 +105,8 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
         [](const server::StreamRoomInfo& room) -> core::EncKeyLocation {
             return {.contextId = room.contextId, .resourceId = room.resourceId.value_or("")};
         },
-        [&](const server::StreamRoomInfo& room, const core::DecryptedEncKey& key) { return decrypt(room, key); },
+        [&](const server::StreamRoomInfo& room, const core::DecryptedEncKey& key,
+            const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(room, key, verifiedDio); },
         [](const server::StreamRoomInfo& room, uint32_t code) {
             return toLibStreamRoom(room, {}, {}, code, StreamRoomDataSchema::Version::UNKNOWN);
         },

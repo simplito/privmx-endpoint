@@ -59,7 +59,8 @@ Poco::Dynamic::Var EntryDataSchemaMapper::encrypt(
 
 std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaMapper::decrypt(
     const server::KvdbEntryInfo& entry,
-    const core::DecryptedEncKey& encKey
+    const core::DecryptedEncKey& encKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getDataStructureVersion(entry)), entry, encKey,
@@ -71,7 +72,8 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaMapper::decrypt(
                 ),
                 {}
             };
-        }
+        },
+        verifiedDio
     );
 }
 
@@ -89,11 +91,12 @@ KvdbEntryDataSchema::Version EntryDataSchemaMapper::getDataStructureVersion(cons
     );
 }
 
-uint32_t EntryDataSchemaMapper::validateEntryDataIntegrity(
+std::pair<uint32_t, std::optional<core::DataIntegrityObject>> EntryDataSchemaMapper::validateEntryDataIntegrity(
     const server::KvdbEntryInfo& entry,
     const std::string& kvdbResourceId
 ) {
-    return core::DataSchemaMapperUtils::toStatusCode([&] {
+    std::optional<core::DataIntegrityObject> verifiedDio;
+    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
         switch (getDataStructureVersion(entry)) {
         case KvdbEntryDataSchema::Version::UNKNOWN:
             throw UnknownKvdbEntryFormatException();
@@ -104,12 +107,14 @@ uint32_t EntryDataSchemaMapper::validateEntryDataIntegrity(
                 dio, entry.contextId, entry.kvdbEntryKey, entry.kvdbId, kvdbResourceId, entry.lastModifier,
                 entry.lastModificationDate, [] { throw KvdbEntryDataIntegrityException(); }
             );
+            verifiedDio = dio;
             return;
         }
         default:
             throw UnknownKvdbEntryFormatException();
         }
     });
+    return {statusCode, verifiedDio};
 }
 
 std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
@@ -121,7 +126,8 @@ std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntri
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyEntries<KvdbEntry>(
         entries, kvdbKeys, keyProvider, _connection,
         [&](const server::KvdbEntryInfo& e) { return validateEntryDataIntegrity(e, kvdbKeys.moduleResourceId); },
-        [&](const server::KvdbEntryInfo& e, const core::DecryptedEncKey& key) { return decrypt(e, key); },
+        [&](const server::KvdbEntryInfo& e, const core::DecryptedEncKey& key,
+            const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(e, key, verifiedDio); },
         [](const server::KvdbEntryInfo& e, uint32_t code) {
             return toLibKvdbEntry(e, {}, {}, {}, {}, code, KvdbEntryDataSchema::Version::UNKNOWN);
         },

@@ -5,7 +5,7 @@
 
 #include <Poco/JSON/Object.h>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
@@ -89,7 +89,7 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
     core::Buffer membershipRaw;
     try {
         membershipRaw = _dataEncryptor.decodeAndVerify(
-            encData.membership, privmx::crypto::PublicKey::fromBase58DER(encData.authorPubKey)
+            encData.membership, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey)
         );
     } catch (...) { throw GroupMembershipMismatchException(); }
     dynamic::MembershipBlock membership;
@@ -133,7 +133,7 @@ void GroupDataSchemaMapper::assertPublicMetaIsAttested(
     core::Buffer metaRaw;
     try {
         metaRaw = _dataEncryptor.decodeAndVerify(
-            encData.meta, privmx::crypto::PublicKey::fromBase58DER(encData.authorPubKey)
+            encData.meta, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey)
         );
     } catch (...) { throw GroupMembershipMismatchException(); }
     dynamic::MetaBlock meta;
@@ -176,7 +176,7 @@ void GroupDataSchemaMapper::assertPrivateMetaIsAttested(
     core::Buffer metaRaw;
     try {
         metaRaw = _dataEncryptor.decodeAndVerify(
-            encData.meta, privmx::crypto::PublicKey::fromBase58DER(encData.authorPubKey)
+            encData.meta, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey)
         );
     } catch (...) { throw GroupMembershipMismatchException(); }
     dynamic::MetaBlock meta;
@@ -255,7 +255,7 @@ std::string GroupDataSchemaMapper::privateMetaTag(const std::string& key, int64_
 
 // Head-entry integrity only: the DIO signature and field checksums, plus the monotone version pins that a
 // per-entry tag cannot provide. Three pins, because the three counters move independently.
-void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupInfo) {
+core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupInfo) {
     // `history` is the same set of entries `data` is projected from, so the head of one is the head of the
     // other — and the roster plane's author comes out of `history`.
     if (groupInfo.data.empty() || groupInfo.history.empty()) {
@@ -286,6 +286,7 @@ void GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupIn
     pinnedRoster = groupInfo.rosterVersion;
     pinnedPublicMeta = groupInfo.publicMetaVersion;
     pinnedPrivateMeta = groupInfo.privateMetaVersion;
+    return dio;
 }
 
 void GroupDataSchemaMapper::dropVersionPin(const std::string& groupId) {
@@ -302,8 +303,14 @@ void GroupDataSchemaMapper::dropAllVersionPins() {
     _verifiedPrivateMetaVersions.clear();
 }
 
-uint32_t GroupDataSchemaMapper::validateDataIntegrity(const server::GroupInfo& groupInfo) {
-    return core::DataSchemaMapperUtils::toStatusCode([&] { assertDataIntegrity(groupInfo); });
+std::pair<uint32_t, core::DataIntegrityObject> GroupDataSchemaMapper::validateDataIntegrity(
+    const server::GroupInfo& groupInfo
+) {
+    core::DataIntegrityObject rosterDio;
+    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+        rosterDio = assertDataIntegrity(groupInfo);
+    });
+    return {statusCode, rosterDio};
 }
 
 Group GroupDataSchemaMapper::toLibGroup(
@@ -378,10 +385,15 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     std::vector<core::DataIntegrityObject> privateMetaDios(groups.size());
     std::vector<core::DataIntegrityObject> rosterDios(groups.size());
 
+    // The roster head's DIO comes out of the integrity pass that had to decode it anyway, and feeds both the
+    // author check and the duplicate-randomId sweep below.
     for (size_t i = 0; i < groups.size(); i++) {
-        if (auto code = validateDataIntegrity(groups[i]); code != 0) {
+        auto [code, rosterDio] = validateDataIntegrity(groups[i]);
+        if (code != 0) {
             result[i] = toError(groups[i], code);
+            continue;
         }
+        rosterDios[i] = rosterDio;
     }
 
     core::KeyDecryptionAndVerificationRequest keyRequest;
@@ -421,10 +433,6 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             assertRosterIsAttested(g, *rosterKey);
             assertPublicMetaIsAttested(g, *publicMetaKey);
             assertPrivateMetaIsAttested(g, *privateMetaKey);
-
-            // The roster envelope's own DIO, for the duplicate-randomId sweep both metadata planes also feed.
-            auto rosterEnc = dynamic::EncryptedGroupRosterV5::fromJSON(g.data.back().data);
-            rosterDios[i] = _groupEncryptor.getRosterDIOAndAssertIntegrity(rosterEnc);
 
             auto [lib, publicDio, privateDio] = decryptMetaPlanes(g, *privateMetaKey);
             result[i] = lib;
@@ -518,7 +526,8 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
             return {};
         }
         auto raw = _dataEncryptor.decodeAndDecryptAndVerify(
-            encData.internalMeta, privmx::crypto::PublicKey::fromBase58DER(encData.authorPubKey), encKey.key
+            encData.internalMeta, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey),
+            encKey.key
         );
         auto parsed = core::dynamic::ModuleInternalMetaV5::fromJSON(
             privmx::utils::Utils::parseJsonObject(raw.stdString())

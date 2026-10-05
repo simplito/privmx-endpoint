@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_SINGLETONSHOLDER_HPP
 #define _PRIVMXLIB_ENDPOINT_CORE_SINGLETONSHOLDER_HPP
 
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/utils/Executor.hpp>
 #include <privmx/utils/Logger.hpp>
@@ -34,6 +35,7 @@ private:
 #ifdef PRIVMX_ENABLE_LOGGER
     std::shared_ptr<privmx::logger::Logger> _logger;
 #endif
+    std::shared_ptr<privmx::crypto::PublicKeyCache> _publicKeyCache;
     std::shared_ptr<privmx::utils::Executor> _executor;
     std::shared_ptr<privmx::endpoint::core::EventQueueImpl> _eventQueueImpl;
 };

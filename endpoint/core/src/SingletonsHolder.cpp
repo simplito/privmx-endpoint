@@ -25,6 +25,7 @@ SingletonsHolder::SingletonsHolder() {
 #ifdef PRIVMX_ENABLE_LOGGER
     _logger = privmx::logger::Logger::getInstance();
 #endif
+    _publicKeyCache = privmx::crypto::PublicKeyCache::getInstance();
     _executor = privmx::utils::Executor::getInstance();
     _eventQueueImpl = privmx::endpoint::core::EventQueueImpl::getInstance();
     LOG_TRACE("SingletonsHolder created")
@@ -36,6 +37,8 @@ SingletonsHolder::~SingletonsHolder() {
     privmx::endpoint::core::EventQueueImpl::freeInstance();
     _executor.reset();
     privmx::utils::Executor::freeInstance();
+    _publicKeyCache.reset();
+    privmx::crypto::PublicKeyCache::freeInstance();
 #ifdef PRIVMX_ENABLE_LOGGER
     _logger.reset();
     privmx::logger::Logger::freeInstance();

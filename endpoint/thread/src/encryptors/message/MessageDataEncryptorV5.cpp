@@ -16,6 +16,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/utils/Utils.hpp"
 #include <privmx/crypto/Crypto.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
@@ -57,14 +58,15 @@ server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(
 
 DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
     const server::EncryptedMessageDataV5& encryptedMessageData,
-    const std::string& encryptionKey
+    const std::string& encryptionKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedMessageDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_5;
     try {
-        result.dio = getDIOAndAssertIntegrity(encryptedMessageData);
-        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey);
+        result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedMessageData);
+        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedMessageData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedMessageData.publicMeta, authorPublicKey);
         if (!encryptedMessageData.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
@@ -95,14 +97,15 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
 }
 
 DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(
-    const server::EncryptedMessageDataV5& encryptedMessageData
+    const server::EncryptedMessageDataV5& encryptedMessageData,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedMessageDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_5;
     try {
-        result.dio = getDIOAndAssertIntegrity(encryptedMessageData);
-        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey);
+        result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedMessageData);
+        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedMessageData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedMessageData.publicMeta, authorPublicKey);
         if (!encryptedMessageData.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));

@@ -2,6 +2,7 @@
 
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
@@ -66,7 +67,8 @@ std::string GroupEnvelopeEncryptor::unwrapContentKey(
 ) {
     // The key we resolved must be the key the envelope names, or a hostile server could steer us onto another
     // epoch's key with only the ECIES 4-byte checksum between us and a wrong answer.
-    if (groupPrivKey.getPublicKey() != privmx::crypto::PublicKey::fromBase58DER(groupPubKeyBase58)) {
+    if (groupPrivKey.getPublicKey() !=
+        privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(groupPubKeyBase58)) {
         throw InvalidEnvelopeFormatException("resolved group key does not match the key named by the envelope");
     }
     std::string unwrapped = privmx::crypto::EciesEncryptor::decrypt(groupPrivKey, wrap);

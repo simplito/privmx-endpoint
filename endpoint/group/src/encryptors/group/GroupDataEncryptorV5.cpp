@@ -3,6 +3,7 @@
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/encryptors/module/DynamicTypes.hpp"
 #include <privmx/crypto/Crypto.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/encryptors/module/Constants.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -76,7 +77,7 @@ DecryptedGroupRosterV5 GroupDataEncryptorV5::decryptRoster(
     result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = getRosterDIOAndAssertIntegrity(encryptedData);
-        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedData.authorPubKey);
+        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedData.authorPubKey);
         result.authorPubKey = encryptedData.authorPubKey;
 
         result.internalMeta = decodeInternalMeta(
@@ -157,7 +158,7 @@ DecryptedGroupPublicMetaV5 GroupDataEncryptorV5::extractPublicMeta(
     result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = getPublicMetaDIOAndAssertIntegrity(encryptedData);
-        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedData.authorPubKey);
+        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedData.authorPubKey);
         result.authorPubKey = encryptedData.authorPubKey;
 
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedData.publicMeta, authorPublicKey);
@@ -243,7 +244,7 @@ DecryptedGroupPrivateMetaV5 GroupDataEncryptorV5::decryptPrivateMeta(
     result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = getPrivateMetaDIOAndAssertIntegrity(encryptedData);
-        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedData.authorPubKey);
+        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedData.authorPubKey);
         result.authorPubKey = encryptedData.authorPubKey;
 
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(

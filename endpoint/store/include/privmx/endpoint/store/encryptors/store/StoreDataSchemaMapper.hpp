@@ -14,8 +14,10 @@ limitations under the License.
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
@@ -43,12 +45,15 @@ public:
 
     std::tuple<Store, core::DataIntegrityObject> decrypt(
         const server::Store& store,
-        const core::DecryptedEncKey& encKey
+        const core::DecryptedEncKey& encKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
     );
 
-    void assertDataIntegrity(const server::Store& store);
+    // Returns the head entry's DIO for a V5 store, so the decrypt that follows need not verify it again.
+    // Empty for V4, which carries no DIO at all.
+    std::optional<core::DataIntegrityObject> assertDataIntegrity(const server::Store& store);
 
-    uint32_t validateDataIntegrity(const server::Store& store);
+    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateDataIntegrity(const server::Store& store);
 
     std::vector<Store> validateDecryptAndConvertStores(
         const std::vector<server::Store>& stores,

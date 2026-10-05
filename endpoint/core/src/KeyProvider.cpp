@@ -12,6 +12,7 @@ limitations under the License.
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/utils/Logger.hpp>
 
 #include "privmx/endpoint/core/CoreConstants.hpp"
@@ -255,7 +256,7 @@ server::KeyEntrySet KeyProvider::createKeyEntrySet(
                 containerSecret, keySecret + location.contextId + location.resourceId
             )
         },
-        crypto::PublicKey::fromBase58DER(user.pubKey), _key
+        crypto::PublicKeyCache::getInstance()->fromBase58DER(user.pubKey), _key
     ).toJSON();
     // clang-format on
     return key_entry_set;

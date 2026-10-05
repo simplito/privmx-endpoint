@@ -12,6 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_INBOX_INBOXDATAENCRYPTORV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXDATAENCRYPTORV5_HPP_
 
+#include <optional>
+
 #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
@@ -36,14 +38,23 @@ public:
         const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& inboxKey
     );
-    InboxDataResultV5 unpackAll(const server::InboxData& encryptedData, const std::string& inboxKey);
+    // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same entry; without one it runs here.
+    InboxDataResultV5 unpackAll(
+        const server::InboxData& encryptedData,
+        const std::string& inboxKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
+    );
 
     InboxPublicDataV5AsResult unpackPublicOnly(const Poco::Dynamic::Var& publicData);
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::InboxData& data);
 
 private:
     InboxPublicDataV5AsResult unpackPublic(const Poco::Dynamic::Var& publicData);
-    InboxPrivateDataV5AsResult unpackPrivate(const server::InboxData& encryptedData, const std::string& inboxKey);
+    InboxPrivateDataV5AsResult unpackPrivate(
+        const server::InboxData& encryptedData,
+        const std::string& inboxKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio
+    );
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::PrivateDataV5& encryptedPrivateData);
     void assertDataFormat(const server::PrivateDataV5& encryptedPrivateData);
     void assertDataFormat(const server::PublicDataV5& encryptedPublicData);

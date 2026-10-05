@@ -12,6 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_IDATASCHEMASTRATEGY_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_IDATASCHEMASTRATEGY_HPP_
 
+#include <optional>
+
 #include <privmx/endpoint/core/CoreTypes.hpp>
 
 namespace privmx {
@@ -22,7 +24,13 @@ template<typename TServerModel, typename TDomainObject>
 class IDataSchemaStrategy {
 public:
     virtual ~IDataSchemaStrategy() = default;
-    virtual TDomainObject decryptAndConvert(const TServerModel& model, const DecryptedEncKey& encKey) const = 0;
+    // `verifiedDio` is the model's own DIO when the caller already decoded and asserted it. A strategy may use
+    // it in place of verifying the same DIO a second time, and must otherwise behave as if it were absent.
+    virtual TDomainObject decryptAndConvert(
+        const TServerModel& model,
+        const DecryptedEncKey& encKey,
+        const std::optional<DataIntegrityObject>& verifiedDio
+    ) const = 0;
 };
 
 } // namespace core

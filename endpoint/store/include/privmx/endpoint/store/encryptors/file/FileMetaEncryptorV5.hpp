@@ -12,6 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_FILEMETAENCRYPTORV5_HPP_
 
+#include <optional>
+
 #include "privmx/endpoint/store/ServerTypes.hpp"
 #include "privmx/endpoint/store/StoreTypes.hpp"
 #include <privmx/endpoint/core/CoreTypes.hpp>
@@ -31,11 +33,16 @@ public:
         const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
+    // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same envelope; without one it runs here.
     store::DecryptedFileMetaV5 decrypt(
         const store::server::EncryptedFileMetaV5& encryptedFileMeta,
-        const std::string& encryptionKey
+        const std::string& encryptionKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
     );
-    store::DecryptedFileMetaV5 extractPublic(const store::server::EncryptedFileMetaV5& encryptedFileMeta);
+    store::DecryptedFileMetaV5 extractPublic(
+        const store::server::EncryptedFileMetaV5& encryptedFileMeta,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
+    );
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedFileMetaV5& encryptedFileMeta);
 
 private:

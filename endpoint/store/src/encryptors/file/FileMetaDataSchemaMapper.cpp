@@ -56,7 +56,8 @@ Poco::Dynamic::Var FileMetaDataSchemaMapper::encrypt(
 
 std::tuple<File, core::DataIntegrityObject> FileMetaDataSchemaMapper::decrypt(
     const server::File& file,
-    const core::DecryptedEncKey& encKey
+    const core::DecryptedEncKey& encKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getDataStructureVersion(file)), file, encKey,
@@ -67,7 +68,8 @@ std::tuple<File, core::DataIntegrityObject> FileMetaDataSchemaMapper::decrypt(
                 ),
                 {}
             };
-        }
+        },
+        verifiedDio
     );
 }
 
@@ -95,8 +97,12 @@ FileDataSchema::Version FileMetaDataSchemaMapper::getDataStructureVersion(const 
     });
 }
 
-uint32_t FileMetaDataSchemaMapper::validateDataIntegrity(const server::File& file, const std::string& storeResourceId) {
-    return core::DataSchemaMapperUtils::toStatusCode([&] {
+std::pair<uint32_t, std::optional<core::DataIntegrityObject>> FileMetaDataSchemaMapper::validateDataIntegrity(
+    const server::File& file,
+    const std::string& storeResourceId
+) {
+    std::optional<core::DataIntegrityObject> verifiedDio;
+    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
         switch (getDataStructureVersion(file)) {
         case FileDataSchema::Version::VERSION_4:
             return;
@@ -107,12 +113,14 @@ uint32_t FileMetaDataSchemaMapper::validateDataIntegrity(const server::File& fil
                 dio, file.contextId, file.resourceId, file.storeId, storeResourceId, file.lastModifier,
                 file.lastModificationDate, [] { throw FileDataIntegrityException(); }
             );
+            verifiedDio = dio;
             return;
         }
         default:
             throw UnknowFileFormatException();
         }
     });
+    return {statusCode, verifiedDio};
 }
 
 DecryptedFileMetaV5 FileMetaDataSchemaMapper::decryptFileMetaV5(
@@ -164,7 +172,8 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
                 _fileKeyIdFormatValidator.assertKeyIdFormat(f.keyId);
             });
         },
-        [&](const server::File& f, const core::DecryptedEncKey& key) { return decrypt(f, key); },
+        [&](const server::File& f, const core::DecryptedEncKey& key,
+            const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(f, key, verifiedDio); },
         [](const server::File& f, uint32_t code) {
             return toLibFile(f, {}, {}, 0, {}, code, FileDataSchema::Version::UNKNOWN, false);
         },

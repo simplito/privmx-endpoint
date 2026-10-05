@@ -15,6 +15,7 @@ limitations under the License.
 #include "privmx/endpoint/thread/Constants.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/utils/Utils.hpp"
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
@@ -52,7 +53,7 @@ DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_4;
     try {
         validateVersion(encryptedMessageData);
-        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey);
+        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedMessageData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedMessageData.publicMeta, authorPublicKey);
         if (!encryptedMessageData.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));

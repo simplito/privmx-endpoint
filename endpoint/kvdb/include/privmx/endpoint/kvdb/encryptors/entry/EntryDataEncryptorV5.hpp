@@ -12,6 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_KVDB_ITEMDATAENCRYPTORV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_KVDB_ITEMDATAENCRYPTORV5_HPP_
 
+#include <optional>
+
 #include "privmx/endpoint/kvdb/KvdbTypes.hpp"
 #include "privmx/endpoint/kvdb/ServerTypes.hpp"
 #include <privmx/crypto/ecc/PrivateKey.hpp>
@@ -32,11 +34,16 @@ public:
         const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
+    // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same envelope; without one it runs here.
     DecryptedKvdbEntryDataV5 decrypt(
         const server::EncryptedKvdbEntryDataV5& encryptedEntryData,
-        const std::string& encryptionKey
+        const std::string& encryptionKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
     );
-    DecryptedKvdbEntryDataV5 extractPublic(const server::EncryptedKvdbEntryDataV5& encryptedEntryData);
+    DecryptedKvdbEntryDataV5 extractPublic(
+        const server::EncryptedKvdbEntryDataV5& encryptedEntryData,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
+    );
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedKvdbEntryDataV5& encryptedEntryData);
 
 private:

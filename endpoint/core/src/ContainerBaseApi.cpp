@@ -15,7 +15,7 @@ limitations under the License.
 #include <set>
 
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 
 #include "privmx/endpoint/core/ContainerBaseApi.hpp"
 #include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp"
@@ -240,7 +240,7 @@ std::vector<server::GroupKeyEntrySet> ContainerBaseApi::buildGroupKeyEntries(
     EncKeyEncryptorV2 encryptor;
     std::vector<server::GroupKeyEntrySet> result;
     for (const auto& g : groups) {
-        auto groupPubKey = privmx::crypto::PublicKey::fromBase58DER(g.groupPubKey);
+        auto groupPubKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(g.groupPubKey);
         auto keySecret = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32));
         auto encData = encryptor.encrypt(
             EncKeyV2ToEncrypt{
