@@ -5,7 +5,7 @@
 
 #include <Poco/JSON/Object.h>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
@@ -89,7 +89,7 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
     core::Buffer membershipRaw;
     try {
         membershipRaw = _dataEncryptor.decodeAndVerify(
-            encData.membership, privmx::crypto::PublicKey::fromBase58DER(encData.authorPubKey)
+            encData.membership, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey)
         );
     } catch (...) { throw GroupMembershipMismatchException(); }
     dynamic::MembershipBlock membership;
@@ -133,7 +133,7 @@ void GroupDataSchemaMapper::assertPublicMetaIsAttested(
     core::Buffer metaRaw;
     try {
         metaRaw = _dataEncryptor.decodeAndVerify(
-            encData.meta, privmx::crypto::PublicKey::fromBase58DER(encData.authorPubKey)
+            encData.meta, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey)
         );
     } catch (...) { throw GroupMembershipMismatchException(); }
     dynamic::MetaBlock meta;
@@ -176,7 +176,7 @@ void GroupDataSchemaMapper::assertPrivateMetaIsAttested(
     core::Buffer metaRaw;
     try {
         metaRaw = _dataEncryptor.decodeAndVerify(
-            encData.meta, privmx::crypto::PublicKey::fromBase58DER(encData.authorPubKey)
+            encData.meta, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey)
         );
     } catch (...) { throw GroupMembershipMismatchException(); }
     dynamic::MetaBlock meta;
@@ -526,7 +526,8 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
             return {};
         }
         auto raw = _dataEncryptor.decodeAndDecryptAndVerify(
-            encData.internalMeta, privmx::crypto::PublicKey::fromBase58DER(encData.authorPubKey), encKey.key
+            encData.internalMeta, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey),
+            encKey.key
         );
         auto parsed = core::dynamic::ModuleInternalMetaV5::fromJSON(
             privmx::utils::Utils::parseJsonObject(raw.stdString())

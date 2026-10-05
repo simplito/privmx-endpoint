@@ -13,6 +13,7 @@ limitations under the License.
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include <privmx/crypto/Crypto.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/encryptors/module/Constants.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -50,7 +51,7 @@ DecryptedModuleDataV4 ModuleDataEncryptorV4::decrypt(
     result.dataStructureVersion = ModuleDataSchema::Version::VERSION_4;
     try {
         validateVersion(encryptedModuleData);
-        auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedModuleData.authorPubKey);
+        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedModuleData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedModuleData.publicMeta, authorPublicKey);
         if (encryptedModuleData.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));

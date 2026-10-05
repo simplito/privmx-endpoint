@@ -17,6 +17,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/utils/Utils.hpp>
 using namespace privmx::endpoint::core;
 
@@ -61,7 +62,7 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(
         dynamic::EncryptionKey decryptedKey = dynamic::EncryptionKey::fromJSON(
             crypto::EciesEncryptor::decryptObjectFromBase64(
                 decryptionKey, encryptedEncKey.encryptedKey,
-                privmx::crypto::PublicKey::fromBase58DER(result.dio.creatorPubKey)
+                privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(result.dio.creatorPubKey)
             )
         );
         if (decryptedKey.id.empty() || decryptedKey.key.empty()) {

@@ -11,7 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/event/encryptors/event/EventDataSchemaStrategyV5.hpp"
 
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
 
 #include "privmx/endpoint/event/Constants.hpp"
@@ -23,7 +23,7 @@ DecryptedEventDataV5 EventDataSchemaStrategyV5::decrypt(
     const server::ContextCustomEventData& model,
     const core::DecryptedEncKey& encKey
 ) const {
-    auto authorPubKey = privmx::crypto::PublicKey::fromBase58DER(model.author.pub);
+    auto authorPubKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(model.author.pub);
     auto encryptedData = server::EncryptedContextEventDataV5::fromJSON(model.eventData);
     return _encryptor.decrypt(encryptedData, authorPubKey, encKey.key);
 }

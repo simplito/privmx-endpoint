@@ -19,6 +19,7 @@ limitations under the License.
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -63,10 +64,11 @@ public:
         return result;
     }
 
-    // Parsed on first use and kept, so wrapping to the same node twice costs one parse.
+    // Parsed on first use and kept, so wrapping to the same node twice costs one parse. The cache behind it
+    // carries that across the short-lived `TreeGroupState` objects a resolve rebuilds every time.
     const privmx::crypto::PublicKey& parsed() const {
         if (!_parsed.has_value()) {
-            _parsed = privmx::crypto::PublicKey::fromBase58DER(_der);
+            _parsed = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(_der);
         }
         return _parsed.value();
     }

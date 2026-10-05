@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/event/EventKeyProvider.hpp"
 #include <privmx/crypto/CryptoException.hpp>
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 using namespace privmx::endpoint::event;
@@ -47,7 +48,7 @@ std::vector<server::UserKey> EventKeyProvider::prepareKeysList(
             server::UserKey{
                 .id = user.userId,
                 .key = privmx::crypto::EciesEncryptor::encryptToBase64(
-                    crypto::PublicKey::fromBase58DER(user.pubKey), key, _key
+                    crypto::PublicKeyCache::getInstance()->fromBase58DER(user.pubKey), key, _key
                 )
             }
         );

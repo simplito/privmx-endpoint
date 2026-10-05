@@ -14,6 +14,7 @@ limitations under the License.
 #include "privmx/endpoint/core/CoreConstants.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint::core;
@@ -67,7 +68,7 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
         fieldChecksums.insert_or_assign(checksumBase64.first, privmx::utils::Base64::toString(checksumBase64.second));
     }
     auto signatureStatus = _dataEncryptor.verifySignature(
-        dioAndSignature, privmx::crypto::PublicKey::fromBase58DER(dioJSON.creatorPublicKey)
+        dioAndSignature, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(dioJSON.creatorPublicKey)
     );
     if (!signatureStatus) {
         throw DataIntegrityObjectInvalidSignatureException();

@@ -13,6 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/inbox/Constants.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
@@ -83,7 +84,7 @@ InboxPublicDataV4AsResult InboxDataProcessorV4::unpackPublic(const Poco::Dynamic
     try {
         validateVersion(publicData);
         auto publicDataV4 = server::PublicDataV4::fromJSON(publicData);
-        auto authorPublicKeyECC = crypto::PublicKey::fromBase58DER(publicDataV4.authorPubKey);
+        auto authorPublicKeyECC = crypto::PublicKeyCache::getInstance()->fromBase58DER(publicDataV4.authorPubKey);
 
         result.publicMeta = _dataEncryptor.decodeAndVerify(publicDataV4.publicMeta, authorPublicKeyECC);
         if (!publicDataV4.publicMetaObject.isEmpty()) {
@@ -117,7 +118,7 @@ InboxPrivateDataV4AsResult InboxDataProcessorV4::unpackPrivate(
     try {
         validateVersion(encryptedData.meta);
         auto privateDataV4 = server::PrivateDataV4::fromJSON(encryptedData.meta);
-        auto authorPublicKeyECC = crypto::PublicKey::fromBase58DER(privateDataV4.authorPubKey);
+        auto authorPublicKeyECC = crypto::PublicKeyCache::getInstance()->fromBase58DER(privateDataV4.authorPubKey);
 
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(
             privateDataV4.privateMeta, authorPublicKeyECC, inboxKey
