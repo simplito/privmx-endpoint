@@ -24,11 +24,6 @@ limitations under the License.
 
 #include <sqlite3.h>
 
-#include <exception>
-#include <fstream>
-#include <iostream>
-#include <stdexcept>
-
 #include "privmx/utils/Utils.hpp"
 #include <Poco/Path.h>
 

@@ -9,7 +9,7 @@
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/group/Types.hpp"
-#include <privmx/endpoint/core/ExtendedPointer.hpp>
+#include <privmx/endpoint/core/BaseApiClass.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -20,7 +20,7 @@ class GroupApiImpl;
 /**
  * 'GroupApi' is a class representing Endpoint's API for Groups.
  */
-class GroupApi : public privmx::endpoint::core::ExtendedPointer<GroupApiImpl> {
+class GroupApi : public privmx::endpoint::core::BaseApiClass<GroupApiImpl> {
 public:
     /**
      * Creates an instance of 'GroupApi'.
@@ -33,11 +33,7 @@ public:
     /**
      * //doc-gen:ignore
      */
-    GroupApi();
-    GroupApi(const GroupApi& obj);
-    GroupApi& operator=(const GroupApi& obj);
-    GroupApi(GroupApi&& obj);
-    ~GroupApi();
+    GroupApi() = default;
 
     /**
      * Creates a new Group whose key distribution is backed by a hidden key tree.

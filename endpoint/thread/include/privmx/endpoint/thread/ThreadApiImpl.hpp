@@ -32,13 +32,12 @@ limitations under the License.
 #include "privmx/endpoint/thread/encryptors/thread/ThreadDataSchemaMapper.hpp"
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
-#include <privmx/utils/ManualManagedClass.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace thread {
 
-class ThreadApiImpl : public privmx::utils::ManualManagedClass<ThreadApiImpl>, protected group::GroupAwareModuleApi {
+class ThreadApiImpl : protected group::GroupAwareModuleApi {
 public:
     ThreadApiImpl(
         const privfs::RpcGateway::Ptr& gateway,

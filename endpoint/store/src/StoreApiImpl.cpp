@@ -699,7 +699,6 @@ void StoreApiImpl::processConnectedEvent() {
 void StoreApiImpl::processDisconnectedEvent() {
     LOG_TRACE("StoreApiImpl recived DisconnectedEvent");
     invalidateModuleKeysInCache();
-    privmx::utils::ManualManagedClass<StoreApiImpl>::cleanup();
 }
 
 FileEncryptionParams StoreApiImpl::getFileEncryptionParams(server::File file, const core::DecryptedEncKey& encKey) {

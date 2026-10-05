@@ -22,15 +22,6 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
-KvdbApi::KvdbApi() {};
-KvdbApi::KvdbApi(const KvdbApi& obj) : ExtendedPointer(obj) {};
-KvdbApi& KvdbApi::operator=(const KvdbApi& obj) {
-    this->ExtendedPointer::operator=(obj);
-    return *this;
-};
-KvdbApi::KvdbApi(KvdbApi&& obj) : ExtendedPointer(std::move(obj)) {};
-KvdbApi::~KvdbApi() {}
-
 KvdbApi KvdbApi::create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi) {
     try {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
@@ -38,7 +29,6 @@ KvdbApi KvdbApi::create(core::Connection& connection, const std::optional<group:
             connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
             connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection, groupApi
         ));
-        impl->attach(impl);
         return KvdbApi(impl);
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
@@ -46,7 +36,7 @@ KvdbApi KvdbApi::create(core::Connection& connection, const std::optional<group:
     }
 }
 
-KvdbApi::KvdbApi(const std::shared_ptr<KvdbApiImpl>& impl) : ExtendedPointer(impl) {}
+KvdbApi::KvdbApi(const std::shared_ptr<KvdbApiImpl>& impl) : BaseApiClass(impl) {}
 
 std::string KvdbApi::createKvdb(
     const std::string& contextId,

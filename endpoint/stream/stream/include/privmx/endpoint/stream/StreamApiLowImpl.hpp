@@ -31,13 +31,11 @@ limitations under the License.
 #include "privmx/endpoint/stream/encryptors/streamRoom/StreamRoomDataSchemaMapper.hpp"
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
-#include <privmx/utils/ManualManagedClass.hpp>
 namespace privmx {
 namespace endpoint {
 namespace stream {
 
-class StreamApiLowImpl : public privmx::utils::ManualManagedClass<StreamApiLowImpl>,
-                         protected group::GroupAwareModuleApi {
+class StreamApiLowImpl : protected group::GroupAwareModuleApi {
 public:
     StreamApiLowImpl(
         const core::Connection& connection,

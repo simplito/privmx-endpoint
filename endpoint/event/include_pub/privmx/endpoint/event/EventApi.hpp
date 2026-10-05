@@ -4,7 +4,7 @@
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/Connection.hpp"
 #include "privmx/endpoint/event/Types.hpp"
-#include <privmx/endpoint/core/ExtendedPointer.hpp>
+#include <privmx/endpoint/core/BaseApiClass.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -15,7 +15,7 @@ class EventApiImpl;
 /**
  * 'EventApi' is a class representing Endpoint's API for context custom events.
  */
-class EventApi : public privmx::endpoint::core::ExtendedPointer<EventApiImpl> {
+class EventApi : public privmx::endpoint::core::BaseApiClass<EventApiImpl> {
 public:
     /**
      * Creates an instance of 'EventApi'.
@@ -29,11 +29,7 @@ public:
     /**
      * //doc-gen:ignore
      */
-    EventApi();
-    EventApi(const EventApi& obj);
-    EventApi& operator=(const EventApi& obj);
-    EventApi(EventApi&& obj);
-    ~EventApi();
+    EventApi() = default;
 
     /**
      * Emits the custom event on the given Context and channel.

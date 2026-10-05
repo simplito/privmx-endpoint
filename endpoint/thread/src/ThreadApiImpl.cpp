@@ -415,7 +415,6 @@ void ThreadApiImpl::processConnectedEvent() {
 void ThreadApiImpl::processDisconnectedEvent() {
     LOG_TRACE("ThreadApiImpl recived DisconnectedEvent");
     invalidateModuleKeysInCache();
-    privmx::utils::ManualManagedClass<ThreadApiImpl>::cleanup();
 }
 
 core::ModuleKeys ThreadApiImpl::getMessageDecryptionKeys(server::Message message) {

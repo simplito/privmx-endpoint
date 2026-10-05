@@ -36,26 +36,23 @@ limitations under the License.
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/utils/GuardedExecutor.hpp>
-#include <privmx/utils/ManualManagedClass.hpp>
 #include <privmx/utils/NotificationQueue.hpp>
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 
-class ConnectionImpl : public privmx::utils::ManualManagedClass<ConnectionImpl> {
+class ConnectionImpl {
 public:
     ConnectionImpl();
     ~ConnectionImpl();
     void connect(
-        const std::shared_ptr<ConnectionImpl>& selfRef,
         const std::string& userPrivKey,
         const std::string& solutionId,
         const std::string& platformUrl,
         const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
     );
     void connectPublic(
-        const std::shared_ptr<ConnectionImpl>& selfRef,
         const std::string& solutionId,
         const std::string& platformUrl,
         const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()

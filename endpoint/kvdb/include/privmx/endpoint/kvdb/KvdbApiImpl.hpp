@@ -33,13 +33,11 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/encryptors/kvdb/KvdbDataSchemaMapper.hpp"
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
-#include <privmx/utils/ManualManagedClass.hpp>
-
 namespace privmx {
 namespace endpoint {
 namespace kvdb {
 
-class KvdbApiImpl : public privmx::utils::ManualManagedClass<KvdbApiImpl>, protected group::GroupAwareModuleApi {
+class KvdbApiImpl : protected group::GroupAwareModuleApi {
 public:
     KvdbApiImpl(
         const privfs::RpcGateway::Ptr& gateway,

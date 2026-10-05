@@ -16,7 +16,6 @@ limitations under the License.
 #include "privmx/endpoint/core/EndpointUtils.hpp"
 #include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
-#include "privmx/endpoint/core/Exception.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
@@ -45,14 +44,12 @@ ConnectionImpl::~ConnectionImpl() {
 }
 
 void ConnectionImpl::connect(
-    const std::shared_ptr<ConnectionImpl>& selfRef,
     const std::string& userPrivKey,
     const std::string& solutionId,
     const std::string& platformUrl,
     const PKIVerificationOptions& verificationOptions
 ) {
     LOG_TIME_DEBUG_START(Platform platformConnect, "")
-    attach(selfRef);
     rpc::ConnectionOptions options;
     auto port = Poco::URI(platformUrl).getPort();
     options.host = Poco::URI(platformUrl).getHost() + ":" + std::to_string(port);
@@ -114,16 +111,10 @@ void ConnectionImpl::connect(
         [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); }
     );
     _gatewayDisconnectedEventListener = _gateway->addDisconnectedEventListener(
-        [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) {
-            _eventMiddleware->emitDisconnectedEvent();
-            cleanup();
-        }
+        [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); }
     );
     _gatewaySessionLostEventListener = _gateway->addSessionLostEventListener(
-        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) {
-            _eventMiddleware->emitDisconnectedEvent();
-            cleanup();
-        }
+        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); }
     );
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -134,14 +125,12 @@ void ConnectionImpl::connect(
 }
 
 void ConnectionImpl::connectPublic(
-    const std::shared_ptr<ConnectionImpl>& selfRef,
     const std::string& solutionId,
     const std::string& platformUrl,
     const PKIVerificationOptions& verificationOptions
 ) {
     // TODO: solutionId is reserved for future use
     LOG_TIME_DEBUG_START(Platform platformConnectPublic, "")
-    attach(selfRef);
     rpc::ConnectionOptions options;
     auto port = Poco::URI(platformUrl).getPort();
     options.host = Poco::URI(platformUrl).getHost() + ":" + std::to_string(port);
@@ -187,16 +176,10 @@ void ConnectionImpl::connectPublic(
         [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); }
     );
     _gatewayDisconnectedEventListener = _gateway->addDisconnectedEventListener(
-        [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) {
-            _eventMiddleware->emitDisconnectedEvent();
-            cleanup();
-        }
+        [&, this]([[maybe_unused]] const rpc::DisconnectedEvent& event) { _eventMiddleware->emitDisconnectedEvent(); }
     );
     _gatewaySessionLostEventListener = _gateway->addSessionLostEventListener(
-        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) {
-            _eventMiddleware->emitDisconnectedEvent();
-            cleanup();
-        }
+        [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); }
     );
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
