@@ -14,8 +14,10 @@ limitations under the License.
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
@@ -44,12 +46,16 @@ public:
 
     std::tuple<StreamRoom, core::DataIntegrityObject> decrypt(
         const server::StreamRoomInfo& streamRoom,
-        const core::DecryptedEncKey& encKey
+        const core::DecryptedEncKey& encKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
     );
 
-    void assertDataIntegrity(const server::StreamRoomInfo& streamRoom);
+    // Returns the head entry's DIO, so the decrypt that follows need not verify it again.
+    std::optional<core::DataIntegrityObject> assertDataIntegrity(const server::StreamRoomInfo& streamRoom);
 
-    uint32_t validateDataIntegrity(const server::StreamRoomInfo& streamRoom);
+    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateDataIntegrity(
+        const server::StreamRoomInfo& streamRoom
+    );
 
     std::vector<StreamRoom> validateDecryptAndConvertStreamRooms(
         const std::vector<server::StreamRoomInfo>& streamRooms,

@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_INBOX_INBOXDATASCHEMASTRATEGYV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXDATASCHEMASTRATEGYV5_HPP_
 
+#include <optional>
 #include <tuple>
 
 #include <Poco/Dynamic/Var.h>
@@ -37,6 +38,11 @@ class InboxDataSchemaStrategyV5 : public core::TypedDataSchemaStrategy<
     // clang-format on
 public:
     InboxDataResultV5 decrypt(const server::InboxInfo& inbox, const core::DecryptedEncKey& encKey) const override;
+    InboxDataResultV5 decrypt(
+        const server::InboxInfo& inbox,
+        const core::DecryptedEncKey& encKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio
+    ) const override;
     std::tuple<Inbox, core::DataIntegrityObject> convert(
         const server::InboxInfo& inbox,
         const InboxDataResultV5& raw

@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 
 #include "privmx/endpoint/core/encryptors/IDataSchemaStrategy.hpp"
@@ -37,15 +38,17 @@ public:
         return it->second;
     }
 
+    // `verifiedDio` trails `onUnknown` so that a caller with nothing to hand over stays a four-argument call.
     template<typename FOnUnknown>
     TDomainObject dispatch(
         int64_t version,
         const TServerModel& item,
         const DecryptedEncKey& encKey,
-        FOnUnknown onUnknown
+        FOnUnknown onUnknown,
+        const std::optional<DataIntegrityObject>& verifiedDio = std::nullopt
     ) const {
         if (auto strategy = getStrategy(version))
-            return strategy->decryptAndConvert(item, encKey);
+            return strategy->decryptAndConvert(item, encKey, verifiedDio);
         return onUnknown();
     }
 

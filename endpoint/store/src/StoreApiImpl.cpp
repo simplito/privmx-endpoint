@@ -246,9 +246,9 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     auto store = serverFileResult.store;
     _storeDataSchemaMapper->assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, containerToModuleKeys(store), store.version);
-    auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(
-        serverFileResult.file, store.resourceId.value_or("")
-    );
+    auto statusCode = _fileMetaDataSchemaMapper
+                          .validateDataIntegrity(serverFileResult.file, store.resourceId.value_or(""))
+                          .first;
     if (statusCode != 0) {
         File result;
         result.statusCode = statusCode;
@@ -749,7 +749,7 @@ void StoreApiImpl::updateFileMeta(
     auto storeKey = containerToModuleKeys(store);
     setNewModuleKeysInCache(store.id, storeKey, store.version);
     server::File file = storeFileGetResult.file;
-    auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(file, store.resourceId.value_or(""));
+    auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(file, store.resourceId.value_or("")).first;
     if (statusCode != 0) {
         throw FileDataIntegrityException("statusCode=" + std::to_string(statusCode));
     }

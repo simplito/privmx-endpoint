@@ -38,7 +38,8 @@ Poco::Dynamic::Var StoreDataSchemaMapper::encrypt(const core::ModuleDataToEncryp
 
 std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaMapper::decrypt(
     const server::Store& store,
-    const core::DecryptedEncKey& encKey
+    const core::DecryptedEncKey& encKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getDataStructureVersion(store.data.back())), store, encKey,
@@ -46,11 +47,12 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaMapper::decrypt(
             return {
                 toLibStore(store, {}, {}, UnknowStoreFormatException().getCode(), StoreDataSchema::Version::UNKNOWN), {}
             };
-        }
+        },
+        verifiedDio
     );
 }
 
-void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
+std::optional<core::DataIntegrityObject> StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
     const auto& entry = store.data.back();
     switch (getDataStructureVersion(entry)) {
     case core::ModuleDataSchema::Version::UNKNOWN:
@@ -58,12 +60,11 @@ void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
             "dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry))
         );
     case core::ModuleDataSchema::Version::VERSION_4:
-        return;
+        return std::nullopt;
     case core::ModuleDataSchema::Version::VERSION_5: {
-        core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, store, _strategyV5, [] {
+        return core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, store, _strategyV5, [] {
             throw StoreDataIntegrityException();
         });
-        return;
     }
     default:
         throw UnknowStoreFormatException(
@@ -72,8 +73,14 @@ void StoreDataSchemaMapper::assertDataIntegrity(const server::Store& store) {
     }
 }
 
-uint32_t StoreDataSchemaMapper::validateDataIntegrity(const server::Store& store) {
-    return core::DataSchemaMapperUtils::toStatusCode([&] { assertDataIntegrity(store); });
+std::pair<uint32_t, std::optional<core::DataIntegrityObject>> StoreDataSchemaMapper::validateDataIntegrity(
+    const server::Store& store
+) {
+    std::optional<core::DataIntegrityObject> verifiedDio;
+    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+        verifiedDio = assertDataIntegrity(store);
+    });
+    return {statusCode, verifiedDio};
 }
 
 std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
@@ -86,7 +93,8 @@ std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
         [](const server::Store& s) -> core::EncKeyLocation {
             return {.contextId = s.contextId, .resourceId = s.resourceId.value_or("")};
         },
-        [&](const server::Store& s, const core::DecryptedEncKey& key) { return decrypt(s, key); },
+        [&](const server::Store& s, const core::DecryptedEncKey& key,
+            const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(s, key, verifiedDio); },
         [](const server::Store& s, uint32_t code) {
             return toLibStore(s, {}, {}, code, StoreDataSchema::Version::UNKNOWN);
         },

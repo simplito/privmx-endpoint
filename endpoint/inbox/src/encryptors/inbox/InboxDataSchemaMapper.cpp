@@ -38,7 +38,8 @@ server::InboxData InboxDataSchemaMapper::encrypt(const InboxDataProcessorModelV5
 
 std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaMapper::decrypt(
     const server::InboxInfo& inbox,
-    const core::DecryptedEncKey& encKey
+    const core::DecryptedEncKey& encKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getDataStructureVersion(inbox.data.back())), inbox, encKey,
@@ -49,31 +50,38 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaMapper::decrypt(
                 ),
                 {}
             };
-        }
+        },
+        verifiedDio
     );
 }
 
-void InboxDataSchemaMapper::assertDataIntegrity(const server::InboxInfo& inbox) {
+std::optional<core::DataIntegrityObject> InboxDataSchemaMapper::assertDataIntegrity(const server::InboxInfo& inbox) {
     const auto& entry = inbox.data.back();
     switch (getDataStructureVersion(entry)) {
     case core::ModuleDataSchema::Version::UNKNOWN:
         throw UnknownInboxFormatException();
     case core::ModuleDataSchema::Version::VERSION_4:
-        return;
+        return std::nullopt;
     case core::ModuleDataSchema::Version::VERSION_5: {
         auto dio = _strategyV5->getDIOAndAssertIntegrity(entry.data);
         core::DataSchemaMapperUtils::assertContainerDIOIntegrity(dio, inbox, [] {
             throw InboxDataIntegrityException();
         });
-        return;
+        return dio;
     }
     default:
         throw UnknownInboxFormatException();
     }
 }
 
-uint32_t InboxDataSchemaMapper::validateDataIntegrity(const server::InboxInfo& inbox) {
-    return core::DataSchemaMapperUtils::toStatusCode([&] { assertDataIntegrity(inbox); });
+std::pair<uint32_t, std::optional<core::DataIntegrityObject>> InboxDataSchemaMapper::validateDataIntegrity(
+    const server::InboxInfo& inbox
+) {
+    std::optional<core::DataIntegrityObject> verifiedDio;
+    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+        verifiedDio = assertDataIntegrity(inbox);
+    });
+    return {statusCode, verifiedDio};
 }
 
 InboxPublicViewData InboxDataSchemaMapper::getPublicViewData(const server::InboxGetPublicViewResult& publicView) {
@@ -128,7 +136,8 @@ std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
         [](const server::InboxInfo& inbox) -> core::EncKeyLocation {
             return {.contextId = inbox.contextId, .resourceId = inbox.resourceId.value_or("")};
         },
-        [&](const server::InboxInfo& inbox, const core::DecryptedEncKey& key) { return decrypt(inbox, key); },
+        [&](const server::InboxInfo& inbox, const core::DecryptedEncKey& key,
+            const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(inbox, key, verifiedDio); },
         [](const server::InboxInfo& inbox, uint32_t code) {
             return toLibInbox(inbox, {}, {}, {}, code, InboxDataSchema::Version::UNKNOWN);
         },

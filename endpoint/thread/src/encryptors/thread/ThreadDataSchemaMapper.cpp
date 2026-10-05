@@ -39,7 +39,8 @@ Poco::Dynamic::Var ThreadDataSchemaMapper::encrypt(const core::ModuleDataToEncry
 
 std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaMapper::decrypt(
     const server::ThreadInfo& thread,
-    const core::DecryptedEncKey& encKey
+    const core::DecryptedEncKey& encKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     return _strategyMapper.dispatch(
         static_cast<int64_t>(getDataStructureVersion(thread.data.back())), thread, encKey,
@@ -50,11 +51,12 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaMapper::decrypt(
                 ),
                 {}
             };
-        }
+        },
+        verifiedDio
     );
 }
 
-void ThreadDataSchemaMapper::assertDataIntegrity(const server::ThreadInfo& thread) {
+std::optional<core::DataIntegrityObject> ThreadDataSchemaMapper::assertDataIntegrity(const server::ThreadInfo& thread) {
     const auto& entry = thread.data.back();
     switch (getDataStructureVersion(entry)) {
     case core::ModuleDataSchema::Version::UNKNOWN:
@@ -62,12 +64,11 @@ void ThreadDataSchemaMapper::assertDataIntegrity(const server::ThreadInfo& threa
             "dataStructureVersion=" + std::to_string((int64_t)getDataStructureVersion(entry))
         );
     case core::ModuleDataSchema::Version::VERSION_4:
-        return;
+        return std::nullopt;
     case core::ModuleDataSchema::Version::VERSION_5: {
-        core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, thread, _strategyV5, [] {
+        return core::DataSchemaMapperUtils::assertContainerV5DIOIntegrity(entry.data, thread, _strategyV5, [] {
             throw ThreadDataIntegrityException();
         });
-        return;
     }
     default:
         throw UnknowThreadFormatException(
@@ -76,8 +77,14 @@ void ThreadDataSchemaMapper::assertDataIntegrity(const server::ThreadInfo& threa
     }
 }
 
-uint32_t ThreadDataSchemaMapper::validateDataIntegrity(const server::ThreadInfo& thread) {
-    return core::DataSchemaMapperUtils::toStatusCode([&] { assertDataIntegrity(thread); });
+std::pair<uint32_t, std::optional<core::DataIntegrityObject>> ThreadDataSchemaMapper::validateDataIntegrity(
+    const server::ThreadInfo& thread
+) {
+    std::optional<core::DataIntegrityObject> verifiedDio;
+    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+        verifiedDio = assertDataIntegrity(thread);
+    });
+    return {statusCode, verifiedDio};
 }
 
 Thread ThreadDataSchemaMapper::toLibThread(
@@ -120,7 +127,8 @@ std::vector<Thread> ThreadDataSchemaMapper::validateDecryptAndConvertThreads(
         [](const server::ThreadInfo& t) -> core::EncKeyLocation {
             return {.contextId = t.contextId, .resourceId = t.resourceId.value_or("")};
         },
-        [&](const server::ThreadInfo& t, const core::DecryptedEncKey& key) { return decrypt(t, key); },
+        [&](const server::ThreadInfo& t, const core::DecryptedEncKey& key,
+            const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(t, key, verifiedDio); },
         [](const server::ThreadInfo& t, uint32_t code) {
             return toLibThread(t, {}, {}, code, ThreadDataSchema::Version::UNKNOWN);
         },

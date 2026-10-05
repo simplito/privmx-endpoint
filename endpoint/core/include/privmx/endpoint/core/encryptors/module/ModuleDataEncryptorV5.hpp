@@ -12,6 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_MODULEDATAENCRYPTORV5_HPP
 #define _PRIVMXLIB_ENDPOINT_CORE_ENCRYPTORS_MODULE_MODULEDATAENCRYPTORV5_HPP
 
+#include <optional>
+
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
@@ -32,11 +34,16 @@ public:
         const crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
+    // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same envelope; without one it runs here.
     DecryptedModuleDataV5 decrypt(
         const dynamic::EncryptedModuleDataV5& encryptedModuleData,
-        const std::string& encryptionKey
+        const std::string& encryptionKey,
+        const std::optional<DataIntegrityObject>& verifiedDio = std::nullopt
     );
-    DecryptedModuleDataV5 extractPublic(const dynamic::EncryptedModuleDataV5& encryptedModuleData);
+    DecryptedModuleDataV5 extractPublic(
+        const dynamic::EncryptedModuleDataV5& encryptedModuleData,
+        const std::optional<DataIntegrityObject>& verifiedDio = std::nullopt
+    );
     core::DataIntegrityObject getDIOAndAssertIntegrity(const dynamic::EncryptedModuleDataV5& encryptedModuleData);
 
 private:

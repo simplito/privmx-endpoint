@@ -57,13 +57,14 @@ server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(
 
 DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
     const server::EncryptedMessageDataV5& encryptedMessageData,
-    const std::string& encryptionKey
+    const std::string& encryptionKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedMessageDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_5;
     try {
-        result.dio = getDIOAndAssertIntegrity(encryptedMessageData);
+        result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedMessageData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedMessageData.publicMeta, authorPublicKey);
         if (!encryptedMessageData.publicMetaObject.isEmpty()) {
@@ -95,13 +96,14 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
 }
 
 DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(
-    const server::EncryptedMessageDataV5& encryptedMessageData
+    const server::EncryptedMessageDataV5& encryptedMessageData,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedMessageDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_5;
     try {
-        result.dio = getDIOAndAssertIntegrity(encryptedMessageData);
+        result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedMessageData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedMessageData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedMessageData.publicMeta, authorPublicKey);
         if (!encryptedMessageData.publicMetaObject.isEmpty()) {

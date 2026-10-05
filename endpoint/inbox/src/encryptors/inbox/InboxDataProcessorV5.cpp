@@ -71,7 +71,11 @@ server::InboxData InboxDataProcessorV5::packForServer(
     };
 }
 
-InboxDataResultV5 InboxDataProcessorV5::unpackAll(const server::InboxData& encryptedData, const std::string& inboxKey) {
+InboxDataResultV5 InboxDataProcessorV5::unpackAll(
+    const server::InboxData& encryptedData,
+    const std::string& inboxKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
+) {
     InboxDataResultV5 result;
     result.storeId = encryptedData.storeId;
     result.threadId = encryptedData.threadId;
@@ -82,7 +86,7 @@ InboxDataResultV5 InboxDataProcessorV5::unpackAll(const server::InboxData& encry
         return result;
     }
 
-    result.privateData = unpackPrivate(encryptedData, inboxKey);
+    result.privateData = unpackPrivate(encryptedData, inboxKey, verifiedDio);
     result.statusCode = result.privateData.statusCode;
     return result;
 }
@@ -124,14 +128,15 @@ InboxPublicDataV5AsResult InboxDataProcessorV5::unpackPublic(const Poco::Dynamic
 
 InboxPrivateDataV5AsResult InboxDataProcessorV5::unpackPrivate(
     const server::InboxData& encryptedData,
-    const std::string& inboxKey
+    const std::string& inboxKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     InboxPrivateDataV5AsResult result;
     result.dataStructureVersion = InboxDataSchema::Version::VERSION_5;
     result.statusCode = 0;
     try {
         auto privateDataV5 = server::PrivateDataV5::fromJSON(encryptedData.meta);
-        result.dio = getDIOAndAssertIntegrity(privateDataV5);
+        result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(privateDataV5);
         auto authorPublicKeyECC = crypto::PublicKey::fromBase58DER(privateDataV5.authorPubKey);
 
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(

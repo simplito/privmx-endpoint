@@ -14,8 +14,10 @@ limitations under the License.
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
@@ -52,12 +54,21 @@ public:
         const core::DecryptedEncKeyV2& fileKey
     );
 
-    std::tuple<File, core::DataIntegrityObject> decrypt(const server::File& file, const core::DecryptedEncKey& encKey);
+    std::tuple<File, core::DataIntegrityObject> decrypt(
+        const server::File& file,
+        const core::DecryptedEncKey& encKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
+    );
 
     FileDataSchema::Version getDataStructureVersion(const server::File& file);
     StoreDataSchema::Version getMinimumStoreSchemaVersion(const server::File& file);
 
-    uint32_t validateDataIntegrity(const server::File& file, const std::string& storeResourceId);
+    // Returns the file's DIO for V5, so the decrypt that follows need not verify it again. Empty for V4,
+    // which carries no DIO at all.
+    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateDataIntegrity(
+        const server::File& file,
+        const std::string& storeResourceId
+    );
 
     DecryptedFileMetaV4 decryptFileMetaV4(const server::File& file, const core::DecryptedEncKey& encKey);
     DecryptedFileMetaV5 decryptFileMetaV5(const server::File& file, const core::DecryptedEncKey& encKey);

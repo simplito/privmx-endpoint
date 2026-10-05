@@ -17,6 +17,7 @@ limitations under the License.
 #include <optional>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp>
@@ -47,12 +48,15 @@ public:
 
     std::tuple<Inbox, core::DataIntegrityObject> decrypt(
         const server::InboxInfo& inbox,
-        const core::DecryptedEncKey& encKey
+        const core::DecryptedEncKey& encKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
     );
 
-    void assertDataIntegrity(const server::InboxInfo& inbox);
+    // Returns the head entry's DIO for a V5 inbox, so the decrypt that follows need not verify it again.
+    // Empty for V4, which carries no DIO at all.
+    std::optional<core::DataIntegrityObject> assertDataIntegrity(const server::InboxInfo& inbox);
 
-    uint32_t validateDataIntegrity(const server::InboxInfo& inbox);
+    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateDataIntegrity(const server::InboxInfo& inbox);
 
     InboxPublicViewData getPublicViewData(const server::InboxGetPublicViewResult& publicView);
     InboxInternalMetaV5 decryptInternalMeta(const server::InboxDataEntry& entry, const core::DecryptedEncKey& encKey);

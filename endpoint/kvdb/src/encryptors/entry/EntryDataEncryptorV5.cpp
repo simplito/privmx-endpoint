@@ -57,13 +57,14 @@ server::EncryptedKvdbEntryDataV5 EntryDataEncryptorV5::encrypt(
 
 DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
     const server::EncryptedKvdbEntryDataV5& encryptedEntryData,
-    const std::string& encryptionKey
+    const std::string& encryptionKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
     try {
-        result.dio = getDIOAndAssertIntegrity(encryptedEntryData);
+        result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedEntryData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedEntryData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedEntryData.publicMeta, authorPublicKey);
         if (!encryptedEntryData.publicMetaObject.isEmpty()) {
@@ -93,13 +94,14 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
 }
 
 DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(
-    const server::EncryptedKvdbEntryDataV5& encryptedEntryData
+    const server::EncryptedKvdbEntryDataV5& encryptedEntryData,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedKvdbEntryDataV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
     try {
-        result.dio = getDIOAndAssertIntegrity(encryptedEntryData);
+        result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedEntryData);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedEntryData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedEntryData.publicMeta, authorPublicKey);
         if (!encryptedEntryData.publicMetaObject.isEmpty()) {

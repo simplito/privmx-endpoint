@@ -12,6 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_TYPEDDATASCHEMASTRATEGYV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_TYPEDDATASCHEMASTRATEGYV5_HPP_
 
+#include <optional>
+
 #include "privmx/endpoint/core/encryptors/TypedDataSchemaStrategyDIO.hpp"
 #include <privmx/endpoint/core/CoreTypes.hpp>
 
@@ -30,11 +32,19 @@ protected:
     virtual TEncryptedData getEncryptedData(const TServerModel& model) const = 0;
 
     TRawData decrypt(const TServerModel& model, const DecryptedEncKey& encKey) const override final {
+        return decrypt(model, encKey, std::nullopt);
+    }
+
+    TRawData decrypt(
+        const TServerModel& model,
+        const DecryptedEncKey& encKey,
+        const std::optional<DataIntegrityObject>& verifiedDio
+    ) const override final {
         auto encData = getEncryptedData(model);
         if (encKey.statusCode == 0) {
-            return _encryptor.decrypt(encData, encKey.key);
+            return _encryptor.decrypt(encData, encKey.key, verifiedDio);
         } else {
-            auto result = _encryptor.extractPublic(encData);
+            auto result = _encryptor.extractPublic(encData, verifiedDio);
             result.statusCode = encKey.statusCode;
             return result;
         }

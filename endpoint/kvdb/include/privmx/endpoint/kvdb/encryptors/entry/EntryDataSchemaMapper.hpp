@@ -15,9 +15,11 @@ limitations under the License.
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
@@ -56,12 +58,17 @@ public:
 
     std::tuple<KvdbEntry, core::DataIntegrityObject> decrypt(
         const server::KvdbEntryInfo& entry,
-        const core::DecryptedEncKey& encKey
+        const core::DecryptedEncKey& encKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
     );
 
     KvdbEntryDataSchema::Version getDataStructureVersion(const server::KvdbEntryInfo& entry);
 
-    uint32_t validateEntryDataIntegrity(const server::KvdbEntryInfo& entry, const std::string& kvdbResourceId);
+    // Returns the entry's DIO, so the decrypt that follows need not verify it again.
+    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateEntryDataIntegrity(
+        const server::KvdbEntryInfo& entry,
+        const std::string& kvdbResourceId
+    );
 
     KvdbEntry validateDecryptAndConvertEntryDataToEntry(
         const server::KvdbEntryInfo& entry,

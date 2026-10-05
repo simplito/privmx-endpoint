@@ -12,6 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_MESSAGEDATAENCRYPTORV5_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_MESSAGEDATAENCRYPTORV5_HPP_
 
+#include <optional>
+
 #include "privmx/endpoint/thread/ServerTypes.hpp"
 #include "privmx/endpoint/thread/ThreadTypes.hpp"
 #include <privmx/crypto/ecc/PrivateKey.hpp>
@@ -32,11 +34,16 @@ public:
         const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
+    // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same envelope; without one it runs here.
     DecryptedMessageDataV5 decrypt(
         const server::EncryptedMessageDataV5& encryptedMessageData,
-        const std::string& encryptionKey
+        const std::string& encryptionKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
     );
-    DecryptedMessageDataV5 extractPublic(const server::EncryptedMessageDataV5& encryptedMessageData);
+    DecryptedMessageDataV5 extractPublic(
+        const server::EncryptedMessageDataV5& encryptedMessageData,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
+    );
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::EncryptedMessageDataV5& encryptedMessageData);
 
 private:

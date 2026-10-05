@@ -49,13 +49,14 @@ store::server::EncryptedFileMetaV5 FileMetaEncryptorV5::encrypt(
 
 store::DecryptedFileMetaV5 FileMetaEncryptorV5::decrypt(
     const store::server::EncryptedFileMetaV5& encryptedFileMeta,
-    const std::string& encryptionKey
+    const std::string& encryptionKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedFileMetaV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = FileDataSchema::Version::VERSION_5;
     try {
-        result.dio = getDIOAndAssertIntegrity(encryptedFileMeta);
+        result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedFileMeta);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedFileMeta.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedFileMeta.publicMeta, authorPublicKey);
         if (!encryptedFileMeta.publicMetaObject.isEmpty()) {
@@ -82,13 +83,14 @@ store::DecryptedFileMetaV5 FileMetaEncryptorV5::decrypt(
 }
 
 store::DecryptedFileMetaV5 FileMetaEncryptorV5::extractPublic(
-    const store::server::EncryptedFileMetaV5& encryptedFileMeta
+    const store::server::EncryptedFileMetaV5& encryptedFileMeta,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedFileMetaV5 result;
     result.statusCode = 0;
     result.dataStructureVersion = FileDataSchema::Version::VERSION_5;
     try {
-        result.dio = getDIOAndAssertIntegrity(encryptedFileMeta);
+        result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedFileMeta);
         auto authorPublicKey = crypto::PublicKey::fromBase58DER(encryptedFileMeta.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedFileMeta.publicMeta, authorPublicKey);
         if (encryptedFileMeta.publicMetaObject.isEmpty()) {

@@ -25,7 +25,15 @@ InboxDataResultV5 InboxDataSchemaStrategyV5::decrypt(
     const server::InboxInfo& inbox,
     const core::DecryptedEncKey& encKey
 ) const {
-    return _processor.unpackAll(inbox.data.back().data, encKey.key);
+    return decrypt(inbox, encKey, std::nullopt);
+}
+
+InboxDataResultV5 InboxDataSchemaStrategyV5::decrypt(
+    const server::InboxInfo& inbox,
+    const core::DecryptedEncKey& encKey,
+    const std::optional<core::DataIntegrityObject>& verifiedDio
+) const {
+    return _processor.unpackAll(inbox.data.back().data, encKey.key, verifiedDio);
 }
 
 std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaStrategyV5::convert(

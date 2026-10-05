@@ -14,8 +14,10 @@ limitations under the License.
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
@@ -47,12 +49,17 @@ public:
 
     std::tuple<Thread, core::DataIntegrityObject> decrypt(
         const server::ThreadInfo& thread,
-        const core::DecryptedEncKey& encKey
+        const core::DecryptedEncKey& encKey,
+        const std::optional<core::DataIntegrityObject>& verifiedDio = std::nullopt
     );
 
-    void assertDataIntegrity(const server::ThreadInfo& thread);
+    // Returns the head entry's DIO for a V5 thread, so the decrypt that follows need not verify it again.
+    // Empty for V4, which carries no DIO at all.
+    std::optional<core::DataIntegrityObject> assertDataIntegrity(const server::ThreadInfo& thread);
 
-    uint32_t validateDataIntegrity(const server::ThreadInfo& thread);
+    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateDataIntegrity(
+        const server::ThreadInfo& thread
+    );
 
     std::vector<Thread> validateDecryptAndConvertThreads(
         const std::vector<server::ThreadInfo>& threads,
