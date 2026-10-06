@@ -41,13 +41,17 @@ public:
 
     Poco::Dynamic::Var encryptRoster(const GroupRosterToEncryptV5& data, const std::string& key);
 
+    // Reads the pins, raises none: those counters stay the bridge's word until an attestation binds them.
     // Returns the roster head's DIO it had to decode anyway, so a caller that needs it does not verify twice.
     core::DataIntegrityObject assertDataIntegrity(const server::GroupInfo& groupInfo);
 
+    // Raises the roster pin on success: the tag check below is what proves `rosterVersion` genuine.
     void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& rosterKey);
 
+    // Raises the public-metadata pin on success, for the same reason and against that plane's own counter.
     void assertPublicMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& publicMetaKey);
 
+    // Raises the private-metadata pin on success, for the same reason and against that plane's own counter.
     void assertPrivateMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& privateMetaKey);
 
     // `HMAC(subkey, epoch | rosterVersion | roster)`. Lists are sorted and length-prefixed so one roster's tag
@@ -136,16 +140,26 @@ private:
         const core::DecryptedEncKey& privateMetaKey
     );
 
+    // One per plane: a tag stays valid forever, so only a pin refuses a genuinely tagged rollback. The counters
+    // move independently, so one pin over all three would reject legitimate states.
+    struct VersionPins {
+        int64_t roster = 0;
+        int64_t publicMeta = 0;
+        int64_t privateMeta = 0;
+    };
+
+    // Monotone: takes the max, so a late but genuine older response cannot lower a pin and reopen the window.
+    // Called only from the three attestations, each of which has just proven its own counter.
+    void pinVersion(const std::string& groupId, int64_t VersionPins::* plane, int64_t version);
+
     core::DataEncryptorV4 _dataEncryptor;
     // Own DIO encryptor, for the one envelope `GroupDataEncryptorV5` has no method for: the internal-meta view.
     core::DIOEncryptorV1 _DIOEncryptor;
     GroupDataEncryptorV5 _groupEncryptor;
-    // Monotone pins, one per plane: a tag stays valid forever, so only a pin refuses a genuinely tagged
-    // rollback. The counters move independently, so one pin over all three would reject legitimate states.
+    // Session-scoped: `dropAllVersionPins` on connect/disconnect means a rollback across a reconnect is
+    // accepted. The pin orders what one session has already proven, nothing more.
     std::mutex _pinMutex;
-    std::map<std::string, int64_t> _verifiedRosterVersions;
-    std::map<std::string, int64_t> _verifiedPublicMetaVersions;
-    std::map<std::string, int64_t> _verifiedPrivateMetaVersions;
+    std::map<std::string, VersionPins> _verifiedVersions;
 };
 
 } // namespace group

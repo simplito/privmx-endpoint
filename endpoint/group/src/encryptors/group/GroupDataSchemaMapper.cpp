@@ -115,6 +115,8 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
     if (membership.rosterVersion != groupInfo.rosterVersion) {
         throw GroupMembershipMismatchException();
     }
+    // Only now is the counter proven, so only now may it be pinned. Nothing later can un-prove it.
+    pinVersion(groupInfo.id, &VersionPins::roster, groupInfo.rosterVersion);
 }
 
 // `keyVersion` may legitimately lag the group's current epoch, but never lead it. What keeps the other plane
@@ -156,6 +158,7 @@ void GroupDataSchemaMapper::assertPublicMetaIsAttested(
     if (meta.metaVersion != groupInfo.publicMetaVersion) {
         throw GroupMembershipMismatchException();
     }
+    pinVersion(groupInfo.id, &VersionPins::publicMeta, groupInfo.publicMetaVersion);
     // Not checked, because a reader cannot: that the author still holds the group. Nothing inside epoch N
     // orders "written during N" against "written after N ended" — `refreshMetadataEpochAfterRemoval` is the fix.
 }
@@ -199,6 +202,7 @@ void GroupDataSchemaMapper::assertPrivateMetaIsAttested(
     if (meta.metaVersion != groupInfo.privateMetaVersion) {
         throw GroupMembershipMismatchException();
     }
+    pinVersion(groupInfo.id, &VersionPins::privateMeta, groupInfo.privateMetaVersion);
 }
 
 std::string GroupDataSchemaMapper::rosterTag(
@@ -253,8 +257,8 @@ std::string GroupDataSchemaMapper::privateMetaTag(const std::string& key, int64_
     return metaPlaneTag("privateMeta", key, keyVersion, metaVersion);
 }
 
-// Head-entry integrity only: the DIO signature and field checksums, plus the monotone version pins that a
-// per-entry tag cannot provide. Three pins, because the three counters move independently.
+// Head-entry integrity only: the DIO signature and field checksums, plus a read of the monotone pins that a
+// per-entry tag cannot provide. Raises no pin — the counters below are still only the bridge's word.
 core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupInfo) {
     // `history` is the same set of entries `data` is projected from, so the head of one is the head of the
     // other — and the roster plane's author comes out of `history`.
@@ -270,37 +274,37 @@ core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const serve
         throw GroupDataIntegrityException();
     }
 
-    // Compare and store under one lock: two concurrent verifications must not both pass against the same stale
-    // pin, or the later one could accept a version older than the one already verified.
+    // `find`, not `operator[]`: a rejected response must leave no trace, or a bridge grows the map without
+    // bound by serving failures for invented group ids.
     std::lock_guard lock(_pinMutex);
-    auto& pinnedRoster = _verifiedRosterVersions[groupInfo.id];
-    auto& pinnedPublicMeta = _verifiedPublicMetaVersions[groupInfo.id];
-    auto& pinnedPrivateMeta = _verifiedPrivateMetaVersions[groupInfo.id];
-    if (groupInfo.rosterVersion < pinnedRoster ||
-        groupInfo.publicMetaVersion < pinnedPublicMeta ||
-        groupInfo.privateMetaVersion < pinnedPrivateMeta) {
+    auto pinned = _verifiedVersions.find(groupInfo.id);
+    if (pinned != _verifiedVersions.end() &&
+        (groupInfo.rosterVersion < pinned->second.roster ||
+         groupInfo.publicMetaVersion < pinned->second.publicMeta ||
+         groupInfo.privateMetaVersion < pinned->second.privateMeta)) {
         // A shorter answer than one already seen is a validly tagged *past* state — a rollback, not an error the
         // tag itself can catch, because that older tag was genuine when it was made.
         throw GroupHistoryForkException();
     }
-    pinnedRoster = groupInfo.rosterVersion;
-    pinnedPublicMeta = groupInfo.publicMetaVersion;
-    pinnedPrivateMeta = groupInfo.privateMetaVersion;
     return dio;
+}
+
+// Compare and store under one lock, so two concurrent attestations cannot both write against the same stale
+// pin and leave the lower of the two standing.
+void GroupDataSchemaMapper::pinVersion(const std::string& groupId, int64_t VersionPins::* plane, int64_t version) {
+    std::lock_guard lock(_pinMutex);
+    int64_t& pinned = _verifiedVersions[groupId].*plane;
+    pinned = std::max(pinned, version);
 }
 
 void GroupDataSchemaMapper::dropVersionPin(const std::string& groupId) {
     std::lock_guard lock(_pinMutex);
-    _verifiedRosterVersions.erase(groupId);
-    _verifiedPublicMetaVersions.erase(groupId);
-    _verifiedPrivateMetaVersions.erase(groupId);
+    _verifiedVersions.erase(groupId);
 }
 
 void GroupDataSchemaMapper::dropAllVersionPins() {
     std::lock_guard lock(_pinMutex);
-    _verifiedRosterVersions.clear();
-    _verifiedPublicMetaVersions.clear();
-    _verifiedPrivateMetaVersions.clear();
+    _verifiedVersions.clear();
 }
 
 std::pair<uint32_t, core::DataIntegrityObject> GroupDataSchemaMapper::validateDataIntegrity(

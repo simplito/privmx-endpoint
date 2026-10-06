@@ -263,6 +263,7 @@ TEST_F(GroupRosterTag, SECURITY_AnOlderCorrectlyTaggedRosterIsRejected) {
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     auto current = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
     ASSERT_NO_THROW(verifier.assertDataIntegrity(current));
+    ASSERT_NO_THROW(verifier.assertRosterIsAttested(current, key(encKey)));
 
     auto rolledBack = serve({"bob", "carol", "mallory"}, {"alice"}, 3, 2, encKey);
     EXPECT_THROW(verifier.assertDataIntegrity(rolledBack), GroupHistoryForkException);
@@ -274,6 +275,7 @@ TEST_F(GroupRosterTag, SECURITY_AnOlderPublicMetaVersionIsRejectedIndependently)
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     auto current = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 9, std::nullopt, 3);
     ASSERT_NO_THROW(verifier.assertDataIntegrity(current));
+    ASSERT_NO_THROW(verifier.assertPublicMetaIsAttested(current, key(encKey)));
 
     auto rolledBack = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 8, std::nullopt, 3);
     EXPECT_THROW(verifier.assertDataIntegrity(rolledBack), GroupHistoryForkException);
@@ -283,9 +285,91 @@ TEST_F(GroupRosterTag, SECURITY_AnOlderPrivateMetaVersionIsRejectedIndependently
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     auto current = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 3, std::nullopt, 9);
     ASSERT_NO_THROW(verifier.assertDataIntegrity(current));
+    ASSERT_NO_THROW(verifier.assertPrivateMetaIsAttested(current, key(encKey)));
 
     auto rolledBack = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 3, std::nullopt, 8);
     EXPECT_THROW(verifier.assertDataIntegrity(rolledBack), GroupHistoryForkException);
+}
+
+TEST_F(GroupRosterTag, AnUnattestedResponseRaisesNoPin) {
+    // The invariant the fix rests on: an integrity pass proves no counter, so it pins none. Only the tag that
+    // binds a counter to signed content may raise that counter's pin.
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    ASSERT_NO_THROW(verifier.assertDataIntegrity(serve({"bob", "carol"}, {"alice"}, 9, 2, encKey)));
+    EXPECT_NO_THROW(verifier.assertDataIntegrity(serve({"bob", "carol"}, {"alice"}, 4, 2, encKey)));
+}
+
+TEST_F(GroupRosterTag, SECURITY_AnInflatedRosterVersionLeavesThePinAlone) {
+    // A keyless bridge raising only the served counter used to pin 5 before the tag check refused the answer,
+    // and every honest version-4 answer afterwards read as a fork — the group bricked until reconnect.
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    auto inflated = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
+    inflated.rosterVersion = 5;
+    ASSERT_NO_THROW(verifier.assertDataIntegrity(inflated));
+    EXPECT_THROW(verifier.assertRosterIsAttested(inflated, key(encKey)), GroupMembershipMismatchException);
+
+    auto genuine = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
+    EXPECT_NO_THROW(verifier.assertDataIntegrity(genuine));
+    EXPECT_NO_THROW(verifier.assertRosterIsAttested(genuine, key(encKey)));
+}
+
+TEST_F(GroupRosterTag, SECURITY_AnInflatedPublicMetaVersionLeavesThePinAlone) {
+    // The same lie on the metadata plane, refused the same way: `publicMetaVersion` is the bridge's word until
+    // `metaVersion` inside the signed entry agrees with it.
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    auto inflated = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7);
+    inflated.publicMetaVersion = 9;
+    ASSERT_NO_THROW(verifier.assertDataIntegrity(inflated));
+    EXPECT_THROW(verifier.assertPublicMetaIsAttested(inflated, key(encKey)), GroupMembershipMismatchException);
+
+    auto genuine = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7);
+    EXPECT_NO_THROW(verifier.assertDataIntegrity(genuine));
+    EXPECT_NO_THROW(verifier.assertPublicMetaIsAttested(genuine, key(encKey)));
+}
+
+TEST_F(GroupRosterTag, SECURITY_AFailedMetadataPlaneDoesNotLoseTheRosterPin) {
+    // The planes pin apart, so breaking a metadata entry cannot cost the roster its pin — otherwise a bridge
+    // would buy itself free roster rollbacks by corrupting a plane it does not even need to read.
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
+    ASSERT_NO_THROW(verifier.assertRosterIsAttested(group, key(encKey)));
+    group.publicMeta = group.privateMeta;
+    EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
+
+    auto rolledBack = serve({"bob", "carol", "mallory"}, {"alice"}, 3, 2, encKey, 7, std::nullopt, 7);
+    EXPECT_THROW(verifier.assertDataIntegrity(rolledBack), GroupHistoryForkException);
+}
+
+TEST_F(GroupRosterTag, APinDoesNotMoveBackwards) {
+    // Two reads in flight at once may attest out of order, and both are genuine. The later, older one must not
+    // lower the pin, or the next sequential read reopens the window the pin exists to close.
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    auto newer = serve({"bob", "carol"}, {"alice"}, 9, 2, encKey);
+    auto older = serve({"bob"}, {"alice"}, 4, 2, encKey);
+    ASSERT_NO_THROW(verifier.assertRosterIsAttested(newer, key(encKey)));
+    ASSERT_NO_THROW(verifier.assertRosterIsAttested(older, key(encKey)));
+
+    EXPECT_THROW(verifier.assertDataIntegrity(older), GroupHistoryForkException);
+}
+
+TEST_F(GroupRosterTag, DroppingAPinForgetsIt) {
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    auto older = serve({"bob"}, {"alice"}, 4, 2, encKey);
+    ASSERT_NO_THROW(verifier.assertRosterIsAttested(serve({"bob", "carol"}, {"alice"}, 9, 2, encKey), key(encKey)));
+    ASSERT_THROW(verifier.assertDataIntegrity(older), GroupHistoryForkException);
+
+    verifier.dropVersionPin("grp");
+    EXPECT_NO_THROW(verifier.assertDataIntegrity(older));
+}
+
+TEST_F(GroupRosterTag, DroppingAllPinsForgetsThem) {
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    auto older = serve({"bob"}, {"alice"}, 4, 2, encKey);
+    ASSERT_NO_THROW(verifier.assertRosterIsAttested(serve({"bob", "carol"}, {"alice"}, 9, 2, encKey), key(encKey)));
+    ASSERT_THROW(verifier.assertDataIntegrity(older), GroupHistoryForkException);
+
+    verifier.dropAllVersionPins();
+    EXPECT_NO_THROW(verifier.assertDataIntegrity(older));
 }
 
 TEST_F(GroupRosterTag, AMovedPrivateMetaVersionLeavesThePublicPlaneAlone) {
