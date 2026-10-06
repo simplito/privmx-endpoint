@@ -1016,6 +1016,8 @@ std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& r
     switch (resolved.failure) {
     case keytree::ResolveFailure::NoTree:
         return "Group key unavailable: group has no key tree";
+    case keytree::ResolveFailure::NoSuchEpoch:
+        return "Group key unavailable: the requested key version does not exist";
     case keytree::ResolveFailure::ClimbFailed:
         if (resolved.climb == keytree::ClimbFailure::Tampered) {
             return "Group key tree verification failed: a node key does not match the published public key";
