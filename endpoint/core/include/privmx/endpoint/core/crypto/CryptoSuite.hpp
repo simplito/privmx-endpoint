@@ -99,6 +99,19 @@ public:
     /// @brief Czy wartosc polityki nazywa zestaw znany temu buildowi.
     static bool isKnownPolicyValue(const std::string& value);
 
+    /**
+     * @brief Narzut ramki zestawu domyslnego: `[1B SuiteId][12B IV][16B tag AEAD]`.
+     *
+     * `constexpr`, bo `group` liczy z niego rozmiar zaszyfrowanego chunku i adresuje chunki
+     * jako `index * ENCRYPTED_CHUNK_SIZE` - czyli potrzebuje go na etapie kompilacji.
+     *
+     * **Ograniczenie:** jest poprawne dopiero dopoki zestaw zapisu jest ustalany stala kompilacji
+     * (poziom 1). Gdy wejdzie wybor per kontener (poziom 2/3), rozmiar chunku przestanie byc
+     * stala i adresowanie w `group` oraz `store` bedzie musialo isc za zestawem odczytanym
+     * z danych. Patrz crypto-update/zmiany-endpoint.md §5.2.
+     */
+    static constexpr std::size_t DEFAULT_FRAME_OVERHEAD = 1 + 12 + 16;
+
     SuiteId id() const { return _id; }
 
     /// @brief Nazwa zestawu uzywana w `ContainerPolicy::cryptoSuite`.

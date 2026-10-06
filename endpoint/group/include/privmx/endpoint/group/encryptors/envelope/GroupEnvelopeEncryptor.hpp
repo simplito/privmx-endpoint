@@ -11,6 +11,7 @@
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
+#include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
 #include <privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp>
 
 #include "privmx/endpoint/group/GroupTypes.hpp"
@@ -20,10 +21,12 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
-// Sealed size of a chunk holding `plainLen` bytes: type byte, zero block, PKCS#7-padded ciphertext, tag.
+// Sealed size of a chunk holding `plainLen` bytes. The overhead comes from `CryptoSuite` instead of being
+// restated here, so the two cannot drift apart: an AEAD frame is `[suite id][iv][ciphertext||tag]`, with the
+// ciphertext the same length as the plaintext — no block padding, unlike the CBC framing this replaced.
 // At namespace scope so `ENCRYPTED_CHUNK_SIZE` derives from it instead of restating the arithmetic.
 constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
-    return 1 + 16 + (plainLen + 16 - (plainLen % 16)) + 16;
+    return plainLen + core::CryptoSuite::DEFAULT_FRAME_OVERHEAD;
 }
 
 /**
