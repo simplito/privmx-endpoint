@@ -32,6 +32,8 @@ struct SuiteSpec {
     cs::Hash hash;
     cs::Kdf kdf;
     std::size_t ivLength;
+    /// Nazwa uzywana w `ContainerPolicy::cryptoSuite`. Limit wartosci polityki to 32 znaki.
+    const char* policyName;
 };
 
 /**
@@ -44,8 +46,8 @@ struct SuiteSpec {
  * bajt CipherType w starym formacie.
  */
 constexpr std::array<SuiteSpec, 2> SUITES{{
-    {SuiteId::Aes256GcmSha256, cs::SymAlg::Aes256Gcm, cs::Hash::Sha256, cs::Kdf::Kdf, 12},
-    {SuiteId::Aes256GcmSha512, cs::SymAlg::Aes256Gcm, cs::Hash::Sha512, cs::Kdf::Kdf, 12},
+    {SuiteId::Aes256GcmSha256, cs::SymAlg::Aes256Gcm, cs::Hash::Sha256, cs::Kdf::Kdf, 12, "aes256gcm-sha256"},
+    {SuiteId::Aes256GcmSha512, cs::SymAlg::Aes256Gcm, cs::Hash::Sha512, cs::Kdf::Kdf, 12, "aes256gcm-sha512"},
 }};
 
 /// Zestaw uzywany do zapisu, gdy nic nie wskazuje innego (poziom 1 wyboru formatu).
@@ -109,6 +111,28 @@ CryptoSuite CryptoSuite::forId(SuiteId id) {
 
 bool CryptoSuite::isKnown(SuiteId id) {
     return findSpec(id) != nullptr;
+}
+
+CryptoSuite CryptoSuite::forPolicyValue(const std::string& value) {
+    for (const auto& spec : SUITES) {
+        if (value == spec.policyName) {
+            return CryptoSuite(spec.id);
+        }
+    }
+    throw UnknownCryptoSuiteException("policy value: '" + value + "'");
+}
+
+bool CryptoSuite::isKnownPolicyValue(const std::string& value) {
+    for (const auto& spec : SUITES) {
+        if (value == spec.policyName) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string CryptoSuite::policyValue() const {
+    return requireSpec(_id).policyName;
 }
 
 std::vector<SuiteId> CryptoSuite::known() {

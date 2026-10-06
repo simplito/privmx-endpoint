@@ -50,6 +50,12 @@ enum class SuiteId : std::uint8_t {
  * Zapis: wedlug zestawu wybranego dla danej operacji (domyslnie `defaultForWrite()`).
  * Odczyt: zawsze wedlug znacznika odczytanego z danych.
  *
+ * **Zakres.** Warstwa obejmuje dane szyfrowane kluczem kontenera. **Nie** obejmuje warstwy
+ * integralnosci - sumy kontrolne pol w DIO i `secretHash` w `EncKeyV2` pozostaja na stalym
+ * SHA-256, wersjonowanym przez `structureVersion` tych struktur. Powod: czytajacy musi wiedziec,
+ * czym zweryfikowac, a DIO nie niesie znacznika zestawu; jest tez elementem koperty, a nie tego,
+ * co dzieje sie wewnatrz kontenera. Nie przepinac ich na ta warstwe bez zmiany formatu DIO.
+ *
  * Format ramki produkowanej przez `encrypt()`:
  * @code
  *   [1B SuiteId][IV][ciphertext || tag AEAD]
@@ -84,7 +90,19 @@ public:
      */
     static std::vector<SuiteId> known();
 
+    /**
+     * @brief Zestaw wskazany wartoscia polityki kontenera (poziom 2 wyboru formatu zapisu).
+     * @throws UnknownCryptoSuiteException gdy wartosc nie jest znana temu buildowi
+     */
+    static CryptoSuite forPolicyValue(const std::string& value);
+
+    /// @brief Czy wartosc polityki nazywa zestaw znany temu buildowi.
+    static bool isKnownPolicyValue(const std::string& value);
+
     SuiteId id() const { return _id; }
+
+    /// @brief Nazwa zestawu uzywana w `ContainerPolicy::cryptoSuite`.
+    std::string policyValue() const;
 
     std::string randomBytes(std::size_t length) const;
     std::string hash(const std::string& data) const;

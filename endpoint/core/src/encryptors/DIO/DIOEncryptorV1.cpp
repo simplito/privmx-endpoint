@@ -26,22 +26,23 @@ std::string DIOEncryptorV1::signAndEncode(
     if (dio.creatorPubKey != authorKey.getPublicKey().toBase58DER()) {
         throw DataIntegrityObjectMismatchEncKeyException();
     }
-    // C++20 nie pozwala mieszac klauzul desygnowanych i pozycyjnych w jednej liscie
-    // inicjalizujacej, a klasy bazowej nie da sie desygnowac - stad `version` ustawiane osobno.
-    dynamic::DataIntegrityObject dioJSON{
-        .creatorUserId = dio.creatorUserId,
-        .creatorPublicKey = dio.creatorPubKey,
-        .contextId = dio.contextId,
-        .resourceId = dio.resourceId,
-        .timestamp = dio.timestamp,
-        .randomId = dio.randomId,
-        .containerId = dio.containerId,
-        .containerResourceId = dio.containerResourceId,
-        .fieldChecksums = std::unordered_map<std::string, std::string>(),
-        .structureVersion = dio.structureVersion,
-        .bridgeIdentity = std::nullopt
-    };
+    // Pola przypisywane po konstrukcji, a nie lista inicjalizujaca: C++20 nie pozwala mieszac
+    // klauzul desygnowanych i pozycyjnych, a klasy bazowej (nosnika `version`) nie da sie
+    // desygnowac. Sama lista desygnowana dawalaby z kolei -Wmissing-field-initializers,
+    // co pod -Werror (PRIVMX_CI_WERROR) lamie build.
+    dynamic::DataIntegrityObject dioJSON{};
     dioJSON.version = DataIntegrityObjectDataSchema::Version::VERSION_1;
+    dioJSON.creatorUserId = dio.creatorUserId;
+    dioJSON.creatorPublicKey = dio.creatorPubKey;
+    dioJSON.contextId = dio.contextId;
+    dioJSON.resourceId = dio.resourceId;
+    dioJSON.timestamp = dio.timestamp;
+    dioJSON.randomId = dio.randomId;
+    dioJSON.containerId = dio.containerId;
+    dioJSON.containerResourceId = dio.containerResourceId;
+    dioJSON.fieldChecksums = std::unordered_map<std::string, std::string>();
+    dioJSON.structureVersion = dio.structureVersion;
+    dioJSON.bridgeIdentity = std::nullopt;
     for (const auto& checksum : dio.fieldChecksums) {
         dioJSON.fieldChecksums.insert_or_assign(checksum.first, privmx::utils::Base64::from(checksum.second));
     }

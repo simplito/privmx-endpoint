@@ -157,6 +157,33 @@ TEST(CryptoSuite, MacLengthFollowsSuite) {
     EXPECT_EQ(64u, CryptoSuite::forId(SuiteId::Aes256GcmSha512).mac(key, PLAINTEXT).size());
 }
 
+TEST_P(CryptoSuiteAllSuites, PolicyValueRoundTrip) {
+    const auto suite = CryptoSuite::forId(GetParam());
+    const std::string value = suite.policyValue();
+
+    EXPECT_FALSE(value.empty());
+    // Limit wartosci polityki po stronie Bridge'a (TypesValidator: maxLength 32).
+    EXPECT_LE(value.size(), 32u);
+    EXPECT_TRUE(CryptoSuite::isKnownPolicyValue(value));
+    EXPECT_EQ(GetParam(), CryptoSuite::forPolicyValue(value).id());
+}
+
+TEST(CryptoSuite, PolicyValuesAreDistinct) {
+    std::vector<std::string> values;
+    for (SuiteId id : CryptoSuite::known()) {
+        values.push_back(CryptoSuite::forId(id).policyValue());
+    }
+    std::sort(values.begin(), values.end());
+
+    EXPECT_EQ(values.end(), std::adjacent_find(values.begin(), values.end()));
+}
+
+TEST(CryptoSuite, UnknownPolicyValueIsRejected) {
+    EXPECT_FALSE(CryptoSuite::isKnownPolicyValue("nie-ma-takiego"));
+    EXPECT_FALSE(CryptoSuite::isKnownPolicyValue(""));
+    EXPECT_THROW(CryptoSuite::forPolicyValue("nie-ma-takiego"), UnknownCryptoSuiteException);
+}
+
 TEST(CryptoSuite, RandomBytesHasRequestedLength) {
     const auto suite = CryptoSuite::defaultForWrite();
 

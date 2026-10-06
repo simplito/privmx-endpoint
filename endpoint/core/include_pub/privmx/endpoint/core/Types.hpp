@@ -161,6 +161,13 @@ struct ContainerPolicyWithoutItem {
      * Enforce forward secrecy: block writes when group grants are stale after a group key rotation
      */
     std::optional<std::string> forwardSecrecy;
+    /**
+     * Determine which set of cryptographic algorithms is used to encrypt new data in the container.
+     *
+     * Affects writes only - reads always follow the suite recorded in the data itself, so a container
+     * may hold objects written under several suites at once.
+     */
+    std::optional<std::string> cryptoSuite;
 };
 
 /**
