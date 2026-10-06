@@ -32,6 +32,8 @@ enum class ResolveFailure {
     NoTree,
     // The caller holds no leaf, or the climb broke.
     ClimbFailed,
+    // The epoch asked for is negative, or newer than the one the group is on.
+    NoSuchEpoch,
     // The current epoch was reached but the requested older one was not.
     DescentFailed,
 };
@@ -53,8 +55,8 @@ class GroupKeyResolver {
 public:
     GroupKeyResolver(TreeKeyCache& cache);
 
-    // `epoch` 0 means current; `archive` is the ladder, fetched separately because it grows with the whole history
-    // and is only needed for an older epoch. The caller's identity comes from `group.ownLeafPosition`.
+    // `epoch` 0 means current and any other value names that exact epoch; `archive` is the ladder, fetched
+    // separately because it grows with the whole history. The caller's identity comes from `ownLeafPosition`.
     ResolveResult resolve(
         const server::GroupInfo& group,
         std::int64_t epoch,

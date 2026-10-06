@@ -200,7 +200,13 @@ ResolveResult GroupKeyResolver::resolveWith(
 
     const TreeGroupState state = toTreeState(group);
     const std::uint32_t currentEpoch = state.epoch;
-    const std::uint32_t wanted = epoch <= 0 ? currentEpoch : static_cast<std::uint32_t>(epoch);
+    // Only 0 means "whichever is current"; every other value names one exact epoch. An epoch the group has not
+    // reached yet is an error, never the current key under a different number.
+    if (epoch < 0 || epoch > static_cast<std::int64_t>(currentEpoch)) {
+        result.failure = ResolveFailure::NoSuchEpoch;
+        return result;
+    }
+    const std::uint32_t wanted = epoch == 0 ? currentEpoch : static_cast<std::uint32_t>(epoch);
 
     // Step 1: climb to the current epoch's grant key. Every recovered node key is verified against the public
     // key the server published for that node, so a corrupted edge fails loudly instead of yielding a wrong key.
@@ -211,7 +217,7 @@ ResolveResult GroupKeyResolver::resolveWith(
         result.climb = climb.failure;
         return result;
     }
-    if (wanted >= currentEpoch) {
+    if (wanted == currentEpoch) {
         result.key = climb.grantKey;
         return result;
     }
