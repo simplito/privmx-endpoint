@@ -50,7 +50,7 @@ server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(
     }
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     core::ExpandedDataIntegrityObject expandedDio = {
-        messageData.dio, .structureVersion = MessageDataSchema::Version::VERSION_5, .fieldChecksums = fieldChecksums
+        messageData.dio, MessageDataSchema::Version::VERSION_5, fieldChecksums
     };
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;

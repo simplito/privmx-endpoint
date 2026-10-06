@@ -244,9 +244,9 @@ std::vector<server::GroupKeyEntrySet> ContainerBaseApi::buildGroupKeyEntries(
         auto keySecret = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32));
         auto encData = encryptor.encrypt(
             EncKeyV2ToEncrypt{
-                EncKey{.id = key.id, .key = key.key}, .dio = dio,
-                .location = {.contextId = contextId, .resourceId = resourceId}, .keySecret = keySecret,
-                .secretHash = privmx::crypto::Crypto::hmacSha256(containerSecret, keySecret + contextId + resourceId)
+                EncKey{.id = key.id, .key = key.key}, dio,
+                EncKeyLocation{.contextId = contextId, .resourceId = resourceId}, keySecret,
+                privmx::crypto::Crypto::hmacSha256(containerSecret, keySecret + contextId + resourceId)
             },
             groupPubKey, _userPrivKey
         );

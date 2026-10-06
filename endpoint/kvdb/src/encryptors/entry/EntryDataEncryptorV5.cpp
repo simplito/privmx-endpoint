@@ -50,7 +50,7 @@ server::EncryptedKvdbEntryDataV5 EntryDataEncryptorV5::encrypt(
     }
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     core::ExpandedDataIntegrityObject expandedDio = {
-        messageData.dio, .structureVersion = KvdbEntryDataSchema::Version::VERSION_5, .fieldChecksums = fieldChecksums
+        messageData.dio, KvdbEntryDataSchema::Version::VERSION_5, fieldChecksums
     };
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;

@@ -44,7 +44,7 @@ dynamic::EncryptedModuleDataV5 ModuleDataEncryptorV5::encrypt(
     );
     fieldChecksums.insert(std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(result.internalMeta)));
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
-    ExpandedDataIntegrityObject expandedDio = {kvdbData.dio, .structureVersion = 5, .fieldChecksums = fieldChecksums};
+    ExpandedDataIntegrityObject expandedDio = {kvdbData.dio, 5, fieldChecksums};
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;
 }

@@ -42,7 +42,7 @@ store::server::EncryptedFileMetaV5 FileMetaEncryptorV5::encrypt(
     fieldChecksums.insert(std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(internalMeta)));
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     core::ExpandedDataIntegrityObject expandedDio = {
-        fileMeta.dio, .structureVersion = FileDataSchema::Version::VERSION_5, .fieldChecksums = fieldChecksums
+        fileMeta.dio, FileDataSchema::Version::VERSION_5, fieldChecksums
     };
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;

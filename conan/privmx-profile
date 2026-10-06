@@ -1,0 +1,17 @@
+include(default)
+
+# Wymuszenie jednej wersji OpenSSL-a w calym grafie zaleznosci.
+#
+# Powod: privmxdrvcrypto/1.0.4 i privmxdrvecc/1.0.3 przypinaja openssl/[>=3.0 <3.1],
+# co koliduje z openssl >= 3.5 wymaganym przez pmx-crypto (ML-KEM / ML-DSA,
+# EVP_SIGNATURE, OPENSSL_store_u32_be). Bez tego `conan install` konczy sie
+# bledem "Version conflict". privmxdrvnet i poco rozwiazuja sie elastycznie,
+# wiec konflikt wnosza wylacznie te dwa drivery kryptograficzne.
+#
+# Zalozenie: OpenSSL deklaruje stabilnosc ABI w obrebie serii 3.x, wiec binaria
+# driverow zbudowane pod 3.0 dzialaja z 3.5.
+#
+# Status: OBEJSCIE POMOSTOWE. Do usuniecia razem z zaleznosciami privmxdrvcrypto
+# i privmxdrvecc, gdy zastapi je pmx-crypto. Patrz crypto-update/zmiany-endpoint.md §1.
+[replace_requires]
+openssl/*: openssl/3.5.9

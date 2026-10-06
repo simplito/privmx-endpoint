@@ -26,8 +26,9 @@ std::string DIOEncryptorV1::signAndEncode(
     if (dio.creatorPubKey != authorKey.getPublicKey().toBase58DER()) {
         throw DataIntegrityObjectMismatchEncKeyException();
     }
+    // C++20 nie pozwala mieszac klauzul desygnowanych i pozycyjnych w jednej liscie
+    // inicjalizujacej, a klasy bazowej nie da sie desygnowac - stad `version` ustawiane osobno.
     dynamic::DataIntegrityObject dioJSON{
-        {.version = DataIntegrityObjectDataSchema::Version::VERSION_1},
         .creatorUserId = dio.creatorUserId,
         .creatorPublicKey = dio.creatorPubKey,
         .contextId = dio.contextId,
@@ -40,6 +41,7 @@ std::string DIOEncryptorV1::signAndEncode(
         .structureVersion = dio.structureVersion,
         .bridgeIdentity = std::nullopt
     };
+    dioJSON.version = DataIntegrityObjectDataSchema::Version::VERSION_1;
     for (const auto& checksum : dio.fieldChecksums) {
         dioJSON.fieldChecksums.insert_or_assign(checksum.first, privmx::utils::Base64::from(checksum.second));
     }
@@ -91,7 +93,7 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
                     .instanceId = dioJSON.bridgeIdentity->instanceId
                 }
         },
-        .structureVersion = dioJSON.structureVersion, .fieldChecksums = fieldChecksums
+        dioJSON.structureVersion, fieldChecksums
     };
 }
 

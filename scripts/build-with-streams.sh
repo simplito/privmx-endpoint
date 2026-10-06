@@ -3,7 +3,7 @@ set -e
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mkdir -p ./build
 BUILD_TYPE="Debug"
-conan install conanfile-streams.txt --output-folder=build --build=missing -s build_type=$BUILD_TYPE
+conan install conanfile-streams.txt --output-folder=build --build=missing -s build_type=$BUILD_TYPE -pr:a=./conan/privmx-profile
 cd build
 
 GENERATORS_DIR="build/$BUILD_TYPE/generators"

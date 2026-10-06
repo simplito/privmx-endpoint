@@ -120,7 +120,7 @@ core::PagingList<SearchIndex> SearchApiImpl::listSearchIndexes(
     const core::PagingQuery& pagingQuery
 ) {
     auto kvdbs = _kvdbApi.getImpl()->listKvdbs(contextId, pagingQuery, SEARCH_TYPE_FILTER_FLAG);
-    return {.totalAvailable = kvdbs.totalAvailable, mapSearchIndexes(kvdbs.readItems)};
+    return {.totalAvailable = kvdbs.totalAvailable, .readItems = mapSearchIndexes(kvdbs.readItems)};
 }
 
 int64_t SearchApiImpl::openSearchIndex(const std::string& indexId) {

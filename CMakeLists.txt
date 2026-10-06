@@ -58,7 +58,8 @@ message(STATUS "Using CLI imported libraries - PRIVMX_CLI_IMPORTED_LIBRARIES=${P
 message(STATUS "Building privmxcli client - PRIVMX_BUILD_CLI=${PRIVMX_BUILD_CLI}")
 message(STATUS "Building privmxBenchmark client - PRIVMX_BUILD_BENCHMARK=${PRIVMX_BUILD_BENCHMARK}")
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB_RECURSE SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
 

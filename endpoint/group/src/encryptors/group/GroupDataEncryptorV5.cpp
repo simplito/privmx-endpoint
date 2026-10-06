@@ -63,7 +63,7 @@ dynamic::EncryptedGroupRosterV5 GroupDataEncryptorV5::encryptRoster(
     fieldChecksums.insert(std::make_pair("membership", privmx::crypto::Crypto::sha256(result.membership)));
 
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
-    core::ExpandedDataIntegrityObject expandedDio = {data.dio, .structureVersion = 5, .fieldChecksums = fieldChecksums};
+    core::ExpandedDataIntegrityObject expandedDio = {data.dio, 5, fieldChecksums};
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;
 }
@@ -145,7 +145,7 @@ dynamic::EncryptedGroupPublicMetaV5 GroupDataEncryptorV5::encryptPublicMeta(
 
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     // Only this plane's fields, so the private plane can be rewritten without invalidating this entry.
-    core::ExpandedDataIntegrityObject expandedDio = {data.dio, .structureVersion = 5, .fieldChecksums = fieldChecksums};
+    core::ExpandedDataIntegrityObject expandedDio = {data.dio, 5, fieldChecksums};
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;
 }
@@ -230,7 +230,7 @@ dynamic::EncryptedGroupPrivateMetaV5 GroupDataEncryptorV5::encryptPrivateMeta(
     fieldChecksums.insert(std::make_pair("meta", privmx::crypto::Crypto::sha256(result.meta)));
 
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
-    core::ExpandedDataIntegrityObject expandedDio = {data.dio, .structureVersion = 5, .fieldChecksums = fieldChecksums};
+    core::ExpandedDataIntegrityObject expandedDio = {data.dio, 5, fieldChecksums};
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;
 }

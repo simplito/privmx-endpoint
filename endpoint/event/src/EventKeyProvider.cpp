@@ -35,7 +35,7 @@ DecryptedEventEncKeyV1 EventKeyProvider::decryptKey(
         statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return DecryptedEventEncKeyV1{
-        core::DecryptedVersionedData{.dataStructureVersion = 1, .statusCode = statusCode}, .key = encKey
+        core::DecryptedVersionedData{.dataStructureVersion = 1, .statusCode = statusCode}, encKey
     };
 }
 std::vector<server::UserKey> EventKeyProvider::prepareKeysList(

@@ -38,7 +38,7 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(
     fieldChecksums.insert(std::make_pair("encryptedKey", privmx::crypto::Crypto::sha256(result.encryptedKey)));
     fieldChecksums.insert(std::make_pair("secretHash", key.secretHash));
     ExpandedDataIntegrityObject expandedDio = ExpandedDataIntegrityObject{
-        key.dio, .structureVersion = EncryptionKeyDataSchema::Version::VERSION_2, .fieldChecksums = fieldChecksums
+        key.dio, EncryptionKeyDataSchema::Version::VERSION_2, fieldChecksums
     };
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;
