@@ -291,11 +291,7 @@ core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const serve
 
 // Compare and store under one lock, so two concurrent attestations cannot both write against the same stale
 // pin and leave the lower of the two standing.
-void GroupDataSchemaMapper::pinVersion(
-    const std::string& groupId,
-    int64_t VersionPins::*plane,
-    int64_t version
-) {
+void GroupDataSchemaMapper::pinVersion(const std::string& groupId, int64_t VersionPins::* plane, int64_t version) {
     std::lock_guard lock(_pinMutex);
     int64_t& pinned = _verifiedVersions[groupId].*plane;
     pinned = std::max(pinned, version);

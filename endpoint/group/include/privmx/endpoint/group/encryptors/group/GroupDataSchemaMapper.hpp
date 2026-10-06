@@ -150,7 +150,7 @@ private:
 
     // Monotone: takes the max, so a late but genuine older response cannot lower a pin and reopen the window.
     // Called only from the three attestations, each of which has just proven its own counter.
-    void pinVersion(const std::string& groupId, int64_t VersionPins::*plane, int64_t version);
+    void pinVersion(const std::string& groupId, int64_t VersionPins::* plane, int64_t version);
 
     core::DataEncryptorV4 _dataEncryptor;
     // Own DIO encryptor, for the one envelope `GroupDataEncryptorV5` has no method for: the internal-meta view.
