@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/crypto/CryptoPrivmx.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
+#include "privmx/endpoint/core/crypto/CryptoSuite.hpp"
 #include "privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp"
 #include "privmx/utils/Utils.hpp"
 
@@ -27,14 +27,12 @@ core::Buffer DataInnerEncryptorV4::decode(const std::string& dataAsBase64) {
 }
 
 core::Buffer DataInnerEncryptorV4::encrypt(const core::Buffer& data, const std::string& encryptionKey) {
-    auto encrypted = privmx::crypto::CryptoPrivmx::privmxEncrypt(
-        privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), data.stdString(), encryptionKey
-    );
+    auto encrypted = core::CryptoSuite::defaultForWrite().encrypt(encryptionKey, data.stdString());
     return core::Buffer::from(encrypted);
 }
 
 core::Buffer DataInnerEncryptorV4::decrypt(const core::Buffer& privateData, const std::string& encryptionKey) {
-    auto decrypted = privmx::crypto::CryptoPrivmx::privmxDecrypt(true, privateData.stdString(), encryptionKey);
+    auto decrypted = core::CryptoSuite::decrypt(encryptionKey, privateData.stdString());
     return core::Buffer::from(decrypted);
 }
 

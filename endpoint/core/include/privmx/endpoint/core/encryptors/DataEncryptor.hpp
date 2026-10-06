@@ -21,7 +21,7 @@ limitations under the License.
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
-#include <privmx/crypto/CryptoPrivmx.hpp>
+#include "privmx/endpoint/core/crypto/CryptoSuite.hpp"
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
 namespace privmx {
@@ -64,17 +64,11 @@ public:
     virtual std::string encrypt(const T& data, const EncKey& encKey) = 0;
 
     std::string signAndEncrypt(const T& data, const privmx::crypto::PrivateKey& privKey, const std::string& key) {
-        return utils::Base64::from(
-            privmx::crypto::CryptoPrivmx::privmxEncrypt(
-                privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), sign(data, privKey), key
-            )
-        );
+        return utils::Base64::from(core::CryptoSuite::defaultForWrite().encrypt(key, sign(data, privKey)));
     }
     std::string signAndEncrypt(const T& data, const privmx::crypto::PrivateKey& privKey, const core::EncKey& encKey) {
         return utils::Base64::from(
-            privmx::crypto::CryptoPrivmx::privmxEncrypt(
-                privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), sign(data, privKey), encKey.key
-            )
+            core::CryptoSuite::defaultForWrite().encrypt(encKey.key, sign(data, privKey))
         );
     }
 
@@ -98,11 +92,7 @@ template<class T>
 class DataEncryptor : public DataEncryptorBase<T> {
 public:
     std::string encrypt(const T& data, const std::string& key) {
-        return utils::Base64::from(
-            privmx::crypto::CryptoPrivmx::privmxEncrypt(
-                privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), data.serialize(), key
-            )
-        );
+        return utils::Base64::from(core::CryptoSuite::defaultForWrite().encrypt(key, data.serialize()));
     }
     std::string encrypt(const T& data, const EncKey& encKey) { return encrypt(data, encKey.key); }
 
@@ -121,7 +111,7 @@ public:
     }
 
     T decrypt(const std::string& data, const std::string& key) {
-        auto decrypted = privmx::crypto::CryptoPrivmx::privmxDecrypt(true, utils::Base64::toString(data), key);
+        auto decrypted = core::CryptoSuite::decrypt(key, utils::Base64::toString(data));
         return T::deserialize(decrypted);
     }
     T decrypt(const std::string& data, const EncKey& encKey) { return decrypt(data, encKey.key); }
@@ -130,9 +120,7 @@ public:
         const std::string& data,
         const std::string& key
     ) {
-        Pson::BinaryString plain = privmx::crypto::CryptoPrivmx::privmxDecrypt(
-            true, utils::Base64::toString(data), key
-        );
+        Pson::BinaryString plain = core::CryptoSuite::decrypt(key, utils::Base64::toString(data));
         Pson::BinaryString signature, data_buf;
         std::tie(signature, data_buf) = this->extractSignAndDataBuff(plain);
         return {signature, T::deserialize(data_buf), data_buf};
@@ -149,11 +137,7 @@ template<>
 class DataEncryptor<Pson::BinaryString> : public DataEncryptorBase<Pson::BinaryString> {
 public:
     std::string encrypt(const Pson::BinaryString& data, const std::string& key) {
-        return utils::Base64::from(
-            privmx::crypto::CryptoPrivmx::privmxEncrypt(
-                privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), data, key
-            )
-        );
+        return utils::Base64::from(core::CryptoSuite::defaultForWrite().encrypt(key, data));
     }
     std::string encrypt(const Pson::BinaryString& data, const EncKey& encKey) { return encrypt(data, encKey.key); }
 
@@ -171,9 +155,7 @@ public:
     }
 
     Pson::BinaryString decrypt(const std::string& data, const std::string& key) {
-        return Pson::BinaryString(
-            privmx::crypto::CryptoPrivmx::privmxDecrypt(true, utils::Base64::toString(data), key)
-        );
+        return Pson::BinaryString(core::CryptoSuite::decrypt(key, utils::Base64::toString(data)));
     }
     Pson::BinaryString decrypt(const std::string& data, const EncKey& encKey) { return decrypt(data, encKey.key); }
 
@@ -181,9 +163,7 @@ public:
         const std::string& data,
         const std::string& key
     ) {
-        Pson::BinaryString plain = privmx::crypto::CryptoPrivmx::privmxDecrypt(
-            true, utils::Base64::toString(data), key
-        );
+        Pson::BinaryString plain = core::CryptoSuite::decrypt(key, utils::Base64::toString(data));
         Pson::BinaryString signature, data_buf;
         std::tie(signature, data_buf) = this->extractSignAndDataBuff(plain);
         return {signature, data_buf, data_buf};

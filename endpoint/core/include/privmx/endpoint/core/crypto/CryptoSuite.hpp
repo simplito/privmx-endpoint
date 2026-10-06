@@ -20,7 +20,10 @@ limitations under the License.
 namespace privmx {
 namespace endpoint {
 namespace core {
-namespace crypto {
+
+// Uwaga: celowo bez podprzestrzeni `crypto`. W drzewie istnieja juz `privmx::crypto`
+// i `privmx::endpoint::crypto`, a trzecia przeslanialaby je dla kodu wewnatrz `core`,
+// gdzie skrocona forma `crypto::PrivateKey` jest w powszechnym uzyciu.
 
 /**
  * @brief Identyfikator zestawu algorytmow, zapisywany w ramce zaszyfrowanych danych.
@@ -110,7 +113,6 @@ private:
     SuiteId _id;
 };
 
-} // namespace crypto
 } // namespace core
 } // namespace endpoint
 } // namespace privmx

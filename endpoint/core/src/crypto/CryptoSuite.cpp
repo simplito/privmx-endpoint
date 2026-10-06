@@ -20,7 +20,6 @@ limitations under the License.
 #include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
 
 using namespace privmx::endpoint::core;
-using namespace privmx::endpoint::core::crypto;
 
 namespace cs = privmx::cryptoservice;
 

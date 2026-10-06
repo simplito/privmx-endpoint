@@ -9,7 +9,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/crypto/CryptoPrivmx.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/ECIES.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>

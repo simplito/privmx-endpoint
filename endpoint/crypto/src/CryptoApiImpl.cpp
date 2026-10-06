@@ -11,10 +11,10 @@ limitations under the License.
 
 #include <privmx/crypto/BIP39.hpp>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/CryptoPrivmx.hpp>
 #include <privmx/crypto/ecc/ExtKey.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
+#include "privmx/endpoint/core/crypto/CryptoSuite.hpp"
 #include "privmx/endpoint/crypto/CryptoApiImpl.hpp"
 #include "privmx/endpoint/crypto/KeyConverter.hpp"
 using namespace privmx::endpoint;
@@ -64,14 +64,12 @@ core::Buffer CryptoApiImpl::generateKeySymmetric() {
 }
 
 core::Buffer CryptoApiImpl::encryptDataSymmetric(const core::Buffer& data, const core::Buffer& key) {
-    auto cipher{privmx::crypto::CryptoPrivmx::privmxEncrypt(
-        privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), data.stdString(), key.stdString()
-    )};
+    auto cipher{core::CryptoSuite::defaultForWrite().encrypt(key.stdString(), data.stdString())};
     return core::Buffer::from(cipher);
 }
 
 core::Buffer CryptoApiImpl::decryptDataSymmetric(const core::Buffer& data, const core::Buffer& key) {
-    auto decrypted{privmx::crypto::CryptoPrivmx::privmxDecrypt(true, data.stdString(), key.stdString())};
+    auto decrypted{core::CryptoSuite::decrypt(key.stdString(), data.stdString())};
     return core::Buffer::from(decrypted);
 }
 
