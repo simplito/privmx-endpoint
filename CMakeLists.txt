@@ -162,6 +162,14 @@ if(PRIVMX_ENABLE_TESTS)
 endif()
 
 
+# pmx-crypto - docelowa biblioteka kryptograficzna, wciagana jako submodul.
+# Na czas aktywnej wspolpracy z ta biblioteka uzywamy add_subdirectory zamiast receptury
+# Conan: daje szybszy cykl iteracji. Docelowo do zamiany na zaleznosc conanowa.
+# POSITION_INDEPENDENT_CODE jest konieczne - privmxcryptolib jest STATIC, a endpoint
+# domyslnie buduje sie jako biblioteka wspoldzielona.
+add_subdirectory(pmx-crypto/library)
+set_target_properties(privmxcryptolib PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 add_subdirectory(utils)
 add_subdirectory(crypto)
 add_subdirectory(rpc)
