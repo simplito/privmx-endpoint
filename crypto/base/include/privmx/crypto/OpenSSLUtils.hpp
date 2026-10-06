@@ -21,9 +21,6 @@ class OpenSSLUtils
 {
 public:
     static std::string CaLocation;
-
-    static void handleErrors(const std::string& msg = std::string());
-
 };
 
 } // crypto

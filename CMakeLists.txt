@@ -29,7 +29,6 @@ message(STATUS "Install private header files - PRIVMX_INSTALL_PRIVATE_HEADERS=${
 
 
 set(PRIVMX_DRIVER_NET ON)
-set(PRIVMX_DRIVER_CRYPTO ON)
 
 if(PRIVMX_EMSCRIPTEN)
     set(BUILD_SHARED_LIBS OFF)
@@ -135,12 +134,11 @@ if(PRIVMX_CONAN)
     add_library(Pson ALIAS pson::Pson)
     find_package(gmp REQUIRED)
     add_library(gmp ALIAS gmp::gmp)
-    if(PRIVMX_DRIVER_CRYPTO)
-        find_package(privmxdrvcrypto REQUIRED)
-        add_library(privmxdrvcrypto ALIAS privmxdrvcrypto::privmxdrvcrypto)
-        find_package(privmxdrvecc REQUIRED)
-        add_library(privmxdrvecc ALIAS privmxdrvecc::privmxdrvecc)
-    endif()
+    # Kryptografia idzie wylacznie przez drivery - brak alternatywnego backendu.
+    find_package(privmxdrvcrypto REQUIRED)
+    add_library(privmxdrvcrypto ALIAS privmxdrvcrypto::privmxdrvcrypto)
+    find_package(privmxdrvecc REQUIRED)
+    add_library(privmxdrvecc ALIAS privmxdrvecc::privmxdrvecc)
     if(PRIVMX_DRIVER_NET)
         find_package(privmxdrvnet REQUIRED)
         add_library(privmxdrvnet ALIAS privmxdrvnet::privmxdrvnet)
