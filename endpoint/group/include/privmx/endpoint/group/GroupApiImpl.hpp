@@ -28,6 +28,7 @@
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCacheRegistry.hpp"
+#include "privmx/endpoint/group/keytree/TreeVerifier.hpp"
 #include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 
@@ -191,9 +192,28 @@ private:
         const std::set<std::string>& newcomers = {}
     );
 
+    // Checks the served tree against the commit statements before any key from it is used (TreeVerifier). Returns
+    // false, checking nothing, for a group without a supported tree or a caller without a seat: there is nothing it
+    // could climb, and the caller refuses both. Any failure is re-read (`model`) once into `group` and checked
+    // again: a torn read, or a concurrent read having pinned a newer state, passes the second time.
+    bool verifyTree(server::GroupInfo& group, const server::GroupGetModel& model, keytree::TreeVerifier::Scope scope);
+
+    // The group's statements with `fromSeq < seq <= toSeq`, ascending (TreeVerifier::Environment::commitsBetween).
+    std::vector<server::GroupTreeCommit> commitsBetween(
+        const std::string& groupId,
+        std::uint64_t fromSeq,
+        std::uint64_t toSeq
+    );
+
+    // Client time a commit statement is signed at, in milliseconds.
+    static std::uint64_t commitDate();
+
+    // `group` must have passed `verifyTree` at plan scope. `tolerateBrokenClimb`: a climb that fails on the served
+    // edges (not on membership) is logged and the state returned anyway — a removal plans from public state alone.
     keytree::TreeGroupState climbForPlanning(
         const server::GroupInfo& group,
-        const std::shared_ptr<keytree::TreeKeyCache>& cache
+        const std::shared_ptr<keytree::TreeKeyCache>& cache,
+        bool tolerateBrokenClimb = false
     );
 
     // One attempt each; `commitWithRetry` re-runs them, from a fresh read, when a concurrent commit moved the base.
@@ -245,6 +265,7 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<GroupDataSchemaMapper> _groupDataSchemaMapper;
     keytree::TreeKeyCacheRegistry _treeKeyCaches;
+    keytree::TreeVerifier _treeVerifier;
     GroupEnvelopeEncryptor _envelopeEncryptor;
     // Keys already unwrapped for envelopes, by `memoKeyFor(groupId, keyId)`; a keyId names one immutable piece
     // of key material. Dropped on connect and disconnect, so an era cut takes effect at reconnect.

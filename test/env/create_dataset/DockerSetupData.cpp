@@ -175,7 +175,7 @@ static void writeGroup(
 }
 
 static Fixture createThread(
-    thread::ThreadApi& api, const string& name, const string& metaBase, const string& contextId,
+    endpoint::thread::ThreadApi& api, const string& name, const string& metaBase, const string& contextId,
     const vector<core::UserWithPubKey>& users, const vector<core::UserWithPubKey>& managers,
     const vector<core::GroupGrantWithKey>& grants = {}
 ) {
@@ -186,8 +186,8 @@ static Fixture createThread(
     return Fixture{name, id, publicMeta, privateMeta};
 }
 
-static void writeThread(DatasetWriter& out, thread::ThreadApi& api, const Fixture& f) {
-    const thread::Thread t = api.getThread(f.id);
+static void writeThread(DatasetWriter& out, endpoint::thread::ThreadApi& api, const Fixture& f) {
+    const endpoint::thread::Thread t = api.getThread(f.id);
     const Poco::Dynamic::Var serialized = _serializer.serialize(t);
     Poco::JSON::Object::Ptr entry = beginEntry(out, f.name, serialized);
     writeContainerHead(out, t);
@@ -330,14 +330,14 @@ static void writeSearchIndex(
 
 // An item is final the moment it is sent, so one call creates it, reads it back and writes both artifacts.
 static void addMessage(
-    DatasetWriter& out, thread::ThreadApi& api, const string& name, const string& metaBase,
+    DatasetWriter& out, endpoint::thread::ThreadApi& api, const string& name, const string& metaBase,
     const string& threadId, const string& data
 ) {
     LOG_INFO(name + " - create")
     const core::Buffer publicMeta = publicMetaOf(metaBase);
     const core::Buffer privateMeta = privateMetaOf(metaBase);
     const string id = api.sendMessage(threadId, publicMeta, privateMeta, core::Buffer::from(data));
-    const thread::Message m = api.getMessage(id);
+    const endpoint::thread::Message m = api.getMessage(id);
     const Poco::Dynamic::Var serialized = _serializer.serialize(m);
     Poco::JSON::Object::Ptr entry = beginEntry(out, name, serialized);
     out.ini << "info_threadId = " << m.info.threadId << std::endl;

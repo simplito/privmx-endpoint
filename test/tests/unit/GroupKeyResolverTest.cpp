@@ -372,6 +372,27 @@ TEST_F(ResolverCurrentEpoch, EpochZeroAndTheCurrentEpochAreEquivalent) {
     EXPECT_EQ(byZero.key->toWIF(), byOne.key->toWIF());
 }
 
+TEST_F(ResolverCurrentEpoch, SECURITY_AnEpochPastTheCurrentOneHasNoKey) {
+    // C3: asking for epoch 2 of a group at epoch 1 used to return epoch 1's key under epoch 2's name — something a
+    // caller would then use to open or seal content it believes belongs to an epoch that does not exist yet.
+    Fixture fixture = buildFixture(4);
+    setOwnLeafPosition(fixture.group, 1);
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult future = resolver.resolve(fixture.group, 2, fixture.members[1].priv, fixture.archive);
+    EXPECT_EQ(future.failure, ResolveFailure::FutureEpoch);
+    EXPECT_FALSE(future.key.has_value());
+
+    // Range-checked before narrowing: neither may wrap round into a real epoch.
+    for (const std::int64_t outOfRange : {std::int64_t(-1), (std::int64_t(1) << 32) + 1}) {
+        const ResolveResult result = resolver.resolve(fixture.group, outOfRange, fixture.members[1].priv, fixture.archive);
+        EXPECT_EQ(result.failure, ResolveFailure::InvalidEpoch) << outOfRange;
+        EXPECT_FALSE(result.key.has_value());
+    }
+    EXPECT_TRUE(resolver.resolve(fixture.group, 1, fixture.members[1].priv, fixture.archive).key.has_value());
+    EXPECT_TRUE(resolver.resolve(fixture.group, 0, fixture.members[1].priv, fixture.archive).key.has_value());
+}
+
 TEST_F(ResolverCurrentEpoch, WithoutOwnLeafPositionTheCallerIsNotAMember) {
     const Fixture fixture = buildFixture(4);
     // ownLeafPosition deliberately unset: the bridge did not point at a leaf for this caller.
@@ -424,6 +445,38 @@ TEST_F(ResolverCurrentEpoch, SECURITY_DetectsACorruptedEdge) {
     const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
     EXPECT_EQ(result.failure, ResolveFailure::ClimbFailed);
     EXPECT_EQ(result.climb, ClimbFailure::Tampered) << "tampering must be reported distinctly from a plain miss";
+}
+
+TEST_F(ResolverCurrentEpoch, BlamesTheCommitterWhoseStatementSetTheTamperedNode) {
+    Fixture fixture = buildFixture(4);
+    setOwnLeafPosition(fixture.group, 0);
+    server::GroupTreeCommit creation;
+    creation.seq = 1; // what the root's record cites
+    creation.committer = "creator";
+    server::GroupTreeCommit latest;
+    latest.seq = 2;
+    latest.committer = "latest";
+    fixture.group.treeCommits = std::vector<server::GroupTreeCommit>{creation};
+    fixture.group.treeCommit = latest;
+
+    const PrivateKey impostor = PrivateKey::generateRandom();
+    const std::uint32_t rootIndex = TreeMath::root(4);
+    EXPECT_EQ(GroupKeyResolver::tamperedBy(fixture.group, rootIndex), "creator") << "the root's edges are its setter's";
+    EXPECT_EQ(GroupKeyResolver::tamperedBy(fixture.group, std::nullopt), "latest") << "the grant edge is the latest's";
+
+    // Through a real climb: member 0's edge to the root opens to the wrong key.
+    auto edges = fixture.group.treeEdges.value();
+    for (server::GroupTreeEdge& edge : edges) {
+        if (edge.childKind == "user" && edge.childUserId.value_or("") == fixture.members[0].userId) {
+            edge.data = TreeKeys::wrapKey(impostor, fixture.members[0].priv.getPublicKey(), fixture.members[0].priv);
+        }
+    }
+    fixture.group.treeEdges = edges;
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
+    EXPECT_EQ(result.climb, ClimbFailure::Tampered);
+    EXPECT_EQ(result.blame, std::optional<std::string>("creator"));
 }
 
 // resolving an older epoch — tree then ladder

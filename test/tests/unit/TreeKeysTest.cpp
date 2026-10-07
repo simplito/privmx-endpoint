@@ -762,6 +762,27 @@ TEST_F(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing)
     expectEveryoneSeatedClimbs(group);
 }
 
+// A member garbles every wrap, so nobody climbs — itself included, which is the point: it must not be able to block
+// its own removal. The plan reads public state only, so the remover needs no climb and no cached key.
+TEST_F(TreeKeysRemoval, SECURITY_PlansWithoutAClimbWhenEveryWrapIsGarbled) {
+    Group group = create(40, 0);
+    for (TreeEdge& edge : group.state.edges) {
+        const PrivateKey stranger = PrivateKey::generateRandom();
+        edge.blob = TreeKeys::wrapKey(PrivateKey::generateRandom(), stranger.getPublicKey(), stranger);
+    }
+    ASSERT_NE(climb(group.state, group.members[35]).failure, ClimbFailure::None);
+
+    TreeKeyCache cold;
+    TreeKeys keys(cold);
+    keys.setMemberKeys(publicOf(group.members));
+    const CommitPlan plan = keys.planRemoval(
+        group.state, {group.members[0].userId}, group.members[35].userId, group.members[35].priv
+    );
+    group.state = applied(group.state, plan);
+    expectEveryoneSeatedClimbs(group);
+    EXPECT_NE(climb(group.state, group.members[0]).failure, ClimbFailure::None);
+}
+
 TEST_F(TreeKeysRemoval, ParsesOnlyTheRosterKeysItWrapsTo) {
     // Seat 35 removed by seat 36: the root is the remover's only keyed node and node 31 stays filled, so the root
     // wraps to node 31 and to the seven members left on the right edge — nobody else. Every other roster entry is

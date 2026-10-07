@@ -98,6 +98,8 @@ struct TreeNodeState {
     std::uint32_t generation = 0;
     // Absent on a blank node.
     std::optional<NodePublicKey> publicKey;
+    // On a filled node: `seq` of the commit statement that set this key, the one that vouches for it.
+    std::optional<std::uint64_t> setBy;
 };
 
 // The group state a client needs to work with the tree, as served. Topology is not stored — it follows from
@@ -112,6 +114,8 @@ struct TreeGroupState {
     // Current epoch and its public grant key — what containers wrap to.
     std::uint32_t epoch = 0;
     privmx::crypto::PublicKey grantPublicKey;
+    // `seq` of the latest commit statement; the next commit is this plus one.
+    std::uint64_t commitSeq = 0;
 };
 
 enum class ClimbFailure {
@@ -163,6 +167,10 @@ struct CommitPlan {
     // The grant edge's epoch and the key it carries: new on a removal or create, the current one otherwise.
     std::uint32_t epoch = 0;
     privmx::crypto::PrivateKey grantKey;
+    // The statement this commit is signed as, and the hash of the tree it leaves behind (refreshed nodes carry
+    // `setBy = seq`). Raw bytes.
+    std::uint64_t seq = 0;
+    std::string treeHash;
 };
 
 struct TreeMember {

@@ -263,9 +263,34 @@ TEST_F(GroupRosterTag, SECURITY_AnOlderCorrectlyTaggedRosterIsRejected) {
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     auto current = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
     ASSERT_NO_THROW(verifier.assertDataIntegrity(current));
+    verifier.storeVersionPins(current); // only a read that passed everything moves the pins
 
     auto rolledBack = serve({"bob", "carol", "mallory"}, {"alice"}, 3, 2, encKey);
     EXPECT_THROW(verifier.assertDataIntegrity(rolledBack), GroupHistoryForkException);
+}
+
+// The audit scenario behind C2: counter 5 served beside a validly signed version-4 entry. The roster check refuses
+// it — and must refuse it without having moved the pin to 5 first, or the honest version-4 response that follows
+// reads as a rollback and the group is bricked for the session.
+TEST_F(GroupRosterTag, SECURITY_ARejectedResponseDoesNotMoveThePin) {
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    // The roster read of `validateAndGetAttestedRoster`, past the key resolution.
+    const auto read = [&](const server::GroupInfo& group) {
+        verifier.assertDataIntegrity(group);
+        verifier.assertRosterIsAttested(group, key(encKey));
+        verifier.storeVersionPins(group);
+    };
+    auto lying = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
+    lying.rosterVersion = 5;
+    EXPECT_THROW(read(lying), GroupMembershipMismatchException);
+
+    const auto honest = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
+    EXPECT_NO_THROW(read(honest))
+        << "the refused response moved the pin";
+
+    // The pin did move for the response that passed: an older one is now a rollback.
+    const auto older = serve({"bob"}, {"alice"}, 3, 2, encKey);
+    EXPECT_THROW(read(older), GroupHistoryForkException);
 }
 
 TEST_F(GroupRosterTag, SECURITY_AnOlderPublicMetaVersionIsRejectedIndependently) {
@@ -274,6 +299,7 @@ TEST_F(GroupRosterTag, SECURITY_AnOlderPublicMetaVersionIsRejectedIndependently)
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     auto current = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 9, std::nullopt, 3);
     ASSERT_NO_THROW(verifier.assertDataIntegrity(current));
+    verifier.storeVersionPins(current); // only a read that passed everything moves the pins
 
     auto rolledBack = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 8, std::nullopt, 3);
     EXPECT_THROW(verifier.assertDataIntegrity(rolledBack), GroupHistoryForkException);
@@ -283,6 +309,7 @@ TEST_F(GroupRosterTag, SECURITY_AnOlderPrivateMetaVersionIsRejectedIndependently
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     auto current = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 3, std::nullopt, 9);
     ASSERT_NO_THROW(verifier.assertDataIntegrity(current));
+    verifier.storeVersionPins(current); // only a read that passed everything moves the pins
 
     auto rolledBack = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 3, std::nullopt, 8);
     EXPECT_THROW(verifier.assertDataIntegrity(rolledBack), GroupHistoryForkException);

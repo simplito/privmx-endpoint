@@ -80,6 +80,9 @@ target_link_libraries(test_e2e_GroupKeyTreeTest privmx privmxendpointcore privmx
 # add and remove of one member. Needs the Bridge management API key from the dataset ini to register context users.
 add_executable(test_e2e_GroupKeyTreeIntegrityTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupKeyTreeIntegrityTest.cpp)
 target_link_libraries(test_e2e_GroupKeyTreeIntegrityTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
+# Sandbox: group (Trellis) perf/usage scenarios against a live Bridge - a tool, not part of the e2e suite
+add_executable(group_sandbox ${CMAKE_CURRENT_SOURCE_DIR}/sandbox/group_sandbox.cpp)
+target_link_libraries(group_sandbox privmx privmxendpointcore privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 # Lock
 add_executable(test_e2e_LockTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/LockTest.cpp)
 target_link_libraries(test_e2e_LockTest privmx privmxendpointcore privmxendpointstore privmxendpointlock Poco::Foundation Poco::Util GTest::GTest)
@@ -138,7 +141,11 @@ target_link_libraries(test_unit_LadderMathTest privmxendpointgroup GTest::GTest 
 add_executable(test_unit_TreeKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeKeysTest.cpp)
 target_link_libraries(test_unit_TreeKeysTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
-# Seeded random commit sequences against an in-test fake bridge: the node-key invariant and removal confidentiality after every step
+# Tree and roster hashes and the signed bytes of a commit statement, against fixed vectors the bridge must reproduce
+add_executable(test_unit_TreeCommitsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeCommitsTest.cpp)
+target_link_libraries(test_unit_TreeCommitsTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+
+# Seeded random commit sequences against an in-test fake bridge: the node-key invariant, removal confidentiality and commit statements after every step; tree verification against a lying bridge
 add_executable(test_unit_TreeInvariantTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeInvariantTest.cpp)
 target_link_libraries(test_unit_TreeInvariantTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 

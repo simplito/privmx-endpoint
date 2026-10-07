@@ -1,0 +1,239 @@
+[{
+	"_id": "6ac79974d6aa4b6872d82b85|1",
+	"groupId": "6ac79974d6aa4b6872d82b85",
+	"seq": 1,
+	"statement": {
+		"addedManagers": [],
+		"addedUsers": [],
+		"committer": "user_1",
+		"committerPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+		"committerSeat": 0,
+		"date": 1.791465844894E+12,
+		"groupId": "970d5698-8daf-461e-8527-b424571a2f7a",
+		"groupPubKey": "5GhGRB7smUFG6ks3bx9mQNmDboe4SYMShxQjCJnQeujgog3arY",
+		"keyVersion": 1,
+		"op": "create",
+		"path": [],
+		"removed": [],
+		"rosterHash": "60c2f8de1e939277ecb923f4093b9c3d296815997ed85c48c788578b98ff969f",
+		"rosterVersion": 1,
+		"seq": 1,
+		"signature": "G1xj22AVnBAZA2F8QimUJs72WnV2qcBz/KoWRO8UC8tK3VAMhKGAT4KjW7qi16RlzpFSSZDlWbvy5NdZXf4IMLk=",
+		"treeHash": "6bed336ff86a3e3a4526013cfaf43d07ac7c21b75bdece81ed150e0f695150dc",
+		"treeVersion": 2
+	}
+},
+{
+	"_id": "6ac79974d6aa4b6872d82b86|1",
+	"groupId": "6ac79974d6aa4b6872d82b86",
+	"seq": 1,
+	"statement": {
+		"addedManagers": [],
+		"addedUsers": [],
+		"committer": "user_1",
+		"committerPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+		"committerSeat": 0,
+		"date": 1.791465844964E+12,
+		"groupId": "b9f487c1-ed4d-4574-9b6f-363a3d1c1e23",
+		"groupPubKey": "7yoSmcC8E3xTJ5LbFezJjAfLqL764fWGjABve3eYG2wFH9PhWb",
+		"keyVersion": 1,
+		"op": "create",
+		"path": [
+			{
+				"generation": 0,
+				"nodeIndex": 1,
+				"publicKey": "7HMNhPrZZivcRDAYPR7vLCzgynjW8TqmUtA699ToKuckU162HF"
+			}
+		],
+		"removed": [],
+		"rosterHash": "0700dc60277c036e0616a8088a938621d58b010527a6ea783dcb021dd8ea13ba",
+		"rosterVersion": 1,
+		"seq": 1,
+		"signature": "Gz33F3HdPrZ/8FgER/VIdlHeysY1p9wpbaTvFfw9wrdPkggBZD+FPYSDBOVTim7ZU4/8xhao8ZbuN0TWZguXFeU=",
+		"treeHash": "e1ecb2e42932d13f3b8dbd1dd616810023205ed7f7398817df7ad13e22615d3f",
+		"treeVersion": 2
+	}
+},
+{
+	"_id": "6ac79975d6aa4b6872d82b87|1",
+	"groupId": "6ac79975d6aa4b6872d82b87",
+	"seq": 1,
+	"statement": {
+		"addedManagers": [],
+		"addedUsers": [],
+		"committer": "user_1",
+		"committerPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+		"committerSeat": 0,
+		"date": 1.791465845031E+12,
+		"groupId": "0383135b-9e07-4567-b816-ab070a948a8c",
+		"groupPubKey": "7ViSH8cwiLNVE7M8vCEM62yJNQwCy8pTJfrCn62saWnjrrbgtb",
+		"keyVersion": 1,
+		"op": "create",
+		"path": [
+			{
+				"generation": 0,
+				"nodeIndex": 3,
+				"publicKey": "7h6i3Ugojh2UhbctoM4GYbDaFS3L2dxAyXhjy4SyTAtW3MJqJi"
+			}
+		],
+		"removed": [],
+		"rosterHash": "4f9e0c35718d8c10bc4e666de2d6a8e0c0dd23cb7afc6be4e1e818f59dcb7b32",
+		"rosterVersion": 1,
+		"seq": 1,
+		"signature": "GwO6/1lF3PuAB2BvShgfiC2zw1eHKTuSE056JXUr1txviPqmDPk5fm+WbkLEwJpH3zP6z5fnqAKSijX8eoFagRc=",
+		"treeHash": "6f54618100427968c3044f2ba9ef54b2265c5d30f8c4d06b25cef917b4f6b3c4",
+		"treeVersion": 2
+	}
+},
+{
+	"_id": "6ac79975d6aa4b6872d82b88|1",
+	"groupId": "6ac79975d6aa4b6872d82b88",
+	"seq": 1,
+	"statement": {
+		"addedManagers": [],
+		"addedUsers": [],
+		"committer": "user_1",
+		"committerPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+		"committerSeat": 0,
+		"date": 1.791465845104E+12,
+		"groupId": "4d735f88-1d3f-4007-b15b-859bf8e7ee14",
+		"groupPubKey": "573koy7gm9jD3mJy3V9fce2jqk6T4WQt4qYmMbKnrdFJ6j38Qp",
+		"keyVersion": 1,
+		"op": "create",
+		"path": [
+			{
+				"generation": 0,
+				"nodeIndex": 1,
+				"publicKey": "74NYFtgeSkBu1U5XJc2ocASExcR2qzZWnfyHs6VoQainw3Vkye"
+			}
+		],
+		"removed": [],
+		"rosterHash": "0700dc60277c036e0616a8088a938621d58b010527a6ea783dcb021dd8ea13ba",
+		"rosterVersion": 1,
+		"seq": 1,
+		"signature": "G0zC+wQSksOnoJgXZTkfAjVxgARPs+h62vUmuRlz/+RzZyr/a5HRRAslivLYGfiMVsk2QEzbvc/zMbDBCSwjY0I=",
+		"treeHash": "9669fd0955c3ba606a80c8895a08a1bcbbcf30cd578b30d651568439b8578e21",
+		"treeVersion": 2
+	}
+},
+{
+	"_id": "6ac79975d6aa4b6872d82b89|1",
+	"groupId": "6ac79975d6aa4b6872d82b89",
+	"seq": 1,
+	"statement": {
+		"addedManagers": [],
+		"addedUsers": [],
+		"committer": "user_1",
+		"committerPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+		"committerSeat": 0,
+		"date": 1.791465845142E+12,
+		"groupId": "bcf79497-4c53-4a57-8d0f-5a61eb2255e7",
+		"groupPubKey": "67KQbZW3VEXFB567s7WwRKUCXcZqgb8xEvfwgdxqGeh1tg5dfJ",
+		"keyVersion": 1,
+		"op": "create",
+		"path": [
+			{
+				"generation": 0,
+				"nodeIndex": 3,
+				"publicKey": "7JzU62FgmSP4mo4a2SofSAEz7H6fPygyU5NM7rvU8D3zXkC2P2"
+			}
+		],
+		"removed": [],
+		"rosterHash": "4f9e0c35718d8c10bc4e666de2d6a8e0c0dd23cb7afc6be4e1e818f59dcb7b32",
+		"rosterVersion": 1,
+		"seq": 1,
+		"signature": "Gyjwtu2gXx8jDOo6HvNHJltpdV3tko1Jf8lBpneXTbKuNhcUQN16x88dZ65LGqrOmpSHqH/46zTMcnF+lGlHX+U=",
+		"treeHash": "1c0277f96625acc1f033dac4ac45ce895f0427a0b02e298fdec20d95083ffd7c",
+		"treeVersion": 2
+	}
+},
+{
+	"_id": "6ac79975d6aa4b6872d82b8a|1",
+	"groupId": "6ac79975d6aa4b6872d82b8a",
+	"seq": 1,
+	"statement": {
+		"addedManagers": [],
+		"addedUsers": [],
+		"committer": "user_1",
+		"committerPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+		"committerSeat": 0,
+		"date": 1.791465845181E+12,
+		"groupId": "914de8aa-bfe5-41b7-8af5-e7b7469c8aa1",
+		"groupPubKey": "5MCYTNXNQEqcgRuPgumbnes4MM8EE3oqwmHmU7nmAdWZcMJAsu",
+		"keyVersion": 1,
+		"op": "create",
+		"path": [
+			{
+				"generation": 0,
+				"nodeIndex": 3,
+				"publicKey": "5hqniqpd2weZjeGmaTqEFkFoioYVWqQXgJNjujjC7eqGRcQ2kg"
+			}
+		],
+		"removed": [],
+		"rosterHash": "4f9e0c35718d8c10bc4e666de2d6a8e0c0dd23cb7afc6be4e1e818f59dcb7b32",
+		"rosterVersion": 1,
+		"seq": 1,
+		"signature": "G0u2MyISDVXY2+42oUMrOIMBMi95XM2d/CqfWvZdllDWq7VD2X+lw2TVVNKygsUo6yDC9Z3m7gw5FA0XsMrn6iA=",
+		"treeHash": "170bfd3a6e6466f4b281ecd7f7339710254fa85a66f8e43b978507c09e308558",
+		"treeVersion": 2
+	}
+},
+{
+	"_id": "6ac79975d6aa4b6872d82b8b|1",
+	"groupId": "6ac79975d6aa4b6872d82b8b",
+	"seq": 1,
+	"statement": {
+		"addedManagers": [],
+		"addedUsers": [],
+		"committer": "user_1",
+		"committerPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+		"committerSeat": 0,
+		"date": 1.791465845211E+12,
+		"groupId": "6605e052-ef42-4a41-9d24-bcbba3176c6e",
+		"groupPubKey": "53CXGSqTiXVqgXcbuQwTojH1LRLZfxfeUYfvinwe2iQqZBeimU",
+		"keyVersion": 1,
+		"op": "create",
+		"path": [],
+		"removed": [],
+		"rosterHash": "60c2f8de1e939277ecb923f4093b9c3d296815997ed85c48c788578b98ff969f",
+		"rosterVersion": 1,
+		"seq": 1,
+		"signature": "GwW9p1+BdQFrMAogFza3fP0QnrDacNuzF0qoY7BaiF53QYb20pPausY94ptm4s+w+esq+WCa083ySmxIXvdqs8c=",
+		"treeHash": "6bed336ff86a3e3a4526013cfaf43d07ac7c21b75bdece81ed150e0f695150dc",
+		"treeVersion": 2
+	}
+},
+{
+	"_id": "6ac79975d6aa4b6872d82b89|2",
+	"groupId": "6ac79975d6aa4b6872d82b89",
+	"seq": 2,
+	"statement": {
+		"addedManagers": [],
+		"addedUsers": [],
+		"committer": "user_1",
+		"committerPubKey": "6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM",
+		"committerSeat": 0,
+		"date": 1.791465846312E+12,
+		"groupId": "6ac79975d6aa4b6872d82b89",
+		"groupPubKey": "6nk24LsCdWsN97MMk2e6qCmFypyHkp7XngpopG4sSkbsD3HZLy",
+		"keyVersion": 2,
+		"op": "remove",
+		"path": [
+			{
+				"generation": 1,
+				"nodeIndex": 3,
+				"publicKey": "74zyk8qfVSzfLCnBtZ8FwGynqYtZe7ZVe1zevASs3FcVKLJ5Cf"
+			}
+		],
+		"removed": [
+			"user_3"
+		],
+		"rosterHash": "0700dc60277c036e0616a8088a938621d58b010527a6ea783dcb021dd8ea13ba",
+		"rosterVersion": 2,
+		"seq": 2,
+		"signature": "GxOWQm77900qQDTaAiQIQ6O8wja/v8xRMGAv3/2KeqZAgHkd4xfj+GCDun9Cbtr43BO3lT0wN32yW+VJOZxPQHQ=",
+		"treeHash": "ac134c006c2650738e9536c54b722fbaebe012bd8d8ad11ab2dc0160eef99a70",
+		"treeVersion": 2
+	}
+}]
+

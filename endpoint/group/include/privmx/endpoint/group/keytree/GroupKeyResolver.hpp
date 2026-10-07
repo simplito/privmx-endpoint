@@ -36,6 +36,10 @@ enum class ResolveFailure {
     DescentFailed,
     // The group's tree has a layout (`treeVersion`) this client does not read.
     UnsupportedTreeVersion,
+    // The requested epoch lies past the current one: there is no key for it yet.
+    FutureEpoch,
+    // The requested epoch is negative or outside the range epochs have.
+    InvalidEpoch,
 };
 
 struct ResolveResult {
@@ -55,8 +59,9 @@ class GroupKeyResolver {
 public:
     GroupKeyResolver(TreeKeyCache& cache);
 
-    // `epoch` 0 means current; `archive` is the ladder, fetched separately because it grows with the whole history
-    // and is only needed for an older epoch. The caller's identity comes from `group.ownLeafPosition`.
+    // `epoch` 0 means current; one past the current fails as `FutureEpoch`. `archive` is the ladder, fetched
+    // separately because it grows with the whole history and is only needed for an older epoch. The caller's
+    // identity comes from `group.ownLeafPosition`.
     ResolveResult resolve(
         const server::GroupInfo& group,
         std::int64_t epoch,
@@ -71,6 +76,13 @@ public:
     static bool ownPathHasBlanks(const server::GroupInfo& group);
 
     static bool hasTree(const server::GroupInfo& group);
+
+    // Who published what a climb found tampered (`ClimbResult::tamperedNode`): a node's edges come from the
+    // statement that set its key (`setBy`), the grant edge (no node) from the latest one, which rewrites it.
+    static std::optional<std::string> tamperedBy(
+        const server::GroupInfo& group,
+        const std::optional<std::uint32_t>& tamperedNode
+    );
 
     // Whether the tree is in the one layout this client reads (TreeMath::TREE_VERSION). Older groups are refused,
     // not migrated.

@@ -61,7 +61,10 @@ Coverage: tree version 2 (buckets of 16 seats, blank nodes without a `publicKey`
 counts from 1 to 64; removals at every position of 2, 5 and 17 seats and the cases that leave blank nodes above the
 buckets (including a batch and a removed creator), each with the unit rung it publishes; additions that grow the tree
 (moving the root, or dropping an old root of 16 seats into a bucket), a batch across 32 seats and refilled blanks;
-and self-updates refilling a blank. Every case names its committer and the nodes it refreshed.
+and self-updates refilling a blank. Every case names its committer and the nodes it refreshed, and carries the signed
+commit statement (`commit`), the post state's `treeHash`, `users`/`managers`/`rosterVersion`; filled node records
+carry `setBy`, and the top-level `userPubKeys` maps every signer to its key. The bridge test verifies each signature,
+recomputes the tree and roster hashes, and replays the commit through its validators.
 
 ## Without a full build
 

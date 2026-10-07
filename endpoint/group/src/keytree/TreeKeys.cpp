@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <privmx/crypto/EciesEncryptor.hpp>
 
+#include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
 
 using namespace privmx::endpoint::group::keytree;
@@ -379,6 +380,7 @@ TreeGroupState TreeKeys::postState(const TreeGroupState& state, const CommitShap
         TreeNodeState kept = node;
         if (shape.blanked.count(node.nodeIndex) > 0) {
             kept.publicKey.reset();
+            kept.setBy.reset();
         }
         post.nodes.push_back(kept);
     }
@@ -416,6 +418,7 @@ CommitPlan TreeKeys::commit(
     CommitPlan plan;
     plan.epoch = epoch;
     plan.grantKey = grantKey;
+    plan.seq = state.commitSeq + 1;
     TreeGroupState post = postState(state, shape);
 
     // Step 1: a fresh, independent random keypair for every node of the committer's keyed path, and for nothing
@@ -430,11 +433,11 @@ CommitPlan TreeKeys::commit(
             return n.nodeIndex == node;
         });
         if (record == post.nodes.end()) {
-            post.nodes.push_back(TreeNodeState{node, 0, refreshed.key.getPublicKey()});
+            post.nodes.push_back(TreeNodeState{node, 0, refreshed.key.getPublicKey(), plan.seq});
         } else {
             refreshed.fromGeneration = record->generation;
             refreshed.generation = record->generation + 1;
-            *record = TreeNodeState{node, refreshed.generation, refreshed.key.getPublicKey()};
+            *record = TreeNodeState{node, refreshed.generation, refreshed.key.getPublicKey(), plan.seq};
         }
         minted.emplace(node, refreshed.key);
         plan.refreshed.push_back(refreshed);
@@ -495,6 +498,8 @@ CommitPlan TreeKeys::commit(
         grantEdge.blob = wrapKey(grantKey, root.key.getPublicKey(), signer);
     }
     plan.edges.push_back(grantEdge);
+    // What the statement signs: the post state, every record of it — which is why planning reads them all.
+    plan.treeHash = TreeCommits::treeHash(post);
     plan.shape = std::move(shape);
     return plan;
 }

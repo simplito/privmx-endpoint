@@ -11,6 +11,7 @@ limitations under the License.
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
+#include <algorithm>
 #include <privmx/utils/Utils.hpp>
 #include <set>
 
@@ -88,7 +89,27 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
         }
         return resolved;
     };
-    return {.users = resolve(userIds), .managers = resolve(managerIds)};
+    ContainerRoster roster{.users = resolve(userIds), .managers = resolve(managerIds)};
+
+    // Every key here is one something is about to be wrapped to, and the listing is only the bridge's word for it:
+    // the application vouches for each pair, as it does for the author of anything this client reads.
+    std::vector<VerificationRequest> requests;
+    const int64_t now = privmx::utils::Utils::getNowTimestamp();
+    for (const auto& userId : wanted) {
+        requests.push_back(
+            {.contextId = contextId,
+             .senderId = userId,
+             .senderPubKey = pubKeyByUserId.at(userId),
+             .date = now,
+             .bridgeIdentity = std::nullopt}
+        );
+    }
+    const auto verified = requests.empty() ? std::vector<bool>{} :
+                                             _connection.getImpl()->getUserVerifier()->verify(requests);
+    if (verified.size() != requests.size() || std::find(verified.begin(), verified.end(), false) != verified.end()) {
+        throw UserVerificationFailureException();
+    }
+    return roster;
 }
 
 ContainerCreateContext ContainerBaseApi::prepareContainerCreate(

@@ -253,8 +253,10 @@ std::string GroupDataSchemaMapper::privateMetaTag(const std::string& key, int64_
     return metaPlaneTag("privateMeta", key, keyVersion, metaVersion);
 }
 
-// Head-entry integrity only: the DIO signature and field checksums, plus the monotone version pins that a
-// per-entry tag cannot provide. Three pins, because the three counters move independently.
+// Head-entry integrity only: the DIO signature and field checksums, plus a comparison against the monotone version
+// pins that a per-entry tag cannot provide. Three pins, because the three counters move independently. Compares,
+// never stores: a response that passes here may still fail its tags or its author check, and a pin moved by such a
+// response would turn the next honest one into a fork (`storeVersionPins` runs once everything has passed).
 core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupInfo) {
     // `history` is the same set of entries `data` is projected from, so the head of one is the head of the
     // other — and the roster plane's author comes out of `history`.
@@ -269,24 +271,33 @@ core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const serve
     if (dio.contextId != groupInfo.contextId || dio.resourceId != groupInfo.resourceId.value_or("")) {
         throw GroupDataIntegrityException();
     }
-
-    // Compare and store under one lock: two concurrent verifications must not both pass against the same stale
-    // pin, or the later one could accept a version older than the one already verified.
     std::lock_guard lock(_pinMutex);
-    auto& pinnedRoster = _verifiedRosterVersions[groupInfo.id];
-    auto& pinnedPublicMeta = _verifiedPublicMetaVersions[groupInfo.id];
-    auto& pinnedPrivateMeta = _verifiedPrivateMetaVersions[groupInfo.id];
-    if (groupInfo.rosterVersion < pinnedRoster ||
-        groupInfo.publicMetaVersion < pinnedPublicMeta ||
-        groupInfo.privateMetaVersion < pinnedPrivateMeta) {
+    assertNotBelowPins(groupInfo);
+    return dio;
+}
+
+void GroupDataSchemaMapper::assertNotBelowPins(const server::GroupInfo& groupInfo) {
+    const auto pinned = [](const std::map<std::string, int64_t>& pins, const std::string& groupId) {
+        const auto it = pins.find(groupId);
+        return it == pins.end() ? int64_t(0) : it->second;
+    };
+    if (groupInfo.rosterVersion < pinned(_verifiedRosterVersions, groupInfo.id) ||
+        groupInfo.publicMetaVersion < pinned(_verifiedPublicMetaVersions, groupInfo.id) ||
+        groupInfo.privateMetaVersion < pinned(_verifiedPrivateMetaVersions, groupInfo.id)) {
         // A shorter answer than one already seen is a validly tagged *past* state — a rollback, not an error the
         // tag itself can catch, because that older tag was genuine when it was made.
         throw GroupHistoryForkException();
     }
-    pinnedRoster = groupInfo.rosterVersion;
-    pinnedPublicMeta = groupInfo.publicMetaVersion;
-    pinnedPrivateMeta = groupInfo.privateMetaVersion;
-    return dio;
+}
+
+void GroupDataSchemaMapper::storeVersionPins(const server::GroupInfo& groupInfo) {
+    // Compare again and store under one lock: two concurrent verifications must not both pass against the same
+    // stale pin, or the later one could accept a version older than the one already verified.
+    std::lock_guard lock(_pinMutex);
+    assertNotBelowPins(groupInfo);
+    _verifiedRosterVersions[groupInfo.id] = groupInfo.rosterVersion;
+    _verifiedPublicMetaVersions[groupInfo.id] = groupInfo.publicMetaVersion;
+    _verifiedPrivateMetaVersions[groupInfo.id] = groupInfo.privateMetaVersion;
 }
 
 void GroupDataSchemaMapper::dropVersionPin(const std::string& groupId) {
@@ -294,13 +305,6 @@ void GroupDataSchemaMapper::dropVersionPin(const std::string& groupId) {
     _verifiedRosterVersions.erase(groupId);
     _verifiedPublicMetaVersions.erase(groupId);
     _verifiedPrivateMetaVersions.erase(groupId);
-}
-
-void GroupDataSchemaMapper::dropAllVersionPins() {
-    std::lock_guard lock(_pinMutex);
-    _verifiedRosterVersions.clear();
-    _verifiedPublicMetaVersions.clear();
-    _verifiedPrivateMetaVersions.clear();
 }
 
 std::pair<uint32_t, core::DataIntegrityObject> GroupDataSchemaMapper::validateDataIntegrity(
@@ -503,6 +507,15 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             result[verifyIdxs[j]].statusCode = core::UserVerificationFailureException().getCode();
         }
     }
+    // Only a group that passed every step moves its pins.
+    for (size_t i = 0; i < result.size(); i++) {
+        if (result[i].statusCode != 0) {
+            continue;
+        }
+        try {
+            storeVersionPins(groups[i]);
+        } catch (const core::Exception& e) { result[i].statusCode = e.getCode(); }
+    }
     return result;
 }
 
@@ -551,7 +564,7 @@ std::pair<std::vector<std::string>, std::vector<std::string>> GroupDataSchemaMap
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    assertDataIntegrity(groupInfo);
+    assertDataIntegrity(groupInfo); // before resolving any key off the entry
     const core::EncKeyLocation location{
         .contextId = groupInfo.contextId, .resourceId = groupInfo.resourceId.value_or("")
     };
@@ -562,6 +575,11 @@ std::pair<std::vector<std::string>, std::vector<std::string>> GroupDataSchemaMap
     if (it == allKeys.end() || groupInfo.data.empty()) {
         throw GroupMembershipMismatchException();
     }
-    assertRosterIsAttested(groupInfo, it->second.at(groupInfo.data.back().keyId));
+    const auto rosterKey = it->second.find(groupInfo.data.back().keyId);
+    if (rosterKey == it->second.end()) {
+        throw GroupMembershipMismatchException();
+    }
+    assertRosterIsAttested(groupInfo, rosterKey->second);
+    storeVersionPins(groupInfo);
     return {groupInfo.users, groupInfo.managers};
 }

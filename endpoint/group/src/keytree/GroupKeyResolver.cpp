@@ -12,6 +12,7 @@ limitations under the License.
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 
 #include <algorithm>
+#include <limits>
 
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
 
@@ -35,10 +36,14 @@ bool GroupKeyResolver::hasSupportedTree(const server::GroupInfo& group) {
 }
 
 TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
-    return TreeWire::toRuntime(
+    TreeGroupState state = TreeWire::toRuntime(
         TreeWire::fromGroupInfo(group), static_cast<std::uint32_t>(group.keyVersion),
         privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey)
     );
+    if (group.treeCommit.has_value() && group.treeCommit->seq > 0) {
+        state.commitSeq = static_cast<std::uint64_t>(group.treeCommit->seq);
+    }
+    return state;
 }
 
 namespace {
@@ -160,6 +165,33 @@ bool GroupKeyResolver::ownPathHasBlanks(const server::GroupInfo& group) {
     return false;
 }
 
+std::optional<std::string> GroupKeyResolver::tamperedBy(
+    const server::GroupInfo& group,
+    const std::optional<std::uint32_t>& tamperedNode
+) {
+    std::optional<std::int64_t> seq;
+    if (!tamperedNode.has_value() && group.treeCommit.has_value()) {
+        seq = group.treeCommit->seq;
+    }
+    for (const server::GroupTreeNode& node : group.treeNodes.value_or(std::vector<server::GroupTreeNode>{})) {
+        if (tamperedNode.has_value() && node.nodeIndex == static_cast<std::int64_t>(tamperedNode.value())) {
+            seq = node.setBy;
+        }
+    }
+    std::vector<server::GroupTreeCommit> statements = group.treeCommits.value_or(
+        std::vector<server::GroupTreeCommit>{}
+    );
+    if (group.treeCommit.has_value()) {
+        statements.push_back(group.treeCommit.value());
+    }
+    for (const server::GroupTreeCommit& statement : statements) {
+        if (seq.has_value() && statement.seq == seq.value()) {
+            return statement.committer;
+        }
+    }
+    return std::nullopt;
+}
+
 // `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group, which no longer
 // carries them: the bridge serves the ladder separately, and the walk stays ignorant of where they came from.
 ResolveResult GroupKeyResolver::resolveWith(
@@ -189,9 +221,20 @@ ResolveResult GroupKeyResolver::resolveWith(
         return result;
     }
 
+    // 0 asks for the current epoch. Anything else is checked before it is narrowed: a negative or oversized value
+    // must not wrap round into some real epoch, and an epoch past the current one has no key yet — answering it
+    // with the current key would hand out a key under a name it does not have.
+    if (epoch < 0 || epoch > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+        result.failure = ResolveFailure::InvalidEpoch;
+        return result;
+    }
     const TreeGroupState state = toTreeState(group);
     const std::uint32_t currentEpoch = state.epoch;
-    const std::uint32_t wanted = epoch <= 0 ? currentEpoch : static_cast<std::uint32_t>(epoch);
+    const std::uint32_t wanted = epoch == 0 ? currentEpoch : static_cast<std::uint32_t>(epoch);
+    if (wanted > currentEpoch) {
+        result.failure = ResolveFailure::FutureEpoch;
+        return result;
+    }
 
     // Step 1: climb to the current epoch's grant key. Every recovered node key is verified against the public
     // key the server published for that node, so a corrupted edge fails loudly instead of yielding a wrong key.
@@ -200,9 +243,12 @@ ResolveResult GroupKeyResolver::resolveWith(
     if (climb.failure != ClimbFailure::None || !climb.grantKey.has_value()) {
         result.failure = ResolveFailure::ClimbFailed;
         result.climb = climb.failure;
+        if (climb.failure == ClimbFailure::Tampered) {
+            result.blame = tamperedBy(group, climb.tamperedNode);
+        }
         return result;
     }
-    if (wanted >= currentEpoch) {
+    if (wanted == currentEpoch) {
         result.key = climb.grantKey;
         return result;
     }

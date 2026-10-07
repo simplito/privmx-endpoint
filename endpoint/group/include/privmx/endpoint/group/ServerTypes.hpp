@@ -40,10 +40,12 @@ JSON_STRUCT(GroupMetaEntry, GROUP_META_ENTRY_FIELDS);
 JSON_STRUCT(GroupKeyHistoryEntry, GROUP_KEY_HISTORY_ENTRY_FIELDS);
 
 // A keyed node's record. No `publicKey` is a blank node: it keeps its generation and waits for a self-update.
+// `setBy` names the commit statement that set a filled node's key.
 #define GROUP_TREE_NODE_FIELDS(F)                                                                                      \
     F(nodeIndex, int64_t)                                                                                              \
     F(generation, int64_t)                                                                                             \
-    F(publicKey, std::optional<std::string>)
+    F(publicKey, std::optional<std::string>)                                                                           \
+    F(setBy, std::optional<int64_t>)
 JSON_STRUCT(GroupTreeNode, GROUP_TREE_NODE_FIELDS);
 
 #define GROUP_TREE_EDGE_FIELDS(F)                                                                                      \
@@ -56,6 +58,34 @@ JSON_STRUCT(GroupTreeNode, GROUP_TREE_NODE_FIELDS);
     F(childUserId, std::optional<std::string>)                                                                         \
     F(data, std::string)
 JSON_STRUCT(GroupTreeEdge, GROUP_TREE_EDGE_FIELDS);
+
+#define GROUP_TREE_COMMIT_PATH_ENTRY_FIELDS(F)                                                                         \
+    F(nodeIndex, int64_t)                                                                                              \
+    F(generation, int64_t)                                                                                             \
+    F(publicKey, std::string)
+JSON_STRUCT(GroupTreeCommitPathEntry, GROUP_TREE_COMMIT_PATH_ENTRY_FIELDS);
+
+// A commit statement as signed (keytree/TreeCommits.hpp). Hashes are lowercase hex, the signature base64.
+#define GROUP_TREE_COMMIT_FIELDS(F)                                                                                    \
+    F(seq, int64_t)                                                                                                    \
+    F(op, std::string)                                                                                                 \
+    F(groupId, std::string)                                                                                            \
+    F(treeVersion, int64_t)                                                                                            \
+    F(date, int64_t)                                                                                                   \
+    F(keyVersion, int64_t)                                                                                             \
+    F(groupPubKey, std::string)                                                                                        \
+    F(rosterVersion, int64_t)                                                                                          \
+    F(rosterHash, std::string)                                                                                         \
+    F(treeHash, std::string)                                                                                           \
+    F(committer, std::string)                                                                                          \
+    F(committerPubKey, std::string)                                                                                    \
+    F(committerSeat, int64_t)                                                                                          \
+    F(path, std::vector<GroupTreeCommitPathEntry>)                                                                     \
+    F(addedUsers, std::vector<std::string>)                                                                            \
+    F(addedManagers, std::vector<std::string>)                                                                         \
+    F(removed, std::vector<std::string>)                                                                               \
+    F(signature, std::string)
+JSON_STRUCT(GroupTreeCommit, GROUP_TREE_COMMIT_FIELDS);
 
 #define GROUP_TREE_STATE_FIELDS(F)                                                                                     \
     F(numLeaves, int64_t)                                                                                              \
@@ -137,6 +167,9 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(nextFreeSeats, std::optional<std::vector<int64_t>>)                                                              \
     F(treeNodes, std::optional<std::vector<GroupTreeNode>>)                                                            \
     F(treeEdges, std::optional<std::vector<GroupTreeEdge>>)                                                            \
+    F(treeCommit, std::optional<GroupTreeCommit>)                                                                      \
+    F(treeCommits, std::optional<std::vector<GroupTreeCommit>>)                                                        \
+    F(copathHashes, std::optional<std::vector<std::string>>)                                                           \
     F(eraFloor, std::optional<int64_t>)                                                                                \
     F(archivePrunedBelow, std::optional<int64_t>)                                                                      \
     F(policy, Poco::Dynamic::Var)                                                                                      \
@@ -159,7 +192,8 @@ JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
     F(privateMetaVersion, int64_t)                                                                                     \
     F(rosterVersion, int64_t)                                                                                          \
     F(keyVersion, int64_t)                                                                                             \
-    F(policy, Poco::Dynamic::Var)
+    F(policy, Poco::Dynamic::Var)                                                                                      \
+    F(treeCommit, std::optional<GroupTreeCommit>)
 JSON_STRUCT(GroupSummary, GROUP_SUMMARY_FIELDS);
 
 #define GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELDS(F)                                                                    \
@@ -181,7 +215,8 @@ JSON_STRUCT(GroupKeyEntrySetForNewGroup, GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELD
     F(policy, std::optional<Poco::Dynamic::Var>)                                                                       \
     F(groupPubKey, std::string)                                                                                        \
     F(groupKeys, std::optional<GroupKeyEntrySetForNewGroup>)                                                           \
-    F(tree, GroupTreeState)
+    F(tree, GroupTreeState)                                                                                            \
+    F(commit, GroupTreeCommit)
 JSON_STRUCT(GroupCreateModel, GROUP_CREATE_MODEL_FIELDS);
 
 // The public metadata plane's write. CAS-guarded on `publicMetaVersion` and nothing else, so a concurrent
@@ -264,7 +299,8 @@ JSON_STRUCT(GroupAddMemberEntry, GROUP_ADD_MEMBER_ENTRY_FIELDS);
     F(data, Poco::Dynamic::Var)                                                                                        \
     F(transition, GroupTreeAdditionTransition)                                                                         \
     F(expectedKeyVersion, int64_t)                                                                                     \
-    F(expectedRosterVersion, int64_t)
+    F(expectedRosterVersion, int64_t)                                                                                  \
+    F(commit, GroupTreeCommit)
 JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
 
 // Removing several at once is not a convenience: done one at a time each removal advances the epoch on its own,
@@ -280,15 +316,28 @@ JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
     F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
     F(expectedKeyVersion, int64_t)                                                                                     \
     F(expectedRosterVersion, int64_t)                                                                                  \
-    F(confirmationTag, std::optional<std::string>)
+    F(confirmationTag, std::optional<std::string>)                                                                     \
+    F(commit, GroupTreeCommit)                                                                                         \
+    F(abandonHistory, std::optional<bool>)
 JSON_STRUCT(GroupRemoveMembersModel, GROUP_REMOVE_MEMBERS_MODEL_FIELDS);
 
 // Refills the caller's own keyed path: no epoch change, no roster change, nothing for anybody else to notice.
 #define GROUP_SELF_UPDATE_MODEL_FIELDS(F)                                                                              \
     F(id, std::string)                                                                                                 \
     F(expectedKeyVersion, int64_t)                                                                                     \
-    F(transition, GroupTreeSelfUpdateTransition)
+    F(transition, GroupTreeSelfUpdateTransition)                                                                       \
+    F(commit, GroupTreeCommit)
 JSON_STRUCT(GroupSelfUpdateModel, GROUP_SELF_UPDATE_MODEL_FIELDS);
+
+// The statements with `fromSeq < seq <= toSeq` (default: the latest), ascending, at most 256 per call.
+#define GROUP_GET_TREE_COMMITS_MODEL_FIELDS(F)                                                                         \
+    F(groupId, std::string)                                                                                            \
+    F(fromSeq, int64_t)                                                                                                \
+    F(toSeq, std::optional<int64_t>)
+JSON_STRUCT(GroupGetTreeCommitsModel, GROUP_GET_TREE_COMMITS_MODEL_FIELDS);
+
+#define GROUP_GET_TREE_COMMITS_RESULT_FIELDS(F) F(commits, std::vector<GroupTreeCommit>)
+JSON_STRUCT(GroupGetTreeCommitsResult, GROUP_GET_TREE_COMMITS_RESULT_FIELDS);
 
 #define GROUP_CUT_ERA_MODEL_FIELDS(F)                                                                                  \
     F(id, std::string)                                                                                                 \

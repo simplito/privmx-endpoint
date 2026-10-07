@@ -42,7 +42,12 @@ public:
     Poco::Dynamic::Var encryptRoster(const GroupRosterToEncryptV5& data, const std::string& key);
 
     // Returns the roster head's DIO it had to decode anyway, so a caller that needs it does not verify twice.
+    // Compares the counters against the version pins but does not move them; see `storeVersionPins`.
     core::DataIntegrityObject assertDataIntegrity(const server::GroupInfo& groupInfo);
+
+    // Moves the pins to this response's counters. Call only once every check of the read has passed; compares
+    // again under the lock, so a concurrent verification that got further makes this one a fork.
+    void storeVersionPins(const server::GroupInfo& groupInfo);
 
     void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& rosterKey);
 
@@ -77,9 +82,6 @@ public:
 
     // Call when the group is gone or the session was reset.
     void dropVersionPin(const std::string& groupId);
-
-    // Call on connect/disconnect, mirroring the tree-key cache.
-    void dropAllVersionPins();
 
     std::vector<Group> validateDecryptAndConvertGroups(
         const std::vector<server::GroupInfo>& groups,
@@ -135,6 +137,9 @@ private:
         const server::GroupInfo& groupInfo,
         const core::DecryptedEncKey& privateMetaKey
     );
+
+    // Throws GroupHistoryForkException when a counter is below its pin. Call with `_pinMutex` held.
+    void assertNotBelowPins(const server::GroupInfo& groupInfo);
 
     core::DataEncryptorV4 _dataEncryptor;
     // Own DIO encryptor, for the one envelope `GroupDataEncryptorV5` has no method for: the internal-meta view.

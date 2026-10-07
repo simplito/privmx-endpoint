@@ -26,6 +26,9 @@ server::GroupTreeNode TreeWire::toWire(const TreeNodeState& node) {
     if (node.publicKey.has_value()) {
         wire.publicKey = node.publicKey->toBase58DER();
     }
+    if (node.setBy.has_value()) {
+        wire.setBy = static_cast<std::int64_t>(node.setBy.value());
+    }
     return wire;
 }
 
@@ -129,7 +132,7 @@ server::GroupTreeState TreeWire::toCreateTree(const CommitPlan& plan) {
     tree.leafAssignment = leafAssignmentToWire(plan.shape.leafAssignment);
     for (const RefreshedNode& refreshed : plan.refreshed) {
         tree.nodes.push_back(
-            toWire(TreeNodeState{refreshed.nodeIndex, refreshed.generation, refreshed.key.getPublicKey()})
+            toWire(TreeNodeState{refreshed.nodeIndex, refreshed.generation, refreshed.key.getPublicKey(), plan.seq})
         );
     }
     tree.edges = edgesToWire(plan);
@@ -163,10 +166,14 @@ TreeGroupState TreeWire::toRuntime(
     }
     for (const server::GroupTreeNode& node : tree.nodes) {
         TreeNodeState converted{
-            static_cast<std::uint32_t>(node.nodeIndex), static_cast<std::uint32_t>(node.generation), std::nullopt
+            static_cast<std::uint32_t>(node.nodeIndex), static_cast<std::uint32_t>(node.generation), std::nullopt,
+            std::nullopt
         };
         if (!node.publicKey.value_or("").empty()) {
             converted.publicKey = NodePublicKey::fromBase58DER(node.publicKey.value());
+            if (node.setBy.has_value() && node.setBy.value() >= 0) {
+                converted.setBy = static_cast<std::uint64_t>(node.setBy.value());
+            }
         }
         state.nodes.push_back(converted);
     }
@@ -242,12 +249,13 @@ server::GroupTreeState TreeWire::afterCommit(const server::GroupTreeState& befor
         nodes[index] = node;
         if (plan.shape.blanked.count(index) > 0) {
             nodes[index].publicKey = std::nullopt;
+            nodes[index].setBy = std::nullopt;
         }
     }
     for (const RefreshedNode& refreshed : plan.refreshed) {
         replaced.insert(refreshed.nodeIndex);
         nodes[refreshed.nodeIndex] = toWire(
-            TreeNodeState{refreshed.nodeIndex, refreshed.generation, refreshed.key.getPublicKey()}
+            TreeNodeState{refreshed.nodeIndex, refreshed.generation, refreshed.key.getPublicKey(), plan.seq}
         );
     }
     for (const auto& [index, node] : nodes) {

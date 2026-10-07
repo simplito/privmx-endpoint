@@ -26,8 +26,11 @@ limitations under the License.
  * string on all 33 edges of a tree.
  *
  * Every case is one commit by a named member: its `before` and `after` states (the after state by the bridge's
- * storage rule, `TreeWire::afterCommit`) and the nodes it refreshed. Trees are version 2 (`treeVersion` at the top):
- * buckets of 16 seats, blank nodes without a `publicKey`.
+ * storage rule, `TreeWire::afterCommit`), the nodes it refreshed, the signed commit statement (`commit`, signature
+ * in full), the post state's `treeHash` and roster (`users`, `managers`, `rosterVersion`). Trees are version 2
+ * (`treeVersion` at the top): buckets of 16 seats, blank nodes without a `publicKey`, filled ones with `setBy`.
+ * Every user who signs is in the top-level `userPubKeys`; ids are global, so a user's key is the same in every case.
+ * A group is "grp", except at seq 1 where its statement names the resourceId "res".
  *
  * Usage: keytree_state_dump > src/test/fixtures/keytree-states.json   (paths relative to the bridge repo)
  * See test/tools/README.md.
@@ -36,6 +39,7 @@ limitations under the License.
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -44,6 +48,7 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/group/keytree/LadderKeys.hpp>
+#include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
@@ -58,6 +63,23 @@ struct Member {
     std::string userId;
     PrivateKey priv;
 };
+
+// One key per user id for the whole dump, so `userPubKeys` can map ids to keys once.
+std::map<std::string, PrivateKey>& userKeys() {
+    static std::map<std::string, PrivateKey> keys;
+    return keys;
+}
+
+Member memberNamed(const std::string& userId) {
+    auto& keys = userKeys();
+    const auto it = keys.find(userId);
+    if (it != keys.end()) {
+        return Member{userId, it->second};
+    }
+    const PrivateKey key = PrivateKey::generateRandom();
+    keys.emplace(userId, key);
+    return Member{userId, key};
+}
 
 std::vector<TreeMember> publicOf(const std::vector<Member>& members) {
     std::vector<TreeMember> result;
@@ -97,6 +119,9 @@ std::string treeToJson(const server::GroupTreeState& tree) {
             + ",\"generation\":" + std::to_string(node.generation);
         if (node.publicKey.has_value()) {
             out += ",\"publicKey\":" + quote(node.publicKey.value()); // absent: a blank node
+        }
+        if (node.setBy.has_value()) {
+            out += ",\"setBy\":" + std::to_string(node.setBy.value());
         }
         out += "}";
     }
@@ -162,6 +187,8 @@ struct Group {
     server::GroupTreeState tree;
     std::uint32_t epoch = 1;
     PrivateKey grantKey;
+    std::uint64_t commitSeq = 0;
+    std::int64_t rosterVersion = 0;
     TreeKeyCache grantKeys; // every epoch's grant key, for the rungs a removal publishes
 
     std::vector<std::string> seated() const {
@@ -184,9 +211,34 @@ struct Group {
     }
 };
 
+// The statement for a commit already applied to `group`, as the endpoint signs it, plus what it describes.
+std::string statementJson(
+    const Group& group,
+    const CommitPlan& plan,
+    CommitOp op,
+    const std::string& committer,
+    std::vector<std::string> added,
+    std::vector<std::string> removed
+) {
+    CommitStatement statement = TreeCommits::statementFor(
+        plan, op, plan.seq == 1 ? "res" : "grp", 1760000000000 + plan.seq, group.epoch,
+        group.grantKey.getPublicKey().toBase58DER(), static_cast<std::uint64_t>(group.rosterVersion), group.seated(),
+        {}, committer, std::move(added), {}, std::move(removed)
+    );
+    TreeCommits::sign(statement, userKeys().at(committer));
+    const TreeGroupState post = TreeWire::toRuntime(group.tree, group.epoch, group.grantKey.getPublicKey());
+    const std::string treeHash = privmx::utils::Hex::from(TreeCommits::treeHash(post));
+    if (treeHash != privmx::utils::Hex::from(statement.treeHash)) {
+        throw std::runtime_error("the stored state does not hash to what the statement signs");
+    }
+    return ",\"commit\":" + privmx::utils::Utils::stringify(TreeCommits::toWire(statement).toJSON())
+        + ",\"treeHash\":" + quote(treeHash) + ",\"rosterVersion\":" + std::to_string(group.rosterVersion)
+        + ",\"users\":" + idsToJson(group.seated()) + ",\"managers\":[]";
+}
+
 std::string groupCreate(Group& group, std::uint32_t count, std::uint32_t creator) {
     for (std::uint32_t i = 0; i < count; ++i) {
-        group.members.push_back(Member{"u" + std::to_string(i), PrivateKey::generateRandom()});
+        group.members.push_back(memberNamed("u" + std::to_string(i)));
     }
     TreeKeyCache scratch;
     TreeKeys keys(scratch);
@@ -195,8 +247,11 @@ std::string groupCreate(Group& group, std::uint32_t count, std::uint32_t creator
     group.tree = TreeWire::toCreateTree(plan);
     group.grantKey = plan.grantKey;
     group.grantKeys.putGrantKey(1, plan.grantKey);
+    group.commitSeq = 1;
+    group.rosterVersion = 1;
     return "{\"kind\":\"create\",\"epoch\":1,\"creator\":" + quote(group.members[creator].userId)
         + ",\"members\":" + idsToJson(group.seated()) + ",\"refreshed\":" + refreshedToJson(plan)
+        + statementJson(group, plan, CommitOp::Create, group.members[creator].userId, {}, {})
         + ",\"tree\":" + treeToJson(group.tree) + "}";
 }
 
@@ -207,7 +262,8 @@ CommitPlan commitBy(
     const std::function<CommitPlan(TreeKeys&, const TreeGroupState&, const Member&)>& plan
 ) {
     const Member& who = group.member(committer);
-    const TreeGroupState state = TreeWire::toRuntime(group.tree, group.epoch, group.grantKey.getPublicKey());
+    TreeGroupState state = TreeWire::toRuntime(group.tree, group.epoch, group.grantKey.getPublicKey());
+    state.commitSeq = group.commitSeq;
     TreeKeyCache cache;
     TreeKeys keys(cache);
     if (keys.climbToGrantKey(state, who.userId, who.priv, false).failure != ClimbFailure::None) {
@@ -219,6 +275,7 @@ CommitPlan commitBy(
     group.epoch = result.epoch;
     group.grantKey = result.grantKey;
     group.grantKeys.putGrantKey(result.epoch, result.grantKey);
+    group.commitSeq = result.seq;
     return result;
 }
 
@@ -229,6 +286,7 @@ std::string groupRemove(Group& group, const std::string& remover, const std::vec
     const CommitPlan plan = commitBy(group, remover, [&](TreeKeys& keys, const TreeGroupState& state, const Member& who) {
         return keys.planRemoval(state, leaving, who.userId, who.priv);
     });
+    group.rosterVersion += 1;
 
     // Unit rung only: no archive is gathered here for the aligned skip targets. A real rotation owes the full set.
     LadderKeys ladder(group.grantKeys);
@@ -247,15 +305,16 @@ std::string groupRemove(Group& group, const std::string& remover, const std::vec
         + std::to_string(plan.epoch) + ",\"remover\":" + quote(remover) + ",\"removed\":" + idsToJson(leaving)
         + ",\"positions\":" + seatsToJson(plan.shape.subjectSeats) + ",\"members\":" + idsToJson(members)
         + ",\"remaining\":" + idsToJson(group.seated()) + ",\"refreshed\":" + refreshedToJson(plan)
-        + ",\"rungs\":" + rungJson + ",\"before\":" + treeToJson(before) + ",\"after\":" + treeToJson(group.tree) + "}";
+        + statementJson(group, plan, CommitOp::Remove, remover, {}, leaving) + ",\"rungs\":" + rungJson + ",\"before\":" + treeToJson(before) + ",\"after\":" + treeToJson(group.tree) + "}";
 }
 
 std::string groupAdd(Group& group, const std::string& adder, std::uint32_t count) {
     const server::GroupTreeState before = group.tree;
     const std::vector<std::string> members = group.seated();
+    static std::uint32_t nextNewcomer = 0;
     std::vector<Member> newcomers;
     for (std::uint32_t i = 0; i < count; ++i) {
-        newcomers.push_back(Member{"n" + std::to_string(group.members.size() + i), PrivateKey::generateRandom()});
+        newcomers.push_back(memberNamed("n" + std::to_string(nextNewcomer++)));
     }
     group.members.insert(group.members.end(), newcomers.begin(), newcomers.end());
     std::vector<std::string> added;
@@ -267,11 +326,12 @@ std::string groupAdd(Group& group, const std::string& adder, std::uint32_t count
             state, publicOf(newcomers), TreeKeys::choosePositions(state, count), who.userId, who.priv
         );
     });
+    group.rosterVersion += 1;
     return "{\"kind\":\"add\",\"epoch\":" + std::to_string(group.epoch) + ",\"adder\":" + quote(adder)
         + ",\"added\":" + idsToJson(added) + ",\"positions\":" + seatsToJson(plan.shape.subjectSeats)
         + ",\"members\":" + idsToJson(members) + ",\"after_members\":" + idsToJson(group.seated())
-        + ",\"refreshed\":" + refreshedToJson(plan) + ",\"before\":" + treeToJson(before)
-        + ",\"after\":" + treeToJson(group.tree) + "}";
+        + ",\"refreshed\":" + refreshedToJson(plan) + statementJson(group, plan, CommitOp::Add, adder, added, {})
+        + ",\"before\":" + treeToJson(before) + ",\"after\":" + treeToJson(group.tree) + "}";
 }
 
 std::string groupSelfUpdate(Group& group, const std::string& memberId) {
@@ -281,7 +341,8 @@ std::string groupSelfUpdate(Group& group, const std::string& memberId) {
     });
     return "{\"kind\":\"selfUpdate\",\"epoch\":" + std::to_string(group.epoch) + ",\"member\":" + quote(memberId)
         + ",\"members\":" + idsToJson(group.seated()) + ",\"refreshed\":" + refreshedToJson(plan)
-        + ",\"before\":" + treeToJson(before) + ",\"after\":" + treeToJson(group.tree) + "}";
+        + statementJson(group, plan, CommitOp::SelfUpdate, memberId, {}, {}) + ",\"before\":" + treeToJson(before)
+        + ",\"after\":" + treeToJson(group.tree) + "}";
 }
 
 std::string u(std::uint32_t i) {
@@ -375,8 +436,14 @@ int main() {
         return 1;
     }
 
+    std::string userPubKeys = "{";
+    for (const auto& [userId, key] : userKeys()) {
+        userPubKeys += std::string(userPubKeys.size() > 1 ? "," : "") + quote(userId) + ":"
+            + quote(key.getPublicKey().toBase58DER());
+    }
+    userPubKeys += "}";
     std::cout << "{\"treeVersion\":" << TreeMath::TREE_VERSION << ",\"bucketLevel\":" << TreeMath::BUCKET_LEVEL
-              << ",\"cases\":[\n";
+              << ",\"userPubKeys\":" << userPubKeys << ",\"cases\":[\n";
     for (std::size_t i = 0; i < cases.size(); ++i) {
         std::cout << (i ? ",\n" : "") << cases[i];
     }
