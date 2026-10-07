@@ -13,16 +13,19 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/crypto/CryptoErrors.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
 #include <privmx/endpoint/core/crypto/KeyFormats.hpp>
 
 using namespace privmx::endpoint::core;
 
 std::string Ecies::encrypt(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature) {
-    if (pub.empty() || privForSignature.empty()) {
-        throw MalformedEncryptionKeyException("ecies encrypt with an empty key");
-    }
-    return keyString(pub.impl()->seal(keyBytes(data), *privForSignature.impl()));
+    return mapCryptoErrors("Ecies::encrypt", [&] {
+        if (pub.empty() || privForSignature.empty()) {
+            throw MalformedEncryptionKeyException("ecies encrypt with an empty key");
+        }
+        return keyString(pub.impl()->seal(keyBytes(data), *privForSignature.impl()));
+    });
 }
 
 std::string Ecies::decrypt(
@@ -30,15 +33,17 @@ std::string Ecies::decrypt(
     const std::string& cipher,
     const std::optional<PublicKey>& pubOfSignature
 ) {
-    if (priv.empty()) {
-        throw MalformedEncryptionKeyException("ecies decrypt with an empty key");
-    }
-    if (pubOfSignature.has_value() && pubOfSignature->empty()) {
-        throw MalformedEncryptionKeyException("ecies decrypt against an empty signer key");
-    }
-    const privmx::cryptoservice::IPublicKey* expectedSender =
-        pubOfSignature.has_value() ? pubOfSignature->impl().get() : nullptr;
-    return keyString(priv.impl()->open(keyBytes(cipher), expectedSender));
+    return mapCryptoErrors("Ecies::decrypt", [&] {
+        if (priv.empty()) {
+            throw MalformedEncryptionKeyException("ecies decrypt with an empty key");
+        }
+        if (pubOfSignature.has_value() && pubOfSignature->empty()) {
+            throw MalformedEncryptionKeyException("ecies decrypt against an empty signer key");
+        }
+        const privmx::cryptoservice::IPublicKey* expectedSender =
+            pubOfSignature.has_value() ? pubOfSignature->impl().get() : nullptr;
+        return keyString(priv.impl()->open(keyBytes(cipher), expectedSender));
+    });
 }
 
 std::string Ecies::encryptToBase64(

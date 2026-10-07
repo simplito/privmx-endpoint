@@ -117,12 +117,19 @@ public:
     /// @brief Nazwa zestawu uzywana w `ContainerPolicy::cryptoSuite`.
     std::string policyValue() const;
 
+    /// @brief Wymagana dlugosc klucza symetrycznego tego zestawu, w bajtach.
+    std::size_t keyLength() const;
+
     std::string randomBytes(std::size_t length) const;
     std::string hash(const std::string& data) const;
     std::string mac(const std::string& key, const std::string& data) const;
     std::string deriveKey(const std::string& secret, const std::string& label, std::size_t length) const;
 
-    /// @brief Szyfruje i oprawia w ramke z uwierzytelnionym znacznikiem zestawu.
+    /**
+     * @brief Szyfruje i oprawia w ramke z uwierzytelnionym znacznikiem zestawu.
+     *
+     * @throws crypto::EncryptInvalidKeyLengthException gdy klucz ma inna dlugosc niz `keyLength()`
+     */
     std::string encrypt(const std::string& key, const std::string& plaintext) const;
 
     /**
@@ -132,6 +139,7 @@ public:
      *
      * @throws MalformedCryptoFrameException gdy ramka jest za krotka
      * @throws UnknownCryptoSuiteException gdy znacznik jest nieznany temu buildowi
+     * @throws crypto::DecryptInvalidKeyLengthException gdy klucz ma inna dlugosc niz `keyLength()`
      */
     static std::string decrypt(const std::string& key, const std::string& framed);
 

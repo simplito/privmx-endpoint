@@ -12,6 +12,7 @@ limitations under the License.
 #include <privmx/cryptoservice/base/CoreTypes.hpp>
 
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/crypto/CryptoErrors.hpp>
 #include <privmx/endpoint/core/crypto/KeyFormats.hpp>
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/crypto/ProviderAccess.hpp>
@@ -21,15 +22,21 @@ using namespace privmx::endpoint::core;
 namespace cs = privmx::cryptoservice;
 
 PrivateKey PrivateKey::fromWIF(const std::string& wif) {
-    return PrivateKey(cryptoProvider().importPrivateKey(keyBytes(wif), cs::KeyFormat::Wif, KEY_ALGORITHM));
+    return mapCryptoErrors("PrivateKey::fromWIF", [&] {
+        return PrivateKey(cryptoProvider().importPrivateKey(keyBytes(wif), cs::KeyFormat::Wif, KEY_ALGORITHM));
+    });
 }
 
 PrivateKey PrivateKey::fromRaw(const std::string& raw) {
-    return PrivateKey(cryptoProvider().importPrivateKey(keyBytes(raw), cs::KeyFormat::Raw, KEY_ALGORITHM));
+    return mapCryptoErrors("PrivateKey::fromRaw", [&] {
+        return PrivateKey(cryptoProvider().importPrivateKey(keyBytes(raw), cs::KeyFormat::Raw, KEY_ALGORITHM));
+    });
 }
 
 PrivateKey PrivateKey::generateRandom() {
-    return PrivateKey(cryptoProvider().generatePrivateKey(KEY_ALGORITHM));
+    return mapCryptoErrors("PrivateKey::generateRandom", [&] {
+        return PrivateKey(cryptoProvider().generatePrivateKey(KEY_ALGORITHM));
+    });
 }
 
 const cs::IPrivateKey& PrivateKey::require() const {
@@ -40,24 +47,30 @@ const cs::IPrivateKey& PrivateKey::require() const {
 }
 
 PublicKey PrivateKey::getPublicKey() const {
-    return PublicKey(require().publicKey());
+    return mapCryptoErrors("PrivateKey::getPublicKey", [&] { return PublicKey(require().publicKey()); });
 }
 
 std::string PrivateKey::getPrivateEncKey() const {
-    return keyString(require().export_(cs::KeyFormat::Raw));
+    return mapCryptoErrors("PrivateKey::getPrivateEncKey", [&] {
+        return keyString(require().export_(cs::KeyFormat::Raw));
+    });
 }
 
 std::string PrivateKey::toWIF() const {
-    return keyString(require().export_(cs::KeyFormat::Wif));
+    return mapCryptoErrors("PrivateKey::toWIF", [&] { return keyString(require().export_(cs::KeyFormat::Wif)); });
 }
 
 std::string PrivateKey::signToCompactSignatureWithHash(const std::string& message) const {
-    return keyString(require().sign(keyBytes(message), SIGNATURE_SCHEME));
+    return mapCryptoErrors("PrivateKey::signToCompactSignatureWithHash", [&] {
+        return keyString(require().sign(keyBytes(message), SIGNATURE_SCHEME));
+    });
 }
 
 std::string PrivateKey::derive(const PublicKey& publicKey) const {
-    if (publicKey.empty()) {
-        throw MalformedEncryptionKeyException("cannot derive against an empty public key");
-    }
-    return keyString(require().deriveSharedSecret(*publicKey.impl()));
+    return mapCryptoErrors("PrivateKey::derive", [&] {
+        if (publicKey.empty()) {
+            throw MalformedEncryptionKeyException("cannot derive against an empty public key");
+        }
+        return keyString(require().deriveSharedSecret(*publicKey.impl()));
+    });
 }

@@ -233,7 +233,14 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointCryptoException, "Unknown Crypto except
     X(PrivmxDriverCryptoException, "privmxDrvCrypto Exception", 0x0027)                                               \
     X(PrivmxDriverEccException, "privmxDrvEcc Exception", 0x0028)                                                     \
     X(GivenPublicKeyDoesNotMatchWithSignatureException, "DGiven public key does not match with signature", 0x0029)    \
-    X(ExtKeyDoesNotHoldPrivateKeyException, "Ext key does not hold private key", 0x002A)
+    X(ExtKeyDoesNotHoldPrivateKeyException, "Ext key does not hold private key", 0x002A)                              \
+    X(RandomGeneratorFailureException, "Random generator failure", 0x002B)                                           \
+    X(DigestFailureException, "Digest computation failure", 0x002C)                                                  \
+    X(HmacFailureException, "HMAC computation failure", 0x002D)                                                      \
+    X(KdfFailureException, "Key derivation failure", 0x002E)                                                         \
+    X(SymmetricCipherFailureException, "Symmetric cipher failure", 0x002F)                                           \
+    X(EccOperationFailureException, "ECC operation failure", 0x0030)                                                 \
+    X(AsymmetricKeyFailureException, "Asymmetric key operation failure", 0x0031)
 
 #define PRIVMX_CRYPTO_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointCryptoException, NAME, MSG, CODE)
 CRYPTO_EXCEPTIONS(PRIVMX_CRYPTO_DECLARE)

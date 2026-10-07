@@ -70,7 +70,8 @@ if [[ "$RUN_UNIT" -eq 1 ]]; then
     for bin in \
         "$BUILD_DIR/utils/privmxutils_test" \
         "$BUILD_DIR/crypto/privmxcrypto_test" \
-        "$BUILD_DIR/privfs/privmxprivfs_test"; do
+        "$BUILD_DIR/privfs/privmxprivfs_test" \
+        "$BUILD_DIR/endpoint/core/privmxendpointcore_test"; do
         [[ -x "$bin" ]] && UNIT_BINARIES+=("$bin")
     done
     while IFS= read -r -d '' bin; do
