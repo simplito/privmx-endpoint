@@ -13,11 +13,9 @@ limitations under the License.
 #include <regex>
 
 #include <privmx/utils/Base58.hpp>
-#include <privmx/crypto/Crypto.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 
 using namespace privmx;
-using namespace privmx::crypto;
 using namespace privmx::utils;
 using namespace std;
 
@@ -54,16 +52,26 @@ string Base58::decode(const string& s) {
     }
 }
 
-string Base58::encodeWithChecksum(const string& s) {
-    string checksum = Crypto::sha256(Crypto::sha256(s)).substr(0, 4);
+string Base58::encodeWithChecksum(const string& s, const Sha256& sha256) {
+    string checksum = sha256(sha256(s)).substr(0, 4);
     return encode(s + checksum);
 }
 
-string Base58::decodeWithChecksum(const string& s) {
+string Base58::decodeWithChecksum(const string& s, const Sha256& sha256) {
+    // Puste wejscie trzeba odrzucic przed `decode`, bo GMP rzuca z niego `std::invalid_argument`,
+    // czyli wyjatek spoza hierarchii biblioteki.
+    if (s.empty()) {
+        throw PrivmxException("Invalid base58 checksum");
+    }
     string data = decode(s);
+    // Bez tego krotsze wejscie dawalo `data.length() - 4` z przekreceniem licznika i `substr`
+    // liczony od wartosci bliskiej zakresowi `size_t`.
+    if (data.length() < 4) {
+        throw PrivmxException("Invalid base58 checksum");
+    }
     string payload = data.substr(0, data.length() - 4);
     string checksum = data.substr(data.length() - 4);
-    string newchecksum = Crypto::sha256(Crypto::sha256(payload)).substr(0, 4);
+    string newchecksum = sha256(sha256(payload)).substr(0, 4);
     if (checksum != newchecksum) {
         throw PrivmxException("Invalid base58 checksum");
     }

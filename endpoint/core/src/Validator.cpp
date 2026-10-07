@@ -12,7 +12,9 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/core/crypto/PrivateKey.hpp"
-#include "privmx/crypto/utils/Base58.hpp"
+#include <privmx/utils/Base58.hpp>
+
+#include "privmx/endpoint/core/crypto/FormatHash.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/Validator.hpp"
 #include "privmx/utils/Utils.hpp"
@@ -253,7 +255,7 @@ void Validator::validatePubKeyFormat(const string& value, const string& stack_tr
     // the base58 alphabet and checksum, so corrupted keys fail here instead of at decryption time.
     std::string der;
     try {
-        der = privmx::utils::Base58::decodeWithChecksum(value);
+        der = privmx::utils::Base58::decodeWithChecksum(value, FormatHash::sha256);
     } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER")); }
     if (der.size() != 33 && der.size() != 65) {
         throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER length"));

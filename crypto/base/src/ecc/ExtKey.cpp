@@ -34,7 +34,7 @@ ExtKey ExtKey::fromSeed(const string& seed) {
 }
 
 ExtKey ExtKey::fromBase58(const std::string& base58) {
-    std::string raw_key = Base58::decodeWithChecksum(base58);
+    std::string raw_key = Base58::decodeWithChecksum(base58, Crypto::sha256);
 
     // BIP32 extended key must be exactly 78 bytes
     if (raw_key.size() != 78) {
@@ -208,7 +208,7 @@ string ExtKey::toBase58(bool is_private) const {
     if (result.size() != 78) {
         throw InvalidResultSizeException();
     }
-    return Base58::encodeWithChecksum(result);
+    return Base58::encodeWithChecksum(result, Crypto::sha256);
 }
 UInt32 ExtKey::read_u32_be(const std::string& raw_key, size_t offset) {
     UInt32 v;

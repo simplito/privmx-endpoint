@@ -22,7 +22,7 @@ using namespace privmx::utils;
 using namespace std;
 
 PrivateKey PrivateKey::fromWIF(const string& wif) {
-    string payload = Base58::decodeWithChecksum(wif);
+    string payload = Base58::decodeWithChecksum(wif, Crypto::sha256);
     if (payload.front() != Networks::BITCOIN.WIF) {
         throw InvalidNetworkException();
     }
@@ -69,5 +69,5 @@ string PrivateKey::toWIF() const {
     string buffer(1, Networks::BITCOIN.WIF);
     buffer.append(Utils::fillTo32(_key.getPrivateKey()))
         .append(1, 0x01);
-    return Base58::encodeWithChecksum(buffer);
+    return Base58::encodeWithChecksum(buffer, Crypto::sha256);
 }

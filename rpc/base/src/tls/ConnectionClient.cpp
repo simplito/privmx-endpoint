@@ -21,7 +21,6 @@ limitations under the License.
 #include <privmx/crypto/PasswordMixer.hpp>
 #include <privmx/rpc/tls/ConnectionClient.hpp>
 #include <privmx/rpc/RpcException.hpp>
-#include <privmx/utils/Base58.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/Utils.hpp>
 #include<optional>

@@ -25,7 +25,7 @@ PublicKey PublicKey::fromDER(const string& der) {
 }
 
 PublicKey PublicKey::fromBase58DER(const string& base58) {
-    string der = Base58::decodeWithChecksum(base58);
+    string der = Base58::decodeWithChecksum(base58, Crypto::sha256);
     return fromDER(der);
 }
 
@@ -44,13 +44,13 @@ string PublicKey::toDER() const {
 }
 
 string PublicKey::toBase58DER() const {
-    return Base58::encodeWithChecksum(_key.getPublicKey());
+    return Base58::encodeWithChecksum(_key.getPublicKey(), Crypto::sha256);
 }
 
 string PublicKey::toBase58Address() const {
     string hash = Crypto::hash160(_key.getPublicKey());
     string payload = Networks::BITCOIN.PUB_KEY_HASH + hash;
-    return Base58::encodeWithChecksum(payload);
+    return Base58::encodeWithChecksum(payload, Crypto::sha256);
 }
 
 bool PublicKey::verifyCompactSignature(const string& message, const string& signature) const {

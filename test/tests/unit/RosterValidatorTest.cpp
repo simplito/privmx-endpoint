@@ -30,6 +30,7 @@ limitations under the License.
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/utils/Base58.hpp>
 
 using privmx::endpoint::core::PrivateKey;
@@ -81,7 +82,9 @@ TEST(RosterValidator, RefusesSomethingThatDecodesButIsNotAPointEncoding) {
     // The point at infinity is spelled exactly like this — a single zero byte — and `EC_POINT_oct2point` accepts
     // it. A key of the wrong length has no business in a roster whatever the curve says about it.
     auto users = roster(2);
-    users[0].pubKey = privmx::utils::Base58::encodeWithChecksum(std::string(1, '\0'));
+    users[0].pubKey = privmx::utils::Base58::encodeWithChecksum(
+        std::string(1, '\0'), privmx::endpoint::core::FormatHash::sha256
+    );
     EXPECT_THROW(Validator::validateUserListFormat(users, "field:users"), privmx::endpoint::core::Exception);
 }
 
@@ -97,7 +100,9 @@ TEST(RosterValidator, AcceptsAnUncompressedEncodingToo) {
     std::string der(65, '\0');
     der[0] = 0x04;
     EXPECT_NO_THROW(
-        Validator::validatePubKeyFormat(privmx::utils::Base58::encodeWithChecksum(der), "field:pubKey"));
+        Validator::validatePubKeyFormat(
+            privmx::utils::Base58::encodeWithChecksum(der, privmx::endpoint::core::FormatHash::sha256), "field:pubKey"
+        ));
 }
 
 TEST(RosterValidator, WhatItDeliberatelyDoesNotDo) {
@@ -108,7 +113,9 @@ TEST(RosterValidator, WhatItDeliberatelyDoesNotDo) {
     for (std::size_t i = 1; i < der.size(); ++i) {
         der[i] = static_cast<char>(0xFF);   // x = 2^256-1 > p, so no point exists
     }
-    const std::string encoded = privmx::utils::Base58::encodeWithChecksum(der);
+    const std::string encoded = privmx::utils::Base58::encodeWithChecksum(
+        der, privmx::endpoint::core::FormatHash::sha256
+    );
     EXPECT_NO_THROW(Validator::validatePubKeyFormat(encoded, "field:pubKey"));
     EXPECT_THROW(Validator::validatePubKeyBase58DER(encoded, "field:pubKey"), privmx::endpoint::core::Exception);
 }
