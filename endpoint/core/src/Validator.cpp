@@ -11,7 +11,7 @@ limitations under the License.
 
 #include <string>
 
-#include "privmx/crypto/ecc/PrivateKey.hpp"
+#include "privmx/endpoint/core/crypto/PrivateKey.hpp"
 #include "privmx/crypto/utils/Base58.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/Validator.hpp"
@@ -237,14 +237,14 @@ void Validator::validateEnumParamString(
 void Validator::validatePrivKeyWIF(const string& value, const string& stack_trace) {
     Validator::validateBase58(value, stack_trace);
     try {
-        privmx::crypto::PrivateKey::fromWIF(value);
+        core::PrivateKey::fromWIF(value);
     } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid PrivKeyWIF")); }
 }
 
 void Validator::validatePubKeyBase58DER(const string& value, const string& stack_trace) {
     Validator::validateBase58(value, stack_trace);
     try {
-        privmx::crypto::PublicKey::fromBase58DER(value);
+        core::PublicKey::fromBase58DER(value);
     } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER")); }
 }
 

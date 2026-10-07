@@ -42,7 +42,7 @@ namespace inbox {
 
 class InboxDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
-    InboxDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
+    InboxDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
     server::InboxData encrypt(const InboxDataProcessorModelV5& data, const std::string& key);
 

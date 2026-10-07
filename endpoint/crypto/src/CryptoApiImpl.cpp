@@ -14,6 +14,9 @@ limitations under the License.
 #include <privmx/crypto/ecc/ExtKey.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
+
 #include "privmx/endpoint/core/crypto/CryptoSuite.hpp"
 #include "privmx/endpoint/crypto/CryptoApiImpl.hpp"
 #include "privmx/endpoint/crypto/KeyConverter.hpp"
@@ -21,22 +24,21 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::crypto;
 
 core::Buffer CryptoApiImpl::signData(const core::Buffer& data, const std::string& key) {
-    auto privKey{privmx::crypto::PrivateKey::fromWIF(key)};
+    auto privKey{core::PrivateKey::fromWIF(key)};
     auto sign{privKey.signToCompactSignatureWithHash(data.stdString())};
     return core::Buffer::from(sign);
 }
 
 bool CryptoApiImpl::verifySignature(const core::Buffer& data, const core::Buffer& signature, const std::string& key) {
-    auto pubKey{privmx::crypto::PublicKey::fromBase58DER(key)};
+    auto pubKey{core::PublicKey::fromBase58DER(key)};
     return pubKey.verifyCompactSignatureWithHash(data.stdString(), signature.stdString());
 }
 
 std::string CryptoApiImpl::generatePrivateKey(const std::optional<std::string>& basestring) {
     if (basestring.has_value()) {
-        auto privWIF{getPrivKeyFromSeed(basestring.value(), 200000).toWIF()};
-        return privWIF;
+        return getPrivKeyFromSeed(basestring.value(), 200000);
     }
-    auto privKey = privmx::crypto::PrivateKey::generateRandom();
+    auto privKey = core::PrivateKey::generateRandom();
     return privKey.toWIF();
 }
 
@@ -53,7 +55,7 @@ std::string CryptoApiImpl::derivePrivateKey(const std::string& password, const s
 }
 
 std::string CryptoApiImpl::derivePublicKey(const std::string& privkey) {
-    auto privKey{privmx::crypto::PrivateKey::fromWIF(privkey.data())};
+    auto privKey{core::PrivateKey::fromWIF(privkey.data())};
     auto pubKey{privKey.getPublicKey()};
     return pubKey.toBase58DER();
 }
@@ -73,11 +75,14 @@ core::Buffer CryptoApiImpl::decryptDataSymmetric(const core::Buffer& data, const
     return core::Buffer::from(decrypted);
 }
 
-privmx::crypto::PrivateKey CryptoApiImpl::getPrivKeyFromSeed(const std::string& seed, size_t rounds) {
+// Zwraca WIF, a nie obiekt klucza: `ExtKey` nalezy jeszcze do starego stosu (wydzielenie BIP32
+// do osobnej biblioteki to osobne zadanie), wiec oddawanie `privmx::crypto::PrivateKey` wyciagaloby
+// ten typ do naglowka. Jedyny konsument i tak potrzebuje tylko WIF-a.
+std::string CryptoApiImpl::getPrivKeyFromSeed(const std::string& seed, size_t rounds) {
     auto salt{privmx::crypto::Crypto::randomBytes(16)};
     auto pbkdf2{privmx::crypto::Crypto::pbkdf2(seed, salt, rounds, 32, "SHA512")};
     auto extKey{privmx::crypto::ExtKey::fromSeed(pbkdf2)};
-    return extKey.getPrivateKey();
+    return extKey.getPrivateKey().toWIF();
 }
 
 std::string CryptoApiImpl::convertPEMKeytoWIFKey(const std::string& keyPEM) {

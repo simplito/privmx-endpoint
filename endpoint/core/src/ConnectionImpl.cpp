@@ -60,13 +60,18 @@ void ConnectionImpl::connect(
         .pubKey = verificationOptions.bridgePubKey,
         .instanceId = verificationOptions.bridgeInstanceId
     };
-    auto key = privmx::crypto::PrivateKey::fromWIF(userPrivKey);
+    auto key = core::PrivateKey::fromWIF(userPrivKey);
+    // Granica z warstwa sieciowa: `privfs`/`rpc` nadal operuja na `privmx::crypto`, bo ich migracja
+    // jest osobnym zadaniem. Konwersja przez WIF kosztuje jedno parsowanie na polaczenie.
+    // Do usuniecia, gdy warstwa sieciowa przejdzie na pmx-crypto.
+    auto legacyKey = privmx::crypto::PrivateKey::fromWIF(key.toWIF());
     if (verificationOptions.bridgePubKey.has_value()) {
         _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(
-            key, options, solutionId, crypto::PublicKey::fromBase58DER(verificationOptions.bridgePubKey.value())
+            legacyKey, options, solutionId,
+            privmx::crypto::PublicKey::fromBase58DER(verificationOptions.bridgePubKey.value())
         );
     } else {
-        _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId);
+        _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(legacyKey, options, solutionId);
     }
     _serverApi.emplace(_gateway);
     _host = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->host;
@@ -141,11 +146,14 @@ void ConnectionImpl::connectPublic(
         .pubKey = verificationOptions.bridgePubKey,
         .instanceId = verificationOptions.bridgeInstanceId
     };
-    auto key = privmx::crypto::PrivateKey::generateRandom();
+    auto key = core::PrivateKey::generateRandom();
     _userPrivKey = key;
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
-    _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(key, options, solutionId);
+    // Granica z warstwa sieciowa - patrz uwaga przy `createGatewayFromEcdhexConnection`.
+    _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(
+        privmx::crypto::PrivateKey::fromWIF(key.toWIF()), options, solutionId
+    );
     _serverApi.emplace(_gateway);
     _serverConfig = _gateway->getInfo().cast<rpc::EcdheConnectionInfo>()->serverConfig;
     _eventMiddleware = std::shared_ptr<EventMiddleware>(
@@ -290,7 +298,7 @@ DataIntegrityObject ConnectionImpl::createDIO(
 DataIntegrityObject ConnectionImpl::createPublicDIO(
     const std::string& contextId,
     const std::string& resourceId,
-    const crypto::PublicKey& pubKey,
+    const core::PublicKey& pubKey,
     const std::optional<std::string>& containerId,
     const std::optional<std::string>& containerResourceId
 ) {
@@ -303,7 +311,7 @@ DataIntegrityObject ConnectionImpl::createDIOExt(
     const std::optional<std::string>& containerId,
     const std::optional<std::string>& containerResourceId,
     const std::optional<std::string>& creatorUserId,
-    const std::optional<crypto::PublicKey>& creatorPublicKey
+    const std::optional<core::PublicKey>& creatorPublicKey
 ) {
 
     return core::DataIntegrityObject{

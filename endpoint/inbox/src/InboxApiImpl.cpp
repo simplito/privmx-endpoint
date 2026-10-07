@@ -49,7 +49,7 @@ InboxApiImpl::InboxApiImpl(
     const std::shared_ptr<ServerApi>& serverApi,
     const std::shared_ptr<store::RequestApi>& requestApi,
     const std::string& host,
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
     const std::shared_ptr<core::HandleManager>& handleManager,
     size_t serverRequestChunkSize,
@@ -101,8 +101,7 @@ std::string InboxApiImpl::createInbox(
 ) {
 
     auto inboxKey = _keyProvider->generateKey();
-    auto eccKey = privmx::crypto::ECC::fromPrivateKey(inboxKey.key);
-    auto privateKey = privmx::crypto::PrivateKey(eccKey);
+    auto privateKey = core::PrivateKey::fromRaw(inboxKey.key);
     auto pubKey = privateKey.getPublicKey();
 
     auto randName{InboxDataHelper::getRandomName()};
@@ -186,8 +185,7 @@ void InboxApiImpl::updateInbox(
         currentInbox, currentInboxEntry, currentInboxResourceId, users, managers,
         forceGenerateNewKey || doesGroupStateForceNewKey(currentInbox, groups)
     );
-    auto eccKey = privmx::crypto::ECC::fromPrivateKey(ctx.key.key);
-    auto privateKey = privmx::crypto::PrivateKey(eccKey);
+    auto privateKey = core::PrivateKey::fromRaw(ctx.key.key);
     auto pubKey = privateKey.getPublicKey();
     InboxDataProcessorModelV5 inboxDataIn{
         .storeId = currentInboxData.storeId,
@@ -374,9 +372,9 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     auto handle = _inboxHandleManager.getInboxHandle(inboxHandle);
     auto publicData{getInboxPublicViewData(handle->inboxId)};
 
-    auto inboxPubKeyECC = privmx::crypto::PublicKey::fromBase58DER(publicData.inboxEntriesPubKeyBase58DER);
+    auto inboxPubKeyECC = core::PublicKey::fromBase58DER(publicData.inboxEntriesPubKeyBase58DER);
     auto _userPrivKeyECC =
-        (handle->userPrivKey.has_value() ? privmx::crypto::PrivateKey::fromWIF(handle->userPrivKey.value()) :
+        (handle->userPrivKey.has_value() ? core::PrivateKey::fromWIF(handle->userPrivKey.value()) :
                                            _userPrivKey);
     auto _userPubKeyECC = _userPrivKeyECC.getPublicKey();
     std::string filesMetaKey;

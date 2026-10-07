@@ -12,8 +12,8 @@ limitations under the License.
 #include <regex>
 
 #include <privmx/crypto/CryptoException.hpp>
-#include <privmx/crypto/ecc/ECC.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/crypto/KeyConverter.hpp"
@@ -38,8 +38,7 @@ std::string KeyConverter::cryptoKeyConvertPEMToWIF(const std::string& keyPEM) {
     base64 = std::regex_replace(base64, std::regex("\n|\r|\t"), "");
     auto decoded = utils::Base64::toString(base64);
     std::string extractedKey{decoded.substr(7, 32)};
-    auto eccKey{privmx::crypto::ECC::fromPrivateKey(extractedKey)};
-    auto privateKey{privmx::crypto::PrivateKey(eccKey)};
+    auto privateKey{core::PrivateKey::fromRaw(extractedKey)};
     auto wif{privateKey.toWIF()};
     return wif;
 }
@@ -64,6 +63,6 @@ std::string KeyConverter::cryptoKeyConvertPGPToBase58DER(const std::string& keyP
     std::string base64 = data.substr(0, controlsumBegin);
     auto decoded = utils::Base64::toString(base64);
     std::string extractedKeyDer{decoded.substr(16, 65)};
-    auto pub = privmx::crypto::PublicKey::fromDER(extractedKeyDer);
+    auto pub = core::PublicKey::fromDER(extractedKeyDer);
     return pub.toBase58DER();
 }

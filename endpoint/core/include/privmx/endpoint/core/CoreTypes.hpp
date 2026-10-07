@@ -16,7 +16,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Types.hpp"
 #include <Poco/Dynamic/Var.h>
 #include <optional>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <string>
 #include <unordered_map>
 

@@ -41,7 +41,7 @@ public:
     static TreeGroupState toRuntime(
         const server::GroupTreeState& tree,
         std::uint32_t epoch,
-        const privmx::crypto::PublicKey& grantPublicKey
+        const core::PublicKey& grantPublicKey
     );
 
     // The refreshed path with the generations it was planned against, the edges that refresh owes, and the grant

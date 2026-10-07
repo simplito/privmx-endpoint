@@ -15,8 +15,8 @@ limitations under the License.
 #include "privmx/endpoint/event/EventTypes.hpp"
 #include "privmx/endpoint/event/ServerTypes.hpp"
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/EciesEncryptor.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/Ecies.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
@@ -29,16 +29,16 @@ namespace event {
 
 class EventKeyProvider {
 public:
-    EventKeyProvider(const privmx::crypto::PrivateKey& key);
+    EventKeyProvider(const core::PrivateKey& key);
     std::string generateKey();
-    DecryptedEventEncKeyV1 decryptKey(const std::string& encryptedKey, const privmx::crypto::PublicKey& authorPubKey);
+    DecryptedEventEncKeyV1 decryptKey(const std::string& encryptedKey, const core::PublicKey& authorPubKey);
     std::vector<server::UserKey> prepareKeysList(
         const std::vector<core::UserWithPubKey>& users,
         const std::string& key
     );
 
 private:
-    privmx::crypto::PrivateKey _key;
+    core::PrivateKey _key;
 };
 
 } // namespace event

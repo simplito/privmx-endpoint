@@ -28,14 +28,14 @@ limitations under the License.
 #include <thread>
 #include <vector>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 
 #include <privmx/endpoint/group/keytree/TreeKeyCache.hpp>
 #include <privmx/endpoint/group/keytree/TreeKeyCacheRegistry.hpp>
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 
-using privmx::crypto::PrivateKey;
+using privmx::endpoint::core::PrivateKey;
 using namespace privmx::endpoint::group::keytree;
 
 // Helpers to assemble tree state from a plan, shared by every suite below.
@@ -744,7 +744,7 @@ TreeKeys::choosePositions(state, 1), members[0].priv
         EXPECT_NE(node.publicKey.toBase58DER(), before->publicKey.toBase58DER()) << "node " << node.nodeIndex;
     }
 
-    const privmx::crypto::PublicKey grantBefore = state.grantPublicKey;
+    const privmx::endpoint::core::PublicKey grantBefore = state.grantPublicKey;
     applyAddition(state, addition, newcomer.userId);
     EXPECT_EQ(state.grantPublicKey.toBase58DER(), grantBefore.toBase58DER())
         << "an addition must not change the grant key";
@@ -820,7 +820,7 @@ TreeKeys::choosePositions(state, 1), members[0].priv
     EXPECT_EQ(addition.positions.at(0), 5u) << "every seat is taken, so the tree grows";
     EXPECT_EQ(addition.newNumLeaves, 6u);
 
-    const privmx::crypto::PublicKey grantBefore = state.grantPublicKey;
+    const privmx::endpoint::core::PublicKey grantBefore = state.grantPublicKey;
     const std::uint32_t epochBefore = state.epoch;
     applyAddition(state, addition, newcomer.userId);
     EXPECT_EQ(state.grantPublicKey.toBase58DER(), grantBefore.toBase58DER());
@@ -851,7 +851,7 @@ TreeKeys::choosePositions(state, 1), members[0].priv
     ASSERT_TRUE(addition.newRoot.has_value()) << "growing from four to five leaves changes the root";
     EXPECT_EQ(addition.newRoot->nodeIndex, TreeMath::root(5));
 
-    const privmx::crypto::PublicKey grantBefore = state.grantPublicKey;
+    const privmx::endpoint::core::PublicKey grantBefore = state.grantPublicKey;
     applyAddition(state, addition, newcomer.userId);
     EXPECT_EQ(state.grantPublicKey.toBase58DER(), grantBefore.toBase58DER());
 
@@ -880,7 +880,7 @@ TreeKeys::choosePositions(state, 1), members[0].priv
     EXPECT_EQ(addition.positions.at(0), 1u);
     EXPECT_EQ(addition.nodes.size(), 1u);
 
-    const privmx::crypto::PublicKey grantBefore = state.grantPublicKey;
+    const privmx::endpoint::core::PublicKey grantBefore = state.grantPublicKey;
     applyAddition(state, addition, newcomer.userId);
     EXPECT_EQ(state.grantPublicKey.toBase58DER(), grantBefore.toBase58DER());
     std::vector<TestMember> after = members;

@@ -25,12 +25,12 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 
 #include <privmx/endpoint/group/keytree/GroupKeyResolver.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 
-using privmx::crypto::PrivateKey;
+using privmx::endpoint::core::PrivateKey;
 using namespace privmx::endpoint::group;
 using namespace privmx::endpoint::group::keytree;
 

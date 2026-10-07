@@ -17,9 +17,9 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -56,7 +56,7 @@ class NodePublicKey {
 public:
     NodePublicKey() = default;
     // From a key this process already holds — a minted one.
-    NodePublicKey(const privmx::crypto::PublicKey& key) : _parsed(key), _der(key.toBase58DER()) {}
+    NodePublicKey(const core::PublicKey& key) : _parsed(key), _der(key.toBase58DER()) {}
 
     static NodePublicKey fromBase58DER(std::string der) {
         NodePublicKey result;
@@ -66,22 +66,22 @@ public:
 
     // Parsed on first use and kept, so wrapping to the same node twice costs one parse. The cache behind it
     // carries that across the short-lived `TreeGroupState` objects a resolve rebuilds every time.
-    const privmx::crypto::PublicKey& parsed() const {
+    const core::PublicKey& parsed() const {
         if (!_parsed.has_value()) {
-            _parsed = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(_der);
+            _parsed = core::PublicKeyCache::getInstance()->fromBase58DER(_der);
         }
         return _parsed.value();
     }
 
     const std::string& toBase58DER() const { return _der; }
 
-    bool operator==(const privmx::crypto::PublicKey& other) const { return _der == other.toBase58DER(); }
-    bool operator!=(const privmx::crypto::PublicKey& other) const { return !(*this == other); }
+    bool operator==(const core::PublicKey& other) const { return _der == other.toBase58DER(); }
+    bool operator!=(const core::PublicKey& other) const { return !(*this == other); }
     bool operator==(const NodePublicKey& other) const { return _der == other._der; }
     bool operator!=(const NodePublicKey& other) const { return _der != other._der; }
 
 private:
-    mutable std::optional<privmx::crypto::PublicKey> _parsed;
+    mutable std::optional<core::PublicKey> _parsed;
     std::string _der;
 };
 
@@ -103,7 +103,7 @@ struct TreeGroupState {
 
     // Current epoch and its public grant key — what containers wrap to.
     std::uint32_t epoch = 0;
-    privmx::crypto::PublicKey grantPublicKey;
+    core::PublicKey grantPublicKey;
 };
 
 enum class ClimbFailure {
@@ -117,7 +117,7 @@ enum class ClimbFailure {
 };
 
 struct ClimbResult {
-    std::optional<privmx::crypto::PrivateKey> grantKey;
+    std::optional<core::PrivateKey> grantKey;
     ClimbFailure failure = ClimbFailure::None;
     // Deepest node reached before stopping. Partial progress is still cached and useful.
     std::uint32_t reachedNode = 0;
@@ -129,7 +129,7 @@ struct ClimbResult {
 struct NodeRefresh {
     std::uint32_t nodeIndex = 0;
     std::uint32_t newGeneration = 0;
-    privmx::crypto::PrivateKey newKey;
+    core::PrivateKey newKey;
     std::vector<TreeEdge> edges;
 };
 
@@ -139,7 +139,7 @@ struct RemovalPlan {
     std::vector<std::uint32_t> blankedPositions;
     // The union of the blanked leaves' direct paths — each shared ancestor appears once.
     std::vector<NodeRefresh> pathRefresh;
-    privmx::crypto::PrivateKey newGrantKey;
+    core::PrivateKey newGrantKey;
     TreeEdge grantEdge;
     std::uint32_t newEpoch = 0;
     // Tree edges + the grant edge. Excludes ladder rungs, which the ladder module builds.
@@ -154,10 +154,10 @@ struct AdditionPlan {
     // Every node on the new leaf's path: minted where the tree grew, one generation on where it existed.
     std::vector<TreeNodeState> nodes;
     // The keys behind those nodes, to keep locally so the next climb starts from cache.
-    std::vector<std::pair<std::uint32_t, privmx::crypto::PrivateKey>> nodeKeys;
+    std::vector<std::pair<std::uint32_t, core::PrivateKey>> nodeKeys;
     // Present only when the tree grew a level; the grant keypair is unchanged either way.
     std::optional<TreeNodeState> newRoot;
-    std::optional<privmx::crypto::PrivateKey> newRootKey;
+    std::optional<core::PrivateKey> newRootKey;
     std::uint32_t newNumLeaves = 0;
     std::uint32_t wrapCount = 0;
 };
@@ -166,15 +166,15 @@ struct BuildPlan {
     std::uint32_t numLeaves = 0;
     std::vector<TreeNodeState> nodes;
     std::vector<TreeEdge> edges;
-    privmx::crypto::PrivateKey grantKey;
+    core::PrivateKey grantKey;
     // Kept locally; the server only ever receives the public halves.
-    std::vector<std::pair<std::uint32_t, privmx::crypto::PrivateKey>> nodeKeys;
+    std::vector<std::pair<std::uint32_t, core::PrivateKey>> nodeKeys;
     std::uint32_t wrapCount = 0;
 };
 
 struct TreeMember {
     std::string userId;
-    privmx::crypto::PublicKey publicKey;
+    core::PublicKey publicKey;
 };
 
 } // namespace keytree

@@ -15,15 +15,15 @@ limitations under the License.
 #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 namespace privmx {
 namespace endpoint {
 namespace core {
 
 class EncKeyEncryptorV1 {
 public:
-    std::string decrypt(const std::string& encryptedEncKey, const privmx::crypto::PrivateKey& decryptionKey);
+    std::string decrypt(const std::string& encryptedEncKey, const core::PrivateKey& decryptionKey);
 };
 
 } // namespace core

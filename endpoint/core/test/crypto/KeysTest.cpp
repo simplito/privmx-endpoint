@@ -136,6 +136,22 @@ TEST(Keys, WorksInsideStandardContainers) {
     EXPECT_EQ(copy, byUser.at("alice"));
 }
 
+/// Stara implementacja przyjmowala klucz publiczny w obu postaciach, a dane zewnetrzne
+/// (klucz wyluskany z bloku PGP) przychodza nieskompresowane. Pierwotna wersja wrappera
+/// obslugiwala tylko 33 B i wywracala `convertPGPAsn1KeyToBase58DERKey`.
+TEST(Keys, FromDerAcceptsCompressedAndUncompressed) {
+    const auto legacyPub = legacy::PrivateKey::fromWIF(WIF).getPublicKey();
+    const std::string compressed = legacyPub.toDER();
+    const std::string uncompressed = legacyPub.getEcc().getPublicKey(false);
+
+    ASSERT_EQ(33u, compressed.size());
+    ASSERT_EQ(65u, uncompressed.size());
+
+    // Obie postaci opisuja ten sam klucz, wiec musza dac te sama postac kanoniczna.
+    EXPECT_EQ(PublicKey::fromDER(compressed), PublicKey::fromDER(uncompressed));
+    EXPECT_EQ(legacyPub.toBase58DER(), PublicKey::fromDER(uncompressed).toBase58DER());
+}
+
 TEST(Keys, MalformedInputIsRejected) {
     EXPECT_ANY_THROW(PublicKey::fromBase58DER("to-nie-jest-klucz"));
     EXPECT_ANY_THROW(PrivateKey::fromWIF("to-nie-jest-wif"));

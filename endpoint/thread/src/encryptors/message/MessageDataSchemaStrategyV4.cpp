@@ -24,7 +24,7 @@ server::EncryptedMessageDataV4 MessageDataSchemaStrategyV4::encrypt(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const core::Buffer& data,
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const std::string& key
 ) const {
     MessageDataToEncryptV4 messageData{

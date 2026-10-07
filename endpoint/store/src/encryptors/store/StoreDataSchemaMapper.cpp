@@ -22,7 +22,7 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
 StoreDataSchemaMapper::StoreDataSchemaMapper(
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const core::Connection& connection
 )
     : core::BaseModuleDataSchemaMapper(userPrivKey, connection) {

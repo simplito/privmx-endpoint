@@ -15,7 +15,7 @@ limitations under the License.
 #include <type_traits>
 
 #include <Poco/Dynamic/Var.h>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
@@ -30,7 +30,7 @@ namespace core {
 
 class BaseModuleDataSchemaMapper {
 public:
-    BaseModuleDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection)
+    BaseModuleDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection)
         : _userPrivKey(userPrivKey), _connection(connection) {}
     virtual ~BaseModuleDataSchemaMapper() = default;
 
@@ -56,7 +56,7 @@ public:
     }
 
 protected:
-    privmx::crypto::PrivateKey _userPrivKey;
+    core::PrivateKey _userPrivKey;
     core::Connection _connection;
     core::ModuleDataEncryptorV5 _encryptorV5;
 

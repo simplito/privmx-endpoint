@@ -61,7 +61,7 @@ public:
         const std::shared_ptr<inbox::ServerApi>& serverApi,
         const std::shared_ptr<store::RequestApi>& requestApi,
         const std::string& host,
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
         const std::shared_ptr<core::HandleManager>& handleManager,
         size_t serverRequestChunkSize,

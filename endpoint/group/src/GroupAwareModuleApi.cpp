@@ -20,7 +20,7 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
 GroupAwareModuleApi::GroupAwareModuleApi(
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
@@ -33,7 +33,7 @@ GroupAwareModuleApi::GroupAwareModuleApi(
         return;
     }
     initGroupPrivKeyResolver(
-        [impl = _groupApi](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
+        [impl = _groupApi](const std::string& groupId, int64_t epoch) -> std::optional<core::PrivateKey> {
             try {
                 return impl->resolveGroupPrivKey(groupId, epoch);
             } catch (...) {

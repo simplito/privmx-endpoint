@@ -14,7 +14,7 @@ limitations under the License.
 
 #include <tuple>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyV5.hpp>
 
@@ -47,7 +47,7 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const core::Buffer& internalMeta,
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const std::string& key,
         const core::DataIntegrityObject& dio
     ) const;

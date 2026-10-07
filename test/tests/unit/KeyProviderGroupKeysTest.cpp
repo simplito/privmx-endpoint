@@ -7,8 +7,8 @@
 #include <vector>
 
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
@@ -51,13 +51,13 @@ class KeyProviderGroupKeysTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // By pointer: `KeyProvider` has no default constructor, and this assumes nothing about copy/move.
-        _keyProvider = std::make_unique<KeyProvider>(privmx::crypto::PrivateKey::generateRandom(), [] {
+        _keyProvider = std::make_unique<KeyProvider>(privmx::endpoint::core::PrivateKey::generateRandom(), [] {
             return std::make_shared<UserVerifier>(std::make_shared<AcceptAllVerifier>());
         });
     }
 
     // One group-addressed wrapping of the shared container key, shaped as `buildGroupKeyEntries` emits it.
-    server::GroupKeyEntry wrapFor(const privmx::crypto::PublicKey& groupPubKey, int64_t groupEpoch) {
+    server::GroupKeyEntry wrapFor(const privmx::endpoint::core::PublicKey& groupPubKey, int64_t groupEpoch) {
         const std::string keySecret = "key-secret-at-epoch-" + std::to_string(groupEpoch);
 
         DataIntegrityObject dio;
@@ -90,8 +90,8 @@ protected:
 
     // Two granted groups covering one keyId, served in A-then-B order, as the bridge stores them.
     std::vector<server::GroupKeysEntry> twoRoutes(
-        const privmx::crypto::PrivateKey& groupA,
-        const privmx::crypto::PrivateKey& groupB
+        const privmx::endpoint::core::PrivateKey& groupA,
+        const privmx::endpoint::core::PrivateKey& groupB
     ) {
         return {
             {.group = GROUP_A, .keys = {wrapFor(groupA.getPublicKey(), 1)}},
@@ -101,19 +101,19 @@ protected:
 
     // Resolves only the listed groups; every call is recorded, in order.
     static KeyProvider::GroupPrivKeyResolver resolverOver(
-        const std::map<std::string, privmx::crypto::PrivateKey>& openable,
+        const std::map<std::string, privmx::endpoint::core::PrivateKey>& openable,
         ResolverLog& log
     ) {
         return [&openable, &log](const std::string& groupId, int64_t) {
             log.attempted.push_back(groupId);
             const auto found = openable.find(groupId);
             return found == openable.end() ? std::nullopt :
-                                             std::optional<privmx::crypto::PrivateKey>(found->second);
+                                             std::optional<privmx::endpoint::core::PrivateKey>(found->second);
         };
     }
 
     std::unique_ptr<KeyProvider> _keyProvider;
-    privmx::crypto::PrivateKey _author = privmx::crypto::PrivateKey::generateRandom();
+    privmx::endpoint::core::PrivateKey _author = privmx::endpoint::core::PrivateKey::generateRandom();
     EncKey _containerKey{.id = KEY_ID, .key = std::string(32, '\x2b')};
     EncKeyLocation _location{.contextId = CONTEXT_ID, .resourceId = RESOURCE_ID};
     std::string _containerSecret = "container-secret";
@@ -124,14 +124,14 @@ protected:
 TEST_F(KeyProviderGroupKeysTest, dead_route_marks_the_key_even_though_a_later_route_opens_it) {
     // Fail closed: group_b yields the right key, but group_a's failure still marks it. The same shape covers
     // "this epoch is not mine to reach" and "the server served a DIO that does not verify".
-    const auto groupA = privmx::crypto::PrivateKey::generateRandom();
-    const auto groupB = privmx::crypto::PrivateKey::generateRandom();
+    const auto groupA = privmx::endpoint::core::PrivateKey::generateRandom();
+    const auto groupB = privmx::endpoint::core::PrivateKey::generateRandom();
 
     KeyDecryptionAndVerificationRequest request;
     request.addGroupKeys(twoRoutes(groupA, groupB), _location);
 
     ResolverLog log;
-    const std::map<std::string, privmx::crypto::PrivateKey> openable{{GROUP_B, groupB}};
+    const std::map<std::string, privmx::endpoint::core::PrivateKey> openable{{GROUP_B, groupB}};
     const auto keys = _keyProvider->getKeysAndVerify(request, resolverOver(openable, log));
 
     const auto& key = keys.at(_location).at(KEY_ID);
@@ -146,14 +146,14 @@ TEST_F(KeyProviderGroupKeysTest, dead_route_marks_the_key_even_though_a_later_ro
 TEST_F(KeyProviderGroupKeysTest, opening_on_the_first_route_leaves_no_mark) {
     // The honest limit of the mark: the search stops on success, so a dead group_b is never attempted and never
     // reported. Detection stays order-dependent until the key-free DIO checks run over every route first.
-    const auto groupA = privmx::crypto::PrivateKey::generateRandom();
-    const auto groupB = privmx::crypto::PrivateKey::generateRandom();
+    const auto groupA = privmx::endpoint::core::PrivateKey::generateRandom();
+    const auto groupB = privmx::endpoint::core::PrivateKey::generateRandom();
 
     KeyDecryptionAndVerificationRequest request;
     request.addGroupKeys(twoRoutes(groupA, groupB), _location);
 
     ResolverLog log;
-    const std::map<std::string, privmx::crypto::PrivateKey> openable{{GROUP_A, groupA}};
+    const std::map<std::string, privmx::endpoint::core::PrivateKey> openable{{GROUP_A, groupA}};
     const auto keys = _keyProvider->getKeysAndVerify(request, resolverOver(openable, log));
 
     const auto& key = keys.at(_location).at(KEY_ID);
@@ -165,14 +165,14 @@ TEST_F(KeyProviderGroupKeysTest, opening_on_the_first_route_leaves_no_mark) {
 
 TEST_F(KeyProviderGroupKeysTest, unopenable_routes_leave_a_failed_entry_under_the_keyId) {
     // Every route dead still yields an entry: callers read `.at(keyId).statusCode`, so a gap throws instead.
-    const auto groupA = privmx::crypto::PrivateKey::generateRandom();
-    const auto groupB = privmx::crypto::PrivateKey::generateRandom();
+    const auto groupA = privmx::endpoint::core::PrivateKey::generateRandom();
+    const auto groupB = privmx::endpoint::core::PrivateKey::generateRandom();
 
     KeyDecryptionAndVerificationRequest request;
     request.addGroupKeys(twoRoutes(groupA, groupB), _location);
 
     ResolverLog log;
-    const std::map<std::string, privmx::crypto::PrivateKey> openable{};
+    const std::map<std::string, privmx::endpoint::core::PrivateKey> openable{};
     const auto keys = _keyProvider->getKeysAndVerify(request, resolverOver(openable, log));
 
     const auto locationKeys = keys.at(_location);
@@ -184,8 +184,8 @@ TEST_F(KeyProviderGroupKeysTest, unopenable_routes_leave_a_failed_entry_under_th
 TEST_F(KeyProviderGroupKeysTest, adding_the_same_location_twice_does_not_duplicate_routes) {
     // `DataSchemaMapperUtils` adds per item and two items can share a container, so a repeated add is ordinary.
     // `insert_or_assign` was idempotent for free; appending is not, and a dup route is a dup `groupGet`.
-    const auto groupA = privmx::crypto::PrivateKey::generateRandom();
-    const auto groupB = privmx::crypto::PrivateKey::generateRandom();
+    const auto groupA = privmx::endpoint::core::PrivateKey::generateRandom();
+    const auto groupB = privmx::endpoint::core::PrivateKey::generateRandom();
     const std::vector<server::GroupKeysEntry> served = twoRoutes(groupA, groupB);
 
     KeyDecryptionAndVerificationRequest request;

@@ -14,14 +14,14 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::core;
 
-std::string DataEncryptorV4::signAndEncode(const core::Buffer& data, const crypto::PrivateKey& authorPrivateKey) {
+std::string DataEncryptorV4::signAndEncode(const core::Buffer& data, const core::PrivateKey& authorPrivateKey) {
     auto signedData = _innerEncryptor.signAndPackDataWithSignature(data, authorPrivateKey);
     return _innerEncryptor.encode(signedData);
 }
 
 std::string DataEncryptorV4::signAndEncryptAndEncode(
     const core::Buffer& data,
-    const crypto::PrivateKey& authorPrivateKey,
+    const core::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
     auto signedData = _innerEncryptor.signAndPackDataWithSignature(data, authorPrivateKey);
@@ -31,7 +31,7 @@ std::string DataEncryptorV4::signAndEncryptAndEncode(
 
 core::Buffer DataEncryptorV4::decodeAndVerify(
     const std::string& publicDataAsBase64,
-    const crypto::PublicKey& authorPublicKey
+    const core::PublicKey& authorPublicKey
 ) {
     auto decoded = _innerEncryptor.decode(publicDataAsBase64);
     return _innerEncryptor.verifyAndExtractData(decoded, authorPublicKey);
@@ -39,7 +39,7 @@ core::Buffer DataEncryptorV4::decodeAndVerify(
 
 core::Buffer DataEncryptorV4::decodeAndDecryptAndVerify(
     const std::string& privateDataAsBase64,
-    const crypto::PublicKey& authorPublicKey,
+    const core::PublicKey& authorPublicKey,
     const std::string& encryptionKey
 ) {
     auto decoded = _innerEncryptor.decode(privateDataAsBase64);

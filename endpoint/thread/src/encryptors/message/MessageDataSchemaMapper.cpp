@@ -19,7 +19,7 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
 MessageDataSchemaMapper::MessageDataSchemaMapper(
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const core::Connection& connection
 )
     : _userPrivKey(userPrivKey), _connection(connection) {

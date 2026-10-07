@@ -20,7 +20,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-FileMetaEncryptor::FileMetaEncryptor(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection)
+FileMetaEncryptor::FileMetaEncryptor(const core::PrivateKey& userPrivKey, const core::Connection& connection)
     : _userPrivKey(userPrivKey), _connection(connection) {}
 
 Poco::Dynamic::Var FileMetaEncryptor::encrypt(

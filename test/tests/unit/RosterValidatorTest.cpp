@@ -26,13 +26,13 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
 #include <privmx/utils/Base58.hpp>
 
-using privmx::crypto::PrivateKey;
+using privmx::endpoint::core::PrivateKey;
 using privmx::endpoint::core::UserWithPubKey;
 using privmx::endpoint::core::Validator;
 

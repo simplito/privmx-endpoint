@@ -25,6 +25,25 @@ PublicKey PublicKey::fromBase58DER(const std::string& base58DER) {
 }
 
 PublicKey PublicKey::fromDER(const std::string& der) {
+    // Dwie dlugosci, bo stara implementacja przyjmowala obie, a dane zewnetrzne (np. klucz
+    // wyluskany z bloku PGP) przychodza w postaci nieskompresowanej.
+    //
+    //   33 B - postac skompresowana, format danych PrivMX
+    //   65 B - postac nieskompresowana; `PrivmxSecp256k1` jej nie przyjmuje, wiec import idzie
+    //          przez zwykly `secp256k1` + `Raw`. Eksport i tak zwraca postac skompresowana,
+    //          wiec dla wolajacego nie ma roznicy.
+    constexpr std::size_t COMPRESSED_LENGTH = 33;
+    constexpr std::size_t UNCOMPRESSED_LENGTH = 65;
+    if (der.size() == UNCOMPRESSED_LENGTH) {
+        return PublicKey(
+            cryptoProvider().importPublicKey(keyBytes(der), cs::KeyFormat::Raw, cs::AsymAlg::secp256k1)
+        );
+    }
+    if (der.size() != COMPRESSED_LENGTH) {
+        throw MalformedEncryptionKeyException(
+            "public key DER of unexpected length: " + std::to_string(der.size())
+        );
+    }
     return PublicKey(cryptoProvider().importPublicKey(keyBytes(der), cs::KeyFormat::Der, KEY_ALGORITHM));
 }
 

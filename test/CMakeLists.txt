@@ -136,10 +136,10 @@ target_link_libraries(test_unit_LadderMathTest privmxendpointgroup GTest::GTest 
 
 # Real EC keys and ECIES (builds, climbs, and removes members from trees entirely in-process; still no server/docker/network)
 add_executable(test_unit_TreeKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeKeysTest.cpp)
-target_link_libraries(test_unit_TreeKeysTest privmx privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+target_link_libraries(test_unit_TreeKeysTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
 add_executable(test_unit_LadderKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/LadderKeysTest.cpp)
-target_link_libraries(test_unit_LadderKeysTest privmx privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+target_link_libraries(test_unit_LadderKeysTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
 # Goes through the wire types (server::GroupInfo, where tree and ladder meet the server API; needs core for JSON struct machinery)
 add_executable(test_unit_GroupKeyResolverTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupKeyResolverTest.cpp)

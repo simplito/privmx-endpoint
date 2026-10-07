@@ -11,7 +11,7 @@
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
@@ -88,7 +88,7 @@ protected:
         std::string pubKey;
     };
     Identity newIdentity(const std::string& userId) {
-        const privmx::crypto::PrivateKey key = privmx::crypto::PrivateKey::generateRandom();
+        const privmx::endpoint::core::PrivateKey key = privmx::endpoint::core::PrivateKey::generateRandom();
         return Identity{
             .userId = userId, .privKey = key.toWIF(), .pubKey = key.getPublicKey().toBase58DER()
         };

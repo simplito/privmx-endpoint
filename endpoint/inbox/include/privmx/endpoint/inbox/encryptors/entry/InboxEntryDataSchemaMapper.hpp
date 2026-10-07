@@ -15,8 +15,8 @@ limitations under the License.
 #include <memory>
 #include <string>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/thread/ServerTypes.hpp>
@@ -44,10 +44,10 @@ public:
 
     std::string encrypt(
         const InboxEntrySendModel& data,
-        privmx::crypto::PrivateKey& userPriv,
-        privmx::crypto::PublicKey& inboxPub
+        core::PrivateKey& userPriv,
+        core::PublicKey& inboxPub
     );
-    InboxEntryDataResult decrypt(std::string& data, privmx::crypto::PrivateKey& inboxPriv);
+    InboxEntryDataResult decrypt(std::string& data, core::PrivateKey& inboxPriv);
     InboxEntryPublicDataResult decryptPublicOnly(std::string& data);
 
     InboxEntryResult decryptInboxEntry(

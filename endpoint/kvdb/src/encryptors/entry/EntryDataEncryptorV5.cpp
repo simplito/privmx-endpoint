@@ -16,14 +16,14 @@ limitations under the License.
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
 #include "privmx/utils/Utils.hpp"
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
 server::EncryptedKvdbEntryDataV5 EntryDataEncryptorV5::encrypt(
     const KvdbEntryDataToEncryptV5& messageData,
-    const crypto::PrivateKey& authorPrivateKey,
+    const core::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
     server::EncryptedKvdbEntryDataV5 result;
@@ -66,7 +66,7 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
     result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedEntryData);
-        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedEntryData.authorPubKey);
+        auto authorPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(encryptedEntryData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedEntryData.publicMeta, authorPublicKey);
         if (!encryptedEntryData.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
@@ -103,7 +103,7 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(
     result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedEntryData);
-        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedEntryData.authorPubKey);
+        auto authorPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(encryptedEntryData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedEntryData.publicMeta, authorPublicKey);
         if (!encryptedEntryData.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));

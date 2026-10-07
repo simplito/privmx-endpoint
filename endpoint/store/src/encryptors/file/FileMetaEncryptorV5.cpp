@@ -16,7 +16,7 @@ limitations under the License.
 #include "privmx/endpoint/store/Constants.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint;
@@ -24,7 +24,7 @@ using namespace privmx::endpoint::store;
 
 store::server::EncryptedFileMetaV5 FileMetaEncryptorV5::encrypt(
     const store::FileMetaToEncryptV5& fileMeta,
-    const crypto::PrivateKey& authorPrivateKey,
+    const core::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
     server::EncryptedFileMetaV5 result;
@@ -58,7 +58,7 @@ store::DecryptedFileMetaV5 FileMetaEncryptorV5::decrypt(
     result.dataStructureVersion = FileDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedFileMeta);
-        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedFileMeta.authorPubKey);
+        auto authorPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(encryptedFileMeta.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedFileMeta.publicMeta, authorPublicKey);
         if (!encryptedFileMeta.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
@@ -92,7 +92,7 @@ store::DecryptedFileMetaV5 FileMetaEncryptorV5::extractPublic(
     result.dataStructureVersion = FileDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedFileMeta);
-        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedFileMeta.authorPubKey);
+        auto authorPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(encryptedFileMeta.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedFileMeta.publicMeta, authorPublicKey);
         if (encryptedFileMeta.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));

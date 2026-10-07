@@ -12,8 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_DATAENCRYPTORV4_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_DATAENCRYPTORV4_HPP_
 
-#include "privmx/crypto/ecc/PrivateKey.hpp"
-#include "privmx/crypto/ecc/PublicKey.hpp"
+#include "privmx/endpoint/core/crypto/PrivateKey.hpp"
+#include "privmx/endpoint/core/crypto/PublicKey.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp"
 
@@ -23,16 +23,16 @@ namespace core {
 
 class DataEncryptorV4 {
 public:
-    std::string signAndEncode(const core::Buffer& data, const crypto::PrivateKey& authorPrivateKey);
+    std::string signAndEncode(const core::Buffer& data, const core::PrivateKey& authorPrivateKey);
     std::string signAndEncryptAndEncode(
         const core::Buffer& data,
-        const crypto::PrivateKey& authorPrivateKey,
+        const core::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    core::Buffer decodeAndVerify(const std::string& publicDataBase64, const crypto::PublicKey& authorPublicKey);
+    core::Buffer decodeAndVerify(const std::string& publicDataBase64, const core::PublicKey& authorPublicKey);
     core::Buffer decodeAndDecryptAndVerify(
         const std::string& privateDataBase64,
-        const crypto::PublicKey& authorPublicKey,
+        const core::PublicKey& authorPublicKey,
         const std::string& encryptionKey
     );
 

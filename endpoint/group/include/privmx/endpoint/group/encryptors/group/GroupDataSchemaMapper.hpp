@@ -11,7 +11,7 @@
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
@@ -31,7 +31,7 @@ namespace group {
 
 class GroupDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
-    GroupDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
+    GroupDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
     // Takes no key: every field of the public plane is signed and none is encrypted. The content key is still
     // what binds the entry to its epoch and version, through the `publicMetaTag` the caller puts in `data.meta`.

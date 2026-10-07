@@ -3,8 +3,8 @@
 #include <memory>
 #include <string>
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -86,7 +86,7 @@ TEST_F(CryptoTest, generatePrivateKey) {
         keyInWIF = cryptoApi->generatePrivateKey(std::nullopt);
     });
     EXPECT_NO_THROW({
-        privmx::crypto::PrivateKey::fromWIF(keyInWIF);
+        privmx::endpoint::core::PrivateKey::fromWIF(keyInWIF);
     });
 }
 
@@ -99,7 +99,7 @@ TEST_F(CryptoTest, derivePrivateKey) {
     });
 #pragma GCC diagnostic pop
     EXPECT_NO_THROW({
-        privmx::crypto::PrivateKey::fromWIF(keyInWIF);
+        privmx::endpoint::core::PrivateKey::fromWIF(keyInWIF);
     });
     EXPECT_EQ(keyInWIF, "L2TUveYrXgohLcLVcvrYd48Nwy25cZNGEuGYjxwWnai2uW9KNpPb");
 }
@@ -110,7 +110,7 @@ TEST_F(CryptoTest, derivePrivateKey2) {
         keyInWIF = cryptoApi->derivePrivateKey2("pass","salt");
     });
     EXPECT_NO_THROW({
-        privmx::crypto::PrivateKey::fromWIF(keyInWIF);
+        privmx::endpoint::core::PrivateKey::fromWIF(keyInWIF);
     });
     EXPECT_EQ(keyInWIF, "L1PtGzD2iLGT3vPQkDGqKhrYCxjBQzfnVzG1D4cTuGnPvPqZEtTP");
 }
@@ -124,7 +124,7 @@ TEST_F(CryptoTest, derivePublicKey) {
         keyInBase58DER = cryptoApi->derivePublicKey("L2TUveYrXgohLcLVcvrYd48Nwy25cZNGEuGYjxwWnai2uW9KNpPb");
     });
     EXPECT_NO_THROW({
-        privmx::crypto::PublicKey::fromBase58DER(keyInBase58DER);
+        privmx::endpoint::core::PublicKey::fromBase58DER(keyInBase58DER);
     });
     EXPECT_EQ(keyInBase58DER, "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
 }
@@ -162,7 +162,7 @@ TEST_F(CryptoTest, convertPEMKeytoWIFKey) {
         keyInWIF = cryptoApi->convertPEMKeytoWIFKey(PEMkey);
     });
     EXPECT_NO_THROW({
-        privmx::crypto::PrivateKey::fromWIF(keyInWIF);
+        privmx::endpoint::core::PrivateKey::fromWIF(keyInWIF);
     });
     EXPECT_EQ(keyInWIF, "KyASahKYZjCyKJBB7ixVQbrQ7o56Vxo2PJgCuTL3YLFGBqxfPFAC");
 }
@@ -173,7 +173,7 @@ TEST_F(CryptoTest, convertPGPAsn1KeyToBase58DERKey) {
         keyInBase58DER = cryptoApi->convertPGPAsn1KeyToBase58DERKey(_PGPkey);
     });
     EXPECT_NO_THROW({
-        privmx::crypto::PublicKey::fromBase58DER(keyInBase58DER);
+        privmx::endpoint::core::PublicKey::fromBase58DER(keyInBase58DER);
     });
     EXPECT_EQ(keyInBase58DER, "7qiWDFa1gEEiEowrBxrGNfKNV9oLtpYGTnZeQ7Y82CdJ7qBTPe");
 }
@@ -354,7 +354,7 @@ TEST_F(CryptoTest, ExtKey_getPrivateEncKey) {
     EXPECT_NO_THROW({
         privateEncKey = ext_key.getPrivateEncKey();
     });
-    privmx::crypto::PrivateKey key = privmx::crypto::PrivateKey::fromWIF(_BIP39_privateKeyWIF_withPassword);
+    privmx::endpoint::core::PrivateKey key = privmx::endpoint::core::PrivateKey::fromWIF(_BIP39_privateKeyWIF_withPassword);
     EXPECT_EQ(privateEncKey.stdString(),key.getPrivateEncKey());
 }
 
@@ -388,7 +388,7 @@ TEST_F(CryptoTest, ExtKey_verifyCompactSignatureWithHash) {
     EXPECT_NO_THROW({
         ext_key =  privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
     });
-    auto privateKey = privmx::crypto::PrivateKey::fromWIF(ext_key.getPrivateKey());
+    auto privateKey = privmx::endpoint::core::PrivateKey::fromWIF(ext_key.getPrivateKey());
     auto sign = privateKey.signToCompactSignatureWithHash("test");
     EXPECT_TRUE(ext_key.verifyCompactSignatureWithHash(core::Buffer::from("test"), core::Buffer::from(sign)));
 }

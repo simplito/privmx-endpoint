@@ -18,7 +18,7 @@ limitations under the License.
 #include <string>
 
 #include <Poco/Dynamic/Var.h>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
@@ -38,7 +38,7 @@ namespace event {
 
 class EventDataSchemaMapper {
 public:
-    EventDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
+    EventDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
     Poco::Dynamic::Var encrypt(
         const std::string& contextId,
@@ -56,7 +56,7 @@ private:
     static ContextCustomEventData makeErrorResult(const server::ContextCustomEventData& rawEvent, int64_t errorCode);
     bool verifyDecryptedEventData(const DecryptedEventDataV5& data);
 
-    privmx::crypto::PrivateKey _userPrivKey;
+    core::PrivateKey _userPrivKey;
     core::Connection _connection;
     EventKeyProvider _eventKeyProvider;
     core::VersionStrategyMapper<server::ContextCustomEventData, ContextCustomEventData> _strategyMapper;

@@ -1,8 +1,8 @@
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp"
 
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/EciesEncryptor.hpp>
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/Ecies.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
@@ -49,29 +49,29 @@ std::string GroupEnvelopeEncryptor::chunkKey(const std::string& fileKey, ChunkIn
 }
 
 std::pair<std::string, std::string> GroupEnvelopeEncryptor::wrapContentKey(
-    const privmx::crypto::PublicKey& groupPubKey
+    const core::PublicKey& groupPubKey
 ) {
     // Throwaway, never retained: it exists only to carry out one ECDH with the group's identity key.
-    privmx::crypto::PrivateKey ephemeralPrivKey = privmx::crypto::PrivateKey::generateRandom();
+    core::PrivateKey ephemeralPrivKey = core::PrivateKey::generateRandom();
     std::string contentKey = privmx::crypto::Crypto::randomBytes(CONTENT_KEY_SIZE);
-    std::string wrap = privmx::crypto::EciesEncryptor::encrypt(
+    std::string wrap = core::Ecies::encrypt(
         groupPubKey, ECIES_DOMAIN + contentKey, ephemeralPrivKey
     );
     return {wrap, contentKey};
 }
 
 std::string GroupEnvelopeEncryptor::unwrapContentKey(
-    const privmx::crypto::PrivateKey& groupPrivKey,
+    const core::PrivateKey& groupPrivKey,
     const std::string& groupPubKeyBase58,
     const std::string& wrap
 ) {
     // The key we resolved must be the key the envelope names, or a hostile server could steer us onto another
     // epoch's key with only the ECIES 4-byte checksum between us and a wrong answer.
     if (groupPrivKey.getPublicKey() !=
-        privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(groupPubKeyBase58)) {
+        core::PublicKeyCache::getInstance()->fromBase58DER(groupPubKeyBase58)) {
         throw InvalidEnvelopeFormatException("resolved group key does not match the key named by the envelope");
     }
-    std::string unwrapped = privmx::crypto::EciesEncryptor::decrypt(groupPrivKey, wrap);
+    std::string unwrapped = core::Ecies::decrypt(groupPrivKey, wrap);
     if (unwrapped.rfind(ECIES_DOMAIN, 0) != 0 || unwrapped.size() != ECIES_DOMAIN.size() + CONTENT_KEY_SIZE) {
         // Not one of ours. Most importantly: an epoch-ladder rung, which is the same ECIES construction
         // addressed to the same key but carries a grant private key. See ECIES_DOMAIN above.
@@ -86,7 +86,7 @@ core::Buffer GroupEnvelopeEncryptor::packGroupKeyEnvelope(
     const std::string& groupId,
     const std::string& keyId,
     const core::Buffer& content,
-    const privmx::crypto::PrivateKey& authorPrivKey,
+    const core::PrivateKey& authorPrivKey,
     const std::string& groupKey
 ) {
     std::string header = writeHeader(TYPE_GROUP_KEY, {groupId, keyId, authorPrivKey.getPublicKey().toDER()});
@@ -112,7 +112,7 @@ DecryptedEnvelope GroupEnvelopeEncryptor::openGroupKeyEnvelope(
     std::string authorPubKeyDer = cursor.readField();
     std::string header = cursor.consumed();
 
-    privmx::crypto::PublicKey authorPubKey = privmx::crypto::PublicKey::fromDER(authorPubKeyDer);
+    core::PublicKey authorPubKey = core::PublicKey::fromDER(authorPubKeyDer);
     core::Buffer plain = _dataEncryptor.verifyAndExtractData(
         _dataEncryptor.decrypt(core::Buffer::from(cursor.readRest()), groupKey), authorPubKey
     );
@@ -133,7 +133,7 @@ DecryptedEnvelope GroupEnvelopeEncryptor::openGroupKeyEnvelope(
 
 core::Buffer GroupEnvelopeEncryptor::packAnonymousEnvelope(
     const std::string& groupId,
-    const privmx::crypto::PublicKey& groupPubKey,
+    const core::PublicKey& groupPubKey,
     const core::Buffer& content
 ) {
     auto [wrap, contentKey] = wrapContentKey(groupPubKey);
@@ -149,7 +149,7 @@ core::Buffer GroupEnvelopeEncryptor::packAnonymousEnvelope(
 
 DecryptedEnvelope GroupEnvelopeEncryptor::openAnonymousEnvelope(
     const core::Buffer& envelope,
-    const privmx::crypto::PrivateKey& groupPrivKey
+    const core::PrivateKey& groupPrivKey
 ) {
     EnvelopeReader cursor(envelope.stdString());
     if (cursor.readU8() != VERSION) {
@@ -186,7 +186,7 @@ core::Buffer GroupEnvelopeEncryptor::packFileEnvelope(
     const std::string& keyId,
     ByteCount plainSize,
     const std::string& fileKey,
-    const privmx::crypto::PrivateKey& authorPrivKey,
+    const core::PrivateKey& authorPrivKey,
     const std::string& groupKey
 ) {
     std::string header = writeHeader(TYPE_FILE, {groupId, keyId, authorPrivKey.getPublicKey().toDER()});
@@ -213,7 +213,7 @@ EnvelopeFileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
     std::string authorPubKeyDer = cursor.readField();
     std::string header = cursor.consumed();
 
-    privmx::crypto::PublicKey authorPubKey = privmx::crypto::PublicKey::fromDER(authorPubKeyDer);
+    core::PublicKey authorPubKey = core::PublicKey::fromDER(authorPubKeyDer);
     core::Buffer plain = _dataEncryptor.verifyAndExtractData(
         _dataEncryptor.decrypt(core::Buffer::from(cursor.readRest()), groupKey), authorPubKey
     );
@@ -236,7 +236,7 @@ EnvelopeFileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
 
 core::Buffer GroupEnvelopeEncryptor::packAnonymousFileEnvelope(
     const std::string& groupId,
-    const privmx::crypto::PublicKey& groupPubKey,
+    const core::PublicKey& groupPubKey,
     ByteCount plainSize,
     const std::string& fileKey
 ) {
@@ -255,7 +255,7 @@ core::Buffer GroupEnvelopeEncryptor::packAnonymousFileEnvelope(
 
 EnvelopeFileHeader GroupEnvelopeEncryptor::unpackAnonymousFileEnvelope(
     const core::Buffer& envelope,
-    const privmx::crypto::PrivateKey& groupPrivKey
+    const core::PrivateKey& groupPrivKey
 ) {
     EnvelopeReader cursor(envelope.stdString());
     if (cursor.readU8() != VERSION) {

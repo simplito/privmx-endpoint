@@ -1,7 +1,7 @@
 #include <algorithm>
 
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/utils/JsonHelper.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -34,7 +34,7 @@ using namespace group;
 
 GroupApiImpl::GroupApiImpl(
     const privfs::RpcGateway::Ptr& gateway,
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const std::string& host,
     const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
@@ -44,7 +44,7 @@ GroupApiImpl::GroupApiImpl(
       _subscriber(gateway), _groupDataSchemaMapper(std::make_shared<GroupDataSchemaMapper>(userPrivKey, connection)) {
     // A group opens its own metadata key by climbing its own tree, so it resolves its grant key for itself.
     initGroupPrivKeyResolver(
-        [this](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
+        [this](const std::string& groupId, int64_t epoch) -> std::optional<core::PrivateKey> {
             try {
                 return resolveGroupPrivKey(groupId, epoch);
             } catch (...) {
@@ -117,7 +117,7 @@ std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
             }
             continue; // a manager listed as a user too gets one leaf, not two
         }
-        members.push_back(keytree::TreeMember{user.userId, privmx::crypto::PublicKey::fromBase58DER(user.pubKey)});
+        members.push_back(keytree::TreeMember{user.userId, core::PublicKey::fromBase58DER(user.pubKey)});
     }
     return members;
 }
@@ -329,7 +329,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     std::vector<keytree::TreeMember> treeNewcomers;
     for (const GroupMemberToAdd& newMember : newMembers) {
         treeNewcomers.push_back(
-            keytree::TreeMember{newMember.user.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.user.pubKey)}
+            keytree::TreeMember{newMember.user.userId, core::PublicKey::fromBase58DER(newMember.user.pubKey)}
         );
     }
     const keytree::AdditionPlan plan = planOrThrow<keytree::AdditionPlan>([&] {
@@ -391,8 +391,8 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
 std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
     const server::GroupInfo& group,
     std::uint32_t newEpoch,
-    const privmx::crypto::PublicKey& newGrantPublicKey,
-    const std::optional<privmx::crypto::PrivateKey>& previousEpochKey,
+    const core::PublicKey& newGrantPublicKey,
+    const std::optional<core::PrivateKey>& previousEpochKey,
     const std::string& author,
     keytree::TreeKeyCache& cache
 ) {
@@ -966,7 +966,7 @@ std::string GroupApiImpl::buildCustomEventSubscriptionQuery(
     return SubscriberImpl::buildCustomEventQuery(channelName, selectorType, selectorId);
 }
 
-privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& groupId, int64_t epoch) {
+core::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& groupId, int64_t epoch) {
     server::GroupGetModel params{
         .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
     };
@@ -1145,7 +1145,7 @@ DecryptedEnvelope GroupApiImpl::decrypt(const Envelope& envelope) {
     return _envelopeEncryptor.openAnonymousEnvelope(envelope, grantKeyForPubKey(routing.groupId, routing.groupPubKey));
 }
 
-privmx::crypto::PrivateKey GroupApiImpl::grantKeyForPubKey(
+core::PrivateKey GroupApiImpl::grantKeyForPubKey(
     const std::string& groupId,
     const std::string& groupPubKeyBase58
 ) {
@@ -1160,7 +1160,7 @@ privmx::crypto::PrivateKey GroupApiImpl::grantKeyForPubKey(
         .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
     };
     auto group = _serverApi.groupGet(params).group;
-    auto target = privmx::crypto::PublicKey::fromBase58DER(groupPubKeyBase58);
+    auto target = core::PublicKey::fromBase58DER(groupPubKeyBase58);
     for (const auto& entry : keytree::GroupKeyResolver::registryFromGroupHistory(group)) {
         if (entry.grantPublicKey == target) {
             _envelopeGrantEpochs.set(memoKey, entry.epoch);
@@ -1178,7 +1178,7 @@ Envelope GroupApiImpl::encryptAnonymously(
     // Public information only — no membership, no server call. That is the whole point: the sender is outside
     // the group and must stay able to write into it knowing nothing but its id and its identity key.
     return _envelopeEncryptor.packAnonymousEnvelope(
-        groupId, privmx::crypto::PublicKey::fromBase58DER(groupPubKey), content
+        groupId, core::PublicKey::fromBase58DER(groupPubKey), content
     );
 }
 
@@ -1265,7 +1265,7 @@ FileHandle GroupApiImpl::beginFileEncryptionAnonymously(
 ) {
     // No server call and no membership, exactly like `encryptAnonymously`. The public key is enough to seal
     // to, and the envelope is not built until the finish, so nothing here needs the group's own key.
-    privmx::crypto::PublicKey::fromBase58DER(groupPubKey); // reject a malformed key now, not at the finish
+    core::PublicKey::fromBase58DER(groupPubKey); // reject a malformed key now, not at the finish
     FileHandle handle = _connection.getImpl()->getHandleManager()->createHandle("GroupEnvelope:EncryptAnonymous");
     _envelopeFiles.set(
         handle,
@@ -1386,7 +1386,7 @@ Envelope GroupApiImpl::finishFileEncryption(FileHandle fileHandle) {
     auto state = finishFile(fileHandle, false);
     if (state->type == ENVELOPE_ANONYMOUS) {
         return _envelopeEncryptor.packAnonymousFileEnvelope(
-            state->groupId, privmx::crypto::PublicKey::fromBase58DER(state->groupPubKey), state->plainSize,
+            state->groupId, core::PublicKey::fromBase58DER(state->groupPubKey), state->plainSize,
             state->fileKey
         );
     }

@@ -10,9 +10,9 @@ limitations under the License.
 */
 
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/EciesEncryptor.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/Ecies.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Logger.hpp>
 
 #include "privmx/endpoint/core/CoreConstants.hpp"
@@ -148,7 +148,7 @@ void KeyDecryptionAndVerificationRequest::markAsCompleted() {
 }
 
 KeyProvider::KeyProvider(
-    const privmx::crypto::PrivateKey& key,
+    const core::PrivateKey& key,
     std::function<std::shared_ptr<UserVerifier>()> getUserVerifier
 )
     : _key(key), _getUserVerifier(getUserVerifier) {}
@@ -256,7 +256,7 @@ server::KeyEntrySet KeyProvider::createKeyEntrySet(
                 containerSecret, keySecret + location.contextId + location.resourceId
             )
         },
-        crypto::PublicKeyCache::getInstance()->fromBase58DER(user.pubKey), _key
+        core::PublicKeyCache::getInstance()->fromBase58DER(user.pubKey), _key
     ).toJSON();
     // clang-format on
     return key_entry_set;
@@ -282,7 +282,7 @@ bool KeyProvider::verifyKeysSecret(
 
 DecryptedEncKeyV2 KeyProvider::decryptKeyEntry(
     const server::KeyEntry& keyEntry,
-    const privmx::crypto::PrivateKey& privKey
+    const core::PrivateKey& privKey
 ) {
     DecryptedEncKeyV2 decryptedEncKey;
     decryptedEncKey.statusCode = 0;

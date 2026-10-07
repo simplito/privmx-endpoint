@@ -45,7 +45,8 @@ public:
     core::Buffer mnemonicToSeed(const std::string& mnemonic, const std::string& password = std::string());
 
 private:
-    privmx::crypto::PrivateKey getPrivKeyFromSeed(const std::string& seed, size_t rounds);
+    /// Zwraca klucz w formacie WIF - uzasadnienie przy definicji.
+    std::string getPrivKeyFromSeed(const std::string& seed, size_t rounds);
 };
 
 } // namespace crypto

@@ -18,7 +18,7 @@ limitations under the License.
 #include <shared_mutex>
 #include <utility>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -29,11 +29,11 @@ namespace keytree {
 // keyed by group and two of them would collide on their first entries. The mutex is not recursive: never nest.
 class TreeKeyCache {
 public:
-    void putNodeKey(std::uint32_t nodeIndex, std::uint32_t generation, const privmx::crypto::PrivateKey& key);
-    std::optional<privmx::crypto::PrivateKey> getNodeKey(std::uint32_t nodeIndex, std::uint32_t generation) const;
+    void putNodeKey(std::uint32_t nodeIndex, std::uint32_t generation, const core::PrivateKey& key);
+    std::optional<core::PrivateKey> getNodeKey(std::uint32_t nodeIndex, std::uint32_t generation) const;
 
-    void putGrantKey(std::uint32_t epoch, const privmx::crypto::PrivateKey& key);
-    std::optional<privmx::crypto::PrivateKey> getGrantKey(std::uint32_t epoch) const;
+    void putGrantKey(std::uint32_t epoch, const core::PrivateKey& key);
+    std::optional<core::PrivateKey> getGrantKey(std::uint32_t epoch) const;
 
     // For an entry that failed verification against the served tree.
     void forgetGrantKey(std::uint32_t epoch);
@@ -53,8 +53,8 @@ private:
     mutable std::shared_mutex _mutex;
     // Unbounded by design: entries accumulate for the lifetime of the connection. Keyed by (nodeIndex, generation),
     // never by node alone — a refresh makes the old key a different key.
-    std::map<std::pair<std::uint32_t, std::uint32_t>, privmx::crypto::PrivateKey> _nodeKeys;
-    std::map<std::uint32_t, privmx::crypto::PrivateKey> _grantKeys;
+    std::map<std::pair<std::uint32_t, std::uint32_t>, core::PrivateKey> _nodeKeys;
+    std::map<std::uint32_t, core::PrivateKey> _grantKeys;
 };
 
 } // namespace keytree

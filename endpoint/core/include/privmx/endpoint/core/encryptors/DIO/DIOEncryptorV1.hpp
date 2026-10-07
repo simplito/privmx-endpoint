@@ -16,8 +16,8 @@ limitations under the License.
 #include "privmx/endpoint/core/DynamicTypes.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp"
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <string>
 namespace privmx {
 namespace endpoint {
@@ -27,7 +27,7 @@ class DIOEncryptorV1 {
 public:
     std::string signAndEncode(
         const core::ExpandedDataIntegrityObject& dio,
-        const privmx::crypto::PrivateKey& authorKey
+        const core::PrivateKey& authorKey
     );
     core::ExpandedDataIntegrityObject decodeAndVerify(const std::string& signedDio);
 

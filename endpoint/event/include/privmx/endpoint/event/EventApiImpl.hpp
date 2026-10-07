@@ -7,7 +7,7 @@
 #include "privmx/endpoint/event/SubscriberImpl.hpp"
 #include "privmx/endpoint/event/encryptors/event/EventDataSchemaMapper.hpp"
 #include <atomic>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/event/EventKeyProvider.hpp>
@@ -22,7 +22,7 @@ class EventApiImpl {
 public:
     EventApiImpl(
         const core::Connection& connection,
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         privfs::RpcGateway::Ptr gateway,
         std::shared_ptr<core::EventMiddleware> eventMiddleware
     );
@@ -74,7 +74,7 @@ private:
     );
     void validateChannelName(const std::string& channelName);
     core::Connection _connection;
-    privmx::crypto::PrivateKey _userPrivKey;
+    core::PrivateKey _userPrivKey;
     privfs::RpcGateway::Ptr _gateway;
     ServerApi _serverApi;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;

@@ -31,7 +31,7 @@ class GroupApiImpl : protected core::ContainerBaseApi {
 public:
     GroupApiImpl(
         const privfs::RpcGateway::Ptr& gateway,
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
@@ -91,7 +91,7 @@ public:
         EventSelectorType selectorType,
         const std::string& selectorId
     );
-    privmx::crypto::PrivateKey resolveGroupPrivKey(const std::string& groupId, int64_t epoch = 0);
+    core::PrivateKey resolveGroupPrivKey(const std::string& groupId, int64_t epoch = 0);
 
     void sendCustomEvent(
         const std::string& groupId,
@@ -182,8 +182,8 @@ private:
     std::vector<keytree::ArchiveRung> buildRotationRungs(
         const server::GroupInfo& group,
         std::uint32_t newEpoch,
-        const privmx::crypto::PublicKey& newGrantPublicKey,
-        const std::optional<privmx::crypto::PrivateKey>& previousEpochKey,
+        const core::PublicKey& newGrantPublicKey,
+        const std::optional<core::PrivateKey>& previousEpochKey,
         const std::string& author,
         keytree::TreeKeyCache& cache
     );
@@ -201,7 +201,7 @@ private:
 
     // The sender only ever held a public key, so its epoch is recovered from the group's published history
     // rather than carried on the wire.
-    privmx::crypto::PrivateKey grantKeyForPubKey(const std::string& groupId, const std::string& groupPubKeyBase58);
+    core::PrivateKey grantKeyForPubKey(const std::string& groupId, const std::string& groupPubKeyBase58);
 
     std::shared_ptr<EnvelopeFileState> getFileState(FileHandle fileHandle, bool wantReading);
     void releaseFileHandle(FileHandle fileHandle);

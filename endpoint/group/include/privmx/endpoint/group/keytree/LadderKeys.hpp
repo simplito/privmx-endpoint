@@ -51,11 +51,11 @@ public:
     // rung it owes. A rung is publishable only at its own epoch, so a key not in the cache is a refusal, not a hole.
     std::vector<ArchiveRung> buildRungs(
         std::uint32_t newEpoch,
-        const privmx::crypto::PublicKey& newGrantPublicKey,
-        const std::optional<privmx::crypto::PrivateKey>& previousEpochKey,
+        const core::PublicKey& newGrantPublicKey,
+        const std::optional<core::PrivateKey>& previousEpochKey,
         std::uint32_t eraFloor,
         const std::string& author,
-        const privmx::crypto::PrivateKey& signer,
+        const core::PrivateKey& signer,
         bool includeSkipRungs = true,
         std::optional<std::uint32_t> prunedBelow = std::nullopt
     );
@@ -82,10 +82,10 @@ public:
     // Addressing a group rather than individuals costs `O(1)` and covers anyone added to that group later.
     std::vector<ArchiveRung> buildEraLinks(
         std::uint32_t closingEpoch,
-        const privmx::crypto::PrivateKey& closingEpochKey,
+        const core::PrivateKey& closingEpochKey,
         const std::vector<EraLinkRecipient>& entitled,
         const std::string& author,
-        const privmx::crypto::PrivateKey& signer
+        const core::PrivateKey& signer
     );
 
     // ── Descending ──────────────────────────────────────────────────────────
@@ -107,12 +107,12 @@ public:
     DescentResult crossEraBoundary(
         const std::vector<ArchiveRung>& available,
         const std::string& ownUserId,
-        const privmx::crypto::PrivateKey& ownUserKey,
-        const std::vector<std::pair<std::string, privmx::crypto::PrivateKey>>& ownGroupKeys,
+        const core::PrivateKey& ownUserKey,
+        const std::vector<std::pair<std::string, core::PrivateKey>>& ownGroupKeys,
         const std::vector<EpochRegistryEntry>& registry
     );
 
-    static std::optional<privmx::crypto::PublicKey> publicKeyOfEpoch(
+    static std::optional<core::PublicKey> publicKeyOfEpoch(
         std::uint32_t epoch,
         const std::vector<EpochRegistryEntry>& registry
     );
@@ -120,7 +120,7 @@ public:
 private:
     // Invariant B: a recovered key really is the epoch's grant key.
     bool verifyAgainstRegistry(
-        const privmx::crypto::PrivateKey& recovered,
+        const core::PrivateKey& recovered,
         std::uint32_t epoch,
         const std::vector<EpochRegistryEntry>& registry
     ) const;

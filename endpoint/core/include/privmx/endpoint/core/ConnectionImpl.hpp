@@ -34,6 +34,8 @@ limitations under the License.
 #include "privmx/endpoint/core/UserVerifierInterface.hpp"
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/utils/GuardedExecutor.hpp>
 #include <privmx/utils/NotificationQueue.hpp>
@@ -69,7 +71,7 @@ public:
     );
     void disconnect();
     const privfs::RpcGateway::Ptr& getGateway() const { return _gateway; }
-    const privmx::crypto::PrivateKey& getUserPrivKey() const { return _userPrivKey; }
+    const core::PrivateKey& getUserPrivKey() const { return _userPrivKey; }
     const std::string& getHost() const { return _host; }
     const std::shared_ptr<KeyProvider>& getKeyProvider() const { return _keyProvider; }
     const std::shared_ptr<EventMiddleware>& getEventMiddleware() const { return _eventMiddleware; }
@@ -92,7 +94,7 @@ public:
     DataIntegrityObject createPublicDIO(
         const std::string& contextId,
         const std::string& resourceId,
-        const crypto::PublicKey& pubKey,
+        const core::PublicKey& pubKey,
         const std::optional<std::string>& containerId = std::nullopt,
         const std::optional<std::string>& containerResourceId = std::nullopt
     );
@@ -107,7 +109,7 @@ private:
         const std::optional<std::string>& containerId,
         const std::optional<std::string>& containerResourceId,
         const std::optional<std::string>& creatorUserId = std::nullopt,
-        const std::optional<crypto::PublicKey>& creatorPublicKey = std::nullopt
+        const std::optional<core::PublicKey>& creatorPublicKey = std::nullopt
     );
     int64_t generateConnectionId();
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
@@ -116,7 +118,7 @@ private:
 
     const int64_t _connectionId;
     privfs::RpcGateway::Ptr _gateway;
-    privmx::crypto::PrivateKey _userPrivKey;
+    core::PrivateKey _userPrivKey;
     std::string _host;
     BridgeIdentity _bridgeIdentity;
     rpc::ServerConfig _serverConfig;

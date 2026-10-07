@@ -39,7 +39,7 @@ namespace store {
 
 class StoreDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
-    StoreDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
+    StoreDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
     Poco::Dynamic::Var encrypt(const core::ModuleDataToEncryptV5& data, const std::string& key);
 

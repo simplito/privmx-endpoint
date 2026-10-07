@@ -3,7 +3,7 @@
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/encryptors/module/DynamicTypes.hpp"
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/encryptors/module/Constants.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -19,7 +19,7 @@ namespace {
 std::string encodeInternalMeta(
     core::DataEncryptorV4& dataEncryptor,
     const core::ModuleInternalMetaV5& internalMeta,
-    const privmx::crypto::PrivateKey& authorPrivateKey,
+    const core::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
     core::dynamic::ModuleInternalMetaV5 internalMetaObj{
@@ -33,7 +33,7 @@ std::string encodeInternalMeta(
 core::ModuleInternalMetaV5 decodeInternalMeta(
     core::DataEncryptorV4& dataEncryptor,
     const std::string& encoded,
-    const privmx::crypto::PublicKey& authorPublicKey,
+    const core::PublicKey& authorPublicKey,
     const std::string& encryptionKey
 ) {
     auto raw = dataEncryptor.decodeAndDecryptAndVerify(encoded, authorPublicKey, encryptionKey);
@@ -47,7 +47,7 @@ core::ModuleInternalMetaV5 decodeInternalMeta(
 
 dynamic::EncryptedGroupRosterV5 GroupDataEncryptorV5::encryptRoster(
     const GroupRosterToEncryptV5& data,
-    const privmx::crypto::PrivateKey& authorPrivateKey,
+    const core::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
     dynamic::EncryptedGroupRosterV5 result;
@@ -77,7 +77,7 @@ DecryptedGroupRosterV5 GroupDataEncryptorV5::decryptRoster(
     result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = getRosterDIOAndAssertIntegrity(encryptedData);
-        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedData.authorPubKey);
+        auto authorPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(encryptedData.authorPubKey);
         result.authorPubKey = encryptedData.authorPubKey;
 
         result.internalMeta = decodeInternalMeta(
@@ -126,7 +126,7 @@ void GroupDataEncryptorV5::assertRosterFormat(const dynamic::EncryptedGroupRoste
 
 dynamic::EncryptedGroupPublicMetaV5 GroupDataEncryptorV5::encryptPublicMeta(
     const GroupPublicMetaToEncryptV5& data,
-    const privmx::crypto::PrivateKey& authorPrivateKey
+    const core::PrivateKey& authorPrivateKey
 ) {
     dynamic::EncryptedGroupPublicMetaV5 result;
     result.version = core::ModuleDataSchema::Version::VERSION_5;
@@ -158,7 +158,7 @@ DecryptedGroupPublicMetaV5 GroupDataEncryptorV5::extractPublicMeta(
     result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = getPublicMetaDIOAndAssertIntegrity(encryptedData);
-        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedData.authorPubKey);
+        auto authorPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(encryptedData.authorPubKey);
         result.authorPubKey = encryptedData.authorPubKey;
 
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedData.publicMeta, authorPublicKey);
@@ -214,7 +214,7 @@ void GroupDataEncryptorV5::assertPublicMetaFormat(const dynamic::EncryptedGroupP
 
 dynamic::EncryptedGroupPrivateMetaV5 GroupDataEncryptorV5::encryptPrivateMeta(
     const GroupPrivateMetaToEncryptV5& data,
-    const privmx::crypto::PrivateKey& authorPrivateKey,
+    const core::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
     dynamic::EncryptedGroupPrivateMetaV5 result;
@@ -244,7 +244,7 @@ DecryptedGroupPrivateMetaV5 GroupDataEncryptorV5::decryptPrivateMeta(
     result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = getPrivateMetaDIOAndAssertIntegrity(encryptedData);
-        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedData.authorPubKey);
+        auto authorPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(encryptedData.authorPubKey);
         result.authorPubKey = encryptedData.authorPubKey;
 
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(

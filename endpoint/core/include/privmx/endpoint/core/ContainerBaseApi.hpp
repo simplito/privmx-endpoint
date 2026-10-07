@@ -64,7 +64,7 @@ struct module_has_keys<T, std::void_t<decltype(std::declval<T>().keys)>> : std::
 class ContainerBaseApi {
 public:
     ContainerBaseApi(
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,
@@ -206,7 +206,7 @@ protected:
     core::KeyProvider::GroupPrivKeyResolver _groupPrivKeyResolver;
 
     // The connection's constants, held here so every module reads one copy rather than keeping its own.
-    privmx::crypto::PrivateKey _userPrivKey;
+    core::PrivateKey _userPrivKey;
     std::shared_ptr<core::KeyProvider> _keyProvider;
     std::string _host;
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;

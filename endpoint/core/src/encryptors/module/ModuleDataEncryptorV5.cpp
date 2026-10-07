@@ -13,7 +13,7 @@ limitations under the License.
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/encryptors/module/Constants.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -21,7 +21,7 @@ using namespace privmx::endpoint::core;
 
 dynamic::EncryptedModuleDataV5 ModuleDataEncryptorV5::encrypt(
     const ModuleDataToEncryptV5& kvdbData,
-    const privmx::crypto::PrivateKey& authorPrivateKey,
+    const core::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
     dynamic::EncryptedModuleDataV5 result;
@@ -59,7 +59,7 @@ DecryptedModuleDataV5 ModuleDataEncryptorV5::decrypt(
     result.dataStructureVersion = ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedModuleData);
-        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedModuleData.authorPubKey);
+        auto authorPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(encryptedModuleData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedModuleData.publicMeta, authorPublicKey);
         if (!encryptedModuleData.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
@@ -101,7 +101,7 @@ DecryptedModuleDataV5 ModuleDataEncryptorV5::extractPublic(
     result.dataStructureVersion = ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedModuleData);
-        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedModuleData.authorPubKey);
+        auto authorPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(encryptedModuleData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedModuleData.publicMeta, authorPublicKey);
         if (!encryptedModuleData.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));

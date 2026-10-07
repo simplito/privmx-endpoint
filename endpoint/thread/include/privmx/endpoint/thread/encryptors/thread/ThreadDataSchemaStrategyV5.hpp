@@ -14,7 +14,7 @@ limitations under the License.
 
 #include <tuple>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
 #include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyV5.hpp>
@@ -39,7 +39,7 @@ class ThreadDataSchemaStrategyV5 : public core::TypedDataSchemaStrategyV5<
 public:
     core::dynamic::EncryptedModuleDataV5 encrypt(
         const core::ModuleDataToEncryptV5& data,
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const std::string& key
     ) const;
     std::tuple<Thread, core::DataIntegrityObject> convert(

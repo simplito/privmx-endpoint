@@ -23,7 +23,7 @@ limitations under the License.
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
@@ -43,7 +43,7 @@ namespace kvdb {
 
 class EntryDataSchemaMapper {
 public:
-    EntryDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
+    EntryDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
     Poco::Dynamic::Var encrypt(
         const std::string& kvdbId,
@@ -95,7 +95,7 @@ public:
     );
 
 private:
-    privmx::crypto::PrivateKey _userPrivKey;
+    core::PrivateKey _userPrivKey;
     core::Connection _connection;
     core::VersionStrategyMapper<server::KvdbEntryInfo, std::tuple<KvdbEntry, core::DataIntegrityObject>>
         _strategyMapper;

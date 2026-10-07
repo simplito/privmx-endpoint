@@ -11,24 +11,24 @@ limitations under the License.
 
 #include "privmx/endpoint/event/EventKeyProvider.hpp"
 #include <privmx/crypto/CryptoException.hpp>
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 using namespace privmx::endpoint::event;
 
-EventKeyProvider::EventKeyProvider(const privmx::crypto::PrivateKey& key) : _key(key) {}
+EventKeyProvider::EventKeyProvider(const core::PrivateKey& key) : _key(key) {}
 
 std::string EventKeyProvider::generateKey() {
     return privmx::crypto::Crypto::randomBytes(32);
 }
 DecryptedEventEncKeyV1 EventKeyProvider::decryptKey(
     const std::string& encryptedKey,
-    const privmx::crypto::PublicKey& authorPubKey
+    const core::PublicKey& authorPubKey
 ) {
     std::string encKey;
     int64_t statusCode = 0;
     try {
-        encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_key, encryptedKey, authorPubKey);
+        encKey = core::Ecies::decryptFromBase64(_key, encryptedKey, authorPubKey);
     } catch (const privmx::endpoint::core::Exception& e) {
         statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {
@@ -47,8 +47,8 @@ std::vector<server::UserKey> EventKeyProvider::prepareKeysList(
         userKeys.push_back(
             server::UserKey{
                 .id = user.userId,
-                .key = privmx::crypto::EciesEncryptor::encryptToBase64(
-                    crypto::PublicKeyCache::getInstance()->fromBase58DER(user.pubKey), key, _key
+                .key = core::Ecies::encryptToBase64(
+                    core::PublicKeyCache::getInstance()->fromBase58DER(user.pubKey), key, _key
                 )
             }
         );

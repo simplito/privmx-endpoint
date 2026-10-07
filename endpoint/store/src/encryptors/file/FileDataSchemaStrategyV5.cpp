@@ -102,7 +102,7 @@ server::EncryptedFileMetaV5 FileDataSchemaStrategyV5::encrypt(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const core::Buffer& internalMeta,
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const std::string& key,
     const core::DataIntegrityObject& dio
 ) const {

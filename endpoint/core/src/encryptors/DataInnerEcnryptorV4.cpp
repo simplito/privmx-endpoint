@@ -38,7 +38,7 @@ core::Buffer DataInnerEncryptorV4::decrypt(const core::Buffer& privateData, cons
 
 core::Buffer DataInnerEncryptorV4::signAndPackDataWithSignature(
     const core::Buffer& data,
-    const crypto::PrivateKey& authorPrivateKey
+    const core::PrivateKey& authorPrivateKey
 ) {
     auto dataWithSignature = sign(data, authorPrivateKey);
     return packDataWithSignature(dataWithSignature);
@@ -46,7 +46,7 @@ core::Buffer DataInnerEncryptorV4::signAndPackDataWithSignature(
 
 core::Buffer DataInnerEncryptorV4::verifyAndExtractData(
     const core::Buffer& signedData,
-    const crypto::PublicKey& authorPublicKey
+    const core::PublicKey& authorPublicKey
 ) {
     auto dataWithSignature = extractDataWithSignature(signedData);
     if (!verifySignature(dataWithSignature, authorPublicKey)) {
@@ -57,7 +57,7 @@ core::Buffer DataInnerEncryptorV4::verifyAndExtractData(
 
 DataInnerEncryptorV4::DataWithSignature DataInnerEncryptorV4::sign(
     const core::Buffer& data,
-    const crypto::PrivateKey& authorPrivateKey
+    const core::PrivateKey& authorPrivateKey
 ) {
     auto signature = authorPrivateKey.signToCompactSignatureWithHash(data.stdString());
     return DataWithSignature{.signature = core::Buffer::from(signature), .data = data};
@@ -90,7 +90,7 @@ DataInnerEncryptorV4::DataWithSignature DataInnerEncryptorV4::extractDataWithSig
 
 bool DataInnerEncryptorV4::verifySignature(
     const DataWithSignature& dataWithSignature,
-    const crypto::PublicKey& authorPublicKey
+    const core::PublicKey& authorPublicKey
 ) {
     return authorPublicKey.verifyCompactSignatureWithHash(
         dataWithSignature.data.stdString(), dataWithSignature.signature.stdString()

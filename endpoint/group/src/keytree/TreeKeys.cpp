@@ -15,7 +15,7 @@ limitations under the License.
 #include <set>
 #include <stdexcept>
 
-#include <privmx/crypto/EciesEncryptor.hpp>
+#include <privmx/endpoint/core/crypto/Ecies.hpp>
 
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
 
@@ -24,20 +24,20 @@ using namespace privmx::endpoint::group::keytree;
 TreeKeys::TreeKeys(TreeKeyCache& cache) : _cache(cache) {}
 
 std::string TreeKeys::wrapKey(
-    const privmx::crypto::PrivateKey& keyToWrap,
-    const privmx::crypto::PublicKey& to,
-    const privmx::crypto::PrivateKey& signer
+    const core::PrivateKey& keyToWrap,
+    const core::PublicKey& to,
+    const core::PrivateKey& signer
 ) {
-    return privmx::crypto::EciesEncryptor::encryptToBase64(to, keyToWrap.toWIF(), signer);
+    return core::Ecies::encryptToBase64(to, keyToWrap.toWIF(), signer);
 }
 
-std::optional<privmx::crypto::PrivateKey> TreeKeys::unwrapKey(
+std::optional<privmx::endpoint::core::PrivateKey> TreeKeys::unwrapKey(
     const std::string& blob,
-    const privmx::crypto::PrivateKey& with
+    const core::PrivateKey& with
 ) {
     try {
-        const std::string wif = privmx::crypto::EciesEncryptor::decryptFromBase64(with, blob);
-        return privmx::crypto::PrivateKey::fromWIF(wif);
+        const std::string wif = core::Ecies::decryptFromBase64(with, blob);
+        return core::PrivateKey::fromWIF(wif);
     } catch (...) {
         // A blob that does not open, or does not carry a WIF, is a data problem for the caller to report.
         return std::nullopt;
@@ -145,7 +145,7 @@ std::vector<std::uint32_t> TreeKeys::choosePositions(const TreeGroupState& state
 ClimbResult TreeKeys::climbToGrantKey(
     const TreeGroupState& state,
     const std::string& ownUserId,
-    const privmx::crypto::PrivateKey& ownUserKey,
+    const core::PrivateKey& ownUserKey,
     bool useCache
 ) {
     ClimbResult result;
@@ -169,7 +169,7 @@ ClimbResult TreeKeys::climbToGrantKey(
 
     const std::uint32_t rootIndex = TreeMath::root(state.numLeaves);
     std::uint32_t currentNode = TreeMath::leafNode(position.value());
-    privmx::crypto::PrivateKey currentKey = ownUserKey;
+    core::PrivateKey currentKey = ownUserKey;
 
     // Step one is special: the edge is addressed to the member's long-term key, not to a node generation.
     if (currentNode != rootIndex) {
@@ -247,7 +247,7 @@ ClimbResult TreeKeys::climbToGrantKey(
     return result;
 }
 
-BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const privmx::crypto::PrivateKey& signer) {
+BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const core::PrivateKey& signer) {
     if (members.empty()) {
         throw std::invalid_argument("a group needs at least one member");
     }
@@ -257,9 +257,9 @@ BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const privmx::
     const std::uint32_t rootIndex = TreeMath::root(plan.numLeaves);
 
     // Mint a fresh independent random keypair for every internal node. Never derived from anything.
-    std::map<std::uint32_t, privmx::crypto::PrivateKey> nodeKeys;
+    std::map<std::uint32_t, core::PrivateKey> nodeKeys;
     for (std::uint32_t node = 1; node < nodeCount; node += 2) {
-        const privmx::crypto::PrivateKey key = privmx::crypto::PrivateKey::generateRandom();
+        const core::PrivateKey key = core::PrivateKey::generateRandom();
         nodeKeys[node] = key;
         plan.nodes.push_back(TreeNodeState{node, 0, key.getPublicKey()});
         plan.nodeKeys.emplace_back(node, key);
@@ -288,7 +288,7 @@ BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const privmx::
 
     // The grant keypair sits above the root, joined by a single edge. Keeping it separate is what stops tree
     // growth from advancing the epoch and invalidating every container granted to the group.
-    plan.grantKey = privmx::crypto::PrivateKey::generateRandom();
+    plan.grantKey = core::PrivateKey::generateRandom();
     TreeEdge grantEdge;
     grantEdge.isGrantEdge = true;
     grantEdge.parentGeneration = 1; // epoch 1
@@ -313,7 +313,7 @@ AdditionPlan TreeKeys::planAddition(
     const TreeGroupState& state,
     const std::vector<TreeMember>& newMembers,
     const std::vector<std::uint32_t>& positions,
-    const privmx::crypto::PrivateKey& signer
+    const core::PrivateKey& signer
 ) {
     if (newMembers.empty()) {
         throw std::invalid_argument("an addition must name at least one member");
@@ -351,10 +351,10 @@ AdditionPlan TreeKeys::planAddition(
 
     // A fresh keypair for every node on the new leaf's path. Wrapping to an existing parent key would be one wrap
     // instead of `log n`, but needs that parent's private key — which a climb only yields for the seat beside you.
-    std::map<std::uint32_t, privmx::crypto::PrivateKey> refreshed;
+    std::map<std::uint32_t, core::PrivateKey> refreshed;
     std::map<std::uint32_t, std::uint32_t> generationOf;
     for (const std::uint32_t node : newPath) {
-        const privmx::crypto::PrivateKey key = privmx::crypto::PrivateKey::generateRandom();
+        const core::PrivateKey key = core::PrivateKey::generateRandom();
         const TreeNodeState* existing = findNode(state, node);
         const std::uint32_t generation = existing == nullptr ? 0 : existing->generation + 1;
         refreshed.emplace(node, key);
@@ -364,7 +364,7 @@ AdditionPlan TreeKeys::planAddition(
     }
 
     for (const std::uint32_t node : newPath) {
-        const privmx::crypto::PrivateKey& nodeKey = refreshed.at(node);
+        const core::PrivateKey& nodeKey = refreshed.at(node);
         for (const std::uint32_t child : TreeMath::children(node, plan.newNumLeaves)) {
             TreeEdge edge;
             edge.parentIndex = node;
@@ -446,7 +446,7 @@ AdditionPlan TreeKeys::planAddition(
 RemovalPlan TreeKeys::planRemoval(
     const TreeGroupState& state,
     const std::vector<std::string>& leavingUserIds,
-    const privmx::crypto::PrivateKey& signer
+    const core::PrivateKey& signer
 ) {
     if (leavingUserIds.empty()) {
         throw std::invalid_argument("a removal must name at least one member");
@@ -475,9 +475,9 @@ RemovalPlan TreeKeys::planRemoval(
 
     // Every node on the path gets a fresh independent random keypair. Deriving it from the key it replaces would
     // let the removed member compute forward, and the server cannot detect that — it lives or dies on this line.
-    std::map<std::uint32_t, privmx::crypto::PrivateKey> refreshed;
+    std::map<std::uint32_t, core::PrivateKey> refreshed;
     for (const std::uint32_t node : path) {
-        refreshed[node] = privmx::crypto::PrivateKey::generateRandom();
+        refreshed[node] = core::PrivateKey::generateRandom();
     }
 
     for (const std::uint32_t node : path) {
@@ -538,7 +538,7 @@ RemovalPlan TreeKeys::planRemoval(
     }
 
     // A fresh grant keypair, re-linked to the refreshed root. This is the epoch bump.
-    plan.newGrantKey = privmx::crypto::PrivateKey::generateRandom();
+    plan.newGrantKey = core::PrivateKey::generateRandom();
     const std::uint32_t rootIndex = TreeMath::root(state.numLeaves);
     plan.grantEdge.isGrantEdge = true;
     plan.grantEdge.parentGeneration = plan.newEpoch;
@@ -555,7 +555,7 @@ RemovalPlan TreeKeys::planRemoval(
     return plan;
 }
 
-std::optional<privmx::crypto::PublicKey> TreeKeys::memberKey(const std::string& userId) {
+std::optional<privmx::endpoint::core::PublicKey> TreeKeys::memberKey(const std::string& userId) {
     const auto parsed = _memberKeys.find(userId);
     if (parsed != _memberKeys.end()) {
         return parsed->second;
@@ -564,7 +564,7 @@ std::optional<privmx::crypto::PublicKey> TreeKeys::memberKey(const std::string& 
     if (raw == _memberKeyStrings.end()) {
         return std::nullopt;
     }
-    const auto inserted = _memberKeys.emplace(userId, privmx::crypto::PublicKey::fromBase58DER(raw->second));
+    const auto inserted = _memberKeys.emplace(userId, core::PublicKey::fromBase58DER(raw->second));
     return inserted.first->second;
 }
 

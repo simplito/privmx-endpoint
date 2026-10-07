@@ -21,7 +21,7 @@ limitations under the License.
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/BaseModuleDataSchemaMapper.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
@@ -43,7 +43,7 @@ namespace thread {
 
 class ThreadDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
-    ThreadDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
+    ThreadDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
     Poco::Dynamic::Var encrypt(const core::ModuleDataToEncryptV5& data, const std::string& key);
 

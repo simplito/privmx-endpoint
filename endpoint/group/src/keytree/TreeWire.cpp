@@ -111,7 +111,7 @@ server::GroupTreeState TreeWire::fromGroupInfo(const server::GroupInfo& group) {
 TreeGroupState TreeWire::toRuntime(
     const server::GroupTreeState& tree,
     std::uint32_t epoch,
-    const privmx::crypto::PublicKey& grantPublicKey
+    const core::PublicKey& grantPublicKey
 ) {
     TreeGroupState state;
     state.numLeaves = static_cast<std::uint32_t>(tree.numLeaves);

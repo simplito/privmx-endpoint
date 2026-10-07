@@ -37,7 +37,7 @@ enum class ResolveFailure {
 };
 
 struct ResolveResult {
-    std::optional<privmx::crypto::PrivateKey> key;
+    std::optional<core::PrivateKey> key;
     ResolveFailure failure = ResolveFailure::None;
     // Detail when `failure == ClimbFailed`.
     ClimbFailure climb = ClimbFailure::None;
@@ -58,7 +58,7 @@ public:
     ResolveResult resolve(
         const server::GroupInfo& group,
         std::int64_t epoch,
-        const privmx::crypto::PrivateKey& ownUserKey,
+        const core::PrivateKey& ownUserKey,
         const server::GroupGetKeyArchiveResult& archive
     );
 
@@ -88,7 +88,7 @@ private:
     ResolveResult resolveWith(
         const server::GroupInfo& group,
         std::int64_t epoch,
-        const privmx::crypto::PrivateKey& ownUserKey,
+        const core::PrivateKey& ownUserKey,
         const std::vector<ArchiveRung>& rungs,
         const std::vector<EpochRegistryEntry>& registry,
         std::uint32_t eraFloor,

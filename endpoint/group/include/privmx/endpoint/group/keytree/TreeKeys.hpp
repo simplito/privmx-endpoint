@@ -40,14 +40,14 @@ public:
     ClimbResult climbToGrantKey(
         const TreeGroupState& state,
         const std::string& ownUserId,
-        const privmx::crypto::PrivateKey& ownUserKey,
+        const core::PrivateKey& ownUserKey,
         bool useCache = true
     );
 
     // ── Construction ────────────────────────────────────────────────────────
 
     // Builds a complete tree for a new group, bottom-up. Costs `2(N-1) + 1` wraps, once.
-    BuildPlan build(const std::vector<TreeMember>& members, const privmx::crypto::PrivateKey& signer);
+    BuildPlan build(const std::vector<TreeMember>& members, const core::PrivateKey& signer);
 
     // Re-keys the new leaf's direct path and wraps each new key to both children (`2*depth + 1` wraps). The cheaper
     // one-wrap shape needs the parent's private key, which a climb only ever recovers for the caller's own seat.
@@ -55,7 +55,7 @@ public:
         const TreeGroupState& state,
         const std::vector<TreeMember>& newMembers,
         const std::vector<std::uint32_t>& positions,
-        const privmx::crypto::PrivateKey& signer
+        const core::PrivateKey& signer
     );
 
     // Refreshes every node on the leaving member's direct path, mints a fresh grant keypair and re-links the grant
@@ -63,7 +63,7 @@ public:
     RemovalPlan planRemoval(
         const TreeGroupState& state,
         const std::vector<std::string>& leavingUserIds,
-        const privmx::crypto::PrivateKey& signer
+        const core::PrivateKey& signer
     );
 
     // Supplies the members' long-term public keys: a removal wraps to surviving sibling leaves, whose keys are not
@@ -92,14 +92,14 @@ public:
     // ── Primitives, exposed for tests and for the ladder module ─────────────
 
     static std::string wrapKey(
-        const privmx::crypto::PrivateKey& keyToWrap,
-        const privmx::crypto::PublicKey& to,
-        const privmx::crypto::PrivateKey& signer
+        const core::PrivateKey& keyToWrap,
+        const core::PublicKey& to,
+        const core::PrivateKey& signer
     );
 
-    static std::optional<privmx::crypto::PrivateKey> unwrapKey(
+    static std::optional<core::PrivateKey> unwrapKey(
         const std::string& blob,
-        const privmx::crypto::PrivateKey& with
+        const core::PrivateKey& with
     );
 
 private:
@@ -113,11 +113,11 @@ private:
     static const TreeNodeState* findNode(const TreeGroupState& state, std::uint32_t nodeIndex);
 
     // Parsed on first use.
-    std::optional<privmx::crypto::PublicKey> memberKey(const std::string& userId);
+    std::optional<core::PublicKey> memberKey(const std::string& userId);
 
     TreeKeyCache& _cache;
     // Parsed keys: supplied whole by `setMemberKeys`, or filled in on demand from the strings below.
-    std::map<std::string, privmx::crypto::PublicKey> _memberKeys;
+    std::map<std::string, core::PublicKey> _memberKeys;
     // Unparsed roster from `setMemberKeyStrings`, base58-DER per user id.
     std::map<std::string, std::string> _memberKeyStrings;
 };

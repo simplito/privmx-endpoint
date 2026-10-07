@@ -21,7 +21,7 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
 KvdbDataSchemaMapper::KvdbDataSchemaMapper(
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const core::Connection& connection
 )
     : core::BaseModuleDataSchemaMapper(userPrivKey, connection) {

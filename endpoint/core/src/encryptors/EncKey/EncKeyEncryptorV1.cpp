@@ -11,13 +11,13 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV1.hpp"
-#include <privmx/crypto/EciesEncryptor.hpp>
+#include <privmx/endpoint/core/crypto/Ecies.hpp>
 
 using namespace privmx::endpoint::core;
 
 std::string EncKeyEncryptorV1::decrypt(
     const std::string& encryptedEncKey,
-    const privmx::crypto::PrivateKey& decryptionKey
+    const core::PrivateKey& decryptionKey
 ) {
-    return privmx::crypto::EciesEncryptor::decryptFromBase64(decryptionKey, encryptedEncKey);
+    return core::Ecies::decryptFromBase64(decryptionKey, encryptedEncKey);
 }

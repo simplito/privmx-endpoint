@@ -12,7 +12,7 @@ limitations under the License.
 #include "privmx/endpoint/event/encryptors/event/EventDataSchemaMapper.hpp"
 
 #include <Poco/JSON/Object.h>
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
@@ -23,7 +23,7 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
 EventDataSchemaMapper::EventDataSchemaMapper(
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const core::Connection& connection
 )
     : _userPrivKey(userPrivKey), _connection(connection), _eventKeyProvider(userPrivKey) {
@@ -47,7 +47,7 @@ ContextCustomEventData EventDataSchemaMapper::decrypt(const server::ContextCusto
     if (getDataStructureVersion(rawEvent) != EventDataSchema::Version::VERSION_5) {
         return makeErrorResult(rawEvent, InvalidEncryptedEventDataVersionException().getCode());
     }
-    auto authorPubKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(rawEvent.author.pub);
+    auto authorPubKey = core::PublicKeyCache::getInstance()->fromBase58DER(rawEvent.author.pub);
     auto decryptedKey = _eventKeyProvider.decryptKey(rawEvent.key, authorPubKey);
     if (decryptedKey.statusCode != 0) {
         return makeErrorResult(rawEvent, decryptedKey.statusCode);
@@ -77,7 +77,7 @@ DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
         result.statusCode = InvalidEncryptedEventDataVersionException().getCode();
         return result;
     }
-    auto authorPubKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(rawEvent.author.pub);
+    auto authorPubKey = core::PublicKeyCache::getInstance()->fromBase58DER(rawEvent.author.pub);
     auto decryptedKey = _eventKeyProvider.decryptKey(rawEvent.key, authorPubKey);
     result.statusCode = decryptedKey.statusCode;
     if (result.statusCode != 0)

@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
 #include <privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp>
@@ -171,13 +171,13 @@ public:
         const std::string& groupId,
         const std::string& keyId,
         const core::Buffer& content,
-        const privmx::crypto::PrivateKey& authorPrivKey,
+        const core::PrivateKey& authorPrivKey,
         const std::string& groupKey
     );
 
     core::Buffer packAnonymousEnvelope(
         const std::string& groupId,
-        const privmx::crypto::PublicKey& groupPubKey,
+        const core::PublicKey& groupPubKey,
         const core::Buffer& content
     );
 
@@ -186,7 +186,7 @@ public:
         const std::string& keyId,
         ByteCount plainSize,
         const std::string& fileKey,
-        const privmx::crypto::PrivateKey& authorPrivKey,
+        const core::PrivateKey& authorPrivKey,
         const std::string& groupKey
     );
 
@@ -194,14 +194,14 @@ public:
 
     core::Buffer packAnonymousFileEnvelope(
         const std::string& groupId,
-        const privmx::crypto::PublicKey& groupPubKey,
+        const core::PublicKey& groupPubKey,
         ByteCount plainSize,
         const std::string& fileKey
     );
 
     EnvelopeFileHeader unpackAnonymousFileEnvelope(
         const core::Buffer& envelope,
-        const privmx::crypto::PrivateKey& groupPrivKey
+        const core::PrivateKey& groupPrivKey
     );
 
     core::Buffer encryptChunk(const core::Buffer& plainChunk, const std::string& fileKey, ChunkIndex index);
@@ -220,7 +220,7 @@ public:
     DecryptedEnvelope openGroupKeyEnvelope(const core::Buffer& envelope, const std::string& groupKey);
     DecryptedEnvelope openAnonymousEnvelope(
         const core::Buffer& envelope,
-        const privmx::crypto::PrivateKey& groupPrivKey
+        const core::PrivateKey& groupPrivKey
     );
 
 private:
@@ -253,10 +253,10 @@ private:
     static std::pair<ByteCount, std::string> readFileBody(const std::string& plain, const std::string& header);
 
     // ECIES key wrap shared by the two anonymous types. Returns `{wrap, contentKey}`.
-    static std::pair<std::string, std::string> wrapContentKey(const privmx::crypto::PublicKey& groupPubKey);
+    static std::pair<std::string, std::string> wrapContentKey(const core::PublicKey& groupPubKey);
     // Inverse, including the domain check that keeps epoch-ladder rungs out.
     static std::string unwrapContentKey(
-        const privmx::crypto::PrivateKey& groupPrivKey,
+        const core::PrivateKey& groupPrivKey,
         const std::string& groupPubKeyBase58,
         const std::string& wrap
     );

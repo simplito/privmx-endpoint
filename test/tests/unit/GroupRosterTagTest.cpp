@@ -40,14 +40,14 @@ limitations under the License.
 #include <vector>
 
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp>
 
-using privmx::crypto::PrivateKey;
+using privmx::endpoint::core::PrivateKey;
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 

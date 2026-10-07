@@ -37,7 +37,7 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const core::Buffer& data,
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const std::string& key
     ) const;
     DecryptedMessageDataV4 decrypt(const server::Message& message, const core::DecryptedEncKey& encKey) const override;

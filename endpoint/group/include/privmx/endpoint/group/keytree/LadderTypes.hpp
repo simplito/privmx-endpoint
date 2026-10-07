@@ -17,8 +17,8 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 
 #include "privmx/endpoint/group/keytree/LadderMath.hpp"
 
@@ -50,7 +50,7 @@ struct ArchiveRung {
 // so it can check a rung published long before it joined. That is what makes a rung deniable but not forgeable.
 struct EpochRegistryEntry {
     std::uint32_t epoch = 0;
-    privmx::crypto::PublicKey grantPublicKey;
+    core::PublicKey grantPublicKey;
 };
 
 // The distinctions are part of the contract with the UI layer.
@@ -73,7 +73,7 @@ enum class DescentFailure {
 };
 
 struct DescentResult {
-    std::optional<privmx::crypto::PrivateKey> key;
+    std::optional<core::PrivateKey> key;
     DescentFailure failure = DescentFailure::None;
     // Oldest epoch actually recovered. Partial progress is cached and worth reporting.
     std::uint32_t reachedEpoch = 0;
@@ -88,7 +88,7 @@ struct DescentResult {
 struct EraLinkRecipient {
     RungRecipientKind kind = RungRecipientKind::User;
     std::string id;
-    privmx::crypto::PublicKey publicKey;
+    core::PublicKey publicKey;
 };
 
 } // namespace keytree

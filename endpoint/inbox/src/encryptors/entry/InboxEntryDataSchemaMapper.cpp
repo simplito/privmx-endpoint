@@ -36,13 +36,13 @@ inbox::server::InboxMessageServer InboxEntryDataSchemaMapper::unpackInboxOrigMes
 
 std::string InboxEntryDataSchemaMapper::encrypt(
     const InboxEntrySendModel& data,
-    privmx::crypto::PrivateKey& userPriv,
-    privmx::crypto::PublicKey& inboxPub
+    core::PrivateKey& userPriv,
+    core::PublicKey& inboxPub
 ) {
     return _strategyV1.encrypt(data, userPriv, inboxPub);
 }
 
-InboxEntryDataResult InboxEntryDataSchemaMapper::decrypt(std::string& data, privmx::crypto::PrivateKey& inboxPriv) {
+InboxEntryDataResult InboxEntryDataSchemaMapper::decrypt(std::string& data, core::PrivateKey& inboxPriv) {
     return _strategyV1.decrypt(data, inboxPriv);
 }
 

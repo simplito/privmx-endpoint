@@ -22,7 +22,7 @@ limitations under the License.
 #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/crypto/CryptoSuite.hpp"
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -30,7 +30,7 @@ namespace core {
 
 class DataEncryptorUtil {
 public:
-    static bool checkSignedData(const Pson::BinaryString& dataSigned, const privmx::crypto::PublicKey& pubKey) {
+    static bool checkSignedData(const Pson::BinaryString& dataSigned, const core::PublicKey& pubKey) {
         Pson::BinaryString signature, data_buf;
         std::tie(signature, data_buf) = extractSignAndDataBuff(dataSigned);
         return pubKey.verifyCompactSignatureWithHash(data_buf, signature);
@@ -40,7 +40,7 @@ public:
     static bool checkSign(
         const Pson::BinaryString& data,
         const Pson::BinaryString signature,
-        const privmx::crypto::PublicKey& pubKey
+        const core::PublicKey& pubKey
     ) {
         return pubKey.verifyCompactSignatureWithHash(data, signature);
     }
@@ -63,17 +63,17 @@ public:
     virtual std::string encrypt(const T& data, const std::string& key) = 0; // base64
     virtual std::string encrypt(const T& data, const EncKey& encKey) = 0;
 
-    std::string signAndEncrypt(const T& data, const privmx::crypto::PrivateKey& privKey, const std::string& key) {
+    std::string signAndEncrypt(const T& data, const core::PrivateKey& privKey, const std::string& key) {
         return utils::Base64::from(core::CryptoSuite::defaultForWrite().encrypt(key, sign(data, privKey)));
     }
-    std::string signAndEncrypt(const T& data, const privmx::crypto::PrivateKey& privKey, const core::EncKey& encKey) {
+    std::string signAndEncrypt(const T& data, const core::PrivateKey& privKey, const core::EncKey& encKey) {
         return utils::Base64::from(
             core::CryptoSuite::defaultForWrite().encrypt(encKey.key, sign(data, privKey))
         );
     }
 
-    virtual Pson::BinaryString sign(const T& data, const privmx::crypto::PrivateKey& privKey) = 0; //
-    virtual Pson::BinaryString getSign(const T& data, const privmx::crypto::PrivateKey& privKey) = 0;
+    virtual Pson::BinaryString sign(const T& data, const core::PrivateKey& privKey) = 0; //
+    virtual Pson::BinaryString getSign(const T& data, const core::PrivateKey& privKey) = 0;
 
     virtual T decrypt(const std::string& data, const std::string& key) = 0;
     virtual T decrypt(const std::string& data, const EncKey& encKey) = 0;
@@ -96,7 +96,7 @@ public:
     }
     std::string encrypt(const T& data, const EncKey& encKey) { return encrypt(data, encKey.key); }
 
-    Pson::BinaryString sign(const T& data, const privmx::crypto::PrivateKey& privKey) {
+    Pson::BinaryString sign(const T& data, const core::PrivateKey& privKey) {
         auto buffer = data.serialize();
         auto signature = privKey.signToCompactSignatureWithHash(buffer);
         Pson::BinaryString plain;
@@ -106,7 +106,7 @@ public:
         return plain;
     }
 
-    Pson::BinaryString getSign(const T& data, const privmx::crypto::PrivateKey& privKey) {
+    Pson::BinaryString getSign(const T& data, const core::PrivateKey& privKey) {
         return Pson::BinaryString(privKey.signToCompactSignatureWithHash(data.serialize()));
     }
 
@@ -141,7 +141,7 @@ public:
     }
     std::string encrypt(const Pson::BinaryString& data, const EncKey& encKey) { return encrypt(data, encKey.key); }
 
-    Pson::BinaryString sign(const Pson::BinaryString& data, const privmx::crypto::PrivateKey& privKey) {
+    Pson::BinaryString sign(const Pson::BinaryString& data, const core::PrivateKey& privKey) {
         auto signature = privKey.signToCompactSignatureWithHash(data);
         Pson::BinaryString plain;
         plain.push_back(1);
@@ -150,7 +150,7 @@ public:
         return plain;
     }
 
-    Pson::BinaryString getSign(const Pson::BinaryString& data, const privmx::crypto::PrivateKey& privKey) {
+    Pson::BinaryString getSign(const Pson::BinaryString& data, const core::PrivateKey& privKey) {
         return Pson::BinaryString(privKey.signToCompactSignatureWithHash(data));
     }
 

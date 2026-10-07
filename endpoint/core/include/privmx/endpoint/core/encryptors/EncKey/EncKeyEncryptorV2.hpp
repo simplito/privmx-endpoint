@@ -16,7 +16,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp"
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -26,12 +26,12 @@ class EncKeyEncryptorV2 {
 public:
     server::EncryptedKeyEntryDataV2 encrypt(
         const EncKeyV2ToEncrypt& key,
-        const privmx::crypto::PublicKey& encryptionKey,
-        const crypto::PrivateKey& authorPrivateKey
+        const core::PublicKey& encryptionKey,
+        const core::PrivateKey& authorPrivateKey
     );
     DecryptedEncKeyV2 decrypt(
         const server::EncryptedKeyEntryDataV2& encryptedEncKey,
-        const privmx::crypto::PrivateKey& decryptionKey
+        const core::PrivateKey& decryptionKey
     );
 
 private:

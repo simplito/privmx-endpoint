@@ -27,14 +27,14 @@ limitations under the License.
 #include <string>
 
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/EciesEncryptor.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/Ecies.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 
 #include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp>
 
-using privmx::crypto::PrivateKey;
+using privmx::endpoint::core::PrivateKey;
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
@@ -103,7 +103,7 @@ TEST_F(GroupEnvelope, LadderRungIsNotAnEnvelope) {
     // Exactly what `TreeKeys::wrapKey` produces, byte-identical to a type 2 key wrap. If `openAnonymousEnvelope`
     // took it, it would return a past epoch's private key as content, past every era-floor and pruning check.
     PrivateKey pastEpochKey = PrivateKey::generateRandom();
-    std::string rung = privmx::crypto::EciesEncryptor::encrypt(
+    std::string rung = core::Ecies::encrypt(
         grantKey.getPublicKey(), pastEpochKey.toWIF(), PrivateKey::generateRandom()
     );
 
@@ -383,7 +383,7 @@ TEST_F(GroupEnvelope, AnonymousFileIsNotALadderRungOracleEither) {
     // Type 4 unwraps an attacker-supplied ECIES blob with the group's grant key, exactly as type 2 does, so
     // it needs the same domain separation — otherwise closing the hole for messages just moved it to files.
     PrivateKey pastEpochKey = PrivateKey::generateRandom();
-    std::string rung = privmx::crypto::EciesEncryptor::encrypt(
+    std::string rung = core::Ecies::encrypt(
         grantKey.getPublicKey(), pastEpochKey.toWIF(), PrivateKey::generateRandom()
     );
 

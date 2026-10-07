@@ -21,7 +21,7 @@ using namespace privmx::endpoint::event;
 
 server::EncryptedContextEventDataV5 EventDataEncryptorV5::encrypt(
     const ContextEventDataToEncryptV5& eventData,
-    const privmx::crypto::PrivateKey& authorPrivateKey,
+    const core::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
     server::EncryptedContextEventDataV5 result;
@@ -42,7 +42,7 @@ server::EncryptedContextEventDataV5 EventDataEncryptorV5::encrypt(
 
 DecryptedEventDataV5 EventDataEncryptorV5::decrypt(
     const server::EncryptedContextEventDataV5& encryptedEventData,
-    const privmx::crypto::PublicKey& authorPublicKey,
+    const core::PublicKey& authorPublicKey,
     const std::string& encryptionKey
 ) {
     DecryptedEventDataV5 result;
@@ -64,7 +64,7 @@ DecryptedEventDataV5 EventDataEncryptorV5::decrypt(
 
 core::DataIntegrityObject EventDataEncryptorV5::getDIOAndAssertIntegrity(
     const server::EncryptedContextEventDataV5& encryptedEventData,
-    const privmx::crypto::PublicKey& authorPublicKey
+    const core::PublicKey& authorPublicKey
 ) {
     assertDataFormat(encryptedEventData);
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedEventData.dio);

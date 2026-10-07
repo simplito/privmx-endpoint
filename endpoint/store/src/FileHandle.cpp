@@ -185,7 +185,7 @@ FileReadWriteHandle::FileReadWriteHandle(
     const store::FileInfo& fileInfo,
     const store::FileEncryptionParams& encryptionParams,
     size_t serverChunkSize,
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const privmx::endpoint::core::Connection& connection,
     std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi,
     std::shared_ptr<CacheInterface> cache
@@ -265,7 +265,7 @@ std::shared_ptr<FileReadWriteHandle> FileHandleManager::createFileReadWriteHandl
     const store::FileInfo& fileInfo,
     const store::FileEncryptionParams& encryptionParams,
     size_t serverChunkSize,
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const privmx::endpoint::core::Connection& connection,
     std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi,
     std::shared_ptr<CacheInterface> cache

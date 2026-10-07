@@ -16,7 +16,7 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"
 #include <optional>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
@@ -39,7 +39,7 @@ public:
         std::optional<DecryptedFileMetaV5> v5;
     };
 
-    FileMetaEncryptor(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
+    FileMetaEncryptor(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
     Poco::Dynamic::Var encrypt(
         const FileInfo& fileInfo,
@@ -53,7 +53,7 @@ public:
 
 private:
     privmx::endpoint::core::DataIntegrityObject createDIO(const FileInfo& fileInfo);
-    privmx::crypto::PrivateKey _userPrivKey;
+    core::PrivateKey _userPrivKey;
     core::Connection _connection;
     FileMetaEncryptorV4 _fileMetaEncryptorV4;
     FileMetaEncryptorV5 _fileMetaEncryptorV5;

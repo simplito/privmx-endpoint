@@ -13,7 +13,7 @@
 #include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/utils/Utils.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>

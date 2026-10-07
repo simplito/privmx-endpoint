@@ -51,7 +51,7 @@ public:
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::shared_ptr<ServerApi>& serverApi,
         const std::string& host,
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const std::shared_ptr<RequestApi>& requestApi,
         const std::shared_ptr<FileDataProvider>& fileDataProvider,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,

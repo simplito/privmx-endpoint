@@ -11,7 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 using namespace privmx::endpoint::group::keytree;
 
@@ -29,7 +29,7 @@ TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
     TreeGroupState state;
     state.numLeaves = static_cast<std::uint32_t>(group.numLeaves.value_or(0));
     state.epoch = static_cast<std::uint32_t>(group.keyVersion);
-    state.grantPublicKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey);
+    state.grantPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey);
 
     if (group.leafAssignment.has_value()) {
         for (const std::string& userId : group.leafAssignment.value()) {
@@ -124,14 +124,14 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromArchive(
         registry.push_back(
             EpochRegistryEntry{
                 static_cast<std::uint32_t>(entry.keyVersion),
-                privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(entry.groupPubKey),
+                core::PublicKeyCache::getInstance()->fromBase58DER(entry.groupPubKey),
             }
         );
     }
     registry.push_back(
         EpochRegistryEntry{
             static_cast<std::uint32_t>(group.keyVersion),
-            privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey),
+            core::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey),
         }
     );
     return registry;
@@ -146,7 +146,7 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromGroupHistory(const
             registry.push_back(
                 EpochRegistryEntry{
                     static_cast<std::uint32_t>(entry.keyVersion),
-                    privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(entry.groupPubKey),
+                    core::PublicKeyCache::getInstance()->fromBase58DER(entry.groupPubKey),
                 }
             );
         }
@@ -154,7 +154,7 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromGroupHistory(const
     registry.push_back(
         EpochRegistryEntry{
             static_cast<std::uint32_t>(group.keyVersion),
-            privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey),
+            core::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey),
         }
     );
     return registry;
@@ -180,7 +180,7 @@ std::optional<std::string> GroupKeyResolver::ownUserId(const server::GroupInfo& 
 ResolveResult GroupKeyResolver::resolveWith(
     const server::GroupInfo& group,
     std::int64_t epoch,
-    const privmx::crypto::PrivateKey& ownUserKey,
+    const core::PrivateKey& ownUserKey,
     const std::vector<ArchiveRung>& rungs,
     const std::vector<EpochRegistryEntry>& registry,
     std::uint32_t eraFloor,
@@ -232,7 +232,7 @@ ResolveResult GroupKeyResolver::resolveWith(
 ResolveResult GroupKeyResolver::resolve(
     const server::GroupInfo& group,
     std::int64_t epoch,
-    const privmx::crypto::PrivateKey& ownUserKey,
+    const core::PrivateKey& ownUserKey,
     const server::GroupGetKeyArchiveResult& archive
 ) {
     const std::optional<std::uint32_t> prunedBelow = archive.archivePrunedBelow.has_value() ?

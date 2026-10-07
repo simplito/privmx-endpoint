@@ -9,10 +9,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/crypto/EciesEncryptor.hpp>
-#include <privmx/crypto/ecc/ECIES.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/Ecies.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/BinaryBufferBE.hpp>
@@ -25,8 +24,8 @@ using namespace privmx::endpoint::inbox;
 
 std::string InboxEntryDataEncryptorV1::encrypt(
     InboxEntrySendModel data,
-    privmx::crypto::PrivateKey& userPriv,
-    privmx::crypto::PublicKey& inboxPub
+    core::PrivateKey& userPriv,
+    core::PublicKey& inboxPub
 ) {
     utils::BinaryBufferBE sendDataBuffer;
     sendDataBuffer.writeOneOctetLengthBuffer(data.publicData.userPubKey);
@@ -38,13 +37,8 @@ std::string InboxEntryDataEncryptorV1::encrypt(
     dataSecuredBuffer.writeOneOctetLengthBuffer(filesMetaKeyBase64);
     dataSecuredBuffer.writeRaw(data.privateData.text);
 
-    // encrypt secured part with ecies
-    privmx::crypto::ECIES ecies(userPriv, inboxPub);
-    auto cipher = ecies.encrypt(dataSecuredBuffer.str());
-    auto cipherWithKey = std::string("e")
-                             .append(userPriv.getPublicKey().toDER())
-                             .append(inboxPub.toDER())
-                             .append(cipher);
+    // Ta sama ramka co dotychczas skladana recznie: 'e' || pub33(nadawca) || pub33(odbiorca) || ecies.
+    auto cipherWithKey = core::Ecies::encrypt(inboxPub, dataSecuredBuffer.str(), userPriv);
 
     utils::BinaryBufferBE concatBuffer;
     concatBuffer.writeOneOctetLengthBuffer(sendDataBuffer.str());
@@ -54,7 +48,7 @@ std::string InboxEntryDataEncryptorV1::encrypt(
 
 InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(
     std::string& serializedBase64,
-    privmx::crypto::PrivateKey& inboxPriv
+    core::PrivateKey& inboxPriv
 ) {
     InboxEntryDataResult result;
     try {
@@ -71,7 +65,7 @@ InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(
 
         std::string privateDataStr;
         wholeBuffer.readRawUntilEnd(privateDataStr);
-        auto decrypted = crypto::EciesEncryptor::decrypt(inboxPriv, privateDataStr);
+        auto decrypted = core::Ecies::decrypt(inboxPriv, privateDataStr);
 
         InboxEntryPrivateData privateData;
         utils::BinaryBufferBE securedBuffer(decrypted);

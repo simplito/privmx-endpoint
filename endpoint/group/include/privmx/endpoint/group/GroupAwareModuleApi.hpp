@@ -32,7 +32,7 @@ namespace group {
 class GroupAwareModuleApi : public core::ContainerBaseApi {
 public:
     GroupAwareModuleApi(
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,

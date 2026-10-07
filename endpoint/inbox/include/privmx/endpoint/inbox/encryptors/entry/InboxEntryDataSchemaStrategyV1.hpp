@@ -14,8 +14,8 @@ limitations under the License.
 
 #include <memory>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
@@ -37,10 +37,10 @@ public:
     InboxEntryDataSchemaStrategyV1(const std::shared_ptr<ServerApi>& serverApi, const store::StoreApi& storeApi);
     std::string encrypt(
         const InboxEntrySendModel& data,
-        privmx::crypto::PrivateKey& userPriv,
-        privmx::crypto::PublicKey& inboxPub
+        core::PrivateKey& userPriv,
+        core::PublicKey& inboxPub
     ) const;
-    InboxEntryDataResult decrypt(std::string& data, privmx::crypto::PrivateKey& inboxPriv) const;
+    InboxEntryDataResult decrypt(std::string& data, core::PrivateKey& inboxPriv) const;
     InboxEntryPublicDataResult decryptPublicOnly(std::string& data) const;
     InboxEntryResult decryptEntry(
         const thread::server::Message& message,

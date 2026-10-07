@@ -16,22 +16,22 @@ limitations under the License.
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/EciesEncryptor.hpp>
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/Ecies.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Utils.hpp>
 using namespace privmx::endpoint::core;
 
 server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(
     const EncKeyV2ToEncrypt& key,
-    const privmx::crypto::PublicKey& encryptionKey,
-    const crypto::PrivateKey& authorPrivateKey
+    const core::PublicKey& encryptionKey,
+    const core::PrivateKey& authorPrivateKey
 ) {
     server::EncryptedKeyEntryDataV2 result;
     result.version = EncryptionKeyDataSchema::Version::VERSION_2;
     dynamic::EncryptionKey keyToEncrypt{
         .id = key.id, .key = utils::Base64::from(key.key), .keySecret = utils::Base64::from(key.keySecret)
     };
-    result.encryptedKey = crypto::EciesEncryptor::encryptObjectToBase64(
+    result.encryptedKey = core::Ecies::encryptObjectToBase64(
         encryptionKey, keyToEncrypt.toJSON(), authorPrivateKey
     );
     std::unordered_map<std::string, std::string> fieldChecksums;
@@ -46,7 +46,7 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(
 
 DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(
     const server::EncryptedKeyEntryDataV2& encryptedEncKey,
-    const privmx::crypto::PrivateKey& decryptionKey
+    const core::PrivateKey& decryptionKey
 ) {
     DecryptedEncKeyV2 result;
     result.statusCode = 0;
@@ -60,9 +60,9 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(
             throw InvalidDataIntegrityObjectChecksumException();
         }
         dynamic::EncryptionKey decryptedKey = dynamic::EncryptionKey::fromJSON(
-            crypto::EciesEncryptor::decryptObjectFromBase64(
+            core::Ecies::decryptObjectFromBase64(
                 decryptionKey, encryptedEncKey.encryptedKey,
-                privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(result.dio.creatorPubKey)
+                core::PublicKeyCache::getInstance()->fromBase58DER(result.dio.creatorPubKey)
             )
         );
         if (decryptedKey.id.empty() || decryptedKey.key.empty()) {

@@ -30,13 +30,13 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
 
-using privmx::crypto::PrivateKey;
+using privmx::endpoint::core::PrivateKey;
 using namespace privmx::endpoint::group;
 using namespace privmx::endpoint::group::keytree;
 
@@ -92,7 +92,7 @@ protected:
     }
 
     // Whether the given member can climb the state to the grant key, from a store holding nothing.
-    bool canClimb(const server::GroupTreeState& tree, std::uint32_t epoch, const privmx::crypto::PublicKey& grantPub,
+    bool canClimb(const server::GroupTreeState& tree, std::uint32_t epoch, const privmx::endpoint::core::PublicKey& grantPub,
                   const Member& member) {
         TreeKeyCache store;
         TreeKeys tree_keys(store);

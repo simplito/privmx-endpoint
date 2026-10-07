@@ -108,7 +108,7 @@ server::EncryptedFileMetaV4 FileDataSchemaStrategyV4::encrypt(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const core::Buffer& internalMeta,
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const std::string& key
 ) const {
     FileMetaToEncryptV4 fileMeta{

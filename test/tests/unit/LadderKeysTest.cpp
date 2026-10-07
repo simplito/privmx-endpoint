@@ -24,12 +24,12 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 
 #include <privmx/endpoint/group/keytree/LadderKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 
-using privmx::crypto::PrivateKey;
+using privmx::endpoint::core::PrivateKey;
 using namespace privmx::endpoint::group::keytree;
 
 // shared epoch-history simulation used by every Ladder Keys suite below

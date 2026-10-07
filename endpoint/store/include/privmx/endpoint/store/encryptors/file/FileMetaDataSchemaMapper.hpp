@@ -21,7 +21,7 @@ limitations under the License.
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
@@ -41,7 +41,7 @@ namespace store {
 
 class FileMetaDataSchemaMapper {
 public:
-    FileMetaDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
+    FileMetaDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
     Poco::Dynamic::Var encrypt(
         const std::string& storeId,
@@ -110,7 +110,7 @@ public:
     );
 
 private:
-    privmx::crypto::PrivateKey _userPrivKey;
+    core::PrivateKey _userPrivKey;
     core::Connection _connection;
     FileKeyIdFormatValidator _fileKeyIdFormatValidator;
     core::VersionStrategyMapper<server::File, std::tuple<File, core::DataIntegrityObject>> _strategyMapper;

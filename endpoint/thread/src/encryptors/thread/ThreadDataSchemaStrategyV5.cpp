@@ -22,7 +22,7 @@ using namespace privmx::endpoint::thread;
 
 core::dynamic::EncryptedModuleDataV5 ThreadDataSchemaStrategyV5::encrypt(
     const core::ModuleDataToEncryptV5& data,
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     const std::string& key
 ) const {
     return _encryptor.encrypt(data, userPrivKey, key);

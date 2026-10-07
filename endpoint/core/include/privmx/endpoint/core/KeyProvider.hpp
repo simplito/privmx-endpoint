@@ -15,7 +15,7 @@ limitations under the License.
 #include <functional>
 #include <map>
 #include <memory>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <vector>
 
 #include "privmx/endpoint/core/CoreTypes.hpp"
@@ -69,9 +69,9 @@ public:
      * so any caching belongs to whoever owns the resolution logic (e.g. `GroupApiImpl`).
      */
     using GroupPrivKeyResolver = std::function<
-        std::optional<privmx::crypto::PrivateKey>(const std::string& groupId, int64_t epoch)>;
+        std::optional<core::PrivateKey>(const std::string& groupId, int64_t epoch)>;
 
-    KeyProvider(const privmx::crypto::PrivateKey& key, std::function<std::shared_ptr<UserVerifier>()> getUserVerifier);
+    KeyProvider(const core::PrivateKey& key, std::function<std::shared_ptr<UserVerifier>()> getUserVerifier);
     EncKey generateKey();
     std::string generateSecret();
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>> getKeysAndVerify(
@@ -99,7 +99,7 @@ public:
     );
 
 private:
-    DecryptedEncKeyV2 decryptKeyEntry(const server::KeyEntry& keyEntry, const privmx::crypto::PrivateKey& privKey);
+    DecryptedEncKeyV2 decryptKeyEntry(const server::KeyEntry& keyEntry, const core::PrivateKey& privKey);
     std::unordered_map<std::string, DecryptedEncKeyV2> decryptAndVerifyKeys(
         std::unordered_map<std::string, server::KeyEntry> keys,
         const EncKeyLocation& location
@@ -128,7 +128,7 @@ private:
     void verifyUserData(
         std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>>& decryptedKeys
     );
-    privmx::crypto::PrivateKey _key;
+    core::PrivateKey _key;
     std::function<std::shared_ptr<UserVerifier>()> _getUserVerifier;
     EncKeyEncryptorV1 _encKeyEncryptorV1;
     EncKeyEncryptorV2 _encKeyEncryptorV2;

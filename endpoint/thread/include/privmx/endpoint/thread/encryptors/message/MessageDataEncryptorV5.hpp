@@ -16,7 +16,7 @@ limitations under the License.
 
 #include "privmx/endpoint/thread/ServerTypes.hpp"
 #include "privmx/endpoint/thread/ThreadTypes.hpp"
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
@@ -31,7 +31,7 @@ class MessageDataEncryptorV5 {
 public:
     server::EncryptedMessageDataV5 encrypt(
         const MessageDataToEncryptV5& messageData,
-        const privmx::crypto::PrivateKey& authorPrivateKey,
+        const core::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same envelope; without one it runs here.

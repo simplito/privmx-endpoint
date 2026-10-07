@@ -10,7 +10,7 @@ limitations under the License.
 */
 
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/EciesEncryptor.hpp>
+#include <privmx/endpoint/core/crypto/Ecies.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
@@ -27,7 +27,7 @@ using namespace privmx::endpoint::event;
 
 EventApiImpl::EventApiImpl(
     const core::Connection& connection,
-    const privmx::crypto::PrivateKey& userPrivKey,
+    const core::PrivateKey& userPrivKey,
     privfs::RpcGateway::Ptr gateway,
     std::shared_ptr<core::EventMiddleware> eventMiddleware
 )

@@ -16,7 +16,7 @@ limitations under the License.
 #include <tuple>
 
 #include <Poco/Dynamic/Var.h>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
 
@@ -60,7 +60,7 @@ public:
     ) const;
     server::InboxData packForServer(
         const InboxDataProcessorModelV5& data,
-        const privmx::crypto::PrivateKey& authorPrivateKey,
+        const core::PrivateKey& authorPrivateKey,
         const std::string& inboxKey
     ) const;
 

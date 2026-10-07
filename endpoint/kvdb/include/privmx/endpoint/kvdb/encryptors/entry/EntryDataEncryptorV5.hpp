@@ -16,7 +16,7 @@ limitations under the License.
 
 #include "privmx/endpoint/kvdb/KvdbTypes.hpp"
 #include "privmx/endpoint/kvdb/ServerTypes.hpp"
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
@@ -31,7 +31,7 @@ class EntryDataEncryptorV5 {
 public:
     server::EncryptedKvdbEntryDataV5 encrypt(
         const KvdbEntryDataToEncryptV5& messageData,
-        const privmx::crypto::PrivateKey& authorPrivateKey,
+        const core::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same envelope; without one it runs here.

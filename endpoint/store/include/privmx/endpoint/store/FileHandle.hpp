@@ -14,7 +14,7 @@ limitations under the License.
 
 #include <string>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/HandleManager.hpp>
@@ -127,7 +127,7 @@ public:
         const store::FileInfo& fileInfo,
         const store::FileEncryptionParams& encryptionParams,
         size_t serverChunkSize,
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const privmx::endpoint::core::Connection& connection,
         std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi,
         std::shared_ptr<CacheInterface> cache
@@ -161,7 +161,7 @@ public:
         const store::FileInfo& fileInfo,
         const store::FileEncryptionParams& encryptionParams,
         size_t serverChunkSize,
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const privmx::endpoint::core::Connection& connection,
         std::shared_ptr<privmx::endpoint::store::ServerApi> serverApi,
         std::shared_ptr<CacheInterface> cache

@@ -14,7 +14,7 @@ limitations under the License.
 
 #include "privmx/endpoint/thread/ServerTypes.hpp"
 #include "privmx/endpoint/thread/ThreadTypes.hpp"
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
@@ -28,7 +28,7 @@ class MessageDataEncryptorV4 {
 public:
     server::EncryptedMessageDataV4 encrypt(
         const MessageDataToEncryptV4& messageData,
-        const privmx::crypto::PrivateKey& authorPrivateKey,
+        const core::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     DecryptedMessageDataV4 decrypt(

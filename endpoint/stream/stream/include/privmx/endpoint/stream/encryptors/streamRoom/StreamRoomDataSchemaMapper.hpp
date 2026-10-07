@@ -40,7 +40,7 @@ namespace stream {
 
 class StreamRoomDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
-    StreamRoomDataSchemaMapper(const privmx::crypto::PrivateKey& userPrivKey, const core::Connection& connection);
+    StreamRoomDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
     Poco::Dynamic::Var encrypt(const core::ModuleDataToEncryptV5& data, const std::string& key);
 

@@ -19,7 +19,7 @@ class GroupDataEncryptorV5 {
 public:
     dynamic::EncryptedGroupRosterV5 encryptRoster(
         const GroupRosterToEncryptV5& data,
-        const privmx::crypto::PrivateKey& authorPrivateKey,
+        const core::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     DecryptedGroupRosterV5 decryptRoster(
@@ -32,7 +32,7 @@ public:
     // entry is attested is the `publicMetaTag` check in `GroupDataSchemaMapper`, not optional for a key holder.
     dynamic::EncryptedGroupPublicMetaV5 encryptPublicMeta(
         const GroupPublicMetaToEncryptV5& data,
-        const privmx::crypto::PrivateKey& authorPrivateKey
+        const core::PrivateKey& authorPrivateKey
     );
     DecryptedGroupPublicMetaV5 extractPublicMeta(const dynamic::EncryptedGroupPublicMetaV5& encryptedData);
     core::DataIntegrityObject getPublicMetaDIOAndAssertIntegrity(
@@ -41,7 +41,7 @@ public:
 
     dynamic::EncryptedGroupPrivateMetaV5 encryptPrivateMeta(
         const GroupPrivateMetaToEncryptV5& data,
-        const privmx::crypto::PrivateKey& authorPrivateKey,
+        const core::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     DecryptedGroupPrivateMetaV5 decryptPrivateMeta(

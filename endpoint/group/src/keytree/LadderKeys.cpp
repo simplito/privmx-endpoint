@@ -24,7 +24,7 @@ using namespace privmx::endpoint::group::keytree;
 
 LadderKeys::LadderKeys(TreeKeyCache& cache) : _cache(cache) {}
 
-std::optional<privmx::crypto::PublicKey> LadderKeys::publicKeyOfEpoch(
+std::optional<privmx::endpoint::core::PublicKey> LadderKeys::publicKeyOfEpoch(
     std::uint32_t epoch,
     const std::vector<EpochRegistryEntry>& registry
 ) {
@@ -37,7 +37,7 @@ std::optional<privmx::crypto::PublicKey> LadderKeys::publicKeyOfEpoch(
 }
 
 bool LadderKeys::verifyAgainstRegistry(
-    const privmx::crypto::PrivateKey& recovered,
+    const core::PrivateKey& recovered,
     std::uint32_t epoch,
     const std::vector<EpochRegistryEntry>& registry
 ) const {
@@ -122,11 +122,11 @@ RungKeyGathering LadderKeys::gatherRungKeys(
 
 std::vector<ArchiveRung> LadderKeys::buildRungs(
     std::uint32_t newEpoch,
-    const privmx::crypto::PublicKey& newGrantPublicKey,
-    const std::optional<privmx::crypto::PrivateKey>& previousEpochKey,
+    const core::PublicKey& newGrantPublicKey,
+    const std::optional<core::PrivateKey>& previousEpochKey,
     std::uint32_t eraFloor,
     const std::string& author,
-    const privmx::crypto::PrivateKey& signer,
+    const core::PrivateKey& signer,
     bool includeSkipRungs,
     std::optional<std::uint32_t> prunedBelow
 ) {
@@ -185,10 +185,10 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
 
 std::vector<ArchiveRung> LadderKeys::buildEraLinks(
     std::uint32_t closingEpoch,
-    const privmx::crypto::PrivateKey& closingEpochKey,
+    const core::PrivateKey& closingEpochKey,
     const std::vector<EraLinkRecipient>& entitled,
     const std::string& author,
-    const privmx::crypto::PrivateKey& signer
+    const core::PrivateKey& signer
 ) {
     std::vector<ArchiveRung> links;
     for (const EraLinkRecipient& recipient : entitled) {
@@ -253,7 +253,7 @@ DescentResult LadderKeys::descend(
     }
 
     std::uint32_t current = from;
-    privmx::crypto::PrivateKey currentKey = startKey.value();
+    core::PrivateKey currentKey = startKey.value();
     std::set<std::uint32_t> visited{from};
 
     while (current > goal) {
@@ -327,13 +327,13 @@ DescentResult LadderKeys::descend(
 DescentResult LadderKeys::crossEraBoundary(
     const std::vector<ArchiveRung>& available,
     const std::string& ownUserId,
-    const privmx::crypto::PrivateKey& ownUserKey,
-    const std::vector<std::pair<std::string, privmx::crypto::PrivateKey>>& ownGroupKeys,
+    const core::PrivateKey& ownUserKey,
+    const std::vector<std::pair<std::string, core::PrivateKey>>& ownGroupKeys,
     const std::vector<EpochRegistryEntry>& registry
 ) {
     DescentResult result;
     for (const ArchiveRung& link : available) {
-        std::optional<privmx::crypto::PrivateKey> opener;
+        std::optional<core::PrivateKey> opener;
         if (link.recipientKind == RungRecipientKind::User && link.recipientId == ownUserId) {
             opener = ownUserKey;
         } else if (link.recipientKind == RungRecipientKind::Group) {

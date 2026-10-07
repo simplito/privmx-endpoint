@@ -15,14 +15,14 @@ limitations under the License.
 #include "privmx/endpoint/thread/Constants.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/utils/Utils.hpp"
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
 server::EncryptedMessageDataV4 MessageDataEncryptorV4::encrypt(
     const MessageDataToEncryptV4& messageData,
-    const crypto::PrivateKey& authorPrivateKey,
+    const core::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
     server::EncryptedMessageDataV4 result;
@@ -53,7 +53,7 @@ DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_4;
     try {
         validateVersion(encryptedMessageData);
-        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedMessageData.authorPubKey);
+        auto authorPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(encryptedMessageData.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedMessageData.publicMeta, authorPublicKey);
         if (!encryptedMessageData.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));

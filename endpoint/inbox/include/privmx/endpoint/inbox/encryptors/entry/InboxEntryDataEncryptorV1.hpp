@@ -12,8 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_INBOX_INBOXENTRYDATAENCRYPTORV1_HPP_
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXENTRYDATAENCRYPTORV1_HPP_
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 
 #include "privmx/endpoint/inbox/InboxTypes.hpp"
 
@@ -25,10 +25,10 @@ class InboxEntryDataEncryptorV1 {
 public:
     std::string encrypt(
         InboxEntrySendModel data,
-        privmx::crypto::PrivateKey& userPriv,
-        privmx::crypto::PublicKey& inboxPub
+        core::PrivateKey& userPriv,
+        core::PublicKey& inboxPub
     );
-    InboxEntryDataResult decrypt(std::string& serializedBase64, privmx::crypto::PrivateKey& inboxPriv);
+    InboxEntryDataResult decrypt(std::string& serializedBase64, core::PrivateKey& inboxPriv);
     InboxEntryPublicDataResult decryptPublicOnly(std::string& serializedBase64);
 };
 

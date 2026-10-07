@@ -30,7 +30,7 @@ class FileMetaEncryptorV5 {
 public:
     store::server::EncryptedFileMetaV5 encrypt(
         const store::FileMetaToEncryptV5& fileMeta,
-        const privmx::crypto::PrivateKey& authorPrivateKey,
+        const core::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same envelope; without one it runs here.

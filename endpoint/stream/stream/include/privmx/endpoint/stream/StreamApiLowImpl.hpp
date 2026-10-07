@@ -40,7 +40,7 @@ public:
     StreamApiLowImpl(
         const core::Connection& connection,
         const privfs::RpcGateway::Ptr& gateway,
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const std::string& host,
         const std::shared_ptr<core::EventMiddleware>& eventMiddleware,

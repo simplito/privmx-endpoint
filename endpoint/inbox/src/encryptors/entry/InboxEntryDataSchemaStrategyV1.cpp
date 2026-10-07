@@ -31,15 +31,15 @@ InboxEntryDataSchemaStrategyV1::InboxEntryDataSchemaStrategyV1(
 
 std::string InboxEntryDataSchemaStrategyV1::encrypt(
     const InboxEntrySendModel& data,
-    privmx::crypto::PrivateKey& userPriv,
-    privmx::crypto::PublicKey& inboxPub
+    core::PrivateKey& userPriv,
+    core::PublicKey& inboxPub
 ) const {
     return _encryptor.encrypt(data, userPriv, inboxPub);
 }
 
 InboxEntryDataResult InboxEntryDataSchemaStrategyV1::decrypt(
     std::string& data,
-    privmx::crypto::PrivateKey& inboxPriv
+    core::PrivateKey& inboxPriv
 ) const {
     return _encryptor.decrypt(data, inboxPriv);
 }
@@ -71,8 +71,7 @@ InboxEntryResult InboxEntryDataSchemaStrategyV1::decryptEntry(
         auto encKey = keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver)
                           .at(location)
                           .at(msgPublicData.usedInboxKeyId);
-        auto eccKey = privmx::crypto::ECC::fromPrivateKey(encKey.key);
-        auto privKeyECC = privmx::crypto::PrivateKey(eccKey);
+        auto privKeyECC = core::PrivateKey::fromRaw(encKey.key);
         auto decrypted = decrypt(msgData, privKeyECC);
         result.statusCode = encKey.statusCode;
         result.publicData = decrypted.publicData;

@@ -15,7 +15,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
-#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint;
@@ -23,7 +23,7 @@ using namespace privmx::endpoint::store;
 
 store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(
     const store::FileMetaToEncryptV4& fileMeta,
-    const crypto::PrivateKey& authorPrivateKey,
+    const core::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
 ) {
     server::EncryptedFileMetaV4 result;
@@ -52,7 +52,7 @@ store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(
     result.dataStructureVersion = FileDataSchema::Version::VERSION_4;
     try {
         validateVersion(encryptedFileMeta);
-        auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedFileMeta.authorPubKey);
+        auto authorPublicKey = core::PublicKeyCache::getInstance()->fromBase58DER(encryptedFileMeta.authorPubKey);
         result.publicMeta = _dataEncryptor.decodeAndVerify(encryptedFileMeta.publicMeta, authorPublicKey);
         if (!encryptedFileMeta.publicMetaObject.isEmpty()) {
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));

@@ -19,7 +19,7 @@ using namespace privmx::endpoint::group::keytree;
 void TreeKeyCache::putNodeKey(
     std::uint32_t nodeIndex,
     std::uint32_t generation,
-    const privmx::crypto::PrivateKey& key
+    const core::PrivateKey& key
 ) {
     std::unique_lock lock(_mutex);
     // `insert_or_assign`, not `operator[]`: subscripting default-constructs the value, and a default-constructed
@@ -27,7 +27,7 @@ void TreeKeyCache::putNodeKey(
     _nodeKeys.insert_or_assign(std::make_pair(nodeIndex, generation), key);
 }
 
-std::optional<privmx::crypto::PrivateKey> TreeKeyCache::getNodeKey(
+std::optional<privmx::endpoint::core::PrivateKey> TreeKeyCache::getNodeKey(
     std::uint32_t nodeIndex,
     std::uint32_t generation
 ) const {
@@ -40,12 +40,12 @@ std::optional<privmx::crypto::PrivateKey> TreeKeyCache::getNodeKey(
     return it->second;
 }
 
-void TreeKeyCache::putGrantKey(std::uint32_t epoch, const privmx::crypto::PrivateKey& key) {
+void TreeKeyCache::putGrantKey(std::uint32_t epoch, const core::PrivateKey& key) {
     std::unique_lock lock(_mutex);
     _grantKeys.insert_or_assign(epoch, key); // see putNodeKey: subscripting would mint a throwaway keypair
 }
 
-std::optional<privmx::crypto::PrivateKey> TreeKeyCache::getGrantKey(std::uint32_t epoch) const {
+std::optional<privmx::endpoint::core::PrivateKey> TreeKeyCache::getGrantKey(std::uint32_t epoch) const {
     std::shared_lock lock(_mutex);
     const auto it = _grantKeys.find(epoch);
     if (it == _grantKeys.end()) {

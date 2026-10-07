@@ -35,7 +35,7 @@ class InboxDataProcessorV5 {
 public:
     server::InboxData packForServer(
         const InboxDataProcessorModelV5& plainData,
-        const privmx::crypto::PrivateKey& authorPrivateKey,
+        const core::PrivateKey& authorPrivateKey,
         const std::string& inboxKey
     );
     // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same entry; without one it runs here.

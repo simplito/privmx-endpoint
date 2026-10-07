@@ -14,7 +14,7 @@ limitations under the License.
 
 #include <tuple>
 
-#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
 #include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyV5.hpp>
@@ -45,7 +45,7 @@ public:
     Store toLibError(const server::Store& store, int64_t errorCode) const override;
     core::dynamic::EncryptedModuleDataV5 encrypt(
         const core::ModuleDataToEncryptV5& data,
-        const privmx::crypto::PrivateKey& userPrivKey,
+        const core::PrivateKey& userPrivKey,
         const std::string& key
     ) const;
 
