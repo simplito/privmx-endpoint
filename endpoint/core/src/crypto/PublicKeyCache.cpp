@@ -13,23 +13,29 @@ limitations under the License.
 #include <optional>
 #include <utility>
 
+#include <privmx/utils/SingletonSlot.hpp>
+
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 using namespace privmx::endpoint::core;
 
-std::shared_ptr<PublicKeyCache> PublicKeyCache::impl = nullptr;
+namespace {
+privmx::utils::SingletonSlot<PublicKeyCache> slot;
+} // namespace
 
 std::shared_ptr<PublicKeyCache> PublicKeyCache::getInstance() {
-    if (!impl) {
-        impl = std::shared_ptr<PublicKeyCache>(new PublicKeyCache());
+    if (!slot.ref()) {
+        slot.ref() = std::shared_ptr<PublicKeyCache>(new PublicKeyCache());
     }
-    return impl;
+    return slot.ref();
 }
 
 void PublicKeyCache::freeInstance() {
-    if (impl) {
-        impl.reset();
+    // Znacznik sprawdzamy przed dotknieciem slotu - patrz SingletonSlot.
+    if (!privmx::utils::SingletonSlot<PublicKeyCache>::alive()) {
+        return;
     }
+    slot.ref().reset();
 }
 
 // Trafienie oddaje kazdemu watkowi ten sam uchwyt backendu. Jest to poprawne tylko dlatego, ze nic tutaj

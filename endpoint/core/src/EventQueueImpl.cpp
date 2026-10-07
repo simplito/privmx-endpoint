@@ -11,22 +11,27 @@ limitations under the License.
 
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 #include <privmx/utils/Logger.hpp>
+#include <privmx/utils/SingletonSlot.hpp>
 
 using namespace privmx::endpoint::core;
 
-std::shared_ptr<EventQueueImpl> EventQueueImpl::impl = nullptr;
+namespace {
+privmx::utils::SingletonSlot<EventQueueImpl> slot;
+} // namespace
 
 std::shared_ptr<EventQueueImpl> EventQueueImpl::getInstance() {
-    if (impl == nullptr) {
-        impl = std::shared_ptr<EventQueueImpl>(new EventQueueImpl());
+    if (slot.ref() == nullptr) {
+        slot.ref() = std::shared_ptr<EventQueueImpl>(new EventQueueImpl());
     }
-    return impl;
+    return slot.ref();
 }
 
 void EventQueueImpl::freeInstance() {
-    if (impl) {
-        impl.reset();
+    // Znacznik sprawdzamy przed dotknieciem slotu - patrz SingletonSlot.
+    if (!privmx::utils::SingletonSlot<EventQueueImpl>::alive()) {
+        return;
     }
+    slot.ref().reset();
 }
 
 void EventQueueImpl::emit(const std::shared_ptr<Event>& event) {

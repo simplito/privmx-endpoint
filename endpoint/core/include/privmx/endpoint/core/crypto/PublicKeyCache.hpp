@@ -46,7 +46,9 @@ protected:
     PublicKeyCache() {};
 
 private:
-    static std::shared_ptr<PublicKeyCache> impl;
+    // Uchwyt instancji mieszka w `SingletonSlot` w pliku zrodlowym, a nie tutaj - patrz
+    // privmx/utils/SingletonSlot.hpp po powod (kolejnosc niszczenia statykow).
+
     // Bridge jest jedyna strona, ktora model zagrozen dopuszcza jako wroga, i to on decyduje, ile
     // roznych kluczy autorow poda. Bez gornego ograniczenia bylaby to nieograniczona alokacja
     // pod jego kontrola.

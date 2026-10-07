@@ -44,7 +44,8 @@ protected:
     EventQueueImpl() {};
 
 private:
-    static std::shared_ptr<EventQueueImpl> impl;
+    // Uchwyt instancji mieszka w `SingletonSlot` w pliku zrodlowym, a nie tutaj - patrz
+    // privmx/utils/SingletonSlot.hpp po powod (kolejnosc niszczenia statykow).
 
     class Notification : public Poco::Notification {
     public:

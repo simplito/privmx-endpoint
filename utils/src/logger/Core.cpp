@@ -3,27 +3,35 @@
 
 #include "privmx/utils/logger/Core.hpp"
 #include "privmx/utils/logger/Outputs.hpp"
+#include "privmx/utils/SingletonSlot.hpp"
 #include <iomanip>
 
 #ifdef PRIVMX_ENABLE_LOGGER
 using namespace privmx::logger;
 
-std::shared_ptr<Logger> Logger::impl = nullptr;
+namespace {
+privmx::utils::SingletonSlot<Logger> slot;
+} // namespace
+
 std::shared_ptr<Logger> Logger::getInstance() {
-    if(!impl) {
-        impl = std::shared_ptr<Logger>(new Logger());
+    if(!slot.ref()) {
+        slot.ref() = std::shared_ptr<Logger>(new Logger());
         INITIALIZE_PRIVMX_LOGGER_STDOUT
         INITIALIZE_PRIVMX_LOGGER_STDERR
         INITIALIZE_PRIVMX_LOGGER_FILE
-        impl->log(LogLevel::TRACE , "Logger created");
+        slot.ref()->log(LogLevel::TRACE , "Logger created");
     }
-    return impl;
+    return slot.ref();
 }
 
 void Logger::freeInstance() {
-    if(impl) {
-        impl->log(LogLevel::TRACE , "Logger deleted");
-        impl.reset();
+    // Znacznik sprawdzamy przed dotknieciem slotu - patrz SingletonSlot.
+    if(!privmx::utils::SingletonSlot<Logger>::alive()) {
+        return;
+    }
+    if(slot.ref()) {
+        slot.ref()->log(LogLevel::TRACE , "Logger deleted");
+        slot.ref().reset();
     }
 }
 

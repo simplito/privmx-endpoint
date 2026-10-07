@@ -62,7 +62,8 @@ private:
     #endif
     // Singleton
     Logger() = default;
-    static std::shared_ptr<Logger> impl;
+    // Uchwyt instancji mieszka w `SingletonSlot` w pliku zrodlowym, a nie tutaj - patrz
+    // privmx/utils/SingletonSlot.hpp po powod (kolejnosc niszczenia statykow).
     // Outputs
     std::mutex _mutex;
     std::vector<std::unique_ptr<LoggerOutput>> _outputs;

@@ -59,7 +59,8 @@ private:
     void stopAllThreadInThePool();
     void initializeThreadPool();
 
-    static std::shared_ptr<Executor> impl;
+    // Uchwyt instancji mieszka w `SingletonSlot` w pliku zrodlowym, a nie tutaj - patrz
+    // privmx/utils/SingletonSlot.hpp po powod (kolejnosc niszczenia statykow).
     std::shared_ptr<privmx::utils::ThreadSafeQueue<TaskData>> _tasksToDo;
     std::vector<ExecutorThread> _threadPool;
 };

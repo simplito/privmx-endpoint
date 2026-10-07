@@ -11,19 +11,26 @@ limitations under the License.
 
 
 #include "privmx/utils/Executor.hpp"
+#include "privmx/utils/SingletonSlot.hpp"
 using namespace privmx::utils;
-std::shared_ptr<Executor> Executor::impl = nullptr;
+
+namespace {
+privmx::utils::SingletonSlot<Executor> slot;
+} // namespace
+
 std::shared_ptr<Executor> Executor::getInstance() {
-    if(!impl) {
-        impl = std::shared_ptr<Executor>(new Executor());
+    if(!slot.ref()) {
+        slot.ref() = std::shared_ptr<Executor>(new Executor());
     }
-    return impl;
+    return slot.ref();
 }
 
 void Executor::freeInstance() {
-    if(impl) {
-        impl.reset();
+    // Znacznik sprawdzamy przed dotknieciem slotu - patrz SingletonSlot.
+    if(!privmx::utils::SingletonSlot<Executor>::alive()) {
+        return;
     }
+    slot.ref().reset();
 }
 
 Executor::Executor() : _tasksToDo(std::make_shared<privmx::utils::ThreadSafeQueue<TaskData>>()) {
