@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -33,8 +34,13 @@ enum class EdgeChildKind {
 
 // One edge of the tree: `wrap(sk_parent -> pk_child)`. Encrypted to the child and carrying the parent's private
 // key, so members travel strictly upward — that asymmetry is where collusion resistance comes from.
+//
+// The parent is the child's lowest FILLED keyed ancestor, not necessarily its structural parent: buckets carry no
+// key and blank nodes have none to give, so an edge skips over them. Every member and every filled node has exactly
+// one incoming edge besides the grant edge.
 struct TreeEdge {
-    // When true the parent is the grant keypair rather than a tree node, and the child is the tree root.
+    // When true the parent is the grant keypair rather than a tree node, and the child is the tree root (or the
+    // sole member of a one-leaf tree).
     bool isGrantEdge = false;
     // Meaningless when `isGrantEdge`.
     std::uint32_t parentIndex = 0;
@@ -85,11 +91,13 @@ private:
     std::string _der;
 };
 
-// Nodes are never deleted, only refreshed into a new generation.
+// A keyed node's record. Blanking drops the key and keeps the generation, so the next fill is one generation on and
+// the bridge can tell an advanced node from a minted one. A keyed node with no record at all is blank too.
 struct TreeNodeState {
     std::uint32_t nodeIndex = 0;
     std::uint32_t generation = 0;
-    NodePublicKey publicKey;
+    // Absent on a blank node.
+    std::optional<NodePublicKey> publicKey;
 };
 
 // The group state a client needs to work with the tree, as served. Topology is not stored — it follows from
@@ -125,51 +133,36 @@ struct ClimbResult {
     std::optional<std::uint32_t> tamperedNode;
 };
 
-// A node refreshed by a removal: a fresh keypair plus edges to all of its existing children.
-struct NodeRefresh {
-    std::uint32_t nodeIndex = 0;
-    std::uint32_t newGeneration = 0;
-    privmx::crypto::PrivateKey newKey;
-    std::vector<TreeEdge> edges;
-};
-
-// Everything a removal must submit, plus the wrap count so callers can assert the cost.
-struct RemovalPlan {
-    // Seats being blanked, ascending. One epoch covers them all, however many there are.
-    std::vector<std::uint32_t> blankedPositions;
-    // The union of the blanked leaves' direct paths — each shared ancestor appears once.
-    std::vector<NodeRefresh> pathRefresh;
-    privmx::crypto::PrivateKey newGrantKey;
-    TreeEdge grantEdge;
-    std::uint32_t newEpoch = 0;
-    // Tree edges + the grant edge. Excludes ladder rungs, which the ladder module builds.
-    std::uint32_t wrapCount = 0;
-};
-
-// Everything an addition must submit: the new leaf's path re-keyed, `2*depth + 1` wraps.
-struct AdditionPlan {
-    // Seats taken, index-aligned with the newcomers the plan was built for.
-    std::vector<std::uint32_t> positions;
-    std::vector<TreeEdge> edges;
-    // Every node on the new leaf's path: minted where the tree grew, one generation on where it existed.
-    std::vector<TreeNodeState> nodes;
-    // The keys behind those nodes, to keep locally so the next climb starts from cache.
-    std::vector<std::pair<std::uint32_t, privmx::crypto::PrivateKey>> nodeKeys;
-    // Present only when the tree grew a level; the grant keypair is unchanged either way.
-    std::optional<TreeNodeState> newRoot;
-    std::optional<privmx::crypto::PrivateKey> newRootKey;
-    std::uint32_t newNumLeaves = 0;
-    std::uint32_t wrapCount = 0;
-};
-
-struct BuildPlan {
+// What one commit changes, before any key exists: who sits where afterwards, which nodes it blanks and whose path it
+// refreshes. Every operation — create, add, remove, self-update — is one of these.
+struct CommitShape {
     std::uint32_t numLeaves = 0;
-    std::vector<TreeNodeState> nodes;
+    std::vector<std::optional<std::string>> leafAssignment;
+    // Keyed nodes the commit blanks: the paths of the seats it empties or fills, minus the committer's own.
+    std::set<std::uint32_t> blanked;
+    std::uint32_t committerSeat = 0;
+    // Seats added (index-aligned with the newcomers) or emptied (ascending); empty for create and self-update.
+    std::vector<std::uint32_t> subjectSeats;
+};
+
+// One node of the committer's keyed path with its fresh key.
+struct RefreshedNode {
+    std::uint32_t nodeIndex = 0;
+    // The generation the node was read at; absent when it had no record.
+    std::optional<std::uint32_t> fromGeneration;
+    std::uint32_t generation = 0;
+    privmx::crypto::PrivateKey key;
+};
+
+struct CommitPlan {
+    CommitShape shape;
+    // The committer's keyed path, bottom-up, root last.
+    std::vector<RefreshedNode> refreshed;
+    // Every edge the refreshed nodes owe on the post state, then the grant edge.
     std::vector<TreeEdge> edges;
+    // The grant edge's epoch and the key it carries: new on a removal or create, the current one otherwise.
+    std::uint32_t epoch = 0;
     privmx::crypto::PrivateKey grantKey;
-    // Kept locally; the server only ever receives the public halves.
-    std::vector<std::pair<std::uint32_t, privmx::crypto::PrivateKey>> nodeKeys;
-    std::uint32_t wrapCount = 0;
 };
 
 struct TreeMember {

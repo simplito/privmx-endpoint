@@ -29,6 +29,7 @@ limitations under the License.
 
 #include <privmx/endpoint/group/keytree/GroupKeyResolver.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
+#include <privmx/endpoint/group/keytree/TreeWire.hpp>
 
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
@@ -75,61 +76,27 @@ protected:
         return result;
     }
 
-    // Serialises a runtime edge into the wire shape the bridge would send.
-    server::GroupTreeEdge toWire(const TreeEdge& edge) {
-        server::GroupTreeEdge wire;
-        wire.isGrantEdge = edge.isGrantEdge;
-        wire.parentIndex = static_cast<std::int64_t>(edge.parentIndex);
-        wire.parentGeneration = static_cast<std::int64_t>(edge.parentGeneration);
-        if (edge.childKind == EdgeChildKind::User) {
-            wire.childKind = "user";
-            wire.childUserId = edge.childUserId;
-        } else {
-            wire.childKind = "node";
-            wire.childIndex = static_cast<std::int64_t>(edge.childIndex);
-            wire.childGeneration = static_cast<std::int64_t>(edge.childGeneration);
-        }
-        wire.data = edge.blob;
-        return wire;
-    }
-
     Fixture buildFixture(std::uint32_t memberCount) {
         Fixture fixture;
         fixture.members = makeMembers(memberCount);
 
         TreeKeyCache buildStore;
         TreeKeys builder(buildStore);
-        const BuildPlan plan = builder.build(publicOf(fixture.members), fixture.members[0].priv);
+        const CommitPlan plan =
+            builder.planCreate(publicOf(fixture.members), fixture.members[0].userId, fixture.members[0].priv);
         fixture.grantKey = plan.grantKey;
+        const server::GroupTreeState tree = TreeWire::toCreateTree(plan);
 
         server::GroupInfo& group = fixture.group;
         group.id = "grp1";
         group.contextId = "ctx1";
         group.groupPubKey = plan.grantKey.getPublicKey().toBase58DER();
         group.keyVersion = 1;
-        group.numLeaves = static_cast<std::int64_t>(plan.numLeaves);
-
-        std::vector<std::string> leaves;
-        for (const TestMember& member : fixture.members) {
-            leaves.push_back(member.userId);
-        }
-        group.leafAssignment = leaves;
-
-        std::vector<server::GroupTreeNode> nodes;
-        for (const TreeNodeState& node : plan.nodes) {
-            nodes.push_back(server::GroupTreeNode{
-                static_cast<std::int64_t>(node.nodeIndex),
-                static_cast<std::int64_t>(node.generation),
-                node.publicKey.toBase58DER(),
-            });
-        }
-        group.treeNodes = nodes;
-
-        std::vector<server::GroupTreeEdge> edges;
-        for (const TreeEdge& edge : plan.edges) {
-            edges.push_back(toWire(edge));
-        }
-        group.treeEdges = edges;
+        group.treeVersion = 2;
+        group.numLeaves = tree.numLeaves;
+        group.leafAssignment = tree.leafAssignment;
+        group.treeNodes = tree.nodes;
+        group.treeEdges = tree.edges;
         fixture.archive = emptyArchive(1);
         return fixture;
     }
@@ -192,7 +159,7 @@ protected:
                 const std::uint32_t rootIndex = TreeMath::root(state.numLeaves);
                 for (const TreeNodeState& node : state.nodes) {
                     if (node.nodeIndex == rootIndex) {
-                        edge.data = TreeKeys::wrapKey(epochKeys.back(), node.publicKey.parsed(), signer);
+                        edge.data = TreeKeys::wrapKey(epochKeys.back(), node.publicKey->parsed(), signer);
                     }
                 }
                 edge.parentGeneration = static_cast<std::int64_t>(upTo);
@@ -237,6 +204,45 @@ TEST_F(ResolverDetection, APartiallyPopulatedTreeIsNotTreatedAsATree) {
 TEST_F(ResolverDetection, AFullyPopulatedTreeIsRecognised) {
     const Fixture fixture = buildFixture(4);
     EXPECT_TRUE(GroupKeyResolver::hasTree(fixture.group));
+    EXPECT_TRUE(GroupKeyResolver::hasSupportedTree(fixture.group));
+}
+
+TEST_F(ResolverDetection, SECURITY_ATreeOfAnotherVersionIsRefusedNotClimbed) {
+    // An older tree climbs just as well and means something else: its copath keys were minted by whoever created
+    // the group. The bridge serves version 1 for groups made before the field existed.
+    for (const std::optional<std::int64_t> version : {std::optional<std::int64_t>(), std::optional<std::int64_t>(1),
+                                                      std::optional<std::int64_t>(3)}) {
+        Fixture fixture = buildFixture(4);
+        fixture.group.treeVersion = version;
+        setOwnLeafPosition(fixture.group, 1);
+        TreeKeyCache store;
+        GroupKeyResolver resolver(store);
+        const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[1].priv, fixture.archive);
+        EXPECT_EQ(result.failure, ResolveFailure::UnsupportedTreeVersion);
+        EXPECT_FALSE(result.key.has_value());
+    }
+}
+
+TEST_F(ResolverDetection, SpotsABlankOnTheCallersOwnPathOnly) {
+    Fixture fixture = buildFixture(40);
+    setOwnLeafPosition(fixture.group, 0);
+    EXPECT_FALSE(GroupKeyResolver::ownPathHasBlanks(fixture.group));
+
+    // Node 31 blanked: on seat 0's keyed path, not on seat 35's.
+    auto nodes = fixture.group.treeNodes.value();
+    for (server::GroupTreeNode& node : nodes) {
+        if (node.nodeIndex == 31) {
+            node.publicKey = std::nullopt;
+        }
+    }
+    fixture.group.treeNodes = nodes;
+    EXPECT_TRUE(GroupKeyResolver::ownPathHasBlanks(fixture.group));
+    setOwnLeafPosition(fixture.group, 35);
+    EXPECT_FALSE(GroupKeyResolver::ownPathHasBlanks(fixture.group));
+
+    // A keyed node with no record at all is blank too.
+    fixture.group.treeNodes = std::vector<server::GroupTreeNode>{};
+    EXPECT_TRUE(GroupKeyResolver::ownPathHasBlanks(fixture.group));
 }
 
 // conversions — where a field mismatch would hide
@@ -248,8 +254,8 @@ TEST_F(ResolverConversion, RoundTripsTheTreeState) {
     EXPECT_EQ(state.numLeaves, 8u);
     EXPECT_EQ(state.epoch, 1u);
     EXPECT_EQ(state.grantPublicKey, fixture.grantKey.getPublicKey());
-    EXPECT_EQ(state.nodes.size(), 7u) << "8 leaves means 7 internal nodes";
-    EXPECT_EQ(state.edges.size(), 2u * 7u + 1u) << "two edges per internal node plus the grant edge";
+    EXPECT_EQ(state.nodes.size(), 1u) << "eight leaves are one bucket under the root, the only keyed node";
+    EXPECT_EQ(state.edges.size(), 8u + 1u) << "one edge per member plus the grant edge";
     for (std::size_t i = 0; i < 8; ++i) {
         ASSERT_TRUE(state.leafAssignment[i].has_value());
         EXPECT_EQ(state.leafAssignment[i].value(), fixture.members[i].userId);
@@ -467,28 +473,23 @@ TEST_F(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem)
     leaves[3] = newcomer.userId;
     fixture.group.leafAssignment = leaves;
 
-    // The seat's parent is on leaf 2's direct path but not on leaf 0's, so the one wrap is authored by the
-    // member sharing the blank's parent — the cheap case the design aims for: one wrap, nothing refreshed.
+    // The seat's edge comes from its lowest keyed ancestor, which every member's climb passes through — so another
+    // member re-wraps it to the newcomer: one wrap, nothing refreshed, and nothing else addressed to them.
     const TreeGroupState state = GroupKeyResolver::toTreeState(fixture.group);
-    const std::uint32_t parentIndex = TreeMath::parent(TreeMath::leafNode(3), state.numLeaves);
-    std::uint32_t parentGeneration = 0;
-    for (const TreeNodeState& node : state.nodes) {
-        if (node.nodeIndex == parentIndex) {
-            parentGeneration = node.generation;
-        }
-    }
     TreeKeyCache adderStore;
     TreeKeys adder(adderStore);
     ASSERT_EQ(
         adder.climbToGrantKey(state, fixture.members[2].userId, fixture.members[2].priv).failure,
         ClimbFailure::None
     );
-    const auto parentKey = adderStore.getNodeKey(parentIndex, parentGeneration);
-    ASSERT_TRUE(parentKey.has_value()) << "the adder's own climb passes through the blank's parent";
 
     auto edges = fixture.group.treeEdges.value();
     for (server::GroupTreeEdge& edge : edges) {
         if (edge.childKind == "user" && edge.childUserId.value_or("") == fixture.members[3].userId) {
+            const auto parentKey = adderStore.getNodeKey(
+                static_cast<std::uint32_t>(edge.parentIndex.value()), static_cast<std::uint32_t>(edge.parentGeneration)
+            );
+            ASSERT_TRUE(parentKey.has_value()) << "the adder's own climb passes through the seat's keyed ancestor";
             edge.childUserId = newcomer.userId;
             edge.data = TreeKeys::wrapKey(parentKey.value(), newcomer.priv.getPublicKey(), fixture.members[2].priv);
         }
@@ -573,7 +574,7 @@ TEST_F(ResolverCurrentEpoch, ASecondResolveIsServedFromTheCacheWithoutClimbing) 
     const ResolveResult first = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
     ASSERT_EQ(first.failure, ResolveFailure::None);
     ASSERT_TRUE(first.key.has_value());
-    ASSERT_EQ(store.nodeKeyCount(), 3u) << "depth(8) == 3 nodes on the direct path, cached by the first climb";
+    ASSERT_EQ(store.nodeKeyCount(), 1u) << "the root, the one keyed node of eight seats, cached by the first climb";
 
     // Drop the node keys and strip the tree edges: a real second climb is now impossible.
     store.clearNodeKeys();

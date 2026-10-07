@@ -11,7 +11,12 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 
+#include <algorithm>
+
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
+
+#include "privmx/endpoint/group/keytree/TreeMath.hpp"
+#include "privmx/endpoint/group/keytree/TreeWire.hpp"
 
 using namespace privmx::endpoint::group::keytree;
 
@@ -25,54 +30,15 @@ bool GroupKeyResolver::hasTree(const server::GroupInfo& group) {
         group.leafAssignment.has_value();
 }
 
+bool GroupKeyResolver::hasSupportedTree(const server::GroupInfo& group) {
+    return group.treeVersion.value_or(0) == static_cast<std::int64_t>(TreeMath::TREE_VERSION);
+}
+
 TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
-    TreeGroupState state;
-    state.numLeaves = static_cast<std::uint32_t>(group.numLeaves.value_or(0));
-    state.epoch = static_cast<std::uint32_t>(group.keyVersion);
-    state.grantPublicKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey);
-
-    if (group.leafAssignment.has_value()) {
-        for (const std::string& userId : group.leafAssignment.value()) {
-            // The wire format uses an empty string for a blank leaf.
-            if (userId.empty()) {
-                state.leafAssignment.push_back(std::nullopt);
-            } else {
-                state.leafAssignment.push_back(userId);
-            }
-        }
-    }
-
-    if (group.treeNodes.has_value()) {
-        for (const server::GroupTreeNode& node : group.treeNodes.value()) {
-            state.nodes.push_back(
-                TreeNodeState{
-                    static_cast<std::uint32_t>(node.nodeIndex),
-                    static_cast<std::uint32_t>(node.generation),
-                    NodePublicKey::fromBase58DER(node.publicKey),
-                }
-            );
-        }
-    }
-
-    if (group.treeEdges.has_value()) {
-        for (const server::GroupTreeEdge& edge : group.treeEdges.value()) {
-            TreeEdge converted;
-            converted.isGrantEdge = edge.isGrantEdge.value_or(false);
-            converted.parentIndex = static_cast<std::uint32_t>(edge.parentIndex.value_or(0));
-            converted.parentGeneration = static_cast<std::uint32_t>(edge.parentGeneration);
-            if (edge.childKind == "user") {
-                converted.childKind = EdgeChildKind::User;
-                converted.childUserId = edge.childUserId.value_or("");
-            } else {
-                converted.childKind = EdgeChildKind::Node;
-                converted.childIndex = static_cast<std::uint32_t>(edge.childIndex.value_or(0));
-                converted.childGeneration = static_cast<std::uint32_t>(edge.childGeneration.value_or(0));
-            }
-            converted.blob = edge.data;
-            state.edges.push_back(converted);
-        }
-    }
-    return state;
+    return TreeWire::toRuntime(
+        TreeWire::fromGroupInfo(group), static_cast<std::uint32_t>(group.keyVersion),
+        privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey)
+    );
 }
 
 namespace {
@@ -175,6 +141,25 @@ std::optional<std::string> GroupKeyResolver::ownUserId(const server::GroupInfo& 
     return userId;
 }
 
+bool GroupKeyResolver::ownPathHasBlanks(const server::GroupInfo& group) {
+    if (!hasTree(group) || !ownUserId(group).has_value()) {
+        return false;
+    }
+    const auto& records = group.treeNodes.value();
+    for (const std::uint32_t node : TreeMath::keyedPath(
+             static_cast<std::uint32_t>(group.ownLeafPosition.value()),
+             static_cast<std::uint32_t>(group.numLeaves.value())
+         )) {
+        const auto record = std::find_if(records.begin(), records.end(), [&](const server::GroupTreeNode& served) {
+            return served.nodeIndex == static_cast<std::int64_t>(node);
+        });
+        if (record == records.end() || record->publicKey.value_or("").empty()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group, which no longer
 // carries them: the bridge serves the ladder separately, and the walk stays ignorant of where they came from.
 ResolveResult GroupKeyResolver::resolveWith(
@@ -189,6 +174,12 @@ ResolveResult GroupKeyResolver::resolveWith(
     ResolveResult result;
     if (!hasTree(group)) {
         result.failure = ResolveFailure::NoTree;
+        return result;
+    }
+    if (!hasSupportedTree(group)) {
+        // Read as the current layout, an older tree would climb fine and mean something else: its copath keys were
+        // minted by whoever created or last re-keyed them, which is exactly what this layout exists to rule out.
+        result.failure = ResolveFailure::UnsupportedTreeVersion;
         return result;
     }
     const auto identity = ownUserId(group);

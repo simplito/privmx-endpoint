@@ -1,9 +1,9 @@
 # Key-tree conformance check
 
 The client and the bridge each implement the same array-indexed left-balanced binary tree arithmetic. **They
-must agree exactly.** The server performs the same computation to decide which nodes a member removal is obliged
-to refresh; if the two disagree, the server either rejects valid removals or — the dangerous direction — accepts
-one that leaves a removed member holding a current node key.
+must agree exactly.** The server performs the same computation to decide which nodes a commit may refresh and which
+it blanks; if the two disagree, the server either rejects valid commits or — the dangerous direction — accepts one
+that leaves a removed member holding a current node key.
 
 Two independent codebases with the same required behaviour is exactly the situation that drifts, so the check is
 a diff of generated vectors rather than a promise.
@@ -57,9 +57,11 @@ two sides disagree about what a well-formed state is, which is precisely what th
 truncated in the dump on purpose — the validator checks that an edge carries a ciphertext, never what is in one,
 because the server cannot decrypt anything.
 
-Coverage: creation for twelve leaf counts (including truncated trees), removal at every position of five sizes
-with the rungs each publishes, and additions both into a blank left by a removal and appended so the tree grows
-and re-parents an existing leaf.
+Coverage: tree version 2 (buckets of 16 seats, blank nodes without a `publicKey`). Creation for thirteen leaf
+counts from 1 to 64; removals at every position of 2, 5 and 17 seats and the cases that leave blank nodes above the
+buckets (including a batch and a removed creator), each with the unit rung it publishes; additions that grow the tree
+(moving the root, or dropping an old root of 16 seats into a bucket), a batch across 32 seats and refilled blanks;
+and self-updates refilling a blank. Every case names its committer and the nodes it refreshed.
 
 ## Without a full build
 

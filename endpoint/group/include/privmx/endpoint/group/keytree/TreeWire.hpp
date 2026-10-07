@@ -24,8 +24,7 @@ namespace endpoint {
 namespace group {
 namespace keytree {
 
-// Turns plans into the tree state the bridge expects. The server validates a whole submitted state rather than a
-// delta — checking a delta would trust the client's account of what it started from — so the merging happens here.
+// Turns commit plans into what the bridge expects: a whole tree for a new group, a transition for every later commit.
 class TreeWire {
 public:
     static server::GroupTreeNode toWire(const TreeNodeState& node);
@@ -33,8 +32,8 @@ public:
     static server::GroupArchiveRung toWire(const ArchiveRung& rung);
     static std::vector<server::GroupArchiveRung> toWire(const std::vector<ArchiveRung>& rungs);
 
-    // The state of a brand-new group: every member seated in order, epoch 1.
-    static server::GroupTreeState fromBuildPlan(const BuildPlan& plan, const std::vector<TreeMember>& members);
+    // The tree of a brand-new group: every member seated in order, the creator's keyed path at generation 0.
+    static server::GroupTreeState toCreateTree(const CommitPlan& plan);
 
     static server::GroupTreeState fromGroupInfo(const server::GroupInfo& group);
 
@@ -44,33 +43,25 @@ public:
         const privmx::crypto::PublicKey& grantPublicKey
     );
 
-    // The refreshed path with the generations it was planned against, the edges that refresh owes, and the grant
-    // edge at the new epoch — `afterRemoval` minus everything the server already holds.
-    static server::GroupTreeTransition toRemovalTransition(
-        const server::GroupTreeState& before,
-        const RemovalPlan& plan,
-        std::int64_t baseKeyVersion
-    );
-
-    // The addition as a delta, the grant edge re-issued to the new root at the unchanged epoch.
-    // `previousGenerations` says which nodes the server holds, so an advanced node reads differently from a minted one.
+    // The adder's refreshed path as `seatedNodes`, the grant edge re-issued at the unchanged epoch.
     static server::GroupTreeAdditionTransition toAdditionTransition(
-        const AdditionPlan& plan,
-        const std::map<std::uint32_t, std::uint32_t>& previousGenerations,
+        const CommitPlan& plan,
         std::int64_t baseKeyVersion
     );
 
-    // Refreshed nodes replace their predecessors and the edges they invalidated are dropped. Nothing off the
-    // removed leaf's direct path is touched, which is what the bridge checks.
-    static server::GroupTreeState afterRemoval(const server::GroupTreeState& before, const RemovalPlan& plan);
+    // The remover's refreshed path, the grant edge at the new epoch.
+    static server::GroupTreeTransition toRemovalTransition(const CommitPlan& plan, std::int64_t baseKeyVersion);
 
-    // The epoch does not move, which is what keeps every container the group can read valid. Edges the plan
-    // supersedes are dropped, as are edges growth re-parented — those would describe a topology no longer there.
-    static server::GroupTreeState afterAddition(
-        const server::GroupTreeState& before,
-        const AdditionPlan& plan,
-        const std::vector<std::string>& newMemberIds
+    static server::GroupTreeSelfUpdateTransition toSelfUpdateTransition(
+        const CommitPlan& plan,
+        std::int64_t baseKeyVersion
     );
+
+    // The whole state after a commit, by the bridge's storage rule: blanked nodes keep their generation and lose
+    // their key, refreshed ones are replaced, and every edge hanging off either is replaced by the plan's. A record
+    // growth pushed into a bucket (an old root at a low level) goes with its edges. The live path never needs this;
+    // the conformance fixture and the tests do.
+    static server::GroupTreeState afterCommit(const server::GroupTreeState& before, const CommitPlan& plan);
 };
 
 } // namespace keytree

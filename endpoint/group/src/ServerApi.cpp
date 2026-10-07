@@ -46,6 +46,10 @@ void ServerApi::groupRemoveMembers(server::GroupRemoveMembersModel model) {
     request("groupRemoveMembers", model.toJSON());
 }
 
+void ServerApi::groupSelfUpdate(server::GroupSelfUpdateModel model) {
+    request("groupSelfUpdate", model.toJSON());
+}
+
 void ServerApi::groupCutEra(server::GroupCutEraModel model) {
     request("groupCutEra", model.toJSON());
 }

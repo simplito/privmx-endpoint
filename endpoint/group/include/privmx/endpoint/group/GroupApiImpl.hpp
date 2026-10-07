@@ -1,10 +1,17 @@
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPIIMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPIIMPL_HPP_
 
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <functional>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <set>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -21,6 +28,7 @@
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCacheRegistry.hpp"
+#include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 namespace privmx {
@@ -174,10 +182,32 @@ private:
         const std::vector<std::string>& userIds
     );
 
+    // The long-term keys a commit wraps to: the caller's own from its key, newcomers' from the arguments (left out
+    // here), everybody else's from the Context user list.
+    std::map<std::string, std::string> commitRecipientKeys(
+        const server::GroupInfo& group,
+        const std::vector<std::string>& recipients,
+        const std::string& ownUserId,
+        const std::set<std::string>& newcomers = {}
+    );
+
     keytree::TreeGroupState climbForPlanning(
         const server::GroupInfo& group,
         const std::shared_ptr<keytree::TreeKeyCache>& cache
     );
+
+    // One attempt each; `commitWithRetry` re-runs them, from a fresh read, when a concurrent commit moved the base.
+    void addGroupMembersOnce(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
+    void removeGroupMembersOnce(const std::string& groupId, const std::vector<std::string>& userIds);
+    static void commitWithRetry(const std::function<void()>& attempt);
+    static bool isRetryableCommitRejection(const privmx::utils::PrivmxException& e);
+
+    // Refills the blank nodes of the caller's own keyed path. Never retried: a failure leaves the tree as it was,
+    // and the next climb that sees the blanks schedules another.
+    void selfUpdate(const std::string& groupId);
+    // At most one pending or running per group, after a random delay so a group's members do not all commit at once.
+    void scheduleSelfUpdate(const std::string& groupId);
+    void runSelfUpdates();
 
     std::vector<keytree::ArchiveRung> buildRotationRungs(
         const server::GroupInfo& group,
@@ -222,6 +252,16 @@ private:
     // Which epoch a published grant public key belongs to, by `memoKeyFor(groupId, pubKeyBase58)`.
     privmx::utils::ThreadSaveMap<std::string, int64_t> _envelopeGrantEpochs;
     privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<EnvelopeFileState>> _envelopeFiles;
+
+    // Background self-updates run on a thread of their own rather than the shared executor: a task there waits out
+    // its random delay, and a handful of groups waiting at once would hold every pool thread and stall event
+    // delivery for all modules. Joined in the destructor; pending ones are dropped on disconnect.
+    std::mutex _selfUpdateMutex;
+    std::condition_variable _selfUpdateWake;
+    std::map<std::string, std::chrono::steady_clock::time_point> _selfUpdatePending;
+    std::optional<std::string> _selfUpdateRunning;
+    bool _selfUpdateStopping = false;
+    std::thread _selfUpdateWorker;
 };
 
 } // namespace group

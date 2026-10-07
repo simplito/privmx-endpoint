@@ -34,6 +34,8 @@ enum class ResolveFailure {
     ClimbFailed,
     // The current epoch was reached but the requested older one was not.
     DescentFailed,
+    // The group's tree has a layout (`treeVersion`) this client does not read.
+    UnsupportedTreeVersion,
 };
 
 struct ResolveResult {
@@ -64,7 +66,15 @@ public:
 
     static std::optional<std::string> ownUserId(const server::GroupInfo& group);
 
+    // Whether a node of the caller's keyed path is blank in the served state — left so by somebody else's commit,
+    // and refilled only by the caller's own self-update.
+    static bool ownPathHasBlanks(const server::GroupInfo& group);
+
     static bool hasTree(const server::GroupInfo& group);
+
+    // Whether the tree is in the one layout this client reads (TreeMath::TREE_VERSION). Older groups are refused,
+    // not migrated.
+    static bool hasSupportedTree(const server::GroupInfo& group);
 
     // ── Conversions from the wire types. Public so they can be tested directly. ──
 

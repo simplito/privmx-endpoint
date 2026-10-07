@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <random>
 
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
@@ -66,6 +67,15 @@ GroupApiImpl::GroupApiImpl(
 }
 
 GroupApiImpl::~GroupApiImpl() {
+    {
+        std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+        _selfUpdateStopping = true;
+        _selfUpdatePending.clear();
+    }
+    _selfUpdateWake.notify_all();
+    if (_selfUpdateWorker.joinable()) {
+        _selfUpdateWorker.join();
+    }
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
@@ -153,6 +163,23 @@ std::map<std::string, std::string> GroupApiImpl::resolveMemberKeys(
     return keys;
 }
 
+std::map<std::string, std::string> GroupApiImpl::commitRecipientKeys(
+    const server::GroupInfo& group,
+    const std::vector<std::string>& recipients,
+    const std::string& ownUserId,
+    const std::set<std::string>& newcomers
+) {
+    std::vector<std::string> toResolve;
+    for (const std::string& userId : recipients) {
+        if (userId != ownUserId && newcomers.count(userId) == 0) {
+            toResolve.push_back(userId);
+        }
+    }
+    std::map<std::string, std::string> keys = resolveMemberKeys(group.contextId, toResolve);
+    keys[ownUserId] = _userPrivKey.getPublicKey().toBase58DER();
+    return keys;
+}
+
 // The keytree module reports impossible requests as `std::invalid_argument`, having no dependency on the endpoint's
 // exception hierarchy. Letting one escape the SDK boundary would `std::terminate` a caller catching core::Exception.
 template<typename TPlan>
@@ -171,6 +198,11 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
     if (!keytree::GroupKeyResolver::hasTree(group)) {
         throw core::EncryptionKeyValidationException("this group is not backed by a key tree");
     }
+    if (!keytree::GroupKeyResolver::hasSupportedTree(group)) {
+        keytree::ResolveResult asResolve;
+        asResolve.failure = keytree::ResolveFailure::UnsupportedTreeVersion;
+        throw core::EncryptionKeyValidationException(describeResolveFailure(asResolve));
+    }
     const auto identity = keytree::GroupKeyResolver::ownUserId(group);
     if (!identity.has_value()) {
         throw core::EncryptionKeyValidationException("caller holds no leaf in this group's key tree");
@@ -186,6 +218,9 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
         asResolve.climb = climb.failure;
         throw core::EncryptionKeyValidationException(describeResolveFailure(asResolve));
     }
+    if (keytree::GroupKeyResolver::ownPathHasBlanks(group)) {
+        scheduleSelfUpdate(group.id);
+    }
     return state;
 }
 
@@ -197,13 +232,29 @@ std::string GroupApiImpl::createGroup(
     const core::Buffer& privateMeta,
     const std::optional<core::ContainerPolicy>& policies
 ) {
+    // The creator commits its own keyed path and nothing else, so it needs a seat of its own to have one. Checked by
+    // key first, which needs no request; the id the seat is planned under is checked again once it is known.
+    const std::vector<keytree::TreeMember> members = toTreeMembers(users, managers);
+    const privmx::crypto::PublicKey ownKey = _userPrivKey.getPublicKey();
+    if (std::none_of(members.begin(), members.end(), [&](const keytree::TreeMember& m) {
+            return m.publicKey == ownKey;
+        })) {
+        throw core::InvalidParamsException("the creator of a group must be one of its users or managers");
+    }
+
     // Empty rosters: the metadata key is wrapped once to the group's own grant key, and members open it by climbing.
     auto ctx = prepareContainerCreate(contextId, {}, {});
-
-    const std::vector<keytree::TreeMember> members = toTreeMembers(users, managers);
+    const std::string creatorId = ctx.dio.creatorUserId;
+    if (std::none_of(members.begin(), members.end(), [&](const keytree::TreeMember& m) {
+            return m.userId == creatorId;
+        })) {
+        throw core::InvalidParamsException("the creator of a group must be one of its users or managers");
+    }
     keytree::TreeKeyCache scratch; // the group has no id yet
     keytree::TreeKeys builder(scratch);
-    const keytree::BuildPlan plan = builder.build(members, _userPrivKey);
+    const keytree::CommitPlan plan = planOrThrow<keytree::CommitPlan>([&] {
+        return builder.planCreate(members, creatorId, _userPrivKey);
+    });
     const std::string groupPubKeyStr = plan.grantKey.getPublicKey().toBase58DER();
 
     // All three planes start at 1 under the same epoch-1 content key, with `internalMeta` on the roster only.
@@ -264,7 +315,7 @@ std::string GroupApiImpl::createGroup(
     model.groupKeys = server::GroupKeyEntrySetForNewGroup{
         .keyId = selfAddressed.at(0).keyId, .groupEpoch = 1, .data = selfAddressed.at(0).data
     };
-    model.tree = keytree::TreeWire::fromBuildPlan(plan, members);
+    model.tree = keytree::TreeWire::toCreateTree(plan);
     if (policies.has_value()) {
         model.policy = core::Factory::createPolicyServerObject(policies.value());
     }
@@ -272,19 +323,23 @@ std::string GroupApiImpl::createGroup(
     auto result = _serverApi.groupCreate(model);
     const auto cache = _treeKeyCaches.get(result.groupId);
     cache->putGrantKey(1, plan.grantKey);
-    for (const auto& minted : plan.nodeKeys) {
-        cache->putNodeKey(minted.first, 0, minted.second);
+    for (const keytree::RefreshedNode& minted : plan.refreshed) {
+        cache->putNodeKey(minted.nodeIndex, minted.generation, minted.key);
     }
     return result.groupId;
 }
 
 void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
-    // One read, not two: the bridge holds the roster, so it allocates the seats and serves the nodes those
-    // seats need in the same answer.
+    commitWithRetry([&] { addGroupMembersOnce(groupId, newMembers); });
+}
+
+void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
+    // One read, not two: the bridge holds the roster, so it allocates the seats and serves every node record the
+    // plan resolves through in the same answer.
     server::GroupGetModel getModel{
         .groupId = groupId,
         .type = {},
-        .scope = {},
+        .scope = std::string("plan"),
         .forUserIds = {},
         .forNewMembers = static_cast<std::int64_t>(newMembers.size()),
         .fromRosterVersion = {}
@@ -315,34 +370,29 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     // Handle for the whole operation
     const auto cache = _treeKeyCaches.get(groupId);
     const keytree::TreeGroupState state = climbForPlanning(currentGroup, cache);
-    std::map<std::uint32_t, std::uint32_t> previousGenerations;
-    for (const keytree::TreeNodeState& node : state.nodes) {
-        previousGenerations[node.nodeIndex] = node.generation;
-    }
+    const std::string adderId = keytree::GroupKeyResolver::ownUserId(currentGroup).value();
 
-    keytree::TreeKeys tree(*cache);
-    // Only the leaves the re-keying actually wraps to — `O(k log n)` of the roster, one listing round trip.
-    const std::uint32_t grown = keytree::TreeMath::numLeavesToSeatAll(positions, state.numLeaves);
-    tree.setMemberKeyStrings(
-        resolveMemberKeys(currentGroup.contextId, keytree::TreeKeys::membersToWrapTo(state, positions, grown))
-    );
     std::vector<keytree::TreeMember> treeNewcomers;
+    std::vector<std::string> newcomerIds;
     for (const GroupMemberToAdd& newMember : newMembers) {
         treeNewcomers.push_back(
             keytree::TreeMember{newMember.user.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.user.pubKey)}
         );
+        newcomerIds.push_back(newMember.user.userId);
     }
-    const keytree::AdditionPlan plan = planOrThrow<keytree::AdditionPlan>([&] {
-        return tree.planAddition(state, treeNewcomers, positions, _userPrivKey);
+    keytree::TreeKeys tree(*cache);
+    // Only the members the adder's path wraps to, which a bucket or a blank keeps to a handful.
+    tree.setMemberKeyStrings(commitRecipientKeys(
+        currentGroup, planOrThrow<std::vector<std::string>>([&] {
+            return keytree::TreeKeys::recipients(
+                state, keytree::TreeKeys::shapeAddition(state, newcomerIds, positions, adderId)
+            );
+        }),
+        adderId, std::set<std::string>(newcomerIds.begin(), newcomerIds.end())
+    ));
+    const keytree::CommitPlan plan = planOrThrow<keytree::CommitPlan>([&] {
+        return tree.planAddition(state, treeNewcomers, positions, adderId, _userPrivKey);
     });
-    for (const auto& [nodeIndex, nodeKey] : plan.nodeKeys) {
-        const auto minted = std::find_if(plan.nodes.begin(), plan.nodes.end(), [&](const keytree::TreeNodeState& n) {
-            return n.nodeIndex == nodeIndex;
-        });
-        if (minted != plan.nodes.end()) {
-            cache->putNodeKey(nodeIndex, minted->generation, nodeKey);
-        }
-    }
 
     // The roster after the change, derived rather than restated. Bare ids: nothing here wraps a key to them,
     // so the public keys the caller used to supply were never read.
@@ -374,17 +424,15 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     }
     model.keyId = ctx.key.id;
     model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
-    model.transition = keytree::TreeWire::toAdditionTransition(plan, previousGenerations, currentEpoch);
+    model.transition = keytree::TreeWire::toAdditionTransition(plan, currentEpoch);
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
 
-    try {
-        _serverApi.groupAddMembers(model);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    _serverApi.groupAddMembers(model);
+    // The epoch and the grant keypair did not move; the adder's own path did.
+    for (const keytree::RefreshedNode& minted : plan.refreshed) {
+        cache->putNodeKey(minted.nodeIndex, minted.generation, minted.key);
     }
-    // No tree-key invalidation and the epoch and grant keypair did not move.
     invalidateModuleKeysInCache(groupId);
 }
 
@@ -444,12 +492,30 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
 }
 
 void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
-    // Every departing member's path, because one delta covers their union — and one epoch covers the batch, where
+    commitWithRetry([&] { removeGroupMembersOnce(groupId, userIds); });
+    // The removal is committed; the metadata entry is now one epoch behind, under a key the departed member
+    // still holds. Move it up. Outside the write above on purpose — see the header.
+    refreshMetadataEpochAfterRemoval(groupId);
+}
+
+void GroupApiImpl::removeGroupMembersOnce(const std::string& groupId, const std::vector<std::string>& userIds) {
+    // Every departing member's path, because one commit covers their union — and one epoch covers the batch, where
     // removing them one at a time would stale every container the group can read once per member.
     server::GroupGetModel getModel{
-        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = userIds, .forNewMembers = {}, .fromRosterVersion = {}
+        .groupId = groupId,
+        .type = {},
+        .scope = std::string("plan"),
+        .forUserIds = userIds,
+        .forNewMembers = {},
+        .fromRosterVersion = {}
     };
     auto currentGroup = _serverApi.groupGet(getModel).group;
+    // Refused before anything is planned: the remover mints the next epoch's grant key, so a member removing itself
+    // would walk out holding the key meant to lock it out. The bridge refuses it too.
+    const std::string self = _connection.getImpl()->getMyUserId(currentGroup.contextId);
+    if (std::find(userIds.begin(), userIds.end(), self) != userIds.end()) {
+        throw core::InvalidParamsException("a member cannot remove themselves from a group");
+    }
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
     const int64_t currentEpoch = currentGroup.keyVersion;
@@ -463,30 +529,23 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     const auto cache = _treeKeyCaches.get(groupId);
     const keytree::TreeGroupState state = climbForPlanning(currentGroup, cache);
     const auto currentGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(currentEpoch));
+    const std::string removerId = keytree::GroupKeyResolver::ownUserId(currentGroup).value();
 
     // Handle for the whole operation
     keytree::TreeKeys tree(*cache);
-    // The surviving siblings' public keys: not part of the tree state, and skipping one locks that member out.
-    // Only the leaves beside the refreshed frontier, never the departing members.
-    std::vector<std::uint32_t> leavingSeats;
-    std::set<std::uint32_t> leavingSeatSet;
-    for (const std::string& gone : userIds) {
-        const auto seat = keytree::TreeKeys::positionOf(state, gone);
-        if (!seat.has_value()) {
-            throw core::EncryptionKeyValidationException("member " + gone + " holds no leaf in this group");
-        }
-        leavingSeats.push_back(seat.value());
-        leavingSeatSet.insert(seat.value());
-    }
-    tree.setMemberKeyStrings(resolveMemberKeys(
-        currentGroup.contextId, keytree::TreeKeys::membersToWrapTo(state, leavingSeats, state.numLeaves, leavingSeatSet)
+    // Only the members the remover's path wraps to — never the departing ones, whose seats resolve to nobody.
+    tree.setMemberKeyStrings(commitRecipientKeys(
+        currentGroup, planOrThrow<std::vector<std::string>>([&] {
+            return keytree::TreeKeys::recipients(state, keytree::TreeKeys::shapeRemoval(state, userIds, removerId));
+        }),
+        removerId
     ));
-    const keytree::RemovalPlan plan = planOrThrow<keytree::RemovalPlan>([&] {
-        return tree.planRemoval(state, userIds, _userPrivKey);
+    const keytree::CommitPlan plan = planOrThrow<keytree::CommitPlan>([&] {
+        return tree.planRemoval(state, userIds, removerId, _userPrivKey);
     });
     const std::vector<keytree::ArchiveRung> rungs = buildRotationRungs(
-        currentGroup, static_cast<std::uint32_t>(newEpoch), plan.newGrantKey.getPublicKey(), currentGrantKey,
-        keytree::GroupKeyResolver::ownUserId(currentGroup).value_or(std::string()), *cache
+        currentGroup, static_cast<std::uint32_t>(newEpoch), plan.grantKey.getPublicKey(), currentGrantKey, removerId,
+        *cache
     );
     // The roster that remains, derived from the verified head rather than restated by the caller.
     const std::set<std::string> leaving(userIds.begin(), userIds.end());
@@ -505,17 +564,17 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     auto ctx = prepareContainerUpdateWithoutKeyEntries(
         currentGroup, currentEntry, resourceId, roster.users, roster.managers, true
     );
+    const std::string newGroupPubKeyStr = plan.grantKey.getPublicKey().toBase58DER();
     const auto selfAddressedKey = buildGroupKeyEntries(
         {core::GroupGrantWithKey{
             .groupId = groupId,
             .role = "manager",
-            .groupPubKey = plan.newGrantKey.getPublicKey().toBase58DER(),
+            .groupPubKey = newGroupPubKeyStr,
             .groupEpoch = newEpoch,
         }},
         ctx.key, ctx.dio, currentGroup.contextId, resourceId, ctx.secret
     );
 
-    const std::string newGroupPubKeyStr = plan.newGrantKey.getPublicKey().toBase58DER();
     // Roster plane only — the metadata entry is not part of this write. `refreshMetadataEpochAfterRemoval`
     // carries it up to the new epoch once this has committed; see its header for why that is a second call.
     GroupRosterToEncryptV5 rosterToEncrypt{
@@ -535,9 +594,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     model.groupPubKey = newGroupPubKeyStr;
     model.keyId = ctx.key.id;
     model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
-    model.transition = keytree::TreeWire::toRemovalTransition(
-        keytree::TreeWire::fromGroupInfo(currentGroup), plan, currentEpoch
-    );
+    model.transition = keytree::TreeWire::toRemovalTransition(plan, currentEpoch);
     model.rungs = keytree::TreeWire::toWire(rungs);
     model.groupKeys = selfAddressedKey.at(0);
     model.expectedKeyVersion = currentEpoch;
@@ -547,18 +604,132 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
         privmx::crypto::Crypto::hmacSha256(GroupDataSchemaMapper::tagSubkey(ctx.key.key, "confirm-tag"), confInput)
     );
 
-    try {
-        _serverApi.groupRemoveMembers(model);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    _serverApi.groupRemoveMembers(model);
+    // Every other node key this client holds may sit under a node the commit blanked; only its own path is current.
     cache->clearNodeKeys();
-    cache->putGrantKey(static_cast<std::uint32_t>(newEpoch), plan.newGrantKey);
+    for (const keytree::RefreshedNode& minted : plan.refreshed) {
+        cache->putNodeKey(minted.nodeIndex, minted.generation, minted.key);
+    }
+    cache->putGrantKey(static_cast<std::uint32_t>(newEpoch), plan.grantKey);
     invalidateModuleKeysInCache(groupId);
-    // The removal is committed; the metadata entry is now one epoch behind, under a key the departed member
-    // still holds. Move it up. Outside the write above on purpose — see the header.
-    refreshMetadataEpochAfterRemoval(groupId);
+}
+
+void GroupApiImpl::commitWithRetry(const std::function<void()>& attempt) {
+    constexpr int MAX_ATTEMPTS = 3;
+    for (int attemptNo = 1;; ++attemptNo) {
+        try {
+            attempt();
+            return;
+        } catch (const privmx::utils::PrivmxException& e) {
+            if (attemptNo < MAX_ATTEMPTS && isRetryableCommitRejection(e)) {
+                LOG_DEBUG("group commit planned against a moved base, re-planning: ", e.what())
+                continue;
+            }
+            core::ExceptionConverter::rethrowAsCoreException(e);
+            throw core::Exception("ExceptionConverter rethrow error");
+        }
+    }
+}
+
+// A concurrent commit — most often a self-update, which every member under a blanked node runs on its own — moved
+// the generations or versions this one was planned against. Nothing about the request was wrong, so a fresh read
+// and a fresh plan are all it takes; anything else the bridge refuses is reported as it is.
+bool GroupApiImpl::isRetryableCommitRejection(const privmx::utils::PrivmxException& e) {
+    const unsigned int code = e.getCode();
+    if ((code & 0xFFFF0000) != 0) {
+        return false; // not a bridge application error
+    }
+    switch (code & 0x0000FFFF) {
+    case 0x621C: // ROTATED_ALREADY
+    case 0x6224: // GROUP_ROSTER_VERSION_MISMATCH
+        return true;
+    case 0x621E: // GROUP_TREE_INVALID, whose data lists the problems found
+        return e.getData().find("\"STALE_BASE_GENERATION\"") != std::string::npos;
+    default:
+        return false;
+    }
+}
+
+void GroupApiImpl::scheduleSelfUpdate(const std::string& groupId) {
+    constexpr std::int64_t MAX_DELAY_MS = 30000;
+    std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+    if (_selfUpdateStopping || _selfUpdatePending.count(groupId) > 0 || _selfUpdateRunning == groupId) {
+        return;
+    }
+    // Every member under a node somebody else's commit blanked notices at about the same moment; spreading them out
+    // keeps them from colliding on the node generations they all refresh.
+    static thread_local std::mt19937_64 random{std::random_device{}()};
+    const auto delay = std::chrono::milliseconds(std::uniform_int_distribution<std::int64_t>(0, MAX_DELAY_MS)(random));
+    _selfUpdatePending[groupId] = std::chrono::steady_clock::now() + delay;
+    if (!_selfUpdateWorker.joinable()) {
+        _selfUpdateWorker = std::thread([this] { runSelfUpdates(); });
+    }
+    _selfUpdateWake.notify_all();
+}
+
+void GroupApiImpl::runSelfUpdates() {
+    std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+    while (!_selfUpdateStopping) {
+        const auto next = std::min_element(
+            _selfUpdatePending.begin(), _selfUpdatePending.end(),
+            [](const auto& a, const auto& b) { return a.second < b.second; }
+        );
+        if (next == _selfUpdatePending.end()) {
+            _selfUpdateWake.wait(lock);
+            continue;
+        }
+        if (next->second > std::chrono::steady_clock::now()) {
+            _selfUpdateWake.wait_until(lock, next->second);
+            continue;
+        }
+        const std::string groupId = next->first;
+        _selfUpdateRunning = groupId;
+        _selfUpdatePending.erase(next);
+        lock.unlock();
+        try {
+            selfUpdate(groupId);
+        } catch (const std::exception& e) {
+            LOG_WARN("[selfUpdate] group key tree self-update dropped: ", e.what())
+        } catch (...) { LOG_WARN("[selfUpdate] group key tree self-update dropped") }
+        lock.lock();
+        _selfUpdateRunning.reset();
+    }
+}
+
+void GroupApiImpl::selfUpdate(const std::string& groupId) {
+    server::GroupGetModel getModel{
+        .groupId = groupId,
+        .type = {},
+        .scope = std::string("plan"),
+        .forUserIds = {},
+        .forNewMembers = {},
+        .fromRosterVersion = {}
+    };
+    const auto group = _serverApi.groupGet(getModel).group;
+    // Re-checked on a fresh read: somebody's commit through the same nodes may have refilled them meanwhile.
+    if (!keytree::GroupKeyResolver::hasTree(group) ||
+        !keytree::GroupKeyResolver::hasSupportedTree(group) ||
+        !keytree::GroupKeyResolver::ownPathHasBlanks(group)) {
+        return;
+    }
+    const auto cache = _treeKeyCaches.get(groupId);
+    const keytree::TreeGroupState state = climbForPlanning(group, cache);
+    const std::string memberId = keytree::GroupKeyResolver::ownUserId(group).value();
+
+    keytree::TreeKeys tree(*cache);
+    tree.setMemberKeyStrings(commitRecipientKeys(
+        group, keytree::TreeKeys::recipients(state, keytree::TreeKeys::shapeSelfUpdate(state, memberId)), memberId
+    ));
+    const keytree::CommitPlan plan = tree.planSelfUpdate(state, memberId, _userPrivKey);
+
+    server::GroupSelfUpdateModel model;
+    model.id = groupId;
+    model.expectedKeyVersion = group.keyVersion;
+    model.transition = keytree::TreeWire::toSelfUpdateTransition(plan, group.keyVersion);
+    _serverApi.groupSelfUpdate(model);
+    for (const keytree::RefreshedNode& minted : plan.refreshed) {
+        cache->putNodeKey(minted.nodeIndex, minted.generation, minted.key);
+    }
 }
 
 void GroupApiImpl::refreshMetadataEpochAfterRemoval(const std::string& groupId) {
@@ -903,6 +1074,10 @@ void GroupApiImpl::processConnectedEvent() {
 }
 
 void GroupApiImpl::processDisconnectedEvent() {
+    {
+        std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+        _selfUpdatePending.clear();
+    }
     _treeKeyCaches.dropAll();
     dropEnvelopeState();
     _groupDataSchemaMapper->dropAllVersionPins();
@@ -983,6 +1158,11 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(const std::string& 
         needsDescent ? fetchKeyArchive(groupId, epoch, currentEpoch) : server::GroupGetKeyArchiveResult{}
     );
     if (resolved.key.has_value()) {
+        // The climb to the current epoch went through, so the served path is the caller's to vouch for: refill
+        // whatever blanks somebody else's commit left on it, in the background.
+        if (keytree::GroupKeyResolver::ownPathHasBlanks(group)) {
+            scheduleSelfUpdate(groupId);
+        }
         return resolved.key.value();
     }
     if (resolved.failure == keytree::ResolveFailure::ClimbFailed &&
@@ -1016,6 +1196,8 @@ std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& r
     switch (resolved.failure) {
     case keytree::ResolveFailure::NoTree:
         return "Group key unavailable: group has no key tree";
+    case keytree::ResolveFailure::UnsupportedTreeVersion:
+        return "Group key unavailable: the group's key tree has a version this client does not support";
     case keytree::ResolveFailure::ClimbFailed:
         if (resolved.climb == keytree::ClimbFailure::Tampered) {
             return "Group key tree verification failed: a node key does not match the published public key";

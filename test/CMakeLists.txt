@@ -134,9 +134,13 @@ target_link_libraries(test_unit_TreeMathTest privmxendpointgroup GTest::GTest GT
 add_executable(test_unit_LadderMathTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/LadderMathTest.cpp)
 target_link_libraries(test_unit_LadderMathTest privmxendpointgroup GTest::GTest GTest::Main)
 
-# Real EC keys and ECIES (builds, climbs, and removes members from trees entirely in-process; still no server/docker/network)
+# Real EC keys and ECIES (creates, climbs, commits and removes members from trees entirely in-process; still no server/docker/network)
 add_executable(test_unit_TreeKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeKeysTest.cpp)
-target_link_libraries(test_unit_TreeKeysTest privmx privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+target_link_libraries(test_unit_TreeKeysTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+
+# Seeded random commit sequences against an in-test fake bridge: the node-key invariant and removal confidentiality after every step
+add_executable(test_unit_TreeInvariantTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeInvariantTest.cpp)
+target_link_libraries(test_unit_TreeInvariantTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
 add_executable(test_unit_LadderKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/LadderKeysTest.cpp)
 target_link_libraries(test_unit_LadderKeysTest privmx privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
@@ -163,7 +167,7 @@ target_link_libraries(test_unit_GroupEnvelopeTest privmx privmxendpointcore priv
 add_executable(test_unit_GroupEnvelopeKeyFilterTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupEnvelopeKeyFilterTest.cpp)
 target_link_libraries(test_unit_GroupEnvelopeKeyFilterTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
-# Merge from plans to a complete submitted state (real EC keys; each state is climbed to prove members who should still have access do)
+# Commit plans to the wire shapes the bridge receives (real EC keys; each state is climbed to prove members who should still have access do)
 add_executable(test_unit_TreeWireTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeWireTest.cpp)
 target_link_libraries(test_unit_TreeWireTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 add_executable(test_unit_GroupCustomChannelTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupCustomChannelTest.cpp)

@@ -39,10 +39,11 @@ JSON_STRUCT(GroupMetaEntry, GROUP_META_ENTRY_FIELDS);
     F(groupPubKey, std::string)
 JSON_STRUCT(GroupKeyHistoryEntry, GROUP_KEY_HISTORY_ENTRY_FIELDS);
 
+// A keyed node's record. No `publicKey` is a blank node: it keeps its generation and waits for a self-update.
 #define GROUP_TREE_NODE_FIELDS(F)                                                                                      \
     F(nodeIndex, int64_t)                                                                                              \
     F(generation, int64_t)                                                                                             \
-    F(publicKey, std::string)
+    F(publicKey, std::optional<std::string>)
 JSON_STRUCT(GroupTreeNode, GROUP_TREE_NODE_FIELDS);
 
 #define GROUP_TREE_EDGE_FIELDS(F)                                                                                      \
@@ -63,9 +64,10 @@ JSON_STRUCT(GroupTreeEdge, GROUP_TREE_EDGE_FIELDS);
     F(edges, std::vector<GroupTreeEdge>)
 JSON_STRUCT(GroupTreeState, GROUP_TREE_STATE_FIELDS);
 
+// `fromGeneration` is the generation the node was read at, absent when it had no record.
 #define GROUP_TREE_REFRESHED_NODE_FIELDS(F)                                                                            \
     F(nodeIndex, int64_t)                                                                                              \
-    F(fromGeneration, int64_t)                                                                                         \
+    F(fromGeneration, std::optional<int64_t>)                                                                          \
     F(generation, int64_t)                                                                                             \
     F(publicKey, std::string)
 JSON_STRUCT(GroupTreeRefreshedNode, GROUP_TREE_REFRESHED_NODE_FIELDS);
@@ -90,6 +92,12 @@ JSON_STRUCT(GroupTreeSeatedNode, GROUP_TREE_SEATED_NODE_FIELDS);
     F(seatedNodes, std::vector<GroupTreeSeatedNode>)                                                                   \
     F(edges, std::vector<GroupTreeEdge>)
 JSON_STRUCT(GroupTreeAdditionTransition, GROUP_TREE_ADDITION_TRANSITION_FIELDS);
+
+#define GROUP_TREE_SELF_UPDATE_TRANSITION_FIELDS(F)                                                                    \
+    F(baseKeyVersion, int64_t)                                                                                         \
+    F(refreshedNodes, std::vector<GroupTreeRefreshedNode>)                                                             \
+    F(edges, std::vector<GroupTreeEdge>)
+JSON_STRUCT(GroupTreeSelfUpdateTransition, GROUP_TREE_SELF_UPDATE_TRANSITION_FIELDS);
 
 #define GROUP_ARCHIVE_RUNG_FIELDS(F)                                                                                   \
     F(atKeyVersion, int64_t)                                                                                           \
@@ -121,6 +129,7 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(rosterVersion, int64_t)                                                                                          \
     F(keyVersion, int64_t)                                                                                             \
     F(keyHistory, std::optional<std::vector<GroupKeyHistoryEntry>>)                                                    \
+    F(treeVersion, std::optional<int64_t>)                                                                             \
     F(numLeaves, std::optional<int64_t>)                                                                               \
     F(leafAssignment, std::optional<std::vector<std::string>>)                                                         \
     F(ownLeafPosition, std::optional<int64_t>)                                                                         \
@@ -273,6 +282,13 @@ JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
     F(expectedRosterVersion, int64_t)                                                                                  \
     F(confirmationTag, std::optional<std::string>)
 JSON_STRUCT(GroupRemoveMembersModel, GROUP_REMOVE_MEMBERS_MODEL_FIELDS);
+
+// Refills the caller's own keyed path: no epoch change, no roster change, nothing for anybody else to notice.
+#define GROUP_SELF_UPDATE_MODEL_FIELDS(F)                                                                              \
+    F(id, std::string)                                                                                                 \
+    F(expectedKeyVersion, int64_t)                                                                                     \
+    F(transition, GroupTreeSelfUpdateTransition)
+JSON_STRUCT(GroupSelfUpdateModel, GROUP_SELF_UPDATE_MODEL_FIELDS);
 
 #define GROUP_CUT_ERA_MODEL_FIELDS(F)                                                                                  \
     F(id, std::string)                                                                                                 \

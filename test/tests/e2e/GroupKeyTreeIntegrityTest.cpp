@@ -684,7 +684,7 @@ TEST_F(GroupKeyTreeIntegrityTest, changing_a_members_public_key_locks_them_out_w
     EXPECT_FALSE(canReadGroupWithRetiredKey(firstKey, groupId)) <<
         "a key the Bridge no longer knows still got served the group";
 
-    // Only re-seating repairs it, and it repairs it completely: the removal refreshes the leaf's path and mints
+    // Only re-seating repairs it, and it repairs it completely: the removal blanks the leaf's path and mints
     // epoch 2, the addition wraps the new leaf to the new key, and the ladder hands back the epoch-1 history.
     ASSERT_NO_THROW({
         groupApi->removeGroupMembers(groupId, {firstKey.userId});
