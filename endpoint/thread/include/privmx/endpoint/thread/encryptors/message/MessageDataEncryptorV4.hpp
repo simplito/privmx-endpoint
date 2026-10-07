@@ -29,7 +29,7 @@ public:
     server::EncryptedMessageDataV4 encrypt(
         const MessageDataToEncryptV4& messageData,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& encryptionKey
+        const core::EncKey& encryptionKey
     );
     DecryptedMessageDataV4 decrypt(
         const server::EncryptedMessageDataV4& encryptedMessageData,

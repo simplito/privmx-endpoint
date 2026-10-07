@@ -76,7 +76,7 @@ std::string KvdbApiImpl::createKvdb(
     const std::vector<core::GroupGrantWithKey>& groups,
     const std::string& type
 ) {
-    auto ctx = prepareContainerCreate(contextId, users, managers);
+    auto ctx = prepareContainerCreate(contextId, users, managers, policies);
     core::ModuleDataToEncryptV5 kvdbDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
@@ -87,7 +87,7 @@ std::string KvdbApiImpl::createKvdb(
     server::KvdbCreateModel create_kvdb_model;
     fillContainerCreateModel(
         create_kvdb_model, contextId, users, managers, ctx,
-        _kvdbDataSchemaMapper->encrypt(kvdbDataToEncrypt, ctx.key.key), groups
+        _kvdbDataSchemaMapper->encrypt(kvdbDataToEncrypt, ctx.key), groups
     );
     create_kvdb_model.type = type;
     if (policies.has_value()) {
@@ -118,7 +118,7 @@ void KvdbApiImpl::updateKvdb(
     auto currentKvdbResourceId = currentKvdb.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
         currentKvdb, currentKvdbEntry, currentKvdbResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentKvdb, groups)
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentKvdb, groups), policies
     );
     server::KvdbUpdateModel model;
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
@@ -136,7 +136,7 @@ void KvdbApiImpl::updateKvdb(
             },
         .dio = ctx.dio
     };
-    model.data = _kvdbDataSchemaMapper->encrypt(kvdbDataToEncrypt, ctx.key.key);
+    model.data = _kvdbDataSchemaMapper->encrypt(kvdbDataToEncrypt, ctx.key);
 
     _serverApi.kvdbUpdate(model);
     invalidateModuleKeysInCache(kvdbId);

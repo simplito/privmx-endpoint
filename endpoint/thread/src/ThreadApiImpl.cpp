@@ -79,7 +79,7 @@ std::string ThreadApiImpl::createThread(
     const std::string& type,
     const std::vector<core::GroupGrantWithKey>& groups
 ) {
-    auto ctx = prepareContainerCreate(contextId, users, managers);
+    auto ctx = prepareContainerCreate(contextId, users, managers, policies);
     core::ModuleDataToEncryptV5 threadDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
@@ -90,7 +90,7 @@ std::string ThreadApiImpl::createThread(
     server::ThreadCreateModel create_thread_model;
     fillContainerCreateModel(
         create_thread_model, contextId, users, managers, ctx,
-        _threadDataSchemaMapper->encrypt(threadDataToEncrypt, ctx.key.key), groups
+        _threadDataSchemaMapper->encrypt(threadDataToEncrypt, ctx.key), groups
     );
     if (type.length() > 0) {
         create_thread_model.type = type;
@@ -123,7 +123,7 @@ void ThreadApiImpl::updateThread(
                                                               core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
         currentThread, currentThreadEntry, currentThreadResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentThread, groups)
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentThread, groups), policies
     );
     server::ThreadUpdateModel model;
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
@@ -141,7 +141,7 @@ void ThreadApiImpl::updateThread(
             },
         .dio = ctx.dio
     };
-    model.data = _threadDataSchemaMapper->encrypt(threadDataToEncrypt, ctx.key.key);
+    model.data = _threadDataSchemaMapper->encrypt(threadDataToEncrypt, ctx.key);
     _serverApi.threadUpdate(model);
     invalidateModuleKeysInCache(threadId);
 }

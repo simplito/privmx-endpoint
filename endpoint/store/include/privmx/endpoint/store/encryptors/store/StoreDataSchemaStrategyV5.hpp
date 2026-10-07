@@ -46,7 +46,7 @@ public:
     core::dynamic::EncryptedModuleDataV5 encrypt(
         const core::ModuleDataToEncryptV5& data,
         const core::PrivateKey& userPrivKey,
-        const std::string& key
+        const core::EncKey& key
     ) const;
 
 protected:

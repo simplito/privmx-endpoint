@@ -45,10 +45,10 @@ Poco::Dynamic::Var FileMetaDataSchemaMapper::encrypt(
     case core::EncryptionKeyDataSchema::Version::UNKNOWN:
         throw UnknowFileFormatException();
     case core::EncryptionKeyDataSchema::Version::VERSION_1:
-        return _strategyV4->encrypt(publicMeta, privateMeta, internalMeta, _userPrivKey, fileKey.key).toJSON();
+        return _strategyV4->encrypt(publicMeta, privateMeta, internalMeta, _userPrivKey, fileKey).toJSON();
     case core::EncryptionKeyDataSchema::Version::VERSION_2: {
         auto fileDIO = _connection.getImpl()->createDIO(contextId, fileResourceId, storeId, storeResourceId);
-        return _strategyV5->encrypt(publicMeta, privateMeta, internalMeta, _userPrivKey, fileKey.key, fileDIO).toJSON();
+        return _strategyV5->encrypt(publicMeta, privateMeta, internalMeta, _userPrivKey, fileKey, fileDIO).toJSON();
     }
     }
     throw UnknowFileFormatException();

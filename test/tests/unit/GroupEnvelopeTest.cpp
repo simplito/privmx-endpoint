@@ -153,7 +153,7 @@ TEST_F(GroupEnvelope, HeaderIsSignedSoAnEnvelopeCannotBeReplayedIntoAnotherGroup
     forgedHeader.push_back(static_cast<char>(der.size()));
     forgedHeader.append(der);
 
-    core::Buffer forged = buf(forgedHeader + raw.encrypt(sealed, otherKey).stdString());
+    core::Buffer forged = buf(forgedHeader + raw.encrypt(sealed, core::EncKey{.id = "", .key = otherKey}).stdString());
     EXPECT_THROW(enc.openGroupKeyEnvelope(forged, otherKey), InvalidEnvelopeFormatException);
 }
 
@@ -190,7 +190,8 @@ TEST_F(GroupEnvelope, AMalformedSignatureFrameThrowsAPrivmxException) {
         header.push_back(static_cast<char>(field.size()));
         header.append(field);
     }
-    core::Buffer forged = buf(header + raw.encrypt(buf(std::string("\x01\xFF", 2)), groupKey).stdString());
+    core::Buffer forged =
+        buf(header + raw.encrypt(buf(std::string("\x01\xFF", 2)), core::EncKey{.id = "", .key = groupKey}).stdString());
 
     EXPECT_THROW(enc.openGroupKeyEnvelope(forged, groupKey), core::Exception);
 }

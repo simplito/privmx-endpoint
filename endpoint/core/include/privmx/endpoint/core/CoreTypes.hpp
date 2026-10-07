@@ -16,6 +16,7 @@ limitations under the License.
 #include "privmx/endpoint/core/Types.hpp"
 #include <Poco/Dynamic/Var.h>
 #include <optional>
+#include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <string>
 #include <unordered_map>
@@ -27,6 +28,20 @@ namespace core {
 struct EncKey {
     std::string id;
     std::string key;
+    /**
+     * Zestaw algorytmow, ktorym zapisujemy dane chronione tym kluczem.
+     *
+     * Jedzie razem z kluczem, bo `EncKey` i tak przechodzi przez caly lancuch encryptorow -
+     * dzieki temu wybor zestawu nie wymaga osobnego kanalu przez kilkanascie warstw. Jest tez
+     * poprawny merytorycznie: klucz i algorytm, w ktorym sie go uzywa, naleza do siebie.
+     *
+     * Dotyczy **wylacznie zapisu**. Odczyt nigdy go nie czyta - bierze zestaw ze znacznika
+     * zapisanego w ramce, wiec dane zapisane dowolnym zestawem zawsze da sie odczytac.
+     *
+     * Wartosc domyslna to zestaw wybrany na etapie budowania (poziom 1). Dla kontenera,
+     * ktorego polityka nazywa zestaw, nadpisuje ja `ContainerBaseApi` (poziom 2).
+     */
+    CryptoSuite suite = CryptoSuite::defaultForWrite();
 };
 
 struct DataIntegrityObject {

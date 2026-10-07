@@ -22,7 +22,7 @@ using namespace privmx::endpoint::core;
 dynamic::EncryptedModuleDataV5 ModuleDataEncryptorV5::encrypt(
     const ModuleDataToEncryptV5& kvdbData,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& encryptionKey
+    const core::EncKey& encryptionKey
 ) {
     dynamic::EncryptedModuleDataV5 result;
     result.version = ModuleDataSchema::Version::VERSION_5;

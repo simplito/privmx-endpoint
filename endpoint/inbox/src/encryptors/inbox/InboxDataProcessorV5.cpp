@@ -22,7 +22,7 @@ using namespace privmx::endpoint::inbox;
 server::InboxData InboxDataProcessorV5::packForServer(
     const InboxDataProcessorModelV5& plainData,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& inboxKey
+    const core::EncKey& inboxKey
 ) {
     server::PublicDataV5 serverPublicData;
     serverPublicData.version = InboxDataSchema::Version::VERSION_5;

@@ -28,7 +28,7 @@ public:
     store::server::EncryptedFileMetaV4 encrypt(
         const store::FileMetaToEncryptV4& fileMeta,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& encryptionKey
+        const core::EncKey& encryptionKey
     );
     store::DecryptedFileMetaV4 decrypt(
         const store::server::EncryptedFileMetaV4& encryptedFileMeta,

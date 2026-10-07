@@ -553,7 +553,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     const std::string& type,
     const std::vector<core::GroupGrantWithKey>& groups
 ) {
-    auto ctx = prepareContainerCreate(contextId, users, managers);
+    auto ctx = prepareContainerCreate(contextId, users, managers, policies);
     core::ModuleDataToEncryptV5 streamRoomDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
@@ -564,7 +564,7 @@ std::string StreamApiLowImpl::createStreamRoom(
     server::StreamRoomCreateModel createStreamRoomModel;
     fillContainerCreateModel(
         createStreamRoomModel, contextId, users, managers, ctx,
-        _streamRoomDataSchemaMapper->encrypt(streamRoomDataToEncrypt, ctx.key.key), groups
+        _streamRoomDataSchemaMapper->encrypt(streamRoomDataToEncrypt, ctx.key), groups
     );
     createStreamRoomModel.type = type;
     if (policies.has_value()) {
@@ -595,7 +595,7 @@ void StreamApiLowImpl::updateStreamRoom(
     auto currentStreamRoomResourceId = currentStreamRoom.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
         currentStreamRoom, currentStreamRoomEntry, currentStreamRoomResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentStreamRoom, groups)
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentStreamRoom, groups), policies
     );
     server::StreamRoomUpdateModel model;
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
@@ -615,7 +615,7 @@ void StreamApiLowImpl::updateStreamRoom(
             },
         .dio = ctx.dio
     };
-    model.data = _streamRoomDataSchemaMapper->encrypt(streamRoomDataToEncrypt, ctx.key.key);
+    model.data = _streamRoomDataSchemaMapper->encrypt(streamRoomDataToEncrypt, ctx.key);
     _serverApi->streamRoomUpdate(model);
     invalidateModuleKeysInCache(streamRoomId);
 }

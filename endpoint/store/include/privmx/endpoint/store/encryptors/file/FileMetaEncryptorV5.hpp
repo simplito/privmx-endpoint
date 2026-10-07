@@ -31,7 +31,7 @@ public:
     store::server::EncryptedFileMetaV5 encrypt(
         const store::FileMetaToEncryptV5& fileMeta,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& encryptionKey
+        const core::EncKey& encryptionKey
     );
     // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same envelope; without one it runs here.
     store::DecryptedFileMetaV5 decrypt(

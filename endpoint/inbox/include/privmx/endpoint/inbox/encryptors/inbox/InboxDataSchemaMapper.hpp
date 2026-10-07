@@ -44,7 +44,7 @@ class InboxDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
     InboxDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
-    server::InboxData encrypt(const InboxDataProcessorModelV5& data, const std::string& key);
+    server::InboxData encrypt(const InboxDataProcessorModelV5& data, const core::EncKey& key);
 
     std::tuple<Inbox, core::DataIntegrityObject> decrypt(
         const server::InboxInfo& inbox,

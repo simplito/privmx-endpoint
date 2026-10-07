@@ -32,7 +32,7 @@ public:
     dynamic::EncryptedModuleDataV5 encrypt(
         const ModuleDataToEncryptV5& kvdbData,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& encryptionKey
+        const core::EncKey& encryptionKey
     );
     // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same envelope; without one it runs here.
     DecryptedModuleDataV5 decrypt(

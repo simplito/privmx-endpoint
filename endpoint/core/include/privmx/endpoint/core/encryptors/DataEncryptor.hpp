@@ -63,13 +63,13 @@ public:
     virtual std::string encrypt(const T& data, const std::string& key) = 0; // base64
     virtual std::string encrypt(const T& data, const EncKey& encKey) = 0;
 
+    // Przeciazenie z golym kluczem zapisuje zestawem domyslnym dla buildu (poziom 1); przeciazenie
+    // z `EncKey` - zestawem przypisanym do kontenera (poziom 2). Patrz `EncKey::suite`.
     std::string signAndEncrypt(const T& data, const core::PrivateKey& privKey, const std::string& key) {
         return utils::Base64::from(core::CryptoSuite::defaultForWrite().encrypt(key, sign(data, privKey)));
     }
     std::string signAndEncrypt(const T& data, const core::PrivateKey& privKey, const core::EncKey& encKey) {
-        return utils::Base64::from(
-            core::CryptoSuite::defaultForWrite().encrypt(encKey.key, sign(data, privKey))
-        );
+        return utils::Base64::from(encKey.suite.encrypt(encKey.key, sign(data, privKey)));
     }
 
     virtual Pson::BinaryString sign(const T& data, const core::PrivateKey& privKey) = 0; //
@@ -94,7 +94,9 @@ public:
     std::string encrypt(const T& data, const std::string& key) {
         return utils::Base64::from(core::CryptoSuite::defaultForWrite().encrypt(key, data.serialize()));
     }
-    std::string encrypt(const T& data, const EncKey& encKey) { return encrypt(data, encKey.key); }
+    std::string encrypt(const T& data, const EncKey& encKey) {
+        return utils::Base64::from(encKey.suite.encrypt(encKey.key, data.serialize()));
+    }
 
     Pson::BinaryString sign(const T& data, const core::PrivateKey& privKey) {
         auto buffer = data.serialize();
@@ -139,7 +141,9 @@ public:
     std::string encrypt(const Pson::BinaryString& data, const std::string& key) {
         return utils::Base64::from(core::CryptoSuite::defaultForWrite().encrypt(key, data));
     }
-    std::string encrypt(const Pson::BinaryString& data, const EncKey& encKey) { return encrypt(data, encKey.key); }
+    std::string encrypt(const Pson::BinaryString& data, const EncKey& encKey) {
+        return utils::Base64::from(encKey.suite.encrypt(encKey.key, data));
+    }
 
     Pson::BinaryString sign(const Pson::BinaryString& data, const core::PrivateKey& privKey) {
         auto signature = privKey.signToCompactSignatureWithHash(data);

@@ -37,9 +37,9 @@ public:
     // what binds the entry to its epoch and version, through the `publicMetaTag` the caller puts in `data.meta`.
     Poco::Dynamic::Var encryptPublicMeta(const GroupPublicMetaToEncryptV5& data);
 
-    Poco::Dynamic::Var encryptPrivateMeta(const GroupPrivateMetaToEncryptV5& data, const std::string& key);
+    Poco::Dynamic::Var encryptPrivateMeta(const GroupPrivateMetaToEncryptV5& data, const core::EncKey& key);
 
-    Poco::Dynamic::Var encryptRoster(const GroupRosterToEncryptV5& data, const std::string& key);
+    Poco::Dynamic::Var encryptRoster(const GroupRosterToEncryptV5& data, const core::EncKey& key);
 
     // Returns the roster head's DIO it had to decode anyway, so a caller that needs it does not verify twice.
     core::DataIntegrityObject assertDataIntegrity(const server::GroupInfo& groupInfo);

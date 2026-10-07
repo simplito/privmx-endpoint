@@ -43,11 +43,11 @@ Poco::Dynamic::Var MessageDataSchemaMapper::encrypt(
     case core::EncryptionKeyDataSchema::Version::UNKNOWN:
         throw UnknowThreadFormatException();
     case core::EncryptionKeyDataSchema::Version::VERSION_1: {
-        return _strategyV4->encrypt(publicMeta, privateMeta, data, _userPrivKey, msgKey.key).toJSON();
+        return _strategyV4->encrypt(publicMeta, privateMeta, data, _userPrivKey, msgKey).toJSON();
     }
     case core::EncryptionKeyDataSchema::Version::VERSION_2: {
         auto messageDIO = _connection.getImpl()->createDIO(contextId, resourceId, threadId, moduleResourceId);
-        return _strategyV5->encrypt(publicMeta, privateMeta, data, _userPrivKey, msgKey.key, messageDIO).toJSON();
+        return _strategyV5->encrypt(publicMeta, privateMeta, data, _userPrivKey, msgKey, messageDIO).toJSON();
     }
     }
     throw UnknowThreadFormatException();

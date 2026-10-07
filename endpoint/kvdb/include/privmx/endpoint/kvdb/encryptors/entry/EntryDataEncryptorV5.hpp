@@ -32,7 +32,7 @@ public:
     server::EncryptedKvdbEntryDataV5 encrypt(
         const KvdbEntryDataToEncryptV5& messageData,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& encryptionKey
+        const core::EncKey& encryptionKey
     );
     // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same envelope; without one it runs here.
     DecryptedKvdbEntryDataV5 decrypt(

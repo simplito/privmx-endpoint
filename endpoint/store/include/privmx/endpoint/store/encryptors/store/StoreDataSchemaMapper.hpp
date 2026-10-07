@@ -41,7 +41,7 @@ class StoreDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
     StoreDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
-    Poco::Dynamic::Var encrypt(const core::ModuleDataToEncryptV5& data, const std::string& key);
+    Poco::Dynamic::Var encrypt(const core::ModuleDataToEncryptV5& data, const core::EncKey& key);
 
     std::tuple<Store, core::DataIntegrityObject> decrypt(
         const server::Store& store,

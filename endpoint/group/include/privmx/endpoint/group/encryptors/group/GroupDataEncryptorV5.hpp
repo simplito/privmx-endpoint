@@ -20,7 +20,7 @@ public:
     dynamic::EncryptedGroupRosterV5 encryptRoster(
         const GroupRosterToEncryptV5& data,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& encryptionKey
+        const core::EncKey& encryptionKey
     );
     DecryptedGroupRosterV5 decryptRoster(
         const dynamic::EncryptedGroupRosterV5& encryptedData,
@@ -42,7 +42,7 @@ public:
     dynamic::EncryptedGroupPrivateMetaV5 encryptPrivateMeta(
         const GroupPrivateMetaToEncryptV5& data,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& encryptionKey
+        const core::EncKey& encryptionKey
     );
     DecryptedGroupPrivateMetaV5 decryptPrivateMeta(
         const dynamic::EncryptedGroupPrivateMetaV5& encryptedData,

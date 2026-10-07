@@ -42,7 +42,7 @@ class StreamRoomDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
     StreamRoomDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection);
 
-    Poco::Dynamic::Var encrypt(const core::ModuleDataToEncryptV5& data, const std::string& key);
+    Poco::Dynamic::Var encrypt(const core::ModuleDataToEncryptV5& data, const core::EncKey& key);
 
     std::tuple<StreamRoom, core::DataIntegrityObject> decrypt(
         const server::StreamRoomInfo& streamRoom,

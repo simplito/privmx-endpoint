@@ -126,7 +126,8 @@ protected:
         };
         server::GroupDataEntry entry;
         entry.keyId = "key1";
-        entry.data = authorMapper.encryptRoster(rosterToEncrypt, privmx::crypto::Crypto::randomBytes(32));
+        entry.data =
+            authorMapper.encryptRoster(rosterToEncrypt, key(privmx::crypto::Crypto::randomBytes(32)));
         group.data.push_back(entry);
 
         GroupPublicMetaToEncryptV5 publicMetaToEncrypt{
@@ -164,7 +165,9 @@ protected:
             .version = privateMetaVersion,
             .keyId = "metaKey1",
             .keyVersion = privateMetaEpoch,
-            .data = authorMapper.encryptPrivateMeta(privateMetaToEncrypt, privmx::crypto::Crypto::randomBytes(32)),
+            .data = authorMapper.encryptPrivateMeta(
+                privateMetaToEncrypt, key(privmx::crypto::Crypto::randomBytes(32))
+            ),
             .created = 1000,
             .author = "alice"
         };
@@ -485,7 +488,7 @@ TEST_F(GroupRosterTag, TheInternalMetaViewReadsTheRosterPlane) {
                     .rosterVersion = 1
                 }
         },
-        encKey
+        key(encKey)
     );
     EXPECT_EQ(mapper.decryptInternalMeta(roster, key(encKey)).secret, "s3cr3t");
 

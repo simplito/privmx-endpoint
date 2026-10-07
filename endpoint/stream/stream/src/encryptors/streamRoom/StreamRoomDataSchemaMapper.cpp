@@ -32,7 +32,7 @@ StreamRoomDataSchemaMapper::StreamRoomDataSchemaMapper(
 
 Poco::Dynamic::Var StreamRoomDataSchemaMapper::encrypt(
     const core::ModuleDataToEncryptV5& data,
-    const std::string& key
+    const core::EncKey& key
 ) {
     return _encryptorV5.encrypt(data, _userPrivKey, key).toJSON();
 }

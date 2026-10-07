@@ -11,6 +11,26 @@
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
+namespace {
+
+/**
+ * Opakowuje goly klucz w `core::EncKey` z zestawem domyslnym dla buildu.
+ *
+ * Koperty grupowe celowo **nie** podlegaja wyborowi zestawu z polityki kontenera, z dwoch powodow:
+ *  - to warstwa zewnetrzna (dostep do kontenera: owijanie kluczy grupy do kluczy tozsamosci),
+ *    a ta jest ustalona z zalozenia - na jednego uzytkownika przypada jeden klucz;
+ *  - `encryptedChunkSizeFor` liczy rozmiar zaszyfrowanego chunku ze stalej `DEFAULT_FRAME_OVERHEAD`,
+ *    a chunki sa adresowane jako `index * ENCRYPTED_CHUNK_SIZE`. Zestaw o innym narzucie ramki
+ *    rozjechalby to adresowanie - dokladnie ten sam problem co w `store` (crypto-update/zmiany-endpoint.md §5.2).
+ *
+ * Nie zamieniac tego na zestaw z polityki bez zmiany sposobu adresowania chunkow.
+ */
+core::EncKey fixedSuiteKey(const std::string& key) {
+    return core::EncKey{.id = "", .key = key};
+}
+
+} // namespace
+
 // Load-bearing: epoch-ladder rungs wrap a past grant private key to the same key with the same `EciesEncryptor`,
 // so without this prefix a rung could be replayed as a type 2 envelope and opened as message content.
 const std::string GroupEnvelopeEncryptor::ECIES_DOMAIN = "PMXENV1";
@@ -93,7 +113,7 @@ core::Buffer GroupEnvelopeEncryptor::packGroupKeyEnvelope(
     core::Buffer signed_ = _dataEncryptor.signAndPackDataWithSignature(
         core::Buffer::from(header + content.stdString()), authorPrivKey
     );
-    return core::Buffer::from(header + _dataEncryptor.encrypt(signed_, groupKey).stdString());
+    return core::Buffer::from(header + _dataEncryptor.encrypt(signed_, fixedSuiteKey(groupKey)).stdString());
 }
 
 DecryptedEnvelope GroupEnvelopeEncryptor::openGroupKeyEnvelope(
@@ -143,7 +163,9 @@ core::Buffer GroupEnvelopeEncryptor::packAnonymousEnvelope(
     EnvelopeWriter::putField(out, wrap);
     // No author signature: the sender is anonymous by construction, so a signature by the throwaway key would
     // attest to nothing. The header is authenticated by being inside this encrypt-then-MAC payload.
-    out.append(_dataEncryptor.encrypt(core::Buffer::from(header + content.stdString()), contentKey).stdString());
+    out.append(
+        _dataEncryptor.encrypt(core::Buffer::from(header + content.stdString()), fixedSuiteKey(contentKey)).stdString()
+    );
     return core::Buffer::from(out);
 }
 
@@ -194,7 +216,7 @@ core::Buffer GroupEnvelopeEncryptor::packFileEnvelope(
     // each chunk authenticates itself, but nothing about chunk N says how many were supposed to follow.
     std::string body = header + EnvelopeWriter::toBE(plainSize, 8) + fileKey;
     core::Buffer signed_ = _dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(body), authorPrivKey);
-    return core::Buffer::from(header + _dataEncryptor.encrypt(signed_, groupKey).stdString());
+    return core::Buffer::from(header + _dataEncryptor.encrypt(signed_, fixedSuiteKey(groupKey)).stdString());
 }
 
 EnvelopeFileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
@@ -248,7 +270,10 @@ core::Buffer GroupEnvelopeEncryptor::packAnonymousFileEnvelope(
     // No signature, for the same reason as type 2: the sender is anonymous by construction. `plainSize` still
     // sits inside this encrypt-then-MAC payload, so a dropped tail stays detectable.
     out.append(_dataEncryptor
-                   .encrypt(core::Buffer::from(header + EnvelopeWriter::toBE(plainSize, 8) + fileKey), contentKey)
+                   .encrypt(
+                       core::Buffer::from(header + EnvelopeWriter::toBE(plainSize, 8) + fileKey),
+                       fixedSuiteKey(contentKey)
+                   )
                    .stdString());
     return core::Buffer::from(out);
 }
@@ -292,7 +317,7 @@ core::Buffer GroupEnvelopeEncryptor::encryptChunk(
     const std::string& fileKey,
     ChunkIndex index
 ) {
-    return _dataEncryptor.encrypt(plainChunk, chunkKey(fileKey, index));
+    return _dataEncryptor.encrypt(plainChunk, fixedSuiteKey(chunkKey(fileKey, index)));
 }
 
 core::Buffer GroupEnvelopeEncryptor::decryptChunk(

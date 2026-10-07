@@ -61,7 +61,7 @@ public:
     server::InboxData packForServer(
         const InboxDataProcessorModelV5& data,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& inboxKey
+        const core::EncKey& inboxKey
     ) const;
 
 private:

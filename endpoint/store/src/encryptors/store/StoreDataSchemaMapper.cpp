@@ -32,7 +32,7 @@ StoreDataSchemaMapper::StoreDataSchemaMapper(
     _strategyMapper.registerStrategy(core::ModuleDataSchema::Version::VERSION_5, _strategyV5);
 }
 
-Poco::Dynamic::Var StoreDataSchemaMapper::encrypt(const core::ModuleDataToEncryptV5& data, const std::string& key) {
+Poco::Dynamic::Var StoreDataSchemaMapper::encrypt(const core::ModuleDataToEncryptV5& data, const core::EncKey& key) {
     return _strategyV5->encrypt(data, _userPrivKey, key).toJSON();
 }
 

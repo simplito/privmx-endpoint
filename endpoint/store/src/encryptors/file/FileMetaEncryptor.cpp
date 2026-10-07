@@ -39,7 +39,7 @@ Poco::Dynamic::Var FileMetaEncryptor::encrypt(
                     .fileSize = fileMeta.internalFileMeta.size,
                     .internalMeta = core::Buffer::from(fileMeta.internalFileMeta.serialize())
                 },
-                _userPrivKey, encKey.key
+                _userPrivKey, encKey
             )
             .toJSON();
     case core::EncryptionKeyDataSchema::Version::VERSION_2:
@@ -51,7 +51,7 @@ Poco::Dynamic::Var FileMetaEncryptor::encrypt(
                     .internalMeta = core::Buffer::from(fileMeta.internalFileMeta.serialize()),
                     .dio = createDIO(fileInfo)
                 },
-                _userPrivKey, encKey.key
+                _userPrivKey, encKey
             )
             .toJSON();
     default:

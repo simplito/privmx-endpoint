@@ -21,7 +21,7 @@ using namespace privmx::endpoint::inbox;
 server::InboxData InboxDataProcessorV4::packForServer(
     const InboxDataProcessorModelV4& plainData,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& inboxKey
+    const core::EncKey& inboxKey
 ) {
     server::PublicDataV4 serverPublicData;
     serverPublicData.version = InboxDataSchema::Version::VERSION_4;

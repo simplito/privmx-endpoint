@@ -51,7 +51,7 @@ Poco::Dynamic::Var EntryDataSchemaMapper::encrypt(
             .internalMeta = std::nullopt,
             .dio = entryDIO
         };
-        return _encryptorV5.encrypt(entryData, _userPrivKey, entryKey.key).toJSON();
+        return _encryptorV5.encrypt(entryData, _userPrivKey, entryKey).toJSON();
     }
     }
     throw UnknownKvdbEntryFormatException();

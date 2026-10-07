@@ -198,7 +198,7 @@ std::string GroupApiImpl::createGroup(
     const std::optional<core::ContainerPolicy>& policies
 ) {
     // Empty rosters: the metadata key is wrapped once to the group's own grant key, and members open it by climbing.
-    auto ctx = prepareContainerCreate(contextId, {}, {});
+    auto ctx = prepareContainerCreate(contextId, {}, {}, policies);
 
     const std::vector<keytree::TreeMember> members = toTreeMembers(users, managers);
     keytree::TreeKeyCache scratch; // the group has no id yet
@@ -245,9 +245,9 @@ std::string GroupApiImpl::createGroup(
     model.resourceId = ctx.resourceId;
     model.contextId = contextId;
     model.keyId = ctx.key.id;
-    model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
+    model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key);
     model.publicMeta = _groupDataSchemaMapper->encryptPublicMeta(publicMetaToEncrypt);
-    model.privateMeta = _groupDataSchemaMapper->encryptPrivateMeta(privateMetaToEncrypt, ctx.key.key);
+    model.privateMeta = _groupDataSchemaMapper->encryptPrivateMeta(privateMetaToEncrypt, ctx.key);
     model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
     model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     model.groupPubKey = groupPubKeyStr;
@@ -354,7 +354,8 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
 
     // No new epoch
     auto ctx = prepareContainerUpdateWithoutKeyEntries(
-        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false
+        // `nullopt`: ta operacja nie zmienia polityki, wiec zestaw bierzemy z polityki samego kontenera.
+        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false, std::nullopt
     );
     // Roster only. The metadata entry is not read, not re-encrypted and not re-signed — that is the separation
     // that stops a concurrent metadata write from stranding this write at a version it never committed to.
@@ -373,7 +374,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
         model.members.push_back(server::GroupAddMemberEntry{.userId = newMember.user.userId, .role = newMember.role});
     }
     model.keyId = ctx.key.id;
-    model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
+    model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key);
     model.transition = keytree::TreeWire::toAdditionTransition(plan, previousGenerations, currentEpoch);
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
@@ -503,7 +504,8 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     drop(roster.managers);
 
     auto ctx = prepareContainerUpdateWithoutKeyEntries(
-        currentGroup, currentEntry, resourceId, roster.users, roster.managers, true
+        // `nullopt`: ta operacja nie zmienia polityki, wiec zestaw bierzemy z polityki samego kontenera.
+        currentGroup, currentEntry, resourceId, roster.users, roster.managers, true, std::nullopt
     );
     const auto selfAddressedKey = buildGroupKeyEntries(
         {core::GroupGrantWithKey{
@@ -534,7 +536,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     model.userIds = userIds;
     model.groupPubKey = newGroupPubKeyStr;
     model.keyId = ctx.key.id;
-    model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
+    model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key);
     model.transition = keytree::TreeWire::toRemovalTransition(
         keytree::TreeWire::fromGroupInfo(currentGroup), plan, currentEpoch
     );
@@ -609,7 +611,8 @@ MetaWriteContext GroupApiImpl::prepareMetaWrite(const std::string& groupId) {
     // because nothing here is wrapped to anybody.
     const auto roster = rosterFromUserIds(currentGroup.users, currentGroup.managers);
     auto ctx = prepareContainerUpdateWithoutKeyEntries(
-        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false
+        // `nullopt`: ta operacja nie zmienia polityki, wiec zestaw bierzemy z polityki samego kontenera.
+        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false, std::nullopt
     );
 
     // The roster head always sits at the current epoch, so the key selected off it is the current epoch's.
@@ -691,7 +694,7 @@ void GroupApiImpl::updateGroupPrivateMeta(
     model.resourceId = w.resourceId;
     model.keyId = w.ctx.key.id;
     model.version = version;
-    model.data = _groupDataSchemaMapper->encryptPrivateMeta(toEncrypt, w.ctx.key.key);
+    model.data = _groupDataSchemaMapper->encryptPrivateMeta(toEncrypt, w.ctx.key);
 
     try {
         _serverApi.groupUpdatePrivateMeta(model);

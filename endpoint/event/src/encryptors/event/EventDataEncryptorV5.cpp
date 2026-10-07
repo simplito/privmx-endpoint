@@ -22,7 +22,7 @@ using namespace privmx::endpoint::event;
 server::EncryptedContextEventDataV5 EventDataEncryptorV5::encrypt(
     const ContextEventDataToEncryptV5& eventData,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& encryptionKey
+    const core::EncKey& encryptionKey
 ) {
     server::EncryptedContextEventDataV5 result;
     result.version = EventDataSchema::Version::VERSION_5;

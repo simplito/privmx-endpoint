@@ -46,7 +46,7 @@ public:
         const core::Buffer& privateMeta,
         const core::Buffer& internalMeta,
         const core::PrivateKey& userPrivKey,
-        const std::string& key
+        const core::EncKey& key
     ) const;
     File toLibError(const server::File& file, int64_t errorCode) const override;
 

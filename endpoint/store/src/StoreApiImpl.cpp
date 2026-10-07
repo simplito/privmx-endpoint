@@ -103,7 +103,7 @@ std::string StoreApiImpl::createStore(
     const std::string& type,
     const std::vector<core::GroupGrantWithKey>& groups
 ) {
-    auto ctx = prepareContainerCreate(contextId, users, managers);
+    auto ctx = prepareContainerCreate(contextId, users, managers, policies);
     core::ModuleDataToEncryptV5 storeDataToEncrypt{
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
@@ -114,7 +114,7 @@ std::string StoreApiImpl::createStore(
     server::StoreCreateModel storeCreateModel;
     fillContainerCreateModel(
         storeCreateModel, contextId, users, managers, ctx,
-        _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key.key), groups
+        _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key), groups
     );
     if (type.length() > 0) {
         storeCreateModel.type = type;
@@ -147,7 +147,7 @@ void StoreApiImpl::updateStore(
                                                                         core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
         currentStore, currentStoreEntry, currentStoreResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentStore, groups)
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentStore, groups), policies
     );
     server::StoreUpdateModel model;
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
@@ -165,7 +165,7 @@ void StoreApiImpl::updateStore(
             },
         .dio = ctx.dio
     };
-    model.data = _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key.key);
+    model.data = _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key);
     _serverApi->storeUpdate(model);
     invalidateModuleKeysInCache(storeId);
 }

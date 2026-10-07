@@ -20,7 +20,7 @@ std::string encodeInternalMeta(
     core::DataEncryptorV4& dataEncryptor,
     const core::ModuleInternalMetaV5& internalMeta,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& encryptionKey
+    const core::EncKey& encryptionKey
 ) {
     core::dynamic::ModuleInternalMetaV5 internalMetaObj{
         .secret = internalMeta.secret, .resourceId = internalMeta.resourceId, .randomId = internalMeta.randomId
@@ -48,7 +48,7 @@ core::ModuleInternalMetaV5 decodeInternalMeta(
 dynamic::EncryptedGroupRosterV5 GroupDataEncryptorV5::encryptRoster(
     const GroupRosterToEncryptV5& data,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& encryptionKey
+    const core::EncKey& encryptionKey
 ) {
     dynamic::EncryptedGroupRosterV5 result;
     result.version = core::ModuleDataSchema::Version::VERSION_5;
@@ -215,7 +215,7 @@ void GroupDataEncryptorV5::assertPublicMetaFormat(const dynamic::EncryptedGroupP
 dynamic::EncryptedGroupPrivateMetaV5 GroupDataEncryptorV5::encryptPrivateMeta(
     const GroupPrivateMetaToEncryptV5& data,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& encryptionKey
+    const core::EncKey& encryptionKey
 ) {
     dynamic::EncryptedGroupPrivateMetaV5 result;
     result.version = core::ModuleDataSchema::Version::VERSION_5;

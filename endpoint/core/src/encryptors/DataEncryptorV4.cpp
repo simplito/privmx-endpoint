@@ -22,7 +22,7 @@ std::string DataEncryptorV4::signAndEncode(const core::Buffer& data, const core:
 std::string DataEncryptorV4::signAndEncryptAndEncode(
     const core::Buffer& data,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& encryptionKey
+    const core::EncKey& encryptionKey
 ) {
     auto signedData = _innerEncryptor.signAndPackDataWithSignature(data, authorPrivateKey);
     auto encrypted = _innerEncryptor.encrypt(signedData, encryptionKey);

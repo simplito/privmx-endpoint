@@ -24,7 +24,7 @@ using namespace privmx::endpoint::store;
 store::server::EncryptedFileMetaV4 FileMetaEncryptorV4::encrypt(
     const store::FileMetaToEncryptV4& fileMeta,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& encryptionKey
+    const core::EncKey& encryptionKey
 ) {
     server::EncryptedFileMetaV4 result;
     result.version = FileDataSchema::Version::VERSION_4;

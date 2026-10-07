@@ -32,7 +32,7 @@ public:
     server::EncryptedMessageDataV5 encrypt(
         const MessageDataToEncryptV5& messageData,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& encryptionKey
+        const core::EncKey& encryptionKey
     );
     // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same envelope; without one it runs here.
     DecryptedMessageDataV5 decrypt(

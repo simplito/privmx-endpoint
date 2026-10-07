@@ -168,7 +168,10 @@ protected:
         );
         const auto& currentEntry = container.data.back();
         auto resourceId = container.resourceId.value_or(core::EndpointUtils::generateId());
-        auto ctx = prepareContainerUpdate(container, currentEntry, resourceId, users, managers, true);
+        // `nullopt`: rotacja klucza nie zmienia polityki, wiec zestaw bierzemy z polityki samego kontenera.
+        auto ctx = prepareContainerUpdate(
+            container, currentEntry, resourceId, users, managers, true, std::nullopt
+        );
 
         TRotateModel model;
         model.id = id;

@@ -24,7 +24,7 @@ using namespace privmx::endpoint::thread;
 server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(
     const MessageDataToEncryptV5& messageData,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& encryptionKey
+    const core::EncKey& encryptionKey
 ) {
     server::EncryptedMessageDataV5 result;
     result.version = MessageDataSchema::Version::VERSION_5;

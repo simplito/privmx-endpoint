@@ -24,10 +24,12 @@ namespace core {
 class DataEncryptorV4 {
 public:
     std::string signAndEncode(const core::Buffer& data, const core::PrivateKey& authorPrivateKey);
+    // Zapis bierze zestaw algorytmow z klucza, odczyt ze znacznika w ramce - stad asymetria
+    // typow miedzy ta metoda a `decodeAndDecryptAndVerify`. Patrz `EncKey::suite`.
     std::string signAndEncryptAndEncode(
         const core::Buffer& data,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& encryptionKey
+        const core::EncKey& encryptionKey
     );
     core::Buffer decodeAndVerify(const std::string& publicDataBase64, const core::PublicKey& authorPublicKey);
     core::Buffer decodeAndDecryptAndVerify(

@@ -28,7 +28,7 @@ public:
     server::EncryptedContextEventDataV5 encrypt(
         const ContextEventDataToEncryptV5& eventData,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& encryptionKey
+        const core::EncKey& encryptionKey
     );
     DecryptedEventDataV5 decrypt(
         const server::EncryptedContextEventDataV5& encryptedEventData,

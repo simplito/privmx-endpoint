@@ -32,7 +32,7 @@ InboxDataSchemaMapper::InboxDataSchemaMapper(
     _strategyMapper.registerStrategy(core::ModuleDataSchema::Version::VERSION_5, _strategyV5);
 }
 
-server::InboxData InboxDataSchemaMapper::encrypt(const InboxDataProcessorModelV5& data, const std::string& key) {
+server::InboxData InboxDataSchemaMapper::encrypt(const InboxDataProcessorModelV5& data, const core::EncKey& key) {
     return _strategyV5->packForServer(data, _userPrivKey, key);
 }
 

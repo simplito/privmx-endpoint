@@ -145,7 +145,7 @@ std::string InboxApiImpl::createInbox(
     createInboxModel.contextId = contextId;
     createInboxModel.users = core::EndpointUtils::usersWithPubKeyToIds(users);
     createInboxModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
-    createInboxModel.data = _inboxDataSchemaMapper->encrypt(inboxDataIn, inboxKey.key);
+    createInboxModel.data = _inboxDataSchemaMapper->encrypt(inboxDataIn, inboxKey);
     createInboxModel.keyId = inboxKey.id;
     auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
     auto keysList = _keyProvider->prepareKeysList(
@@ -183,7 +183,7 @@ void InboxApiImpl::updateInbox(
                                                                         core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
         currentInbox, currentInboxEntry, currentInboxResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentInbox, groups)
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentInbox, groups), policies
     );
     auto privateKey = core::PrivateKey::fromRaw(ctx.key.key);
     auto pubKey = privateKey.getPublicKey();
@@ -214,7 +214,7 @@ void InboxApiImpl::updateInbox(
     inboxUpdateModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     inboxUpdateModel.version = version;
     inboxUpdateModel.force = force;
-    inboxUpdateModel.data = _inboxDataSchemaMapper->encrypt(inboxDataIn, ctx.key.key);
+    inboxUpdateModel.data = _inboxDataSchemaMapper->encrypt(inboxDataIn, ctx.key);
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
     // revokes every grant the Inbox had.
     fillContainerGroupGrants(
@@ -409,7 +409,11 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
                 "", core::EndpointUtils::generateId(), _userPrivKeyECC.getPublicKey(), handle->inboxId,
                 handle->inboxResourceId
             );
-            auto encryptedFileMeta = _fileMetaEncryptorV4.encrypt(prepareMeta(fileInfo), _userPrivKeyECC, filesMetaKey);
+            // Klucz efemeryczny wygenerowany na ten jeden wpis, poza jakimkolwiek kontenerem -
+            // nie ma polityki, ktora mogla by wskazac zestaw, wiec zostaje domyslny dla buildu.
+            auto encryptedFileMeta = _fileMetaEncryptorV4.encrypt(
+                prepareMeta(fileInfo), _userPrivKeyECC, core::EncKey{.id = "", .key = filesMetaKey}
+            );
             inbox::server::InboxFile inboxFile;
             inboxFile.fileIndex = fileIndex;
             inboxFile.meta = encryptedFileMeta.toJSON();

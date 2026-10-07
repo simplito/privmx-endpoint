@@ -24,7 +24,7 @@ using namespace privmx::endpoint::kvdb;
 server::EncryptedKvdbEntryDataV5 EntryDataEncryptorV5::encrypt(
     const KvdbEntryDataToEncryptV5& messageData,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& encryptionKey
+    const core::EncKey& encryptionKey
 ) {
     server::EncryptedKvdbEntryDataV5 result;
     result.version = KvdbEntryDataSchema::Version::VERSION_5;

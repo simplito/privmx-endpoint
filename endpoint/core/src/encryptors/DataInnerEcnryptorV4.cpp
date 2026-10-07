@@ -26,8 +26,8 @@ core::Buffer DataInnerEncryptorV4::decode(const std::string& dataAsBase64) {
     return core::Buffer::from(decoded);
 }
 
-core::Buffer DataInnerEncryptorV4::encrypt(const core::Buffer& data, const std::string& encryptionKey) {
-    auto encrypted = core::CryptoSuite::defaultForWrite().encrypt(encryptionKey, data.stdString());
+core::Buffer DataInnerEncryptorV4::encrypt(const core::Buffer& data, const core::EncKey& encryptionKey) {
+    auto encrypted = encryptionKey.suite.encrypt(encryptionKey.key, data.stdString());
     return core::Buffer::from(encrypted);
 }
 

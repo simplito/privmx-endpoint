@@ -43,7 +43,7 @@ Store StoreDataSchemaStrategyV5::toLibError(const server::Store& store, int64_t 
 core::dynamic::EncryptedModuleDataV5 StoreDataSchemaStrategyV5::encrypt(
     const core::ModuleDataToEncryptV5& data,
     const core::PrivateKey& userPrivKey,
-    const std::string& key
+    const core::EncKey& key
 ) const {
     return _encryptor.encrypt(data, userPrivKey, key);
 }

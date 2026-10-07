@@ -30,7 +30,7 @@ public:
     dynamic::EncryptedModuleDataV4 encrypt(
         const ModuleDataToEncryptV4& moduleData,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& encryptionKey
+        const core::EncKey& encryptionKey
     );
     DecryptedModuleDataV4 decrypt(
         const dynamic::EncryptedModuleDataV4& encryptedModuleData,

@@ -36,7 +36,7 @@ public:
     server::InboxData packForServer(
         const InboxDataProcessorModelV5& plainData,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& inboxKey
+        const core::EncKey& inboxKey
     );
     // A `verifiedDio` stands in for `getDIOAndAssertIntegrity` on this same entry; without one it runs here.
     InboxDataResultV5 unpackAll(

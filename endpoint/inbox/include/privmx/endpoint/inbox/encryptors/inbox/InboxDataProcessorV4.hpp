@@ -33,7 +33,7 @@ public:
     server::InboxData packForServer(
         const InboxDataProcessorModelV4& plainData,
         const core::PrivateKey& authorPrivateKey,
-        const std::string& inboxKey
+        const core::EncKey& inboxKey
     );
     InboxDataResultV4 unpackAll(const server::InboxData& encryptedData, const std::string& inboxKey);
 

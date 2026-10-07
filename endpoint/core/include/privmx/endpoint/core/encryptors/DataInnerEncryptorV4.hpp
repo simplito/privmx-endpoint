@@ -15,6 +15,7 @@ limitations under the License.
 #include "privmx/endpoint/core/crypto/PrivateKey.hpp"
 #include "privmx/endpoint/core/crypto/PublicKey.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
+#include "privmx/endpoint/core/CoreTypes.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -29,7 +30,9 @@ public:
 
     std::string encode(const core::Buffer& data);
     core::Buffer decode(const std::string& dataAsBase64);
-    core::Buffer encrypt(const core::Buffer& data, const std::string& encryptionKey);
+    // Zapis bierze zestaw algorytmow z klucza, odczyt ze znacznika w ramce - stad asymetria
+    // typow. Patrz `EncKey::suite`.
+    core::Buffer encrypt(const core::Buffer& data, const core::EncKey& encryptionKey);
     core::Buffer decrypt(const core::Buffer& privateData, const std::string& encryptionKey);
     core::Buffer signAndPackDataWithSignature(const core::Buffer& data, const core::PrivateKey& authorPrivateKey);
     core::Buffer verifyAndExtractData(const core::Buffer& signedData, const core::PublicKey& authorPublicKey);

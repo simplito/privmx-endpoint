@@ -109,10 +109,25 @@ protected:
     );
 
     // Empty rosters build no per-user key entries — for a module that hands its key over some other way.
+    /**
+     * @brief Zestaw algorytmow, ktorym nalezy zapisywac dane kontenera o tej polityce.
+     *
+     * Poziom 2 wyboru formatu zapisu: polityka kontenera przed stala kompilacji.
+     * Typem jest `ContainerPolicyWithoutItem`, bo `cryptoSuite` siedzi wlasnie tam, a `stream`
+     * uzywa tylko tej czesci polityki.
+     *
+     * @throws UnknownCryptoSuiteException gdy polityka nazywa zestaw nieznany temu buildowi
+     */
+    static CryptoSuite suiteFromPolicy(const std::optional<ContainerPolicyWithoutItem>& policies);
+
+    // `policies` sluzy tu tylko do wyboru zestawu algorytmow dla nowego klucza (patrz `EncKey::suite`);
+    // sama polityka jedzie do Bridge'a osobno. Jest parametrem, a nie czyms doklejanym w modulach,
+    // zeby nowy typ kontenera nie mogl o tym wyborze po cichu zapomniec.
     ContainerCreateContext prepareContainerCreate(
         const std::string& contextId,
         const std::vector<UserWithPubKey>& users,
-        const std::vector<UserWithPubKey>& managers
+        const std::vector<UserWithPubKey>& managers,
+        const std::optional<ContainerPolicyWithoutItem>& policies
     );
 
     template<typename TContainer, typename TEntry>
@@ -122,9 +137,11 @@ protected:
         const std::string& resourceId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
-        bool forceGenerateNewKey
+        bool forceGenerateNewKey,
+        const std::optional<ContainerPolicyWithoutItem>& policies
     ) {
-        auto plan = planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey);
+        auto plan =
+            planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey, policies);
         plan.ctx.keyEntries = buildRosterKeyEntries(plan);
         return plan.ctx;
     }
@@ -138,9 +155,10 @@ protected:
         const std::string& resourceId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
-        bool forceGenerateNewKey
+        bool forceGenerateNewKey,
+        const std::optional<ContainerPolicyWithoutItem>& policies
     ) {
-        return planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey).ctx;
+        return planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey, policies).ctx;
     }
 
     // The served container struct reduced to what the key cache and the decryptors need. Identical for every
@@ -229,7 +247,8 @@ private:
         const std::string& resourceId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
-        bool forceGenerateNewKey
+        bool forceGenerateNewKey,
+        const std::optional<ContainerPolicyWithoutItem>& policies
     );
 
     std::vector<server::KeyEntrySet> buildRosterKeyEntries(const ContainerUpdatePlan& plan);
@@ -294,7 +313,8 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     const std::string& resourceId,
     const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers,
-    bool forceGenerateNewKey
+    bool forceGenerateNewKey,
+    const std::optional<ContainerPolicyWithoutItem>& policies
 ) {
     auto location{getModuleEncKeyLocation(container, resourceId)};
     auto containerKeys{getAndValidateModuleKeys(container, resourceId)};
@@ -316,6 +336,17 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     if (needNewKey) {
         key = _keyProvider->generateKey();
     }
+    // Zestaw ustawiamy takze wtedy, gdy klucz zostaje ten sam: znacznik zestawu siedzi w kazdej ramce
+    // z osobna, wiec zmiana zestawu nie wymaga rotacji klucza, a dane zapisane poprzednim zestawem
+    // pozostaja czytelne.
+    //
+    // Gdy wolajacy nie zmienia polityki (`policies == nullopt` - tak dziala kazda aktualizacja wewnetrzna,
+    // np. zapis rostera grupy), bierzemy polityke **serwowanego kontenera**. Fallback na zestaw domyslny
+    // bylby tu cicha regresja: kontener, ktorego polityka zada mocniejszego zestawu, zapisywalby czesc
+    // swoich danych slabszym.
+    key.suite = policies.has_value()
+        ? suiteFromPolicy(policies)
+        : suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy));
     return ContainerUpdatePlan{
         .ctx = {.location = location, .key = key, .dio = dio, .secret = secret, .keyEntries = {}},
         .containerKeys = containerKeys,

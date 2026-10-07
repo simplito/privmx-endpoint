@@ -23,7 +23,7 @@ using namespace privmx::endpoint::thread;
 server::EncryptedMessageDataV4 MessageDataEncryptorV4::encrypt(
     const MessageDataToEncryptV4& messageData,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& encryptionKey
+    const core::EncKey& encryptionKey
 ) {
     server::EncryptedMessageDataV4 result;
     result.version = MessageDataSchema::Version::VERSION_4;

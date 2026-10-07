@@ -94,7 +94,7 @@ core::DataIntegrityObject InboxDataSchemaStrategyV5::getDIOAndAssertIntegrity(co
 server::InboxData InboxDataSchemaStrategyV5::packForServer(
     const InboxDataProcessorModelV5& data,
     const core::PrivateKey& authorPrivateKey,
-    const std::string& inboxKey
+    const core::EncKey& inboxKey
 ) const {
     return _processor.packForServer(data, authorPrivateKey, inboxKey);
 }

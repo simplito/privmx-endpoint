@@ -25,7 +25,7 @@ server::EncryptedMessageDataV5 MessageDataSchemaStrategyV5::encrypt(
     const core::Buffer& privateMeta,
     const core::Buffer& data,
     const core::PrivateKey& userPrivKey,
-    const std::string& key,
+    const core::EncKey& key,
     const core::DataIntegrityObject& dio
 ) const {
     MessageDataToEncryptV5 messageData{

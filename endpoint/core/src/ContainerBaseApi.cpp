@@ -91,12 +91,24 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
     return {.users = resolve(userIds), .managers = resolve(managerIds)};
 }
 
+CryptoSuite ContainerBaseApi::suiteFromPolicy(const std::optional<ContainerPolicyWithoutItem>& policies) {
+    if (policies.has_value() && policies->cryptoSuite.has_value()) {
+        // Rzuca `UnknownCryptoSuiteException`, gdy ten build nie zna nazwanego zestawu. Celowo nie
+        // cofamy sie po cichu do domyslnego: zapis slabszym zestawem niz zadala polityka bylby
+        // niezauwazalnym oslabieniem ochrony kontenera.
+        return CryptoSuite::forPolicyValue(policies->cryptoSuite.value());
+    }
+    return CryptoSuite::defaultForWrite();
+}
+
 ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
     const std::string& contextId,
     const std::vector<UserWithPubKey>& users,
-    const std::vector<UserWithPubKey>& managers
+    const std::vector<UserWithPubKey>& managers,
+    const std::optional<ContainerPolicyWithoutItem>& policies
 ) {
     auto key = _keyProvider->generateKey();
+    key.suite = suiteFromPolicy(policies);
     std::string resourceId = EndpointUtils::generateId();
     auto dio = _connection.getImpl()->createDIO(contextId, resourceId);
     auto secret = _keyProvider->generateSecret();

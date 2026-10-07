@@ -30,12 +30,12 @@ Poco::Dynamic::Var GroupDataSchemaMapper::encryptPublicMeta(const GroupPublicMet
 
 Poco::Dynamic::Var GroupDataSchemaMapper::encryptPrivateMeta(
     const GroupPrivateMetaToEncryptV5& data,
-    const std::string& key
+    const core::EncKey& key
 ) {
     return _groupEncryptor.encryptPrivateMeta(data, _userPrivKey, key).toJSON();
 }
 
-Poco::Dynamic::Var GroupDataSchemaMapper::encryptRoster(const GroupRosterToEncryptV5& data, const std::string& key) {
+Poco::Dynamic::Var GroupDataSchemaMapper::encryptRoster(const GroupRosterToEncryptV5& data, const core::EncKey& key) {
     return _groupEncryptor.encryptRoster(data, _userPrivKey, key).toJSON();
 }
 

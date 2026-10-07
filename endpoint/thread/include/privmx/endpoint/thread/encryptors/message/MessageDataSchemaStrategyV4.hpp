@@ -38,7 +38,7 @@ public:
         const core::Buffer& privateMeta,
         const core::Buffer& data,
         const core::PrivateKey& userPrivKey,
-        const std::string& key
+        const core::EncKey& key
     ) const;
     DecryptedMessageDataV4 decrypt(const server::Message& message, const core::DecryptedEncKey& encKey) const override;
     std::tuple<Message, core::DataIntegrityObject> convert(
