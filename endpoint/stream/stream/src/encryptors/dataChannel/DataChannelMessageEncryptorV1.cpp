@@ -27,7 +27,7 @@ core::Buffer DataChannelMessageEncryptorV1::encryptMessage(const DataChannelMess
     if (encKey.keyId.size() >= 0xff) {
         throw InvalidEncryptionKeyIdLengthException();
     }
-    auto iv = privmx::crypto::Crypto::randomBytes(GCM_NONCE_LENGTH_BYTES);
+    auto iv = core::CryptoSuite::randomBytes(GCM_NONCE_LENGTH_BYTES);
     auto serializedHeader = serializeHeader(
         Header{
             .version = WIRE_FORMAT_VERSION,

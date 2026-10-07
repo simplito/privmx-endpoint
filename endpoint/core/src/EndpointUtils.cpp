@@ -12,7 +12,7 @@ limitations under the License.
 #include "privmx/endpoint/core/EndpointUtils.hpp"
 #include <Poco/UUID.h>
 #include <Poco/UUIDGenerator.h>
-#include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
 #include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint::core;
@@ -86,5 +86,5 @@ std::string EndpointUtils::generateId() {
 }
 
 std::string EndpointUtils::generateDIORandomId() {
-    return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8));
+    return privmx::utils::Hex::from(CryptoSuite::randomBytes(8));
 }

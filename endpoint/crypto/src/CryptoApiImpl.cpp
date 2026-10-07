@@ -61,7 +61,7 @@ std::string CryptoApiImpl::derivePublicKey(const std::string& privkey) {
 }
 
 core::Buffer CryptoApiImpl::generateKeySymmetric() {
-    auto key{privmx::crypto::Crypto::randomBytes(32)};
+    auto key{core::CryptoSuite::randomBytes(32)};
     return core::Buffer::from(key);
 }
 
@@ -79,7 +79,7 @@ core::Buffer CryptoApiImpl::decryptDataSymmetric(const core::Buffer& data, const
 // do osobnej biblioteki to osobne zadanie), wiec oddawanie `privmx::crypto::PrivateKey` wyciagaloby
 // ten typ do naglowka. Jedyny konsument i tak potrzebuje tylko WIF-a.
 std::string CryptoApiImpl::getPrivKeyFromSeed(const std::string& seed, size_t rounds) {
-    auto salt{privmx::crypto::Crypto::randomBytes(16)};
+    auto salt{core::CryptoSuite::randomBytes(16)};
     auto pbkdf2{privmx::crypto::Crypto::pbkdf2(seed, salt, rounds, 32, "SHA512")};
     auto extKey{privmx::crypto::ExtKey::fromSeed(pbkdf2)};
     return extKey.getPrivateKey().toWIF();

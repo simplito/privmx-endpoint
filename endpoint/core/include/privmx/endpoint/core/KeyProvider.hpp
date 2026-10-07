@@ -72,7 +72,14 @@ public:
         std::optional<core::PrivateKey>(const std::string& groupId, int64_t epoch)>;
 
     KeyProvider(const core::PrivateKey& key, std::function<std::shared_ptr<UserVerifier>()> getUserVerifier);
-    EncKey generateKey();
+    /**
+     * @brief Nowy klucz kontenera dla podanego zestawu algorytmow.
+     *
+     * Dlugosc klucza bierze sie z zestawu, a nie ze stalej, i zestaw zostaje na kluczu zapisany -
+     * dzieki temu niezmiennik "klucz ma dlugosc wymagana przez swoj zestaw" zachodzi z konstrukcji,
+     * a nie przez zbieg okolicznosci, ze oba dzisiejsze zestawy chca 32 bajtow.
+     */
+    EncKey generateKey(const CryptoSuite& suite);
     std::string generateSecret();
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>> getKeysAndVerify(
         const KeyDecryptionAndVerificationRequest& request,

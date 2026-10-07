@@ -107,8 +107,7 @@ ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
     const std::vector<UserWithPubKey>& managers,
     const std::optional<ContainerPolicyWithoutItem>& policies
 ) {
-    auto key = _keyProvider->generateKey();
-    key.suite = suiteFromPolicy(policies);
+    auto key = _keyProvider->generateKey(suiteFromPolicy(policies));
     std::string resourceId = EndpointUtils::generateId();
     auto dio = _connection.getImpl()->createDIO(contextId, resourceId);
     auto secret = _keyProvider->generateSecret();
@@ -253,7 +252,7 @@ std::vector<server::GroupKeyEntrySet> ContainerBaseApi::buildGroupKeyEntries(
     std::vector<server::GroupKeyEntrySet> result;
     for (const auto& g : groups) {
         auto groupPubKey = core::PublicKeyCache::getInstance()->fromBase58DER(g.groupPubKey);
-        auto keySecret = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32));
+        auto keySecret = privmx::utils::Hex::from(CryptoSuite::randomBytes(32));
         auto encData = encryptor.encrypt(
             EncKeyV2ToEncrypt{
                 EncKey{.id = key.id, .key = key.key}, dio,

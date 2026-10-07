@@ -100,7 +100,11 @@ std::string InboxApiImpl::createInbox(
     const std::vector<core::GroupGrantWithKey>& groups
 ) {
 
-    auto inboxKey = _keyProvider->generateKey();
+    auto inboxKey = _keyProvider->generateKey(suiteFromPolicy(policies));
+    // Klucz Inboxa ma drugie zastosowanie: jest **takze** surowym kluczem prywatnym secp256k1, z ktorego
+    // bierze sie para kluczy do odbierania wpisow. To pinuje jego dlugosc na 32 bajty niezaleznie od
+    // zestawu symetrycznego. Dzis kazdy zestaw i tak chce 32 bajtow; gdy pojawi sie inny, `fromRaw`
+    // odrzuci klucz i trzeba bedzie rozdzielic te dwa zastosowania zamiast poszerzac klucz kontenera.
     auto privateKey = core::PrivateKey::fromRaw(inboxKey.key);
     auto pubKey = privateKey.getPublicKey();
 
@@ -358,7 +362,7 @@ int64_t InboxApiImpl::prepareEntry(
         requestModel.files = filesList;
         store::server::CreateRequestResult requestResult = _requestApi->createRequest(requestModel);
         for (size_t i = 0; i < fileHandles.size(); i++) {
-            std::string key = privmx::crypto::Crypto::randomBytes(32);
+            std::string key = core::CryptoSuite::randomBytes(32);
             fileHandles[i]->setRequestData(requestResult.id, key, (i));
         }
     }
@@ -379,7 +383,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     auto _userPubKeyECC = _userPrivKeyECC.getPublicKey();
     std::string filesMetaKey;
     bool hasFiles = !handle->inboxFileHandles.empty();
-    filesMetaKey = (hasFiles ? privmx::crypto::Crypto::randomBytes(32) : std::string());
+    filesMetaKey = (hasFiles ? core::CryptoSuite::randomBytes(32) : std::string());
 
     InboxEntrySendModel modelForSerializer{
         .publicData =

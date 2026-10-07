@@ -32,7 +32,7 @@ ChunkStreamer::ChunkStreamer(
       _chunkBufferedStream(serverRequestChunkSize) {}
 
 void ChunkStreamer::createRequest(bool randomWriteSupport) {
-    _key = privmx::crypto::Crypto::randomBytes(32);
+    _key = core::CryptoSuite::randomBytes(32);
     auto size = getFileSize();
     server::FileDefinition fileDefinition{};
     fileDefinition.size = size.size;
@@ -113,7 +113,7 @@ FileSizeResult ChunkStreamer::getFileSize() const {
 }
 ChunkStreamer::PreparedChunk ChunkStreamer::prepareChunk(const std::string& data) {
     std::string chunkKey = privmx::crypto::Crypto::sha256(_key + getSeqBE());
-    std::string iv = privmx::crypto::Crypto::randomBytes(IV_SIZE);
+    std::string iv = core::CryptoSuite::randomBytes(IV_SIZE);
     std::string cipher = privmx::crypto::Crypto::aes256CbcPkcs7Encrypt(data, chunkKey, iv);
     std::string ivWithCipher = iv + cipher;
     std::string hmac = privmx::crypto::Crypto::hmacSha256(chunkKey, ivWithCipher);

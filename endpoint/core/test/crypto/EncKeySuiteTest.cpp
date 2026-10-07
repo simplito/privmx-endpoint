@@ -15,7 +15,9 @@ limitations under the License.
 
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptor.hpp>
 #include <privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp>
 
@@ -109,4 +111,37 @@ TEST(EncKeySuite, ReadIgnoresSuiteOnTheKeyAndFollowsTheFrame) {
 
     const EncKey readerKey{.id = "k1", .key = KEY32, .suite = CryptoSuite::defaultForWrite()};
     EXPECT_EQ(PLAIN, std::string(encryptor.decrypt(base64, readerKey)));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Niezmiennik: swiezo wygenerowany klucz ma dlugosc wymagana przez swoj zestaw. Przed zmiana
+// `generateKey` zwracal zawsze 32 bajty, co bylo poprawne tylko dlatego, ze oba dzisiejsze
+// zestawy akurat tyle chca.
+// ---------------------------------------------------------------------------------------------
+
+TEST(EncKeySuite, GeneratedKeyMatchesItsSuite) {
+    KeyProvider provider(PrivateKey::generateRandom(), [] { return nullptr; });
+
+    for (const SuiteId id : CryptoSuite::known()) {
+        const CryptoSuite suite = CryptoSuite::forId(id);
+        const EncKey key = provider.generateKey(suite);
+
+        EXPECT_EQ(suite.id(), key.suite.id());
+        EXPECT_EQ(suite.keyLength(), key.key.size());
+        EXPECT_FALSE(key.id.empty());
+        // Klucz musi dac sie od razu uzyc swoim wlasnym zestawem - to lapie rozjazd miedzy
+        // `keyLength()` a tym, co faktycznie wygenerowano.
+        EXPECT_NO_THROW(suite.encrypt(key.key, PLAIN));
+    }
+}
+
+TEST(EncKeySuite, GeneratedKeysDiffer) {
+    KeyProvider provider(PrivateKey::generateRandom(), [] { return nullptr; });
+    const CryptoSuite suite = CryptoSuite::defaultForWrite();
+
+    const EncKey first = provider.generateKey(suite);
+    const EncKey second = provider.generateKey(suite);
+
+    EXPECT_NE(first.key, second.key);
+    EXPECT_NE(first.id, second.id);
 }

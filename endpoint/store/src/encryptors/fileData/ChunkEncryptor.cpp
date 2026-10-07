@@ -23,7 +23,7 @@ ChunkEncryptor::ChunkEncryptor(std::string key, size_t chunkSize) : _key(key), _
 
 IChunkEncryptor::Chunk ChunkEncryptor::encrypt(const uint64_t index, const std::string& data) {
     std::string chunkKey = privmx::crypto::Crypto::sha256(_key + chunkIndexToBE(index));
-    std::string iv = privmx::crypto::Crypto::randomBytes(IV_SIZE);
+    std::string iv = core::CryptoSuite::randomBytes(IV_SIZE);
     std::string cipher = privmx::crypto::Crypto::aes256CbcPkcs7Encrypt(data, chunkKey, iv);
     std::string ivWithCipher = iv + cipher;
     std::string hmac = privmx::crypto::Crypto::hmacSha256(chunkKey, ivWithCipher);

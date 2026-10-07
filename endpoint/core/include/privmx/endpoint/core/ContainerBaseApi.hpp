@@ -330,23 +330,24 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     if (!_keyProvider->verifyKeysSecret(containerKeys, location, secret)) {
         throw core::EncryptionKeyValidationException();
     }
-    core::EncKey key = currentKey;
-    core::DataIntegrityObject dio = _connection.getImpl()->createDIO(container.contextId, resourceId);
-    bool needNewKey = roster->doNeedNewKey();
-    if (needNewKey) {
-        key = _keyProvider->generateKey();
-    }
-    // Zestaw ustawiamy takze wtedy, gdy klucz zostaje ten sam: znacznik zestawu siedzi w kazdej ramce
-    // z osobna, wiec zmiana zestawu nie wymaga rotacji klucza, a dane zapisane poprzednim zestawem
-    // pozostaja czytelne.
-    //
     // Gdy wolajacy nie zmienia polityki (`policies == nullopt` - tak dziala kazda aktualizacja wewnetrzna,
     // np. zapis rostera grupy), bierzemy polityke **serwowanego kontenera**. Fallback na zestaw domyslny
     // bylby tu cicha regresja: kontener, ktorego polityka zada mocniejszego zestawu, zapisywalby czesc
     // swoich danych slabszym.
-    key.suite = policies.has_value()
+    const CryptoSuite suite = policies.has_value()
         ? suiteFromPolicy(policies)
         : suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy));
+
+    core::EncKey key = currentKey;
+    core::DataIntegrityObject dio = _connection.getImpl()->createDIO(container.contextId, resourceId);
+    bool needNewKey = roster->doNeedNewKey();
+    if (needNewKey) {
+        key = _keyProvider->generateKey(suite);
+    } else {
+        // Klucz zostaje ten sam, zmienia sie tylko zestaw zapisu. Jest to bezpieczne, bo znacznik
+        // zestawu siedzi w kazdej ramce z osobna: dane zapisane poprzednim zestawem pozostaja czytelne.
+        key.suite = suite;
+    }
     return ContainerUpdatePlan{
         .ctx = {.location = location, .key = key, .dio = dio, .secret = secret, .keyEntries = {}},
         .containerKeys = containerKeys,

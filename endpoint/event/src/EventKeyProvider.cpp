@@ -19,7 +19,7 @@ using namespace privmx::endpoint::event;
 EventKeyProvider::EventKeyProvider(const core::PrivateKey& key) : _key(key) {}
 
 std::string EventKeyProvider::generateKey() {
-    return privmx::crypto::Crypto::randomBytes(32);
+    return core::CryptoSuite::randomBytes(32);
 }
 DecryptedEventEncKeyV1 EventKeyProvider::decryptKey(
     const std::string& encryptedKey,

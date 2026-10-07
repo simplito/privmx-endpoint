@@ -1253,7 +1253,7 @@ FileHandle GroupApiImpl::beginFileEncryption(const std::string& groupId, FileSiz
             .keyId = key.id,
             .groupKey = key.key,
             // Per file, so a chunk lifted from one file is useless in any other.
-            .fileKey = privmx::crypto::Crypto::randomBytes(32),
+            .fileKey = core::CryptoSuite::randomBytes(32),
             .index = 0,
             .plainSize = static_cast<ByteCount>(size),
         })
@@ -1277,7 +1277,7 @@ FileHandle GroupApiImpl::beginFileEncryptionAnonymously(
             .type = ENVELOPE_ANONYMOUS,
             .groupId = groupId,
             .groupPubKey = groupPubKey,
-            .fileKey = privmx::crypto::Crypto::randomBytes(32),
+            .fileKey = core::CryptoSuite::randomBytes(32),
             .index = 0,
             .plainSize = static_cast<ByteCount>(size),
         })

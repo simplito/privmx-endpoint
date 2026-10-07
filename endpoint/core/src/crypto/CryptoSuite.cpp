@@ -153,7 +153,7 @@ std::vector<SuiteId> CryptoSuite::known() {
     return result;
 }
 
-std::string CryptoSuite::randomBytes(std::size_t length) const {
+std::string CryptoSuite::randomBytes(std::size_t length) {
     return mapCryptoErrors("CryptoSuite::randomBytes", [&] { return str(cryptoProvider().randomBytes(length)); });
 }
 

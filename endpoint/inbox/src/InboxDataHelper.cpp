@@ -26,7 +26,7 @@ privmx::endpoint::core::EncKey InboxDataHelper::deserializeEncKey(const std::str
 }
 
 std::string InboxDataHelper::getRandomName() {
-    return utils::Base64::from(crypto::Crypto::randomBytes(8));
+    return utils::Base64::from(core::CryptoSuite::randomBytes(8));
 }
 
 server::FileConfig InboxDataHelper::fileConfigToTypedObject(const FilesConfig& fileConfig) {

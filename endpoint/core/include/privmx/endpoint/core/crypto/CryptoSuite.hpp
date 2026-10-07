@@ -120,7 +120,15 @@ public:
     /// @brief Wymagana dlugosc klucza symetrycznego tego zestawu, w bajtach.
     std::size_t keyLength() const;
 
-    std::string randomBytes(std::size_t length) const;
+    /**
+     * @brief Losowe bajty.
+     *
+     * Statyczna, bo losowosc nie zalezy od zestawu - zadna z jego czesci nie zmienia tego, co
+     * znaczy "32 losowe bajty". Dzieki temu wolajacy, ktorzy potrzebuja tylko entropii (generowanie
+     * kluczy, IV, identyfikatorow), nie musza skadkolwiek brac zestawu.
+     */
+    static std::string randomBytes(std::size_t length);
+
     std::string hash(const std::string& data) const;
     std::string mac(const std::string& key, const std::string& data) const;
     std::string deriveKey(const std::string& secret, const std::string& label, std::size_t length) const;

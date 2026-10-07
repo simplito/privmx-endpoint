@@ -153,15 +153,16 @@ KeyProvider::KeyProvider(
 )
     : _key(key), _getUserVerifier(getUserVerifier) {}
 
-EncKey KeyProvider::generateKey() {
+EncKey KeyProvider::generateKey(const CryptoSuite& suite) {
     return {
-        .id = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(16)),
-        .key = privmx::crypto::Crypto::randomBytes(32)
+        .id = privmx::utils::Hex::from(CryptoSuite::randomBytes(16)),
+        .key = CryptoSuite::randomBytes(suite.keyLength()),
+        .suite = suite
     };
 }
 
 std::string KeyProvider::generateSecret() {
-    return privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32));
+    return privmx::utils::Hex::from(CryptoSuite::randomBytes(32));
 }
 
 std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncKeyV2>> KeyProvider::getKeysAndVerify(
