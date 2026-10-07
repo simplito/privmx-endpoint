@@ -19,6 +19,7 @@ limitations under the License.
 
 #include "privmx/endpoint/store/ChunkBufferedStream.hpp"
 #include "privmx/endpoint/store/RequestApi.hpp"
+#include "privmx/endpoint/store/encryptors/fileData/FileCipher.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -79,6 +80,8 @@ private:
     std::string _checksums;
     uint64_t _fileIndex = 0;
     uint64_t _serverSeq = 0;
+    // Nowe pliki zapisujemy formatem domyslnym; odczyt dobiera format po `cipherType` z meta.
+    FileCipher _cipher = FileCipher::defaultForWrite();
 };
 
 } // namespace store

@@ -370,10 +370,12 @@ FileDecryptionParams StoreApiImpl::getFileDecryptionParams(
 }
 
 int64_t StoreApiImpl::createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams) {
-    if (storeFileDecryptionParams.cipherType != 1) {
-        throw UnsupportedCipherTypeException(
-            std::to_string(storeFileDecryptionParams.cipherType) + " expected type: 1"
-        );
+    // Odrzucamy tylko format, ktorego ten build nie zna - a nie wszystko poza jedynka.
+    // `FileCipher` niesie wtedy caly uklad pliku: dlugosc IV, krok tablicy skrotow i arytmetyke
+    // rozmiarow. Rejestr odczytu jest kompletny w kazdym buildzie, zeby klient nie przestal
+    // czytac wlasnych plikow po zmianie formatu zapisu.
+    if (!FileCipher::isKnown(storeFileDecryptionParams.cipherType)) {
+        throw UnsupportedCipherTypeException("cipherType: " + std::to_string(storeFileDecryptionParams.cipherType));
     }
     std::shared_ptr<FileReadHandle> handle = _fileHandleManager.createFileReadHandle(
         storeFileDecryptionParams, _serverRequestChunkSize, _serverApi, _chunksCache

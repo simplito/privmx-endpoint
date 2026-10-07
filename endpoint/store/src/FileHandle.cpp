@@ -75,13 +75,14 @@ FileReadHandle::FileReadHandle(
           decryptionParams.originalSize,
           false
       ) {
-    _chunkEncryptor = std::make_shared<ChunkEncryptor>(decryptionParams.key, decryptionParams.chunkSize);
+    const FileCipher cipher = FileCipher::forType(decryptionParams.cipherType);
+    _chunkEncryptor = std::make_shared<ChunkEncryptor>(decryptionParams.key, decryptionParams.chunkSize, cipher);
     _chunkDataProvider = std::make_shared<ChunkDataProvider>(
         server, _chunkEncryptor, _chunkEncryptor->getEncryptedChunkSize(), serverChunkSize, decryptionParams.fileId,
         decryptionParams.sizeOnServer, decryptionParams.version, std::move(cache)
     );
     _hashList = std::make_shared<HmacList>(
-        decryptionParams.key, decryptionParams.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge()
+        decryptionParams.key, decryptionParams.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge(), cipher
     );
     _chunkReader = std::make_shared<ChunkReader>(_chunkDataProvider, _chunkEncryptor, _hashList, decryptionParams);
     _fileReader = std::make_shared<FileReader>(_chunkReader, decryptionParams);
@@ -199,8 +200,9 @@ FileReadWriteHandle::FileReadWriteHandle(
           true
       ) {
     std::shared_ptr<FileMetaEncryptor> fileMetaEncryptor = std::make_shared<FileMetaEncryptor>(userPrivKey, connection);
+    const FileCipher cipher = FileCipher::forType(encryptionParams.fileDecryptionParams.cipherType);
     std::shared_ptr<ChunkEncryptor> chunkEncryptor = std::make_shared<ChunkEncryptor>(
-        encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.chunkSize
+        encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.chunkSize, cipher
     );
     std::shared_ptr<ChunkDataProvider> chunkDataProvider = std::make_shared<ChunkDataProvider>(
         serverApi, chunkEncryptor, chunkEncryptor->getEncryptedChunkSize(), serverChunkSize,
@@ -209,7 +211,7 @@ FileReadWriteHandle::FileReadWriteHandle(
     );
     std::shared_ptr<IHashList> hashList = std::make_shared<HmacList>(
         encryptionParams.fileDecryptionParams.key, encryptionParams.fileDecryptionParams.hmac,
-        chunkDataProvider->getCurrentChecksumsFromBridge()
+        chunkDataProvider->getCurrentChecksumsFromBridge(), cipher
     );
     std::shared_ptr<IChunkReader> chunkReader = std::make_shared<ChunkReader>(
         chunkDataProvider, chunkEncryptor, hashList, encryptionParams.fileDecryptionParams

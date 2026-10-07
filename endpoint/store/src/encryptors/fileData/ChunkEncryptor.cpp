@@ -11,42 +11,30 @@ limitations under the License.
 
 #include "privmx/endpoint/store/encryptors/fileData/ChunkEncryptor.hpp"
 
-#include "privmx/endpoint/store/StoreException.hpp"
-#include "privmx/endpoint/store/StoreTypes.hpp"
-#include <Poco/ByteOrder.h>
-#include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/store/StoreException.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-ChunkEncryptor::ChunkEncryptor(std::string key, size_t chunkSize) : _key(key), _chunkSize(chunkSize) {}
+ChunkEncryptor::ChunkEncryptor(std::string key, size_t chunkSize, FileCipher cipher)
+    : _key(key), _chunkSize(chunkSize), _cipher(cipher) {}
 
 IChunkEncryptor::Chunk ChunkEncryptor::encrypt(const uint64_t index, const std::string& data) {
-    std::string chunkKey = privmx::crypto::Crypto::sha256(_key + chunkIndexToBE(index));
-    std::string iv = core::CryptoSuite::randomBytes(IV_SIZE);
-    std::string cipher = privmx::crypto::Crypto::aes256CbcPkcs7Encrypt(data, chunkKey, iv);
-    std::string ivWithCipher = iv + cipher;
-    std::string hmac = privmx::crypto::Crypto::hmacSha256(chunkKey, ivWithCipher);
-    return {.data = hmac + ivWithCipher, .hmac = hmac};
+    return _cipher.encryptChunk(_cipher.chunkKey(_key, index), data);
 }
 
 bool ChunkEncryptor::hasHash(const std::string& chunkData, const std::string& hash) const {
-    return chunkData.size() >= HMAC_SIZE && chunkData.substr(0, HMAC_SIZE) == hash;
+    return chunkData.size() >= _cipher.hashLength() && chunkData.substr(0, _cipher.hashLength()) == hash;
 }
 
 std::string ChunkEncryptor::decrypt(const uint64_t index, const Chunk& chunk) {
-    std::string chunkKey = privmx::crypto::Crypto::sha256(_key + chunkIndexToBE(index));
-    std::string hmac = chunk.data.substr(0, HMAC_SIZE);
-    if (chunk.hmac != hmac) {
+    // Dwa rozne bledy, bo wskazuja na co innego. Ten pierwszy znaczy, ze skrot z tablicy skrotow
+    // nie pasuje do ramki, czyli ze serwer podal chunk z innego miejsca pliku. Dopiero drugi,
+    // w `FileCipher`, znaczy, ze sama ramka jest naruszona.
+    if (!hasHash(chunk.data, chunk.hmac)) {
         throw FileChunkInvalidChecksumException();
     }
-    std::string hmac2 = crypto::Crypto::hmacSha256(chunkKey, chunk.data.substr(HMAC_SIZE));
-    if (hmac != hmac2) {
-        throw FileChunkInvalidCipherChecksumException();
-    }
-    std::string iv = chunk.data.substr(HMAC_SIZE, IV_SIZE);
-    std::string plain = crypto::Crypto::aes256CbcPkcs7Decrypt(chunk.data.substr(HMAC_SIZE + IV_SIZE), chunkKey, iv);
-    return plain;
+    return _cipher.decryptChunk(_cipher.chunkKey(_key, index), chunk);
 }
 
 size_t ChunkEncryptor::getPlainChunkSize() {
@@ -54,36 +42,14 @@ size_t ChunkEncryptor::getPlainChunkSize() {
 }
 
 size_t ChunkEncryptor::getEncryptedChunkSize() {
-    auto CHUNK_PADDINGSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
-    return _chunkSize + CHUNK_PADDINGSize + HMAC_SIZE + IV_SIZE;
+    return _cipher.encryptedChunkSize(_chunkSize);
 }
 
 uint64_t ChunkEncryptor::getEncryptedFileSize(const uint64_t& fileSize) {
-    if (fileSize == 0) {
-        return 0;
-    }
-    auto parts = (fileSize + _chunkSize - 1) / _chunkSize;
-    auto lastChunkSize = fileSize % _chunkSize;
-    if (lastChunkSize == 0) {
-        lastChunkSize = _chunkSize;
-    }
-    // 16 iv + 32 hmac + max 16 padding
-    auto fullChunkPaddingSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
-    auto lastChunkPaddingSize = CHUNK_PADDING - (lastChunkSize % CHUNK_PADDING);
-    auto encryptedFileSize = (parts - 1) * (_chunkSize + HMAC_SIZE + IV_SIZE + fullChunkPaddingSize) +
-        lastChunkSize +
-        HMAC_SIZE +
-        IV_SIZE +
-        lastChunkPaddingSize;
-    return encryptedFileSize;
+    return _cipher.encryptedFileSize(fileSize, _chunkSize);
 }
 
 void ChunkEncryptor::sync(std::string key, size_t chunkSize) {
     _key = key;
     _chunkSize = chunkSize;
-}
-
-std::string ChunkEncryptor::chunkIndexToBE(const uint64_t index) {
-    uint32_t index_be = Poco::ByteOrder::toBigEndian(static_cast<uint32_t>(index));
-    return std::string((char*)&index_be, 4);
 }

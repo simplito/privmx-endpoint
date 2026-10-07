@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STORE_CHUNKENCRYPTOR_HPP_
 #define _PRIVMXLIB_ENDPOINT_STORE_CHUNKENCRYPTOR_HPP_
 
+#include "privmx/endpoint/store/encryptors/fileData/FileCipher.hpp"
 #include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
 #include <cstdint>
 #include <string>
@@ -22,7 +23,8 @@ namespace store {
 
 class ChunkEncryptor : public IChunkEncryptor {
 public:
-    ChunkEncryptor(std::string key, size_t chunkSize);
+    /// Format domyslny dla zapisu; przy odczycie nalezy podac ten, ktory niesie meta pliku.
+    ChunkEncryptor(std::string key, size_t chunkSize, FileCipher cipher = FileCipher::defaultForWrite());
     IChunkEncryptor::Chunk encrypt(const uint64_t index, const std::string& data) override;
     std::string decrypt(const uint64_t index, const Chunk& chunk) override;
     bool hasHash(const std::string& chunkData, const std::string& hash) const override;
@@ -32,10 +34,9 @@ public:
     void sync(std::string key, size_t chunkSize) override;
 
 private:
-    std::string chunkIndexToBE(const uint64_t index);
-
     std::string _key;
     size_t _chunkSize;
+    FileCipher _cipher;
 };
 } // namespace store
 } // namespace endpoint

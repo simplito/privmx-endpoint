@@ -69,9 +69,10 @@ ChunksSentInfo ChunkStreamer::finalize(const std::string& data) {
     }
     commitFile();
     return {
-        .cipherType = 1,
+        // Znacznik formatu laduje w wewnetrznym meta pliku i to po nim odczyt dobiera `FileCipher`.
+        .cipherType = _cipher.type(),
         .key = _key,
-        .hmac = privmx::crypto::Crypto::hmacSha256(_key, _checksums),
+        .hmac = _cipher.topHash(_key, _checksums),
         .chunkSize = _chunkSize,
         .requestId = _requestId
     };
@@ -97,27 +98,17 @@ FileSizeResult ChunkStreamer::getFileSize() const {
     if (_fileSize == 0) {
         return {.size = 0, .checksumSize = 0};
     }
-    uint64_t parts = (_fileSize + _chunkSize - 1) / _chunkSize;
-    uint64_t lastChunkSize = _fileSize % _chunkSize;
-    if (lastChunkSize == 0) {
-        lastChunkSize = _chunkSize;
-    }
-    uint64_t fullChunkPaddingSize = CHUNK_PADDING - (_chunkSize % CHUNK_PADDING);
-    uint64_t lastChunkPaddingSize = CHUNK_PADDING - (lastChunkSize % CHUNK_PADDING);
-    uint64_t serverFileSize = (parts - 1) * (_chunkSize + HMAC_SIZE + IV_SIZE + fullChunkPaddingSize) +
-        lastChunkSize +
-        HMAC_SIZE +
-        IV_SIZE +
-        lastChunkPaddingSize;
-    return {.size = serverFileSize, .checksumSize = parts * HMAC_SIZE};
+    const uint64_t parts = (_fileSize + _chunkSize - 1) / _chunkSize;
+    return {
+        .size = _cipher.encryptedFileSize(_fileSize, _chunkSize),
+        .checksumSize = parts * _cipher.hashLength()
+    };
 }
 ChunkStreamer::PreparedChunk ChunkStreamer::prepareChunk(const std::string& data) {
-    std::string chunkKey = privmx::crypto::Crypto::sha256(_key + getSeqBE());
-    std::string iv = core::CryptoSuite::randomBytes(IV_SIZE);
-    std::string cipher = privmx::crypto::Crypto::aes256CbcPkcs7Encrypt(data, chunkKey, iv);
-    std::string ivWithCipher = iv + cipher;
-    std::string hmac = privmx::crypto::Crypto::hmacSha256(chunkKey, ivWithCipher);
-    return {.data = hmac + ivWithCipher, .hmac = hmac};
+    // Ten sam format co przy odczycie - `FileCipher` jest jedynym miejscem, ktore go zna.
+    // Wczesniej byla tu kopia logiki z `ChunkEncryptor`, czyli dwa miejsca do utrzymania zgodnymi.
+    const auto chunk = _cipher.encryptChunk(_cipher.chunkKey(_key, _seq), data);
+    return {.data = chunk.data, .hmac = chunk.hmac};
 }
 
 void ChunkStreamer::commitFile() {

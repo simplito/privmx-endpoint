@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STORE_HMACLIST_HPP_
 
 #include "privmx/endpoint/store/StoreTypes.hpp"
+#include "privmx/endpoint/store/encryptors/fileData/FileCipher.hpp"
 #include "privmx/endpoint/store/interfaces/IHashList.hpp"
 #include <cstdint>
 #include <optional>
@@ -24,7 +25,13 @@ namespace store {
 
 class HmacList : public IHashList {
 public:
-    HmacList(const std::string& topHashKey, const std::string& topHash, const std::string& hashes = std::string());
+    /// Krok tablicy i skrot wierzcholkowy pochodza z formatu pliku, nie ze stalej - patrz `FileCipher`.
+    HmacList(
+        const std::string& topHashKey,
+        const std::string& topHash,
+        const std::string& hashes = std::string(),
+        FileCipher cipher = FileCipher::defaultForWrite()
+    );
     virtual void sync(const std::string& topHashKey, const std::string& topHash, const std::string& hashes) override;
     virtual void setAll(const std::string& hashes) override;
     virtual void set(const uint64_t& chunkIndex, const std::string& hash, bool truncate = false) override;
@@ -33,13 +40,14 @@ public:
     virtual const std::string& getTopHash() override;
     virtual bool verifyHash(const uint64_t& chunkIndex, const std::string& hash) override;
     virtual bool verifyTopHash(const std::string& topHash) override;
-    virtual inline uint64_t getHashSize() override { return HMAC_SIZE; };
+    virtual inline uint64_t getHashSize() override { return _cipher.hashLength(); };
 
 private:
     std::string _topHashKey;
     std::optional<std::string> _topHash;
     uint64_t _size = 0;
     std::string _hashes;
+    FileCipher _cipher;
 };
 
 } // namespace store
