@@ -8,6 +8,7 @@
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
+#include <privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 
 using namespace privmx::endpoint;
@@ -767,7 +768,10 @@ TEST_F(GroupTest, envelope_file_range_read_as_documented) {
     // The documentation promises the output begins exactly at `from`, despite `from` landing mid-chunk.
     EXPECT_EQ(out, plain.substr(from, length));
     // ...and that the offset it hands back points at a chunk boundary, never into the middle of one.
-    const std::size_t encryptedChunk = 1 + 16 + (128 * 1024 + 16) + 16;
+    // Brana ze zrodla, a nie przepisana. Poprzednio stala byla tu rozpisana recznie jako uklad ramki
+    // CBC (`1 + 16 + (plain + 16) + 16`) i rozjechala sie z kodem, gdy ramka stala sie AEAD - test
+    // liczyl reszte z dzielenia przez 131121, podczas gdy chunki stoja co 131101.
+    const std::size_t encryptedChunk = group::GroupEnvelopeEncryptor::ENCRYPTED_CHUNK_SIZE;
     EXPECT_EQ(api.seekInEncryptedFile(api.beginFileDecryption(envelope), from) % encryptedChunk, 0);
 
     // A range reader that stops once it has enough ends mid-chunk, with bytes buffered and most of the file

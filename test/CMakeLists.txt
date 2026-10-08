@@ -136,6 +136,17 @@ target_link_libraries(test_unit_LadderMathTest privmxendpointgroup GTest::GTest 
 
 add_executable(test_unit_StoreFileFormatTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/StoreFileFormatTest.cpp)
 target_link_libraries(test_unit_StoreFileFormatTest privmx privmxendpointcore privmxendpointstore GTest::GTest GTest::Main)
+# Test dostaje te sama definicje co biblioteka, zeby moc sprawdzic, ze opcja CMake **doszla**
+# do kompilacji `privmxendpointstore`. Bez tego ustawienie opcji moze cicho nie zadzialac
+# (tak bylo, gdy `set_target_properties(... COMPILE_DEFINITIONS ...)` nadpisywalo definicje).
+target_compile_definitions(test_unit_StoreFileFormatTest
+    PRIVATE PRIVMX_DEFAULT_FILE_CIPHER_ID=${PRIVMX_DEFAULT_FILE_CIPHER_ID})
+
+# Warstwa zwinnosci algorytmicznej kontenera: rejestr zestawow i ramka ze znacznikiem.
+add_executable(test_unit_CryptoSuiteTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/CryptoSuiteTest.cpp)
+target_link_libraries(test_unit_CryptoSuiteTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
+target_compile_definitions(test_unit_CryptoSuiteTest
+    PRIVATE PRIVMX_DEFAULT_CRYPTO_SUITE_ID=${PRIVMX_DEFAULT_CRYPTO_SUITE_ID})
 
 # Real EC keys and ECIES (builds, climbs, and removes members from trees entirely in-process; still no server/docker/network)
 add_executable(test_unit_TreeKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeKeysTest.cpp)

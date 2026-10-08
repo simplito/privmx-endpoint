@@ -42,10 +42,11 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  *   u8 x            one octet
  *   u8len x         one length octet, then x; `EnvelopeWriter::putField` refuses anything above 255 bytes
  *   u32be / u64be   fixed-width big-endian integer
- *   encrypt(p, k)   `core::DataInnerEncryptorV4`, CipherType 4: `0x04 | cbc(zero16 || p) | hmac tag16`. The
- *                   IV is random but not transmitted — the cipher prepends a 16-byte zero block and decrypt
- *                   reuses that block's ciphertext as the CBC IV. 16 bytes of overhead either way, which is
- *                   the arithmetic `encryptedChunkSizeFor` depends on and a test pins.
+ *   encrypt(p, k)   `core::DataInnerEncryptorV4`, ramka AEAD: `u8 suiteId | iv | ciphertext || tag`.
+ *                   Szyfrogram ma dlugosc jawnego tekstu - brak dopelnienia blokowego, inaczej niz
+ *                   w zastapionym tu kodowaniu CBC. Narzut jest staly i to z niego liczy sie
+ *                   `encryptedChunkSizeFor`; nie przepisywac tej arytmetyki w zadnym innym miejscu
+ *                   (test e2e mial ja rozpisana recznie i rozjechal sie przy zmianie ramki).
  *   sign(p, priv)   `signAndPackDataWithSignature`; covers only the buffer handed to it, which is why every
  *                   type repeats its header inside the sealed payload.
  *
