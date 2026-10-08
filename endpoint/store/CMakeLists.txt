@@ -9,6 +9,13 @@ else()
 endif()
 target_include_directories(privmxendpointstore PUBLIC ${INCLUDE_DIRS} PUBLIC ${INCLUDE_PUB_DIRS})
 target_compile_options(privmxendpointstore PRIVATE -fPIC -Wall -Wextra -Wno-narrowing)
+# MINIMAL_BUILD trafia tu razem z reszta, bo `set_target_properties(... COMPILE_DEFINITIONS ...)`
+# nadpisuje cala wlasciwosc i kasowalo definicje dodane wczesniej. `target_compile_definitions` dokleja.
+#
+# PRIVMX_DEFAULT_FILE_CIPHER_ID: format zapisu danych pliku. Patrz glowny CMakeLists.
+target_compile_definitions(privmxendpointstore
+    PRIVATE MINIMAL_BUILD
+    PRIVATE PRIVMX_DEFAULT_FILE_CIPHER_ID=${PRIVMX_DEFAULT_FILE_CIPHER_ID})
 target_link_libraries(privmxendpointstore PRIVATE Poco::Foundation privmx privmxendpointcore PUBLIC privmxendpointgroup)
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxendpointstore PROPERTIES POSITION_INDEPENDENT_CODE True)
@@ -21,4 +28,3 @@ endif()
 if(PRIVMX_WERROR)
     target_compile_options(privmxendpointstore PRIVATE -Werror)
 endif()
-set_target_properties(privmxendpointstore PROPERTIES COMPILE_DEFINITIONS "MINIMAL_BUILD")

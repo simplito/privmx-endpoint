@@ -27,6 +27,47 @@ message(STATUS "Conan build - PRIVMX_CONAN=${PRIVMX_CONAN}")
 option(PRIVMX_INSTALL_PRIVATE_HEADERS OFF)
 message(STATUS "Install private header files - PRIVMX_INSTALL_PRIVATE_HEADERS=${PRIVMX_INSTALL_PRIVATE_HEADERS}")
 
+# Zestaw algorytmow uzywany do ZAPISU danych kontenerow. Nie ma wplywu na odczyt: rejestr
+# odczytu jest kompletny w kazdym buildzie, bo kazda ramka niesie wlasny znacznik zestawu.
+# Gdyby ta opcja zawezala takze odczyt, klienci zbudowani roznymi wartosciami przestaliby
+# czytac nawzajem swoje dane.
+#
+# Nazwy odpowiadaja wartosciom pola `cryptoSuite` w polityce kontenera (`CryptoSuite::policyValue`).
+set(PRIVMX_DEFAULT_CRYPTO_SUITE "aes256gcm-sha256" CACHE STRING "Crypto suite used for writing container data")
+set_property(CACHE PRIVMX_DEFAULT_CRYPTO_SUITE PROPERTY STRINGS "aes256gcm-sha256" "aes256gcm-sha512")
+
+if(PRIVMX_DEFAULT_CRYPTO_SUITE STREQUAL "aes256gcm-sha256")
+    set(PRIVMX_DEFAULT_CRYPTO_SUITE_ID 1)
+elseif(PRIVMX_DEFAULT_CRYPTO_SUITE STREQUAL "aes256gcm-sha512")
+    set(PRIVMX_DEFAULT_CRYPTO_SUITE_ID 2)
+else()
+    message(FATAL_ERROR
+        "Unknown PRIVMX_DEFAULT_CRYPTO_SUITE='${PRIVMX_DEFAULT_CRYPTO_SUITE}'. "
+        "Known values: aes256gcm-sha256, aes256gcm-sha512")
+endif()
+message(STATUS "Crypto suite for writing - PRIVMX_DEFAULT_CRYPTO_SUITE=${PRIVMX_DEFAULT_CRYPTO_SUITE} (id ${PRIVMX_DEFAULT_CRYPTO_SUITE_ID})")
+
+# Format danych pliku w `store`, uzywany do ZAPISU nowych plikow. Celowo osobna os niz
+# PRIVMX_DEFAULT_CRYPTO_SUITE: zestawy kontenerow roznia sie haszem, a formaty plikow trybem
+# szyfru, wiec jedno nie wynika z drugiego. Rozdzielenie pozwala tez na migracje po kawalku -
+# nowe kontenery przy starym formacie plikow i odwrotnie.
+#
+# Odczyt jest kompletny niezaleznie od tej wartosci: `cipherType` kazdego pliku siedzi w jego
+# wewnetrznym meta i to po nim dobierany jest format.
+set(PRIVMX_DEFAULT_FILE_CIPHER "aes256cbc-hmac-sha256" CACHE STRING "File data format used for writing new files")
+set_property(CACHE PRIVMX_DEFAULT_FILE_CIPHER PROPERTY STRINGS "aes256cbc-hmac-sha256" "aes256gcm")
+
+if(PRIVMX_DEFAULT_FILE_CIPHER STREQUAL "aes256cbc-hmac-sha256")
+    set(PRIVMX_DEFAULT_FILE_CIPHER_ID 1)
+elseif(PRIVMX_DEFAULT_FILE_CIPHER STREQUAL "aes256gcm")
+    set(PRIVMX_DEFAULT_FILE_CIPHER_ID 2)
+else()
+    message(FATAL_ERROR
+        "Unknown PRIVMX_DEFAULT_FILE_CIPHER='${PRIVMX_DEFAULT_FILE_CIPHER}'. "
+        "Known values: aes256cbc-hmac-sha256, aes256gcm")
+endif()
+message(STATUS "File data format for writing - PRIVMX_DEFAULT_FILE_CIPHER=${PRIVMX_DEFAULT_FILE_CIPHER} (cipherType ${PRIVMX_DEFAULT_FILE_CIPHER_ID})")
+
 
 set(PRIVMX_DRIVER_NET ON)
 

@@ -24,7 +24,8 @@ IChunkEncryptor::Chunk ChunkEncryptor::encrypt(const uint64_t index, const std::
 }
 
 bool ChunkEncryptor::hasHash(const std::string& chunkData, const std::string& hash) const {
-    return chunkData.size() >= _cipher.hashLength() && chunkData.substr(0, _cipher.hashLength()) == hash;
+    // Gdzie w ramce lezy skrot, wie format - patrz `FileCipher::frameCarriesHash`.
+    return _cipher.frameCarriesHash(chunkData, hash);
 }
 
 std::string ChunkEncryptor::decrypt(const uint64_t index, const Chunk& chunk) {

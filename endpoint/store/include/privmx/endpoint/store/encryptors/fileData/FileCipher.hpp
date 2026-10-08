@@ -42,8 +42,21 @@ namespace store {
  */
 class FileCipher {
 public:
-    /// AES-256-CBC + PKCS#7, HMAC-SHA256 nad `IV || szyfrogram`, klucz chunku `sha256(fileKey || BE32(index))`.
+    /**
+     * AES-256-CBC + PKCS#7, HMAC-SHA256 nad `IV || szyfrogram`.
+     * Ramka: `[32 B HMAC][16 B IV][szyfrogram]`; wpisem tablicy skrotow jest HMAC z poczatku ramki.
+     */
     static constexpr int64_t AES_CBC_HMAC_SHA256 = 1;
+
+    /**
+     * AES-256-GCM.
+     * Ramka: `[12 B IV][szyfrogram || 16 B tag]`; wpisem tablicy skrotow jest tag z **konca** ramki.
+     *
+     * Wzgledem formatu 1: brak dopelnienia blokowego i o polowe mniejszy krok tablicy skrotow
+     * (16 zamiast 32 B), wiec plik na serwerze i jego tablica skrotow sa mniejsze. Uwierzytelnienie
+     * robi sam tryb AEAD, zamiast osobnego HMAC-a doklejanego przed ramke.
+     */
+    static constexpr int64_t AES_GCM = 2;
 
     /**
      * @brief Format o podanym znaczniku.
@@ -68,6 +81,16 @@ public:
 
     /// @brief Rozmiar bloku dopelnienia; 0, gdy format nie dopelnia.
     std::size_t paddingBlock() const;
+
+    /**
+     * @brief Czy ramka niesie podany skrot chunku.
+     *
+     * Sprawdzane, zanim cokolwiek zostanie odszyfrowane: lapie przypadek, w ktorym serwer poda
+     * chunk z innego miejsca pliku. Gdzie w ramce lezy skrot, zalezy od formatu - w formacie 1
+     * stoi na poczatku, w formacie 2 jest tagiem AEAD na koncu - i dlatego wie o tym `FileCipher`,
+     * a nie wolajacy.
+     */
+    bool frameCarriesHash(const std::string& chunkData, const std::string& hash) const;
 
     /// @brief Klucz chunku o danym indeksie. Indeks wchodzi do klucza, wiec chunki nie sa zamienne.
     std::string chunkKey(const std::string& fileKey, std::uint64_t index) const;

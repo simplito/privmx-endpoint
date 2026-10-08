@@ -51,8 +51,28 @@ constexpr std::array<SuiteSpec, 2> SUITES{{
     {SuiteId::Aes256GcmSha512, cs::SymAlg::Aes256Gcm, cs::Hash::Sha512, cs::Kdf::Kdf, 32, 12, "aes256gcm-sha512"},
 }};
 
-/// Zestaw uzywany do zapisu, gdy nic nie wskazuje innego (poziom 1 wyboru formatu).
-constexpr SuiteId DEFAULT_WRITE_SUITE = SuiteId::Aes256GcmSha256;
+/**
+ * Zestaw uzywany do zapisu, gdy nic nie wskazuje innego (poziom 1 wyboru formatu).
+ *
+ * Ustawiany przy konfiguracji buildu przez `PRIVMX_DEFAULT_CRYPTO_SUITE`. Dotyczy **wylacznie
+ * zapisu** - `SUITES` powyzej pozostaje kompletne niezaleznie od tej wartosci, bo kazda ramka
+ * niesie wlasny znacznik. Klient zbudowany z jedna wartoscia czyta dane zapisane kazda inna.
+ */
+#ifndef PRIVMX_DEFAULT_CRYPTO_SUITE_ID
+#define PRIVMX_DEFAULT_CRYPTO_SUITE_ID 1
+#endif
+constexpr SuiteId DEFAULT_WRITE_SUITE = static_cast<SuiteId>(PRIVMX_DEFAULT_CRYPTO_SUITE_ID);
+
+/// Blad budowania zamiast wyjatku przy pierwszym zapisie, gdyby ktos podal nieznany identyfikator.
+constexpr bool defaultWriteSuiteIsKnown() {
+    for (const auto& spec : SUITES) {
+        if (spec.id == DEFAULT_WRITE_SUITE) {
+            return true;
+        }
+    }
+    return false;
+}
+static_assert(defaultWriteSuiteIsKnown(), "PRIVMX_DEFAULT_CRYPTO_SUITE_ID nie odpowiada zadnemu zestawowi");
 
 /// Dlugosc tagu AEAD doklejanego przez providera do szyfrogramu.
 constexpr std::size_t AEAD_TAG_LENGTH = 16;
@@ -206,7 +226,10 @@ std::string CryptoSuite::decrypt(const std::string& key, const std::string& fram
         const SuiteSpec& spec = requireSpec(readSuiteId(framed));
         requireKeyLength(spec, key, false);
         const std::size_t headerLength = 1 + spec.ivLength;
-        if (framed.size() <= headerLength + AEAD_TAG_LENGTH) {
+        // Rownosc jest poprawna: ramka dlugosci dokladnie `naglowek + tag` to zaszyfrowany
+        // **pusty** tekst jawny. Odrzucanie jej czynilo puste pole nieodczytywalnym, mimo ze
+        // zapis takiego pola przechodzil bez zarzutu.
+        if (framed.size() < headerLength + AEAD_TAG_LENGTH) {
             throw MalformedCryptoFrameException("frame shorter than its header, iv and tag");
         }
         const std::string tag = framed.substr(0, 1);

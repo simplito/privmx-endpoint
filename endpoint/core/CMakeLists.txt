@@ -9,6 +9,14 @@ else()
 endif()
 target_include_directories(privmxendpointcore PUBLIC ${INCLUDE_DIRS} PUBLIC ${INCLUDE_PUB_DIRS})
 target_compile_options(privmxendpointcore PRIVATE -fPIC -Wall -Wextra)
+# MINIMAL_BUILD bylo tu ustawiane przez `set_target_properties(... COMPILE_DEFINITIONS ...)`, ktore
+# **nadpisuje** cala wlasciwosc - kazda definicja dodana wczesniej przez `target_compile_definitions`
+# cicho znikala. `target_compile_definitions` dokleja, wiec kolejnosc przestaje mie znaczenie.
+#
+# PRIVMX_DEFAULT_CRYPTO_SUITE_ID: wybor zestawu zapisu (poziom 1). Patrz glowny CMakeLists.
+target_compile_definitions(privmxendpointcore
+    PRIVATE MINIMAL_BUILD
+    PRIVATE PRIVMX_DEFAULT_CRYPTO_SUITE_ID=${PRIVMX_DEFAULT_CRYPTO_SUITE_ID})
 # privmxcryptolib jest PUBLIC, bo publiczne naglowki core (crypto/PrivateKey.hpp i spokrewnione)
 # wystawiaja typy z pmx-crypto - konsumenci potrzebuja jego sciezek include.
 target_link_libraries(privmxendpointcore PRIVATE Poco::Foundation privmx PUBLIC privmxcryptolib)
@@ -23,7 +31,6 @@ endif()
 if(PRIVMX_WERROR)
     target_compile_options(privmxendpointcore PRIVATE -Werror)
 endif()
-set_target_properties(privmxendpointcore PROPERTIES COMPILE_DEFINITIONS "MINIMAL_BUILD")
 
 if(PRIVMX_ENABLE_TESTS)
     include(FindGTest)

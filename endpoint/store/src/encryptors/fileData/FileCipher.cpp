@@ -28,20 +28,53 @@ struct CipherSpec {
     int64_t type;
     std::size_t ivLength;
     std::size_t hashLength;
+    /// 0 oznacza format bez dopelnienia blokowego.
     std::size_t paddingBlock;
+    /**
+     * Bajty, ktore ramka dokłada do jawnego tekstu **poza** dopelnieniem.
+     *
+     * Podane wprost, a nie liczone z `ivLength + hashLength`, bo te dwie wartosci skladaja sie na
+     * narzut tylko przypadkiem: w formacie 1 skrot jest doklejany przed ramke, w formacie 2 tag
+     * jest czescia wyjscia szyfru. Format, w ktorym skrot ma inna dlugosc niz uwierzytelniacz
+     * w ramce, rozjechalby taki wzor po cichu.
+     */
+    std::size_t fixedOverhead;
 };
 
 /**
  * Rejestr formatow danych pliku.
  *
- * Jeden wpis: format wydany dotychczas. Stale pochodza z `StoreTypes.hpp`, bo to one opisywaly
- * ten format, zanim dostal on nazwe.
+ * Stale formatu 1 pochodza z `StoreTypes.hpp`, bo to one opisywaly ten format, zanim dostal nazwe.
+ * Raz wydanej wartosci `cipherType` nie wolno przedefiniowac.
  */
-constexpr std::array<CipherSpec, 1> CIPHERS{{
-    {FileCipher::AES_CBC_HMAC_SHA256, IV_SIZE, HMAC_SIZE, CHUNK_PADDING},
+constexpr std::size_t GCM_IV_LENGTH = 12;
+constexpr std::size_t GCM_TAG_LENGTH = 16;
+
+constexpr std::array<CipherSpec, 2> CIPHERS{{
+    {FileCipher::AES_CBC_HMAC_SHA256, IV_SIZE, HMAC_SIZE, CHUNK_PADDING, HMAC_SIZE + IV_SIZE},
+    {FileCipher::AES_GCM, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0, GCM_IV_LENGTH + GCM_TAG_LENGTH},
 }};
 
-constexpr int64_t DEFAULT_WRITE_CIPHER = FileCipher::AES_CBC_HMAC_SHA256;
+/**
+ * Format uzywany do zapisu nowych plikow; ustawiany przy konfiguracji buildu przez
+ * `PRIVMX_DEFAULT_FILE_CIPHER`. Dotyczy **wylacznie zapisu** - `CIPHERS` pozostaje kompletne
+ * niezaleznie od tej wartosci, bo `cipherType` kazdego pliku siedzi w jego wewnetrznym meta.
+ */
+#ifndef PRIVMX_DEFAULT_FILE_CIPHER_ID
+#define PRIVMX_DEFAULT_FILE_CIPHER_ID 1
+#endif
+constexpr int64_t DEFAULT_WRITE_CIPHER = PRIVMX_DEFAULT_FILE_CIPHER_ID;
+
+/// Blad budowania zamiast wyjatku przy pierwszym zapisie, gdyby podano nieznany identyfikator.
+constexpr bool defaultWriteCipherIsKnown() {
+    for (const auto& spec : CIPHERS) {
+        if (spec.type == DEFAULT_WRITE_CIPHER) {
+            return true;
+        }
+    }
+    return false;
+}
+static_assert(defaultWriteCipherIsKnown(), "PRIVMX_DEFAULT_FILE_CIPHER_ID nie odpowiada zadnemu formatowi");
 
 const CipherSpec* findSpec(int64_t type) {
     for (const auto& spec : CIPHERS) {
@@ -109,6 +142,17 @@ std::string FileCipher::chunkKey(const std::string& fileKey, std::uint64_t index
 IChunkEncryptor::Chunk FileCipher::encryptChunk(const std::string& chunkKey, const std::string& plain) const {
     const CipherSpec& spec = requireSpec(_type);
     const std::string iv = core::CryptoSuite::randomBytes(spec.ivLength);
+
+    if (spec.type == FileCipher::AES_GCM) {
+        // `[IV][szyfrogram || tag]`. Tag jest koncowka wyjscia szyfru i to on trafia do tablicy
+        // skrotow - nie ma tu osobnego uwierzytelniacza doklejanego przed ramke.
+        const std::string cipherWithTag = privmx::crypto::Crypto::aes256GcmEncrypt(plain, chunkKey, iv);
+        return {
+            .data = iv + cipherWithTag,
+            .hmac = cipherWithTag.substr(cipherWithTag.size() - spec.hashLength)
+        };
+    }
+
     const std::string cipher = privmx::crypto::Crypto::aes256CbcPkcs7Encrypt(plain, chunkKey, iv);
     const std::string ivWithCipher = iv + cipher;
     const std::string hmac = privmx::crypto::Crypto::hmacSha256(chunkKey, ivWithCipher);
@@ -117,12 +161,39 @@ IChunkEncryptor::Chunk FileCipher::encryptChunk(const std::string& chunkKey, con
 
 std::string FileCipher::decryptChunk(const std::string& chunkKey, const IChunkEncryptor::Chunk& chunk) const {
     const CipherSpec& spec = requireSpec(_type);
+
+    if (spec.type == FileCipher::AES_GCM) {
+        if (chunk.data.size() < spec.fixedOverhead) {
+            throw FileChunkInvalidCipherChecksumException();
+        }
+        const std::string iv = chunk.data.substr(0, spec.ivLength);
+        // Uwierzytelnienie robi sam tryb AEAD: blad tagu wychodzi z `aes256GcmDecrypt`, a nie
+        // z osobnego porownania. Tlumaczymy go na ten sam wyjatek co w formacie 1, zeby wolajacy
+        // nie musial rozrozniac formatow.
+        try {
+            return privmx::crypto::Crypto::aes256GcmDecrypt(chunk.data.substr(spec.ivLength), chunkKey, iv);
+        } catch (...) {
+            throw FileChunkInvalidCipherChecksumException();
+        }
+    }
+
     const std::string ivWithCipher = chunk.data.substr(spec.hashLength);
     if (privmx::crypto::Crypto::hmacSha256(chunkKey, ivWithCipher) != chunk.data.substr(0, spec.hashLength)) {
         throw FileChunkInvalidCipherChecksumException();
     }
     const std::string iv = ivWithCipher.substr(0, spec.ivLength);
     return privmx::crypto::Crypto::aes256CbcPkcs7Decrypt(ivWithCipher.substr(spec.ivLength), chunkKey, iv);
+}
+
+bool FileCipher::frameCarriesHash(const std::string& chunkData, const std::string& hash) const {
+    const CipherSpec& spec = requireSpec(_type);
+    if (chunkData.size() < spec.fixedOverhead || hash.size() != spec.hashLength) {
+        return false;
+    }
+    if (spec.type == FileCipher::AES_GCM) {
+        return chunkData.compare(chunkData.size() - spec.hashLength, spec.hashLength, hash) == 0;
+    }
+    return chunkData.compare(0, spec.hashLength, hash) == 0;
 }
 
 std::string FileCipher::topHash(const std::string& topHashKey, const std::string& hashes) const {
@@ -133,8 +204,10 @@ std::string FileCipher::topHash(const std::string& topHashKey, const std::string
 std::size_t FileCipher::encryptedChunkSize(std::size_t plainChunkSize) const {
     const CipherSpec& spec = requireSpec(_type);
     // Dopelnienie PKCS#7 dokleja pelny blok takze wtedy, gdy dane sa juz wielokrotnoscia bloku.
-    const std::size_t padding = spec.paddingBlock - (plainChunkSize % spec.paddingBlock);
-    return plainChunkSize + padding + spec.hashLength + spec.ivLength;
+    // Format bez dopelnienia ma `paddingBlock == 0` - wtedy nie wolno dzielic.
+    const std::size_t padding =
+        spec.paddingBlock == 0 ? 0 : spec.paddingBlock - (plainChunkSize % spec.paddingBlock);
+    return plainChunkSize + padding + spec.fixedOverhead;
 }
 
 std::uint64_t FileCipher::encryptedFileSize(std::uint64_t fileSize, std::size_t plainChunkSize) const {
