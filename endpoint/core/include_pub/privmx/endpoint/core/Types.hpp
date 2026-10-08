@@ -287,6 +287,33 @@ struct GroupGrantWithKey {
     int64_t groupEpoch = 0;
 };
 
+struct Error {
+    /**
+     * Error name.
+     */
+    std::string name;
+    /**
+     * Scope telling form witch part of endpoint error was produced.
+     */
+    std::string scope;
+    /**
+     * Unique code representing etach possible core::exception 
+     */
+    unsigned int code;
+    /**
+     * Simple message explaining what happened
+     */
+    std::string message;
+    /**
+     * Extra information if one line message in not enough to show full scope of what happened
+     */
+    std::string description;
+    /**
+     * Equivalent of catching std::exception::what(), it should be expected to be .
+     */
+    std::string _what;
+};
+
 } // namespace core
 } // namespace endpoint
 } // namespace privmx
