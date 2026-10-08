@@ -401,9 +401,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
             commitSentInfo = _inboxHandleManager.commitInboxHandle(inboxHandle);
         } catch (const core::DataDifferentThanDeclaredException& e) {
             _inboxHandleManager.abortInboxHandle(inboxHandle);
-            WritingToEntryInteruptedWrittenDataSmallerThenDeclaredException ex;
-            ex.setCause(e);
-            throw ex;
+            throw WritingToEntryInteruptedWrittenDataSmallerThenDeclaredException(e);
         }
         for (auto fileInfo : commitSentInfo.filesInfo) {
             fileIndex++;
@@ -532,9 +530,7 @@ core::Buffer InboxApiImpl::readFromFile(const int64_t handle, const int64_t leng
         result = core::Buffer::from(handlePtr->read(length));
     } catch (const store::FileVersionMismatchException& e) {
         closeFile(handle);
-        store::FileVersionMismatchHandleClosedException ex;
-        ex.setCause(e);
-        throw ex;
+        throw store::FileVersionMismatchHandleClosedException(e);
     }
     return result;
 }

@@ -139,9 +139,7 @@ std::string ChunkDataProvider::requestSegment(uint32_t segmentNumber) {
         core::Exception converted = core::ExceptionConverter::convert(e);
         if (converted.getCode() == privmx::endpoint::server::StoreFileVersionMismatchException().getCode()) {
             // STORE_FILE_VERSION_MISMATCH
-            store::FileVersionMismatchException ex;
-            ex.setCause(converted);
-            throw ex;
+            throw store::FileVersionMismatchException(converted);
         } else {
             e.rethrow();
         }

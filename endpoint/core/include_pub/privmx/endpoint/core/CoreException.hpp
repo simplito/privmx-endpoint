@@ -8,12 +8,46 @@
     public:                                                                                                            \
         static constexpr unsigned int SCOPE_CODE = (CODE);                                                             \
         NAME() : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16)) {}                                 \
-        NAME(const std::string& description)                                                                           \
-            : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16), description) {}                       \
-        NAME(const std::string& msg, const std::string& name, unsigned int code)                                       \
-            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, std::string()) {}               \
-        NAME(const std::string& msg, const std::string& name, unsigned int code, const std::string& description)       \
-            : privmx::endpoint::core::Exception(msg, name, SCOPE, (CODE << 16) | code, description) {}                 \
+        NAME(std::string description)                                                                                  \
+            : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16), std::move(description)) {}            \
+        NAME(const Exception& cause)                                                                                   \
+            : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16), std::string(), cause) {}              \
+        NAME(std::string description, const Exception& cause)                                                          \
+            : privmx::endpoint::core::Exception(MSG, #NAME, SCOPE, (CODE << 16), std::move(description), cause) {}     \
+        NAME(std::string msg, std::string_view name, unsigned int code)                                                \
+            : privmx::endpoint::core::Exception(std::move(msg), name, SCOPE, (CODE << 16) | code, std::string()) {}    \
+        NAME(std::string msg, std::string_view name, unsigned int code, std::string description)                       \
+            : privmx::endpoint::core::Exception(                                                                       \
+                  std::move(msg),                                                                                      \
+                  name,                                                                                                \
+                  SCOPE,                                                                                               \
+                  (CODE << 16) | code,                                                                                 \
+                  std::move(description)                                                                               \
+              ) {}                                                                                                     \
+        NAME(std::string msg, std::string_view name, unsigned int code, const Exception& cause)                        \
+            : privmx::endpoint::core::Exception(                                                                       \
+                  std::move(msg),                                                                                      \
+                  name,                                                                                                \
+                  SCOPE,                                                                                               \
+                  (CODE << 16) | code,                                                                                 \
+                  std::string(),                                                                                       \
+                  cause                                                                                                \
+              ) {}                                                                                                     \
+        NAME(                                                                                                          \
+            std::string msg,                                                                                           \
+            std::string_view name,                                                                                     \
+            unsigned int code,                                                                                         \
+            std::string description,                                                                                   \
+            const Exception& cause                                                                                     \
+        )                                                                                                              \
+            : privmx::endpoint::core::Exception(                                                                       \
+                  std::move(msg),                                                                                      \
+                  name,                                                                                                \
+                  SCOPE,                                                                                               \
+                  (CODE << 16) | code,                                                                                 \
+                  std::move(description),                                                                              \
+                  cause                                                                                                \
+              ) {}                                                                                                     \
         void rethrow() const override;                                                                                 \
     };                                                                                                                 \
     inline void NAME::rethrow() const {                                                                                \
@@ -25,7 +59,11 @@
     public:                                                                                                            \
         static constexpr unsigned int FULL_CODE = (BASE_SCOPED::SCOPE_CODE << 16) | (CODE);                            \
         NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                      \
-        NAME(const std::string& new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, new_of_description) {}             \
+        NAME(std::string new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, std::move(new_of_description)) {}         \
+        NAME(const Exception& cause)                                                                                   \
+            : BASE_SCOPED(MSG, #NAME, CODE, std::string(), cause) {}                                                   \
+        NAME(std::string new_of_description, const Exception& cause)                                                   \
+            : BASE_SCOPED(MSG, #NAME, CODE, std::move(new_of_description), cause) {}                                   \
         void rethrow() const override;                                                                                 \
     };                                                                                                                 \
     inline void NAME::rethrow() const {                                                                                \
