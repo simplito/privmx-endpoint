@@ -124,11 +124,23 @@ std::vector<server::KeyEntrySet> ContainerBaseApi::buildRosterKeyEntries(const C
     return keyEntries;
 }
 
+bool ContainerBaseApi::isForwardSecrecyEnforced(const Poco::Dynamic::Var& policy) {
+    // Only the container's own policy reaches a client — "default" and "inherit" resolve on the bridge, against
+    // the context. Anything but an explicit opt-out is taken as enforcing, so the stricter answer is the default.
+    return Factory::parsePolicyServerObject(policy).forwardSecrecy.value_or("default") != "no";
+}
+
 void ContainerBaseApi::assertRekeyNotNeeded(const server::ContainerInfoBase& container) {
+    if (!isForwardSecrecyEnforced(container.policy)) {
+        return;
+    }
     assertNoStaleGroups(container.staleGroups);
 }
 
 void ContainerBaseApi::assertRekeyNotNeeded(const ModuleKeys& moduleKeys) {
+    if (!moduleKeys.forwardSecrecyEnforced) {
+        return;
+    }
     assertNoStaleGroups(moduleKeys.staleGroups);
 }
 
@@ -211,7 +223,8 @@ ContainerKeyCache::CachedModuleKeys ContainerBaseApi::convertModuleKeysToContain
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,
         .contextId = moduleKeys.contextId,
-        .moduleVersion = moduleVersion
+        .moduleVersion = moduleVersion,
+        .forwardSecrecyEnforced = moduleKeys.forwardSecrecyEnforced
     };
 }
 
@@ -225,7 +238,8 @@ ModuleKeys ContainerBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat
         .currentKeyId = moduleKeys.currentKeyId,
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,
-        .contextId = moduleKeys.contextId
+        .contextId = moduleKeys.contextId,
+        .forwardSecrecyEnforced = moduleKeys.forwardSecrecyEnforced
     };
 }
 

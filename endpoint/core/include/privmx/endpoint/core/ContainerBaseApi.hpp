@@ -157,7 +157,8 @@ protected:
             .currentKeyId = container.keyId,
             .moduleSchemaVersion = _moduleDataSchemaMapper->getDataStructureVersion(container.data.back()),
             .moduleResourceId = container.resourceId.value_or(""),
-            .contextId = container.contextId
+            .contextId = container.contextId,
+            .forwardSecrecyEnforced = isForwardSecrecyEnforced(container.policy)
         };
     }
 
@@ -194,8 +195,16 @@ protected:
         const std::string& containerSecret
     );
 
-    static bool isRekeyNeeded(const server::ContainerInfoBase& container) { return !container.staleGroups.empty(); }
-    static bool isRekeyNeeded(const ModuleKeys& moduleKeys) { return !moduleKeys.staleGroups.empty(); }
+    // A container whose policy reads `forwardSecrecy: "no"` is never refused an item write over a grantee
+    // group's epoch, so nothing here treats its stale key as a reason to stop or to re-key.
+    static bool isForwardSecrecyEnforced(const Poco::Dynamic::Var& policy);
+
+    static bool isRekeyNeeded(const server::ContainerInfoBase& container) {
+        return isForwardSecrecyEnforced(container.policy) && !container.staleGroups.empty();
+    }
+    static bool isRekeyNeeded(const ModuleKeys& moduleKeys) {
+        return moduleKeys.forwardSecrecyEnforced && !moduleKeys.staleGroups.empty();
+    }
 
     // Refuses a key that is stale — see `ModuleKeys::staleGroups`. Called where the answer decides whether to
     // encrypt; the container update and re-key calls are deliberately not guarded, a re-key being the way out.
