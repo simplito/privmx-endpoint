@@ -1692,3 +1692,75 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_still_reports_a_stale_key_when_the_re_
     EXPECT_EQ(untouched.version, stale.version);
     EXPECT_EQ(untouched.staleGroups.size(), 1);
 }
+
+TEST_F(ThreadUsingGroupsTest, sendMessage_to_a_stale_thread_is_accepted_when_forward_secrecy_is_off) {
+    // `forwardSecrecy: "no"` is the container's opt-out, and the bridge honours it by accepting an item write
+    // under a key wrapped to a superseded group epoch. The endpoint must not re-key, or refuse, ahead of it.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(),
+            std::vector<core::UserWithPubKey>{user(1), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("fs_off_group_pub"),
+            core::Buffer::from("fs_off_group_priv")
+        );
+    });
+    ASSERT_FALSE(groupId.empty());
+
+    group::Group sharedGroup;
+    ASSERT_NO_THROW({ sharedGroup = groupApi->getGroup(groupId); });
+    ASSERT_EQ(sharedGroup.statusCode, 0);
+
+    // user_2 may write to T but may not re-key it — the member an auto-rotation strands.
+    core::ContainerPolicy policy;
+    policy.rotateKeys = "manager";
+    policy.forwardSecrecy = "no";
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = threadApi->createThread(
+            contextId(),
+            std::vector<core::UserWithPubKey>{user(1), user(2)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("fs_off_thread_public"),
+            core::Buffer::from("fs_off_thread_private"),
+            policy,
+            std::vector<core::GroupGrantWithKey>{
+                {.groupId = groupId, .role = "user", .groupPubKey = sharedGroup.groupPubKey}
+            }
+        );
+    });
+    ASSERT_FALSE(threadId.empty());
+
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {userId(3)}); });
+
+    thread::Thread stale;
+    ASSERT_NO_THROW({ stale = threadApi->getThread(threadId); });
+    // The bridge still reports the staleness — what the opt-out changes is that it no longer blocks a write.
+    ASSERT_EQ(stale.staleGroups.size(), 1);
+
+    disconnect();
+    connectAs(2);
+
+    std::string messageId;
+    EXPECT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            threadId,
+            core::Buffer::from("fs_off_public"),
+            core::Buffer::from("fs_off_private"),
+            core::Buffer::from("fs_off_data")
+        );
+    });
+    ASSERT_FALSE(messageId.empty());
+
+    thread::Message message;
+    ASSERT_NO_THROW({ message = threadApi->getMessage(messageId); });
+    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(message.data.stdString(), "fs_off_data");
+
+    // It went out under the thread's existing key: no re-key was attempted, so none could be denied.
+    thread::Thread after;
+    ASSERT_NO_THROW({ after = threadApi->getThread(threadId); });
+    EXPECT_EQ(after.version, stale.version);
+    EXPECT_EQ(after.staleGroups.size(), 1);
+}
