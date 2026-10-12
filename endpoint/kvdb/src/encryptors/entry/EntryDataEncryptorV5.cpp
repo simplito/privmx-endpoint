@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/kvdb/encryptors/entry/EntryDataEncryptorV5.hpp"
 
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/kvdb/Constants.hpp"
 #include "privmx/endpoint/kvdb/KvdbException.hpp"
 #include "privmx/utils/Utils.hpp"

@@ -1,5 +1,4 @@
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
 #include "privmx/endpoint/group/Events.hpp"
@@ -54,16 +53,11 @@ bool Events::isGroupCreatedEvent(const core::EventHolder& eventHolder) {
 }
 
 GroupCreatedEvent Events::extractGroupCreatedEvent(const core::EventHolder& eventHolder) {
-    try {
-        auto event = std::dynamic_pointer_cast<GroupCreatedEvent>(eventHolder.get());
-        if (!event) {
-            throw CannotExtractGroupCreatedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<GroupCreatedEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractGroupCreatedEventException();
     }
+    return *event;
 }
 
 bool Events::isGroupUpdatedEvent(const core::EventHolder& eventHolder) {
@@ -71,16 +65,11 @@ bool Events::isGroupUpdatedEvent(const core::EventHolder& eventHolder) {
 }
 
 GroupUpdatedEvent Events::extractGroupUpdatedEvent(const core::EventHolder& eventHolder) {
-    try {
-        auto event = std::dynamic_pointer_cast<GroupUpdatedEvent>(eventHolder.get());
-        if (!event) {
-            throw CannotExtractGroupUpdatedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<GroupUpdatedEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractGroupUpdatedEventException();
     }
+    return *event;
 }
 
 bool Events::isGroupCustomEvent(const core::EventHolder& eventHolder) {
@@ -88,16 +77,11 @@ bool Events::isGroupCustomEvent(const core::EventHolder& eventHolder) {
 }
 
 GroupCustomEvent Events::extractGroupCustomEvent(const core::EventHolder& eventHolder) {
-    try {
-        auto event = std::dynamic_pointer_cast<GroupCustomEvent>(eventHolder.get());
-        if (!event) {
-            throw CannotExtractGroupCustomEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<GroupCustomEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractGroupCustomEventException();
     }
+    return *event;
 }
 
 bool Events::isGroupDeletedEvent(const core::EventHolder& eventHolder) {
@@ -105,14 +89,9 @@ bool Events::isGroupDeletedEvent(const core::EventHolder& eventHolder) {
 }
 
 GroupDeletedEvent Events::extractGroupDeletedEvent(const core::EventHolder& eventHolder) {
-    try {
-        auto event = std::dynamic_pointer_cast<GroupDeletedEvent>(eventHolder.get());
-        if (!event) {
-            throw CannotExtractGroupDeletedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<GroupDeletedEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractGroupDeletedEventException();
     }
+    return *event;
 }

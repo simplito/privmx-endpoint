@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
 #include "privmx/endpoint/stream/Events.hpp"
@@ -124,16 +123,11 @@ bool Events::isStreamRoomCreatedEvent(const core::EventHolder& handler) {
 }
 
 StreamRoomCreatedEvent Events::extractStreamRoomCreatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StreamRoomCreatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStreamRoomCreatedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StreamRoomCreatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStreamRoomCreatedEventException();
     }
+    return *event;
 }
 
 bool Events::isStreamRoomUpdatedEvent(const core::EventHolder& handler) {
@@ -141,16 +135,11 @@ bool Events::isStreamRoomUpdatedEvent(const core::EventHolder& handler) {
 }
 
 StreamRoomUpdatedEvent Events::extractStreamRoomUpdatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StreamRoomUpdatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStreamRoomUpdatedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StreamRoomUpdatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStreamRoomUpdatedEventException();
     }
+    return *event;
 }
 
 bool Events::isStreamRoomDeletedEvent(const core::EventHolder& handler) {
@@ -158,16 +147,11 @@ bool Events::isStreamRoomDeletedEvent(const core::EventHolder& handler) {
 }
 
 StreamRoomDeletedEvent Events::extractStreamRoomDeletedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StreamRoomDeletedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStreamRoomDeletedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StreamRoomDeletedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStreamRoomDeletedEventException();
     }
+    return *event;
 }
 
 bool Events::isStreamPublishedEvent(const core::EventHolder& handler) {
@@ -175,16 +159,11 @@ bool Events::isStreamPublishedEvent(const core::EventHolder& handler) {
 }
 
 StreamPublishedEvent Events::extractStreamPublishedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StreamPublishedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStreamPublishedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StreamPublishedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStreamPublishedEventException();
     }
+    return *event;
 }
 
 bool Events::isStreamUpdatedEvent(const core::EventHolder& handler) {
@@ -192,16 +171,11 @@ bool Events::isStreamUpdatedEvent(const core::EventHolder& handler) {
 }
 
 StreamUpdatedEvent Events::extractStreamUpdatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StreamUpdatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStreamUpdatedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StreamUpdatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStreamUpdatedEventException();
     }
+    return *event;
 }
 
 bool Events::isStreamRoomJoinedEvent(const core::EventHolder& handler) {
@@ -209,16 +183,11 @@ bool Events::isStreamRoomJoinedEvent(const core::EventHolder& handler) {
 }
 
 StreamRoomJoinedEvent Events::extractStreamRoomJoinedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StreamRoomJoinedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStreamRoomJoinedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StreamRoomJoinedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStreamRoomJoinedEventException();
     }
+    return *event;
 }
 
 bool Events::isStreamUnpublishedEvent(const core::EventHolder& handler) {
@@ -226,16 +195,11 @@ bool Events::isStreamUnpublishedEvent(const core::EventHolder& handler) {
 }
 
 StreamUnpublishedEvent Events::extractStreamUnpublishedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StreamUnpublishedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStreamUnpublishedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StreamUnpublishedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStreamUnpublishedEventException();
     }
+    return *event;
 }
 
 bool Events::isStreamRoomLeftEvent(const core::EventHolder& handler) {
@@ -243,16 +207,11 @@ bool Events::isStreamRoomLeftEvent(const core::EventHolder& handler) {
 }
 
 StreamRoomLeftEvent Events::extractStreamRoomLeftEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StreamRoomLeftEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStreamRoomLeftEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StreamRoomLeftEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStreamRoomLeftEventException();
     }
+    return *event;
 }
 
 bool Events::isStreamSubscribedEvent(const core::EventHolder& handler) {
@@ -260,16 +219,11 @@ bool Events::isStreamSubscribedEvent(const core::EventHolder& handler) {
 }
 
 StreamSubscribedEvent Events::extractStreamSubscribedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StreamSubscribedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStreamSubscribedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StreamSubscribedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStreamSubscribedEventException();
     }
+    return *event;
 }
 
 bool Events::isStreamUnsubscribedEvent(const core::EventHolder& handler) {
@@ -277,14 +231,9 @@ bool Events::isStreamUnsubscribedEvent(const core::EventHolder& handler) {
 }
 
 StreamUnsubscribedEvent Events::extractStreamUnsubscribedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StreamUnsubscribedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStreamUnsubscribedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StreamUnsubscribedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStreamUnsubscribedEventException();
     }
+    return *event;
 }

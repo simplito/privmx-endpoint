@@ -14,7 +14,6 @@ limitations under the License.
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/VarDeserializer.hpp>
@@ -232,8 +231,7 @@ bool KvdbApiImpl::hasEntry(const std::string& kvdbId, const std::string& key) {
         server::KvdbEntryGetModel model{.kvdbId = kvdbId, .kvdbEntryKey = key};
         _serverApi.kvdbEntryGet(model);
     } catch (const privmx::endpoint::core::Exception& e) {
-        if (core::ExceptionConverter::convert(e).getCode() ==
-            privmx::endpoint::server::KvdbEntryDoesNotExistException().getCode()) {
+        if (e.getCode() == privmx::endpoint::server::KvdbEntryDoesNotExistException().getCode()) {
             return false;
         }
         e.rethrow();

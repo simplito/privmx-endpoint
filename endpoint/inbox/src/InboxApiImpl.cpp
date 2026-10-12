@@ -14,7 +14,6 @@ limitations under the License.
 
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/store/ChunkBufferedStream.hpp>
 #include <privmx/endpoint/store/FileHandle.hpp>

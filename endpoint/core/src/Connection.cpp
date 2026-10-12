@@ -13,7 +13,6 @@ limitations under the License.
 #include "privmx/endpoint/core/ConnectionImpl.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/JsonSerializer.hpp"
 #include "privmx/endpoint/core/Validator.hpp"
 #include "privmx/endpoint/core/VarSerializer.hpp"
@@ -41,14 +40,9 @@ Connection Connection::connect(
     Validator::validatePrivKeyWIF(userPrivKey, "field:userPrivKey ");
     Validator::validateId(solutionId, "field:solutionId ");
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
-    try {
-        std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
-        impl->connect(userPrivKey, solutionId, platformUrl, verificationOptions);
-        return Connection(impl);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
+    impl->connect(userPrivKey, solutionId, platformUrl, verificationOptions);
+    return Connection(impl);
 }
 
 Connection Connection::connectPublic(
@@ -57,14 +51,9 @@ Connection Connection::connectPublic(
     const PKIVerificationOptions& verificationOptions
 ) {
     Validator::validateClass<PKIVerificationOptions>(verificationOptions, "field:verificationOptions ");
-    try {
-        std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
-        impl->connectPublic(solutionId, platformUrl, verificationOptions);
-        return Connection(impl);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
+    impl->connectPublic(solutionId, platformUrl, verificationOptions);
+    return Connection(impl);
 }
 
 Connection::Connection(const std::shared_ptr<ConnectionImpl>& impl)
@@ -85,14 +74,8 @@ int64_t Connection::getConnectionId() {
     if (_connectionId.has_value()) {
         return _connectionId.value();
     } else {
-        auto impl = getImpl();
-        try {
-            _connectionId = impl->getConnectionId();
-            return _connectionId.value();
-        } catch (const privmx::endpoint::core::Exception& e) {
-            core::ExceptionConverter::rethrowAsCoreException(e);
-            throw core::Exception("ExceptionConverter rethrow error");
-        }
+        _connectionId = getImpl()->getConnectionId();
+        return _connectionId.value();
     }
 }
 
@@ -100,12 +83,7 @@ PagingList<Context> Connection::listContexts(const PagingQuery& pagingQuery) {
     auto impl = getImpl();
     assertConnection(impl);
     core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
-    try {
-        return impl->listContexts(pagingQuery);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->listContexts(pagingQuery);
 }
 
 PagingList<UserInfo> Connection::listContextUsers(const std::string& contextId, const PagingQuery& pagingQuery) {
@@ -113,12 +91,7 @@ PagingList<UserInfo> Connection::listContextUsers(const std::string& contextId, 
     assertConnection(impl);
     Validator::validateId(contextId, "field:contextId ");
     core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
-    try {
-        return impl->listContextUsers(contextId, pagingQuery);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->listContextUsers(contextId, pagingQuery);
 }
 
 void Connection::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
@@ -129,23 +102,13 @@ void Connection::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier
 std::vector<std::string> Connection::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto impl = getImpl();
     assertConnection(impl);
-    try {
-        return impl->subscribeFor(subscriptionQueries);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->subscribeFor(subscriptionQueries);
 }
 
 void Connection::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     auto impl = getImpl();
     assertConnection(impl);
-    try {
-        return impl->unsubscribeFrom(subscriptionIds);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->unsubscribeFrom(subscriptionIds);
 }
 
 std::string Connection::buildSubscriptionQuery(
@@ -155,21 +118,11 @@ std::string Connection::buildSubscriptionQuery(
 ) {
     auto impl = getImpl();
     assertConnection(impl);
-    try {
-        return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
 }
 
 void Connection::disconnect() {
     auto impl = getImpl();
     assertGateway(impl);
-    try {
-        impl->disconnect();
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    impl->disconnect();
 }

@@ -12,7 +12,6 @@ limitations under the License.
 #include "privmx/endpoint/event/EventKeyProvider.hpp"
 #include <privmx/crypto/CryptoException.hpp>
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 using namespace privmx::endpoint::event;
 

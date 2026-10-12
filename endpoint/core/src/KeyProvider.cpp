@@ -17,7 +17,6 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreConstants.hpp"
 #include "privmx/endpoint/core/EndpointUtils.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
 
 #include "privmx/endpoint/core/KeyProvider.hpp"

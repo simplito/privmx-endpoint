@@ -13,7 +13,6 @@ limitations under the License.
 #include "privmx/endpoint/inbox/encryptors/inbox/InboxDataSchemaMapper.hpp"
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
 
 #include "privmx/endpoint/inbox/Constants.hpp"

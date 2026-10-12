@@ -15,7 +15,6 @@ limitations under the License.
 #include <optional>
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/core/encryptors/IDataSchemaStrategy.hpp"
 

@@ -14,7 +14,6 @@ limitations under the License.
 #include "privmx/endpoint/search/FullTextSearch.hpp"
 #include "privmx/endpoint/search/PrivmxSqliteVFS.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint;

@@ -9,7 +9,6 @@
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/Utils.hpp>
@@ -378,12 +377,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
 
-    try {
-        _serverApi.groupAddMembers(model);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    _serverApi.groupAddMembers(model);
     // No tree-key invalidation and the epoch and grant keypair did not move.
     invalidateModuleKeysInCache(groupId);
 }
@@ -547,12 +541,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
         privmx::crypto::Crypto::hmacSha256(GroupDataSchemaMapper::tagSubkey(ctx.key.key, "confirm-tag"), confInput)
     );
 
-    try {
-        _serverApi.groupRemoveMembers(model);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    _serverApi.groupRemoveMembers(model);
     cache->clearNodeKeys();
     cache->putGrantKey(static_cast<std::uint32_t>(newEpoch), plan.newGrantKey);
     invalidateModuleKeysInCache(groupId);
@@ -654,15 +643,13 @@ void GroupApiImpl::updateGroupPublicMeta(
     } catch (const privmx::endpoint::core::Exception& e) {
         // Not reachable against the current bridge: `ROTATED_ALREADY` comes from the rotation family, never
         // from a metadata write. Kept for the day that changes; the retry re-reads and re-tags on its own.
-        auto code = core::ExceptionConverter::convert(e).getCode();
-        if (allowRotationRetry && code == endpoint::server::GroupRotatedAlreadyException().getCode()) {
+        if (allowRotationRetry && e.getCode() == endpoint::server::GroupRotatedAlreadyException().getCode()) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
             updateGroupPublicMeta(groupId, publicMeta, version, false);
             return;
         }
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+        throw;
     }
     // Rotates nothing — not the content key, not the grant key, not the tree. Only the cached view is stale.
     invalidateModuleKeysInCache(groupId);
@@ -696,15 +683,13 @@ void GroupApiImpl::updateGroupPrivateMeta(
     try {
         _serverApi.groupUpdatePrivateMeta(model);
     } catch (const privmx::endpoint::core::Exception& e) {
-        auto code = core::ExceptionConverter::convert(e).getCode();
-        if (allowRotationRetry && code == endpoint::server::GroupRotatedAlreadyException().getCode()) {
+        if (allowRotationRetry && e.getCode() == endpoint::server::GroupRotatedAlreadyException().getCode()) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
             updateGroupPrivateMeta(groupId, privateMeta, version, false);
             return;
         }
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+        throw;
     }
     invalidateModuleKeysInCache(groupId);
 }

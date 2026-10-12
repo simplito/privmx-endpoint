@@ -19,6 +19,7 @@ limitations under the License.
 #include <privmx/crypto/CryptoPrivmx.hpp>
 #include <privmx/crypto/ecc/ExtKey.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/privfs/types/Types.hpp>
 #include <privmx/utils/TypedObject.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -189,6 +190,10 @@ void RpcGateway::tryRestoreBySession() {
             .properties = info->properties
         }, getOptions().asOpt());
         switchRpc(new_rpc);
+    } catch (const privmx::endpoint::server::UserDoesNotExistException& e) {
+        // named apart from the other alerts by the transport, but still a bad session key
+        info->session_key = nullopt;
+        e.rethrow();
     } catch (const privmx::rpc::ServerAlertException& e) {
         info->session_key = nullopt;
         e.rethrow();

@@ -11,7 +11,6 @@ limitations under the License.
 
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
 
@@ -23,17 +22,12 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
 EventApi EventApi::create(core::Connection& connection) {
-    try {
-        std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
-        std::shared_ptr<EventApiImpl> impl(new EventApiImpl(
-            connection, connectionImpl->getUserPrivKey(), connectionImpl->getGateway(),
-            connectionImpl->getEventMiddleware()
-        ));
-        return EventApi(impl);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
+    std::shared_ptr<EventApiImpl> impl(new EventApiImpl(
+        connection, connectionImpl->getUserPrivKey(), connectionImpl->getGateway(),
+        connectionImpl->getEventMiddleware()
+    ));
+    return EventApi(impl);
 }
 
 EventApi::EventApi(const std::shared_ptr<EventApiImpl>& impl) : BaseApiClass(impl) {}
@@ -47,32 +41,15 @@ void EventApi::emitEvent(
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
-    try {
-        return impl->emitEvent(contextId, users, channelName, eventData);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->emitEvent(contextId, users, channelName, eventData);
 }
 
 std::vector<std::string> EventApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
-    auto impl = getImpl();
-    try {
-        return impl->subscribeFor(subscriptionQueries);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return getImpl()->subscribeFor(subscriptionQueries);
 }
 
 void EventApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    auto impl = getImpl();
-    try {
-        return impl->unsubscribeFrom(subscriptionIds);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return getImpl()->unsubscribeFrom(subscriptionIds);
 }
 
 std::string EventApi::buildSubscriptionQuery(
@@ -80,11 +57,5 @@ std::string EventApi::buildSubscriptionQuery(
     EventSelectorType selectorType,
     const std::string& selectorId
 ) {
-    auto impl = getImpl();
-    try {
-        return impl->buildSubscriptionQuery(channelName, selectorType, selectorId);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return getImpl()->buildSubscriptionQuery(channelName, selectorType, selectorId);
 }

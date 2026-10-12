@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/thread/encryptors/message/MessageDataEncryptorV5.hpp"
 
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/thread/Constants.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/utils/Utils.hpp"

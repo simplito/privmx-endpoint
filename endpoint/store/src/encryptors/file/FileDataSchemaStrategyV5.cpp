@@ -13,7 +13,6 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/file/FileMetaDataSchemaMapper.hpp"
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/store/Constants.hpp"

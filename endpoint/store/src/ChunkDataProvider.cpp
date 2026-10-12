@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/store/ChunkDataProvider.hpp"
 #include "privmx/endpoint/core/ConvertedExceptions.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
 #include "privmx/endpoint/store/cache/CacheKey.hpp"
 #include <Pson/BinaryString.hpp>
@@ -135,13 +134,12 @@ std::string ChunkDataProvider::requestSegment(uint32_t segmentNumber) {
     server::StoreFileReadResult fileData;
     try {
         fileData = _server->storeFileRead(fileDataModel);
-    } catch (const utils::PrivmxException& e) {
-        core::Exception converted = core::ExceptionConverter::convert(e);
-        if (converted.getCode() == privmx::endpoint::server::StoreFileVersionMismatchException().getCode()) {
+    } catch (const core::Exception& e) {
+        if (e.getCode() == privmx::endpoint::server::StoreFileVersionMismatchException().getCode()) {
             // STORE_FILE_VERSION_MISMATCH
-            throw store::FileVersionMismatchException(converted);
+            throw store::FileVersionMismatchException(e);
         } else {
-            e.rethrow();
+            throw;
         }
     }
     return fileData.data;

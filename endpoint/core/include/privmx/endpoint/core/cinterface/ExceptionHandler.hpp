@@ -19,7 +19,6 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/core/Exception.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/cinterface/InterfaceException.hpp"
 #include <privmx/utils/PrivmxException.hpp>
 

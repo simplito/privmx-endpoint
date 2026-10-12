@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
@@ -24,17 +23,12 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
 ThreadApi ThreadApi::create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi) {
-    try {
-        std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
-        std::shared_ptr<ThreadApiImpl> impl(new ThreadApiImpl(
-            connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
-            connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection, groupApi
-        ));
-        return ThreadApi(impl);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
+    std::shared_ptr<ThreadApiImpl> impl(new ThreadApiImpl(
+        connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
+        connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection, groupApi
+    ));
+    return ThreadApi(impl);
 }
 
 ThreadApi::ThreadApi(const std::shared_ptr<ThreadApiImpl>& impl) : BaseApiClass(impl) {}
@@ -53,12 +47,7 @@ std::string ThreadApi::createThread(
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
-    try {
-        return impl->createThread(contextId, users, managers, publicMeta, privateMeta, policies, "thread", groups);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->createThread(contextId, users, managers, publicMeta, privateMeta, policies, "thread", groups);
 }
 
 void ThreadApi::updateThread(
@@ -78,14 +67,9 @@ void ThreadApi::updateThread(
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
-    try {
-        impl->updateThread(
-            threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
-        );
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    impl->updateThread(
+        threadId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
+    );
 }
 
 void ThreadApi::rotateThreadKeys(
@@ -101,34 +85,19 @@ void ThreadApi::rotateThreadKeys(
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
-    try {
-        impl->rotateThreadKeys(threadId, users, managers, version, force, groups);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    impl->rotateThreadKeys(threadId, users, managers, version, force, groups);
 }
 
 void ThreadApi::deleteThread(const std::string& threadId) {
     auto impl = getImpl();
     core::Validator::validateId(threadId, "field:threadId ");
-    try {
-        return impl->deleteThread(threadId);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->deleteThread(threadId);
 }
 
 Thread ThreadApi::getThread(const std::string& threadId) {
     auto impl = getImpl();
     core::Validator::validateId(threadId, "field:threadId ");
-    try {
-        return impl->getThread(threadId);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->getThread(threadId);
 }
 
 core::PagingList<Thread> ThreadApi::listThreads(const std::string& contextId, const core::PagingQuery& pagingQuery) {
@@ -137,35 +106,20 @@ core::PagingList<Thread> ThreadApi::listThreads(const std::string& contextId, co
     core::Validator::validatePagingQuery(
         pagingQuery, {"createDate", "lastModificationDate", "lastMsgDate"}, "field:pagingQuery "
     );
-    try {
-        return impl->listThreads(contextId, pagingQuery);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->listThreads(contextId, pagingQuery);
 }
 
 Message ThreadApi::getMessage(const std::string& messageId) {
     auto impl = getImpl();
     core::Validator::validateId(messageId, "field:messageId ");
-    try {
-        return impl->getMessage(messageId);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->getMessage(messageId);
 }
 
 core::PagingList<Message> ThreadApi::listMessages(const std::string& threadId, const core::PagingQuery& pagingQuery) {
     auto impl = getImpl();
     core::Validator::validateId(threadId, "field:threadId ");
     core::Validator::validatePagingQuery(pagingQuery, {"createDate", "updates"}, "field:pagingQuery ");
-    try {
-        return impl->listMessages(threadId, pagingQuery);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->listMessages(threadId, pagingQuery);
 }
 
 std::string ThreadApi::sendMessage(
@@ -176,23 +130,13 @@ std::string ThreadApi::sendMessage(
 ) {
     auto impl = getImpl();
     core::Validator::validateId(threadId, "field:threadId ");
-    try {
-        return impl->sendMessage(threadId, publicMeta, privateMeta, data);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->sendMessage(threadId, publicMeta, privateMeta, data);
 }
 
 void ThreadApi::deleteMessage(const std::string& messageId) {
     auto impl = getImpl();
     core::Validator::validateId(messageId, "field:messageId ");
-    try {
-        return impl->deleteMessage(messageId);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->deleteMessage(messageId);
 }
 
 void ThreadApi::updateMessage(
@@ -203,32 +147,15 @@ void ThreadApi::updateMessage(
 ) {
     auto impl = getImpl();
     core::Validator::validateId(messageId, "field:messageId ");
-    try {
-        return impl->updateMessage(messageId, publicMeta, privateMeta, data);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->updateMessage(messageId, publicMeta, privateMeta, data);
 }
 
 std::vector<std::string> ThreadApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
-    auto impl = getImpl();
-    try {
-        return impl->subscribeFor(subscriptionQueries);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return getImpl()->subscribeFor(subscriptionQueries);
 }
 
 void ThreadApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    auto impl = getImpl();
-    try {
-        return impl->unsubscribeFrom(subscriptionIds);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return getImpl()->unsubscribeFrom(subscriptionIds);
 }
 
 std::string ThreadApi::buildSubscriptionQuery(
@@ -236,11 +163,5 @@ std::string ThreadApi::buildSubscriptionQuery(
     EventSelectorType selectorType,
     const std::string& selectorId
 ) {
-    auto impl = getImpl();
-    try {
-        return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return getImpl()->buildSubscriptionQuery(eventType, selectorType, selectorId);
 }

@@ -12,7 +12,6 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"
 
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
 #include <privmx/crypto/Crypto.hpp>

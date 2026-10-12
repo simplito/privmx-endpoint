@@ -15,7 +15,6 @@ limitations under the License.
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/BinaryBufferBE.hpp>
 
 #include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataEncryptorV1.hpp"

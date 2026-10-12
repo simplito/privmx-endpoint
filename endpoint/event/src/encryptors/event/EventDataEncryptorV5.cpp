@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/event/encryptors/event/EventDataEncryptorV5.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/event/Constants.hpp"
 #include "privmx/endpoint/event/EventException.hpp"
 #include "privmx/utils/Utils.hpp"

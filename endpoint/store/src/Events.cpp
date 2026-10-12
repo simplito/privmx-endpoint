@@ -9,7 +9,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
@@ -101,16 +100,11 @@ bool Events::isStoreCreatedEvent(const core::EventHolder& handler) {
 }
 
 StoreCreatedEvent Events::extractStoreCreatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StoreCreatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStoreCreatedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StoreCreatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStoreCreatedEventException();
     }
+    return *event;
 }
 
 bool Events::isStoreUpdatedEvent(const core::EventHolder& handler) {
@@ -118,16 +112,11 @@ bool Events::isStoreUpdatedEvent(const core::EventHolder& handler) {
 }
 
 StoreUpdatedEvent Events::extractStoreUpdatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StoreUpdatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStoreUpdatedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StoreUpdatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStoreUpdatedEventException();
     }
+    return *event;
 }
 
 bool Events::isStoreDeletedEvent(const core::EventHolder& handler) {
@@ -135,16 +124,11 @@ bool Events::isStoreDeletedEvent(const core::EventHolder& handler) {
 }
 
 StoreDeletedEvent Events::extractStoreDeletedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StoreDeletedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStoreDeletedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StoreDeletedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStoreDeletedEventException();
     }
+    return *event;
 }
 
 bool Events::isStoreStatsChangedEvent(const core::EventHolder& handler) {
@@ -152,16 +136,11 @@ bool Events::isStoreStatsChangedEvent(const core::EventHolder& handler) {
 }
 
 StoreStatsChangedEvent Events::extractStoreStatsChangedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StoreStatsChangedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStoreStatsChangedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StoreStatsChangedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStoreStatsChangedEventException();
     }
+    return *event;
 }
 
 bool Events::isStoreFileCreatedEvent(const core::EventHolder& handler) {
@@ -169,16 +148,11 @@ bool Events::isStoreFileCreatedEvent(const core::EventHolder& handler) {
 }
 
 StoreFileCreatedEvent Events::extractStoreFileCreatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StoreFileCreatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStoreFileCreatedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StoreFileCreatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStoreFileCreatedEventException();
     }
+    return *event;
 }
 
 bool Events::isStoreFileUpdatedEvent(const core::EventHolder& handler) {
@@ -186,16 +160,11 @@ bool Events::isStoreFileUpdatedEvent(const core::EventHolder& handler) {
 }
 
 StoreFileUpdatedEvent Events::extractStoreFileUpdatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StoreFileUpdatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStoreFileUpdatedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StoreFileUpdatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStoreFileUpdatedEventException();
     }
+    return *event;
 }
 
 bool Events::isStoreFileDeletedEvent(const core::EventHolder& handler) {
@@ -203,14 +172,9 @@ bool Events::isStoreFileDeletedEvent(const core::EventHolder& handler) {
 }
 
 StoreFileDeletedEvent Events::extractStoreFileDeletedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<StoreFileDeletedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractStoreFileDeletedEventException();
-        }
-        return *event;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<StoreFileDeletedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractStoreFileDeletedEventException();
     }
+    return *event;
 }

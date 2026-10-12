@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/encryptors/module/Constants.hpp>

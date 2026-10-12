@@ -15,7 +15,6 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/core/EndpointUtils.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/VarDeserializer.hpp>
 

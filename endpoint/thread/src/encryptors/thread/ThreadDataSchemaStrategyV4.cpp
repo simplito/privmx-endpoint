@@ -14,7 +14,6 @@ limitations under the License.
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/thread/Constants.hpp"
 

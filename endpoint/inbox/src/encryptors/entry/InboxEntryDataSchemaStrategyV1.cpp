@@ -13,7 +13,6 @@ limitations under the License.
 #include "privmx/endpoint/inbox/InboxException.hpp"
 #include <privmx/crypto/ecc/ECC.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/store/StoreApiImpl.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
