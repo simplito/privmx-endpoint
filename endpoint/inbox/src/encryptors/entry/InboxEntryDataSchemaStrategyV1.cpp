@@ -82,8 +82,6 @@ InboxEntryResult InboxEntryDataSchemaStrategyV1::decryptEntry(
         return result;
     } catch (const core::Exception& e) {
         return makeEmptyResultWithStatusCode(e.getCode());
-    } catch (const privmx::utils::PrivmxException& e) {
-        return makeEmptyResultWithStatusCode(core::ExceptionConverter::convert(e).getCode());
     } catch (...) { return makeEmptyResultWithStatusCode(ENDPOINT_CORE_EXCEPTION_CODE); }
 }
 
@@ -124,8 +122,6 @@ inbox::InboxEntry InboxEntryDataSchemaStrategyV1::convertToFinal(
             }
         } catch (const core::Exception& e) {
             result.statusCode = e.getCode();
-        } catch (const privmx::utils::PrivmxException& e) {
-            result.statusCode = core::ExceptionConverter::convert(e).getCode();
         } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     }
     result.schemaVersion = EntryDataSchema::Version::VERSION_1;

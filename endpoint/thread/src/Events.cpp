@@ -99,7 +99,7 @@ ThreadCreatedEvent Events::extractThreadCreatedEvent(const core::EventHolder& ha
             throw CannotExtractThreadCreatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -116,7 +116,7 @@ ThreadUpdatedEvent Events::extractThreadUpdatedEvent(const core::EventHolder& ha
             throw CannotExtractThreadUpdatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -133,7 +133,7 @@ ThreadDeletedEvent Events::extractThreadDeletedEvent(const core::EventHolder& ha
             throw CannotExtractThreadDeletedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -150,7 +150,7 @@ ThreadStatsChangedEvent Events::extractThreadStatsEvent(const core::EventHolder&
             throw CannotExtractThreadStatsEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -167,7 +167,7 @@ ThreadNewMessageEvent Events::extractThreadNewMessageEvent(const core::EventHold
             throw CannotExtractThreadNewMessageEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -184,7 +184,7 @@ ThreadMessageUpdatedEvent Events::extractThreadMessageUpdatedEvent(const core::E
             throw CannotExtractThreadMessageUpdatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -205,7 +205,7 @@ ThreadMessageDeletedEvent Events::extractThreadMessageDeletedEvent(const core::E
             throw CannotExtractThreadDeletedMessageEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

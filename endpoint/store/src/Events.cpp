@@ -107,7 +107,7 @@ StoreCreatedEvent Events::extractStoreCreatedEvent(const core::EventHolder& hand
             throw CannotExtractStoreCreatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -124,7 +124,7 @@ StoreUpdatedEvent Events::extractStoreUpdatedEvent(const core::EventHolder& hand
             throw CannotExtractStoreUpdatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -141,7 +141,7 @@ StoreDeletedEvent Events::extractStoreDeletedEvent(const core::EventHolder& hand
             throw CannotExtractStoreDeletedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -158,7 +158,7 @@ StoreStatsChangedEvent Events::extractStoreStatsChangedEvent(const core::EventHo
             throw CannotExtractStoreStatsChangedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -175,7 +175,7 @@ StoreFileCreatedEvent Events::extractStoreFileCreatedEvent(const core::EventHold
             throw CannotExtractStoreFileCreatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -192,7 +192,7 @@ StoreFileUpdatedEvent Events::extractStoreFileUpdatedEvent(const core::EventHold
             throw CannotExtractStoreFileUpdatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -209,7 +209,7 @@ StoreFileDeletedEvent Events::extractStoreFileDeletedEvent(const core::EventHold
             throw CannotExtractStoreFileDeletedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

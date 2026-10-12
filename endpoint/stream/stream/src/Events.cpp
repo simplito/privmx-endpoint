@@ -130,7 +130,7 @@ StreamRoomCreatedEvent Events::extractStreamRoomCreatedEvent(const core::EventHo
             throw CannotExtractStreamRoomCreatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -147,7 +147,7 @@ StreamRoomUpdatedEvent Events::extractStreamRoomUpdatedEvent(const core::EventHo
             throw CannotExtractStreamRoomUpdatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -164,7 +164,7 @@ StreamRoomDeletedEvent Events::extractStreamRoomDeletedEvent(const core::EventHo
             throw CannotExtractStreamRoomDeletedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -181,7 +181,7 @@ StreamPublishedEvent Events::extractStreamPublishedEvent(const core::EventHolder
             throw CannotExtractStreamPublishedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -198,7 +198,7 @@ StreamUpdatedEvent Events::extractStreamUpdatedEvent(const core::EventHolder& ha
             throw CannotExtractStreamUpdatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -215,7 +215,7 @@ StreamRoomJoinedEvent Events::extractStreamRoomJoinedEvent(const core::EventHold
             throw CannotExtractStreamRoomJoinedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -232,7 +232,7 @@ StreamUnpublishedEvent Events::extractStreamUnpublishedEvent(const core::EventHo
             throw CannotExtractStreamUnpublishedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -249,7 +249,7 @@ StreamRoomLeftEvent Events::extractStreamRoomLeftEvent(const core::EventHolder& 
             throw CannotExtractStreamRoomLeftEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -266,7 +266,7 @@ StreamSubscribedEvent Events::extractStreamSubscribedEvent(const core::EventHold
             throw CannotExtractStreamSubscribedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -283,7 +283,7 @@ StreamUnsubscribedEvent Events::extractStreamUnsubscribedEvent(const core::Event
             throw CannotExtractStreamUnsubscribedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

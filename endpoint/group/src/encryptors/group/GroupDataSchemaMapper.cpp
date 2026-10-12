@@ -456,8 +456,6 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             }
         } catch (const core::Exception& e) {
             result[i] = toError(g, e.getCode());
-        } catch (const privmx::utils::PrivmxException& e) {
-            result[i] = toError(g, core::ExceptionConverter::convert(e).getCode());
         } catch (...) { result[i] = toError(g, ENDPOINT_CORE_EXCEPTION_CODE); }
     }
 

@@ -80,7 +80,7 @@ InboxCreatedEvent Events::extractInboxCreatedEvent(const privmx::endpoint::core:
             throw CannotExtractInboxCreatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -97,7 +97,7 @@ InboxUpdatedEvent Events::extractInboxUpdatedEvent(const privmx::endpoint::core:
             throw CannotExtractInboxUpdatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -114,7 +114,7 @@ InboxDeletedEvent Events::extractInboxDeletedEvent(const privmx::endpoint::core:
             throw CannotExtractInboxDeletedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -131,7 +131,7 @@ InboxEntryCreatedEvent Events::extractInboxEntryCreatedEvent(const core::EventHo
             throw CannotExtractInboxEntryCreatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -148,7 +148,7 @@ InboxEntryDeletedEvent Events::extractInboxEntryDeletedEvent(const core::EventHo
             throw CannotExtractInboxEntryDeletedException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

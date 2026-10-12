@@ -90,8 +90,6 @@ DecryptedGroupRosterV5 GroupDataEncryptorV5::decryptRoster(
         );
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
@@ -178,8 +176,6 @@ DecryptedGroupPublicMetaV5 GroupDataEncryptorV5::extractPublicMeta(
         result.meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
@@ -255,8 +251,6 @@ DecryptedGroupPrivateMetaV5 GroupDataEncryptorV5::decryptPrivateMeta(
         result.meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }

@@ -293,9 +293,6 @@ DecryptedEncKeyV2 KeyProvider::decryptKeyEntry(
         } catch (const privmx::endpoint::core::Exception& e) {
             decryptedEncKey.statusCode = e.getCode();
             return decryptedEncKey;
-        } catch (const privmx::utils::PrivmxException& e) {
-            decryptedEncKey.statusCode = core::ExceptionConverter::convert(e).getCode();
-            return decryptedEncKey;
         } catch (...) {
             decryptedEncKey.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
             return decryptedEncKey;

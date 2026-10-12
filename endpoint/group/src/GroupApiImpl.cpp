@@ -380,7 +380,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
 
     try {
         _serverApi.groupAddMembers(model);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -549,7 +549,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
 
     try {
         _serverApi.groupRemoveMembers(model);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -651,7 +651,7 @@ void GroupApiImpl::updateGroupPublicMeta(
 
     try {
         _serverApi.groupUpdatePublicMeta(model);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         // Not reachable against the current bridge: `ROTATED_ALREADY` comes from the rotation family, never
         // from a metadata write. Kept for the day that changes; the retry re-reads and re-tags on its own.
         auto code = core::ExceptionConverter::convert(e).getCode();
@@ -695,7 +695,7 @@ void GroupApiImpl::updateGroupPrivateMeta(
 
     try {
         _serverApi.groupUpdatePrivateMeta(model);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         auto code = core::ExceptionConverter::convert(e).getCode();
         if (allowRotationRetry && code == endpoint::server::GroupRotatedAlreadyException().getCode()) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
@@ -863,8 +863,6 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 data.authorPubKey = decrypted.authorPubKey;
             } catch (const core::Exception& e) {
                 data.statusCode = e.getCode();
-            } catch (const privmx::utils::PrivmxException& e) {
-                data.statusCode = core::ExceptionConverter::convert(e).getCode();
             } catch (...) { data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
             auto event = core::EventBuilder::buildEvent<GroupCustomEvent>(
                 "group/" + raw.id + "/" + channelName, data, notification

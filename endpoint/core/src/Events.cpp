@@ -94,7 +94,7 @@ LibBreakEvent Events::extractLibBreakEvent(const core::EventHolder& handler) {
             throw CannotExtractLibBreakEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -111,7 +111,7 @@ LibPlatformDisconnectedEvent Events::extractLibPlatformDisconnectedEvent(const c
             throw CannotExtractLibPlatformDisconnectedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -128,7 +128,7 @@ LibConnectedEvent Events::extractLibConnectedEvent(const core::EventHolder& hand
             throw CannotExtractLibConnectedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -145,7 +145,7 @@ LibDisconnectedEvent Events::extractLibDisconnectedEvent(const core::EventHolder
             throw CannotExtractLibDisconnectedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -162,7 +162,7 @@ CollectionChangedEvent Events::extractCollectionChangedEvent(const core::EventHo
             throw CannotExtractCollectionChangedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -179,7 +179,7 @@ ContextUserAddedEvent Events::extractContextUserAddedEvent(const core::EventHold
             throw CannotExtractContextUserAddedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -196,7 +196,7 @@ ContextUserRemovedEvent Events::extractContextUserRemovedEvent(const core::Event
             throw CannotExtractContextUserRemovedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -213,7 +213,7 @@ ContextUsersStatusChangedEvent Events::extractContextUsersStatusChangedEvent(con
             throw CannotExtractContextUsersStatusChangedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

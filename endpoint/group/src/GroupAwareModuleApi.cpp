@@ -46,7 +46,7 @@ GroupAwareModuleApi::GroupAwareModuleApi(
 
 GroupAwareModuleApi::~GroupAwareModuleApi() = default;
 
-void GroupAwareModuleApi::absorbAutoRekeyFailure(const std::string& moduleId, const privmx::utils::PrivmxException& e) {
+void GroupAwareModuleApi::absorbAutoRekeyFailure(const std::string& moduleId, const privmx::endpoint::core::Exception& e) {
     auto code = core::ExceptionConverter::convert(e).getCode();
     if (code == privmx::endpoint::server::ContainerRotatedAlreadyException().getCode()) {
         invalidateModuleKeysInCache(moduleId);
@@ -62,7 +62,7 @@ void GroupAwareModuleApi::absorbAutoRekeyFailure(const std::string& moduleId, co
 void GroupAwareModuleApi::runRequiringCurrentKey(const std::string& moduleId, const std::function<void()>& operation) {
     try {
         operation();
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         auto code = core::ExceptionConverter::convert(e).getCode();
         if (code == privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode()) {
             throw core::StaleKeyRekeyRequiredException("moduleId=" + moduleId + " has to be re-keyed by a manager");

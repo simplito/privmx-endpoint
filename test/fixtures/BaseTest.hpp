@@ -44,9 +44,6 @@ protected:
         } catch (const privmx::endpoint::core::Exception& e) {
             std::cout << e.getFull() << std::endl;
             FAIL();
-        } catch (const privmx::utils::PrivmxException& e) {
-            std::cout << e.what() << " | " << e.getData() << std::endl;
-            FAIL();
         } catch (const std::exception& e) {
             std::cout << e.what() << std::endl;
         }

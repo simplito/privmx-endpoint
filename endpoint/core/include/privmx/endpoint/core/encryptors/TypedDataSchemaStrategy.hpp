@@ -35,8 +35,6 @@ public:
             return convert(model, decrypt(model, encKey, verifiedDio));
         } catch (const core::Exception& e) {
             return makeErrorResult(model, e.getCode());
-        } catch (const privmx::utils::PrivmxException& e) {
-            return makeErrorResult(model, ExceptionConverter::convert(e).getCode());
         } catch (...) { return makeErrorResult(model, ENDPOINT_CORE_EXCEPTION_CODE); }
     }
 

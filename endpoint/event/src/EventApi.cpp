@@ -30,7 +30,7 @@ EventApi EventApi::create(core::Connection& connection) {
             connectionImpl->getEventMiddleware()
         ));
         return EventApi(impl);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -49,7 +49,7 @@ void EventApi::emitEvent(
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     try {
         return impl->emitEvent(contextId, users, channelName, eventData);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -59,7 +59,7 @@ std::vector<std::string> EventApi::subscribeFor(const std::vector<std::string>& 
     auto impl = getImpl();
     try {
         return impl->subscribeFor(subscriptionQueries);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -69,7 +69,7 @@ void EventApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) 
     auto impl = getImpl();
     try {
         return impl->unsubscribeFrom(subscriptionIds);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -83,7 +83,7 @@ std::string EventApi::buildSubscriptionQuery(
     auto impl = getImpl();
     try {
         return impl->buildSubscriptionQuery(channelName, selectorType, selectorId);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

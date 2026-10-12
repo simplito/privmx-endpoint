@@ -100,7 +100,7 @@ KvdbCreatedEvent Events::extractKvdbCreatedEvent(const core::EventHolder& handle
             throw CannotExtractKvdbCreatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -117,7 +117,7 @@ KvdbUpdatedEvent Events::extractKvdbUpdatedEvent(const core::EventHolder& handle
             throw CannotExtractKvdbUpdatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -134,7 +134,7 @@ KvdbDeletedEvent Events::extractKvdbDeletedEvent(const core::EventHolder& handle
             throw CannotExtractKvdbDeletedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -151,7 +151,7 @@ KvdbStatsChangedEvent Events::extractKvdbStatsEvent(const core::EventHolder& eve
             throw CannotExtractKvdbStatsEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -168,7 +168,7 @@ KvdbNewEntryEvent Events::extractKvdbNewEntryEvent(const core::EventHolder& hand
             throw CannotExtractKvdbNewEntryEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -185,7 +185,7 @@ KvdbEntryUpdatedEvent Events::extractKvdbEntryUpdatedEvent(const core::EventHold
             throw CannotExtractKvdbEntryUpdatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -202,7 +202,7 @@ KvdbEntryDeletedEvent Events::extractKvdbEntryDeletedEvent(const core::EventHold
             throw CannotExtractKvdbDeletedEntryEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

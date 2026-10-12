@@ -61,8 +61,8 @@ public:
         try {
             fn();
             return 0;
-        } catch (const Exception& e) { return e.getCode(); } catch (const privmx::utils::PrivmxException& e) {
-            return ExceptionConverter::convert(e).getCode();
+        } catch (const Exception& e) {
+            return e.getCode();
         } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
     }
 
@@ -195,8 +195,6 @@ public:
                 }
             } catch (const Exception& e) {
                 result[i] = toLibError(items[i], e.getCode());
-            } catch (const privmx::utils::PrivmxException& e) {
-                result[i] = toLibError(items[i], ExceptionConverter::convert(e).getCode());
             } catch (...) { result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE); }
         }
 
@@ -294,8 +292,6 @@ public:
                 }
             } catch (const Exception& e) {
                 result[i] = toLibError(items[i], e.getCode());
-            } catch (const privmx::utils::PrivmxException& e) {
-                result[i] = toLibError(items[i], ExceptionConverter::convert(e).getCode());
             } catch (...) { result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE); }
         }
 

@@ -60,7 +60,7 @@ GroupCreatedEvent Events::extractGroupCreatedEvent(const core::EventHolder& even
             throw CannotExtractGroupCreatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -77,7 +77,7 @@ GroupUpdatedEvent Events::extractGroupUpdatedEvent(const core::EventHolder& even
             throw CannotExtractGroupUpdatedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -94,7 +94,7 @@ GroupCustomEvent Events::extractGroupCustomEvent(const core::EventHolder& eventH
             throw CannotExtractGroupCustomEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -111,7 +111,7 @@ GroupDeletedEvent Events::extractGroupDeletedEvent(const core::EventHolder& even
             throw CannotExtractGroupDeletedEventException();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

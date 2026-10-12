@@ -45,7 +45,7 @@ Connection Connection::connect(
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
         impl->connect(userPrivKey, solutionId, platformUrl, verificationOptions);
         return Connection(impl);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -61,7 +61,7 @@ Connection Connection::connectPublic(
         std::shared_ptr<ConnectionImpl> impl(new ConnectionImpl());
         impl->connectPublic(solutionId, platformUrl, verificationOptions);
         return Connection(impl);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -89,7 +89,7 @@ int64_t Connection::getConnectionId() {
         try {
             _connectionId = impl->getConnectionId();
             return _connectionId.value();
-        } catch (const privmx::utils::PrivmxException& e) {
+        } catch (const privmx::endpoint::core::Exception& e) {
             core::ExceptionConverter::rethrowAsCoreException(e);
             throw core::Exception("ExceptionConverter rethrow error");
         }
@@ -102,7 +102,7 @@ PagingList<Context> Connection::listContexts(const PagingQuery& pagingQuery) {
     core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
     try {
         return impl->listContexts(pagingQuery);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -115,7 +115,7 @@ PagingList<UserInfo> Connection::listContextUsers(const std::string& contextId, 
     core::Validator::validatePagingQuery(pagingQuery, {}, "field:pagingQuery ");
     try {
         return impl->listContextUsers(contextId, pagingQuery);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -131,7 +131,7 @@ std::vector<std::string> Connection::subscribeFor(const std::vector<std::string>
     assertConnection(impl);
     try {
         return impl->subscribeFor(subscriptionQueries);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -142,7 +142,7 @@ void Connection::unsubscribeFrom(const std::vector<std::string>& subscriptionIds
     assertConnection(impl);
     try {
         return impl->unsubscribeFrom(subscriptionIds);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -157,7 +157,7 @@ std::string Connection::buildSubscriptionQuery(
     assertConnection(impl);
     try {
         return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -168,7 +168,7 @@ void Connection::disconnect() {
     assertGateway(impl);
     try {
         impl->disconnect();
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

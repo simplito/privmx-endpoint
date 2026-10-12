@@ -77,8 +77,6 @@ store::DecryptedFileMetaV5 FileMetaEncryptorV5::decrypt(
         result.authorPubKey = encryptedFileMeta.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
@@ -105,8 +103,6 @@ store::DecryptedFileMetaV5 FileMetaEncryptorV5::extractPublic(
         result.authorPubKey = encryptedFileMeta.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }

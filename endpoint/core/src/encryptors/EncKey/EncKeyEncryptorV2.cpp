@@ -74,8 +74,6 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(
         result.keySecret = utils::Base64::toString(decryptedKey.keySecret);
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }

@@ -231,7 +231,7 @@ bool KvdbApiImpl::hasEntry(const std::string& kvdbId, const std::string& key) {
     try {
         server::KvdbEntryGetModel model{.kvdbId = kvdbId, .kvdbEntryKey = key};
         _serverApi.kvdbEntryGet(model);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         if (core::ExceptionConverter::convert(e).getCode() ==
             privmx::endpoint::server::KvdbEntryDoesNotExistException().getCode()) {
             return false;

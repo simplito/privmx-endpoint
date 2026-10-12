@@ -63,8 +63,6 @@ ContextCustomEventData EventDataSchemaMapper::decrypt(const server::ContextCusto
         return _strategyV5->convert(rawEvent, raw);
     } catch (const core::Exception& e) {
         return makeErrorResult(rawEvent, e.getCode());
-    } catch (const privmx::utils::PrivmxException& e) {
-        return makeErrorResult(rawEvent, core::ExceptionConverter::convert(e).getCode());
     } catch (...) { return makeErrorResult(rawEvent, ENDPOINT_CORE_EXCEPTION_CODE); }
 }
 
@@ -95,8 +93,6 @@ DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
         }
     } catch (const core::Exception& e) {
         result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }

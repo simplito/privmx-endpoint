@@ -40,7 +40,7 @@ ContextCustomEvent Events::extractContextCustomEvent(const core::EventHolder& ha
             throw CannotExtractContextCustomEvent();
         }
         return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

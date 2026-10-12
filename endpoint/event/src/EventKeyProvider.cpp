@@ -31,8 +31,6 @@ DecryptedEventEncKeyV1 EventKeyProvider::decryptKey(
         encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_key, encryptedKey, authorPubKey);
     } catch (const privmx::endpoint::core::Exception& e) {
         statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return DecryptedEventEncKeyV1{
         core::DecryptedVersionedData{.dataStructureVersion = 1, .statusCode = statusCode}, .key = encKey

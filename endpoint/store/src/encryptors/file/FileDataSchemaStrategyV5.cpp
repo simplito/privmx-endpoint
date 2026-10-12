@@ -41,16 +41,6 @@ DecryptedFileMetaV5 FileDataSchemaStrategyV5::decryptFileMeta(
              {},
              {}}
         );
-    } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedFileMetaV5(
-            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5,
-              .statusCode = core::ExceptionConverter::convert(e).getCode()},
-             {},
-             {},
-             {},
-             {},
-             {}}
-        );
     } catch (...) {
         return DecryptedFileMetaV5(
             {{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},
@@ -79,8 +69,6 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::convert(
             randomWrite = internalMeta.randomWrite.value_or(false);
         } catch (const core::Exception& e) {
             statusCode = e.getCode();
-        } catch (const privmx::utils::PrivmxException& e) {
-            statusCode = core::ExceptionConverter::convert(e).getCode();
         } catch (...) { statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     }
     return {

@@ -90,8 +90,6 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
         result.authorPubKey = encryptedMessageData.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
@@ -118,8 +116,6 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(
         result.authorPubKey = encryptedMessageData.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }

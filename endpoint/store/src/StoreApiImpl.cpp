@@ -463,19 +463,11 @@ void StoreApiImpl::flushFile(const int64_t handle) {
         if (e.getCode() != privmx::endpoint::server::InvalidKeyException().getCode()) {
             e.rethrow();
         }
-    } catch (const privmx::utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() !=
-            privmx::endpoint::server::InvalidKeyException().getCode()) {
-            core::ExceptionConverter::rethrowAsCoreException(e);
-        }
     }
     try {
         rw_handle->file->refreshEncKey(getCurrentFileEncKey(rw_handle->getFileId()));
         rw_handle->file->flush();
     } catch (const core::Exception& e) {
-        rw_handle->file->discardPending();
-        e.rethrow();
-    } catch (const privmx::utils::PrivmxException& e) {
         rw_handle->file->discardPending();
         e.rethrow();
     }

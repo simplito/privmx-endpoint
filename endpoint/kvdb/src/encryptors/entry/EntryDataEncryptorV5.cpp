@@ -88,8 +88,6 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
         result.authorPubKey = encryptedEntryData.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }
@@ -116,8 +114,6 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(
         result.authorPubKey = encryptedEntryData.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
     } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
     return result;
 }

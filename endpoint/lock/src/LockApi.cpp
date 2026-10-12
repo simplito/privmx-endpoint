@@ -34,7 +34,7 @@ LockApi LockApi::create(core::Connection& connection) {
         std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
         std::shared_ptr<LockApiImpl> impl(new LockApiImpl(connectionImpl->getGateway()));
         return LockApi(impl);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -46,7 +46,7 @@ LockOperationResult LockApi::lock(const std::string& resourceId, const std::stri
     auto impl = getImpl();
     try {
         return impl->lock(resourceId, uuid, lockLevel);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -56,7 +56,7 @@ LockOperationResult LockApi::unlock(const std::string& resourceId, const std::st
     auto impl = getImpl();
     try {
         return impl->unlock(resourceId, uuid, lockLevel);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -66,7 +66,7 @@ bool LockApi::checkReservedLock(const std::string& resourceId, const std::string
     auto impl = getImpl();
     try {
         return impl->checkReservedLock(resourceId, uuid);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }

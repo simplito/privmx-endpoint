@@ -18,7 +18,7 @@ using namespace privmx::endpoint::crypto;
 ExtKey ExtKey::fromSeed(const core::Buffer& seed) {
     try {
         return ExtKey(privmx::crypto::ExtKey::fromSeed(seed.stdString()));
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -27,7 +27,7 @@ ExtKey ExtKey::fromSeed(const core::Buffer& seed) {
 ExtKey ExtKey::fromBase58(const std::string& base58) {
     try {
         return ExtKey(privmx::crypto::ExtKey::fromBase58(base58));
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -36,7 +36,7 @@ ExtKey ExtKey::fromBase58(const std::string& base58) {
 ExtKey ExtKey::generateRandom() {
     try {
         return ExtKey(privmx::crypto::ExtKey::generateRandom());
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -49,7 +49,7 @@ ExtKey::ExtKey(const privmx::crypto::ExtKey& impl) : _impl(std::make_shared<priv
 ExtKey ExtKey::derive(uint32_t index) const {
     try {
         return ExtKey(_impl->derive(index));
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -58,7 +58,7 @@ ExtKey ExtKey::derive(uint32_t index) const {
 ExtKey ExtKey::deriveHardened(uint32_t index) const {
     try {
         return ExtKey(_impl->deriveHardened(index));
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -67,7 +67,7 @@ ExtKey ExtKey::deriveHardened(uint32_t index) const {
 std::string ExtKey::getPrivatePartAsBase58() const {
     try {
         return _impl->getPrivatePartAsBase58();
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -76,7 +76,7 @@ std::string ExtKey::getPrivatePartAsBase58() const {
 std::string ExtKey::getPublicPartAsBase58() const {
     try {
         return _impl->getPublicPartAsBase58();
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -85,7 +85,7 @@ std::string ExtKey::getPublicPartAsBase58() const {
 std::string ExtKey::getPrivateKey() const {
     try {
         return _impl->getPrivateKey().toWIF();
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -94,7 +94,7 @@ std::string ExtKey::getPrivateKey() const {
 std::string ExtKey::getPublicKey() const {
     try {
         return _impl->getPublicKeyAsBase58();
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -103,7 +103,7 @@ std::string ExtKey::getPublicKey() const {
 privmx::endpoint::core::Buffer ExtKey::getPrivateEncKey() const {
     try {
         return privmx::endpoint::core::Buffer::from(_impl->getPrivateEncKey());
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -112,7 +112,7 @@ privmx::endpoint::core::Buffer ExtKey::getPrivateEncKey() const {
 std::string ExtKey::getPublicKeyAsBase58Address() const {
     try {
         return _impl->getPublicKeyAsBase58Address();
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -121,7 +121,7 @@ std::string ExtKey::getPublicKeyAsBase58Address() const {
 privmx::endpoint::core::Buffer ExtKey::getChainCode() const {
     try {
         return privmx::endpoint::core::Buffer::from(_impl->getChainCode());
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -133,7 +133,7 @@ bool ExtKey::verifyCompactSignatureWithHash(
 ) const {
     try {
         return _impl->verifyCompactSignatureWithHash(message.stdString(), signature.stdString());
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
@@ -142,7 +142,7 @@ bool ExtKey::verifyCompactSignatureWithHash(
 bool ExtKey::isPrivate() const {
     try {
         return _impl->isPrivate();
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
     }
