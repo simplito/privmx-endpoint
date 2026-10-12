@@ -22,7 +22,7 @@ elseif(PRIVMX_NET STREQUAL "DRIVER")
 endif()
 
 file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/base/src/*.cpp)
-set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/base/include ${CMAKE_CURRENT_BINARY_DIR}/include)
+set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/base/include ${CMAKE_CURRENT_SOURCE_DIR}/base/include_pub ${CMAKE_CURRENT_BINARY_DIR}/include)
 set(LIBS "")
 
 if(PRIVMX_ENABLE_NET_POCO)
@@ -71,6 +71,7 @@ target_link_libraries(privmxrpc PUBLIC Poco::Foundation privmxutils privmxcrypto
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxrpc PROPERTIES POSITION_INDEPENDENT_CODE True)
 endif()
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/base/include_pub/privmx DESTINATION include)
 if(PRIVMX_INSTALL_PRIVATE_HEADERS)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/base/include/privmx DESTINATION include)
 endif()

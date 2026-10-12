@@ -13,17 +13,18 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_CORE_EXCEPTION_CONVERTER_HPP_
 
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/utils/PrivmxException.hpp"
-#include <optional>
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 
+// deprecated: the lower layers throw core::Exception directly, so only the alert carrying
+// "User doesn't exist" is still translated here, the transport cannot tell it from any other alert
+
 class ExceptionConverter {
 public:
-    static privmx::endpoint::core::Exception convert(const privmx::utils::PrivmxException& e);
-    static void rethrowAsCoreException(const privmx::utils::PrivmxException& e);
+    static Exception convert(const Exception& e);
+    static void rethrowAsCoreException(const Exception& e);
 };
 
 } // namespace core

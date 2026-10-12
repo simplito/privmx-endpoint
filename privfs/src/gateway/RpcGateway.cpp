@@ -189,10 +189,8 @@ void RpcGateway::tryRestoreBySession() {
             .properties = info->properties
         }, getOptions().asOpt());
         switchRpc(new_rpc);
-    } catch (PrivmxException& e) {
-        if (e.getType() == PrivmxException::ALERT) {
-            info->session_key = nullopt;
-        }
+    } catch (const privmx::rpc::ServerAlertException& e) {
+        info->session_key = nullopt;
         e.rethrow();
     }
 }

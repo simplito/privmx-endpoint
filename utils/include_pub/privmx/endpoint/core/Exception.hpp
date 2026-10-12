@@ -57,6 +57,9 @@ public:
     std::string getDescription() const noexcept;
     std::string getFull(bool JSON = false) const noexcept;
     std::shared_ptr<const Exception> getCause() const noexcept { return _cause; }
+    // verbatim payload the Bridge attached to the error, kept unparsed so callers can read its structure
+    std::string getData() const noexcept;
+    void setData(std::string data) noexcept { _data = std::move(data); }
     virtual void rethrow() const;
 
 private:
@@ -67,6 +70,7 @@ private:
     std::string _description;
     std::string _what; // _what = _msg + _description + _cause
     std::shared_ptr<const Exception> _cause;
+    std::string _data;
 };
 
 inline std::string Exception::getName() const noexcept {
@@ -83,6 +87,10 @@ inline unsigned int Exception::getCode() const noexcept {
 
 inline std::string Exception::getDescription() const noexcept {
     return _description;
+}
+
+inline std::string Exception::getData() const noexcept {
+    return _data;
 }
 
 inline std::string Exception::getFull(bool JSON) const noexcept {

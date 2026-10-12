@@ -31,7 +31,6 @@ class ExceptionHandler {
 public:
     static Poco::Dynamic::Var make_error(const std::string& message = "Unknown");
     static Poco::Dynamic::Var make_error(const endpoint::core::Exception& e);
-    static Poco::Dynamic::Var make_error(const utils::PrivmxException& e);
     static Poco::Dynamic::Var make_error(const Poco::Exception& e);
     static Poco::Dynamic::Var make_error(const std::exception& e);
 };
@@ -52,10 +51,6 @@ inline Poco::Dynamic::Var ExceptionHandler::make_error(const endpoint::core::Exc
     }
     error->set("__type", "Error");
     return error;
-}
-
-inline Poco::Dynamic::Var ExceptionHandler::make_error(const utils::PrivmxException& e) {
-    return make_error(endpoint::core::ExceptionConverter::convert(e));
 }
 
 inline Poco::Dynamic::Var ExceptionHandler::make_error(const Poco::Exception& e) {

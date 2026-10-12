@@ -159,8 +159,8 @@ void ConnectionBase::process(istream& input) {
                 _next_read_state = RWState();
                 break;
             case ContentType::ALERT:
-                // errors form connection  
-                throw PrivmxException(frame_data, PrivmxException::ALERT);
+                // errors form connection
+                throw ServerAlertException(frame_data);
                 break;
         }
     }
