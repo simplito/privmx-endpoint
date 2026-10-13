@@ -100,9 +100,16 @@ TEST_F(GroupTest, listGroups_correct_input_data) {
     for (const auto& g : groupsList.readItems) {
         EXPECT_EQ(g.contextId, reader->getString("Context_1.contextId"));
         EXPECT_FALSE(g.groupId.empty());
-        EXPECT_FALSE(g.groupPubKey.empty());
+        EXPECT_TRUE(g.groupPubKey.empty()) << "nothing verified in this process yet, and a listing vouches for nothing";
         EXPECT_GE(g.keyVersion, 0);
     }
+    // Once `getGroup` has verified a group, the listing hands out that same key.
+    const std::string groupPubKey = groupApi->getGroup(groupsList.readItems[0].groupId).groupPubKey;
+    EXPECT_FALSE(groupPubKey.empty());
+    const auto relisted = groupApi->listGroups(
+        reader->getString("Context_1.contextId"), core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "asc"}
+    );
+    EXPECT_EQ(relisted.readItems[0].groupPubKey, groupPubKey);
     // limit=1
     core::PagingList<group::GroupSummary> groupsPage;
     EXPECT_NO_THROW({

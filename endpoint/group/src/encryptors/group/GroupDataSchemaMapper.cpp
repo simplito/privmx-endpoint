@@ -14,9 +14,42 @@
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
+#include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
+
+namespace {
+
+bool onRoster(
+    const privmx::endpoint::group::server::GroupInfo& groupInfo,
+    const std::string& userId,
+    const std::vector<std::string>& former = {}
+) {
+    for (const auto* list : {&groupInfo.users, &groupInfo.managers, &former}) {
+        if (std::find(list->begin(), list->end(), userId) != list->end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// A plane's key opened, and the plane and its key written by somebody on the roster (or a former member). Anybody in
+// the context can wrap a key to the group's public grant key and tag a plane under it; only the roster says who
+// writes the group's metadata. (Which members may is the bridge's policy, which nothing signs.)
+void assertWrittenByMember(
+    const server::GroupInfo& groupInfo,
+    const std::string& author,
+    const core::DecryptedEncKeyV2& key,
+    const std::vector<std::string>& former
+) {
+    if (key.statusCode != 0 || !onRoster(groupInfo, author, former) ||
+        !onRoster(groupInfo, key.dio.creatorUserId, former)) {
+        throw GroupMembershipMismatchException();
+    }
+}
+
+} // namespace
 
 GroupDataSchemaMapper::GroupDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
@@ -78,9 +111,14 @@ std::tuple<Group, core::DataIntegrityObject, core::DataIntegrityObject> GroupDat
 // is a failure, not a pass: if the metadata opened, the roster must attest.
 void GroupDataSchemaMapper::assertRosterIsAttested(
     const server::GroupInfo& groupInfo,
-    const core::DecryptedEncKey& rosterKey
+    const core::DecryptedEncKeyV2& rosterKey
 ) {
     if (rosterKey.statusCode != 0 || groupInfo.data.empty()) {
+        throw GroupMembershipMismatchException();
+    }
+    // The head key is wrapped by whoever opened the epoch, a member until a removal opens the next one. Anybody
+    // else's entry (a removed member's, the UserVerifier vouching only that it is theirs) is a key they chose.
+    if (!onRoster(groupInfo, rosterKey.dio.creatorUserId)) {
         throw GroupMembershipMismatchException();
     }
     auto encData = dynamic::EncryptedGroupRosterV5::fromJSON(groupInfo.data.back().data);
@@ -121,11 +159,10 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
 // from being served here is the domain-separated tag, plus a parse that refuses an envelope with no `publicMeta`.
 void GroupDataSchemaMapper::assertPublicMetaIsAttested(
     const server::GroupInfo& groupInfo,
-    const core::DecryptedEncKey& publicMetaKey
+    const core::DecryptedEncKeyV2& publicMetaKey,
+    const std::vector<std::string>& formerMembers
 ) {
-    if (publicMetaKey.statusCode != 0) {
-        throw GroupMembershipMismatchException();
-    }
+    assertWrittenByMember(groupInfo, groupInfo.publicMeta.author, publicMetaKey, formerMembers);
     dynamic::EncryptedGroupPublicMetaV5 encData;
     try {
         encData = dynamic::EncryptedGroupPublicMetaV5::fromJSON(groupInfo.publicMeta.data);
@@ -156,19 +193,19 @@ void GroupDataSchemaMapper::assertPublicMetaIsAttested(
     if (meta.metaVersion != groupInfo.publicMetaVersion) {
         throw GroupMembershipMismatchException();
     }
-    // Not checked, because a reader cannot: that the author still holds the group. Nothing inside epoch N
-    // orders "written during N" against "written after N ended" — `refreshMetadataEpochAfterRemoval` is the fix.
+    // A member removed since may have written this, and still holds its key: nothing inside epoch N orders
+    // "written during N" against "written after N ended". `refreshMetadataEpochAfterRemoval` carries the plane up
+    // to the new epoch under the remover's name; until it has, the plane reads as unattested.
 }
 
 // The private plane's counterpart, against its own entry, its own tag domain and its own counter. The epoch
 // caveat documented at the end of `assertPublicMetaIsAttested` applies here unchanged.
 void GroupDataSchemaMapper::assertPrivateMetaIsAttested(
     const server::GroupInfo& groupInfo,
-    const core::DecryptedEncKey& privateMetaKey
+    const core::DecryptedEncKeyV2& privateMetaKey,
+    const std::vector<std::string>& formerMembers
 ) {
-    if (privateMetaKey.statusCode != 0) {
-        throw GroupMembershipMismatchException();
-    }
+    assertWrittenByMember(groupInfo, groupInfo.privateMeta.author, privateMetaKey, formerMembers);
     dynamic::EncryptedGroupPrivateMetaV5 encData;
     try {
         encData = dynamic::EncryptedGroupPrivateMetaV5::fromJSON(groupInfo.privateMeta.data);
@@ -253,8 +290,10 @@ std::string GroupDataSchemaMapper::privateMetaTag(const std::string& key, int64_
     return metaPlaneTag("privateMeta", key, keyVersion, metaVersion);
 }
 
-// Head-entry integrity only: the DIO signature and field checksums, plus the monotone version pins that a
-// per-entry tag cannot provide. Three pins, because the three counters move independently.
+// Head-entry integrity only: the DIO signature and field checksums, plus a comparison against the monotone version
+// pins that a per-entry tag cannot provide. Three pins, because the three counters move independently. Compares,
+// never stores: a response that passes here may still fail its tags or its author check, and a pin moved by such a
+// response would turn the next honest one into a fork (`storeVersionPins` runs once everything has passed).
 core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const server::GroupInfo& groupInfo) {
     // `history` is the same set of entries `data` is projected from, so the head of one is the head of the
     // other — and the roster plane's author comes out of `history`.
@@ -266,41 +305,38 @@ core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const serve
     try {
         dio = _groupEncryptor.getRosterDIOAndAssertIntegrity(encData);
     } catch (...) { throw GroupDataIntegrityException(); }
-    if (dio.contextId != groupInfo.contextId || dio.resourceId != groupInfo.resourceId.value_or("")) {
+    // The served context and resourceId only count as what the id was derived from.
+    if (dio.contextId != groupInfo.contextId || dio.resourceId != groupInfo.resourceId.value_or("") ||
+        keytree::TreeCommits::groupId(dio.contextId, dio.resourceId) != groupInfo.id) {
         throw GroupDataIntegrityException();
     }
-
-    // Compare and store under one lock: two concurrent verifications must not both pass against the same stale
-    // pin, or the later one could accept a version older than the one already verified.
     std::lock_guard lock(_pinMutex);
-    auto& pinnedRoster = _verifiedRosterVersions[groupInfo.id];
-    auto& pinnedPublicMeta = _verifiedPublicMetaVersions[groupInfo.id];
-    auto& pinnedPrivateMeta = _verifiedPrivateMetaVersions[groupInfo.id];
-    if (groupInfo.rosterVersion < pinnedRoster ||
-        groupInfo.publicMetaVersion < pinnedPublicMeta ||
-        groupInfo.privateMetaVersion < pinnedPrivateMeta) {
+    assertNotBelowPins(groupInfo);
+    return dio;
+}
+
+void GroupDataSchemaMapper::assertNotBelowPins(const server::GroupInfo& groupInfo) {
+    const auto pinned = [](const std::map<std::string, int64_t>& pins, const std::string& groupId) {
+        const auto it = pins.find(groupId);
+        return it == pins.end() ? int64_t(0) : it->second;
+    };
+    if (groupInfo.rosterVersion < pinned(_verifiedRosterVersions, groupInfo.id) ||
+        groupInfo.publicMetaVersion < pinned(_verifiedPublicMetaVersions, groupInfo.id) ||
+        groupInfo.privateMetaVersion < pinned(_verifiedPrivateMetaVersions, groupInfo.id)) {
         // A shorter answer than one already seen is a validly tagged *past* state — a rollback, not an error the
         // tag itself can catch, because that older tag was genuine when it was made.
         throw GroupHistoryForkException();
     }
-    pinnedRoster = groupInfo.rosterVersion;
-    pinnedPublicMeta = groupInfo.publicMetaVersion;
-    pinnedPrivateMeta = groupInfo.privateMetaVersion;
-    return dio;
 }
 
-void GroupDataSchemaMapper::dropVersionPin(const std::string& groupId) {
+void GroupDataSchemaMapper::storeVersionPins(const server::GroupInfo& groupInfo) {
+    // Compare again and store under one lock: two concurrent verifications must not both pass against the same
+    // stale pin, or the later one could accept a version older than the one already verified.
     std::lock_guard lock(_pinMutex);
-    _verifiedRosterVersions.erase(groupId);
-    _verifiedPublicMetaVersions.erase(groupId);
-    _verifiedPrivateMetaVersions.erase(groupId);
-}
-
-void GroupDataSchemaMapper::dropAllVersionPins() {
-    std::lock_guard lock(_pinMutex);
-    _verifiedRosterVersions.clear();
-    _verifiedPublicMetaVersions.clear();
-    _verifiedPrivateMetaVersions.clear();
+    assertNotBelowPins(groupInfo);
+    _verifiedRosterVersions[groupInfo.id] = groupInfo.rosterVersion;
+    _verifiedPublicMetaVersions[groupInfo.id] = groupInfo.publicMetaVersion;
+    _verifiedPrivateMetaVersions[groupInfo.id] = groupInfo.privateMetaVersion;
 }
 
 std::pair<uint32_t, core::DataIntegrityObject> GroupDataSchemaMapper::validateDataIntegrity(
@@ -352,8 +388,6 @@ GroupSummary GroupDataSchemaMapper::toLibGroupSummary(const server::GroupSummary
         .creator = info.creator,
         .lastModificationDate = info.lastModificationDate,
         .lastModifier = info.lastModifier,
-        .users = info.users,
-        .managers = info.managers,
         .publicMetaVersion = info.publicMetaVersion,
         .privateMetaVersion = info.privateMetaVersion,
         .rosterVersion = info.rosterVersion,
@@ -363,12 +397,21 @@ GroupSummary GroupDataSchemaMapper::toLibGroupSummary(const server::GroupSummary
     };
 }
 
+void GroupDataSchemaMapper::addReadKeys(
+    core::KeyDecryptionAndVerificationRequest& request, const server::GroupInfo& g, const core::EncKeyLocation& location
+) {
+    for (const std::string& keyId : std::set<std::string>{g.data.back().keyId, g.publicMeta.keyId, g.privateMeta.keyId}) {
+        request.addGroupKeys(g.groupKeys, location, keyId);
+    }
+}
+
 // Three keys and three identities per group, so `batchValidateDecryptVerifyContainers` does not fit: it
 // hardcodes one key and verifies against the document's `lastModifier`, which no plane here need match.
 std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     const std::vector<server::GroupInfo>& groups,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
-    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
+    const std::vector<std::string>& formerMembers
 ) {
     if (groups.empty()) {
         return {};
@@ -401,7 +444,7 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
         if (result[i].statusCode != 0) {
             continue;
         }
-        keyRequest.addGroupKeys(groups[i].groupKeys, locationOf(groups[i]));
+        addReadKeys(keyRequest, groups[i], locationOf(groups[i]));
     }
     auto allKeys = keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver);
     std::set<std::string> seenRandomIds;
@@ -419,20 +462,20 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             }
             // Three key lookups; the two metadata ones may resolve different epochs. `find` rather than `at`,
             // so an absent key is a legible status, not an out_of_range escaping as a bare internal error.
-            const auto keyOf = [&](const std::string& keyId) -> const core::DecryptedEncKey* {
+            const auto keyOf = [&](const std::string& keyId) -> const core::DecryptedEncKeyV2* {
                 auto found = it->second.find(keyId);
                 return found == it->second.end() ? nullptr : &found->second;
             };
-            const core::DecryptedEncKey* rosterKey = keyOf(g.data.back().keyId);
-            const core::DecryptedEncKey* publicMetaKey = keyOf(g.publicMeta.keyId);
-            const core::DecryptedEncKey* privateMetaKey = keyOf(g.privateMeta.keyId);
+            const core::DecryptedEncKeyV2* rosterKey = keyOf(g.data.back().keyId);
+            const core::DecryptedEncKeyV2* publicMetaKey = keyOf(g.publicMeta.keyId);
+            const core::DecryptedEncKeyV2* privateMetaKey = keyOf(g.privateMeta.keyId);
             if (rosterKey == nullptr || publicMetaKey == nullptr || privateMetaKey == nullptr) {
                 result[i] = toError(g, GroupMembershipMismatchException().getCode());
                 continue;
             }
             assertRosterIsAttested(g, *rosterKey);
-            assertPublicMetaIsAttested(g, *publicMetaKey);
-            assertPrivateMetaIsAttested(g, *privateMetaKey);
+            assertPublicMetaIsAttested(g, *publicMetaKey, formerMembers);
+            assertPrivateMetaIsAttested(g, *privateMetaKey, formerMembers);
 
             auto [lib, publicDio, privateDio] = decryptMetaPlanes(g, *privateMetaKey);
             result[i] = lib;
@@ -503,6 +546,15 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             result[verifyIdxs[j]].statusCode = core::UserVerificationFailureException().getCode();
         }
     }
+    // Only a group that passed every step moves its pins.
+    for (size_t i = 0; i < result.size(); i++) {
+        if (result[i].statusCode != 0) {
+            continue;
+        }
+        try {
+            storeVersionPins(groups[i]);
+        } catch (const core::Exception& e) { result[i].statusCode = e.getCode(); }
+    }
     return result;
 }
 
@@ -541,9 +593,10 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
 Group GroupDataSchemaMapper::validateDecryptAndConvertGroup(
     const server::GroupInfo& groupInfo,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
-    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
+    const std::vector<std::string>& formerMembers
 ) {
-    return validateDecryptAndConvertGroups({groupInfo}, keyProvider, groupPrivKeyResolver)[0];
+    return validateDecryptAndConvertGroups({groupInfo}, keyProvider, groupPrivKeyResolver, formerMembers)[0];
 }
 
 std::pair<std::vector<std::string>, std::vector<std::string>> GroupDataSchemaMapper::validateAndGetAttestedRoster(
@@ -551,17 +604,25 @@ std::pair<std::vector<std::string>, std::vector<std::string>> GroupDataSchemaMap
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    assertDataIntegrity(groupInfo);
+    assertDataIntegrity(groupInfo); // before resolving any key off the entry
+    if (groupInfo.data.empty()) {
+        throw GroupMembershipMismatchException();
+    }
     const core::EncKeyLocation location{
         .contextId = groupInfo.contextId, .resourceId = groupInfo.resourceId.value_or("")
     };
     core::KeyDecryptionAndVerificationRequest keyRequest;
-    keyRequest.addGroupKeys(groupInfo.groupKeys, location);
+    keyRequest.addGroupKeys(groupInfo.groupKeys, location, groupInfo.data.back().keyId); // the only key read here
     auto allKeys = keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver);
     auto it = allKeys.find(location);
-    if (it == allKeys.end() || groupInfo.data.empty()) {
+    if (it == allKeys.end()) {
         throw GroupMembershipMismatchException();
     }
-    assertRosterIsAttested(groupInfo, it->second.at(groupInfo.data.back().keyId));
+    const auto rosterKey = it->second.find(groupInfo.data.back().keyId);
+    if (rosterKey == it->second.end()) {
+        throw GroupMembershipMismatchException();
+    }
+    assertRosterIsAttested(groupInfo, rosterKey->second);
+    storeVersionPins(groupInfo);
     return {groupInfo.users, groupInfo.managers};
 }

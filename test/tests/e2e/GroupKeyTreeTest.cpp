@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <algorithm>
 #include "BaseGroupTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -7,6 +8,7 @@
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupApiImpl.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -481,6 +483,20 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_leaves_the_same_session_able_to_read
     EXPECT_EQ(before.data.stdString(), "data_before");
 }
 
+TEST_F(GroupKeyTreeTest, a_resolved_epoch_key_is_not_fetched_again_in_the_same_connection) {
+    // Every container key read resolves its grant's group epoch; once known, that epoch must cost no `groupGet` and
+    // climb again. Shown by deleting the group first, after which any read of it fails. The delete goes straight to
+    // the server: `deleteGroup` itself drops the group's cached keys (T4-14), which is not what is measured here.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
+    const auto impl = groupApi->getImpl();
+    std::optional<privmx::crypto::PrivateKey> first, again;
+    ASSERT_NO_THROW({ first = impl->resolveGroupPrivKey(groupId, 1); });
+    ASSERT_NO_THROW({ group::ServerApi(connection->getImpl()->getGateway()).groupDelete({.groupId = groupId}); });
+    ASSERT_NO_THROW({ again = impl->resolveGroupPrivKey(groupId, 1); });
+    EXPECT_EQ(again->getPublicKey().toBase58DER(), first->getPublicKey().toBase58DER());
+}
+
 TEST_F(GroupKeyTreeTest, reconnecting_rebuilds_the_key_cache_from_scratch) {
     // Connect and disconnect both empty the cache. A read after reconnecting has to climb again and succeed.
     std::string groupId;
@@ -684,6 +700,30 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_rejects_somebody_who_is_not_a_member
     EXPECT_THROW({
         groupApi->removeGroupMembers(groupId, {user(3).userId});
     }, core::Exception);
+}
+
+TEST_F(GroupKeyTreeTest, SECURITY_removeGroupMembers_refuses_to_remove_the_caller) {
+    // The remover mints the next epoch's grant key, so removing yourself would walk out holding the key meant to
+    // lock you out. Refused client-side before anything is planned, and by the bridge besides.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
+    EXPECT_THROW({
+        groupApi->removeGroupMembers(groupId, {user(2).userId, user(1).userId});
+    }, core::InvalidParamsException);
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.keyVersion, 1) << "nothing was committed";
+    EXPECT_NE(std::find(after.users.begin(), after.users.end(), user(2).userId), after.users.end());
+}
+
+TEST_F(GroupKeyTreeTest, createGroup_refuses_a_creator_outside_the_group) {
+    // A creator commits its own path like anybody else, so it needs a seat to have one.
+    EXPECT_THROW({
+        groupApi->createGroup(
+            contextId(), {user(2), user(3)}, std::vector<core::UserWithPubKey>{user(2)},
+            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
+        );
+    }, core::InvalidParamsException);
 }
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_remove_anybody) {

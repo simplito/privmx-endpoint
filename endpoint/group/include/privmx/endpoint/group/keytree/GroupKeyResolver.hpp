@@ -13,12 +13,14 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_GROUPKEYRESOLVER_HPP_
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include "privmx/endpoint/group/keytree/LadderKeys.hpp"
+#include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeys.hpp"
 
 namespace privmx {
@@ -34,6 +36,12 @@ enum class ResolveFailure {
     ClimbFailed,
     // The current epoch was reached but the requested older one was not.
     DescentFailed,
+    // The group's tree has a layout (`treeVersion`) this client does not read.
+    UnsupportedTreeVersion,
+    // The requested epoch lies past the current one: there is no key for it yet.
+    FutureEpoch,
+    // The requested epoch is negative or outside the range epochs have.
+    InvalidEpoch,
 };
 
 struct ResolveResult {
@@ -53,8 +61,9 @@ class GroupKeyResolver {
 public:
     GroupKeyResolver(TreeKeyCache& cache);
 
-    // `epoch` 0 means current; `archive` is the ladder, fetched separately because it grows with the whole history
-    // and is only needed for an older epoch. The caller's identity comes from `group.ownLeafPosition`.
+    // `epoch` 0 means current; one past the current fails as `FutureEpoch`. `archive` is the ladder, fetched
+    // separately because it grows with the whole history and is only needed for an older epoch. The caller's
+    // identity comes from `group.ownLeafPosition`.
     ResolveResult resolve(
         const server::GroupInfo& group,
         std::int64_t epoch,
@@ -64,7 +73,26 @@ public:
 
     static std::optional<std::string> ownUserId(const server::GroupInfo& group);
 
+    // The lowest node of the caller's keyed path it should self-update over, if any: one blank in the served state
+    // (left so by a removal), or set by somebody not seated under it (the creator or an adder), who keeps that key.
+    static std::optional<std::uint32_t> nodeNeedingSelfUpdate(const server::GroupInfo& group);
+    // Whether the caller holds the lowest occupied seat under `node` (a node of its own keyed path). That seat heals
+    // the node first; every other seat under it only stands in when it did not, so a node draws one commit, not one
+    // per member under it.
+    static bool healsFirst(const server::GroupInfo& group, std::uint32_t node);
+
     static bool hasTree(const server::GroupInfo& group);
+
+    // Who published what a climb found tampered (`ClimbResult::tamperedNode`): a node's edges come from the
+    // statement that set its key (`setBy`), the grant edge (no node) from the latest one, which rewrites it.
+    static std::optional<std::string> tamperedBy(
+        const server::GroupInfo& group,
+        const std::optional<std::uint32_t>& tamperedNode
+    );
+
+    // Whether the tree is in the one layout this client reads (TreeMath::TREE_VERSION). Older groups are refused,
+    // not migrated.
+    static bool hasSupportedTree(const server::GroupInfo& group);
 
     // ── Conversions from the wire types. Public so they can be tested directly. ──
 
@@ -82,6 +110,15 @@ public:
     static std::vector<EpochRegistryEntry> registryFromArchive(
         const server::GroupInfo& group,
         const server::GroupGetKeyArchiveResult& archive
+    );
+
+    // The archive as the group's statements vouch for it, `openers` being the statement that opened each epoch
+    // (TreeVerifier::epochOpeners): each past grant key off its statement rather than the bridge's `keyHistory`, and
+    // only the rungs sealed by the committer that opened the epoch they hang from, named as their author. A rung the
+    // bridge sealed itself is dropped.
+    static server::GroupGetKeyArchiveResult authenticated(
+        server::GroupGetKeyArchiveResult archive,
+        const std::map<std::uint64_t, CommitStatement>& openers
     );
 
 private:

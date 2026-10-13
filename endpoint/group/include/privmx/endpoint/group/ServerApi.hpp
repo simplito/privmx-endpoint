@@ -27,6 +27,8 @@ public:
     // ── Tree-backed membership (documents/nested_groups/09-hidden-key-tree.md) ──
     void groupAddMembers(server::GroupAddMembersModel model);
     void groupRemoveMembers(server::GroupRemoveMembersModel model);
+    void groupSelfUpdate(server::GroupSelfUpdateModel model);
+    server::GroupGetTreeCommitsResult groupGetTreeCommits(server::GroupGetTreeCommitsModel model);
     void groupCutEra(server::GroupCutEraModel model);
     void groupPruneArchive(server::GroupPruneArchiveModel model);
     // The Epoch Ladder, fetched only when a client is actually reaching for an older epoch.

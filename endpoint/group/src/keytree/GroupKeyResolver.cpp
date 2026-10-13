@@ -11,7 +11,13 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 
+#include <algorithm>
+#include <limits>
+
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
+
+#include "privmx/endpoint/group/keytree/TreeMath.hpp"
+#include "privmx/endpoint/group/keytree/TreeWire.hpp"
 
 using namespace privmx::endpoint::group::keytree;
 
@@ -25,52 +31,35 @@ bool GroupKeyResolver::hasTree(const server::GroupInfo& group) {
         group.leafAssignment.has_value();
 }
 
+bool GroupKeyResolver::hasSupportedTree(const server::GroupInfo& group) {
+    return group.treeVersion.value_or(0) == static_cast<std::int64_t>(TreeMath::TREE_VERSION);
+}
+
+namespace {
+
+// The statements served with the group: the ones its filled nodes cite, and the latest.
+std::vector<privmx::endpoint::group::server::GroupTreeCommit> statements(
+    const privmx::endpoint::group::server::GroupInfo& group
+) {
+    auto all = group.treeCommits.value_or(std::vector<privmx::endpoint::group::server::GroupTreeCommit>{});
+    if (group.treeCommit.has_value()) {
+        all.push_back(group.treeCommit.value());
+    }
+    return all;
+}
+
+} // namespace
+
 TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
-    TreeGroupState state;
-    state.numLeaves = static_cast<std::uint32_t>(group.numLeaves.value_or(0));
-    state.epoch = static_cast<std::uint32_t>(group.keyVersion);
-    state.grantPublicKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey);
-
-    if (group.leafAssignment.has_value()) {
-        for (const std::string& userId : group.leafAssignment.value()) {
-            // The wire format uses an empty string for a blank leaf.
-            if (userId.empty()) {
-                state.leafAssignment.push_back(std::nullopt);
-            } else {
-                state.leafAssignment.push_back(userId);
-            }
-        }
+    TreeGroupState state = TreeWire::toRuntime(
+        TreeWire::fromGroupInfo(group), static_cast<std::uint32_t>(group.keyVersion),
+        privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey)
+    );
+    if (group.treeCommit.has_value() && group.treeCommit->seq > 0) {
+        state.commitSeq = static_cast<std::uint64_t>(group.treeCommit->seq);
     }
-
-    if (group.treeNodes.has_value()) {
-        for (const server::GroupTreeNode& node : group.treeNodes.value()) {
-            state.nodes.push_back(
-                TreeNodeState{
-                    static_cast<std::uint32_t>(node.nodeIndex),
-                    static_cast<std::uint32_t>(node.generation),
-                    NodePublicKey::fromBase58DER(node.publicKey),
-                }
-            );
-        }
-    }
-
-    if (group.treeEdges.has_value()) {
-        for (const server::GroupTreeEdge& edge : group.treeEdges.value()) {
-            TreeEdge converted;
-            converted.isGrantEdge = edge.isGrantEdge.value_or(false);
-            converted.parentIndex = static_cast<std::uint32_t>(edge.parentIndex.value_or(0));
-            converted.parentGeneration = static_cast<std::uint32_t>(edge.parentGeneration);
-            if (edge.childKind == "user") {
-                converted.childKind = EdgeChildKind::User;
-                converted.childUserId = edge.childUserId.value_or("");
-            } else {
-                converted.childKind = EdgeChildKind::Node;
-                converted.childIndex = static_cast<std::uint32_t>(edge.childIndex.value_or(0));
-                converted.childGeneration = static_cast<std::uint32_t>(edge.childGeneration.value_or(0));
-            }
-            converted.blob = edge.data;
-            state.edges.push_back(converted);
-        }
+    for (const server::GroupTreeCommit& statement : statements(group)) {
+        state.setters[static_cast<std::uint64_t>(statement.seq)] = statement.committer;
     }
     return state;
 }
@@ -137,6 +126,31 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromArchive(
     return registry;
 }
 
+privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupKeyResolver::authenticated(
+    server::GroupGetKeyArchiveResult archive,
+    const std::map<std::uint64_t, CommitStatement>& openers
+) {
+    archive.keyHistory.clear();
+    for (const auto& [epoch, statement] : openers) {
+        archive.keyHistory.push_back(server::GroupKeyHistoryEntry{
+            .keyVersion = static_cast<std::int64_t>(epoch), .groupPubKey = statement.groupPubKey
+        });
+    }
+    std::vector<server::GroupArchiveRung> rungs;
+    for (server::GroupArchiveRung& rung : archive.rungs) {
+        const auto opener = openers.find(static_cast<std::uint64_t>(rung.atKeyVersion));
+        const auto sealer = TreeKeys::sealerOf(rung.data);
+        if (opener == openers.end() || !sealer.has_value() ||
+            sealer->toBase58DER() != opener->second.committerPubKey) {
+            continue;
+        }
+        rung.author = opener->second.committer;
+        rungs.push_back(rung);
+    }
+    archive.rungs = rungs;
+    return archive;
+}
+
 std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromGroupHistory(const server::GroupInfo& group) {
     std::vector<EpochRegistryEntry> registry;
     // `keyHistory` holds the PAST epochs only; the current one lives in `groupPubKey`. Missing that distinction
@@ -175,6 +189,66 @@ std::optional<std::string> GroupKeyResolver::ownUserId(const server::GroupInfo& 
     return userId;
 }
 
+bool GroupKeyResolver::healsFirst(const server::GroupInfo& group, std::uint32_t node) {
+    // A node's left subtree is complete, so its lowest leaf is `2^level - 1` indices to the left of it.
+    const std::uint32_t lowest = TreeMath::leafPosition(node - ((1u << TreeMath::level(node)) - 1));
+    const auto& seats = group.leafAssignment.value();
+    const auto own = static_cast<std::size_t>(group.ownLeafPosition.value());
+    return std::all_of(seats.begin() + lowest, seats.begin() + own, [](const std::string& s) { return s.empty(); });
+}
+
+std::optional<std::uint32_t> GroupKeyResolver::nodeNeedingSelfUpdate(const server::GroupInfo& group) {
+    if (!hasTree(group) || !ownUserId(group).has_value()) {
+        return std::nullopt;
+    }
+    const auto& records = group.treeNodes.value();
+    const auto vouchers = statements(group);
+    const auto numLeaves = static_cast<std::uint32_t>(group.numLeaves.value());
+    for (const std::uint32_t node :
+         TreeMath::keyedPath(static_cast<std::uint32_t>(group.ownLeafPosition.value()), numLeaves)) {
+        const auto record = std::find_if(records.begin(), records.end(), [&](const server::GroupTreeNode& served) {
+            return served.nodeIndex == static_cast<std::int64_t>(node);
+        });
+        if (record == records.end() || record->publicKey.value_or("").empty()) {
+            return node;
+        }
+        // Set from outside its subtree (by the creator or an adder): whoever set it keeps it, so heal it.
+        const auto voucher = std::find_if(vouchers.begin(), vouchers.end(), [&](const server::GroupTreeCommit& s) {
+            return record->setBy.has_value() && s.seq == record->setBy.value();
+        });
+        if (voucher == vouchers.end() || voucher->committerSeat < 0 ||
+            voucher->committerSeat >= static_cast<std::int64_t>(numLeaves)) {
+            return node;
+        }
+        const auto path = TreeMath::directPath(static_cast<std::uint32_t>(voucher->committerSeat), numLeaves);
+        if (std::find(path.begin(), path.end(), node) == path.end()) {
+            return node;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> GroupKeyResolver::tamperedBy(
+    const server::GroupInfo& group,
+    const std::optional<std::uint32_t>& tamperedNode
+) {
+    std::optional<std::int64_t> seq;
+    if (!tamperedNode.has_value() && group.treeCommit.has_value()) {
+        seq = group.treeCommit->seq;
+    }
+    for (const server::GroupTreeNode& node : group.treeNodes.value_or(std::vector<server::GroupTreeNode>{})) {
+        if (tamperedNode.has_value() && node.nodeIndex == static_cast<std::int64_t>(tamperedNode.value())) {
+            seq = node.setBy;
+        }
+    }
+    for (const server::GroupTreeCommit& statement : statements(group)) {
+        if (seq.has_value() && statement.seq == seq.value()) {
+            return statement.committer;
+        }
+    }
+    return std::nullopt;
+}
+
 // `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group, which no longer
 // carries them: the bridge serves the ladder separately, and the walk stays ignorant of where they came from.
 ResolveResult GroupKeyResolver::resolveWith(
@@ -191,6 +265,12 @@ ResolveResult GroupKeyResolver::resolveWith(
         result.failure = ResolveFailure::NoTree;
         return result;
     }
+    if (!hasSupportedTree(group)) {
+        // Read as the current layout, an older tree would climb fine and mean something else: nothing in it says who
+        // set a node, which is what a removal needs to blank everything the leaver could know.
+        result.failure = ResolveFailure::UnsupportedTreeVersion;
+        return result;
+    }
     const auto identity = ownUserId(group);
     if (!identity.has_value()) {
         result.failure = ResolveFailure::ClimbFailed;
@@ -198,9 +278,20 @@ ResolveResult GroupKeyResolver::resolveWith(
         return result;
     }
 
+    // 0 asks for the current epoch. Anything else is checked before it is narrowed: a negative or oversized value
+    // must not wrap round into some real epoch, and an epoch past the current one has no key yet — answering it
+    // with the current key would hand out a key under a name it does not have.
+    if (epoch < 0 || epoch > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+        result.failure = ResolveFailure::InvalidEpoch;
+        return result;
+    }
     const TreeGroupState state = toTreeState(group);
     const std::uint32_t currentEpoch = state.epoch;
-    const std::uint32_t wanted = epoch <= 0 ? currentEpoch : static_cast<std::uint32_t>(epoch);
+    const std::uint32_t wanted = epoch == 0 ? currentEpoch : static_cast<std::uint32_t>(epoch);
+    if (wanted > currentEpoch) {
+        result.failure = ResolveFailure::FutureEpoch;
+        return result;
+    }
 
     // Step 1: climb to the current epoch's grant key. Every recovered node key is verified against the public
     // key the server published for that node, so a corrupted edge fails loudly instead of yielding a wrong key.
@@ -209,9 +300,12 @@ ResolveResult GroupKeyResolver::resolveWith(
     if (climb.failure != ClimbFailure::None || !climb.grantKey.has_value()) {
         result.failure = ResolveFailure::ClimbFailed;
         result.climb = climb.failure;
+        if (climb.failure == ClimbFailure::Tampered || climb.failure == ClimbFailure::DecryptFailed) {
+            result.blame = tamperedBy(group, climb.tamperedNode);
+        }
         return result;
     }
-    if (wanted >= currentEpoch) {
+    if (wanted == currentEpoch) {
         result.key = climb.grantKey;
         return result;
     }

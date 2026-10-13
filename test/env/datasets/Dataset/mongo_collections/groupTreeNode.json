@@ -1,57 +1,41 @@
 [{
-	"_id": "6aa3c3777442a344f262d1a7|1",
-	"groupId": "6aa3c3777442a344f262d1a7",
+	"_id": "7fc6c5609a5e66a2598e5d520822c5ffff818f73f4dcd28bd9579dbf561d7408|1",
+	"groupId": "7fc6c5609a5e66a2598e5d520822c5ffff818f73f4dcd28bd9579dbf561d7408",
 	"nodeIndex": 1,
 	"generation": 0,
-	"publicKey": "7KZxGxbnQun9aLpsMn5Wi8nJQP8nDFvFpfgKVd5KVsdWVmdy74"
+	"publicKey": "8bWMgkaP3qjcrC7qGQYQNhN8YevjRRgMK44HDFnbsVrJW3kxfN",
+	"setBy": 1
 },
 {
-	"_id": "6aa3c3777442a344f262d1a8|1",
-	"groupId": "6aa3c3777442a344f262d1a8",
-	"nodeIndex": 1,
-	"generation": 0,
-	"publicKey": "7cDvtcZxUD6jV1QTc9ntPX3pNqbMMogeaPMQUQQizngwhAudsf"
-},
-{
-	"_id": "6aa3c3777442a344f262d1a8|3",
-	"groupId": "6aa3c3777442a344f262d1a8",
+	"_id": "5b64b01ad0ac2111ebc548eea7569306491f087bd51a38cd5f599d1817099d4e|3",
+	"groupId": "5b64b01ad0ac2111ebc548eea7569306491f087bd51a38cd5f599d1817099d4e",
 	"nodeIndex": 3,
 	"generation": 0,
-	"publicKey": "7NH49iCpWnUN4JixXqC6d3PHv1W8rYVgrdKrDEG5tznca6XhyZ"
+	"publicKey": "8Ld6RqqShqH24ft51wCgabkSBVHa25zHdnE62AMfSPseMV6Sb5",
+	"setBy": 1
 },
 {
-	"_id": "6aa3c3777442a344f262d1a9|1",
-	"groupId": "6aa3c3777442a344f262d1a9",
+	"_id": "d3c7160a1eb60fbbddfee6bb02a3f283fce2443b7ac7aeb852b49fa2427856ef|1",
+	"groupId": "d3c7160a1eb60fbbddfee6bb02a3f283fce2443b7ac7aeb852b49fa2427856ef",
 	"nodeIndex": 1,
 	"generation": 0,
-	"publicKey": "6hoWKks1djfSwYJ2VvhQyu4A4b9zX5ReRxwSX18Mu2KRzME2Tj"
+	"publicKey": "6GbDrUFH6j8RxPcuHybiLbcVFzKCKqS7y6ZLVwvQVh2qTik6CS",
+	"setBy": 1
 },
 {
-	"_id": "6aa3c3777442a344f262d1aa|1",
-	"groupId": "6aa3c3777442a344f262d1aa",
-	"nodeIndex": 1,
-	"generation": 0,
-	"publicKey": "8ZamJ6Bx15dY6WawrRKa2FW5WKmWTPSvzPsh1PJkREwQjMBb7y"
-},
-{
-	"_id": "6aa3c3777442a344f262d1aa|3",
-	"groupId": "6aa3c3777442a344f262d1aa",
+	"_id": "95046ddc6034661401443e0f2c0997fea2c8f6720c1d1d76c95404a2f4c041b3|3",
+	"groupId": "95046ddc6034661401443e0f2c0997fea2c8f6720c1d1d76c95404a2f4c041b3",
 	"nodeIndex": 3,
 	"generation": 1,
-	"publicKey": "55qbgRsvadP94sBCep5SvfLskEAWwzH1CoBanRkskaoKhKZDyG"
+	"publicKey": "6z7eAYNBcsjeDru29GgpqPuJ4zc5b8697wFVfp4rKS6DAKyMU6",
+	"setBy": 2
 },
 {
-	"_id": "6aa3c3777442a344f262d1ab|1",
-	"groupId": "6aa3c3777442a344f262d1ab",
-	"nodeIndex": 1,
-	"generation": 0,
-	"publicKey": "7PjXuamaAbEowQ3Vvn6kjsAiECkveikAfTeHD26GKeqQ2GEKYH"
-},
-{
-	"_id": "6aa3c3777442a344f262d1ab|3",
-	"groupId": "6aa3c3777442a344f262d1ab",
+	"_id": "1dcd8903818b2d1f91abd2084d912971176e2f32e344703d8662e5a53b6521ad|3",
+	"groupId": "1dcd8903818b2d1f91abd2084d912971176e2f32e344703d8662e5a53b6521ad",
 	"nodeIndex": 3,
 	"generation": 0,
-	"publicKey": "7uBQM3iekk3dCMyC3VzCUwf5ZvVZasWG4MnQFFQANyemxebNGf"
+	"publicKey": "74cXRF83ogADWh1Yk8ZnzaWgnz1S14sXjV2nTzXXyzsEBaPGHK",
+	"setBy": 1
 }]
 

@@ -42,13 +42,28 @@ public:
     Poco::Dynamic::Var encryptRoster(const GroupRosterToEncryptV5& data, const std::string& key);
 
     // Returns the roster head's DIO it had to decode anyway, so a caller that needs it does not verify twice.
+    // Compares the counters against the version pins but does not move them; see `storeVersionPins`.
     core::DataIntegrityObject assertDataIntegrity(const server::GroupInfo& groupInfo);
 
-    void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& rosterKey);
+    // Moves the pins to this response's counters. Call only once every check of the read has passed; compares
+    // again under the lock, so a concurrent verification that got further makes this one a fork.
+    void storeVersionPins(const server::GroupInfo& groupInfo);
 
-    void assertPublicMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& publicMetaKey);
+    void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKeyV2& rosterKey);
 
-    void assertPrivateMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& privateMetaKey);
+    // A plane's author and whoever wrapped its key must be on the attested roster, or in `formerMembers`: the
+    // members a removal has just dropped, whose entries the remover's metadata refresh carries up to the new epoch.
+    void assertPublicMetaIsAttested(
+        const server::GroupInfo& groupInfo,
+        const core::DecryptedEncKeyV2& publicMetaKey,
+        const std::vector<std::string>& formerMembers = {}
+    );
+
+    void assertPrivateMetaIsAttested(
+        const server::GroupInfo& groupInfo,
+        const core::DecryptedEncKeyV2& privateMetaKey,
+        const std::vector<std::string>& formerMembers = {}
+    );
 
     // `HMAC(subkey, epoch | rosterVersion | roster)`. Lists are sorted and length-prefixed so one roster's tag
     // cannot match another's under a different split; `rosterVersion` binds the counter the monotone pin checks.
@@ -75,22 +90,25 @@ public:
     // The status code, plus the roster head's DIO when that code is 0.
     std::pair<uint32_t, core::DataIntegrityObject> validateDataIntegrity(const server::GroupInfo& groupInfo);
 
-    // Call when the group is gone or the session was reset.
-    void dropVersionPin(const std::string& groupId);
-
-    // Call on connect/disconnect, mirroring the tree-key cache.
-    void dropAllVersionPins();
+    // The routes to the head, publicMeta and privateMeta keys only: every other epoch's key would cost a grant-key
+    // resolution (a read and a ladder descent) for nothing, so a read stays O(1) in the group's epochs. `g` has
+    // passed `validateDataIntegrity`, so it has a head.
+    static void addReadKeys(
+        core::KeyDecryptionAndVerificationRequest& request, const server::GroupInfo& g, const core::EncKeyLocation& location
+    );
 
     std::vector<Group> validateDecryptAndConvertGroups(
         const std::vector<server::GroupInfo>& groups,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
-        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
+        const std::vector<std::string>& formerMembers = {}
     );
 
     Group validateDecryptAndConvertGroup(
         const server::GroupInfo& groupInfo,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
-        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
+        const std::vector<std::string>& formerMembers = {}
     );
 
     // Deliberately does not open the metadata entry: that plane may sit at an older epoch, and waiting on its
@@ -135,6 +153,9 @@ private:
         const server::GroupInfo& groupInfo,
         const core::DecryptedEncKey& privateMetaKey
     );
+
+    // Throws GroupHistoryForkException when a counter is below its pin. Call with `_pinMutex` held.
+    void assertNotBelowPins(const server::GroupInfo& groupInfo);
 
     core::DataEncryptorV4 _dataEncryptor;
     // Own DIO encryptor, for the one envelope `GroupDataEncryptorV5` has no method for: the internal-meta view.

@@ -12,11 +12,14 @@ limitations under the License.
 #include "privmx/endpoint/group/keytree/TreeKeys.hpp"
 
 #include <algorithm>
+#include <functional>
 #include <set>
 #include <stdexcept>
 
 #include <privmx/crypto/EciesEncryptor.hpp>
+#include <privmx/utils/Utils.hpp>
 
+#include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
 
 using namespace privmx::endpoint::group::keytree;
@@ -44,43 +47,15 @@ std::optional<privmx::crypto::PrivateKey> TreeKeys::unwrapKey(
     }
 }
 
-const TreeEdge* TreeKeys::findEdgeFromNode(
-    const TreeGroupState& state,
-    std::uint32_t childIndex,
-    std::uint32_t childGeneration
-) {
-    for (const TreeEdge& edge : state.edges) {
-        if (edge.isGrantEdge) {
-            continue;
+std::optional<privmx::crypto::PublicKey> TreeKeys::sealerOf(const std::string& blob) {
+    try {
+        // `EciesEncryptor::encrypt`: 'e' || sender DER (33) || recipient DER (33) || ciphertext.
+        const std::string raw = privmx::utils::Base64::toString(blob);
+        if (raw.size() < 67 || raw.front() != 'e') {
+            return std::nullopt;
         }
-        if (edge.childKind == EdgeChildKind::Node &&
-            edge.childIndex == childIndex &&
-            edge.childGeneration == childGeneration) {
-            return &edge;
-        }
-    }
-    return nullptr;
-}
-
-const TreeEdge* TreeKeys::findEdgeFromUser(const TreeGroupState& state, const std::string& userId) {
-    for (const TreeEdge& edge : state.edges) {
-        if (edge.isGrantEdge) {
-            continue;
-        }
-        if (edge.childKind == EdgeChildKind::User && edge.childUserId == userId) {
-            return &edge;
-        }
-    }
-    return nullptr;
-}
-
-const TreeEdge* TreeKeys::findGrantEdge(const TreeGroupState& state) {
-    for (const TreeEdge& edge : state.edges) {
-        if (edge.isGrantEdge) {
-            return &edge;
-        }
-    }
-    return nullptr;
+        return privmx::crypto::PublicKey::fromDER(raw.substr(1, 33));
+    } catch (...) { return std::nullopt; }
 }
 
 const TreeNodeState* TreeKeys::findNode(const TreeGroupState& state, std::uint32_t nodeIndex) {
@@ -101,30 +76,6 @@ std::optional<std::uint32_t> TreeKeys::positionOf(const TreeGroupState& state, c
     return std::nullopt;
 }
 
-std::vector<std::string> TreeKeys::membersToWrapTo(
-    const TreeGroupState& state,
-    const std::vector<std::uint32_t>& positions,
-    std::uint32_t numLeaves,
-    const std::set<std::uint32_t>& excludedSeats
-) {
-    std::set<std::string> wanted;
-    for (const std::uint32_t node : TreeMath::frontier(positions, numLeaves)) {
-        for (const std::uint32_t child : TreeMath::children(node, numLeaves)) {
-            if (!TreeMath::isLeaf(child)) {
-                continue;
-            }
-            const std::uint32_t seat = TreeMath::leafPosition(child);
-            if (excludedSeats.count(seat) > 0 || seat >= state.leafAssignment.size()) {
-                continue;
-            }
-            if (state.leafAssignment[seat].has_value()) {
-                wanted.insert(state.leafAssignment[seat].value());
-            }
-        }
-    }
-    return std::vector<std::string>(wanted.begin(), wanted.end());
-}
-
 std::vector<std::uint32_t> TreeKeys::choosePositions(const TreeGroupState& state, std::uint32_t count) {
     // Lowest blank first, then append. Never move anyone: that invariant is what removes the need to track
     // which subtrees a member has ever occupied.
@@ -140,6 +91,74 @@ std::vector<std::uint32_t> TreeKeys::choosePositions(const TreeGroupState& state
         seats.push_back(position);
     }
     return seats;
+}
+
+namespace {
+
+void resolveInto(const TreeGroupState& state, std::uint32_t nodeIndex, std::vector<std::uint32_t>& out) {
+    if (TreeMath::isLeaf(nodeIndex)) {
+        const std::uint32_t position = TreeMath::leafPosition(nodeIndex);
+        if (position < state.leafAssignment.size() && state.leafAssignment[position].has_value()) {
+            out.push_back(nodeIndex);
+        }
+        return;
+    }
+    if (TreeMath::isKeyed(nodeIndex, state.numLeaves)) {
+        for (const TreeNodeState& node : state.nodes) {
+            if (node.nodeIndex == nodeIndex && node.publicKey.has_value()) {
+                out.push_back(nodeIndex);
+                return;
+            }
+        }
+    }
+    for (const std::uint32_t child : TreeMath::children(nodeIndex, state.numLeaves)) {
+        resolveInto(state, child, out);
+    }
+}
+
+// The edge that carries an ancestor's key down to the node we stand on, as the current state describes it: from a
+// filled node still on our path above us, at that node's current generation. A leftover edge of an older state
+// fails one of those and is passed over rather than followed into a key that no longer verifies.
+const TreeEdge* findClimbingEdge(
+    const TreeGroupState& state,
+    const std::function<bool(const TreeEdge&)>& addressedToUs,
+    const std::vector<std::uint32_t>& above,
+    const std::function<const TreeNodeState*(std::uint32_t)>& node
+) {
+    for (const TreeEdge& edge : state.edges) {
+        if (edge.isGrantEdge || !addressedToUs(edge)) {
+            continue;
+        }
+        if (std::find(above.begin(), above.end(), edge.parentIndex) == above.end()) {
+            continue;
+        }
+        const TreeNodeState* parent = node(edge.parentIndex);
+        if (parent != nullptr && parent->publicKey.has_value() && parent->generation == edge.parentGeneration) {
+            return &edge;
+        }
+    }
+    return nullptr;
+}
+
+// `node` if keyed, and every keyed ancestor of it up to the root: what a holder of `node`'s key can climb to.
+void climbInto(std::uint32_t node, std::uint32_t numLeaves, std::set<std::uint32_t>& out) {
+    const std::uint32_t root = TreeMath::root(numLeaves);
+    for (;; node = TreeMath::parent(node, numLeaves)) {
+        if (TreeMath::isKeyed(node, numLeaves)) {
+            out.insert(node);
+        }
+        if (node == root) {
+            return;
+        }
+    }
+}
+
+} // namespace
+
+std::vector<std::uint32_t> TreeKeys::resolution(const TreeGroupState& state, std::uint32_t nodeIndex) {
+    std::vector<std::uint32_t> resolved;
+    resolveInto(state, nodeIndex, resolved);
+    return resolved;
 }
 
 ClimbResult TreeKeys::climbToGrantKey(
@@ -168,44 +187,33 @@ ClimbResult TreeKeys::climbToGrantKey(
     }
 
     const std::uint32_t rootIndex = TreeMath::root(state.numLeaves);
+    const std::vector<std::uint32_t> path = TreeMath::directPath(position.value(), state.numLeaves);
+    const auto node = [&](std::uint32_t nodeIndex) { return findNode(state, nodeIndex); };
     std::uint32_t currentNode = TreeMath::leafNode(position.value());
     privmx::crypto::PrivateKey currentKey = ownUserKey;
+    result.reachedNode = currentNode;
 
-    // Step one is special: the edge is addressed to the member's long-term key, not to a node generation.
-    if (currentNode != rootIndex) {
-        const TreeEdge* edge = findEdgeFromUser(state, ownUserId);
-        if (edge == nullptr) {
-            result.failure = ClimbFailure::MissingEdge;
-            result.reachedNode = currentNode;
-            return result;
-        }
-        const auto recovered = unwrapKey(edge->blob, ownUserKey);
-        if (!recovered.has_value()) {
-            result.failure = ClimbFailure::DecryptFailed;
-            result.reachedNode = currentNode;
-            return result;
-        }
-        const TreeNodeState* node = findNode(state, edge->parentIndex);
-        if (node == nullptr || !(node->publicKey == recovered.value().getPublicKey())) {
-            result.failure = ClimbFailure::Tampered;
-            result.reachedNode = currentNode;
-            result.tamperedNode = edge->parentIndex;
-            return result;
-        }
-        currentNode = edge->parentIndex;
-        currentKey = recovered.value();
-        _cache.putNodeKey(currentNode, node->generation, currentKey);
-        result.reachedNode = currentNode;
-    }
-
-    // Then walk node to node until the root.
+    // Up the path one edge at a time. An edge may skip levels — its parent is the lowest filled keyed ancestor — but
+    // it only ever leads further up our own path, so the walk ends at the root whatever the server serves.
+    auto stillAbove = path.begin();
     while (currentNode != rootIndex) {
-        const TreeNodeState* currentState = findNode(state, currentNode);
-        if (currentState == nullptr) {
-            result.failure = ClimbFailure::MissingEdge;
-            return result;
-        }
-        const TreeEdge* edge = findEdgeFromNode(state, currentNode, currentState->generation);
+        const std::vector<std::uint32_t> above(stillAbove, path.end());
+        const TreeNodeState* currentState = TreeMath::isLeaf(currentNode) ? nullptr : node(currentNode);
+        const TreeEdge* edge = TreeMath::isLeaf(currentNode) ?
+            findClimbingEdge(
+                state,
+                [&](const TreeEdge& e) { return e.childKind == EdgeChildKind::User && e.childUserId == ownUserId; },
+                above, node
+            ) :
+            findClimbingEdge(
+                state,
+                [&](const TreeEdge& e) {
+                    return e.childKind == EdgeChildKind::Node &&
+                        e.childIndex == currentNode &&
+                        e.childGeneration == currentState->generation;
+                },
+                above, node
+            );
         if (edge == nullptr) {
             result.failure = ClimbFailure::MissingEdge;
             return result;
@@ -213,23 +221,26 @@ ClimbResult TreeKeys::climbToGrantKey(
         const auto recovered = unwrapKey(edge->blob, currentKey);
         if (!recovered.has_value()) {
             result.failure = ClimbFailure::DecryptFailed;
+            result.tamperedNode = edge->parentIndex; // the parent's setter wrote its edges, garbled ones included
             return result;
         }
-        const TreeNodeState* parentState = findNode(state, edge->parentIndex);
-        if (parentState == nullptr || !(parentState->publicKey == recovered.value().getPublicKey())) {
+        const TreeNodeState* parentState = node(edge->parentIndex);
+        if (!(parentState->publicKey.value() == recovered.value().getPublicKey())) {
             result.failure = ClimbFailure::Tampered;
             result.tamperedNode = edge->parentIndex;
             return result;
         }
         currentNode = edge->parentIndex;
         currentKey = recovered.value();
-        _cache.putNodeKey(currentNode, parentState->generation, currentKey);
+        stillAbove = std::find(stillAbove, path.end(), currentNode) + 1;
         result.reachedNode = currentNode;
     }
 
-    // Finally the grant edge, which hangs off the root.
-    const TreeEdge* grantEdge = findGrantEdge(state);
-    if (grantEdge == nullptr) {
+    // Finally the grant edge, which hangs off the root — or, in a one-leaf tree, off the member.
+    const auto grantEdge = std::find_if(state.edges.begin(), state.edges.end(), [](const TreeEdge& edge) {
+        return edge.isGrantEdge;
+    });
+    if (grantEdge == state.edges.end()) {
         result.failure = ClimbFailure::MissingEdge;
         return result;
     }
@@ -247,312 +258,364 @@ ClimbResult TreeKeys::climbToGrantKey(
     return result;
 }
 
-BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const privmx::crypto::PrivateKey& signer) {
-    if (members.empty()) {
+CommitShape TreeKeys::shapeCreate(const std::vector<std::string>& memberIds, const std::string& creatorId) {
+    if (memberIds.empty()) {
         throw std::invalid_argument("a group needs at least one member");
     }
-    BuildPlan plan;
-    plan.numLeaves = static_cast<std::uint32_t>(members.size());
-    const std::uint32_t nodeCount = TreeMath::nodeCount(plan.numLeaves);
-    const std::uint32_t rootIndex = TreeMath::root(plan.numLeaves);
-
-    // Mint a fresh independent random keypair for every internal node. Never derived from anything.
-    std::map<std::uint32_t, privmx::crypto::PrivateKey> nodeKeys;
-    for (std::uint32_t node = 1; node < nodeCount; node += 2) {
-        const privmx::crypto::PrivateKey key = privmx::crypto::PrivateKey::generateRandom();
-        nodeKeys[node] = key;
-        plan.nodes.push_back(TreeNodeState{node, 0, key.getPublicKey()});
-        plan.nodeKeys.emplace_back(node, key);
+    CommitShape shape;
+    shape.numLeaves = static_cast<std::uint32_t>(memberIds.size());
+    std::set<std::string> named;
+    for (const std::string& memberId : memberIds) {
+        if (!named.insert(memberId).second) {
+            throw std::invalid_argument("member " + memberId + " is named twice");
+        }
+        shape.leafAssignment.push_back(memberId);
     }
-
-    // Edges: every internal node wraps its private key to each of its existing children.
-    for (const auto& [node, key] : nodeKeys) {
-        for (const std::uint32_t child : TreeMath::children(node, plan.numLeaves)) {
-            TreeEdge edge;
-            edge.parentIndex = node;
-            edge.parentGeneration = 0;
-            if (TreeMath::isLeaf(child)) {
-                const std::uint32_t position = TreeMath::leafPosition(child);
-                edge.childKind = EdgeChildKind::User;
-                edge.childUserId = members[position].userId;
-                edge.blob = wrapKey(key, members[position].publicKey, signer);
-            } else {
-                edge.childKind = EdgeChildKind::Node;
-                edge.childIndex = child;
-                edge.childGeneration = 0;
-                edge.blob = wrapKey(key, nodeKeys.at(child).getPublicKey(), signer);
-            }
-            plan.edges.push_back(edge);
+    const auto seat = std::find(memberIds.begin(), memberIds.end(), creatorId);
+    if (seat == memberIds.end()) {
+        throw std::invalid_argument("the creator " + creatorId + " must be a member of the group it creates");
+    }
+    shape.committerSeat = static_cast<std::uint32_t>(std::distance(memberIds.begin(), seat));
+    // The creator fills every keyed node, so every later commit is already cheap. What it learns that way is what a
+    // removal of the creator blanks (`setBy`); members heal it sooner by self-updating over it.
+    const std::vector<std::uint32_t> own = TreeMath::keyedPath(shape.committerSeat, shape.numLeaves);
+    for (const std::uint32_t node : TreeMath::keyedNodes(shape.numLeaves)) {
+        if (std::find(own.begin(), own.end(), node) == own.end()) {
+            shape.filledOffPath.insert(node);
         }
     }
-
-    // The grant keypair sits above the root, joined by a single edge. Keeping it separate is what stops tree
-    // growth from advancing the epoch and invalidating every container granted to the group.
-    plan.grantKey = privmx::crypto::PrivateKey::generateRandom();
-    TreeEdge grantEdge;
-    grantEdge.isGrantEdge = true;
-    grantEdge.parentGeneration = 1; // epoch 1
-    if (TreeMath::isLeaf(rootIndex)) {
-        // Single-member group: the root is the member's own leaf.
-        grantEdge.childKind = EdgeChildKind::User;
-        grantEdge.childUserId = members[TreeMath::leafPosition(rootIndex)].userId;
-        grantEdge.blob = wrapKey(plan.grantKey, members[TreeMath::leafPosition(rootIndex)].publicKey, signer);
-    } else {
-        grantEdge.childKind = EdgeChildKind::Node;
-        grantEdge.childIndex = rootIndex;
-        grantEdge.childGeneration = 0;
-        grantEdge.blob = wrapKey(plan.grantKey, nodeKeys.at(rootIndex).getPublicKey(), signer);
-    }
-    plan.edges.push_back(grantEdge);
-
-    plan.wrapCount = static_cast<std::uint32_t>(plan.edges.size());
-    return plan;
+    return shape;
 }
 
-AdditionPlan TreeKeys::planAddition(
+CommitShape TreeKeys::shapeAddition(
     const TreeGroupState& state,
-    const std::vector<TreeMember>& newMembers,
+    const std::vector<std::string>& newMemberIds,
     const std::vector<std::uint32_t>& positions,
-    const privmx::crypto::PrivateKey& signer
+    const std::string& adderId
 ) {
-    if (newMembers.empty()) {
+    if (newMemberIds.empty()) {
         throw std::invalid_argument("an addition must name at least one member");
     }
-    if (newMembers.size() != positions.size()) {
+    if (newMemberIds.size() != positions.size()) {
         // Parallel lists: a mismatch would seat somebody at another newcomer's coordinate.
         throw std::invalid_argument("every newcomer needs exactly one seat");
     }
+    const auto adderSeat = positionOf(state, adderId);
+    if (!adderSeat.has_value()) {
+        throw std::invalid_argument("the adder " + adderId + " holds no leaf in this tree");
+    }
 
-    AdditionPlan plan;
-    plan.positions = positions;
-    plan.newNumLeaves = TreeMath::numLeavesToSeatAll(positions, state.numLeaves);
+    CommitShape shape;
+    shape.numLeaves = TreeMath::numLeavesToSeatAll(positions, state.numLeaves);
+    shape.leafAssignment = state.leafAssignment;
+    shape.leafAssignment.resize(shape.numLeaves, std::nullopt);
+    shape.committerSeat = adderSeat.value();
+    shape.subjectSeats = positions;
 
-    // Who ends up on which seat, so the leaf-edge branch below can answer it for any child it walks past.
-    std::map<std::uint32_t, const TreeMember*> newcomerAt;
     std::set<std::string> named;
+    std::set<std::uint32_t> taken;
     for (std::size_t i = 0; i < positions.size(); ++i) {
-        // Two seats for one userId would leave a second leaf nobody blanks: `positionOf` finds only the first,
-        // so a later removal re-keys one path and leaves the other climbing to the new grant key.
-        if (!named.insert(newMembers[i].userId).second) {
-            throw std::invalid_argument("member " + newMembers[i].userId + " is named twice");
+        // Two seats for one userId would leave a second leaf nobody blanks: `positionOf` finds only the first.
+        if (!named.insert(newMemberIds[i]).second) {
+            throw std::invalid_argument("member " + newMemberIds[i] + " is named twice");
         }
-        if (positionOf(state, newMembers[i].userId).has_value()) {
-            throw std::invalid_argument("member " + newMembers[i].userId + " already holds a leaf in this tree");
+        if (positionOf(state, newMemberIds[i]).has_value()) {
+            throw std::invalid_argument("member " + newMemberIds[i] + " already holds a leaf in this tree");
         }
-        if (!newcomerAt.emplace(positions[i], &newMembers[i]).second) {
+        if (!taken.insert(positions[i]).second) {
             throw std::invalid_argument("two newcomers cannot take the same seat");
         }
+        if (shape.leafAssignment[positions[i]].has_value()) {
+            throw std::invalid_argument("seat " + std::to_string(positions[i]) + " is not free");
+        }
+        shape.leafAssignment[positions[i]] = newMemberIds[i];
     }
-
-    const std::uint32_t oldRoot = TreeMath::root(state.numLeaves);
-    const std::uint32_t newRoot = TreeMath::root(plan.newNumLeaves);
-    // The union, not the paths concatenated: an ancestor shared by two newcomers is re-keyed once.
-    const std::vector<std::uint32_t> newPath = TreeMath::frontier(positions, plan.newNumLeaves);
-
-    // A fresh keypair for every node on the new leaf's path. Wrapping to an existing parent key would be one wrap
-    // instead of `log n`, but needs that parent's private key — which a climb only yields for the seat beside you.
-    std::map<std::uint32_t, privmx::crypto::PrivateKey> refreshed;
-    std::map<std::uint32_t, std::uint32_t> generationOf;
-    for (const std::uint32_t node : newPath) {
-        const privmx::crypto::PrivateKey key = privmx::crypto::PrivateKey::generateRandom();
-        const TreeNodeState* existing = findNode(state, node);
-        const std::uint32_t generation = existing == nullptr ? 0 : existing->generation + 1;
-        refreshed.emplace(node, key);
-        generationOf[node] = generation;
-        plan.nodes.push_back(TreeNodeState{node, generation, key.getPublicKey()});
-        plan.nodeKeys.emplace_back(node, key);
-    }
-
-    for (const std::uint32_t node : newPath) {
-        const privmx::crypto::PrivateKey& nodeKey = refreshed.at(node);
-        for (const std::uint32_t child : TreeMath::children(node, plan.newNumLeaves)) {
-            TreeEdge edge;
-            edge.parentIndex = node;
-            edge.parentGeneration = generationOf.at(node);
-            if (TreeMath::isLeaf(child)) {
-                const std::uint32_t position = TreeMath::leafPosition(child);
-                if (const auto newcomer = newcomerAt.find(position); newcomer != newcomerAt.end()) {
-                    edge.childKind = EdgeChildKind::User;
-                    edge.childUserId = newcomer->second->userId;
-                    edge.blob = wrapKey(nodeKey, newcomer->second->publicKey, signer);
-                } else {
-                    // A sibling leaf: the refresh replaced the key their climb runs through, so they need an edge
-                    // to the new one. Their public key is not part of the tree state, so it comes from the roster.
-                    const bool seated = position < state.leafAssignment.size() &&
-                        state.leafAssignment[position].has_value();
-                    if (!seated) {
-                        continue; // blank leaf: nothing to wrap to
-                    }
-                    const auto memberPub = memberKey(state.leafAssignment[position].value());
-                    if (!memberPub.has_value()) {
-                        throw std::invalid_argument(
-                            "seating a member re-keys the path and needs the public key of member " +
-                            state.leafAssignment[position].value() +
-                            "; supply the roster first"
-                        );
-                    }
-                    edge.childKind = EdgeChildKind::User;
-                    edge.childUserId = state.leafAssignment[position].value();
-                    edge.blob = wrapKey(nodeKey, memberPub.value(), signer);
-                }
-            } else {
-                // On-path children carry their new public key; everything off the path keeps its current one, so
-                // the subtree under it climbs into the refreshed path without re-keying anything of its own.
-                const auto onPath = refreshed.find(child);
-                if (onPath != refreshed.end()) {
-                    edge.childKind = EdgeChildKind::Node;
-                    edge.childIndex = child;
-                    edge.childGeneration = generationOf.at(child);
-                    edge.blob = wrapKey(nodeKey, onPath->second.getPublicKey(), signer);
-                } else {
-                    const TreeNodeState* existing = findNode(state, child);
-                    if (existing == nullptr) {
-                        throw std::invalid_argument("tree state is missing node " + std::to_string(child));
-                    }
-                    edge.childKind = EdgeChildKind::Node;
-                    edge.childIndex = child;
-                    edge.childGeneration = existing->generation;
-                    edge.blob = wrapKey(nodeKey, existing->publicKey.parsed(), signer);
-                }
+    // The newcomers' paths below the adder's are minted by the adder, not left blank: the adder keeps those keys,
+    // which is why a removal of the adder blanks every node it set (`shapeRemoval`).
+    const std::vector<std::uint32_t> own = TreeMath::keyedPath(shape.committerSeat, shape.numLeaves);
+    for (const std::uint32_t position : positions) {
+        for (const std::uint32_t node : TreeMath::keyedPath(position, shape.numLeaves)) {
+            if (std::find(own.begin(), own.end(), node) == own.end()) {
+                shape.filledOffPath.insert(node);
             }
-            plan.edges.push_back(edge);
         }
     }
-
-    if (newRoot != oldRoot) {
-        plan.newRoot = TreeNodeState{newRoot, generationOf.at(newRoot), refreshed.at(newRoot).getPublicKey()};
-        plan.newRootKey = refreshed.at(newRoot);
-    }
-
-    // The root is on the path, so the grant edge is re-issued to its new key. The grant keypair itself is unchanged,
-    // so no container holding a wrap of it goes stale — which is why it sits one indirection above the root.
-    const auto grantKey = _cache.getGrantKey(state.epoch);
-    if (!grantKey.has_value()) {
-        throw std::invalid_argument("re-linking the grant edge needs the grant key; climb the tree first");
-    }
-    TreeEdge grantEdge;
-    grantEdge.isGrantEdge = true;
-    grantEdge.parentGeneration = state.epoch;
-    grantEdge.childKind = EdgeChildKind::Node;
-    grantEdge.childIndex = newRoot;
-    grantEdge.childGeneration = generationOf.at(newRoot);
-    grantEdge.blob = wrapKey(grantKey.value(), refreshed.at(newRoot).getPublicKey(), signer);
-    plan.edges.push_back(grantEdge);
-
-    plan.wrapCount = static_cast<std::uint32_t>(plan.edges.size());
-    return plan;
+    return shape;
 }
 
-RemovalPlan TreeKeys::planRemoval(
+CommitShape TreeKeys::shapeRemoval(
     const TreeGroupState& state,
     const std::vector<std::string>& leavingUserIds,
-    const privmx::crypto::PrivateKey& signer
+    const std::string& removerId
 ) {
     if (leavingUserIds.empty()) {
         throw std::invalid_argument("a removal must name at least one member");
     }
+    const auto removerSeat = positionOf(state, removerId);
+    if (!removerSeat.has_value()) {
+        throw std::invalid_argument("the remover " + removerId + " holds no leaf in this tree");
+    }
 
-    RemovalPlan plan;
-    plan.newEpoch = state.epoch + 1;
+    CommitShape shape;
+    shape.numLeaves = state.numLeaves; // seats are never compacted
+    shape.leafAssignment = state.leafAssignment;
+    shape.committerSeat = removerSeat.value();
 
-    std::set<std::uint32_t> leavingLeaves;
     std::set<std::string> named;
+    std::set<std::uint32_t> known;
     for (const std::string& leavingUserId : leavingUserIds) {
         if (!named.insert(leavingUserId).second) {
             throw std::invalid_argument("member " + leavingUserId + " is named twice");
         }
-        const auto position = positionOf(state, leavingUserId);
-        if (!position.has_value()) {
+        if (leavingUserId == removerId) {
+            // The remover mints the next epoch's grant key, so removing yourself would hand you the key that is
+            // meant to lock you out.
+            throw std::invalid_argument("a member cannot remove themselves");
+        }
+        const auto seat = positionOf(state, leavingUserId);
+        if (!seat.has_value()) {
             throw std::invalid_argument("member " + leavingUserId + " holds no leaf in this tree");
         }
-        plan.blankedPositions.push_back(position.value());
-        leavingLeaves.insert(TreeMath::leafNode(position.value()));
+        shape.subjectSeats.push_back(seat.value());
+        shape.leafAssignment[seat.value()] = std::nullopt;
+        climbInto(TreeMath::leafNode(seat.value()), shape.numLeaves, known);
     }
-    std::sort(plan.blankedPositions.begin(), plan.blankedPositions.end());
-    // The union, so every ancestor shared by two departing members is refreshed once. Refreshing it per member
-    // would mint two keys for one node and generation, and the second write would orphan the first's edges.
-    const std::vector<std::uint32_t> path = TreeMath::frontier(plan.blankedPositions, state.numLeaves);
-
-    // Every node on the path gets a fresh independent random keypair. Deriving it from the key it replaces would
-    // let the removed member compute forward, and the server cannot detect that — it lives or dies on this line.
-    std::map<std::uint32_t, privmx::crypto::PrivateKey> refreshed;
-    for (const std::uint32_t node : path) {
-        refreshed[node] = privmx::crypto::PrivateKey::generateRandom();
-    }
-
-    for (const std::uint32_t node : path) {
-        const TreeNodeState* existing = findNode(state, node);
-        if (existing == nullptr) {
-            throw std::invalid_argument("tree state is missing node " + std::to_string(node));
+    // Everything the leavers could know: their paths, every key they minted, and every ancestor of those — a key
+    // wrapped to one they know is one they know. Edges only ever lead up, so this closure is all of it.
+    for (const TreeNodeState& node : state.nodes) {
+        if (!node.publicKey.has_value() || !TreeMath::isKeyed(node.nodeIndex, shape.numLeaves)) {
+            continue;
         }
-        NodeRefresh refresh;
-        refresh.nodeIndex = node;
-        refresh.newGeneration = existing->generation + 1;
-        refresh.newKey = refreshed.at(node);
+        const auto setter = node.setBy.has_value() ? state.setters.find(node.setBy.value()) : state.setters.end();
+        if (setter == state.setters.end()) {
+            throw std::invalid_argument("node " + std::to_string(node.nodeIndex) + " names no known statement");
+        }
+        if (named.count(setter->second) > 0) {
+            climbInto(node.nodeIndex, shape.numLeaves, known);
+        }
+    }
+    // The remover's own path is re-keyed instead.
+    for (const std::uint32_t node : TreeMath::keyedPath(shape.committerSeat, shape.numLeaves)) {
+        known.erase(node);
+    }
+    shape.blanked = std::move(known);
+    std::sort(shape.subjectSeats.begin(), shape.subjectSeats.end());
+    return shape;
+}
 
-        for (const std::uint32_t child : TreeMath::children(node, state.numLeaves)) {
-            if (leavingLeaves.count(child) > 0) {
-                // A blanked leaf gets no edge. A node whose every leaf is blanked owes none at all: it still
-                // takes a fresh key so the refresh reaches the root, but nothing can climb into it.
+CommitShape TreeKeys::shapeSelfUpdate(const TreeGroupState& state, const std::string& memberId) {
+    const auto seat = positionOf(state, memberId);
+    if (!seat.has_value()) {
+        throw std::invalid_argument("member " + memberId + " holds no leaf in this tree");
+    }
+    if (state.numLeaves < 2) {
+        throw std::invalid_argument("a one-leaf tree has no node to refresh");
+    }
+    CommitShape shape;
+    shape.numLeaves = state.numLeaves;
+    shape.leafAssignment = state.leafAssignment;
+    shape.committerSeat = seat.value();
+    return shape;
+}
+
+TreeGroupState TreeKeys::postState(const TreeGroupState& state, const CommitShape& shape) {
+    TreeGroupState post;
+    post.numLeaves = shape.numLeaves;
+    post.leafAssignment = shape.leafAssignment;
+    for (const TreeNodeState& node : state.nodes) {
+        if (!TreeMath::isKeyed(node.nodeIndex, shape.numLeaves)) {
+            continue; // an old root that growth turned into a bucket node: it holds no key from here on
+        }
+        TreeNodeState kept = node;
+        if (shape.blanked.count(node.nodeIndex) > 0) {
+            kept.publicKey.reset();
+            kept.setBy.reset();
+        }
+        post.nodes.push_back(kept);
+    }
+    return post;
+}
+
+std::vector<std::string> TreeKeys::recipients(const TreeGroupState& state, const CommitShape& shape) {
+    const TreeGroupState post = postState(state, shape);
+    const std::vector<std::uint32_t> path = TreeMath::keyedPath(shape.committerSeat, shape.numLeaves);
+    std::set<std::uint32_t> minted(shape.filledOffPath);
+    minted.insert(path.begin(), path.end());
+    std::set<std::string> wanted;
+    for (const std::uint32_t node : minted) {
+        for (const std::uint32_t child : TreeMath::children(node, shape.numLeaves)) {
+            // A minted child gets a node edge. Any other child has nothing minted below it (the minted set is closed
+            // upwards), so its resolution never depends on what the commit mints.
+            if (minted.count(child) > 0) {
                 continue;
             }
-            TreeEdge edge;
-            edge.parentIndex = node;
-            edge.parentGeneration = refresh.newGeneration;
-
-            if (TreeMath::isLeaf(child)) {
-                const std::uint32_t childPosition = TreeMath::leafPosition(child);
-                if (!state.leafAssignment[childPosition].has_value()) {
-                    continue; // blank leaf: nobody to wrap to
+            for (const std::uint32_t resolved : resolution(post, child)) {
+                if (TreeMath::isLeaf(resolved)) {
+                    wanted.insert(post.leafAssignment[TreeMath::leafPosition(resolved)].value());
                 }
-                // A sibling leaf still occupied: its member's public key must come from the caller's roster.
-                const auto memberPub = memberKey(state.leafAssignment[childPosition].value());
-                if (!memberPub.has_value()) {
-                    throw std::invalid_argument(
-                        "removal needs the public key of member " +
-                        state.leafAssignment[childPosition].value() +
-                        "; supply the roster first"
-                    );
-                }
-                edge.childKind = EdgeChildKind::User;
-                edge.childUserId = state.leafAssignment[childPosition].value();
-                edge.blob = wrapKey(refresh.newKey, memberPub.value(), signer);
-            } else {
-                // On-path children carry their NEW public key; copath children keep their current one.
-                const auto onPath = refreshed.find(child);
-                const bool childOnPath = onPath != refreshed.end();
-                const TreeNodeState* childState = findNode(state, child);
-                if (childState == nullptr) {
-                    throw std::invalid_argument("tree state is missing node " + std::to_string(child));
-                }
-                edge.childKind = EdgeChildKind::Node;
-                edge.childIndex = child;
-                edge.childGeneration = childOnPath ? childState->generation + 1 : childState->generation;
-                edge.blob = childOnPath ? wrapKey(refresh.newKey, onPath->second.getPublicKey(), signer) :
-                                          wrapKey(refresh.newKey, childState->publicKey.parsed(), signer);
             }
-            refresh.edges.push_back(edge);
         }
-        plan.wrapCount += static_cast<std::uint32_t>(refresh.edges.size());
-        plan.pathRefresh.push_back(refresh);
+    }
+    return std::vector<std::string>(wanted.begin(), wanted.end());
+}
+
+CommitPlan TreeKeys::commit(
+    const TreeGroupState& state,
+    CommitShape shape,
+    std::uint32_t epoch,
+    const privmx::crypto::PrivateKey& grantKey,
+    const privmx::crypto::PrivateKey& signer
+) {
+    CommitPlan plan;
+    plan.epoch = epoch;
+    plan.grantKey = grantKey;
+    plan.seq = state.commitSeq + 1;
+    TreeGroupState post = postState(state, shape);
+
+    // Step 1: a fresh, independent random keypair for every node the commit mints: the off-path fills, then the
+    // committer's keyed path, root last. Deriving one from the key it replaces would let whoever held that key compute
+    // forward, and the server cannot detect it — confidentiality lives or dies on this line.
+    std::vector<std::uint32_t> toMint(shape.filledOffPath.begin(), shape.filledOffPath.end());
+    const std::vector<std::uint32_t> path = TreeMath::keyedPath(shape.committerSeat, shape.numLeaves);
+    toMint.insert(toMint.end(), path.begin(), path.end());
+    std::map<std::uint32_t, privmx::crypto::PrivateKey> minted;
+    for (const std::uint32_t node : toMint) {
+        RefreshedNode refreshed;
+        refreshed.nodeIndex = node;
+        refreshed.key = privmx::crypto::PrivateKey::generateRandom();
+        const auto record = std::find_if(post.nodes.begin(), post.nodes.end(), [&](const TreeNodeState& n) {
+            return n.nodeIndex == node;
+        });
+        if (record == post.nodes.end()) {
+            post.nodes.push_back(TreeNodeState{node, 0, refreshed.key.getPublicKey(), plan.seq});
+        } else {
+            refreshed.fromGeneration = record->generation;
+            refreshed.generation = record->generation + 1;
+            *record = TreeNodeState{node, refreshed.generation, refreshed.key.getPublicKey(), plan.seq};
+        }
+        minted.emplace(node, refreshed.key);
+        plan.refreshed.push_back(refreshed);
     }
 
-    // A fresh grant keypair, re-linked to the refreshed root. This is the epoch bump.
-    plan.newGrantKey = privmx::crypto::PrivateKey::generateRandom();
-    const std::uint32_t rootIndex = TreeMath::root(state.numLeaves);
-    plan.grantEdge.isGrantEdge = true;
-    plan.grantEdge.parentGeneration = plan.newEpoch;
-    if (TreeMath::isLeaf(rootIndex)) {
-        throw std::invalid_argument("cannot remove the only member of a group");
+    // Step 2: each refreshed key wrapped to the resolution of its children on the state AFTER the commit — blanked
+    // nodes resolve through to what lies below them, so a removed member's seat simply resolves to nobody.
+    for (const RefreshedNode& refreshed : plan.refreshed) {
+        for (const std::uint32_t child : TreeMath::children(refreshed.nodeIndex, shape.numLeaves)) {
+            for (const std::uint32_t resolved : resolution(post, child)) {
+                TreeEdge edge;
+                edge.parentIndex = refreshed.nodeIndex;
+                edge.parentGeneration = refreshed.generation;
+                if (TreeMath::isLeaf(resolved)) {
+                    const std::string& userId = post.leafAssignment[TreeMath::leafPosition(resolved)].value();
+                    const auto memberPub = memberKey(userId);
+                    if (!memberPub.has_value()) {
+                        throw std::invalid_argument(
+                            "the commit wraps to member " + userId + " and needs their public key; supply it first"
+                        );
+                    }
+                    edge.childKind = EdgeChildKind::User;
+                    edge.childUserId = userId;
+                    edge.blob = wrapKey(refreshed.key, memberPub.value(), signer);
+                } else {
+                    const TreeNodeState* target = findNode(post, resolved);
+                    edge.childKind = EdgeChildKind::Node;
+                    edge.childIndex = resolved;
+                    edge.childGeneration = target->generation;
+                    const auto own = minted.find(resolved);
+                    edge.blob = own != minted.end() ? wrapKey(refreshed.key, own->second.getPublicKey(), signer) :
+                                                      wrapKey(refreshed.key, target->publicKey->parsed(), signer);
+                }
+                plan.edges.push_back(edge);
+            }
+        }
     }
-    const TreeNodeState* rootState = findNode(state, rootIndex);
-    plan.grantEdge.childKind = EdgeChildKind::Node;
-    plan.grantEdge.childIndex = rootIndex;
-    plan.grantEdge.childGeneration = rootState->generation + 1;
-    plan.grantEdge.blob = wrapKey(plan.newGrantKey, refreshed.at(rootIndex).getPublicKey(), signer);
-    plan.wrapCount += 1;
 
+    // The grant keypair sits above the root, joined by a single edge. Keeping it separate is what stops a commit
+    // that is not a removal from advancing the epoch and invalidating every container granted to the group.
+    TreeEdge grantEdge;
+    grantEdge.isGrantEdge = true;
+    grantEdge.parentGeneration = epoch;
+    if (shape.numLeaves == 1) {
+        const std::string& soleMember = shape.leafAssignment.at(0).value();
+        const auto memberPub = memberKey(soleMember);
+        if (!memberPub.has_value()) {
+            throw std::invalid_argument("the grant edge needs the public key of member " + soleMember);
+        }
+        grantEdge.childKind = EdgeChildKind::User;
+        grantEdge.childUserId = soleMember;
+        grantEdge.blob = wrapKey(grantKey, memberPub.value(), signer);
+    } else {
+        const RefreshedNode& root = plan.refreshed.back();
+        grantEdge.childKind = EdgeChildKind::Node;
+        grantEdge.childIndex = root.nodeIndex;
+        grantEdge.childGeneration = root.generation;
+        grantEdge.blob = wrapKey(grantKey, root.key.getPublicKey(), signer);
+    }
+    plan.edges.push_back(grantEdge);
+    // What the statement signs: the post state, every record of it — which is why planning reads them all.
+    plan.treeHash = TreeCommits::treeHash(post, &plan.subtreeHashes);
+    plan.shape = std::move(shape);
     return plan;
+}
+
+privmx::crypto::PrivateKey TreeKeys::currentGrantKey(const TreeGroupState& state) const {
+    const auto grantKey = _cache.getGrantKey(state.epoch);
+    if (!grantKey.has_value() || !(state.grantPublicKey == grantKey.value().getPublicKey())) {
+        throw std::invalid_argument("re-linking the grant edge needs the current grant key; climb the tree first");
+    }
+    return grantKey.value();
+}
+
+CommitPlan TreeKeys::planCreate(
+    const std::vector<TreeMember>& members,
+    const std::string& creatorId,
+    const privmx::crypto::PrivateKey& signer
+) {
+    std::vector<std::string> memberIds;
+    for (const TreeMember& member : members) {
+        memberIds.push_back(member.userId);
+        _memberKeys.insert_or_assign(member.userId, member.publicKey);
+    }
+    CommitShape shape = shapeCreate(memberIds, creatorId);
+    return commit(TreeGroupState{}, std::move(shape), 1, privmx::crypto::PrivateKey::generateRandom(), signer);
+}
+
+CommitPlan TreeKeys::planAddition(
+    const TreeGroupState& state,
+    const std::vector<TreeMember>& newMembers,
+    const std::vector<std::uint32_t>& positions,
+    const std::string& adderId,
+    const privmx::crypto::PrivateKey& signer
+) {
+    std::vector<std::string> newMemberIds;
+    for (const TreeMember& member : newMembers) {
+        newMemberIds.push_back(member.userId);
+    }
+    CommitShape shape = shapeAddition(state, newMemberIds, positions, adderId);
+    for (const TreeMember& member : newMembers) {
+        _memberKeys.insert_or_assign(member.userId, member.publicKey);
+    }
+    return commit(state, std::move(shape), state.epoch, currentGrantKey(state), signer);
+}
+
+CommitPlan TreeKeys::planRemoval(
+    const TreeGroupState& state,
+    const std::vector<std::string>& leavingUserIds,
+    const std::string& removerId,
+    const privmx::crypto::PrivateKey& signer
+) {
+    CommitShape shape = shapeRemoval(state, leavingUserIds, removerId);
+    // A fresh grant keypair: this is the epoch bump.
+    return commit(state, std::move(shape), state.epoch + 1, privmx::crypto::PrivateKey::generateRandom(), signer);
+}
+
+CommitPlan TreeKeys::planSelfUpdate(
+    const TreeGroupState& state,
+    const std::string& memberId,
+    const privmx::crypto::PrivateKey& signer
+) {
+    CommitShape shape = shapeSelfUpdate(state, memberId);
+    return commit(state, std::move(shape), state.epoch, currentGrantKey(state), signer);
 }
 
 std::optional<privmx::crypto::PublicKey> TreeKeys::memberKey(const std::string& userId) {

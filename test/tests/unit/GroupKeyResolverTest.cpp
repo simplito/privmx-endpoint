@@ -22,6 +22,7 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -29,6 +30,7 @@ limitations under the License.
 
 #include <privmx/endpoint/group/keytree/GroupKeyResolver.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
+#include <privmx/endpoint/group/keytree/TreeWire.hpp>
 
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
@@ -75,61 +77,33 @@ protected:
         return result;
     }
 
-    // Serialises a runtime edge into the wire shape the bridge would send.
-    server::GroupTreeEdge toWire(const TreeEdge& edge) {
-        server::GroupTreeEdge wire;
-        wire.isGrantEdge = edge.isGrantEdge;
-        wire.parentIndex = static_cast<std::int64_t>(edge.parentIndex);
-        wire.parentGeneration = static_cast<std::int64_t>(edge.parentGeneration);
-        if (edge.childKind == EdgeChildKind::User) {
-            wire.childKind = "user";
-            wire.childUserId = edge.childUserId;
-        } else {
-            wire.childKind = "node";
-            wire.childIndex = static_cast<std::int64_t>(edge.childIndex);
-            wire.childGeneration = static_cast<std::int64_t>(edge.childGeneration);
-        }
-        wire.data = edge.blob;
-        return wire;
-    }
-
     Fixture buildFixture(std::uint32_t memberCount) {
         Fixture fixture;
         fixture.members = makeMembers(memberCount);
 
         TreeKeyCache buildStore;
         TreeKeys builder(buildStore);
-        const BuildPlan plan = builder.build(publicOf(fixture.members), fixture.members[0].priv);
+        const CommitPlan plan =
+            builder.planCreate(publicOf(fixture.members), fixture.members[0].userId, fixture.members[0].priv);
         fixture.grantKey = plan.grantKey;
+        const server::GroupTreeState tree = TreeWire::toCreateTree(plan);
 
         server::GroupInfo& group = fixture.group;
         group.id = "grp1";
         group.contextId = "ctx1";
         group.groupPubKey = plan.grantKey.getPublicKey().toBase58DER();
         group.keyVersion = 1;
-        group.numLeaves = static_cast<std::int64_t>(plan.numLeaves);
-
-        std::vector<std::string> leaves;
-        for (const TestMember& member : fixture.members) {
-            leaves.push_back(member.userId);
-        }
-        group.leafAssignment = leaves;
-
-        std::vector<server::GroupTreeNode> nodes;
-        for (const TreeNodeState& node : plan.nodes) {
-            nodes.push_back(server::GroupTreeNode{
-                static_cast<std::int64_t>(node.nodeIndex),
-                static_cast<std::int64_t>(node.generation),
-                node.publicKey.toBase58DER(),
-            });
-        }
-        group.treeNodes = nodes;
-
-        std::vector<server::GroupTreeEdge> edges;
-        for (const TreeEdge& edge : plan.edges) {
-            edges.push_back(toWire(edge));
-        }
-        group.treeEdges = edges;
+        group.treeVersion = TreeMath::TREE_VERSION;
+        group.numLeaves = tree.numLeaves;
+        group.leafAssignment = tree.leafAssignment;
+        group.treeNodes = tree.nodes;
+        group.treeEdges = tree.edges;
+        // Only what the resolver reads off the creation statement: who committed it, from which seat.
+        server::GroupTreeCommit created;
+        created.seq = 1;
+        created.committer = fixture.members[0].userId;
+        created.committerSeat = 0;
+        group.treeCommit = created;
         fixture.archive = emptyArchive(1);
         return fixture;
     }
@@ -192,7 +166,7 @@ protected:
                 const std::uint32_t rootIndex = TreeMath::root(state.numLeaves);
                 for (const TreeNodeState& node : state.nodes) {
                     if (node.nodeIndex == rootIndex) {
-                        edge.data = TreeKeys::wrapKey(epochKeys.back(), node.publicKey.parsed(), signer);
+                        edge.data = TreeKeys::wrapKey(epochKeys.back(), node.publicKey->parsed(), signer);
                     }
                 }
                 edge.parentGeneration = static_cast<std::int64_t>(upTo);
@@ -237,6 +211,105 @@ TEST_F(ResolverDetection, APartiallyPopulatedTreeIsNotTreatedAsATree) {
 TEST_F(ResolverDetection, AFullyPopulatedTreeIsRecognised) {
     const Fixture fixture = buildFixture(4);
     EXPECT_TRUE(GroupKeyResolver::hasTree(fixture.group));
+    EXPECT_TRUE(GroupKeyResolver::hasSupportedTree(fixture.group));
+}
+
+TEST_F(ResolverDetection, SECURITY_ATreeOfAnotherVersionIsRefusedNotClimbed) {
+    // An older tree climbs just as well and means something else: nothing in it says who set a node. The bridge
+    // serves version 1 for groups made before the field existed.
+    // Version 2 statements and rungs carry neither the genesis roster nor the rung spans (T3-26).
+    for (const std::optional<std::int64_t> version : {std::optional<std::int64_t>(), std::optional<std::int64_t>(1),
+                                                      std::optional<std::int64_t>(2), std::optional<std::int64_t>(4)}) {
+        Fixture fixture = buildFixture(4);
+        fixture.group.treeVersion = version;
+        setOwnLeafPosition(fixture.group, 1);
+        TreeKeyCache store;
+        GroupKeyResolver resolver(store);
+        const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[1].priv, fixture.archive);
+        EXPECT_EQ(result.failure, ResolveFailure::UnsupportedTreeVersion);
+        EXPECT_FALSE(result.key.has_value());
+    }
+}
+
+TEST_F(ResolverDetection, SpotsABlankOnTheCallersOwnPathOnly) {
+    Fixture fixture = buildFixture(40);
+    setOwnLeafPosition(fixture.group, 0);
+    EXPECT_FALSE(GroupKeyResolver::nodeNeedingSelfUpdate(fixture.group).has_value());
+
+    // Node 31 blanked: on seat 0's keyed path, not on seat 35's.
+    auto nodes = fixture.group.treeNodes.value();
+    for (server::GroupTreeNode& node : nodes) {
+        if (node.nodeIndex == 31) {
+            node.publicKey = std::nullopt;
+        }
+    }
+    fixture.group.treeNodes = nodes;
+    EXPECT_TRUE(GroupKeyResolver::nodeNeedingSelfUpdate(fixture.group).has_value());
+    setOwnLeafPosition(fixture.group, 35);
+    EXPECT_FALSE(GroupKeyResolver::nodeNeedingSelfUpdate(fixture.group).has_value());
+
+    // A keyed node with no record at all is blank too.
+    fixture.group.treeNodes = std::vector<server::GroupTreeNode>{};
+    EXPECT_TRUE(GroupKeyResolver::nodeNeedingSelfUpdate(fixture.group).has_value());
+}
+
+TEST_F(ResolverDetection, SpotsANodeOnTheCallersPathSetFromOutsideIt) {
+    // 64 seats created by seat 0, which minted node 95 (seats 32..63) from outside it.
+    Fixture fixture = buildFixture(64);
+    setOwnLeafPosition(fixture.group, 0);
+    EXPECT_FALSE(GroupKeyResolver::nodeNeedingSelfUpdate(fixture.group).has_value())
+        << "the creator's own path is its own";
+    setOwnLeafPosition(fixture.group, 40);
+    EXPECT_TRUE(GroupKeyResolver::nodeNeedingSelfUpdate(fixture.group).has_value());
+
+    // Seat 40 self-updates over 63 and 95: healed, for seat 63 under 95 as well.
+    server::GroupTreeCommit healed;
+    healed.seq = 2;
+    healed.committer = fixture.members[40].userId;
+    healed.committerSeat = 40;
+    fixture.group.treeCommits = std::vector<server::GroupTreeCommit>{fixture.group.treeCommit.value()};
+    fixture.group.treeCommit = healed;
+    auto nodes = fixture.group.treeNodes.value();
+    for (server::GroupTreeNode& node : nodes) {
+        if (node.nodeIndex == 63 || node.nodeIndex == 95) {
+            node.setBy = 2;
+        }
+    }
+    fixture.group.treeNodes = nodes;
+    EXPECT_FALSE(GroupKeyResolver::nodeNeedingSelfUpdate(fixture.group).has_value());
+    setOwnLeafPosition(fixture.group, 63);
+    EXPECT_FALSE(GroupKeyResolver::nodeNeedingSelfUpdate(fixture.group).has_value());
+
+    // A node citing no statement served with it is healed too.
+    setOwnLeafPosition(fixture.group, 0);
+    EXPECT_FALSE(GroupKeyResolver::nodeNeedingSelfUpdate(fixture.group).has_value());
+    for (server::GroupTreeNode& node : nodes) {
+        if (node.nodeIndex == 31) {
+            node.setBy = 7;
+        }
+    }
+    fixture.group.treeNodes = nodes;
+    EXPECT_TRUE(GroupKeyResolver::nodeNeedingSelfUpdate(fixture.group).has_value());
+}
+
+TEST_F(ResolverDetection, OnlyTheLowestOccupiedSeatUnderANodeHealsItFirst) {
+    // 64 seats created by seat 0, which minted node 95 (seats 32..63) from outside it: all 32 seats need it healed,
+    // and one commit does it.
+    Fixture fixture = buildFixture(64);
+    setOwnLeafPosition(fixture.group, 40);
+    ASSERT_EQ(GroupKeyResolver::nodeNeedingSelfUpdate(fixture.group), std::optional<std::uint32_t>(95));
+    for (const std::uint32_t seat : {32u, 40u, 63u}) {
+        setOwnLeafPosition(fixture.group, seat);
+        EXPECT_EQ(GroupKeyResolver::healsFirst(fixture.group, 95), seat == 32) << "seat " << seat;
+    }
+    // Seats 32..39 left: the lowest occupied one is now 40.
+    auto seats = fixture.group.leafAssignment.value();
+    std::fill(seats.begin() + 32, seats.begin() + 40, std::string());
+    fixture.group.leafAssignment = seats;
+    setOwnLeafPosition(fixture.group, 40);
+    EXPECT_TRUE(GroupKeyResolver::healsFirst(fixture.group, 95));
+    setOwnLeafPosition(fixture.group, 41);
+    EXPECT_FALSE(GroupKeyResolver::healsFirst(fixture.group, 95));
 }
 
 // conversions — where a field mismatch would hide
@@ -248,8 +321,8 @@ TEST_F(ResolverConversion, RoundTripsTheTreeState) {
     EXPECT_EQ(state.numLeaves, 8u);
     EXPECT_EQ(state.epoch, 1u);
     EXPECT_EQ(state.grantPublicKey, fixture.grantKey.getPublicKey());
-    EXPECT_EQ(state.nodes.size(), 7u) << "8 leaves means 7 internal nodes";
-    EXPECT_EQ(state.edges.size(), 2u * 7u + 1u) << "two edges per internal node plus the grant edge";
+    EXPECT_EQ(state.nodes.size(), 1u) << "eight leaves are one bucket under the root, the only keyed node";
+    EXPECT_EQ(state.edges.size(), 8u + 1u) << "one edge per member plus the grant edge";
     for (std::size_t i = 0; i < 8; ++i) {
         ASSERT_TRUE(state.leafAssignment[i].has_value());
         EXPECT_EQ(state.leafAssignment[i].value(), fixture.members[i].userId);
@@ -366,6 +439,27 @@ TEST_F(ResolverCurrentEpoch, EpochZeroAndTheCurrentEpochAreEquivalent) {
     EXPECT_EQ(byZero.key->toWIF(), byOne.key->toWIF());
 }
 
+TEST_F(ResolverCurrentEpoch, SECURITY_AnEpochPastTheCurrentOneHasNoKey) {
+    // C3: asking for epoch 2 of a group at epoch 1 used to return epoch 1's key under epoch 2's name — something a
+    // caller would then use to open or seal content it believes belongs to an epoch that does not exist yet.
+    Fixture fixture = buildFixture(4);
+    setOwnLeafPosition(fixture.group, 1);
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult future = resolver.resolve(fixture.group, 2, fixture.members[1].priv, fixture.archive);
+    EXPECT_EQ(future.failure, ResolveFailure::FutureEpoch);
+    EXPECT_FALSE(future.key.has_value());
+
+    // Range-checked before narrowing: neither may wrap round into a real epoch.
+    for (const std::int64_t outOfRange : {std::int64_t(-1), (std::int64_t(1) << 32) + 1}) {
+        const ResolveResult result = resolver.resolve(fixture.group, outOfRange, fixture.members[1].priv, fixture.archive);
+        EXPECT_EQ(result.failure, ResolveFailure::InvalidEpoch) << outOfRange;
+        EXPECT_FALSE(result.key.has_value());
+    }
+    EXPECT_TRUE(resolver.resolve(fixture.group, 1, fixture.members[1].priv, fixture.archive).key.has_value());
+    EXPECT_TRUE(resolver.resolve(fixture.group, 0, fixture.members[1].priv, fixture.archive).key.has_value());
+}
+
 TEST_F(ResolverCurrentEpoch, WithoutOwnLeafPositionTheCallerIsNotAMember) {
     const Fixture fixture = buildFixture(4);
     // ownLeafPosition deliberately unset: the bridge did not point at a leaf for this caller.
@@ -420,6 +514,66 @@ TEST_F(ResolverCurrentEpoch, SECURITY_DetectsACorruptedEdge) {
     EXPECT_EQ(result.climb, ClimbFailure::Tampered) << "tampering must be reported distinctly from a plain miss";
 }
 
+TEST_F(ResolverCurrentEpoch, BlamesTheCommitterWhoseStatementSetTheTamperedNode) {
+    Fixture fixture = buildFixture(4);
+    setOwnLeafPosition(fixture.group, 0);
+    server::GroupTreeCommit creation;
+    creation.seq = 1; // what the root's record cites
+    creation.committer = "creator";
+    server::GroupTreeCommit latest;
+    latest.seq = 2;
+    latest.committer = "latest";
+    fixture.group.treeCommits = std::vector<server::GroupTreeCommit>{creation};
+    fixture.group.treeCommit = latest;
+
+    const PrivateKey impostor = PrivateKey::generateRandom();
+    const std::uint32_t rootIndex = TreeMath::root(4);
+    EXPECT_EQ(GroupKeyResolver::tamperedBy(fixture.group, rootIndex), "creator") << "the root's edges are its setter's";
+    EXPECT_EQ(GroupKeyResolver::tamperedBy(fixture.group, std::nullopt), "latest") << "the grant edge is the latest's";
+
+    // Through a real climb: member 0's edge to the root opens to the wrong key.
+    auto edges = fixture.group.treeEdges.value();
+    for (server::GroupTreeEdge& edge : edges) {
+        if (edge.childKind == "user" && edge.childUserId.value_or("") == fixture.members[0].userId) {
+            edge.data = TreeKeys::wrapKey(impostor, fixture.members[0].priv.getPublicKey(), fixture.members[0].priv);
+        }
+    }
+    fixture.group.treeEdges = edges;
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
+    EXPECT_EQ(result.climb, ClimbFailure::Tampered);
+    EXPECT_EQ(result.blame, std::optional<std::string>("creator"));
+}
+
+TEST_F(ResolverCurrentEpoch, SECURITY_BlamesTheSetterOfTheNodeWhoseEdgeDoesNotOpen) {
+    // T3-16: a garbled edge (sealed to somebody else) fails to decrypt rather than to verify; whoever set the node
+    // above it wrote that edge all the same.
+    Fixture fixture = buildFixture(4);
+    setOwnLeafPosition(fixture.group, 0);
+    server::GroupTreeCommit creation;
+    creation.seq = 1;
+    creation.committer = "creator";
+    server::GroupTreeCommit latest;
+    latest.seq = 2;
+    latest.committer = "latest";
+    fixture.group.treeCommits = std::vector<server::GroupTreeCommit>{creation};
+    fixture.group.treeCommit = latest;
+    auto edges = fixture.group.treeEdges.value();
+    for (server::GroupTreeEdge& edge : edges) {
+        if (edge.childKind == "user" && edge.childUserId.value_or("") == fixture.members[0].userId) {
+            const PrivateKey somebodyElse = PrivateKey::generateRandom();
+            edge.data = TreeKeys::wrapKey(somebodyElse, somebodyElse.getPublicKey(), fixture.members[0].priv);
+        }
+    }
+    fixture.group.treeEdges = edges;
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
+    EXPECT_EQ(result.climb, ClimbFailure::DecryptFailed);
+    EXPECT_EQ(result.blame, std::optional<std::string>("creator"));
+}
+
 // resolving an older epoch — tree then ladder
 
 TEST_F(ResolverOldEpoch, ClimbsThenDescendsToReachAnOlderEpoch) {
@@ -467,28 +621,13 @@ TEST_F(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem)
     leaves[3] = newcomer.userId;
     fixture.group.leafAssignment = leaves;
 
-    // The seat's parent is on leaf 2's direct path but not on leaf 0's, so the one wrap is authored by the
-    // member sharing the blank's parent — the cheap case the design aims for: one wrap, nothing refreshed.
-    const TreeGroupState state = GroupKeyResolver::toTreeState(fixture.group);
-    const std::uint32_t parentIndex = TreeMath::parent(TreeMath::leafNode(3), state.numLeaves);
-    std::uint32_t parentGeneration = 0;
-    for (const TreeNodeState& node : state.nodes) {
-        if (node.nodeIndex == parentIndex) {
-            parentGeneration = node.generation;
-        }
-    }
-    TreeKeyCache adderStore;
-    TreeKeys adder(adderStore);
-    ASSERT_EQ(
-        adder.climbToGrantKey(state, fixture.members[2].userId, fixture.members[2].priv).failure,
-        ClimbFailure::None
-    );
-    const auto parentKey = adderStore.getNodeKey(parentIndex, parentGeneration);
-    ASSERT_TRUE(parentKey.has_value()) << "the adder's own climb passes through the blank's parent";
-
+    // The seat's edge comes from its lowest keyed ancestor, which every member's climb passes through — so another
+    // member re-wraps it to the newcomer: one wrap, nothing refreshed, and nothing else addressed to them.
     auto edges = fixture.group.treeEdges.value();
     for (server::GroupTreeEdge& edge : edges) {
         if (edge.childKind == "user" && edge.childUserId.value_or("") == fixture.members[3].userId) {
+            const auto parentKey = TreeKeys::unwrapKey(edge.data, fixture.members[3].priv); // what the adder climbs past
+            ASSERT_TRUE(parentKey.has_value());
             edge.childUserId = newcomer.userId;
             edge.data = TreeKeys::wrapKey(parentKey.value(), newcomer.priv.getPublicKey(), fixture.members[2].priv);
         }
@@ -545,7 +684,8 @@ TEST_F(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
     auto rungs = fixture.archive.rungs;
     for (server::GroupArchiveRung& rung : rungs) {
         if (rung.atKeyVersion == 8 && rung.targetKeyVersion == 7) {
-            rung.data = TreeKeys::wrapKey(impostor, epochKeys[7].getPublicKey(), fixture.members[0].priv);
+            rung.data =
+                LadderKeys::sealRung(impostor, RungSpan{8, 7}, epochKeys[7].getPublicKey(), fixture.members[0].priv);
             rung.author = "mallory";
         }
     }
@@ -558,6 +698,56 @@ TEST_F(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
     EXPECT_EQ(result.descent, DescentFailure::Tampered);
     ASSERT_TRUE(result.blame.has_value());
     EXPECT_EQ(result.blame.value(), "mallory");
+}
+
+TEST_F(ResolverOldEpoch, SECURITY_TheLadderIsTakenOnlyAsTheStatementsVouchForIt) {
+    // T3-09: the bridge seals a key of its own into the rung down to epoch 7 and lists that key as epoch 7's. Off its
+    // `keyHistory` the descent takes it; off the statements, neither the rung nor the key stands.
+    Fixture fixture = buildFixture(4);
+    const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);
+    setOwnLeafPosition(fixture.group, 1);
+    std::map<std::uint64_t, CommitStatement> openers;
+    for (std::uint64_t epoch = 1; epoch <= 8; ++epoch) {
+        CommitStatement statement;
+        statement.keyVersion = epoch;
+        statement.groupPubKey = epochKeys[epoch - 1].getPublicKey().toBase58DER();
+        statement.committer = "remover";
+        statement.committerPubKey = fixture.members[0].priv.getPublicKey().toBase58DER(); // who sealed the rungs
+        openers.emplace(epoch, statement);
+    }
+    const PrivateKey planted = PrivateKey::generateRandom();
+    server::GroupGetKeyArchiveResult forged = fixture.archive;
+    for (server::GroupArchiveRung& rung : forged.rungs) {
+        if (rung.atKeyVersion == 8 && rung.targetKeyVersion == 7) {
+            rung.data = LadderKeys::sealRung(
+                planted, RungSpan{8, 7}, epochKeys[7].getPublicKey(), PrivateKey::generateRandom()
+            );
+        }
+    }
+    for (server::GroupKeyHistoryEntry& entry : forged.keyHistory) {
+        if (entry.keyVersion == 7) {
+            entry.groupPubKey = planted.getPublicKey().toBase58DER();
+        }
+    }
+    const auto resolve7 = [&](const server::GroupGetKeyArchiveResult& archive) {
+        TreeKeyCache store;
+        GroupKeyResolver resolver(store);
+        return resolver.resolve(fixture.group, 7, fixture.members[1].priv, archive);
+    };
+    const ResolveResult taken = resolve7(forged);
+    ASSERT_TRUE(taken.key.has_value());
+    EXPECT_EQ(taken.key->toWIF(), planted.toWIF()) << "the attack, against the archive as served";
+
+    EXPECT_FALSE(resolve7(GroupKeyResolver::authenticated(forged, openers)).key.has_value());
+
+    const server::GroupGetKeyArchiveResult honest = GroupKeyResolver::authenticated(fixture.archive, openers);
+    EXPECT_EQ(honest.rungs.size(), fixture.archive.rungs.size());
+    for (const server::GroupArchiveRung& rung : honest.rungs) {
+        EXPECT_EQ(rung.author, std::optional<std::string>("remover")) << "named by the statement, not the bridge";
+    }
+    const ResolveResult reached = resolve7(honest);
+    ASSERT_TRUE(reached.key.has_value());
+    EXPECT_EQ(reached.key->toWIF(), epochKeys[6].toWIF());
 }
 
 // caching — the seam GroupApiImpl::resolveGroupPrivKey actually calls on every read
@@ -573,10 +763,8 @@ TEST_F(ResolverCurrentEpoch, ASecondResolveIsServedFromTheCacheWithoutClimbing) 
     const ResolveResult first = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
     ASSERT_EQ(first.failure, ResolveFailure::None);
     ASSERT_TRUE(first.key.has_value());
-    ASSERT_EQ(store.nodeKeyCount(), 3u) << "depth(8) == 3 nodes on the direct path, cached by the first climb";
 
-    // Drop the node keys and strip the tree edges: a real second climb is now impossible.
-    store.clearNodeKeys();
+    // Strip the tree edges: a real second climb is now impossible.
     fixture.group.treeEdges = std::vector<server::GroupTreeEdge>{};
 
     const ResolveResult second = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
@@ -585,5 +773,4 @@ TEST_F(ResolverCurrentEpoch, ASecondResolveIsServedFromTheCacheWithoutClimbing) 
            "climb with";
     ASSERT_TRUE(second.key.has_value());
     EXPECT_EQ(second.key->toWIF(), first.key->toWIF());
-    EXPECT_EQ(store.nodeKeyCount(), 0u) << "a real cache hit recovers no node key";
 }

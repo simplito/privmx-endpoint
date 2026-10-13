@@ -1,10 +1,17 @@
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPIIMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPIIMPL_HPP_
 
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <functional>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <set>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -21,6 +28,8 @@
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCacheRegistry.hpp"
+#include "privmx/endpoint/group/keytree/TreeVerifier.hpp"
+#include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 namespace privmx {
@@ -52,21 +61,32 @@ public:
 
     void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
+    // Both metadata planes as a removal read them, before it committed.
+    struct MetaPlanes {
+        server::GroupMetaEntry publicMeta;
+        server::GroupMetaEntry privateMeta;
+    };
+
     // Called after a removal commits, never as part of it: an entry left at epoch N is still openable and
-    // re-taggable by the removed member, and best-effort here keeps the removal's own write single-plane.
-    void refreshMetadataEpochAfterRemoval(const std::string& groupId);
+    // re-taggable by the removed member, and best-effort here keeps the removal's own write single-plane. After a
+    // removal that abandoned history no plane behind can be read, so it is started over, empty. `removed` are
+    // accepted as the planes' authors only for entries exactly as in `planesBefore`: written while they were members.
+    void refreshMetadataEpochAfterRemoval(
+        const std::string& groupId,
+        bool historyAbandoned,
+        const std::vector<std::string>& removed,
+        const MetaPlanes& planesBefore
+    );
 
     void updateGroupPublicMeta(
         const std::string& groupId,
         const core::Buffer& publicMeta,
-        const int64_t version,
-        bool allowRotationRetry = true
+        const int64_t version
     );
     void updateGroupPrivateMeta(
         const std::string& groupId,
         const core::Buffer& privateMeta,
-        const int64_t version,
-        bool allowRotationRetry = true
+        const int64_t version
     );
     void updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies);
     void deleteGroup(const std::string& groupId);
@@ -91,7 +111,13 @@ public:
         EventSelectorType selectorType,
         const std::string& selectorId
     );
-    privmx::crypto::PrivateKey resolveGroupPrivKey(const std::string& groupId, int64_t epoch = 0);
+    // `seatedRead`: a read of this group the caller has already verified (`verifyTree`, seated). Its own current
+    // epoch then resolves off it rather than off a second read that would verify the same thing again.
+    privmx::crypto::PrivateKey resolveGroupPrivKey(
+        const std::string& groupId,
+        int64_t epoch = 0,
+        const server::GroupInfo* seatedRead = nullptr
+    );
 
     void sendCustomEvent(
         const std::string& groupId,
@@ -122,26 +148,59 @@ public:
     DecryptedFileInfo finishFileDecryption(FileHandle fileHandle);
 
     // Narrowing the archive first keeps the key provider to one grant-key resolution per envelope opened,
-    // rather than one per key the group has ever held.
+    // rather than one per key the group has ever held. Only the group's own routes: its key is wrapped to itself.
     static std::vector<core::server::GroupKeysEntry> filterToKeyId(
         const std::vector<core::server::GroupKeysEntry>& all,
+        const std::string& groupId,
         const std::string& keyId
+    );
+
+    // Whether `wrappedBy` opened the epoch one of `routes` labels the key with (the group's creator or a remover,
+    // the only members who wrap an epoch's content key). Anybody in the context can wrap a key of their own to an
+    // epoch's public grant key; the opener, after `epochOpeners`, is a member's signed word.
+    static bool wrappedByEpochOpener(
+        const std::vector<core::server::GroupKeysEntry>& routes,
+        const std::string& wrappedBy,
+        const std::map<std::uint64_t, keytree::CommitStatement>& openers
     );
 
     static std::string describeResolveFailure(const keytree::ResolveResult& resolved);
 
-    server::GroupGetKeyArchiveResult fetchKeyArchive(
+    // The group's own route to its head entry's key must be at the answer's (verified) `keyVersion`: a key from an
+    // earlier epoch is one a member removed since still holds. Throws GroupDataIntegrityException.
+    static void assertHeadKeyAtEpoch(const server::GroupInfo& group);
+
+    // The epoch of the newest state verified (or committed) for the group, 0 if none.
+    std::uint64_t pinnedKeyVersion(const std::string& groupId);
+
+    // See `TreeVerifier::agreesWithPin`.
+    bool agreesWithPin(
         const std::string& groupId,
+        const std::string& contextId,
+        std::int64_t keyVersion,
+        const std::string& groupPubKey
+    );
+
+    // The ladder between the two epochs, as the group's statements vouch for it (GroupKeyResolver::authenticated).
+    // `group` must have passed `verifyTree`, which pins it.
+    server::GroupGetKeyArchiveResult fetchKeyArchive(
+        const server::GroupInfo& group,
         int64_t targetEpoch,
         int64_t currentEpoch
     );
 
 private:
-    void adoptRotatedAlready(const std::string& groupId, const server::RotatedAlreadyPayload& payload);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
+    // Every read a key is chosen or cached from: the tree (path view), the head key's epoch and the roster
+    // attestation, all on this one answer. Throws for a caller without a verifiable seat.
+    server::GroupInfo readGroupForKeys(const std::string& groupId);
+    // The group key resolver; with `seatedRead`, serving its current epoch off it (see `resolveGroupPrivKey`).
+    core::KeyProvider::GroupPrivKeyResolver resolverOver(const server::GroupInfo* seatedRead);
+    // The key new envelopes are sealed under, re-read once if the cached head is behind the pinned epoch.
+    core::DecryptedEncKeyV2 currentEncKey(const std::string& groupId);
     core::ModuleKeys groupToModuleKeys(const server::GroupInfo& group);
 
     static std::vector<keytree::TreeMember> toTreeMembers(
@@ -167,17 +226,82 @@ private:
 
     // The entire shared prologue of both metadata writes; neither plane reads the other's envelope.
     // Kept in one place so the epoch guard cannot drift between the two callers.
-    MetaWriteContext prepareMetaWrite(const std::string& groupId);
+    // `currentGroup` comes from `readGroupForKeys`.
+    MetaWriteContext prepareMetaWrite(const server::GroupInfo& currentGroup);
+    void writePublicMeta(const server::GroupInfo& currentGroup, const core::Buffer& publicMeta, int64_t version);
+    void writePrivateMeta(const server::GroupInfo& currentGroup, const core::Buffer& privateMeta, int64_t version);
 
     std::map<std::string, std::string> resolveMemberKeys(
         const std::string& contextId,
         const std::vector<std::string>& userIds
     );
 
+    // The long-term keys a commit wraps to: the caller's own from its key, newcomers' from the arguments (left out
+    // here), everybody else's from the Context user list.
+    std::map<std::string, std::string> commitRecipientKeys(
+        const server::GroupInfo& group,
+        const std::vector<std::string>& recipients,
+        const std::string& ownUserId,
+        const std::set<std::string>& newcomers = {}
+    );
+
+    // Checks the served tree against the commit statements before any key from it is used (TreeVerifier). Returns
+    // false, checking nothing, for a group without a supported tree or a caller without a seat: there is nothing it
+    // could climb, and the caller refuses both. Any failure is re-read (`model`) once into `group` and checked
+    // again: a torn read, or a concurrent read having pinned a newer state, passes the second time.
+    bool verifyTree(server::GroupInfo& group, const server::GroupGetModel& model, keytree::TreeVerifier::Scope scope);
+
+    // Whether a group carries the grant key its latest statement vouches for, at or past the state this process
+    // verified (TreeVerifier::verifyListed). A failure is logged, not thrown.
+    bool hasVerifiedGrantKey(const server::GroupInfo& group);
+
+    // The connection's UserVerifier and the group's statements, as TreeVerifier reads them.
+    keytree::TreeVerifier::Environment treeEnvironment(const std::string& groupId);
+
+    // Client time a commit statement is signed at, in milliseconds.
+    static std::uint64_t commitDate();
+
+    // Chains an unsigned statement to `group`'s latest (verified) one: its digest as `prevDigest`, and a date no
+    // earlier than its, which readers require of the chain. Refused at a seq a statement of ours was refused at as a
+    // lost race (T4-17): that one may have been applied, and a second one there would be a fork.
+    void chainTo(keytree::CommitStatement& statement, const server::GroupInfo& group);
+
+    // Sends a signed statement; a refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo`.
+    void submit(
+        const std::string& groupId,
+        const keytree::CommitStatement& statement,
+        const std::function<void()>& send
+    );
+
+    // `group` must have passed `verifyTree` at plan scope. `tolerateBrokenClimb`: a climb that fails on the served
+    // edges (not on membership) is logged and the state returned anyway — a removal plans from public state alone.
     keytree::TreeGroupState climbForPlanning(
         const server::GroupInfo& group,
-        const std::shared_ptr<keytree::TreeKeyCache>& cache
+        const std::shared_ptr<keytree::TreeKeyCache>& cache,
+        bool tolerateBrokenClimb = false
     );
+
+    // One attempt each; `commitWithRetry` re-runs them, from a fresh read, when a concurrent commit moved the base.
+    void addGroupMembersOnce(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
+    // Returns whether the removal abandoned history (the caller held no current grant key).
+    // `planesBefore` is what the attempt read, for `refreshMetadataEpochAfterRemoval`.
+    bool removeGroupMembersOnce(
+        const std::string& groupId,
+        const std::vector<std::string>& userIds,
+        MetaPlanes& planesBefore
+    );
+    static void commitWithRetry(const std::function<void()>& attempt);
+    static bool isRetryableCommitRejection(const privmx::utils::PrivmxException& e);
+
+    // Refills the blank nodes of the caller's own keyed path. A failure leaves the tree as it was; one lost to a
+    // concurrent commit (`isRetryableCommitRejection`) is rescheduled, up to MAX_SELF_UPDATE_ATTEMPTS in all.
+    void selfUpdate(const std::string& groupId);
+    // Schedules one when `group` (a seated, verified read) shows the caller's path needs it: within a window that
+    // grows with the group for the seat that heals first, one window later for any other (`healsFirst`).
+    void scheduleSelfUpdateIfNeeded(const std::string& groupId, const server::GroupInfo& group);
+    // At most one pending or running per group, after a random delay so a group's members do not all commit at once.
+    void scheduleSelfUpdate(const std::string& groupId, std::int64_t windowMs, bool healsFirst, int attempts = 0);
+    void runSelfUpdates();
 
     std::vector<keytree::ArchiveRung> buildRotationRungs(
         const server::GroupInfo& group,
@@ -188,10 +312,12 @@ private:
         keytree::TreeKeyCache& cache
     );
 
-    void dropNodeKeysIfEpochAdvanced(const std::string& groupId, std::uint32_t epoch);
-
     // Includes open file handles, not just the key caches.
     void dropEnvelopeState();
+
+    // Every key memoized for the group (tree key cache, epoch keys, envelope keys and grant epochs): a deleted id may
+    // come back as another group, whose epochs share the numbers but not the keys.
+    void forgetGroupKeys(const std::string& groupId);
 
     // Length-prefixed `groupId`, so one pair cannot collide with another under a different split.
     static std::string memoKeyFor(const std::string& groupId, const std::string& suffix);
@@ -215,6 +341,7 @@ private:
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::shared_ptr<GroupDataSchemaMapper> _groupDataSchemaMapper;
     keytree::TreeKeyCacheRegistry _treeKeyCaches;
+    keytree::TreeVerifier _treeVerifier;
     GroupEnvelopeEncryptor _envelopeEncryptor;
     // Keys already unwrapped for envelopes, by `memoKeyFor(groupId, keyId)`; a keyId names one immutable piece
     // of key material. Dropped on connect and disconnect, so an era cut takes effect at reconnect.
@@ -222,6 +349,26 @@ private:
     // Which epoch a published grant public key belongs to, by `memoKeyFor(groupId, pubKeyBase58)`.
     privmx::utils::ThreadSaveMap<std::string, int64_t> _envelopeGrantEpochs;
     privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<EnvelopeFileState>> _envelopeFiles;
+    // Grant private keys by `memoKeyFor(groupId, epoch)`, each checked against the epoch's published public key.
+    // Kept for the whole connection (dropped on disconnect): a removal ends a member's access to later epochs, and
+    // a hot session keeps the ones it already held — as it would by keeping the keys themselves.
+    privmx::utils::ThreadSaveMap<std::string, privmx::crypto::PrivateKey> _epochKeys;
+
+    // Background self-updates run on a thread of their own rather than the shared executor: a task there waits out
+    // its random delay, and a handful of groups waiting at once would hold every pool thread and stall event
+    // delivery for all modules. Joined in the destructor; pending ones are dropped on disconnect.
+    std::mutex _selfUpdateMutex;
+    std::condition_variable _selfUpdateWake;
+    struct PendingSelfUpdate {
+        std::chrono::steady_clock::time_point due;
+        std::int64_t windowMs; // the delay window it was scheduled with, reused by a retry
+        int attempts;          // lost races so far, counted toward MAX_SELF_UPDATE_ATTEMPTS
+    };
+    std::map<std::string, PendingSelfUpdate> _selfUpdatePending;
+    std::optional<std::string> _selfUpdateRunning;
+    static constexpr int MAX_SELF_UPDATE_ATTEMPTS = 3;
+    bool _selfUpdateStopping = false;
+    std::thread _selfUpdateWorker;
 };
 
 } // namespace group

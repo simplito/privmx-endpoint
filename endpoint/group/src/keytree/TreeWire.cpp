@@ -11,7 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/TreeWire.hpp"
 
-#include <algorithm>
+#include <map>
 #include <set>
 
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
@@ -23,7 +23,12 @@ server::GroupTreeNode TreeWire::toWire(const TreeNodeState& node) {
     server::GroupTreeNode wire;
     wire.nodeIndex = static_cast<std::int64_t>(node.nodeIndex);
     wire.generation = static_cast<std::int64_t>(node.generation);
-    wire.publicKey = node.publicKey.toBase58DER();
+    if (node.publicKey.has_value()) {
+        wire.publicKey = node.publicKey->toBase58DER();
+    }
+    if (node.setBy.has_value()) {
+        wire.setBy = static_cast<std::int64_t>(node.setBy.value());
+    }
     return wire;
 }
 
@@ -81,21 +86,56 @@ std::vector<server::GroupArchiveRung> TreeWire::toWire(const std::vector<Archive
     return wire;
 }
 
-server::GroupTreeState TreeWire::fromBuildPlan(const BuildPlan& plan, const std::vector<TreeMember>& members) {
-    server::GroupTreeState tree;
-    tree.numLeaves = static_cast<std::int64_t>(plan.numLeaves);
-    // Positions beyond the member list exist only when the tree was padded; they are blanks, spelled as empty
-    // strings because that is how the wire format says "nobody here" without a nullable element.
-    tree.leafAssignment.assign(plan.numLeaves, std::string());
-    for (std::size_t i = 0; i < members.size() && i < plan.numLeaves; ++i) {
-        tree.leafAssignment[i] = members[i].userId;
+namespace {
+
+std::vector<std::string> leafAssignmentToWire(const std::vector<std::optional<std::string>>& seats) {
+    // A blank is spelled as an empty string: that is how the wire format says "nobody here" without a nullable
+    // element.
+    std::vector<std::string> wire;
+    for (const auto& seat : seats) {
+        wire.push_back(seat.value_or(std::string()));
     }
-    for (const TreeNodeState& node : plan.nodes) {
-        tree.nodes.push_back(toWire(node));
+    return wire;
+}
+
+template<typename TWireNode>
+std::vector<TWireNode> refreshedToWire(const CommitPlan& plan) {
+    std::vector<TWireNode> wire;
+    for (const RefreshedNode& refreshed : plan.refreshed) {
+        TWireNode node;
+        node.nodeIndex = static_cast<std::int64_t>(refreshed.nodeIndex);
+        // The generation the node was read at travels with the refresh: the server refuses the commit if the node
+        // has moved since, rather than applying it to a base the client never saw.
+        if (refreshed.fromGeneration.has_value()) {
+            node.fromGeneration = static_cast<std::int64_t>(refreshed.fromGeneration.value());
+        }
+        node.generation = static_cast<std::int64_t>(refreshed.generation);
+        node.publicKey = refreshed.key.getPublicKey().toBase58DER();
+        wire.push_back(node);
     }
+    return wire;
+}
+
+std::vector<server::GroupTreeEdge> edgesToWire(const CommitPlan& plan) {
+    std::vector<server::GroupTreeEdge> wire;
     for (const TreeEdge& edge : plan.edges) {
-        tree.edges.push_back(toWire(edge));
+        wire.push_back(TreeWire::toWire(edge));
     }
+    return wire;
+}
+
+} // namespace
+
+server::GroupTreeState TreeWire::toCreateTree(const CommitPlan& plan) {
+    server::GroupTreeState tree;
+    tree.numLeaves = static_cast<std::int64_t>(plan.shape.numLeaves);
+    tree.leafAssignment = leafAssignmentToWire(plan.shape.leafAssignment);
+    for (const RefreshedNode& refreshed : plan.refreshed) {
+        tree.nodes.push_back(
+            toWire(TreeNodeState{refreshed.nodeIndex, refreshed.generation, refreshed.key.getPublicKey(), plan.seq})
+        );
+    }
+    tree.edges = edgesToWire(plan);
     return tree;
 }
 
@@ -125,13 +165,17 @@ TreeGroupState TreeWire::toRuntime(
         }
     }
     for (const server::GroupTreeNode& node : tree.nodes) {
-        state.nodes.push_back(
-            TreeNodeState{
-                static_cast<std::uint32_t>(node.nodeIndex),
-                static_cast<std::uint32_t>(node.generation),
-                NodePublicKey::fromBase58DER(node.publicKey),
+        TreeNodeState converted{
+            static_cast<std::uint32_t>(node.nodeIndex), static_cast<std::uint32_t>(node.generation), std::nullopt,
+            std::nullopt
+        };
+        if (!node.publicKey.value_or("").empty()) {
+            converted.publicKey = NodePublicKey::fromBase58DER(node.publicKey.value());
+            if (node.setBy.has_value() && node.setBy.value() >= 0) {
+                converted.setBy = static_cast<std::uint64_t>(node.setBy.value());
             }
-        );
+        }
+        state.nodes.push_back(converted);
     }
     for (const server::GroupTreeEdge& edge : tree.edges) {
         TreeEdge converted;
@@ -152,196 +196,80 @@ TreeGroupState TreeWire::toRuntime(
     return state;
 }
 
-server::GroupTreeTransition TreeWire::toRemovalTransition(
-    const server::GroupTreeState& before,
-    const RemovalPlan& plan,
-    std::int64_t baseKeyVersion
-) {
-    server::GroupTreeTransition transition;
-    transition.baseKeyVersion = baseKeyVersion;
-    for (const std::uint32_t position : plan.blankedPositions) {
-        transition.blankedPositions.push_back(static_cast<std::int64_t>(position));
-    }
-    for (const NodeRefresh& refresh : plan.pathRefresh) {
-        // The generation the node was read at travels with the refresh: the server refuses the delta if the node
-        // has moved since, rather than applying it to a base the client never saw.
-        std::int64_t fromGeneration = static_cast<std::int64_t>(refresh.newGeneration) - 1;
-        for (const server::GroupTreeNode& node : before.nodes) {
-            if (static_cast<std::uint32_t>(node.nodeIndex) == refresh.nodeIndex) {
-                fromGeneration = node.generation;
-                break;
-            }
-        }
-        server::GroupTreeRefreshedNode wire;
-        wire.nodeIndex = static_cast<std::int64_t>(refresh.nodeIndex);
-        wire.fromGeneration = fromGeneration;
-        wire.generation = static_cast<std::int64_t>(refresh.newGeneration);
-        wire.publicKey = refresh.newKey.getPublicKey().toBase58DER();
-        transition.refreshedNodes.push_back(wire);
-
-        for (const TreeEdge& edge : refresh.edges) {
-            transition.edges.push_back(toWire(edge));
-        }
-    }
-    transition.edges.push_back(toWire(plan.grantEdge));
-    return transition;
-}
-
 server::GroupTreeAdditionTransition TreeWire::toAdditionTransition(
-    const AdditionPlan& plan,
-    const std::map<std::uint32_t, std::uint32_t>& previousGenerations,
+    const CommitPlan& plan,
     std::int64_t baseKeyVersion
 ) {
     server::GroupTreeAdditionTransition transition;
     transition.baseKeyVersion = baseKeyVersion;
-    for (const std::uint32_t position : plan.positions) {
+    for (const std::uint32_t position : plan.shape.subjectSeats) {
         transition.positions.push_back(static_cast<std::int64_t>(position));
     }
-    for (const TreeNodeState& node : plan.nodes) {
-        server::GroupTreeSeatedNode wire;
-        wire.nodeIndex = static_cast<std::int64_t>(node.nodeIndex);
-        const auto previous = previousGenerations.find(node.nodeIndex);
-        if (previous != previousGenerations.end()) {
-            wire.fromGeneration = static_cast<std::int64_t>(previous->second);
-        }
-        wire.generation = static_cast<std::int64_t>(node.generation);
-        wire.publicKey = node.publicKey.toBase58DER();
-        transition.seatedNodes.push_back(wire);
-    }
-    for (const TreeEdge& edge : plan.edges) {
-        transition.edges.push_back(toWire(edge));
-    }
+    transition.seatedNodes = refreshedToWire<server::GroupTreeSeatedNode>(plan);
+    transition.edges = edgesToWire(plan);
     return transition;
 }
 
-server::GroupTreeState TreeWire::afterRemoval(const server::GroupTreeState& before, const RemovalPlan& plan) {
-    server::GroupTreeState after;
-    after.numLeaves = before.numLeaves;
-    after.leafAssignment = before.leafAssignment;
-    std::set<std::string> departing;
-    for (const std::uint32_t position : plan.blankedPositions) {
-        if (position < after.leafAssignment.size() && !after.leafAssignment[position].empty()) {
-            // Guarded: an empty id in this set would match every node-kind edge's `value_or("")` below and drop
-            // edges the removal never touched.
-            departing.insert(after.leafAssignment[position]);
-            after.leafAssignment[position] = std::string();
-        }
+server::GroupTreeTransition TreeWire::toRemovalTransition(const CommitPlan& plan, std::int64_t baseKeyVersion) {
+    server::GroupTreeTransition transition;
+    transition.baseKeyVersion = baseKeyVersion;
+    for (const std::uint32_t position : plan.shape.subjectSeats) {
+        transition.blankedPositions.push_back(static_cast<std::int64_t>(position));
     }
-
-    std::set<std::uint32_t> refreshed;
-    for (const NodeRefresh& refresh : plan.pathRefresh) {
-        refreshed.insert(refresh.nodeIndex);
-    }
-
-    // Nodes off the path come through byte-identical; nodes on it are replaced by their refreshed selves.
-    for (const server::GroupTreeNode& node : before.nodes) {
-        if (refreshed.count(static_cast<std::uint32_t>(node.nodeIndex)) == 0) {
-            after.nodes.push_back(node);
-        }
-    }
-    for (const NodeRefresh& refresh : plan.pathRefresh) {
-        after.nodes.push_back(
-            toWire(TreeNodeState{refresh.nodeIndex, refresh.newGeneration, refresh.newKey.getPublicKey()})
-        );
-    }
-
-    for (const server::GroupTreeEdge& edge : before.edges) {
-        if (edge.isGrantEdge.value_or(false)) {
-            continue; // replaced below, at the new epoch
-        }
-        if (refreshed.count(static_cast<std::uint32_t>(edge.parentIndex.value_or(0))) > 0) {
-            // Its parent's key is gone, so the blob decrypts to a key nobody holds any more. The refresh
-            // supplies the replacement; keeping this one would make the state fail the generation check.
-            continue;
-        }
-        if (edge.childKind == "user" && departing.count(edge.childUserId.value_or("")) > 0) {
-            continue; // the whole point of the operation
-        }
-        after.edges.push_back(edge);
-    }
-    for (const NodeRefresh& refresh : plan.pathRefresh) {
-        for (const TreeEdge& edge : refresh.edges) {
-            after.edges.push_back(toWire(edge));
-        }
-    }
-    after.edges.push_back(toWire(plan.grantEdge));
-    return after;
+    transition.refreshedNodes = refreshedToWire<server::GroupTreeRefreshedNode>(plan);
+    transition.edges = edgesToWire(plan);
+    return transition;
 }
 
-server::GroupTreeState TreeWire::afterAddition(
-    const server::GroupTreeState& before,
-    const AdditionPlan& plan,
-    const std::vector<std::string>& newMemberIds
+server::GroupTreeSelfUpdateTransition TreeWire::toSelfUpdateTransition(
+    const CommitPlan& plan,
+    std::int64_t baseKeyVersion
 ) {
+    server::GroupTreeSelfUpdateTransition transition;
+    transition.baseKeyVersion = baseKeyVersion;
+    transition.refreshedNodes = refreshedToWire<server::GroupTreeRefreshedNode>(plan);
+    transition.edges = edgesToWire(plan);
+    return transition;
+}
+
+server::GroupTreeState TreeWire::afterCommit(const server::GroupTreeState& before, const CommitPlan& plan) {
     server::GroupTreeState after;
-    after.numLeaves = static_cast<std::int64_t>(plan.newNumLeaves);
-    after.leafAssignment = before.leafAssignment;
-    after.leafAssignment.resize(plan.newNumLeaves, std::string());
-    for (std::size_t i = 0; i < plan.positions.size(); ++i) {
-        after.leafAssignment[plan.positions[i]] = newMemberIds[i];
-    }
-    // The plan re-keys the new leaf's path, so its nodes REPLACE the ones held before rather than joining them:
-    // appending would leave the state carrying two entries for one node index, one of them a key nobody holds.
-    std::map<std::uint32_t, server::GroupTreeNode> nodesByIndex;
+    after.numLeaves = static_cast<std::int64_t>(plan.shape.numLeaves);
+    after.leafAssignment = leafAssignmentToWire(plan.shape.leafAssignment);
+
+    // Every node whose outgoing edges the commit invalidates: refreshed, blanked, or no longer keyed at all.
+    std::set<std::uint32_t> replaced(plan.shape.blanked.begin(), plan.shape.blanked.end());
+    std::map<std::uint32_t, server::GroupTreeNode> nodes;
     for (const server::GroupTreeNode& node : before.nodes) {
-        nodesByIndex[static_cast<std::uint32_t>(node.nodeIndex)] = node;
+        const auto index = static_cast<std::uint32_t>(node.nodeIndex);
+        if (!TreeMath::isKeyed(index, plan.shape.numLeaves)) {
+            replaced.insert(index);
+            continue;
+        }
+        nodes[index] = node;
+        if (plan.shape.blanked.count(index) > 0) {
+            nodes[index].publicKey = std::nullopt;
+            nodes[index].setBy = std::nullopt;
+        }
     }
-    for (const TreeNodeState& node : plan.nodes) {
-        nodesByIndex[node.nodeIndex] = toWire(node);
+    for (const RefreshedNode& refreshed : plan.refreshed) {
+        replaced.insert(refreshed.nodeIndex);
+        nodes[refreshed.nodeIndex] = toWire(
+            TreeNodeState{refreshed.nodeIndex, refreshed.generation, refreshed.key.getPublicKey(), plan.seq}
+        );
     }
-    for (const auto& [nodeIndex, node] : nodesByIndex) {
+    for (const auto& [index, node] : nodes) {
         after.nodes.push_back(node);
     }
 
-    // Growth re-parents nodes at the truncated edge, so an edge correct a moment ago can name a parent that is no
-    // longer the child's. The plan supplies the replacement; keeping the old one would describe a dead topology.
-    const auto stillCorrect = [&](const server::GroupTreeEdge& edge) {
-        if (edge.isGrantEdge.value_or(false)) {
-            return true; // the plan replaces it when the root changed; otherwise it still points at the root
-        }
-        const std::uint32_t parentIndex = static_cast<std::uint32_t>(edge.parentIndex.value_or(0));
-        std::uint32_t childNode = 0;
-        if (edge.childKind == "user") {
-            const std::string& userId = edge.childUserId.value_or("");
-            const auto seat = std::find(before.leafAssignment.begin(), before.leafAssignment.end(), userId);
-            if (seat == before.leafAssignment.end()) {
-                return false;
-            }
-            childNode = TreeMath::leafNode(
-                static_cast<std::uint32_t>(std::distance(before.leafAssignment.begin(), seat))
-            );
-        } else {
-            childNode = static_cast<std::uint32_t>(edge.childIndex.value_or(0));
-        }
-        const std::uint32_t root = TreeMath::root(plan.newNumLeaves);
-        if (childNode == root) {
-            return false; // the old root is now somebody's child; only the plan knows whose
-        }
-        return TreeMath::parent(childNode, plan.newNumLeaves) == parentIndex;
-    };
-
-    std::set<std::string> replaced;
-    const auto edgeKey = [](const server::GroupTreeEdge& edge) {
-        if (edge.isGrantEdge.value_or(false)) {
-            return std::string("grant");
-        }
-        const std::string child = edge.childKind == "user" ? "user:" + edge.childUserId.value_or("") :
-                                                             "node:" + std::to_string(edge.childIndex.value_or(0));
-        return std::to_string(edge.parentIndex.value_or(0)) + ">" + child;
-    };
-    std::vector<server::GroupTreeEdge> added;
-    for (const TreeEdge& edge : plan.edges) {
-        const server::GroupTreeEdge wire = toWire(edge);
-        replaced.insert(edgeKey(wire));
-        added.push_back(wire);
-    }
     for (const server::GroupTreeEdge& edge : before.edges) {
-        if (replaced.count(edgeKey(edge)) > 0 || !stillCorrect(edge)) {
+        if (edge.isGrantEdge.value_or(false) ||
+            replaced.count(static_cast<std::uint32_t>(edge.parentIndex.value_or(0))) > 0) {
             continue;
         }
         after.edges.push_back(edge);
     }
-    for (const server::GroupTreeEdge& edge : added) {
+    for (const server::GroupTreeEdge& edge : edgesToWire(plan)) {
         after.edges.push_back(edge);
     }
     return after;

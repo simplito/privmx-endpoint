@@ -10,12 +10,10 @@ limitations under the License.
 */
 
 /**
- * Turning removal and addition plans into the complete tree state the bridge receives, with real EC keys.
- *
- * Both the shape of the state and the ability of the members who should still climb it are checked: a mistake
- * here does not produce a wrong key but a state the server rejects or, worse, accepts while a member can no
- * longer climb. The server's own view of the same states is checked from the bridge's test suite, against
- * fixtures emitted by test/tools/keytree_state_dump.cpp.
+ * Turning commit plans into what the bridge receives, with real EC keys: the tree of a new group, and the
+ * transition every later commit sends. A mistake here does not produce a wrong key but a commit the server
+ * rejects or, worse, accepts while a member can no longer climb. The server's own view of the same states is checked
+ * from the bridge's test suite, against fixtures emitted by test/tools/keytree_state_dump.cpp.
  *
  * Tests named SECURITY guard confidentiality and fail silently at runtime if the guard regresses.
  */
@@ -24,9 +22,8 @@ limitations under the License.
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <map>
-#include <memory>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -40,20 +37,21 @@ using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
 using namespace privmx::endpoint::group::keytree;
 
-class TreeWireTestBase : public testing::Test {
+class TreeWireTest : public testing::Test {
 protected:
     struct Member {
         std::string userId;
         PrivateKey priv;
     };
 
-    std::vector<Member> makeMembers(std::uint32_t count) {
+    // A group as stored on the bridge, the members behind it, and the plan that made its current state.
+    struct Group {
         std::vector<Member> members;
-        for (std::uint32_t i = 0; i < count; ++i) {
-            members.push_back(Member{"u" + std::to_string(i), PrivateKey::generateRandom()});
-        }
-        return members;
-    }
+        server::GroupTreeState tree;
+        std::uint32_t epoch = 1;
+        privmx::crypto::PublicKey grant;
+        std::map<std::uint64_t, std::string> setters; // statement seq -> committer
+    };
 
     std::vector<TreeMember> publicOf(const std::vector<Member>& members) {
         std::vector<TreeMember> result;
@@ -63,372 +61,246 @@ protected:
         return result;
     }
 
-    // A tree-backed group, with the store that holds the builder's node keys.
-    struct Fixture {
-        std::vector<Member> members;
-        TreeKeyCache store;
-        server::GroupTreeState tree;
-        TreeGroupState state;
-        PrivateKey grantKey;
-        std::uint32_t epoch = 1;
-    };
-
-    std::shared_ptr<Fixture> build(std::uint32_t count, std::uint32_t epoch = 1) {
-        auto fixture = std::make_shared<Fixture>();
-        fixture->members = makeMembers(count);
-        fixture->epoch = epoch;
-        TreeKeys builder(fixture->store);
-        const std::vector<TreeMember> members = publicOf(fixture->members);
-        const BuildPlan plan = builder.build(members, fixture->members[0].priv);
-        fixture->grantKey = plan.grantKey;
-        fixture->tree = TreeWire::fromBuildPlan(plan, members);
-        for (server::GroupTreeEdge& edge : fixture->tree.edges) {
-            if (edge.isGrantEdge.value_or(false)) {
-                edge.parentGeneration = static_cast<std::int64_t>(epoch);
-            }
-        }
-        fixture->state = TreeWire::toRuntime(fixture->tree, epoch, plan.grantKey.getPublicKey());
-        return fixture;
+    TreeGroupState runtime(const Group& group) {
+        TreeGroupState state = TreeWire::toRuntime(group.tree, group.epoch, group.grant);
+        state.setters = group.setters;
+        state.commitSeq = group.setters.rbegin()->first;
+        return state;
     }
 
-    // Whether the given member can climb the state to the grant key, from a store holding nothing.
-    bool canClimb(const server::GroupTreeState& tree, std::uint32_t epoch, const privmx::crypto::PublicKey& grantPub,
-                  const Member& member) {
-        TreeKeyCache store;
-        TreeKeys tree_keys(store);
-        const TreeGroupState state = TreeWire::toRuntime(tree, epoch, grantPub);
-        const ClimbResult climb = tree_keys.climbToGrantKey(state, member.userId, member.priv, false);
+    Group create(std::uint32_t count, std::uint32_t creator = 0) {
+        Group group;
+        for (std::uint32_t i = 0; i < count; ++i) {
+            group.members.push_back(Member{"u" + std::to_string(i), PrivateKey::generateRandom()});
+        }
+        TreeKeyCache cache;
+        TreeKeys keys(cache);
+        const CommitPlan plan =
+            keys.planCreate(publicOf(group.members), group.members[creator].userId, group.members[creator].priv);
+        group.tree = TreeWire::toCreateTree(plan);
+        group.grant = plan.grantKey.getPublicKey();
+        group.setters[plan.seq] = group.members[creator].userId;
+        return group;
+    }
+
+    // Plans as `committer` from a cold cache, then stores the result the way the bridge does.
+    CommitPlan commit(
+        Group& group,
+        std::uint32_t committer,
+        const std::function<CommitPlan(TreeKeys&, const TreeGroupState&, const Member&)>& plan
+    ) {
+        TreeKeyCache cache;
+        TreeKeys keys(cache);
+        const TreeGroupState state = runtime(group);
+        const Member& who = group.members[committer];
+        EXPECT_EQ(keys.climbToGrantKey(state, who.userId, who.priv, false).failure, ClimbFailure::None);
+        keys.setMemberKeys(publicOf(group.members));
+        const CommitPlan result = plan(keys, state, who);
+        group.tree = TreeWire::afterCommit(group.tree, result);
+        group.epoch = result.epoch;
+        group.grant = result.grantKey.getPublicKey();
+        group.setters[result.seq] = who.userId;
+        return result;
+    }
+
+    CommitPlan remove(Group& group, std::uint32_t remover, std::uint32_t leaving) {
+        return commit(group, remover, [&](TreeKeys& keys, const TreeGroupState& state, const Member& who) {
+            return keys.planRemoval(state, {group.members[leaving].userId}, who.userId, who.priv);
+        });
+    }
+
+    CommitPlan add(Group& group, std::uint32_t adder) {
+        const Member newcomer{"new" + std::to_string(group.members.size()), PrivateKey::generateRandom()};
+        const CommitPlan plan = commit(group, adder, [&](TreeKeys& keys, const TreeGroupState& state, const Member& who) {
+            return keys.planAddition(
+                state, publicOf({newcomer}), TreeKeys::choosePositions(state, 1), who.userId, who.priv
+            );
+        });
+        group.members.push_back(newcomer);
+        return plan;
+    }
+
+    bool canClimb(const Group& group, const Member& member) {
+        TreeKeyCache cache;
+        TreeKeys keys(cache);
+        const ClimbResult climb = keys.climbToGrantKey(runtime(group), member.userId, member.priv, false);
         return climb.failure == ClimbFailure::None && climb.grantKey.has_value();
     }
 
-    const server::GroupTreeEdge* grantEdgeOf(const server::GroupTreeState& tree) {
-        for (const server::GroupTreeEdge& edge : tree.edges) {
-            if (edge.isGrantEdge.value_or(false)) {
-                return &edge;
+    static const server::GroupTreeEdge* grantEdgeOf(const std::vector<server::GroupTreeEdge>& edges) {
+        const auto grant = std::find_if(edges.begin(), edges.end(), [](const server::GroupTreeEdge& edge) {
+            return edge.isGrantEdge.value_or(false);
+        });
+        return grant == edges.end() ? nullptr : &*grant;
+    }
+
+    static const server::GroupTreeNode* nodeOf(const server::GroupTreeState& tree, std::uint32_t nodeIndex) {
+        for (const server::GroupTreeNode& node : tree.nodes) {
+            if (node.nodeIndex == static_cast<std::int64_t>(nodeIndex)) {
+                return &node;
             }
         }
         return nullptr;
-    }
-
-    std::size_t countUserEdges(const server::GroupTreeState& tree, const std::string& userId) {
-        std::size_t count = 0;
-        for (const server::GroupTreeEdge& edge : tree.edges) {
-            if (edge.childKind == "user" && edge.childUserId.value_or("") == userId) {
-                ++count;
-            }
-        }
-        return count;
-    }
-
-    struct RemovalOutcome {
-        server::GroupTreeState after;
-        RemovalPlan plan;
-    };
-
-    RemovalOutcome removeMember(Fixture& fixture, std::uint32_t position, std::uint32_t remover) {
-        TreeKeys tree(fixture.store);
-        tree.setMemberKeys(publicOf(fixture.members));
-        const ClimbResult climb = tree.climbToGrantKey(
-            fixture.state, fixture.members[remover].userId, fixture.members[remover].priv, false
-        );
-        if (climb.failure != ClimbFailure::None) {
-            throw std::runtime_error("the remover could not climb");
-        }
-        RemovalPlan plan =
-            tree.planRemoval(fixture.state, {fixture.members[position].userId}, fixture.members[remover].priv);
-        server::GroupTreeState after = TreeWire::afterRemoval(fixture.tree, plan);
-        return RemovalOutcome{after, plan};
-    }
-
-    struct AdditionOutcome {
-        server::GroupTreeState after;
-        AdditionPlan plan;
-        Member newcomer;
-    };
-
-    AdditionOutcome addMember(Fixture& fixture, const std::vector<TreeMember>& roster) {
-        TreeKeys tree(fixture.store);
-        tree.setMemberKeys(roster);
-        const ClimbResult climb =
-            tree.climbToGrantKey(fixture.state, fixture.members[0].userId, fixture.members[0].priv, false);
-        if (climb.failure != ClimbFailure::None) {
-            throw std::runtime_error("the adder could not climb");
-        }
-        const Member newcomer{"newcomer", PrivateKey::generateRandom()};
-        std::vector<TreeMember> withNewcomer = roster;
-        withNewcomer.push_back(TreeMember{newcomer.userId, newcomer.priv.getPublicKey()});
-        TreeKeys planner(fixture.store);
-        planner.setMemberKeys(withNewcomer);
-        const AdditionPlan plan = planner.planAddition(
-fixture.state, std::vector<TreeMember>{TreeMember{newcomer.userId, newcomer.priv.getPublicKey()}},
-TreeKeys::choosePositions(fixture.state, 1), fixture.members[0].priv
-);
-        server::GroupTreeState after = TreeWire::afterAddition(fixture.tree, plan, {newcomer.userId});
-        return AdditionOutcome{after, plan, newcomer};
     }
 };
 
 // creation
 
-class TreeWireBuild : public TreeWireTestBase {};
-
-TEST_F(TreeWireBuild, SeatsEveryMemberAndPublishesEveryInternalNode) {
-    for (const std::uint32_t count : {1u, 2u, 3u, 4u, 5u, 8u, 9u}) {
-        const auto fixture = build(count);
-        EXPECT_EQ(fixture->tree.numLeaves, static_cast<std::int64_t>(count)) << "N=" << count;
-        ASSERT_EQ(fixture->tree.leafAssignment.size(), count);
+TEST_F(TreeWireTest, ACreatedTreeSeatsEveryoneAndCarriesEveryKeyedNode) {
+    for (const std::uint32_t count : {1u, 2u, 3u, 16u, 17u, 33u, 40u}) {
+        const std::uint32_t creator = count - 1;
+        const Group group = create(count, creator);
+        EXPECT_EQ(group.tree.numLeaves, static_cast<std::int64_t>(count));
+        ASSERT_EQ(group.tree.leafAssignment.size(), count);
         for (std::uint32_t i = 0; i < count; ++i) {
-            EXPECT_EQ(fixture->tree.leafAssignment[i], fixture->members[i].userId);
+            EXPECT_EQ(group.tree.leafAssignment[i], group.members[i].userId);
         }
-        // Internal nodes are the odd indices below 2N-1: one keypair each, leaves carrying none because a
-        // member's own long-term key already is the leaf.
-        const std::size_t expectedNodes = count == 1 ? 0 : (count - 1);
-        EXPECT_EQ(fixture->tree.nodes.size(), expectedNodes) << "N=" << count;
+        std::vector<std::uint32_t> nodes;
+        for (const server::GroupTreeNode& node : group.tree.nodes) {
+            nodes.push_back(static_cast<std::uint32_t>(node.nodeIndex));
+            EXPECT_EQ(node.generation, 0);
+            EXPECT_TRUE(node.publicKey.has_value());
+        }
+        EXPECT_EQ(nodes, TreeMath::keyedNodes(count)) << "N=" << count;
     }
 }
 
-TEST_F(TreeWireBuild, StaysWithinTheBridgesPerTreeSubmissionCaps) {
-    // The bridge derives its `groupCreate` caps from the declared `numLeaves` — at most N-1 nodes and 2N-1
-    // edges — and an honest full tree sits exactly on both, so this client has no headroom at all.
-    for (const std::uint32_t count : {1u, 2u, 3u, 4u, 5u, 7u, 8u, 9u, 16u, 17u, 31u, 32u, 33u, 64u}) {
-        const auto fixture = build(count);
-        const auto numLeaves = static_cast<std::size_t>(fixture->tree.numLeaves);
-        EXPECT_EQ(numLeaves, count) << "N=" << count;
-        EXPECT_EQ(fixture->tree.leafAssignment.size(), numLeaves) << "N=" << count;
-        EXPECT_LE(fixture->tree.nodes.size(), numLeaves - 1) << "N=" << count;
-        EXPECT_LE(fixture->tree.edges.size(), 2 * numLeaves - 1) << "N=" << count;
+TEST_F(TreeWireTest, ACreatedTreeStaysWithinTheBridgesSubmissionCaps) {
+    // Every member gets exactly one edge, every keyed node below the root one more, plus the grant edge — which
+    // in a one-seat tree is the member's edge.
+    for (const std::uint32_t count : {1u, 2u, 3u, 8u, 16u, 17u, 32u, 33u, 64u, 100u}) {
+        const Group group = create(count);
+        const std::size_t keyed = TreeMath::keyedNodes(count).size();
+        EXPECT_EQ(group.tree.edges.size(), count == 1 ? 1u : count + keyed) << "N=" << count;
+        EXPECT_LE(group.tree.nodes.size(), std::max<std::size_t>(count, 1) - 1) << "N=" << count;
+        EXPECT_LE(group.tree.edges.size(), 2u * count - 1) << "N=" << count;
     }
 }
 
-TEST_F(TreeWireBuild, EveryMemberCanClimbTheStateThatWasSubmitted) {
-    // The functional counterpart to the shape checks: a state that looks right but nobody can climb is worse
-    // than one the server rejects.
-    const auto fixture = build(5);
-    for (const Member& member : fixture->members) {
-        EXPECT_TRUE(canClimb(fixture->tree, fixture->epoch, fixture->grantKey.getPublicKey(), member))
-            << member.userId << " cannot climb";
+TEST_F(TreeWireTest, EveryMemberCanClimbTheTreeThatWasSubmitted) {
+    const Group group = create(40, 20);
+    for (const Member& member : group.members) {
+        EXPECT_TRUE(canClimb(group, member)) << member.userId << " cannot climb";
     }
 }
 
-TEST_F(TreeWireBuild, TheGrantEdgeCarriesTheEpochRatherThanANodeGeneration) {
-    const auto fixture = build(4, 9);
-    const server::GroupTreeEdge* grant = grantEdgeOf(fixture->tree);
+TEST_F(TreeWireTest, TheGrantEdgeCarriesTheEpochAndNamesTheRoot) {
+    const Group group = create(40);
+    const server::GroupTreeEdge* grant = grantEdgeOf(group.tree.edges);
     ASSERT_NE(grant, nullptr);
-    EXPECT_EQ(grant->parentGeneration, 9);
+    EXPECT_EQ(grant->parentGeneration, 1);
     EXPECT_EQ(grant->childKind, "node");
-    EXPECT_EQ(grant->childIndex.value_or(0), TreeMath::root(4));
+    EXPECT_EQ(grant->childIndex.value_or(0), TreeMath::root(40));
+    EXPECT_EQ(grant->childGeneration.value_or(-1), 0);
+    EXPECT_FALSE(grant->parentIndex.has_value());
+
+    const Group alone = create(1);
+    const server::GroupTreeEdge* direct = grantEdgeOf(alone.tree.edges);
+    ASSERT_NE(direct, nullptr);
+    EXPECT_EQ(direct->childKind, "user");
+    EXPECT_EQ(direct->childUserId.value_or(""), alone.members[0].userId);
 }
 
-TEST_F(TreeWireBuild, AOneMemberGroupWrapsTheGrantKeyStraightToTheMember) {
-    const auto fixture = build(1);
-    const server::GroupTreeEdge* grant = grantEdgeOf(fixture->tree);
+// transitions
+
+TEST_F(TreeWireTest, ARemovalSendsTheRemoversPathTheBlankedSeatAndTheNewEpoch) {
+    Group group = create(40, 0);
+    const CommitPlan plan = remove(group, 35, 5);
+    const server::GroupTreeTransition transition = TreeWire::toRemovalTransition(plan, 1);
+    EXPECT_EQ(transition.baseKeyVersion, 1);
+    EXPECT_EQ(transition.blankedPositions, std::vector<std::int64_t>({5}));
+    ASSERT_EQ(transition.refreshedNodes.size(), 1u);
+    EXPECT_EQ(transition.refreshedNodes[0].nodeIndex, 63);
+    EXPECT_EQ(transition.refreshedNodes[0].fromGeneration, std::optional<std::int64_t>(0));
+    EXPECT_EQ(transition.refreshedNodes[0].generation, 1);
+    const server::GroupTreeEdge* grant = grantEdgeOf(transition.edges);
     ASSERT_NE(grant, nullptr);
-    EXPECT_EQ(grant->childKind, "user");
-    EXPECT_EQ(grant->childUserId.value_or(""), fixture->members[0].userId);
-    EXPECT_TRUE(canClimb(fixture->tree, 1, fixture->grantKey.getPublicKey(), fixture->members[0]));
-}
-
-// removal
-
-class TreeWireRemoval : public TreeWireTestBase {};
-
-TEST_F(TreeWireRemoval, BlanksTheLeafAndKeepsTheTreeTheSameSize) {
-    auto fixture = build(8, 5);
-    const RemovalOutcome outcome = removeMember(*fixture, 3, 0);
-    EXPECT_EQ(outcome.after.numLeaves, fixture->tree.numLeaves) << "a removal leaves a blank, it does not compact";
-    EXPECT_TRUE(outcome.after.leafAssignment[3].empty());
-    EXPECT_EQ(outcome.after.leafAssignment[4], fixture->members[4].userId) << "nobody else moved";
-}
-
-TEST_F(TreeWireRemoval, ReplacesEveryRefreshedNodeExactlyOnce) {
-    auto fixture = build(8, 5);
-    const RemovalOutcome outcome = removeMember(*fixture, 3, 0);
-    EXPECT_EQ(outcome.after.nodes.size(), fixture->tree.nodes.size()) << "nodes are refreshed, never added";
-    for (const NodeRefresh& refresh : outcome.plan.pathRefresh) {
-        std::size_t matching = 0;
-        for (const server::GroupTreeNode& node : outcome.after.nodes) {
-            if (static_cast<std::uint32_t>(node.nodeIndex) == refresh.nodeIndex) {
-                ++matching;
-                EXPECT_EQ(node.generation, static_cast<std::int64_t>(refresh.newGeneration));
-                EXPECT_EQ(node.publicKey, refresh.newKey.getPublicKey().toBase58DER());
-            }
-        }
-        EXPECT_EQ(matching, 1u) << "node " << refresh.nodeIndex << " appears " << matching << " times";
+    EXPECT_EQ(grant->parentGeneration, 2);
+    EXPECT_EQ(grant->childGeneration.value_or(-1), 1);
+    for (const server::GroupTreeEdge& edge : transition.edges) {
+        EXPECT_NE(edge.childUserId.value_or(""), group.members[5].userId);
     }
 }
 
-TEST_F(TreeWireRemoval, SECURITY_LeavesNoEdgeAddressedToTheDepartingMember) {
-    auto fixture = build(8, 5);
-    const std::string departing = fixture->members[3].userId;
-    const RemovalOutcome outcome = removeMember(*fixture, 3, 0);
-    EXPECT_EQ(countUserEdges(outcome.after, departing), 0u);
+TEST_F(TreeWireTest, AFreshlyMintedNodeIsSentWithoutAFromGeneration) {
+    // 32 seats to 33: the root 63 did not exist, node 31 did.
+    Group group = create(32, 0);
+    const CommitPlan plan = add(group, 0);
+    const server::GroupTreeAdditionTransition transition = TreeWire::toAdditionTransition(plan, 1);
+    EXPECT_EQ(transition.positions, std::vector<std::int64_t>({32}));
+    ASSERT_EQ(transition.seatedNodes.size(), 2u);
+    EXPECT_EQ(transition.seatedNodes[0].nodeIndex, 31);
+    EXPECT_EQ(transition.seatedNodes[0].fromGeneration, std::optional<std::int64_t>(0));
+    EXPECT_EQ(transition.seatedNodes[1].nodeIndex, 63);
+    EXPECT_FALSE(transition.seatedNodes[1].fromGeneration.has_value());
+    EXPECT_EQ(transition.seatedNodes[1].generation, 0);
+    EXPECT_FALSE(transition.toJSON()->getArray("seatedNodes")->getObject(1)->has("fromGeneration"))
+        << "absent on the wire, not null or zero";
+    EXPECT_EQ(grantEdgeOf(transition.edges)->parentGeneration, 1) << "re-linking is not a rotation";
 }
 
-TEST_F(TreeWireRemoval, SECURITY_TheRemovedMemberCanNoLongerClimb) {
-    // The point of the whole operation, checked with real crypto rather than by inspecting the shape.
-    auto fixture = build(8, 5);
-    const RemovalOutcome outcome = removeMember(*fixture, 3, 0);
-    EXPECT_FALSE(canClimb(
-        outcome.after, outcome.plan.newEpoch, outcome.plan.newGrantKey.getPublicKey(), fixture->members[3]
-    ));
+TEST_F(TreeWireTest, ASelfUpdateSendsTheMembersPathAtTheUnchangedEpoch) {
+    Group group = create(40, 0);
+    remove(group, 35, 5);
+    const CommitPlan plan = commit(group, 9, [&](TreeKeys& keys, const TreeGroupState& state, const Member& who) {
+        return keys.planSelfUpdate(state, who.userId, who.priv);
+    });
+    const server::GroupTreeSelfUpdateTransition transition = TreeWire::toSelfUpdateTransition(plan, 2);
+    EXPECT_EQ(transition.baseKeyVersion, 2);
+    ASSERT_EQ(transition.refreshedNodes.size(), 2u);
+    EXPECT_EQ(transition.refreshedNodes[0].nodeIndex, 31);
+    EXPECT_EQ(transition.refreshedNodes[1].nodeIndex, 63);
+    EXPECT_EQ(grantEdgeOf(transition.edges)->parentGeneration, 2);
+    const auto json = transition.toJSON();
+    EXPECT_TRUE(json->has("baseKeyVersion") && json->has("refreshedNodes") && json->has("edges"));
 }
 
-TEST_F(TreeWireRemoval, EveryRemainingMemberCanStillClimb) {
-    for (const std::uint32_t count : {2u, 3u, 4u, 5u, 8u}) {
-        for (std::uint32_t position = 0; position < count; ++position) {
-            auto fixture = build(count, 5);
-            const std::uint32_t remover = position == 0 ? 1 : 0;
-            const RemovalOutcome outcome = removeMember(*fixture, position, remover);
-            for (std::uint32_t i = 0; i < count; ++i) {
-                if (i == position) {
-                    continue;
-                }
-                EXPECT_TRUE(canClimb(
-                    outcome.after, outcome.plan.newEpoch, outcome.plan.newGrantKey.getPublicKey(),
-                    fixture->members[i]
-                )) << "N=" << count << " removed " << position << ", " << fixture->members[i].userId
-                   << " lost access";
-            }
+// the stored state
+
+TEST_F(TreeWireTest, SECURITY_ABlankedNodeKeepsItsGenerationAndLosesItsKey) {
+    Group group = create(40, 0);
+    remove(group, 35, 5);
+    const server::GroupTreeNode* blank = nodeOf(group.tree, 31);
+    ASSERT_NE(blank, nullptr);
+    EXPECT_EQ(blank->generation, 0);
+    EXPECT_FALSE(blank->publicKey.has_value());
+    for (const server::GroupTreeEdge& edge : group.tree.edges) {
+        EXPECT_NE(edge.parentIndex.value_or(-1), 31) << "a blank node holds no edges";
+        EXPECT_NE(edge.childUserId.value_or(""), group.members[5].userId) << "nothing addressed to the leaver";
+    }
+    EXPECT_FALSE(canClimb(group, group.members[5]));
+    for (std::uint32_t i = 0; i < 40; ++i) {
+        if (i != 5) {
+            EXPECT_TRUE(canClimb(group, group.members[i])) << group.members[i].userId << " lost access";
         }
     }
 }
 
-TEST_F(TreeWireRemoval, TheGrantEdgeMovesToTheNewEpoch) {
-    auto fixture = build(4, 5);
-    const RemovalOutcome outcome = removeMember(*fixture, 2, 0);
-    const server::GroupTreeEdge* grant = grantEdgeOf(outcome.after);
-    ASSERT_NE(grant, nullptr);
-    EXPECT_EQ(grant->parentGeneration, static_cast<std::int64_t>(outcome.plan.newEpoch));
-    std::size_t grantEdges = 0;
-    for (const server::GroupTreeEdge& edge : outcome.after.edges) {
-        if (edge.isGrantEdge.value_or(false)) {
-            ++grantEdges;
-        }
+TEST_F(TreeWireTest, GrowthPastSixteenDropsTheOldRootWithItsEdges) {
+    Group group = create(16, 4);
+    add(group, 4);
+    EXPECT_EQ(group.tree.numLeaves, 17);
+    EXPECT_EQ(nodeOf(group.tree, 15), nullptr) << "level 4 is a bucket once it is not the root";
+    for (const server::GroupTreeEdge& edge : group.tree.edges) {
+        EXPECT_NE(edge.parentIndex.value_or(-1), 15);
     }
-    EXPECT_EQ(grantEdges, 1u) << "the old grant edge must be gone, not merely joined by a new one";
-}
-
-TEST_F(TreeWireRemoval, EveryEdgeNamesTheCurrentGenerationOfBothEndpoints) {
-    // This is the rule the server leans on to make refresh coverage automatic, so the client has to satisfy it
-    // exactly rather than approximately.
-    auto fixture = build(8, 5);
-    const RemovalOutcome outcome = removeMember(*fixture, 5, 0);
-    std::map<std::uint32_t, std::int64_t> generations;
-    for (const server::GroupTreeNode& node : outcome.after.nodes) {
-        generations[static_cast<std::uint32_t>(node.nodeIndex)] = node.generation;
-    }
-    for (const server::GroupTreeEdge& edge : outcome.after.edges) {
-        if (edge.isGrantEdge.value_or(false)) {
-            continue;
-        }
-        const auto parent = generations.find(static_cast<std::uint32_t>(edge.parentIndex.value_or(0)));
-        ASSERT_NE(parent, generations.end()) << "edge from unknown node " << edge.parentIndex.value_or(0);
-        EXPECT_EQ(edge.parentGeneration, parent->second) << "stale parent generation";
-        if (edge.childKind == "node") {
-            const auto child = generations.find(static_cast<std::uint32_t>(edge.childIndex.value_or(0)));
-            ASSERT_NE(child, generations.end());
-            EXPECT_EQ(edge.childGeneration.value_or(-1), child->second) << "stale child generation";
-        }
+    for (const Member& member : group.members) {
+        EXPECT_TRUE(canClimb(group, member)) << member.userId;
     }
 }
 
-// addition
-
-class TreeWireAddition : public TreeWireTestBase {};
-
-TEST_F(TreeWireAddition, SECURITY_DoesNotMoveTheEpoch) {
-    // If an addition rotated the grant key, every container the group can read would go stale — one new member
-    // would force the whole group to re-key, the cost the grant indirection exists to avoid.
-    auto fixture = build(4, 5);
-    const AdditionOutcome outcome = addMember(*fixture, publicOf(fixture->members));
-    const server::GroupTreeEdge* grant = grantEdgeOf(outcome.after);
-    ASSERT_NE(grant, nullptr);
-    EXPECT_EQ(grant->parentGeneration, 5);
-}
-
-TEST_F(TreeWireAddition, GrowthPastAFullLevelTouchesNoExistingNodeKey) {
-    // Four full seats, so the newcomer is appended and their whole path is a single node that did not exist a
-    // moment ago. Re-keying a path costs nothing here — there is nothing on it to re-key.
-    auto fixture = build(4, 5);
-    const AdditionOutcome outcome = addMember(*fixture, publicOf(fixture->members));
-    for (const server::GroupTreeNode& before : fixture->tree.nodes) {
-        for (const server::GroupTreeNode& after : outcome.after.nodes) {
-            if (after.nodeIndex == before.nodeIndex) {
-                EXPECT_EQ(after.generation, before.generation) << "node " << before.nodeIndex << " was refreshed";
-                EXPECT_EQ(after.publicKey, before.publicKey);
-            }
-        }
-    }
-}
-
-TEST_F(TreeWireAddition, TheNewcomerAndEveryoneElseCanClimb) {
-    for (const std::uint32_t count : {1u, 2u, 3u, 4u, 5u, 8u}) {
-        auto fixture = build(count, 5);
-        const AdditionOutcome outcome = addMember(*fixture, publicOf(fixture->members));
-        EXPECT_TRUE(canClimb(outcome.after, 5, fixture->grantKey.getPublicKey(), outcome.newcomer))
-            << "N=" << count << ": the newcomer cannot climb";
-        for (const Member& member : fixture->members) {
-            EXPECT_TRUE(canClimb(outcome.after, 5, fixture->grantKey.getPublicKey(), member))
-                << "N=" << count << ": " << member.userId << " lost access to an addition";
-        }
-    }
-}
-
-TEST_F(TreeWireAddition, GrowthThatReParentsALeafDropsTheSupersededEdge) {
-    // N=3 -> 4 moves leaf 2 under a node that did not exist. The edge naming its old parent describes a gone
-    // topology, and a state carrying both would be rejected — rightly, since only one of them is real.
-    auto fixture = build(3, 5);
-    const AdditionOutcome outcome = addMember(*fixture, publicOf(fixture->members));
-    EXPECT_EQ(outcome.after.numLeaves, 4);
-    EXPECT_EQ(countUserEdges(outcome.after, fixture->members[2].userId), 1u)
-        << "the re-parented member must have exactly one edge, naming its new parent";
-    const std::uint32_t newParent = TreeMath::parent(TreeMath::leafNode(2), 4);
-    for (const server::GroupTreeEdge& edge : outcome.after.edges) {
-        if (edge.childKind == "user" && edge.childUserId.value_or("") == fixture->members[2].userId) {
-            EXPECT_EQ(edge.parentIndex.value_or(0), newParent);
-        }
-    }
-}
-
-TEST_F(TreeWireAddition, GrowthMintsANewRootAndRelinksTheGrantEdgeToIt) {
-    auto fixture = build(2, 5);
-    const AdditionOutcome outcome = addMember(*fixture, publicOf(fixture->members));
-    ASSERT_TRUE(outcome.plan.newRoot.has_value()) << "growing from 2 to 3 leaves changes the root";
-    const server::GroupTreeEdge* grant = grantEdgeOf(outcome.after);
-    ASSERT_NE(grant, nullptr);
-    EXPECT_EQ(grant->childIndex.value_or(0), TreeMath::root(3));
-    EXPECT_EQ(grant->parentGeneration, 5) << "re-linking is not a rotation";
-    std::size_t grantEdges = 0;
-    for (const server::GroupTreeEdge& edge : outcome.after.edges) {
-        if (edge.isGrantEdge.value_or(false)) {
-            ++grantEdges;
-        }
-    }
-    EXPECT_EQ(grantEdges, 1u);
-}
-
-TEST_F(TreeWireAddition, SeatingIntoABlankRekeysThePathAndAddsNoNode) {
-    auto fixture = build(4, 5);
-    const RemovalOutcome removal = removeMember(*fixture, 2, 0);
-    // Continue from the post-removal state, which is where a blank comes from in the first place.
-    Fixture next;
-    next.members = fixture->members;
-    next.members.erase(next.members.begin() + 2);
-    next.epoch = removal.plan.newEpoch;
-    next.grantKey = removal.plan.newGrantKey;
-    next.tree = removal.after;
-    next.store.putGrantKey(next.epoch, removal.plan.newGrantKey);
-    for (const NodeRefresh& refresh : removal.plan.pathRefresh) {
-        next.store.putNodeKey(refresh.nodeIndex, refresh.newGeneration, refresh.newKey);
-    }
-    next.state = TreeWire::toRuntime(next.tree, next.epoch, next.grantKey.getPublicKey());
-
-    const AdditionOutcome outcome = addMember(next, publicOf(next.members));
-    EXPECT_EQ(outcome.plan.positions.at(0), 2u) << "the blank is filled before the tree grows";
-    // Two nodes on the path of a four-leaf tree, two children each, plus the grant edge re-issued to the root.
-    // Not one wrap: seating somebody under a node the caller cannot reach means re-keying the path to it.
-    EXPECT_EQ(outcome.plan.wrapCount, 5u);
-    EXPECT_EQ(outcome.after.nodes.size(), next.tree.nodes.size())
-        << "the path is re-keyed in place, so no node index appears twice";
-    EXPECT_TRUE(canClimb(outcome.after, next.epoch, next.grantKey.getPublicKey(), outcome.newcomer));
+TEST_F(TreeWireTest, AServedBlankReadsAsBlankWhetherAbsentOrEmpty) {
+    server::GroupTreeState tree;
+    tree.numLeaves = 40;
+    tree.leafAssignment.assign(40, "u");
+    tree.nodes = {
+        server::GroupTreeNode{31, 2, std::nullopt},
+        server::GroupTreeNode{63, 4, std::string()},
+    };
+    const TreeGroupState state = TreeWire::toRuntime(tree, 1, PrivateKey::generateRandom().getPublicKey());
+    ASSERT_EQ(state.nodes.size(), 2u);
+    EXPECT_FALSE(state.nodes[0].publicKey.has_value());
+    EXPECT_EQ(state.nodes[0].generation, 2u);
+    EXPECT_FALSE(state.nodes[1].publicKey.has_value());
+    EXPECT_FALSE(TreeWire::toWire(state.nodes[0]).toJSON()->has("publicKey"));
 }

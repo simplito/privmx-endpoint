@@ -162,8 +162,10 @@ public:
     /**
      * Gets a list of Groups in given Context.
      *
-     * The listing carries no per-Group metadata: a page holds identity, roster, epoch and policies only.
-     * Call `getGroup` for a Group's `publicMeta`/`privateMeta` and for its verified status.
+     * The listing carries only fields of constant size: identity, epoch, counters and policies. No roster
+     * (`users`/`managers`) and no per-Group metadata. Call `getGroup` for the roster, `publicMeta`/`privateMeta`
+     * and the verified status. A listed `groupPubKey` is empty unless it matches a state this process has
+     * already verified for the Group (see `GroupSummary::groupPubKey`).
      *
      * @param contextId ID of the Context to get the Groups from
      * @param pagingQuery struct with list query parameters

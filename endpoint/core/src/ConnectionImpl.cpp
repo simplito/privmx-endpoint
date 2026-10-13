@@ -68,9 +68,16 @@ void ConnectionImpl::connect(
     } else {
         _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId);
     }
-    _serverApi.emplace(_gateway);
     _host = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->host;
     _serverConfig = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->serverConfig;
+    connectOver(_gateway, key);
+    assertServerVersion();
+    LOG_TIME_DEBUG_STOP(Platform platformConnect, "")
+}
+
+void ConnectionImpl::connectOver(const privfs::RpcGateway::Ptr& gateway, const crypto::PrivateKey& key) {
+    _gateway = gateway;
+    _serverApi.emplace(_gateway);
     _userPrivKey = key;
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
@@ -120,8 +127,6 @@ void ConnectionImpl::connect(
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
     _subscriber = std::make_shared<SubscriberImpl>(_gateway);
-    assertServerVersion();
-    LOG_TIME_DEBUG_STOP(Platform platformConnect, "")
 }
 
 void ConnectionImpl::connectPublic(

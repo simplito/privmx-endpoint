@@ -1,0 +1,683 @@
+/*
+PrivMX Endpoint.
+Copyright © 2024 Simplito sp. z o.o.
+
+This file is part of the PrivMX Platform (https://privmx.dev).
+This software is Licensed under the PrivMX Free License.
+
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+#include "privmx/endpoint/group/keytree/TreeVerifier.hpp"
+
+#include <algorithm>
+#include <optional>
+#include <stdexcept>
+
+#include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/utils/Utils.hpp>
+
+#include "privmx/endpoint/group/GroupException.hpp"
+#include "privmx/endpoint/group/keytree/TreeMath.hpp"
+#include "privmx/endpoint/group/keytree/TreeWire.hpp"
+
+using namespace privmx::endpoint::group::keytree;
+namespace server = privmx::endpoint::group::server;
+using privmx::endpoint::group::GroupDataIntegrityException;
+using privmx::endpoint::group::GroupHistoryForkException;
+
+namespace {
+
+[[noreturn]] void reject() {
+    throw GroupDataIntegrityException();
+}
+
+CommitStatement parse(const server::GroupTreeCommit& wire) {
+    try {
+        return TreeCommits::fromWire(wire);
+    } catch (const std::invalid_argument&) { reject(); }
+}
+
+std::uint64_t nowMs() {
+    return static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp());
+}
+
+// The latest statement, read ahead of this clock: every honest commit after it must be dated no earlier, which the
+// bridge refuses until then, so a member and a bridge could freeze the group, removals of that member included. The
+// chain's dates never go back, so the latest one bounds them all. Twice the bridge's own tolerance: an honest commit
+// is dated within it of the bridge's clock, and this clock may be as far behind the bridge's.
+CommitStatement parseLatest(const server::GroupTreeCommit& wire) {
+    CommitStatement latest = parse(wire);
+    if (latest.date > nowMs() + 2 * TreeCommits::DATE_TOLERANCE_MS) {
+        reject();
+    }
+    return latest;
+}
+
+// ponytail: a "still accepted now" answer is reused for a minute, long enough for one listing's `preverifyListed` and
+// its `verifyListed`s. A key revoked within that minute can still move a pin; shorten it if that matters.
+constexpr std::uint64_t NOW_ANSWER_REUSE_MS = 60 * 1000;
+
+std::set<std::string> asSet(const std::vector<std::string>& values) {
+    return std::set<std::string>(values.begin(), values.end());
+}
+
+bool onRoster(
+    const std::vector<std::string>& users,
+    const std::vector<std::string>& managers,
+    const std::string& userId
+) {
+    return std::find(users.begin(), users.end(), userId) != users.end() ||
+        std::find(managers.begin(), managers.end(), userId) != managers.end();
+}
+
+// The latest statement describes exactly what is served: grant key, counters, roster.
+bool describes(const CommitStatement& latest, const server::GroupInfo& group) {
+    return latest.keyVersion == static_cast<std::uint64_t>(group.keyVersion) &&
+        latest.groupPubKey == group.groupPubKey &&
+        latest.rosterVersion == static_cast<std::uint64_t>(group.rosterVersion) &&
+        latest.rosterHash == TreeCommits::rosterHash(group.users, group.managers);
+}
+
+// The id is `TreeCommits::groupId(contextId, resourceId)`: the only thing that authenticates the served context, which
+// the UserVerifier, the pins and every later check run in.
+bool inItsContext(const server::GroupInfo& group) {
+    return group.resourceId.has_value() && TreeCommits::groupId(group.contextId, group.resourceId.value()) == group.id;
+}
+
+std::string verifiedKey(const std::string& contextId, const std::string& groupId, const CommitStatement& statement) {
+    return contextId + '\0' + groupId + '\0' + TreeCommits::digest(statement);
+}
+
+bool seatedAt(const TreeGroupState& state, std::uint32_t seat, const std::string& userId) {
+    return seat < state.numLeaves && seat < state.leafAssignment.size() && state.leafAssignment[seat] == userId;
+}
+
+} // namespace
+
+void TreeVerifier::verifyStatements(
+    const std::string& groupId,
+    const std::string& contextId,
+    const std::vector<CommitStatement>& statements,
+    const Environment& environment,
+    bool firstStillValid
+) {
+    std::vector<Claim> claims;
+    for (const CommitStatement& statement : statements) {
+        claims.push_back(Claim{.groupId = &groupId, .contextId = &contextId, .statement = &statement});
+    }
+    if (!claims.empty()) {
+        claims.front().now = firstStillValid;
+    }
+    if (!checkStatements(claims, environment)) {
+        reject();
+    }
+}
+
+bool TreeVerifier::checkStatements(const std::vector<Claim>& claims, const Environment& environment) {
+    const std::uint64_t now = nowMs();
+    const auto keyNow = [](const Claim& claim) {
+        return *claim.contextId + '\0' + claim.statement->committer + '\0' + claim.statement->committerPubKey;
+    };
+    // Per claim, the requests its answer waits on: at the statement's date (unless cached) and now (N-3).
+    struct Pending {
+        const Claim* claim;
+        std::optional<std::size_t> atDate;
+        std::optional<std::size_t> atNow;
+    };
+    std::vector<Pending> pending;
+    {
+        std::lock_guard lock(_mutex);
+        for (const Claim& claim : claims) {
+            Pending entry{.claim = &claim, .atDate = std::nullopt, .atNow = std::nullopt};
+            if (_verifiedStatements.find(verifiedKey(*claim.contextId, *claim.groupId, *claim.statement)) == nullptr) {
+                entry.atDate = 0;
+            }
+            if (claim.now) {
+                const std::uint64_t* accepted = _acceptedNow.find(keyNow(claim));
+                if (accepted == nullptr || now > *accepted + NOW_ANSWER_REUSE_MS) {
+                    entry.atNow = 0;
+                }
+            }
+            if (entry.atDate.has_value() || entry.atNow.has_value()) {
+                pending.push_back(entry);
+            }
+        }
+    }
+    bool all = true;
+    std::vector<core::VerificationRequest> requests;
+    const auto ask = [&](const Claim& claim, std::uint64_t date) {
+        requests.push_back(
+            core::VerificationRequest{
+                .contextId = *claim.contextId,
+                .senderId = claim.statement->committer,
+                .senderPubKey = claim.statement->committerPubKey,
+                .date = static_cast<std::int64_t>(date),
+                .bridgeIdentity = std::nullopt
+            }
+        );
+        return requests.size() - 1;
+    };
+    std::map<std::string, std::size_t> nowRequests; // one per key, however many groups it committed to
+    std::vector<Pending> asked;
+    for (Pending entry : pending) {
+        const Claim& claim = *entry.claim;
+        const CommitStatement& statement = *claim.statement;
+        if (entry.atDate.has_value()) {
+            // A statement names its group, which has no id yet at seq 1: the creator signs its resourceId instead,
+            // and the bridge derives the id from it. Never the served resourceId, or one group's genesis passes as
+            // another's.
+            const bool namesGroup = statement.seq == 1 ?
+                TreeCommits::groupId(*claim.contextId, statement.groupId) == *claim.groupId :
+                statement.groupId == *claim.groupId;
+            bool genuine =
+                namesGroup && !statement.groupId.empty() && statement.treeVersion == TreeMath::TREE_VERSION;
+            try {
+                genuine = genuine &&
+                    TreeCommits::verifySignature(
+                              statement,
+                              privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(statement.committerPubKey)
+                    );
+            } catch (...) { genuine = false; }
+            if (!genuine) {
+                all = false;
+                continue;
+            }
+            // The key the committer signed with, at the time it signed, as the application vouches for its users —
+            // the same check a metadata entry's author gets.
+            entry.atDate = ask(claim, statement.date);
+        }
+        // And, for a statement about to move a pin, at the current time: a key the application has revoked since may
+        // still be vouched for at a date before the revocation, and the chain's dates allow any date up to now.
+        if (entry.atNow.has_value()) {
+            const auto [it, fresh] = nowRequests.emplace(keyNow(claim), 0);
+            if (fresh) {
+                it->second = ask(claim, now);
+            }
+            entry.atNow = it->second;
+        }
+        asked.push_back(entry);
+    }
+    if (requests.empty()) {
+        return all;
+    }
+    const std::vector<bool> verified = environment.verifyUsers(requests);
+    if (verified.size() != requests.size()) {
+        return false;
+    }
+    std::lock_guard lock(_mutex);
+    for (const Pending& entry : asked) {
+        const bool atDate = !entry.atDate.has_value() || verified[entry.atDate.value()];
+        const bool atNow = !entry.atNow.has_value() || verified[entry.atNow.value()];
+        if (entry.atDate.has_value() && atDate) {
+            _verifiedStatements.put(
+                verifiedKey(*entry.claim->contextId, *entry.claim->groupId, *entry.claim->statement), true
+            );
+        }
+        if (entry.atNow.has_value() && atNow) {
+            _acceptedNow.put(keyNow(*entry.claim), now);
+        }
+        all = all && atDate && atNow;
+    }
+    return all;
+}
+
+void TreeVerifier::preverifyListed(const std::vector<server::GroupInfo>& summaries, const Environment& environment) {
+    std::vector<CommitStatement> latest;
+    latest.reserve(summaries.size()); // the claims point into it
+    std::vector<Claim> claims;
+    for (const server::GroupInfo& summary : summaries) {
+        if (!summary.treeCommit.has_value()) {
+            continue;
+        }
+        try {
+            latest.push_back(TreeCommits::fromWire(summary.treeCommit.value()));
+        } catch (const std::invalid_argument&) { continue; }
+        claims.push_back(Claim{
+            .groupId = &summary.id,
+            .contextId = &summary.contextId,
+            .statement = &latest.back(),
+            .now = movesPin(summary.id, latest.back())
+        });
+    }
+    checkStatements(claims, environment); // what fails is `verifyListed`'s to refuse, group by group
+}
+
+void TreeVerifier::followChain(
+    const std::string& groupId,
+    const std::string& contextId,
+    Head& head,
+    std::set<std::string>& grantKeys,
+    std::uint64_t toSeq,
+    const Environment& environment,
+    const std::function<void(const CommitStatement&)>& each
+) {
+    while (head.seq < toSeq) {
+        const server::GroupGetTreeCommitsResult answer = environment.commitsBetween(head.seq, toSeq);
+        std::vector<CommitStatement> page;
+        for (const server::GroupTreeCommit& wire : answer.commits) {
+            page.push_back(parse(wire));
+        }
+        if (page.empty() || page.size() > toSeq - head.seq) {
+            reject(); // a short answer, or more than was asked for
+        }
+        if (head.seq == 0) {
+            // The genesis roster, unsigned beside the chain: seq 1's `rosterHash` binds it (`extend`).
+            head.roster = Roster{
+                .users = asSet(answer.genesisUsers.value_or(std::vector<std::string>())),
+                .managers = asSet(answer.genesisManagers.value_or(std::vector<std::string>()))
+            };
+        }
+        for (const CommitStatement& statement : page) {
+            // Signed by somebody who was a member when it was made: a non-member's statement is the bridge's.
+            // Each one extends the one before it (the bridge cannot fork or splice the chain) and is dated no earlier:
+            // a key its committer has since rotated away from cannot sign into the past.
+            const bool newEpoch = statement.keyVersion > head.keyVersion;
+            if (statement.seq != head.seq + 1 || statement.prevDigest != head.digest || statement.date < head.date ||
+                statement.keyVersion < head.keyVersion || statement.rosterVersion < head.rosterVersion ||
+                (newEpoch ? !grantKeys.insert(statement.groupPubKey).second :
+                            statement.groupPubKey != head.groupPubKey) ||
+                !extend(head.roster, statement, statement.seq == 1 || statement.seq == toSeq)) {
+                reject();
+            }
+            head.seq = statement.seq;
+            head.digest = TreeCommits::digest(statement);
+            head.date = statement.date;
+            head.keyVersion = statement.keyVersion;
+            head.groupPubKey = statement.groupPubKey;
+            head.rosterVersion = statement.rosterVersion;
+        }
+        verifyStatements(groupId, contextId, page, environment);
+        for (const CommitStatement& statement : page) {
+            each(statement);
+        }
+    }
+}
+
+void TreeVerifier::verifyChain(
+    const std::string& groupId,
+    const std::string& contextId,
+    const Pin& pin,
+    const CommitStatement& latest,
+    const Environment& environment
+) {
+    if (pin.contextId != contextId) {
+        reject();
+    }
+    Head head = pin;
+    std::set<std::string> grantKeys{pin.groupPubKey};
+    followChain(groupId, contextId, head, grantKeys, latest.seq, environment, [](const CommitStatement&) {});
+    if (head.digest != TreeCommits::digest(latest)) {
+        reject();
+    }
+}
+
+void TreeVerifier::verify(const server::GroupInfo& group, Scope scope, const Environment& environment) {
+    if (!group.treeCommit.has_value() || !inItsContext(group)) {
+        reject();
+    }
+    const CommitStatement latest = parseLatest(group.treeCommit.value());
+
+    // Every statement the served nodes cite, by seq; the latest is one of them whenever it refreshed something.
+    std::map<std::uint64_t, CommitStatement> vouchers;
+    vouchers.emplace(latest.seq, latest);
+    for (const server::GroupTreeCommit& wire : group.treeCommits.value_or(std::vector<server::GroupTreeCommit>{})) {
+        const CommitStatement statement = parse(wire);
+        const auto [it, inserted] = vouchers.emplace(statement.seq, statement);
+        if (!inserted && TreeCommits::digest(it->second) != TreeCommits::digest(statement)) {
+            reject(); // two different statements under one seq
+        }
+    }
+
+    TreeGroupState state;
+    try {
+        state = TreeWire::toRuntime(
+            TreeWire::fromGroupInfo(group), static_cast<std::uint32_t>(group.keyVersion),
+            privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey)
+        );
+    } catch (...) { reject(); }
+    if (state.numLeaves == 0 || state.leafAssignment.size() != state.numLeaves) {
+        reject();
+    }
+
+    // The latest statement describes exactly what is served, the committer's seat included.
+    if (!describes(latest, group) || !seatedAt(state, latest.committerSeat, latest.committer)) {
+        reject();
+    }
+
+    // And the tree, by hash: every record served (and, in the path view, every copath subtree through its hash). In
+    // the path view the other seats are only bound through those copath hashes, so the seat checks here and below
+    // read a `leafAssignment` the hash does not cover outside the caller's own leaf. That view is only ever climbed,
+    // never wrapped to; every planning path reads the "plan" view, where the hash covers all of it.
+    std::string treeHash;
+    std::map<std::uint32_t, std::string> subtreeHashes;
+    try {
+        if (scope == Scope::Plan) {
+            treeHash = TreeCommits::treeHash(state, &subtreeHashes);
+        } else {
+            if (!group.ownLeafPosition.has_value() ||
+                group.ownLeafPosition.value() < 0 ||
+                group.ownLeafPosition.value() >= static_cast<std::int64_t>(state.numLeaves) ||
+                !group.copathHashes.has_value()) {
+                reject();
+            }
+            treeHash = TreeCommits::treeHashAlongPath(
+                state, static_cast<std::uint32_t>(group.ownLeafPosition.value()), group.copathHashes.value(),
+                &subtreeHashes
+            );
+        }
+    } catch (const std::invalid_argument&) { reject(); }
+    if (treeHash != latest.treeHash) {
+        reject();
+    }
+
+    // Each filled node vouched for by the statement that set it, whose committer is still on the roster: a removal
+    // blanks or re-keys every node the leaver set, so a node still vouched for by a former member is a planted one.
+    // And over the very subtree it was minted over: a node rolled back to an older, genuinely vouched generation
+    // sits over children re-keyed since, which a removal would not blank. (A served node off the path view's hashed
+    // path has no subtree hash, and is refused.)
+    std::vector<CommitStatement> toVerify{latest};
+    std::set<std::uint64_t> cited;
+    std::set<std::uint32_t> recorded;
+    for (const TreeNodeState& node : state.nodes) {
+        // Not part of the tree, or (path view) off the hashed path: covered by no hash, so its generation must not
+        // reach the pins either, blank or filled.
+        if (!TreeMath::isKeyed(node.nodeIndex, state.numLeaves) || subtreeHashes.count(node.nodeIndex) == 0) {
+            reject();
+        }
+        if (!recorded.insert(node.nodeIndex).second) {
+            reject(); // a second record for one node: only the first is hashed, but a lookup might take either
+        }
+        if (!node.publicKey.has_value()) {
+            continue;
+        }
+        if (!node.setBy.has_value()) {
+            reject();
+        }
+        const auto voucher = vouchers.find(node.setBy.value());
+        if (voucher == vouchers.end()) {
+            reject();
+        }
+        const CommitStatement& statement = voucher->second;
+        const bool listed = std::any_of(statement.path.begin(), statement.path.end(), [&](const StatementNode& entry) {
+            return entry.nodeIndex == node.nodeIndex &&
+                entry.generation == node.generation &&
+                entry.publicKey == node.publicKey->toBase58DER() &&
+                entry.subtreeHash == subtreeHashes.at(node.nodeIndex);
+        });
+        if (!listed || !onRoster(group.users, group.managers, statement.committer)) {
+            reject();
+        }
+        if (cited.insert(statement.seq).second && statement.seq != latest.seq) {
+            toVerify.push_back(statement);
+        }
+    }
+    verifyStatements(group.id, group.contextId, toVerify, environment, movesPin(group.id, latest));
+
+    // History: never behind what this session has verified, and connected to it by statements of members. Against
+    // the pin as it stands when this state is stored: one a concurrent verification moved meanwhile, perhaps onto
+    // another branch, is checked against afresh rather than overwritten.
+    Pin pin = pinOf(group.id);
+    for (;;) {
+        if (pin.seq != 0) {
+            if (latest.seq < pin.seq || (latest.seq == pin.seq && TreeCommits::digest(latest) != pin.digest)) {
+                throw GroupHistoryForkException();
+            }
+            if (latest.seq > pin.seq) {
+                verifyChain(group.id, group.contextId, pin, latest, environment);
+            }
+        } else if (!onRoster(group.users, group.managers, latest.committer)) {
+            reject(); // trust on first use: the latest genuine statement, by somebody on the roster it attests
+        }
+        for (const TreeNodeState& node : state.nodes) {
+            const auto seen = pin.generations.find(node.nodeIndex);
+            if (seen != pin.generations.end() && node.generation < seen->second) {
+                throw GroupHistoryForkException(); // a node served at a generation older than one already seen
+            }
+        }
+        // Everything passed; only now does this state become the reference for the next read.
+        if (storeIfPinned(group.id, pin, group.contextId, latest, group.users, group.managers, state.nodes)) {
+            return;
+        }
+    }
+}
+
+bool TreeVerifier::storeIfPinned(
+    const std::string& groupId,
+    Pin& seen,
+    const std::string& contextId,
+    const CommitStatement& latest,
+    const std::vector<std::string>& users,
+    const std::vector<std::string>& managers,
+    const std::vector<TreeNodeState>& nodes
+) {
+    std::lock_guard lock(_mutex);
+    Pin& stored = _pins[groupId];
+    if (stored.seq != seen.seq || stored.digest != seen.digest) {
+        seen = stored;
+        return false;
+    }
+    storeLocked(stored, contextId, latest, users, managers);
+    for (const TreeNodeState& node : nodes) {
+        std::uint32_t& generation = stored.generations[node.nodeIndex];
+        generation = std::max(generation, node.generation);
+    }
+    return true;
+}
+
+TreeVerifier::Pin TreeVerifier::pinOf(const std::string& groupId) {
+    std::lock_guard lock(_mutex);
+    const auto it = _pins.find(groupId);
+    return it == _pins.end() ? Pin{} : it->second;
+}
+
+void TreeVerifier::storeLocked(
+    Pin& stored,
+    const std::string& contextId,
+    const CommitStatement& latest,
+    const std::vector<std::string>& users,
+    const std::vector<std::string>& managers
+) {
+    stored.contextId = contextId;
+    stored.seq = latest.seq;
+    stored.digest = TreeCommits::digest(latest);
+    stored.date = latest.date;
+    stored.roster = Roster{.users = asSet(users), .managers = asSet(managers), .hash = latest.rosterHash};
+    stored.keyVersion = latest.keyVersion;
+    stored.groupPubKey = latest.groupPubKey;
+    stored.rosterVersion = latest.rosterVersion;
+}
+
+void TreeVerifier::verifyListed(const server::GroupInfo& summary, const Environment& environment) {
+    if (!summary.treeCommit.has_value() || !inItsContext(summary)) {
+        reject();
+    }
+    const CommitStatement latest = parseLatest(summary.treeCommit.value());
+    if (!describes(latest, summary) || !onRoster(summary.users, summary.managers, latest.committer)) {
+        reject();
+    }
+    verifyStatements(summary.id, summary.contextId, {latest}, environment, movesPin(summary.id, latest));
+
+    // A group this process has verified is taken only as a continuation of that state; below the pin is the caller's.
+    // Against the pin as it stands when this one is stored, as in `verify`.
+    Pin pin = pinOf(summary.id);
+    for (;;) {
+        if (pin.seq != 0) {
+            if (latest.seq < pin.seq) {
+                return; // `pinnedSeq` tells the caller
+            }
+            if (latest.seq == pin.seq) {
+                if (TreeCommits::digest(latest) != pin.digest) {
+                    throw GroupHistoryForkException(); // at the pinned seq, only the pinned statement
+                }
+                return;
+            }
+            verifyChain(summary.id, summary.contextId, pin, latest, environment);
+        }
+        // Pinned like a member's read, so the next listing cannot go back to a state from before a removal. No tree
+        // was checked, so no generations: those stay whatever a member's read pinned.
+        if (storeIfPinned(summary.id, pin, summary.contextId, latest, summary.users, summary.managers, {})) {
+            return;
+        }
+    }
+}
+
+void TreeVerifier::pinCommitted(
+    const std::string& groupId,
+    const std::string& contextId,
+    const CommitStatement& statement,
+    const std::vector<std::string>& users,
+    const std::vector<std::string>& managers
+) {
+    std::lock_guard lock(_mutex);
+    Pin& stored = _pins[groupId];
+    if (stored.seq > statement.seq) {
+        return; // a read has verified a later state already
+    }
+    if (stored.seq == statement.seq && stored.digest != TreeCommits::digest(statement)) {
+        throw GroupHistoryForkException(); // the bridge took this commit at a seq it has served another one at
+    }
+    storeLocked(stored, contextId, statement, users, managers);
+    for (const StatementNode& node : statement.path) {
+        std::uint32_t& generation = stored.generations[node.nodeIndex];
+        generation = std::max(generation, node.generation);
+    }
+}
+
+void TreeVerifier::assertSeatsMatchRoster(
+    const server::GroupInfo& group,
+    const std::vector<std::string>& users,
+    const std::vector<std::string>& managers
+) {
+    std::set<std::string> seated;
+    for (const std::string& seat : group.leafAssignment.value_or(std::vector<std::string>{})) {
+        if (!seat.empty() && !seated.insert(seat).second) {
+            reject(); // one member, two seats
+        }
+    }
+    std::set<std::string> roster = asSet(users);
+    roster.insert(managers.begin(), managers.end());
+    if (seated != roster) {
+        reject();
+    }
+}
+
+bool TreeVerifier::pinnedAt(
+    const std::string& groupId,
+    const std::string& contextId,
+    std::int64_t keyVersion,
+    const std::string& groupPubKey
+) {
+    std::lock_guard lock(_mutex);
+    const auto it = _pins.find(groupId);
+    return it != _pins.end() && it->second.contextId == contextId && !groupPubKey.empty() &&
+        it->second.groupPubKey == groupPubKey &&
+        static_cast<std::int64_t>(it->second.keyVersion) == keyVersion;
+}
+
+bool TreeVerifier::agreesWithPin(
+    const std::string& groupId,
+    const std::string& contextId,
+    std::int64_t keyVersion,
+    const std::string& groupPubKey
+) {
+    return pinnedSeq(groupId) == 0 || pinnedAt(groupId, contextId, keyVersion, groupPubKey);
+}
+
+std::uint64_t TreeVerifier::pinnedSeq(const std::string& groupId) {
+    std::lock_guard lock(_mutex);
+    const auto it = _pins.find(groupId);
+    return it == _pins.end() ? 0 : it->second.seq;
+}
+
+std::uint64_t TreeVerifier::pinnedKeyVersion(const std::string& groupId) {
+    std::lock_guard lock(_mutex);
+    const auto it = _pins.find(groupId);
+    return it == _pins.end() ? 0 : it->second.keyVersion;
+}
+
+std::map<std::uint64_t, CommitStatement> TreeVerifier::epochOpeners(
+    const std::string& groupId,
+    const std::string& contextId,
+    const Environment& environment
+) {
+    std::uint64_t pinSeq = 0;
+    std::string pinDigest;
+    Openers known;
+    {
+        std::lock_guard lock(_mutex);
+        const auto it = _pins.find(groupId);
+        if (it == _pins.end() || it->second.seq == 0 || it->second.contextId != contextId) {
+            reject();
+        }
+        pinSeq = it->second.seq;
+        pinDigest = it->second.digest;
+        const Openers* memo = _openers.find(groupId);
+        if (memo != nullptr && memo->head.seq == pinSeq && memo->head.digest == pinDigest) {
+            return memo->byEpoch;
+        }
+        if (memo != nullptr && memo->head.seq <= pinSeq) {
+            known = *memo;
+        }
+    }
+    // Only the statements since the last answer: the same checks a fetch from seq 1 makes, the earlier ones having
+    // passed them already. Replayed forward from the genesis roster, so each committer was a member when it signed and
+    // the pinned roster hash is the replayed roster's (I-1).
+    followChain(groupId, contextId, known.head, known.grantKeys, pinSeq, environment, [&](const CommitStatement& s) {
+        known.byEpoch.emplace(s.keyVersion, s);
+    });
+    if (known.head.digest != pinDigest) {
+        reject();
+    }
+    std::map<std::uint64_t, CommitStatement> byEpoch = known.byEpoch;
+    std::lock_guard lock(_mutex);
+    const Openers* stored = _openers.find(groupId);
+    if (stored == nullptr || stored->head.seq < known.head.seq) {
+        _openers.put(groupId, std::move(known));
+    }
+    return byEpoch;
+}
+
+bool TreeVerifier::extend(Roster& roster, const CommitStatement& statement, bool checkHash) {
+    if (roster.users.count(statement.committer) == 0 && roster.managers.count(statement.committer) == 0) {
+        return false;
+    }
+    if (!statement.addedUsers.empty() || !statement.addedManagers.empty() || !statement.removed.empty()) {
+        roster.users.insert(statement.addedUsers.begin(), statement.addedUsers.end());
+        roster.managers.insert(statement.addedManagers.begin(), statement.addedManagers.end());
+        for (const std::string& gone : statement.removed) {
+            roster.users.erase(gone);
+            roster.managers.erase(gone);
+        }
+        roster.hash.clear();
+    }
+    if (!checkHash) {
+        return true;
+    }
+    if (roster.hash.empty()) {
+        roster.hash = TreeCommits::rosterHash(
+            {roster.users.begin(), roster.users.end()}, {roster.managers.begin(), roster.managers.end()}
+        );
+    }
+    return roster.hash == statement.rosterHash;
+}
+
+bool TreeVerifier::movesPin(const std::string& groupId, const CommitStatement& latest) {
+    const std::uint64_t pinned = pinnedSeq(groupId);
+    return pinned != 0 && latest.seq > pinned;
+}
+
+void TreeVerifier::refusedAsLostRace(const std::string& groupId, std::uint64_t seq) {
+    std::lock_guard lock(_mutex);
+    std::uint64_t& refused = _pins[groupId].refusedSeq;
+    refused = std::max(refused, seq);
+}
+
+void TreeVerifier::assertMaySignAt(const std::string& groupId, std::uint64_t seq) {
+    std::lock_guard lock(_mutex);
+    const auto it = _pins.find(groupId);
+    if (it != _pins.end() && seq <= it->second.refusedSeq) {
+        reject(); // the bridge said a concurrent commit took that seq, and now serves none there
+    }
+}
