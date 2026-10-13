@@ -53,6 +53,8 @@ limitations under the License.
 #include <privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp>
 #include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 
+#include "AcceptAllVerifier.hpp"
+
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
@@ -556,15 +558,6 @@ TEST_F(GroupRosterTag, TheInternalMetaViewReadsTheRosterPlane) {
     );
     EXPECT_EQ(mapper.decryptInternalMeta(publicMeta, key(encKey)).secret, "");
 }
-
-namespace {
-class AcceptAllVerifier : public core::UserVerifierInterface {
-public:
-    std::vector<bool> verify(const std::vector<core::VerificationRequest>& request) override {
-        return std::vector<bool>(request.size(), true);
-    }
-};
-} // namespace
 
 // A read opens the head and the two metadata keys, never the other epochs': each one costs a grant-key resolution
 // (a read and a ladder descent), which made a cold read of a group at epoch 100 take seconds.

@@ -73,8 +73,7 @@ bool onRoster(
 }
 
 // The latest statement describes exactly what is served: grant key, counters, roster.
-template<typename TGroup>
-bool describes(const CommitStatement& latest, const TGroup& group) {
+bool describes(const CommitStatement& latest, const server::GroupInfo& group) {
     return latest.keyVersion == static_cast<std::uint64_t>(group.keyVersion) &&
         latest.groupPubKey == group.groupPubKey &&
         latest.rosterVersion == static_cast<std::uint64_t>(group.rosterVersion) &&
@@ -83,8 +82,7 @@ bool describes(const CommitStatement& latest, const TGroup& group) {
 
 // The id is `TreeCommits::groupId(contextId, resourceId)`: the only thing that authenticates the served context, which
 // the UserVerifier, the pins and every later check run in.
-template<typename TGroup>
-bool inItsContext(const TGroup& group) {
+bool inItsContext(const server::GroupInfo& group) {
     return group.resourceId.has_value() && TreeCommits::groupId(group.contextId, group.resourceId.value()) == group.id;
 }
 
@@ -406,7 +404,6 @@ void TreeVerifier::verify(const server::GroupInfo& group, Scope scope, const Env
             return entry.nodeIndex == node.nodeIndex &&
                 entry.generation == node.generation &&
                 entry.publicKey == node.publicKey->toBase58DER() &&
-                subtreeHashes.count(node.nodeIndex) == 1 &&
                 entry.subtreeHash == subtreeHashes.at(node.nodeIndex);
         });
         if (!listed || !onRoster(group.users, group.managers, statement.committer)) {
@@ -506,16 +503,16 @@ void TreeVerifier::verifyListed(const server::GroupInfo& summary, const Environm
     // Against the pin as it stands when this one is stored, as in `verify`.
     Pin pin = pinOf(summary.id);
     for (;;) {
-        if (pin.seq != 0 && latest.seq < pin.seq) {
-            return; // `pinnedSeq` tells the caller
-        }
-        if (pin.seq != 0 && latest.seq == pin.seq) {
-            if (TreeCommits::digest(latest) != pin.digest) {
-                throw GroupHistoryForkException(); // at the pinned seq, only the pinned statement
-            }
-            return;
-        }
         if (pin.seq != 0) {
+            if (latest.seq < pin.seq) {
+                return; // `pinnedSeq` tells the caller
+            }
+            if (latest.seq == pin.seq) {
+                if (TreeCommits::digest(latest) != pin.digest) {
+                    throw GroupHistoryForkException(); // at the pinned seq, only the pinned statement
+                }
+                return;
+            }
             verifyChain(summary.id, summary.contextId, pin, latest, environment);
         }
         // Pinned like a member's read, so the next listing cannot go back to a state from before a removal. No tree

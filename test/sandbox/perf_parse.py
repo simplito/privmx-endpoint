@@ -9,6 +9,7 @@ server ms max, bytes in, bytes out]}, failure messages, and the Bridge container
 ("<epoch s> <cpu%> <mem>" lines) over the phase's wall-clock window.
 """
 import json
+from collections import Counter
 import re
 import sys
 
@@ -42,7 +43,7 @@ def main(log_path, markers_path, cpu_path=None):
             if edge == ">":
                 current = key
                 opened[key] = int(at)
-                phases.setdefault(key, {"methods": {}, "failures": {}})
+                phases.setdefault(key, {"methods": {}, "failures": Counter()})
             else:
                 current = None
                 phases[key]["wall_ms"] = int(at) - opened[key]
@@ -66,7 +67,7 @@ def main(log_path, markers_path, cpu_path=None):
                 err = json.dumps(x.get("error", {}))
                 reason = "STALE_BASE_GENERATION" if "STALE_BASE_GENERATION" in err else x.get("error", {}).get("message", "?")
                 k = x["method"] + ": " + reason[:120]
-                phases[current]["failures"][k] = phases[current]["failures"].get(k, 0) + 1
+                phases[current]["failures"][k] += 1
     if seen != len(markers):
         print(f"warning: {len(markers) - seen} markers not found in the log", file=sys.stderr)
     for p in phases.values():

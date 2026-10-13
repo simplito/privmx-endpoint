@@ -80,11 +80,9 @@ protected:
     std::mt19937 random;
     std::uint32_t nextUser = 0;
     // Each member's own client: its pins and verified statements, as kept across reads in one session.
-    std::map<std::string, std::unique_ptr<TreeVerifier>> verifiers;
+    std::map<std::string, TreeVerifier> verifiers;
 
-    void SetUp() override {
-        bridge.keyOf = [this](const std::string& userId) { return member(userId).publicKey; };
-    }
+    void SetUp() override { reset(); }
 
     void reset() {
         bridge = FakeBridge{};
@@ -115,13 +113,7 @@ protected:
         return env;
     }
 
-    TreeVerifier& verifierOf(const std::string& userId) {
-        auto& verifier = verifiers[userId];
-        if (!verifier) {
-            verifier = std::make_unique<TreeVerifier>();
-        }
-        return *verifier;
-    }
+    TreeVerifier& verifierOf(const std::string& userId) { return verifiers[userId]; }
 
     // A member's read: what the bridge serves it, verified by its own client before anything is used.
     TreeGroupState verifiedRead(const std::string& userId, bool plan) {
@@ -177,16 +169,6 @@ protected:
             keys.push_back(TreeMember{m.userId, m.publicKey});
         }
         return keys;
-    }
-
-    std::vector<std::string> seated() const {
-        std::vector<std::string> ids;
-        for (const auto& seat : bridge.state.leafAssignment) {
-            if (seat.has_value()) {
-                ids.push_back(seat.value());
-            }
-        }
-        return ids;
     }
 
     std::uint32_t pick(std::uint32_t bound) {
@@ -248,7 +230,7 @@ protected:
     void checkInvariants(bool afterRemoval) {
         const TreeGroupState& state = bridge.state;
         const std::string grant = state.grantPublicKey.toBase58DER();
-        const std::vector<std::string> seatedIds = seated();
+        const std::vector<std::string> seatedIds = seatedIn(bridge.state);
 
         // Knowledge: a filled node's key only within Know; the grant key only for the seated.
         std::map<std::string, std::set<std::uint32_t>> closures;
@@ -405,10 +387,10 @@ protected:
             refreshed.push_back(server::GroupTreeRefreshedNode{node.nodeIndex, node.fromGeneration, node.generation,
                                                                node.publicKey});
         }
-        std::vector<std::string> after = seated();
+        std::vector<std::string> after = seatedIn(bridge.state);
         after.insert(after.end(), ids.begin(), ids.end());
         bridge.commit(
-            FakeBridge::Op::Add, adder, ids, positions, refreshed, wire.edges, std::nullopt,
+            CommitOp::Add, adder, ids, positions, refreshed, wire.edges, std::nullopt,
             sign(plan, CommitOp::Add, adder, bridge.state.epoch, bridge.state.grantPublicKey, bridge.rosterVersion + 1,
                  after, ids, {})
         );
@@ -425,13 +407,13 @@ protected:
         });
         const auto wire = TreeWire::toRemovalTransition(plan, bridge.state.epoch);
         std::vector<std::string> after;
-        for (const std::string& id : seated()) {
+        for (const std::string& id : seatedIn(bridge.state)) {
             if (std::find(leaving.begin(), leaving.end(), id) == leaving.end()) {
                 after.push_back(id);
             }
         }
         bridge.commit(
-            FakeBridge::Op::Remove, remover, leaving, {}, wire.refreshedNodes, wire.edges, plan.grantKey.getPublicKey(),
+            CommitOp::Remove, remover, leaving, {}, wire.refreshedNodes, wire.edges, plan.grantKey.getPublicKey(),
             sign(plan, CommitOp::Remove, remover, bridge.state.epoch + 1, plan.grantKey.getPublicKey(),
                  bridge.rosterVersion + 1, after, {}, leaving)
         );
@@ -448,9 +430,9 @@ protected:
         });
         const auto wire = TreeWire::toSelfUpdateTransition(plan, bridge.state.epoch);
         bridge.commit(
-            FakeBridge::Op::SelfUpdate, memberId, {}, {}, wire.refreshedNodes, wire.edges, std::nullopt,
+            CommitOp::SelfUpdate, memberId, {}, {}, wire.refreshedNodes, wire.edges, std::nullopt,
             sign(plan, CommitOp::SelfUpdate, memberId, bridge.state.epoch, bridge.state.grantPublicKey,
-                 bridge.rosterVersion, seated(), {}, {})
+                 bridge.rosterVersion, seatedIn(bridge.state), {}, {})
         );
         expectSameAsAfterCommit(TreeWire::afterCommit(before, plan));
         learnPlan(memberId, plan);
@@ -465,7 +447,7 @@ protected:
         const std::uint32_t size = seed % 3 == 0 ? 1 + pick(32) : seed % 3 == 1 ? 33 + pick(8) : 60 + pick(12);
         create(size, pick(size));
         for (std::uint32_t i = 0; i < operations && !HasFatalFailure(); ++i) {
-            const std::vector<std::string> members = seated();
+            const std::vector<std::string> members = seatedIn(bridge.state);
             const std::string committer = members[pick(static_cast<std::uint32_t>(members.size()))];
             const std::uint32_t roll = pick(10);
             if (roll < 3 && bridge.state.numLeaves < 72) {
@@ -497,6 +479,17 @@ protected:
     }
 
     const std::string& id(std::size_t index) const { return everyone[index].userId; }
+
+    // Whether `check` is refused with GroupDataIntegrityException.
+    template<class F>
+    static bool refuses(F check) {
+        try {
+            check();
+            return false;
+        } catch (const GroupDataIntegrityException&) {
+            return true;
+        }
+    }
 
     // A statement the bridge stores with none of its checks — what a malicious bridge, or a member colluding with
     // one, can put in front of a client. `change` edits the stored state; the statement then describes the result
@@ -825,13 +818,7 @@ TEST_F(TreeVerification, SECURITY_RefusesEveryLieInTheLatestStatement) {
             }
         }
         info.treeCommits = cited;
-        TreeVerifier fresh;
-        try {
-            fresh.verify(info, TreeVerifier::Scope::Path, environment());
-            return false;
-        } catch (const GroupDataIntegrityException&) {
-            return true;
-        }
+        return refuses([&] { TreeVerifier().verify(info, TreeVerifier::Scope::Path, environment()); });
     };
     EXPECT_FALSE(refusedWith([](CommitStatement&) {}, true)) << "the honest statement re-signed must pass";
     EXPECT_TRUE(refusedWith([](CommitStatement& s) { s.groupId = "other"; }, true));
@@ -1023,12 +1010,7 @@ TEST_F(TreeVerification, SECURITY_EpochOpenersComeOnlyOffTheChainThatEndsAtThePi
         };
         TreeVerifier fresh; // `own` answers from what it already checked
         fresh.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment());
-        try {
-            fresh.epochOpeners(GROUP_ID, "ctx", env);
-            return false;
-        } catch (const GroupDataIntegrityException&) {
-            return true;
-        }
+        return refuses([&] { fresh.epochOpeners(GROUP_ID, "ctx", env); });
     };
     EXPECT_FALSE(refusedWith([](std::vector<server::GroupTreeCommit>&) {}));
     EXPECT_TRUE(refusedWith([](std::vector<server::GroupTreeCommit>& c) { c.pop_back(); })) << "short of the pin";
@@ -1145,12 +1127,7 @@ TEST_F(TreeVerification, SECURITY_AListedGroupIsTakenOnlyAsItsLatestStatementDes
     const auto refused = [&](const std::function<void(server::GroupInfo&)>& lie) {
         server::GroupInfo summary = honest;
         lie(summary);
-        try {
-            TreeVerifier().verifyListed(summary, environment());
-            return false;
-        } catch (const GroupDataIntegrityException&) {
-            return true;
-        }
+        return refuses([&] { TreeVerifier().verifyListed(summary, environment()); });
     };
     EXPECT_FALSE(refused([](server::GroupInfo&) {}));
     EXPECT_TRUE(refused([](server::GroupInfo& s) { s.treeCommit.reset(); }));
@@ -1393,12 +1370,7 @@ TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused
         }, {});
         TreeVerifier own;
         own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), seatedIn(bridge.state), {});
-        try {
-            own.epochOpeners(GROUP_ID, "ctx", environment());
-            return true;
-        } catch (const GroupDataIntegrityException&) {
-            return false;
-        }
+        return !refuses([&] { own.epochOpeners(GROUP_ID, "ctx", environment()); });
     };
     EXPECT_TRUE(opensUnder([] { return PrivateKey::generateRandom().getPublicKey(); }));
     EXPECT_FALSE(opensUnder([&] {

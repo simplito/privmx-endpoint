@@ -143,8 +143,6 @@ public:
     std::string resourceId = "res";
     std::string contextId = "ctx";
 
-    enum class Op { Add, Remove, SelfUpdate };
-
     // The bridge's statement check (§4): every field derived from the post state, nothing taken from the client.
     void checkStatement(
         const server::GroupTreeCommit& wire,
@@ -234,7 +232,7 @@ public:
 
     // `subjects` are the users added (with `positions`) or removed. Returns the nodes the commit blanked.
     void commit(
-        Op op,
+        CommitOp op,
         const std::string& committer,
         const std::vector<std::string>& subjects,
         const std::vector<std::uint32_t>& positions,
@@ -249,7 +247,7 @@ public:
         auto seats = state.leafAssignment;
         std::set<std::uint32_t> blanked;
         std::set<std::uint32_t> minted;
-        if (op == Op::Add) {
+        if (op == CommitOp::Add) {
             numLeaves = TreeMath::numLeavesToSeatAll(positions, numLeaves);
             seats.resize(numLeaves);
             for (std::size_t i = 0; i < positions.size(); ++i) {
@@ -260,7 +258,7 @@ public:
                     minted.insert(node);
                 }
             }
-        } else if (op == Op::Remove) {
+        } else if (op == CommitOp::Remove) {
             for (const std::string& gone : subjects) {
                 ASSERT_NE(gone, committer) << "self-removal must never reach the bridge";
                 const auto seat = seatOf(state, gone);
@@ -347,15 +345,15 @@ public:
             post.nodes.push_back(record);
         }
         post.edges = kept;
-        if (op == Op::Remove) {
+        if (op == CommitOp::Remove) {
             post.epoch += 1;
             post.grantPublicKey = newGrant.value();
         }
-        const std::int64_t postRosterVersion = rosterVersion + (op == Op::SelfUpdate ? 0 : 1);
+        const std::int64_t postRosterVersion = rosterVersion + (op == CommitOp::SelfUpdate ? 0 : 1);
         checkStatement(
-            commit, op == Op::Add ? CommitOp::Add : op == Op::Remove ? CommitOp::Remove : CommitOp::SelfUpdate,
-            committer, post, postRosterVersion, refreshed, op == Op::Add ? subjects : std::vector<std::string>{},
-            op == Op::Remove ? subjects : std::vector<std::string>{}
+            commit, op, committer, post, postRosterVersion, refreshed,
+            op == CommitOp::Add ? subjects : std::vector<std::string>{},
+            op == CommitOp::Remove ? subjects : std::vector<std::string>{}
         );
         state = post;
         rosterVersion = postRosterVersion;

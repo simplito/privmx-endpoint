@@ -156,7 +156,7 @@ struct Bridge {
         if (group == "groupRemoveMembers") {
             const auto model = server::GroupRemoveMembersModel::fromJSON(params);
             tree.commit(
-                FakeBridge::Op::Remove, caller, model.userIds, {}, model.transition.refreshedNodes,
+                CommitOp::Remove, caller, model.userIds, {}, model.transition.refreshedNodes,
                 model.transition.edges, PublicKey::fromBase58DER(model.groupPubKey), model.commit
             );
             server::GroupDataEntry head;
@@ -352,7 +352,7 @@ protected:
         statement.prevDigest = TreeCommits::digest(TreeCommits::fromWire(bridge.tree.commits.back()));
         TreeCommits::sign(statement, priv);
         bridge.tree.commit(
-            FakeBridge::Op::SelfUpdate, committer, {}, {}, wire.refreshedNodes, wire.edges, std::nullopt,
+            CommitOp::SelfUpdate, committer, {}, {}, wire.refreshedNodes, wire.edges, std::nullopt,
             TreeCommits::toWire(statement)
         );
     }

@@ -197,8 +197,8 @@ private:
     // Every read a key is chosen or cached from: the tree (path view), the head key's epoch and the roster
     // attestation, all on this one answer. Throws for a caller without a verifiable seat.
     server::GroupInfo readGroupForKeys(const std::string& groupId);
-    // `_groupPrivKeyResolver`, but serving `seatedRead`'s current epoch off it (see `resolveGroupPrivKey`).
-    core::KeyProvider::GroupPrivKeyResolver resolverOver(const server::GroupInfo& seatedRead);
+    // The group key resolver; with `seatedRead`, serving its current epoch off it (see `resolveGroupPrivKey`).
+    core::KeyProvider::GroupPrivKeyResolver resolverOver(const server::GroupInfo* seatedRead);
     // The key new envelopes are sealed under, re-read once if the cached head is behind the pinned epoch.
     core::DecryptedEncKeyV2 currentEncKey(const std::string& groupId);
     core::ModuleKeys groupToModuleKeys(const server::GroupInfo& group);
@@ -315,8 +315,8 @@ private:
     // Includes open file handles, not just the key caches.
     void dropEnvelopeState();
 
-    // Every key memoized for the group (epoch keys, envelope keys and grant epochs): a deleted id may come back as
-    // another group, whose epochs share the numbers but not the keys.
+    // Every key memoized for the group (tree key cache, epoch keys, envelope keys and grant epochs): a deleted id may
+    // come back as another group, whose epochs share the numbers but not the keys.
     void forgetGroupKeys(const std::string& groupId);
 
     // Length-prefixed `groupId`, so one pair cannot collide with another under a different split.

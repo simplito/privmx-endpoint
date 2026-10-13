@@ -102,7 +102,8 @@ protected:
         return after;
     }
 
-    Group create(std::uint32_t count, std::uint32_t creator = 0) {
+    // `created`, when given, receives the creator's plan.
+    Group create(std::uint32_t count, std::uint32_t creator = 0, CommitPlan* created = nullptr) {
         Group group;
         group.members = makeMembers(count);
         TreeKeyCache cache;
@@ -110,6 +111,9 @@ protected:
         const CommitPlan plan =
             keys.planCreate(publicOf(group.members), group.members[creator].userId, group.members[creator].priv);
         group.state = applied(TreeGroupState{}, plan);
+        if (created != nullptr) {
+            *created = plan;
+        }
         return group;
     }
 
@@ -192,6 +196,27 @@ protected:
             nodes.push_back(refreshed.nodeIndex);
         }
         return nodes;
+    }
+
+    // The keys the committer of `plan` held right after it: the grant key and every node key it minted.
+    static std::vector<PrivateKey> keysOf(const CommitPlan& plan) {
+        std::vector<PrivateKey> keys{plan.grantKey};
+        for (const RefreshedNode& minted : plan.refreshed) {
+            keys.push_back(minted.key);
+        }
+        return keys;
+    }
+
+    // Nothing in `held` opens the current grant key or any current node key.
+    static void expectReachesNothingCurrent(const TreeGroupState& state, std::vector<PrivateKey>& held) {
+        const std::set<std::string> reached = reachable(state, held);
+        EXPECT_EQ(reached.count(state.grantPublicKey.toBase58DER()), 0u) << "reaches the current grant key";
+        for (const TreeNodeState& node : state.nodes) {
+            if (node.publicKey.has_value()) {
+                EXPECT_EQ(reached.count(node.publicKey->toBase58DER()), 0u)
+                    << "reaches current node " << node.nodeIndex;
+            }
+        }
     }
 
     static Nodes sorted(Nodes nodes) {
@@ -715,28 +740,15 @@ TEST_F(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedDoNot) {
 // own path left the copath keys the leaver had minted opening the refreshed root. Now the removal blanks every node
 // the leaver set (V2: seat 40 removes the creator of 64 and re-keys 63 and 95; node 31 is off its path).
 TEST_F(TreeKeysRemoval, SECURITY_ARemovedCreatorReachesNothingWithEverythingItEverHeld) {
-    Group group;
-    group.members = makeMembers(64);
-    TreeKeyCache creatorCache;
-    TreeKeys creator(creatorCache);
-    const CommitPlan created = creator.planCreate(publicOf(group.members), group.members[0].userId, group.members[0].priv);
-    group.state = applied(TreeGroupState{}, created);
-    std::vector<PrivateKey> held{group.members[0].priv, created.grantKey};
-    for (const RefreshedNode& minted : created.refreshed) {
-        held.push_back(minted.key);
-    }
+    CommitPlan created;
+    Group group = create(64, 0, &created);
+    std::vector<PrivateKey> held = keysOf(created);
+    held.push_back(group.members[0].priv);
 
     const CommitPlan plan = remove(group, 40, {0});
     EXPECT_EQ(sorted(refreshedOf(plan)), Nodes({63, 95}));
     EXPECT_EQ(plan.shape.blanked, (std::set<std::uint32_t>{31}));
-    const std::set<std::string> reached = reachable(group.state, held);
-    EXPECT_EQ(reached.count(group.state.grantPublicKey.toBase58DER()), 0u)
-        << "the removed creator reaches the new epoch's grant key";
-    for (const TreeNodeState& node : group.state.nodes) {
-        if (node.publicKey.has_value()) {
-            EXPECT_EQ(reached.count(node.publicKey->toBase58DER()), 0u) << "reaches current node " << node.nodeIndex;
-        }
-    }
+    expectReachesNothingCurrent(group.state, held);
 }
 
 // The two were removed at different epochs, so between them they hold two generations of the shared path.
@@ -756,30 +768,17 @@ TEST_F(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing)
 // V5: node 63 was re-keyed by seat 40, but it wraps to node 31, which the creator set — so the creator opens it, and
 // the removal has to blank the ancestors of what it set too, not only what it set.
 TEST_F(TreeKeysRemoval, SECURITY_ARemovalBlanksTheAncestorsOfWhatTheLeaverSet) {
-    Group group;
-    group.members = makeMembers(128);
-    TreeKeyCache creatorCache;
-    TreeKeys creator(creatorCache);
-    const CommitPlan created =
-        creator.planCreate(publicOf(group.members), group.members[0].userId, group.members[0].priv);
-    group.state = applied(TreeGroupState{}, created);
-    std::vector<PrivateKey> held{group.members[0].priv, created.grantKey};
-    for (const RefreshedNode& minted : created.refreshed) {
-        held.push_back(minted.key);
-    }
+    CommitPlan created;
+    Group group = create(128, 0, &created);
+    std::vector<PrivateKey> held = keysOf(created);
+    held.push_back(group.members[0].priv);
     selfUpdate(group, 40);
     reachable(group.state, held); // whatever the creator opens before it goes
 
     const CommitPlan plan = remove(group, 100, {0});
     EXPECT_EQ(sorted(refreshedOf(plan)), Nodes({127, 191, 223}));
     EXPECT_EQ(plan.shape.blanked, (std::set<std::uint32_t>{31, 63, 159}));
-    const std::set<std::string> reached = reachable(group.state, held);
-    EXPECT_EQ(reached.count(group.state.grantPublicKey.toBase58DER()), 0u);
-    for (const TreeNodeState& node : group.state.nodes) {
-        if (node.publicKey.has_value()) {
-            EXPECT_EQ(reached.count(node.publicKey->toBase58DER()), 0u) << "reaches current node " << node.nodeIndex;
-        }
-    }
+    expectReachesNothingCurrent(group.state, held);
     expectEveryoneSeatedClimbs(group);
 }
 
@@ -790,10 +789,8 @@ TEST_F(TreeKeysRemoval, SECURITY_ARemovedAdderReachesNothingItMintedForOthers) {
     std::vector<PrivateKey> held{group.members[40].priv};
     reachable(group.state, held);
     const auto keep = [&](const CommitPlan& plan) {
-        held.push_back(plan.grantKey);
-        for (const RefreshedNode& minted : plan.refreshed) {
-            held.push_back(minted.key);
-        }
+        const std::vector<PrivateKey> minted = keysOf(plan);
+        held.insert(held.end(), minted.begin(), minted.end());
     };
     keep(remove(group, 40, {5}));
     const CommitPlan added = add(group, 40, 1);
@@ -805,13 +802,7 @@ TEST_F(TreeKeysRemoval, SECURITY_ARemovedAdderReachesNothingItMintedForOthers) {
     const CommitPlan plan = remove(group, 0, {40});
     EXPECT_EQ(sorted(refreshedOf(plan)), Nodes({31, 63}));
     EXPECT_EQ(plan.shape.blanked, (std::set<std::uint32_t>{95}));
-    const std::set<std::string> reached = reachable(group.state, held);
-    EXPECT_EQ(reached.count(group.state.grantPublicKey.toBase58DER()), 0u);
-    for (const TreeNodeState& node : group.state.nodes) {
-        if (node.publicKey.has_value()) {
-            EXPECT_EQ(reached.count(node.publicKey->toBase58DER()), 0u) << "reaches current node " << node.nodeIndex;
-        }
-    }
+    expectReachesNothingCurrent(group.state, held);
     expectEveryoneSeatedClimbs(group);
 }
 

@@ -56,18 +56,7 @@ GroupApiImpl::GroupApiImpl(
     : ContainerBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _serverApi(ServerApi(gateway)),
       _subscriber(gateway), _groupDataSchemaMapper(std::make_shared<GroupDataSchemaMapper>(userPrivKey, connection)) {
     // A group opens its own metadata key by climbing its own tree, so it resolves its grant key for itself.
-    initGroupPrivKeyResolver(
-        [this](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
-            try {
-                return resolveGroupPrivKey(groupId, epoch);
-            } catch (const GroupHistoryForkException&) {
-                throw; // a rollback is not "no key": it must reach the caller as itself
-            } catch (...) {
-                // caller holds no leaf in this group's tree at this epoch — skip
-                return std::nullopt;
-            }
-        }
-    );
+    initGroupPrivKeyResolver(resolverOver(nullptr));
     initModuleDataSchemaMapper(_groupDataSchemaMapper);
     _pinnedGroupEpoch = [this](const std::string& groupId) { return pinnedKeyVersion(groupId); };
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
@@ -899,21 +888,21 @@ void GroupApiImpl::refreshMetadataEpochAfterRemoval(
         // client has not attested would launder whatever the bridge served into an entry under the new epoch's key,
         // and an unverified epoch would let the bridge talk this out of running.
         const server::GroupInfo group = readGroupForKeys(groupId);
-        if (historyAbandoned) {
-            // A plane behind sits under a key nobody can reach any more, and what it says cannot be attested: start
-            // it over, empty, in the new epoch rather than leave it unreadable for good.
-            if (group.publicMeta.keyVersion < group.keyVersion) {
-                writePublicMeta(group, core::Buffer(), group.publicMetaVersion);
-            }
-            if (group.privateMeta.keyVersion < group.keyVersion) {
-                writePrivateMeta(group, core::Buffer(), group.privateMetaVersion);
-            }
-            return;
-        }
         // Per plane, because the two sit at epochs of their own: one may already have been carried up by a
         // concurrent write while the other is still behind.
         const bool publicBehind = group.publicMeta.keyVersion < group.keyVersion;
         const bool privateBehind = group.privateMeta.keyVersion < group.keyVersion;
+        if (historyAbandoned) {
+            // A plane behind sits under a key nobody can reach any more, and what it says cannot be attested: start
+            // it over, empty, in the new epoch rather than leave it unreadable for good.
+            if (publicBehind) {
+                writePublicMeta(group, core::Buffer(), group.publicMetaVersion);
+            }
+            if (privateBehind) {
+                writePrivateMeta(group, core::Buffer(), group.privateMetaVersion);
+            }
+            return;
+        }
         // The removed count as authors only of the very entries served before the removal, written while they were
         // members: one tagged since under the key they still hold must not be re-signed in the remover's name.
         const auto asBefore = [](const server::GroupMetaEntry& now, const server::GroupMetaEntry& then) {
@@ -923,7 +912,7 @@ void GroupApiImpl::refreshMetadataEpochAfterRemoval(
         const bool unchanged = (!publicBehind || asBefore(group.publicMeta, planesBefore.publicMeta)) &&
             (!privateBehind || asBefore(group.privateMeta, planesBefore.privateMeta));
         const Group verified = _groupDataSchemaMapper->validateDecryptAndConvertGroup(
-            group, _keyProvider, resolverOver(group), unchanged ? removed : std::vector<std::string>{}
+            group, _keyProvider, resolverOver(&group), unchanged ? removed : std::vector<std::string>{}
         );
         if (verified.statusCode != 0) {
             return;
@@ -1060,7 +1049,6 @@ void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::Con
 void GroupApiImpl::deleteGroup(const std::string& groupId) {
     server::GroupDeleteModel model{.groupId = groupId};
     _serverApi.groupDelete(model);
-    _treeKeyCaches.drop(groupId);
     forgetGroupKeys(groupId);
     invalidateModuleKeysInCache(groupId);
 }
@@ -1074,7 +1062,7 @@ Group GroupApiImpl::getGroup(const std::string& groupId) {
     // without a seat gets the group as before, with nothing cached.
     const bool seated = verifyTree(group, params, keytree::TreeVerifier::Scope::Path);
     Group result = _groupDataSchemaMapper->validateDecryptAndConvertGroup(
-        group, _keyProvider, seated ? resolverOver(group) : _groupPrivKeyResolver
+        group, _keyProvider, seated ? resolverOver(&group) : _groupPrivKeyResolver
     );
     // Outsiders seal anonymous envelopes to it: only as the latest statement vouches for it, which `verifyTree`
     // checked for a seated caller.
@@ -1278,7 +1266,6 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
             auto raw = server::GroupDeletedEventData::fromJSON(notification.data);
             // Key caches only. The pins stay as tombstones: the event is the bridge's word alone, and dropping them
             // would make the next read of the group a first contact the bridge could answer with any old state.
-            _treeKeyCaches.drop(raw.groupId);
             forgetGroupKeys(raw.groupId);
             invalidateModuleKeysInCache(raw.groupId);
             auto data = Mapper::mapToGroupDeletedEventData(raw);
@@ -1318,6 +1305,7 @@ void GroupApiImpl::dropEnvelopeState() {
 }
 
 void GroupApiImpl::forgetGroupKeys(const std::string& groupId) {
+    _treeKeyCaches.drop(groupId);
     const std::string prefix = memoKeyFor(groupId, "");
     const auto erase = [&](auto& memo) {
         std::vector<std::string> stale;
@@ -1350,17 +1338,20 @@ group::server::GroupInfo GroupApiImpl::readGroupForKeys(const std::string& group
         throw core::EncryptionKeyValidationException("caller holds no verifiable seat in this group's key tree");
     }
     assertHeadKeyAtEpoch(group);
-    _groupDataSchemaMapper->validateAndGetAttestedRoster(group, _keyProvider, resolverOver(group));
+    _groupDataSchemaMapper->validateAndGetAttestedRoster(group, _keyProvider, resolverOver(&group));
     return group;
 }
 
-core::KeyProvider::GroupPrivKeyResolver GroupApiImpl::resolverOver(const server::GroupInfo& seatedRead) {
-    return [this, &seatedRead](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
+core::KeyProvider::GroupPrivKeyResolver GroupApiImpl::resolverOver(const server::GroupInfo* seatedRead) {
+    return [this, seatedRead](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
         try {
-            return resolveGroupPrivKey(groupId, epoch, &seatedRead);
+            return resolveGroupPrivKey(groupId, epoch, seatedRead);
         } catch (const GroupHistoryForkException&) {
-            throw;
-        } catch (...) { return std::nullopt; } // as `_groupPrivKeyResolver`
+            throw; // a rollback is not "no key": it must reach the caller as itself
+        } catch (...) {
+            // caller holds no leaf in this group's tree at this epoch — skip
+            return std::nullopt;
+        }
     };
 }
 

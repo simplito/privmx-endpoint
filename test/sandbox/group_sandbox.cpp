@@ -58,6 +58,12 @@ std::string q(const std::string& text) {
     return out + "\"";
 }
 
+std::string arr(const std::vector<double>& values) {
+    std::string out = "[";
+    for (size_t i = 0; i < values.size(); ++i) out += (i ? "," : "") + num(values[i]);
+    return out + "]";
+}
+
 template <typename F> double ms(F&& body) {
     const auto start = std::chrono::steady_clock::now();
     body();
@@ -289,6 +295,16 @@ protected:
     }
     static long long treeBytes(std::map<std::string, long long>& m) { return m["groupTreeNode_b"] + m["groupTreeEdge_b"]; }
 
+    // `<op>_commit_b` and `<op>_tree_delta_b`: the commit's size, and what it grew the tree by since `before`.
+    static void commitCost(Fields& f, const std::string& op, std::map<std::string, long long>& after, std::map<std::string, long long>& before) {
+        f.push_back({op + "_commit_b", num(after["lastCommit_b"])});
+        f.push_back({op + "_tree_delta_b", num(treeBytes(after) - treeBytes(before))});
+    }
+
+    static void addUser(group::GroupApi& groups, const std::string& groupId, const core::UserWithPubKey& who) {
+        groups.addGroupMembers(groupId, {{.user = who, .role = "user"}});
+    }
+
     void addMongo(Fields& f, const std::string& groupId) {
         auto m = mongo(groupId);
         for (const char* c : {"groupTreeNode", "groupTreeEdge", "groupTreeCommit", "groupHistoryEntry", "groupArchiveRung", "groupEpochKey"}) {
@@ -328,6 +344,23 @@ protected:
         policy.get = "all";
         policy.item = core::ItemPolicy{.get = "all", .listAll = "all"};
         return policy;
+    }
+
+    // A warm hot path on `threadId`: `calls` timed sendMessage, then a getMessage of each; keys prefixed by `who`.
+    // Whether every read returned what was sent.
+    bool hotPath(Fields& f, const std::string& tag, const std::string& who, thread::ThreadApi& threads, const std::string& threadId, int calls) {
+        std::vector<std::string> ids;
+        auto send = [&] { ids.push_back(threads.sendMessage(threadId, core::Buffer::from("p"), core::Buffer::from("p"), core::Buffer::from("hot"))); };
+        timed(f, tag, who + "first_send", send);
+        std::vector<double> sends, gets;
+        timed(f, tag, who + "sends", [&] { for (int i = 0; i < calls; ++i) sends.push_back(ms(send)); });
+        bool ok = true;
+        timed(f, tag, who + "gets", [&] {
+            for (int i = 0; i < calls; ++i) gets.push_back(ms([&] { ok = threads.getMessage(ids[1 + i]).data.stdString() == "hot" && ok; }));
+        });
+        f.push_back({who + "send_each_ms", arr(sends)});
+        f.push_back({who + "get_each_ms", arr(gets)});
+        return ok;
     }
 
     static std::vector<core::GroupGrantWithKey> grantTo(const group::Group& g) {
@@ -388,14 +421,12 @@ TEST_F(GroupSandbox, P2_add_remove) {
             const std::string groupId = makeGroup(*s->groups, n);
             const Identity extra = registerUser();
             auto before = mongo(groupId);
-            f.push_back({"add_ms", num(ms([&] { s->groups->addGroupMembers(groupId, {{.user = extra.member(), .role = "user"}}); }))});
+            f.push_back({"add_ms", num(ms([&] { addUser(*s->groups, groupId, extra.member()); }))});
             auto added = mongo(groupId);
-            f.push_back({"add_commit_b", num(added["lastCommit_b"])});
-            f.push_back({"add_tree_delta_b", num(treeBytes(added) - treeBytes(before))});
+            commitCost(f, "add", added, before);
             f.push_back({"remove_ms", num(ms([&] { s->groups->removeGroupMembers(groupId, {extra.userId}); }))});
             auto removed = mongo(groupId);
-            f.push_back({"remove_commit_b", num(removed["lastCommit_b"])});
-            f.push_back({"remove_tree_delta_b", num(treeBytes(removed) - treeBytes(added))});
+            commitCost(f, "remove", removed, added);
             f.push_back({"remove_rungs_b", num(removed["groupArchiveRung_b"] - added["groupArchiveRung_b"])});
             f.push_back({"remove_history_b", num(removed["groupHistoryEntry_b"] - added["groupHistoryEntry_b"])});
         });
@@ -473,10 +504,9 @@ TEST_F(GroupSandbox, P5_blanks_self_update) {
         auto addOne = [&](const std::string& tag) {
             const Identity extra = registerUser();
             auto before = mongo(groupId);
-            f.push_back({tag + "_add_ms", num(ms([&] { s->groups->addGroupMembers(groupId, {{.user = extra.member(), .role = "user"}}); }))});
+            f.push_back({tag + "_add_ms", num(ms([&] { addUser(*s->groups, groupId, extra.member()); }))});
             auto after = mongo(groupId);
-            f.push_back({tag + "_add_commit_b", num(after["lastCommit_b"])});
-            f.push_back({tag + "_add_tree_delta_b", num(treeBytes(after) - treeBytes(before))});
+            commitCost(f, tag + "_add", after, before);
         };
         addOne("blank");
 
@@ -534,10 +564,9 @@ TEST_F(GroupSandbox, P6_creator_removal) {
             f.push_back({"remove_ms", num(ms([&] { remover->groups->removeGroupMembers(groupId, {userId(1)}); }))});
             auto removed = mongo(groupId);
             f.push_back({"filled_after", num(removed["filledNodes"])});
-            f.push_back({"remove_commit_b", num(removed["lastCommit_b"])});
-            f.push_back({"remove_tree_delta_b", num(treeBytes(removed) - treeBytes(m))});
+            commitCost(f, "remove", removed, m);
             const Identity extra = registerUser();
-            f.push_back({"add_after_ms", num(ms([&] { remover->groups->addGroupMembers(groupId, {{.user = extra.member(), .role = "user"}}); }))});
+            f.push_back({"add_after_ms", num(ms([&] { addUser(*remover->groups, groupId, extra.member()); }))});
             const group::Envelope after = remover->groups->encrypt(groupId, core::Buffer::from("after"));
             auto far = open(pooled(n - 1 - 3).privKey); // last bucket, never a healer
             std::string farPlain;
@@ -609,7 +638,7 @@ TEST_F(GroupSandbox, U2_store_late_joiner) {
             fileId = memberStores.closeFile(h);
         }
         const Identity late = registerUser();
-        f.push_back({"add_ms", num(ms([&] { owner->groups->addGroupMembers(groupId, {{.user = late.member(), .role = "user"}}); }))});
+        f.push_back({"add_ms", num(ms([&] { addUser(*owner->groups, groupId, late.member()); }))});
         std::string read;
         f.push_back({"first_read_ms", num(ms([&] {
             auto joiner = open(late.privKey);
@@ -641,7 +670,7 @@ TEST_F(GroupSandbox, U5_late_joiner_ladder) {
         const group::Envelope old = owner->groups->encrypt(groupId, core::Buffer::from("epoch1"));
         for (int i = 0; i < k; ++i) owner->groups->removeGroupMembers(groupId, {users[3 + i].userId});
         const Identity late = registerUser();
-        owner->groups->addGroupMembers(groupId, {{.user = late.member(), .role = "user"}});
+        addUser(*owner->groups, groupId, late.member());
         auto joiner = open(late.privKey);
         f.push_back({"epoch", num(joiner->groups->getGroup(groupId).keyVersion)});
         std::string oldPlain, read;
@@ -669,7 +698,7 @@ TEST_F(GroupSandbox, U3_concurrent_managers) {
         double took[2];
         auto add = [&](int slot, group::GroupApi& groups, const Identity& who) {
             try {
-                took[slot] = ms([&] { groups.addGroupMembers(groupId, {{.user = who.member(), .role = "user"}}); });
+                took[slot] = ms([&] { addUser(groups, groupId, who.member()); });
                 outcome[slot] = "ok";
             } catch (const std::exception& e) {
                 outcome[slot] = describe(e);
@@ -734,11 +763,6 @@ TEST_F(GroupSandbox, U4_inbox_anonymous) {
 
 namespace {
 constexpr int MAX_MEMBERS = 16384; // TypesValidator.MAX_GROUP_MEMBERS on the Bridge
-std::string arr(const std::vector<double>& values) {
-    std::string out = "[";
-    for (size_t i = 0; i < values.size(); ++i) out += (i ? "," : "") + num(values[i]);
-    return out + "]";
-}
 } // namespace
 
 // S1: direct createGroup; if it is refused, create(128) + add batches instead, with the refusal recorded.
@@ -773,14 +797,12 @@ TEST_F(GroupSandbox, S2_add_remove) {
             const std::string groupId = create(*s->groups, roster(members));
             const Identity extra = registerUser();
             auto before = mongo(groupId);
-            timed(f, tag, "add", [&] { s->groups->addGroupMembers(groupId, {{.user = extra.member(), .role = "user"}}); });
+            timed(f, tag, "add", [&] { addUser(*s->groups, groupId, extra.member()); });
             auto added = mongo(groupId);
-            f.push_back({"add_commit_b", num(added["lastCommit_b"])});
-            f.push_back({"add_tree_delta_b", num(treeBytes(added) - treeBytes(before))});
+            commitCost(f, "add", added, before);
             timed(f, tag, "remove", [&] { s->groups->removeGroupMembers(groupId, {extra.userId}); });
             auto removed = mongo(groupId);
-            f.push_back({"remove_commit_b", num(removed["lastCommit_b"])});
-            f.push_back({"remove_tree_delta_b", num(treeBytes(removed) - treeBytes(added))});
+            commitCost(f, "remove", removed, added);
             f.push_back({"remove_rungs_b", num(removed["groupArchiveRung_b"] - added["groupArchiveRung_b"])});
             addMongo(f, groupId);
         });
@@ -869,14 +891,12 @@ TEST_F(GroupSandbox, S4_creator_removal) {
             timed(f, tag, "remove_creator", [&] { remover->groups->removeGroupMembers(groupId, {userId(1)}); });
             auto removed = mongo(groupId);
             f.push_back({"filled_after", num(removed["filledNodes"])});
-            f.push_back({"remove_commit_b", num(removed["lastCommit_b"])});
-            f.push_back({"remove_tree_delta_b", num(treeBytes(removed) - treeBytes(m))});
+            commitCost(f, "remove", removed, m);
             const Identity extra = registerUser();
-            timed(f, tag, "add_after", [&] { remover->groups->addGroupMembers(groupId, {{.user = extra.member(), .role = "user"}}); });
+            timed(f, tag, "add_after", [&] { addUser(*remover->groups, groupId, extra.member()); });
             auto added = mongo(groupId);
-            f.push_back({"add_commit_b", num(added["lastCommit_b"])});
-            f.push_back({"add_tree_delta_b", num(treeBytes(added) - treeBytes(removed))});
-            timed(f, tag, "add2_after", [&] { remover->groups->addGroupMembers(groupId, {{.user = registerUser().member(), .role = "user"}}); });
+            commitCost(f, "add", added, removed);
+            timed(f, tag, "add2_after", [&] { addUser(*remover->groups, groupId, registerUser().member()); });
             const group::Envelope after = remover->groups->encrypt(groupId, core::Buffer::from("after"));
             std::unique_ptr<Session> far;
             std::string farPlain;
@@ -905,13 +925,11 @@ TEST_F(GroupSandbox, S5_spread_removal) {
         auto removed = mongo(groupId);
         f.push_back({"filled_before", num(m["filledNodes"])});
         f.push_back({"filled_after", num(removed["filledNodes"])});
-        f.push_back({"remove_commit_b", num(removed["lastCommit_b"])});
-        f.push_back({"remove_tree_delta_b", num(treeBytes(removed) - treeBytes(m))});
-        timed(f, tag, "add_after", [&] { s->groups->addGroupMembers(groupId, {{.user = registerUser().member(), .role = "user"}}); });
+        commitCost(f, "remove", removed, m);
+        timed(f, tag, "add_after", [&] { addUser(*s->groups, groupId, registerUser().member()); });
         auto added = mongo(groupId);
-        f.push_back({"add_commit_b", num(added["lastCommit_b"])});
-        f.push_back({"add_tree_delta_b", num(treeBytes(added) - treeBytes(removed))});
-        timed(f, tag, "add2_after", [&] { s->groups->addGroupMembers(groupId, {{.user = registerUser().member(), .role = "user"}}); });
+        commitCost(f, "add", added, removed);
+        timed(f, tag, "add2_after", [&] { addUser(*s->groups, groupId, registerUser().member()); });
         addMongo(f, groupId);
     });
 }
@@ -968,10 +986,9 @@ TEST_F(GroupSandbox, S6_self_update_storm) {
             healers.clear();
             auto healed = mongo(groupId);
             f.push_back({"filled_after", num(healed["filledNodes"])});
-            timed(f, tag, "add_after", [&] { remover->groups->addGroupMembers(groupId, {{.user = registerUser().member(), .role = "user"}}); });
+            timed(f, tag, "add_after", [&] { addUser(*remover->groups, groupId, registerUser().member()); });
             auto added = mongo(groupId);
-            f.push_back({"add_commit_b", num(added["lastCommit_b"])});
-            f.push_back({"add_tree_delta_b", num(treeBytes(added) - treeBytes(healed))});
+            commitCost(f, "add", added, healed);
         });
     }
 }
@@ -994,7 +1011,7 @@ TEST_F(GroupSandbox, S7_deep_history) {
         f.push_back({"removal_ms", arr(each)});
         const group::Envelope current = s->groups->encrypt(groupId, core::Buffer::from("now"));
         const Identity late = registerUser();
-        timed(f, tag, "late_add", [&] { s->groups->addGroupMembers(groupId, {{.user = late.member(), .role = "user"}}); });
+        timed(f, tag, "late_add", [&] { addUser(*s->groups, groupId, late.member()); });
         std::string a, b, c, d;
         {
             auto joiner = open(late.privKey);
@@ -1028,18 +1045,7 @@ TEST_F(GroupSandbox, S8_thread_hot_path) {
         );
         auto member = open(privKeyOf(2));
         auto threads = thread::ThreadApi::create(*member->connection, *member->groups);
-        std::vector<std::string> ids;
-        auto send = [&] { ids.push_back(threads.sendMessage(threadId, core::Buffer::from("p"), core::Buffer::from("p"), core::Buffer::from("hot"))); };
-        timed(f, tag, "first_send", send);
-        std::vector<double> sends, gets;
-        timed(f, tag, "sends", [&] { for (int i = 0; i < calls; ++i) sends.push_back(ms(send)); });
-        bool ok = true;
-        timed(f, tag, "gets", [&] {
-            for (int i = 0; i < calls; ++i) gets.push_back(ms([&] { ok = ok && threads.getMessage(ids[1 + i]).data.stdString() == "hot"; }));
-        });
-        f.push_back({"send_each_ms", arr(sends)});
-        f.push_back({"get_each_ms", arr(gets)});
-        check(f, "reads_ok", ok);
+        check(f, "reads_ok", hotPath(f, tag, "", threads, threadId, calls));
     });
 }
 
@@ -1063,7 +1069,7 @@ TEST_F(GroupSandbox, S9_concurrent_managers) {
                 std::vector<std::thread> adders;
                 for (int i = 0; i < 4; ++i) adders.emplace_back([&, i] {
                     try {
-                        took[i] = ms([&] { managers[i]->groups->addGroupMembers(groupId, {{.user = newcomers[i].member(), .role = "user"}}); });
+                        took[i] = ms([&] { addUser(*managers[i]->groups, groupId, newcomers[i].member()); });
                         outcome[i] = "ok";
                     } catch (const std::exception& e) {
                         outcome[i] = describe(e).substr(0, 200);
@@ -1126,7 +1132,7 @@ TEST_F(GroupSandbox, R1_epoch_isolation) {
             Fields scratch;
             removals.push_back(timed(scratch, tag, "rm" + std::to_string(i), [&] { s->groups->removeGroupMembers(groupId, {leaver}); }));
             const Identity next = registerUser();
-            adds.push_back(timed(scratch, tag, "add" + std::to_string(i), [&] { s->groups->addGroupMembers(groupId, {{.user = next.member(), .role = "user"}}); }));
+            adds.push_back(timed(scratch, tag, "add" + std::to_string(i), [&] { addUser(*s->groups, groupId, next.member()); }));
             leaver = next.userId;
         }
         f.push_back({"removal_ms", arr(removals)});
@@ -1146,19 +1152,15 @@ TEST_F(GroupSandbox, R1_epoch_isolation) {
         const int loops = 100;
         timed(f, tag, "encrypt_x100", [&] { for (int i = 0; i < loops; ++i) s->groups->encrypt(groupId, core::Buffer::from("x")); });
         timed(f, tag, "decrypt_x100", [&] { for (int i = 0; i < loops; ++i) s->groups->decrypt(current); });
-        const std::string mib(1 << 20, 'z');
         const int64_t size = 32LL << 20;
-        const std::string max(4 << 20, 'z'); // encryptFileChunk takes at most 4 MiB per call
-        timed(f, tag, "file32_4mib", [&] {
-            auto h = s->groups->beginFileEncryption(groupId, size);
-            for (int i = 0; i < 8; ++i) s->groups->encryptFileChunk(h, core::Buffer::from(max));
-            s->groups->finishFileEncryption(h);
-        });
-        timed(f, tag, "file32_1mib", [&] {
-            auto h = s->groups->beginFileEncryption(groupId, size);
-            for (int i = 0; i < 32; ++i) s->groups->encryptFileChunk(h, core::Buffer::from(mib));
-            s->groups->finishFileEncryption(h);
-        });
+        for (const int chunkMib : {4, 1}) { // encryptFileChunk takes at most 4 MiB per call
+            const std::string chunk(chunkMib << 20, 'z');
+            timed(f, tag, "file32_" + std::to_string(chunkMib) + "mib", [&] {
+                auto h = s->groups->beginFileEncryption(groupId, size);
+                for (int i = 0; i < 32 / chunkMib; ++i) s->groups->encryptFileChunk(h, core::Buffer::from(chunk));
+                s->groups->finishFileEncryption(h);
+            });
+        }
         addMongo(f, groupId);
     });
 }
@@ -1183,14 +1185,7 @@ TEST_F(GroupSandbox, R2_thread_hot_path_single_group) {
         for (const auto& [who, id] : std::vector<std::pair<std::string, Identity>>{{"member", x}, {"plain", plain}}) {
             auto session = open(id.privKey);
             auto threads = thread::ThreadApi::create(*session->connection, *session->groups);
-            std::vector<std::string> ids;
-            auto send = [&] { ids.push_back(threads.sendMessage(threadId, core::Buffer::from("p"), core::Buffer::from("p"), core::Buffer::from("hot"))); };
-            timed(f, tag, who + "_first_send", send);
-            std::vector<double> sends, gets;
-            timed(f, tag, who + "_sends", [&] { for (int i = 0; i < calls; ++i) sends.push_back(ms(send)); });
-            timed(f, tag, who + "_gets", [&] { for (int i = 0; i < calls; ++i) gets.push_back(ms([&] { threads.getMessage(ids[1 + i]); })); });
-            f.push_back({who + "_send_each_ms", arr(sends)});
-            f.push_back({who + "_get_each_ms", arr(gets)});
+            hotPath(f, tag, who + "_", threads, threadId, calls);
         }
     });
 }

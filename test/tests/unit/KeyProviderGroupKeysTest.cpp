@@ -19,6 +19,8 @@
 #include <privmx/endpoint/core/UserVerifier.hpp>
 #include <privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp>
 
+#include "AcceptAllVerifier.hpp"
+
 using namespace privmx::endpoint::core;
 
 /**
@@ -36,13 +38,6 @@ constexpr const char* RESOURCE_ID = "res_key_provider_group_keys";
 constexpr const char* KEY_ID = "key_shared_by_every_group";
 constexpr const char* GROUP_A = "group_a";
 constexpr const char* GROUP_B = "group_b";
-
-class AcceptAllVerifier : public UserVerifierInterface {
-public:
-    std::vector<bool> verify(const std::vector<VerificationRequest>& request) override {
-        return std::vector<bool>(request.size(), true);
-    }
-};
 
 // Records which groups the resolver was asked about, so a test can assert on attempts not made.
 struct ResolverLog {
