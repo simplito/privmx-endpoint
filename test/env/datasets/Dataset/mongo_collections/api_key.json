@@ -1,7 +1,7 @@
 [{
-	"_id": "ea8c5a5f4dfe50696574d96c953c434f",
-	"created": 1.79146583741E+12,
-	"user": "6ac7996d7677e90ef73eb11b",
+	"_id": "911572cfd04444c54984213c327adf36",
+	"created": 1.791877150403E+12,
+	"user": "6acde01ec988d9b2cb261aea",
 	"name": "MainKey",
 	"scopes": [
 		"context",
@@ -15,7 +15,7 @@
 		"kvdb"
 	],
 	"enabled": true,
-	"secret": "e800668e1fdafdedfc64adf8328d3b4b",
+	"secret": "d39f7a2b06954babd04468a86b3411ea",
 	"publicKey": null,
 	"masterKey": true
 }]

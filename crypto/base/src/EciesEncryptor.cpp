@@ -28,7 +28,7 @@ string EciesEncryptor::decryptFromBase64(const PrivateKey& priv, const string& c
 }
 
 string EciesEncryptor::decrypt(const PrivateKey& priv, const string& cipher, const std::optional<PublicKey>& pubOfSignature) {
-    if (cipher.front() != 101 || cipher.size() < 67) {
+    if (cipher.size() < 67 || cipher.front() != 101) {
         throw InvalidFirstByteOfCipherException();
     }
     auto external_pub = cipher.substr(1, 33);

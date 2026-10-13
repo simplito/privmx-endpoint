@@ -23,6 +23,7 @@ limitations under the License.
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,7 @@ protected:
         server::GroupTreeState tree;
         std::uint32_t epoch = 1;
         privmx::crypto::PublicKey grant;
+        std::map<std::uint64_t, std::string> setters; // statement seq -> committer
     };
 
     std::vector<TreeMember> publicOf(const std::vector<Member>& members) {
@@ -59,7 +61,12 @@ protected:
         return result;
     }
 
-    TreeGroupState runtime(const Group& group) { return TreeWire::toRuntime(group.tree, group.epoch, group.grant); }
+    TreeGroupState runtime(const Group& group) {
+        TreeGroupState state = TreeWire::toRuntime(group.tree, group.epoch, group.grant);
+        state.setters = group.setters;
+        state.commitSeq = group.setters.rbegin()->first;
+        return state;
+    }
 
     Group create(std::uint32_t count, std::uint32_t creator = 0) {
         Group group;
@@ -72,6 +79,7 @@ protected:
             keys.planCreate(publicOf(group.members), group.members[creator].userId, group.members[creator].priv);
         group.tree = TreeWire::toCreateTree(plan);
         group.grant = plan.grantKey.getPublicKey();
+        group.setters[plan.seq] = group.members[creator].userId;
         return group;
     }
 
@@ -91,6 +99,7 @@ protected:
         group.tree = TreeWire::afterCommit(group.tree, result);
         group.epoch = result.epoch;
         group.grant = result.grantKey.getPublicKey();
+        group.setters[result.seq] = who.userId;
         return result;
     }
 
@@ -137,7 +146,7 @@ protected:
 
 // creation
 
-TEST_F(TreeWireTest, ACreatedTreeSeatsEveryoneAndCarriesOnlyTheCreatorsPath) {
+TEST_F(TreeWireTest, ACreatedTreeSeatsEveryoneAndCarriesEveryKeyedNode) {
     for (const std::uint32_t count : {1u, 2u, 3u, 16u, 17u, 33u, 40u}) {
         const std::uint32_t creator = count - 1;
         const Group group = create(count, creator);
@@ -152,16 +161,16 @@ TEST_F(TreeWireTest, ACreatedTreeSeatsEveryoneAndCarriesOnlyTheCreatorsPath) {
             EXPECT_EQ(node.generation, 0);
             EXPECT_TRUE(node.publicKey.has_value());
         }
-        EXPECT_EQ(nodes, TreeMath::keyedPath(creator, count)) << "N=" << count;
+        EXPECT_EQ(nodes, TreeMath::keyedNodes(count)) << "N=" << count;
     }
 }
 
 TEST_F(TreeWireTest, ACreatedTreeStaysWithinTheBridgesSubmissionCaps) {
-    // Every member gets exactly one edge, every refreshed node below the root one more, plus the grant edge — which
+    // Every member gets exactly one edge, every keyed node below the root one more, plus the grant edge — which
     // in a one-seat tree is the member's edge.
     for (const std::uint32_t count : {1u, 2u, 3u, 8u, 16u, 17u, 32u, 33u, 64u, 100u}) {
         const Group group = create(count);
-        const std::size_t keyed = TreeMath::keyedPath(0, count).size();
+        const std::size_t keyed = TreeMath::keyedNodes(count).size();
         EXPECT_EQ(group.tree.edges.size(), count == 1 ? 1u : count + keyed) << "N=" << count;
         EXPECT_LE(group.tree.nodes.size(), std::max<std::size_t>(count, 1) - 1) << "N=" << count;
         EXPECT_LE(group.tree.edges.size(), 2u * count - 1) << "N=" << count;

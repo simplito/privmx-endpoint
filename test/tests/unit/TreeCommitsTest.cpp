@@ -23,7 +23,9 @@ limitations under the License.
  *            = H("pmx-tree-inner\0" || u32(v) || CH(left) || CH(right))  otherwise
  *     TH     = H("pmx-tree\0" || u32(n) || CH(root))
  *     RH     = H("pmx-tree-roster\0" || u32(#u) || lp(u)... || u32(#m) || lp(m)...)   lists deduplicated, sorted
- *     SB     = ... || lp(committer) || lp(committerPubKey) || u32(committerSeat) || ...   see TreeCommits::signedBytes
+ *     SB     = H-tag || lp(groupId) || u32(treeVersion) || u64(seq) || lp(prevDigest) || ...
+ *              ... || lp(committer) || lp(committerPubKey) || u32(committerSeat) || ...   see TreeCommits::signedBytes
+ *              (each path entry: u32(v) || u32(gen) || lp(pk) || subtreeHash)
  */
 
 #include <gtest/gtest.h>
@@ -78,6 +80,7 @@ TreeGroupState bucketedTree() {
 CommitStatement removalStatement() {
     CommitStatement statement;
     statement.seq = 7;
+    statement.prevDigest = std::string(32, '\x22');
     statement.op = CommitOp::Remove;
     statement.groupId = "grp-1";
     statement.treeVersion = 2;
@@ -90,7 +93,7 @@ CommitStatement removalStatement() {
     statement.committer = "alice";
     statement.committerPubKey = "APK";
     statement.committerSeat = 0;
-    statement.path = {StatementNode{3, 2, "pk3"}};
+    statement.path = {StatementNode{3, 2, "pk3", std::string(32, '\x11')}};
     statement.removed = {"bob"};
     return statement;
 }
@@ -131,6 +134,12 @@ TEST(TreeCommitsHashes, ARosterHashesSortedAndDeduplicated) {
     );
     EXPECT_NE(TreeCommits::rosterHash({"alice"}, {"bob"}), TreeCommits::rosterHash({"bob"}, {"alice"}))
         << "a promotion changes the roster";
+}
+
+TEST(TreeCommitsHashes, SECURITY_AGroupIdFollowsFromItsContextAndResourceId) {
+    // The bridge's CommitStatement.test.ts holds the same vector: a genesis statement passes only for this id.
+    EXPECT_EQ(TreeCommits::groupId("ctx", "res"), "c05bb98afb4dd712d19bfc4c42f84cf213274a8345b6c2d55d3cf941c2fea17f");
+    EXPECT_NE(TreeCommits::groupId("ctxr", "es"), TreeCommits::groupId("ctx", "res"));
 }
 
 TEST(TreeCommitsHashes, EveryRecordFieldIsInTheHash) {
@@ -179,12 +188,13 @@ TEST(TreeCommitsStatement, SignedBytesMatchTheReference) {
     const std::string bytes = TreeCommits::signedBytes(removalStatement());
     EXPECT_EQ(
         hex(bytes),
-        "706d782d747265652d636f6d6d697400000000056772702d310000000200000000000000070300000199c82cc000000000000000000400"
-        "00000347504b0000000000000009d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a9"
-        "7283612ab5a836890e362e279f43dc77f8e059dc17598d00000005616c6963650000000341504b00000000000000010000000300000002"
-        "00000003706b3300000000000000000000000100000003626f62"
+        "706d782d747265652d636f6d6d697400000000056772702d31000000020000000000000007000000202222222222222222222222222222"
+        "2222222222222222222222222222222222220300000199c82cc00000000000000000040000000347504b0000000000000009d42481d52a"
+        "260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059"
+        "dc17598d00000005616c6963650000000341504b0000000000000001000000030000000200000003706b33111111111111111111111111"
+        "111111111111111111111111111111111111111100000000000000000000000100000003626f62"
     );
-    EXPECT_EQ(hex(privmx::crypto::Crypto::sha256(bytes)), "8d06b165a681d3b8a7501c382459ac619e258ada00bd4dbccf063a68115ccff7");
+    EXPECT_EQ(hex(privmx::crypto::Crypto::sha256(bytes)), "c180895bffe8752c1bcd018e315145d3cf02f22739c9d9972114e9d119877677");
 }
 
 TEST(TreeCommitsStatement, ASignatureCoversEveryField) {
@@ -198,6 +208,7 @@ TEST(TreeCommitsStatement, ASignatureCoversEveryField) {
 
     const std::vector<std::function<void(CommitStatement&)>> tampering = {
         [](CommitStatement& s) { s.seq += 1; },
+        [](CommitStatement& s) { s.prevDigest[0] ^= 1; },
         [](CommitStatement& s) { s.op = CommitOp::Add; },
         [](CommitStatement& s) { s.groupId = "grp-2"; },
         [](CommitStatement& s) { s.treeVersion = 1; },
@@ -212,6 +223,7 @@ TEST(TreeCommitsStatement, ASignatureCoversEveryField) {
         [](CommitStatement& s) { s.committerSeat = 1; },
         [](CommitStatement& s) { s.path[0].generation = 3; },
         [](CommitStatement& s) { s.path[0].publicKey = "pk4"; },
+        [](CommitStatement& s) { s.path[0].subtreeHash[0] ^= 1; },
         [](CommitStatement& s) { s.path.clear(); },
         [](CommitStatement& s) { s.addedUsers = {"mallory"}; },
         [](CommitStatement& s) { s.addedManagers = {"mallory"}; },
@@ -252,7 +264,10 @@ TEST(TreeCommitsStatement, RefusesWhatDoesNotDecode) {
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.committerSeat = std::int64_t(1) << 33; }));
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.treeHash = w.treeHash.substr(2); }));
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.rosterHash[0] = 'A'; }));
+    EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.path[0].subtreeHash = ""; }));
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.signature = privmx::utils::Base64::from("short"); }));
+    EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.prevDigest = ""; })) << "only seq 1 follows nothing";
+    EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.seq = 1; })) << "and it follows nothing";
 }
 
 TEST(TreeCommitsStatement, AStatementForAPlanDescribesThePostState) {
@@ -265,17 +280,19 @@ TEST(TreeCommitsStatement, AStatementForAPlanDescribesThePostState) {
     TreeKeys keys(cache);
     const CommitPlan plan = keys.planCreate(members, "u1", PrivateKey::generateRandom());
     const CommitStatement statement = TreeCommits::statementFor(
-        plan, CommitOp::Create, "res", 5, 1, "GPK", 1, {"u2", "u0"}, {"u1"}, "u1", {"u2", "u0"}, {"u1"}, {}
+        plan, CommitOp::Create, "res", 5, 1, "GPK", 1, {"u2", "u0"}, {"u1"}, "u1", {"u2", "u0", "u2"}, {"u1"}, {}
     );
     EXPECT_EQ(statement.seq, 1u);
     EXPECT_EQ(statement.committerSeat, 1u);
     ASSERT_EQ(statement.path.size(), 1u);
     EXPECT_EQ(statement.path[0].nodeIndex, 3u);
-    EXPECT_EQ(statement.addedUsers, (std::vector<std::string>{"u0", "u2"})) << "deltas sorted";
+    EXPECT_EQ(statement.addedUsers, (std::vector<std::string>{"u0", "u2"}))
+        << "deltas sorted and deduplicated, as the bridge expects them";
     EXPECT_EQ(statement.rosterHash, TreeCommits::rosterHash({"u0", "u2"}, {"u1"}));
     TreeGroupState post;
     post.numLeaves = 3;
     post.leafAssignment = {ids[0], ids[1], ids[2]};
     post.nodes = {TreeNodeState{3, 0, plan.refreshed[0].key.getPublicKey(), 1}};
     EXPECT_EQ(statement.treeHash, TreeCommits::treeHash(post)) << "the refreshed nodes carry setBy = seq";
+    EXPECT_EQ(statement.path[0].subtreeHash, TreeCommits::subtreeHash(post, 3)) << "and their post-state subtree";
 }

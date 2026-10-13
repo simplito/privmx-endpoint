@@ -791,6 +791,7 @@ std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
             "Encryption Key status code = " + std::to_string(currentStreamRoomKey.statusCode)
         );
     }
+    assertWriteKey(currentStreamRoomKey); // the LOCAL key: what this client's media is encrypted under
     webRTCKeys.push_back(
         stream::Key{
             currentStreamRoomKey.id, core::Buffer::from(deriveStreamEncryptionKey(currentStreamRoomKey)), KeyType::LOCAL

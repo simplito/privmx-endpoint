@@ -32,23 +32,57 @@ namespace keytree {
 
 // Checks a served tree against the commit statements members signed, before any key from it is used: the latest
 // statement must be genuine and describe exactly the served roster, grant key and tree (by hash); every filled
-// node must be vouched for by a genuine statement whose committer still sits under it; and the history since the
-// last state this client verified must be an unbroken chain of statements by members. That closes a bridge
-// substituting node or grant keys, seating outsiders, or rolling a node back — on its own.
+// node must be vouched for by a genuine statement whose committer is still on that roster and which signed the
+// node's current subtree hash; and the history since the last state this client verified must be an unbroken chain
+// of statements by members. That closes a bridge substituting node or grant keys, seating outsiders, or rolling a
+// node back (with or without a colluding member). Which nodes a member may set is the bridge's and the remover's
+// business (a removal blanks everything the leaver could know); one state cannot show who learned a key through a
+// since-blanked child.
 //
 // What it cannot close, by design:
-//   - First contact (no pin for the group in this process; pins survive reconnects) trusts the latest validly
-//     signed state: trust on first use, as for any delivery service.
+//   - First contact (no pin for the group in this verifier, which lives as long as its GroupApi; pins survive
+//     reconnects and deletion events, not a new GroupApi) trusts the latest validly signed state: trust on first
+//     use, as for any delivery service. That state may be any seq, so a first contact is not bound to genesis
+//     (T4-19); `epochOpeners`, which reads the chain from seq 1, replays it from the genesis roster.
 //   - The bridge may withhold or delay commits.
-//   - A member colluding with the bridge can sign a state that rolls a node in someone else's subtree back to an
-//     older generation that a statement still validly vouches for, and that a former member knew. The node
-//     generation pins catch it only for a client that has already seen the newer generation. It takes a member, the
-//     bridge and a removed colluder at once.
 //
 // Failures throw GroupDataIntegrityException, rollbacks GroupHistoryForkException. Pins are kept per group in
-// memory and only stored once a verification has passed completely.
+// memory and only stored once a verification has passed completely. A latest statement that moves a pin (or is a
+// first contact) needs its committer's key accepted by the UserVerifier both at its date and now (N-3).
 class TreeVerifier {
 public:
+    // At most twice `cap` entries: two generations rather than an LRU, as in `PublicKeyCache`. The bridge chooses how
+    // many distinct statements and groups it serves, so nothing it feeds a cache may grow without bound (T3-24).
+    template<typename V>
+    class Bounded {
+    public:
+        explicit Bounded(std::size_t cap) : _cap(cap) {}
+        const V* find(const std::string& key) {
+            if (const auto it = _current.find(key); it != _current.end()) {
+                return &it->second;
+            }
+            const auto old = _previous.find(key);
+            if (old == _previous.end()) {
+                return nullptr;
+            }
+            V value = std::move(old->second);
+            _previous.erase(old);
+            return &put(key, std::move(value));
+        }
+        V& put(const std::string& key, V value) {
+            if (_current.size() >= _cap && _current.count(key) == 0) {
+                _previous = std::move(_current);
+                _current.clear();
+            }
+            return _current[key] = std::move(value);
+        }
+
+    private:
+        std::size_t _cap;
+        std::map<std::string, V> _current;
+        std::map<std::string, V> _previous;
+    };
+
     // How much of the tree the response carries: one seat's path ("path", the default `groupGet`), or every
     // record ("plan"/"full").
     enum class Scope {
@@ -60,17 +94,54 @@ public:
     struct Environment {
         // The connection's UserVerifier; it vouches for each statement's committer and `committerPubKey`.
         std::function<std::vector<bool>(const std::vector<core::VerificationRequest>&)> verifyUsers;
-        // The statements with `fromSeq < seq <= toSeq`, ascending.
-        std::function<std::vector<server::GroupTreeCommit>(std::uint64_t fromSeq, std::uint64_t toSeq)> commitsBetween;
+        // One page of the statements with `fromSeq < seq <= toSeq`, ascending from `fromSeq + 1`; it may stop short of
+        // `toSeq`, and the verifier asks again from where it stopped. From seq 0, with the genesis roster beside it.
+        std::function<server::GroupGetTreeCommitsResult(std::uint64_t fromSeq, std::uint64_t toSeq)> commitsBetween;
     };
 
     void verify(const server::GroupInfo& group, Scope scope, const Environment& environment);
 
-    // A listed group, for a writer that may hold no seat in it: its latest statement is genuine and describes the
-    // listed grant key, counters and roster, and its committer is on that roster. A pinned group must also continue
-    // its pin (the pinned statement at its seq, a member-signed chain above it). No tree is checked and no pin moves.
-    // Throws GroupDataIntegrityException.
-    void verifyListed(const server::GroupSummary& summary, const Environment& environment);
+    // A `groupGet` answer, for a reader or writer that may hold no seat in the group (a listing carries neither the
+    // roster nor a statement, so it is never verified itself): its latest statement is genuine and describes the
+    // served grant key, counters and roster, and its committer is on that roster. A pinned group must also continue
+    // its pin (the pinned statement at its seq, a member-signed chain above it). No tree is checked; the pin is
+    // stored or moved up to the statement, so the writer is on first use only once per GroupApi. A statement below
+    // the pin passes, and `pinnedSeq` tells it apart. Throws GroupDataIntegrityException.
+    void verifyListed(const server::GroupInfo& summary, const Environment& environment);
+
+    // The latest statements of several `groupGet` answers, put to the UserVerifier in one call, so that
+    // `verifyListed` on each finds its statement checked already. Refuses nothing itself: a statement that fails is
+    // left for `verifyListed`.
+    void preverifyListed(const std::vector<server::GroupInfo>& summaries, const Environment& environment);
+
+    // Whether `keyVersion`/`groupPubKey` are exactly the epoch and grant key of the state pinned for the group, in
+    // `contextId` — the only way a listing's `groupPubKey`, which no statement comes with, is taken.
+    bool pinnedAt(
+        const std::string& groupId,
+        const std::string& contextId,
+        std::int64_t keyVersion,
+        const std::string& groupPubKey
+    );
+
+    // A grant key handed in from outside (a caller's `GroupGrantWithKey`): unpinned groups are the caller's word,
+    // a pinned one only exactly at its pin — an older epoch is one a removed member may still hold.
+    bool agreesWithPin(
+        const std::string& groupId,
+        const std::string& contextId,
+        std::int64_t keyVersion,
+        const std::string& groupPubKey
+    );
+
+    // A commit of this client's own that the bridge accepted is the newest state it knows of: pinned as if read
+    // back, so the next read cannot be the state the commit replaced. `users`/`managers` are the roster it signed.
+    // Throws GroupHistoryForkException when a different statement is pinned at the same seq.
+    void pinCommitted(
+        const std::string& groupId,
+        const std::string& contextId,
+        const CommitStatement& statement,
+        const std::vector<std::string>& users,
+        const std::vector<std::string>& managers
+    );
 
     // P2: the members seated in the tree must be exactly the attested roster, or the next commit wraps to whoever
     // the bridge seated. Throws GroupDataIntegrityException.
@@ -80,49 +151,162 @@ public:
         const std::vector<std::string>& managers
     );
 
-    void forget(const std::string& groupId);
-
-    // `seq` of the last state verified for the group, 0 if none.
+    // `seq` and `keyVersion` of the last state verified for the group, 0 if none. Pins are never dropped: an
+    // unauthenticated `groupDeleted` must not turn the next read into a first contact.
     std::uint64_t pinnedSeq(const std::string& groupId);
+    std::uint64_t pinnedKeyVersion(const std::string& groupId);
 
-private:
-    // What a verified state leaves behind for the next read of the same group.
-    struct Pin {
-        std::uint64_t seq = 0;
-        std::string treeHash;
-        std::string digest; // of the latest statement
-        std::set<std::string> users;
-        std::set<std::string> managers;
-        std::uint64_t keyVersion = 0;
-        std::uint64_t rosterVersion = 0;
-        // Highest generation seen per node index. A blank keeps its generation, so blanking never lowers it.
-        std::map<std::uint32_t, std::uint32_t> generations;
-    };
-
-    // Signature by `committerPubKey`, that key accepted by the UserVerifier for the committer at the statement's
-    // date, and naming this group and tree version. Results are cached per group and statement.
-    void verifyStatements(
+    // The statement that opened each epoch (the first at its `keyVersion`), off the whole chain up to the pin: a
+    // statement for every seq from 1, each genuine as `verifyStatements` checks it and chained to the one before by
+    // `prevDigest`, the roster replayed forward from the genesis roster seq 1's `rosterHash` binds (I-1) with every
+    // committer on it and the pinned `rosterHash` matching, counters and dates never going back, the last one the pinned statement, one
+    // grant key per epoch. Kept per group (a bounded number of them), so a later call fetches only the statements
+    // since. What a past epoch's grant key and the author of a rung are checked against. Throws
+    // GroupDataIntegrityException, also when the group has no pin.
+    std::map<std::uint64_t, CommitStatement> epochOpeners(
         const std::string& groupId,
-        const std::string& resourceId,
         const std::string& contextId,
-        const std::vector<CommitStatement>& statements,
         const Environment& environment
     );
 
-    // The chain from the pin to `latest`: contiguous, each signed by a member of the roster before it, rosters
-    // replayed through the deltas, counters never going back, ending exactly at `latest`.
+    // T4-17: the bridge refused this client's statement at `seq` as a lost race. It may have applied it all the same,
+    // so no second statement is signed at that seq (`assertMaySignAt`) until a read shows the seq taken.
+    void refusedAsLostRace(const std::string& groupId, std::uint64_t seq);
+
+    // Throws GroupDataIntegrityException when a statement at `seq` or later was refused as a lost race: the bridge
+    // then serves a chain that does not reach the seq it claimed a concurrent commit took.
+    void assertMaySignAt(const std::string& groupId, std::uint64_t seq);
+
+private:
+    // The roster as the statements replay it, with the hash the last of them signed.
+    struct Roster {
+        std::set<std::string> users;
+        std::set<std::string> managers;
+        std::string hash;
+    };
+
+    // Where a chain of statements has been followed to: the last statement's seq, digest, date and counters, and the
+    // roster replayed up to it.
+    struct Head {
+        std::uint64_t seq = 0;
+        std::string digest;
+        std::uint64_t date = 0;
+        Roster roster;
+        std::uint64_t keyVersion = 0;
+        std::string groupPubKey;
+        std::uint64_t rosterVersion = 0;
+    };
+
+    // What a verified state leaves behind for the next read of the same group: the head at its latest statement.
+    struct Pin : Head {
+        std::string contextId; // authenticated by the group's id
+        // Highest generation seen per node index. A blank keeps its generation, so blanking never lowers it.
+        std::map<std::uint32_t, std::uint32_t> generations;
+        std::uint64_t refusedSeq = 0; // `refusedAsLostRace`
+    };
+
+    // Signature by `committerPubKey`, that key accepted by the UserVerifier for the committer at the statement's
+    // date, and naming this group (at seq 1 through `TreeCommits::groupId`) and tree version. Results are cached per
+    // context, group and statement. With `firstStillValid` the first statement's key must be accepted now as well.
+    void verifyStatements(
+        const std::string& groupId,
+        const std::string& contextId,
+        const std::vector<CommitStatement>& statements,
+        const Environment& environment,
+        bool firstStillValid = false
+    );
+
+    // One statement as some group's, for `checkStatements`.
+    struct Claim {
+        const std::string* groupId;
+        const std::string* contextId;
+        const CommitStatement* statement;
+        // N-3: the committer's key must also be accepted at the current time — a key revoked now cannot move a pin.
+        // Only the latest statement's: an intermediate one is checked at its own date, so a revoked key's statement
+        // followed by one from a key valid now still moves it (a limit, not a guarantee; SECURITY-NOTES T4-04).
+        bool now = false;
+    };
+
+    // `verifyStatements` over claims for any groups, in one UserVerifier call: caches each that passes and says
+    // whether all did.
+    bool checkStatements(const std::vector<Claim>& claims, const Environment& environment);
+
+    // `head` moved along the statements up to `toSeq`, fetched page by page and each page checked before the next is
+    // fetched (T4-15): a chain nobody on the roster signed is refused at its first page, not once all of it is held.
+    // Each statement is the next seq, linked by `prevDigest`, genuine (`verifyStatements`), signed by a member of the
+    // roster before it (`extend`), with counters and dates never going back and one grant key per epoch, a new
+    // epoch's not in `grantKeys` (T4-24), which collects it. `each` sees every statement once it passed.
+    void followChain(
+        const std::string& groupId,
+        const std::string& contextId,
+        Head& head,
+        std::set<std::string>& grantKeys,
+        std::uint64_t toSeq,
+        const Environment& environment,
+        const std::function<void(const CommitStatement&)>& each
+    );
+
+    // The chain from the pin to `latest` (`followChain`), ending exactly at `latest`. A new epoch's grant key is
+    // compared with the pinned one only; `epochOpeners` holds every earlier epoch's.
     void verifyChain(
         const std::string& groupId,
-        const std::string& resourceId,
         const std::string& contextId,
         const Pin& pin,
         const CommitStatement& latest,
         const Environment& environment
     );
 
+    // The pin for the group, or an empty one (seq 0) if none.
+    Pin pinOf(const std::string& groupId);
+
+    // `statement` applied to `roster`: signed by somebody on it, and with `checkHash` leaving exactly the roster it
+    // signs. `followChain` checks the hash at seq 1 (the genesis roster is the bridge's) and at the last statement:
+    // the signed deltas between decide the roster either way, and hashing a 16k roster per statement is not free.
+    // An unchanged roster is compared by hash, not hashed again (F1).
+    static bool extend(Roster& roster, const CommitStatement& statement, bool checkHash);
+
+    // Whether `latest` would move an existing pin: what needs the committer's key valid now (N-3). Not a first contact,
+    // which takes the latest genuine statement on trust: there an honest committer who rotated their key since would
+    // lock every fresh session out of the group, and with it every commit that could move the group past it.
+    bool movesPin(const std::string& groupId, const CommitStatement& latest);
+
+    // `latest` stored as the group's pin, with `nodes`' generations, if the pin is still `seen`; otherwise `seen` is
+    // refreshed to the pin as it now stands and nothing is stored (another verification moved it meanwhile).
+    bool storeIfPinned(
+        const std::string& groupId,
+        Pin& seen,
+        const std::string& contextId,
+        const CommitStatement& latest,
+        const std::vector<std::string>& users,
+        const std::vector<std::string>& managers,
+        const std::vector<TreeNodeState>& nodes
+    );
+
+    // `stored` moved to `latest` and the roster it signed; under `_mutex`. Generations are the caller's.
+    static void storeLocked(
+        Pin& stored,
+        const std::string& contextId,
+        const CommitStatement& latest,
+        const std::vector<std::string>& users,
+        const std::vector<std::string>& managers
+    );
+
+    // `epochOpeners`' last answer per group, extended by the statements since rather than fetched again from seq 1.
+    struct Openers {
+        Head head;
+        std::set<std::string> grantKeys; // every epoch's so far
+        std::map<std::uint64_t, CommitStatement> byEpoch;
+    };
+
     std::mutex _mutex;
+    // Never evicted: a dropped pin turns the next read into a first contact the bridge may answer with any old state.
     std::map<std::string, Pin> _pins;
-    std::set<std::string> _verifiedStatements;
+    // ponytail: 16 groups' rosters per generation (a 16k roster is ~2 MB); an evicted group refetches from seq 1.
+    Bounded<Openers> _openers{16};
+    Bounded<bool> _verifiedStatements{4096};
+    // `contextId \0 userId \0 pubKey` -> when the UserVerifier last accepted that key "now", reused for
+    // `NOW_ANSWER_REUSE_MS` so that a listing's `preverifyListed` and `verifyListed` share one call (M4).
+    Bounded<std::uint64_t> _acceptedNow{1024};
 };
 
 } // namespace keytree

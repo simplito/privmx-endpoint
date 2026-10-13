@@ -329,6 +329,8 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
             file_raw = _serverApi->storeFileGet(storeFileGetModel);
             encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
         }
+        // The handle writes under the file's key, so it must pass as a write key, not merely decrypt.
+        assertWriteKey(encryptionParams.encKey);
         std::shared_ptr<FileReadWriteHandle> handle = _fileHandleManager.createFileReadWriteHandle(
             privmx::endpoint::store::FileInfo{
                 .contextId = file_raw.file.contextId,
@@ -439,6 +441,7 @@ void StoreApiImpl::syncFile(const int64_t handle) {
                 // place to re-key. Keep the old key; `flushFile` re-keys and retries once the write is rejected.
             }
         }
+        assertWriteKey(writeKey);
         rw_handle->file->sync(encryptionParams.fileMeta, encryptionParams.fileDecryptionParams, writeKey);
         return;
     }

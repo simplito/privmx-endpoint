@@ -155,6 +155,9 @@ target_link_libraries(test_unit_LadderKeysTest privmx privmxendpointgroup Poco::
 # Goes through the wire types (server::GroupInfo, where tree and ladder meet the server API; needs core for JSON struct machinery)
 add_executable(test_unit_GroupKeyResolverTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupKeyResolverTest.cpp)
 target_link_libraries(test_unit_GroupKeyResolverTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+# GroupApiImpl's wiring against a lying bridge: real clients over an in-memory gateway (ConnectionImpl::connectOver)
+add_executable(test_unit_GroupApiLyingBridgeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupApiLyingBridgeTest.cpp)
+target_link_libraries(test_unit_GroupApiLyingBridgeTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
 # Roster attestation and the monotone version pin (builds signed server::GroupInfo by hand via GroupDataSchemaMapper::encrypt, no live bridge)
 add_executable(test_unit_GroupRosterTagTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupRosterTagTest.cpp)

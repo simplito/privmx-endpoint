@@ -117,6 +117,21 @@ public:
         const std::vector<EpochRegistryEntry>& registry
     );
 
+    // A rung's blob carries its span inside the ciphertext, `"pmx-rung\0" || u32(at) || u32(target) || WIF(key)`, so
+    // a rung relabelled by the bridge does not open (T4-08) and its sealer is not blamed for the relabelling.
+    static std::string sealRung(
+        const privmx::crypto::PrivateKey& key,
+        const RungSpan& span,
+        const privmx::crypto::PublicKey& to,
+        const privmx::crypto::PrivateKey& signer
+    );
+
+    // The key `rung` carries, if its blob opens with `with` and names the rung's own span.
+    static std::optional<privmx::crypto::PrivateKey> openRung(
+        const ArchiveRung& rung,
+        const privmx::crypto::PrivateKey& with
+    );
+
 private:
     // Invariant B: a recovered key really is the epoch's grant key.
     bool verifyAgainstRegistry(

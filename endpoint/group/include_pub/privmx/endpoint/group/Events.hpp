@@ -87,7 +87,8 @@ struct GroupCustomEventData {
     std::string channelName;
 
     /**
-     * ID of the sender, as the bridge reported it. NOT authenticated — see `authorPubKey`.
+     * ID of the sender, as the bridge reported it. When `statusCode` is 0 the UserVerifier has accepted
+     * `authorPubKey` as this user's key.
      */
     std::string userId;
 

@@ -295,7 +295,7 @@ TEST_F(LadderKeysGather, SECURITY_DetectsASubstitutedRungAndRefusesToCacheIt) {
     for (ArchiveRung& rung : tampered) {
         if (rung.span.at == 7 && rung.span.target == 6) {
             // A key that decrypts fine but is not epoch 6's, published under a name the blame can land on.
-            rung.blob = TreeKeys::wrapKey(attacker, keyOf(history, 7, 1).getPublicKey(), attacker);
+            rung.blob = LadderKeys::sealRung(attacker, rung.span, keyOf(history, 7, 1).getPublicKey(), attacker);
             rung.author = "mallory";
         }
     }
@@ -456,7 +456,7 @@ TEST_F(LadderKeysDescend, SECURITY_DetectsASubstitutedRung) {
     // Replace the rung 8->7 with a correctly-encrypted wrap of an unrelated key, authored by someone else.
     for (ArchiveRung& rung : history.rungs) {
         if (rung.span.at == 8 && rung.span.target == 7) {
-            rung.blob = TreeKeys::wrapKey(impostor, keyOf(history, 8, 1).getPublicKey(), signer);
+            rung.blob = LadderKeys::sealRung(impostor, rung.span, keyOf(history, 8, 1).getPublicKey(), signer);
             rung.author = "mallory";
         }
     }
@@ -489,6 +489,48 @@ TEST_F(LadderKeysDescend, SECURITY_RoutesAroundACorruptedUnitRungViaASkip) {
     EXPECT_EQ(result.key->toWIF(), keyOf(history, 4, 1).toWIF());
 }
 
+TEST_F(LadderKeysDescend, SECURITY_AForgedSkipRungIsPassedOverForTheNextRoute) {
+    // T4-08: anyone holding epoch 8's key can seal a rung at 8 under any span and any sealer, so a rung that does not
+    // open to its target's registered key costs the walk that rung, not the descent.
+    EpochHistory history = simulateEpochHistory(8, 1);
+    for (ArchiveRung& rung : history.rungs) {
+        if (rung.span.at == 8 && rung.span.target == 4) {
+            rung.blob = LadderKeys::sealRung(
+                PrivateKey::generateRandom(), rung.span, keyOf(history, 8, 1).getPublicKey(),
+                PrivateKey::generateRandom()
+            );
+        }
+    }
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    store.putGrantKey(8, keyOf(history, 8, 1));
+    const DescentResult result = ladder.descend(8, 4, history.rungs, history.registry);
+    ASSERT_EQ(result.failure, DescentFailure::None);
+    EXPECT_EQ(result.key->toWIF(), keyOf(history, 4, 1).toWIF());
+}
+
+TEST_F(LadderKeysDescend, SECURITY_AnHonestRungRelabelledByTheBridgeBlamesNobody) {
+    // T4-08: the span is sealed inside the blob, so the bridge serving the honest rung 8->4 as 8->7 gets a rung that
+    // does not open, not one that opens to the wrong epoch's key and names its honest sealer as the tamperer.
+    EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> served;
+    for (const ArchiveRung& rung : history.rungs) {
+        if (rung.span.at == 8 && rung.span.target == 4) {
+            ArchiveRung relabelled = rung;
+            relabelled.span.target = 7;
+            served.push_back(relabelled);
+        } else if (rung.span.at != 8) {
+            served.push_back(rung);
+        }
+    }
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    store.putGrantKey(8, keyOf(history, 8, 1));
+    const DescentResult result = ladder.descend(8, 7, served, history.registry);
+    EXPECT_EQ(result.failure, DescentFailure::DecryptFailed);
+    EXPECT_FALSE(result.blame.has_value());
+}
+
 // The rung is placed in storage directly, because a client that validates on write would never emit one.
 TEST_F(LadderKeysDescend, SECURITY_IgnoresAnUpwardRung) {
     EpochHistory history = simulateEpochHistory(8, 1);
@@ -499,7 +541,7 @@ TEST_F(LadderKeysDescend, SECURITY_IgnoresAnUpwardRung) {
     ArchiveRung upward;
     upward.span = RungSpan{5, 9};
     upward.recipientKind = RungRecipientKind::Epoch;
-    upward.blob = TreeKeys::wrapKey(future, keyOf(history, 5, 1).getPublicKey(), signer);
+    upward.blob = LadderKeys::sealRung(future, upward.span, keyOf(history, 5, 1).getPublicKey(), signer);
     upward.author = "mallory";
     history.rungs.push_back(upward);
     history.registry.push_back(EpochRegistryEntry{9, future.getPublicKey()});
@@ -522,7 +564,7 @@ TEST_F(LadderKeysDescend, SECURITY_RemovedMemberCannotWalkForward) {
             continue;
         }
         for (std::uint32_t held = 1; held <= removedAfter; ++held) {
-            EXPECT_FALSE(TreeKeys::unwrapKey(rung.blob, keyOf(history, held, 1)).has_value())
+            EXPECT_FALSE(LadderKeys::openRung(rung, keyOf(history, held, 1)).has_value())
                 << "epoch " << held << " key opened a rung published at epoch " << rung.span.at;
         }
     }
@@ -662,7 +704,7 @@ TEST_F(LadderKeysEras, SECURITY_DetectsATamperedEraLink) {
     forged.span = RungSpan{7, 6};
     forged.recipientKind = RungRecipientKind::User;
     forged.recipientId = "bob";
-    forged.blob = TreeKeys::wrapKey(impostor, member.getPublicKey(), signer);
+    forged.blob = LadderKeys::sealRung(impostor, forged.span, member.getPublicKey(), signer);
     forged.author = "mallory";
 
     TreeKeyCache store;

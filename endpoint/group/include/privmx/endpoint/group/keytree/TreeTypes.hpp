@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREETYPES_HPP_
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -116,6 +117,9 @@ struct TreeGroupState {
     privmx::crypto::PublicKey grantPublicKey;
     // `seq` of the latest commit statement; the next commit is this plus one.
     std::uint64_t commitSeq = 0;
+    // `seq` -> committer of the statements the filled nodes cite (`setBy`): who minted each key, which a removal
+    // needs to blank everything the leaver could know.
+    std::map<std::uint64_t, std::string> setters;
 };
 
 enum class ClimbFailure {
@@ -133,23 +137,27 @@ struct ClimbResult {
     ClimbFailure failure = ClimbFailure::None;
     // Deepest node reached before stopping. Partial progress is still cached and useful.
     std::uint32_t reachedNode = 0;
-    // Which node failed verification, when `failure == Tampered`.
+    // The node whose edge failed, when `failure` is `Tampered` or `DecryptFailed`; none for the grant edge.
     std::optional<std::uint32_t> tamperedNode;
 };
 
-// What one commit changes, before any key exists: who sits where afterwards, which nodes it blanks and whose path it
-// refreshes. Every operation — create, add, remove, self-update — is one of these.
+// What one commit changes, before any key exists: who sits where afterwards, which nodes it blanks and which it
+// mints. Every operation — create, add, remove, self-update — is one of these.
 struct CommitShape {
     std::uint32_t numLeaves = 0;
     std::vector<std::optional<std::string>> leafAssignment;
-    // Keyed nodes the commit blanks: the paths of the seats it empties or fills, minus the committer's own.
+    // Keyed nodes a removal blanks: everything the leavers could know (their paths, every node they set, and every
+    // ancestor of those), minus the committer's own path, which it re-keys.
     std::set<std::uint32_t> blanked;
+    // Keyed nodes minted besides the committer's path: every other keyed node at creation, the newcomers' paths
+    // below the adder's on an addition.
+    std::set<std::uint32_t> filledOffPath;
     std::uint32_t committerSeat = 0;
     // Seats added (index-aligned with the newcomers) or emptied (ascending); empty for create and self-update.
     std::vector<std::uint32_t> subjectSeats;
 };
 
-// One node of the committer's keyed path with its fresh key.
+// One node the commit mints, with its fresh key.
 struct RefreshedNode {
     std::uint32_t nodeIndex = 0;
     // The generation the node was read at; absent when it had no record.
@@ -160,7 +168,7 @@ struct RefreshedNode {
 
 struct CommitPlan {
     CommitShape shape;
-    // The committer's keyed path, bottom-up, root last.
+    // `shape.filledOffPath` ascending, then the committer's keyed path bottom-up, root last.
     std::vector<RefreshedNode> refreshed;
     // Every edge the refreshed nodes owe on the post state, then the grant edge.
     std::vector<TreeEdge> edges;
@@ -171,6 +179,8 @@ struct CommitPlan {
     // `setBy = seq`). Raw bytes.
     std::uint64_t seq = 0;
     std::string treeHash;
+    // `CH` of every inner node of the post state, by index: what each statement path entry signs.
+    std::map<std::uint32_t, std::string> subtreeHashes;
 };
 
 struct TreeMember {

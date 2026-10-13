@@ -35,6 +35,21 @@ bool GroupKeyResolver::hasSupportedTree(const server::GroupInfo& group) {
     return group.treeVersion.value_or(0) == static_cast<std::int64_t>(TreeMath::TREE_VERSION);
 }
 
+namespace {
+
+// The statements served with the group: the ones its filled nodes cite, and the latest.
+std::vector<privmx::endpoint::group::server::GroupTreeCommit> statements(
+    const privmx::endpoint::group::server::GroupInfo& group
+) {
+    auto all = group.treeCommits.value_or(std::vector<privmx::endpoint::group::server::GroupTreeCommit>{});
+    if (group.treeCommit.has_value()) {
+        all.push_back(group.treeCommit.value());
+    }
+    return all;
+}
+
+} // namespace
+
 TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
     TreeGroupState state = TreeWire::toRuntime(
         TreeWire::fromGroupInfo(group), static_cast<std::uint32_t>(group.keyVersion),
@@ -42,6 +57,9 @@ TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
     );
     if (group.treeCommit.has_value() && group.treeCommit->seq > 0) {
         state.commitSeq = static_cast<std::uint64_t>(group.treeCommit->seq);
+    }
+    for (const server::GroupTreeCommit& statement : statements(group)) {
+        state.setters[static_cast<std::uint64_t>(statement.seq)] = statement.committer;
     }
     return state;
 }
@@ -108,6 +126,31 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromArchive(
     return registry;
 }
 
+privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupKeyResolver::authenticated(
+    server::GroupGetKeyArchiveResult archive,
+    const std::map<std::uint64_t, CommitStatement>& openers
+) {
+    archive.keyHistory.clear();
+    for (const auto& [epoch, statement] : openers) {
+        archive.keyHistory.push_back(server::GroupKeyHistoryEntry{
+            .keyVersion = static_cast<std::int64_t>(epoch), .groupPubKey = statement.groupPubKey
+        });
+    }
+    std::vector<server::GroupArchiveRung> rungs;
+    for (server::GroupArchiveRung& rung : archive.rungs) {
+        const auto opener = openers.find(static_cast<std::uint64_t>(rung.atKeyVersion));
+        const auto sealer = TreeKeys::sealerOf(rung.data);
+        if (opener == openers.end() || !sealer.has_value() ||
+            sealer->toBase58DER() != opener->second.committerPubKey) {
+            continue;
+        }
+        rung.author = opener->second.committer;
+        rungs.push_back(rung);
+    }
+    archive.rungs = rungs;
+    return archive;
+}
+
 std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromGroupHistory(const server::GroupInfo& group) {
     std::vector<EpochRegistryEntry> registry;
     // `keyHistory` holds the PAST epochs only; the current one lives in `groupPubKey`. Missing that distinction
@@ -146,23 +189,43 @@ std::optional<std::string> GroupKeyResolver::ownUserId(const server::GroupInfo& 
     return userId;
 }
 
-bool GroupKeyResolver::ownPathHasBlanks(const server::GroupInfo& group) {
+bool GroupKeyResolver::healsFirst(const server::GroupInfo& group, std::uint32_t node) {
+    // A node's left subtree is complete, so its lowest leaf is `2^level - 1` indices to the left of it.
+    const std::uint32_t lowest = TreeMath::leafPosition(node - ((1u << TreeMath::level(node)) - 1));
+    const auto& seats = group.leafAssignment.value();
+    const auto own = static_cast<std::size_t>(group.ownLeafPosition.value());
+    return std::all_of(seats.begin() + lowest, seats.begin() + own, [](const std::string& s) { return s.empty(); });
+}
+
+std::optional<std::uint32_t> GroupKeyResolver::nodeNeedingSelfUpdate(const server::GroupInfo& group) {
     if (!hasTree(group) || !ownUserId(group).has_value()) {
-        return false;
+        return std::nullopt;
     }
     const auto& records = group.treeNodes.value();
-    for (const std::uint32_t node : TreeMath::keyedPath(
-             static_cast<std::uint32_t>(group.ownLeafPosition.value()),
-             static_cast<std::uint32_t>(group.numLeaves.value())
-         )) {
+    const auto vouchers = statements(group);
+    const auto numLeaves = static_cast<std::uint32_t>(group.numLeaves.value());
+    for (const std::uint32_t node :
+         TreeMath::keyedPath(static_cast<std::uint32_t>(group.ownLeafPosition.value()), numLeaves)) {
         const auto record = std::find_if(records.begin(), records.end(), [&](const server::GroupTreeNode& served) {
             return served.nodeIndex == static_cast<std::int64_t>(node);
         });
         if (record == records.end() || record->publicKey.value_or("").empty()) {
-            return true;
+            return node;
+        }
+        // Set from outside its subtree (by the creator or an adder): whoever set it keeps it, so heal it.
+        const auto voucher = std::find_if(vouchers.begin(), vouchers.end(), [&](const server::GroupTreeCommit& s) {
+            return record->setBy.has_value() && s.seq == record->setBy.value();
+        });
+        if (voucher == vouchers.end() || voucher->committerSeat < 0 ||
+            voucher->committerSeat >= static_cast<std::int64_t>(numLeaves)) {
+            return node;
+        }
+        const auto path = TreeMath::directPath(static_cast<std::uint32_t>(voucher->committerSeat), numLeaves);
+        if (std::find(path.begin(), path.end(), node) == path.end()) {
+            return node;
         }
     }
-    return false;
+    return std::nullopt;
 }
 
 std::optional<std::string> GroupKeyResolver::tamperedBy(
@@ -178,13 +241,7 @@ std::optional<std::string> GroupKeyResolver::tamperedBy(
             seq = node.setBy;
         }
     }
-    std::vector<server::GroupTreeCommit> statements = group.treeCommits.value_or(
-        std::vector<server::GroupTreeCommit>{}
-    );
-    if (group.treeCommit.has_value()) {
-        statements.push_back(group.treeCommit.value());
-    }
-    for (const server::GroupTreeCommit& statement : statements) {
+    for (const server::GroupTreeCommit& statement : statements(group)) {
         if (seq.has_value() && statement.seq == seq.value()) {
             return statement.committer;
         }
@@ -209,8 +266,8 @@ ResolveResult GroupKeyResolver::resolveWith(
         return result;
     }
     if (!hasSupportedTree(group)) {
-        // Read as the current layout, an older tree would climb fine and mean something else: its copath keys were
-        // minted by whoever created or last re-keyed them, which is exactly what this layout exists to rule out.
+        // Read as the current layout, an older tree would climb fine and mean something else: nothing in it says who
+        // set a node, which is what a removal needs to blank everything the leaver could know.
         result.failure = ResolveFailure::UnsupportedTreeVersion;
         return result;
     }
@@ -243,7 +300,7 @@ ResolveResult GroupKeyResolver::resolveWith(
     if (climb.failure != ClimbFailure::None || !climb.grantKey.has_value()) {
         result.failure = ResolveFailure::ClimbFailed;
         result.climb = climb.failure;
-        if (climb.failure == ClimbFailure::Tampered) {
+        if (climb.failure == ClimbFailure::Tampered || climb.failure == ClimbFailure::DecryptFailed) {
             result.blame = tamperedBy(group, climb.tamperedNode);
         }
         return result;

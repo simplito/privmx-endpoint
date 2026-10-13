@@ -27,7 +27,10 @@ limitations under the License.
  *
  * Every case is one commit by a named member: its `before` and `after` states (the after state by the bridge's
  * storage rule, `TreeWire::afterCommit`), the nodes it refreshed, the signed commit statement (`commit`, signature
- * in full), the post state's `treeHash` and roster (`users`, `managers`, `rosterVersion`). Trees are version 2
+ * in full), the post state's `treeHash` and roster (`users`, `managers`, `rosterVersion`). Removals also carry
+ * `setters` (the committer of each statement `before`'s filled nodes cite) and `blanked` (what the removal blanks
+ * besides the remover's path, ascending); additions carry `blanked: []`. Cases from the A-prime test vectors carry
+ * their `id` ("V2" ...). Trees are version 3
  * (`treeVersion` at the top): buckets of 16 seats, blank nodes without a `publicKey`, filled ones with `setBy`.
  * Every user who signs is in the top-level `userPubKeys`; ids are global, so a user's key is the same in every case.
  * A group is "grp", except at seq 1 where its statement names the resourceId "res".
@@ -40,6 +43,7 @@ limitations under the License.
 #include <functional>
 #include <iostream>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -188,8 +192,10 @@ struct Group {
     std::uint32_t epoch = 1;
     PrivateKey grantKey;
     std::uint64_t commitSeq = 0;
+    std::map<std::uint64_t, std::string> setters; // statement seq -> committer
     std::int64_t rosterVersion = 0;
     TreeKeyCache grantKeys; // every epoch's grant key, for the rungs a removal publishes
+    std::string lastDigest; // of the latest statement, which the next one chains to
 
     std::vector<std::string> seated() const {
         std::vector<std::string> ids;
@@ -213,7 +219,7 @@ struct Group {
 
 // The statement for a commit already applied to `group`, as the endpoint signs it, plus what it describes.
 std::string statementJson(
-    const Group& group,
+    Group& group,
     const CommitPlan& plan,
     CommitOp op,
     const std::string& committer,
@@ -225,13 +231,16 @@ std::string statementJson(
         group.grantKey.getPublicKey().toBase58DER(), static_cast<std::uint64_t>(group.rosterVersion), group.seated(),
         {}, committer, std::move(added), {}, std::move(removed)
     );
+    statement.prevDigest = plan.seq == 1 ? "" : group.lastDigest;
     TreeCommits::sign(statement, userKeys().at(committer));
+    group.lastDigest = TreeCommits::digest(statement);
     const TreeGroupState post = TreeWire::toRuntime(group.tree, group.epoch, group.grantKey.getPublicKey());
     const std::string treeHash = privmx::utils::Hex::from(TreeCommits::treeHash(post));
     if (treeHash != privmx::utils::Hex::from(statement.treeHash)) {
         throw std::runtime_error("the stored state does not hash to what the statement signs");
     }
     return ",\"commit\":" + privmx::utils::Utils::stringify(TreeCommits::toWire(statement).toJSON())
+        + ",\"digest\":" + quote(privmx::utils::Hex::from(group.lastDigest))
         + ",\"treeHash\":" + quote(treeHash) + ",\"rosterVersion\":" + std::to_string(group.rosterVersion)
         + ",\"users\":" + idsToJson(group.seated()) + ",\"managers\":[]";
 }
@@ -248,6 +257,7 @@ std::string groupCreate(Group& group, std::uint32_t count, std::uint32_t creator
     group.grantKey = plan.grantKey;
     group.grantKeys.putGrantKey(1, plan.grantKey);
     group.commitSeq = 1;
+    group.setters[1] = group.members[creator].userId;
     group.rosterVersion = 1;
     return "{\"kind\":\"create\",\"epoch\":1,\"creator\":" + quote(group.members[creator].userId)
         + ",\"members\":" + idsToJson(group.seated()) + ",\"refreshed\":" + refreshedToJson(plan)
@@ -264,6 +274,7 @@ CommitPlan commitBy(
     const Member& who = group.member(committer);
     TreeGroupState state = TreeWire::toRuntime(group.tree, group.epoch, group.grantKey.getPublicKey());
     state.commitSeq = group.commitSeq;
+    state.setters = group.setters;
     TreeKeyCache cache;
     TreeKeys keys(cache);
     if (keys.climbToGrantKey(state, who.userId, who.priv, false).failure != ClimbFailure::None) {
@@ -276,11 +287,21 @@ CommitPlan commitBy(
     group.grantKey = result.grantKey;
     group.grantKeys.putGrantKey(result.epoch, result.grantKey);
     group.commitSeq = result.seq;
+    group.setters[result.seq] = committer;
     return result;
 }
 
 std::string groupRemove(Group& group, const std::string& remover, const std::vector<std::string>& leaving) {
     const server::GroupTreeState before = group.tree;
+    std::string setters = "{";
+    std::set<std::int64_t> cited;
+    for (const server::GroupTreeNode& node : before.nodes) {
+        if (node.publicKey.has_value() && node.setBy.has_value() && cited.insert(node.setBy.value()).second) {
+            setters += std::string(setters.size() > 1 ? "," : "") + quote(std::to_string(node.setBy.value())) + ":"
+                + quote(group.setters.at(static_cast<std::uint64_t>(node.setBy.value())));
+        }
+    }
+    setters += "}";
     const std::vector<std::string> members = group.seated();
     const std::uint32_t beforeEpoch = group.epoch;
     const CommitPlan plan = commitBy(group, remover, [&](TreeKeys& keys, const TreeGroupState& state, const Member& who) {
@@ -305,7 +326,10 @@ std::string groupRemove(Group& group, const std::string& remover, const std::vec
         + std::to_string(plan.epoch) + ",\"remover\":" + quote(remover) + ",\"removed\":" + idsToJson(leaving)
         + ",\"positions\":" + seatsToJson(plan.shape.subjectSeats) + ",\"members\":" + idsToJson(members)
         + ",\"remaining\":" + idsToJson(group.seated()) + ",\"refreshed\":" + refreshedToJson(plan)
-        + statementJson(group, plan, CommitOp::Remove, remover, {}, leaving) + ",\"rungs\":" + rungJson + ",\"before\":" + treeToJson(before) + ",\"after\":" + treeToJson(group.tree) + "}";
+        + ",\"setters\":" + setters + ",\"blanked\":"
+        + seatsToJson(std::vector<std::uint32_t>(plan.shape.blanked.begin(), plan.shape.blanked.end()))
+        + statementJson(group, plan, CommitOp::Remove, remover, {}, leaving) + ",\"rungs\":" + rungJson
+        + ",\"before\":" + treeToJson(before) + ",\"after\":" + treeToJson(group.tree) + "}";
 }
 
 std::string groupAdd(Group& group, const std::string& adder, std::uint32_t count) {
@@ -330,7 +354,9 @@ std::string groupAdd(Group& group, const std::string& adder, std::uint32_t count
     return "{\"kind\":\"add\",\"epoch\":" + std::to_string(group.epoch) + ",\"adder\":" + quote(adder)
         + ",\"added\":" + idsToJson(added) + ",\"positions\":" + seatsToJson(plan.shape.subjectSeats)
         + ",\"members\":" + idsToJson(members) + ",\"after_members\":" + idsToJson(group.seated())
-        + ",\"refreshed\":" + refreshedToJson(plan) + statementJson(group, plan, CommitOp::Add, adder, added, {})
+        + ",\"refreshed\":" + refreshedToJson(plan) + ",\"blanked\":"
+        + seatsToJson(std::vector<std::uint32_t>(plan.shape.blanked.begin(), plan.shape.blanked.end()))
+        + statementJson(group, plan, CommitOp::Add, adder, added, {})
         + ",\"before\":" + treeToJson(before) + ",\"after\":" + treeToJson(group.tree) + "}";
 }
 
@@ -349,13 +375,26 @@ std::string u(std::uint32_t i) {
     return "u" + std::to_string(i);
 }
 
+// Tags a case with its test-vector id.
+std::string tagged(const std::string& id, const std::string& json) {
+    return "{\"id\":" + quote(id) + "," + json.substr(1);
+}
+
+// Checks a vector's blank set as the spec computed it, so a drift fails here rather than in the bridge's suite.
+std::string expectBlanked(const std::string& json, const std::string& blanked) {
+    if (json.find(",\"blanked\":" + blanked + ",") == std::string::npos) {
+        throw std::runtime_error("expected blanked " + blanked);
+    }
+    return json;
+}
+
 } // namespace
 
 int main() {
     std::vector<std::string> cases;
     try {
         // ── creation, across sizes: one keyed node up to 32 seats, then buckets below the root ──
-        for (const std::uint32_t count : {1u, 2u, 3u, 4u, 5u, 8u, 16u, 17u, 31u, 32u, 33u, 40u, 64u}) {
+        for (const std::uint32_t count : {1u, 2u, 3u, 4u, 5u, 8u, 16u, 17u, 31u, 32u, 33u, 40u}) {
             Group group;
             cases.push_back(groupCreate(group, count, 0));
         }
@@ -383,7 +422,6 @@ int main() {
                  {40, 35, {5}},     // node 31 blanked, the root wraps through it to 31 members
                  {40, 1, {0}},      // the creator removed by its bucket neighbour
                  {40, 0, {3, 34}},  // a batch across both halves
-                 {64, 40, {0, 63}}, // two blanks below the root
              }) {
             Group group;
             groupCreate(group, removal.count, 0);
@@ -416,6 +454,62 @@ int main() {
             groupCreate(group, 5, 0);
             groupRemove(group, u(0), {u(4)});
             cases.push_back(groupAdd(group, u(1), 1));
+        }
+
+        // ── A-prime vectors: dense creation, fills by the adder, and the knowledge closure a removal blanks ──
+        {
+            Group group;
+            cases.push_back(tagged("V1", groupCreate(group, 64, 0)));
+        }
+        {
+            Group group;
+            groupCreate(group, 64, 0);
+            cases.push_back(tagged("V2", expectBlanked(groupRemove(group, u(40), {u(0)}), "[31]")));
+        }
+        {
+            Group group;
+            groupCreate(group, 64, 0);
+            groupSelfUpdate(group, u(40));
+            cases.push_back(tagged("V3", expectBlanked(groupRemove(group, u(5), {u(0)}), "[]")));
+        }
+        {
+            Group group;
+            groupCreate(group, 64, 0);
+            cases.push_back(tagged("V4", expectBlanked(groupRemove(group, u(5), {u(40)}), "[95]")));
+        }
+        {
+            Group group;
+            groupCreate(group, 128, 0);
+            groupSelfUpdate(group, u(40));
+            cases.push_back(tagged("V5", expectBlanked(groupRemove(group, u(100), {u(0)}), "[31,63,159]")));
+        }
+        {
+            Group group;
+            groupCreate(group, 128, 0);
+            groupSelfUpdate(group, u(40));
+            groupSelfUpdate(group, u(70));
+            groupSelfUpdate(group, u(100));
+            cases.push_back(tagged("V6", expectBlanked(groupRemove(group, u(40), {u(0), u(70)}), "[31,159,191]")));
+        }
+        {
+            Group group;
+            groupCreate(group, 64, 0);
+            groupRemove(group, u(40), {u(5)});
+            cases.push_back(tagged("V7", expectBlanked(groupAdd(group, u(40), 1), "[]")));
+            cases.push_back(tagged("V8", expectBlanked(groupRemove(group, u(0), {u(40)}), "[95]")));
+        }
+        {
+            Group group;
+            groupCreate(group, 64, 0);
+            groupSelfUpdate(group, u(40));
+            groupRemove(group, u(5), {u(41)});
+            groupAdd(group, u(0), 1);
+            cases.push_back(tagged("V9", expectBlanked(groupRemove(group, u(40), {u(0)}), "[31]")));
+        }
+        {
+            Group group;
+            groupCreate(group, 64, 0);
+            cases.push_back(tagged("V10", expectBlanked(groupRemove(group, u(40), {u(0), u(63)}), "[31]")));
         }
 
         // ── self-updates: refilling a blank, and a plain refresh ──

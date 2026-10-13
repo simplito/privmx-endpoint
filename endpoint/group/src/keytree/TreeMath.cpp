@@ -215,6 +215,16 @@ std::vector<std::uint32_t> TreeMath::keyedPath(std::uint32_t position, std::uint
     return keyed;
 }
 
+std::vector<std::uint32_t> TreeMath::keyedNodes(std::uint32_t numLeaves) {
+    std::vector<std::uint32_t> keyed;
+    for (std::uint32_t node = 1; node < nodeCount(numLeaves); node += 2) {
+        if (isKeyed(node, numLeaves)) {
+            keyed.push_back(node);
+        }
+    }
+    return keyed;
+}
+
 std::uint32_t TreeMath::numLeavesToSeat(std::uint32_t position, std::uint32_t currentNumLeaves) {
     if (position < currentNumLeaves) {
         return currentNumLeaves;

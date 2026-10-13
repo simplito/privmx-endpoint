@@ -62,12 +62,14 @@ JSON_STRUCT(GroupTreeEdge, GROUP_TREE_EDGE_FIELDS);
 #define GROUP_TREE_COMMIT_PATH_ENTRY_FIELDS(F)                                                                         \
     F(nodeIndex, int64_t)                                                                                              \
     F(generation, int64_t)                                                                                             \
-    F(publicKey, std::string)
+    F(publicKey, std::string)                                                                                          \
+    F(subtreeHash, std::string)
 JSON_STRUCT(GroupTreeCommitPathEntry, GROUP_TREE_COMMIT_PATH_ENTRY_FIELDS);
 
 // A commit statement as signed (keytree/TreeCommits.hpp). Hashes are lowercase hex, the signature base64.
 #define GROUP_TREE_COMMIT_FIELDS(F)                                                                                    \
     F(seq, int64_t)                                                                                                    \
+    F(prevDigest, std::string)                                                                                         \
     F(op, std::string)                                                                                                 \
     F(groupId, std::string)                                                                                            \
     F(treeVersion, int64_t)                                                                                            \
@@ -186,14 +188,12 @@ JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
     F(creator, std::string)                                                                                            \
     F(lastModificationDate, int64_t)                                                                                   \
     F(lastModifier, std::string)                                                                                       \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
     F(publicMetaVersion, int64_t)                                                                                      \
     F(privateMetaVersion, int64_t)                                                                                     \
     F(rosterVersion, int64_t)                                                                                          \
     F(keyVersion, int64_t)                                                                                             \
-    F(policy, Poco::Dynamic::Var)                                                                                      \
-    F(treeCommit, std::optional<GroupTreeCommit>)
+    F(policy, Poco::Dynamic::Var)
+// Constant size: no roster and no statement, so `groupPubKey` is unvouched (TreeVerifier::pinnedAt).
 JSON_STRUCT(GroupSummary, GROUP_SUMMARY_FIELDS);
 
 #define GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELDS(F)                                                                    \
@@ -316,7 +316,6 @@ JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
     F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
     F(expectedKeyVersion, int64_t)                                                                                     \
     F(expectedRosterVersion, int64_t)                                                                                  \
-    F(confirmationTag, std::optional<std::string>)                                                                     \
     F(commit, GroupTreeCommit)                                                                                         \
     F(abandonHistory, std::optional<bool>)
 JSON_STRUCT(GroupRemoveMembersModel, GROUP_REMOVE_MEMBERS_MODEL_FIELDS);
@@ -336,7 +335,11 @@ JSON_STRUCT(GroupSelfUpdateModel, GROUP_SELF_UPDATE_MODEL_FIELDS);
     F(toSeq, std::optional<int64_t>)
 JSON_STRUCT(GroupGetTreeCommitsModel, GROUP_GET_TREE_COMMITS_MODEL_FIELDS);
 
-#define GROUP_GET_TREE_COMMITS_RESULT_FIELDS(F) F(commits, std::vector<GroupTreeCommit>)
+// From seq 0, the roster seq 1 seats: unsigned, bound by seq 1's `rosterHash`.
+#define GROUP_GET_TREE_COMMITS_RESULT_FIELDS(F)                                                                        \
+    F(commits, std::vector<GroupTreeCommit>)                                                                           \
+    F(genesisUsers, std::optional<std::vector<std::string>>)                                                           \
+    F(genesisManagers, std::optional<std::vector<std::string>>)
 JSON_STRUCT(GroupGetTreeCommitsResult, GROUP_GET_TREE_COMMITS_RESULT_FIELDS);
 
 #define GROUP_CUT_ERA_MODEL_FIELDS(F)                                                                                  \
@@ -364,15 +367,6 @@ JSON_STRUCT(GroupGetKeyArchiveModel, GROUP_GET_KEY_ARCHIVE_MODEL_FIELDS);
     F(keyHistory, std::vector<GroupKeyHistoryEntry>)                                                                   \
     F(rungs, std::vector<GroupArchiveRung>)
 JSON_STRUCT(GroupGetKeyArchiveResult, GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS);
-
-// `confirmationTag` is optional because the winner may have been a client that sent none. A missing tag is a
-// state the loser refuses to adopt, not a parse error that would swallow the ROTATED_ALREADY being recovered.
-#define ROTATED_ALREADY_PAYLOAD_FIELDS(F)                                                                              \
-    F(keyVersion, int64_t)                                                                                             \
-    F(groupPubKey, std::string)                                                                                        \
-    F(winnerKeyEntry, core::server::KeyEntry)                                                                          \
-    F(confirmationTag, std::optional<std::string>)
-JSON_STRUCT(RotatedAlreadyPayload, ROTATED_ALREADY_PAYLOAD_FIELDS);
 
 // `data` is a base64 group envelope carrying its own keyId, so no `keyId` field and no key list: that keeps
 // the request a fixed size, where `contextSendCustomEvent` grows a wrapped key per recipient.

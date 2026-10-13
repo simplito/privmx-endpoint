@@ -52,6 +52,8 @@ public:
         const std::string& platformUrl,
         const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
     );
+    // `connect` past opening the channel to the bridge: a unit test drives it over a gateway of its own.
+    void connectOver(const privfs::RpcGateway::Ptr& gateway, const crypto::PrivateKey& key);
     void connectPublic(
         const std::string& solutionId,
         const std::string& platformUrl,

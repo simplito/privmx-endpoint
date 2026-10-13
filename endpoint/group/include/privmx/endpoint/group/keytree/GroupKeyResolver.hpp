@@ -13,12 +13,14 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_GROUPKEYRESOLVER_HPP_
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include "privmx/endpoint/group/keytree/LadderKeys.hpp"
+#include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeys.hpp"
 
 namespace privmx {
@@ -71,9 +73,13 @@ public:
 
     static std::optional<std::string> ownUserId(const server::GroupInfo& group);
 
-    // Whether a node of the caller's keyed path is blank in the served state — left so by somebody else's commit,
-    // and refilled only by the caller's own self-update.
-    static bool ownPathHasBlanks(const server::GroupInfo& group);
+    // The lowest node of the caller's keyed path it should self-update over, if any: one blank in the served state
+    // (left so by a removal), or set by somebody not seated under it (the creator or an adder), who keeps that key.
+    static std::optional<std::uint32_t> nodeNeedingSelfUpdate(const server::GroupInfo& group);
+    // Whether the caller holds the lowest occupied seat under `node` (a node of its own keyed path). That seat heals
+    // the node first; every other seat under it only stands in when it did not, so a node draws one commit, not one
+    // per member under it.
+    static bool healsFirst(const server::GroupInfo& group, std::uint32_t node);
 
     static bool hasTree(const server::GroupInfo& group);
 
@@ -104,6 +110,15 @@ public:
     static std::vector<EpochRegistryEntry> registryFromArchive(
         const server::GroupInfo& group,
         const server::GroupGetKeyArchiveResult& archive
+    );
+
+    // The archive as the group's statements vouch for it, `openers` being the statement that opened each epoch
+    // (TreeVerifier::epochOpeners): each past grant key off its statement rather than the bridge's `keyHistory`, and
+    // only the rungs sealed by the committer that opened the epoch they hang from, named as their author. A rung the
+    // bridge sealed itself is dropped.
+    static server::GroupGetKeyArchiveResult authenticated(
+        server::GroupGetKeyArchiveResult archive,
+        const std::map<std::uint64_t, CommitStatement>& openers
     );
 
 private:

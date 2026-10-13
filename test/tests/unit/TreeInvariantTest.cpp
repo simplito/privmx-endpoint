@@ -15,18 +15,21 @@ limitations under the License.
  *
  *   - knowledge: every member's knowledge is what it minted plus everything reachable over the current edges from
  *     what it already knew — accumulated over the whole run, never forgotten, and computed for former members too.
- *     The TreeKEM invariant then has to hold: a filled node's key is known only to members seated under it;
- *   - removal: nobody unseated knows the current grant key, and every seated member climbs to it (real ECIES);
+ *     The invariant then has to hold: a filled node's key is known to a member only if the node is in its knowledge
+ *     closure Know(u) — the ancestors of its seat and of every node it set (written again here from the spec);
+ *     a former member's Know has no seat term, so after its removal it knows no current node at all;
+ *   - removal: nobody unseated — whether removed just now or long ago — knows the current grant key, and every
+ *     seated member climbs to it (real ECIES);
  *   - consistency: the stored edges are exactly the edges the filled nodes owe their children's resolution, plus
  *     one grant edge.
  *
  * The fake bridge derives what each commit may touch on its own, from the operation and the committer, and refuses
  * a refresh of anything else — the same rule the real one enforces.
  *
- * How the old design fails here: A creates {A, B, C, D} and mints every node key, including node 5 above C and D.
- * B removes A, which re-keyed only A's own direct path, so the refreshed root still wraps to node 5 at the
- * generation A minted. The knowledge check fails right after the create (A knows node 5, outside A's subtree), and
- * the removal check fails after B's commit (A opens the root through node 5, then the new grant key).
+ * How a removal that blanks only the leaver's path fails here: A creates 64 seats and mints every node key,
+ * including node 95 above seats 32..63. Seat 5 removes A, blanking A's path {31, 63} and re-keying its own — the same
+ * two nodes — so the refreshed root still wraps to node 95 at the generation A minted, and A opens the new grant key
+ * through it. The removal check fails right after that commit; the knowledge closure blanks 95 as well.
  *
  * Keys are real and random, so a run is reproducible in its operations (seeded), not in its key material.
  */
@@ -55,378 +58,14 @@ limitations under the License.
 #include <privmx/endpoint/group/keytree/TreeVerifier.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
 
+#include "TreeFakeBridge.hpp"
+
 using privmx::crypto::PrivateKey;
+using privmx::crypto::PublicKey;
 using namespace privmx::endpoint::group;
 using namespace privmx::endpoint::group::keytree;
 
 namespace {
-
-struct Member {
-    std::string userId;
-    PrivateKey priv;
-    privmx::crypto::PublicKey publicKey;
-    std::string pub;
-};
-
-const TreeNodeState* recordOf(const TreeGroupState& state, std::uint32_t nodeIndex) {
-    for (const TreeNodeState& node : state.nodes) {
-        if (node.nodeIndex == nodeIndex) {
-            return &node;
-        }
-    }
-    return nullptr;
-}
-
-std::optional<std::uint32_t> seatOf(const TreeGroupState& state, const std::string& userId) {
-    for (std::size_t i = 0; i < state.leafAssignment.size(); ++i) {
-        if (state.leafAssignment[i] == userId) {
-            return static_cast<std::uint32_t>(i);
-        }
-    }
-    return std::nullopt;
-}
-
-std::vector<std::string> seatedIn(const TreeGroupState& state) {
-    std::vector<std::string> ids;
-    for (const auto& seat : state.leafAssignment) {
-        if (seat.has_value()) {
-            ids.push_back(seat.value());
-        }
-    }
-    return ids;
-}
-
-std::vector<TreeEdge> edgesOf(const std::vector<server::GroupTreeEdge>& wire) {
-    server::GroupTreeState carrier;
-    carrier.numLeaves = 1;
-    carrier.edges = wire;
-    return TreeWire::toRuntime(carrier, 0, PrivateKey::generateRandom().getPublicKey()).edges;
-}
-
-// The resolution, written again from the spec rather than borrowed from the code under test.
-void resolve(const TreeGroupState& state, std::uint32_t node, std::vector<std::string>& out) {
-    if (TreeMath::isLeaf(node)) {
-        const auto& seat = state.leafAssignment[TreeMath::leafPosition(node)];
-        if (seat.has_value()) {
-            out.push_back("user:" + seat.value());
-        }
-        return;
-    }
-    const TreeNodeState* record = recordOf(state, node);
-    if (TreeMath::isKeyed(node, state.numLeaves) && record != nullptr && record->publicKey.has_value()) {
-        out.push_back("node:" + std::to_string(node) + "@" + std::to_string(record->generation));
-        return;
-    }
-    for (const std::uint32_t child : TreeMath::children(node, state.numLeaves)) {
-        resolve(state, child, out);
-    }
-}
-
-std::string edgeIdentity(const TreeEdge& edge) {
-    const std::string child = edge.childKind == EdgeChildKind::User ?
-        "user:" + edge.childUserId :
-        "node:" + std::to_string(edge.childIndex) + "@" + std::to_string(edge.childGeneration);
-    if (edge.isGrantEdge) {
-        return "grant@" + std::to_string(edge.parentGeneration) + ">" + child;
-    }
-    return std::to_string(edge.parentIndex) + "@" + std::to_string(edge.parentGeneration) + ">" + child;
-}
-
-// What the bridge holds, and the rule it stores a commit by.
-class FakeBridge {
-public:
-    TreeGroupState state;
-    // Every commit statement, in order; `seq` is the position plus one.
-    std::vector<server::GroupTreeCommit> commits;
-    std::int64_t rosterVersion = 0;
-    // The Context user list: whose key a statement must be signed with.
-    std::function<privmx::crypto::PublicKey(const std::string&)> keyOf;
-
-    enum class Op { Add, Remove, SelfUpdate };
-
-    // The bridge's statement check (§4): every field derived from the post state, nothing taken from the client.
-    void checkStatement(
-        const server::GroupTreeCommit& wire,
-        CommitOp op,
-        const std::string& committer,
-        const TreeGroupState& post,
-        std::int64_t postRosterVersion,
-        const std::vector<server::GroupTreeRefreshedNode>& refreshed,
-        std::vector<std::string> added,
-        std::vector<std::string> removed
-    ) {
-        CommitStatement statement;
-        ASSERT_NO_THROW(statement = TreeCommits::fromWire(wire));
-        EXPECT_EQ(statement.seq, commits.size() + 1);
-        EXPECT_EQ(statement.op, op);
-        EXPECT_EQ(statement.groupId, statement.seq == 1 ? "res" : "grp");
-        EXPECT_EQ(statement.treeVersion, TreeMath::TREE_VERSION);
-        EXPECT_EQ(statement.keyVersion, post.epoch);
-        EXPECT_EQ(statement.groupPubKey, post.grantPublicKey.toBase58DER());
-        EXPECT_EQ(statement.rosterVersion, static_cast<std::uint64_t>(postRosterVersion));
-        EXPECT_EQ(statement.rosterHash, TreeCommits::rosterHash(seatedIn(post), {}));
-        EXPECT_EQ(statement.committer, committer);
-        EXPECT_EQ(statement.committerPubKey, keyOf(committer).toBase58DER());
-        EXPECT_EQ(std::optional<std::uint32_t>(statement.committerSeat), seatOf(post, committer));
-        ASSERT_EQ(statement.path.size(), refreshed.size());
-        for (std::size_t i = 0; i < refreshed.size(); ++i) {
-            EXPECT_EQ(statement.path[i].nodeIndex, refreshed[i].nodeIndex);
-            EXPECT_EQ(statement.path[i].generation, refreshed[i].generation);
-            EXPECT_EQ(statement.path[i].publicKey, refreshed[i].publicKey);
-        }
-        std::sort(added.begin(), added.end());
-        std::sort(removed.begin(), removed.end());
-        EXPECT_EQ(statement.addedUsers, added);
-        EXPECT_TRUE(statement.addedManagers.empty());
-        EXPECT_EQ(statement.removed, removed);
-        EXPECT_EQ(statement.treeHash, TreeCommits::treeHash(post)) << "the statement signs another tree";
-        EXPECT_TRUE(TreeCommits::verifySignature(statement, keyOf(committer))) << "not signed by the committer";
-    }
-
-    void create(
-        const server::GroupTreeState& tree,
-        const privmx::crypto::PublicKey& grant,
-        const std::string& creator,
-        const server::GroupTreeCommit& commit
-    ) {
-        state = TreeWire::toRuntime(tree, 1, grant);
-        std::vector<server::GroupTreeRefreshedNode> refreshed;
-        for (const server::GroupTreeNode& node : tree.nodes) {
-            EXPECT_EQ(node.setBy, std::optional<std::int64_t>(1));
-            refreshed.push_back(server::GroupTreeRefreshedNode{node.nodeIndex, std::nullopt, node.generation,
-                                                               node.publicKey.value_or("")});
-        }
-        rosterVersion = 1;
-        checkStatement(commit, CommitOp::Create, creator, state, 1, refreshed, {}, {});
-        commits.push_back(commit);
-        const auto seat = seatOf(state, creator);
-        ASSERT_TRUE(seat.has_value()) << "the creator holds no seat";
-        std::vector<std::uint32_t> created;
-        for (const TreeNodeState& node : state.nodes) {
-            created.push_back(node.nodeIndex);
-            EXPECT_EQ(node.generation, 0u);
-        }
-        std::sort(created.begin(), created.end());
-        std::vector<std::uint32_t> path = TreeMath::keyedPath(seat.value(), state.numLeaves);
-        std::sort(path.begin(), path.end());
-        EXPECT_EQ(created, path) << "a create may key the creator's path and nothing else";
-    }
-
-    // `subjects` are the users added (with `positions`) or removed. Returns the nodes the commit blanked.
-    void commit(
-        Op op,
-        const std::string& committer,
-        const std::vector<std::string>& subjects,
-        const std::vector<std::uint32_t>& positions,
-        const std::vector<server::GroupTreeRefreshedNode>& refreshed,
-        const std::vector<server::GroupTreeEdge>& edges,
-        const std::optional<privmx::crypto::PublicKey>& newGrant,
-        const server::GroupTreeCommit& commit
-    ) {
-        const auto committerSeat = seatOf(state, committer);
-        ASSERT_TRUE(committerSeat.has_value()) << "only a seated member commits";
-        std::uint32_t numLeaves = state.numLeaves;
-        auto seats = state.leafAssignment;
-        std::set<std::uint32_t> blanked;
-        if (op == Op::Add) {
-            numLeaves = TreeMath::numLeavesToSeatAll(positions, numLeaves);
-            seats.resize(numLeaves);
-            for (std::size_t i = 0; i < positions.size(); ++i) {
-                ASSERT_FALSE(seats[positions[i]].has_value());
-                seats[positions[i]] = subjects[i];
-            }
-            const auto own = TreeMath::keyedPath(committerSeat.value(), numLeaves);
-            for (const std::uint32_t position : positions) {
-                for (const std::uint32_t node : TreeMath::keyedPath(position, numLeaves)) {
-                    if (std::find(own.begin(), own.end(), node) == own.end()) {
-                        blanked.insert(node);
-                    }
-                }
-            }
-        } else if (op == Op::Remove) {
-            for (const std::string& gone : subjects) {
-                ASSERT_NE(gone, committer) << "self-removal must never reach the bridge";
-                const auto seat = seatOf(state, gone);
-                ASSERT_TRUE(seat.has_value());
-                seats[seat.value()] = std::nullopt;
-                for (const std::uint32_t node : TreeMath::keyedPath(seat.value(), numLeaves)) {
-                    blanked.insert(node);
-                }
-            }
-        }
-
-        // Exactly the committer's keyed path, each node one generation on (or minted at 0), each with a new key.
-        const std::vector<std::uint32_t> path = TreeMath::keyedPath(committerSeat.value(), numLeaves);
-        ASSERT_EQ(refreshed.size(), path.size()) << "a commit refreshes the committer's keyed path, nothing else";
-        std::map<std::uint32_t, TreeNodeState> records;
-        for (const TreeNodeState& node : state.nodes) {
-            records[node.nodeIndex] = node;
-        }
-        for (const server::GroupTreeRefreshedNode& node : refreshed) {
-            const auto index = static_cast<std::uint32_t>(node.nodeIndex);
-            ASSERT_NE(std::find(path.begin(), path.end(), index), path.end()) << "refreshes node " << index;
-            const auto stored = records.find(index);
-            if (stored == records.end()) {
-                EXPECT_FALSE(node.fromGeneration.has_value());
-                EXPECT_EQ(node.generation, 0);
-            } else {
-                EXPECT_EQ(node.fromGeneration, std::optional<std::int64_t>(stored->second.generation));
-                EXPECT_EQ(node.generation, static_cast<std::int64_t>(stored->second.generation) + 1);
-                if (stored->second.publicKey.has_value()) {
-                    EXPECT_NE(node.publicKey, stored->second.publicKey->toBase58DER()) << "a key reused";
-                }
-            }
-            ASSERT_FALSE(node.publicKey.empty());
-        }
-
-        // Storage: whatever hangs off a blanked, refreshed or no-longer-keyed node goes, and so does the grant edge.
-        std::set<std::uint32_t> replaced(blanked.begin(), blanked.end());
-        for (auto it = records.begin(); it != records.end();) {
-            if (!TreeMath::isKeyed(it->first, numLeaves)) {
-                replaced.insert(it->first);
-                it = records.erase(it);
-            } else {
-                if (blanked.count(it->first) > 0) {
-                    it->second.publicKey.reset();
-                    it->second.setBy.reset();
-                }
-                ++it;
-            }
-        }
-        for (const server::GroupTreeRefreshedNode& node : refreshed) {
-            const auto index = static_cast<std::uint32_t>(node.nodeIndex);
-            replaced.insert(index);
-            records[index] = TreeNodeState{
-                index, static_cast<std::uint32_t>(node.generation), NodePublicKey::fromBase58DER(node.publicKey),
-                commits.size() + 1
-            };
-        }
-        std::vector<TreeEdge> kept;
-        for (const TreeEdge& edge : state.edges) {
-            if (!edge.isGrantEdge && replaced.count(edge.parentIndex) == 0) {
-                kept.push_back(edge);
-            }
-        }
-        for (const TreeEdge& edge : edgesOf(edges)) {
-            kept.push_back(edge);
-        }
-
-        TreeGroupState post = state;
-        post.numLeaves = numLeaves;
-        post.leafAssignment = seats;
-        post.nodes.clear();
-        for (const auto& [index, record] : records) {
-            post.nodes.push_back(record);
-        }
-        post.edges = kept;
-        if (op == Op::Remove) {
-            post.epoch += 1;
-            post.grantPublicKey = newGrant.value();
-        }
-        const std::int64_t postRosterVersion = rosterVersion + (op == Op::SelfUpdate ? 0 : 1);
-        checkStatement(
-            commit, op == Op::Add ? CommitOp::Add : op == Op::Remove ? CommitOp::Remove : CommitOp::SelfUpdate,
-            committer, post, postRosterVersion, refreshed, op == Op::Add ? subjects : std::vector<std::string>{},
-            op == Op::Remove ? subjects : std::vector<std::string>{}
-        );
-        state = post;
-        rosterVersion = postRosterVersion;
-        commits.push_back(commit);
-    }
-
-    // What `groupGet` serves `userId`: scope "plan" (every record) or the default "path" (its own keyed path's
-    // records and the copath subtrees' hashes), with the statements the served nodes cite.
-    server::GroupInfo serve(const std::string& userId, bool plan) const {
-        server::GroupInfo info;
-        info.id = "grp";
-        info.resourceId = "res";
-        info.contextId = "ctx";
-        info.groupPubKey = state.grantPublicKey.toBase58DER();
-        info.keyVersion = state.epoch;
-        info.rosterVersion = rosterVersion;
-        info.users = seatedIn(state);
-        info.treeVersion = TreeMath::TREE_VERSION;
-        info.numLeaves = state.numLeaves;
-        std::vector<std::string> seats;
-        for (const auto& seat : state.leafAssignment) {
-            seats.push_back(seat.value_or(""));
-        }
-        info.leafAssignment = seats;
-        const auto position = seatOf(state, userId);
-        if (position.has_value()) {
-            info.ownLeafPosition = position.value();
-        }
-        const TreeGroupState served = plan ? servePlan(userId) : servePath(userId);
-        std::vector<server::GroupTreeNode> nodes;
-        std::vector<server::GroupTreeCommit> cited;
-        std::set<std::uint64_t> citedSeqs;
-        for (const TreeNodeState& node : served.nodes) {
-            nodes.push_back(TreeWire::toWire(node));
-            if (node.setBy.has_value() && citedSeqs.insert(node.setBy.value()).second) {
-                cited.push_back(commits.at(node.setBy.value() - 1));
-            }
-        }
-        std::vector<server::GroupTreeEdge> edges;
-        for (const TreeEdge& edge : served.edges) {
-            edges.push_back(TreeWire::toWire(edge));
-        }
-        info.treeNodes = nodes;
-        info.treeEdges = edges;
-        info.treeCommit = commits.back();
-        info.treeCommits = cited;
-        if (!plan && position.has_value()) {
-            std::vector<std::string> copath;
-            for (const std::uint32_t node : TreeMath::copath(position.value(), state.numLeaves)) {
-                copath.push_back(privmx::utils::Hex::from(TreeCommits::subtreeHash(state, node)));
-            }
-            info.copathHashes = copath;
-        }
-        return info;
-    }
-
-    std::vector<server::GroupTreeCommit> commitsBetween(std::uint64_t fromSeq, std::uint64_t toSeq) const {
-        std::vector<server::GroupTreeCommit> result;
-        for (std::uint64_t seq = fromSeq + 1; seq <= toSeq && seq <= commits.size(); ++seq) {
-            result.push_back(commits[seq - 1]);
-        }
-        return result;
-    }
-
-    // `groupGet` with scope "plan": every record, the caller's climbing edges, the grant edge.
-    TreeGroupState servePlan(const std::string& userId) const {
-        TreeGroupState served = state;
-        served.edges = climbingEdges(userId);
-        return served;
-    }
-
-    // The default scope "path": records of the caller's keyed path only.
-    TreeGroupState servePath(const std::string& userId) const {
-        TreeGroupState served = servePlan(userId);
-        const auto path = TreeMath::keyedPath(seatOf(state, userId).value(), state.numLeaves);
-        served.nodes.clear();
-        for (const TreeNodeState& node : state.nodes) {
-            if (std::find(path.begin(), path.end(), node.nodeIndex) != path.end()) {
-                served.nodes.push_back(node);
-            }
-        }
-        return served;
-    }
-
-private:
-    std::vector<TreeEdge> climbingEdges(const std::string& userId) const {
-        const auto path = TreeMath::keyedPath(seatOf(state, userId).value(), state.numLeaves);
-        std::vector<TreeEdge> climbing;
-        for (const TreeEdge& edge : state.edges) {
-            const bool toMe = edge.childKind == EdgeChildKind::User && edge.childUserId == userId;
-            const bool toMyPath = edge.childKind == EdgeChildKind::Node &&
-                std::find(path.begin(), path.end(), edge.childIndex) != path.end();
-            if (edge.isGrantEdge || toMe || toMyPath) {
-                climbing.push_back(edge);
-            }
-        }
-        return climbing;
-    }
-};
 
 class TreeInvariant : public testing::Test {
 protected:
@@ -507,9 +146,13 @@ protected:
         std::vector<std::string> removed
     ) {
         CommitStatement statement = TreeCommits::statementFor(
-            plan, op, op == CommitOp::Create ? "res" : "grp", 1760000000000, keyVersion, grant.toBase58DER(),
-            static_cast<std::uint64_t>(rosterVersion), users, {}, committer, std::move(added), {}, std::move(removed)
+            plan, op, op == CommitOp::Create ? std::string("res") : GROUP_ID, 1760000000000, keyVersion,
+            grant.toBase58DER(), static_cast<std::uint64_t>(rosterVersion), users, {}, committer, std::move(added), {},
+            std::move(removed)
         );
+        if (op != CommitOp::Create) {
+            statement.prevDigest = TreeCommits::digest(TreeCommits::fromWire(bridge.commits.back()));
+        }
         TreeCommits::sign(statement, member(committer).priv);
         return TreeCommits::toWire(statement);
     }
@@ -607,22 +250,20 @@ protected:
         const std::string grant = state.grantPublicKey.toBase58DER();
         const std::vector<std::string> seatedIds = seated();
 
-        // Knowledge: a filled node's key only under it; the grant key only for the seated.
+        // Knowledge: a filled node's key only within Know; the grant key only for the seated.
+        std::map<std::string, std::set<std::uint32_t>> closures;
+        for (const auto& [userId, known] : knows) {
+            closures[userId] = bridge.know(userId);
+        }
         for (const TreeNodeState& node : state.nodes) {
             ASSERT_TRUE(TreeMath::isKeyed(node.nodeIndex, state.numLeaves)) << "a record on unkeyed " << node.nodeIndex;
             if (!node.publicKey.has_value()) {
                 continue;
             }
-            std::set<std::string> under;
-            for (const std::uint32_t position : TreeMath::leavesUnder(node.nodeIndex, state.numLeaves)) {
-                if (state.leafAssignment[position].has_value()) {
-                    under.insert(state.leafAssignment[position].value());
-                }
-            }
             for (const auto& [userId, known] : knows) {
                 if (known.count(node.publicKey->toBase58DER()) > 0) {
-                    EXPECT_EQ(under.count(userId), 1u)
-                        << userId << " knows node " << node.nodeIndex << " without being seated under it";
+                    EXPECT_EQ(closures[userId].count(node.nodeIndex), 1u)
+                        << userId << " knows node " << node.nodeIndex << " outside its knowledge closure";
                 }
             }
         }
@@ -819,14 +460,15 @@ protected:
 
     void runSequence(std::uint32_t seed, std::uint32_t operations) {
         random.seed(seed);
-        // Odd seeds start above 32 seats, where the root is not the only keyed node; even ones anywhere from 1 to 32.
-        const std::uint32_t size = seed % 2 == 1 ? 33 + pick(8) : 1 + pick(32);
+        // Past 32 seats the root is not the only keyed node, past 64 there are keyed nodes off two levels: the
+        // creator's and adders' off-path fills, and the closure a removal blanks, only matter there.
+        const std::uint32_t size = seed % 3 == 0 ? 1 + pick(32) : seed % 3 == 1 ? 33 + pick(8) : 60 + pick(12);
         create(size, pick(size));
         for (std::uint32_t i = 0; i < operations && !HasFatalFailure(); ++i) {
             const std::vector<std::string> members = seated();
             const std::string committer = members[pick(static_cast<std::uint32_t>(members.size()))];
             const std::uint32_t roll = pick(10);
-            if (roll < 3 && bridge.state.numLeaves < 48) {
+            if (roll < 3 && bridge.state.numLeaves < 72) {
                 add(committer, 1 + pick(3));
             } else if (roll < 6 && members.size() > 1) {
                 std::vector<std::string> others;
@@ -870,8 +512,9 @@ protected:
         change(next);
         CommitStatement statement;
         statement.seq = bridge.commits.size() + 1;
+        statement.prevDigest = TreeCommits::digest(TreeCommits::fromWire(bridge.commits.back()));
         statement.op = CommitOp::SelfUpdate;
-        statement.groupId = "grp";
+        statement.groupId = GROUP_ID;
         statement.treeVersion = TreeMath::TREE_VERSION;
         statement.date = 1760000000000;
         statement.keyVersion = next.epoch;
@@ -881,6 +524,9 @@ protected:
         statement.treeHash = TreeCommits::treeHash(next);
         statement.committer = signer;
         statement.committerSeat = seatOf(next, signer).value();
+        for (StatementNode& node : path) {
+            node.subtreeHash = TreeCommits::subtreeHash(next, node.nodeIndex);
+        }
         statement.path = std::move(path);
         statement.addedUsers = std::move(added);
         TreeCommits::sign(statement, member(signer).priv);
@@ -917,8 +563,41 @@ TEST_F(TreeInvariant, TheC1ScenarioAboveTheBuckets) {
     remove(everyone[7].userId, {everyone[36].userId, everyone[3].userId});
 }
 
+TEST_F(TreeInvariant, ARemovedCreatorLosesEveryNodeItSet) {
+    // The header's case: the remover's path is the creator's, and node 95 is off both.
+    create(64, 0);
+    remove(everyone[5].userId, {everyone[0].userId});
+    EXPECT_EQ(bridge.lastBlanked, (std::set<std::uint32_t>{95}));
+    EXPECT_EQ(knows[everyone[0].userId].count(bridge.state.grantPublicKey.toBase58DER()), 0u);
+}
+
+TEST_F(TreeInvariant, ARemovedAdderLosesWhatItMintedForTheNewcomers) {
+    // V8: seat 40 adds a member at seat 5 and so mints node 31; removing seat 40 blanks node 95, the rest of what it
+    // could know, while the remover re-keys 31 and 63.
+    create(64, 0);
+    const std::string adder = everyone[40].userId; // a copy: adding grows `everyone`
+    remove(adder, {everyone[5].userId});
+    add(adder, 1);
+    ASSERT_TRUE(bridge.state.leafAssignment[5].has_value()) << "the blank is reused";
+    remove(everyone[0].userId, {adder});
+    EXPECT_EQ(bridge.lastBlanked, (std::set<std::uint32_t>{95}));
+}
+
+TEST_F(TreeInvariant, ASelfUpdateHealsNodesSetFromOutside) {
+    // Seat 40 sits under node 95, which the creator set: it self-updates over it, after which removing the creator
+    // costs no blank at all (V3).
+    create(64, 0);
+    EXPECT_TRUE(GroupKeyResolver::nodeNeedingSelfUpdate(bridge.serve(everyone[40].userId, true)).has_value());
+    EXPECT_FALSE(GroupKeyResolver::nodeNeedingSelfUpdate(bridge.serve(everyone[0].userId, true)).has_value());
+    selfUpdate(everyone[40].userId);
+    EXPECT_FALSE(GroupKeyResolver::nodeNeedingSelfUpdate(bridge.serve(everyone[40].userId, true)).has_value());
+    EXPECT_FALSE(GroupKeyResolver::nodeNeedingSelfUpdate(bridge.serve(everyone[63].userId, true)).has_value());
+    remove(everyone[5].userId, {everyone[0].userId});
+    EXPECT_TRUE(bridge.lastBlanked.empty());
+}
+
 TEST_F(TreeInvariant, RandomSequencesKeepEveryInvariant) {
-    // Six runs of 35 commits, half of them in groups past 32 seats; additions stop growing a group at 48.
+    // Six runs of 35 commits, from groups of under 32 seats to over 64; additions stop growing a group at 72.
     for (std::uint32_t seed = 1; seed <= 6 && !HasFatalFailure(); ++seed) {
         SCOPED_TRACE("seed " + std::to_string(seed));
         reset();
@@ -982,26 +661,32 @@ TEST_F(TreeVerification, SECURITY_RefusesAnOutsiderSeated) {
         << "nor the roster the statement signed";
 }
 
-TEST_F(TreeVerification, SECURITY_RefusesANodeVouchedByAStatementOfSomebodyOutsideIt) {
-    // C1 through the back door: seat 35, outside node 31, signs a state planting a key it knows at node 31. The
-    // state hashes right and the statement is genuine — only who signed it gives it away.
+TEST_F(TreeVerification, AcceptsANodeSetByTheCreatorOutsideItsSubtree) {
+    // Seat 35 creates the group and so sets node 31, outside its own subtree: that is the design now.
+    create(40, 35);
+    EXPECT_NO_THROW(verify(id(9), false));
+    EXPECT_NO_THROW(verify(id(9), true));
+}
+
+TEST_F(TreeVerification, SECURITY_RefusesANodeVouchedByAFormerMember) {
+    // The creator is removed, which blanks node 31 (it set it). A colluding member and the bridge put the creator's
+    // key back under the creator's own genuine statement; the state hashes right, but that voucher left the roster.
     create(40, 0);
-    ASSERT_NO_THROW(verify(id(9), false));
-    const PrivateKey planted = PrivateKey::generateRandom();
-    const std::uint32_t generation = recordOf(bridge.state, 31)->generation + 1;
-    const std::uint64_t seq = bridge.commits.size() + 1;
-    forge(
-        id(35),
-        [&](TreeGroupState& state) { setRecord(state, TreeNodeState{31, generation, planted.getPublicKey(), seq}); },
-        {StatementNode{31, generation, planted.getPublicKey().toBase58DER()}}
-    );
-    EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
-    EXPECT_THROW(verify(id(10), true), GroupDataIntegrityException) << "a client with no pin refuses it too";
+    remove(id(35), {id(0)});
+    ASSERT_FALSE(recordOf(bridge.state, 31)->publicKey.has_value());
+    const server::GroupTreeCommitPathEntry original = bridge.commits[0].path[0];
+    ASSERT_EQ(original.nodeIndex, 31);
+    forge(id(9), [&](TreeGroupState& state) {
+        setRecord(state, TreeNodeState{31, 0, NodePublicKey::fromBase58DER(original.publicKey), 1});
+    }, {});
+    EXPECT_THROW(verify(id(10), true), GroupDataIntegrityException);
+    EXPECT_THROW(verify(id(10), false), GroupDataIntegrityException);
 }
 
 TEST_F(TreeVerification, SECURITY_RefusesAStaleGenerationToAClientThatSawTheNewer) {
     // Node 31 rolled back to the generation the creator set — a key a since-removed member could have known —
-    // under a genuine statement by a colluding member. The node's own generation pin is what refuses it.
+    // under a genuine statement by a colluding member. Node 15 below it has been re-keyed since, so the subtree no
+    // longer hashes to what the creator signed: refused by a client that saw generation 1 and by one that did not.
     create(40, 0);
     selfUpdate(id(1)); // node 31 at generation 1, set by statement 2
     ASSERT_NO_THROW(verify(id(2), false));
@@ -1010,9 +695,48 @@ TEST_F(TreeVerification, SECURITY_RefusesAStaleGenerationToAClientThatSawTheNewe
     forge(id(3), [&](TreeGroupState& state) {
         setRecord(state, TreeNodeState{31, 0, NodePublicKey::fromBase58DER(original.publicKey), 1});
     }, {});
-    EXPECT_THROW(verify(id(2), false), GroupHistoryForkException);
-    // The residual, by design: a client that never saw generation 1 accepts the validly vouched older one.
-    EXPECT_NO_THROW(verify(id(4), false));
+    EXPECT_THROW(verify(id(2), false), GroupDataIntegrityException);
+    EXPECT_THROW(verify(id(4), false), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_RefusesARolledBackAncestorOverAHealedChild) {
+    // AM-1: seat 100 self-updates, so node 191 (generation 1, its setter) wraps to node 159, which the creator
+    // set: the creator learns 191. Seat 70 heals 159 and 191. The creator and the bridge serve 191 at generation 1
+    // again under seat 100's genuine statement, and the creator re-keys the root over it in a commit of its own; seat
+    // 100 is on the roster, so the creator's removal would not blank 191 and its fresh root would wrap to it. No
+    // client may take that state, pinned or not, in either view.
+    create(128, 0);
+    selfUpdate(id(100));
+    const std::vector<server::GroupTreeCommitPathEntry> healed = bridge.commits.back().path;
+    const auto rolledBack = std::find_if(healed.begin(), healed.end(), [](const server::GroupTreeCommitPathEntry& e) {
+        return e.nodeIndex == 191;
+    });
+    ASSERT_NE(rolledBack, healed.end());
+    selfUpdate(id(70));
+    ASSERT_GT(recordOf(bridge.state, 191)->generation, rolledBack->generation);
+    const std::string root = PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    const std::uint32_t rootGeneration = recordOf(bridge.state, 127)->generation + 1;
+    forge(id(0), [&](TreeGroupState& state) {
+        setRecord(
+            state, TreeNodeState{
+                       191, static_cast<std::uint32_t>(rolledBack->generation),
+                       NodePublicKey::fromBase58DER(rolledBack->publicKey), bridge.commits.size() - 1
+                   }
+        );
+        setRecord(
+            state, TreeNodeState{127, rootGeneration, NodePublicKey::fromBase58DER(root), bridge.commits.size() + 1}
+        );
+    }, {StatementNode{127, rootGeneration, root, ""}});
+    for (const bool plan : {false, true}) {
+        TreeVerifier fresh;
+        EXPECT_THROW(
+            fresh.verify(
+                bridge.serve(id(plan ? 40 : 100), plan), plan ? TreeVerifier::Scope::Plan : TreeVerifier::Scope::Path,
+                environment()
+            ),
+            GroupDataIntegrityException
+        ) << (plan ? "the remover's plan view" : "a path view under 191");
+    }
 }
 
 TEST_F(TreeVerification, SECURITY_RefusesASecondRecordForOneNode) {
@@ -1052,11 +776,11 @@ TEST_F(TreeVerification, AnAnswerBehindThePinIsTellableFromAForkAtThePin) {
     const server::GroupInfo older = bridge.serve(id(9), false);
     selfUpdate(id(1));
     ASSERT_NO_THROW(verify(id(9), false));
-    EXPECT_EQ(verifierOf(id(9)).pinnedSeq("grp"), bridge.commits.size());
+    EXPECT_EQ(verifierOf(id(9)).pinnedSeq(GROUP_ID), bridge.commits.size());
     EXPECT_THROW(verifierOf(id(9)).verify(older, TreeVerifier::Scope::Path, environment()), GroupHistoryForkException);
-    EXPECT_LT(older.treeCommit->seq, static_cast<std::int64_t>(verifierOf(id(9)).pinnedSeq("grp")));
+    EXPECT_LT(older.treeCommit->seq, static_cast<std::int64_t>(verifierOf(id(9)).pinnedSeq(GROUP_ID)));
     EXPECT_NO_THROW(verify(id(9), false)) << "the fresh read passes";
-    EXPECT_EQ(TreeVerifier().pinnedSeq("grp"), 0u);
+    EXPECT_EQ(TreeVerifier().pinnedSeq(GROUP_ID), 0u);
 }
 
 TEST_F(TreeVerification, SECURITY_RefusesAChainLinkSignedByANonMember) {
@@ -1068,15 +792,16 @@ TEST_F(TreeVerification, SECURITY_RefusesAChainLinkSignedByANonMember) {
     const std::string mallory = newMember().userId;
     forge(mallory, [&](TreeGroupState& state) { state.leafAssignment[5] = mallory; }, {}, {mallory}, 1);
     EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
-    // The residual, by design: first contact trusts the latest genuine statement by somebody on its roster.
-    EXPECT_NO_THROW(verify(id(10), false));
+    // First contact trusts the latest genuine statement by somebody on its roster, but seat 5 changed under the
+    // root without the root being re-keyed: the root's voucher signed another subtree.
+    EXPECT_THROW(verify(id(10), false), GroupDataIntegrityException);
 }
 
 TEST_F(TreeVerification, FollowsAChainOfHonestCommits) {
     create(40, 0);
     ASSERT_NO_THROW(verify(id(9), false));
     remove(id(35), {id(5)});
-    add(id(1), 2);
+    add(std::string(id(1)), 2); // a copy: adding grows `everyone`
     selfUpdate(id(9));
     EXPECT_NO_THROW(verify(id(9), false)) << "four statements past the pin";
     EXPECT_NO_THROW(verify(id(9), true));
@@ -1133,6 +858,224 @@ TEST_F(TreeVerification, SECURITY_RefusesEveryLieInTheLatestStatement) {
     EXPECT_THROW(fresh.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, env), GroupDataIntegrityException);
 }
 
+TEST_F(TreeVerification, SECURITY_AGenesisStatementIsRefusedUnderAnotherGroupsId) {
+    // T3-04: a group nobody has committed to since its creation, served as a group this client has never seen. Its
+    // only statement is genuine and names its own resourceId, which the bridge serves alongside; the id it is served
+    // under does not follow from that resourceId.
+    create(40, 0);
+    server::GroupInfo info = bridge.serve(id(9), false);
+    EXPECT_NO_THROW(TreeVerifier().verify(info, TreeVerifier::Scope::Path, environment()));
+    info.id = TreeCommits::groupId("ctx", "another-resource");
+    EXPECT_THROW(TreeVerifier().verify(info, TreeVerifier::Scope::Path, environment()), GroupDataIntegrityException);
+    info.id = TreeCommits::groupId("another-context", "res");
+    EXPECT_THROW(TreeVerifier().verify(info, TreeVerifier::Scope::Path, environment()), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_AGroupIsVerifiedOnlyInTheContextItsIdFollowsFrom) {
+    // T4-01: past seq 1 the statements name the id alone, so the served context counts only through the id. Served
+    // in another context, a UserVerifier would vouch for that context's namesakes of the members.
+    create(40, 0);
+    remove(id(35), {id(5)});
+    server::GroupInfo info = bridge.serve(id(9), false);
+    info.contextId = "ctx-2";
+    EXPECT_THROW(TreeVerifier().verify(info, TreeVerifier::Scope::Path, environment()), GroupDataIntegrityException);
+    verify(id(9), false);
+    EXPECT_THROW(
+        verifierOf(id(9)).verify(info, TreeVerifier::Scope::Path, environment()), GroupDataIntegrityException
+    ) << "nor once the client has verified it in the right one";
+    EXPECT_THROW(verifierOf(id(9)).epochOpeners(GROUP_ID, "ctx-2", environment()), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_AChainLinkMustExtendTheStatementBeforeIt) {
+    // T4-02/T4-17: a member's genuine statement that does not follow the pinned one is a fork, not a continuation.
+    create(40, 0);
+    remove(id(35), {id(5)});
+    verify(id(9), false);
+    forge(id(9), [](TreeGroupState&) {}, {});
+    CommitStatement statement = TreeCommits::fromWire(bridge.commits.back());
+    statement.prevDigest = std::string(32, 'x');
+    TreeCommits::sign(statement, member(id(9)).priv);
+    bridge.commits.back() = TreeCommits::toWire(statement);
+    EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_AChainLinkIsNeverDatedBeforeTheOneItExtends) {
+    // T4-04: a key its owner has rotated away from is still vouched for at a date before the rotation.
+    create(40, 0);
+    remove(id(35), {id(5)});
+    verify(id(9), false);
+    forge(id(9), [](TreeGroupState&) {}, {});
+    CommitStatement statement = TreeCommits::fromWire(bridge.commits.back());
+    statement.date -= 1;
+    TreeCommits::sign(statement, member(id(9)).priv);
+    bridge.commits.back() = TreeCommits::toWire(statement);
+    EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_AStatementDatedAheadOfTheClockIsRefused) {
+    // N-1: every honest commit after it must be dated no earlier, which the bridge refuses until then: the member who
+    // signed it, with a bridge, could freeze the group and never be removed.
+    create(40, 0);
+    remove(id(35), {id(5)});
+    verify(id(9), false);
+    forge(id(9), [](TreeGroupState&) {}, {});
+    CommitStatement statement = TreeCommits::fromWire(bridge.commits.back());
+    const auto dated = [&](std::uint64_t ahead) {
+        statement.date = static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp()) + ahead;
+        TreeCommits::sign(statement, member(id(9)).priv);
+        bridge.commits.back() = TreeCommits::toWire(statement);
+    };
+    // Twice the bridge's tolerance, no more: the committer's clock ahead of the bridge's, this one behind it (F4).
+    dated(2 * TreeCommits::DATE_TOLERANCE_MS - 60 * 1000);
+    EXPECT_NO_THROW(TreeVerifier().verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment()));
+    dated(2 * TreeCommits::DATE_TOLERANCE_MS + 60 * 1000);
+    EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
+    EXPECT_THROW(
+        TreeVerifier().verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment()),
+        GroupDataIntegrityException
+    ) << "nor on first contact";
+    EXPECT_THROW(TreeVerifier().verifyListed(bridge.serve(id(9), false), environment()), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_APinMovedOntoAnotherBranchMeanwhileIsNotOverwritten) {
+    // N-4: a verification checks the chain from the pin it started at; a concurrent one moving the pin meanwhile, to a
+    // statement this chain does not pass through, is a fork the store must not overwrite unseen.
+    create(40, 0);
+    verify(id(9), false); // seq 1
+    remove(id(35), {id(5)});
+    selfUpdate(id(1)); // seq 3 extends the honest seq 2
+    CommitStatement other = TreeCommits::fromWire(bridge.commits[1]);
+    other.date += 1; // another seq 2
+    TreeCommits::sign(other, member(other.committer).priv);
+    TreeVerifier& verifier = verifierOf(id(9));
+    TreeVerifier::Environment env = environment();
+    bool moved = false;
+    env.commitsBetween = [&, inner = env.commitsBetween](std::uint64_t fromSeq, std::uint64_t toSeq) {
+        if (!moved) {
+            moved = true;
+            verifier.pinCommitted(GROUP_ID, "ctx", other, seatedIn(bridge.state), {});
+        }
+        return inner(fromSeq, toSeq);
+    };
+    EXPECT_THROW(verifier.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, env), EndpointGroupException);
+    EXPECT_EQ(verifier.pinnedSeq(GROUP_ID), 2u);
+}
+
+TEST_F(TreeVerification, SECURITY_EpochOpenersRefuseAStatementByANonMemberBelowThePin) {
+    // T4-02: mallory seats herself; a pin taken past her statement without walking the chain (first contact, an own
+    // commit) must not make her the opener of anything.
+    create(40, 0);
+    remove(id(35), {id(5)});
+    const std::string mallory = newMember().userId;
+    forge(mallory, [&](TreeGroupState& state) { state.leafAssignment[5] = mallory; }, {}, {mallory}, 1);
+    TreeVerifier own;
+    own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), seatedIn(bridge.state), {});
+    EXPECT_THROW(own.epochOpeners(GROUP_ID, "ctx", environment()), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_AnotherStatementAtThePinnedSeqIsAFork) {
+    // T3-22: the same tree re-signed at the pinned seq (another date) is another statement: a fork, not the pin.
+    create(40, 0);
+    remove(id(35), {id(5)});
+    verify(id(9), false);
+    CommitStatement resigned = TreeCommits::fromWire(bridge.commits.back());
+    resigned.date += 1;
+    TreeCommits::sign(resigned, member(resigned.committer).priv);
+    bridge.commits.back() = TreeCommits::toWire(resigned);
+    EXPECT_NO_THROW(TreeVerifier().verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment()));
+    EXPECT_THROW(verify(id(9), false), GroupHistoryForkException);
+}
+
+TEST_F(TreeVerification, SECURITY_AListedStatementAtThePinnedSeqOtherThanThePinnedOneIsAFork) {
+    // T4-18: a listing continues the pin at its own seq only as the pinned statement itself, never a re-signed one.
+    create(40, 0);
+    remove(id(35), {id(5)});
+    verify(id(9), false);
+    server::GroupInfo listed = bridge.serve(id(9), false);
+    CommitStatement resigned = TreeCommits::fromWire(listed.treeCommit.value());
+    resigned.date += 1;
+    TreeCommits::sign(resigned, member(resigned.committer).priv);
+    listed.treeCommit = TreeCommits::toWire(resigned);
+    EXPECT_THROW(verifierOf(id(9)).verifyListed(listed, environment()), GroupHistoryForkException);
+}
+
+TEST_F(TreeVerification, SECURITY_EpochOpenersComeOnlyOffTheChainThatEndsAtThePin) {
+    // T3-09: past grant keys and the authors of rungs are read off the statements, so only off the pinned chain.
+    create(40, 0);
+    remove(id(35), {id(5)});
+    selfUpdate(id(9));
+    TreeVerifier own;
+    EXPECT_THROW(own.epochOpeners(GROUP_ID, "ctx", environment()), GroupDataIntegrityException) << "nothing pinned";
+    own.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment());
+    const auto openers = own.epochOpeners(GROUP_ID, "ctx", environment());
+    ASSERT_EQ(openers.size(), 2u);
+    EXPECT_EQ(openers.at(1).seq, 1u);
+    EXPECT_EQ(openers.at(2).seq, 2u);
+    EXPECT_EQ(openers.at(2).committer, id(35));
+    EXPECT_EQ(openers.at(2).groupPubKey, bridge.state.grantPublicKey.toBase58DER());
+
+    const auto refusedWith = [&](const std::function<void(std::vector<server::GroupTreeCommit>&)>& lie) {
+        TreeVerifier::Environment env = environment();
+        env.commitsBetween = [&](std::uint64_t fromSeq, std::uint64_t toSeq) {
+            auto answer = bridge.commitsBetween(fromSeq, toSeq);
+            lie(answer.commits);
+            return answer;
+        };
+        TreeVerifier fresh; // `own` answers from what it already checked
+        fresh.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment());
+        try {
+            fresh.epochOpeners(GROUP_ID, "ctx", env);
+            return false;
+        } catch (const GroupDataIntegrityException&) {
+            return true;
+        }
+    };
+    EXPECT_FALSE(refusedWith([](std::vector<server::GroupTreeCommit>&) {}));
+    EXPECT_TRUE(refusedWith([](std::vector<server::GroupTreeCommit>& c) { c.pop_back(); })) << "short of the pin";
+    EXPECT_TRUE(refusedWith([](std::vector<server::GroupTreeCommit>& c) { c.erase(c.begin()); })) << "a gap";
+    const std::string planted = PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    EXPECT_TRUE(refusedWith([&](std::vector<server::GroupTreeCommit>& c) {
+        CommitStatement statement = TreeCommits::fromWire(c[1]);
+        statement.groupPubKey = planted;
+        TreeCommits::sign(statement, PrivateKey::generateRandom());
+        c[1] = TreeCommits::toWire(statement);
+    })) << "the bridge's own key for epoch 2, signed by nobody the UserVerifier vouches for";
+    EXPECT_TRUE(refusedWith([&](std::vector<server::GroupTreeCommit>& c) {
+        CommitStatement statement = TreeCommits::fromWire(c[1]);
+        statement.groupPubKey = planted;
+        TreeCommits::sign(statement, member(statement.committer).priv);
+        c[1] = TreeCommits::toWire(statement);
+    })) << "two grant keys for epoch 2";
+    EXPECT_TRUE(refusedWith([&](std::vector<server::GroupTreeCommit>& c) {
+        CommitStatement statement = TreeCommits::fromWire(c[0]);
+        statement.groupPubKey = planted;
+        TreeCommits::sign(statement, member(statement.committer).priv);
+        c[0] = TreeCommits::toWire(statement);
+    })) << "a genuine statement swapped in below the pin";
+}
+
+TEST_F(TreeVerification, EpochOpenersFetchOnlyTheStatementsSinceTheLastAnswer) {
+    // M3: every old-epoch key and every removal reads the openers; a refetch from seq 1 grew with every commit.
+    create(40, 0);
+    remove(id(35), {id(5)});
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> fetched;
+    TreeVerifier::Environment env = environment();
+    env.commitsBetween = [&](std::uint64_t fromSeq, std::uint64_t toSeq) {
+        fetched.emplace_back(fromSeq, toSeq);
+        return bridge.commitsBetween(fromSeq, toSeq);
+    };
+    TreeVerifier own;
+    own.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment());
+    own.epochOpeners(GROUP_ID, "ctx", env);
+    own.epochOpeners(GROUP_ID, "ctx", env);
+    remove(id(9), {id(6)});
+    own.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment());
+    const auto openers = own.epochOpeners(GROUP_ID, "ctx", env);
+    EXPECT_EQ(fetched, (std::vector<std::pair<std::uint64_t, std::uint64_t>>{{0, 2}, {2, 3}}));
+    ASSERT_EQ(openers.size(), 3u);
+    EXPECT_EQ(openers.at(3).committer, id(9));
+}
+
 TEST_F(TreeVerification, AsksTheUserVerifierOncePerStatementForTheKeyAndDateItWasSignedAt) {
     create(40, 0);
     std::vector<privmx::endpoint::core::VerificationRequest> asked;
@@ -1143,11 +1086,20 @@ TEST_F(TreeVerification, AsksTheUserVerifierOncePerStatementForTheKeyAndDateItWa
         }
         return std::vector<bool>(requests.size(), true);
     };
-    TreeVerifier().verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, env);
-    ASSERT_EQ(asked.size(), 1u) << "one statement, one request";
+    TreeVerifier own;
+    own.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, env);
+    ASSERT_EQ(asked.size(), 1u) << "one statement at its date (a first contact asks nothing for now)";
     EXPECT_EQ(asked[0].senderId, id(0));
     EXPECT_EQ(asked[0].senderPubKey, member(id(0)).pub);
     EXPECT_EQ(asked[0].date, 1760000000000);
+    remove(id(35), {id(5)});
+    asked.clear();
+    own.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, env);
+    ASSERT_EQ(asked.size(), 2u) << "one statement moving the pin: at its date, and now";
+    EXPECT_EQ(asked[0].senderId, id(35));
+    EXPECT_EQ(asked[0].date, 1760000000000);
+    EXPECT_EQ(asked[1].senderPubKey, member(id(35)).pub);
+    EXPECT_GE(asked[1].date, privmx::utils::Utils::getNowTimestamp() - 60 * 1000);
 
     env.verifyUsers = [](const std::vector<privmx::endpoint::core::VerificationRequest>&) {
         return std::vector<bool>{};
@@ -1157,22 +1109,41 @@ TEST_F(TreeVerification, AsksTheUserVerifierOncePerStatementForTheKeyAndDateItWa
     ) << "an answer that does not cover every request";
 }
 
+TEST_F(TreeVerification, SECURITY_AKeyRevokedNowCannotMoveThePin) {
+    // N-3: the committer signs any date it likes, and the UserVerifier truthfully vouches for its key at a date before
+    // the revocation; only the key's standing now keeps it from extending the chain.
+    create(40, 0);
+    verify(id(9), false);
+    const std::int64_t revokedAt = privmx::utils::Utils::getNowTimestamp() - 1000;
+    TreeVerifier::Environment env = environment();
+    using privmx::endpoint::core::VerificationRequest;
+    env.verifyUsers = [&, vouch = env.verifyUsers](const std::vector<VerificationRequest>& requests) {
+        std::vector<bool> verified = vouch(requests);
+        for (std::size_t i = 0; i < requests.size(); ++i) {
+            if (requests[i].senderId == id(9) && requests[i].date >= revokedAt) {
+                verified[i] = false;
+            }
+        }
+        return verified;
+    };
+    EXPECT_NO_THROW(verifierOf(id(9)).verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, env))
+        << "an already pinned statement needs no answer for now";
+    forge(id(9), [](TreeGroupState&) {}, {}); // dated 1760000000000, before the revocation
+    const server::GroupInfo served = bridge.serve(id(9), false);
+    EXPECT_THROW(verifierOf(id(9)).verify(served, TreeVerifier::Scope::Path, env), GroupDataIntegrityException);
+    // F1: a first contact takes the latest genuine statement on trust, or an honest committer who rotated their key
+    // since would lock every fresh session out, and with it every commit that could move the group past it.
+    EXPECT_NO_THROW(TreeVerifier().verify(served, TreeVerifier::Scope::Path, env)) << "a first contact";
+    EXPECT_NO_THROW(TreeVerifier().verifyListed(bridge.serve(id(9), false), env)) << "a first contact";
+    EXPECT_NO_THROW(verify(id(9), false)) << "the same statement while the key is still the committer's";
+}
+
 TEST_F(TreeVerification, SECURITY_AListedGroupIsTakenOnlyAsItsLatestStatementDescribesIt) {
     create(40, 0);
     remove(id(35), {id(5)}); // seq 2, so the statement names the group id rather than the resourceId
-    const server::GroupInfo info = bridge.serve(id(9), false);
-    server::GroupSummary honest;
-    honest.id = info.id;
-    honest.resourceId = info.resourceId;
-    honest.contextId = info.contextId;
-    honest.users = info.users;
-    honest.managers = info.managers;
-    honest.keyVersion = info.keyVersion;
-    honest.groupPubKey = info.groupPubKey;
-    honest.rosterVersion = info.rosterVersion;
-    honest.treeCommit = info.treeCommit;
-    const auto refused = [&](const std::function<void(server::GroupSummary&)>& lie) {
-        server::GroupSummary summary = honest;
+    const server::GroupInfo honest = bridge.serve(id(9), false);
+    const auto refused = [&](const std::function<void(server::GroupInfo&)>& lie) {
+        server::GroupInfo summary = honest;
         lie(summary);
         try {
             TreeVerifier().verifyListed(summary, environment());
@@ -1181,20 +1152,22 @@ TEST_F(TreeVerification, SECURITY_AListedGroupIsTakenOnlyAsItsLatestStatementDes
             return true;
         }
     };
-    EXPECT_FALSE(refused([](server::GroupSummary&) {}));
-    EXPECT_TRUE(refused([](server::GroupSummary& s) { s.treeCommit.reset(); }));
-    EXPECT_TRUE(refused([](server::GroupSummary& s) {
+    EXPECT_FALSE(refused([](server::GroupInfo&) {}));
+    EXPECT_TRUE(refused([](server::GroupInfo& s) { s.treeCommit.reset(); }));
+    EXPECT_TRUE(refused([](server::GroupInfo& s) {
         s.groupPubKey = PrivateKey::generateRandom().getPublicKey().toBase58DER();
     })) << "a grant key the statement does not sign";
-    EXPECT_TRUE(refused([](server::GroupSummary& s) { s.keyVersion += 1; }));
-    EXPECT_TRUE(refused([](server::GroupSummary& s) { s.users.push_back("mallory"); })) << "another roster";
-    EXPECT_TRUE(refused([](server::GroupSummary& s) { s.id = "other"; })) << "another group's statement";
-    EXPECT_TRUE(refused([&](server::GroupSummary& s) {
+    EXPECT_TRUE(refused([](server::GroupInfo& s) { s.keyVersion += 1; }));
+    EXPECT_TRUE(refused([](server::GroupInfo& s) { s.users.push_back("mallory"); })) << "another roster";
+    EXPECT_TRUE(refused([](server::GroupInfo& s) { s.id = "other"; })) << "another group's statement";
+    EXPECT_TRUE(refused([](server::GroupInfo& s) { s.contextId = "ctx-2"; })) << "a context not in its id";
+    EXPECT_TRUE(refused([](server::GroupInfo& s) { s.resourceId.reset(); }));
+    EXPECT_TRUE(refused([&](server::GroupInfo& s) {
         CommitStatement statement = TreeCommits::fromWire(s.treeCommit.value());
         TreeCommits::sign(statement, PrivateKey::generateRandom());
         s.treeCommit = TreeCommits::toWire(statement);
     })) << "signed by a key the UserVerifier does not vouch for";
-    EXPECT_TRUE(refused([&](server::GroupSummary& s) {
+    EXPECT_TRUE(refused([&](server::GroupInfo& s) {
         s.users.erase(std::remove(s.users.begin(), s.users.end(), id(35)), s.users.end());
         CommitStatement statement = TreeCommits::fromWire(s.treeCommit.value());
         statement.rosterHash = TreeCommits::rosterHash(s.users, s.managers);
@@ -1207,21 +1180,11 @@ TEST_F(TreeVerification, SECURITY_AListedGroupContinuesThePinOfAClientThatVerifi
     create(40, 0);
     remove(id(35), {id(5)}); // seq 2: id(5) is out, but its key stays vouched
     verify(id(9), false);
-    const server::GroupInfo info = bridge.serve(id(9), false);
-    server::GroupSummary honest;
-    honest.id = info.id;
-    honest.resourceId = info.resourceId;
-    honest.contextId = info.contextId;
-    honest.users = info.users;
-    honest.managers = info.managers;
-    honest.keyVersion = info.keyVersion;
-    honest.groupPubKey = info.groupPubKey;
-    honest.rosterVersion = info.rosterVersion;
-    honest.treeCommit = info.treeCommit;
+    const server::GroupInfo honest = bridge.serve(id(9), false);
     EXPECT_NO_THROW(verifierOf(id(9)).verifyListed(honest, environment()));
     // The removed member signs itself back in, with its own grant key, at the pinned seq and past it.
     for (const std::int64_t bump : {0, 1}) {
-        server::GroupSummary summary = honest;
+        server::GroupInfo summary = honest;
         summary.users.push_back(id(5));
         summary.groupPubKey = member(id(5)).pub;
         CommitStatement statement = TreeCommits::fromWire(summary.treeCommit.value());
@@ -1234,4 +1197,224 @@ TEST_F(TreeVerification, SECURITY_AListedGroupContinuesThePinOfAClientThatVerifi
         EXPECT_NO_THROW(TreeVerifier().verifyListed(summary, environment())) << "the trust-on-first-use case";
         EXPECT_THROW(verifierOf(id(9)).verifyListed(summary, environment()), EndpointGroupException) << bump;
     }
+}
+
+TEST_F(TreeVerification, SECURITY_AnOwnCommitIsPinnedSoTheStateItReplacedIsRefused) {
+    // T3-03: the remover reads, removes, and is then served the state from before its own removal — every statement
+    // in it genuine. Without the commit pinned that state equals the pin and passes, leaver and all.
+    create(40, 0);
+    TreeVerifier own;
+    own.verify(bridge.serve(id(1), false), TreeVerifier::Scope::Path, environment());
+    const server::GroupInfo beforeRemoval = bridge.serve(id(1), false);
+    remove(id(1), {id(5)});
+    own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), seatedIn(bridge.state), {});
+    EXPECT_EQ(own.pinnedKeyVersion(GROUP_ID), bridge.state.epoch);
+    EXPECT_THROW(own.verify(beforeRemoval, TreeVerifier::Scope::Path, environment()), GroupHistoryForkException);
+    EXPECT_NO_THROW(own.verify(bridge.serve(id(1), false), TreeVerifier::Scope::Path, environment()))
+        << "the committed state itself reads back";
+    EXPECT_NO_THROW(own.verify(bridge.serve(id(1), true), TreeVerifier::Scope::Plan, environment()));
+}
+
+TEST_F(TreeVerification, SECURITY_AListedGroupIsPinnedOnFirstUse) {
+    // T3-06: a writer outside the group is on trust on first use once, not on every listing: after seeing the
+    // removal it takes the listing from before it only as "behind", and a later one only as a chain from its pin.
+    create(40, 0);
+    const server::GroupInfo beforeRemoval = bridge.serve(id(9), false);
+    remove(id(35), {id(5)});
+    TreeVerifier writer;
+    writer.verifyListed(bridge.serve(id(9), false), environment());
+    EXPECT_EQ(writer.pinnedSeq(GROUP_ID), 2u);
+    EXPECT_EQ(writer.pinnedKeyVersion(GROUP_ID), bridge.state.epoch);
+    EXPECT_NO_THROW(writer.verifyListed(beforeRemoval, environment()));
+    EXPECT_EQ(writer.pinnedSeq(GROUP_ID), 2u) << "the older listing does not move the pin back";
+    selfUpdate(id(9));
+    EXPECT_NO_THROW(writer.verifyListed(bridge.serve(id(9), false), environment()));
+    EXPECT_EQ(writer.pinnedSeq(GROUP_ID), 3u);
+}
+
+TEST_F(TreeVerification, SECURITY_AListingsGrantKeyIsTakenOnlyAtThePinnedState) {
+    // A listing carries no roster and no statement, so its `groupPubKey` is vouched for by nothing: it is taken only
+    // as exactly the epoch and key of the state a writer outside the group verified (`verifyListed`) and pinned.
+    create(40, 0);
+    TreeVerifier writer;
+    const server::GroupInfo first = bridge.serve(id(9), false);
+    EXPECT_FALSE(writer.pinnedAt(GROUP_ID, "ctx", first.keyVersion, first.groupPubKey)) << "nothing verified yet";
+    writer.verifyListed(first, environment());
+    EXPECT_TRUE(writer.pinnedAt(GROUP_ID, "ctx", first.keyVersion, first.groupPubKey));
+    EXPECT_FALSE(writer.pinnedAt(GROUP_ID, "ctx-2", first.keyVersion, first.groupPubKey)) << "listed in another context";
+    EXPECT_FALSE(writer.pinnedAt(GROUP_ID, "ctx", first.keyVersion + 1, first.groupPubKey));
+    EXPECT_FALSE(writer.pinnedAt(GROUP_ID, "ctx", first.keyVersion, member(id(5)).pub)) << "a key the pin does not name";
+    EXPECT_FALSE(writer.pinnedAt("other", "ctx", first.keyVersion, first.groupPubKey));
+    remove(id(35), {id(5)});
+    const server::GroupInfo second = bridge.serve(id(9), false);
+    EXPECT_FALSE(writer.pinnedAt(GROUP_ID, "ctx", second.keyVersion, second.groupPubKey)) << "a new epoch is read first";
+    writer.verifyListed(second, environment());
+    EXPECT_TRUE(writer.pinnedAt(GROUP_ID, "ctx", second.keyVersion, second.groupPubKey));
+    EXPECT_FALSE(writer.pinnedAt(GROUP_ID, "ctx", first.keyVersion, first.groupPubKey))
+        << "nor the epoch before the removal";
+}
+
+TEST_F(TreeVerification, SECURITY_ACallersGrantKeyBehindThePinIsNotTaken) {
+    // T4-09: a `GroupGrantWithKey` the application kept from before a removal names the epoch the removed member
+    // still holds. Unpinned it is the caller's word; pinned, only the pinned epoch and key are.
+    create(40, 0);
+    TreeVerifier writer;
+    const server::GroupInfo first = bridge.serve(id(9), false);
+    EXPECT_TRUE(writer.agreesWithPin(GROUP_ID, "ctx", first.keyVersion, first.groupPubKey)) << "no pin, no verdict";
+    remove(id(35), {id(5)});
+    const server::GroupInfo second = bridge.serve(id(9), false);
+    writer.verifyListed(second, environment());
+    EXPECT_FALSE(writer.agreesWithPin(GROUP_ID, "ctx", first.keyVersion, first.groupPubKey));
+    EXPECT_TRUE(writer.agreesWithPin(GROUP_ID, "ctx", second.keyVersion, second.groupPubKey));
+}
+
+TEST_F(TreeVerification, AListingIsPutToTheUserVerifierInOneCall) {
+    // M4: `fetchGroupEpochs` verifies every group it reads; one UserVerifier call each made 100 grants cost 100 calls.
+    create(40, 0);
+    const server::GroupInfo first = bridge.serve(id(9), false);
+    remove(id(35), {id(5)});
+    const server::GroupInfo second = bridge.serve(id(9), false);
+    server::GroupInfo forged = second;
+    CommitStatement statement = TreeCommits::fromWire(forged.treeCommit.value());
+    TreeCommits::sign(statement, PrivateKey::generateRandom()); // a key the UserVerifier vouches for nobody with
+    forged.treeCommit = TreeCommits::toWire(statement);
+
+    std::vector<std::size_t> calls;
+    TreeVerifier::Environment env = environment();
+    const auto vouch = env.verifyUsers;
+    env.verifyUsers = [&](const std::vector<privmx::endpoint::core::VerificationRequest>& requests) {
+        calls.push_back(requests.size());
+        return vouch(requests);
+    };
+    TreeVerifier writer;
+    writer.verifyListed(first, environment());
+    writer.preverifyListed({first, forged, second}, env);
+    EXPECT_EQ(calls, (std::vector<std::size_t>{4})) << "one call for the whole listing: two dates, two keys now";
+    EXPECT_NO_THROW(writer.verifyListed(second, env));
+    EXPECT_EQ(calls.size(), 1u) << "verifyListed found its statement checked";
+    EXPECT_THROW(writer.verifyListed(forged, env), GroupDataIntegrityException) << "a failure stays verifyListed's";
+}
+
+TEST_F(TreeVerification, SECURITY_RefusesARecordOffThePathView) {
+    // T3-14: a blank record off the served path is covered by no hash. Taken, its generation would reach the pins,
+    // and the next plan read of the honest tree would look like a rollback for as long as the process lives.
+    create(64, 0); // node 95 is keyed and off seat 9's path
+    const std::uint32_t seat = seatOf(bridge.state, id(9)).value();
+    const std::vector<std::uint32_t> onPath = TreeMath::keyedPath(seat, bridge.state.numLeaves);
+    std::optional<std::uint32_t> offPath;
+    for (const std::uint32_t node : TreeMath::keyedNodes(bridge.state.numLeaves)) {
+        if (std::find(onPath.begin(), onPath.end(), node) == onPath.end()) {
+            offPath = node;
+        }
+    }
+    ASSERT_TRUE(offPath.has_value());
+    server::GroupInfo info = bridge.serve(id(9), false);
+    auto nodes = info.treeNodes.value();
+    nodes.push_back(server::GroupTreeNode{.nodeIndex = offPath.value(), .generation = 0xFFFFFFFF});
+    info.treeNodes = nodes;
+    TreeVerifier own;
+    EXPECT_THROW(own.verify(info, TreeVerifier::Scope::Path, environment()), GroupDataIntegrityException);
+    EXPECT_NO_THROW(own.verify(bridge.serve(id(9), true), TreeVerifier::Scope::Plan, environment()));
+}
+
+TEST_F(TreeVerification, SECURITY_EpochOpenersReplayTheRosterFromGenesis) {
+    // I-1: below a pin no read walked (first contact, an own commit), a member's statement whose roster hash its
+    // deltas do not explain passed a replay back from the pin, which cannot tell a removed user from a manager.
+    create(40, 0);
+    forge(id(9), [](TreeGroupState&) {}, {});
+    CommitStatement lying = TreeCommits::fromWire(bridge.commits.back());
+    lying.rosterHash = TreeCommits::rosterHash(seatedIn(bridge.state), {"mallory"}); // a manager no delta seats
+    TreeCommits::sign(lying, member(id(9)).priv);
+    bridge.commits.back() = TreeCommits::toWire(lying);
+    TreeVerifier own;
+    own.pinCommitted(GROUP_ID, "ctx", lying, seatedIn(bridge.state), {"mallory"});
+    EXPECT_THROW(own.epochOpeners(GROUP_ID, "ctx", environment()), GroupDataIntegrityException);
+
+    // And the genesis roster, served unsigned beside the chain, must be the one seq 1's hash binds, even where the
+    // deltas after it end at the pinned roster all the same.
+    reset();
+    create(40, 0);
+    remove(id(35), {id(5)});
+    bridge.genesis.erase(std::find(bridge.genesis.begin(), bridge.genesis.end(), id(5)));
+    TreeVerifier fresh;
+    fresh.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), seatedIn(bridge.state), {});
+    EXPECT_THROW(fresh.epochOpeners(GROUP_ID, "ctx", environment()), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_NoSecondStatementIsSignedAtASeqRefusedAsALostRace) {
+    // T4-17: "a concurrent commit took that seq" is the bridge's word, and it may have applied the statement all the
+    // same. A second statement at that seq would be a fork of the bridge's choosing.
+    TreeVerifier own;
+    own.refusedAsLostRace(GROUP_ID, 5);
+    EXPECT_THROW(own.assertMaySignAt(GROUP_ID, 5), GroupDataIntegrityException) << "the read did not reach seq 5";
+    EXPECT_THROW(own.assertMaySignAt(GROUP_ID, 4), GroupDataIntegrityException);
+    EXPECT_NO_THROW(own.assertMaySignAt(GROUP_ID, 6)) << "a read past it: the seq was taken";
+    EXPECT_NO_THROW(own.assertMaySignAt("other", 5));
+    EXPECT_EQ(own.pinnedSeq(GROUP_ID), 0u) << "remembering it pins nothing";
+}
+
+TEST_F(TreeVerification, SECURITY_AChainIsCheckedPageByPageBeforeTheNextPageIsFetched) {
+    // T4-15: a page nobody on the roster signed is refused before the next one is fetched, so a client never holds
+    // more than a page of a chain however long the bridge makes it.
+    create(40, 0);
+    remove(id(35), {id(5)});
+    selfUpdate(id(9));
+    std::size_t pages = 0;
+    TreeVerifier::Environment env = environment();
+    env.commitsBetween = [&](std::uint64_t fromSeq, std::uint64_t) {
+        ++pages;
+        return bridge.commitsBetween(fromSeq, fromSeq + 1); // one statement a page
+    };
+    const auto openers = [&] {
+        pages = 0;
+        TreeVerifier own;
+        own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), seatedIn(bridge.state), {});
+        return own.epochOpeners(GROUP_ID, "ctx", env);
+    };
+    EXPECT_NO_THROW(openers());
+    EXPECT_EQ(pages, 3u);
+    CommitStatement genesis = TreeCommits::fromWire(bridge.commits.front());
+    TreeCommits::sign(genesis, PrivateKey::generateRandom()); // a key the UserVerifier does not vouch for
+    bridge.commits.front() = TreeCommits::toWire(genesis);
+    EXPECT_THROW(openers(), GroupDataIntegrityException);
+    EXPECT_EQ(pages, 1u);
+}
+
+TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused) {
+    // T4-24: a member republishing the grant key of an epoch before a removal reopens the new epoch to the leaver.
+    const auto opensUnder = [&](const std::function<PublicKey()>& grantKey) {
+        reset();
+        create(40, 0);
+        remove(id(35), {id(5)});
+        const PublicKey key = grantKey();
+        forge(id(9), [&](TreeGroupState& state) {
+            state.epoch += 1;
+            state.grantPublicKey = key;
+        }, {});
+        TreeVerifier own;
+        own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), seatedIn(bridge.state), {});
+        try {
+            own.epochOpeners(GROUP_ID, "ctx", environment());
+            return true;
+        } catch (const GroupDataIntegrityException&) {
+            return false;
+        }
+    };
+    EXPECT_TRUE(opensUnder([] { return PrivateKey::generateRandom().getPublicKey(); }));
+    EXPECT_FALSE(opensUnder([&] {
+        return PublicKey::fromBase58DER(TreeCommits::fromWire(bridge.commits.front()).groupPubKey);
+    })) << "epoch 1's key at epoch 3";
+}
+
+TEST(TreeVerifierCaches, SECURITY_ABoundedCacheKeepsAtMostTwoGenerations) {
+    // T3-24: the bridge chooses how many distinct statements it serves; what the verifier caches of them is capped.
+    TreeVerifier::Bounded<int> cache(2);
+    cache.put("a", 1);
+    cache.put("b", 2);
+    cache.put("c", 3); // "a" and "b" move to the previous generation
+    ASSERT_NE(cache.find("a"), nullptr) << "found in the previous generation, and taken back into the current";
+    cache.put("d", 4); // the current one is full again: "c" and "a" move, "b" goes
+    EXPECT_EQ(cache.find("b"), nullptr);
+    ASSERT_NE(cache.find("a"), nullptr);
+    EXPECT_EQ(*cache.find("a"), 1);
 }

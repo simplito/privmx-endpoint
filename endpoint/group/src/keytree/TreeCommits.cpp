@@ -23,21 +23,25 @@ limitations under the License.
 using namespace privmx::endpoint::group::keytree;
 namespace server = privmx::endpoint::group::server;
 
-namespace {
-
-// Domain tags end in a NUL byte, so no tag is a prefix of another's preimage.
-std::string tag(const char* name) {
+std::string TreeCommits::tag(const char* name) {
     return std::string(name) + std::string(1, '\0');
 }
 
-void putU8(std::string& out, std::uint8_t value) {
-    out.push_back(static_cast<char>(value));
-}
-
-void putU32(std::string& out, std::uint32_t value) {
+void TreeCommits::putU32(std::string& out, std::uint32_t value) {
     for (int shift = 24; shift >= 0; shift -= 8) {
         out.push_back(static_cast<char>((value >> shift) & 0xFF));
     }
+}
+
+void TreeCommits::putLp(std::string& out, const std::string& value) {
+    putU32(out, static_cast<std::uint32_t>(value.size()));
+    out += value;
+}
+
+namespace {
+
+void putU8(std::string& out, std::uint8_t value) {
+    out.push_back(static_cast<char>(value));
 }
 
 void putU64(std::string& out, std::uint64_t value) {
@@ -46,15 +50,10 @@ void putU64(std::string& out, std::uint64_t value) {
     }
 }
 
-void putLp(std::string& out, const std::string& value) {
-    putU32(out, static_cast<std::uint32_t>(value.size()));
-    out += value;
-}
-
 void putList(std::string& out, const std::vector<std::string>& values) {
-    putU32(out, static_cast<std::uint32_t>(values.size()));
+    TreeCommits::putU32(out, static_cast<std::uint32_t>(values.size()));
     for (const std::string& value : values) {
-        putLp(out, value);
+        TreeCommits::putLp(out, value);
     }
 }
 
@@ -81,22 +80,30 @@ const TreeNodeState* findRecord(const TreeGroupState& state, std::uint32_t nodeI
     return nullptr;
 }
 
-std::string childHash(const TreeGroupState& state, std::uint32_t nodeIndex) {
+std::string childHash(
+    const TreeGroupState& state,
+    std::uint32_t nodeIndex,
+    std::map<std::uint32_t, std::string>* memo = nullptr
+) {
     if (TreeMath::isLeaf(nodeIndex)) {
         const std::uint32_t position = TreeMath::leafPosition(nodeIndex);
         const bool known = position < state.leafAssignment.size();
         return TreeCommits::leafHash(position, known ? state.leafAssignment[position].value_or("") : "");
     }
-    return TreeCommits::nodeHash(
+    std::string hash = TreeCommits::nodeHash(
         nodeIndex, state.numLeaves, findRecord(state, nodeIndex),
-        childHash(state, TreeMath::left(nodeIndex, state.numLeaves)),
-        childHash(state, TreeMath::right(nodeIndex, state.numLeaves))
+        childHash(state, TreeMath::left(nodeIndex, state.numLeaves), memo),
+        childHash(state, TreeMath::right(nodeIndex, state.numLeaves), memo)
     );
+    if (memo != nullptr) {
+        (*memo)[nodeIndex] = hash;
+    }
+    return hash;
 }
 
 std::string treeHashOver(std::uint32_t numLeaves, const std::string& rootHash) {
-    std::string preimage = tag("pmx-tree");
-    putU32(preimage, numLeaves);
+    std::string preimage = TreeCommits::tag("pmx-tree");
+    TreeCommits::putU32(preimage, numLeaves);
     preimage += rootHash;
     return privmx::crypto::Crypto::sha256(preimage);
 }
@@ -173,14 +180,15 @@ std::string TreeCommits::subtreeHash(const TreeGroupState& state, std::uint32_t 
     return childHash(state, nodeIndex);
 }
 
-std::string TreeCommits::treeHash(const TreeGroupState& state) {
-    return treeHashOver(state.numLeaves, childHash(state, TreeMath::root(state.numLeaves)));
+std::string TreeCommits::treeHash(const TreeGroupState& state, std::map<std::uint32_t, std::string>* subtreeHashes) {
+    return treeHashOver(state.numLeaves, childHash(state, TreeMath::root(state.numLeaves), subtreeHashes));
 }
 
 std::string TreeCommits::treeHashAlongPath(
     const TreeGroupState& state,
     std::uint32_t position,
-    const std::vector<std::string>& copathHashes
+    const std::vector<std::string>& copathHashes,
+    std::map<std::uint32_t, std::string>* subtreeHashes
 ) {
     const std::vector<std::uint32_t> path = TreeMath::directPath(position, state.numLeaves);
     if (copathHashes.size() != path.size()) {
@@ -196,6 +204,9 @@ std::string TreeCommits::treeHashAlongPath(
             path[i], state.numLeaves, findRecord(state, path[i]), currentIsLeft ? hash : sibling,
             currentIsLeft ? sibling : hash
         );
+        if (subtreeHashes != nullptr) {
+            (*subtreeHashes)[path[i]] = hash;
+        }
         current = path[i];
     }
     return treeHashOver(state.numLeaves, hash);
@@ -208,14 +219,23 @@ std::string TreeCommits::rosterHash(std::vector<std::string> users, std::vector<
     return privmx::crypto::Crypto::sha256(preimage);
 }
 
+std::string TreeCommits::groupId(const std::string& contextId, const std::string& resourceId) {
+    std::string preimage = tag("pmx-group-id");
+    putLp(preimage, contextId);
+    putLp(preimage, resourceId);
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(preimage));
+}
+
 std::string TreeCommits::signedBytes(const CommitStatement& statement) {
-    if (statement.rosterHash.size() != 32 || statement.treeHash.size() != 32) {
+    if (statement.rosterHash.size() != 32 || statement.treeHash.size() != 32 ||
+        statement.prevDigest.size() != (statement.seq == 1 ? 0 : 32)) {
         throw std::invalid_argument("commit statement hashes must be 32 bytes");
     }
     std::string bytes = tag("pmx-tree-commit");
     putLp(bytes, statement.groupId);
     putU32(bytes, statement.treeVersion);
     putU64(bytes, statement.seq);
+    putLp(bytes, statement.prevDigest);
     putU8(bytes, static_cast<std::uint8_t>(statement.op));
     putU64(bytes, statement.date);
     putU64(bytes, statement.keyVersion);
@@ -231,6 +251,10 @@ std::string TreeCommits::signedBytes(const CommitStatement& statement) {
         putU32(bytes, node.nodeIndex);
         putU32(bytes, node.generation);
         putLp(bytes, node.publicKey);
+        if (node.subtreeHash.size() != 32) {
+            throw std::invalid_argument("commit statement hashes must be 32 bytes");
+        }
+        bytes += node.subtreeHash;
     }
     putList(bytes, statement.addedUsers);
     putList(bytes, statement.addedManagers);
@@ -283,21 +307,22 @@ CommitStatement TreeCommits::statementFor(
     statement.committerSeat = plan.shape.committerSeat;
     for (const RefreshedNode& refreshed : plan.refreshed) {
         statement.path.push_back(
-            StatementNode{refreshed.nodeIndex, refreshed.generation, refreshed.key.getPublicKey().toBase58DER()}
+            StatementNode{
+                refreshed.nodeIndex, refreshed.generation, refreshed.key.getPublicKey().toBase58DER(),
+                plan.subtreeHashes.at(refreshed.nodeIndex)
+            }
         );
     }
-    std::sort(addedUsers.begin(), addedUsers.end());
-    std::sort(addedManagers.begin(), addedManagers.end());
-    std::sort(removed.begin(), removed.end());
-    statement.addedUsers = std::move(addedUsers);
-    statement.addedManagers = std::move(addedManagers);
-    statement.removed = std::move(removed);
+    statement.addedUsers = sortedUnique(std::move(addedUsers));
+    statement.addedManagers = sortedUnique(std::move(addedManagers));
+    statement.removed = sortedUnique(std::move(removed));
     return statement;
 }
 
 server::GroupTreeCommit TreeCommits::toWire(const CommitStatement& statement) {
     server::GroupTreeCommit wire;
     wire.seq = static_cast<std::int64_t>(statement.seq);
+    wire.prevDigest = privmx::utils::Hex::from(statement.prevDigest);
     wire.op = opName(statement.op);
     wire.groupId = statement.groupId;
     wire.treeVersion = statement.treeVersion;
@@ -311,7 +336,11 @@ server::GroupTreeCommit TreeCommits::toWire(const CommitStatement& statement) {
     wire.committerPubKey = statement.committerPubKey;
     wire.committerSeat = statement.committerSeat;
     for (const StatementNode& node : statement.path) {
-        wire.path.push_back(server::GroupTreeCommitPathEntry{node.nodeIndex, node.generation, node.publicKey});
+        wire.path.push_back(
+            server::GroupTreeCommitPathEntry{
+                node.nodeIndex, node.generation, node.publicKey, privmx::utils::Hex::from(node.subtreeHash)
+            }
+        );
     }
     wire.addedUsers = statement.addedUsers;
     wire.addedManagers = statement.addedManagers;
@@ -323,6 +352,10 @@ server::GroupTreeCommit TreeCommits::toWire(const CommitStatement& statement) {
 CommitStatement TreeCommits::fromWire(const server::GroupTreeCommit& wire) {
     CommitStatement statement;
     statement.seq = inRange<std::uint64_t>(wire.seq, "seq");
+    statement.prevDigest = statement.seq == 1 ? "" : fromHex32(wire.prevDigest);
+    if (statement.seq == 1 && !wire.prevDigest.empty()) {
+        throw std::invalid_argument("a genesis statement follows no other");
+    }
     bool knownOp = false;
     for (const CommitOp op :
          {CommitOp::Create, CommitOp::Add, CommitOp::Remove, CommitOp::SelfUpdate, CommitOp::Rotate}) {
@@ -349,7 +382,8 @@ CommitStatement TreeCommits::fromWire(const server::GroupTreeCommit& wire) {
         statement.path.push_back(
             StatementNode{
                 inRange<std::uint32_t>(node.nodeIndex, "path.nodeIndex"),
-                inRange<std::uint32_t>(node.generation, "path.generation"), node.publicKey
+                inRange<std::uint32_t>(node.generation, "path.generation"), node.publicKey,
+                fromHex32(node.subtreeHash)
             }
         );
     }

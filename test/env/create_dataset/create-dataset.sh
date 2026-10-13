@@ -42,6 +42,7 @@ docker cp $DOCKER_MONGO_NAME:/mongo_collections $DATASET_DIR
 # Group
 docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=group --db=privmx_localhost --jsonArray --pretty --out=mongo_collections/group.json"
 docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=groupArchiveRung --db=privmx_localhost --jsonArray --pretty --out=mongo_collections/groupArchiveRung.json"
+docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=groupEpochKey --db=privmx_localhost --jsonArray --pretty --out=mongo_collections/groupEpochKey.json"
 docker exec $DOCKER_MONGO_NAME bash -c "mongoexport --collection=groupHistoryEntry --db=privmx_localhost --jsonArray --pretty --out=mongo_collections/groupHistoryEntry.json"
 # One collection per metadata plane. Exporting only one of them would leave every group unreadable on restore:
 # a read needs both heads, and the bridge answers a missing one with GROUP_META_UNREACHABLE.

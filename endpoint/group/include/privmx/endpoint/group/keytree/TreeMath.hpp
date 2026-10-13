@@ -24,8 +24,10 @@ namespace keytree {
 // nodes odd, topology a pure function of the leaf count. Must agree with the bridge's own computation exactly.
 class TreeMath {
 public:
-    // The tree layout this client reads and writes. A group carrying any other version is refused, never migrated.
-    static constexpr std::uint32_t TREE_VERSION = 2;
+    // The tree layout and statement format this client reads and writes. A group carrying any other version is
+    // refused, never migrated. 3: rung blobs bound to their span, the genesis roster served beside the chain, custom
+    // events bound to their channel, no confirmation tag.
+    static constexpr std::uint32_t TREE_VERSION = 3;
 
     // Internal nodes at or below this level carry no key: a bucket of `2^BUCKET_LEVEL` seats is wrapped to leaf by
     // leaf. Tied to TREE_VERSION, not configurable per group — the bridge derives the same keyed set.
@@ -93,9 +95,12 @@ public:
     // leaf is its member's long-term key.
     static bool isKeyed(std::uint32_t nodeIndex, std::uint32_t numLeaves);
 
-    // `directPath` filtered by `isKeyed`, bottom-up: exactly the nodes a commit by this seat refreshes, and the only
-    // ones it may mint keys for. Ends at the root; empty for one leaf.
+    // `directPath` filtered by `isKeyed`, bottom-up: the nodes every commit by this seat refreshes (a creation and
+    // an addition also fill nodes off it). Ends at the root; empty for one leaf.
     static std::vector<std::uint32_t> keyedPath(std::uint32_t position, std::uint32_t numLeaves);
+
+    // Every keyed node of the tree, ascending.
+    static std::vector<std::uint32_t> keyedNodes(std::uint32_t numLeaves);
 
     // Grows past the current count when appending at the end.
     static std::uint32_t numLeavesToSeat(std::uint32_t position, std::uint32_t currentNumLeaves);

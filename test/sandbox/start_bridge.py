@@ -14,7 +14,7 @@ RUNNER = Path(__file__).resolve().parent.parent / "runner"
 sys.path.insert(0, str(RUNNER))
 import e2e_common  # noqa: E402
 
-# Removals and rotations share a per-group budget (default 10/h); the perf scenarios do dozens per group.
+# Removals and rotations share a per-group budget (default 60/h); the perf scenarios do dozens per group.
 EXTRA_ENV = os.environ.get("SANDBOX_BRIDGE_ENV", "PMX_MAX_GROUP_ROTATIONS_PER_HOUR=100000").split()
 
 _run = e2e_common.require_command_success

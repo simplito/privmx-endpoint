@@ -3,6 +3,7 @@
 
 #include "privmx/endpoint/group/Types.hpp"
 #include <privmx/endpoint/core/Subscriber.hpp>
+#include <optional>
 
 namespace privmx {
 namespace endpoint {
@@ -20,6 +21,11 @@ public:
         const std::string& selectorId
     );
     static std::string channelNameFromQuery(const std::string& subscriptionQuery);
+    // T4-07: a custom event is sealed with its channel name in front, inside what the sender signs and encrypts, so
+    // the bridge cannot deliver it on another channel: `"pmx-event\0" || u32(len) || channelName || data`.
+    static std::string sealOnChannel(const std::string& channelName, const std::string& data);
+    // The data `sealed` carries for `channelName`; nullopt when it was sealed for another channel.
+    static std::optional<std::string> openOnChannel(const std::string& channelName, const std::string& sealed);
 
 private:
     virtual std::vector<std::string> transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);

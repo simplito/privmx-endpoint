@@ -40,6 +40,9 @@ struct StatementNode {
     std::uint32_t nodeIndex = 0;
     std::uint32_t generation = 0;
     std::string publicKey; // base58 DER
+    // `CH` of the node in the post state: pins the subtree the key was minted over, so a served node whose subtree
+    // has changed since (a child re-keyed under a rolled-back parent) no longer matches its voucher. Raw bytes.
+    std::string subtreeHash;
 };
 
 // What the tree, the roster and the grant key look like after one commit, signed by the committer. The bridge
@@ -47,6 +50,9 @@ struct StatementNode {
 // statement whose `treeHash` it matches. Hashes and the signature are raw bytes here, hex/base64 on the wire.
 struct CommitStatement {
     std::uint64_t seq = 0;
+    // `digest` of the statement at `seq - 1`, empty at seq 1: chains every statement to the history it extends, so
+    // nothing below a verified statement can be swapped or forked. Raw bytes.
+    std::string prevDigest;
     CommitOp op = CommitOp::Create;
     // The group's id — except at seq 1, where the group has none yet and this is the creator's resourceId.
     std::string groupId;
@@ -75,6 +81,18 @@ struct CommitStatement {
 // hashes, so one tree hash pins every key and every seat at once.
 class TreeCommits {
 public:
+    // Clock skew a statement's `date` may show against the checker's clock, both ways: the bridge's
+    // `CommitStatement.DATE_TOLERANCE_MS`. A reader allows a latest statement twice that ahead of its own clock, its
+    // own skew on top (N-1: every later commit is dated no earlier, so that is how long a forward-dated statement can
+    // freeze the group).
+    static constexpr std::uint64_t DATE_TOLERANCE_MS = 10 * 60 * 1000;
+
+    // The encoders of every preimage and sealed label in the key tree. A domain tag ends in a NUL byte, so no tag is a
+    // prefix of another's preimage; integers are big-endian; `putLp` prefixes a string with its u32 length.
+    static std::string tag(const char* name);
+    static void putU32(std::string& out, std::uint32_t value);
+    static void putLp(std::string& out, const std::string& value);
+
     // `H("pmx-tree-leaf\0" || u32(p) || lp(userId))`, "" for a blank seat.
     static std::string leafHash(std::uint32_t position, const std::string& userId);
 
@@ -92,20 +110,31 @@ public:
     // bridge serves as `copathHashes`.
     static std::string subtreeHash(const TreeGroupState& state, std::uint32_t nodeIndex);
 
-    // `H("pmx-tree\0" || u32(numLeaves) || CH(root))` over a state holding every record.
-    static std::string treeHash(const TreeGroupState& state);
+    // `H("pmx-tree\0" || u32(numLeaves) || CH(root))` over a state holding every record. Every `CH` of an inner
+    // node goes into `subtreeHashes` when given.
+    static std::string treeHash(
+        const TreeGroupState& state,
+        std::map<std::uint32_t, std::string>* subtreeHashes = nullptr
+    );
 
     // The same hash from one seat's view: its leaf, the records on its direct path (the others are absent from
     // `state.nodes` or ignored) and the hash of each copath node, aligned with `TreeMath::copath`. Throws
-    // std::invalid_argument when the copath hashes do not fit the tree.
+    // std::invalid_argument when the copath hashes do not fit the tree. The `CH` of each direct-path node goes into
+    // `subtreeHashes` when given.
     static std::string treeHashAlongPath(
         const TreeGroupState& state,
         std::uint32_t position,
-        const std::vector<std::string>& copathHashes
+        const std::vector<std::string>& copathHashes,
+        std::map<std::uint32_t, std::string>* subtreeHashes = nullptr
     );
 
     // Each list deduplicated and sorted bytewise first.
     static std::string rosterHash(std::vector<std::string> users, std::vector<std::string> managers);
+
+    // A group's id, as the bridge derives it at creation: lowercase hex of
+    // `H("pmx-group-id\0" || lp(contextId) || lp(resourceId))`. It ties the id to the resourceId the creator signs
+    // at seq 1, so that statement cannot be served as another group's.
+    static std::string groupId(const std::string& contextId, const std::string& resourceId);
 
     static std::string signedBytes(const CommitStatement& statement);
 
@@ -118,7 +147,7 @@ public:
     static std::string digest(const CommitStatement& statement);
 
     // A statement over the post state a plan describes. The roster lists are the post-commit roster; the deltas
-    // are sorted here. Unsigned.
+    // are sorted and deduplicated here (at seq 1 empty: `rosterHash` binds the genesis roster). Unsigned.
     static CommitStatement statementFor(
         const CommitPlan& plan,
         CommitOp op,

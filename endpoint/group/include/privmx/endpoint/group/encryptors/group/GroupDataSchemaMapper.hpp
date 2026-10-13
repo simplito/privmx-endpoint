@@ -49,11 +49,21 @@ public:
     // again under the lock, so a concurrent verification that got further makes this one a fork.
     void storeVersionPins(const server::GroupInfo& groupInfo);
 
-    void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& rosterKey);
+    void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKeyV2& rosterKey);
 
-    void assertPublicMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& publicMetaKey);
+    // A plane's author and whoever wrapped its key must be on the attested roster, or in `formerMembers`: the
+    // members a removal has just dropped, whose entries the remover's metadata refresh carries up to the new epoch.
+    void assertPublicMetaIsAttested(
+        const server::GroupInfo& groupInfo,
+        const core::DecryptedEncKeyV2& publicMetaKey,
+        const std::vector<std::string>& formerMembers = {}
+    );
 
-    void assertPrivateMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& privateMetaKey);
+    void assertPrivateMetaIsAttested(
+        const server::GroupInfo& groupInfo,
+        const core::DecryptedEncKeyV2& privateMetaKey,
+        const std::vector<std::string>& formerMembers = {}
+    );
 
     // `HMAC(subkey, epoch | rosterVersion | roster)`. Lists are sorted and length-prefixed so one roster's tag
     // cannot match another's under a different split; `rosterVersion` binds the counter the monotone pin checks.
@@ -80,19 +90,25 @@ public:
     // The status code, plus the roster head's DIO when that code is 0.
     std::pair<uint32_t, core::DataIntegrityObject> validateDataIntegrity(const server::GroupInfo& groupInfo);
 
-    // Call when the group is gone or the session was reset.
-    void dropVersionPin(const std::string& groupId);
+    // The routes to the head, publicMeta and privateMeta keys only: every other epoch's key would cost a grant-key
+    // resolution (a read and a ladder descent) for nothing, so a read stays O(1) in the group's epochs. `g` has
+    // passed `validateDataIntegrity`, so it has a head.
+    static void addReadKeys(
+        core::KeyDecryptionAndVerificationRequest& request, const server::GroupInfo& g, const core::EncKeyLocation& location
+    );
 
     std::vector<Group> validateDecryptAndConvertGroups(
         const std::vector<server::GroupInfo>& groups,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
-        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
+        const std::vector<std::string>& formerMembers = {}
     );
 
     Group validateDecryptAndConvertGroup(
         const server::GroupInfo& groupInfo,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
-        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
+        const std::vector<std::string>& formerMembers = {}
     );
 
     // Deliberately does not open the metadata entry: that plane may sit at an older epoch, and waiting on its

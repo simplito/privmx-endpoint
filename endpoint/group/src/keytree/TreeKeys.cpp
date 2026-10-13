@@ -17,6 +17,7 @@ limitations under the License.
 #include <stdexcept>
 
 #include <privmx/crypto/EciesEncryptor.hpp>
+#include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
@@ -44,6 +45,17 @@ std::optional<privmx::crypto::PrivateKey> TreeKeys::unwrapKey(
         // A blob that does not open, or does not carry a WIF, is a data problem for the caller to report.
         return std::nullopt;
     }
+}
+
+std::optional<privmx::crypto::PublicKey> TreeKeys::sealerOf(const std::string& blob) {
+    try {
+        // `EciesEncryptor::encrypt`: 'e' || sender DER (33) || recipient DER (33) || ciphertext.
+        const std::string raw = privmx::utils::Base64::toString(blob);
+        if (raw.size() < 67 || raw.front() != 'e') {
+            return std::nullopt;
+        }
+        return privmx::crypto::PublicKey::fromDER(raw.substr(1, 33));
+    } catch (...) { return std::nullopt; }
 }
 
 const TreeNodeState* TreeKeys::findNode(const TreeGroupState& state, std::uint32_t nodeIndex) {
@@ -128,6 +140,19 @@ const TreeEdge* findClimbingEdge(
     return nullptr;
 }
 
+// `node` if keyed, and every keyed ancestor of it up to the root: what a holder of `node`'s key can climb to.
+void climbInto(std::uint32_t node, std::uint32_t numLeaves, std::set<std::uint32_t>& out) {
+    const std::uint32_t root = TreeMath::root(numLeaves);
+    for (;; node = TreeMath::parent(node, numLeaves)) {
+        if (TreeMath::isKeyed(node, numLeaves)) {
+            out.insert(node);
+        }
+        if (node == root) {
+            return;
+        }
+    }
+}
+
 } // namespace
 
 std::vector<std::uint32_t> TreeKeys::resolution(const TreeGroupState& state, std::uint32_t nodeIndex) {
@@ -196,6 +221,7 @@ ClimbResult TreeKeys::climbToGrantKey(
         const auto recovered = unwrapKey(edge->blob, currentKey);
         if (!recovered.has_value()) {
             result.failure = ClimbFailure::DecryptFailed;
+            result.tamperedNode = edge->parentIndex; // the parent's setter wrote its edges, garbled ones included
             return result;
         }
         const TreeNodeState* parentState = node(edge->parentIndex);
@@ -207,7 +233,6 @@ ClimbResult TreeKeys::climbToGrantKey(
         currentNode = edge->parentIndex;
         currentKey = recovered.value();
         stillAbove = std::find(stillAbove, path.end(), currentNode) + 1;
-        _cache.putNodeKey(currentNode, parentState->generation, currentKey);
         result.reachedNode = currentNode;
     }
 
@@ -246,12 +271,19 @@ CommitShape TreeKeys::shapeCreate(const std::vector<std::string>& memberIds, con
         }
         shape.leafAssignment.push_back(memberId);
     }
-    // The creator commits like anybody else: its own path only, so it has to hold a seat to have one.
     const auto seat = std::find(memberIds.begin(), memberIds.end(), creatorId);
     if (seat == memberIds.end()) {
         throw std::invalid_argument("the creator " + creatorId + " must be a member of the group it creates");
     }
     shape.committerSeat = static_cast<std::uint32_t>(std::distance(memberIds.begin(), seat));
+    // The creator fills every keyed node, so every later commit is already cheap. What it learns that way is what a
+    // removal of the creator blanks (`setBy`); members heal it sooner by self-updating over it.
+    const std::vector<std::uint32_t> own = TreeMath::keyedPath(shape.committerSeat, shape.numLeaves);
+    for (const std::uint32_t node : TreeMath::keyedNodes(shape.numLeaves)) {
+        if (std::find(own.begin(), own.end(), node) == own.end()) {
+            shape.filledOffPath.insert(node);
+        }
+    }
     return shape;
 }
 
@@ -298,13 +330,13 @@ CommitShape TreeKeys::shapeAddition(
         }
         shape.leafAssignment[positions[i]] = newMemberIds[i];
     }
-    // The newcomers' paths are blanked, not re-keyed for them: a key minted on somebody else's path is a key its
-    // minter keeps after leaving that subtree. The adder's own path is refreshed instead and covers them from above.
+    // The newcomers' paths below the adder's are minted by the adder, not left blank: the adder keeps those keys,
+    // which is why a removal of the adder blanks every node it set (`shapeRemoval`).
     const std::vector<std::uint32_t> own = TreeMath::keyedPath(shape.committerSeat, shape.numLeaves);
     for (const std::uint32_t position : positions) {
         for (const std::uint32_t node : TreeMath::keyedPath(position, shape.numLeaves)) {
             if (std::find(own.begin(), own.end(), node) == own.end()) {
-                shape.blanked.insert(node);
+                shape.filledOffPath.insert(node);
             }
         }
     }
@@ -330,6 +362,7 @@ CommitShape TreeKeys::shapeRemoval(
     shape.committerSeat = removerSeat.value();
 
     std::set<std::string> named;
+    std::set<std::uint32_t> known;
     for (const std::string& leavingUserId : leavingUserIds) {
         if (!named.insert(leavingUserId).second) {
             throw std::invalid_argument("member " + leavingUserId + " is named twice");
@@ -345,11 +378,27 @@ CommitShape TreeKeys::shapeRemoval(
         }
         shape.subjectSeats.push_back(seat.value());
         shape.leafAssignment[seat.value()] = std::nullopt;
-        // Everything the leaver could have held: every key on its path, which no other path re-keys for it.
-        for (const std::uint32_t node : TreeMath::keyedPath(seat.value(), shape.numLeaves)) {
-            shape.blanked.insert(node);
+        climbInto(TreeMath::leafNode(seat.value()), shape.numLeaves, known);
+    }
+    // Everything the leavers could know: their paths, every key they minted, and every ancestor of those — a key
+    // wrapped to one they know is one they know. Edges only ever lead up, so this closure is all of it.
+    for (const TreeNodeState& node : state.nodes) {
+        if (!node.publicKey.has_value() || !TreeMath::isKeyed(node.nodeIndex, shape.numLeaves)) {
+            continue;
+        }
+        const auto setter = node.setBy.has_value() ? state.setters.find(node.setBy.value()) : state.setters.end();
+        if (setter == state.setters.end()) {
+            throw std::invalid_argument("node " + std::to_string(node.nodeIndex) + " names no known statement");
+        }
+        if (named.count(setter->second) > 0) {
+            climbInto(node.nodeIndex, shape.numLeaves, known);
         }
     }
+    // The remover's own path is re-keyed instead.
+    for (const std::uint32_t node : TreeMath::keyedPath(shape.committerSeat, shape.numLeaves)) {
+        known.erase(node);
+    }
+    shape.blanked = std::move(known);
     std::sort(shape.subjectSeats.begin(), shape.subjectSeats.end());
     return shape;
 }
@@ -390,12 +439,14 @@ TreeGroupState TreeKeys::postState(const TreeGroupState& state, const CommitShap
 std::vector<std::string> TreeKeys::recipients(const TreeGroupState& state, const CommitShape& shape) {
     const TreeGroupState post = postState(state, shape);
     const std::vector<std::uint32_t> path = TreeMath::keyedPath(shape.committerSeat, shape.numLeaves);
+    std::set<std::uint32_t> minted(shape.filledOffPath);
+    minted.insert(path.begin(), path.end());
     std::set<std::string> wanted;
-    for (const std::uint32_t node : path) {
+    for (const std::uint32_t node : minted) {
         for (const std::uint32_t child : TreeMath::children(node, shape.numLeaves)) {
-            // A child on the path is refreshed itself and gets a node edge. Off the path, nothing below a bucket
-            // node is keyed, so the resolution never depends on what the commit mints.
-            if (std::find(path.begin(), path.end(), child) != path.end()) {
+            // A minted child gets a node edge. Any other child has nothing minted below it (the minted set is closed
+            // upwards), so its resolution never depends on what the commit mints.
+            if (minted.count(child) > 0) {
                 continue;
             }
             for (const std::uint32_t resolved : resolution(post, child)) {
@@ -421,11 +472,14 @@ CommitPlan TreeKeys::commit(
     plan.seq = state.commitSeq + 1;
     TreeGroupState post = postState(state, shape);
 
-    // Step 1: a fresh, independent random keypair for every node of the committer's keyed path, and for nothing
-    // else. Deriving one from the key it replaces would let whoever held that key compute forward, and the server
-    // cannot detect it — confidentiality lives or dies on this line.
+    // Step 1: a fresh, independent random keypair for every node the commit mints: the off-path fills, then the
+    // committer's keyed path, root last. Deriving one from the key it replaces would let whoever held that key compute
+    // forward, and the server cannot detect it — confidentiality lives or dies on this line.
+    std::vector<std::uint32_t> toMint(shape.filledOffPath.begin(), shape.filledOffPath.end());
+    const std::vector<std::uint32_t> path = TreeMath::keyedPath(shape.committerSeat, shape.numLeaves);
+    toMint.insert(toMint.end(), path.begin(), path.end());
     std::map<std::uint32_t, privmx::crypto::PrivateKey> minted;
-    for (const std::uint32_t node : TreeMath::keyedPath(shape.committerSeat, shape.numLeaves)) {
+    for (const std::uint32_t node : toMint) {
         RefreshedNode refreshed;
         refreshed.nodeIndex = node;
         refreshed.key = privmx::crypto::PrivateKey::generateRandom();
@@ -499,7 +553,7 @@ CommitPlan TreeKeys::commit(
     }
     plan.edges.push_back(grantEdge);
     // What the statement signs: the post state, every record of it — which is why planning reads them all.
-    plan.treeHash = TreeCommits::treeHash(post);
+    plan.treeHash = TreeCommits::treeHash(post, &plan.subtreeHashes);
     plan.shape = std::move(shape);
     return plan;
 }

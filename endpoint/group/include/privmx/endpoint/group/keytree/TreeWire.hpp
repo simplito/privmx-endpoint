@@ -32,7 +32,7 @@ public:
     static server::GroupArchiveRung toWire(const ArchiveRung& rung);
     static std::vector<server::GroupArchiveRung> toWire(const std::vector<ArchiveRung>& rungs);
 
-    // The tree of a brand-new group: every member seated in order, the creator's keyed path at generation 0.
+    // The tree of a brand-new group: every member seated in order, every keyed node at generation 0.
     static server::GroupTreeState toCreateTree(const CommitPlan& plan);
 
     static server::GroupTreeState fromGroupInfo(const server::GroupInfo& group);

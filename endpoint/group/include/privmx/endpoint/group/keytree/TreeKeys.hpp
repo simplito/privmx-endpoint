@@ -30,12 +30,12 @@ namespace keytree {
 // Builds and traverses the hidden key tree; every wrap is an ECIES encryption of a private key, verified on
 // unwrap.
 //
-// The invariant everything here preserves (TreeKEM's): a node's private key is known only to members whose leaves
-// are in that node's subtree. So a commit mints keys for the committer's own keyed path and nothing else, always
-// fresh random — never derived from the key they replace, or a removed member would compute the next one — and
-// every other node a change touches is blanked rather than re-keyed. Blanks are refilled by their own members'
-// self-updates. A member therefore never holds a copath key, which is what a removal relies on: blanking the
-// leaver's path and refreshing the remover's leaves nothing the leaver can open.
+// The invariant everything here preserves: a member knows a node's current key only if that node is in its
+// knowledge closure — its own path, every node it set (`setBy`), and every ancestor of those. Keys are always fresh
+// random, never derived from the key they replace, or a removed member would compute the next one. The creator
+// fills every keyed node and an adder the newcomers' paths below its own, so commits stay cheap from the start; a
+// removal blanks the leavers' closures and re-keys the remover's path, which leaves nothing a leaver can open.
+// Members heal nodes set from outside their subtree by self-updating over them, which shrinks those closures.
 class TreeKeys {
 public:
     explicit TreeKeys(TreeKeyCache& cache);
@@ -59,10 +59,11 @@ public:
 
     // ── Commit shapes: who sits where afterwards, what gets blanked, whose path is refreshed ───────────────
 
-    // Members are seated in the order given.
+    // Members are seated in the order given; the creator mints every keyed node.
     static CommitShape shapeCreate(const std::vector<std::string>& memberIds, const std::string& creatorId);
 
-    // `positions` are index-aligned with `newMemberIds`: blanks a removal left, or appended contiguously.
+    // `positions` are index-aligned with `newMemberIds`: blanks a removal left, or appended contiguously. The adder
+    // mints the newcomers' paths below its own.
     static CommitShape shapeAddition(
         const TreeGroupState& state,
         const std::vector<std::string>& newMemberIds,
@@ -70,7 +71,8 @@ public:
         const std::string& adderId
     );
 
-    // Refuses a remover who is among the leaving: the remover mints the next grant key.
+    // Refuses a remover who is among the leaving: the remover mints the next grant key. Blanks the leavers'
+    // knowledge closure, which needs `state.setters` for every filled node (std::invalid_argument otherwise).
     static CommitShape shapeRemoval(
         const TreeGroupState& state,
         const std::vector<std::string>& leavingUserIds,
@@ -140,9 +142,14 @@ public:
         const privmx::crypto::PrivateKey& with
     );
 
+    // The sender key a wrapped blob carries (`wrapKey`'s `signer`). It opens only through the ECDH with that key, so
+    // whoever sealed it holds the sender's private key or the recipient's. Nullopt for a blob that does not parse.
+    static std::optional<privmx::crypto::PublicKey> sealerOf(const std::string& blob);
+
 private:
-    // The single planner behind every operation (§6): blank `shape.blanked`, mint fresh keys for the committer's
-    // keyed path, and wrap each of them to the resolution of its children on the resulting state.
+    // The single planner behind every operation (§6): blank `shape.blanked`, mint fresh keys for
+    // `shape.filledOffPath` and the committer's keyed path, and wrap each of them to the resolution of its children
+    // on the resulting state.
     CommitPlan commit(
         const TreeGroupState& state,
         CommitShape shape,

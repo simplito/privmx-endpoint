@@ -19,6 +19,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
 
 #include "privmx/endpoint/core/ContainerBaseApi.hpp"
+#include "privmx/endpoint/core/CoreConstants.hpp"
 #include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
@@ -90,16 +91,24 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
         return resolved;
     };
     ContainerRoster roster{.users = resolve(userIds), .managers = resolve(managerIds)};
+    // The listing is only the bridge's word for these keys.
+    std::vector<UserWithPubKey> all;
+    for (const auto& userId : wanted) {
+        all.push_back(UserWithPubKey{.userId = userId, .pubKey = pubKeyByUserId.at(userId)});
+    }
+    assertUserKeysVerified(contextId, all);
+    return roster;
+}
 
-    // Every key here is one something is about to be wrapped to, and the listing is only the bridge's word for it:
-    // the application vouches for each pair, as it does for the author of anything this client reads.
+void ContainerBaseApi::assertUserKeysVerified(const std::string& contextId, const std::vector<UserWithPubKey>& users) {
+    // As for the author of anything this client reads: the application vouches for each pair.
     std::vector<VerificationRequest> requests;
     const int64_t now = privmx::utils::Utils::getNowTimestamp();
-    for (const auto& userId : wanted) {
+    for (const auto& user : users) {
         requests.push_back(
             {.contextId = contextId,
-             .senderId = userId,
-             .senderPubKey = pubKeyByUserId.at(userId),
+             .senderId = user.userId,
+             .senderPubKey = user.pubKey,
              .date = now,
              .bridgeIdentity = std::nullopt}
         );
@@ -109,7 +118,6 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
     if (verified.size() != requests.size() || std::find(verified.begin(), verified.end(), false) != verified.end()) {
         throw UserVerificationFailureException();
     }
-    return roster;
 }
 
 ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
@@ -146,11 +154,57 @@ std::vector<server::KeyEntrySet> ContainerBaseApi::buildRosterKeyEntries(const C
 }
 
 void ContainerBaseApi::assertRekeyNotNeeded(const server::ContainerInfoBase& container) {
-    assertNoStaleGroups(container.staleGroups);
+    assertNoStaleGroups(staleGroupsOf(container.groupKeys, container.keyId, container.staleGroups));
+    assertSignedEntry(container.keys, container.keyId);
 }
 
 void ContainerBaseApi::assertRekeyNotNeeded(const ModuleKeys& moduleKeys) {
-    assertNoStaleGroups(moduleKeys.staleGroups);
+    assertNoStaleGroups(staleGroupsOf(moduleKeys.groupKeys, moduleKeys.currentKeyId, moduleKeys.staleGroups));
+    assertSignedEntry(moduleKeys.keys, moduleKeys.currentKeyId);
+}
+
+bool ContainerBaseApi::hasUnsignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId) {
+    return std::any_of(keys.begin(), keys.end(), [&](const server::KeyEntry& key) {
+        return key.keyId == keyId && key.data.isString();
+    });
+}
+
+void ContainerBaseApi::assertSignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId) {
+    if (hasUnsignedEntry(keys, keyId)) {
+        throw StaleKeyRekeyRequiredException("the current key is an unsigned (V1) entry");
+    }
+}
+
+std::vector<std::string> ContainerBaseApi::staleGroupsOf(
+    const std::vector<server::GroupKeysEntry>& groupKeys,
+    const std::string& keyId,
+    const std::vector<std::string>& staleGroups
+) {
+    std::vector<std::string> stale = groupsBehindPins(groupKeys, keyId, _pinnedGroupEpoch);
+    stale.insert(stale.end(), staleGroups.begin(), staleGroups.end());
+    return stale;
+}
+
+// A route's epoch is the server's label, but a key opened through it opens only under that epoch's grant key, so a
+// lie either fails the open or names the real epoch.
+std::vector<std::string> ContainerBaseApi::groupsBehindPins(
+    const std::vector<server::GroupKeysEntry>& groupKeys,
+    const std::string& keyId,
+    const std::function<int64_t(const std::string&)>& pinnedEpoch
+) {
+    std::vector<std::string> behind;
+    if (!pinnedEpoch) {
+        return behind;
+    }
+    for (const auto& entry : groupKeys) {
+        for (const auto& key : entry.keys) {
+            if (key.keyId == keyId && key.groupEpoch.value_or(0) < pinnedEpoch(entry.group)) {
+                behind.push_back(entry.group);
+                break;
+            }
+        }
+    }
+    return behind;
 }
 
 void ContainerBaseApi::assertNoStaleGroups(const std::vector<std::string>& staleGroups) {
@@ -181,10 +235,21 @@ DecryptedEncKeyV2 ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleKeys
     KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location = EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
-    keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver)
-        .at(location)
-        .at(moduleKeys.currentKeyId);
+    keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location, moduleKeys.currentKeyId);
+    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver)
+                   .at(location)
+                   .at(moduleKeys.currentKeyId);
+    assertWriteKey(key);
+    return key;
+}
+
+void ContainerBaseApi::assertWriteKey(const DecryptedEncKey& key) {
+    if (key.statusCode != 0) {
+        throw EncryptionKeyValidationException("Current encryption key statusCode: " + std::to_string(key.statusCode));
+    }
+    if (key.dataStructureVersion != EncryptionKeyDataSchema::Version::VERSION_2) {
+        throw EncryptionKeyValidationException("Current encryption key is not a signed (V2) key entry");
+    }
 }
 
 ModuleKeys ContainerBaseApi::getModuleKeys(

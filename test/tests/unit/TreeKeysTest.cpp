@@ -94,9 +94,12 @@ protected:
 
     // The state the bridge stores once it accepts the commit.
     static TreeGroupState applied(const TreeGroupState& before, const CommitPlan& plan) {
-        return TreeWire::toRuntime(
-            TreeWire::afterCommit(wireOf(before), plan), plan.epoch, plan.grantKey.getPublicKey()
-        );
+        TreeGroupState after =
+            TreeWire::toRuntime(TreeWire::afterCommit(wireOf(before), plan), plan.epoch, plan.grantKey.getPublicKey());
+        after.commitSeq = plan.seq;
+        after.setters = before.setters;
+        after.setters[plan.seq] = plan.shape.leafAssignment.at(plan.shape.committerSeat).value();
+        return after;
     }
 
     Group create(std::uint32_t count, std::uint32_t creator = 0) {
@@ -197,8 +200,9 @@ protected:
     }
 
     // Public keys of everything that opens over the state's edges from the keys given, by real decryption: what a
-    // member — or a coalition of former members pooling everything they ever held — can reach.
-    static std::set<std::string> reachable(const TreeGroupState& state, std::vector<PrivateKey> known) {
+    // member — or a coalition of former members pooling everything they ever held — can reach. `known` grows by
+    // every key opened, so a caller can carry it across states.
+    static std::set<std::string> reachable(const TreeGroupState& state, std::vector<PrivateKey>& known) {
         std::set<std::string> reached;
         for (const PrivateKey& key : known) {
             reached.insert(key.getPublicKey().toBase58DER());
@@ -220,6 +224,18 @@ protected:
             }
         }
         return reached;
+    }
+
+    // The private key of `nodeIndex` as `holder` opens it over the state's edges.
+    static PrivateKey openedKey(const TreeGroupState& state, const PrivateKey& holder, std::uint32_t nodeIndex) {
+        std::vector<PrivateKey> known{holder};
+        reachable(state, known);
+        for (const PrivateKey& key : known) {
+            if (recordOf(state, nodeIndex)->publicKey.value() == key.getPublicKey()) {
+                return key;
+            }
+        }
+        throw std::runtime_error("node " + std::to_string(nodeIndex) + " does not open");
     }
 
     static std::optional<PrivateKey> mintedKey(const CommitPlan& plan, std::uint32_t nodeIndex) {
@@ -353,14 +369,17 @@ TEST_F(TreeKeysResolution, ABlankKeyedNodeResolvesThroughToWhatLiesBelow) {
 
 class TreeKeysCreate : public TreeKeysTestBase {};
 
-TEST_F(TreeKeysCreate, MintsTheCreatorsKeyedPathAndNothingElse) {
-    for (const std::uint32_t count : {1u, 2u, 3u, 16u, 17u, 33u, 40u}) {
+TEST_F(TreeKeysCreate, MintsEveryKeyedNodeItsOwnPathLast) {
+    for (const std::uint32_t count : {1u, 2u, 3u, 16u, 17u, 33u, 40u, 64u, 128u}) {
         for (const std::uint32_t creator : {0u, count / 2, count - 1}) {
             const std::vector<TestMember> members = makeMembers(count);
             TreeKeyCache cache;
             TreeKeys keys(cache);
             const CommitPlan plan = keys.planCreate(publicOf(members), members[creator].userId, members[creator].priv);
-            EXPECT_EQ(refreshedOf(plan), TreeMath::keyedPath(creator, count)) << "N=" << count << " c=" << creator;
+            EXPECT_EQ(sorted(refreshedOf(plan)), TreeMath::keyedNodes(count)) << "N=" << count << " c=" << creator;
+            const Nodes own = TreeMath::keyedPath(creator, count);
+            const Nodes refreshed = refreshedOf(plan);
+            EXPECT_EQ(Nodes(refreshed.end() - own.size(), refreshed.end()), own) << "its own path last, root last";
             for (const RefreshedNode& refreshed : plan.refreshed) {
                 EXPECT_EQ(refreshed.generation, 0u);
                 EXPECT_FALSE(refreshed.fromGeneration.has_value()) << "a created node has no record to come from";
@@ -421,21 +440,6 @@ TEST_F(TreeKeysCreate, RefusesWhatItCannotCommit) {
 
 class TreeKeysClimb : public TreeKeysTestBase {};
 
-TEST_F(TreeKeysClimb, CachesEveryKeyOnTheWayUp) {
-    const Group group = create(40);
-    TreeKeyCache store;
-    TreeKeys keys(store);
-    ASSERT_EQ(keys.climbToGrantKey(group.state, group.members[0].userId, group.members[0].priv).failure,
-              ClimbFailure::None);
-    EXPECT_EQ(store.nodeKeyCount(), TreeMath::keyedPath(0, 40).size());
-
-    // A second climb is served from the cached grant key and touches nothing.
-    const std::size_t before = store.nodeKeyCount();
-    EXPECT_EQ(keys.climbToGrantKey(group.state, group.members[0].userId, group.members[0].priv).failure,
-              ClimbFailure::None);
-    EXPECT_EQ(store.nodeKeyCount(), before);
-}
-
 TEST_F(TreeKeysClimb, ANonMemberCannotClimb) {
     const Group group = create(4);
     const TestMember outsider{"stranger", PrivateKey::generateRandom()};
@@ -459,7 +463,6 @@ TEST_F(TreeKeysClimb, SECURITY_DetectsACorruptedEdge) {
     EXPECT_EQ(result.failure, ClimbFailure::Tampered);
     EXPECT_FALSE(result.grantKey.has_value());
     EXPECT_EQ(result.tamperedNode, std::optional<std::uint32_t>(31u));
-    EXPECT_EQ(store.nodeKeyCount(), 0u) << "a key failing verification must never be cached";
 }
 
 TEST_F(TreeKeysClimb, SECURITY_DetectsASubstitutedGrantKey) {
@@ -548,17 +551,13 @@ TEST_F(TreeKeysClimb, SECURITY_FollowsNoEdgeFromANodeOffItsOwnPath) {
             rearranged.push_back(edge);
         }
     }
-    TreeKeyCache creatorCache;
-    TreeKeys creator(creatorCache);
-    ASSERT_EQ(creator.climbToGrantKey(group.state, group.members[0].userId, group.members[0].priv, false).failure,
-              ClimbFailure::None);
     TreeEdge offPath;
     offPath.parentIndex = 31;
     offPath.parentGeneration = recordOf(group.state, 31)->generation;
     offPath.childKind = EdgeChildKind::User;
     offPath.childUserId = outside.userId;
     offPath.blob = TreeKeys::wrapKey(
-        creatorCache.getNodeKey(31, offPath.parentGeneration).value(), outside.priv.getPublicKey(), outside.priv
+        openedKey(group.state, group.members[0].priv, 31), outside.priv.getPublicKey(), outside.priv
     );
     rearranged.push_back(offPath);
     group.state.edges = rearranged;
@@ -602,12 +601,11 @@ TEST_F(TreeKeysClimb, AMatchingCachedGrantKeyStillShortCircuitsTheWalk) {
     TreeKeys keys(store);
     ASSERT_EQ(keys.climbToGrantKey(group.state, group.members[0].userId, group.members[0].priv).failure,
               ClimbFailure::None);
-    // Drop the node keys but keep the grant key: if the second climb really short-circuits, it recovers no node
-    // key on the way and the count stays at zero.
-    store.clearNodeKeys();
-    EXPECT_EQ(keys.climbToGrantKey(group.state, group.members[0].userId, group.members[0].priv).failure,
-              ClimbFailure::None);
-    EXPECT_EQ(store.nodeKeyCount(), 0u) << "verification must not cost the short-circuit";
+    // Strip the edges: if the second climb really short-circuits, it needs none of them.
+    TreeGroupState edgeless = group.state;
+    edgeless.edges.clear();
+    EXPECT_EQ(keys.climbToGrantKey(edgeless, group.members[0].userId, group.members[0].priv).failure,
+              ClimbFailure::None) << "verification must not cost the short-circuit";
 }
 
 TEST_F(TreeKeysClimb, TwoTreesAtTheSameEpochDoNotAliasThroughOneStore) {
@@ -638,7 +636,7 @@ TEST_F(TreeKeysRemoval, RefreshesTheRemoversPathAndBlanksTheLeaversRest) {
     Group group = create(40, 0);
     const CommitPlan plan = remove(group, 35, {5});
     EXPECT_EQ(refreshedOf(plan), TreeMath::keyedPath(35, 40));
-    EXPECT_EQ(plan.shape.blanked, (std::set<std::uint32_t>{31, 63}));
+    EXPECT_EQ(plan.shape.blanked, (std::set<std::uint32_t>{31})) << "the root is re-keyed, not blanked";
     EXPECT_EQ(plan.epoch, 2u);
     EXPECT_EQ(plan.shape.subjectSeats, Nodes({5}));
     ASSERT_NE(recordOf(group.state, 31), nullptr);
@@ -713,21 +711,24 @@ TEST_F(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedDoNot) {
     }
 }
 
-// The C1 finding, as it was found: the creator once minted every node key, a removal re-keyed only the leaver's own
-// path, and the copath keys the leaver had minted still opened the refreshed root. Now a creator mints only its own
-// path, and the removal blanks all of it.
+// The C1 finding, as it was found: the creator mints every node key, and a removal that re-keyed only the leaver's
+// own path left the copath keys the leaver had minted opening the refreshed root. Now the removal blanks every node
+// the leaver set (V2: seat 40 removes the creator of 64 and re-keys 63 and 95; node 31 is off its path).
 TEST_F(TreeKeysRemoval, SECURITY_ARemovedCreatorReachesNothingWithEverythingItEverHeld) {
-    Group group = create(40, 0);
+    Group group;
+    group.members = makeMembers(64);
     TreeKeyCache creatorCache;
     TreeKeys creator(creatorCache);
-    ASSERT_EQ(creator.climbToGrantKey(group.state, group.members[0].userId, group.members[0].priv, false).failure,
-              ClimbFailure::None);
-    std::vector<PrivateKey> held{group.members[0].priv, creatorCache.getGrantKey(1).value()};
-    for (const std::uint32_t node : TreeMath::keyedPath(0, 40)) {
-        held.push_back(creatorCache.getNodeKey(node, 0).value());
+    const CommitPlan created = creator.planCreate(publicOf(group.members), group.members[0].userId, group.members[0].priv);
+    group.state = applied(TreeGroupState{}, created);
+    std::vector<PrivateKey> held{group.members[0].priv, created.grantKey};
+    for (const RefreshedNode& minted : created.refreshed) {
+        held.push_back(minted.key);
     }
 
-    remove(group, 35, {0});
+    const CommitPlan plan = remove(group, 40, {0});
+    EXPECT_EQ(sorted(refreshedOf(plan)), Nodes({63, 95}));
+    EXPECT_EQ(plan.shape.blanked, (std::set<std::uint32_t>{31}));
     const std::set<std::string> reached = reachable(group.state, held);
     EXPECT_EQ(reached.count(group.state.grantPublicKey.toBase58DER()), 0u)
         << "the removed creator reaches the new epoch's grant key";
@@ -743,23 +744,82 @@ TEST_F(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing)
     Group group = create(40, 0);
     std::vector<PrivateKey> pooled;
     for (const std::uint32_t leaver : {7u, 36u}) {
-        TreeKeyCache cache;
-        TreeKeys keys(cache);
-        ASSERT_EQ(
-            keys.climbToGrantKey(group.state, group.members[leaver].userId, group.members[leaver].priv, false).failure,
-            ClimbFailure::None
-        );
-        pooled.push_back(group.members[leaver].priv);
-        pooled.push_back(cache.getGrantKey(group.state.epoch).value());
-        for (const TreeNodeState& node : group.state.nodes) {
-            if (const auto key = cache.getNodeKey(node.nodeIndex, node.generation); key.has_value()) {
-                pooled.push_back(key.value());
-            }
-        }
+        std::vector<PrivateKey> held{group.members[leaver].priv};
+        reachable(group.state, held); // everything the leaver could open before leaving
+        pooled.insert(pooled.end(), held.begin(), held.end());
         remove(group, 20, {leaver});
     }
     EXPECT_EQ(reachable(group.state, pooled).count(group.state.grantPublicKey.toBase58DER()), 0u);
     expectEveryoneSeatedClimbs(group);
+}
+
+// V5: node 63 was re-keyed by seat 40, but it wraps to node 31, which the creator set — so the creator opens it, and
+// the removal has to blank the ancestors of what it set too, not only what it set.
+TEST_F(TreeKeysRemoval, SECURITY_ARemovalBlanksTheAncestorsOfWhatTheLeaverSet) {
+    Group group;
+    group.members = makeMembers(128);
+    TreeKeyCache creatorCache;
+    TreeKeys creator(creatorCache);
+    const CommitPlan created =
+        creator.planCreate(publicOf(group.members), group.members[0].userId, group.members[0].priv);
+    group.state = applied(TreeGroupState{}, created);
+    std::vector<PrivateKey> held{group.members[0].priv, created.grantKey};
+    for (const RefreshedNode& minted : created.refreshed) {
+        held.push_back(minted.key);
+    }
+    selfUpdate(group, 40);
+    reachable(group.state, held); // whatever the creator opens before it goes
+
+    const CommitPlan plan = remove(group, 100, {0});
+    EXPECT_EQ(sorted(refreshedOf(plan)), Nodes({127, 191, 223}));
+    EXPECT_EQ(plan.shape.blanked, (std::set<std::uint32_t>{31, 63, 159}));
+    const std::set<std::string> reached = reachable(group.state, held);
+    EXPECT_EQ(reached.count(group.state.grantPublicKey.toBase58DER()), 0u);
+    for (const TreeNodeState& node : group.state.nodes) {
+        if (node.publicKey.has_value()) {
+            EXPECT_EQ(reached.count(node.publicKey->toBase58DER()), 0u) << "reaches current node " << node.nodeIndex;
+        }
+    }
+    expectEveryoneSeatedClimbs(group);
+}
+
+// V8: the adder of seat 5 keeps node 31, which it minted off its own path; removing the adder blanks what is left
+// of that (node 95), while the remover's path re-keys 31 and 63.
+TEST_F(TreeKeysRemoval, SECURITY_ARemovedAdderReachesNothingItMintedForOthers) {
+    Group group = create(64, 0);
+    std::vector<PrivateKey> held{group.members[40].priv};
+    reachable(group.state, held);
+    const auto keep = [&](const CommitPlan& plan) {
+        held.push_back(plan.grantKey);
+        for (const RefreshedNode& minted : plan.refreshed) {
+            held.push_back(minted.key);
+        }
+    };
+    keep(remove(group, 40, {5}));
+    const CommitPlan added = add(group, 40, 1);
+    EXPECT_EQ(added.shape.subjectSeats, Nodes({5}));
+    EXPECT_EQ(added.shape.filledOffPath, (std::set<std::uint32_t>{31}));
+    keep(added);
+    reachable(group.state, held);
+
+    const CommitPlan plan = remove(group, 0, {40});
+    EXPECT_EQ(sorted(refreshedOf(plan)), Nodes({31, 63}));
+    EXPECT_EQ(plan.shape.blanked, (std::set<std::uint32_t>{95}));
+    const std::set<std::string> reached = reachable(group.state, held);
+    EXPECT_EQ(reached.count(group.state.grantPublicKey.toBase58DER()), 0u);
+    for (const TreeNodeState& node : group.state.nodes) {
+        if (node.publicKey.has_value()) {
+            EXPECT_EQ(reached.count(node.publicKey->toBase58DER()), 0u) << "reaches current node " << node.nodeIndex;
+        }
+    }
+    expectEveryoneSeatedClimbs(group);
+}
+
+TEST_F(TreeKeysRemoval, RefusesANodeWithNoKnownSetter) {
+    Group group = create(64, 0);
+    group.state.setters.clear();
+    EXPECT_THROW(TreeKeys::shapeRemoval(group.state, {group.members[5].userId}, group.members[40].userId),
+                 std::invalid_argument);
 }
 
 // A member garbles every wrap, so nobody climbs — itself included, which is the point: it must not be able to block
@@ -816,21 +876,21 @@ TEST_F(TreeKeysRemoval, ParsesOnlyTheRosterKeysItWrapsTo) {
 
 class TreeKeysAddition : public TreeKeysTestBase {};
 
-TEST_F(TreeKeysAddition, SECURITY_TheNewcomersPathIsBlankedNotKeyedForThem) {
-    // Seat 5 emptied, then refilled by seat 35: the adder refreshes its own path (the root) and blanks node 31
-    // rather than minting a key on a path that is not its own — a key it would keep after the newcomer's subtree
-    // stopped being any of its business.
+TEST_F(TreeKeysAddition, TheNewcomersPathIsFilledByTheAdder) {
+    // Seat 5 emptied (node 31 blank), then refilled by seat 35: the adder mints node 31 for the newcomer, then its
+    // own path (the root). It keeps node 31's key, which its own removal will blank.
     Group group = create(40, 0);
     remove(group, 35, {5});
-    selfUpdate(group, 0); // node 31 filled again, so the addition has something to blank
     const std::uint32_t epoch = group.state.epoch;
     const auto grantBefore = group.state.grantPublicKey;
 
     const CommitPlan plan = add(group, 35, 1);
     EXPECT_EQ(plan.shape.subjectSeats, Nodes({5})) << "the blank is reused before the tree grows";
-    EXPECT_EQ(refreshedOf(plan), TreeMath::keyedPath(35, 40));
-    EXPECT_EQ(plan.shape.blanked, (std::set<std::uint32_t>{31}));
-    EXPECT_FALSE(recordOf(group.state, 31)->publicKey.has_value());
+    EXPECT_EQ(refreshedOf(plan), Nodes({31, 63}));
+    EXPECT_EQ(plan.refreshed[0].fromGeneration, std::optional<std::uint32_t>(0u));
+    EXPECT_EQ(plan.refreshed[0].generation, 1u);
+    EXPECT_TRUE(plan.shape.blanked.empty()) << "an addition blanks nothing";
+    EXPECT_EQ(recordOf(group.state, 31)->setBy, std::optional<std::uint64_t>(plan.seq));
     EXPECT_EQ(group.state.epoch, epoch) << "an addition must not advance the epoch";
     EXPECT_EQ(group.state.grantPublicKey, grantBefore) << "nor change the grant key";
     expectEveryoneSeatedClimbs(group);
@@ -1037,62 +1097,20 @@ TEST_F(TreeKeyCacheBasics, PutOverwritesInPlace) {
     const PrivateKey second = PrivateKey::generateRandom();
 
     TreeKeyCache store;
-    store.putNodeKey(1, 0, first);
-    store.putNodeKey(1, 0, second);
-    ASSERT_TRUE(store.getNodeKey(1, 0).has_value());
-    EXPECT_EQ(store.getNodeKey(1, 0)->toWIF(), second.toWIF());
-    EXPECT_EQ(store.nodeKeyCount(), 1u) << "same slot, not a second entry";
-
     store.putGrantKey(1, first);
     store.putGrantKey(1, second);
     ASSERT_TRUE(store.getGrantKey(1).has_value());
     EXPECT_EQ(store.getGrantKey(1)->toWIF(), second.toWIF());
 }
 
-TEST_F(TreeKeyCacheBasics, GenerationIsPartOfTheNodeKeyIdentity) {
-    const PrivateKey oldKey = PrivateKey::generateRandom();
-    const PrivateKey refreshed = PrivateKey::generateRandom();
-
-    TreeKeyCache store;
-    store.putNodeKey(1, 0, oldKey);
-    store.putNodeKey(1, 1, refreshed);
-    EXPECT_EQ(store.nodeKeyCount(), 2u) << "a refresh makes the old key a different key";
-    EXPECT_EQ(store.getNodeKey(1, 0)->toWIF(), oldKey.toWIF());
-    EXPECT_EQ(store.getNodeKey(1, 1)->toWIF(), refreshed.toWIF());
-}
-
-TEST_F(TreeKeyCacheBasics, HighestGrantEpochReportsTheLargestCached) {
-    TreeKeyCache store;
-    EXPECT_FALSE(store.highestGrantEpoch().has_value());
-
-    store.putGrantKey(1, PrivateKey::generateRandom());
-    store.putGrantKey(7, PrivateKey::generateRandom());
-    store.putGrantKey(3, PrivateKey::generateRandom());
-    ASSERT_TRUE(store.highestGrantEpoch().has_value());
-    EXPECT_EQ(store.highestGrantEpoch().value(), 7u) << "largest, not last written";
-}
-
-TEST_F(TreeKeyCacheBasics, ClearNodeKeysKeepsGrantKeys) {
-    TreeKeyCache store;
-    store.putNodeKey(1, 0, PrivateKey::generateRandom());
-    store.putGrantKey(4, PrivateKey::generateRandom());
-
-    store.clearNodeKeys();
-    EXPECT_EQ(store.nodeKeyCount(), 0u);
-    // A removal kills the node generations but not the epoch keys: `buildRungs` still needs the older ones.
-    EXPECT_TRUE(store.getGrantKey(4).has_value());
-}
-
 TEST_F(TreeKeyCacheBasics, ForgetGrantKeyRemovesOnlyThatEpoch) {
     TreeKeyCache store;
     store.putGrantKey(1, PrivateKey::generateRandom());
     store.putGrantKey(2, PrivateKey::generateRandom());
-    store.putNodeKey(1, 0, PrivateKey::generateRandom());
 
     store.forgetGrantKey(1);
     EXPECT_FALSE(store.getGrantKey(1).has_value());
     EXPECT_TRUE(store.getGrantKey(2).has_value());
-    EXPECT_EQ(store.nodeKeyCount(), 1u);
 }
 
 TEST_F(TreeKeyCacheBasics, ConcurrentReadersAndWritersDoNotRace) {
@@ -1105,12 +1123,10 @@ TEST_F(TreeKeyCacheBasics, ConcurrentReadersAndWritersDoNotRace) {
     for (std::uint32_t t = 0; t < 4; ++t) {
         threads.emplace_back([&store, t]() {
             for (std::uint32_t i = 0; i < 200; ++i) {
-                store.putNodeKey(t, i, PrivateKey::generateRandom());
-                (void)store.getNodeKey(t, i);
+                store.putGrantKey(100 + t, PrivateKey::generateRandom());
                 (void)store.getGrantKey(99);
-                (void)store.highestGrantEpoch();
                 if (i % 50 == 0) {
-                    store.clearNodeKeys();
+                    store.forgetGrantKey(100 + t);
                 }
             }
         });
@@ -1118,7 +1134,7 @@ TEST_F(TreeKeyCacheBasics, ConcurrentReadersAndWritersDoNotRace) {
     for (std::thread& thread : threads) {
         thread.join();
     }
-    ASSERT_TRUE(store.getGrantKey(99).has_value()) << "clearNodeKeys must never touch the grant keys";
+    ASSERT_TRUE(store.getGrantKey(99).has_value()) << "another epoch's writes must never touch it";
     EXPECT_EQ(store.getGrantKey(99)->toWIF(), anchor.toWIF());
 }
 
@@ -1140,10 +1156,6 @@ TEST_F(TreeKeyCacheRegistryTest, SECURITY_GivesEachGroupItsOwnStore) {
     EXPECT_EQ(registry.get("groupB")->getGrantKey(1)->toWIF(), keyB.toWIF());
     EXPECT_NE(registry.get("groupA")->getGrantKey(1)->toWIF(), keyB.toWIF());
 
-    registry.get("groupA")->putNodeKey(1, 0, keyA);
-    registry.get("groupB")->putNodeKey(1, 0, keyB);
-    EXPECT_EQ(registry.get("groupA")->getNodeKey(1, 0)->toWIF(), keyA.toWIF());
-    EXPECT_EQ(registry.get("groupB")->getNodeKey(1, 0)->toWIF(), keyB.toWIF());
 }
 
 TEST_F(TreeKeyCacheRegistryTest, ReturnsTheSameStoreForTheSameGroup) {

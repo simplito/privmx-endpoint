@@ -18,11 +18,47 @@ limitations under the License.
 #include <stdexcept>
 #include <string>
 
-#include "privmx/endpoint/group/keytree/TreeKeys.hpp" // for the wrap/unwrap primitives
+#include <privmx/crypto/EciesEncryptor.hpp>
+
+#include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 
 using namespace privmx::endpoint::group::keytree;
 
+namespace {
+
+std::string rungLabel(const RungSpan& span) {
+    std::string label = TreeCommits::tag("pmx-rung");
+    TreeCommits::putU32(label, span.at);
+    TreeCommits::putU32(label, span.target);
+    return label;
+}
+
+} // namespace
+
 LadderKeys::LadderKeys(TreeKeyCache& cache) : _cache(cache) {}
+
+std::string LadderKeys::sealRung(
+    const privmx::crypto::PrivateKey& key,
+    const RungSpan& span,
+    const privmx::crypto::PublicKey& to,
+    const privmx::crypto::PrivateKey& signer
+) {
+    return privmx::crypto::EciesEncryptor::encryptToBase64(to, rungLabel(span) + key.toWIF(), signer);
+}
+
+std::optional<privmx::crypto::PrivateKey> LadderKeys::openRung(
+    const ArchiveRung& rung,
+    const privmx::crypto::PrivateKey& with
+) {
+    try {
+        const std::string label = rungLabel(rung.span);
+        const std::string plain = privmx::crypto::EciesEncryptor::decryptFromBase64(with, rung.blob);
+        if (plain.compare(0, label.size(), label) != 0) {
+            return std::nullopt; // sealed for another span: relabelled, so not this rung's sealer's doing
+        }
+        return privmx::crypto::PrivateKey::fromWIF(plain.substr(label.size()));
+    } catch (...) { return std::nullopt; }
+}
 
 std::optional<privmx::crypto::PublicKey> LadderKeys::publicKeyOfEpoch(
     std::uint32_t epoch,
@@ -148,7 +184,7 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
     ArchiveRung unitRung;
     unitRung.span = RungSpan{newEpoch, newEpoch - 1};
     unitRung.recipientKind = RungRecipientKind::Epoch;
-    unitRung.blob = TreeKeys::wrapKey(previousEpochKey.value(), newGrantPublicKey, signer);
+    unitRung.blob = sealRung(previousEpochKey.value(), unitRung.span, newGrantPublicKey, signer);
     unitRung.author = author;
     rungs.push_back(unitRung);
 
@@ -176,7 +212,7 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
         ArchiveRung rung;
         rung.span = RungSpan{newEpoch, *target};
         rung.recipientKind = RungRecipientKind::Epoch;
-        rung.blob = TreeKeys::wrapKey(targetKey.value(), newGrantPublicKey, signer);
+        rung.blob = sealRung(targetKey.value(), rung.span, newGrantPublicKey, signer);
         rung.author = author;
         rungs.push_back(rung);
     }
@@ -206,7 +242,7 @@ std::vector<ArchiveRung> LadderKeys::buildEraLinks(
         link.span = RungSpan{closingEpoch + 1, closingEpoch};
         link.recipientKind = recipient.kind;
         link.recipientId = recipient.id;
-        link.blob = TreeKeys::wrapKey(closingEpochKey, recipient.publicKey, signer);
+        link.blob = sealRung(closingEpochKey, link.span, recipient.publicKey, signer);
         link.author = author;
         links.push_back(link);
     }
@@ -263,8 +299,10 @@ DescentResult LadderKeys::descend(
             return result;
         }
 
-        // Greedy: the smallest target not below the goal is the largest jump that does not overshoot.
-        const ArchiveRung* best = nullptr;
+        // Greedy: the smallest target not below the goal is the largest jump that does not overshoot. The span is
+        // sealed inside the blob, but the sealer is not authenticated (any holder of the epoch key can seal one), so
+        // one that does not open to its target's registered key is skipped for the next; blame only when none does.
+        std::vector<const ArchiveRung*> candidates;
         for (const ArchiveRung& rung : available) {
             if (rung.recipientKind != RungRecipientKind::Epoch) {
                 continue; // era links are crossed explicitly, not walked over
@@ -277,27 +315,35 @@ DescentResult LadderKeys::descend(
             if (rung.span.at != current || rung.span.target < goal) {
                 continue;
             }
-            if (best == nullptr || rung.span.target < best->span.target) {
-                best = &rung;
-            }
+            candidates.push_back(&rung);
         }
-        if (best == nullptr) {
+        if (candidates.empty()) {
             result.failure = floorFailure != DescentFailure::None ? floorFailure : DescentFailure::MissingRung;
             result.reachedEpoch = current;
             return result;
         }
-
-        const auto recovered = TreeKeys::unwrapKey(best->blob, currentKey);
-        if (!recovered.has_value()) {
-            result.failure = DescentFailure::DecryptFailed;
-            result.reachedEpoch = current;
-            return result;
+        std::stable_sort(candidates.begin(), candidates.end(), [](const ArchiveRung* a, const ArchiveRung* b) {
+            return a->span.target < b->span.target;
+        });
+        const ArchiveRung* best = nullptr;
+        std::optional<privmx::crypto::PrivateKey> recovered;
+        DescentResult refused = result;
+        for (const ArchiveRung* candidate : candidates) {
+            recovered = openRung(*candidate, currentKey);
+            if (recovered.has_value() && verifyAgainstRegistry(recovered.value(), candidate->span.target, registry)) {
+                best = candidate;
+                break;
+            }
+            if (refused.failure == DescentFailure::None) {
+                refused.failure = recovered.has_value() ? DescentFailure::Tampered : DescentFailure::DecryptFailed;
+                refused.reachedEpoch = current;
+                if (recovered.has_value()) {
+                    refused.blame = candidate->author;
+                }
+            }
         }
-        if (!verifyAgainstRegistry(recovered.value(), best->span.target, registry)) {
-            result.failure = DescentFailure::Tampered;
-            result.reachedEpoch = current;
-            result.blame = best->author;
-            return result;
+        if (best == nullptr) {
+            return refused;
         }
 
         current = best->span.target;
@@ -348,7 +394,7 @@ DescentResult LadderKeys::crossEraBoundary(
             continue;
         }
 
-        const auto recovered = TreeKeys::unwrapKey(link.blob, opener.value());
+        const auto recovered = openRung(link, opener.value());
         if (!recovered.has_value()) {
             result.failure = DescentFailure::DecryptFailed;
             continue; // another link may still open

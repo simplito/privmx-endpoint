@@ -8,6 +8,7 @@
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupApiImpl.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -480,6 +481,20 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_leaves_the_same_session_able_to_read
     ASSERT_NO_THROW({ before = threadApi->getMessage(beforeId); });
     EXPECT_EQ(before.statusCode, 0) << "the removal discarded the older epoch key the ladder descent needs";
     EXPECT_EQ(before.data.stdString(), "data_before");
+}
+
+TEST_F(GroupKeyTreeTest, a_resolved_epoch_key_is_not_fetched_again_in_the_same_connection) {
+    // Every container key read resolves its grant's group epoch; once known, that epoch must cost no `groupGet` and
+    // climb again. Shown by deleting the group first, after which any read of it fails. The delete goes straight to
+    // the server: `deleteGroup` itself drops the group's cached keys (T4-14), which is not what is measured here.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
+    const auto impl = groupApi->getImpl();
+    std::optional<privmx::crypto::PrivateKey> first, again;
+    ASSERT_NO_THROW({ first = impl->resolveGroupPrivKey(groupId, 1); });
+    ASSERT_NO_THROW({ group::ServerApi(connection->getImpl()->getGateway()).groupDelete({.groupId = groupId}); });
+    ASSERT_NO_THROW({ again = impl->resolveGroupPrivKey(groupId, 1); });
+    EXPECT_EQ(again->getPublicKey().toBase58DER(), first->getPublicKey().toBase58DER());
 }
 
 TEST_F(GroupKeyTreeTest, reconnecting_rebuilds_the_key_cache_from_scratch) {

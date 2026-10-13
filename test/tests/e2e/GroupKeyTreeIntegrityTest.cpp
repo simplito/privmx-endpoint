@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -8,13 +9,16 @@
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
+#include <privmx/endpoint/thread/ServerApi.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 
 using namespace privmx::endpoint;
@@ -1102,6 +1106,26 @@ TEST_F(GroupKeyTreeIntegrityTest, two_concurrent_public_meta_writes_still_serial
     EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion) << "the other plane is untouched";
 }
 
+TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_up_the_metadata_the_removed_member_wrote) {
+    // T4-03: the planes' author is the member removed; it wrote them while a member, so the remover carries them up
+    // under its own name rather than leaving them unattested.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(2)}); });
+    onFreshSession(2, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        ASSERT_NO_THROW({
+            const group::Group current = groups.getGroup(groupId);
+            groups.updateGroupPublicMeta(groupId, core::Buffer::from("public_by_2"), current.publicMetaVersion);
+            groups.updateGroupPrivateMeta(groupId, core::Buffer::from("private_by_2"), current.privateMetaVersion);
+        });
+    });
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(2).userId}); });
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(after.publicMeta.stdString(), "public_by_2");
+    EXPECT_EQ(after.privateMeta.stdString(), "private_by_2");
+}
+
 TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_both_metadata_planes_up_to_the_new_epoch) {
     // An entry left at the epoch it was written under stays openable, and forgeable, by whoever held that
     // epoch's key - the member just removed included - so a removal carries both planes up to the new epoch.
@@ -1162,4 +1186,145 @@ TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_both_metadata_planes_up_to_t
     EXPECT_TRUE(canReadGroup(2, groupId)) << "a member seated after the write cannot read the metadata; " <<
         lastReadError;
     EXPECT_TRUE(canReadGroup(1, groupId)) << "the manager lost access to their own group; " << lastReadError;
+}
+
+// -- an unsigned key entry --
+
+TEST_F(GroupKeyTreeIntegrityTest, SECURITY_an_unsigned_v1_key_entry_never_becomes_the_key_new_content_goes_under) {
+    // A V1 entry carries no signature, so whoever serves it chooses the key - the Bridge, or here a manager speaking
+    // raw RPC, which stands in for it. Whoever chose the key reads everything written under it.
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = threadApi->createThread(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2)}, std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("v1_public"), core::Buffer::from("v1_private"), readableByEverybody()
+        );
+    });
+    const thread::Thread before = threadApi->getThread(threadId);
+
+    const std::string forgedKeyId = "forged_v1_key";
+    std::vector<core::server::KeyEntrySet> forged;
+    for (int index : {1, 2}) {
+        forged.push_back(core::server::KeyEntrySet{
+            .user = user(index).userId,
+            .keyId = forgedKeyId,
+            .data = privmx::crypto::EciesEncryptor::encryptToBase64(
+                privmx::crypto::PublicKey::fromBase58DER(user(index).pubKey), std::string(32, '\x5a'),
+                privmx::crypto::PrivateKey::generateRandom()
+            )
+        });
+    }
+    thread::ServerApi raw(connection->getImpl()->getGateway());
+    thread::server::ThreadRotateKeysModel rotate;
+    rotate.id = threadId;
+    rotate.keyId = forgedKeyId;
+    rotate.keys = forged;
+    rotate.version = before.version;
+    rotate.force = false;
+    ASSERT_NO_THROW({ raw.threadRotateKeys(rotate); });
+
+    // Never written under: a sender allowed to re-key replaces the key first, anybody else is told to.
+    const auto sendAs = [&](thread::ThreadApi& threads) -> std::optional<std::string> {
+        try {
+            return threads.sendMessage(
+                threadId, core::Buffer::from("pub"), core::Buffer::from("priv"), core::Buffer::from("under_forged_key")
+            );
+        } catch (const core::StaleKeyRekeyRequiredException&) { return std::nullopt; }
+    };
+    const auto keyIdOf = [&](const std::string& messageId) {
+        thread::server::ThreadMessageGetModel get;
+        get.messageId = messageId;
+        return raw.threadMessageGet(get).message.keyId;
+    };
+    std::optional<std::string> fromUser2;
+    onFreshSession(2, [&](group::GroupApi&, thread::ThreadApi& threads) {
+        ASSERT_NO_THROW({ fromUser2 = sendAs(threads); });
+        // What was written before stays readable: only writing under the V1 key is refused.
+        EXPECT_EQ(threads.getThread(threadId).statusCode, 0);
+    });
+    std::optional<std::string> fromUser1;
+    ASSERT_NO_THROW({ fromUser1 = sendAs(*threadApi); });
+    ASSERT_TRUE(fromUser1.has_value()) << "the manager re-keys a legacy key away rather than being stuck with it";
+    EXPECT_NE(keyIdOf(fromUser1.value()), forgedKeyId) << "user_1 wrote under a key the server chose";
+    if (fromUser2.has_value()) {
+        EXPECT_NE(keyIdOf(fromUser2.value()), forgedKeyId) << "user_2 wrote under a key the server chose";
+    }
+}
+
+// -- keys the application does not vouch for --
+
+namespace {
+
+// Vouches for every key but the one user's, as an application would for a key it knows is not theirs.
+class DistrustingVerifier : public core::UserVerifierInterface {
+public:
+    explicit DistrustingVerifier(std::string distrusted) : _distrusted(std::move(distrusted)) {}
+    std::vector<bool> verify(const std::vector<core::VerificationRequest>& requests) override {
+        std::vector<bool> result;
+        for (const auto& request : requests) {
+            result.push_back(request.senderId != _distrusted);
+        }
+        return result;
+    }
+
+private:
+    std::string _distrusted;
+};
+
+template <typename Call>
+bool failsUserVerification(Call call) {
+    try {
+        call();
+    } catch (const core::Exception& e) {
+        return e.getCode() == core::UserVerificationFailureException().getCode();
+    }
+    return false;
+}
+
+} // namespace
+
+TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_key_the_application_does_not_vouch_for_gets_no_seat) {
+    // T3-11: a seat is filled to the key given for it, and that key comes off the Bridge's user listing. One the
+    // application does not vouch for may be the Bridge's own, which would then climb to the grant key.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
+    connection->setUserVerifier(std::make_shared<DistrustingVerifier>(user(3).userId));
+    EXPECT_TRUE(failsUserVerification([&] { createTreeGroup({user(1), user(3)}); })) << "seated at creation";
+    EXPECT_TRUE(failsUserVerification([&] {
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
+    })) << "seated by an addition";
+    EXPECT_FALSE(contains(groupApi->getGroup(groupId).users, user(3).userId));
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_listed_group_key_is_handed_out_only_as_a_vouched_statement_names_it) {
+    // T3-10: an outsider seals anonymous envelopes to the listed key. Unless the latest statement naming it is by
+    // somebody the application vouches for, the key may be the Bridge's. A listing carries no statement, so the key
+    // is handed out only once a read in this session has verified one naming it (the creator's own commit counts,
+    // hence another member's session).
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
+    auto other = connect(2);
+    privmx::test::ScopeExit closeIt([&] { other->disconnect(); });
+    auto groups = group::GroupApi::create(*other);
+    const auto listedKey = [&] {
+        const auto page =
+            groups.listGroups(contextId(), core::PagingQuery{.skip = 0, .limit = 100, .sortOrder = "desc"});
+        for (const auto& listed : page.readItems) {
+            if (listed.groupId == groupId) {
+                return listed.groupPubKey;
+            }
+        }
+        return std::string("not listed");
+    };
+    EXPECT_EQ(listedKey(), "") << "nothing verified in this session yet";
+    // Distrusted first: a statement once vouched for is not asked about again in this session.
+    other->setUserVerifier(std::make_shared<DistrustingVerifier>(user(1).userId));
+    try {
+        groups.getGroup(groupId);
+    } catch (const std::exception&) {}
+    EXPECT_EQ(listedKey(), "") << "the key of a statement nobody vouches for";
+    other->setUserVerifier(std::make_shared<DistrustingVerifier>("nobody"));
+    const std::string verified = groups.getGroup(groupId).groupPubKey;
+    EXPECT_FALSE(verified.empty());
+    EXPECT_EQ(listedKey(), verified);
 }
