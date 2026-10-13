@@ -295,10 +295,8 @@ void KvdbApiImpl::setEntryRequest(
     const core::ModuleKeys& keys
 ) {
     auto msgKey = getAndValidateModuleCurrentEncKey(keys);
-    if (msgKey.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(msgKey.statusCode)
-        );
+    if (msgKey.error) {
+        throw core::EncryptionKeyValidationException("current encryption key cannot be used", *msgKey.error);
     }
     server::KvdbEntrySetModel send_entry_model;
     send_entry_model.kvdbId = kvdbId;

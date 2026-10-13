@@ -430,7 +430,7 @@ void StoreApiImpl::syncFile(const int64_t handle) {
             setNewModuleKeysInCache(file_raw.store.id, storeKey, file_raw.store.version);
             try {
                 auto currentKey = getAndValidateModuleCurrentEncKey(storeKey);
-                if (currentKey.statusCode == 0) {
+                if (currentKey.statusCode() == 0) {
                     writeKey = core::DecryptedEncKey(currentKey);
                 }
             } catch (const core::Exception&) {
@@ -483,10 +483,8 @@ core::DecryptedEncKey StoreApiImpl::getCurrentFileEncKey(const std::string& file
     auto storeKey = containerToModuleKeys(store);
     setNewModuleKeysInCache(store.id, storeKey, store.version);
     auto key = getAndValidateModuleCurrentEncKey(storeKey);
-    if (key.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(key.statusCode)
-        );
+    if (key.error) {
+        throw core::EncryptionKeyValidationException("current encryption key cannot be used", *key.error);
     }
     return key;
 }
@@ -548,10 +546,8 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(
 ) {
     auto serverId = _host;
     auto key = getAndValidateModuleCurrentEncKey(storeKey);
-    if (key.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(key.statusCode)
-        );
+    if (key.error) {
+        throw core::EncryptionKeyValidationException("current encryption key cannot be used", *key.error);
     }
     dynamic::InternalStoreFileMeta internalFileMeta;
     internalFileMeta.version = 4;
@@ -744,10 +740,8 @@ void StoreApiImpl::updateFileMeta(
     // above is not guaranteed to have happened — a caller who may not re-key never gets here.
     assertRekeyNotNeeded(store);
     auto key = getAndValidateModuleCurrentEncKey(store);
-    if (key.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(key.statusCode)
-        );
+    if (key.error) {
+        throw core::EncryptionKeyValidationException("current encryption key cannot be used", *key.error);
     }
     auto fileInternalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(
         file, storeKey, _keyProvider, _groupPrivKeyResolver

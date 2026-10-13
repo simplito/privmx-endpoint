@@ -48,16 +48,15 @@ ContextCustomEventData EventDataSchemaMapper::decrypt(const server::ContextCusto
     }
     auto authorPubKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(rawEvent.author.pub);
     auto decryptedKey = _eventKeyProvider.decryptKey(rawEvent.key, authorPubKey);
-    if (decryptedKey.statusCode != 0) {
-        return makeErrorResult(rawEvent, decryptedKey.statusCode);
+    if (decryptedKey.statusCode() != 0) {
+        return makeErrorResult(rawEvent, decryptedKey.statusCode());
     }
     core::DecryptedEncKey encKey;
     encKey.key = decryptedKey.key;
-    encKey.statusCode = 0;
     try {
         auto raw = _strategyV5->decrypt(rawEvent, encKey);
-        if (raw.statusCode == 0 && !verifyDecryptedEventData(raw)) {
-            raw.statusCode = privmx::endpoint::core::UserVerificationFailureException().getCode();
+        if (raw.statusCode() == 0 && !verifyDecryptedEventData(raw)) {
+            raw.error = core::asError(privmx::endpoint::core::UserVerificationFailureException());
         }
         return _strategyV5->convert(rawEvent, raw);
     } catch (const core::Exception& e) {
@@ -71,28 +70,27 @@ DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
     DecryptedInternalContextEventDataV1 result;
     result.dataStructureVersion = EventDataSchema::Version::VERSION_5;
     if (getDataStructureVersion(rawEvent) != EventDataSchema::Version::VERSION_5) {
-        result.statusCode = InvalidEncryptedEventDataVersionException().getCode();
+        result.error = core::asError(InvalidEncryptedEventDataVersionException());
         return result;
     }
     auto authorPubKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(rawEvent.author.pub);
     auto decryptedKey = _eventKeyProvider.decryptKey(rawEvent.key, authorPubKey);
-    result.statusCode = decryptedKey.statusCode;
-    if (result.statusCode != 0)
+    result.error = decryptedKey.error;
+    if (result.error)
         return result;
     core::DecryptedEncKey encKey;
     encKey.key = decryptedKey.key;
-    encKey.statusCode = 0;
     try {
         auto raw = _strategyV5->decrypt(rawEvent, encKey);
-        result.statusCode = raw.statusCode;
+        result.error = raw.error;
         result.data = raw.data;
         result.type = raw.type.has_value() ? raw.type.value() : "";
-        if (result.statusCode == 0 && !verifyDecryptedEventData(raw)) {
-            result.statusCode = privmx::endpoint::core::UserVerificationFailureException().getCode();
+        if (!result.error && !verifyDecryptedEventData(raw)) {
+            result.error = core::asError(privmx::endpoint::core::UserVerificationFailureException());
         }
     } catch (const core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("decrypting the internal context event"); }
     return result;
 }
 

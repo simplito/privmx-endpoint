@@ -34,7 +34,7 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaStrategyV4::conver
 ) const {
     return {
         ThreadDataSchemaMapper::toLibThread(
-            thread, raw.publicMeta, raw.privateMeta, raw.statusCode, ThreadDataSchema::Version::VERSION_4
+            thread, raw.publicMeta, raw.privateMeta, raw.statusCode(), ThreadDataSchema::Version::VERSION_4
         ),
         core::DataIntegrityObject{
             .creatorUserId = thread.lastModifier,

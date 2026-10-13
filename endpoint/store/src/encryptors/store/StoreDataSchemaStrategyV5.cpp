@@ -29,7 +29,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaStrategyV5::convert(
 ) const {
     return {
         StoreDataSchemaMapper::toLibStore(
-            store, raw.publicMeta, raw.privateMeta, raw.statusCode, StoreDataSchema::Version::VERSION_5
+            store, raw.publicMeta, raw.privateMeta, raw.statusCode(), StoreDataSchema::Version::VERSION_5
         ),
         raw.dio
     };

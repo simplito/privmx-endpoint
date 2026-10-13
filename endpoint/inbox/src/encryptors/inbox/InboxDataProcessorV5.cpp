@@ -82,13 +82,13 @@ InboxDataResultV5 InboxDataProcessorV5::unpackAll(
     result.threadId = encryptedData.threadId;
     result.filesConfig = InboxDataHelper::fileConfigFromTypedObject(encryptedData.fileConfig);
     result.publicData = unpackPublic(encryptedData.publicData);
-    result.statusCode = result.publicData.statusCode;
-    if (result.statusCode != 0) {
+    result.error = result.publicData.error;
+    if (result.error) {
         return result;
     }
 
     result.privateData = unpackPrivate(encryptedData, inboxKey, verifiedDio);
-    result.statusCode = result.privateData.statusCode;
+    result.error = result.privateData.error;
     return result;
 }
 
@@ -100,7 +100,6 @@ InboxPublicDataV5AsResult InboxDataProcessorV5::unpackPublicOnly(const Poco::Dyn
 InboxPublicDataV5AsResult InboxDataProcessorV5::unpackPublic(const Poco::Dynamic::Var& publicData) {
     InboxPublicDataV5AsResult result;
     result.dataStructureVersion = InboxDataSchema::Version::VERSION_5;
-    result.statusCode = 0;
     try {
         auto publicDataV5 = server::PublicDataV5::fromJSON(publicData);
         assertDataFormat(publicDataV5);
@@ -111,8 +110,7 @@ InboxPublicDataV5AsResult InboxDataProcessorV5::unpackPublic(const Poco::Dynamic
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
             auto tmp_2 = utils::Utils::stringifyVar(publicDataV5.publicMetaObject);
             if (tmp_1 != tmp_2) {
-                auto e = InboxPublicDataMismatchException();
-                result.statusCode = e.getCode();
+                result.error = core::asError(InboxPublicDataMismatchException());
             }
         }
         result.inboxEntriesPubKeyBase58DER = publicDataV5.inboxPubKey;
@@ -120,8 +118,8 @@ InboxPublicDataV5AsResult InboxDataProcessorV5::unpackPublic(const Poco::Dynamic
         result.authorPubKey = publicDataV5.authorPubKey;
 
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("unpacking inbox data"); }
     return result;
 }
 
@@ -132,7 +130,6 @@ InboxPrivateDataV5AsResult InboxDataProcessorV5::unpackPrivate(
 ) {
     InboxPrivateDataV5AsResult result;
     result.dataStructureVersion = InboxDataSchema::Version::VERSION_5;
-    result.statusCode = 0;
     try {
         auto privateDataV5 = server::PrivateDataV5::fromJSON(encryptedData.meta);
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(privateDataV5);
@@ -155,8 +152,8 @@ InboxPrivateDataV5AsResult InboxDataProcessorV5::unpackPrivate(
         result.authorPubKey = privateDataV5.authorPubKey;
 
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("unpacking inbox data"); }
     return result;
 }
 

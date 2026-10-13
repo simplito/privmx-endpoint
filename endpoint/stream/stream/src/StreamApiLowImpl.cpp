@@ -785,9 +785,9 @@ std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
     auto currentStreamRoomKey = keys.at(encryptionKeyId);
 
     std::vector<stream::Key> webRTCKeys;
-    if (currentStreamRoomKey.statusCode != 0) {
+    if (currentStreamRoomKey.error) {
         throw core::MalformedEncryptionKeyException(
-            "Encryption Key status code = " + std::to_string(currentStreamRoomKey.statusCode)
+            "current stream room key cannot be used", *currentStreamRoomKey.error
         );
     }
     webRTCKeys.push_back(
@@ -796,7 +796,7 @@ std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
         }
     );
     for (const auto& key : keys) {
-        if (key.second.statusCode == 0) {
+        if (key.second.statusCode() == 0) {
             webRTCKeys.push_back(
                 stream::Key{key.second.id, core::Buffer::from(deriveStreamEncryptionKey(key.second)), KeyType::REMOTE}
             );

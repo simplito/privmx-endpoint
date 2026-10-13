@@ -39,7 +39,7 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaStrategyV5::conver
 ) const {
     return {
         ThreadDataSchemaMapper::toLibThread(
-            thread, raw.publicMeta, raw.privateMeta, raw.statusCode, ThreadDataSchema::Version::VERSION_5
+            thread, raw.publicMeta, raw.privateMeta, raw.statusCode(), ThreadDataSchema::Version::VERSION_5
         ),
         raw.dio
     };

@@ -43,7 +43,7 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV5::conv
 ) const {
     return {
         MessageDataSchemaMapper::toLibMessage(
-            message, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode,
+            message, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode(),
             MessageDataSchema::Version::VERSION_5
         ),
         raw.dio

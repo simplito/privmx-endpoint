@@ -52,7 +52,7 @@ void GroupAwareModuleApi::absorbAutoRekeyFailure(const std::string& moduleId, co
         return;
     }
     if (code == privmx::endpoint::server::AccessDeniedException().getCode()) {
-        throw core::StaleKeyRekeyRequiredException("automatic re-key of moduleId=" + moduleId + " was denied");
+        throw core::StaleKeyRekeyRequiredException("automatic re-key of moduleId=" + moduleId + " was denied", e);
     }
     e.rethrow();
 }
@@ -62,7 +62,7 @@ void GroupAwareModuleApi::runRequiringCurrentKey(const std::string& moduleId, co
         operation();
     } catch (const privmx::endpoint::core::Exception& e) {
         if (e.getCode() == privmx::endpoint::server::ContainerGroupEpochOutdatedException().getCode()) {
-            throw core::StaleKeyRekeyRequiredException("moduleId=" + moduleId + " has to be re-keyed by a manager");
+            throw core::StaleKeyRekeyRequiredException("moduleId=" + moduleId + " has to be re-keyed by a manager", e);
         }
         throw;
     }

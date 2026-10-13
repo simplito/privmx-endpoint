@@ -72,7 +72,6 @@ DecryptedGroupRosterV5 GroupDataEncryptorV5::decryptRoster(
     const std::string& encryptionKey
 ) {
     DecryptedGroupRosterV5 result;
-    result.statusCode = 0;
     result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = getRosterDIOAndAssertIntegrity(encryptedData);
@@ -88,8 +87,8 @@ DecryptedGroupRosterV5 GroupDataEncryptorV5::decryptRoster(
             privmx::utils::Utils::parseJsonObject(membershipRaw.stdString())
         );
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("decrypting group data"); }
     return result;
 }
 
@@ -151,7 +150,6 @@ DecryptedGroupPublicMetaV5 GroupDataEncryptorV5::extractPublicMeta(
     const dynamic::EncryptedGroupPublicMetaV5& encryptedData
 ) {
     DecryptedGroupPublicMetaV5 result;
-    result.statusCode = 0;
     result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = getPublicMetaDIOAndAssertIntegrity(encryptedData);
@@ -166,16 +164,15 @@ DecryptedGroupPublicMetaV5 GroupDataEncryptorV5::extractPublicMeta(
             );
             auto tmp_2 = privmx::utils::Utils::stringifyVar(encryptedData.publicMetaObject);
             if (tmp_1 != tmp_2) {
-                auto e = core::ModulePublicDataMismatchException();
-                result.statusCode = e.getCode();
+                result.error = core::asError(core::ModulePublicDataMismatchException());
             }
         }
 
         auto metaRaw = _dataEncryptor.decodeAndVerify(encryptedData.meta, authorPublicKey);
         result.meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("decrypting group data"); }
     return result;
 }
 
@@ -235,7 +232,6 @@ DecryptedGroupPrivateMetaV5 GroupDataEncryptorV5::decryptPrivateMeta(
     const std::string& encryptionKey
 ) {
     DecryptedGroupPrivateMetaV5 result;
-    result.statusCode = 0;
     result.dataStructureVersion = core::ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = getPrivateMetaDIOAndAssertIntegrity(encryptedData);
@@ -249,8 +245,8 @@ DecryptedGroupPrivateMetaV5 GroupDataEncryptorV5::decryptPrivateMeta(
         auto metaRaw = _dataEncryptor.decodeAndVerify(encryptedData.meta, authorPublicKey);
         result.meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("decrypting group data"); }
     return result;
 }
 

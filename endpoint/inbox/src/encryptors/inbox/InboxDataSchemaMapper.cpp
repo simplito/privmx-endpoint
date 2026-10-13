@@ -95,8 +95,7 @@ InboxPublicViewData InboxDataSchemaMapper::getPublicViewData(const server::Inbox
             return _strategyV5->getPublicViewData(publicView);
         }
     }
-    auto e = UnknownInboxFormatException();
-    result.statusCode = e.getCode();
+    result.error = core::asError(UnknownInboxFormatException());
     return result;
 }
 

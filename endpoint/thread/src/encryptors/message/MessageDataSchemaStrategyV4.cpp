@@ -48,7 +48,7 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV4::conv
     const auto& lastDate = message.updates.empty() ? message.createDate : message.updates.back().createDate;
     return {
         MessageDataSchemaMapper::toLibMessage(
-            message, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode,
+            message, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode(),
             MessageDataSchema::Version::VERSION_4
         ),
         core::DataIntegrityObject{

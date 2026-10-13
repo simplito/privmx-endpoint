@@ -59,7 +59,6 @@ protected:
     core::DecryptedEncKey key(const std::string& material) {
         core::DecryptedEncKey k;
         k.key = material;
-        k.statusCode = 0;
         return k;
     }
 
@@ -303,7 +302,7 @@ TEST_F(GroupRosterTag, SECURITY_AMissingRosterKeyIsAFailureNotAPass) {
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
     group.users.push_back("mallory");
     core::DecryptedEncKey noKey;
-    noKey.statusCode = 1;
+    noKey.error = core::asError(core::UnknownEncryptionKeyVersionException());
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     EXPECT_THROW(verifier.assertRosterIsAttested(group, noKey), GroupMembershipMismatchException);
 }
@@ -414,7 +413,7 @@ TEST_F(GroupRosterTag, SECURITY_APrivateMetaEnvelopeServedAsThePublicOneIsReject
 TEST_F(GroupRosterTag, SECURITY_AMissingMetadataKeyIsAFailureNotAPass) {
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
     core::DecryptedEncKey noKey;
-    noKey.statusCode = 1;
+    noKey.error = core::asError(core::UnknownEncryptionKeyVersionException());
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, noKey), GroupMembershipMismatchException);
     EXPECT_THROW(verifier.assertPrivateMetaIsAttested(group, noKey), GroupMembershipMismatchException);

@@ -48,7 +48,6 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(
     const privmx::crypto::PrivateKey& decryptionKey
 ) {
     DecryptedEncKeyV2 result;
-    result.statusCode = 0;
     result.dataStructureVersion = EncryptionKeyDataSchema::Version::VERSION_2;
     try {
         assertDataFormat(encryptedEncKey);
@@ -72,8 +71,8 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(
         result.secretHash = expandedDio.fieldChecksums.at("secretHash");
         result.keySecret = utils::Base64::toString(decryptedKey.keySecret);
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = asError(e);
+    } catch (...) { result.error = unknownError("decrypting the encryption key entry"); }
     return result;
 }
 

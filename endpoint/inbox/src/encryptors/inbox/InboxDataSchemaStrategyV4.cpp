@@ -33,7 +33,7 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaStrategyV4::convert(
 ) const {
     return {
         InboxDataSchemaMapper::toLibInbox(
-            inbox, raw.publicData.publicMeta, raw.privateData.privateMeta, raw.filesConfig, raw.statusCode,
+            inbox, raw.publicData.publicMeta, raw.privateData.privateMeta, raw.filesConfig, raw.statusCode(),
             InboxDataSchema::Version::VERSION_4
         ),
         core::DataIntegrityObject{
@@ -67,7 +67,7 @@ InboxPublicViewData InboxDataSchemaStrategyV4::getPublicViewData(
     result.resourceId = "";
     result.version = publicView.version;
     result.dataStructureVersion = publicData.dataStructureVersion;
-    result.statusCode = publicData.statusCode;
+    result.error = publicData.error;
     return result;
 }
 

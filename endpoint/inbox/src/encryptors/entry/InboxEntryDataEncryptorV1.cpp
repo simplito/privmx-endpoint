@@ -58,7 +58,6 @@ InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(
 ) {
     InboxEntryDataResult result;
     try {
-        result.statusCode = 0;
         utils::BinaryBufferBE wholeBuffer(utils::Base64::toString(serializedBase64));
         std::string publicDataStr;
         wholeBuffer.readOneOctetLengthBuffer(publicDataStr);
@@ -83,15 +82,14 @@ InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(
         result.privateData = privateData;
         result.publicData = publicData;
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("unpacking the inbox entry"); }
     return result;
 }
 
 InboxEntryPublicDataResult InboxEntryDataEncryptorV1::decryptPublicOnly(std::string& serializedBase64) {
     InboxEntryPublicDataResult result;
     try {
-        result.statusCode = 0;
         utils::BinaryBufferBE wholeBuffer(utils::Base64::toString(serializedBase64));
         std::string publicDataStr;
         wholeBuffer.readOneOctetLengthBuffer(publicDataStr);
@@ -102,7 +100,7 @@ InboxEntryPublicDataResult InboxEntryDataEncryptorV1::decryptPublicOnly(std::str
         publicDataBuffer.readOneOctetLengthBuffer(result.usedInboxKeyId);
 
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("unpacking the inbox entry"); }
     return result;
 }

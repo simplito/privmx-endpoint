@@ -61,7 +61,6 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
     const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedKvdbEntryDataV5 result;
-    result.statusCode = 0;
     result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedEntryData);
@@ -71,8 +70,7 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
             auto tmp_2 = utils::Utils::stringifyVar(encryptedEntryData.publicMetaObject);
             if (tmp_1 != tmp_2) {
-                auto e = KvdbEntryPublicDataMismatchException();
-                result.statusCode = e.getCode();
+                result.error = core::asError(KvdbEntryPublicDataMismatchException());
             }
         }
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(
@@ -86,8 +84,8 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
             std::nullopt;
         result.authorPubKey = encryptedEntryData.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("decrypting kvdb entry data"); }
     return result;
 }
 
@@ -96,7 +94,6 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(
     const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedKvdbEntryDataV5 result;
-    result.statusCode = 0;
     result.dataStructureVersion = KvdbEntryDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedEntryData);
@@ -106,14 +103,13 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
             auto tmp_2 = utils::Utils::stringifyVar(encryptedEntryData.publicMetaObject);
             if (tmp_1 != tmp_2) {
-                auto e = KvdbEntryPublicDataMismatchException();
-                result.statusCode = e.getCode();
+                result.error = core::asError(KvdbEntryPublicDataMismatchException());
             }
         }
         result.authorPubKey = encryptedEntryData.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("decrypting kvdb entry data"); }
     return result;
 }
 

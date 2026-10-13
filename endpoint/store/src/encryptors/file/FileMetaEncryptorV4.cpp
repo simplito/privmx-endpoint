@@ -47,7 +47,6 @@ store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(
     const std::string& encryptionKey
 ) {
     DecryptedFileMetaV4 result;
-    result.statusCode = 0;
     result.dataStructureVersion = FileDataSchema::Version::VERSION_4;
     try {
         validateVersion(encryptedFileMeta);
@@ -57,8 +56,7 @@ store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
             auto tmp_2 = utils::Utils::stringifyVar(encryptedFileMeta.publicMetaObject);
             if (tmp_1 != tmp_2) {
-                auto e = FilePublicDataMismatchException();
-                result.statusCode = e.getCode();
+                result.error = core::asError(FilePublicDataMismatchException());
             }
         }
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(
@@ -72,8 +70,8 @@ store::DecryptedFileMetaV4 FileMetaEncryptorV4::decrypt(
         );
         result.authorPubKey = encryptedFileMeta.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("decrypting file meta"); }
     return result;
 }
 

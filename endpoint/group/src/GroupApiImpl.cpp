@@ -722,8 +722,10 @@ void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server:
     request.addOne(winnerKeyVec, payload.winnerKeyEntry.keyId, location);
     auto decrypted = _keyProvider->getKeysAndVerify(request);
     const auto& winnerGk = decrypted.at(location).at(payload.winnerKeyEntry.keyId);
-    if (winnerGk.statusCode != 0) {
-        throw GroupDataIntegrityException("RotatedAlready: winner's key entry failed verification");
+    if (winnerGk.error) {
+        throw GroupDataIntegrityException(
+            "RotatedAlready: winner's key entry failed verification", *winnerGk.error
+        );
     }
 
     // Without a tag nothing ties this epoch to a member, so adopting it would mean re-wrapping against whatever
@@ -1082,11 +1084,11 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
         throw core::EncryptionKeyValidationException("Group key " + keyId + " could not be resolved");
     }
     const core::DecryptedEncKeyV2 found = atLocation->second.at(keyId);
-    if (found.statusCode != 0) {
+    if (found.error) {
         // `findEncKeyByKeyId` and friends hand back entries whose decryption failed; unchecked, the empty key
         // surfaces as a cipher length complaint instead of the real cause, usually an era boundary.
         throw core::EncryptionKeyValidationException(
-            "Group key " + keyId + " could not be decrypted (status " + std::to_string(found.statusCode) + ")"
+            "Group key " + keyId + " could not be decrypted", *found.error
         );
     }
     _envelopeKeys.set(memoKey, found);

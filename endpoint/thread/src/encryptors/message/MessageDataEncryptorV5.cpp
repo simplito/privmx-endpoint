@@ -61,7 +61,6 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
     const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedMessageDataV5 result;
-    result.statusCode = 0;
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedMessageData);
@@ -71,8 +70,7 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
             auto tmp_2 = utils::Utils::stringifyVar(encryptedMessageData.publicMetaObject);
             if (tmp_1 != tmp_2) {
-                auto e = MessagePublicDataMismatchException();
-                result.statusCode = e.getCode();
+                result.error = core::asError(MessagePublicDataMismatchException());
             }
         }
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(
@@ -88,8 +86,8 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
             std::nullopt;
         result.authorPubKey = encryptedMessageData.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("decrypting message data"); }
     return result;
 }
 
@@ -98,7 +96,6 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(
     const std::optional<core::DataIntegrityObject>& verifiedDio
 ) {
     DecryptedMessageDataV5 result;
-    result.statusCode = 0;
     result.dataStructureVersion = MessageDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedMessageData);
@@ -108,14 +105,13 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
             auto tmp_2 = utils::Utils::stringifyVar(encryptedMessageData.publicMetaObject);
             if (tmp_1 != tmp_2) {
-                auto e = MessagePublicDataMismatchException();
-                result.statusCode = e.getCode();
+                result.error = core::asError(MessagePublicDataMismatchException());
             }
         }
         result.authorPubKey = encryptedMessageData.authorPubKey;
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        result.error = core::asError(e);
+    } catch (...) { result.error = core::unknownError("decrypting message data"); }
     return result;
 }
 

@@ -260,10 +260,8 @@ std::string ThreadApiImpl::sendMessageRequest(
     const core::ModuleKeys& keys
 ) {
     core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys);
-    if (msgKey.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(msgKey.statusCode)
-        );
+    if (msgKey.error) {
+        throw core::EncryptionKeyValidationException("current encryption key cannot be used", *msgKey.error);
     }
     auto resourceId = core::EndpointUtils::generateId();
     server::ThreadMessageSendModel send_message_model;
@@ -308,10 +306,8 @@ void ThreadApiImpl::updateMessageRequest(
     const core::ModuleKeys& keys
 ) {
     core::DecryptedEncKeyV2 msgKey = getAndValidateModuleCurrentEncKey(keys);
-    if (msgKey.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(msgKey.statusCode)
-        );
+    if (msgKey.error) {
+        throw core::EncryptionKeyValidationException("current encryption key cannot be used", *msgKey.error);
     }
     server::ThreadMessageUpdateModel send_message_model;
     send_message_model.messageId = messageId;

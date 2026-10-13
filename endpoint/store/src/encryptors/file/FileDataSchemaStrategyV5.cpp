@@ -33,7 +33,7 @@ DecryptedFileMetaV5 FileDataSchemaStrategyV5::decryptFileMeta(
         return decrypt(file, encKey);
     } catch (const core::Exception& e) {
         return DecryptedFileMetaV5(
-            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = e.getCode()},
+            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .error = core::asError(e)},
              {},
              {},
              {},
@@ -42,7 +42,8 @@ DecryptedFileMetaV5 FileDataSchemaStrategyV5::decryptFileMeta(
         );
     } catch (...) {
         return DecryptedFileMetaV5(
-            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},
+            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5,
+              .error = core::unknownError("decrypting file meta")},
              {},
              {},
              {},
@@ -58,7 +59,7 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::convert(
 ) const {
     int64_t size = 0;
     bool randomWrite = false;
-    auto statusCode = raw.statusCode;
+    auto statusCode = raw.statusCode();
     if (statusCode == 0) {
         try {
             auto internalMeta = dynamic::InternalStoreFileMeta::fromJSON(
