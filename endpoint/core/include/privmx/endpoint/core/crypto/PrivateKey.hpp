@@ -46,9 +46,17 @@ public:
     /// @brief Pusty uchwyt. Operacje poza `empty()` rzucaja wyjatek.
     PrivateKey() = default;
 
-    explicit PrivateKey(std::shared_ptr<privmx::cryptoservice::IPrivateKey> key) : _key(std::move(key)) {}
+    /// @brief Uchwyt razem z algorytmem. Uzasadnienie: patrz `core::PublicKey`.
+    explicit PrivateKey(
+        std::shared_ptr<privmx::cryptoservice::IPrivateKey> key,
+        privmx::cryptoservice::AsymAlg algorithm = DEFAULT_KEY_ALGORITHM
+    )
+        : _key(std::move(key)), _algorithm(algorithm) {}
 
     bool empty() const { return _key == nullptr; }
+
+    /// @brief Algorytm tego klucza. Pusty uchwyt oddaje wartosc domyslna i nie nadaje sie do uzycia.
+    privmx::cryptoservice::AsymAlg algorithm() const { return _algorithm; }
 
     PublicKey getPublicKey() const;
 
@@ -74,6 +82,7 @@ private:
     const privmx::cryptoservice::IPrivateKey& require() const;
 
     std::shared_ptr<privmx::cryptoservice::IPrivateKey> _key;
+    privmx::cryptoservice::AsymAlg _algorithm = DEFAULT_KEY_ALGORITHM;
 };
 
 } // namespace core

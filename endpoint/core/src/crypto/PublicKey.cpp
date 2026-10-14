@@ -23,8 +23,13 @@ namespace cs = privmx::cryptoservice;
 
 PublicKey PublicKey::fromBase58DER(const std::string& base58DER) {
     return mapCryptoErrors("PublicKey::fromBase58DER", [&] {
+        // Postac Base58DER nie nazwie dzis swojego algorytmu - uzgodnienie wspolnego, otagowanego
+        // kodowania czeka na Bridge (crypto-update/issue-bridge-crypto-agility.md §3). Do tego czasu
+        // import zaklada algorytm domyslny, ale **zapamietuje** go na kluczu, wiec gdy kodowanie
+        // zacznie go niesc, zmienia sie tylko to miejsce, a nie operacje korzystajace z klucza.
         return PublicKey(
-            cryptoProvider().importPublicKey(keyBytes(base58DER), cs::KeyFormat::Base58Der, KEY_ALGORITHM)
+            cryptoProvider().importPublicKey(keyBytes(base58DER), cs::KeyFormat::Base58Der, DEFAULT_KEY_ALGORITHM),
+            DEFAULT_KEY_ALGORITHM
         );
     });
 }
@@ -41,8 +46,11 @@ PublicKey PublicKey::fromDER(const std::string& der) {
     constexpr std::size_t UNCOMPRESSED_LENGTH = 65;
     return mapCryptoErrors("PublicKey::fromDER", [&] {
         if (der.size() == UNCOMPRESSED_LENGTH) {
+            // Inny algorytm w rozumieniu `pmx-crypto` (ta sama krzywa, inny format danych), wiec klucz
+            // zapamietuje wlasnie ten - operacje na nim musza isc za formatem, w ktorym go wczytano.
             return PublicKey(
-                cryptoProvider().importPublicKey(keyBytes(der), cs::KeyFormat::Raw, cs::AsymAlg::secp256k1)
+                cryptoProvider().importPublicKey(keyBytes(der), cs::KeyFormat::Raw, cs::AsymAlg::secp256k1),
+                cs::AsymAlg::secp256k1
             );
         }
         if (der.size() != COMPRESSED_LENGTH) {
@@ -50,7 +58,10 @@ PublicKey PublicKey::fromDER(const std::string& der) {
                 "public key DER of unexpected length: " + std::to_string(der.size())
             );
         }
-        return PublicKey(cryptoProvider().importPublicKey(keyBytes(der), cs::KeyFormat::Der, KEY_ALGORITHM));
+        return PublicKey(
+            cryptoProvider().importPublicKey(keyBytes(der), cs::KeyFormat::Der, DEFAULT_KEY_ALGORITHM),
+            DEFAULT_KEY_ALGORITHM
+        );
     });
 }
 
@@ -80,6 +91,8 @@ std::string PublicKey::toBase58DER() const {
 
 bool PublicKey::verifyCompactSignatureWithHash(const std::string& message, const std::string& signature) const {
     return mapCryptoErrors("PublicKey::verifyCompactSignatureWithHash", [&] {
-        return require().verify(keyBytes(message), keyBytes(signature), SIGNATURE_SCHEME);
+        // Schemat z algorytmu **tego** klucza, nie ze stalej: klucz uzytkownika moze byc dowolnego
+        // algorytmu, a weryfikacja nie swoim schematem odrzucalaby poprawne podpisy.
+        return require().verify(keyBytes(message), keyBytes(signature), signatureSchemeFor(_algorithm));
     });
 }

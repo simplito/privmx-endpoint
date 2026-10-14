@@ -76,7 +76,8 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointCoreException, "Unknown endpoint core e
     X(UnresolvedContainerMemberException, "Cannot resolve the public key of a container's member", 0x002B)         \
     X(UnknownCryptoSuiteException, "Unknown crypto suite", 0x002C)                                                \
     X(MalformedCryptoFrameException, "Malformed crypto frame", 0x002D)                                            \
-    X(CryptoSuiteIsFixedAtCreationException, "A container's crypto suite cannot be changed", 0x002E)
+    X(CryptoSuiteIsFixedAtCreationException, "A container's crypto suite cannot be changed", 0x002E)        \
+    X(UnsupportedKeyAlgorithmException, "Unsupported asymmetric key algorithm", 0x002F)
 
 #define PRIVMX_CORE_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, NAME, MSG, CODE)
 CORE_EXCEPTIONS(PRIVMX_CORE_DECLARE)

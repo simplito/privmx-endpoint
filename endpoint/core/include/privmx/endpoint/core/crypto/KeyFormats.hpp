@@ -22,28 +22,36 @@ namespace endpoint {
 namespace core {
 
 /**
- * @brief Algorytm kluczy tozsamosci.
+ * @brief Algorytm, ktorym generowane sa **nowe** klucze tozsamosci.
+ *
+ * Tylko generowanie. Klucz juz istniejacy niesie swoj algorytm ze soba (`PublicKey::algorithm()`,
+ * `PrivateKey::algorithm()`) i operacje na nim ida za **nim**, a nie za ta stala - bo klucze
+ * uzytkownikow moga byc dowolnego algorytmu, nie tylko tego, ktorym akurat generujemy.
  *
  * `PrivmxSecp256k1` to secp256k1 z formatami danych PrivMX: czesc prywatna jako samo 32 B,
  * klucz publiczny jako 33 B w postaci skompresowanej. Zwykly `secp256k1` uzywa innych,
  * dluzszych postaci, wiec nie jest zamiennikiem.
- *
- * Warstwa zewnetrzna (dostep do kontenera, podpisy autorstwa) jest **ustalona** - zmiennosc
- * algorytmow dotyczy na razie tego, co dzieje sie wewnatrz kontenera. Patrz
- * crypto-update/warstwa-agility.md §5.
  */
-constexpr privmx::cryptoservice::AsymAlg KEY_ALGORITHM = privmx::cryptoservice::AsymAlg::PrivmxSecp256k1;
+constexpr privmx::cryptoservice::AsymAlg DEFAULT_KEY_ALGORITHM = privmx::cryptoservice::AsymAlg::PrivmxSecp256k1;
 
 /**
- * @brief Schemat podpisu odpowiadajacy dotychczasowemu `signToCompactSignatureWithHash`.
+ * @brief Schemat podpisu odpowiadajacy algorytmowi klucza.
  *
- * To **`Compact`**, nie `CompactWithHash`. `Compact` daje ECDSA nad `sha256(m)`;
- * `CompactWithHash` liczy `sha256` dodatkowo, czyli ECDSA nad `sha256(sha256(m))`.
- * Nazwa sugeruje odwrotnosc - zmiana na `CompactWithHash` wyprodukuje podpisy, ktore
- * zweryfikuja sie wylacznie miedzy soba, bez bledu kompilacji ani wykonania.
+ * Wyprowadzany z klucza, a nie brany ze stalej: dodanie kolejnego algorytmu (planowane Ed25519)
+ * ma byc dopisaniem wiersza tutaj, a nie przegladaniem miejsc, ktore podpisuja i weryfikuja.
+ *
+ * Dla krzywych ECDSA jest to **`Compact`**, nie `CompactWithHash`. `Compact` daje ECDSA nad
+ * `sha256(m)`; `CompactWithHash` liczy `sha256` dodatkowo, czyli ECDSA nad `sha256(sha256(m))`.
+ * Nazwa sugeruje odwrotnosc - zmiana na `CompactWithHash` wyprodukuje podpisy, ktore zweryfikuja
+ * sie wylacznie miedzy soba, bez bledu kompilacji ani wykonania.
  * Dowod pomiarowy: crypto-update/B1-podpisy-compact.md
+ *
+ * @throws UnsupportedKeyAlgorithmException gdy algorytm nie ma tu przypisanego schematu
  */
-constexpr privmx::cryptoservice::SigScheme SIGNATURE_SCHEME = privmx::cryptoservice::SigScheme::Compact;
+privmx::cryptoservice::SigScheme signatureSchemeFor(privmx::cryptoservice::AsymAlg algorithm);
+
+/// @brief Czy endpoint potrafi uzywac kluczy tego algorytmu.
+bool isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg algorithm);
 
 inline privmx::cryptoservice::BytesView keyBytes(const std::string& data) {
     return privmx::cryptoservice::BytesView(reinterpret_cast<const std::uint8_t*>(data.data()), data.size());

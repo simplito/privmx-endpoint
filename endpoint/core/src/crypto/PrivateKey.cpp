@@ -21,21 +21,30 @@ using namespace privmx::endpoint::core;
 
 namespace cs = privmx::cryptoservice;
 
+// WIF i postac surowa nie nazywaja dzis swojego algorytmu - otagowane kodowanie czeka na uzgodnienie
+// z Bridge'em (crypto-update/issue-bridge-crypto-agility.md §3). Import zaklada wiec algorytm domyslny,
+// ale zapamietuje go na kluczu: gdy kodowanie zacznie go niesc, zmienia sie tylko te trzy funkcje.
 PrivateKey PrivateKey::fromWIF(const std::string& wif) {
     return mapCryptoErrors("PrivateKey::fromWIF", [&] {
-        return PrivateKey(cryptoProvider().importPrivateKey(keyBytes(wif), cs::KeyFormat::Wif, KEY_ALGORITHM));
+        return PrivateKey(
+            cryptoProvider().importPrivateKey(keyBytes(wif), cs::KeyFormat::Wif, DEFAULT_KEY_ALGORITHM),
+            DEFAULT_KEY_ALGORITHM
+        );
     });
 }
 
 PrivateKey PrivateKey::fromRaw(const std::string& raw) {
     return mapCryptoErrors("PrivateKey::fromRaw", [&] {
-        return PrivateKey(cryptoProvider().importPrivateKey(keyBytes(raw), cs::KeyFormat::Raw, KEY_ALGORITHM));
+        return PrivateKey(
+            cryptoProvider().importPrivateKey(keyBytes(raw), cs::KeyFormat::Raw, DEFAULT_KEY_ALGORITHM),
+            DEFAULT_KEY_ALGORITHM
+        );
     });
 }
 
 PrivateKey PrivateKey::generateRandom() {
     return mapCryptoErrors("PrivateKey::generateRandom", [&] {
-        return PrivateKey(cryptoProvider().generatePrivateKey(KEY_ALGORITHM));
+        return PrivateKey(cryptoProvider().generatePrivateKey(DEFAULT_KEY_ALGORITHM), DEFAULT_KEY_ALGORITHM);
     });
 }
 
@@ -47,7 +56,11 @@ const cs::IPrivateKey& PrivateKey::require() const {
 }
 
 PublicKey PrivateKey::getPublicKey() const {
-    return mapCryptoErrors("PrivateKey::getPublicKey", [&] { return PublicKey(require().publicKey()); });
+    // Klucz publiczny dziedziczy algorytm swojej polowy prywatnej - inaczej podpis zlozony jednym
+    // weryfikowalby sie drugim schematem.
+    return mapCryptoErrors("PrivateKey::getPublicKey", [&] {
+        return PublicKey(require().publicKey(), _algorithm);
+    });
 }
 
 std::string PrivateKey::getPrivateEncKey() const {
@@ -62,7 +75,7 @@ std::string PrivateKey::toWIF() const {
 
 std::string PrivateKey::signToCompactSignatureWithHash(const std::string& message) const {
     return mapCryptoErrors("PrivateKey::signToCompactSignatureWithHash", [&] {
-        return keyString(require().sign(keyBytes(message), SIGNATURE_SCHEME));
+        return keyString(require().sign(keyBytes(message), signatureSchemeFor(_algorithm)));
     });
 }
 

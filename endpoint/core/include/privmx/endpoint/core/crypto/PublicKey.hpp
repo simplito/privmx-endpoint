@@ -17,6 +17,8 @@ limitations under the License.
 
 #include <privmx/cryptoservice/base/CoreInterfaces.hpp>
 
+#include <privmx/endpoint/core/crypto/KeyFormats.hpp>
+
 namespace privmx {
 namespace endpoint {
 namespace core {
@@ -42,9 +44,23 @@ public:
     /// @brief Pusty uchwyt. Operacje poza `empty()` i porownaniem rzucaja wyjatek.
     PublicKey() = default;
 
-    explicit PublicKey(std::shared_ptr<privmx::cryptoservice::IPublicKey> key) : _key(std::move(key)) {}
+    /**
+     * @brief Uchwyt razem z algorytmem, ktoremu odpowiada.
+     *
+     * Algorytm jest podawany, bo `pmx-crypto` nie wystawia go z klucza, a endpoint i tak zawsze
+     * wie, czym importowal lub generowal. Klucze uzytkownikow moga byc dowolnego algorytmu, wiec
+     * operacje (podpis, weryfikacja) musza isc za **tym** polem, a nie za stala kompilacji.
+     */
+    explicit PublicKey(
+        std::shared_ptr<privmx::cryptoservice::IPublicKey> key,
+        privmx::cryptoservice::AsymAlg algorithm = DEFAULT_KEY_ALGORITHM
+    )
+        : _key(std::move(key)), _algorithm(algorithm) {}
 
     bool empty() const { return _key == nullptr; }
+
+    /// @brief Algorytm tego klucza. Pusty uchwyt oddaje wartosc domyslna i nie nadaje sie do uzycia.
+    privmx::cryptoservice::AsymAlg algorithm() const { return _algorithm; }
 
     /// Porownanie po postaci kanonicznej (Base58DER), a nie po tozsamosci uchwytu.
     bool operator==(const PublicKey& other) const;
@@ -68,6 +84,7 @@ private:
     const privmx::cryptoservice::IPublicKey& require() const;
 
     std::shared_ptr<privmx::cryptoservice::IPublicKey> _key;
+    privmx::cryptoservice::AsymAlg _algorithm = DEFAULT_KEY_ALGORITHM;
 };
 
 } // namespace core

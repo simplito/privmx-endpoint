@@ -100,6 +100,64 @@ TEST(Keys, SignatureIsRejectedForOtherMessageAndKey) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Klucz niesie swoj algorytm.
+//
+// Klucze uzytkownikow moga byc dowolnego algorytmu, wiec podpis i weryfikacja musza isc za tym,
+// co niesie **klucz**, a nie za stala kompilacji. Dopoki jest jeden algorytm, roznicy nie widac -
+// te testy przybijaja mechanizm, zeby dolozenie drugiego (planowane Ed25519) nie wymagalo
+// przegladania miejsc, ktore podpisuja.
+// ---------------------------------------------------------------------------------------------
+
+TEST(KeyAlgorithm, ImportedKeysRememberWhatTheyWereParsedAs) {
+    const PrivateKey priv = PrivateKey::fromWIF(WIF);
+
+    EXPECT_EQ(DEFAULT_KEY_ALGORITHM, priv.algorithm());
+    // Klucz publiczny dziedziczy algorytm polowy prywatnej - inaczej podpis zlozony jednym
+    // weryfikowalby sie drugim schematem.
+    EXPECT_EQ(priv.algorithm(), priv.getPublicKey().algorithm());
+    EXPECT_EQ(DEFAULT_KEY_ALGORITHM, PrivateKey::generateRandom().algorithm());
+    EXPECT_EQ(
+        DEFAULT_KEY_ALGORITHM, PublicKey::fromBase58DER(priv.getPublicKey().toBase58DER()).algorithm()
+    );
+}
+
+/// Postac nieskompresowana to w rozumieniu `pmx-crypto` inny algorytm (ta sama krzywa, inny format
+/// danych). Klucz ma pamietac ten, ktorym go wczytano, a nie domyslny.
+TEST(KeyAlgorithm, AnUncompressedImportRemembersItsOwnFormat) {
+    const PrivateKey priv = PrivateKey::fromWIF(WIF);
+    const std::string uncompressed = legacy::PrivateKey::fromWIF(WIF).getPublicKey().getEcc().getPublicKey(false);
+    ASSERT_EQ(65u, uncompressed.size());
+
+    const PublicKey imported = PublicKey::fromDER(uncompressed);
+
+    EXPECT_EQ(privmx::cryptoservice::AsymAlg::secp256k1, imported.algorithm());
+    // Mimo innego algorytmu w rejestrze to ten sam klucz - eksport wraca do postaci skompresowanej.
+    EXPECT_EQ(priv.getPublicKey().toBase58DER(), imported.toBase58DER());
+}
+
+/// Podpis zlozony kluczem weryfikuje sie jego wlasnym schematem - takze gdy klucz publiczny
+/// przyszedl w innym formacie niz prywatny.
+TEST(KeyAlgorithm, SigningAndVerifyingFollowTheKey) {
+    const PrivateKey priv = PrivateKey::fromWIF(WIF);
+    const std::string signature = priv.signToCompactSignatureWithHash(MESSAGE);
+
+    EXPECT_TRUE(priv.getPublicKey().verifyCompactSignatureWithHash(MESSAGE, signature));
+
+    const std::string uncompressed = legacy::PrivateKey::fromWIF(WIF).getPublicKey().getEcc().getPublicKey(false);
+    EXPECT_TRUE(PublicKey::fromDER(uncompressed).verifyCompactSignatureWithHash(MESSAGE, signature));
+}
+
+TEST(KeyAlgorithm, TheRegistryKnowsExactlyWhatItCanUse) {
+    EXPECT_TRUE(isSupportedKeyAlgorithm(DEFAULT_KEY_ALGORITHM));
+    EXPECT_TRUE(isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg::secp256k1));
+    // Jeszcze nieobslugiwany - ma byc odmowa pod wlasna nazwa, a nie podpis zlym schematem.
+    EXPECT_FALSE(isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg::ED25519));
+    EXPECT_THROW(
+        signatureSchemeFor(privmx::cryptoservice::AsymAlg::ED25519), UnsupportedKeyAlgorithmException
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
 // Semantyka wartosciowa - to dla niej w ogole powstal wrapper.
 // ---------------------------------------------------------------------------------------------
 
