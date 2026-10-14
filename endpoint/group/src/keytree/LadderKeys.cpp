@@ -293,22 +293,35 @@ DescentResult LadderKeys::descend(
         const ArchiveRung* best = nullptr;
         std::optional<privmx::crypto::PrivateKey> recovered;
         DescentResult refused = result;
+        std::set<std::uint32_t> failedTargets;
         for (const ArchiveRung* candidate : candidates) {
             recovered = openRung(*candidate, currentKey);
             if (recovered.has_value() && verifyAgainstRegistry(recovered.value(), candidate->span.target, registry)) {
                 best = candidate;
                 break;
             }
+            failedTargets.insert(candidate->span.target);
             if (refused.failure == DescentFailure::None) {
                 refused.failure = recovered.has_value() ? DescentFailure::Tampered : DescentFailure::DecryptFailed;
                 refused.reachedEpoch = current;
-                if (recovered.has_value()) {
-                    refused.blame = candidate->author;
-                }
+            }
+            // Blame only a rung its epoch's opener sealed (an author), and the first such one whatever failed
+            // first: an unattributed rung tried earlier (a lower span, sorted first) must not hide the opener's.
+            if (recovered.has_value() && !candidate->author.empty() && !refused.blame.has_value()) {
+                refused.failure = DescentFailure::Tampered;
+                refused.blame = candidate->author;
             }
         }
         if (best == nullptr) {
+            for (const std::uint32_t target : failedTargets) {
+                refused.brokenSpans.push_back(RungSpan{current, target});
+            }
             return refused;
+        }
+        for (const std::uint32_t target : failedTargets) {
+            if (target < best->span.target) {
+                result.brokenSpans.push_back(RungSpan{current, target}); // routed around: worth a repair
+            }
         }
 
         current = best->span.target;

@@ -21,6 +21,7 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -594,6 +595,106 @@ TEST_F(LadderKeysDescend, ANewcomerReachesOldEpochsWithNothingWrappedToThem) {
     for (const ArchiveRung& rung : history.rungs) {
         EXPECT_TRUE(LadderKeys::openRung(rung, keyOf(history, rung.span.at, 1)).has_value());
     }
+}
+
+// repair rungs (L-1): a span may hold more than one rung; only the registry decides which one is right
+
+namespace {
+ArchiveRung sealed(const RungSpan& span, const PrivateKey& carried, const PrivateKey& at, const std::string& author) {
+    ArchiveRung rung;
+    rung.span = span;
+    rung.blob = LadderKeys::sealRung(carried, span, at.getPublicKey(), PrivateKey::generateRandom());
+    rung.author = author;
+    return rung;
+}
+
+std::vector<ArchiveRung> without(std::vector<ArchiveRung> rungs, const RungSpan& span) {
+    rungs.erase(std::remove_if(rungs.begin(), rungs.end(), [&](const ArchiveRung& rung) {
+        return rung.span.at == span.at && rung.span.target == span.target;
+    }), rungs.end());
+    return rungs;
+}
+} // namespace
+
+TEST_F(LadderKeysDescend, SECURITY_ABrokenUnitRungIsCrossedOnARepairRungBesideIt) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> served = without(history.rungs, RungSpan{8, 7});
+    served.push_back(sealed(RungSpan{8, 7}, PrivateKey::generateRandom(), keyOf(history, 8, 1), AUTHOR)); // opener's: garbage
+    served.push_back(sealed(RungSpan{8, 7}, keyOf(history, 7, 1), keyOf(history, 8, 1), ""));          // a repair
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    store.putGrantKey(8, keyOf(history, 8, 1));
+    const DescentResult result = ladder.descend(8, 7, served, history.registry);
+    ASSERT_EQ(result.failure, DescentFailure::None);
+    EXPECT_EQ(result.key->toWIF(), keyOf(history, 7, 1).toWIF());
+    EXPECT_FALSE(result.blame.has_value());
+    EXPECT_EQ(result.hops, 1u);
+}
+
+TEST_F(LadderKeysDescend, ReportsTheSpansItPassedOver) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> served = without(history.rungs, RungSpan{8, 4});
+    served.push_back(sealed(RungSpan{8, 4}, PrivateKey::generateRandom(), keyOf(history, 8, 1), AUTHOR));
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    store.putGrantKey(8, keyOf(history, 8, 1));
+    const DescentResult result = ladder.descend(8, 4, served, history.registry);
+    ASSERT_EQ(result.failure, DescentFailure::None) << "routed around via (8,6), (6,4)";
+    EXPECT_EQ(result.hops, 2u);
+    ASSERT_EQ(result.brokenSpans.size(), 1u);
+    EXPECT_EQ(result.brokenSpans[0].at, 8u);
+    EXPECT_EQ(result.brokenSpans[0].target, 4u);
+}
+
+TEST_F(LadderKeysDescend, SECURITY_AnUnattributedRungThatOpensToTheWrongKeyBlamesNobody) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> served = without(history.rungs, RungSpan{8, 7});
+    served.push_back(sealed(RungSpan{8, 7}, PrivateKey::generateRandom(), keyOf(history, 8, 1), ""));
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    store.putGrantKey(8, keyOf(history, 8, 1));
+    const DescentResult result = ladder.descend(8, 7, served, history.registry);
+    EXPECT_EQ(result.failure, DescentFailure::Tampered);
+    EXPECT_FALSE(result.blame.has_value()) << "whoever sealed it, the statements do not name them";
+    ASSERT_EQ(result.brokenSpans.size(), 1u);
+}
+
+TEST_F(LadderKeysDescend, SECURITY_AnUnattributedRungDoesNotHideTheOpenersBadRung) {
+    // The unattributed (8,4) is tried first (lowest target) and fails first; the opener's bad (8,7) is still blamed.
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> served = without(without(without(history.rungs, RungSpan{8, 7}), RungSpan{8, 6}), RungSpan{8, 4});
+    served.push_back(sealed(RungSpan{8, 4}, PrivateKey::generateRandom(), keyOf(history, 8, 1), ""));
+    served.push_back(sealed(RungSpan{8, 7}, PrivateKey::generateRandom(), keyOf(history, 8, 1), "opener"));
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    store.putGrantKey(8, keyOf(history, 8, 1));
+    const DescentResult result = ladder.descend(8, 4, served, history.registry);
+    EXPECT_EQ(result.failure, DescentFailure::Tampered);
+    ASSERT_TRUE(result.blame.has_value());
+    EXPECT_EQ(result.blame.value(), "opener");
+}
+
+TEST_F(LadderKeysDescend, GarbageDuplicatesCostAttemptsNotHops) {
+    const EpochHistory history = simulateEpochHistory(32, 1);
+    std::vector<ArchiveRung> served;
+    for (const ArchiveRung& rung : history.rungs) {
+        for (int i = 0; i < 3; ++i) {
+            served.push_back(sealed(rung.span, PrivateKey::generateRandom(), keyOf(history, rung.span.at, 1), ""));
+        }
+        served.push_back(rung);
+    }
+    TreeKeyCache clean;
+    LadderKeys cleanLadder(clean);
+    clean.putGrantKey(32, keyOf(history, 32, 1));
+    const DescentResult expected = cleanLadder.descend(32, 3, history.rungs, history.registry);
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    store.putGrantKey(32, keyOf(history, 32, 1));
+    const DescentResult result = ladder.descend(32, 3, served, history.registry);
+    ASSERT_EQ(result.failure, DescentFailure::None);
+    EXPECT_EQ(result.key->toWIF(), keyOf(history, 3, 1).toWIF());
+    EXPECT_EQ(result.hops, expected.hops);
+    EXPECT_TRUE(result.brokenSpans.empty()) << "a span with a good rung in it is not broken";
 }
 
 // registry

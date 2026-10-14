@@ -127,18 +127,28 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupKeyResolver::auth
             .keyVersion = static_cast<std::int64_t>(epoch), .groupPubKey = statement.groupPubKey
         });
     }
-    std::vector<server::GroupArchiveRung> rungs;
+    std::vector<server::GroupArchiveRung> openerSealed;
+    std::vector<server::GroupArchiveRung> others;
     for (server::GroupArchiveRung& rung : archive.rungs) {
         const auto opener = openers.find(static_cast<std::uint64_t>(rung.atKeyVersion));
         const auto sealer = TreeKeys::sealerOf(rung.data);
-        if (opener == openers.end() || !sealer.has_value() ||
-            sealer->toBase58DER() != opener->second.committerPubKey) {
-            continue;
+        if (opener != openers.end() && sealer.has_value() && sealer->toBase58DER() == opener->second.committerPubKey) {
+            rung.author = opener->second.committer;
+            openerSealed.push_back(rung);
+        } else {
+            rung.author.reset(); // the bridge's word is no attribution
+            others.push_back(rung);
         }
-        rung.author = opener->second.committer;
-        rungs.push_back(rung);
     }
-    archive.rungs = rungs;
+    std::map<std::pair<std::int64_t, std::int64_t>, std::size_t> perSpan;
+    archive.rungs.clear();
+    for (const auto* list : {&openerSealed, &others}) {
+        for (const server::GroupArchiveRung& rung : *list) {
+            if (++perSpan[{rung.atKeyVersion, rung.targetKeyVersion}] <= MAX_SERVED_RUNGS_PER_SPAN) {
+                archive.rungs.push_back(rung);
+            }
+        }
+    }
     return archive;
 }
 
@@ -304,6 +314,7 @@ ResolveResult GroupKeyResolver::resolveWith(
     // Step 2: descend the ladder. Verification against the epoch registry happens at every hop.
     LadderKeys ladder(_cache);
     const DescentResult descent = ladder.descend(currentEpoch, wanted, rungs, registry, eraFloor, prunedBelow);
+    result.brokenSpans = descent.brokenSpans;
     if (descent.failure != DescentFailure::None || !descent.key.has_value()) {
         result.failure = ResolveFailure::DescentFailed;
         result.descent = descent.failure;

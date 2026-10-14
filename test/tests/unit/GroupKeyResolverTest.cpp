@@ -738,6 +738,8 @@ TEST_F(ResolverOldEpoch, SECURITY_TheLadderIsTakenOnlyAsTheStatementsVouchForIt)
     ASSERT_TRUE(taken.key.has_value());
     EXPECT_EQ(taken.key->toWIF(), planted.toWIF()) << "the attack, against the archive as served";
 
+    // The planted rung is kept (any member may append a repair rung), but unattributed, and it fails the registry
+    // check: the statement names epoch 7's real key, so the planted one is never taken.
     EXPECT_FALSE(resolve7(GroupKeyResolver::authenticated(forged, openers)).key.has_value());
 
     const server::GroupGetKeyArchiveResult honest = GroupKeyResolver::authenticated(fixture.archive, openers);
@@ -748,6 +750,89 @@ TEST_F(ResolverOldEpoch, SECURITY_TheLadderIsTakenOnlyAsTheStatementsVouchForIt)
     const ResolveResult reached = resolve7(honest);
     ASSERT_TRUE(reached.key.has_value());
     EXPECT_EQ(reached.key->toWIF(), epochKeys[6].toWIF());
+}
+
+// Openers of epochs 1..upTo, each naming `committer` (sealing with `sealer`) and the epoch's real grant key.
+static std::map<std::uint64_t, CommitStatement> openersOf(
+    const std::vector<PrivateKey>& epochKeys, const std::string& committer, const PrivateKey& sealer
+) {
+    std::map<std::uint64_t, CommitStatement> openers;
+    for (std::uint64_t epoch = 1; epoch <= epochKeys.size(); ++epoch) {
+        CommitStatement statement;
+        statement.keyVersion = epoch;
+        statement.groupPubKey = epochKeys[epoch - 1].getPublicKey().toBase58DER();
+        statement.committer = committer;
+        statement.committerPubKey = sealer.getPublicKey().toBase58DER();
+        openers.emplace(epoch, statement);
+    }
+    return openers;
+}
+
+TEST_F(ResolverOldEpoch, SECURITY_ARungSealedByAnotherMemberIsKeptButAttributedToNobody) {
+    // L-1: a repair rung appended by another member is what lets a reader cross a broken rung. It is kept, so the
+    // descent can use it, but it names nobody: blame comes from the signed statement, never from the bridge.
+    Fixture fixture = buildFixture(4);
+    const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);
+    setOwnLeafPosition(fixture.group, 1);
+    const auto openers = openersOf(epochKeys, "remover", fixture.members[0].priv);
+    server::GroupGetKeyArchiveResult archive = fixture.archive;
+    for (server::GroupArchiveRung& rung : archive.rungs) {
+        if (rung.atKeyVersion == 8 && rung.targetKeyVersion == 7) {
+            rung.data = LadderKeys::sealRung(PrivateKey::generateRandom(), RungSpan{8, 7}, epochKeys[7].getPublicKey(),
+                                             fixture.members[0].priv); // the opener's rung is garbage
+        }
+    }
+    server::GroupArchiveRung repair{8, 7, LadderKeys::sealRung(epochKeys[6], RungSpan{8, 7}, epochKeys[7].getPublicKey(),
+                                                              fixture.members[2].priv), std::string("bridge-says-carol")};
+    archive.rungs.push_back(repair);
+
+    const server::GroupGetKeyArchiveResult authenticated = GroupKeyResolver::authenticated(archive, openers);
+    ASSERT_EQ(authenticated.rungs.size(), archive.rungs.size()) << "nothing dropped by sealer";
+    EXPECT_FALSE(authenticated.rungs.back().author.has_value()) << "another member's rung names nobody";
+
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult result = resolver.resolve(fixture.group, 7, fixture.members[1].priv, authenticated);
+    ASSERT_TRUE(result.key.has_value());
+    EXPECT_EQ(result.key->toWIF(), epochKeys[6].toWIF()) << "crossed on the repair";
+}
+
+TEST_F(ResolverOldEpoch, SECURITY_AtMostEightRungsPerSpanAreKeptOpenerSealedFirst) {
+    // A lying bridge serving a span many times over can cost a reader at most eight attempts per span, and the
+    // opener's own rung is never pushed out by others.
+    Fixture fixture = buildFixture(4);
+    const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);
+    const auto openers = openersOf(epochKeys, "remover", fixture.members[0].priv);
+    server::GroupGetKeyArchiveResult archive = fixture.archive;
+    server::GroupArchiveRung opener;
+    std::vector<server::GroupArchiveRung> rest;
+    for (const server::GroupArchiveRung& rung : archive.rungs) {
+        if (rung.atKeyVersion == 8 && rung.targetKeyVersion == 7) {
+            opener = rung;
+        } else {
+            rest.push_back(rung);
+        }
+    }
+    // Twenty unattributed copies served before the opener's, and twenty more opener-sealed ones after it.
+    archive.rungs = rest;
+    for (int i = 0; i < 20; ++i) {
+        archive.rungs.push_back(server::GroupArchiveRung{8, 7, LadderKeys::sealRung(PrivateKey::generateRandom(),
+            RungSpan{8, 7}, epochKeys[7].getPublicKey(), PrivateKey::generateRandom()), std::nullopt});
+    }
+    archive.rungs.push_back(opener);
+    for (int i = 0; i < 20; ++i) {
+        archive.rungs.push_back(opener);
+    }
+    const server::GroupGetKeyArchiveResult authenticated = GroupKeyResolver::authenticated(archive, openers);
+    std::vector<server::GroupArchiveRung> span;
+    for (const server::GroupArchiveRung& rung : authenticated.rungs) {
+        if (rung.atKeyVersion == 8 && rung.targetKeyVersion == 7) {
+            span.push_back(rung);
+        }
+    }
+    ASSERT_EQ(span.size(), GroupKeyResolver::MAX_SERVED_RUNGS_PER_SPAN);
+    EXPECT_EQ(span.front().data, opener.data) << "the opener's rung comes first";
+    EXPECT_EQ(span.front().author, std::optional<std::string>("remover"));
 }
 
 // caching — the seam GroupApiImpl::resolveGroupPrivKey actually calls on every read
