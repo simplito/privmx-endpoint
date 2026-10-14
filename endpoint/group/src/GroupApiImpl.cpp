@@ -1788,18 +1788,31 @@ Envelope GroupApiImpl::encryptAnonymously(
 
 // -- envelope files --------------------------------------------------------------------------------------
 
-std::shared_ptr<EnvelopeFileState> GroupApiImpl::getFileState(FileHandle fileHandle, bool wantReading) {
-    auto state = _envelopeFiles.get(fileHandle);
-    if (!state.has_value()) {
-        throw core::InvalidParamsException("field:fileHandle is not an open encrypted-file handle");
+namespace {
+constexpr const char* NOT_AN_OPEN_FILE_HANDLE = "field:fileHandle is not an open encrypted-file handle";
+
+// For a call holding the handle's lock: a finish that won the lock first has closed it.
+EnvelopeFileState& openState(EnvelopeFile& file) {
+    if (file.state.closed) {
+        throw core::InvalidParamsException(NOT_AN_OPEN_FILE_HANDLE);
     }
-    if (state.value()->reading != wantReading) {
+    return file.state;
+}
+} // namespace
+
+// `reading` never changes after construction, so it is checked here without the handle's lock.
+std::shared_ptr<EnvelopeFile> GroupApiImpl::getFileState(FileHandle fileHandle, bool wantReading) {
+    auto file = _envelopeFiles.get(fileHandle);
+    if (!file.has_value()) {
+        throw core::InvalidParamsException(NOT_AN_OPEN_FILE_HANDLE);
+    }
+    if (file.value()->state.reading != wantReading) {
         throw core::InvalidParamsException(
             wantReading ? "field:fileHandle came from beginFileEncryption, not beginFileDecryption" :
                           "field:fileHandle came from beginFileDecryption, not beginFileEncryption"
         );
     }
-    return state.value();
+    return file.value();
 }
 
 void GroupApiImpl::releaseFileHandle(FileHandle fileHandle) {
@@ -1811,32 +1824,32 @@ void GroupApiImpl::releaseFileHandle(FileHandle fileHandle) {
 
 // A chunk's sealed length follows from the declared size, so both directions work at arbitrary caller-chosen
 // block sizes. Declaring the size up front is what distinguishes a short final chunk from one still arriving.
-core::Buffer GroupApiImpl::drainChunks(const std::shared_ptr<EnvelopeFileState>& state) {
-    const ByteCount chunks = GroupEnvelopeEncryptor::chunkCount(state->plainSize);
+core::Buffer GroupApiImpl::drainChunks(EnvelopeFileState& state) {
+    const ByteCount chunks = GroupEnvelopeEncryptor::chunkCount(state.plainSize);
     std::string out;
-    while (state->index < chunks) {
-        const ByteCount plainLen = GroupEnvelopeEncryptor::plainChunkSizeAt(state->plainSize, state->index);
-        const ByteCount need = state->reading ? encryptedChunkSizeFor(plainLen) : plainLen;
-        if (state->buffer.size() < need) {
+    while (state.index < chunks) {
+        const ByteCount plainLen = GroupEnvelopeEncryptor::plainChunkSizeAt(state.plainSize, state.index);
+        const ByteCount need = state.reading ? encryptedChunkSizeFor(plainLen) : plainLen;
+        if (state.buffer.size() < need) {
             break;
         }
-        core::Buffer piece = core::Buffer::from(state->buffer.substr(0, need));
-        std::string produced = (state->reading ? _envelopeEncryptor.decryptChunk(piece, state->fileKey, state->index) :
-                                                 _envelopeEncryptor.encryptChunk(piece, state->fileKey, state->index))
+        core::Buffer piece = core::Buffer::from(state.buffer.substr(0, need));
+        std::string produced = (state.reading ? _envelopeEncryptor.decryptChunk(piece, state.fileKey, state.index) :
+                                                _envelopeEncryptor.encryptChunk(piece, state.fileKey, state.index))
                                    .stdString();
-        if (state->skipInChunk > 0) {
+        if (state.skipInChunk > 0) {
             // A seek can land mid-chunk, but a chunk only opens whole. Drop the head the caller did not ask
             // for, once, on the first chunk after the seek.
-            produced.erase(0, std::min<std::size_t>(state->skipInChunk, produced.size()));
-            state->skipInChunk = 0;
+            produced.erase(0, std::min<std::size_t>(state.skipInChunk, produced.size()));
+            state.skipInChunk = 0;
         }
         out.append(produced);
-        state->buffer.erase(0, need);
-        state->index++;
+        state.buffer.erase(0, need);
+        state.index++;
     }
     // Past the last chunk nothing drains, so leftovers only grow. Refused here rather than at the close, or a
     // long ciphertext against a short declared size buffers the whole remainder first. Seeked readers included.
-    if (state->reading && state->index >= chunks && !state->buffer.empty()) {
+    if (state.reading && state.index >= chunks && !state.buffer.empty()) {
         throw InvalidEnvelopeFormatException("more file data than the declared size accounts for");
     }
     return core::Buffer::from(out);
@@ -1845,20 +1858,19 @@ core::Buffer GroupApiImpl::drainChunks(const std::shared_ptr<EnvelopeFileState>&
 FileHandle GroupApiImpl::beginFileEncryption(const std::string& groupId, FileSize size) {
     auto key = currentEncKey(groupId);
     FileHandle handle = _connection.getImpl()->getHandleManager()->createHandle("GroupEnvelope:Encrypt");
-    _envelopeFiles.set(
-        handle,
-        std::make_shared<EnvelopeFileState>(EnvelopeFileState{
-            .reading = false,
-            .type = ENVELOPE_FROM_MEMBER,
-            .groupId = groupId,
-            .keyId = key.id,
-            .groupKey = key.key,
-            // Per file, so a chunk lifted from one file is useless in any other.
-            .fileKey = privmx::crypto::Crypto::randomBytes(32),
-            .index = 0,
-            .plainSize = static_cast<ByteCount>(size),
-        })
-    );
+    auto file = std::make_shared<EnvelopeFile>();
+    file->state = EnvelopeFileState{
+        .reading = false,
+        .type = ENVELOPE_FROM_MEMBER,
+        .groupId = groupId,
+        .keyId = key.id,
+        .groupKey = key.key,
+        // Per file, so a chunk lifted from one file is useless in any other.
+        .fileKey = privmx::crypto::Crypto::randomBytes(32),
+        .index = 0,
+        .plainSize = static_cast<ByteCount>(size),
+    };
+    _envelopeFiles.set(handle, file);
     return handle;
 }
 
@@ -1871,28 +1883,29 @@ FileHandle GroupApiImpl::beginFileEncryptionAnonymously(
     // to, and the envelope is not built until the finish, so nothing here needs the group's own key.
     privmx::crypto::PublicKey::fromBase58DER(groupPubKey); // reject a malformed key now, not at the finish
     FileHandle handle = _connection.getImpl()->getHandleManager()->createHandle("GroupEnvelope:EncryptAnonymous");
-    _envelopeFiles.set(
-        handle,
-        std::make_shared<EnvelopeFileState>(EnvelopeFileState{
-            .reading = false,
-            .type = ENVELOPE_ANONYMOUS,
-            .groupId = groupId,
-            .groupPubKey = groupPubKey,
-            .fileKey = privmx::crypto::Crypto::randomBytes(32),
-            .index = 0,
-            .plainSize = static_cast<ByteCount>(size),
-        })
-    );
+    auto file = std::make_shared<EnvelopeFile>();
+    file->state = EnvelopeFileState{
+        .reading = false,
+        .type = ENVELOPE_ANONYMOUS,
+        .groupId = groupId,
+        .groupPubKey = groupPubKey,
+        .fileKey = privmx::crypto::Crypto::randomBytes(32),
+        .index = 0,
+        .plainSize = static_cast<ByteCount>(size),
+    };
+    _envelopeFiles.set(handle, file);
     return handle;
 }
 
 core::Buffer GroupApiImpl::encryptFileChunk(FileHandle fileHandle, const core::Buffer& plainChunk) {
-    auto state = getFileState(fileHandle, false);
-    if (state->written + plainChunk.size() > state->plainSize) {
+    auto file = getFileState(fileHandle, false);
+    std::lock_guard lock(file->mutex);
+    EnvelopeFileState& state = openState(*file);
+    if (state.written + plainChunk.size() > state.plainSize) {
         throw core::InvalidParamsException("field:plainChunk would exceed the declared file size");
     }
-    state->written += plainChunk.size();
-    state->buffer.append(plainChunk.stdString());
+    state.written += plainChunk.size();
+    state.buffer.append(plainChunk.stdString());
     return drainChunks(state);
 }
 
@@ -1913,50 +1926,58 @@ FileHandle GroupApiImpl::beginFileDecryption(const Envelope& envelope) {
     }
 
     FileHandle handle = _connection.getImpl()->getHandleManager()->createHandle("GroupEnvelope:Decrypt");
-    _envelopeFiles.set(
-        handle,
-        std::make_shared<EnvelopeFileState>(EnvelopeFileState{
-            .reading = true,
-            .type = header.type,
-            .groupId = header.groupId,
-            .keyId = header.keyId,
-            .groupKey = groupKey,
-            .groupPubKey = routing.groupPubKey,
-            .authorPubKey = header.authorPubKey,
-            .fileKey = header.fileKey,
-            .index = 0,
-            .plainSize = header.plainSize,
-        })
-    );
+    auto file = std::make_shared<EnvelopeFile>();
+    file->state = EnvelopeFileState{
+        .reading = true,
+        .type = header.type,
+        .groupId = header.groupId,
+        .keyId = header.keyId,
+        .groupKey = groupKey,
+        .groupPubKey = routing.groupPubKey,
+        .authorPubKey = header.authorPubKey,
+        .fileKey = header.fileKey,
+        .index = 0,
+        .plainSize = header.plainSize,
+    };
+    _envelopeFiles.set(handle, file);
     return handle;
 }
 
 core::Buffer GroupApiImpl::decryptFileChunk(FileHandle fileHandle, const core::Buffer& cipherChunk) {
-    auto state = getFileState(fileHandle, true);
-    state->buffer.append(cipherChunk.stdString());
+    auto file = getFileState(fileHandle, true);
+    std::lock_guard lock(file->mutex);
+    EnvelopeFileState& state = openState(*file);
+    state.buffer.append(cipherChunk.stdString());
     return drainChunks(state);
 }
 
 CipherOffset GroupApiImpl::seekInEncryptedFile(FileHandle fileHandle, FilePosition position) {
-    auto state = getFileState(fileHandle, true);
-    if (position < 0 || static_cast<ByteCount>(position) > state->plainSize) {
+    auto file = getFileState(fileHandle, true);
+    std::lock_guard lock(file->mutex);
+    EnvelopeFileState& state = openState(*file);
+    if (position < 0 || static_cast<ByteCount>(position) > state.plainSize) {
         throw core::InvalidParamsException("field:position is outside the file");
     }
     const ByteCount target = static_cast<ByteCount>(position);
-    state->index = static_cast<ChunkIndex>(target / GroupEnvelopeEncryptor::CHUNK_SIZE);
-    state->skipInChunk = target % GroupEnvelopeEncryptor::CHUNK_SIZE;
+    state.index = static_cast<ChunkIndex>(target / GroupEnvelopeEncryptor::CHUNK_SIZE);
+    state.skipInChunk = target % GroupEnvelopeEncryptor::CHUNK_SIZE;
     // Whatever was half-collected belonged to the old position.
-    state->buffer.clear();
+    state.buffer.clear();
     // From here on the caller decides what to read, so "did all of it arrive" is a question this handle can
     // no longer answer. `finishFileDecryption` reports that rather than pretending otherwise.
-    state->seeked = true;
-    return static_cast<int64_t>(GroupEnvelopeEncryptor::cipherOffsetOfChunk(state->index));
+    state.seeked = true;
+    return static_cast<int64_t>(GroupEnvelopeEncryptor::cipherOffsetOfChunk(state.index));
 }
 
-std::shared_ptr<EnvelopeFileState> GroupApiImpl::finishFile(FileHandle fileHandle, bool wantReading) {
-    auto state = getFileState(fileHandle, wantReading);
+EnvelopeFileState GroupApiImpl::finishFile(FileHandle fileHandle, bool wantReading) {
+    auto file = getFileState(fileHandle, wantReading);
+    std::lock_guard lock(file->mutex);
+    EnvelopeFileState& state = openState(*file);
+    // Closed whatever the outcome, so neither a second finish nor a chunk call still waiting for the lock
+    // touches the state after this one.
+    state.closed = true;
     // Free the handle however this ends, rather than hold a key resident because a file turned out short.
-    // `state` is a shared_ptr, so the caller can still read it once the map has let go.
+    // `Release` takes only the map and HandleManager locks; nothing takes those and then a file lock.
     struct Release {
         GroupApiImpl* self;
         int64_t handle;
@@ -1969,7 +1990,7 @@ std::shared_ptr<EnvelopeFileState> GroupApiImpl::finishFile(FileHandle fileHandl
     } release{this, fileHandle};
 
     switch (GroupEnvelopeEncryptor::classifyRead(
-        state->seeked, state->index, GroupEnvelopeEncryptor::chunkCount(state->plainSize), state->buffer.empty()
+        state.seeked, state.index, GroupEnvelopeEncryptor::chunkCount(state.plainSize), state.buffer.empty()
     )) {
     case GroupEnvelopeEncryptor::ReadOutcome::Truncated:
         // Every chunk authenticates itself, but nothing in chunk N says how many were meant to follow. The
@@ -1983,28 +2004,30 @@ std::shared_ptr<EnvelopeFileState> GroupApiImpl::finishFile(FileHandle fileHandl
     case GroupEnvelopeEncryptor::ReadOutcome::Complete:
         break;
     }
-    return state;
+    // Moved, not copied, so the keys are not duplicated; `closed` (a bool, copied) stays set for anyone still
+    // holding `file`.
+    return std::move(state);
 }
 
 Envelope GroupApiImpl::finishFileEncryption(FileHandle fileHandle) {
     auto state = finishFile(fileHandle, false);
-    if (state->type == ENVELOPE_ANONYMOUS) {
+    if (state.type == ENVELOPE_ANONYMOUS) {
         return _envelopeEncryptor.packAnonymousFileEnvelope(
-            state->groupId, privmx::crypto::PublicKey::fromBase58DER(state->groupPubKey), state->plainSize,
-            state->fileKey
+            state.groupId, privmx::crypto::PublicKey::fromBase58DER(state.groupPubKey), state.plainSize,
+            state.fileKey
         );
     }
     return _envelopeEncryptor.packFileEnvelope(
-        state->groupId, state->keyId, state->plainSize, state->fileKey, _userPrivKey, state->groupKey
+        state.groupId, state.keyId, state.plainSize, state.fileKey, _userPrivKey, state.groupKey
     );
 }
 
 DecryptedFileInfo GroupApiImpl::finishFileDecryption(FileHandle fileHandle) {
     auto state = finishFile(fileHandle, true);
     return DecryptedFileInfo{
-        .groupId = state->groupId,
-        .authorPubKey = state->authorPubKey,
-        .type = state->type,
-        .complete = !state->seeked,
+        .groupId = state.groupId,
+        .authorPubKey = state.authorPubKey,
+        .type = state.type,
+        .complete = !state.seeked,
     };
 }

@@ -18,11 +18,15 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
+#include <mutex>
+#include <set>
 #include <thread>
 
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
 #include <privmx/endpoint/group/Events.hpp>
@@ -30,6 +34,7 @@ limitations under the License.
 #include <privmx/endpoint/group/GroupApiImpl.hpp>
 #include <privmx/endpoint/group/GroupAwareModuleApi.hpp>
 #include <privmx/endpoint/group/GroupException.hpp>
+#include <privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp>
 #include <privmx/endpoint/group/keytree/GroupKeyResolver.hpp>
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
@@ -265,6 +270,24 @@ struct Client {
         );
     }
 };
+
+// Runs `body(i)` on `threads` threads released together, so their calls overlap as much as the scheduler allows.
+void race(int threads, const std::function<void(int)>& body) {
+    std::atomic<int> ready{0};
+    std::vector<std::thread> running;
+    for (int i = 0; i < threads; ++i) {
+        running.emplace_back([&, i] {
+            ready++;
+            while (ready.load() < threads) {
+                std::this_thread::yield();
+            }
+            body(i);
+        });
+    }
+    for (auto& thread : running) {
+        thread.join();
+    }
+}
 
 // The next event of `type` from the shared queue; the others are dropped.
 core::EventHolder nextEvent(const std::string& type) {
@@ -526,4 +549,118 @@ TEST_F(GroupApiLyingBridge, SECURITY_NoSecondStatementIsSignedAtASeqTheBridgeCal
     };
     EXPECT_THROW(client("alice").removeGroupMembers(groupId, {"carol"}), GroupDataIntegrityException);
     EXPECT_EQ(removals, 1);
+}
+
+// T3-29. Without the handle's lock these race on one EnvelopeFileState: heap corruption, lost `written` updates,
+// duplicate or skipped chunk indices, two envelopes from one handle. A plain build shows it in most runs; under
+// ThreadSanitizer every run (configure a separate build dir with -DCMAKE_CXX_FLAGS="-fsanitize=thread -g -O1", as the
+// commented-out lines at the top of CMakeLists.txt, and run --gtest_filter='*ConcurrentChunks*:*ConcurrentFinishes*').
+TEST_F(GroupApiLyingBridge, SECURITY_ConcurrentChunksOnOneFileHandleSealOneWholeFile) {
+    using E = GroupEnvelopeEncryptor;
+    const std::string groupId = createGroup({"alice", "bob"});
+    GroupApi& api = clients.at("alice")->groupApi;
+    constexpr int THREADS = 8;
+    constexpr int CALLS = 64;
+    const core::Buffer piece = core::Buffer::from(std::string(E::CHUNK_SIZE / CALLS, 'x'));
+
+    // Encrypt: 8 threads x 16 pieces fill exactly 8 chunks, whatever the interleaving.
+    const FileHandle writer = api.beginFileEncryption(groupId, THREADS * E::CHUNK_SIZE);
+    std::mutex outMutex;
+    std::vector<std::string> outputs;
+    race(THREADS, [&](int) {
+        for (int i = 0; i < CALLS; ++i) {
+            std::string sealed = api.encryptFileChunk(writer, piece).stdString();
+            if (!sealed.empty()) {
+                std::lock_guard lock(outMutex);
+                outputs.push_back(std::move(sealed));
+            }
+        }
+    });
+    std::vector<std::string> chunks;
+    for (const auto& out : outputs) {
+        ASSERT_EQ(out.size() % E::ENCRYPTED_CHUNK_SIZE, 0u);
+        for (std::size_t at = 0; at < out.size(); at += E::ENCRYPTED_CHUNK_SIZE) {
+            chunks.push_back(out.substr(at, E::ENCRYPTED_CHUNK_SIZE));
+        }
+    }
+    ASSERT_EQ(chunks.size(), static_cast<std::size_t>(THREADS));
+    const Envelope envelope = api.finishFileEncryption(writer);
+
+    // A chunk opens only at the index it was sealed at, so each one must open at exactly one k, all k distinct.
+    std::set<int> indices;
+    for (const auto& chunk : chunks) {
+        std::vector<int> opensAt;
+        for (int k = 0; k < THREADS; ++k) {
+            const FileHandle reader = api.beginFileDecryption(envelope);
+            api.seekInEncryptedFile(reader, k * E::CHUNK_SIZE);
+            try {
+                if (api.decryptFileChunk(reader, core::Buffer::from(chunk)).stdString() ==
+                    std::string(E::CHUNK_SIZE, 'x')) {
+                    opensAt.push_back(k);
+                }
+            } catch (const core::Exception&) {}
+            try {
+                api.finishFileDecryption(reader);
+            } catch (const core::Exception&) {}
+        }
+        ASSERT_EQ(opensAt.size(), 1u);
+        indices.insert(opensAt.at(0));
+    }
+    EXPECT_EQ(indices.size(), static_cast<std::size_t>(THREADS));
+
+    // Decrypt: four threads push the chunks of a well-formed file from a shared cursor while a fifth seeks back.
+    // Chunk and index can mismatch, so refusals are expected; what must not happen is a crash or a wrong plaintext.
+    const FileHandle sealer = api.beginFileEncryption(groupId, THREADS * E::CHUNK_SIZE);
+    const std::string whole =
+        api.encryptFileChunk(sealer, core::Buffer::from(std::string(THREADS * E::CHUNK_SIZE, 'x'))).stdString();
+    const Envelope ordered = api.finishFileEncryption(sealer);
+    ASSERT_EQ(whole.size(), THREADS * E::ENCRYPTED_CHUNK_SIZE);
+    const FileHandle reader = api.beginFileDecryption(ordered);
+    std::atomic<int> cursor{0};
+    std::atomic<int> wrong{0};
+    race(5, [&](int thread) {
+        if (thread == 4) {
+            for (int i = 0; i < 4; ++i) {
+                api.seekInEncryptedFile(reader, 0);
+                std::this_thread::yield();
+            }
+            return;
+        }
+        for (int at = cursor++; at < THREADS; at = cursor++) {
+            try {
+                const core::Buffer chunk =
+                    core::Buffer::from(whole.substr(at * E::ENCRYPTED_CHUNK_SIZE, E::ENCRYPTED_CHUNK_SIZE));
+                const std::string plain = api.decryptFileChunk(reader, chunk).stdString();
+                if (plain.size() > E::CHUNK_SIZE || plain.find_first_not_of('x') != std::string::npos) {
+                    wrong++;
+                }
+            } catch (const core::Exception&) {}
+        }
+    });
+    EXPECT_EQ(wrong.load(), 0);
+    try {
+        api.finishFileDecryption(reader);
+    } catch (const core::Exception&) {}
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ConcurrentFinishesCloseAFileHandleOnce) {
+    // T3-29: the first finish closes the handle under its lock; the other is refused, never a second envelope.
+    const std::string groupId = createGroup({"alice", "bob"});
+    GroupApi& api = clients.at("alice")->groupApi;
+    for (int iteration = 0; iteration < 2000; ++iteration) {
+        const FileHandle handle = api.beginFileEncryption(groupId, 16);
+        api.encryptFileChunk(handle, core::Buffer::from(std::string(16, 'x')));
+        std::atomic<int> envelopes{0};
+        std::atomic<int> refused{0};
+        race(2, [&](int) {
+            try {
+                api.finishFileEncryption(handle);
+                envelopes++;
+            } catch (const core::InvalidParamsException&) {
+                refused++;
+            }
+        });
+        ASSERT_EQ(envelopes.load(), 1) << "iteration " << iteration;
+        ASSERT_EQ(refused.load(), 1) << "iteration " << iteration;
+    }
 }

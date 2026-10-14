@@ -257,7 +257,9 @@ public:
      * The size is declared up front, as it is for a Store file, and enforced at `finishFileEncryption`:
      * supplying less than you promised is an error, because it cannot be told apart from a file cut short.
      *
-     * A handle must not be driven from two threads at once.
+     * Calls on one handle may come from several threads; they are applied one at a time, in no guaranteed
+     * order, and a call after the handle is finished is refused. Push chunks in order, from one caller, to get
+     * the file you meant.
      *
      * @param groupId ID of the Group to seal for
      * @param size total size of the plaintext file, in bytes

@@ -329,11 +329,12 @@ private:
     // rather than carried on the wire.
     privmx::crypto::PrivateKey grantKeyForPubKey(const std::string& groupId, const std::string& groupPubKeyBase58);
 
-    std::shared_ptr<EnvelopeFileState> getFileState(FileHandle fileHandle, bool wantReading);
+    std::shared_ptr<EnvelopeFile> getFileState(FileHandle fileHandle, bool wantReading);
     void releaseFileHandle(FileHandle fileHandle);
-    core::Buffer drainChunks(const std::shared_ptr<EnvelopeFileState>& state);
-    // Shared tail of both finishers: completeness check, then release whatever the outcome.
-    std::shared_ptr<EnvelopeFileState> finishFile(FileHandle fileHandle, bool wantReading);
+    // The caller holds the handle's lock.
+    core::Buffer drainChunks(EnvelopeFileState& state);
+    // Shared tail of both finishers: completeness check, then close and release whatever the outcome.
+    EnvelopeFileState finishFile(FileHandle fileHandle, bool wantReading);
 
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
@@ -348,7 +349,7 @@ private:
     privmx::utils::ThreadSaveMap<std::string, core::DecryptedEncKeyV2> _envelopeKeys;
     // Which epoch a published grant public key belongs to, by `memoKeyFor(groupId, pubKeyBase58)`.
     privmx::utils::ThreadSaveMap<std::string, int64_t> _envelopeGrantEpochs;
-    privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<EnvelopeFileState>> _envelopeFiles;
+    privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<EnvelopeFile>> _envelopeFiles;
     // Grant private keys by `memoKeyFor(groupId, epoch)`, each checked against the epoch's published public key.
     // Kept for the whole connection (dropped on disconnect): a removal ends a member's access to later epochs, and
     // a hot session keeps the ones it already held — as it would by keeping the keys themselves.
