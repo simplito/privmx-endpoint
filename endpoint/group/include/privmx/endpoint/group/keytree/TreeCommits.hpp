@@ -83,8 +83,9 @@ class TreeCommits {
 public:
     // Clock skew a statement's `date` may show against the checker's clock, both ways: the bridge's
     // `CommitStatement.DATE_TOLERANCE_MS`. A reader allows a latest statement twice that ahead of its own clock, its
-    // own skew on top (N-1: every later commit is dated no earlier, so that is how long a forward-dated statement can
-    // freeze the group).
+    // own skew on top. That bounds how far a member and a misbehaving bridge can push the chain's dates ahead of real
+    // time, which matters because the UserVerifier is asked at each statement's date. It no longer bounds a freeze:
+    // the bridge takes a commit dated exactly as the statement it extends, however far ahead that one is (N-1).
     static constexpr std::uint64_t DATE_TOLERANCE_MS = 10 * 60 * 1000;
 
     // The encoders of every preimage and sealed label in the key tree. A domain tag ends in a NUL byte, so no tag is a

@@ -43,10 +43,11 @@ std::uint64_t nowMs() {
     return static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp());
 }
 
-// The latest statement, read ahead of this clock: every honest commit after it must be dated no earlier, which the
-// bridge refuses until then, so a member and a bridge could freeze the group, removals of that member included. The
-// chain's dates never go back, so the latest one bounds them all. Twice the bridge's own tolerance: an honest commit
-// is dated within it of the bridge's clock, and this clock may be as far behind the bridge's.
+// The latest statement, read ahead of this clock. The chain's dates never go back, so the latest one bounds them all,
+// and with it how far ahead of real time a member and a misbehaving bridge can push the dates the UserVerifier is
+// asked at (the bridge takes a commit dated as the statement it extends past its tolerance, so this bounds date
+// creep, not a freeze: N-1). Twice the bridge's own tolerance: an honest commit is dated within it of the bridge's
+// clock, and this clock may be as far behind the bridge's.
 CommitStatement parseLatest(const server::GroupTreeCommit& wire) {
     CommitStatement latest = parse(wire);
     if (latest.date > nowMs() + 2 * TreeCommits::DATE_TOLERANCE_MS) {

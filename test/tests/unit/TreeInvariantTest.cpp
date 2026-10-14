@@ -900,8 +900,8 @@ TEST_F(TreeVerification, SECURITY_AChainLinkIsNeverDatedBeforeTheOneItExtends) {
 }
 
 TEST_F(TreeVerification, SECURITY_AStatementDatedAheadOfTheClockIsRefused) {
-    // N-1: every honest commit after it must be dated no earlier, which the bridge refuses until then: the member who
-    // signed it, with a bridge, could freeze the group and never be removed.
+    // N-1: bounds how far ahead a chain's dates can be pushed; the bridge no longer freezes on it (it takes a
+    // commit dated as the statement it extends), so this cap keeps the dates a UserVerifier is asked at near now.
     create(40, 0);
     remove(id(35), {id(5)});
     verify(id(9), false);

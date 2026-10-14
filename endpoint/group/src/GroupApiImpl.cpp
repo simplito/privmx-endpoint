@@ -1528,7 +1528,9 @@ void GroupApiImpl::chainTo(keytree::CommitStatement& statement, const server::Gr
     _treeVerifier.assertMaySignAt(group.id, statement.seq);
     const keytree::CommitStatement previous = keytree::TreeCommits::fromWire(group.treeCommit.value());
     statement.prevDigest = keytree::TreeCommits::digest(previous);
-    statement.date = std::max(statement.date, previous.date); // a clock behind the last committer's
+    // A clock behind the last committer's signs its date. The bridge takes a date equal to the previous one even
+    // past its tolerance, so this never freezes (N-1); keep the max: the exception is equality, not "anything later".
+    statement.date = std::max(statement.date, previous.date);
 }
 
 void GroupApiImpl::submit(
