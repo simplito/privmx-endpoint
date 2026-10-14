@@ -726,7 +726,8 @@ TEST_F(GroupKeyTreeTest, a_one_member_group_rotates_and_still_reads_its_history)
     ASSERT_NO_THROW({ groupId = createTreeGroup({}); });
     group::Group before;
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
-    ASSERT_EQ(before.users, std::vector<std::string>{user(1).userId});
+    ASSERT_TRUE(before.users.empty());
+    ASSERT_EQ(before.managers, std::vector<std::string>{user(1).userId}) << "user_1 alone, as the manager";
 
     std::string threadId;
     ASSERT_NO_THROW({ threadId = createThreadGrantedTo(before); });
