@@ -11,6 +11,10 @@
 #include <privmx/endpoint/group/GroupApiImpl.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
+#include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/crypto/utils/Base58.hpp>
+#include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint;
@@ -93,6 +97,35 @@ protected:
                 .groupEpoch = group.keyVersion
             }}
         );
+    }
+
+    // A removal sent straight to the Bridge, valid in shape only. The Bridge checks the new key (reuse, encoding)
+    // before it reads the transition or the statement's content, so the refusal text says which check fired.
+    // "" = accepted. The unit rung `k+1 -> k` alone is the whole rung set at epoch 1 or right after a cut to `k`,
+    // the only states it is called in.
+    std::string rawRemovalRefusal(const std::string& groupId, const std::string& userId, const std::string& groupPubKey) {
+        group::ServerApi api(connection->getImpl()->getGateway());
+        const auto current = api.groupGet({.groupId = groupId, .scope = std::string("plan")}).group;
+        // The latest served statement: shape-valid and already signed; only its key is swapped.
+        auto statement = api.groupGetTreeCommits({.groupId = groupId, .fromSeq = 0}).commits.back();
+        statement.groupPubKey = groupPubKey;
+        group::server::GroupRemoveMembersModel model;
+        model.id = groupId;
+        model.userIds = {userId};
+        model.groupPubKey = groupPubKey;
+        model.keyId = "m3-raw";
+        model.data = Poco::Dynamic::Var(std::string("x"));
+        model.transition = {.baseKeyVersion = current.keyVersion, .blankedPositions = {}, .refreshedNodes = {}, .edges = {}};
+        model.rungs = {{.atKeyVersion = current.keyVersion + 1, .targetKeyVersion = current.keyVersion, .data = "x"}};
+        model.expectedKeyVersion = current.keyVersion;
+        model.expectedRosterVersion = current.rosterVersion;
+        model.commit = statement;
+        try {
+            api.groupRemoveMembers(model);
+        } catch (const privmx::utils::PrivmxException& e) {
+            return std::string(e.what()) + " | " + e.getData();
+        }
+        return "";
     }
 
     std::shared_ptr<thread::ThreadApi> threadApi;
@@ -741,3 +774,62 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_remove_anybody) {
     connectAs(1);
 }
 
+
+// -- grant key reuse (T4-24) --
+
+TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_from_below_the_era_floor_is_refused) {
+    // Every member of an old epoch holds its grant key's private half, the ones removed since included. A cut drops
+    // the old epochs' rows, so the Bridge must find the old keys in the statements, which no cut touches.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
+    std::string k1, k2;
+    ASSERT_NO_THROW({ k1 = groupApi->getGroup(groupId).groupPubKey; });
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); });
+    ASSERT_NO_THROW({ k2 = groupApi->getGroup(groupId).groupPubKey; });
+    ASSERT_NO_THROW({ groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}}); });
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); });
+
+    group::ServerApi api(connection->getImpl()->getGateway());
+    ASSERT_NO_THROW({ api.groupCutEra({.id = groupId, .newFloor = 3, .expectedKeyVersion = 3}); });
+
+    group::server::GroupGetTreeCommitsResult served;
+    ASSERT_NO_THROW({ served = api.groupGetTreeCommits({.groupId = groupId, .fromSeq = 0}); });
+    ASSERT_GE(served.commits.size(), 4u) << "create, remove, add, remove";
+    EXPECT_EQ(served.commits.front().seq, 1) << "the cut took statements with it";
+    EXPECT_EQ(static_cast<int64_t>(served.commits.size()), served.commits.back().seq) << "the statements are no longer contiguous";
+
+    for (const auto& old : {k1, k2}) {
+        const auto refusal = rawRemovalRefusal(groupId, user(2).userId, old);
+        EXPECT_NE(refusal.find("groupPubKey of an earlier epoch"), std::string::npos)
+            << "a key from below the era floor was not recognised: " << refusal;
+    }
+    // Control: the same model with a fresh key gets past the reuse check, so the refusal above is about the key.
+    const auto fresh = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    const auto control = rawRemovalRefusal(groupId, user(2).userId, fresh);
+    EXPECT_FALSE(control.empty()) << "a shape-only removal was accepted";
+    EXPECT_EQ(control.find("earlier epoch"), std::string::npos) << control;
+
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.keyVersion, 3);
+    EXPECT_NE(std::find(after.users.begin(), after.users.end(), user(2).userId), after.users.end());
+}
+
+TEST_F(GroupKeyTreeTest, SECURITY_a_group_key_re_encoded_uncompressed_is_refused) {
+    // Keys are compared as strings, so the current key spelled uncompressed would pass for a new one everywhere.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
+    std::string k1;
+    ASSERT_NO_THROW({ k1 = groupApi->getGroup(groupId).groupPubKey; });
+    const auto uncompressed = privmx::utils::Base58::encodeWithChecksum(
+        privmx::crypto::PublicKey::fromBase58DER(k1).getEcc().getPublicKey(false)
+    );
+    ASSERT_NE(uncompressed, k1);
+
+    const auto refusal = rawRemovalRefusal(groupId, user(3).userId, uncompressed);
+    EXPECT_NE(refusal.find("compressed"), std::string::npos) << "a re-encoded key was taken for a new one: " << refusal;
+
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.keyVersion, 1);
+}
