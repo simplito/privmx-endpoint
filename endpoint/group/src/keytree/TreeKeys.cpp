@@ -609,6 +609,48 @@ CommitPlan TreeKeys::planRemoval(
     return commit(state, std::move(shape), state.epoch + 1, privmx::crypto::PrivateKey::generateRandom(), signer);
 }
 
+CommitPlan TreeKeys::planRotation(
+    const TreeGroupState& state,
+    const std::string& rotatorId,
+    const privmx::crypto::PrivateKey& signer
+) {
+    const auto seat = positionOf(state, rotatorId);
+    if (!seat.has_value()) {
+        throw std::invalid_argument("the rotator " + rotatorId + " holds no leaf in this tree");
+    }
+    CommitPlan plan;
+    plan.shape.numLeaves = state.numLeaves;
+    plan.shape.leafAssignment = state.leafAssignment;
+    plan.shape.committerSeat = seat.value();
+    plan.epoch = state.epoch + 1;
+    // A fresh grant keypair, independent of the one it replaces: this is the epoch bump.
+    plan.grantKey = privmx::crypto::PrivateKey::generateRandom();
+    plan.seq = state.commitSeq + 1;
+    TreeEdge grantEdge;
+    grantEdge.isGrantEdge = true;
+    grantEdge.parentGeneration = plan.epoch;
+    const std::uint32_t root = TreeMath::root(state.numLeaves);
+    if (TreeMath::isLeaf(root)) {
+        // The one seat is the rotator's, so the edge goes to the rotator's own key, which `signer` is: nothing is
+        // fetched from the directory (T3-27).
+        grantEdge.childKind = EdgeChildKind::User;
+        grantEdge.childUserId = rotatorId;
+        grantEdge.blob = wrapKey(plan.grantKey, signer.getPublicKey(), signer);
+    } else {
+        const TreeNodeState* record = findNode(state, root);
+        if (record == nullptr || !record->publicKey.has_value()) {
+            throw std::invalid_argument("the root holds no key to wrap the new grant key to");
+        }
+        grantEdge.childKind = EdgeChildKind::Node;
+        grantEdge.childIndex = root;
+        grantEdge.childGeneration = record->generation;
+        grantEdge.blob = wrapKey(plan.grantKey, record->publicKey->parsed(), signer);
+    }
+    plan.edges.push_back(grantEdge);
+    plan.treeHash = TreeCommits::treeHash(state, &plan.subtreeHashes);
+    return plan;
+}
+
 CommitPlan TreeKeys::planSelfUpdate(
     const TreeGroupState& state,
     const std::string& memberId,

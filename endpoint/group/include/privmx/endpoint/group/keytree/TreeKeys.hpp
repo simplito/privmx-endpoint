@@ -110,6 +110,15 @@ public:
         const privmx::crypto::PrivateKey& signer
     );
 
+    // Next epoch, a fresh grant key, no node touched: the one grant edge, wrapped to the root's published key, or
+    // in a one-leaf tree (whose root is the sole member's leaf) to the rotator's own key, `signer`. `state` must
+    // carry every record (the "plan" view): the statement signs its tree hash, which a rotation leaves as it is.
+    CommitPlan planRotation(
+        const TreeGroupState& state,
+        const std::string& rotatorId,
+        const privmx::crypto::PrivateKey& signer
+    );
+
     // Same epoch and grant key, which must already be in the cache (climb first).
     CommitPlan planSelfUpdate(
         const TreeGroupState& state,

@@ -360,6 +360,31 @@ public:
         commits.push_back(commit);
     }
 
+    // What `generateNewGroupKey` stores: the tree untouched, the grant edge replaced, the epoch and roster version up.
+    // Shared with the 09 and 11 tests, which extend `checkStatement`, not this.
+    void rotate(
+        const std::string& committer,
+        const server::GroupTreeEdge& grantEdge,
+        const privmx::crypto::PublicKey& newGrant,
+        const server::GroupTreeCommit& commit
+    ) {
+        ASSERT_TRUE(seatOf(state, committer).has_value()) << "only a seated member rotates";
+        TreeGroupState post = state;
+        post.epoch += 1;
+        post.grantPublicKey = newGrant;
+        post.edges.erase(
+            std::remove_if(post.edges.begin(), post.edges.end(), [](const TreeEdge& e) { return e.isGrantEdge; }),
+            post.edges.end()
+        );
+        for (const TreeEdge& edge : edgesOf({grantEdge})) {
+            post.edges.push_back(edge);
+        }
+        checkStatement(commit, CommitOp::Rotate, committer, post, rosterVersion + 1, {}, {}, {});
+        state = post;
+        rosterVersion += 1;
+        commits.push_back(commit);
+    }
+
     // What `groupGet` serves `userId`: scope "plan" (every record) or the default "path" (its own keyed path's
     // records and the copath subtrees' hashes), with the statements the served nodes cite.
     server::GroupInfo serve(const std::string& userId, bool plan) const {

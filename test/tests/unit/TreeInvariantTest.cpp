@@ -440,6 +440,29 @@ protected:
         checkInvariants(false);
     }
 
+    // A rotation as GroupApiImpl plans it (`TreeKeys::planRotation`), stored by the bridge's `generateNewGroupKey`.
+    void rotate(const std::string& rotator) {
+        const CommitPlan plan = planBy(rotator, [&](TreeKeys& keys, const TreeGroupState& served) {
+            return keys.planRotation(served, rotator, member(rotator).priv);
+        });
+        ASSERT_TRUE(plan.refreshed.empty()) << "a rotation mints no node";
+        ASSERT_EQ(plan.edges.size(), 1u) << "a rotation writes the grant edge alone";
+        bridge.rotate(
+            rotator, TreeWire::toWire(plan.edges[0]), plan.grantKey.getPublicKey(),
+            sign(plan, CommitOp::Rotate, rotator, bridge.state.epoch + 1, plan.grantKey.getPublicKey(),
+                 bridge.rosterVersion + 1, seatedIn(bridge.state), {}, {})
+        );
+        learnPlan(rotator, plan);
+        closeKnowledge();
+        checkInvariants(false);
+    }
+
+    // A cold climb of `userId`'s verified path view: the grant key it reaches, if any.
+    ClimbResult coldClimb(const std::string& userId, TreeKeyCache& cache) {
+        TreeKeys keys(cache);
+        return keys.climbToGrantKey(verifiedRead(userId, false), userId, member(userId).priv, false);
+    }
+
     void runSequence(std::uint32_t seed, std::uint32_t operations) {
         random.seed(seed);
         // Past 32 seats the root is not the only keyed node, past 64 there are keyed nodes off two levels: the
@@ -596,6 +619,92 @@ TEST_F(TreeInvariant, RandomSequencesKeepEveryInvariant) {
         reset();
         runSequence(seed, 35);
     }
+}
+
+// rotation (T3-27)
+
+TEST_F(TreeInvariant, AOneMemberGroupClimbsToTheGrantKeyOfARotatedEpoch) {
+    // The one-leaf root is the member's leaf: the new grant key is wrapped straight to the member's own key.
+    create(1, 0);
+    const std::string sole = everyone[0].userId;
+    rotate(sole);
+    ASSERT_EQ(bridge.state.epoch, 2u);
+    ASSERT_EQ(edgeIdentity(bridge.state.edges.at(0)), "grant@2>user:" + sole);
+    TreeKeyCache cache;
+    const ClimbResult climb = coldClimb(sole, cache);
+    ASSERT_EQ(climb.failure, ClimbFailure::None);
+    EXPECT_EQ(climb.grantKey->getPublicKey().toBase58DER(), bridge.state.grantPublicKey.toBase58DER());
+}
+
+TEST_F(TreeInvariant, SECURITY_AOneMemberRotationIsTakenOnlyUnderTheGrantKeyItsStatementSigns) {
+    // The bridge serves the grant edge re-wrapped to a key of its own choosing. Anybody can wrap to the member's
+    // public key; only the signed `groupPubKey` makes the member take the key inside.
+    create(1, 0);
+    const std::string sole = everyone[0].userId;
+    rotate(sole);
+    const PrivateKey planted = PrivateKey::generateRandom();
+    for (TreeEdge& edge : bridge.state.edges) {
+        ASSERT_TRUE(edge.isGrantEdge);
+        edge.blob = TreeKeys::wrapKey(planted, member(sole).publicKey, PrivateKey::generateRandom());
+    }
+    TreeKeyCache cache;
+    EXPECT_EQ(coldClimb(sole, cache).failure, ClimbFailure::Tampered);
+    EXPECT_FALSE(cache.getGrantKey(2).has_value()) << "nothing is cached for the epoch";
+}
+
+TEST_F(TreeInvariant, ARotatedOneMemberGroupSeatsANewcomerAtTheRotatedEpoch) {
+    // 1 -> 2 after a rotation: the grant edge moves from the member to node 1, still at the rotated epoch.
+    create(1, 0);
+    const std::string sole = everyone[0].userId;
+    rotate(sole);
+    add(sole, 1);
+    const std::string newcomer = everyone.back().userId;
+    ASSERT_EQ(bridge.state.epoch, 2u) << "an addition advances no epoch";
+    std::vector<std::string> grants;
+    for (const TreeEdge& edge : bridge.state.edges) {
+        if (edge.isGrantEdge) {
+            grants.push_back(edgeIdentity(edge));
+        }
+    }
+    EXPECT_EQ(grants, std::vector<std::string>{"grant@2>node:1@" + std::to_string(recordOf(bridge.state, 1)->generation)});
+    TreeKeyCache cache;
+    const ClimbResult climb = coldClimb(newcomer, cache);
+    ASSERT_EQ(climb.failure, ClimbFailure::None);
+    EXPECT_EQ(climb.grantKey->getPublicKey().toBase58DER(), bridge.state.grantPublicKey.toBase58DER());
+    // Create -> rotate -> add, as a chain from a pin before the rotation and on first contact.
+    EXPECT_NO_THROW(verifiedRead(sole, false));
+    const auto openers = verifierOf(newcomer).epochOpeners(GROUP_ID, "ctx", environment());
+    ASSERT_EQ(openers.size(), 2u);
+    EXPECT_EQ(openers.at(1).seq, 1u);
+    EXPECT_EQ(openers.at(2).seq, 2u);
+    EXPECT_EQ(openers.at(2).op, CommitOp::Rotate);
+    EXPECT_EQ(openers.at(2).committer, sole);
+}
+
+TEST_F(TreeInvariant, ARotationOfALargerGroupGoesToTheRootAndKeepsEveryInvariant) {
+    // n >= 2: wrapped to the root at its current generation, including right after a removal re-keyed it; a removed
+    // member reaches none of the rotated keys (the knowledge check), every seated one climbs to them.
+    create(40, 0);
+    rotate(everyone[9].userId);
+    remove(everyone[35].userId, {everyone[5].userId});
+    rotate(everyone[0].userId);
+    selfUpdate(everyone[7].userId);
+    rotate(everyone[39].userId);
+    EXPECT_EQ(bridge.state.epoch, 5u);
+    EXPECT_EQ(knows[everyone[5].userId].count(bridge.state.grantPublicKey.toBase58DER()), 0u);
+    for (const std::size_t seat : {0u, 9u, 33u}) {
+        TreeKeyCache cache;
+        EXPECT_EQ(coldClimb(everyone[seat].userId, cache).failure, ClimbFailure::None) << seat;
+    }
+}
+
+TEST_F(TreeInvariant, ARotationIsPlannedOnlyByASeatedMember) {
+    create(4, 0);
+    const std::string removed = everyone[3].userId;
+    remove(everyone[0].userId, {removed});
+    TreeKeyCache cache;
+    TreeKeys keys(cache);
+    EXPECT_THROW(keys.planRotation(bridge.state, removed, member(removed).priv), std::invalid_argument);
 }
 
 // verification
