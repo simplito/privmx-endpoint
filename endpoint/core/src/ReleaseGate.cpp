@@ -17,18 +17,63 @@ using namespace privmx::endpoint::core;
 
 ReleaseGate::ReleaseGate(std::uint64_t windowMs) : _windowMs(windowMs) {}
 
-ReleaseGate::Verdict ReleaseGate::check(const std::string&, const Released&, std::uint64_t, std::uint64_t) {
+ReleaseGate::Verdict ReleaseGate::check(
+    const std::string& key,
+    const Released& next,
+    std::uint64_t now,
+    std::uint64_t pinnedSeq
+) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    // Behind the pin: the statement at that seq has landed or lost; P is unreachable either way. This is also what
+    // keeps lazy resolution safe once our own statement there landed and its entry was dropped.
+    if (next.seq <= pinnedSeq) {
+        return Verdict::Stale;
+    }
+    const Released* open = openLocked(key, now, pinnedSeq);
+    if (open != nullptr &&
+        open->prevDigest == next.prevDigest &&
+        open->digest != next.digest &&
+        !(open->yields && !next.yields)) {
+        return Verdict::Held;
+    }
     return Verdict::Ok;
 }
 
-void ReleaseGate::record(const std::string&, const Released&) {}
-
-std::optional<ReleaseGate::Released> ReleaseGate::unresolved(const std::string&, std::uint64_t, std::uint64_t) {
-    return std::nullopt;
+void ReleaseGate::record(const std::string& key, const Released& next) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    const auto it = _released.find(key);
+    if (it == _released.end()) {
+        _released.emplace(key, next);
+    } else if (newer(next, it->second)) {
+        it->second = next;
+    }
 }
 
-const ReleaseGate::Released* ReleaseGate::openLocked(const std::string&, std::uint64_t, std::uint64_t) {
-    return nullptr;
+std::optional<ReleaseGate::Released> ReleaseGate::unresolved(
+    const std::string& key,
+    std::uint64_t now,
+    std::uint64_t pinnedSeq
+) {
+    std::lock_guard<std::mutex> lock(_mutex);
+    const Released* open = openLocked(key, now, pinnedSeq);
+    return open == nullptr ? std::nullopt : std::optional<Released>(*open);
+}
+
+const ReleaseGate::Released* ReleaseGate::openLocked(
+    const std::string& key,
+    std::uint64_t now,
+    std::uint64_t pinnedSeq
+) {
+    const auto it = _released.find(key);
+    if (it == _released.end()) {
+        return nullptr;
+    }
+    // Landed, superseded (the pin passed it) or expired (an honest bridge refuses it by its date by now).
+    if (pinnedSeq >= it->second.seq || now >= it->second.date + _windowMs) {
+        _released.erase(it);
+        return nullptr;
+    }
+    return &it->second;
 }
 
 bool ReleaseGate::newer(const Released& a, const Released& b) {
