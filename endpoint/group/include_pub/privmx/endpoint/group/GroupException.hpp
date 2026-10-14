@@ -55,6 +55,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, IncompleteEpochLadderExceptio
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, InvalidEnvelopeFormatException, "Malformed group envelope", 0x0012)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeTruncatedFileException, "Encrypted file is shorter than its envelope declares", 0x0013)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, CannotExtractGroupCustomEventException, "Cannot extract GroupCustomEvent", 0x0014)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupCommitUnresolvedException, "An earlier commit to this group has no known outcome yet; retry the same operation, or retry after the group's head moves or 20 minutes pass", 0x0015)
 // clang-format on
 } // namespace group
 } // namespace endpoint

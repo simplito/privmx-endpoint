@@ -361,6 +361,19 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
 }
 
 void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
+    // What the caller asked for, as `settle` tells one op from another: each newcomer's id, role and key, by id.
+    std::vector<const GroupMemberToAdd*> byId;
+    for (const GroupMemberToAdd& newMember : newMembers) {
+        byId.push_back(&newMember);
+    }
+    std::stable_sort(byId.begin(), byId.end(), [](const GroupMemberToAdd* a, const GroupMemberToAdd* b) {
+        return a->user.userId < b->user.userId;
+    });
+    std::vector<std::string> opParts;
+    for (const GroupMemberToAdd* newMember : byId) {
+        opParts.insert(opParts.end(), {newMember->user.userId, newMember->role, newMember->user.pubKey});
+    }
+    const std::string op = core::ReleaseGate::opKey("add", opParts);
     // One read, not two: the bridge holds the roster, so it allocates the seats and serves every node record the
     // plan resolves through in the same answer.
     server::GroupGetModel getModel{
@@ -374,6 +387,16 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
     auto currentGroup = _serverApi.groupGet(getModel).group;
     // Every record a plan reads and every node it wraps to, checked against the statements members signed.
     verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+    switch (settle(groupId, currentGroup, op, true)) {
+    case Settled::Done:
+        return;
+    case Settled::Reread:
+        currentGroup = _serverApi.groupGet(getModel).group;
+        verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+        break;
+    default:
+        break;
+    }
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
     const int64_t currentEpoch = currentGroup.keyVersion;
@@ -477,12 +500,26 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
 
-    submit(groupId, statement, [&] { _serverApi.groupAddMembers(model); });
-    _treeVerifier.pinCommitted(
-        groupId, currentGroup.contextId, statement, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-        core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
+    const auto sent = std::make_shared<const server::GroupAddMembersModel>(std::move(model));
+    const std::string contextId = currentGroup.contextId;
+    const std::vector<std::string> users = core::EndpointUtils::usersWithPubKeyToIds(roster.users);
+    const std::vector<std::string> managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers);
+    submit(
+        groupId, statement,
+        UnresolvedCommit{
+            .op = op,
+            .kind = "add",
+            .contextId = contextId,
+            .newcomers = newcomerKeys,
+            .send = [this, sent] { _serverApi.groupAddMembers(*sent); },
+            .landed =
+                [this, groupId, contextId, statement, users, managers] {
+                    _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers);
+                    invalidateModuleKeysInCache(groupId);
+                },
+            .after = {}
+        }
     );
-    invalidateModuleKeysInCache(groupId);
 }
 
 std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
@@ -541,15 +578,18 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
 }
 
 void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
-    bool historyAbandoned = false;
+    std::optional<bool> historyAbandoned;
     MetaPlanes planesBefore;
     commitWithRetry([&] { historyAbandoned = removeGroupMembersOnce(groupId, userIds, planesBefore); });
     // The removal is committed; the metadata entry is now one epoch behind, under a key the departed member
-    // still holds. Move it up. Outside the write above on purpose — see the header.
-    refreshMetadataEpochAfterRemoval(groupId, historyAbandoned, userIds, planesBefore);
+    // still holds. Move it up. Outside the write above on purpose — see the header. Already done when an earlier
+    // call's removal turned out to have landed (`settle`).
+    if (historyAbandoned.has_value()) {
+        refreshMetadataEpochAfterRemoval(groupId, historyAbandoned.value(), userIds, planesBefore);
+    }
 }
 
-bool GroupApiImpl::removeGroupMembersOnce(
+std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
     const std::string& groupId,
     const std::vector<std::string>& userIds,
     MetaPlanes& planesBefore
@@ -566,6 +606,20 @@ bool GroupApiImpl::removeGroupMembersOnce(
     };
     auto currentGroup = _serverApi.groupGet(getModel).group;
     verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+    std::vector<std::string> leavingIds = userIds;
+    std::sort(leavingIds.begin(), leavingIds.end());
+    leavingIds.erase(std::unique(leavingIds.begin(), leavingIds.end()), leavingIds.end());
+    const std::string op = core::ReleaseGate::opKey("remove", leavingIds);
+    switch (settle(groupId, currentGroup, op, true)) {
+    case Settled::Done:
+        return std::nullopt;
+    case Settled::Reread:
+        currentGroup = _serverApi.groupGet(getModel).group;
+        verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+        break;
+    default:
+        break;
+    }
     planesBefore = MetaPlanes{currentGroup.publicMeta, currentGroup.privateMeta};
     // Refused before anything is planned: the remover mints the next epoch's grant key, so a member removing itself
     // would walk out holding the key meant to lock it out. The bridge refuses it too.
@@ -658,9 +712,28 @@ bool GroupApiImpl::removeGroupMembersOnce(
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
 
-    submit(groupId, statement, [&] { _serverApi.groupRemoveMembers(model); });
-    // Pinned before anything reads the group again, or the next read could be the state with the leaver still in.
-    adoptCommittedEpoch(currentGroup, statement, roster, plan.grantKey, *cache);
+    const auto sent = std::make_shared<const server::GroupRemoveMembersModel>(std::move(model));
+    const MetaPlanes planes = planesBefore;
+    submit(
+        groupId, statement,
+        UnresolvedCommit{
+            .op = op,
+            .kind = "remove",
+            .contextId = currentGroup.contextId,
+            .newcomers = {},
+            .send = [this, sent] { _serverApi.groupRemoveMembers(*sent); },
+            // Pinned before anything reads the group again, or the next read could be the state with the leaver
+            // still in.
+            .landed =
+                [this, groupId, contextId = currentGroup.contextId, statement,
+                 users = core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+                 managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers), grantKey = plan.grantKey] {
+                    adoptCommittedEpoch(groupId, contextId, statement, users, managers, grantKey);
+                },
+            .after = [this, groupId, abandonHistory, userIds,
+                      planes] { refreshMetadataEpochAfterRemoval(groupId, abandonHistory, userIds, planes); }
+        }
+    );
     return abandonHistory;
 }
 
@@ -717,32 +790,35 @@ GroupApiImpl::NewEpochRoster GroupApiImpl::sealRosterForNewEpoch(
 }
 
 void GroupApiImpl::adoptCommittedEpoch(
-    const server::GroupInfo& currentGroup,
+    const std::string& groupId,
+    const std::string& contextId,
     const keytree::CommitStatement& statement,
-    const RosterAfterChange& roster,
-    const privmx::crypto::PrivateKey& grantKey,
-    keytree::TreeKeyCache& cache
+    const std::vector<std::string>& users,
+    const std::vector<std::string>& managers,
+    const privmx::crypto::PrivateKey& grantKey
 ) {
-    _treeVerifier.pinCommitted(
-        currentGroup.id, currentGroup.contextId, statement, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-        core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
-    );
-    cache.putGrantKey(static_cast<std::uint32_t>(statement.keyVersion), grantKey);
+    _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers);
+    // Looked up now, not when planned: `settle` may run this long after, with the group's cache replaced meanwhile.
+    _treeKeyCaches.get(groupId)->putGrantKey(static_cast<std::uint32_t>(statement.keyVersion), grantKey);
     // Minted here and accepted at exactly this epoch (the CAS), so it is the epoch's published key: the metadata
     // refresh that follows opens it without a read.
-    _epochKeys.set(memoKeyFor(currentGroup.id, std::to_string(statement.keyVersion)), grantKey);
-    invalidateModuleKeysInCache(currentGroup.id);
+    _epochKeys.set(memoKeyFor(groupId, std::to_string(statement.keyVersion)), grantKey);
+    invalidateModuleKeysInCache(groupId);
 }
 
 void GroupApiImpl::rotateGroupKey(const std::string& groupId) {
+    bool committedHere = true;
     MetaPlanes planesBefore;
-    commitWithRetry([&] { rotateGroupKeyOnce(groupId, planesBefore); });
+    commitWithRetry([&] { committedHere = rotateGroupKeyOnce(groupId, planesBefore); });
     // As after a removal: the metadata planes sit one epoch behind, under the key the rotation replaces. Nobody left,
-    // so nobody is accepted as an author beyond the members.
-    refreshMetadataEpochAfterRemoval(groupId, false, {}, planesBefore);
+    // so nobody is accepted as an author beyond the members. Already done when an earlier call's rotation turned out
+    // to have landed (`settle`).
+    if (committedHere) {
+        refreshMetadataEpochAfterRemoval(groupId, false, {}, planesBefore);
+    }
 }
 
-void GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& planesBefore) {
+bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& planesBefore) {
     // Every record, because the statement signs the tree hash, which a rotation leaves as it is.
     server::GroupGetModel getModel{
         .groupId = groupId,
@@ -754,6 +830,17 @@ void GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& pl
     };
     auto currentGroup = _serverApi.groupGet(getModel).group;
     verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+    const std::string op = core::ReleaseGate::opKey("rotate");
+    switch (settle(groupId, currentGroup, op, true)) {
+    case Settled::Done:
+        return false;
+    case Settled::Reread:
+        currentGroup = _serverApi.groupGet(getModel).group;
+        verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+        break;
+    default:
+        break;
+    }
     planesBefore = MetaPlanes{currentGroup.publicMeta, currentGroup.privateMeta};
     const int64_t currentEpoch = currentGroup.keyVersion;
     const int64_t newEpoch = currentEpoch + 1;
@@ -804,9 +891,27 @@ void GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& pl
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
 
-    submit(groupId, statement, [&] { _serverApi.groupGenerateNewKey(model); });
-    // Pinned before anything reads the group again: the state under the replaced key is refused from here on.
-    adoptCommittedEpoch(currentGroup, statement, roster, plan.grantKey, *cache);
+    const auto sent = std::make_shared<const server::GroupGenerateNewKeyModel>(std::move(model));
+    const MetaPlanes planes = planesBefore;
+    submit(
+        groupId, statement,
+        UnresolvedCommit{
+            .op = op,
+            .kind = "rotation",
+            .contextId = currentGroup.contextId,
+            .newcomers = {},
+            .send = [this, sent] { _serverApi.groupGenerateNewKey(*sent); },
+            // Pinned before anything reads the group again: the state under the replaced key is refused from here on.
+            .landed =
+                [this, groupId, contextId = currentGroup.contextId, statement,
+                 users = core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+                 managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers), grantKey = plan.grantKey] {
+                    adoptCommittedEpoch(groupId, contextId, statement, users, managers, grantKey);
+                },
+            .after = [this, groupId, planes] { refreshMetadataEpochAfterRemoval(groupId, false, {}, planes); }
+        }
+    );
+    return true;
 }
 
 void GroupApiImpl::commitWithRetry(const std::function<void()>& attempt) {
@@ -815,6 +920,13 @@ void GroupApiImpl::commitWithRetry(const std::function<void()>& attempt) {
         try {
             attempt();
             return;
+        } catch (const keytree::StalePlan&) {
+            // Another commit of this client to the group landed while this one was planned on the head before it.
+            if (attemptNo < MAX_ATTEMPTS) {
+                LOG_DEBUG("group commit planned behind this client's own commit, re-planning")
+                continue;
+            }
+            throw RotatedAlreadyException();
         } catch (const privmx::utils::PrivmxException& e) {
             if (attemptNo < MAX_ATTEMPTS && isRetryableCommitRejection(e)) {
                 LOG_DEBUG("group commit planned against a moved base, re-planning: ", e.what())
@@ -906,6 +1018,12 @@ void GroupApiImpl::runSelfUpdates() {
         bool lostRace = false;
         try {
             selfUpdate(groupId);
+        } catch (const keytree::StalePlan&) {
+            lostRace = true; // planned behind a commit of this client's own; re-plan like a lost race
+        } catch (const GroupCommitUnresolvedException& e) {
+            // Held back by an earlier statement of this client's at the same base; the next read that shows the
+            // need schedules it again.
+            LOG_DEBUG("[selfUpdate] group key tree self-update deferred: ", e.what())
         } catch (const privmx::utils::PrivmxException& e) {
             lostRace = isRetryableCommitRejection(e);
             if (!lostRace) {
@@ -934,8 +1052,20 @@ void GroupApiImpl::selfUpdate(const std::string& groupId) {
     // likely refilled it, and the plan view carries every node record of the tree.
     const server::GroupGetModel pathModel = pathRead(groupId);
     auto pathView = _serverApi.groupGet(pathModel).group;
-    if (!verifyTree(pathView, pathModel, keytree::TreeVerifier::Scope::Path) ||
-        !keytree::GroupKeyResolver::nodeNeedingSelfUpdate(pathView).has_value()) {
+    if (!verifyTree(pathView, pathModel, keytree::TreeVerifier::Scope::Path)) {
+        return;
+    }
+    // Before the need check: an unresolved self-update of ours is resent (or found landed), never planned again.
+    switch (settle(groupId, pathView, SELF_UPDATE_OP, false)) {
+    case Settled::Proceed:
+        break;
+    case Settled::Deferred:
+        LOG_DEBUG("[selfUpdate] deferred: an earlier commit of this client to the group has no known outcome yet")
+        return;
+    default:
+        return;
+    }
+    if (!keytree::GroupKeyResolver::nodeNeedingSelfUpdate(pathView).has_value()) {
         return;
     }
     server::GroupGetModel getModel{
@@ -981,8 +1111,23 @@ void GroupApiImpl::selfUpdate(const std::string& groupId) {
     chainTo(statement, group);
     keytree::TreeCommits::sign(statement, _userPrivKey);
     model.commit = keytree::TreeCommits::toWire(statement);
-    submit(groupId, statement, [&] { _serverApi.groupSelfUpdate(model); });
-    _treeVerifier.pinCommitted(groupId, group.contextId, statement, attestedUsers, attestedManagers);
+    const auto sent = std::make_shared<const server::GroupSelfUpdateModel>(std::move(model));
+    const std::string contextId = group.contextId;
+    submit(
+        groupId, statement,
+        UnresolvedCommit{
+            .op = SELF_UPDATE_OP,
+            .kind = "self-update",
+            .contextId = contextId,
+            .newcomers = {},
+            .send = [this, sent] { _serverApi.groupSelfUpdate(*sent); },
+            .landed =
+                [this, groupId, contextId, statement, users = attestedUsers, managers = attestedManagers] {
+                    _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers);
+                },
+            .after = {}
+        }
+    );
 }
 
 void GroupApiImpl::refreshMetadataEpochAfterRemoval(
@@ -1393,6 +1538,8 @@ void GroupApiImpl::processConnectedEvent() {
     invalidateModuleKeysInCache();
 }
 
+// `_unresolved` (m2) is kept on purpose: a dropped connection is the commonest unknown outcome of a commit, and the
+// same call retried on the next connection must resend that statement, not be held back by it.
 void GroupApiImpl::processDisconnectedEvent() {
     {
         std::unique_lock<std::mutex> lock(_selfUpdateMutex);
@@ -1641,20 +1788,152 @@ void GroupApiImpl::chainTo(keytree::CommitStatement& statement, const server::Gr
     statement.date = std::max(statement.date, previous.date);
 }
 
+std::shared_ptr<std::mutex> GroupApiImpl::commitLock(const std::string& groupId) {
+    std::lock_guard<std::mutex> lock(_unresolvedMutex);
+    auto& mutex = _commitLocks[groupId];
+    if (!mutex) {
+        mutex = std::make_shared<std::mutex>();
+    }
+    return mutex;
+}
+
+void GroupApiImpl::forgetUnresolved(const std::string& groupId, const std::string& digest) {
+    std::lock_guard<std::mutex> lock(_unresolvedMutex);
+    const auto it = _unresolved.find(groupId);
+    if (it != _unresolved.end() && it->second.digest == digest) {
+        _unresolved.erase(it);
+    }
+}
+
 void GroupApiImpl::submit(
     const std::string& groupId,
     const keytree::CommitStatement& statement,
-    const std::function<void()>& send
+    UnresolvedCommit commit
 ) {
+    const auto mutex = commitLock(groupId);
+    std::unique_lock<std::mutex> lock(*mutex);
+    commit.digest = keytree::TreeCommits::digest(statement);
+    const core::ReleaseGate::Released released{
+        .seq = statement.seq,
+        .prevDigest = statement.prevDigest,
+        .digest = commit.digest,
+        .date = statement.date,
+        .yields = commit.op == SELF_UPDATE_OP
+    };
+    switch (_releaseGate.check(groupId, released, commitDate(), _treeVerifier.pinnedSeq(groupId))) {
+    case core::ReleaseGate::Verdict::Stale:
+        throw keytree::StalePlan{};
+    case core::ReleaseGate::Verdict::Held:
+        throw GroupCommitUnresolvedException("an earlier commit to this group has no known outcome yet");
+    case core::ReleaseGate::Verdict::Ok:
+        break;
+    }
+    // I-01 step 6: write-ahead save of the gate entry (m2-design 9.1).
+    _releaseGate.record(groupId, released);
+    {
+        // Replaces a pending background self-update only now, when the op superseding it is actually released.
+        std::lock_guard<std::mutex> guard(_unresolvedMutex);
+        _unresolved[groupId] = commit;
+    }
     try {
-        send();
+        commit.send();
     } catch (const privmx::utils::PrivmxException& e) {
         // The bridge's word that a concurrent commit took this seq; it may have applied ours all the same.
         if (isRetryableCommitRejection(e)) {
             _treeVerifier.refusedAsLostRace(groupId, statement.seq);
         }
-        throw;
+        throw; // any failure keeps the gate entry and the body: the bridge may have applied it
     }
+    forgetUnresolved(groupId, commit.digest);
+    commit.landed();
+}
+
+GroupApiImpl::Settled GroupApiImpl::settle(
+    const std::string& groupId,
+    const server::GroupInfo& head,
+    const std::string& op,
+    bool mayCompleteOther
+) {
+    std::optional<UnresolvedCommit> first;
+    {
+        std::lock_guard<std::mutex> lock(_unresolvedMutex);
+        const auto it = _unresolved.find(groupId);
+        if (it == _unresolved.end()) {
+            return Settled::Proceed;
+        }
+        first = it->second;
+    }
+    const std::string headDigest = head.treeCommit.has_value() ?
+        keytree::TreeCommits::digest(keytree::TreeCommits::fromWire(head.treeCommit.value())) :
+        std::string();
+    // A resent add wraps to its newcomers' keys again: only while the UserVerifier still vouches for them. Outside
+    // every lock of ours, like any verifier call.
+    if (!first->newcomers.empty() && headDigest != first->digest && (first->op == op || mayCompleteOther)) {
+        try {
+            assertUserKeysVerified(first->contextId, first->newcomers);
+        } catch (...) {
+            forgetUnresolved(groupId, first->digest); // the gate entry stays: nothing else is released at its base
+            if (first->op == op) {
+                throw;
+            }
+            throw GroupCommitUnresolvedException(
+                "an earlier add to this group has no known outcome yet, and its newcomers' keys are no longer verified"
+            );
+        }
+    }
+    const auto mutex = commitLock(groupId);
+    std::unique_lock<std::mutex> lock(*mutex);
+    UnresolvedCommit pending;
+    {
+        std::lock_guard<std::mutex> guard(_unresolvedMutex);
+        const auto it = _unresolved.find(groupId);
+        if (it == _unresolved.end() || it->second.digest != first->digest) {
+            return Settled::Proceed; // settled meanwhile; the gate decides at `submit`
+        }
+        pending = it->second;
+    }
+    const auto finish = [&](Settled done) {
+        forgetUnresolved(groupId, pending.digest);
+        pending.landed();
+        lock.unlock();
+        if (pending.after) {
+            pending.after();
+        }
+        return pending.op == op ? Settled::Done : done;
+    };
+    if (headDigest == pending.digest) {
+        return finish(Settled::Proceed); // it landed; only the answer was lost
+    }
+    const auto released = _releaseGate.unresolved(groupId, commitDate(), _treeVerifier.pinnedSeq(groupId));
+    if (!released.has_value() || released->digest != pending.digest) {
+        forgetUnresolved(groupId, pending.digest); // superseded, or its window closed
+        return Settled::Proceed;
+    }
+    if (pending.op == SELF_UPDATE_OP && op != SELF_UPDATE_OP) {
+        return Settled::Proceed; // yields; the body stays for the worker until this op is released
+    }
+    if (pending.op != op && !mayCompleteOther) {
+        return Settled::Deferred;
+    }
+    _treeVerifier.assertMaySignAt(groupId, released->seq); // T4-17
+    try {
+        pending.send();
+    } catch (const privmx::utils::PrivmxException& e) {
+        if (isRetryableCommitRejection(e)) {
+            _treeVerifier.refusedAsLostRace(groupId, released->seq);
+            throw;
+        }
+        if (pending.op == op) {
+            throw;
+        }
+        throw GroupCommitUnresolvedException("an earlier " + pending.kind + " to this group has no known outcome yet");
+    } catch (...) {
+        if (pending.op == op) {
+            throw;
+        }
+        throw GroupCommitUnresolvedException("an earlier " + pending.kind + " to this group has no known outcome yet");
+    }
+    return finish(Settled::Reread);
 }
 
 privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKeyArchive(

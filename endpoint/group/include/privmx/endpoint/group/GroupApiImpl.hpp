@@ -19,6 +19,7 @@
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 
 #include "privmx/endpoint/core/ContainerBaseApi.hpp"
+#include "privmx/endpoint/core/ReleaseGate.hpp"
 #include "privmx/endpoint/group/GroupApi.hpp"
 #include "privmx/endpoint/group/GroupTypes.hpp"
 #include "privmx/endpoint/group/ServerApi.hpp"
@@ -26,6 +27,7 @@
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp"
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
+#include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
 #include "privmx/endpoint/group/keytree/TreeKeyCacheRegistry.hpp"
 #include "privmx/endpoint/group/keytree/TreeVerifier.hpp"
@@ -47,6 +49,10 @@ public:
         const core::Connection& connection
     );
     ~GroupApiImpl();
+
+    // m2: how long a released statement with no known outcome holds back a different one at its prevDigest. An honest
+    // bridge refuses a statement dated more than DATE_TOLERANCE_MS behind its clock; twice that covers both clocks.
+    static constexpr std::uint64_t RELEASE_WINDOW_MS = 2 * keytree::TreeCommits::DATE_TOLERANCE_MS;
 
     std::string createGroup(
         const std::string& contextId,
@@ -268,12 +274,43 @@ private:
     // lost race (T4-17): that one may have been applied, and a second one there would be a fork.
     void chainTo(keytree::CommitStatement& statement, const server::GroupInfo& group);
 
-    // Sends a signed statement; a refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo`.
-    void submit(
+    // m2: a commit released to the bridge with no known outcome. A retry resends exactly this.
+    struct UnresolvedCommit {
+        std::string digest; // of the released statement (set by `submit`)
+        std::string op;     // core::ReleaseGate::opKey of what the caller asked for
+        std::string kind;   // "add", "remove", ... for messages
+        std::string contextId;
+        std::vector<core::UserWithPubKey> newcomers; // add only: re-checked before every resend
+        std::function<void()> send;                  // the request as first sent; never re-planned
+        std::function<void()> landed;                // pin + caches once accepted; looks the TreeKeyCache up itself
+        std::function<void()> after;                 // best-effort follow-up (a removal's metadata refresh) or empty
+    };
+    // Proceed: plan on the read. Done: the caller's own op landed (now or before). Reread: another op of this
+    // client was completed first; read again. Deferred: the background self-update yields to another op's commit.
+    enum class Settled {
+        Proceed,
+        Done,
+        Reread,
+        Deferred
+    };
+    inline static const std::string SELF_UPDATE_OP = core::ReleaseGate::opKey("selfUpdate");
+
+    // Per group; held only from release to outcome, never across reads or the UserVerifier.
+    std::shared_ptr<std::mutex> commitLock(const std::string& groupId);
+    // Before planning on `head` (a verified read): completes this client's unresolved commit to the group, if any
+    // (resend, or noticing it landed), so no second statement is released at its prevDigest (A5-F3).
+    // `mayCompleteOther`: whether a different op may resend it (every app op; not the background self-update).
+    Settled settle(
         const std::string& groupId,
-        const keytree::CommitStatement& statement,
-        const std::function<void()>& send
+        const server::GroupInfo& head,
+        const std::string& op,
+        bool mayCompleteOther
     );
+    // Releases a signed statement through the gate (`_releaseGate`) and keeps `commit` until its outcome is known.
+    // Throws keytree::StalePlan for a plan behind the pin, GroupCommitUnresolvedException when another statement at
+    // its prevDigest is unresolved. A refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo`.
+    void submit(const std::string& groupId, const keytree::CommitStatement& statement, UnresolvedCommit commit);
+    void forgetUnresolved(const std::string& groupId, const std::string& digest);
 
     // `group` must have passed `verifyTree` at plan scope. `tolerateBrokenClimb`: a climb that fails on the served
     // edges (not on membership) is logged and the state returned anyway — a removal plans from public state alone.
@@ -285,15 +322,17 @@ private:
 
     // One attempt each; `commitWithRetry` re-runs them, from a fresh read, when a concurrent commit moved the base.
     void addGroupMembersOnce(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
-    // Returns whether the removal abandoned history (the caller held no current grant key).
+    // Returns whether the removal abandoned history (the caller held no current grant key); nullopt when an
+    // earlier attempt of the same removal turned out to have landed (`settle` ran its metadata refresh then).
     // `planesBefore` is what the attempt read, for `refreshMetadataEpochAfterRemoval`.
-    bool removeGroupMembersOnce(
+    std::optional<bool> removeGroupMembersOnce(
         const std::string& groupId,
         const std::vector<std::string>& userIds,
         MetaPlanes& planesBefore
     );
-    // `planesBefore` is what the attempt read, for `refreshMetadataEpochAfterRemoval`.
-    void rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& planesBefore);
+    // `planesBefore` is what the attempt read, for `refreshMetadataEpochAfterRemoval`. False when an earlier attempt
+    // of a rotation turned out to have landed (`settle` ran its metadata refresh then).
+    bool rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& planesBefore);
 
     // What a commit opening a new epoch publishes beside the tree, shared by removal and rotation: the roster under a
     // fresh metadata key (a key never used before once history is abandoned), and that key wrapped once to the new
@@ -313,13 +352,15 @@ private:
     );
 
     // After this client's commit opened `statement.keyVersion`: pins it before anything reads the group again (the
-    // state it replaced is refused from then on) and keeps the new grant key, the epoch's published one.
+    // state it replaced is refused from then on) and keeps the new grant key, the epoch's published one. `users` /
+    // `managers` are the roster the statement signed. An `UnresolvedCommit::landed`, so it takes nothing by reference.
     void adoptCommittedEpoch(
-        const server::GroupInfo& currentGroup,
+        const std::string& groupId,
+        const std::string& contextId,
         const keytree::CommitStatement& statement,
-        const RosterAfterChange& roster,
-        const privmx::crypto::PrivateKey& grantKey,
-        keytree::TreeKeyCache& cache
+        const std::vector<std::string>& users,
+        const std::vector<std::string>& managers,
+        const privmx::crypto::PrivateKey& grantKey
     );
 
     static void commitWithRetry(const std::function<void()>& attempt);
@@ -402,6 +443,14 @@ private:
     static constexpr int MAX_SELF_UPDATE_ATTEMPTS = 3;
     bool _selfUpdateStopping = false;
     std::thread _selfUpdateWorker;
+
+    // m2 (A5-F3): one released statement per prevDigest. The bodies survive reconnects on purpose: a dropped
+    // connection is the commonest unknown outcome, and the same call retried after it must resend, not be held back.
+    std::mutex _unresolvedMutex;                                     // guards both maps
+    std::map<std::string, std::shared_ptr<std::mutex>> _commitLocks; // never pruned: one per group committed to
+    std::map<std::string, UnresolvedCommit> _unresolved;
+    core::ReleaseGate _releaseGate{RELEASE_WINDOW_MS};
+    friend struct GroupApiImplTestAccess; // tests reach selfUpdate() and stop the worker
 };
 
 } // namespace group

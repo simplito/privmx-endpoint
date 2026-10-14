@@ -30,6 +30,10 @@ namespace endpoint {
 namespace group {
 namespace keytree {
 
+// m2: a plan whose base is behind the pin (the client's own commit, or a read, moved it meanwhile). Retryable: a fresh
+// read plans on the newer head. Not an endpoint exception; `commitWithRetry` and the self-update worker handle it.
+struct StalePlan {};
+
 // Checks a served tree against the commit statements members signed, before any key from it is used: the latest
 // statement must be genuine and describe exactly the served roster, grant key and tree (by hash); every filled
 // node must be vouched for by a genuine statement whose committer is still on that roster and which signed the
