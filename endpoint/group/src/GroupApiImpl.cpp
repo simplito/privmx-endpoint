@@ -846,9 +846,9 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 auto decrypted = decrypt(core::Buffer::from(privmx::utils::Base64::toString(raw.eventData)));
                 data.payload = decrypted.data;
                 data.authorPubKey = decrypted.authorPubKey;
-            } catch (const core::Exception& e) {
-                data.error = core::toPublicError(e);
-            } catch (...) { data.error = core::toPublicError(*core::unknownError("decrypting the group event")); }
+            } catch (const core::Exception& e) { data.error = core::toPublicError(e); } catch (...) {
+                data.error = core::toPublicError(*core::unknownError("decrypting the group event"));
+            }
             auto event = core::EventBuilder::buildEvent<GroupCustomEvent>(
                 "group/" + raw.id + "/" + channelName, data, notification
             );

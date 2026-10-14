@@ -59,9 +59,7 @@ ContextCustomEventData EventDataSchemaMapper::decrypt(const server::ContextCusto
             raw.error = core::asError(privmx::endpoint::core::UserVerificationFailureException());
         }
         return _strategyV5->convert(rawEvent, raw);
-    } catch (const core::Exception& e) {
-        return makeErrorResult(rawEvent, core::toPublicError(e));
-    } catch (...) {
+    } catch (const core::Exception& e) { return makeErrorResult(rawEvent, core::toPublicError(e)); } catch (...) {
         return makeErrorResult(rawEvent, core::toPublicError(*core::unknownError("decrypting the context event")));
     }
 }

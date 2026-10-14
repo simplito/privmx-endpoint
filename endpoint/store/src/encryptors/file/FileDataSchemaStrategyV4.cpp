@@ -69,9 +69,9 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV4::convert(
                 utils::Utils::parseJson(raw.internalMeta.stdString())
             );
             randomWrite = internalMeta.randomWrite.value_or(false);
-        } catch (const core::Exception& e) {
-            error = core::toPublicError(e);
-        } catch (...) { error = core::toPublicError(*core::unknownError("decoding the file's internal meta")); }
+        } catch (const core::Exception& e) { error = core::toPublicError(e); } catch (...) {
+            error = core::toPublicError(*core::unknownError("decoding the file's internal meta"));
+        }
     }
     return {
         FileMetaDataSchemaMapper::toLibFile(

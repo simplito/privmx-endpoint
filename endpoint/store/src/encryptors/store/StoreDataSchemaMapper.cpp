@@ -46,8 +46,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaMapper::decrypt(
         [&]() -> std::tuple<Store, core::DataIntegrityObject> {
             return {
                 toLibStore(
-                    store, {}, {}, core::toPublicError(UnknowStoreFormatException()),
-                    StoreDataSchema::Version::UNKNOWN
+                    store, {}, {}, core::toPublicError(UnknowStoreFormatException()), StoreDataSchema::Version::UNKNOWN
                 ),
                 {}
             };
@@ -77,14 +76,10 @@ std::optional<core::DataIntegrityObject> StoreDataSchemaMapper::assertDataIntegr
     }
 }
 
-std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
-StoreDataSchemaMapper::validateDataIntegrity(
-    const server::Store& store
-) {
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> StoreDataSchemaMapper::
+    validateDataIntegrity(const server::Store& store) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const auto error = core::DataSchemaMapperUtils::toError([&] {
-        verifiedDio = assertDataIntegrity(store);
-    });
+    const auto error = core::DataSchemaMapperUtils::toError([&] { verifiedDio = assertDataIntegrity(store); });
     return {error, verifiedDio};
 }
 

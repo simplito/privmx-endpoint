@@ -98,11 +98,8 @@ FileDataSchema::Version FileMetaDataSchemaMapper::getDataStructureVersion(const 
     });
 }
 
-std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
-FileMetaDataSchemaMapper::validateDataIntegrity(
-    const server::File& file,
-    const std::string& storeResourceId
-) {
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> FileMetaDataSchemaMapper::
+    validateDataIntegrity(const server::File& file, const std::string& storeResourceId) {
     std::optional<core::DataIntegrityObject> verifiedDio;
     const auto error = core::DataSchemaMapperUtils::toError([&] {
         switch (getDataStructureVersion(file)) {
@@ -170,9 +167,7 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
         files, storeKeys, keyProvider, _connection,
         [&](const server::File& f) { return validateDataIntegrity(f, storeKeys.moduleResourceId); },
         [&](const server::File& f) {
-            return core::DataSchemaMapperUtils::toError([&] {
-                _fileKeyIdFormatValidator.assertKeyIdFormat(f.keyId);
-            });
+            return core::DataSchemaMapperUtils::toError([&] { _fileKeyIdFormatValidator.assertKeyIdFormat(f.keyId); });
         },
         [&](const server::File& f, const core::DecryptedEncKey& key,
             const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(f, key, verifiedDio); },

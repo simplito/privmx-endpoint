@@ -71,14 +71,10 @@ std::optional<core::DataIntegrityObject> KvdbDataSchemaMapper::assertDataIntegri
     }
 }
 
-std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
-KvdbDataSchemaMapper::validateDataIntegrity(
-    const server::KvdbInfo& kvdb
-) {
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> KvdbDataSchemaMapper::
+    validateDataIntegrity(const server::KvdbInfo& kvdb) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const auto error = core::DataSchemaMapperUtils::toError([&] {
-        verifiedDio = assertDataIntegrity(kvdb);
-    });
+    const auto error = core::DataSchemaMapperUtils::toError([&] { verifiedDio = assertDataIntegrity(kvdb); });
     return {error, verifiedDio};
 }
 

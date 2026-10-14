@@ -326,9 +326,7 @@ std::pair<std::optional<core::Error>, core::DataIntegrityObject> GroupDataSchema
     const server::GroupInfo& groupInfo
 ) {
     core::DataIntegrityObject rosterDio;
-    const auto error = core::DataSchemaMapperUtils::toError([&] {
-        rosterDio = assertDataIntegrity(groupInfo);
-    });
+    const auto error = core::DataSchemaMapperUtils::toError([&] { rosterDio = assertDataIntegrity(groupInfo); });
     return {error, rosterDio};
 }
 
@@ -473,9 +471,9 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             if (seen(rosterDios[i]) || seen(publicMetaDios[i]) || seen(privateMetaDios[i])) {
                 result[i].error = core::toPublicError(core::DataIntegrityObjectDuplicatedException());
             }
-        } catch (const core::Exception& e) {
-            result[i] = toError(g, core::toPublicError(e));
-        } catch (...) { result[i] = toError(g, core::toPublicError(*core::unknownError("decrypting the group"))); }
+        } catch (const core::Exception& e) { result[i] = toError(g, core::toPublicError(e)); } catch (...) {
+            result[i] = toError(g, core::toPublicError(*core::unknownError("decrypting the group")));
+        }
     }
 
     // One request per plane per group, each against the author of that plane's own head entry. All three must

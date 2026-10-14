@@ -119,9 +119,9 @@ inbox::InboxEntry InboxEntryDataSchemaStrategyV1::convertToFinal(
                     result.files.push_back(failed);
                 }
             }
-        } catch (const core::Exception& e) {
-            result.error = core::toPublicError(e);
-        } catch (...) { result.error = core::toPublicError(*core::unknownError("fetching the entry's files")); }
+        } catch (const core::Exception& e) { result.error = core::toPublicError(e); } catch (...) {
+            result.error = core::toPublicError(*core::unknownError("fetching the entry's files"));
+        }
     }
     result.schemaVersion = EntryDataSchema::Version::VERSION_1;
     return result;

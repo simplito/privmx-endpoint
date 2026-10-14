@@ -34,8 +34,7 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaStrategyV4::convert(
     return {
         InboxDataSchemaMapper::toLibInbox(
             inbox, raw.publicData.publicMeta, raw.privateData.privateMeta, raw.filesConfig,
-            core::toPublicError(raw.error),
-            InboxDataSchema::Version::VERSION_4
+            core::toPublicError(raw.error), InboxDataSchema::Version::VERSION_4
         ),
         core::DataIntegrityObject{
             .creatorUserId = inbox.lastModifier,

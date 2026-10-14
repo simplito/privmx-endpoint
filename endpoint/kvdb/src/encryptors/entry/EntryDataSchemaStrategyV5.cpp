@@ -38,7 +38,5 @@ KvdbEntry EntryDataSchemaStrategyV5::toLibError(
     const server::KvdbEntryInfo& entry,
     const std::optional<core::Error>& error
 ) const {
-    return EntryDataSchemaMapper::toLibKvdbEntry(
-        entry, {}, {}, {}, {}, error, KvdbEntryDataSchema::Version::VERSION_5
-    );
+    return EntryDataSchemaMapper::toLibKvdbEntry(entry, {}, {}, {}, {}, error, KvdbEntryDataSchema::Version::VERSION_5);
 }

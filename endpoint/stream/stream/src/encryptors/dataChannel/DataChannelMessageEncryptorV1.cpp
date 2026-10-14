@@ -67,9 +67,9 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(
             )
         );
         updateSeq(remoteStreamId, parsedEncryptedMessage.header.seq);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::toPublicError(e);
-    } catch (...) { result.error = core::toPublicError(*core::unknownError("decrypting the data channel message")); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::toPublicError(e); } catch (...) {
+        result.error = core::toPublicError(*core::unknownError("decrypting the data channel message"));
+    }
     return result;
 }
 

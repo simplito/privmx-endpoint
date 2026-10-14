@@ -75,14 +75,10 @@ std::optional<core::DataIntegrityObject> InboxDataSchemaMapper::assertDataIntegr
     }
 }
 
-std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
-InboxDataSchemaMapper::validateDataIntegrity(
-    const server::InboxInfo& inbox
-) {
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> InboxDataSchemaMapper::
+    validateDataIntegrity(const server::InboxInfo& inbox) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const auto error = core::DataSchemaMapperUtils::toError([&] {
-        verifiedDio = assertDataIntegrity(inbox);
-    });
+    const auto error = core::DataSchemaMapperUtils::toError([&] { verifiedDio = assertDataIntegrity(inbox); });
     return {error, verifiedDio};
 }
 

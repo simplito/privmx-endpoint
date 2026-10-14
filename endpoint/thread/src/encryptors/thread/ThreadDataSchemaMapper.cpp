@@ -78,14 +78,10 @@ std::optional<core::DataIntegrityObject> ThreadDataSchemaMapper::assertDataInteg
     }
 }
 
-std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
-ThreadDataSchemaMapper::validateDataIntegrity(
-    const server::ThreadInfo& thread
-) {
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> ThreadDataSchemaMapper::
+    validateDataIntegrity(const server::ThreadInfo& thread) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const auto error = core::DataSchemaMapperUtils::toError([&] {
-        verifiedDio = assertDataIntegrity(thread);
-    });
+    const auto error = core::DataSchemaMapperUtils::toError([&] { verifiedDio = assertDataIntegrity(thread); });
     return {error, verifiedDio};
 }
 

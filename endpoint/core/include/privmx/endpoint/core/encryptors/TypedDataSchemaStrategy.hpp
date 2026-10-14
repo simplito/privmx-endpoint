@@ -32,9 +32,9 @@ public:
     ) const override final {
         try {
             return convert(model, decrypt(model, encKey, verifiedDio));
-        } catch (const core::Exception& e) {
-            return makeErrorResult(model, toPublicError(e));
-        } catch (...) { return makeErrorResult(model, toPublicError(*unknownError("decrypting the item"))); }
+        } catch (const core::Exception& e) { return makeErrorResult(model, toPublicError(e)); } catch (...) {
+            return makeErrorResult(model, toPublicError(*unknownError("decrypting the item")));
+        }
     }
 
     virtual TRawData decrypt(const TServerModel& model, const DecryptedEncKey& encKey) const = 0;

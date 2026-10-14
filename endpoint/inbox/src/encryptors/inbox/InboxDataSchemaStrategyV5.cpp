@@ -42,8 +42,7 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaStrategyV5::convert(
     return {
         InboxDataSchemaMapper::toLibInbox(
             inbox, raw.publicData.publicMeta, raw.privateData.privateMeta, raw.filesConfig,
-            core::toPublicError(raw.error),
-            InboxDataSchema::Version::VERSION_5
+            core::toPublicError(raw.error), InboxDataSchema::Version::VERSION_5
         ),
         raw.privateData.dio
     };

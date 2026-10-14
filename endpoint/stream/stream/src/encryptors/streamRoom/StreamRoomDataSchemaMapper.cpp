@@ -84,14 +84,10 @@ std::optional<core::DataIntegrityObject> StreamRoomDataSchemaMapper::assertDataI
     }
 }
 
-std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
-StreamRoomDataSchemaMapper::validateDataIntegrity(
-    const server::StreamRoomInfo& streamRoom
-) {
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> StreamRoomDataSchemaMapper::
+    validateDataIntegrity(const server::StreamRoomInfo& streamRoom) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const auto error = core::DataSchemaMapperUtils::toError([&] {
-        verifiedDio = assertDataIntegrity(streamRoom);
-    });
+    const auto error = core::DataSchemaMapperUtils::toError([&] { verifiedDio = assertDataIntegrity(streamRoom); });
     return {error, verifiedDio};
 }
 

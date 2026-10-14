@@ -69,7 +69,5 @@ Message MessageDataSchemaStrategyV4::toLibError(
     const server::Message& message,
     const std::optional<core::Error>& error
 ) const {
-    return MessageDataSchemaMapper::toLibMessage(
-        message, {}, {}, {}, {}, error, MessageDataSchema::Version::VERSION_4
-    );
+    return MessageDataSchemaMapper::toLibMessage(message, {}, {}, {}, {}, error, MessageDataSchema::Version::VERSION_4);
 }

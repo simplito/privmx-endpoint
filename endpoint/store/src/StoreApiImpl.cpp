@@ -245,8 +245,7 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     auto store = serverFileResult.store;
     _storeDataSchemaMapper->assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, containerToModuleKeys(store), store.version);
-    auto error = _fileMetaDataSchemaMapper
-                     .validateDataIntegrity(serverFileResult.file, store.resourceId.value_or(""))
+    auto error = _fileMetaDataSchemaMapper.validateDataIntegrity(serverFileResult.file, store.resourceId.value_or(""))
                      .first;
     if (error.has_value()) {
         File result;

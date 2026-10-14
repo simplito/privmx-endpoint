@@ -89,11 +89,8 @@ MessageDataSchema::Version MessageDataSchemaMapper::getMessagesDataStructureVers
     );
 }
 
-std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
-MessageDataSchemaMapper::validateMessageDataIntegrity(
-    const server::Message& message,
-    const std::string& threadResourceId
-) {
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> MessageDataSchemaMapper::
+    validateMessageDataIntegrity(const server::Message& message, const std::string& threadResourceId) {
     std::optional<core::DataIntegrityObject> verifiedDio;
     const auto error = core::DataSchemaMapperUtils::toError([&] {
         switch (getMessagesDataStructureVersion(message)) {

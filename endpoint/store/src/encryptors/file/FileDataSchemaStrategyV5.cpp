@@ -67,14 +67,14 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::convert(
             );
             size = internalMeta.size;
             randomWrite = internalMeta.randomWrite.value_or(false);
-        } catch (const core::Exception& e) {
-            error = core::toPublicError(e);
-        } catch (...) { error = core::toPublicError(*core::unknownError("decoding the file's internal meta")); }
+        } catch (const core::Exception& e) { error = core::toPublicError(e); } catch (...) {
+            error = core::toPublicError(*core::unknownError("decoding the file's internal meta"));
+        }
     }
     return {
         FileMetaDataSchemaMapper::toLibFile(
-            file, raw.publicMeta, raw.privateMeta, size, raw.authorPubKey, error,
-            FileDataSchema::Version::VERSION_5, randomWrite
+            file, raw.publicMeta, raw.privateMeta, size, raw.authorPubKey, error, FileDataSchema::Version::VERSION_5,
+            randomWrite
         ),
         raw.dio
     };

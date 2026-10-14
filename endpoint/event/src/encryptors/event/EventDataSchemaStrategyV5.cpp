@@ -51,10 +51,6 @@ ContextCustomEventData EventDataSchemaStrategyV5::toContextCustomEventData(
     int64_t schemaVersion
 ) {
     return ContextCustomEventData{
-        .contextId = raw.id,
-        .userId = raw.author.id,
-        .payload = payload,
-        .error = error,
-        .schemaVersion = schemaVersion
+        .contextId = raw.id, .userId = raw.author.id, .payload = payload, .error = error, .schemaVersion = schemaVersion
     };
 }

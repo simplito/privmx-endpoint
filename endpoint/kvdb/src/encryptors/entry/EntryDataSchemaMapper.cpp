@@ -91,11 +91,8 @@ KvdbEntryDataSchema::Version EntryDataSchemaMapper::getDataStructureVersion(cons
     );
 }
 
-std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
-EntryDataSchemaMapper::validateEntryDataIntegrity(
-    const server::KvdbEntryInfo& entry,
-    const std::string& kvdbResourceId
-) {
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> EntryDataSchemaMapper::
+    validateEntryDataIntegrity(const server::KvdbEntryInfo& entry, const std::string& kvdbResourceId) {
     std::optional<core::DataIntegrityObject> verifiedDio;
     const auto error = core::DataSchemaMapperUtils::toError([&] {
         switch (getDataStructureVersion(entry)) {

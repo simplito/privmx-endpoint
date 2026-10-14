@@ -60,9 +60,9 @@ public:
         try {
             fn();
             return std::nullopt;
-        } catch (const Exception& e) {
-            return toPublicError(e);
-        } catch (...) { return toPublicError(*unknownError()); }
+        } catch (const Exception& e) { return toPublicError(e); } catch (...) {
+            return toPublicError(*unknownError());
+        }
     }
 
     template<typename TContainer>
@@ -133,9 +133,9 @@ public:
         const std::vector<TServer>& items,
         const std::shared_ptr<KeyProvider>& keyProvider,
         const Connection& connection,
-        std::function<std::pair<std::optional<Error>, std::optional<DataIntegrityObject>>(
-            const type_identity_t<TServer>&
-        )> validateIntegrity,
+        std::function<
+            std::pair<std::optional<Error>, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
+            validateIntegrity,
         std::function<EncKeyLocation(const type_identity_t<TServer>&)> getLocation,
         std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
             const type_identity_t<TServer>&,
@@ -193,9 +193,7 @@ public:
                 } else {
                     result[i] = toLibError(items[i], toPublicError(*unknownError("resolving the item's key")));
                 }
-            } catch (const Exception& e) {
-                result[i] = toLibError(items[i], toPublicError(e));
-            } catch (...) {
+            } catch (const Exception& e) { result[i] = toLibError(items[i], toPublicError(e)); } catch (...) {
                 result[i] = toLibError(items[i], toPublicError(*unknownError("decrypting the item")));
             }
         }
@@ -230,9 +228,9 @@ public:
         const ModuleKeys& moduleKeys,
         const std::shared_ptr<KeyProvider>& keyProvider,
         const Connection& connection,
-        std::function<std::pair<std::optional<Error>, std::optional<DataIntegrityObject>>(
-            const type_identity_t<TServer>&
-        )> validateIntegrity,
+        std::function<
+            std::pair<std::optional<Error>, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
+            validateIntegrity,
         std::function<std::optional<Error>(const type_identity_t<TServer>&)> validateKeyId,
         std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
             const type_identity_t<TServer>&,
@@ -293,9 +291,7 @@ public:
                 if (!seenRandomIds.insert(dio.randomId + "-" + std::to_string(dio.timestamp)).second) {
                     result[i].error = toPublicError(DataIntegrityObjectDuplicatedException());
                 }
-            } catch (const Exception& e) {
-                result[i] = toLibError(items[i], toPublicError(e));
-            } catch (...) {
+            } catch (const Exception& e) { result[i] = toLibError(items[i], toPublicError(e)); } catch (...) {
                 result[i] = toLibError(items[i], toPublicError(*unknownError("decrypting the entry")));
             }
         }
@@ -330,9 +326,9 @@ public:
         const ModuleKeys& moduleKeys,
         const std::shared_ptr<KeyProvider>& keyProvider,
         const Connection& connection,
-        std::function<std::pair<std::optional<Error>, std::optional<DataIntegrityObject>>(
-            const type_identity_t<TServer>&
-        )> validateIntegrity,
+        std::function<
+            std::pair<std::optional<Error>, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
+            validateIntegrity,
         std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
             const type_identity_t<TServer>&,
             const DecryptedEncKey&,

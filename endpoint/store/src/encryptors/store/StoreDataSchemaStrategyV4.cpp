@@ -50,7 +50,6 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaStrategyV4::convert(
     };
 }
 
-Store StoreDataSchemaStrategyV4::toLibError(const server::Store& store, const std::optional<core::Error>& error)
-    const {
+Store StoreDataSchemaStrategyV4::toLibError(const server::Store& store, const std::optional<core::Error>& error) const {
     return StoreDataSchemaMapper::toLibStore(store, {}, {}, error, StoreDataSchema::Version::VERSION_4);
 }

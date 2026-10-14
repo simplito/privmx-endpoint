@@ -42,8 +42,10 @@ public:
         const server::StreamRoomInfo& streamRoom,
         const core::DecryptedModuleDataV5& raw
     ) const override;
-    StreamRoom toLibError(const server::StreamRoomInfo& streamRoom, const std::optional<core::Error>& error)
-        const override;
+    StreamRoom toLibError(
+        const server::StreamRoomInfo& streamRoom,
+        const std::optional<core::Error>& error
+    ) const override;
 
 protected:
     core::dynamic::EncryptedModuleDataV5 getEncryptedData(const server::StreamRoomInfo& model) const override;
