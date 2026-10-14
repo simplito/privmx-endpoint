@@ -157,7 +157,11 @@ private:
         const FileDecryptionParams& storeFileDecryptionParams,
         const FileMeta& fileMeta
     );
-    void assertStoreExist(const std::string& storeId);
+    /// @brief Sprawdza, ze Store istnieje, i oddaje go - wolajacy potrzebuje jego polityki.
+    store::server::Store assertStoreExist(const std::string& storeId);
+
+    /// @brief Format zapisu danych pliku wynikajacy z polityki Store'a; `defaultForWrite()` bez polityki.
+    static FileCipher fileCipherFor(const store::server::Store& store);
     void autoRotateStoreKeys(const std::string& storeId);
     void assertFileExist(const std::string& fileId);
 

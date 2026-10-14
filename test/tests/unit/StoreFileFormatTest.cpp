@@ -462,6 +462,90 @@ TEST(StoreFileGcmFormat, TamperedCiphertextIsRejectedByTheAeadTag) {
     EXPECT_THROW(encryptor.decrypt(0, chunk), FileChunkInvalidCipherChecksumException);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Format 3 (cipherType = 3): AES-256-GCM ze skrotami SHA-512.
+//
+// Uklad ramki jest **taki sam** jak w formacie 2 - tag AEAD ma 16 B niezaleznie od funkcji skrotu.
+// Rozni je tylko to, czym liczony jest klucz chunku i skrot wierzcholkowy tablicy. Format istnieje
+// po to, zeby kontener nazywajacy zestaw z SHA-512 mial dane pliku liczone tym samym skrotem.
+// ---------------------------------------------------------------------------------------------
+
+namespace {
+
+FileCipher gcm512() {
+    return FileCipher::forType(FileCipher::AES_GCM_SHA512);
+}
+
+} // namespace
+
+/// Gdyby uklad sie roznil, adresowanie chunkow w pliku przestaloby byc wspolne dla obu formatow.
+TEST(StoreFileSha512Format, LayoutIsIdenticalToFormatTwo) {
+    EXPECT_EQ(gcm().ivLength(), gcm512().ivLength());
+    EXPECT_EQ(gcm().hashLength(), gcm512().hashLength());
+    EXPECT_EQ(gcm().paddingBlock(), gcm512().paddingBlock());
+    EXPECT_EQ(gcm().encryptedChunkSize(1024), gcm512().encryptedChunkSize(1024));
+}
+
+/// Sedno tego formatu: ten sam uklad, inny skrot. Gdyby klucz chunku wychodzil taki sam, format 3
+/// bylby tylko inna etykieta na formacie 2.
+TEST(StoreFileSha512Format, ChunkKeyAndTopHashDifferFromFormatTwo) {
+    EXPECT_NE(gcm().chunkKey(KEY, 0), gcm512().chunkKey(KEY, 0));
+
+    const std::string topKey(32, 't');
+    const std::string hashes(16, '0');
+    EXPECT_NE(gcm().topHash(topKey, hashes), gcm512().topHash(topKey, hashes));
+    // HMAC-SHA512 ma 64 B, HMAC-SHA256 - 32 B.
+    EXPECT_EQ(32u, gcm().topHash(topKey, hashes).size());
+    EXPECT_EQ(64u, gcm512().topHash(topKey, hashes).size());
+}
+
+TEST(StoreFileSha512Format, RoundTrip) {
+    ChunkEncryptor encryptor(KEY, CHUNK, gcm512());
+
+    for (const size_t size : {size_t{0}, size_t{1}, size_t{4096}}) {
+        const std::string plain = repeat('y', size);
+        const auto chunk = encryptor.encrypt(2, plain);
+        EXPECT_EQ(plain, encryptor.decrypt(2, chunk)) << "rozmiar " << size;
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Wybor formatu z zestawu kontenera (poziom 2).
+// ---------------------------------------------------------------------------------------------
+
+/// Kontener nazywajacy zestaw dostaje format pliku liczony tym samym skrotem. Bez tego wybor
+/// zestawu zatrzymywalby sie na granicy `store`: pliki szlyby SHA-256 niezaleznie od polityki.
+TEST(StoreFileCipherFromSuite, EachSuiteMapsToTheFormatWithItsOwnHash) {
+    using core::CryptoSuite;
+    using core::SuiteId;
+
+    EXPECT_EQ(
+        FileCipher::AES_GCM,
+        FileCipher::forContainerSuite(CryptoSuite::forId(SuiteId::Aes256GcmSha256)).type()
+    );
+    EXPECT_EQ(
+        FileCipher::AES_GCM_SHA512,
+        FileCipher::forContainerSuite(CryptoSuite::forId(SuiteId::Aes256GcmSha512)).type()
+    );
+}
+
+/// "Brak polityki" to co innego niz "polityka nazywajaca zestaw domyslny" - tylko to pierwsze
+/// ma isc za ustawieniem buildu.
+TEST(StoreFileCipherFromSuite, NoSuiteFallsBackToTheBuildDefault) {
+    EXPECT_EQ(
+        FileCipher::defaultForWrite().type(), FileCipher::forContainerSuite(std::nullopt).type()
+    );
+}
+
+/// Kazdy zestaw z rejestru musi miec odpowiednik wsrod formatow pliku - inaczej kontener o takiej
+/// polityce dalby sie utworzyc, ale nie dalby sie zapisac.
+TEST(StoreFileCipherFromSuite, EverySuiteHasAFileFormat) {
+    for (const core::SuiteId id : core::CryptoSuite::known()) {
+        EXPECT_NO_THROW(FileCipher::forContainerSuite(core::CryptoSuite::forId(id)))
+            << "zestaw " << static_cast<int>(id);
+    }
+}
+
 /// Dwa formaty daja dwa rozne uklady pliku - gdyby ktorys policzyl rozmiar drugiego, chunki
 /// czytalyby sie spod zlych przesuniec. Ten test przybija, ze sa faktycznie rozlaczne.
 TEST(StoreFileGcmFormat, LayoutDiffersFromFormatOne) {

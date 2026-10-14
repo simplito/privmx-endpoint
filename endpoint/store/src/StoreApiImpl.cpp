@@ -289,10 +289,10 @@ int64_t StoreApiImpl::createFile(
     const int64_t size,
     bool randomWriteSupport
 ) {
-    assertStoreExist(storeId);
+    const auto store = assertStoreExist(storeId);
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         storeId, std::string(), core::EndpointUtils::generateId(), (uint64_t)size, publicMeta, privateMeta, _CHUNK_SIZE,
-        _serverRequestChunkSize, _requestApi, randomWriteSupport
+        _serverRequestChunkSize, _requestApi, randomWriteSupport, fileCipherFor(store)
     );
     handle->createRequestData();
     return handle->getId();
@@ -312,7 +312,10 @@ int64_t StoreApiImpl::updateFile(
     );
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         result.store.id, fileId, result.file.resourceId, (uint64_t)size, publicMeta, privateMeta, _CHUNK_SIZE,
-        _serverRequestChunkSize, _requestApi, internalMeta.randomWrite.value_or(false)
+        _serverRequestChunkSize, _requestApi, internalMeta.randomWrite.value_or(false),
+        // `updateFile` nadpisuje tresc w calosci, wiec nie dziedziczy `cipherType` starej wersji -
+        // idzie za polityka Store'a tak samo jak `createFile`.
+        fileCipherFor(result.store)
     );
     handle->createRequestData();
     return handle->getId();
@@ -781,9 +784,22 @@ void StoreApiImpl::updateFileMeta(
     _serverApi->storeFileUpdate(storeFileUpdateModel);
 }
 
-void StoreApiImpl::assertStoreExist(const std::string& storeId) {
+store::server::Store StoreApiImpl::assertStoreExist(const std::string& storeId) {
     store::server::StoreGetModel params{.storeId = storeId, .type = std::nullopt};
-    _serverApi->storeGet(params);
+    // Oddaje Store'a, zamiast wyrzucac odpowiedz: `createFile` potrzebuje jego polityki, zeby
+    // wybrac format zapisu danych pliku, a to zadanie i tak tu leci.
+    return _serverApi->storeGet(params).store;
+}
+
+FileCipher StoreApiImpl::fileCipherFor(const store::server::Store& store) {
+    // Poziom 2: dane pliku ida tym samym algorytmem, co reszta zawartosci kontenera. Store bez
+    // polityki dostaje format domyslny dla buildu (poziom 1) - dlatego przekazujemy `optional`,
+    // a nie `suiteFromPolicy`, ktore zwraca domyslny zestaw takze dla "brak polityki".
+    const auto policy = core::Factory::parsePolicyServerObjectWithoutItem(store.policy);
+    if (!policy.cryptoSuite.has_value()) {
+        return FileCipher::defaultForWrite();
+    }
+    return FileCipher::forContainerSuite(core::CryptoSuite::forPolicyValue(policy.cryptoSuite.value()));
 }
 
 void StoreApiImpl::assertFileExist(const std::string& fileId) {

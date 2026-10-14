@@ -101,7 +101,8 @@ public:
         uint64_t chunkSize,
         uint64_t serverRequestChunkSize,
         std::shared_ptr<privmx::endpoint::store::RequestApi> requestApi,
-        bool randomWriteSupport
+        bool randomWriteSupport,
+        FileCipher cipher = FileCipher::defaultForWrite()
     );
     void write(const std::string& data);
     privmx::endpoint::store::ChunksSentInfo finalize();
@@ -155,7 +156,8 @@ public:
         uint64_t chunkSize,
         uint64_t serverRequestChunkSize,
         std::shared_ptr<RequestApi> requestApi,
-        bool randomWriteSupport
+        bool randomWriteSupport,
+        FileCipher cipher = FileCipher::defaultForWrite()
     );
     std::shared_ptr<FileReadWriteHandle> createFileReadWriteHandle(
         const store::FileInfo& fileInfo,

@@ -14,8 +14,11 @@ limitations under the License.
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
+
+#include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
 
 #include "privmx/endpoint/store/interfaces/IChunkEncryptor.hpp"
 
@@ -49,7 +52,7 @@ public:
     static constexpr int64_t AES_CBC_HMAC_SHA256 = 1;
 
     /**
-     * AES-256-GCM.
+     * AES-256-GCM, skroty SHA-256.
      * Ramka: `[12 B IV][szyfrogram || 16 B tag]`; wpisem tablicy skrotow jest tag z **konca** ramki.
      *
      * Wzgledem formatu 1: brak dopelnienia blokowego i o polowe mniejszy krok tablicy skrotow
@@ -59,13 +62,38 @@ public:
     static constexpr int64_t AES_GCM = 2;
 
     /**
+     * AES-256-GCM, skroty SHA-512.
+     *
+     * Ramka jest **taka sama** jak w formacie 2 - tag AEAD ma 16 B niezaleznie od funkcji skrotu,
+     * wiec krok tablicy skrotow i adresowanie chunkow sie nie zmieniaja. Rozni je to, czym liczony
+     * jest klucz chunku i skrot wierzcholkowy tablicy.
+     *
+     * Istnieje, bo kontener nazywajacy zestaw z SHA-512 ma miec dane pliku liczone tym samym
+     * skrotem. Bez tego formatu plik w takim kontenerze nadal uzywalby SHA-256 - wybor zestawu
+     * zatrzymywalby sie na granicy `store`.
+     */
+    static constexpr int64_t AES_GCM_SHA512 = 3;
+
+    /**
      * @brief Format o podanym znaczniku.
      * @throws UnsupportedCipherTypeException gdy ten build nie zna takiego formatu
      */
     static FileCipher forType(int64_t cipherType);
 
-    /// @brief Format uzywany przy zapisie nowych plikow.
+    /// @brief Format uzywany przy zapisie nowych plikow, gdy nic go nie wskazuje (poziom 1).
     static FileCipher defaultForWrite();
+
+    /**
+     * @brief Format odpowiadajacy zestawowi algorytmow kontenera (poziom 2).
+     *
+     * Dane pliku sa danymi kontenera, wiec maja isc tym samym algorytmem i tym samym skrotem, co
+     * reszta jego zawartosci. Kontener, ktory nie nazwal zestawu, dostaje `defaultForWrite()` -
+     * dlatego parametr jest opcjonalny: "brak polityki" to co innego niz "polityka nazywajaca
+     * zestaw domyslny", a tylko to pierwsze ma isc za ustawieniem buildu.
+     *
+     * @throws UnsupportedCipherTypeException gdy zestaw nie ma odpowiednika wsrod formatow pliku
+     */
+    static FileCipher forContainerSuite(const std::optional<core::CryptoSuite>& suite);
 
     static bool isKnown(int64_t cipherType);
 

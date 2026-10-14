@@ -24,8 +24,23 @@ using namespace privmx::endpoint::store;
 
 namespace {
 
+/**
+ * Tryb szyfru, czyli uklad ramki i sposob uwierzytelnienia.
+ *
+ * Osobny od `type`, bo formatow o tym samym ukladzie ramki moze byc wiele - roznia sie wtedy samym
+ * skrotem. Rozgalezianie po `type` wymagaloby dopisania kazdego nowego formatu do kazdego `if`,
+ * a pominiecie jednego nie dawaloby bledu kompilacji, tylko plik zapisany w zlym ukladzie.
+ */
+enum class Mode {
+    /// `[HMAC][IV][szyfrogram]`, uwierzytelnienie osobnym HMAC-iem przed ramka.
+    CbcHmac,
+    /// `[IV][szyfrogram || tag]`, uwierzytelnienie przez sam tryb AEAD.
+    Gcm,
+};
+
 struct CipherSpec {
     int64_t type;
+    Mode mode;
     std::size_t ivLength;
     std::size_t hashLength;
     /// 0 oznacza format bez dopelnienia blokowego.
@@ -39,6 +54,12 @@ struct CipherSpec {
      * w ramce, rozjechalby taki wzor po cichu.
      */
     std::size_t fixedOverhead;
+    /**
+     * Zestaw, z ktorego format bierze **funkcje skrotu** - klucz chunku i skrot wierzcholkowy
+     * tablicy. Uzywana jest wylacznie czesc skrotowa; szyfr opisuja pozostale pola tego wpisu,
+     * bo tryb i uklad ramki sa wlasnoscia formatu pliku, nie zestawu kontenera.
+     */
+    core::SuiteId hashSuite;
 };
 
 /**
@@ -50,10 +71,27 @@ struct CipherSpec {
 constexpr std::size_t GCM_IV_LENGTH = 12;
 constexpr std::size_t GCM_TAG_LENGTH = 16;
 
-constexpr std::array<CipherSpec, 2> CIPHERS{{
-    {FileCipher::AES_CBC_HMAC_SHA256, IV_SIZE, HMAC_SIZE, CHUNK_PADDING, HMAC_SIZE + IV_SIZE},
-    {FileCipher::AES_GCM, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0, GCM_IV_LENGTH + GCM_TAG_LENGTH},
+constexpr std::array<CipherSpec, 3> CIPHERS{{
+    {FileCipher::AES_CBC_HMAC_SHA256, Mode::CbcHmac, IV_SIZE, HMAC_SIZE, CHUNK_PADDING,
+     HMAC_SIZE + IV_SIZE, core::SuiteId::Aes256GcmSha256},
+    {FileCipher::AES_GCM, Mode::Gcm, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0,
+     GCM_IV_LENGTH + GCM_TAG_LENGTH, core::SuiteId::Aes256GcmSha256},
+    // Ramka identyczna jak w formacie 2 - tag AEAD ma 16 B niezaleznie od funkcji skrotu, wiec
+    // krok tablicy skrotow i adresowanie chunkow sie nie zmieniaja. Rozni je sam skrot.
+    {FileCipher::AES_GCM_SHA512, Mode::Gcm, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0,
+     GCM_IV_LENGTH + GCM_TAG_LENGTH, core::SuiteId::Aes256GcmSha512},
 }};
+
+/// Format pliku odpowiadajacy zestawowi kontenera. Tryb jest zawsze AEAD - zestawy kontenera sa
+/// AEAD-owe, a format 1 (CBC+HMAC) istnieje wylacznie jako zastany uklad plikow juz zapisanych.
+constexpr int64_t cipherForHashSuite(core::SuiteId suite) {
+    for (const auto& spec : CIPHERS) {
+        if (spec.mode == Mode::Gcm && spec.hashSuite == suite) {
+            return spec.type;
+        }
+    }
+    return 0;
+}
 
 /**
  * Format uzywany do zapisu nowych plikow; ustawiany przy konfiguracji buildu przez
@@ -109,6 +147,20 @@ FileCipher FileCipher::defaultForWrite() {
     return FileCipher(DEFAULT_WRITE_CIPHER);
 }
 
+FileCipher FileCipher::forContainerSuite(const std::optional<core::CryptoSuite>& suite) {
+    if (!suite.has_value()) {
+        return defaultForWrite();
+    }
+    const int64_t type = cipherForHashSuite(suite->id());
+    if (type == 0) {
+        // Zestaw bez odpowiednika wsrod formatow pliku. Nie cofamy sie po cichu do domyslnego:
+        // kontener zazadal konkretnych algorytmow, wiec zapisanie jego plikow innymi byloby
+        // niezauwazalnym rozjazdem miedzy polityka a tym, co faktycznie lezy na dysku.
+        throw UnsupportedCipherTypeException("no file format for crypto suite: " + suite->policyValue());
+    }
+    return FileCipher(type);
+}
+
 bool FileCipher::isKnown(int64_t cipherType) {
     return findSpec(cipherType) != nullptr;
 }
@@ -135,15 +187,17 @@ std::size_t FileCipher::paddingBlock() const {
 }
 
 std::string FileCipher::chunkKey(const std::string& fileKey, std::uint64_t index) const {
-    requireSpec(_type);
-    return privmx::crypto::Crypto::sha256(fileKey + indexToBE(index));
+    // Skrot pochodzi z zestawu formatu, nie ze stalej. Dla formatow 1 i 2 jest to SHA-256, czyli
+    // dokladnie to, co liczyl tu wczesniej `Crypto::sha256` - pliki zapisane wczesniej czytaja sie
+    // bez zmian. Format 3 liczy to samo SHA-512 i dlatego ma wlasny `cipherType`.
+    return core::CryptoSuite::forId(requireSpec(_type).hashSuite).hash(fileKey + indexToBE(index));
 }
 
 IChunkEncryptor::Chunk FileCipher::encryptChunk(const std::string& chunkKey, const std::string& plain) const {
     const CipherSpec& spec = requireSpec(_type);
     const std::string iv = core::CryptoSuite::randomBytes(spec.ivLength);
 
-    if (spec.type == FileCipher::AES_GCM) {
+    if (spec.mode == Mode::Gcm) {
         // `[IV][szyfrogram || tag]`. Tag jest koncowka wyjscia szyfru i to on trafia do tablicy
         // skrotow - nie ma tu osobnego uwierzytelniacza doklejanego przed ramke.
         const std::string cipherWithTag = privmx::crypto::Crypto::aes256GcmEncrypt(plain, chunkKey, iv);
@@ -162,7 +216,7 @@ IChunkEncryptor::Chunk FileCipher::encryptChunk(const std::string& chunkKey, con
 std::string FileCipher::decryptChunk(const std::string& chunkKey, const IChunkEncryptor::Chunk& chunk) const {
     const CipherSpec& spec = requireSpec(_type);
 
-    if (spec.type == FileCipher::AES_GCM) {
+    if (spec.mode == Mode::Gcm) {
         if (chunk.data.size() < spec.fixedOverhead) {
             throw FileChunkInvalidCipherChecksumException();
         }
@@ -190,15 +244,16 @@ bool FileCipher::frameCarriesHash(const std::string& chunkData, const std::strin
     if (chunkData.size() < spec.fixedOverhead || hash.size() != spec.hashLength) {
         return false;
     }
-    if (spec.type == FileCipher::AES_GCM) {
+    if (spec.mode == Mode::Gcm) {
         return chunkData.compare(chunkData.size() - spec.hashLength, spec.hashLength, hash) == 0;
     }
     return chunkData.compare(0, spec.hashLength, hash) == 0;
 }
 
 std::string FileCipher::topHash(const std::string& topHashKey, const std::string& hashes) const {
-    requireSpec(_type);
-    return privmx::crypto::Crypto::hmacSha256(topHashKey, hashes);
+    // Jak `chunkKey`: skrot z zestawu formatu. Dla formatow 1 i 2 wychodzi HMAC-SHA256, czyli to
+    // samo co wczesniej.
+    return core::CryptoSuite::forId(requireSpec(_type).hashSuite).mac(topHashKey, hashes);
 }
 
 std::size_t FileCipher::encryptedChunkSize(std::size_t plainChunkSize) const {

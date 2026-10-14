@@ -55,16 +55,19 @@ message(STATUS "Crypto suite for writing - PRIVMX_DEFAULT_CRYPTO_SUITE=${PRIVMX_
 # Odczyt jest kompletny niezaleznie od tej wartosci: `cipherType` kazdego pliku siedzi w jego
 # wewnetrznym meta i to po nim dobierany jest format.
 set(PRIVMX_DEFAULT_FILE_CIPHER "aes256cbc-hmac-sha256" CACHE STRING "File data format used for writing new files")
-set_property(CACHE PRIVMX_DEFAULT_FILE_CIPHER PROPERTY STRINGS "aes256cbc-hmac-sha256" "aes256gcm")
+set_property(CACHE PRIVMX_DEFAULT_FILE_CIPHER PROPERTY STRINGS
+    "aes256cbc-hmac-sha256" "aes256gcm" "aes256gcm-sha512")
 
 if(PRIVMX_DEFAULT_FILE_CIPHER STREQUAL "aes256cbc-hmac-sha256")
     set(PRIVMX_DEFAULT_FILE_CIPHER_ID 1)
 elseif(PRIVMX_DEFAULT_FILE_CIPHER STREQUAL "aes256gcm")
     set(PRIVMX_DEFAULT_FILE_CIPHER_ID 2)
+elseif(PRIVMX_DEFAULT_FILE_CIPHER STREQUAL "aes256gcm-sha512")
+    set(PRIVMX_DEFAULT_FILE_CIPHER_ID 3)
 else()
     message(FATAL_ERROR
         "Unknown PRIVMX_DEFAULT_FILE_CIPHER='${PRIVMX_DEFAULT_FILE_CIPHER}'. "
-        "Known values: aes256cbc-hmac-sha256, aes256gcm")
+        "Known values: aes256cbc-hmac-sha256, aes256gcm, aes256gcm-sha512")
 endif()
 message(STATUS "File data format for writing - PRIVMX_DEFAULT_FILE_CIPHER=${PRIVMX_DEFAULT_FILE_CIPHER} (cipherType ${PRIVMX_DEFAULT_FILE_CIPHER_ID})")
 

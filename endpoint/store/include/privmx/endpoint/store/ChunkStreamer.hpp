@@ -45,7 +45,10 @@ public:
         const std::shared_ptr<store::RequestApi>& requestApi,
         size_t chunkSize,
         uint64_t fileSize,
-        size_t serverRequestChunkSize
+        size_t serverRequestChunkSize,
+        // Format zapisu danych pliku. Domyslny parametr jest dla wywolan, ktore nie maja dostepu
+        // do kontenera; sciezka tworzenia pliku podaje go jawnie, na podstawie polityki Store'a.
+        FileCipher cipher = FileCipher::defaultForWrite()
     );
     void createRequest(bool enableRandomWrite = false);
     void setRequestData(const std::string& requestId, const std::string& key, const uint64_t& fileIndex);

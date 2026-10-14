@@ -26,10 +26,11 @@ ChunkStreamer::ChunkStreamer(
     const std::shared_ptr<store::RequestApi>& requestApi,
     size_t chunkSize,
     uint64_t fileSize,
-    size_t serverRequestChunkSize
+    size_t serverRequestChunkSize,
+    FileCipher cipher
 )
     : _requestApi(requestApi), _chunkSize(chunkSize), _fileSize(fileSize),
-      _chunkBufferedStream(serverRequestChunkSize) {}
+      _chunkBufferedStream(serverRequestChunkSize), _cipher(cipher) {}
 
 void ChunkStreamer::createRequest(bool randomWriteSupport) {
     _key = core::CryptoSuite::randomBytes(32);

@@ -135,11 +135,12 @@ FileWriteHandle::FileWriteHandle(
     uint64_t chunkSize,
     uint64_t serverRequestChunkSize,
     std::shared_ptr<RequestApi> requestApi,
-    bool randomWriteSupport
+    bool randomWriteSupport,
+    FileCipher cipher
 )
     : FileHandle(id, storeId, fileId, resourceId, size, randomWriteSupport), _publicMeta(publicMeta),
       _privateMeta(privateMeta), _stream(ChunkBufferedStream(chunkSize, size)),
-      _streamer(ChunkStreamer(requestApi, chunkSize, size, serverRequestChunkSize)) {}
+      _streamer(ChunkStreamer(requestApi, chunkSize, size, serverRequestChunkSize, cipher)) {}
 
 void FileWriteHandle::write(const std::string& data) {
     _stream.write(data);
@@ -252,12 +253,13 @@ std::shared_ptr<FileWriteHandle> FileHandleManager::createFileWriteHandle(
     uint64_t chunkSize,
     uint64_t serverRequestChunkSize,
     std::shared_ptr<RequestApi> requestApi,
-    bool randomWriteSupport
+    bool randomWriteSupport,
+    FileCipher cipher
 ) {
     int64_t id = _handleManager->createHandle((_labelPrefix.empty() ? "" : _labelPrefix + ":") + "FileWrite");
     std::shared_ptr<FileWriteHandle> result = std::make_shared<FileWriteHandle>(
         id, storeId, fileId, resourceId, size, publicMeta, privateMeta, chunkSize, serverRequestChunkSize, requestApi,
-        randomWriteSupport
+        randomWriteSupport, cipher
     );
     _map.set(id, result);
     return result;
