@@ -335,7 +335,7 @@ protected:
         if (metadataError.has_value()) {
             GTEST_LOG_(INFO) << client.name << " cannot read the Index's metadata: " << metadataError.value();
         } else {
-            EXPECT_NE(index.statusCode, 0)
+            EXPECT_NE(errCode(index), 0)
                 << client.name << " still decrypted the Index's metadata after losing access to it";
         }
 
@@ -372,8 +372,8 @@ TEST_F(SearchUsingGroupsTest, createSearchIndex_with_group_grants) {
     group::Group group_1, group_2;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
+    ASSERT_EQ(errCode(group_2), 0);
     ASSERT_FALSE(group_1.groupPubKey.empty());
 
     // no grants
@@ -391,7 +391,7 @@ TEST_F(SearchUsingGroupsTest, createSearchIndex_with_group_grants) {
     });
     ASSERT_FALSE(indexId.empty());
     EXPECT_NO_THROW({ index = searchApi->getSearchIndex(indexId); });
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.groups.size(), 0);
     EXPECT_EQ(index.staleGroups.size(), 0);
 
@@ -401,7 +401,7 @@ TEST_F(SearchUsingGroupsTest, createSearchIndex_with_group_grants) {
     });
     ASSERT_FALSE(indexId.empty());
     EXPECT_NO_THROW({ index = searchApi->getSearchIndex(indexId); });
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.publicMeta.stdString(), "group_index_public");
     EXPECT_EQ(index.staleGroups.size(), 0);
     ASSERT_EQ(index.groups.size(), 1);
@@ -414,7 +414,7 @@ TEST_F(SearchUsingGroupsTest, createSearchIndex_with_group_grants) {
     });
     ASSERT_FALSE(indexId.empty());
     EXPECT_NO_THROW({ index = searchApi->getSearchIndex(indexId); });
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.groups.size(), 2);
     bool found1 = false, found2 = false;
     for (const auto& g : index.groups) {
@@ -446,7 +446,7 @@ TEST_F(SearchUsingGroupsTest, createSearchIndex_with_group_grants) {
 TEST_F(SearchUsingGroupsTest, listSearchIndexes_includes_groups_field) {
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string indexId;
     ASSERT_NO_THROW({
@@ -465,7 +465,7 @@ TEST_F(SearchUsingGroupsTest, listSearchIndexes_includes_groups_field) {
         return i.indexId == indexId;
     });
     ASSERT_NE(found, list.readItems.end());
-    EXPECT_EQ(found->statusCode, 0);
+    EXPECT_EQ(errCode(*found), 0);
     ASSERT_EQ(found->groups.size(), 1);
     EXPECT_EQ(found->groups[0].groupId, group_2.groupId);
     EXPECT_EQ(found->groups[0].role, "user");
@@ -474,7 +474,7 @@ TEST_F(SearchUsingGroupsTest, listSearchIndexes_includes_groups_field) {
 TEST_F(SearchUsingGroupsTest, updateSearchIndex_add_group) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string indexId;
     ASSERT_NO_THROW({
@@ -512,7 +512,7 @@ TEST_F(SearchUsingGroupsTest, updateSearchIndex_add_group) {
 
     search::SearchIndex after;
     EXPECT_NO_THROW({ after = searchApi->getSearchIndex(indexId); });
-    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(errCode(after), 0);
     EXPECT_EQ(after.publicMeta.stdString(), "add_group_public_2");
     ASSERT_EQ(after.groups.size(), 1);
     EXPECT_EQ(after.groups[0].groupId, group_1.groupId);
@@ -522,7 +522,7 @@ TEST_F(SearchUsingGroupsTest, updateSearchIndex_remove_group) {
     // The grant list an update carries is authoritative: an empty one revokes every grant the Index had.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string indexId;
     ASSERT_NO_THROW({
@@ -551,7 +551,7 @@ TEST_F(SearchUsingGroupsTest, updateSearchIndex_remove_group) {
 
     search::SearchIndex revoked;
     EXPECT_NO_THROW({ revoked = searchApi->getSearchIndex(indexId); });
-    EXPECT_EQ(revoked.statusCode, 0);
+    EXPECT_EQ(errCode(revoked), 0);
     EXPECT_EQ(revoked.groups.size(), 0);
 
     // user_2's only route into the Index was Group_2, and the revocation forced a new key.
@@ -567,7 +567,7 @@ TEST_F(SearchUsingGroupsTest, group_member_reads_the_index_and_its_documents) {
     // its journal, its locks - having gone through the grant.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string userGrantedId;
     ASSERT_NO_THROW({
@@ -588,7 +588,7 @@ TEST_F(SearchUsingGroupsTest, group_member_reads_the_index_and_its_documents) {
     connectAs(2);
     search::SearchIndex index;
     EXPECT_NO_THROW({ index = searchApi->getSearchIndex(userGrantedId); });
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.indexId, userGrantedId);
     EXPECT_EQ(index.publicMeta.stdString(), "group_index_public");
     EXPECT_EQ(index.privateMeta.stdString(), "group_index_private");
@@ -602,7 +602,7 @@ TEST_F(SearchUsingGroupsTest, group_member_reads_the_index_and_its_documents) {
 TEST_F(SearchUsingGroupsTest, documents_added_by_group_member_are_visible_to_the_owner) {
     group::Group group_3;
     ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_3.statusCode, 0);
+    ASSERT_EQ(errCode(group_3), 0);
 
     std::string indexId;
     ASSERT_NO_THROW({ indexId = createIndexWithGroups(reader->getString("Context_1.contextId"), {group_3}); });
@@ -625,7 +625,7 @@ TEST_F(SearchUsingGroupsTest, caller_in_no_granted_group_cannot_read_the_index) 
     // Group_2 holds user_1 and user_2; user_3 is in neither the Index's roster nor its grantee group.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string indexId;
     ASSERT_NO_THROW({
@@ -660,7 +660,7 @@ TEST_F(SearchUsingGroupsTest, rotateSearchIndexKeys_clears_staleGroups_after_the
 
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
     ASSERT_EQ(group.keyVersion, 1);
 
     std::string indexId;
@@ -679,7 +679,7 @@ TEST_F(SearchUsingGroupsTest, rotateSearchIndexKeys_clears_staleGroups_after_the
     // Nothing may write to the Index between the removal and this read: a write would re-key it on its own.
     search::SearchIndex stale;
     ASSERT_NO_THROW({ stale = searchApi->getSearchIndex(indexId); });
-    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(errCode(stale), 0);
     ASSERT_EQ(stale.staleGroups.size(), 1);
     EXPECT_EQ(stale.staleGroups[0], groupId);
 
@@ -696,7 +696,7 @@ TEST_F(SearchUsingGroupsTest, rotateSearchIndexKeys_clears_staleGroups_after_the
 
     search::SearchIndex fresh;
     EXPECT_NO_THROW({ fresh = searchApi->getSearchIndex(indexId); });
-    EXPECT_EQ(fresh.statusCode, 0);
+    EXPECT_EQ(errCode(fresh), 0);
     EXPECT_EQ(fresh.staleGroups.size(), 0);
     EXPECT_EQ(fresh.groups.size(), 1);
 
@@ -718,7 +718,7 @@ TEST_F(SearchUsingGroupsTest, revoking_the_grantee_group_locks_out_a_member_work
     createGroupOf("revoke_grant", {user(2), user(3)}, groupId);
     group::Group group;
     ASSERT_NO_THROW({ group = groupNow(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
     createIndexGranting("revoke_grant", {user(1)}, {user(1)}, grantsFor(group), indexId);
 
     // user_2's whole working session: open once, write, read back, and keep the handle.
@@ -729,7 +729,7 @@ TEST_F(SearchUsingGroupsTest, revoking_the_grantee_group_locks_out_a_member_work
     setIndexAccess(indexId, {user(1)}, {user(1)}, {});
     search::SearchIndex revoked;
     ASSERT_NO_THROW({ revoked = owner.searchApi->getSearchIndex(indexId); });
-    ASSERT_EQ(revoked.statusCode, 0);
+    ASSERT_EQ(errCode(revoked), 0);
     ASSERT_EQ(revoked.groups.size(), 0);
     EXPECT_EQ(revoked.staleGroups.size(), 0) << "an Index that grants no group cannot be stale against one";
     // Nothing happened to the Group itself - the lockout has to come from the grant alone.
@@ -751,7 +751,7 @@ TEST_F(SearchUsingGroupsTest, removing_a_direct_member_locks_them_out_and_leaves
     createGroupOf("drop_user", {user(3)}, groupId);
     group::Group group;
     ASSERT_NO_THROW({ group = groupNow(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
     createIndexGranting(
         "drop_user", {user(1), user(2)}, {user(1), user(2)}, grantsFor(group),
         indexId
@@ -769,7 +769,7 @@ TEST_F(SearchUsingGroupsTest, removing_a_direct_member_locks_them_out_and_leaves
     setIndexAccess(indexId, {user(1)}, {user(1)}, grantsFor(group));
     search::SearchIndex trimmed;
     ASSERT_NO_THROW({ trimmed = owner.searchApi->getSearchIndex(indexId); });
-    ASSERT_EQ(trimmed.statusCode, 0);
+    ASSERT_EQ(errCode(trimmed), 0);
     EXPECT_EQ(trimmed.users.size(), 1);
     ASSERT_EQ(trimmed.groups.size(), 1);
     EXPECT_EQ(trimmed.groups[0].groupId, groupId);
@@ -793,7 +793,7 @@ TEST_F(SearchUsingGroupsTest, removing_the_worker_from_the_grantee_group_locks_t
     createGroupOf("drop_member", {user(2), user(3)}, groupId);
     group::Group group;
     ASSERT_NO_THROW({ group = groupNow(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
     ASSERT_EQ(group.keyVersion, 1);
     createIndexGranting("drop_member", {user(1)}, {user(1)}, grantsFor(group), indexId);
 
@@ -808,7 +808,7 @@ TEST_F(SearchUsingGroupsTest, removing_the_worker_from_the_grantee_group_locks_t
     // Nothing may write to the Index between the removal and this read: a write re-keys it on its own.
     search::SearchIndex stale;
     ASSERT_NO_THROW({ stale = owner.searchApi->getSearchIndex(indexId); });
-    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(errCode(stale), 0);
     ASSERT_EQ(stale.staleGroups.size(), 1);
     EXPECT_EQ(stale.staleGroups[0], groupId);
 
@@ -845,7 +845,7 @@ TEST_F(SearchUsingGroupsTest, removing_another_member_from_the_grantee_group_kee
     createGroupOf("other_out", {user(2), user(3)}, groupId);
     group::Group group;
     ASSERT_NO_THROW({ group = groupNow(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
     ASSERT_EQ(group.keyVersion, 1);
     createIndexGranting("other_out", {user(1)}, {user(1)}, grantsFor(group), indexId);
 
@@ -906,7 +906,7 @@ TEST_F(SearchUsingGroupsTest, adding_a_member_to_the_grantee_group_disturbs_noth
     createGroupOf("other_in", {user(2)}, groupId);
     group::Group group;
     ASSERT_NO_THROW({ group = groupNow(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
     ASSERT_EQ(group.keyVersion, 1);
     createIndexGranting("other_in", {user(1)}, {user(1)}, grantsFor(group), indexId);
 
@@ -915,7 +915,7 @@ TEST_F(SearchUsingGroupsTest, adding_a_member_to_the_grantee_group_disturbs_noth
 
     search::SearchIndex before;
     ASSERT_NO_THROW({ before = owner.searchApi->getSearchIndex(indexId); });
-    ASSERT_EQ(before.statusCode, 0);
+    ASSERT_EQ(errCode(before), 0);
     ASSERT_EQ(before.staleGroups.size(), 0);
 
     // user_3 is outside the Group and outside the Index, and can reach neither.
@@ -933,7 +933,7 @@ TEST_F(SearchUsingGroupsTest, adding_a_member_to_the_grantee_group_disturbs_noth
 
     search::SearchIndex after;
     ASSERT_NO_THROW({ after = owner.searchApi->getSearchIndex(indexId); });
-    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(errCode(after), 0);
     EXPECT_EQ(after.staleGroups.size(), 0) << "an addition left the Index needing a re-key";
     EXPECT_EQ(after.version, before.version) << "an addition changed the Index itself";
 

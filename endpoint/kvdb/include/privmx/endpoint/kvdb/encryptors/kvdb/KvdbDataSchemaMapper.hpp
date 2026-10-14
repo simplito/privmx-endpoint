@@ -55,7 +55,9 @@ public:
     // Returns the head entry's DIO, so the decrypt that follows need not verify it again.
     std::optional<core::DataIntegrityObject> assertDataIntegrity(const server::KvdbInfo& kvdb);
 
-    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateDataIntegrity(const server::KvdbInfo& kvdb);
+    std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> validateDataIntegrity(
+        const server::KvdbInfo& kvdb
+    );
 
     std::vector<Kvdb> validateDecryptAndConvertKvdbs(
         const std::vector<server::KvdbInfo>& kvdbs,
@@ -73,7 +75,7 @@ public:
         const server::KvdbInfo& info,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        int64_t statusCode,
+        const std::optional<core::Error>& error,
         int64_t schemaVersion
     );
 

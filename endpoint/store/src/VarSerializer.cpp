@@ -38,7 +38,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::Store>(const store::Store& va
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("policy", serialize(val.policy));
     obj->set("filesCount", serialize(val.filesCount));
-    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("error", serialize(val.error));
     obj->set("groups", serialize(val.groups));
     obj->set("staleGroups", serialize(val.staleGroups));
     return obj;
@@ -178,7 +178,7 @@ Poco::Dynamic::Var VarSerializer::serialize<store::File>(const store::File& val)
     obj->set("privateMeta", serialize(val.privateMeta));
     obj->set("size", serialize(val.size));
     obj->set("authorPubKey", serialize(val.authorPubKey));
-    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("error", serialize(val.error));
     obj->set("schemaVersion", serialize(val.schemaVersion));
     obj->set("randomWrite", serialize(val.randomWrite));
     return obj;

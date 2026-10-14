@@ -69,7 +69,7 @@ TEST_F(GroupCustomEventsTest, a_member_receives_the_notification_opened_and_attr
 
     auto received = awaitCustomEvent();
     ASSERT_TRUE(received.has_value());
-    EXPECT_EQ(received->data.statusCode, 0);
+    EXPECT_EQ(errCode(received->data), 0);
     EXPECT_EQ(received->data.payload.stdString(), "user_1 is typing");
     EXPECT_EQ(received->data.groupId, groupId);
     EXPECT_EQ(received->data.channelName, "typing");
@@ -101,7 +101,7 @@ TEST_F(GroupCustomEventsTest, a_notification_still_opens_after_the_group_key_has
     groupApi->sendCustomEvent(groupId, "typing", core::Buffer::from("sent after rotation"));
     auto received = awaitCustomEvent();
     ASSERT_TRUE(received.has_value());
-    EXPECT_EQ(received->data.statusCode, 0);
+    EXPECT_EQ(errCode(received->data), 0);
     EXPECT_EQ(received->data.payload.stdString(), "sent after rotation");
     // And the epoch-1 envelope is still readable — the same key path the notification travels.
     EXPECT_EQ(groupApi2.decrypt(sealedUnderEpoch1).data.stdString(), "sealed before rotation");

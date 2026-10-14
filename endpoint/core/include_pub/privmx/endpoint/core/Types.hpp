@@ -287,29 +287,33 @@ struct GroupGrantWithKey {
     int64_t groupEpoch = 0;
 };
 
+/**
+ * A failure reported through a returned struct instead of a thrown exception. Carries the same
+ * information a caught core::Exception would, so a partially decrypted result can still be inspected.
+ */
 struct Error {
     /**
      * Error name.
      */
     std::string name;
     /**
-     * Scope telling form witch part of endpoint error was produced.
+     * Scope telling from which part of endpoint the error was produced.
      */
     std::string scope;
     /**
-     * Unique code representing etach possible core::exception 
+     * Unique code representing each possible core::Exception.
      */
     unsigned int code;
     /**
-     * Simple message explaining what happened
+     * Simple message explaining what happened.
      */
     std::string message;
     /**
-     * Extra information if one line message in not enough to show full scope of what happened
+     * Extra information, for when the one line message is not enough to show the full scope of what happened.
      */
     std::string description;
     /**
-     * Equivalent of catching std::exception::what(), it should be expected to be .
+     * Equivalent of core::Exception::what() - the message, the description and any cause, joined into one line.
      */
     std::string _what;
 };

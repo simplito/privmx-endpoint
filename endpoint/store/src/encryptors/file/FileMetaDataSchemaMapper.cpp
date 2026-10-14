@@ -64,7 +64,8 @@ std::tuple<File, core::DataIntegrityObject> FileMetaDataSchemaMapper::decrypt(
         [&]() -> std::tuple<File, core::DataIntegrityObject> {
             return {
                 toLibFile(
-                    file, {}, {}, 0, {}, UnknowFileFormatException().getCode(), FileDataSchema::Version::UNKNOWN, false
+                    file, {}, {}, 0, {}, core::toPublicError(UnknowFileFormatException()),
+                    FileDataSchema::Version::UNKNOWN, false
                 ),
                 {}
             };
@@ -97,12 +98,13 @@ FileDataSchema::Version FileMetaDataSchemaMapper::getDataStructureVersion(const 
     });
 }
 
-std::pair<uint32_t, std::optional<core::DataIntegrityObject>> FileMetaDataSchemaMapper::validateDataIntegrity(
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
+FileMetaDataSchemaMapper::validateDataIntegrity(
     const server::File& file,
     const std::string& storeResourceId
 ) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+    const auto error = core::DataSchemaMapperUtils::toError([&] {
         switch (getDataStructureVersion(file)) {
         case FileDataSchema::Version::VERSION_4:
             return;
@@ -120,7 +122,7 @@ std::pair<uint32_t, std::optional<core::DataIntegrityObject>> FileMetaDataSchema
             throw UnknowFileFormatException();
         }
     });
-    return {statusCode, verifiedDio};
+    return {error, verifiedDio};
 }
 
 DecryptedFileMetaV5 FileMetaDataSchemaMapper::decryptFileMetaV5(
@@ -168,14 +170,14 @@ std::vector<File> FileMetaDataSchemaMapper::validateDecryptAndConvertFiles(
         files, storeKeys, keyProvider, _connection,
         [&](const server::File& f) { return validateDataIntegrity(f, storeKeys.moduleResourceId); },
         [&](const server::File& f) {
-            return core::DataSchemaMapperUtils::toStatusCode([&] {
+            return core::DataSchemaMapperUtils::toError([&] {
                 _fileKeyIdFormatValidator.assertKeyIdFormat(f.keyId);
             });
         },
         [&](const server::File& f, const core::DecryptedEncKey& key,
             const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(f, key, verifiedDio); },
-        [](const server::File& f, uint32_t code) {
-            return toLibFile(f, {}, {}, 0, {}, code, FileDataSchema::Version::UNKNOWN, false);
+        [](const server::File& f, const std::optional<core::Error>& error) {
+            return toLibFile(f, {}, {}, 0, {}, error, FileDataSchema::Version::UNKNOWN, false);
         },
         groupPrivKeyResolver
     );
@@ -211,7 +213,7 @@ File FileMetaDataSchemaMapper::toLibFile(
     const core::Buffer& privateMeta,
     int64_t size,
     const std::string& authorPubKey,
-    int64_t statusCode,
+    const std::optional<core::Error>& error,
     int64_t schemaVersion,
     bool randomWrite
 ) {
@@ -227,7 +229,7 @@ File FileMetaDataSchemaMapper::toLibFile(
         .privateMeta = privateMeta,
         .size = size,
         .authorPubKey = authorPubKey,
-        .statusCode = statusCode,
+        .error = error,
         .schemaVersion = schemaVersion,
         .randomWrite = randomWrite
     };

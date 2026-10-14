@@ -197,7 +197,7 @@ TEST_F(SearchTest, getSearchIndex) {
     EXPECT_EQ(index.lastModifier, reader->getString("SearchIndex_1.lastModifier"));
     EXPECT_EQ(index.version, reader->getInt64("SearchIndex_1.version"));
     EXPECT_EQ(static_cast<int64_t>(index.mode), reader->getInt64("SearchIndex_1.mode"));
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_1.publicMeta_inHex")));
     EXPECT_EQ(index.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_1.uploaded_publicMeta_inHex")));
     EXPECT_EQ(index.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_1.privateMeta_inHex")));
@@ -336,7 +336,7 @@ TEST_F(SearchTest, listSearchIndexes) {
         EXPECT_EQ(searchIndex.lastModifier, reader->getString("SearchIndex_3.lastModifier"));
         EXPECT_EQ(searchIndex.version, reader->getInt64("SearchIndex_3.version"));
         EXPECT_EQ(static_cast<int64_t>(searchIndex.mode), reader->getInt64("SearchIndex_3.mode"));
-        EXPECT_EQ(searchIndex.statusCode, 0);
+        EXPECT_EQ(errCode(searchIndex), 0);
         EXPECT_EQ(searchIndex.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_3.publicMeta_inHex")));
         EXPECT_EQ(searchIndex.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_3.uploaded_publicMeta_inHex")));
         EXPECT_EQ(searchIndex.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_3.privateMeta_inHex")));
@@ -376,7 +376,7 @@ TEST_F(SearchTest, listSearchIndexes) {
         EXPECT_EQ(searchIndex.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_2.uploaded_publicMeta_inHex")));
         EXPECT_EQ(searchIndex.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_2.privateMeta_inHex")));
         EXPECT_EQ(searchIndex.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_2.uploaded_privateMeta_inHex")));
-        EXPECT_EQ(searchIndex.statusCode, 0);
+        EXPECT_EQ(errCode(searchIndex), 0);
         EXPECT_EQ(searchIndex.users.size(), 2);
         if(searchIndex.users.size() == 2) {
             EXPECT_EQ(searchIndex.users[0], reader->getString("Login.user_1_id"));
@@ -401,7 +401,7 @@ TEST_F(SearchTest, listSearchIndexes) {
         EXPECT_EQ(searchIndex.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_3.uploaded_publicMeta_inHex")));
         EXPECT_EQ(searchIndex.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_3.privateMeta_inHex")));
         EXPECT_EQ(searchIndex.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("SearchIndex_3.uploaded_privateMeta_inHex")));
-        EXPECT_EQ(searchIndex.statusCode, 0);
+        EXPECT_EQ(errCode(searchIndex), 0);
         EXPECT_EQ(searchIndex.users.size(), 2);
         if(searchIndex.users.size() == 2) {
             EXPECT_EQ(searchIndex.users[0], reader->getString("Login.user_1_id"));
@@ -509,7 +509,7 @@ TEST_F(SearchTest, createSearchIndex) {
             indexId
         );
     });
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(index.publicMeta.stdString(), "public");
     EXPECT_EQ(index.privateMeta.stdString(), "private");
@@ -546,7 +546,7 @@ TEST_F(SearchTest, createSearchIndex) {
             indexId
         );
     });
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(index.publicMeta.stdString(), "public");
     EXPECT_EQ(index.privateMeta.stdString(), "private");
@@ -687,7 +687,7 @@ TEST_F(SearchTest, updateSearchIndex) {
             reader->getString("SearchIndex_1.indexId")
         );
     });
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(index.version, 2);
     EXPECT_EQ(index.publicMeta.stdString(), "public");
@@ -733,7 +733,7 @@ TEST_F(SearchTest, updateSearchIndex) {
             reader->getString("SearchIndex_1.indexId")
         );
     });
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(index.version, 3);
     EXPECT_EQ(index.publicMeta.stdString(), "public");
@@ -779,7 +779,7 @@ TEST_F(SearchTest, updateSearchIndex) {
             reader->getString("SearchIndex_2.indexId")
         );
     });
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(index.version, 2);
     EXPECT_EQ(index.publicMeta.stdString(), "public");
@@ -821,7 +821,7 @@ TEST_F(SearchTest, updateSearchIndex) {
             reader->getString("SearchIndex_2.indexId")
         );
     });
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(index.version, 3);
     EXPECT_EQ(index.publicMeta.stdString(), "public");
@@ -858,7 +858,7 @@ TEST_F(SearchTest, updateSearchIndex) {
             reader->getString("SearchIndex_3.indexId")
         );
     });
-    EXPECT_EQ(index.statusCode, 0);
+    EXPECT_EQ(errCode(index), 0);
     EXPECT_EQ(index.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(index.version, 2);
     EXPECT_EQ(index.publicMeta.stdString(), "public");
@@ -1252,7 +1252,7 @@ TEST_F(SearchTest, falseUserVerifierInterface) {
         listSearchIndexes = searchApi->listSearchIndexes(reader->getString("Context_1.contextId"),{.skip=0, .limit=1, .sortOrder="desc"});
     });
     if(listSearchIndexes.readItems.size() == 1) {
-        EXPECT_EQ(listSearchIndexes.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
+        EXPECT_EQ(errCode(listSearchIndexes.readItems[0]), core::UserVerificationFailureException().getCode());
     } else {
         FAIL();
     }

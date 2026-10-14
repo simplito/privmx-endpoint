@@ -96,7 +96,7 @@ inbox::InboxEntry InboxEntryDataSchemaStrategyV1::convertToFinal(
     result.createDate = message.createDate;
     result.data = core::Buffer::from(raw.privateData.text);
     result.authorPubKey = raw.publicData.userPubKey;
-    result.statusCode = raw.statusCode();
+    result.error = core::toPublicError(raw.error);
     if (!raw.error) {
         try {
             core::DecryptedEncKey fileMetaEncKey{
@@ -114,15 +114,14 @@ inbox::InboxEntry InboxEntryDataSchemaStrategyV1::convertToFinal(
                         std::get<0>(_storeApi.getImpl()->getFileMetaDataSchemaMapper().decrypt(file, fileMetaEncKey))
                     );
                 } else {
-                    store::File error;
-                    auto e = store::FileFetchFailedException();
-                    error.statusCode = e.getCode();
-                    result.files.push_back(error);
+                    store::File failed;
+                    failed.error = core::toPublicError(store::FileFetchFailedException());
+                    result.files.push_back(failed);
                 }
             }
-        } catch (const core::Exception& e) { result.statusCode = e.getCode(); } catch (...) {
-            result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-        }
+        } catch (const core::Exception& e) {
+            result.error = core::toPublicError(e);
+        } catch (...) { result.error = core::toPublicError(*core::unknownError("fetching the entry's files")); }
     }
     result.schemaVersion = EntryDataSchema::Version::VERSION_1;
     return result;

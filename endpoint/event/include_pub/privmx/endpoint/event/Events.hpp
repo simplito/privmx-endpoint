@@ -26,9 +26,9 @@ struct ContextCustomEventData {
      */
     core::Buffer payload;
     /**
-     * Payload decryption status
+     * Set when payload decryption failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
     /**
      * Version of the event data structure and how it is encoded/encrypted
      */

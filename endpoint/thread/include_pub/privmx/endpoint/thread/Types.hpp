@@ -63,9 +63,9 @@ struct Message {
     std::string authorPubKey;
 
     /**
-     * status code of retrieval and decryption of the message
+     * Set when retrieval or decryption of the message failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 
     /**
      * Version of the Message data structure and how it is encoded/encrypted
@@ -155,9 +155,9 @@ struct Thread {
     int64_t messagesCount;
 
     /**
-     * status code of retrieval and decryption of the Thread
+     * Set when retrieval or decryption of the Thread failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 
     /**
      * Version of the Thread data structure and how it is encoded/encrypted

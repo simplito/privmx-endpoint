@@ -46,7 +46,8 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaMapper::decrypt(
         [&]() -> std::tuple<Inbox, core::DataIntegrityObject> {
             return {
                 toLibInbox(
-                    inbox, {}, {}, {}, UnknownInboxFormatException().getCode(), InboxDataSchema::Version::UNKNOWN
+                    inbox, {}, {}, {}, core::toPublicError(UnknownInboxFormatException()),
+                    InboxDataSchema::Version::UNKNOWN
                 ),
                 {}
             };
@@ -74,14 +75,15 @@ std::optional<core::DataIntegrityObject> InboxDataSchemaMapper::assertDataIntegr
     }
 }
 
-std::pair<uint32_t, std::optional<core::DataIntegrityObject>> InboxDataSchemaMapper::validateDataIntegrity(
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
+InboxDataSchemaMapper::validateDataIntegrity(
     const server::InboxInfo& inbox
 ) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+    const auto error = core::DataSchemaMapperUtils::toError([&] {
         verifiedDio = assertDataIntegrity(inbox);
     });
-    return {statusCode, verifiedDio};
+    return {error, verifiedDio};
 }
 
 InboxPublicViewData InboxDataSchemaMapper::getPublicViewData(const server::InboxGetPublicViewResult& publicView) {
@@ -137,8 +139,8 @@ std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
         },
         [&](const server::InboxInfo& inbox, const core::DecryptedEncKey& key,
             const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(inbox, key, verifiedDio); },
-        [](const server::InboxInfo& inbox, uint32_t code) {
-            return toLibInbox(inbox, {}, {}, {}, code, InboxDataSchema::Version::UNKNOWN);
+        [](const server::InboxInfo& inbox, const std::optional<core::Error>& error) {
+            return toLibInbox(inbox, {}, {}, {}, error, InboxDataSchema::Version::UNKNOWN);
         },
         groupPrivKeyResolver
     );
@@ -157,7 +159,7 @@ Inbox InboxDataSchemaMapper::toLibInbox(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const std::optional<FilesConfig>& filesConfig,
-    int64_t statusCode,
+    const std::optional<core::Error>& error,
     int64_t schemaVersion
 ) {
     return Inbox{
@@ -174,7 +176,7 @@ Inbox InboxDataSchemaMapper::toLibInbox(
         .privateMeta = privateMeta,
         .filesConfig = filesConfig,
         .policy = core::Factory::parsePolicyServerObject(info.policy),
-        .statusCode = statusCode,
+        .error = error,
         .schemaVersion = schemaVersion,
         .groups = core::Mapper::mapToGroupGrants(info.groups),
         .staleGroups = info.staleGroups

@@ -212,7 +212,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     ASSERT_FALSE(groupId.empty());
     group::Group group1;
     ASSERT_NO_THROW({ group1 = user1.groupApi->getGroup(groupId); });
-    ASSERT_EQ(group1.statusCode, 0);
+    ASSERT_EQ(errCode(group1), 0);
     ASSERT_EQ(group1.keyVersion, 1);
 
     // -- Store1: user_1 manages it, Group1 reads it, anyone may download it --
@@ -236,7 +236,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     // user_3 reads it through the same grant, metadata and bytes both
     store::File file1AsUser3;
     ASSERT_NO_THROW({ file1AsUser3 = user3.storeApi->getFile(file1Id); });
-    EXPECT_EQ(file1AsUser3.statusCode, 0) << "a group member could not read a file uploaded by another one";
+    EXPECT_EQ(errCode(file1AsUser3), 0) << "a group member could not read a file uploaded by another one";
     EXPECT_EQ(file1AsUser3.privateMeta.stdString(), "file1_private");
     std::string file1DataAsUser3;
     ASSERT_NO_THROW({ file1DataAsUser3 = downloadFile(user3, file1Id, file1AsUser3.size); });
@@ -245,7 +245,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     // -- user_1 updates the Store, roster untouched --
     store::Store beforeUpdate;
     ASSERT_NO_THROW({ beforeUpdate = user1.storeApi->getStore(storeId); });
-    ASSERT_EQ(beforeUpdate.statusCode, 0);
+    ASSERT_EQ(errCode(beforeUpdate), 0);
     ASSERT_NO_THROW({
         // The grant has to be restated: an omitted `groups` means "no grantees", not "leave them alone".
         user1.storeApi->updateStore(
@@ -256,7 +256,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     });
     store::Store afterUpdate;
     ASSERT_NO_THROW({ afterUpdate = user1.storeApi->getStore(storeId); });
-    EXPECT_EQ(afterUpdate.statusCode, 0);
+    EXPECT_EQ(errCode(afterUpdate), 0);
     EXPECT_EQ(afterUpdate.publicMeta.stdString(), "store1_public_v2");
     ASSERT_EQ(afterUpdate.groups.size(), 1);
     EXPECT_EQ(afterUpdate.groups[0].groupId, groupId);
@@ -282,7 +282,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     for (int i = 0; i < FILE_COUNT; ++i) {
         const auto found = asMember.find(user3FileIds[i]);
         ASSERT_NE(found, asMember.end()) << "user_3's own file " << i << " is missing from the listing";
-        ASSERT_EQ(found->second.statusCode, 0) << "user_3 could not read their own file " << i << " as a member";
+        ASSERT_EQ(errCode(found->second), 0) << "user_3 could not read their own file " << i << " as a member";
     }
     // One full download to prove the caches cover the bytes too, not just the metadata.
     std::string firstDataAsMember;
@@ -317,7 +317,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     // -- What user_3 can see now: the re-encrypted file is closed to them, its public half is not --
     store::File lostFile;
     ASSERT_NO_THROW({ lostFile = user3.storeApi->getFile(file1Id); });
-    EXPECT_NE(lostFile.statusCode, 0) << "a removed member decrypted a file re-encrypted after their removal";
+    EXPECT_NE(errCode(lostFile), 0) << "a removed member decrypted a file re-encrypted after their removal";
     EXPECT_EQ(lostFile.publicMeta.stdString(), "file1_public_v2")
         << "public metadata is not encrypted and has to survive the loss of the key";
     EXPECT_TRUE(lostFile.privateMeta.stdString().empty());
@@ -333,7 +333,7 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     for (int i = 0; i < FILE_COUNT; ++i) {
         const auto found = asUser3.find(user3FileIds[i]);
         ASSERT_NE(found, asUser3.end()) << "user_3's own file " << i << " is gone from the listing";
-        if (found->second.statusCode != 0) {
+        if (errCode(found->second) != 0) {
             ++unreadable;
         }
     }
@@ -384,10 +384,10 @@ TEST_F(StoreGroupScenarioTest, store_granted_to_a_group_across_a_member_removal)
     auto asUser2 = byFileId(remaining);
     ASSERT_NE(asUser2.find(file1Id), asUser2.end());
     ASSERT_NE(asUser2.find(file2Id), asUser2.end());
-    EXPECT_EQ(asUser2.at(file1Id).statusCode, 0);
+    EXPECT_EQ(errCode(asUser2.at(file1Id)), 0);
     EXPECT_EQ(asUser2.at(file1Id).privateMeta.stdString(), "file1_private_v2");
     EXPECT_EQ(downloadFile(user2, file1Id, asUser2.at(file1Id).size), "file1_data_v2");
-    EXPECT_EQ(asUser2.at(file2Id).statusCode, 0);
+    EXPECT_EQ(errCode(asUser2.at(file2Id)), 0);
     EXPECT_EQ(downloadFile(user2, file2Id, asUser2.at(file2Id).size), "file2_data");
 
     // -- Both watchers were told about all of it --

@@ -67,7 +67,7 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaMapper::decrypt(
         [&]() -> std::tuple<KvdbEntry, core::DataIntegrityObject> {
             return {
                 toLibKvdbEntry(
-                    entry, {}, {}, {}, {}, UnknownKvdbEntryFormatException().getCode(),
+                    entry, {}, {}, {}, {}, core::toPublicError(UnknownKvdbEntryFormatException()),
                     KvdbEntryDataSchema::Version::UNKNOWN
                 ),
                 {}
@@ -91,12 +91,13 @@ KvdbEntryDataSchema::Version EntryDataSchemaMapper::getDataStructureVersion(cons
     );
 }
 
-std::pair<uint32_t, std::optional<core::DataIntegrityObject>> EntryDataSchemaMapper::validateEntryDataIntegrity(
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
+EntryDataSchemaMapper::validateEntryDataIntegrity(
     const server::KvdbEntryInfo& entry,
     const std::string& kvdbResourceId
 ) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+    const auto error = core::DataSchemaMapperUtils::toError([&] {
         switch (getDataStructureVersion(entry)) {
         case KvdbEntryDataSchema::Version::UNKNOWN:
             throw UnknownKvdbEntryFormatException();
@@ -114,7 +115,7 @@ std::pair<uint32_t, std::optional<core::DataIntegrityObject>> EntryDataSchemaMap
             throw UnknownKvdbEntryFormatException();
         }
     });
-    return {statusCode, verifiedDio};
+    return {error, verifiedDio};
 }
 
 std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntriesDataToKvdbEntries(
@@ -128,8 +129,8 @@ std::vector<KvdbEntry> EntryDataSchemaMapper::validateDecryptAndConvertKvdbEntri
         [&](const server::KvdbEntryInfo& e) { return validateEntryDataIntegrity(e, kvdbKeys.moduleResourceId); },
         [&](const server::KvdbEntryInfo& e, const core::DecryptedEncKey& key,
             const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(e, key, verifiedDio); },
-        [](const server::KvdbEntryInfo& e, uint32_t code) {
-            return toLibKvdbEntry(e, {}, {}, {}, {}, code, KvdbEntryDataSchema::Version::UNKNOWN);
+        [](const server::KvdbEntryInfo& e, const std::optional<core::Error>& error) {
+            return toLibKvdbEntry(e, {}, {}, {}, {}, error, KvdbEntryDataSchema::Version::UNKNOWN);
         },
         groupPrivKeyResolver
     );
@@ -152,7 +153,7 @@ KvdbEntry EntryDataSchemaMapper::toLibKvdbEntry(
     const core::Buffer& privateMeta,
     const core::Buffer& data,
     const std::string& authorPubKey,
-    int64_t statusCode,
+    const std::optional<core::Error>& error,
     int64_t schemaVersion
 ) {
     return KvdbEntry{
@@ -168,7 +169,7 @@ KvdbEntry EntryDataSchemaMapper::toLibKvdbEntry(
         .data = data,
         .authorPubKey = authorPubKey,
         .version = entry.version,
-        .statusCode = statusCode,
+        .error = error,
         .schemaVersion = schemaVersion
     };
 }

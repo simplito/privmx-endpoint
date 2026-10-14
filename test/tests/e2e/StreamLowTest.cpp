@@ -172,7 +172,7 @@ TEST_F(StreamLowTest, createStream) {
             streamRoomId
         );
     });
-    EXPECT_EQ(streamRoom.statusCode, 0);
+    EXPECT_EQ(errCode(streamRoom), 0);
     EXPECT_EQ(streamRoom.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(streamRoom.publicMeta.stdString(), "public");
     EXPECT_EQ(streamRoom.privateMeta.stdString(), "private");
@@ -215,7 +215,7 @@ TEST_F(StreamLowTest, createStream) {
             streamRoomId
         );
     });
-    EXPECT_EQ(streamRoom.statusCode, 0);
+    EXPECT_EQ(errCode(streamRoom), 0);
     EXPECT_EQ(streamRoom.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(streamRoom.publicMeta.stdString(), "public");
     EXPECT_EQ(streamRoom.privateMeta.stdString(), "private");
@@ -346,7 +346,7 @@ TEST_F(StreamLowTest, listStreamRooms) {
     if(listStreamRooms.readItems.size() >= 1) {
         auto stream = listStreamRooms.readItems[0];
         EXPECT_EQ(stream.streamRoomId, streamRoomId_3);
-        EXPECT_EQ(stream.statusCode, 0);
+        EXPECT_EQ(errCode(stream), 0);
     }
     EXPECT_NO_THROW({
         listStreamRooms = streamApiLow->listStreamRooms(
@@ -363,12 +363,12 @@ TEST_F(StreamLowTest, listStreamRooms) {
     if(listStreamRooms.readItems.size() >= 1) {
         auto stream = listStreamRooms.readItems[0];
         EXPECT_EQ(stream.streamRoomId, streamRoomId_2);
-        EXPECT_EQ(stream.statusCode, 0);
+        EXPECT_EQ(errCode(stream), 0);
     }
     if(listStreamRooms.readItems.size() >= 2) {
         auto stream = listStreamRooms.readItems[1];
         EXPECT_EQ(stream.streamRoomId, streamRoomId_3);
-        EXPECT_EQ(stream.statusCode, 0);
+        EXPECT_EQ(errCode(stream), 0);
     }
 
 }
@@ -516,7 +516,7 @@ TEST_F(StreamLowTest, updateStreamRoom) {
             streamRoomId_1
         );
     });
-    EXPECT_EQ(streamRoom.statusCode, 0);
+    EXPECT_EQ(errCode(streamRoom), 0);
     EXPECT_EQ(streamRoom.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(streamRoom.version, 2);
     EXPECT_EQ(streamRoom.publicMeta.stdString(), "public");
@@ -565,7 +565,7 @@ TEST_F(StreamLowTest, updateStreamRoom) {
             streamRoomId_1
         );
     });
-    EXPECT_EQ(streamRoom.statusCode, 0);
+    EXPECT_EQ(errCode(streamRoom), 0);
     EXPECT_EQ(streamRoom.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(streamRoom.version, 3);
     EXPECT_EQ(streamRoom.publicMeta.stdString(), "public");
@@ -603,7 +603,7 @@ TEST_F(StreamLowTest, updateStreamRoom) {
             streamRoomId_2
         );
     });
-    EXPECT_EQ(streamRoom.statusCode, 0);
+    EXPECT_EQ(errCode(streamRoom), 0);
     EXPECT_EQ(streamRoom.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(streamRoom.version, 2);
     EXPECT_EQ(streamRoom.publicMeta.stdString(), "public");
@@ -648,7 +648,7 @@ TEST_F(StreamLowTest, userValidator_false) {
         auto Stream = streamApiLow->getStreamRoom(
             streamRoomId_1
         );
-        EXPECT_FALSE(Stream.statusCode == 0);
+        EXPECT_FALSE(errCode(Stream) == 0);
     });
     EXPECT_NO_THROW({
         auto Streams = streamApiLow->listStreamRooms(
@@ -659,7 +659,7 @@ TEST_F(StreamLowTest, userValidator_false) {
                 .sortOrder="desc"
             }
         );
-        EXPECT_FALSE(Streams.readItems[0].statusCode == 0);
+        EXPECT_FALSE(errCode(Streams.readItems[0]) == 0);
     });
     EXPECT_NO_THROW({
         streamApiLow->createStreamRoom(
@@ -708,7 +708,7 @@ TEST_F(StreamLowTest, userValidator_false) {
         streamListResult = streamApiLow->listStreamRooms(reader->getString("Context_1.contextId"),{.skip=0, .limit=1, .sortOrder="desc"});
     });
     if(streamListResult.readItems.size() == 1) {
-        EXPECT_EQ(streamListResult.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
+        EXPECT_EQ(errCode(streamListResult.readItems[0]), core::UserVerificationFailureException().getCode());
     } else {
         FAIL();
     }

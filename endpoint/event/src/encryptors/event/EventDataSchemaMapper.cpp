@@ -44,12 +44,12 @@ Poco::Dynamic::Var EventDataSchemaMapper::encrypt(
 
 ContextCustomEventData EventDataSchemaMapper::decrypt(const server::ContextCustomEventData& rawEvent) {
     if (getDataStructureVersion(rawEvent) != EventDataSchema::Version::VERSION_5) {
-        return makeErrorResult(rawEvent, InvalidEncryptedEventDataVersionException().getCode());
+        return makeErrorResult(rawEvent, core::toPublicError(InvalidEncryptedEventDataVersionException()));
     }
     auto authorPubKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(rawEvent.author.pub);
     auto decryptedKey = _eventKeyProvider.decryptKey(rawEvent.key, authorPubKey);
-    if (decryptedKey.statusCode() != 0) {
-        return makeErrorResult(rawEvent, decryptedKey.statusCode());
+    if (decryptedKey.error) {
+        return makeErrorResult(rawEvent, core::toPublicError(decryptedKey.error));
     }
     core::DecryptedEncKey encKey;
     encKey.key = decryptedKey.key;
@@ -59,8 +59,10 @@ ContextCustomEventData EventDataSchemaMapper::decrypt(const server::ContextCusto
             raw.error = core::asError(privmx::endpoint::core::UserVerificationFailureException());
         }
         return _strategyV5->convert(rawEvent, raw);
-    } catch (const core::Exception& e) { return makeErrorResult(rawEvent, e.getCode()); } catch (...) {
-        return makeErrorResult(rawEvent, ENDPOINT_CORE_EXCEPTION_CODE);
+    } catch (const core::Exception& e) {
+        return makeErrorResult(rawEvent, core::toPublicError(e));
+    } catch (...) {
+        return makeErrorResult(rawEvent, core::toPublicError(*core::unknownError("decrypting the context event")));
     }
 }
 
@@ -119,13 +121,13 @@ EventDataSchema::Version EventDataSchemaMapper::getDataStructureVersion(
 
 ContextCustomEventData EventDataSchemaMapper::makeErrorResult(
     const server::ContextCustomEventData& rawEvent,
-    int64_t errorCode
+    const std::optional<core::Error>& error
 ) {
     return ContextCustomEventData{
         .contextId = rawEvent.id,
         .userId = rawEvent.author.id,
         .payload = {},
-        .statusCode = errorCode,
+        .error = error,
         .schemaVersion = EventDataSchema::Version::UNKNOWN
     };
 }

@@ -245,12 +245,12 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     auto store = serverFileResult.store;
     _storeDataSchemaMapper->assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, containerToModuleKeys(store), store.version);
-    auto statusCode = _fileMetaDataSchemaMapper
-                          .validateDataIntegrity(serverFileResult.file, store.resourceId.value_or(""))
-                          .first;
-    if (statusCode != 0) {
+    auto error = _fileMetaDataSchemaMapper
+                     .validateDataIntegrity(serverFileResult.file, store.resourceId.value_or(""))
+                     .first;
+    if (error.has_value()) {
         File result;
-        result.statusCode = statusCode;
+        result.error = error;
         return result;
     }
     auto ret{_fileMetaDataSchemaMapper.validateDecryptAndConvertFile(
@@ -732,9 +732,9 @@ void StoreApiImpl::updateFileMeta(
     auto storeKey = containerToModuleKeys(store);
     setNewModuleKeysInCache(store.id, storeKey, store.version);
     server::File file = storeFileGetResult.file;
-    auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(file, store.resourceId.value_or("")).first;
-    if (statusCode != 0) {
-        throw FileDataIntegrityException("statusCode=" + std::to_string(statusCode));
+    auto error = _fileMetaDataSchemaMapper.validateDataIntegrity(file, store.resourceId.value_or("")).first;
+    if (error.has_value()) {
+        throw FileDataIntegrityException(error->_what);
     }
     // Still guarded: the server-struct key fetch, unlike the `ModuleKeys` one, does not assert, and the re-key
     // above is not guaranteed to have happened — a caller who may not re-key never gets here.

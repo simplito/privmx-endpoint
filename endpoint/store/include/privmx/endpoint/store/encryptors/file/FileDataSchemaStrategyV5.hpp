@@ -42,7 +42,7 @@ public:
         const server::File& file,
         const DecryptedFileMetaV5& raw
     ) const override;
-    File toLibError(const server::File& file, int64_t errorCode) const override;
+    File toLibError(const server::File& file, const std::optional<core::Error>& error) const override;
     server::EncryptedFileMetaV5 encrypt(
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,

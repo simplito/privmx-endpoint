@@ -128,7 +128,7 @@ protected:
 
         group::Group group;
         ASSERT_NO_THROW({ group = alice.groupApi->getGroup(groupId); });
-        ASSERT_EQ(group.statusCode, 0);
+        ASSERT_EQ(errCode(group), 0);
 
         ASSERT_NO_THROW({
             indexId = alice.searchApi->createSearchIndex(

@@ -45,7 +45,7 @@ public:
         const server::Message& message,
         const DecryptedMessageDataV4& raw
     ) const override;
-    Message toLibError(const server::Message& message, int64_t errorCode) const override;
+    Message toLibError(const server::Message& message, const std::optional<core::Error>& error) const override;
 
 private:
     mutable MessageDataEncryptorV4 _encryptor;

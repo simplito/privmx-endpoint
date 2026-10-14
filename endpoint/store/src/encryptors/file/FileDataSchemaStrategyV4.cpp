@@ -62,20 +62,20 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV4::convert(
     const DecryptedFileMetaV4& raw
 ) const {
     bool randomWrite = false;
-    auto statusCode = raw.statusCode();
-    if (statusCode == 0) {
+    auto error = core::toPublicError(raw.error);
+    if (!error.has_value()) {
         try {
             auto internalMeta = dynamic::InternalStoreFileMeta::fromJSON(
                 utils::Utils::parseJson(raw.internalMeta.stdString())
             );
             randomWrite = internalMeta.randomWrite.value_or(false);
-        } catch (const core::Exception& e) { statusCode = e.getCode(); } catch (...) {
-            statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-        }
+        } catch (const core::Exception& e) {
+            error = core::toPublicError(e);
+        } catch (...) { error = core::toPublicError(*core::unknownError("decoding the file's internal meta")); }
     }
     return {
         FileMetaDataSchemaMapper::toLibFile(
-            file, raw.publicMeta, raw.privateMeta, raw.fileSize, raw.authorPubKey, statusCode,
+            file, raw.publicMeta, raw.privateMeta, raw.fileSize, raw.authorPubKey, error,
             FileDataSchema::Version::VERSION_4, randomWrite
         ),
         core::DataIntegrityObject{
@@ -105,8 +105,6 @@ server::EncryptedFileMetaV4 FileDataSchemaStrategyV4::encrypt(
     return _encryptor.encrypt(fileMeta, userPrivKey, key);
 }
 
-File FileDataSchemaStrategyV4::toLibError(const server::File& file, int64_t errorCode) const {
-    return FileMetaDataSchemaMapper::toLibFile(
-        file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_4, false
-    );
+File FileDataSchemaStrategyV4::toLibError(const server::File& file, const std::optional<core::Error>& error) const {
+    return FileMetaDataSchemaMapper::toLibFile(file, {}, {}, 0, {}, error, FileDataSchema::Version::VERSION_4, false);
 }

@@ -567,7 +567,7 @@ void GroupApiImpl::refreshMetadataEpochAfterRemoval(const std::string& groupId) 
         // Read through the verifying path: re-signing metadata this client has not attested would launder
         // whatever the bridge served into an entry under the new epoch's key, which is the opposite of the point.
         const Group verified = getGroup(groupId);
-        if (verified.statusCode != 0) {
+        if (verified.error.has_value()) {
             return;
         }
         // One write per plane that is behind, with `allowRotationRetry` false because a rotation got us here.
@@ -838,7 +838,7 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 .userId = raw.author.id,
                 .authorPubKey = {},
                 .payload = {},
-                .statusCode = 0
+                .error = std::nullopt
             };
             // A failure here is reported, never thrown: the event loop has nobody to throw to, and one
             // unreadable notification must not cost the caller the readable ones behind it.
@@ -846,9 +846,9 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 auto decrypted = decrypt(core::Buffer::from(privmx::utils::Base64::toString(raw.eventData)));
                 data.payload = decrypted.data;
                 data.authorPubKey = decrypted.authorPubKey;
-            } catch (const core::Exception& e) { data.statusCode = e.getCode(); } catch (...) {
-                data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-            }
+            } catch (const core::Exception& e) {
+                data.error = core::toPublicError(e);
+            } catch (...) { data.error = core::toPublicError(*core::unknownError("decrypting the group event")); }
             auto event = core::EventBuilder::buildEvent<GroupCustomEvent>(
                 "group/" + raw.id + "/" + channelName, data, notification
             );

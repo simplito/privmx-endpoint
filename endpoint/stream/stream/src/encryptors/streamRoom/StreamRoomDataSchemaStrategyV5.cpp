@@ -29,7 +29,8 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaStrategyV5
 ) const {
     return {
         StreamRoomDataSchemaMapper::toLibStreamRoom(
-            streamRoom, raw.publicMeta, raw.privateMeta, raw.statusCode(), StreamRoomDataSchema::Version::VERSION_5
+            streamRoom, raw.publicMeta, raw.privateMeta, core::toPublicError(raw.error),
+            StreamRoomDataSchema::Version::VERSION_5
         ),
         raw.dio
     };
@@ -37,9 +38,9 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaStrategyV5
 
 StreamRoom StreamRoomDataSchemaStrategyV5::toLibError(
     const server::StreamRoomInfo& streamRoom,
-    int64_t errorCode
+    const std::optional<core::Error>& error
 ) const {
     return StreamRoomDataSchemaMapper::toLibStreamRoom(
-        streamRoom, {}, {}, errorCode, StreamRoomDataSchema::Version::VERSION_5
+        streamRoom, {}, {}, error, StreamRoomDataSchema::Version::VERSION_5
     );
 }

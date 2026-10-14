@@ -29,14 +29,15 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaStrategyV5::convert(
 ) const {
     return {
         StoreDataSchemaMapper::toLibStore(
-            store, raw.publicMeta, raw.privateMeta, raw.statusCode(), StoreDataSchema::Version::VERSION_5
+            store, raw.publicMeta, raw.privateMeta, core::toPublicError(raw.error), StoreDataSchema::Version::VERSION_5
         ),
         raw.dio
     };
 }
 
-Store StoreDataSchemaStrategyV5::toLibError(const server::Store& store, int64_t errorCode) const {
-    return StoreDataSchemaMapper::toLibStore(store, {}, {}, errorCode, StoreDataSchema::Version::VERSION_5);
+Store StoreDataSchemaStrategyV5::toLibError(const server::Store& store, const std::optional<core::Error>& error)
+    const {
+    return StoreDataSchemaMapper::toLibStore(store, {}, {}, error, StoreDataSchema::Version::VERSION_5);
 }
 
 core::dynamic::EncryptedModuleDataV5 StoreDataSchemaStrategyV5::encrypt(

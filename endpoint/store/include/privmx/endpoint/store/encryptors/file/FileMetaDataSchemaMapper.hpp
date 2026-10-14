@@ -65,7 +65,7 @@ public:
 
     // Returns the file's DIO for V5, so the decrypt that follows need not verify it again. Empty for V4,
     // which carries no DIO at all.
-    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateDataIntegrity(
+    std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> validateDataIntegrity(
         const server::File& file,
         const std::string& storeResourceId
     );
@@ -104,7 +104,7 @@ public:
         const core::Buffer& privateMeta,
         int64_t size,
         const std::string& authorPubKey,
-        int64_t statusCode,
+        const std::optional<core::Error>& error,
         int64_t schemaVersion,
         bool randomWrite = false
     );

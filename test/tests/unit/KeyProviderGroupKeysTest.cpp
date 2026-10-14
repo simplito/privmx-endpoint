@@ -164,7 +164,7 @@ TEST_F(KeyProviderGroupKeysTest, opening_on_the_first_route_leaves_no_mark) {
 }
 
 TEST_F(KeyProviderGroupKeysTest, unopenable_routes_leave_a_failed_entry_under_the_keyId) {
-    // Every route dead still yields an entry: callers read `.at(keyId).statusCode`, so a gap throws instead.
+    // Every route dead still yields an entry: callers read `.at(keyId).statusCode()`, so a gap throws instead.
     const auto groupA = privmx::crypto::PrivateKey::generateRandom();
     const auto groupB = privmx::crypto::PrivateKey::generateRandom();
 

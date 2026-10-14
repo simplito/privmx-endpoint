@@ -27,15 +27,18 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaStrategyV5::conv
 ) const {
     return {
         EntryDataSchemaMapper::toLibKvdbEntry(
-            entry, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode(),
+            entry, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, core::toPublicError(raw.error),
             KvdbEntryDataSchema::Version::VERSION_5
         ),
         raw.dio
     };
 }
 
-KvdbEntry EntryDataSchemaStrategyV5::toLibError(const server::KvdbEntryInfo& entry, int64_t errorCode) const {
+KvdbEntry EntryDataSchemaStrategyV5::toLibError(
+    const server::KvdbEntryInfo& entry,
+    const std::optional<core::Error>& error
+) const {
     return EntryDataSchemaMapper::toLibKvdbEntry(
-        entry, {}, {}, {}, {}, errorCode, KvdbEntryDataSchema::Version::VERSION_5
+        entry, {}, {}, {}, {}, error, KvdbEntryDataSchema::Version::VERSION_5
     );
 }

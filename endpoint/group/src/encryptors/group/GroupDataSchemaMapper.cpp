@@ -49,7 +49,8 @@ std::tuple<Group, core::DataIntegrityObject, core::DataIntegrityObject> GroupDat
         getDataStructureVersion(groupInfo.privateMeta) != core::ModuleDataSchema::Version::VERSION_5) {
         return {
             toLibGroup(
-                groupInfo, {}, {}, UnknownGroupFormatException().getCode(), core::ModuleDataSchema::Version::UNKNOWN
+                groupInfo, {}, {}, core::toPublicError(UnknownGroupFormatException()),
+                core::ModuleDataSchema::Version::UNKNOWN
             ),
             {},
             {}
@@ -64,10 +65,10 @@ std::tuple<Group, core::DataIntegrityObject, core::DataIntegrityObject> GroupDat
         dynamic::EncryptedGroupPrivateMetaV5::fromJSON(groupInfo.privateMeta.data), privateMetaKey.key
     );
     // Either plane failing marks the whole Group unverified; the plane that did open still returns its buffer.
-    const int64_t statusCode = publicPlane.error ? publicPlane.statusCode() : privatePlane.statusCode();
+    const auto error = core::toPublicError(publicPlane.error ? publicPlane.error : privatePlane.error);
     return {
         toLibGroup(
-            groupInfo, publicPlane.publicMeta, privatePlane.privateMeta, statusCode,
+            groupInfo, publicPlane.publicMeta, privatePlane.privateMeta, error,
             core::ModuleDataSchema::Version::VERSION_5
         ),
         publicPlane.dio, privatePlane.dio
@@ -321,21 +322,21 @@ void GroupDataSchemaMapper::dropAllVersionPins() {
     _verifiedPrivateMetaVersions.clear();
 }
 
-std::pair<uint32_t, core::DataIntegrityObject> GroupDataSchemaMapper::validateDataIntegrity(
+std::pair<std::optional<core::Error>, core::DataIntegrityObject> GroupDataSchemaMapper::validateDataIntegrity(
     const server::GroupInfo& groupInfo
 ) {
     core::DataIntegrityObject rosterDio;
-    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+    const auto error = core::DataSchemaMapperUtils::toError([&] {
         rosterDio = assertDataIntegrity(groupInfo);
     });
-    return {statusCode, rosterDio};
+    return {error, rosterDio};
 }
 
 Group GroupDataSchemaMapper::toLibGroup(
     const server::GroupInfo& info,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    int64_t statusCode,
+    const std::optional<core::Error>& error,
     int64_t schemaVersion
 ) {
     return Group{
@@ -354,7 +355,7 @@ Group GroupDataSchemaMapper::toLibGroup(
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
         .policy = core::Factory::parsePolicyServerObject(info.policy),
-        .statusCode = statusCode,
+        .error = error,
         .schemaVersion = schemaVersion,
         .type = info.type,
         .keyVersion = info.keyVersion
@@ -394,8 +395,8 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     const auto locationOf = [](const server::GroupInfo& g) -> core::EncKeyLocation {
         return {.contextId = g.contextId, .resourceId = g.resourceId.value_or("")};
     };
-    const auto toError = [](const server::GroupInfo& g, uint32_t code) {
-        return toLibGroup(g, {}, {}, code, core::ModuleDataSchema::Version::UNKNOWN);
+    const auto toError = [](const server::GroupInfo& g, const std::optional<core::Error>& error) {
+        return toLibGroup(g, {}, {}, error, core::ModuleDataSchema::Version::UNKNOWN);
     };
 
     std::vector<Group> result(groups.size());
@@ -406,9 +407,9 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     // The roster head's DIO comes out of the integrity pass that had to decode it anyway, and feeds both the
     // author check and the duplicate-randomId sweep below.
     for (size_t i = 0; i < groups.size(); i++) {
-        auto [code, rosterDio] = validateDataIntegrity(groups[i]);
-        if (code != 0) {
-            result[i] = toError(groups[i], code);
+        auto [error, rosterDio] = validateDataIntegrity(groups[i]);
+        if (error.has_value()) {
+            result[i] = toError(groups[i], error);
             continue;
         }
         rosterDios[i] = rosterDio;
@@ -416,7 +417,7 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
 
     core::KeyDecryptionAndVerificationRequest keyRequest;
     for (size_t i = 0; i < groups.size(); i++) {
-        if (result[i].statusCode != 0) {
+        if (result[i].error.has_value()) {
             continue;
         }
         keyRequest.addGroupKeys(groups[i].groupKeys, locationOf(groups[i]));
@@ -425,14 +426,14 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     std::set<std::string> seenRandomIds;
 
     for (size_t i = 0; i < groups.size(); i++) {
-        if (result[i].statusCode != 0) {
+        if (result[i].error.has_value()) {
             continue;
         }
         const server::GroupInfo& g = groups[i];
         try {
             auto it = allKeys.find(locationOf(g));
             if (it == allKeys.end()) {
-                result[i] = toError(g, ENDPOINT_CORE_EXCEPTION_CODE);
+                result[i] = toError(g, core::toPublicError(*core::unknownError("resolving the group's keys")));
                 continue;
             }
             // Three key lookups; the two metadata ones may resolve different epochs. `find` rather than `at`,
@@ -445,7 +446,7 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             const core::DecryptedEncKey* publicMetaKey = keyOf(g.publicMeta.keyId);
             const core::DecryptedEncKey* privateMetaKey = keyOf(g.privateMeta.keyId);
             if (rosterKey == nullptr || publicMetaKey == nullptr || privateMetaKey == nullptr) {
-                result[i] = toError(g, GroupMembershipMismatchException().getCode());
+                result[i] = toError(g, core::toPublicError(GroupMembershipMismatchException()));
                 continue;
             }
             assertRosterIsAttested(g, *rosterKey);
@@ -461,7 +462,7 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             if (publicDio.creatorUserId != g.publicMeta.author ||
                 privateDio.creatorUserId != g.privateMeta.author ||
                 rosterDios[i].creatorUserId != g.history.back().author) {
-                result[i] = toError(g, GroupDataIntegrityException().getCode());
+                result[i] = toError(g, core::toPublicError(GroupDataIntegrityException()));
                 continue;
             }
             const auto seen = [&](const core::DataIntegrityObject& d) {
@@ -470,11 +471,11 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             // Three distinct signed objects, so `createGroup` must mint three distinct randomIds — otherwise a
             // group's own entries look like one entry served repeatedly.
             if (seen(rosterDios[i]) || seen(publicMetaDios[i]) || seen(privateMetaDios[i])) {
-                result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
+                result[i].error = core::toPublicError(core::DataIntegrityObjectDuplicatedException());
             }
-        } catch (const core::Exception& e) { result[i] = toError(g, e.getCode()); } catch (...) {
-            result[i] = toError(g, ENDPOINT_CORE_EXCEPTION_CODE);
-        }
+        } catch (const core::Exception& e) {
+            result[i] = toError(g, core::toPublicError(e));
+        } catch (...) { result[i] = toError(g, core::toPublicError(*core::unknownError("decrypting the group"))); }
     }
 
     // One request per plane per group, each against the author of that plane's own head entry. All three must
@@ -482,7 +483,7 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     std::vector<core::VerificationRequest> verifyReqs;
     std::vector<size_t> verifyIdxs;
     for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].statusCode != 0) {
+        if (result[i].error.has_value()) {
             continue;
         }
         const server::GroupInfo& g = groups[i];
@@ -516,7 +517,7 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     auto verified = _connection.getImpl()->getUserVerifier()->verify(verifyReqs);
     for (size_t j = 0; j < verifyIdxs.size(); j++) {
         if (!verified[j]) {
-            result[verifyIdxs[j]].statusCode = core::UserVerificationFailureException().getCode();
+            result[verifyIdxs[j]].error = core::toPublicError(core::UserVerificationFailureException());
         }
     }
     return result;

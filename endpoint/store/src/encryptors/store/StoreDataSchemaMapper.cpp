@@ -45,7 +45,11 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaMapper::decrypt(
         static_cast<int64_t>(getDataStructureVersion(store.data.back())), store, encKey,
         [&]() -> std::tuple<Store, core::DataIntegrityObject> {
             return {
-                toLibStore(store, {}, {}, UnknowStoreFormatException().getCode(), StoreDataSchema::Version::UNKNOWN), {}
+                toLibStore(
+                    store, {}, {}, core::toPublicError(UnknowStoreFormatException()),
+                    StoreDataSchema::Version::UNKNOWN
+                ),
+                {}
             };
         },
         verifiedDio
@@ -73,14 +77,15 @@ std::optional<core::DataIntegrityObject> StoreDataSchemaMapper::assertDataIntegr
     }
 }
 
-std::pair<uint32_t, std::optional<core::DataIntegrityObject>> StoreDataSchemaMapper::validateDataIntegrity(
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
+StoreDataSchemaMapper::validateDataIntegrity(
     const server::Store& store
 ) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+    const auto error = core::DataSchemaMapperUtils::toError([&] {
         verifiedDio = assertDataIntegrity(store);
     });
-    return {statusCode, verifiedDio};
+    return {error, verifiedDio};
 }
 
 std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
@@ -95,8 +100,8 @@ std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
         },
         [&](const server::Store& s, const core::DecryptedEncKey& key,
             const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(s, key, verifiedDio); },
-        [](const server::Store& s, uint32_t code) {
-            return toLibStore(s, {}, {}, code, StoreDataSchema::Version::UNKNOWN);
+        [](const server::Store& s, const std::optional<core::Error>& error) {
+            return toLibStore(s, {}, {}, error, StoreDataSchema::Version::UNKNOWN);
         },
         groupPrivKeyResolver
     );
@@ -114,7 +119,7 @@ Store StoreDataSchemaMapper::toLibStore(
     const server::Store& store,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    int64_t statusCode,
+    const std::optional<core::Error>& error,
     int64_t schemaVersion
 ) {
     return Store{
@@ -132,7 +137,7 @@ Store StoreDataSchemaMapper::toLibStore(
         .privateMeta = privateMeta,
         .policy = core::Factory::parsePolicyServerObject(store.policy),
         .filesCount = store.files,
-        .statusCode = statusCode,
+        .error = error,
         .schemaVersion = schemaVersion,
         .groups = core::Mapper::mapToGroupGrants(store.groups),
         .staleGroups = store.staleGroups

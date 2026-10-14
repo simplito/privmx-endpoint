@@ -43,15 +43,18 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV5::conv
 ) const {
     return {
         MessageDataSchemaMapper::toLibMessage(
-            message, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode(),
+            message, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, core::toPublicError(raw.error),
             MessageDataSchema::Version::VERSION_5
         ),
         raw.dio
     };
 }
 
-Message MessageDataSchemaStrategyV5::toLibError(const server::Message& message, int64_t errorCode) const {
+Message MessageDataSchemaStrategyV5::toLibError(
+    const server::Message& message,
+    const std::optional<core::Error>& error
+) const {
     return MessageDataSchemaMapper::toLibMessage(
-        message, {}, {}, {}, {}, errorCode, MessageDataSchema::Version::VERSION_5
+        message, {}, {}, {}, {}, error, MessageDataSchema::Version::VERSION_5
     );
 }

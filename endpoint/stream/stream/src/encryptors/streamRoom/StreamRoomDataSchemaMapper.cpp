@@ -47,7 +47,7 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaMapper::de
         [&]() -> std::tuple<StreamRoom, core::DataIntegrityObject> {
             return {
                 toLibStreamRoom(
-                    streamRoom, {}, {}, UnknowStreamRoomFormatException().getCode(),
+                    streamRoom, {}, {}, core::toPublicError(UnknowStreamRoomFormatException()),
                     StreamRoomDataSchema::Version::UNKNOWN
                 ),
                 {}
@@ -84,14 +84,15 @@ std::optional<core::DataIntegrityObject> StreamRoomDataSchemaMapper::assertDataI
     }
 }
 
-std::pair<uint32_t, std::optional<core::DataIntegrityObject>> StreamRoomDataSchemaMapper::validateDataIntegrity(
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>>
+StreamRoomDataSchemaMapper::validateDataIntegrity(
     const server::StreamRoomInfo& streamRoom
 ) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+    const auto error = core::DataSchemaMapperUtils::toError([&] {
         verifiedDio = assertDataIntegrity(streamRoom);
     });
-    return {statusCode, verifiedDio};
+    return {error, verifiedDio};
 }
 
 std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStreamRooms(
@@ -107,8 +108,8 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
         },
         [&](const server::StreamRoomInfo& room, const core::DecryptedEncKey& key,
             const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(room, key, verifiedDio); },
-        [](const server::StreamRoomInfo& room, uint32_t code) {
-            return toLibStreamRoom(room, {}, {}, code, StreamRoomDataSchema::Version::UNKNOWN);
+        [](const server::StreamRoomInfo& room, const std::optional<core::Error>& error) {
+            return toLibStreamRoom(room, {}, {}, error, StreamRoomDataSchema::Version::UNKNOWN);
         },
         groupPrivKeyResolver
     );
@@ -126,7 +127,7 @@ StreamRoom StreamRoomDataSchemaMapper::toLibStreamRoom(
     const server::StreamRoomInfo& info,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    int64_t statusCode,
+    const std::optional<core::Error>& error,
     int64_t schemaVersion
 ) {
     return StreamRoom{
@@ -142,7 +143,7 @@ StreamRoom StreamRoomDataSchemaMapper::toLibStreamRoom(
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
         .policy = core::Factory::parsePolicyServerObject(info.policy),
-        .statusCode = statusCode,
+        .error = error,
         .schemaVersion = schemaVersion,
         .state = info.state.value_or("closed"),
         .emptyRoomTtl = info.emptyRoomTtl.value_or(0),

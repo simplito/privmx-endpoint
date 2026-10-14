@@ -105,7 +105,7 @@ TEST_F(GroupKeyTreeTest, createGroup_starts_at_epoch_one) {
 
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    EXPECT_EQ(group.statusCode, 0) << "the creator must be able to decrypt the group it just made";
+    EXPECT_EQ(errCode(group), 0) << "the creator must be able to decrypt the group it just made";
     EXPECT_EQ(group.keyVersion, 1);
     EXPECT_FALSE(group.groupPubKey.empty());
     EXPECT_EQ(group.publicMeta.stdString(), "keytree_public");
@@ -123,7 +123,7 @@ TEST_F(GroupKeyTreeTest, every_member_can_read_a_tree_backed_group) {
         connectAs(index);
         group::Group group;
         ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-        EXPECT_EQ(group.statusCode, 0) << "a member could not decrypt the group";
+        EXPECT_EQ(errCode(group), 0) << "a member could not decrypt the group";
         EXPECT_EQ(group.privateMeta.stdString(), "keytree_private");
         disconnect();
     }
@@ -145,7 +145,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_non_member_cannot_read_a_tree_backed_group) 
         threw = true;
     }
     if (!threw) {
-        EXPECT_NE(group.statusCode, 0) << "a non-member decrypted the group's metadata";
+        EXPECT_NE(errCode(group), 0) << "a non-member decrypted the group's metadata";
     }
     disconnect();
     connectAs(1);
@@ -183,7 +183,7 @@ TEST_F(GroupKeyTreeTest, an_added_member_can_read_the_group) {
     connectAs(3);
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    EXPECT_EQ(group.statusCode, 0) << "the newly seated member cannot climb to the group key";
+    EXPECT_EQ(errCode(group), 0) << "the newly seated member cannot climb to the group key";
     EXPECT_EQ(group.privateMeta.stdString(), "keytree_private");
     disconnect();
     connectAs(1);
@@ -221,13 +221,13 @@ TEST_F(GroupKeyTreeTest, addGroupMembers_seats_a_whole_batch_at_the_same_epoch) 
     connectAs(2);
     group::Group asUser2;
     ASSERT_NO_THROW({ asUser2 = groupApi->getGroup(groupId); });
-    EXPECT_EQ(asUser2.statusCode, 0) << "the member seated first in the batch cannot climb";
+    EXPECT_EQ(errCode(asUser2), 0) << "the member seated first in the batch cannot climb";
     disconnect();
 
     connectAs(3);
     group::Group asUser3;
     ASSERT_NO_THROW({ asUser3 = groupApi->getGroup(groupId); });
-    EXPECT_EQ(asUser3.statusCode, 0) << "the member seated second in the batch cannot climb";
+    EXPECT_EQ(errCode(asUser3), 0) << "the member seated second in the batch cannot climb";
     disconnect();
     connectAs(1);
 }
@@ -249,7 +249,7 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_and_replaces_the_
     EXPECT_EQ(after.keyVersion, before.keyVersion + 1) << "a removal must advance the epoch";
     EXPECT_NE(after.groupPubKey, before.groupPubKey) << "a removal must mint a new grant key";
     EXPECT_EQ(std::find(after.users.begin(), after.users.end(), user(3).userId), after.users.end());
-    EXPECT_EQ(after.statusCode, 0) << "a remaining member cannot read the group it still belongs to";
+    EXPECT_EQ(errCode(after), 0) << "a remaining member cannot read the group it still belongs to";
 }
 
 TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_once_for_the_whole_batch) {
@@ -270,7 +270,7 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_once_for_the_whol
     EXPECT_NE(after.groupPubKey, before.groupPubKey) << "a removal must mint a new grant key";
     EXPECT_EQ(std::find(after.users.begin(), after.users.end(), user(2).userId), after.users.end());
     EXPECT_EQ(std::find(after.users.begin(), after.users.end(), user(3).userId), after.users.end());
-    EXPECT_EQ(after.statusCode, 0) << "the manager cannot read the group they still manage";
+    EXPECT_EQ(errCode(after), 0) << "the manager cannot read the group they still manage";
     disconnect();
 
     // Neither leaver climbs any more - a batch must not leave one of them holding a live path. The bridge may
@@ -279,7 +279,7 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_advances_the_epoch_once_for_the_whol
         connectAs(who);
         bool reads = false;
         try {
-            reads = groupApi->getGroup(groupId).statusCode == 0;
+            reads = errCode(groupApi->getGroup(groupId)) == 0;
         } catch (const core::Exception&) {
             reads = false;
         }
@@ -302,7 +302,7 @@ TEST_F(GroupKeyTreeTest, remaining_members_can_still_read_after_a_removal) {
     connectAs(2);
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    EXPECT_EQ(group.statusCode, 0) << "the refresh locked out a member who should have kept access";
+    EXPECT_EQ(errCode(group), 0) << "the refresh locked out a member who should have kept access";
     EXPECT_EQ(group.privateMeta.stdString(), "keytree_private");
     disconnect();
     connectAs(1);
@@ -362,7 +362,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_removed_member_cannot_read_content_written_a
         threw = true;
     }
     if (!threw) {
-        EXPECT_NE(message.statusCode, 0)
+        EXPECT_NE(errCode(message), 0)
             << "a removed member read content written after their removal";
         EXPECT_NE(message.data.stdString(), "data_after");
     }
@@ -407,20 +407,20 @@ TEST_F(GroupKeyTreeTest, SECURITY_two_groups_at_the_same_epoch_do_not_share_cach
     connectAs(2);
     thread::Message fromA;
     ASSERT_NO_THROW({ fromA = threadApi->getMessage(messageIdA); });
-    ASSERT_EQ(fromA.statusCode, 0);
+    ASSERT_EQ(errCode(fromA), 0);
     ASSERT_EQ(fromA.data.stdString(), "data_A");
 
     // Group A's epoch-1 key is cached now. Group B is also at epoch 1.
     thread::Message fromB;
     ASSERT_NO_THROW({ fromB = threadApi->getMessage(messageIdB); });
-    EXPECT_EQ(fromB.statusCode, 0)
+    EXPECT_EQ(errCode(fromB), 0)
         << "reading group B after group A returned group A's cached grant key for epoch 1";
     EXPECT_EQ(fromB.data.stdString(), "data_B");
 
     // And back again, so the fix cannot be an eviction that merely swaps which group is broken.
     thread::Message fromAAgain;
     ASSERT_NO_THROW({ fromAAgain = threadApi->getMessage(messageIdA); });
-    EXPECT_EQ(fromAAgain.statusCode, 0);
+    EXPECT_EQ(errCode(fromAAgain), 0);
     EXPECT_EQ(fromAAgain.data.stdString(), "data_A");
     disconnect();
     connectAs(1);
@@ -472,12 +472,12 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_leaves_the_same_session_able_to_read
 
     thread::Message after;
     ASSERT_NO_THROW({ after = threadApi->getMessage(afterId); });
-    EXPECT_EQ(after.statusCode, 0) << "the new epoch's grant key was not usable after the removal";
+    EXPECT_EQ(errCode(after), 0) << "the new epoch's grant key was not usable after the removal";
     EXPECT_EQ(after.data.stdString(), "data_after");
 
     thread::Message before;
     ASSERT_NO_THROW({ before = threadApi->getMessage(beforeId); });
-    EXPECT_EQ(before.statusCode, 0) << "the removal discarded the older epoch key the ladder descent needs";
+    EXPECT_EQ(errCode(before), 0) << "the removal discarded the older epoch key the ladder descent needs";
     EXPECT_EQ(before.data.stdString(), "data_before");
 }
 
@@ -501,13 +501,13 @@ TEST_F(GroupKeyTreeTest, reconnecting_rebuilds_the_key_cache_from_scratch) {
     connectAs(2);
     thread::Message first;
     ASSERT_NO_THROW({ first = threadApi->getMessage(messageId); });
-    ASSERT_EQ(first.statusCode, 0);
+    ASSERT_EQ(errCode(first), 0);
     disconnect();
 
     connectAs(2);
     thread::Message second;
     ASSERT_NO_THROW({ second = threadApi->getMessage(messageId); });
-    EXPECT_EQ(second.statusCode, 0) << "the cache was emptied on reconnect and the re-climb failed";
+    EXPECT_EQ(errCode(second), 0) << "the cache was emptied on reconnect and the re-climb failed";
     EXPECT_EQ(second.data.stdString(), "data_x");
     disconnect();
     connectAs(1);
@@ -585,7 +585,7 @@ TEST_F(GroupKeyTreeTest, a_remaining_member_reads_content_from_before_a_removal)
     connectAs(2);
     thread::Message message;
     ASSERT_NO_THROW({ message = threadApi->getMessage(oldMessageId); });
-    EXPECT_EQ(message.statusCode, 0) << "a remaining member lost the group's history at the removal";
+    EXPECT_EQ(errCode(message), 0) << "a remaining member lost the group's history at the removal";
     EXPECT_EQ(message.data.stdString(), "data_old");
     disconnect();
     connectAs(1);
@@ -622,7 +622,7 @@ TEST_F(GroupKeyTreeTest, a_newcomer_reads_history_that_predates_them) {
     connectAs(3);
     thread::Message message;
     ASSERT_NO_THROW({ message = threadApi->getMessage(oldMessageId); });
-    EXPECT_EQ(message.statusCode, 0)
+    EXPECT_EQ(errCode(message), 0)
         << "a newcomer could not descend the ladder to content that predates them";
     EXPECT_EQ(message.data.stdString(), "data_hist");
     disconnect();
@@ -664,7 +664,7 @@ TEST_F(GroupKeyTreeTest, several_removals_in_a_row_keep_the_whole_history_reacha
 
     thread::Message message;
     ASSERT_NO_THROW({ message = threadApi->getMessage(oldestId); });
-    EXPECT_EQ(message.statusCode, 0) << "the oldest message became unreachable after three epoch bumps";
+    EXPECT_EQ(errCode(message), 0) << "the oldest message became unreachable after three epoch bumps";
     EXPECT_EQ(message.data.stdString(), "oldest");
 }
 

@@ -125,8 +125,8 @@ TEST_F(InboxUsingGroupsTest, createInbox_with_group_grants) {
     group::Group group_1, group_2;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
+    ASSERT_EQ(errCode(group_2), 0);
     ASSERT_FALSE(group_1.groupPubKey.empty());
 
     // no grants
@@ -141,7 +141,7 @@ TEST_F(InboxUsingGroupsTest, createInbox_with_group_grants) {
     });
     ASSERT_FALSE(inboxId.empty());
     EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(i.statusCode, 0);
+    EXPECT_EQ(errCode(i), 0);
     EXPECT_EQ(i.groups.size(), 0);
 
     // one grant
@@ -154,7 +154,7 @@ TEST_F(InboxUsingGroupsTest, createInbox_with_group_grants) {
     });
     ASSERT_FALSE(inboxId.empty());
     EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(i.statusCode, 0);
+    EXPECT_EQ(errCode(i), 0);
     ASSERT_EQ(i.groups.size(), 1);
     EXPECT_EQ(i.groups[0].groupId, group_1.groupId);
     EXPECT_EQ(i.groups[0].role, "user");
@@ -181,7 +181,7 @@ TEST_F(InboxUsingGroupsTest, createInbox_with_group_grants) {
     });
     ASSERT_FALSE(inboxId.empty());
     EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(i.statusCode, 0);
+    EXPECT_EQ(errCode(i), 0);
     EXPECT_EQ(i.groups.size(), 2);
     bool found1 = false, found2 = false;
     for (const auto& g : i.groups) {
@@ -213,7 +213,7 @@ TEST_F(InboxUsingGroupsTest, createInbox_with_group_grants) {
 TEST_F(InboxUsingGroupsTest, updateInbox_add_and_promote_group) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     // an inbox that starts with no grantee group
     std::string inboxId;
@@ -249,7 +249,7 @@ TEST_F(InboxUsingGroupsTest, updateInbox_add_and_promote_group) {
     });
     inbox::Inbox updated;
     EXPECT_NO_THROW({ updated = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.publicMeta.stdString(), "after_group");
     ASSERT_EQ(updated.groups.size(), 1);
     EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
@@ -282,10 +282,10 @@ TEST_F(InboxUsingGroupsTest, updateInbox_add_and_promote_group) {
 TEST_F(InboxUsingGroupsTest, updateInbox_remove_group) {
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     // policy.get="all" so user_2 can always call getInbox without throwing; after group removal it
-    // receives statusCode!=0 and empty privateMeta because it no longer holds the decryption key.
+    // receives a set `error` and empty privateMeta because it no longer holds the decryption key.
     core::ContainerPolicyWithoutItem policy;
     policy.get = "all";
 
@@ -310,7 +310,7 @@ TEST_F(InboxUsingGroupsTest, updateInbox_remove_group) {
     connectAs(2);
     inbox::Inbox beforeRemoval;
     EXPECT_NO_THROW({ beforeRemoval = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(beforeRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(beforeRemoval), 0);
     EXPECT_FALSE(beforeRemoval.privateMeta.stdString().empty());
 
     disconnect();
@@ -333,21 +333,21 @@ TEST_F(InboxUsingGroupsTest, updateInbox_remove_group) {
 
     inbox::Inbox updated;
     EXPECT_NO_THROW({ updated = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.groups.size(), 0);
 
     disconnect();
     connectAs(2);
     inbox::Inbox afterRemoval;
     EXPECT_NO_THROW({ afterRemoval = inboxApi->getInbox(inboxId); });
-    EXPECT_NE(afterRemoval.statusCode, 0);
+    EXPECT_NE(errCode(afterRemoval), 0);
     EXPECT_TRUE(afterRemoval.privateMeta.stdString().empty());
 }
 
 TEST_F(InboxUsingGroupsTest, listInboxes_includes_groups_field) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string inboxId;
     ASSERT_NO_THROW({
@@ -369,7 +369,7 @@ TEST_F(InboxUsingGroupsTest, listInboxes_includes_groups_field) {
     bool found = false;
     for (const auto& i : list.readItems) {
         if (i.inboxId == inboxId) {
-            EXPECT_EQ(i.statusCode, 0);
+            EXPECT_EQ(errCode(i), 0);
             EXPECT_EQ(i.groups.size(), 1);
             if (i.groups.size() == 1) {
                 EXPECT_EQ(i.groups[0].groupId, group_1.groupId);
@@ -387,7 +387,7 @@ TEST_F(InboxUsingGroupsTest, readEntry_via_group_grant) {
     // inner Thread, which createInbox grants to the same group - so this read exercises that propagation.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string inboxId;
     ASSERT_NO_THROW({
@@ -410,7 +410,7 @@ TEST_F(InboxUsingGroupsTest, readEntry_via_group_grant) {
 
     inbox::InboxEntry entry;
     EXPECT_NO_THROW({ entry = inboxApi->readEntry(entryId); });
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
     EXPECT_EQ(entry.data.stdString(), "entry_data");
 }
 
@@ -428,13 +428,13 @@ TEST_F(InboxUsingGroupsTest, reads_through_a_group_grant) {
         inbox::Inbox i;
         EXPECT_NO_THROW({ i = inboxApi->getInbox(reader->getString("Inbox_4.inboxId")); })
             << "user_" << index << " could not open the inbox";
-        EXPECT_EQ(i.statusCode, 0);
+        EXPECT_EQ(errCode(i), 0);
         EXPECT_EQ(i.groups.size(), 2);
 
         inbox::InboxEntry entry;
         EXPECT_NO_THROW({ entry = inboxApi->readEntry(dataEntryId); })
             << "user_" << index << " could not read the entry";
-        EXPECT_EQ(entry.statusCode, 0);
+        EXPECT_EQ(errCode(entry), 0);
         EXPECT_EQ(entry.data.stdString(), data);
 
         // the paging path, which decrypts a batch rather than one row
@@ -447,7 +447,7 @@ TEST_F(InboxUsingGroupsTest, reads_through_a_group_grant) {
         });
         EXPECT_EQ(list.totalAvailable, 2);
         for (const auto& listed : list.readItems) {
-            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_EQ(errCode(listed), 0);
             EXPECT_FALSE(listed.data.stdString().empty());
         }
     }
@@ -457,7 +457,7 @@ TEST_F(InboxUsingGroupsTest, user_added_to_group_gains_access_to_inbox_and_entri
     // Group_2 has user_1 + user_2; user_3 is not yet a member.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string inboxId;
     ASSERT_NO_THROW({
@@ -481,7 +481,7 @@ TEST_F(InboxUsingGroupsTest, user_added_to_group_gains_access_to_inbox_and_entri
     connectAs(3);
     inbox::Inbox iBefore;
     EXPECT_NO_THROW({ iBefore = inboxApi->getInbox(inboxId); });
-    EXPECT_NE(iBefore.statusCode, 0);
+    EXPECT_NE(errCode(iBefore), 0);
 
     // Seat user_3's leaf in the key tree - a metadata write would only re-wrap the group's metadata key.
     disconnect();
@@ -497,11 +497,11 @@ TEST_F(InboxUsingGroupsTest, user_added_to_group_gains_access_to_inbox_and_entri
     connectAs(3);
     inbox::Inbox iAfter;
     EXPECT_NO_THROW({ iAfter = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(iAfter.statusCode, 0);
+    EXPECT_EQ(errCode(iAfter), 0);
 
     inbox::InboxEntry eAfter;
     EXPECT_NO_THROW({ eAfter = inboxApi->readEntry(entryId); });
-    EXPECT_EQ(eAfter.statusCode, 0);
+    EXPECT_EQ(errCode(eAfter), 0);
     EXPECT_EQ(eAfter.data.stdString(), "entry_data");
 }
 
@@ -510,7 +510,7 @@ TEST_F(InboxUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
     // `verifyKeysSecret` fails on any non-zero status, and updateInbox runs it once per inner container.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string inboxId;
     ASSERT_NO_THROW({
@@ -526,7 +526,7 @@ TEST_F(InboxUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 
     inbox::Inbox i;
     EXPECT_NO_THROW({ i = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(i.statusCode, 0);
+    EXPECT_EQ(errCode(i), 0);
     EXPECT_EQ(i.groups.size(), 1);
 
     std::string entryId;
@@ -534,7 +534,7 @@ TEST_F(InboxUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
     ASSERT_FALSE(entryId.empty());
     inbox::InboxEntry entry;
     EXPECT_NO_THROW({ entry = inboxApi->readEntry(entryId); });
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
     EXPECT_EQ(entry.data.stdString(), "direct_data");
 
     EXPECT_NO_THROW({
@@ -557,7 +557,7 @@ TEST_F(InboxUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 
     inbox::Inbox updated;
     EXPECT_NO_THROW({ updated = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.privateMeta.stdString(), "direct_updated_private");
 }
 
@@ -569,13 +569,13 @@ TEST_F(InboxUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
 
     inbox::Inbox i;
     EXPECT_NO_THROW({ i = inboxApi->getInbox(reader->getString("Inbox_5.inboxId")); });
-    EXPECT_EQ(i.statusCode, 0);
+    EXPECT_EQ(errCode(i), 0);
     // `groups` stays unnarrowed, so user_2 still sees the grant it is not part of.
     EXPECT_EQ(i.groups.size(), 1);
 
     inbox::InboxEntry entry;
     EXPECT_NO_THROW({ entry = inboxApi->readEntry(reader->getString("Entry_5.entryId")); });
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
     EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("Entry_5.data_inHex")));
 }
 
@@ -584,7 +584,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_covers_a_grantee_group_the_caller_d
     // caller must be in that group: the default group policy hands a group's epoch and key to members only.
     group::Group granteeGroup;
     ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(granteeGroup.statusCode, 0);
+    ASSERT_EQ(errCode(granteeGroup), 0);
 
     std::string inboxId;
     ASSERT_NO_THROW({
@@ -600,7 +600,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_covers_a_grantee_group_the_caller_d
 
     inbox::Inbox before;
     ASSERT_NO_THROW({ before = inboxApi->getInbox(inboxId); });
-    ASSERT_EQ(before.statusCode, 0);
+    ASSERT_EQ(errCode(before), 0);
 
     disconnect();
     connectAs(2);
@@ -623,7 +623,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_covers_a_grantee_group_the_caller_d
     connectAs(1);
     inbox::Inbox after;
     EXPECT_NO_THROW({ after = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(errCode(after), 0);
     EXPECT_EQ(after.groups.size(), 1);
     if (after.groups.size() == 1) {
         EXPECT_EQ(after.groups[0].groupId, granteeGroup.groupId);
@@ -636,7 +636,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_covers_a_grantee_group_the_caller_d
     ASSERT_FALSE(entryId.empty());
     inbox::InboxEntry entry;
     EXPECT_NO_THROW({ entry = inboxApi->readEntry(entryId); });
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
     EXPECT_EQ(entry.data.stdString(), "post_rekey_data");
 }
 
@@ -661,7 +661,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
 
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
     ASSERT_EQ(group.keyVersion, 1);
 
     std::string inboxId;
@@ -685,12 +685,12 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
 
     group::Group rotatedGroup;
     ASSERT_NO_THROW({ rotatedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(rotatedGroup.statusCode, 0);
+    ASSERT_EQ(errCode(rotatedGroup), 0);
     ASSERT_EQ(rotatedGroup.keyVersion, 2);
 
     inbox::Inbox stale;
     ASSERT_NO_THROW({ stale = inboxApi->getInbox(inboxId); });
-    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(errCode(stale), 0);
     EXPECT_EQ(stale.staleGroups.size(), 1);
     if (stale.staleGroups.size() == 1) {
         EXPECT_EQ(stale.staleGroups[0], groupId);
@@ -709,7 +709,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
 
     inbox::Inbox fresh;
     EXPECT_NO_THROW({ fresh = inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(fresh.statusCode, 0);
+    EXPECT_EQ(errCode(fresh), 0);
     EXPECT_EQ(fresh.staleGroups.size(), 0);
     EXPECT_EQ(fresh.groups.size(), 1);
 
@@ -719,6 +719,6 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
     connectAs(2);
     inbox::InboxEntry oldEpochEntry;
     EXPECT_NO_THROW({ oldEpochEntry = inboxApi->readEntry(oldEpochEntryId); });
-    EXPECT_EQ(oldEpochEntry.statusCode, 0);
+    EXPECT_EQ(errCode(oldEpochEntry), 0);
     EXPECT_EQ(oldEpochEntry.data.stdString(), "old_epoch_data");
 }

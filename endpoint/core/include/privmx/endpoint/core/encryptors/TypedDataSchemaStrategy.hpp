@@ -32,9 +32,9 @@ public:
     ) const override final {
         try {
             return convert(model, decrypt(model, encKey, verifiedDio));
-        } catch (const core::Exception& e) { return makeErrorResult(model, e.getCode()); } catch (...) {
-            return makeErrorResult(model, ENDPOINT_CORE_EXCEPTION_CODE);
-        }
+        } catch (const core::Exception& e) {
+            return makeErrorResult(model, toPublicError(e));
+        } catch (...) { return makeErrorResult(model, toPublicError(*unknownError("decrypting the item"))); }
     }
 
     virtual TRawData decrypt(const TServerModel& model, const DecryptedEncKey& encKey) const = 0;
@@ -49,7 +49,7 @@ public:
         return decrypt(model, encKey);
     }
     virtual TDomainObject convert(const TServerModel& model, const TRawData& raw) const = 0;
-    virtual TDomainObject makeErrorResult(const TServerModel& model, int64_t errorCode) const = 0;
+    virtual TDomainObject makeErrorResult(const TServerModel& model, const std::optional<Error>& error) const = 0;
 };
 
 } // namespace core

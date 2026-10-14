@@ -29,12 +29,13 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaStrategyV5::convert(
 ) const {
     return {
         KvdbDataSchemaMapper::toLibKvdb(
-            kvdb, raw.publicMeta, raw.privateMeta, raw.statusCode(), KvdbDataSchema::Version::VERSION_5
+            kvdb, raw.publicMeta, raw.privateMeta, core::toPublicError(raw.error), KvdbDataSchema::Version::VERSION_5
         ),
         raw.dio
     };
 }
 
-Kvdb KvdbDataSchemaStrategyV5::toLibError(const server::KvdbInfo& kvdb, int64_t errorCode) const {
-    return KvdbDataSchemaMapper::toLibKvdb(kvdb, {}, {}, errorCode, KvdbDataSchema::Version::VERSION_5);
+Kvdb KvdbDataSchemaStrategyV5::toLibError(const server::KvdbInfo& kvdb, const std::optional<core::Error>& error)
+    const {
+    return KvdbDataSchemaMapper::toLibKvdb(kvdb, {}, {}, error, KvdbDataSchema::Version::VERSION_5);
 }

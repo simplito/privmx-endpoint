@@ -45,14 +45,14 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(
     const std::string& remoteStreamId,
     const core::Buffer& encryptedData
 ) {
-    DecryptedDataChannelMessage result = {core::Buffer(), 0, 0};
+    DecryptedDataChannelMessage result = {{core::Buffer(), 0}, std::nullopt};
     try {
         assertData(encryptedData);
     } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
+        result.error = core::toPublicError(e);
         return result;
     } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        result.error = core::toPublicError(*core::unknownError("checking the data channel message"));
         return result;
     }
     auto parsedEncryptedMessage = parseEncryptedMessage(encryptedData.stdString());
@@ -67,9 +67,9 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(
             )
         );
         updateSeq(remoteStreamId, parsedEncryptedMessage.header.seq);
-    } catch (const privmx::endpoint::core::Exception& e) { result.statusCode = e.getCode(); } catch (...) {
-        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
-    }
+    } catch (const privmx::endpoint::core::Exception& e) {
+        result.error = core::toPublicError(e);
+    } catch (...) { result.error = core::toPublicError(*core::unknownError("decrypting the data channel message")); }
     return result;
 }
 

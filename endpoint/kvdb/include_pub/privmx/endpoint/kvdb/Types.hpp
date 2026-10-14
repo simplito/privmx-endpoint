@@ -84,9 +84,9 @@ struct Kvdb {
     core::ContainerPolicy policy;
 
     /**
-     * Retrieval and decryption status code
+     * Set when retrieval or decryption failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 
     /**
      * Version of the Kvdb data structure and how it is encoded/encrypted
@@ -167,9 +167,9 @@ struct KvdbEntry {
     int64_t version;
 
     /**
-     * Retrieval and decryption status code
+     * Set when retrieval or decryption failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 
     /**
      * Version of the Entry data structure and how it is encoded/encrypted
