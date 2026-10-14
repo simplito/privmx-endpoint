@@ -19,6 +19,8 @@
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
+#include <privmx/endpoint/group/GroupApiImpl.hpp>
+#include <privmx/endpoint/group/keytree/LadderMath.hpp>
 #include <privmx/endpoint/thread/ServerApi.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 
@@ -1368,4 +1370,36 @@ TEST_F(
     EXPECT_TRUE(contains(after.users, newcomer.userId)) << "the removal did not extend user_3's addition";
     EXPECT_FALSE(contains(after.users, user(2).userId));
     EXPECT_FALSE(contains(after.users, stranger.userId));
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, ladder_a_removal_leaves_a_ladder_that_needs_no_repair) {
+    // user_2 stays online across three removals and reads after each, so it holds both keys of every new epoch and
+    // checks its rungs in the background. An honest remover's rungs open: nothing gets repaired, and every stored
+    // rung is the remover's.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
+    auto online = connect(2);
+    privmx::test::ScopeExit closeIt([&] { online->disconnect(); });
+    auto onlineGroups = group::GroupApi::create(*online);
+    ASSERT_NO_THROW({ onlineGroups.getImpl()->resolveGroupPrivKey(groupId); });
+    for (int round = 0; round < 3; ++round) {
+        if (round > 0) {
+            ASSERT_NO_THROW({ groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}}); });
+        }
+        ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); });
+        ASSERT_NO_THROW({ onlineGroups.getImpl()->resolveGroupPrivKey(groupId); });
+    }
+    // Two background windows of a small group (1 s each), so every check has run.
+    std::this_thread::sleep_for(std::chrono::milliseconds(2500));
+    group::server::GroupGetKeyArchiveModel model;
+    model.id = groupId;
+    const auto rungs = group::ServerApi(connection->getImpl()->getGateway()).groupGetKeyArchive(model).rungs;
+    std::size_t owed = 0;
+    for (std::uint32_t epoch = 2; epoch <= 4; ++epoch) {
+        owed += group::keytree::LadderMath::rungSpansFor(epoch, 1).size();
+    }
+    EXPECT_EQ(rungs.size(), owed) << "a repair was sent for a ladder that needed none";
+    for (const auto& rung : rungs) {
+        EXPECT_EQ(rung.author, std::optional<std::string>(user(1).userId));
+    }
 }
