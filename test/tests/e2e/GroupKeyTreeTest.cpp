@@ -717,6 +717,122 @@ TEST_F(GroupKeyTreeTest, several_removals_in_a_row_keep_the_whole_history_reacha
     EXPECT_EQ(message.data.stdString(), "oldest");
 }
 
+// -- rotation without a membership change (T3-27) --
+
+TEST_F(GroupKeyTreeTest, a_one_member_group_rotates_and_still_reads_its_history) {
+    // The one-leaf tree's root is the member's own leaf: the new grant key goes straight to the member's key. Its
+    // history stays readable through the rung down to epoch 1, to the member and to whoever joins later.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({}); });
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
+    ASSERT_EQ(before.users, std::vector<std::string>{user(1).userId});
+
+    std::string threadId;
+    ASSERT_NO_THROW({ threadId = createThreadGrantedTo(before); });
+    std::string oldMessageId;
+    ASSERT_NO_THROW({
+        oldMessageId = threadApi->sendMessage(
+            threadId, core::Buffer::from("p"), core::Buffer::from("p"), core::Buffer::from("before_rotation")
+        );
+    });
+
+    ASSERT_NO_THROW({ groupApi->rotateGroupKey(groupId); });
+
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0) << "the sole member cannot read its own rotated group";
+    EXPECT_EQ(after.keyVersion, 2);
+    EXPECT_NE(after.groupPubKey, before.groupPubKey) << "a rotation must mint a new grant key";
+    EXPECT_EQ(after.users, before.users);
+    EXPECT_EQ(after.privateMeta.stdString(), "keytree_private");
+
+    thread::Message message;
+    ASSERT_NO_THROW({ message = threadApi->getMessage(oldMessageId); });
+    EXPECT_EQ(message.statusCode, 0) << "the rotation cut the member off its own history";
+    EXPECT_EQ(message.data.stdString(), "before_rotation");
+
+    ASSERT_NO_THROW({
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(2), .role = "user"}});
+    });
+    disconnect();
+    connectAs(2);
+    group::Group seen;
+    ASSERT_NO_THROW({ seen = groupApi->getGroup(groupId); });
+    EXPECT_EQ(seen.statusCode, 0) << "a newcomer cannot read a group grown out of a rotated one-member group";
+    EXPECT_EQ(seen.keyVersion, 2) << "an addition advances no epoch";
+    ASSERT_NO_THROW({ message = threadApi->getMessage(oldMessageId); });
+    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(message.data.stdString(), "before_rotation");
+    disconnect();
+    connectAs(1);
+}
+
+TEST_F(GroupKeyTreeTest, rotateGroupKey_advances_the_epoch_for_the_same_members) {
+    // n >= 2: the new grant key goes to the unchanged root. Granted containers go stale, as after a removal, and
+    // are re-keyed by the next write of somebody allowed to; the history stays readable across the rotation and a
+    // removal after it.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
+    group::Group before;
+    ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
+    std::string threadId;
+    ASSERT_NO_THROW({ threadId = createThreadGrantedTo(before); });
+    std::string oldMessageId;
+    ASSERT_NO_THROW({
+        oldMessageId = threadApi->sendMessage(
+            threadId, core::Buffer::from("p"), core::Buffer::from("p"), core::Buffer::from("epoch_one")
+        );
+    });
+
+    ASSERT_NO_THROW({ groupApi->rotateGroupKey(groupId); });
+
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(after.keyVersion, 2);
+    EXPECT_NE(after.groupPubKey, before.groupPubKey);
+    EXPECT_EQ(after.users, before.users) << "a rotation removes nobody";
+    thread::Thread stale;
+    ASSERT_NO_THROW({ stale = threadApi->getThread(threadId); });
+    EXPECT_EQ(stale.staleGroups.size(), 1) << "a granted container is not staled by the rotation";
+    ASSERT_NO_THROW({
+        threadApi->sendMessage(threadId, core::Buffer::from("p"), core::Buffer::from("p"), core::Buffer::from("epoch_two"));
+    });
+    thread::Thread rekeyed;
+    ASSERT_NO_THROW({ rekeyed = threadApi->getThread(threadId); });
+    EXPECT_TRUE(rekeyed.staleGroups.empty()) << "the write did not re-key the container onto the new epoch";
+
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); });
+    disconnect();
+    connectAs(2);
+    group::Group seen;
+    ASSERT_NO_THROW({ seen = groupApi->getGroup(groupId); });
+    EXPECT_EQ(seen.statusCode, 0);
+    EXPECT_EQ(seen.keyVersion, 3);
+    thread::Message message;
+    ASSERT_NO_THROW({ message = threadApi->getMessage(oldMessageId); });
+    EXPECT_EQ(message.statusCode, 0) << "a member lost the history from before the rotation";
+    EXPECT_EQ(message.data.stdString(), "epoch_one");
+    disconnect();
+    connectAs(1);
+}
+
+TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_rotate_the_group_key) {
+    // A rotation stales every container granted to the group: the `rotateKeys` policy (managers, by default) gates
+    // it on the bridge, whatever a member can compute.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
+    disconnect();
+    connectAs(2);
+    EXPECT_THROW({ groupApi->rotateGroupKey(groupId); }, core::Exception) << "a non-manager rotated the group key";
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.keyVersion, 1) << "nothing was committed";
+    disconnect();
+    connectAs(1);
+}
+
 // -- rejections the server owes us --
 
 TEST_F(GroupKeyTreeTest, addGroupMembers_rejects_somebody_already_in_the_group) {

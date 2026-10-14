@@ -573,8 +573,6 @@ bool GroupApiImpl::removeGroupMembersOnce(
     if (std::find(userIds.begin(), userIds.end(), self) != userIds.end()) {
         throw core::InvalidParamsException("a member cannot remove themselves from a group");
     }
-    const auto& currentEntry = currentGroup.data.back();
-    const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
     const int64_t currentEpoch = currentGroup.keyVersion;
     const int64_t newEpoch = currentEpoch + 1;
     const int64_t newRosterVersion = currentGroup.rosterVersion + 1;
@@ -630,6 +628,53 @@ bool GroupApiImpl::removeGroupMembersOnce(
     drop(roster.users);
     drop(roster.managers);
 
+    const std::string newGroupPubKeyStr = plan.grantKey.getPublicKey().toBase58DER();
+    const NewEpochRoster sealed = sealRosterForNewEpoch(
+        currentGroup, roster, newGroupPubKeyStr, newEpoch, newRosterVersion, abandonHistory
+    );
+
+    // Seats come from the plan, which resolved them from the roster the bridge served. `subjectLeafPositions`
+    // carries the same answer; keeping the plan as the single source stops the two from ever disagreeing.
+    server::GroupRemoveMembersModel model;
+    model.id = groupId;
+    model.userIds = userIds;
+    model.groupPubKey = newGroupPubKeyStr;
+    model.keyId = sealed.keyId;
+    model.data = sealed.data;
+    model.transition = keytree::TreeWire::toRemovalTransition(plan, currentEpoch);
+    keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
+        plan, keytree::CommitOp::Remove, groupId, commitDate(), static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr,
+        static_cast<std::uint64_t>(newRosterVersion), core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+        core::EndpointUtils::usersWithPubKeyToIds(roster.managers), removerId, {}, {}, userIds
+    );
+    chainTo(statement, currentGroup);
+    keytree::TreeCommits::sign(statement, _userPrivKey);
+    model.commit = keytree::TreeCommits::toWire(statement);
+    model.rungs = keytree::TreeWire::toWire(rungs);
+    if (abandonHistory) {
+        model.abandonHistory = true;
+    }
+    model.groupKeys = sealed.groupKeys;
+    model.expectedKeyVersion = currentEpoch;
+    model.expectedRosterVersion = currentGroup.rosterVersion;
+
+    submit(groupId, statement, [&] { _serverApi.groupRemoveMembers(model); });
+    // Pinned before anything reads the group again, or the next read could be the state with the leaver still in.
+    adoptCommittedEpoch(currentGroup, statement, roster, plan.grantKey, *cache);
+    return abandonHistory;
+}
+
+GroupApiImpl::NewEpochRoster GroupApiImpl::sealRosterForNewEpoch(
+    const server::GroupInfo& currentGroup,
+    const RosterAfterChange& roster,
+    const std::string& newGroupPubKeyStr,
+    int64_t newEpoch,
+    int64_t newRosterVersion,
+    bool abandonHistory
+) {
+    const std::string& groupId = currentGroup.id;
+    const auto& currentEntry = currentGroup.data.back();
+    const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
     // Nothing old may stay readable once history is abandoned, and the old key and secret cannot be opened anyway:
     // both start fresh, as at creation.
     auto ctx = abandonHistory ?
@@ -643,7 +688,6 @@ bool GroupApiImpl::removeGroupMembersOnce(
         prepareContainerUpdateWithoutKeyEntries(
             currentGroup, currentEntry, resourceId, roster.users, roster.managers, true
         );
-    const std::string newGroupPubKeyStr = plan.grantKey.getPublicKey().toBase58DER();
     const auto selfAddressedKey = buildGroupKeyEntries(
         {core::GroupGrantWithKey{
             .groupId = groupId,
@@ -665,43 +709,104 @@ bool GroupApiImpl::removeGroupMembersOnce(
         )
     };
 
-    // Seats come from the plan, which resolved them from the roster the bridge served. `subjectLeafPositions`
-    // carries the same answer; keeping the plan as the single source stops the two from ever disagreeing.
-    server::GroupRemoveMembersModel model;
+    return NewEpochRoster{
+        .keyId = ctx.key.id,
+        .data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key),
+        .groupKeys = selfAddressedKey.at(0)
+    };
+}
+
+void GroupApiImpl::adoptCommittedEpoch(
+    const server::GroupInfo& currentGroup,
+    const keytree::CommitStatement& statement,
+    const RosterAfterChange& roster,
+    const privmx::crypto::PrivateKey& grantKey,
+    keytree::TreeKeyCache& cache
+) {
+    _treeVerifier.pinCommitted(
+        currentGroup.id, currentGroup.contextId, statement, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+        core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
+    );
+    cache.putGrantKey(static_cast<std::uint32_t>(statement.keyVersion), grantKey);
+    // Minted here and accepted at exactly this epoch (the CAS), so it is the epoch's published key: the metadata
+    // refresh that follows opens it without a read.
+    _epochKeys.set(memoKeyFor(currentGroup.id, std::to_string(statement.keyVersion)), grantKey);
+    invalidateModuleKeysInCache(currentGroup.id);
+}
+
+void GroupApiImpl::rotateGroupKey(const std::string& groupId) {
+    MetaPlanes planesBefore;
+    commitWithRetry([&] { rotateGroupKeyOnce(groupId, planesBefore); });
+    // As after a removal: the metadata planes sit one epoch behind, under the key the rotation replaces. Nobody left,
+    // so nobody is accepted as an author beyond the members.
+    refreshMetadataEpochAfterRemoval(groupId, false, {}, planesBefore);
+}
+
+void GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& planesBefore) {
+    // Every record, because the statement signs the tree hash, which a rotation leaves as it is.
+    server::GroupGetModel getModel{
+        .groupId = groupId,
+        .type = {},
+        .scope = std::string("plan"),
+        .forUserIds = {},
+        .forNewMembers = {},
+        .fromRosterVersion = {}
+    };
+    auto currentGroup = _serverApi.groupGet(getModel).group;
+    verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+    planesBefore = MetaPlanes{currentGroup.publicMeta, currentGroup.privateMeta};
+    const int64_t currentEpoch = currentGroup.keyVersion;
+    const int64_t newEpoch = currentEpoch + 1;
+    const int64_t newRosterVersion = currentGroup.rosterVersion + 1;
+
+    // Unlike a removal, a rotation never abandons history: the point is a new key for the same members, and the
+    // climb (a verified root key and the current grant key) is what the rungs down to the old epochs are made from.
+    const auto cache = _treeKeyCaches.get(groupId);
+    const keytree::TreeGroupState state = climbForPlanning(currentGroup, cache);
+    const auto currentGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(currentEpoch));
+    if (!currentGrantKey.has_value() || currentGrantKey->getPublicKey().toBase58DER() != currentGroup.groupPubKey) {
+        throw core::EncryptionKeyValidationException("rotating the group key needs the current grant key");
+    }
+    const auto [attestedUsers, attestedManagers] =
+        _groupDataSchemaMapper->validateAndGetAttestedRoster(currentGroup, _keyProvider, _groupPrivKeyResolver);
+    keytree::TreeVerifier::assertSeatsMatchRoster(currentGroup, attestedUsers, attestedManagers);
+    const std::string rotatorId = keytree::GroupKeyResolver::ownUserId(currentGroup).value();
+
+    keytree::TreeKeys tree(*cache);
+    const keytree::CommitPlan plan = planOrThrow<keytree::CommitPlan>([&] {
+        return tree.planRotation(state, rotatorId, _userPrivKey);
+    });
+    const std::vector<keytree::ArchiveRung> rungs = buildRotationRungs(
+        currentGroup, static_cast<std::uint32_t>(newEpoch), plan.grantKey.getPublicKey(), currentGrantKey, rotatorId,
+        *cache
+    );
+    const RosterAfterChange roster = rosterFromUserIds(attestedUsers, attestedManagers);
+    const std::string newGroupPubKeyStr = plan.grantKey.getPublicKey().toBase58DER();
+    const NewEpochRoster sealed = sealRosterForNewEpoch(
+        currentGroup, roster, newGroupPubKeyStr, newEpoch, newRosterVersion, false
+    );
+
+    server::GroupGenerateNewKeyModel model;
     model.id = groupId;
-    model.userIds = userIds;
     model.groupPubKey = newGroupPubKeyStr;
-    model.keyId = ctx.key.id;
-    model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
-    model.transition = keytree::TreeWire::toRemovalTransition(plan, currentEpoch);
+    model.keyId = sealed.keyId;
+    model.data = sealed.data;
+    model.grantEdge = keytree::TreeWire::toWire(plan.edges.at(0));
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
-        plan, keytree::CommitOp::Remove, groupId, commitDate(), static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr,
-        static_cast<std::uint64_t>(newRosterVersion), core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-        core::EndpointUtils::usersWithPubKeyToIds(roster.managers), removerId, {}, {}, userIds
+        plan, keytree::CommitOp::Rotate, groupId, commitDate(), static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr,
+        static_cast<std::uint64_t>(newRosterVersion), attestedUsers, attestedManagers, rotatorId, {}, {}, {}
     );
     chainTo(statement, currentGroup);
     keytree::TreeCommits::sign(statement, _userPrivKey);
     model.commit = keytree::TreeCommits::toWire(statement);
     model.rungs = keytree::TreeWire::toWire(rungs);
-    if (abandonHistory) {
-        model.abandonHistory = true;
-    }
-    model.groupKeys = selfAddressedKey.at(0);
+    model.groupKeys = sealed.groupKeys;
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
 
-    submit(groupId, statement, [&] { _serverApi.groupRemoveMembers(model); });
-    // Pinned before anything reads the group again, or the next read could be the state with the leaver still in.
-    _treeVerifier.pinCommitted(
-        groupId, currentGroup.contextId, statement, core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-        core::EndpointUtils::usersWithPubKeyToIds(roster.managers)
-    );
-    cache->putGrantKey(static_cast<std::uint32_t>(newEpoch), plan.grantKey);
-    // Minted here and accepted at exactly this epoch (the CAS above), so it is the epoch's published key: the
-    // metadata refresh that follows opens it without a read.
-    _epochKeys.set(memoKeyFor(groupId, std::to_string(newEpoch)), plan.grantKey);
-    invalidateModuleKeysInCache(groupId);
-    return abandonHistory;
+    submit(groupId, statement, [&] { _serverApi.groupGenerateNewKey(model); });
+    // Pinned before anything reads the group again: the state under the replaced key is refused from here on.
+    adoptCommittedEpoch(currentGroup, statement, roster, plan.grantKey, *cache);
 }
 
 void GroupApiImpl::commitWithRetry(const std::function<void()>& attempt) {

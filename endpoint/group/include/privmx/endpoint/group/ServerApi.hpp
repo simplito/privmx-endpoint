@@ -28,6 +28,7 @@ public:
     void groupAddMembers(server::GroupAddMembersModel model);
     void groupRemoveMembers(server::GroupRemoveMembersModel model);
     void groupSelfUpdate(server::GroupSelfUpdateModel model);
+    void groupGenerateNewKey(server::GroupGenerateNewKeyModel model);
     server::GroupGetTreeCommitsResult groupGetTreeCommits(server::GroupGetTreeCommitsModel model);
     void groupCutEra(server::GroupCutEraModel model);
     void groupPruneArchive(server::GroupPruneArchiveModel model);

@@ -61,13 +61,15 @@ public:
 
     void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
+    void rotateGroupKey(const std::string& groupId);
+
     // Both metadata planes as a removal read them, before it committed.
     struct MetaPlanes {
         server::GroupMetaEntry publicMeta;
         server::GroupMetaEntry privateMeta;
     };
 
-    // Called after a removal commits, never as part of it: an entry left at epoch N is still openable and
+    // Called after a removal (or a rotation) commits, never as part of it: an entry left at epoch N is still openable and
     // re-taggable by the removed member, and best-effort here keeps the removal's own write single-plane. After a
     // removal that abandoned history no plane behind can be read, so it is started over, empty. `removed` are
     // accepted as the planes' authors only for entries exactly as in `planesBefore`: written while they were members.
@@ -290,6 +292,36 @@ private:
         const std::vector<std::string>& userIds,
         MetaPlanes& planesBefore
     );
+    // `planesBefore` is what the attempt read, for `refreshMetadataEpochAfterRemoval`.
+    void rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& planesBefore);
+
+    // What a commit opening a new epoch publishes beside the tree, shared by removal and rotation: the roster under a
+    // fresh metadata key (a key never used before once history is abandoned), and that key wrapped once to the new
+    // grant key.
+    struct NewEpochRoster {
+        std::string keyId;
+        Poco::Dynamic::Var data;
+        core::server::GroupKeyEntrySet groupKeys;
+    };
+    NewEpochRoster sealRosterForNewEpoch(
+        const server::GroupInfo& currentGroup,
+        const RosterAfterChange& roster,
+        const std::string& newGroupPubKeyStr,
+        int64_t newEpoch,
+        int64_t newRosterVersion,
+        bool abandonHistory
+    );
+
+    // After this client's commit opened `statement.keyVersion`: pins it before anything reads the group again (the
+    // state it replaced is refused from then on) and keeps the new grant key, the epoch's published one.
+    void adoptCommittedEpoch(
+        const server::GroupInfo& currentGroup,
+        const keytree::CommitStatement& statement,
+        const RosterAfterChange& roster,
+        const privmx::crypto::PrivateKey& grantKey,
+        keytree::TreeKeyCache& cache
+    );
+
     static void commitWithRetry(const std::function<void()>& attempt);
     static bool isRetryableCommitRejection(const privmx::utils::PrivmxException& e);
 

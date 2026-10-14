@@ -320,6 +320,21 @@ JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
     F(abandonHistory, std::optional<bool>)
 JSON_STRUCT(GroupRemoveMembersModel, GROUP_REMOVE_MEMBERS_MODEL_FIELDS);
 
+// Advances the epoch without removing anybody: a fresh grant key on the one grant edge (to the unchanged root, or
+// to the sole member of a one-leaf tree), the rungs down to the old epochs, and the roster republished under it.
+#define GROUP_GENERATE_NEW_KEY_MODEL_FIELDS(F)                                                                         \
+    F(id, std::string)                                                                                                 \
+    F(groupPubKey, std::string)                                                                                        \
+    F(data, Poco::Dynamic::Var)                                                                                        \
+    F(keyId, std::string)                                                                                              \
+    F(grantEdge, GroupTreeEdge)                                                                                        \
+    F(commit, GroupTreeCommit)                                                                                         \
+    F(rungs, std::vector<GroupArchiveRung>)                                                                            \
+    F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
+    F(expectedKeyVersion, int64_t)                                                                                     \
+    F(expectedRosterVersion, int64_t)
+JSON_STRUCT(GroupGenerateNewKeyModel, GROUP_GENERATE_NEW_KEY_MODEL_FIELDS);
+
 // Refills the caller's own keyed path: no epoch change, no roster change, nothing for anybody else to notice.
 #define GROUP_SELF_UPDATE_MODEL_FIELDS(F)                                                                              \
     F(id, std::string)                                                                                                 \

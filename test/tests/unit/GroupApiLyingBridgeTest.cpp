@@ -77,6 +77,22 @@ struct Bridge {
         return info;
     }
 
+    // The roster entry, history and self-addressed metadata key a removal or a rotation publishes for its epoch.
+    template<typename Model>
+    void storeNewEpoch(const std::string& caller, const Model& model) {
+        server::GroupDataEntry head;
+        head.keyId = model.keyId;
+        head.data = model.data;
+        rest.data.push_back(head);
+        rest.history.push_back(
+            {model.keyId, model.groupPubKey, privmx::utils::Utils::getNowTimestamp(), caller, tree.rosterVersion,
+             static_cast<int64_t>(tree.state.epoch)}
+        );
+        rest.groupKeys->at(0).keys.push_back(
+            {.keyId = model.groupKeys->keyId, .data = model.groupKeys->data, .groupEpoch = model.groupKeys->groupEpoch}
+        );
+    }
+
     Poco::Dynamic::Var answer(const std::string& caller, const std::string& method, Poco::JSON::Object::Ptr params) {
         const std::string group = method.substr(std::string("context.").size());
         if (method == "context.contextGet") {
@@ -164,18 +180,14 @@ struct Bridge {
                 CommitOp::Remove, caller, model.userIds, {}, model.transition.refreshedNodes,
                 model.transition.edges, PublicKey::fromBase58DER(model.groupPubKey), model.commit
             );
-            server::GroupDataEntry head;
-            head.keyId = model.keyId;
-            head.data = model.data;
-            rest.data.push_back(head);
-            rest.history.push_back(
-                {model.keyId, model.groupPubKey, privmx::utils::Utils::getNowTimestamp(), caller,
-                 tree.rosterVersion, static_cast<int64_t>(tree.state.epoch)}
-            );
-            rest.groupKeys->at(0).keys.push_back(
-                {.keyId = model.groupKeys->keyId, .data = model.groupKeys->data, .groupEpoch = model.groupKeys->groupEpoch}
-            );
+            storeNewEpoch(caller, model);
             afterRemoval();
+            return Poco::Dynamic::Var();
+        }
+        if (group == "groupGenerateNewKey") {
+            const auto model = server::GroupGenerateNewKeyModel::fromJSON(params);
+            tree.rotate(caller, model.grantEdge, PublicKey::fromBase58DER(model.groupPubKey), model.commit);
+            storeNewEpoch(caller, model);
             return Poco::Dynamic::Var();
         }
         if (group == "groupUpdatePublicMeta" || group == "groupUpdatePrivateMeta") {
@@ -676,4 +688,45 @@ TEST_F(GroupApiLyingBridge, SECURITY_ConcurrentFinishesCloseAFileHandleOnce) {
         ASSERT_EQ(envelopes.load(), 1) << "iteration " << iteration;
         ASSERT_EQ(refused.load(), 1) << "iteration " << iteration;
     }
+}
+
+TEST_F(GroupApiLyingBridge, AOneMemberGroupRotatesOntoItsMembersOwnKeyAndReadsBack) {
+    // T3-27: the one-leaf root is alice's own leaf, so the new grant key is wrapped to her own key; her metadata is
+    // carried up to the new epoch, and a fresh client of hers, with nothing cached, reads the group.
+    const std::string groupId = createGroup({"alice"});
+    const std::string before = bridge.tree.state.grantPublicKey.toBase58DER();
+    client("alice").rotateGroupKey(groupId);
+    ASSERT_EQ(bridge.tree.state.epoch, 2u);
+    EXPECT_NE(bridge.tree.state.grantPublicKey.toBase58DER(), before);
+    ASSERT_EQ(bridge.tree.state.edges.size(), 1u);
+    EXPECT_EQ(edgeIdentity(bridge.tree.state.edges[0]), "grant@2>user:alice");
+    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2) << "the metadata stayed under the replaced key";
+    clients.erase("alice");
+    const Group group = client("alice").getGroup(groupId);
+    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(group.keyVersion, 2);
+    EXPECT_EQ(group.privateMeta.stdString(), "private");
+}
+
+TEST_F(GroupApiLyingBridge, ARotationOfALargerGroupIsReadByEveryMember) {
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("alice").rotateGroupKey(groupId);
+    ASSERT_EQ(bridge.tree.state.epoch, 2u);
+    for (const std::string id : {"bob", "carol"}) {
+        const Group group = client(id).getGroup(groupId);
+        EXPECT_EQ(group.statusCode, 0) << id;
+        EXPECT_EQ(group.keyVersion, 2) << id;
+    }
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARotationIsNotPlannedOnAStateRolledBackBelowThePin) {
+    // The new grant key goes to the root the bridge serves: planned only on a state verified against the pin, or a
+    // rolled-back root (a key a since-removed member may hold) would receive it.
+    const std::string groupId = createGroup({"alice", "bob"});
+    const Bridge atSeq1 = bridge;
+    selfUpdateBy("bob");
+    client("alice").resolveGroupPrivKey(groupId); // reads seq 2, pins it
+    bridge.tree = atSeq1.tree;
+    EXPECT_THROW(client("alice").rotateGroupKey(groupId), GroupHistoryForkException);
+    EXPECT_EQ(bridge.tree.commits.size(), 1u) << "nothing was committed";
 }

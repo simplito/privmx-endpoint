@@ -94,6 +94,23 @@ public:
     void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     /**
+     * Replaces the Group's key without changing who is in it: the key epoch advances, and a fresh Group key is
+     * wrapped to the same members, the caller included — also when the caller is the Group's only member.
+     *
+     * For when a Group key may have leaked without anybody's own identity key: every container granted to the
+     * Group goes stale, as after a removal, so their owners can re-key them onto the new epoch. Do that only from a
+     * session that has read the Group after this call (the caller's own session does): one that has not may still
+     * take the old key for the current one. Content sealed before stays readable to the members.
+     *
+     * Not a remedy for a lost device: a device holding the identity key opens the new epoch as well. Change the
+     * identity key first, then rotate. Charged to the Group's rotation budget; allowed by the `rotateKeys` policy
+     * (managers, by default).
+     *
+     * @param groupId ID of the Group
+     */
+    void rotateGroupKey(const std::string& groupId);
+
+    /**
      * Updates a Group's public (unencrypted) metadata, and nothing else.
      *
      * The three things a Group's metadata used to be updated by one call — public metadata, private metadata
