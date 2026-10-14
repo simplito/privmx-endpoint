@@ -125,7 +125,9 @@ void KvdbApiImpl::updateKvdb(
     // revokes every grant the KVDB had.
     fillContainerUpdateModel(model, kvdbId, currentKvdbResourceId, users, managers, ctx, version, force, groups);
     if (policies.has_value()) {
-        model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
+        model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(
+            policyForUpdate(currentKvdb, policies.value())
+        );
     }
     core::ModuleDataToEncryptV5 kvdbDataToEncrypt{
         .publicMeta = publicMeta,

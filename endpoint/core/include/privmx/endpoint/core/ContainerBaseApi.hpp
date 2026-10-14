@@ -120,6 +120,22 @@ protected:
      */
     static CryptoSuite suiteFromPolicy(const std::optional<ContainerPolicyWithoutItem>& policies);
 
+    /**
+     * @brief Uzgadnia `cryptoSuite` polityki wysylanej w aktualizacji z zestawem kontenera.
+     *
+     * Zestaw jest ustalany przy tworzeniu kontenera i nie zmienia sie. Bridge egzekwuje to doslownie:
+     * aktualizacja niesie **cala** polityke, wiec pominiecie `cryptoSuite` jest dla niego taka sama
+     * zmiana jak podmiana i konczy sie `INVALID_PARAMS`. Wolajacy, ktory zmienia same uprawnienia,
+     * nie ma powodu powtarzac zestawu - dlatego przenosimy go tutaj.
+     *
+     * Jawnie podany, ale inny zestaw nie jest po cichu nadpisywany: to blad wolajacego i lepiej
+     * zglosic go pod wlasna nazwa, niz czekac na `INVALID_PARAMS` z serwera.
+     *
+     * @throws CryptoSuiteIsFixedAtCreationException gdy polityka nazywa inny zestaw niz kontener
+     */
+    template<typename TPolicy, typename TContainer>
+    static TPolicy policyForUpdate(const TContainer& container, TPolicy policies);
+
     // `policies` sluzy tu tylko do wyboru zestawu algorytmow dla nowego klucza (patrz `EncKey::suite`);
     // sama polityka jedzie do Bridge'a osobno. Jest parametrem, a nie czyms doklejanym w modulach,
     // zeby nowy typ kontenera nie mogl o tym wyborze po cichu zapomniec.
@@ -306,6 +322,19 @@ auto ContainerBaseApi::getAndValidateModuleKeys(ModuleStruct moduleObj, const st
     return moduleKeys;
 }
 
+template<typename TPolicy, typename TContainer>
+TPolicy ContainerBaseApi::policyForUpdate(const TContainer& container, TPolicy policies) {
+    const auto current = Factory::parsePolicyServerObjectWithoutItem(container.policy).cryptoSuite;
+    if (policies.cryptoSuite.has_value() && policies.cryptoSuite != current) {
+        throw CryptoSuiteIsFixedAtCreationException(
+            "container: " + (current.has_value() ? current.value() : std::string("none")) +
+            ", requested: " + policies.cryptoSuite.value()
+        );
+    }
+    policies.cryptoSuite = current;
+    return policies;
+}
+
 template<typename TContainer, typename TEntry>
 ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     const TContainer& container,
@@ -330,13 +359,14 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     if (!_keyProvider->verifyKeysSecret(containerKeys, location, secret)) {
         throw core::EncryptionKeyValidationException();
     }
-    // Gdy wolajacy nie zmienia polityki (`policies == nullopt` - tak dziala kazda aktualizacja wewnetrzna,
-    // np. zapis rostera grupy), bierzemy polityke **serwowanego kontenera**. Fallback na zestaw domyslny
-    // bylby tu cicha regresja: kontener, ktorego polityka zada mocniejszego zestawu, zapisywalby czesc
-    // swoich danych slabszym.
-    const CryptoSuite suite = policies.has_value()
-        ? suiteFromPolicy(policies)
-        : suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy));
+    // Zestaw bierzemy **zawsze z serwowanego kontenera**, nigdy z polityki przekazanej do aktualizacji.
+    //
+    // Zestaw jest ustalany przy tworzeniu kontenera i nie zmienia sie - pilnuje tego Bridge, ktory
+    // odrzuca aktualizacje zmieniajaca lub pomijajaca `cryptoSuite`. Polityka wchodzaca nie moze go
+    // wiec legalnie zmienic, a czytanie z niej bylo bledem: wolajacy, ktory zmienia same uprawnienia,
+    // nie powtarza `cryptoSuite`, przez co `suiteFromPolicy` cofalo sie do zestawu **domyslnego dla
+    // buildu**. Kontener utworzony z mocniejszym zestawem zapisywalby wtedy czesc danych slabszym.
+    const CryptoSuite suite = suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy));
 
     core::EncKey key = currentKey;
     core::DataIntegrityObject dio = _connection.getImpl()->createDIO(container.contextId, resourceId);

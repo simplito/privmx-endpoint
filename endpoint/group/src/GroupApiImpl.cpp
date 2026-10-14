@@ -713,10 +713,22 @@ void GroupApiImpl::updateGroupPrivateMeta(
 }
 
 void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies) {
-    // No read, no key, no envelope: the policy is a bare bridge-held field, so there is nothing to tag or
-    // encrypt. No cache invalidation either — no counter moves and the module key cache keys on `rosterVersion`.
+    // No key and no envelope: the policy is a bare bridge-held field, so there is nothing to tag or encrypt.
+    // No cache invalidation either — no counter moves and the module key cache keys on `rosterVersion`.
+    //
+    // The one read is for `cryptoSuite`. It is fixed when the group is created and the bridge refuses an
+    // update that names a different one *or drops it*; since the update carries the whole policy, a caller
+    // changing permissions alone would otherwise drop it and be refused. `policyForUpdate` carries it over,
+    // and that needs the group's current policy.
+    server::GroupGetModel getModel{
+        .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
+    };
+    auto currentGroup = _serverApi.groupGet(getModel).group;
     _serverApi.groupUpdatePolicy(
-        server::GroupUpdatePolicyModel{.id = groupId, .policy = core::Factory::createPolicyServerObject(policies)}
+        server::GroupUpdatePolicyModel{
+            .id = groupId,
+            .policy = core::Factory::createPolicyServerObject(policyForUpdate(currentGroup, policies))
+        }
     );
 }
 

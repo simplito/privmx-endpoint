@@ -154,7 +154,9 @@ void StoreApiImpl::updateStore(
     // revokes every grant the Store had.
     fillContainerUpdateModel(model, storeId, currentStoreResourceId, users, managers, ctx, version, force, groups);
     if (policies.has_value()) {
-        model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
+        model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(
+            policyForUpdate(currentStore, policies.value())
+        );
     }
     core::ModuleDataToEncryptV5 storeDataToEncrypt{
         .publicMeta = publicMeta,

@@ -231,7 +231,9 @@ void InboxApiImpl::updateInbox(
     };
 
     if (policies.has_value()) {
-        inboxUpdateModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
+        inboxUpdateModel.policy = privmx::endpoint::core::Factory::createPolicyServerObject(
+            policyForUpdate(currentInbox, policies.value())
+        );
     }
 
     _serverApi->inboxUpdate(inboxUpdateModel);

@@ -130,7 +130,9 @@ void ThreadApiImpl::updateThread(
     // revokes every grant the Thread had.
     fillContainerUpdateModel(model, threadId, currentThreadResourceId, users, managers, ctx, version, force, groups);
     if (policies.has_value()) {
-        model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
+        model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(
+            policyForUpdate(currentThread, policies.value())
+        );
     }
     core::ModuleDataToEncryptV5 threadDataToEncrypt{
         .publicMeta = publicMeta,
