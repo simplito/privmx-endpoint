@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
 #include "privmx/endpoint/event/EventException.hpp"
@@ -34,14 +33,9 @@ bool Events::isContextCustomEvent(const core::EventHolder& handler) {
 }
 
 ContextCustomEvent Events::extractContextCustomEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<ContextCustomEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractContextCustomEvent();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<ContextCustomEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractContextCustomEvent();
     }
+    return *event;
 }

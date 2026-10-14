@@ -128,9 +128,9 @@ struct StreamRoom {
     core::ContainerPolicyWithoutItem policy;
 
     /**
-     * status code of retrieval and decryption of the Stream Room
+     * Set when retrieval or decryption of the Stream Room failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 
     /**
      * Version of the Stream Room data structure and how it is encoded/encrypted
@@ -510,10 +510,9 @@ struct DataChannelMessage {
  */
 struct DecryptedDataChannelMessage : public DataChannelMessage {
     /**
-     * status code of decryption of the message. A value other than 0 means that the message could not be decrypted
-     * or that its data integrity has been violated
+     * Set when the message could not be decrypted or its data integrity has been violated, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 };
 
 } // namespace stream

@@ -68,7 +68,7 @@ Poco::Dynamic::Var VarSerializer::serialize<search::SearchIndex>(const search::S
     obj->set("privateMeta", serialize(val.privateMeta));
     obj->set("policy", serialize(val.policy));
     obj->set("mode", serialize(val.mode));
-    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("error", serialize(val.error));
     obj->set("schemaVersion", serialize(val.schemaVersion));
     obj->set("groups", serialize(val.groups));
     obj->set("staleGroups", serialize(val.staleGroups));

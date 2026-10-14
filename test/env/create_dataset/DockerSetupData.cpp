@@ -124,9 +124,15 @@ static void writeContainerHead(DatasetWriter& out, const ContainerT& c) {
 }
 
 // Common tail: the status the bridge reported and the whole object as the serializer sees it.
+// The dataset keeps the numeric `statusCode` key, so the public `error` is narrowed back to it here.
+template<typename T>
+static int64_t errCode(const T& value) {
+    return value.error.has_value() ? (int64_t)value.error->code : 0;
+}
+
 template<typename ContainerT>
 static void writeStatus(DatasetWriter& out, const ContainerT& c, const Poco::Dynamic::Var& serialized) {
-    out.ini << "statusCode = " << c.statusCode << std::endl;
+    out.ini << "statusCode = " << errCode(c) << std::endl;
     out.ini << "schemaVersion = " << c.schemaVersion << std::endl;
     out.ini << "JSON_data = " << utils::Utils::stringifyVar(serialized) << std::endl;
 }
@@ -169,7 +175,7 @@ static void writeGroup(
         entry->set("preRotation_groupPubKey", preRotationPubKey);
         entry->set("removedUserId", removedUserId);
     }
-    out.ini << "statusCode = " << g.statusCode << std::endl;
+    out.ini << "statusCode = " << errCode(g) << std::endl;
     out.ini << "schemaVersion = " << g.schemaVersion << std::endl;
     writeUploadedMeta(out, entry, f.publicMeta.stdString(), f.privateMeta.stdString());
 }
@@ -444,7 +450,7 @@ static void addInboxEntry(
     writeHex(out.ini, "data_inHex", e.data.stdString());
     out.ini << "authorPubKey = " << e.authorPubKey << std::endl;
     out.ini << "createDate = " << e.createDate << std::endl;
-    out.ini << "statusCode = " << e.statusCode << std::endl;
+    out.ini << "statusCode = " << errCode(e) << std::endl;
     out.ini << "schemaVersion = " << e.schemaVersion << std::endl;
     for(size_t i = 0; i < e.files.size(); ++i) {
         const string p = "file_" + std::to_string(i) + "_";
@@ -454,7 +460,7 @@ static void addInboxEntry(
         out.ini << p << "info_createDate = " << f.info.createDate << std::endl;
         out.ini << p << "info_author = " << f.info.author << std::endl;
         out.ini << p << "authorPubKey = " << f.authorPubKey << std::endl;
-        out.ini << p << "statusCode = " << f.statusCode << std::endl;
+        out.ini << p << "statusCode = " << errCode(f) << std::endl;
         out.ini << p << "schemaVersion = " << f.schemaVersion << std::endl;
         writeHex(out.ini, p + "publicMeta_inHex", f.publicMeta.stdString());
         writeHex(out.ini, p + "privateMeta_inHex", f.privateMeta.stdString());

@@ -42,7 +42,7 @@ public:
     ) const override;
     std::tuple<Inbox, core::DataIntegrityObject> makeErrorResult(
         const server::InboxInfo& inbox,
-        int64_t errorCode
+        const std::optional<core::Error>& error
     ) const override;
     InboxPublicDataV4AsResult unpackPublicOnly(const Poco::Dynamic::Var& publicData) const;
     InboxPublicViewData getPublicViewData(const server::InboxGetPublicViewResult& publicView) const;

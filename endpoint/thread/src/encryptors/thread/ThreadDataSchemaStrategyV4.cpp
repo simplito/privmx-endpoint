@@ -14,7 +14,6 @@ limitations under the License.
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/thread/Constants.hpp"
 
@@ -35,7 +34,8 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaStrategyV4::conver
 ) const {
     return {
         ThreadDataSchemaMapper::toLibThread(
-            thread, raw.publicMeta, raw.privateMeta, raw.statusCode, ThreadDataSchema::Version::VERSION_4
+            thread, raw.publicMeta, raw.privateMeta, core::toPublicError(raw.error),
+            ThreadDataSchema::Version::VERSION_4
         ),
         core::DataIntegrityObject{
             .creatorUserId = thread.lastModifier,
@@ -51,6 +51,9 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaStrategyV4::conver
     };
 }
 
-Thread ThreadDataSchemaStrategyV4::toLibError(const server::ThreadInfo& thread, int64_t errorCode) const {
-    return ThreadDataSchemaMapper::toLibThread(thread, {}, {}, errorCode, ThreadDataSchema::Version::VERSION_4);
+Thread ThreadDataSchemaStrategyV4::toLibError(
+    const server::ThreadInfo& thread,
+    const std::optional<core::Error>& error
+) const {
+    return ThreadDataSchemaMapper::toLibThread(thread, {}, {}, error, ThreadDataSchema::Version::VERSION_4);
 }

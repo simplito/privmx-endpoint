@@ -224,7 +224,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     ASSERT_FALSE(groupId.empty());
     group::Group group1;
     ASSERT_NO_THROW({ group1 = user1.groupApi->getGroup(groupId); });
-    ASSERT_EQ(group1.statusCode, 0);
+    ASSERT_EQ(errCode(group1), 0);
     ASSERT_EQ(group1.keyVersion, 1);
 
     // -- Inbox1: user_1 manages it, Group1 reads it, anyone may fetch it --
@@ -248,10 +248,10 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     auto entriesAsUser3 = listAllEntries(user3, inboxId, PAGE_LIMIT);
     ASSERT_EQ(entriesAsUser3.size(), 1);
     const inbox::InboxEntry entry1AsUser3 = entriesAsUser3[0];
-    EXPECT_EQ(entry1AsUser3.statusCode, 0) << "a group member could not read an entry submitted by another one";
+    EXPECT_EQ(errCode(entry1AsUser3), 0) << "a group member could not read an entry submitted by another one";
     EXPECT_EQ(entry1AsUser3.data.stdString(), "entry1_data");
     ASSERT_EQ(entry1AsUser3.files.size(), 1);
-    EXPECT_EQ(entry1AsUser3.files[0].statusCode, 0) << "the grant did not reach the Inbox's inner Store";
+    EXPECT_EQ(errCode(entry1AsUser3.files[0]), 0) << "the grant did not reach the Inbox's inner Store";
     EXPECT_EQ(entry1AsUser3.files[0].privateMeta.stdString(), "file1_private");
     std::string file1DataAsUser3;
     ASSERT_NO_THROW({
@@ -263,7 +263,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     // -- user_1 updates the Inbox, roster untouched --
     inbox::Inbox beforeUpdate;
     ASSERT_NO_THROW({ beforeUpdate = user1.inboxApi->getInbox(inboxId); });
-    ASSERT_EQ(beforeUpdate.statusCode, 0);
+    ASSERT_EQ(errCode(beforeUpdate), 0);
     ASSERT_NO_THROW({
         // The grant has to be restated: an omitted `groups` means "no grantees", not "leave them alone" - and
         // updateInbox applies whatever it is told to all three containers.
@@ -275,7 +275,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     });
     inbox::Inbox afterUpdate;
     ASSERT_NO_THROW({ afterUpdate = user1.inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(afterUpdate.statusCode, 0);
+    EXPECT_EQ(errCode(afterUpdate), 0);
     EXPECT_EQ(afterUpdate.publicMeta.stdString(), "inbox1_public_v2");
     ASSERT_EQ(afterUpdate.groups.size(), 1);
     EXPECT_EQ(afterUpdate.groups[0].groupId, groupId);
@@ -283,7 +283,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     // The update re-keyed all three containers, so the same read has to keep working for a group-only reader.
     inbox::InboxEntry entry1AfterUpdate;
     ASSERT_NO_THROW({ entry1AfterUpdate = user3.inboxApi->readEntry(entry1Id); });
-    EXPECT_EQ(entry1AfterUpdate.statusCode, 0) << "updateInbox lost the grant on one of the inner containers";
+    EXPECT_EQ(errCode(entry1AfterUpdate), 0) << "updateInbox lost the grant on one of the inner containers";
     EXPECT_EQ(entry1AfterUpdate.data.stdString(), "entry1_data");
 
     // -- ENTRY_COUNT entries by user_3 --
@@ -298,7 +298,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
         const std::string data = "user3_data_" + std::to_string(i);
         const auto found = asUser2BeforeRemoval.find(data);
         ASSERT_NE(found, asUser2BeforeRemoval.end()) << "entry " << i << " is missing from the listing";
-        ASSERT_EQ(found->second.statusCode, 0) << "user_2 could not read entry " << i;
+        ASSERT_EQ(errCode(found->second), 0) << "user_2 could not read entry " << i;
     }
     pumpEvents();
 
@@ -312,7 +312,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
 
     inbox::Inbox staleInbox;
     ASSERT_NO_THROW({ staleInbox = user1.inboxApi->getInbox(inboxId); });
-    ASSERT_EQ(staleInbox.statusCode, 0);
+    ASSERT_EQ(errCode(staleInbox), 0);
     ASSERT_EQ(staleInbox.staleGroups.size(), 1);
     EXPECT_EQ(staleInbox.staleGroups[0], groupId);
 
@@ -336,7 +336,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     });
     inbox::Inbox freshInbox;
     ASSERT_NO_THROW({ freshInbox = user1.inboxApi->getInbox(inboxId); });
-    EXPECT_EQ(freshInbox.statusCode, 0);
+    EXPECT_EQ(errCode(freshInbox), 0);
     EXPECT_TRUE(freshInbox.staleGroups.empty()) << "rotateInboxKeys did not clear staleGroups";
     ASSERT_EQ(freshInbox.groups.size(), 1);
     EXPECT_EQ(freshInbox.groups[0].groupId, groupId);
@@ -349,7 +349,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     // -- user_2 is still in Group1 at epoch 2, and everything is readable to them across both key epochs --
     auto asUser2 = byEntryData(listAllEntries(user2, inboxId, ENTRY_COUNT + PAGE_LIMIT));
     ASSERT_NE(asUser2.find("entry1_data"), asUser2.end());
-    EXPECT_EQ(asUser2.at("entry1_data").statusCode, 0) << "the re-key cost a remaining member the oldest entry";
+    EXPECT_EQ(errCode(asUser2.at("entry1_data")), 0) << "the re-key cost a remaining member the oldest entry";
     ASSERT_EQ(asUser2.at("entry1_data").files.size(), 1);
     EXPECT_EQ(
         downloadFile(user2, asUser2.at("entry1_data").files[0].info.fileId, asUser2.at("entry1_data").files[0].size),
@@ -359,12 +359,12 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
         const std::string data = "user3_data_" + std::to_string(i);
         const auto found = asUser2.find(data);
         ASSERT_NE(found, asUser2.end()) << "entry " << i << " is gone from the listing";
-        ASSERT_EQ(found->second.statusCode, 0) << "the re-key cost a remaining member entry " << i;
+        ASSERT_EQ(errCode(found->second), 0) << "the re-key cost a remaining member entry " << i;
     }
     ASSERT_NE(asUser2.find("entry2_data"), asUser2.end());
-    EXPECT_EQ(asUser2.at("entry2_data").statusCode, 0);
+    EXPECT_EQ(errCode(asUser2.at("entry2_data")), 0);
     ASSERT_NE(asUser2.find("entry3_data"), asUser2.end());
-    EXPECT_EQ(asUser2.at("entry3_data").statusCode, 0);
+    EXPECT_EQ(errCode(asUser2.at("entry3_data")), 0);
 
     // -- What user_3 can see now --
     // The public view needs no key and no membership at all, so it keeps working.
@@ -376,7 +376,7 @@ TEST_F(InboxGroupScenarioTest, inbox_granted_to_a_group_across_a_member_removal_
     // The Inbox itself is still fetchable under `get: "all"`, but no longer decryptable.
     inbox::Inbox lostInbox;
     ASSERT_NO_THROW({ lostInbox = user3.inboxApi->getInbox(inboxId); });
-    EXPECT_NE(lostInbox.statusCode, 0) << "a removed member still decrypts the inbox";
+    EXPECT_NE(errCode(lostInbox), 0) << "a removed member still decrypts the inbox";
     EXPECT_EQ(lostInbox.publicMeta.stdString(), "inbox1_public_v2")
         << "public metadata is not encrypted and has to survive the loss of the key";
     EXPECT_TRUE(lostInbox.privateMeta.stdString().empty());

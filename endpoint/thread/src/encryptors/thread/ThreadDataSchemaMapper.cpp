@@ -47,7 +47,8 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaMapper::decrypt(
         [&]() -> std::tuple<Thread, core::DataIntegrityObject> {
             return {
                 toLibThread(
-                    thread, {}, {}, UnknowThreadFormatException().getCode(), ThreadDataSchema::Version::UNKNOWN
+                    thread, {}, {}, core::toPublicError(UnknowThreadFormatException()),
+                    ThreadDataSchema::Version::UNKNOWN
                 ),
                 {}
             };
@@ -77,21 +78,18 @@ std::optional<core::DataIntegrityObject> ThreadDataSchemaMapper::assertDataInteg
     }
 }
 
-std::pair<uint32_t, std::optional<core::DataIntegrityObject>> ThreadDataSchemaMapper::validateDataIntegrity(
-    const server::ThreadInfo& thread
-) {
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> ThreadDataSchemaMapper::
+    validateDataIntegrity(const server::ThreadInfo& thread) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
-        verifiedDio = assertDataIntegrity(thread);
-    });
-    return {statusCode, verifiedDio};
+    const auto error = core::DataSchemaMapperUtils::toError([&] { verifiedDio = assertDataIntegrity(thread); });
+    return {error, verifiedDio};
 }
 
 Thread ThreadDataSchemaMapper::toLibThread(
     const server::ThreadInfo& info,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    int64_t statusCode,
+    const std::optional<core::Error>& error,
     int64_t schemaVersion
 ) {
     return Thread{
@@ -110,7 +108,7 @@ Thread ThreadDataSchemaMapper::toLibThread(
         .privateMeta = privateMeta,
         .policy = core::Factory::parsePolicyServerObject(info.policy),
         .messagesCount = info.messages,
-        .statusCode = statusCode,
+        .error = error,
         .schemaVersion = schemaVersion,
         .groups = core::Mapper::mapToGroupGrants(info.groups),
         .staleGroups = info.staleGroups
@@ -129,8 +127,8 @@ std::vector<Thread> ThreadDataSchemaMapper::validateDecryptAndConvertThreads(
         },
         [&](const server::ThreadInfo& t, const core::DecryptedEncKey& key,
             const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(t, key, verifiedDio); },
-        [](const server::ThreadInfo& t, uint32_t code) {
-            return toLibThread(t, {}, {}, code, ThreadDataSchema::Version::UNKNOWN);
+        [](const server::ThreadInfo& t, const std::optional<core::Error>& error) {
+            return toLibThread(t, {}, {}, error, ThreadDataSchema::Version::UNKNOWN);
         },
         groupPrivKeyResolver
     );

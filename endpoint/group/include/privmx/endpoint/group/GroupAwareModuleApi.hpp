@@ -45,7 +45,7 @@ public:
 protected:
     // The two outcomes of a self-started re-key that are not failures: a lost race, and a refusal, which becomes
     // `StaleKeyRekeyRequiredException`. An unresolved grantee group stays a failure — it cannot re-key at all.
-    void absorbAutoRekeyFailure(const std::string& moduleId, const privmx::utils::PrivmxException& e);
+    void absorbAutoRekeyFailure(const std::string& moduleId, const privmx::endpoint::core::Exception& e);
 
     // For a write that cannot re-key its way out: an Inbox submission seals to the entries public key and its
     // sender may not be named on the container at all, so only a manager can clear a stale epoch.
@@ -113,8 +113,8 @@ protected:
         }
         try {
             return op(keys);
-        } catch (const privmx::utils::PrivmxException& e) {
-            auto code = core::ExceptionConverter::convert(e).getCode();
+        } catch (const privmx::endpoint::core::Exception& e) {
+            auto code = e.getCode();
             if (code == invalidKeyCode) {
                 return op(getNewModuleKeysAndUpdateCache(moduleId));
             }
@@ -200,7 +200,7 @@ protected:
             rotateContainerKeys<TRotateModel>(
                 moduleId, container, roster.users, roster.managers, container.version, false, {}, sendRotateRequest
             );
-        } catch (const privmx::utils::PrivmxException& e) { absorbAutoRekeyFailure(moduleId, e); }
+        } catch (const privmx::endpoint::core::Exception& e) { absorbAutoRekeyFailure(moduleId, e); }
     }
 
 private:

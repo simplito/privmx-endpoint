@@ -407,7 +407,7 @@ public:
     /**
      * Decrypts a message received over the Stream Room's data channel.
      *
-     * A message which cannot be decrypted is reported by the 'statusCode' of the returned struct rather than by an
+     * A message which cannot be decrypted is reported by the 'error' of the returned struct rather than by an
      * exception, so that a single broken message does not break the whole data channel. A message with an invalid
      * sequence number throws 'InvalidDataChannelSeqException', so the same message cannot be decrypted twice.
      *

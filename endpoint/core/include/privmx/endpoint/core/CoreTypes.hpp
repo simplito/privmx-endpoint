@@ -12,9 +12,11 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_CORETYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_CORETYPES_HPP_
 
+#include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include <Poco/Dynamic/Var.h>
+#include <memory>
 #include <optional>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include <string>
@@ -41,10 +43,44 @@ struct DataIntegrityObject {
     std::optional<BridgeIdentity> bridgeIdentity;
 };
 
+// A null `error` means the payload decrypted and verified. Internally the whole exception is kept, cause chain
+// included; `statusCode()` narrows it to the single code the public API structs carry.
 struct DecryptedVersionedData {
     int64_t dataStructureVersion;
-    int64_t statusCode;
+    std::shared_ptr<const Exception> error;
+
+    int64_t statusCode() const noexcept { return error ? (int64_t)error->getCode() : 0; }
 };
+
+inline std::shared_ptr<const Exception> asError(const Exception& e) {
+    return std::make_shared<const Exception>(e);
+}
+
+// for the `catch (...)` paths, which have no exception object to keep
+inline std::shared_ptr<const Exception> unknownError(std::string description = std::string()) {
+    return std::make_shared<const Exception>(
+        "Unknown exception", "UnknownException", "Core", ENDPOINT_CORE_EXCEPTION_CODE, std::move(description)
+    );
+}
+
+// narrows a retained exception to the Error the public API structs carry; the cause chain stops here
+inline Error toPublicError(const Exception& e) {
+    return Error{
+        .name = e.getName(),
+        .scope = e.getScope(),
+        .code = e.getCode(),
+        .message = e.getMessage(),
+        .description = e.getDescription(),
+        ._what = e.what()
+    };
+}
+
+inline std::optional<Error> toPublicError(const std::shared_ptr<const Exception>& e) {
+    if (!e) {
+        return std::nullopt;
+    }
+    return toPublicError(*e);
+}
 
 struct DecryptedEncKey : public EncKey, public DecryptedVersionedData {};
 

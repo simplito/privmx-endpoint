@@ -32,27 +32,25 @@ ContextCustomEventData EventDataSchemaStrategyV5::convert(
     const server::ContextCustomEventData& model,
     const DecryptedEventDataV5& raw
 ) const {
-    return toContextCustomEventData(model, raw.data, raw.statusCode, EventDataSchema::Version::VERSION_5);
+    return toContextCustomEventData(
+        model, raw.data, core::toPublicError(raw.error), EventDataSchema::Version::VERSION_5
+    );
 }
 
 ContextCustomEventData EventDataSchemaStrategyV5::makeErrorResult(
     const server::ContextCustomEventData& model,
-    int64_t errorCode
+    const std::optional<core::Error>& error
 ) const {
-    return toContextCustomEventData(model, {}, errorCode, EventDataSchema::Version::VERSION_5);
+    return toContextCustomEventData(model, {}, error, EventDataSchema::Version::VERSION_5);
 }
 
 ContextCustomEventData EventDataSchemaStrategyV5::toContextCustomEventData(
     const server::ContextCustomEventData& raw,
     const core::Buffer& payload,
-    int64_t statusCode,
+    const std::optional<core::Error>& error,
     int64_t schemaVersion
 ) {
     return ContextCustomEventData{
-        .contextId = raw.id,
-        .userId = raw.author.id,
-        .payload = payload,
-        .statusCode = statusCode,
-        .schemaVersion = schemaVersion
+        .contextId = raw.id, .userId = raw.author.id, .payload = payload, .error = error, .schemaVersion = schemaVersion
     };
 }

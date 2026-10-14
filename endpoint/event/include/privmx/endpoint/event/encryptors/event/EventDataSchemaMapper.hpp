@@ -53,7 +53,10 @@ public:
     EventDataSchema::Version getDataStructureVersion(const server::ContextCustomEventData& rawEvent);
 
 private:
-    static ContextCustomEventData makeErrorResult(const server::ContextCustomEventData& rawEvent, int64_t errorCode);
+    static ContextCustomEventData makeErrorResult(
+        const server::ContextCustomEventData& rawEvent,
+        const std::optional<core::Error>& error
+    );
     bool verifyDecryptedEventData(const DecryptedEventDataV5& data);
 
     privmx::crypto::PrivateKey _userPrivKey;

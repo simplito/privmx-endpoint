@@ -77,6 +77,21 @@ Poco::Dynamic::Var VarSerializer::serialize<Context>(const Context& val) {
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<Error>(const Error& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$Error");
+    }
+    obj->set("name", serialize(val.name));
+    obj->set("scope", serialize(val.scope));
+    obj->set("code", serialize((int64_t)val.code));
+    obj->set("message", serialize(val.message));
+    obj->set("description", serialize(val.description));
+    obj->set("what", serialize(val._what));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<PagingList<Context>>(const PagingList<Context>& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {

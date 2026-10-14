@@ -1,5 +1,4 @@
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
@@ -13,17 +12,12 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
 GroupApi GroupApi::create(core::Connection& connection) {
-    try {
-        std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
-        std::shared_ptr<GroupApiImpl> impl(new GroupApiImpl(
-            connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
-            connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection
-        ));
-        return GroupApi(impl);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
+    std::shared_ptr<GroupApiImpl> impl(new GroupApiImpl(
+        connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
+        connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection
+    ));
+    return GroupApi(impl);
 }
 
 GroupApi::GroupApi(const std::shared_ptr<GroupApiImpl>& impl) : BaseApiClass(impl) {}
@@ -40,12 +34,7 @@ std::string GroupApi::createGroup(
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateUserListFormat(users, "field:users ");
     core::Validator::validateUserListFormat(managers, "field:managers ");
-    try {
-        return impl->createGroup(contextId, users, managers, publicMeta, privateMeta, policies);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->createGroup(contextId, users, managers, publicMeta, privateMeta, policies);
 }
 
 void GroupApi::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
@@ -64,12 +53,7 @@ void GroupApi::addGroupMembers(const std::string& groupId, const std::vector<Gro
         asRoster.push_back(newMember.user);
     }
     core::Validator::validateUserListFormat(asRoster, "field:newMembers ");
-    try {
-        impl->addGroupMembers(groupId, newMembers);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    impl->addGroupMembers(groupId, newMembers);
 }
 
 void GroupApi::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
@@ -78,12 +62,7 @@ void GroupApi::removeGroupMembers(const std::string& groupId, const std::vector<
     for (const std::string& userId : userIds) {
         core::Validator::validateId(userId, "field:userIds ");
     }
-    try {
-        impl->removeGroupMembers(groupId, userIds);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    impl->removeGroupMembers(groupId, userIds);
 }
 
 void GroupApi::updateGroupPublicMeta(
@@ -93,12 +72,7 @@ void GroupApi::updateGroupPublicMeta(
 ) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    try {
-        impl->updateGroupPublicMeta(groupId, publicMeta, version);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    impl->updateGroupPublicMeta(groupId, publicMeta, version);
 }
 
 void GroupApi::updateGroupPrivateMeta(
@@ -108,45 +82,25 @@ void GroupApi::updateGroupPrivateMeta(
 ) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    try {
-        impl->updateGroupPrivateMeta(groupId, privateMeta, version);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    impl->updateGroupPrivateMeta(groupId, privateMeta, version);
 }
 
 void GroupApi::updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    try {
-        impl->updateGroupPolicy(groupId, policies);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    impl->updateGroupPolicy(groupId, policies);
 }
 
 void GroupApi::deleteGroup(const std::string& groupId) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    try {
-        return impl->deleteGroup(groupId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->deleteGroup(groupId);
 }
 
 Group GroupApi::getGroup(const std::string& groupId) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    try {
-        return impl->getGroup(groupId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->getGroup(groupId);
 }
 
 core::PagingList<GroupSummary> GroupApi::listGroups(
@@ -156,33 +110,18 @@ core::PagingList<GroupSummary> GroupApi::listGroups(
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validatePagingQuery(pagingQuery, {"createDate", "lastModificationDate"}, "field:pagingQuery ");
-    try {
-        return impl->listGroups(contextId, pagingQuery);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->listGroups(contextId, pagingQuery);
 }
 
 Envelope GroupApi::encrypt(const std::string& groupId, const core::Buffer& content) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    try {
-        return impl->encrypt(groupId, content);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->encrypt(groupId, content);
 }
 
 DecryptedEnvelope GroupApi::decrypt(const Envelope& envelope) {
     auto impl = getImpl();
-    try {
-        return impl->decrypt(envelope);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->decrypt(envelope);
 }
 
 Envelope GroupApi::encryptAnonymously(
@@ -193,12 +132,7 @@ Envelope GroupApi::encryptAnonymously(
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     core::Validator::validatePubKeyBase58DER(groupPubKey, "field:groupPubKey ");
-    try {
-        return impl->encryptAnonymously(groupId, groupPubKey, content);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->encryptAnonymously(groupId, groupPubKey, content);
 }
 
 namespace {
@@ -213,12 +147,7 @@ FileHandle GroupApi::beginFileEncryption(const std::string& groupId, const FileS
     if (size < 0) {
         throw core::InvalidParamsException("field:size cannot be negative");
     }
-    try {
-        return impl->beginFileEncryption(groupId, size);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->beginFileEncryption(groupId, size);
 }
 
 FileHandle GroupApi::beginFileEncryptionAnonymously(
@@ -232,94 +161,49 @@ FileHandle GroupApi::beginFileEncryptionAnonymously(
     if (size < 0) {
         throw core::InvalidParamsException("field:size cannot be negative");
     }
-    try {
-        return impl->beginFileEncryptionAnonymously(groupId, groupPubKey, size);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->beginFileEncryptionAnonymously(groupId, groupPubKey, size);
 }
 
 core::Buffer GroupApi::encryptFileChunk(const FileHandle fileHandle, const core::Buffer& plainChunk) {
     auto impl = getImpl();
     core::Validator::validateBufferSize(plainChunk, 0, MAX_FILE_BLOCK, "field:plainChunk");
-    try {
-        return impl->encryptFileChunk(fileHandle, plainChunk);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->encryptFileChunk(fileHandle, plainChunk);
 }
 
 Envelope GroupApi::finishFileEncryption(const FileHandle fileHandle) {
     auto impl = getImpl();
-    try {
-        return impl->finishFileEncryption(fileHandle);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->finishFileEncryption(fileHandle);
 }
 
 FileHandle GroupApi::beginFileDecryption(const Envelope& envelope) {
     auto impl = getImpl();
-    try {
-        return impl->beginFileDecryption(envelope);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->beginFileDecryption(envelope);
 }
 
 core::Buffer GroupApi::decryptFileChunk(const FileHandle fileHandle, const core::Buffer& cipherChunk) {
     auto impl = getImpl();
     core::Validator::validateBufferSize(cipherChunk, 0, MAX_FILE_BLOCK, "field:cipherChunk");
-    try {
-        return impl->decryptFileChunk(fileHandle, cipherChunk);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->decryptFileChunk(fileHandle, cipherChunk);
 }
 
 CipherOffset GroupApi::seekInEncryptedFile(const FileHandle fileHandle, const FilePosition position) {
     auto impl = getImpl();
-    try {
-        return impl->seekInEncryptedFile(fileHandle, position);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->seekInEncryptedFile(fileHandle, position);
 }
 
 DecryptedFileInfo GroupApi::finishFileDecryption(const FileHandle fileHandle) {
     auto impl = getImpl();
-    try {
-        return impl->finishFileDecryption(fileHandle);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->finishFileDecryption(fileHandle);
 }
 
 std::vector<std::string> GroupApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto impl = getImpl();
-    try {
-        return impl->subscribeFor(subscriptionQueries);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->subscribeFor(subscriptionQueries);
 }
 
 void GroupApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     auto impl = getImpl();
-    try {
-        return impl->unsubscribeFrom(subscriptionIds);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->unsubscribeFrom(subscriptionIds);
 }
 
 std::string GroupApi::buildSubscriptionQuery(
@@ -328,12 +212,7 @@ std::string GroupApi::buildSubscriptionQuery(
     const std::string& selectorId
 ) {
     auto impl = getImpl();
-    try {
-        return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
 }
 
 void GroupApi::sendCustomEvent(
@@ -348,12 +227,7 @@ void GroupApi::sendCustomEvent(
     for (const auto& user : users) {
         core::Validator::validateId(user, "field:users ");
     }
-    try {
-        return impl->sendCustomEvent(groupId, channelName, eventData, users);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->sendCustomEvent(groupId, channelName, eventData, users);
 }
 
 std::string GroupApi::buildCustomEventSubscriptionQuery(
@@ -362,10 +236,5 @@ std::string GroupApi::buildCustomEventSubscriptionQuery(
     const std::string& selectorId
 ) {
     auto impl = getImpl();
-    try {
-        return impl->buildCustomEventSubscriptionQuery(channelName, selectorType, selectorId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->buildCustomEventSubscriptionQuery(channelName, selectorType, selectorId);
 }

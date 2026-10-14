@@ -39,7 +39,7 @@ public:
         const server::Store& store,
         const core::DecryptedModuleDataV4& raw
     ) const override;
-    Store toLibError(const server::Store& store, int64_t errorCode) const override;
+    Store toLibError(const server::Store& store, const std::optional<core::Error>& error) const override;
 
 private:
     mutable core::ModuleDataEncryptorV4 _encryptor;

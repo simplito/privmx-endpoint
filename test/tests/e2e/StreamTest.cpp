@@ -319,7 +319,7 @@ TEST_F(StreamTest, createStreamRoom) {
             streamRoomId
         );
     });
-    EXPECT_EQ(streamRoom.statusCode, 0);
+    EXPECT_EQ(errCode(streamRoom), 0);
     EXPECT_EQ(streamRoom.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(streamRoom.publicMeta.stdString(), "public");
     EXPECT_EQ(streamRoom.privateMeta.stdString(), "private");
@@ -363,7 +363,7 @@ TEST_F(StreamTest, createStreamRoom) {
             streamRoomId
         );
     });
-    EXPECT_EQ(streamRoom.statusCode, 0);
+    EXPECT_EQ(errCode(streamRoom), 0);
     EXPECT_EQ(streamRoom.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(streamRoom.publicMeta.stdString(), "public");
     EXPECT_EQ(streamRoom.privateMeta.stdString(), "private");

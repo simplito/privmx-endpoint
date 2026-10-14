@@ -13,7 +13,6 @@ limitations under the License.
 #include "privmx/endpoint/thread/encryptors/message/MessageDataSchemaMapper.hpp"
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/thread/Constants.hpp"
 
@@ -44,15 +43,16 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaStrategyV5::conv
 ) const {
     return {
         MessageDataSchemaMapper::toLibMessage(
-            message, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, raw.statusCode,
+            message, raw.publicMeta, raw.privateMeta, raw.data, raw.authorPubKey, core::toPublicError(raw.error),
             MessageDataSchema::Version::VERSION_5
         ),
         raw.dio
     };
 }
 
-Message MessageDataSchemaStrategyV5::toLibError(const server::Message& message, int64_t errorCode) const {
-    return MessageDataSchemaMapper::toLibMessage(
-        message, {}, {}, {}, {}, errorCode, MessageDataSchema::Version::VERSION_5
-    );
+Message MessageDataSchemaStrategyV5::toLibError(
+    const server::Message& message,
+    const std::optional<core::Error>& error
+) const {
+    return MessageDataSchemaMapper::toLibMessage(message, {}, {}, {}, {}, error, MessageDataSchema::Version::VERSION_5);
 }

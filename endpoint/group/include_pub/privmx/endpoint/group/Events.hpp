@@ -94,20 +94,20 @@ struct GroupCustomEventData {
     /**
      * Public key of the sender (base58-DER encoded), whose signature over the payload has been verified.
      *
-     * This is the field that attests to the author. EMPTY when `statusCode` is non-zero.
+     * This is the field that attests to the author. EMPTY when `error` is set.
      */
     std::string authorPubKey;
 
     /**
-     * Decrypted payload. EMPTY when `statusCode` is non-zero.
+     * Decrypted payload. EMPTY when `error` is set.
      */
     core::Buffer payload;
 
     /**
-     * 0 when the payload was opened. Otherwise the error that stopped it — the Group's key for this
+     * Empty when the payload was opened. Otherwise the error that stopped it — the Group's key for this
      * notification could not be resolved, or the payload did not verify.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 };
 
 /**

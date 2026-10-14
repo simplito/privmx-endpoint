@@ -63,16 +63,12 @@ void PmxDataChannelObserver::OnMessage(const char* buffer, int length, bool bina
             );
             std::shared_ptr<PlainData> data = std::make_shared<PlainData>(
                 std::vector<std::string>{}, _remoteStreamId, decryptedData.data, decryptedData.seq, binary,
-                decryptedData.statusCode
+                decryptedData.error ? decryptedData.error->code : 0
             );
             LOG_DEBUG("_onTrackInterface->OnData(data): ", data)
             _onTrackInterface->OnData(data);
         } catch (const privmx::endpoint::core::Exception& e) {
             LOG_ERROR("PmxDataChannelObserver::OnMessage recived privmx::endpoint::core::Exception\n", e.getFull())
-        } catch (const privmx::utils::PrivmxException& e) {
-            LOG_ERROR(
-                "PmxDataChannelObserver::OnMessage recived privmx::utils::PrivmxException\n", e.what(), " ", e.getCode()
-            )
         } catch (...) { LOG_ERROR("PmxDataChannelObserver::OnMessage recived unknown exception") }
     }
 }

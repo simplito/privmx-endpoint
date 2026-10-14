@@ -47,7 +47,7 @@ public:
         const server::Message& message,
         const DecryptedMessageDataV5& raw
     ) const override;
-    Message toLibError(const server::Message& message, int64_t errorCode) const override;
+    Message toLibError(const server::Message& message, const std::optional<core::Error>& error) const override;
 
 protected:
     server::EncryptedMessageDataV5 getEncryptedData(const server::Message& model) const override;

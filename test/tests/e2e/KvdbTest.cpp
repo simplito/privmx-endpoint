@@ -129,7 +129,7 @@ protected:
         EXPECT_EQ(kvdb.version, reader->getInt64(section + ".version"));
         EXPECT_EQ(kvdb.lastEntryDate, reader->getInt64(section + ".lastEntryDate"));
         EXPECT_EQ(kvdb.entries, reader->getInt64(section + ".entries"));
-        EXPECT_EQ(kvdb.statusCode, 0);
+        EXPECT_EQ(errCode(kvdb), 0);
         EXPECT_EQ(
             kvdb.publicMeta.stdString(),
             privmx::utils::Hex::toString(reader->getString(section + ".publicMeta_inHex"))
@@ -162,7 +162,7 @@ protected:
             privmx::utils::Hex::toString(reader->getString(section + ".privateMeta_inHex"))
         );
         EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString(section + ".data_inHex")));
-        EXPECT_EQ(entry.statusCode, 0);
+        EXPECT_EQ(errCode(entry), 0);
         EXPECT_EQ(
             privmx::utils::Utils::stringifyVar(_serializer.serialize(entry)),
             reader->getString(section + ".JSON_data")
@@ -226,7 +226,7 @@ TEST_F(KvdbTest, createKvdb) {
     });
     ASSERT_FALSE(createdId.empty());
     EXPECT_NO_THROW({ kvdb = kvdbApi->getKvdb(createdId); });
-    EXPECT_EQ(kvdb.statusCode, 0);
+    EXPECT_EQ(errCode(kvdb), 0);
     EXPECT_EQ(kvdb.contextId, contextId());
     EXPECT_EQ(kvdb.publicMeta.stdString(), "public");
     EXPECT_EQ(kvdb.privateMeta.stdString(), "private");
@@ -241,7 +241,7 @@ TEST_F(KvdbTest, createKvdb) {
     });
     ASSERT_FALSE(createdId.empty());
     EXPECT_NO_THROW({ kvdb = kvdbApi->getKvdb(createdId); });
-    EXPECT_EQ(kvdb.statusCode, 0);
+    EXPECT_EQ(errCode(kvdb), 0);
     EXPECT_EQ(kvdb.contextId, contextId());
     EXPECT_EQ(kvdb.publicMeta.stdString(), "public");
     EXPECT_EQ(kvdb.privateMeta.stdString(), "private");
@@ -294,7 +294,7 @@ TEST_F(KvdbTest, updateKvdb) {
         );
     });
     EXPECT_NO_THROW({ kvdb = kvdbApi->getKvdb(kvdbId(1)); });
-    EXPECT_EQ(kvdb.statusCode, 0);
+    EXPECT_EQ(errCode(kvdb), 0);
     EXPECT_EQ(kvdb.version, 2);
     EXPECT_EQ(kvdb.publicMeta.stdString(), "public");
     EXPECT_EQ(kvdb.privateMeta.stdString(), "private");
@@ -341,7 +341,7 @@ TEST_F(KvdbTest, updateKvdb) {
         );
     });
     EXPECT_NO_THROW({ kvdb = kvdbApi->getKvdb(kvdbId(3)); });
-    EXPECT_EQ(kvdb.statusCode, 0);
+    EXPECT_EQ(errCode(kvdb), 0);
     EXPECT_EQ(kvdb.version, 2);
     expectMembers(kvdb, {1}, {1});
 }
@@ -368,7 +368,7 @@ TEST_F(KvdbTest, rotateKvdbKeys) {
     ASSERT_NO_THROW({ kvdbApi->rotateKvdbKeys(createdId, user_1, user_1, 0, true); });
     kvdb::Kvdb afterFirstRotation;
     ASSERT_NO_THROW({ afterFirstRotation = kvdbApi->getKvdb(createdId); });
-    ASSERT_EQ(afterFirstRotation.statusCode, 0); // a single rotation has always been readable
+    ASSERT_EQ(errCode(afterFirstRotation), 0); // a single rotation has always been readable
 
     ASSERT_NO_THROW({ kvdbApi->rotateKvdbKeys(createdId, user_1, user_1, 0, true); });
 
@@ -378,7 +378,7 @@ TEST_F(KvdbTest, rotateKvdbKeys) {
 
     kvdb::Kvdb kvdb;
     EXPECT_NO_THROW({ kvdb = kvdbApi->getKvdb(createdId); });
-    EXPECT_EQ(kvdb.statusCode, 0);
+    EXPECT_EQ(errCode(kvdb), 0);
     EXPECT_EQ(kvdb.publicMeta.stdString(), "rotated_public");
     EXPECT_EQ(kvdb.privateMeta.stdString(), "rotated_private");
 
@@ -391,7 +391,7 @@ TEST_F(KvdbTest, rotateKvdbKeys) {
     for(const auto& listed : kvdbListResult.readItems) {
         if(listed.kvdbId == createdId) {
             foundInList = true;
-            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_EQ(errCode(listed), 0);
             EXPECT_EQ(listed.privateMeta.stdString(), "rotated_private");
         }
     }
@@ -400,7 +400,7 @@ TEST_F(KvdbTest, rotateKvdbKeys) {
     // Control: an entry carries its own keyId, so it must stay readable across the rotations.
     kvdb::KvdbEntry entry;
     EXPECT_NO_THROW({ entry = kvdbApi->getEntry(createdId, "rotated_entry"); });
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
     EXPECT_EQ(entry.data.stdString(), "entry_data");
 }
 
@@ -665,7 +665,7 @@ TEST_F(KvdbTest, setEntry) {
     EXPECT_EQ(entry.publicMeta.stdString(), "kvdb_entry_1_publicMeta");
     EXPECT_EQ(entry.privateMeta.stdString(), "kvdb_entry_1_privateMeta");
     EXPECT_EQ(entry.data.stdString(), "kvdb_entry_1_data");
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
 
     // overwriting it at a stale version is refused
     EXPECT_THROW({
@@ -684,7 +684,7 @@ TEST_F(KvdbTest, setEntry) {
     EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId(2), "kvdb_entry_key"); });
     EXPECT_EQ(entry.version, 2);
     EXPECT_EQ(entry.data.stdString(), "kvdb_entry_1_data_v2");
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
 
     // a non-member may not write, a fellow member may overwrite somebody else's entry
     disconnect();
@@ -708,7 +708,7 @@ TEST_F(KvdbTest, setEntry) {
     EXPECT_EQ(entry.publicMeta.stdString(), "kvdb_entry_1_publicMeta");
     EXPECT_EQ(entry.privateMeta.stdString(), "kvdb_entry_1_privateMeta");
     EXPECT_EQ(entry.data.stdString(), "kvdb_entry_1_data_v3");
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
 
     // with a stale kvdb in the cache: the write below only succeeds if the new key is picked up
     disconnect();
@@ -722,7 +722,7 @@ TEST_F(KvdbTest, setEntry) {
         );
     });
     EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId(1), "test"); });
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
     EXPECT_EQ(entry.data.stdString(), "data");
     EXPECT_EQ(entry.privateMeta.stdString(), "privateMeta");
     EXPECT_EQ(entry.publicMeta.stdString(), "publicMeta");
@@ -796,12 +796,12 @@ TEST_F(KvdbTest, userValidator_false) {
 
     EXPECT_NO_THROW({
         auto kvdb = kvdbApi->getKvdb(kvdbId(1));
-        EXPECT_EQ(kvdb.statusCode, failureCode);
+        EXPECT_EQ(errCode(kvdb), failureCode);
     });
     EXPECT_NO_THROW({
         auto kvdbs = kvdbApi->listKvdbs(contextId(), {.skip=0, .limit=1, .sortOrder="desc"});
         ASSERT_EQ(kvdbs.readItems.size(), 1);
-        EXPECT_EQ(kvdbs.readItems[0].statusCode, failureCode);
+        EXPECT_EQ(errCode(kvdbs.readItems[0]), failureCode);
     });
     EXPECT_NO_THROW({
         kvdbApi->createKvdb(
@@ -818,12 +818,12 @@ TEST_F(KvdbTest, userValidator_false) {
     EXPECT_NO_THROW({ kvdbApi->deleteKvdb(kvdbId(2)); });
     EXPECT_NO_THROW({
         auto entry = kvdbApi->getEntry(reader->getString("KvdbEntry_1.info_kvdbId"), entryKey(1));
-        EXPECT_EQ(entry.statusCode, failureCode);
+        EXPECT_EQ(errCode(entry), failureCode);
     });
     EXPECT_NO_THROW({
         auto entries = kvdbApi->listEntries(kvdbId(1), {.skip=0, .limit=1, .sortOrder="desc"});
         ASSERT_EQ(entries.readItems.size(), 1);
-        EXPECT_EQ(entries.readItems[0].statusCode, failureCode);
+        EXPECT_EQ(errCode(entries.readItems[0]), failureCode);
     });
     EXPECT_THROW({
         kvdbApi->setEntry(

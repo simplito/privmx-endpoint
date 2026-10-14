@@ -219,8 +219,8 @@ SearchIndex SearchApiImpl::mapSearchIndex(const kvdb::Kvdb& kvdb) {
         .publicMeta = kvdb.publicMeta,
         .privateMeta = kvdb.privateMeta,
         .policy = kvdb.policy,
-        .mode = (kvdb.statusCode == 0) ? (IndexMode)getIndexData(kvdb.kvdbId).mode : IndexMode::UNKNOWN,
-        .statusCode = kvdb.statusCode,
+        .mode = !kvdb.error.has_value() ? (IndexMode)getIndexData(kvdb.kvdbId).mode : IndexMode::UNKNOWN,
+        .error = kvdb.error,
         .schemaVersion = kvdb.schemaVersion,
         // Reported off the KVDB half alone: both halves are granted together, and reading the Store's would cost
         // a round trip per Index. A re-key of either half clears its own staleness.

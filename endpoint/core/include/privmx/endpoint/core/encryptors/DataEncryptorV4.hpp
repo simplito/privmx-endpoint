@@ -23,16 +23,16 @@ namespace core {
 
 class DataEncryptorV4 {
 public:
-    std::string signAndEncode(const core::Buffer& data, const crypto::PrivateKey& authorPrivateKey);
+    std::string signAndEncode(const core::Buffer& data, const privmx::crypto::PrivateKey& authorPrivateKey);
     std::string signAndEncryptAndEncode(
         const core::Buffer& data,
-        const crypto::PrivateKey& authorPrivateKey,
+        const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
-    core::Buffer decodeAndVerify(const std::string& publicDataBase64, const crypto::PublicKey& authorPublicKey);
+    core::Buffer decodeAndVerify(const std::string& publicDataBase64, const privmx::crypto::PublicKey& authorPublicKey);
     core::Buffer decodeAndDecryptAndVerify(
         const std::string& privateDataBase64,
-        const crypto::PublicKey& authorPublicKey,
+        const privmx::crypto::PublicKey& authorPublicKey,
         const std::string& encryptionKey
     );
 

@@ -53,7 +53,9 @@ public:
     // Empty for V4, which carries no DIO at all.
     std::optional<core::DataIntegrityObject> assertDataIntegrity(const server::Store& store);
 
-    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateDataIntegrity(const server::Store& store);
+    std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> validateDataIntegrity(
+        const server::Store& store
+    );
 
     std::vector<Store> validateDecryptAndConvertStores(
         const std::vector<server::Store>& stores,
@@ -71,7 +73,7 @@ public:
         const server::Store& store,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        int64_t statusCode,
+        const std::optional<core::Error>& error,
         int64_t schemaVersion
     );
 

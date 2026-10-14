@@ -102,8 +102,8 @@ TEST_F(StoreUsingGroupsTest, createStore_with_group_grants) {
     group::Group group_1, group_2;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
+    ASSERT_EQ(errCode(group_2), 0);
     ASSERT_FALSE(group_1.groupPubKey.empty());
 
     // no grants
@@ -118,7 +118,7 @@ TEST_F(StoreUsingGroupsTest, createStore_with_group_grants) {
     });
     ASSERT_FALSE(storeId.empty());
     EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
-    EXPECT_EQ(s.statusCode, 0);
+    EXPECT_EQ(errCode(s), 0);
     EXPECT_EQ(s.groups.size(), 0);
 
     // one grant
@@ -131,7 +131,7 @@ TEST_F(StoreUsingGroupsTest, createStore_with_group_grants) {
     });
     ASSERT_FALSE(storeId.empty());
     EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
-    EXPECT_EQ(s.statusCode, 0);
+    EXPECT_EQ(errCode(s), 0);
     ASSERT_EQ(s.groups.size(), 1);
     EXPECT_EQ(s.groups[0].groupId, group_1.groupId);
     EXPECT_EQ(s.groups[0].role, "user");
@@ -157,7 +157,7 @@ TEST_F(StoreUsingGroupsTest, createStore_with_group_grants) {
     });
     ASSERT_FALSE(storeId.empty());
     EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
-    EXPECT_EQ(s.statusCode, 0);
+    EXPECT_EQ(errCode(s), 0);
     EXPECT_EQ(s.groups.size(), 2);
     bool found1 = false, found2 = false;
     for (const auto& g : s.groups) {
@@ -188,7 +188,7 @@ TEST_F(StoreUsingGroupsTest, createStore_with_group_grants) {
 TEST_F(StoreUsingGroupsTest, updateStore_add_and_promote_group) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     // a store that starts with no grantee group
     std::string storeId;
@@ -223,7 +223,7 @@ TEST_F(StoreUsingGroupsTest, updateStore_add_and_promote_group) {
     });
     store::Store updated;
     EXPECT_NO_THROW({ updated = storeApi->getStore(storeId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.publicMeta.stdString(), "after_group");
     ASSERT_EQ(updated.groups.size(), 1);
     EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
@@ -256,10 +256,10 @@ TEST_F(StoreUsingGroupsTest, updateStore_remove_group) {
     // Group_2 has user_1 and user_2, so removing the grant is observable from user_2's side.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     // policy.get="all" so user_2 can always call getStore without throwing; after group removal it
-    // receives statusCode!=0 and empty privateMeta because it no longer holds the decryption key.
+    // receives an `error` and empty privateMeta because it no longer holds the decryption key.
     core::ContainerPolicy policy;
     policy.get = "all";
 
@@ -287,7 +287,7 @@ TEST_F(StoreUsingGroupsTest, updateStore_remove_group) {
     connectAs(2);
     store::Store beforeRemoval;
     EXPECT_NO_THROW({ beforeRemoval = storeApi->getStore(storeId); });
-    EXPECT_EQ(beforeRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(beforeRemoval), 0);
     EXPECT_FALSE(beforeRemoval.privateMeta.stdString().empty());
 
     disconnect();
@@ -309,7 +309,7 @@ TEST_F(StoreUsingGroupsTest, updateStore_remove_group) {
 
     store::Store updated;
     EXPECT_NO_THROW({ updated = storeApi->getStore(storeId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.publicMeta.stdString(), "no_group_now");
     EXPECT_EQ(updated.groups.size(), 0);
 
@@ -317,14 +317,14 @@ TEST_F(StoreUsingGroupsTest, updateStore_remove_group) {
     connectAs(2);
     store::Store afterRemoval;
     EXPECT_NO_THROW({ afterRemoval = storeApi->getStore(storeId); });
-    EXPECT_NE(afterRemoval.statusCode, 0);
+    EXPECT_NE(errCode(afterRemoval), 0);
     EXPECT_TRUE(afterRemoval.privateMeta.stdString().empty());
 }
 
 TEST_F(StoreUsingGroupsTest, listStores_includes_groups_field) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string storeId;
     ASSERT_NO_THROW({
@@ -346,7 +346,7 @@ TEST_F(StoreUsingGroupsTest, listStores_includes_groups_field) {
     bool found = false;
     for (const auto& s : list.readItems) {
         if (s.storeId == storeId) {
-            EXPECT_EQ(s.statusCode, 0);
+            EXPECT_EQ(errCode(s), 0);
             EXPECT_EQ(s.groups.size(), 1);
             if (s.groups.size() == 1) {
                 EXPECT_EQ(s.groups[0].groupId, group_1.groupId);
@@ -374,13 +374,13 @@ TEST_F(StoreUsingGroupsTest, reads_through_a_group_grant) {
         store::Store s;
         EXPECT_NO_THROW({ s = storeApi->getStore(reader->getString("Store_4.storeId")); })
             << "user_" << index << " could not open the store";
-        EXPECT_EQ(s.statusCode, 0);
+        EXPECT_EQ(errCode(s), 0);
         EXPECT_EQ(s.groups.size(), 2);
 
         store::File f;
         EXPECT_NO_THROW({ f = storeApi->getFile(dataFileId); })
             << "user_" << index << " could not read the file";
-        EXPECT_EQ(f.statusCode, 0);
+        EXPECT_EQ(errCode(f), 0);
         EXPECT_EQ(f.privateMeta.stdString(), privateMeta);
         std::string content;
         EXPECT_NO_THROW({ content = downloadFile(dataFileId, f.size); });
@@ -396,7 +396,7 @@ TEST_F(StoreUsingGroupsTest, reads_through_a_group_grant) {
         });
         EXPECT_EQ(list.totalAvailable, 2);
         for (const auto& listed : list.readItems) {
-            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_EQ(errCode(listed), 0);
             EXPECT_FALSE(listed.privateMeta.stdString().empty());
         }
     }
@@ -405,7 +405,7 @@ TEST_F(StoreUsingGroupsTest, reads_through_a_group_grant) {
 TEST_F(StoreUsingGroupsTest, getFile_lost_after_group_removal) {
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string storeId;
     ASSERT_NO_THROW({
@@ -426,7 +426,7 @@ TEST_F(StoreUsingGroupsTest, getFile_lost_after_group_removal) {
     connectAs(2);
     store::File beforeRemoval;
     EXPECT_NO_THROW({ beforeRemoval = storeApi->getFile(fileId); });
-    EXPECT_EQ(beforeRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(beforeRemoval), 0);
     EXPECT_EQ(beforeRemoval.privateMeta.stdString(), "secret_private");
 
     // user_1 drops the grant, which forces a new container key.
@@ -455,12 +455,12 @@ TEST_F(StoreUsingGroupsTest, getFile_lost_after_group_removal) {
     connectAs(2);
     store::File afterRemoval;
     EXPECT_NO_THROW({ afterRemoval = storeApi->getFile(fileId); });
-    EXPECT_EQ(afterRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(afterRemoval), 0);
     EXPECT_EQ(afterRemoval.privateMeta.stdString(), "secret_private");
 
     store::File newFile;
     EXPECT_NO_THROW({ newFile = storeApi->getFile(newFileId); });
-    EXPECT_NE(newFile.statusCode, 0);
+    EXPECT_NE(errCode(newFile), 0);
     EXPECT_TRUE(newFile.privateMeta.stdString().empty());
 }
 
@@ -468,7 +468,7 @@ TEST_F(StoreUsingGroupsTest, user_added_to_group_gains_access_to_store_and_files
     // Group_2 has user_1 + user_2; user_3 is not yet a member.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string storeId;
     ASSERT_NO_THROW({
@@ -489,10 +489,10 @@ TEST_F(StoreUsingGroupsTest, user_added_to_group_gains_access_to_store_and_files
     connectAs(3);
     store::Store sBefore;
     EXPECT_NO_THROW({ sBefore = storeApi->getStore(storeId); });
-    EXPECT_NE(sBefore.statusCode, 0);
+    EXPECT_NE(errCode(sBefore), 0);
     store::File fBefore;
     EXPECT_NO_THROW({ fBefore = storeApi->getFile(fileId); });
-    EXPECT_NE(fBefore.statusCode, 0);
+    EXPECT_NE(errCode(fBefore), 0);
 
     // Seat user_3's leaf in the key tree - a metadata write would only re-wrap the group's metadata key.
     disconnect();
@@ -508,10 +508,10 @@ TEST_F(StoreUsingGroupsTest, user_added_to_group_gains_access_to_store_and_files
     connectAs(3);
     store::Store sAfter;
     EXPECT_NO_THROW({ sAfter = storeApi->getStore(storeId); });
-    EXPECT_EQ(sAfter.statusCode, 0);
+    EXPECT_EQ(errCode(sAfter), 0);
     store::File fAfter;
     EXPECT_NO_THROW({ fAfter = storeApi->getFile(fileId); });
-    EXPECT_EQ(fAfter.statusCode, 0);
+    EXPECT_EQ(errCode(fAfter), 0);
     EXPECT_EQ(fAfter.privateMeta.stdString(), "file_priv");
 }
 
@@ -520,7 +520,7 @@ TEST_F(StoreUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
     // `verifyKeysSecret` fails on any non-zero status, so an unresolved group entry throws instead of updating.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string storeId;
     ASSERT_NO_THROW({
@@ -538,12 +538,12 @@ TEST_F(StoreUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 
     store::Store s;
     EXPECT_NO_THROW({ s = storeApi->getStore(storeId); });
-    EXPECT_EQ(s.statusCode, 0);
+    EXPECT_EQ(errCode(s), 0);
     EXPECT_EQ(s.groups.size(), 1);
 
     store::File f;
     EXPECT_NO_THROW({ f = storeApi->getFile(fileId); });
-    EXPECT_EQ(f.statusCode, 0);
+    EXPECT_EQ(errCode(f), 0);
     std::string content;
     EXPECT_NO_THROW({ content = downloadFile(fileId, f.size); });
     EXPECT_EQ(content, "direct_data");
@@ -567,7 +567,7 @@ TEST_F(StoreUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 
     store::Store updated;
     EXPECT_NO_THROW({ updated = storeApi->getStore(storeId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.privateMeta.stdString(), "direct_updated_private");
 }
 
@@ -579,13 +579,13 @@ TEST_F(StoreUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
 
     store::Store s;
     EXPECT_NO_THROW({ s = storeApi->getStore(reader->getString("Store_5.storeId")); });
-    EXPECT_EQ(s.statusCode, 0);
+    EXPECT_EQ(errCode(s), 0);
     // `groups` stays unnarrowed, so user_2 still sees the grant it is not part of.
     EXPECT_EQ(s.groups.size(), 1);
 
     store::File f;
     EXPECT_NO_THROW({ f = storeApi->getFile(reader->getString("File_5.info_fileId")); });
-    EXPECT_EQ(f.statusCode, 0);
+    EXPECT_EQ(errCode(f), 0);
     EXPECT_EQ(f.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("File_5.privateMeta_inHex")));
 }
 
@@ -594,7 +594,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_d
     // group: the default group policy hands a group's epoch and public key to members only.
     group::Group granteeGroup;
     ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(granteeGroup.statusCode, 0);
+    ASSERT_EQ(errCode(granteeGroup), 0);
 
     std::string storeId;
     ASSERT_NO_THROW({
@@ -610,7 +610,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_d
 
     store::Store before;
     ASSERT_NO_THROW({ before = storeApi->getStore(storeId); });
-    ASSERT_EQ(before.statusCode, 0);
+    ASSERT_EQ(errCode(before), 0);
 
     // user_2 re-keys without naming any group at all.
     disconnect();
@@ -635,7 +635,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_d
     connectAs(1);
     store::Store after;
     EXPECT_NO_THROW({ after = storeApi->getStore(storeId); });
-    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(errCode(after), 0);
     EXPECT_EQ(after.groups.size(), 1);
     if (after.groups.size() == 1) {
         EXPECT_EQ(after.groups[0].groupId, granteeGroup.groupId);
@@ -646,7 +646,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_covers_a_grantee_group_the_caller_d
     ASSERT_NO_THROW({ fileId = uploadFile(storeId, "post_rekey_pub", "post_rekey_priv", "post_rekey_data"); });
     store::File f;
     EXPECT_NO_THROW({ f = storeApi->getFile(fileId); });
-    EXPECT_EQ(f.statusCode, 0);
+    EXPECT_EQ(errCode(f), 0);
     EXPECT_EQ(f.privateMeta.stdString(), "post_rekey_priv");
 }
 
@@ -671,7 +671,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_clears_staleGroups_after_the_group_
 
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
     ASSERT_EQ(group.keyVersion, 1);
 
     std::string storeId;
@@ -696,12 +696,12 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_clears_staleGroups_after_the_group_
 
     group::Group rotatedGroup;
     ASSERT_NO_THROW({ rotatedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(rotatedGroup.statusCode, 0);
+    ASSERT_EQ(errCode(rotatedGroup), 0);
     ASSERT_EQ(rotatedGroup.keyVersion, 2);
 
     store::Store stale;
     ASSERT_NO_THROW({ stale = storeApi->getStore(storeId); });
-    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(errCode(stale), 0);
     EXPECT_EQ(stale.staleGroups.size(), 1);
     if (stale.staleGroups.size() == 1) {
         EXPECT_EQ(stale.staleGroups[0], groupId);
@@ -720,7 +720,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_clears_staleGroups_after_the_group_
 
     store::Store fresh;
     EXPECT_NO_THROW({ fresh = storeApi->getStore(storeId); });
-    EXPECT_EQ(fresh.statusCode, 0);
+    EXPECT_EQ(errCode(fresh), 0);
     EXPECT_EQ(fresh.staleGroups.size(), 0);
     EXPECT_EQ(fresh.groups.size(), 1);
 
@@ -730,7 +730,7 @@ TEST_F(StoreUsingGroupsTest, rotateStoreKeys_clears_staleGroups_after_the_group_
     connectAs(2);
     store::File oldEpochFile;
     EXPECT_NO_THROW({ oldEpochFile = storeApi->getFile(oldEpochFileId); });
-    EXPECT_EQ(oldEpochFile.statusCode, 0);
+    EXPECT_EQ(errCode(oldEpochFile), 0);
     EXPECT_EQ(oldEpochFile.privateMeta.stdString(), "old_epoch_priv");
 }
 
@@ -755,7 +755,7 @@ TEST_F(StoreUsingGroupsTest, uploading_a_file_auto_rotates_a_stale_store_key) {
 
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
 
     std::string storeId;
     ASSERT_NO_THROW({
@@ -773,7 +773,7 @@ TEST_F(StoreUsingGroupsTest, uploading_a_file_auto_rotates_a_stale_store_key) {
 
     store::Store stale;
     ASSERT_NO_THROW({ stale = storeApi->getStore(storeId); });
-    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(errCode(stale), 0);
     ASSERT_EQ(stale.staleGroups.size(), 1);
     ASSERT_EQ(stale.staleGroups[0], groupId);
 
@@ -783,7 +783,7 @@ TEST_F(StoreUsingGroupsTest, uploading_a_file_auto_rotates_a_stale_store_key) {
 
     store::Store rekeyed;
     ASSERT_NO_THROW({ rekeyed = storeApi->getStore(storeId); });
-    EXPECT_EQ(rekeyed.statusCode, 0);
+    EXPECT_EQ(errCode(rekeyed), 0);
     EXPECT_TRUE(rekeyed.staleGroups.empty());
     // Exactly one re-key: a rotation appends one history entry and nothing else wrote to the Store.
     EXPECT_EQ(rekeyed.version, stale.version + 1);
@@ -796,6 +796,6 @@ TEST_F(StoreUsingGroupsTest, uploading_a_file_auto_rotates_a_stale_store_key) {
     connectAs(2);
     store::File file;
     EXPECT_NO_THROW({ file = storeApi->getFile(fileId); });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
     EXPECT_EQ(downloadFile(fileId, (int64_t)std::string("auto_data").size()), "auto_data");
 }

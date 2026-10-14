@@ -42,7 +42,7 @@ public:
         const server::KvdbInfo& kvdb,
         const core::DecryptedModuleDataV5& raw
     ) const override;
-    Kvdb toLibError(const server::KvdbInfo& kvdb, int64_t errorCode) const override;
+    Kvdb toLibError(const server::KvdbInfo& kvdb, const std::optional<core::Error>& error) const override;
 
 protected:
     core::dynamic::EncryptedModuleDataV5 getEncryptedData(const server::KvdbInfo& model) const override;

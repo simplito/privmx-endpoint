@@ -27,7 +27,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& va
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("privateMeta", serialize(val.privateMeta));
     obj->set("policy", serialize(val.policy));
-    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("error", serialize(val.error));
     obj->set("schemaVersion", serialize(val.schemaVersion));
     obj->set("keyVersion", serialize(val.keyVersion));
     if (val.type.has_value()) {
@@ -154,7 +154,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupCustomEventData>(const g
     obj->set("userId", serialize(val.userId));
     obj->set("authorPubKey", serialize(val.authorPubKey));
     obj->set("payload", serialize(val.payload));
-    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("error", serialize(val.error));
     return obj;
 }
 

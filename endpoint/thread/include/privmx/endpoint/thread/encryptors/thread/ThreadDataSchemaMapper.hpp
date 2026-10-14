@@ -57,7 +57,7 @@ public:
     // Empty for V4, which carries no DIO at all.
     std::optional<core::DataIntegrityObject> assertDataIntegrity(const server::ThreadInfo& thread);
 
-    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateDataIntegrity(
+    std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> validateDataIntegrity(
         const server::ThreadInfo& thread
     );
 
@@ -77,7 +77,7 @@ public:
         const server::ThreadInfo& info,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        int64_t statusCode,
+        const std::optional<core::Error>& error,
         int64_t schemaVersion
     );
 

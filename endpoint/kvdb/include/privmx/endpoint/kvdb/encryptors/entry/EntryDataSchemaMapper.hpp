@@ -65,7 +65,7 @@ public:
     KvdbEntryDataSchema::Version getDataStructureVersion(const server::KvdbEntryInfo& entry);
 
     // Returns the entry's DIO, so the decrypt that follows need not verify it again.
-    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateEntryDataIntegrity(
+    std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> validateEntryDataIntegrity(
         const server::KvdbEntryInfo& entry,
         const std::string& kvdbResourceId
     );
@@ -90,7 +90,7 @@ public:
         const core::Buffer& privateMeta,
         const core::Buffer& data,
         const std::string& authorPubKey,
-        int64_t statusCode,
+        const std::optional<core::Error>& error,
         int64_t schemaVersion
     );
 

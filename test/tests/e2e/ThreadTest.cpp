@@ -129,7 +129,7 @@ protected:
         EXPECT_EQ(thread.version, reader->getInt64(section + ".version"));
         EXPECT_EQ(thread.lastMsgDate, reader->getInt64(section + ".lastMsgDate"));
         EXPECT_EQ(thread.messagesCount, reader->getInt64(section + ".messagesCount"));
-        EXPECT_EQ(thread.statusCode, 0);
+        EXPECT_EQ(errCode(thread), 0);
         EXPECT_EQ(
             thread.publicMeta.stdString(),
             privmx::utils::Hex::toString(reader->getString(section + ".publicMeta_inHex"))
@@ -162,7 +162,7 @@ protected:
             privmx::utils::Hex::toString(reader->getString(section + ".privateMeta_inHex"))
         );
         EXPECT_EQ(message.data.stdString(), privmx::utils::Hex::toString(reader->getString(section + ".data_inHex")));
-        EXPECT_EQ(message.statusCode, 0);
+        EXPECT_EQ(errCode(message), 0);
         EXPECT_EQ(
             privmx::utils::Utils::stringifyVar(_serializer.serialize(message)),
             reader->getString(section + ".JSON_data")
@@ -281,7 +281,7 @@ TEST_F(ThreadTest, createThread) {
     });
     ASSERT_FALSE(createdId.empty());
     EXPECT_NO_THROW({ thread = threadApi->getThread(createdId); });
-    EXPECT_EQ(thread.statusCode, 0);
+    EXPECT_EQ(errCode(thread), 0);
     EXPECT_EQ(thread.contextId, contextId());
     EXPECT_EQ(thread.publicMeta.stdString(), "public");
     EXPECT_EQ(thread.privateMeta.stdString(), "private");
@@ -296,7 +296,7 @@ TEST_F(ThreadTest, createThread) {
     });
     ASSERT_FALSE(createdId.empty());
     EXPECT_NO_THROW({ thread = threadApi->getThread(createdId); });
-    EXPECT_EQ(thread.statusCode, 0);
+    EXPECT_EQ(errCode(thread), 0);
     EXPECT_EQ(thread.contextId, contextId());
     expectMembers(thread, {1}, {1});
 
@@ -363,7 +363,7 @@ TEST_F(ThreadTest, updateThread) {
         );
     });
     EXPECT_NO_THROW({ thread = threadApi->getThread(threadId(1)); });
-    EXPECT_EQ(thread.statusCode, 0);
+    EXPECT_EQ(errCode(thread), 0);
     EXPECT_EQ(thread.version, 2);
     EXPECT_EQ(thread.publicMeta.stdString(), "public");
     EXPECT_EQ(thread.privateMeta.stdString(), "private");
@@ -410,7 +410,7 @@ TEST_F(ThreadTest, updateThread) {
         );
     });
     EXPECT_NO_THROW({ thread = threadApi->getThread(threadId(3)); });
-    EXPECT_EQ(thread.statusCode, 0);
+    EXPECT_EQ(errCode(thread), 0);
     EXPECT_EQ(thread.version, 2);
     expectMembers(thread, {1}, {1});
 }
@@ -427,7 +427,7 @@ TEST_F(ThreadTest, updateThread_rewraps_keys_for_a_newly_added_user) {
     connectAs(ConnectionType::User2);
     thread::Message message;
     EXPECT_NO_THROW({ message = threadApi->getMessage(messageId(1)); });
-    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(errCode(message), 0);
 }
 
 TEST_F(ThreadTest, updateThread_policy) {
@@ -493,7 +493,7 @@ TEST_F(ThreadTest, rotateThreadKeys) {
     ASSERT_NO_THROW({ threadApi->rotateThreadKeys(createdId, user_1, user_1, 0, true); });
     thread::Thread afterFirstRotation;
     ASSERT_NO_THROW({ afterFirstRotation = threadApi->getThread(createdId); });
-    ASSERT_EQ(afterFirstRotation.statusCode, 0); // a single rotation has always been readable
+    ASSERT_EQ(errCode(afterFirstRotation), 0); // a single rotation has always been readable
 
     ASSERT_NO_THROW({ threadApi->rotateThreadKeys(createdId, user_1, user_1, 0, true); });
 
@@ -503,7 +503,7 @@ TEST_F(ThreadTest, rotateThreadKeys) {
 
     thread::Thread thread;
     EXPECT_NO_THROW({ thread = threadApi->getThread(createdId); });
-    EXPECT_EQ(thread.statusCode, 0);
+    EXPECT_EQ(errCode(thread), 0);
     EXPECT_EQ(thread.publicMeta.stdString(), "rotated_public");
     EXPECT_EQ(thread.privateMeta.stdString(), "rotated_private");
 
@@ -516,7 +516,7 @@ TEST_F(ThreadTest, rotateThreadKeys) {
     for(const auto& listed : threadListResult.readItems) {
         if(listed.threadId == createdId) {
             foundInList = true;
-            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_EQ(errCode(listed), 0);
             EXPECT_EQ(listed.privateMeta.stdString(), "rotated_private");
         }
     }
@@ -525,7 +525,7 @@ TEST_F(ThreadTest, rotateThreadKeys) {
     // Control: a message carries its own keyId, so it must stay readable across the rotations.
     thread::Message message;
     EXPECT_NO_THROW({ message = threadApi->getMessage(createdMessageId); });
-    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(errCode(message), 0);
     EXPECT_EQ(message.data.stdString(), "msg_data");
 }
 
@@ -652,7 +652,7 @@ TEST_F(ThreadTest, listThreads) {
     EXPECT_EQ(listThreads.totalAvailable, 1);
     ASSERT_EQ(listThreads.readItems.size(), 1);
     EXPECT_EQ(listThreads.readItems[0].threadId, createdId);
-    EXPECT_EQ(listThreads.readItems[0].statusCode, 0);
+    EXPECT_EQ(errCode(listThreads.readItems[0]), 0);
     EXPECT_EQ(listThreads.readItems[0].publicMeta.stdString(), "{\"test\":1}");
     EXPECT_EQ(listThreads.readItems[0].privateMeta.stdString(), "list_query_test");
 }
@@ -793,7 +793,7 @@ TEST_F(ThreadTest, sendMessage) {
     });
     thread::Message message;
     EXPECT_NO_THROW({ message = threadApi->getMessage(sentId); });
-    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(errCode(message), 0);
     EXPECT_EQ(message.data.stdString().length(), random_data.length());
     if(message.data.stdString().length() == random_data.length()) {
         EXPECT_EQ(message.data.stdString(), random_data);
@@ -816,7 +816,7 @@ TEST_F(ThreadTest, sendMessage) {
         );
     });
     EXPECT_NO_THROW({ message = threadApi->getMessage(sentId); });
-    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(errCode(message), 0);
     EXPECT_EQ(message.data.stdString(), "data");
 }
 
@@ -853,7 +853,7 @@ TEST_F(ThreadTest, updateMessage) {
     });
     thread::Message message;
     EXPECT_NO_THROW({ message = threadApi->getMessage(messageId(1)); });
-    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(errCode(message), 0);
     EXPECT_EQ(message.data.stdString().length(), random_data.length());
     if(message.data.stdString().length() == random_data.length()) {
         EXPECT_EQ(message.data.stdString(), random_data);
@@ -876,7 +876,7 @@ TEST_F(ThreadTest, updateMessage) {
         );
     });
     EXPECT_NO_THROW({ message = threadApi->getMessage(messageId(1)); });
-    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(errCode(message), 0);
     EXPECT_EQ(message.data.stdString(), "data");
 }
 
@@ -999,12 +999,12 @@ TEST_F(ThreadTest, userValidator_false) {
 
     EXPECT_NO_THROW({
         auto thread = threadApi->getThread(threadId(1));
-        EXPECT_EQ(thread.statusCode, failureCode);
+        EXPECT_EQ(errCode(thread), failureCode);
     });
     EXPECT_NO_THROW({
         auto threads = threadApi->listThreads(contextId(), {.skip=0, .limit=1, .sortOrder="desc"});
         ASSERT_EQ(threads.readItems.size(), 1);
-        EXPECT_EQ(threads.readItems[0].statusCode, failureCode);
+        EXPECT_EQ(errCode(threads.readItems[0]), failureCode);
     });
     EXPECT_NO_THROW({
         threadApi->createThread(
@@ -1021,12 +1021,12 @@ TEST_F(ThreadTest, userValidator_false) {
     EXPECT_NO_THROW({ threadApi->deleteThread(threadId(2)); });
     EXPECT_NO_THROW({
         auto message = threadApi->getMessage(messageId(1));
-        EXPECT_EQ(message.statusCode, failureCode);
+        EXPECT_EQ(errCode(message), failureCode);
     });
     EXPECT_NO_THROW({
         auto messages = threadApi->listMessages(threadId(1), {.skip=0, .limit=1, .sortOrder="desc"});
         ASSERT_EQ(messages.readItems.size(), 1);
-        EXPECT_EQ(messages.readItems[0].statusCode, failureCode);
+        EXPECT_EQ(errCode(messages.readItems[0]), failureCode);
     });
     EXPECT_THROW({
         threadApi->sendMessage(

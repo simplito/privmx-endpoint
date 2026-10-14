@@ -16,6 +16,13 @@
 #include <privmx/utils/PrivmxException.hpp>
 
 
+// Narrows the public `error` back to the code the assertions compare against; 0 means no error.
+// Global scope on purpose: the API structs live in privmx::endpoint::*, so ADL would not find it here.
+template<typename T>
+inline int64_t errCode(const T& value) {
+    return value.error.has_value() ? (int64_t)value.error->code : 0;
+}
+
 namespace privmx {
 namespace test {
 
@@ -43,9 +50,6 @@ protected:
             customSetUp();
         } catch (const privmx::endpoint::core::Exception& e) {
             std::cout << e.getFull() << std::endl;
-            FAIL();
-        } catch (const privmx::utils::PrivmxException& e) {
-            std::cout << e.what() << " | " << e.getData() << std::endl;
             FAIL();
         } catch (const std::exception& e) {
             std::cout << e.what() << std::endl;

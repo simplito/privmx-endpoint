@@ -56,7 +56,9 @@ public:
     // Empty for V4, which carries no DIO at all.
     std::optional<core::DataIntegrityObject> assertDataIntegrity(const server::InboxInfo& inbox);
 
-    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateDataIntegrity(const server::InboxInfo& inbox);
+    std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> validateDataIntegrity(
+        const server::InboxInfo& inbox
+    );
 
     InboxPublicViewData getPublicViewData(const server::InboxGetPublicViewResult& publicView);
     InboxInternalMetaV5 decryptInternalMeta(const server::InboxDataEntry& entry, const core::DecryptedEncKey& encKey);
@@ -82,7 +84,7 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const std::optional<FilesConfig>& filesConfig,
-        int64_t statusCode,
+        const std::optional<core::Error>& error,
         int64_t schemaVersion
     );
 

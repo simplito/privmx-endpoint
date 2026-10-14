@@ -135,8 +135,8 @@ TEST_F(KeyProviderGroupKeysTest, dead_route_marks_the_key_even_though_a_later_ro
     const auto keys = _keyProvider->getKeysAndVerify(request, resolverOver(openable, log));
 
     const auto& key = keys.at(_location).at(KEY_ID);
-    EXPECT_EQ(key.statusCode, UnknownEncryptionKeyVersionException().getCode());
-    // `statusCode` withholds the key without erasing what was found.
+    EXPECT_EQ(key.statusCode(), UnknownEncryptionKeyVersionException().getCode());
+    // `error` withholds the key without erasing what was found.
     EXPECT_EQ(key.id, KEY_ID);
     EXPECT_EQ(key.key, _containerKey.key);
     // Both tried: nothing can tell a route is dead without attempting it.
@@ -157,14 +157,14 @@ TEST_F(KeyProviderGroupKeysTest, opening_on_the_first_route_leaves_no_mark) {
     const auto keys = _keyProvider->getKeysAndVerify(request, resolverOver(openable, log));
 
     const auto& key = keys.at(_location).at(KEY_ID);
-    EXPECT_EQ(key.statusCode, 0);
+    EXPECT_EQ(key.statusCode(), 0);
     EXPECT_EQ(key.key, _containerKey.key);
     // Stopped on the first success: attempting group_b costs a `groupGet` and a climb for nothing.
     EXPECT_EQ(log.attempted, (std::vector<std::string>{GROUP_A}));
 }
 
 TEST_F(KeyProviderGroupKeysTest, unopenable_routes_leave_a_failed_entry_under_the_keyId) {
-    // Every route dead still yields an entry: callers read `.at(keyId).statusCode`, so a gap throws instead.
+    // Every route dead still yields an entry: callers read `.at(keyId).statusCode()`, so a gap throws instead.
     const auto groupA = privmx::crypto::PrivateKey::generateRandom();
     const auto groupB = privmx::crypto::PrivateKey::generateRandom();
 
@@ -177,7 +177,7 @@ TEST_F(KeyProviderGroupKeysTest, unopenable_routes_leave_a_failed_entry_under_th
 
     const auto locationKeys = keys.at(_location);
     ASSERT_EQ(locationKeys.count(KEY_ID), 1u);
-    EXPECT_EQ(locationKeys.at(KEY_ID).statusCode, UnknownEncryptionKeyVersionException().getCode());
+    EXPECT_EQ(locationKeys.at(KEY_ID).statusCode(), UnknownEncryptionKeyVersionException().getCode());
     EXPECT_EQ(log.attempted, (std::vector<std::string>{GROUP_A, GROUP_B}));
 }
 

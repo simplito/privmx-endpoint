@@ -78,7 +78,7 @@ protected:
     std::string grantedStore(const std::string& role) {
         group::Group group_2;
         EXPECT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-        EXPECT_EQ(group_2.statusCode, 0);
+        EXPECT_EQ(errCode(group_2), 0);
         std::string storeId;
         EXPECT_NO_THROW({ storeId = createStoreWithGroup(group_2, role); });
         return storeId;

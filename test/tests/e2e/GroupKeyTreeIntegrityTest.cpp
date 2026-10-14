@@ -193,7 +193,7 @@ protected:
     bool canReadGroup(int index, const std::string& groupId) {
         bool readable = false;
         onFreshSession(index, [&](group::GroupApi& groups, thread::ThreadApi&) {
-            readable = decrypts([&] { return groups.getGroup(groupId).statusCode; });
+            readable = decrypts([&] { return errCode(groups.getGroup(groupId)); });
         });
         return readable;
     }
@@ -201,7 +201,7 @@ protected:
     bool canReadThread(int index, const std::string& threadId) {
         bool readable = false;
         onFreshSession(index, [&](group::GroupApi&, thread::ThreadApi& threads) {
-            readable = decrypts([&] { return threads.getThread(threadId).statusCode; });
+            readable = decrypts([&] { return errCode(threads.getThread(threadId)); });
         });
         return readable;
     }
@@ -209,7 +209,7 @@ protected:
     bool canReadMessage(int index, const std::string& messageId) {
         bool readable = false;
         onFreshSession(index, [&](group::GroupApi&, thread::ThreadApi& threads) {
-            readable = decrypts([&] { return threads.getMessage(messageId).statusCode; });
+            readable = decrypts([&] { return errCode(threads.getMessage(messageId)); });
         });
         return readable;
     }
@@ -218,7 +218,7 @@ protected:
     bool canReadGroupAs(const Identity& identity, const std::string& groupId) {
         bool readable = false;
         onFreshSessionWith(identity.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
-            readable = decrypts([&] { return groups.getGroup(groupId).statusCode; });
+            readable = decrypts([&] { return errCode(groups.getGroup(groupId)); });
         });
         return readable;
     }
@@ -226,7 +226,7 @@ protected:
     bool canReadMessageAs(const Identity& identity, const std::string& messageId) {
         bool readable = false;
         onFreshSessionWith(identity.privKey, [&](group::GroupApi&, thread::ThreadApi& threads) {
-            readable = decrypts([&] { return threads.getMessage(messageId).statusCode; });
+            readable = decrypts([&] { return errCode(threads.getMessage(messageId)); });
         });
         return readable;
     }
@@ -237,7 +237,7 @@ protected:
         try {
             bool readable = false;
             onFreshSessionWith(identity.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
-                readable = decrypts([&] { return groups.getGroup(groupId).statusCode; });
+                readable = decrypts([&] { return errCode(groups.getGroup(groupId)); });
             });
             return readable;
         } catch (const core::Exception& e) {
@@ -285,7 +285,7 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_group_key_worn_as_a_user_key_is_not
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     group::Group g;
     ASSERT_NO_THROW({ g = groupApi->getGroup(groupId); });
-    ASSERT_EQ(g.statusCode, 0);
+    ASSERT_EQ(errCode(g), 0);
     ASSERT_FALSE(g.groupPubKey.empty());
 
     const std::string wornAsUser = "group_worn_as_user";
@@ -323,14 +323,14 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_group_key_worn_as_a_user_key_is_not
     // And G itself is untouched by the impersonation: same epoch, still readable, still removable-from.
     group::Group afterAbuse;
     ASSERT_NO_THROW({ afterAbuse = groupApi->getGroup(groupId); });
-    EXPECT_EQ(afterAbuse.statusCode, 0);
+    EXPECT_EQ(errCode(afterAbuse), 0);
     EXPECT_EQ(afterAbuse.keyVersion, g.keyVersion);
     EXPECT_NO_THROW({
         groupApi->removeGroupMembers(groupId, {user(2).userId});
     });
     group::Group afterRemoval;
     ASSERT_NO_THROW({ afterRemoval = groupApi->getGroup(groupId); });
-    EXPECT_EQ(afterRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(afterRemoval), 0);
     EXPECT_EQ(afterRemoval.keyVersion, g.keyVersion + 1);
 }
 
@@ -346,8 +346,8 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_group_key_worn_as_a_user_key_is_not
     group::Group a, b;
     ASSERT_NO_THROW({ a = groupApi->getGroup(groupA); });
     ASSERT_NO_THROW({ b = groupApi->getGroup(groupB); });
-    ASSERT_EQ(a.statusCode, 0);
-    ASSERT_EQ(b.statusCode, 0);
+    ASSERT_EQ(errCode(a), 0);
+    ASSERT_EQ(errCode(b), 0);
 
     const std::string wornAsUser = "group_a_worn_as_user";
     ASSERT_NO_FATAL_FAILURE(registerContextUser(wornAsUser, a.groupPubKey));
@@ -375,7 +375,7 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_group_key_worn_as_a_user_key_is_not
         (seated ? "was accepted)" : "was refused)");
     group::Group afterRemoval;
     ASSERT_NO_THROW({ afterRemoval = groupApi->getGroup(groupB); });
-    EXPECT_EQ(afterRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(afterRemoval), 0);
     EXPECT_EQ(afterRemoval.keyVersion, b.keyVersion + 1);
     EXPECT_TRUE(canReadGroup(1, groupB)) << "B's manager lost access to their own group; " << lastReadError;
     // B rotating does not retire A's epoch-1 key - A's members keep it via the ladder - so this has to keep
@@ -392,8 +392,8 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_group_cannot_be_seated_as_a_member_
     group::Group a, b;
     ASSERT_NO_THROW({ a = groupApi->getGroup(groupA); });
     ASSERT_NO_THROW({ b = groupApi->getGroup(groupB); });
-    ASSERT_EQ(a.statusCode, 0);
-    ASSERT_EQ(b.statusCode, 0);
+    ASSERT_EQ(errCode(a), 0);
+    ASSERT_EQ(errCode(b), 0);
     const core::UserWithPubKey groupAsMember{.userId = a.groupId, .pubKey = a.groupPubKey};
 
     EXPECT_THROW(
@@ -418,7 +418,7 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_group_cannot_be_seated_as_a_member_
     // A refused addition must leave B exactly as it was - no half-applied transition, no epoch drift.
     group::Group afterAttempts;
     ASSERT_NO_THROW({ afterAttempts = groupApi->getGroup(groupB); });
-    EXPECT_EQ(afterAttempts.statusCode, 0);
+    EXPECT_EQ(errCode(afterAttempts), 0);
     EXPECT_EQ(afterAttempts.keyVersion, b.keyVersion);
     EXPECT_EQ(afterAttempts.users.size(), b.users.size());
     EXPECT_FALSE(contains(afterAttempts.users, a.groupId));
@@ -439,7 +439,7 @@ TEST_F(GroupKeyTreeIntegrityTest, ladder_hands_a_newcomer_every_epoch_the_group_
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group atEpoch1;
     ASSERT_NO_THROW({ atEpoch1 = groupApi->getGroup(groupId); });
-    ASSERT_EQ(atEpoch1.statusCode, 0);
+    ASSERT_EQ(errCode(atEpoch1), 0);
     ASSERT_EQ(atEpoch1.keyVersion, 1);
 
     std::string threadId;
@@ -575,7 +575,7 @@ TEST_F(GroupKeyTreeIntegrityTest, rotating_the_epoch_does_not_take_back_a_compro
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     group::Group atEpoch1;
     ASSERT_NO_THROW({ atEpoch1 = groupApi->getGroup(groupId); });
-    ASSERT_EQ(atEpoch1.statusCode, 0);
+    ASSERT_EQ(errCode(atEpoch1), 0);
     ASSERT_EQ(atEpoch1.keyVersion, 1);
 
     std::string threadId;
@@ -641,7 +641,7 @@ TEST_F(GroupKeyTreeIntegrityTest, changing_a_members_public_key_locks_them_out_w
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), asMember(firstKey)}); });
     group::Group atEpoch1;
     ASSERT_NO_THROW({ atEpoch1 = groupApi->getGroup(groupId); });
-    ASSERT_EQ(atEpoch1.statusCode, 0);
+    ASSERT_EQ(errCode(atEpoch1), 0);
     ASSERT_EQ(atEpoch1.keyVersion, 1);
 
     std::string threadId;
@@ -674,7 +674,7 @@ TEST_F(GroupKeyTreeIntegrityTest, changing_a_members_public_key_locks_them_out_w
     // lists somebody who cannot read, and the tree holds a wrap for a key that belongs to nobody.
     group::Group afterRotation;
     ASSERT_NO_THROW({ afterRotation = groupApi->getGroup(groupId); });
-    EXPECT_EQ(afterRotation.statusCode, 0);
+    EXPECT_EQ(errCode(afterRotation), 0);
     EXPECT_EQ(afterRotation.keyVersion, 1) << "a key rotation must not be mistaken for a membership change";
     EXPECT_TRUE(contains(afterRotation.users, firstKey.userId)) <<
         "the locked-out member is still on the roster - that is the mismatch this test is about";
@@ -719,7 +719,7 @@ TEST_F(GroupKeyTreeIntegrityTest, add_and_remove_the_same_member_repeatedly_keep
         ++epoch;
         group::Group afterRemoval;
         ASSERT_NO_THROW({ afterRemoval = groupApi->getGroup(groupId); });
-        EXPECT_EQ(afterRemoval.statusCode, 0) << "the group stopped verifying after a removal (851979 = 0xD000B, "
+        EXPECT_EQ(errCode(afterRemoval), 0) << "the group stopped verifying after a removal (851979 = 0xD000B, "
             "the G1 chain-link check)";
         EXPECT_EQ(afterRemoval.keyVersion, epoch) << "a removal must advance the epoch exactly once";
         EXPECT_FALSE(contains(afterRemoval.users, user(3).userId));
@@ -732,7 +732,7 @@ TEST_F(GroupKeyTreeIntegrityTest, add_and_remove_the_same_member_repeatedly_keep
         });
         group::Group afterAddition;
         ASSERT_NO_THROW({ afterAddition = groupApi->getGroup(groupId); });
-        EXPECT_EQ(afterAddition.statusCode, 0) << "the group stopped verifying after an addition (851979 = "
+        EXPECT_EQ(errCode(afterAddition), 0) << "the group stopped verifying after an addition (851979 = "
             "0xD000B, the G1 chain-link check)";
         EXPECT_EQ(afterAddition.keyVersion, epoch) << "an addition must not advance the epoch";
         EXPECT_TRUE(contains(afterAddition.users, user(3).userId));
@@ -744,7 +744,7 @@ TEST_F(GroupKeyTreeIntegrityTest, add_and_remove_the_same_member_repeatedly_keep
     // Same roster as at the start, three epochs later, and every member still reads it from a cold client.
     group::Group finalState;
     ASSERT_NO_THROW({ finalState = groupApi->getGroup(groupId); });
-    EXPECT_EQ(finalState.statusCode, 0);
+    EXPECT_EQ(errCode(finalState), 0);
     EXPECT_EQ(finalState.keyVersion, 4);
     EXPECT_EQ(finalState.users.size(), 3);
 
@@ -752,7 +752,7 @@ TEST_F(GroupKeyTreeIntegrityTest, add_and_remove_the_same_member_repeatedly_keep
     // to accept a window overlapping what it already verified instead of taking it for an unanchored one.
     group::Group reread;
     ASSERT_NO_THROW({ reread = groupApi->getGroup(groupId); });
-    EXPECT_EQ(reread.statusCode, 0) << "re-reading an unchanged group broke its verification";
+    EXPECT_EQ(errCode(reread), 0) << "re-reading an unchanged group broke its verification";
     EXPECT_EQ(reread.keyVersion, finalState.keyVersion);
     EXPECT_EQ(reread.publicMetaVersion, finalState.publicMetaVersion);
     EXPECT_EQ(reread.privateMetaVersion, finalState.privateMetaVersion);
@@ -779,8 +779,8 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_add_and_remove_of_the_same_member_l
     // warmed up before the race, so what overlaps is the mutating call and not two first reads.
     auto adderConnection = connect(2);
     auto adderGroups = group::GroupApi::create(*adderConnection);
-    ASSERT_EQ(groupApi->getGroup(groupId).statusCode, 0);
-    ASSERT_EQ(adderGroups.getGroup(groupId).statusCode, 0);
+    ASSERT_EQ(errCode(groupApi->getGroup(groupId)), 0);
+    ASSERT_EQ(errCode(adderGroups.getGroup(groupId)), 0);
     auto& removerGroups = *groupApi;
 
     bool removed = false;
@@ -816,7 +816,7 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_add_and_remove_of_the_same_member_l
 
     group::Group afterRace;
     ASSERT_NO_THROW({ afterRace = groupApi->getGroup(groupId); });
-    EXPECT_EQ(afterRace.statusCode, 0) << "the race left the group undecryptable to its manager";
+    EXPECT_EQ(errCode(afterRace), 0) << "the race left the group undecryptable to its manager";
     // Only a removal advances the epoch, and only one removal was asked for.
     EXPECT_EQ(afterRace.keyVersion, removed ? 2 : 1) << "remove: " << removeFailure << " add: " << addFailure;
 
@@ -840,13 +840,13 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_removal_leaves_the_group
     ASSERT_NO_THROW({ groupId = createTreeGroup({remover, updater, user(3)}, managers); });
     group::Group before;
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
-    ASSERT_EQ(before.statusCode, 0);
+    ASSERT_EQ(errCode(before), 0);
 
     // user_1 removes from the fixture's session; user_2 updates from one of their own. Both are warmed up first,
     // so what overlaps is the mutating call rather than two cold reads.
     auto updaterConnection = connect(2);
     auto updaterGroups = group::GroupApi::create(*updaterConnection);
-    ASSERT_EQ(updaterGroups.getGroup(groupId).statusCode, 0);
+    ASSERT_EQ(errCode(updaterGroups.getGroup(groupId)), 0);
     auto& removerGroups = *groupApi;
 
     bool removed = false;
@@ -885,7 +885,7 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_removal_leaves_the_group
 
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
-    EXPECT_EQ(after.statusCode, 0) << "the race left the group's chain unverifiable; remove: " << removeFailure <<
+    EXPECT_EQ(errCode(after), 0) << "the race left the group's chain unverifiable; remove: " << removeFailure <<
         " update: " << updateFailure;
     // That the two planes no longer share a counter is the whole point: the roster counter moves once per landed
     // membership change and nothing the update writes is something the removal committed to.
@@ -929,11 +929,11 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_addition_leaves_the_grou
     ASSERT_NO_THROW({ groupId = createTreeGroup({adder, updater}, managers); });
     group::Group before;
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
-    ASSERT_EQ(before.statusCode, 0);
+    ASSERT_EQ(errCode(before), 0);
 
     auto updaterConnection = connect(2);
     auto updaterGroups = group::GroupApi::create(*updaterConnection);
-    ASSERT_EQ(updaterGroups.getGroup(groupId).statusCode, 0);
+    ASSERT_EQ(errCode(updaterGroups.getGroup(groupId)), 0);
     auto& adderGroups = *groupApi;
 
     bool added = false;
@@ -970,7 +970,7 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_update_and_addition_leaves_the_grou
 
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
-    EXPECT_EQ(after.statusCode, 0) << "the race left the group's roster unverifiable; add: " << addFailure <<
+    EXPECT_EQ(errCode(after), 0) << "the race left the group's roster unverifiable; add: " << addFailure <<
         " update: " << updateFailure;
     EXPECT_EQ(after.keyVersion, 1) << "neither call rotates the epoch; add: " << addFailure;
     EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion + (updated ? 1 : 0)) << "an addition must not "
@@ -1002,11 +1002,11 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_public_and_private_meta_writes_both
     ASSERT_NO_THROW({ groupId = createTreeGroup({publicWriter, privateWriter}, managers); });
     group::Group before;
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
-    ASSERT_EQ(before.statusCode, 0);
+    ASSERT_EQ(errCode(before), 0);
 
     auto privateConnection = connect(2);
     auto privateGroups = group::GroupApi::create(*privateConnection);
-    ASSERT_EQ(privateGroups.getGroup(groupId).statusCode, 0);
+    ASSERT_EQ(errCode(privateGroups.getGroup(groupId)), 0);
     auto& publicGroups = *groupApi;
 
     bool publicOk = false;
@@ -1047,7 +1047,7 @@ TEST_F(GroupKeyTreeIntegrityTest, concurrent_public_and_private_meta_writes_both
 
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
-    EXPECT_EQ(after.statusCode, 0) << "the race left the group unverifiable; public: " << publicFailure <<
+    EXPECT_EQ(errCode(after), 0) << "the race left the group unverifiable; public: " << publicFailure <<
         " private: " << privateFailure;
     EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion + 1);
     EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion + 1);
@@ -1069,11 +1069,11 @@ TEST_F(GroupKeyTreeIntegrityTest, two_concurrent_public_meta_writes_still_serial
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}, managers); });
     group::Group before;
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
-    ASSERT_EQ(before.statusCode, 0);
+    ASSERT_EQ(errCode(before), 0);
 
     auto secondConnection = connect(2);
     auto secondGroups = group::GroupApi::create(*secondConnection);
-    ASSERT_EQ(secondGroups.getGroup(groupId).statusCode, 0);
+    ASSERT_EQ(errCode(secondGroups.getGroup(groupId)), 0);
     auto& firstGroups = *groupApi;
 
     int landed = 0;
@@ -1097,7 +1097,7 @@ TEST_F(GroupKeyTreeIntegrityTest, two_concurrent_public_meta_writes_still_serial
 
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
-    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(errCode(after), 0);
     EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion + 1) << "one landing, one increment";
     EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion) << "the other plane is untouched";
 }
@@ -1126,7 +1126,7 @@ TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_both_metadata_planes_up_to_t
 
     group::Group afterRemovals;
     ASSERT_NO_THROW({ afterRemovals = groupApi->getGroup(groupId); });
-    EXPECT_EQ(afterRemovals.statusCode, 0);
+    EXPECT_EQ(errCode(afterRemovals), 0);
     EXPECT_EQ(afterRemovals.keyVersion, 3) << "two removals, two rotations";
     EXPECT_EQ(afterRemovals.rosterVersion, written.rosterVersion + 2) << "two removals, two roster entries";
     // A carry-up that never landed would leave these at `written`, with the entries still under a key a removed
@@ -1149,7 +1149,7 @@ TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_both_metadata_planes_up_to_t
     });
     group::Group divergent;
     ASSERT_NO_THROW({ divergent = groupApi->getGroup(groupId); });
-    EXPECT_EQ(divergent.statusCode, 0) << "the two planes at different versions must still verify";
+    EXPECT_EQ(errCode(divergent), 0) << "the two planes at different versions must still verify";
     EXPECT_EQ(divergent.publicMeta.stdString(), "meta_at_epoch_3");
     EXPECT_EQ(divergent.privateMetaVersion, afterRemovals.privateMetaVersion) << "a public-plane write must not "
         "move the private counter";

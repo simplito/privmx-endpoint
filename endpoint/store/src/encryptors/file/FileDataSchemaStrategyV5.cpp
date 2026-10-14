@@ -13,7 +13,6 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/file/FileMetaDataSchemaMapper.hpp"
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/store/Constants.hpp"
@@ -34,17 +33,7 @@ DecryptedFileMetaV5 FileDataSchemaStrategyV5::decryptFileMeta(
         return decrypt(file, encKey);
     } catch (const core::Exception& e) {
         return DecryptedFileMetaV5(
-            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = e.getCode()},
-             {},
-             {},
-             {},
-             {},
-             {}}
-        );
-    } catch (const privmx::utils::PrivmxException& e) {
-        return DecryptedFileMetaV5(
-            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5,
-              .statusCode = core::ExceptionConverter::convert(e).getCode()},
+            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .error = core::asError(e)},
              {},
              {},
              {},
@@ -53,7 +42,8 @@ DecryptedFileMetaV5 FileDataSchemaStrategyV5::decryptFileMeta(
         );
     } catch (...) {
         return DecryptedFileMetaV5(
-            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5, .statusCode = ENDPOINT_CORE_EXCEPTION_CODE},
+            {{.dataStructureVersion = FileDataSchema::Version::VERSION_5,
+              .error = core::unknownError("decrypting file meta")},
              {},
              {},
              {},
@@ -69,33 +59,29 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::convert(
 ) const {
     int64_t size = 0;
     bool randomWrite = false;
-    auto statusCode = raw.statusCode;
-    if (statusCode == 0) {
+    auto error = core::toPublicError(raw.error);
+    if (!error.has_value()) {
         try {
             auto internalMeta = dynamic::InternalStoreFileMeta::fromJSON(
                 utils::Utils::parseJson(raw.internalMeta.stdString())
             );
             size = internalMeta.size;
             randomWrite = internalMeta.randomWrite.value_or(false);
-        } catch (const core::Exception& e) {
-            statusCode = e.getCode();
-        } catch (const privmx::utils::PrivmxException& e) {
-            statusCode = core::ExceptionConverter::convert(e).getCode();
-        } catch (...) { statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        } catch (const core::Exception& e) { error = core::toPublicError(e); } catch (...) {
+            error = core::toPublicError(*core::unknownError("decoding the file's internal meta"));
+        }
     }
     return {
         FileMetaDataSchemaMapper::toLibFile(
-            file, raw.publicMeta, raw.privateMeta, size, raw.authorPubKey, statusCode,
-            FileDataSchema::Version::VERSION_5, randomWrite
+            file, raw.publicMeta, raw.privateMeta, size, raw.authorPubKey, error, FileDataSchema::Version::VERSION_5,
+            randomWrite
         ),
         raw.dio
     };
 }
 
-File FileDataSchemaStrategyV5::toLibError(const server::File& file, int64_t errorCode) const {
-    return FileMetaDataSchemaMapper::toLibFile(
-        file, {}, {}, 0, {}, errorCode, FileDataSchema::Version::VERSION_5, false
-    );
+File FileDataSchemaStrategyV5::toLibError(const server::File& file, const std::optional<core::Error>& error) const {
+    return FileMetaDataSchemaMapper::toLibFile(file, {}, {}, 0, {}, error, FileDataSchema::Version::VERSION_5, false);
 }
 
 server::EncryptedFileMetaV5 FileDataSchemaStrategyV5::encrypt(

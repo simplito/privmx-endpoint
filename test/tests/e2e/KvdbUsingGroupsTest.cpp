@@ -97,8 +97,8 @@ TEST_F(KvdbUsingGroupsTest, createKvdb_with_group_grants) {
     group::Group group_1, group_2;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
+    ASSERT_EQ(errCode(group_2), 0);
     ASSERT_FALSE(group_1.groupPubKey.empty());
 
     // no grants
@@ -113,7 +113,7 @@ TEST_F(KvdbUsingGroupsTest, createKvdb_with_group_grants) {
     });
     ASSERT_FALSE(kvdbId.empty());
     EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(k.statusCode, 0);
+    EXPECT_EQ(errCode(k), 0);
     EXPECT_EQ(k.groups.size(), 0);
 
     // one grant
@@ -126,7 +126,7 @@ TEST_F(KvdbUsingGroupsTest, createKvdb_with_group_grants) {
     });
     ASSERT_FALSE(kvdbId.empty());
     EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(k.statusCode, 0);
+    EXPECT_EQ(errCode(k), 0);
     ASSERT_EQ(k.groups.size(), 1);
     EXPECT_EQ(k.groups[0].groupId, group_1.groupId);
     EXPECT_EQ(k.groups[0].role, "user");
@@ -152,7 +152,7 @@ TEST_F(KvdbUsingGroupsTest, createKvdb_with_group_grants) {
     });
     ASSERT_FALSE(kvdbId.empty());
     EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(k.statusCode, 0);
+    EXPECT_EQ(errCode(k), 0);
     EXPECT_EQ(k.groups.size(), 2);
     bool found1 = false, found2 = false;
     for (const auto& g : k.groups) {
@@ -183,7 +183,7 @@ TEST_F(KvdbUsingGroupsTest, createKvdb_with_group_grants) {
 TEST_F(KvdbUsingGroupsTest, updateKvdb_add_and_promote_group) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     // a kvdb that starts with no grantee group
     std::string kvdbId;
@@ -218,7 +218,7 @@ TEST_F(KvdbUsingGroupsTest, updateKvdb_add_and_promote_group) {
     });
     kvdb::Kvdb updated;
     EXPECT_NO_THROW({ updated = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.publicMeta.stdString(), "after_group");
     ASSERT_EQ(updated.groups.size(), 1);
     EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
@@ -250,10 +250,10 @@ TEST_F(KvdbUsingGroupsTest, updateKvdb_add_and_promote_group) {
 TEST_F(KvdbUsingGroupsTest, updateKvdb_remove_group) {
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     // policy.get="all" so user_2 can always call getKvdb without throwing; after group removal it
-    // receives statusCode!=0 and empty privateMeta because it no longer holds the decryption key.
+    // receives an `error` and empty privateMeta because it no longer holds the decryption key.
     core::ContainerPolicy policy;
     policy.get = "all";
 
@@ -277,7 +277,7 @@ TEST_F(KvdbUsingGroupsTest, updateKvdb_remove_group) {
     connectAs(2);
     kvdb::Kvdb beforeRemoval;
     EXPECT_NO_THROW({ beforeRemoval = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(beforeRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(beforeRemoval), 0);
     EXPECT_FALSE(beforeRemoval.privateMeta.stdString().empty());
 
     disconnect();
@@ -299,21 +299,21 @@ TEST_F(KvdbUsingGroupsTest, updateKvdb_remove_group) {
 
     kvdb::Kvdb updated;
     EXPECT_NO_THROW({ updated = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.groups.size(), 0);
 
     disconnect();
     connectAs(2);
     kvdb::Kvdb afterRemoval;
     EXPECT_NO_THROW({ afterRemoval = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_NE(afterRemoval.statusCode, 0);
+    EXPECT_NE(errCode(afterRemoval), 0);
     EXPECT_TRUE(afterRemoval.privateMeta.stdString().empty());
 }
 
 TEST_F(KvdbUsingGroupsTest, listKvdbs_includes_groups_field) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string kvdbId;
     ASSERT_NO_THROW({
@@ -335,7 +335,7 @@ TEST_F(KvdbUsingGroupsTest, listKvdbs_includes_groups_field) {
     bool found = false;
     for (const auto& k : list.readItems) {
         if (k.kvdbId == kvdbId) {
-            EXPECT_EQ(k.statusCode, 0);
+            EXPECT_EQ(errCode(k), 0);
             EXPECT_EQ(k.groups.size(), 1);
             if (k.groups.size() == 1) {
                 EXPECT_EQ(k.groups[0].groupId, group_1.groupId);
@@ -365,13 +365,13 @@ TEST_F(KvdbUsingGroupsTest, reads_through_a_group_grant) {
         kvdb::Kvdb k;
         EXPECT_NO_THROW({ k = kvdbApi->getKvdb(dataKvdbId); })
             << "user_" << index << " could not open the kvdb";
-        EXPECT_EQ(k.statusCode, 0);
+        EXPECT_EQ(errCode(k), 0);
         EXPECT_EQ(k.groups.size(), 2);
 
         kvdb::KvdbEntry entry;
         EXPECT_NO_THROW({ entry = kvdbApi->getEntry(dataKvdbId, key); })
             << "user_" << index << " could not read the entry";
-        EXPECT_EQ(entry.statusCode, 0);
+        EXPECT_EQ(errCode(entry), 0);
         EXPECT_EQ(entry.privateMeta.stdString(), privateMeta);
         EXPECT_EQ(entry.data.stdString(), data);
 
@@ -384,7 +384,7 @@ TEST_F(KvdbUsingGroupsTest, reads_through_a_group_grant) {
         });
         EXPECT_EQ(list.totalAvailable, 2);
         for (const auto& listed : list.readItems) {
-            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_EQ(errCode(listed), 0);
             EXPECT_FALSE(listed.privateMeta.stdString().empty());
             EXPECT_FALSE(listed.data.stdString().empty());
         }
@@ -394,7 +394,7 @@ TEST_F(KvdbUsingGroupsTest, reads_through_a_group_grant) {
 TEST_F(KvdbUsingGroupsTest, getEntry_lost_after_group_removal) {
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string kvdbId;
     ASSERT_NO_THROW({
@@ -413,7 +413,7 @@ TEST_F(KvdbUsingGroupsTest, getEntry_lost_after_group_removal) {
     connectAs(2);
     kvdb::KvdbEntry beforeRemoval;
     EXPECT_NO_THROW({ beforeRemoval = kvdbApi->getEntry(kvdbId, "old_key"); });
-    EXPECT_EQ(beforeRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(beforeRemoval), 0);
     EXPECT_EQ(beforeRemoval.privateMeta.stdString(), "secret_private");
 
     disconnect();
@@ -439,12 +439,12 @@ TEST_F(KvdbUsingGroupsTest, getEntry_lost_after_group_removal) {
     connectAs(2);
     kvdb::KvdbEntry afterRemoval;
     EXPECT_NO_THROW({ afterRemoval = kvdbApi->getEntry(kvdbId, "old_key"); });
-    EXPECT_EQ(afterRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(afterRemoval), 0);
     EXPECT_EQ(afterRemoval.privateMeta.stdString(), "secret_private");
 
     kvdb::KvdbEntry newEntry;
     EXPECT_NO_THROW({ newEntry = kvdbApi->getEntry(kvdbId, "new_key"); });
-    EXPECT_NE(newEntry.statusCode, 0);
+    EXPECT_NE(errCode(newEntry), 0);
     EXPECT_TRUE(newEntry.privateMeta.stdString().empty());
 }
 
@@ -452,7 +452,7 @@ TEST_F(KvdbUsingGroupsTest, user_added_to_group_gains_access_to_kvdb_and_entries
     // Group_2 has user_1 + user_2; user_3 is not yet a member.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string kvdbId;
     ASSERT_NO_THROW({
@@ -471,10 +471,10 @@ TEST_F(KvdbUsingGroupsTest, user_added_to_group_gains_access_to_kvdb_and_entries
     connectAs(3);
     kvdb::Kvdb kBefore;
     EXPECT_NO_THROW({ kBefore = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_NE(kBefore.statusCode, 0);
+    EXPECT_NE(errCode(kBefore), 0);
     kvdb::KvdbEntry eBefore;
     EXPECT_NO_THROW({ eBefore = kvdbApi->getEntry(kvdbId, "entry_key"); });
-    EXPECT_NE(eBefore.statusCode, 0);
+    EXPECT_NE(errCode(eBefore), 0);
 
     // Seat user_3's leaf in the key tree - a metadata write would only re-wrap the group's metadata key.
     disconnect();
@@ -490,10 +490,10 @@ TEST_F(KvdbUsingGroupsTest, user_added_to_group_gains_access_to_kvdb_and_entries
     connectAs(3);
     kvdb::Kvdb kAfter;
     EXPECT_NO_THROW({ kAfter = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(kAfter.statusCode, 0);
+    EXPECT_EQ(errCode(kAfter), 0);
     kvdb::KvdbEntry eAfter;
     EXPECT_NO_THROW({ eAfter = kvdbApi->getEntry(kvdbId, "entry_key"); });
-    EXPECT_EQ(eAfter.statusCode, 0);
+    EXPECT_EQ(errCode(eAfter), 0);
     EXPECT_EQ(eAfter.data.stdString(), "entry_data");
 }
 
@@ -502,7 +502,7 @@ TEST_F(KvdbUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
     // `verifyKeysSecret` fails on any non-zero status, so an unresolved group entry throws instead of updating.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string kvdbId;
     ASSERT_NO_THROW({
@@ -518,12 +518,12 @@ TEST_F(KvdbUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 
     kvdb::Kvdb k;
     EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(k.statusCode, 0);
+    EXPECT_EQ(errCode(k), 0);
     EXPECT_EQ(k.groups.size(), 1);
 
     kvdb::KvdbEntry entry;
     EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId, "direct_key"); });
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
     EXPECT_EQ(entry.data.stdString(), "direct_data");
 
     core::PagingList<kvdb::KvdbEntry> list;
@@ -551,7 +551,7 @@ TEST_F(KvdbUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) {
 
     kvdb::Kvdb updated;
     EXPECT_NO_THROW({ updated = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.privateMeta.stdString(), "direct_updated_private");
 }
 
@@ -564,13 +564,13 @@ TEST_F(KvdbUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
     const std::string kvdbId = reader->getString("Kvdb_5.kvdbId");
     kvdb::Kvdb k;
     EXPECT_NO_THROW({ k = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(k.statusCode, 0);
+    EXPECT_EQ(errCode(k), 0);
     // `groups` stays unnarrowed, so user_2 still sees the grant it is not part of.
     EXPECT_EQ(k.groups.size(), 1);
 
     kvdb::KvdbEntry entry;
     EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId, reader->getString("KvdbEntry_5.info_key")); });
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
     EXPECT_EQ(entry.data.stdString(), privmx::utils::Hex::toString(reader->getString("KvdbEntry_5.data_inHex")));
 }
 
@@ -579,7 +579,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_did
     // group: the default group policy hands a group's epoch and public key to members only.
     group::Group granteeGroup;
     ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(granteeGroup.statusCode, 0);
+    ASSERT_EQ(errCode(granteeGroup), 0);
 
     std::string kvdbId;
     ASSERT_NO_THROW({
@@ -595,7 +595,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_did
 
     kvdb::Kvdb before;
     ASSERT_NO_THROW({ before = kvdbApi->getKvdb(kvdbId); });
-    ASSERT_EQ(before.statusCode, 0);
+    ASSERT_EQ(errCode(before), 0);
 
     disconnect();
     connectAs(2);
@@ -618,7 +618,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_did
     connectAs(1);
     kvdb::Kvdb after;
     EXPECT_NO_THROW({ after = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(errCode(after), 0);
     EXPECT_EQ(after.groups.size(), 1);
     if (after.groups.size() == 1) {
         EXPECT_EQ(after.groups[0].groupId, granteeGroup.groupId);
@@ -628,7 +628,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_covers_a_grantee_group_the_caller_did
     ASSERT_NO_THROW({ setNewEntry(kvdbId, "post_rekey", "post_pub", "post_priv", "post_data"); });
     kvdb::KvdbEntry entry;
     EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId, "post_rekey"); });
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
     EXPECT_EQ(entry.data.stdString(), "post_data");
 }
 
@@ -653,7 +653,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
 
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
     ASSERT_EQ(group.keyVersion, 1);
 
     std::string kvdbId;
@@ -674,12 +674,12 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
 
     group::Group rotatedGroup;
     ASSERT_NO_THROW({ rotatedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(rotatedGroup.statusCode, 0);
+    ASSERT_EQ(errCode(rotatedGroup), 0);
     ASSERT_EQ(rotatedGroup.keyVersion, 2);
 
     kvdb::Kvdb stale;
     ASSERT_NO_THROW({ stale = kvdbApi->getKvdb(kvdbId); });
-    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(errCode(stale), 0);
     EXPECT_EQ(stale.staleGroups.size(), 1);
     if (stale.staleGroups.size() == 1) {
         EXPECT_EQ(stale.staleGroups[0], groupId);
@@ -698,7 +698,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
 
     kvdb::Kvdb fresh;
     EXPECT_NO_THROW({ fresh = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(fresh.statusCode, 0);
+    EXPECT_EQ(errCode(fresh), 0);
     EXPECT_EQ(fresh.staleGroups.size(), 0);
     EXPECT_EQ(fresh.groups.size(), 1);
 
@@ -708,7 +708,7 @@ TEST_F(KvdbUsingGroupsTest, rotateKvdbKeys_clears_staleGroups_after_the_group_ad
     connectAs(2);
     kvdb::KvdbEntry oldEpochEntry;
     EXPECT_NO_THROW({ oldEpochEntry = kvdbApi->getEntry(kvdbId, "old_epoch_key"); });
-    EXPECT_EQ(oldEpochEntry.statusCode, 0);
+    EXPECT_EQ(errCode(oldEpochEntry), 0);
     EXPECT_EQ(oldEpochEntry.privateMeta.stdString(), "old_epoch_priv");
 }
 
@@ -733,7 +733,7 @@ TEST_F(KvdbUsingGroupsTest, setEntry_auto_rotates_a_stale_kvdb_key) {
 
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
 
     std::string kvdbId;
     ASSERT_NO_THROW({
@@ -751,7 +751,7 @@ TEST_F(KvdbUsingGroupsTest, setEntry_auto_rotates_a_stale_kvdb_key) {
 
     kvdb::Kvdb stale;
     ASSERT_NO_THROW({ stale = kvdbApi->getKvdb(kvdbId); });
-    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(errCode(stale), 0);
     ASSERT_EQ(stale.staleGroups.size(), 1);
     ASSERT_EQ(stale.staleGroups[0], groupId);
 
@@ -759,7 +759,7 @@ TEST_F(KvdbUsingGroupsTest, setEntry_auto_rotates_a_stale_kvdb_key) {
 
     kvdb::Kvdb rekeyed;
     ASSERT_NO_THROW({ rekeyed = kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(rekeyed.statusCode, 0);
+    EXPECT_EQ(errCode(rekeyed), 0);
     EXPECT_TRUE(rekeyed.staleGroups.empty());
     // Exactly one re-key: a rotation appends one history entry and nothing else wrote to the KVDB.
     EXPECT_EQ(rekeyed.version, stale.version + 1);
@@ -772,6 +772,6 @@ TEST_F(KvdbUsingGroupsTest, setEntry_auto_rotates_a_stale_kvdb_key) {
     connectAs(2);
     kvdb::KvdbEntry entry;
     EXPECT_NO_THROW({ entry = kvdbApi->getEntry(kvdbId, "auto_key"); });
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
     EXPECT_EQ(entry.data.stdString(), "auto_data");
 }

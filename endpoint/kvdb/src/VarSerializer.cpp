@@ -36,7 +36,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::Kvdb>(const kvdb::Kvdb& val) {
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("policy", serialize(val.policy));
     obj->set("entries", serialize(val.entries));
-    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("error", serialize(val.error));
     obj->set("schemaVersion", serialize(val.schemaVersion));
     obj->set("groups", serialize(val.groups));
     obj->set("staleGroups", serialize(val.staleGroups));
@@ -78,7 +78,7 @@ Poco::Dynamic::Var VarSerializer::serialize<kvdb::KvdbEntry>(const kvdb::KvdbEnt
     obj->set("privateMeta", serialize(val.privateMeta));
     obj->set("data", serialize(val.data));
     obj->set("version", serialize(val.version));
-    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("error", serialize(val.error));
     obj->set("schemaVersion", serialize(val.schemaVersion));
     return obj;
 }

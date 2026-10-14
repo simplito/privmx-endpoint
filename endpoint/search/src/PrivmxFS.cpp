@@ -1,6 +1,5 @@
 #include "privmx/endpoint/search/PrivmxFS.hpp"
 #include "privmx/endpoint/core/ConvertedExceptions.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/search/DynamicTypes.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
 #include <Poco/UUIDGenerator.h>
@@ -125,7 +124,7 @@ void PrivmxFS::deleteFile(const std::string& path) {
     LOG_TRACE("PrivmxFS::deleteFile - ", path, " | kvdbId: ", _session->kvdbId)
     privmx::endpoint::kvdb::KvdbEntry kvdbEntry = _session->kvdbApi.getEntry(_session->kvdbId, path);
     std::string fileId = "";
-    if (kvdbEntry.statusCode == 0) {
+    if (!kvdbEntry.error.has_value()) {
         fileId = kvdbEntry.data.stdString();
     }
     _session->kvdbApi.deleteEntry(_session->kvdbId, path);
@@ -137,7 +136,7 @@ std::string PrivmxFS::getFileId(const std::string& name) {
     LOG_TRACE("PrivmxFS::getFileId - ", name, " | kvdbId: ", _session->kvdbId)
     auto entry = _session->kvdbApi.findEntry(_session->kvdbId, name);
     if (entry.has_value()) {
-        if (entry->statusCode != 0) {
+        if (entry->error.has_value()) {
             throw MalformedInternalFileIdException();
         }
         return entry->data.stdString();

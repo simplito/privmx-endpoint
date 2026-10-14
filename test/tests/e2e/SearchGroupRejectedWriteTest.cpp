@@ -109,8 +109,6 @@ protected:
             return std::nullopt;
         } catch (const core::Exception& e) {
             return e.getFull();
-        } catch (const privmx::utils::PrivmxException& e) {
-            return std::string(e.what()) + " | " + e.getData();
         } catch (const std::exception& e) {
             return std::string(e.what());
         }
@@ -130,7 +128,7 @@ protected:
 
         group::Group group;
         ASSERT_NO_THROW({ group = alice.groupApi->getGroup(groupId); });
-        ASSERT_EQ(group.statusCode, 0);
+        ASSERT_EQ(errCode(group), 0);
 
         ASSERT_NO_THROW({
             indexId = alice.searchApi->createSearchIndex(

@@ -123,12 +123,6 @@ int main(int argc, char** argv) {
         cerr << e.getFull() << endl;
         stop = true;
         if(eventThread.joinable()) {eventQueue.emitBreakEvent(); eventThread.join();}
-    } catch (const privmx::utils::PrivmxException& e) {
-        cerr << e.what() << endl;
-        cerr << e.getData() << endl;
-        cerr << e.getCode() << endl;
-        stop = true;
-        if(eventThread.joinable()) {eventQueue.emitBreakEvent(); eventThread.join();}
     } catch (const exception& e) {
         cerr << e.what() << endl;
         stop = true;

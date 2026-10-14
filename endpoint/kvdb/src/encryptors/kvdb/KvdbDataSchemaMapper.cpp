@@ -42,7 +42,10 @@ std::tuple<Kvdb, core::DataIntegrityObject> KvdbDataSchemaMapper::decrypt(
         static_cast<int64_t>(getDataStructureVersion(kvdb.data.back())), kvdb, encKey,
         [&]() -> std::tuple<Kvdb, core::DataIntegrityObject> {
             return {
-                toLibKvdb(kvdb, {}, {}, UnknownKvdbFormatException().getCode(), KvdbDataSchema::Version::UNKNOWN), {}
+                toLibKvdb(
+                    kvdb, {}, {}, core::toPublicError(UnknownKvdbFormatException()), KvdbDataSchema::Version::UNKNOWN
+                ),
+                {}
             };
         },
         verifiedDio
@@ -68,14 +71,11 @@ std::optional<core::DataIntegrityObject> KvdbDataSchemaMapper::assertDataIntegri
     }
 }
 
-std::pair<uint32_t, std::optional<core::DataIntegrityObject>> KvdbDataSchemaMapper::validateDataIntegrity(
-    const server::KvdbInfo& kvdb
-) {
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> KvdbDataSchemaMapper::
+    validateDataIntegrity(const server::KvdbInfo& kvdb) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
-        verifiedDio = assertDataIntegrity(kvdb);
-    });
-    return {statusCode, verifiedDio};
+    const auto error = core::DataSchemaMapperUtils::toError([&] { verifiedDio = assertDataIntegrity(kvdb); });
+    return {error, verifiedDio};
 }
 
 std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
@@ -90,8 +90,8 @@ std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
         },
         [&](const server::KvdbInfo& k, const core::DecryptedEncKey& key,
             const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(k, key, verifiedDio); },
-        [](const server::KvdbInfo& k, uint32_t code) {
-            return toLibKvdb(k, {}, {}, code, KvdbDataSchema::Version::UNKNOWN);
+        [](const server::KvdbInfo& k, const std::optional<core::Error>& error) {
+            return toLibKvdb(k, {}, {}, error, KvdbDataSchema::Version::UNKNOWN);
         },
         groupPrivKeyResolver
     );
@@ -109,7 +109,7 @@ Kvdb KvdbDataSchemaMapper::toLibKvdb(
     const server::KvdbInfo& info,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    int64_t statusCode,
+    const std::optional<core::Error>& error,
     int64_t schemaVersion
 ) {
     return Kvdb{
@@ -127,7 +127,7 @@ Kvdb KvdbDataSchemaMapper::toLibKvdb(
         .entries = info.entries,
         .lastEntryDate = info.lastEntryDate,
         .policy = core::Factory::parsePolicyServerObject(info.policy),
-        .statusCode = statusCode,
+        .error = error,
         .schemaVersion = schemaVersion,
         .groups = core::Mapper::mapToGroupGrants(info.groups),
         .staleGroups = info.staleGroups

@@ -14,7 +14,6 @@ limitations under the License.
 #include "privmx/endpoint/search/FullTextSearch.hpp"
 #include "privmx/endpoint/search/PrivmxSqliteVFS.hpp"
 #include "privmx/endpoint/search/SearchException.hpp"
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint;
@@ -288,12 +287,6 @@ void FullTextSearch::ensureTableCreated() {
         createTable();
     } catch (const privmx::endpoint::core::Exception& e) {
         LOG_ERROR("FullTextSearch::ensureTableCreated() recived endpoint::core::Exception ->\n", e.getFull())
-    } catch (const privmx::utils::PrivmxException& e) {
-        LOG_ERROR(
-            "FullTextSearch::ensureTableCreated() recived utils::PrivmxException, converter to "
-            "endpoint::core::Exception:->\n",
-            core::ExceptionConverter::convert(e).getFull()
-        )
     } catch (const std::exception& e) {
         LOG_FATAL("FullTextSearch::ensureTableCreated() recived std::exception->\n", e.what())
     } catch (...) { LOG_FATAL("FullTextSearch::ensureTableCreated() recived unknown exception\n") }

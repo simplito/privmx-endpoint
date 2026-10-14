@@ -164,7 +164,7 @@ protected:
         EXPECT_EQ(
             inbox.privateMeta.stdString(), Hex::toString(reader->getString(section + ".uploaded_privateMeta_inHex"))
         );
-        EXPECT_EQ(inbox.statusCode, 0);
+        EXPECT_EQ(errCode(inbox), 0);
     }
 
     // `fileCount` is spelled out because the ini records the files by index but not how many there are.
@@ -175,7 +175,7 @@ protected:
         EXPECT_EQ(entry.data.stdString(), Hex::toString(reader->getString(section + ".uploaded_data_inHex")));
         EXPECT_EQ(entry.authorPubKey, reader->getString(section + ".authorPubKey"));
         EXPECT_EQ(entry.createDate, reader->getInt64(section + ".createDate"));
-        EXPECT_EQ(entry.statusCode, 0);
+        EXPECT_EQ(errCode(entry), 0);
         ASSERT_EQ(entry.files.size(), fileCount);
         for(size_t i = 0; i < fileCount; ++i) {
             const std::string p = section + ".file_" + std::to_string(i) + "_";
@@ -186,7 +186,7 @@ protected:
             EXPECT_EQ(file.info.createDate, reader->getInt64(p + "info_createDate"));
             EXPECT_EQ(file.info.author, reader->getString(p + "info_author"));
             EXPECT_EQ(file.authorPubKey, reader->getString(p + "authorPubKey"));
-            EXPECT_EQ(file.statusCode, 0);
+            EXPECT_EQ(errCode(file), 0);
             EXPECT_EQ(file.publicMeta.stdString(), Hex::toString(reader->getString(p + "publicMeta_inHex")));
             EXPECT_EQ(file.publicMeta.stdString(), Hex::toString(reader->getString(up + "publicMeta_inHex")));
             EXPECT_EQ(file.privateMeta.stdString(), Hex::toString(reader->getString(p + "privateMeta_inHex")));
@@ -300,11 +300,11 @@ protected:
         EXPECT_EQ(entry.inboxId, id);
         EXPECT_EQ(entry.data.stdString(), "test_sendEntry");
         ASSERT_EQ(entry.files.size(), 2);
-        EXPECT_EQ(entry.files[0].statusCode, 0);
+        EXPECT_EQ(errCode(entry.files[0]), 0);
         EXPECT_EQ(entry.files[0].publicMeta.stdString(), "publicMeta_1");
         EXPECT_EQ(entry.files[0].privateMeta.stdString(), "privateMeta_1");
         EXPECT_EQ(entry.files[0].size, 0);
-        EXPECT_EQ(entry.files[1].statusCode, 0);
+        EXPECT_EQ(errCode(entry.files[1]), 0);
         EXPECT_EQ(entry.files[1].publicMeta.stdString(), "publicMeta_2");
         EXPECT_EQ(entry.files[1].privateMeta.stdString(), "privateMeta_2");
         EXPECT_EQ(entry.files[1].size, 128*1024);
@@ -369,7 +369,7 @@ TEST_F(InboxTest, createInbox) {
     });
     ASSERT_FALSE(createdId.empty());
     EXPECT_NO_THROW({ inbox = inboxApi->getInbox(createdId); });
-    EXPECT_EQ(inbox.statusCode, 0);
+    EXPECT_EQ(errCode(inbox), 0);
     EXPECT_EQ(inbox.contextId, contextId());
     EXPECT_EQ(inbox.publicMeta.stdString(), "public");
     EXPECT_EQ(inbox.privateMeta.stdString(), "private");
@@ -384,7 +384,7 @@ TEST_F(InboxTest, createInbox) {
     });
     ASSERT_FALSE(createdId.empty());
     EXPECT_NO_THROW({ inbox = inboxApi->getInbox(createdId); });
-    EXPECT_EQ(inbox.statusCode, 0);
+    EXPECT_EQ(errCode(inbox), 0);
     EXPECT_EQ(inbox.contextId, contextId());
     expectMembers(inbox, {1}, {1});
 
@@ -515,7 +515,7 @@ TEST_F(InboxTest, updateInbox_rewraps_keys_for_a_newly_added_user) {
     connectAs(ConnectionType::User2);
     inbox::InboxEntry entry;
     EXPECT_NO_THROW({ entry = inboxApi->readEntry(entryId(1)); });
-    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(errCode(entry), 0);
 }
 
 TEST_F(InboxTest, updateInbox_policy) {
@@ -929,12 +929,12 @@ TEST_F(InboxTest, falseUserVerifierInterface) {
         inboxListResult = inboxApi->listInboxes(contextId(), {.skip=0, .limit=1, .sortOrder="desc"});
     });
     ASSERT_EQ(inboxListResult.readItems.size(), 1);
-    EXPECT_EQ(inboxListResult.readItems[0].statusCode, failureCode);
+    EXPECT_EQ(errCode(inboxListResult.readItems[0]), failureCode);
 
     core::PagingList<inbox::InboxEntry> inboxEntriesListResult;
     EXPECT_NO_THROW({
         inboxEntriesListResult = inboxApi->listEntries(inboxId(1), {.skip=0, .limit=1, .sortOrder="desc"});
     });
     ASSERT_EQ(inboxEntriesListResult.readItems.size(), 1);
-    EXPECT_EQ(inboxEntriesListResult.readItems[0].statusCode, failureCode);
+    EXPECT_EQ(errCode(inboxEntriesListResult.readItems[0]), failureCode);
 }

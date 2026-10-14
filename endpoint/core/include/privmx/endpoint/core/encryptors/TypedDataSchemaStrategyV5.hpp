@@ -41,11 +41,11 @@ protected:
         const std::optional<DataIntegrityObject>& verifiedDio
     ) const override final {
         auto encData = getEncryptedData(model);
-        if (encKey.statusCode == 0) {
+        if (encKey.statusCode() == 0) {
             return _encryptor.decrypt(encData, encKey.key, verifiedDio);
         } else {
             auto result = _encryptor.extractPublic(encData, verifiedDio);
-            result.statusCode = encKey.statusCode;
+            result.error = encKey.error;
             return result;
         }
     }

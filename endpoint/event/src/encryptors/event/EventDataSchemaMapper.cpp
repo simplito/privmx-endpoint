@@ -15,7 +15,6 @@ limitations under the License.
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/event/EventException.hpp"
 
@@ -45,27 +44,24 @@ Poco::Dynamic::Var EventDataSchemaMapper::encrypt(
 
 ContextCustomEventData EventDataSchemaMapper::decrypt(const server::ContextCustomEventData& rawEvent) {
     if (getDataStructureVersion(rawEvent) != EventDataSchema::Version::VERSION_5) {
-        return makeErrorResult(rawEvent, InvalidEncryptedEventDataVersionException().getCode());
+        return makeErrorResult(rawEvent, core::toPublicError(InvalidEncryptedEventDataVersionException()));
     }
     auto authorPubKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(rawEvent.author.pub);
     auto decryptedKey = _eventKeyProvider.decryptKey(rawEvent.key, authorPubKey);
-    if (decryptedKey.statusCode != 0) {
-        return makeErrorResult(rawEvent, decryptedKey.statusCode);
+    if (decryptedKey.error) {
+        return makeErrorResult(rawEvent, core::toPublicError(decryptedKey.error));
     }
     core::DecryptedEncKey encKey;
     encKey.key = decryptedKey.key;
-    encKey.statusCode = 0;
     try {
         auto raw = _strategyV5->decrypt(rawEvent, encKey);
-        if (raw.statusCode == 0 && !verifyDecryptedEventData(raw)) {
-            raw.statusCode = privmx::endpoint::core::UserVerificationFailureException().getCode();
+        if (raw.statusCode() == 0 && !verifyDecryptedEventData(raw)) {
+            raw.error = core::asError(privmx::endpoint::core::UserVerificationFailureException());
         }
         return _strategyV5->convert(rawEvent, raw);
-    } catch (const core::Exception& e) {
-        return makeErrorResult(rawEvent, e.getCode());
-    } catch (const privmx::utils::PrivmxException& e) {
-        return makeErrorResult(rawEvent, core::ExceptionConverter::convert(e).getCode());
-    } catch (...) { return makeErrorResult(rawEvent, ENDPOINT_CORE_EXCEPTION_CODE); }
+    } catch (const core::Exception& e) { return makeErrorResult(rawEvent, core::toPublicError(e)); } catch (...) {
+        return makeErrorResult(rawEvent, core::toPublicError(*core::unknownError("decrypting the context event")));
+    }
 }
 
 DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
@@ -74,30 +70,27 @@ DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
     DecryptedInternalContextEventDataV1 result;
     result.dataStructureVersion = EventDataSchema::Version::VERSION_5;
     if (getDataStructureVersion(rawEvent) != EventDataSchema::Version::VERSION_5) {
-        result.statusCode = InvalidEncryptedEventDataVersionException().getCode();
+        result.error = core::asError(InvalidEncryptedEventDataVersionException());
         return result;
     }
     auto authorPubKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(rawEvent.author.pub);
     auto decryptedKey = _eventKeyProvider.decryptKey(rawEvent.key, authorPubKey);
-    result.statusCode = decryptedKey.statusCode;
-    if (result.statusCode != 0)
+    result.error = decryptedKey.error;
+    if (result.error)
         return result;
     core::DecryptedEncKey encKey;
     encKey.key = decryptedKey.key;
-    encKey.statusCode = 0;
     try {
         auto raw = _strategyV5->decrypt(rawEvent, encKey);
-        result.statusCode = raw.statusCode;
+        result.error = raw.error;
         result.data = raw.data;
         result.type = raw.type.has_value() ? raw.type.value() : "";
-        if (result.statusCode == 0 && !verifyDecryptedEventData(raw)) {
-            result.statusCode = privmx::endpoint::core::UserVerificationFailureException().getCode();
+        if (!result.error && !verifyDecryptedEventData(raw)) {
+            result.error = core::asError(privmx::endpoint::core::UserVerificationFailureException());
         }
-    } catch (const core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting the internal context event");
+    }
     return result;
 }
 
@@ -126,13 +119,13 @@ EventDataSchema::Version EventDataSchemaMapper::getDataStructureVersion(
 
 ContextCustomEventData EventDataSchemaMapper::makeErrorResult(
     const server::ContextCustomEventData& rawEvent,
-    int64_t errorCode
+    const std::optional<core::Error>& error
 ) {
     return ContextCustomEventData{
         .contextId = rawEvent.id,
         .userId = rawEvent.author.id,
         .payload = {},
-        .statusCode = errorCode,
+        .error = error,
         .schemaVersion = EventDataSchema::Version::UNKNOWN
     };
 }

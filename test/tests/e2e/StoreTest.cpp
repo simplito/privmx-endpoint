@@ -130,7 +130,7 @@ protected:
         EXPECT_EQ(store.lastModifier, reader->getString(section + ".lastModifier"));
         EXPECT_EQ(store.version, reader->getInt64(section + ".version"));
         EXPECT_EQ(store.filesCount, reader->getInt64(section + ".filesCount"));
-        EXPECT_EQ(store.statusCode, 0);
+        EXPECT_EQ(errCode(store), 0);
         EXPECT_EQ(
             store.publicMeta.stdString(),
             privmx::utils::Hex::toString(reader->getString(section + ".publicMeta_inHex"))
@@ -164,7 +164,7 @@ protected:
         );
         EXPECT_EQ(file.size, reader->getInt64(section + ".size"));
         EXPECT_EQ(file.authorPubKey, reader->getString(section + ".authorPubKey"));
-        EXPECT_EQ(file.statusCode, 0);
+        EXPECT_EQ(errCode(file), 0);
         EXPECT_EQ(
             privmx::utils::Utils::stringifyVar(_serializer.serialize(file)),
             reader->getString(section + ".JSON_data")
@@ -270,7 +270,7 @@ protected:
 
         store::File file;
         EXPECT_NO_THROW({ file = storeApi->getFile(closedId); });
-        EXPECT_EQ(file.statusCode, 0);
+        EXPECT_EQ(errCode(file), 0);
         EXPECT_EQ(file.info.fileId, closedId);
         EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
         EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
@@ -358,7 +358,7 @@ TEST_F(StoreTest, createStore) {
     });
     ASSERT_FALSE(createdId.empty());
     EXPECT_NO_THROW({ store = storeApi->getStore(createdId); });
-    EXPECT_EQ(store.statusCode, 0);
+    EXPECT_EQ(errCode(store), 0);
     EXPECT_EQ(store.contextId, contextId());
     EXPECT_EQ(store.publicMeta.stdString(), "public");
     EXPECT_EQ(store.privateMeta.stdString(), "private");
@@ -373,7 +373,7 @@ TEST_F(StoreTest, createStore) {
     });
     ASSERT_FALSE(createdId.empty());
     EXPECT_NO_THROW({ store = storeApi->getStore(createdId); });
-    EXPECT_EQ(store.statusCode, 0);
+    EXPECT_EQ(errCode(store), 0);
     EXPECT_EQ(store.contextId, contextId());
     expectMembers(store, {1}, {1});
 
@@ -440,7 +440,7 @@ TEST_F(StoreTest, updateStore) {
         );
     });
     EXPECT_NO_THROW({ store = storeApi->getStore(storeId(1)); });
-    EXPECT_EQ(store.statusCode, 0);
+    EXPECT_EQ(errCode(store), 0);
     EXPECT_EQ(store.storeId, storeId(1));
     EXPECT_EQ(store.version, 2);
     EXPECT_EQ(store.publicMeta.stdString(), "public");
@@ -488,7 +488,7 @@ TEST_F(StoreTest, updateStore) {
         );
     });
     EXPECT_NO_THROW({ store = storeApi->getStore(storeId(3)); });
-    EXPECT_EQ(store.statusCode, 0);
+    EXPECT_EQ(errCode(store), 0);
     EXPECT_EQ(store.version, 2);
     expectMembers(store, {1}, {1});
 }
@@ -505,7 +505,7 @@ TEST_F(StoreTest, updateStore_rewraps_keys_for_a_newly_added_user) {
     connectAs(ConnectionType::User2);
     store::File file;
     EXPECT_NO_THROW({ file = storeApi->getFile(fileId(1)); });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
 }
 
 TEST_F(StoreTest, updateStore_policy) {
@@ -555,7 +555,7 @@ TEST_F(StoreTest, rotateStoreKeys) {
     ASSERT_NO_THROW({ storeApi->rotateStoreKeys(createdId, user_1, user_1, 0, true); });
     store::Store afterFirstRotation;
     ASSERT_NO_THROW({ afterFirstRotation = storeApi->getStore(createdId); });
-    ASSERT_EQ(afterFirstRotation.statusCode, 0); // a single rotation has always been readable
+    ASSERT_EQ(errCode(afterFirstRotation), 0); // a single rotation has always been readable
 
     ASSERT_NO_THROW({ storeApi->rotateStoreKeys(createdId, user_1, user_1, 0, true); });
 
@@ -565,7 +565,7 @@ TEST_F(StoreTest, rotateStoreKeys) {
 
     store::Store store;
     EXPECT_NO_THROW({ store = storeApi->getStore(createdId); });
-    EXPECT_EQ(store.statusCode, 0);
+    EXPECT_EQ(errCode(store), 0);
     EXPECT_EQ(store.publicMeta.stdString(), "rotated_public");
     EXPECT_EQ(store.privateMeta.stdString(), "rotated_private");
 
@@ -578,7 +578,7 @@ TEST_F(StoreTest, rotateStoreKeys) {
     for(const auto& listed : storeListResult.readItems) {
         if(listed.storeId == createdId) {
             foundInList = true;
-            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_EQ(errCode(listed), 0);
             EXPECT_EQ(listed.privateMeta.stdString(), "rotated_private");
         }
     }
@@ -587,7 +587,7 @@ TEST_F(StoreTest, rotateStoreKeys) {
     // Control: a file carries its own keyId, so it must stay readable across the rotations.
     store::File file;
     EXPECT_NO_THROW({ file = storeApi->getFile(createdFileId); });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
     EXPECT_NO_THROW({
         int64_t handle = storeApi->openFile(createdFileId);
         EXPECT_EQ(storeApi->readFromFile(handle, (int64_t)fileData.size()).stdString(), fileData);
@@ -718,7 +718,7 @@ TEST_F(StoreTest, listStores) {
     EXPECT_EQ(listStores.totalAvailable, 1);
     ASSERT_EQ(listStores.readItems.size(), 1);
     EXPECT_EQ(listStores.readItems[0].storeId, createdId);
-    EXPECT_EQ(listStores.readItems[0].statusCode, 0);
+    EXPECT_EQ(errCode(listStores.readItems[0]), 0);
     EXPECT_EQ(listStores.readItems[0].filesCount, 0);
     EXPECT_EQ(listStores.readItems[0].publicMeta.stdString(), "{\"test\":1}");
     EXPECT_EQ(listStores.readItems[0].privateMeta.stdString(), "list_query_test");
@@ -751,7 +751,7 @@ TEST_F(StoreTest, createFile) {
     ASSERT_FALSE(createdId.empty());
     store::File file;
     EXPECT_NO_THROW({ file = storeApi->getFile(createdId); });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
     EXPECT_EQ(file.info.fileId, createdId);
     EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
     EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
@@ -767,7 +767,7 @@ TEST_F(StoreTest, createFile) {
         createdId = storeApi->closeFile(handle);
     });
     EXPECT_NO_THROW({ file = storeApi->getFile(createdId); });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
     EXPECT_EQ(file.size, 0);
 
     // the full 128 MB round trip
@@ -807,7 +807,7 @@ TEST_F(StoreTest, updateFile) {
     ASSERT_FALSE(closedId.empty());
     store::File file;
     EXPECT_NO_THROW({ file = storeApi->getFile(closedId); });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
     EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
     EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
     EXPECT_EQ(file.size, 0);
@@ -836,7 +836,7 @@ TEST_F(StoreTest, updateFile) {
         closedId = storeApi->closeFile(handle);
     });
     EXPECT_NO_THROW({ file = storeApi->getFile(closedId); });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
     EXPECT_EQ(file.size, 0);
 
     // the full 128 MB round trip
@@ -865,7 +865,7 @@ TEST_F(StoreTest, updateFileMeta) {
     });
     store::File file;
     EXPECT_NO_THROW({ file = storeApi->getFile(fileId(1)); });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
     EXPECT_EQ(file.info.fileId, fileId(1));
     EXPECT_EQ(file.publicMeta.stdString(), "publicMeta");
     EXPECT_EQ(file.privateMeta.stdString(), "privateMeta");
@@ -880,7 +880,7 @@ TEST_F(StoreTest, updateFileMeta) {
         );
     });
     EXPECT_NO_THROW({ file = storeApi->getFile(fileId(1)); });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
     EXPECT_EQ(file.publicMeta.stdString(), "rekeyed_public");
     EXPECT_EQ(file.privateMeta.stdString(), "rekeyed_private");
     EXPECT_EQ(file.size, reader->getInt64("File_1.size"));
@@ -1099,7 +1099,7 @@ TEST_F(StoreTest, writeToFile_random_access) {
     ASSERT_NE(handle, 0);
     store::File file;
     EXPECT_NO_THROW({ file = storeApi->getFile(createdId); });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
     EXPECT_EQ(file.publicMeta.stdString(), "RW_publicMeta");
     EXPECT_EQ(file.privateMeta.stdString(), "RW_privateMeta");
     EXPECT_EQ(file.size, 0);
@@ -1136,7 +1136,7 @@ TEST_F(StoreTest, writeToFile_random_access) {
         writtenData = storeApi->readFromFile(handle, file.size).stdString();
         storeApi->closeFile(handle);
     });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
     EXPECT_EQ(file.size, 3);
     EXPECT_EQ(file.randomWrite, true);
     EXPECT_EQ(writtenData, "ttt");
@@ -1190,7 +1190,7 @@ TEST_F(StoreTest, writeToFile_random_access) {
         writtenData = storeApi->readFromFile(handle, file.size).stdString();
         storeApi->closeFile(handle);
     });
-    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(errCode(file), 0);
     EXPECT_EQ(file.size, (int64_t)(blockSize*3));
     EXPECT_EQ(file.randomWrite, true);
     EXPECT_EQ(writtenData, Ix64k+Tx64k+Ix64k);
@@ -1401,12 +1401,12 @@ TEST_F(StoreTest, userValidator_false) {
 
     EXPECT_NO_THROW({
         auto store = storeApi->getStore(storeId(1));
-        EXPECT_EQ(store.statusCode, failureCode);
+        EXPECT_EQ(errCode(store), failureCode);
     });
     EXPECT_NO_THROW({
         auto stores = storeApi->listStores(contextId(), {.skip=0, .limit=1, .sortOrder="desc"});
         ASSERT_EQ(stores.readItems.size(), 1);
-        EXPECT_EQ(stores.readItems[0].statusCode, failureCode);
+        EXPECT_EQ(errCode(stores.readItems[0]), failureCode);
     });
     EXPECT_THROW({
         storeApi->createStore(
@@ -1423,12 +1423,12 @@ TEST_F(StoreTest, userValidator_false) {
     EXPECT_NO_THROW({ storeApi->deleteStore(storeId(2)); });
     EXPECT_NO_THROW({
         auto file = storeApi->getFile(fileId(1));
-        EXPECT_EQ(file.statusCode, failureCode);
+        EXPECT_EQ(errCode(file), failureCode);
     });
     EXPECT_NO_THROW({
         auto files = storeApi->listFiles(storeId(1), {.skip=0, .limit=1, .sortOrder="desc"});
         ASSERT_EQ(files.readItems.size(), 1);
-        EXPECT_EQ(files.readItems[0].statusCode, failureCode);
+        EXPECT_EQ(errCode(files.readItems[0]), failureCode);
     });
     EXPECT_THROW({
         int64_t handle = storeApi->createFile(

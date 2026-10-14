@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/event/encryptors/event/EventDataEncryptorV5.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/event/Constants.hpp"
 #include "privmx/endpoint/event/EventException.hpp"
 #include "privmx/utils/Utils.hpp"
@@ -46,7 +45,6 @@ DecryptedEventDataV5 EventDataEncryptorV5::decrypt(
     const std::string& encryptionKey
 ) {
     DecryptedEventDataV5 result;
-    result.statusCode = 0;
     result.dataStructureVersion = EventDataSchema::Version::VERSION_5;
     try {
         result.dio = getDIOAndAssertIntegrity(encryptedEventData, authorPublicKey);
@@ -54,11 +52,9 @@ DecryptedEventDataV5 EventDataEncryptorV5::decrypt(
             encryptedEventData.encryptedData, authorPublicKey, encryptionKey
         );
         result.type = encryptedEventData.type;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting the context event data");
+    }
     return result;
 }
 
