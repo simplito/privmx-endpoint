@@ -79,6 +79,8 @@ class LadderKeysBuild : public LadderKeysTestBase {};
 class LadderKeysGather : public LadderKeysTestBase {};
 class LadderKeysDescend : public LadderKeysTestBase {};
 class LadderKeysRegistry : public LadderKeysTestBase {};
+class LadderKeysRepair : public LadderKeysTestBase {};
+class LadderKeysSelfCheck : public LadderKeysTestBase {};
 
 // building rungs
 
@@ -695,6 +697,114 @@ TEST_F(LadderKeysDescend, GarbageDuplicatesCostAttemptsNotHops) {
     EXPECT_EQ(result.key->toWIF(), keyOf(history, 3, 1).toWIF());
     EXPECT_EQ(result.hops, expected.hops);
     EXPECT_TRUE(result.brokenSpans.empty()) << "a span with a good rung in it is not broken";
+}
+
+// finding what to repair
+
+namespace {
+// A cache holding every key of `history` from `from` to `to`, as a member online across those epochs would.
+void holdEpochs(TreeKeyCache& cache, const std::vector<PrivateKey>& keys, std::uint32_t from, std::uint32_t to) {
+    for (std::uint32_t epoch = from; epoch <= to; ++epoch) {
+        cache.putGrantKey(epoch, keys[epoch - 1]);
+    }
+}
+} // namespace
+
+TEST_F(LadderKeysRepair, FindsABrokenUnitRung) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> served = without(history.rungs, RungSpan{8, 7});
+    served.push_back(sealed(RungSpan{8, 7}, PrivateKey::generateRandom(), keyOf(history, 8, 1), AUTHOR));
+    TreeKeyCache cache;
+    holdEpochs(cache, history.keys, 1, 8);
+    const std::vector<RungSpan> unopened = LadderKeys::unopenedSpans(8, served, cache, 1);
+    ASSERT_EQ(unopened.size(), 1u);
+    EXPECT_EQ(unopened[0].target, 7u);
+    EXPECT_TRUE(LadderKeys::unopenedSpans(8, history.rungs, cache, 1).empty()) << "an intact epoch needs nothing";
+}
+
+TEST_F(LadderKeysRepair, IgnoresASpanAnyServedRungOpens) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> served = history.rungs;
+    // Garbage beside the good one: already repaired, or never broken.
+    served.push_back(sealed(RungSpan{8, 7}, PrivateKey::generateRandom(), keyOf(history, 8, 1), ""));
+    TreeKeyCache cache;
+    holdEpochs(cache, history.keys, 1, 8);
+    EXPECT_TRUE(LadderKeys::unopenedSpans(8, served, cache, 1).empty());
+}
+
+TEST_F(LadderKeysRepair, SkipsSpansWhoseTargetKeyIsNotHeld) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    TreeKeyCache cache;
+    holdEpochs(cache, history.keys, 7, 8); // joined at 7: holds neither 6 nor 4
+    EXPECT_TRUE(LadderKeys::unopenedSpans(8, {}, cache, 1).size() == 1u) << "only (8,7) is sealable by this member";
+    TreeKeyCache cold;
+    cold.putGrantKey(7, keyOf(history, 7, 1));
+    EXPECT_TRUE(LadderKeys::unopenedSpans(8, {}, cold, 1).empty()) << "without sk_8 nothing can be checked or sealed";
+}
+
+TEST_F(LadderKeysRepair, SECURITY_NamesOnlyCanonicalDownwardSpansAtOrAboveTheFloor) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    TreeKeyCache cache;
+    holdEpochs(cache, history.keys, 1, 8);
+    const std::vector<RungSpan> unopened = LadderKeys::unopenedSpans(8, {}, cache, 6);
+    std::vector<std::uint32_t> targets;
+    for (const RungSpan& span : unopened) {
+        EXPECT_EQ(span.at, 8u);
+        EXPECT_LT(span.target, span.at);
+        targets.push_back(span.target);
+    }
+    std::sort(targets.begin(), targets.end());
+    EXPECT_EQ(targets, (std::vector<std::uint32_t>{6, 7})) << "never (8,4), below the floor; never (8,5)";
+}
+
+TEST_F(LadderKeysRepair, TheRememberedFloorNeverGoesDown) {
+    TreeKeyCache cache;
+    EXPECT_EQ(cache.raiseFloor(1), 1u);
+    EXPECT_EQ(cache.raiseFloor(5), 5u);
+    EXPECT_EQ(cache.raiseFloor(2), 5u) << "a lower floor served later is ignored";
+    cache.clear();
+    EXPECT_EQ(cache.raiseFloor(1), 5u) << "forgetting keys does not forget the floor";
+}
+
+// the commit self-check
+
+TEST_F(LadderKeysSelfCheck, AnHonestSetPasses) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> atEight;
+    for (const ArchiveRung& rung : history.rungs) {
+        if (rung.span.at == 8) {
+            atEight.push_back(rung);
+        }
+    }
+    ASSERT_EQ(atEight.size(), 3u);
+    EXPECT_FALSE(LadderKeys::firstRungNotOpeningToTheChain(atEight, keyOf(history, 8, 1), history.registry).has_value());
+}
+
+TEST_F(LadderKeysSelfCheck, SECURITY_ARungSealingAKeyTheRegistryDoesNotNameIsRefused) {
+    // A wrong key in the committer's cache (a client bug) would otherwise become a permanent broken skip rung.
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    const std::vector<ArchiveRung> rungs{
+        sealed(RungSpan{8, 7}, keyOf(history, 7, 1), keyOf(history, 8, 1), AUTHOR),
+        sealed(RungSpan{8, 6}, PrivateKey::generateRandom(), keyOf(history, 8, 1), AUTHOR),
+    };
+    const auto bad = LadderKeys::firstRungNotOpeningToTheChain(rungs, keyOf(history, 8, 1), history.registry);
+    ASSERT_TRUE(bad.has_value());
+    EXPECT_EQ(bad->target, 6u);
+}
+
+TEST_F(LadderKeysSelfCheck, SECURITY_AWrongLabelIsRefused) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    ArchiveRung relabelled = sealed(RungSpan{8, 6}, keyOf(history, 7, 1), keyOf(history, 8, 1), AUTHOR);
+    relabelled.span = RungSpan{8, 7}; // the right key, sealed under another span's label
+    const auto bad = LadderKeys::firstRungNotOpeningToTheChain({relabelled}, keyOf(history, 8, 1), history.registry);
+    ASSERT_TRUE(bad.has_value());
+    EXPECT_EQ(bad->target, 7u);
+}
+
+TEST_F(LadderKeysSelfCheck, SECURITY_ARungToAnotherRecipientIsRefused) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    const ArchiveRung elsewhere = sealed(RungSpan{8, 7}, keyOf(history, 7, 1), PrivateKey::generateRandom(), AUTHOR);
+    EXPECT_TRUE(LadderKeys::firstRungNotOpeningToTheChain({elsewhere}, keyOf(history, 8, 1), history.registry).has_value());
 }
 
 // registry

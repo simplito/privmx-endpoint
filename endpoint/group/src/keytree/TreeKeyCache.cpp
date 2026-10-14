@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
 
+#include <algorithm>
 #include <mutex>
 #include <shared_mutex>
 
@@ -40,4 +41,10 @@ void TreeKeyCache::forgetGrantKey(std::uint32_t epoch) {
 void TreeKeyCache::clear() {
     std::unique_lock lock(_mutex);
     _grantKeys.clear();
+}
+
+std::uint32_t TreeKeyCache::raiseFloor(std::uint32_t seen) {
+    std::unique_lock lock(_mutex);
+    _floor = std::max(_floor, seen);
+    return _floor;
 }

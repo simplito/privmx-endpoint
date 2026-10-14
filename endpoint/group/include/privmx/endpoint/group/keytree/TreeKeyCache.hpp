@@ -37,10 +37,17 @@ public:
 
     void clear();
 
+    // The highest ladder floor (max of era floor and prune watermark) seen for this group in this session: stores
+    // max(stored, seen) and returns it. A floor only ever rises on an honest bridge, so a lower one served later is
+    // the bridge's lie and is ignored; nothing is repaired or required below the returned value. Survives `clear()`:
+    // forgetting keys is no reason to forget a floor.
+    std::uint32_t raiseFloor(std::uint32_t seen);
+
 private:
     mutable std::shared_mutex _mutex;
     // Within a group `epoch -> key` is immutable; `LadderKeys::buildRungs` reads the older ones.
     std::map<std::uint32_t, privmx::crypto::PrivateKey> _grantKeys;
+    std::uint32_t _floor = 1;
 };
 
 } // namespace keytree

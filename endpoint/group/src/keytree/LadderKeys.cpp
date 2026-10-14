@@ -76,7 +76,7 @@ bool LadderKeys::verifyAgainstRegistry(
     const privmx::crypto::PrivateKey& recovered,
     std::uint32_t epoch,
     const std::vector<EpochRegistryEntry>& registry
-) const {
+) {
     const auto published = publicKeyOfEpoch(epoch, registry);
     if (!published.has_value()) {
         // No anchor for this epoch means we cannot vouch for the key. Refusing is the safe answer: accepting an
@@ -84,6 +84,50 @@ bool LadderKeys::verifyAgainstRegistry(
         return false;
     }
     return published.value() == recovered.getPublicKey();
+}
+
+std::vector<RungSpan> LadderKeys::unopenedSpans(
+    std::uint32_t at,
+    const std::vector<ArchiveRung>& served,
+    const TreeKeyCache& cache,
+    std::uint32_t floor
+) {
+    std::vector<RungSpan> unopened;
+    const auto atKey = cache.getGrantKey(at);
+    if (!atKey.has_value() || at < 1 || floor < 1) {
+        return unopened;
+    }
+    for (const RungSpan& span : LadderMath::rungSpansFor(at, floor)) {
+        const auto targetKey = cache.getGrantKey(span.target);
+        if (!targetKey.has_value()) {
+            continue; // nothing this client could seal anyway
+        }
+        const bool opens = std::any_of(served.begin(), served.end(), [&](const ArchiveRung& rung) {
+            if (rung.span.at != span.at || rung.span.target != span.target) {
+                return false;
+            }
+            const auto recovered = openRung(rung, atKey.value());
+            return recovered.has_value() && recovered->getPublicKey() == targetKey->getPublicKey();
+        });
+        if (!opens) {
+            unopened.push_back(span);
+        }
+    }
+    return unopened;
+}
+
+std::optional<RungSpan> LadderKeys::firstRungNotOpeningToTheChain(
+    const std::vector<ArchiveRung>& rungs,
+    const privmx::crypto::PrivateKey& atKey,
+    const std::vector<EpochRegistryEntry>& registry
+) {
+    for (const ArchiveRung& rung : rungs) {
+        const auto recovered = openRung(rung, atKey);
+        if (!recovered.has_value() || !verifyAgainstRegistry(recovered.value(), rung.span.target, registry)) {
+            return rung.span;
+        }
+    }
+    return std::nullopt;
 }
 
 std::vector<std::uint32_t> LadderKeys::requiredSkipTargets(
