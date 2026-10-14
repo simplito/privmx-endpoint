@@ -91,17 +91,17 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
         membershipRaw = _dataEncryptor.decodeAndVerify(
             encData.membership, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey)
         );
-    } catch (const core::Exception& e) {
-        throw GroupMembershipMismatchException(e);
-    } catch (...) { throw GroupMembershipMismatchException(); }
+    } catch (const core::Exception& e) { throw GroupMembershipMismatchException(e); } catch (...) {
+        throw GroupMembershipMismatchException();
+    }
     dynamic::MembershipBlock membership;
     try {
         membership = dynamic::MembershipBlock::fromJSON(
             privmx::utils::Utils::parseJsonObject(membershipRaw.stdString())
         );
-    } catch (const core::Exception& e) {
-        throw GroupMembershipMismatchException(e);
-    } catch (...) { throw GroupMembershipMismatchException(); }
+    } catch (const core::Exception& e) { throw GroupMembershipMismatchException(e); } catch (...) {
+        throw GroupMembershipMismatchException();
+    }
     if (membership.groupPubKey != groupInfo.groupPubKey || membership.keyId != groupInfo.data.back().keyId) {
         throw GroupMembershipMismatchException();
     }
@@ -133,23 +133,23 @@ void GroupDataSchemaMapper::assertPublicMetaIsAttested(
     dynamic::EncryptedGroupPublicMetaV5 encData;
     try {
         encData = dynamic::EncryptedGroupPublicMetaV5::fromJSON(groupInfo.publicMeta.data);
-    } catch (const core::Exception& e) {
-        throw GroupMembershipMismatchException(e);
-    } catch (...) { throw GroupMembershipMismatchException(); }
+    } catch (const core::Exception& e) { throw GroupMembershipMismatchException(e); } catch (...) {
+        throw GroupMembershipMismatchException();
+    }
     core::Buffer metaRaw;
     try {
         metaRaw = _dataEncryptor.decodeAndVerify(
             encData.meta, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey)
         );
-    } catch (const core::Exception& e) {
-        throw GroupMembershipMismatchException(e);
-    } catch (...) { throw GroupMembershipMismatchException(); }
+    } catch (const core::Exception& e) { throw GroupMembershipMismatchException(e); } catch (...) {
+        throw GroupMembershipMismatchException();
+    }
     dynamic::MetaBlock meta;
     try {
         meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
-    } catch (const core::Exception& e) {
-        throw GroupMembershipMismatchException(e);
-    } catch (...) { throw GroupMembershipMismatchException(); }
+    } catch (const core::Exception& e) { throw GroupMembershipMismatchException(e); } catch (...) {
+        throw GroupMembershipMismatchException();
+    }
     if (meta.keyId != groupInfo.publicMeta.keyId ||
         meta.keyVersion != groupInfo.publicMeta.keyVersion ||
         meta.keyVersion > groupInfo.keyVersion) {
@@ -182,23 +182,23 @@ void GroupDataSchemaMapper::assertPrivateMetaIsAttested(
     dynamic::EncryptedGroupPrivateMetaV5 encData;
     try {
         encData = dynamic::EncryptedGroupPrivateMetaV5::fromJSON(groupInfo.privateMeta.data);
-    } catch (const core::Exception& e) {
-        throw GroupMembershipMismatchException(e);
-    } catch (...) { throw GroupMembershipMismatchException(); }
+    } catch (const core::Exception& e) { throw GroupMembershipMismatchException(e); } catch (...) {
+        throw GroupMembershipMismatchException();
+    }
     core::Buffer metaRaw;
     try {
         metaRaw = _dataEncryptor.decodeAndVerify(
             encData.meta, privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey)
         );
-    } catch (const core::Exception& e) {
-        throw GroupMembershipMismatchException(e);
-    } catch (...) { throw GroupMembershipMismatchException(); }
+    } catch (const core::Exception& e) { throw GroupMembershipMismatchException(e); } catch (...) {
+        throw GroupMembershipMismatchException();
+    }
     dynamic::MetaBlock meta;
     try {
         meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
-    } catch (const core::Exception& e) {
-        throw GroupMembershipMismatchException(e);
-    } catch (...) { throw GroupMembershipMismatchException(); }
+    } catch (const core::Exception& e) { throw GroupMembershipMismatchException(e); } catch (...) {
+        throw GroupMembershipMismatchException();
+    }
     if (meta.keyId != groupInfo.privateMeta.keyId ||
         meta.keyVersion != groupInfo.privateMeta.keyVersion ||
         meta.keyVersion > groupInfo.keyVersion) {
@@ -281,9 +281,9 @@ core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const serve
     core::DataIntegrityObject dio;
     try {
         dio = _groupEncryptor.getRosterDIOAndAssertIntegrity(encData);
-    } catch (const core::Exception& e) {
-        throw GroupDataIntegrityException(e);
-    } catch (...) { throw GroupDataIntegrityException(); }
+    } catch (const core::Exception& e) { throw GroupDataIntegrityException(e); } catch (...) {
+        throw GroupDataIntegrityException();
+    }
     if (dio.contextId != groupInfo.contextId || dio.resourceId != groupInfo.resourceId.value_or("")) {
         throw GroupDataIntegrityException();
     }
@@ -472,9 +472,9 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
             if (seen(rosterDios[i]) || seen(publicMetaDios[i]) || seen(privateMetaDios[i])) {
                 result[i].statusCode = core::DataIntegrityObjectDuplicatedException().getCode();
             }
-        } catch (const core::Exception& e) {
-            result[i] = toError(g, e.getCode());
-        } catch (...) { result[i] = toError(g, ENDPOINT_CORE_EXCEPTION_CODE); }
+        } catch (const core::Exception& e) { result[i] = toError(g, e.getCode()); } catch (...) {
+            result[i] = toError(g, ENDPOINT_CORE_EXCEPTION_CODE);
+        }
     }
 
     // One request per plane per group, each against the author of that plane's own head entry. All three must

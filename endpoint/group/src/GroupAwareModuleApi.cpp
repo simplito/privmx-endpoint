@@ -45,7 +45,10 @@ GroupAwareModuleApi::GroupAwareModuleApi(
 
 GroupAwareModuleApi::~GroupAwareModuleApi() = default;
 
-void GroupAwareModuleApi::absorbAutoRekeyFailure(const std::string& moduleId, const privmx::endpoint::core::Exception& e) {
+void GroupAwareModuleApi::absorbAutoRekeyFailure(
+    const std::string& moduleId,
+    const privmx::endpoint::core::Exception& e
+) {
     auto code = e.getCode();
     if (code == privmx::endpoint::server::ContainerRotatedAlreadyException().getCode()) {
         invalidateModuleKeysInCache(moduleId);

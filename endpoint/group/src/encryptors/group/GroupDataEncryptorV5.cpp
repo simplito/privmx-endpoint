@@ -86,9 +86,9 @@ DecryptedGroupRosterV5 GroupDataEncryptorV5::decryptRoster(
         result.membership = dynamic::MembershipBlock::fromJSON(
             privmx::utils::Utils::parseJsonObject(membershipRaw.stdString())
         );
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting group data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting group data");
+    }
     return result;
 }
 
@@ -170,9 +170,9 @@ DecryptedGroupPublicMetaV5 GroupDataEncryptorV5::extractPublicMeta(
 
         auto metaRaw = _dataEncryptor.decodeAndVerify(encryptedData.meta, authorPublicKey);
         result.meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting group data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting group data");
+    }
     return result;
 }
 
@@ -244,9 +244,9 @@ DecryptedGroupPrivateMetaV5 GroupDataEncryptorV5::decryptPrivateMeta(
 
         auto metaRaw = _dataEncryptor.decodeAndVerify(encryptedData.meta, authorPublicKey);
         result.meta = dynamic::MetaBlock::fromJSON(privmx::utils::Utils::parseJsonObject(metaRaw.stdString()));
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting group data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting group data");
+    }
     return result;
 }
 

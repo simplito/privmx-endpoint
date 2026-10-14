@@ -58,9 +58,9 @@ InboxEntryResult InboxEntryDataSchemaStrategyV1::decryptEntry(
         inbox::server::InboxMessageServer inboxMessageServer;
         try {
             inboxMessageServer = inbox::server::InboxMessageServer::deserialize(utils::Base64::toString(message.data));
-        } catch (const core::Exception& e) {
-            throw FailedToExtractMessagePublicMetaException(e);
-        } catch (...) { throw FailedToExtractMessagePublicMetaException(); }
+        } catch (const core::Exception& e) { throw FailedToExtractMessagePublicMetaException(e); } catch (...) {
+            throw FailedToExtractMessagePublicMetaException();
+        }
         auto msgData = inboxMessageServer.message;
 
         auto msgPublicData = decryptPublicOnly(msgData);
@@ -80,9 +80,9 @@ InboxEntryResult InboxEntryDataSchemaStrategyV1::decryptEntry(
         result.storeId = inboxMessageServer.store;
         result.filesIds = inboxMessageServer.files;
         return result;
-    } catch (const core::Exception& e) {
-        return makeEmptyResult(core::asError(e));
-    } catch (...) { return makeEmptyResult(core::unknownError("decrypting the inbox entry")); }
+    } catch (const core::Exception& e) { return makeEmptyResult(core::asError(e)); } catch (...) {
+        return makeEmptyResult(core::unknownError("decrypting the inbox entry"));
+    }
 }
 
 inbox::InboxEntry InboxEntryDataSchemaStrategyV1::convertToFinal(
@@ -120,9 +120,9 @@ inbox::InboxEntry InboxEntryDataSchemaStrategyV1::convertToFinal(
                     result.files.push_back(error);
                 }
             }
-        } catch (const core::Exception& e) {
-            result.statusCode = e.getCode();
-        } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        } catch (const core::Exception& e) { result.statusCode = e.getCode(); } catch (...) {
+            result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        }
     }
     result.schemaVersion = EntryDataSchema::Version::VERSION_1;
     return result;

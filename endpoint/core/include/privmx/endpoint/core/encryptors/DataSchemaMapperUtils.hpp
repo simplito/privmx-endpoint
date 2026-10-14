@@ -60,9 +60,9 @@ public:
         try {
             fn();
             return 0;
-        } catch (const Exception& e) {
-            return e.getCode();
-        } catch (...) { return ENDPOINT_CORE_EXCEPTION_CODE; }
+        } catch (const Exception& e) { return e.getCode(); } catch (...) {
+            return ENDPOINT_CORE_EXCEPTION_CODE;
+        }
     }
 
     template<typename TContainer>
@@ -192,9 +192,9 @@ public:
                 } else {
                     result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE);
                 }
-            } catch (const Exception& e) {
-                result[i] = toLibError(items[i], e.getCode());
-            } catch (...) { result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE); }
+            } catch (const Exception& e) { result[i] = toLibError(items[i], e.getCode()); } catch (...) {
+                result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE);
+            }
         }
 
         std::vector<VerificationRequest> verifyReqs;
@@ -289,9 +289,9 @@ public:
                 if (!seenRandomIds.insert(dio.randomId + "-" + std::to_string(dio.timestamp)).second) {
                     result[i].statusCode = DataIntegrityObjectDuplicatedException().getCode();
                 }
-            } catch (const Exception& e) {
-                result[i] = toLibError(items[i], e.getCode());
-            } catch (...) { result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE); }
+            } catch (const Exception& e) { result[i] = toLibError(items[i], e.getCode()); } catch (...) {
+                result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE);
+            }
         }
 
         std::vector<VerificationRequest> verifyReqs;

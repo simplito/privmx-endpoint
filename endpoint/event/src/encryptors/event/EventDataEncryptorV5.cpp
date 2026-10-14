@@ -52,9 +52,9 @@ DecryptedEventDataV5 EventDataEncryptorV5::decrypt(
             encryptedEventData.encryptedData, authorPublicKey, encryptionKey
         );
         result.type = encryptedEventData.type;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting the context event data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting the context event data");
+    }
     return result;
 }
 

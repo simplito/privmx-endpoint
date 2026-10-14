@@ -70,9 +70,9 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(
         result.key = utils::Base64::toString(decryptedKey.key);
         result.secretHash = expandedDio.fieldChecksums.at("secretHash");
         result.keySecret = utils::Base64::toString(decryptedKey.keySecret);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = asError(e);
-    } catch (...) { result.error = unknownError("decrypting the encryption key entry"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = asError(e); } catch (...) {
+        result.error = unknownError("decrypting the encryption key entry");
+    }
     return result;
 }
 

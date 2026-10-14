@@ -67,9 +67,9 @@ DecryptedModuleDataV4 ModuleDataEncryptorV4::decrypt(
             )) :
             std::nullopt;
         result.authorPubKey = encryptedModuleData.authorPubKey;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = asError(e);
-    } catch (...) { result.error = unknownError("decrypting module data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = asError(e); } catch (...) {
+        result.error = unknownError("decrypting module data");
+    }
     return result;
 }
 

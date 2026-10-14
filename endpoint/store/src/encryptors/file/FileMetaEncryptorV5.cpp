@@ -72,9 +72,9 @@ store::DecryptedFileMetaV5 FileMetaEncryptorV5::decrypt(
             encryptedFileMeta.internalMeta.value(), authorPublicKey, encryptionKey
         );
         result.authorPubKey = encryptedFileMeta.authorPubKey;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting file meta"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting file meta");
+    }
     return result;
 }
 
@@ -96,9 +96,9 @@ store::DecryptedFileMetaV5 FileMetaEncryptorV5::extractPublic(
             }
         }
         result.authorPubKey = encryptedFileMeta.authorPubKey;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting file meta"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting file meta");
+    }
     return result;
 }
 

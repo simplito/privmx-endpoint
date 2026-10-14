@@ -67,9 +67,9 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(
             )
         );
         updateSeq(remoteStreamId, parsedEncryptedMessage.header.seq);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.statusCode = e.getCode(); } catch (...) {
+        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+    }
     return result;
 }
 

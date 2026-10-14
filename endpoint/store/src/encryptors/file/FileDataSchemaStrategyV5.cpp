@@ -67,9 +67,9 @@ std::tuple<File, core::DataIntegrityObject> FileDataSchemaStrategyV5::convert(
             );
             size = internalMeta.size;
             randomWrite = internalMeta.randomWrite.value_or(false);
-        } catch (const core::Exception& e) {
-            statusCode = e.getCode();
-        } catch (...) { statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        } catch (const core::Exception& e) { statusCode = e.getCode(); } catch (...) {
+            statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        }
     }
     return {
         FileMetaDataSchemaMapper::toLibFile(

@@ -83,9 +83,9 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::decrypt(
             )) :
             std::nullopt;
         result.authorPubKey = encryptedEntryData.authorPubKey;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting kvdb entry data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting kvdb entry data");
+    }
     return result;
 }
 
@@ -107,9 +107,9 @@ DecryptedKvdbEntryDataV5 EntryDataEncryptorV5::extractPublic(
             }
         }
         result.authorPubKey = encryptedEntryData.authorPubKey;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting kvdb entry data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting kvdb entry data");
+    }
     return result;
 }
 

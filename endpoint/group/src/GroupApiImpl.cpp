@@ -723,9 +723,7 @@ void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server:
     auto decrypted = _keyProvider->getKeysAndVerify(request);
     const auto& winnerGk = decrypted.at(location).at(payload.winnerKeyEntry.keyId);
     if (winnerGk.error) {
-        throw GroupDataIntegrityException(
-            "RotatedAlready: winner's key entry failed verification", *winnerGk.error
-        );
+        throw GroupDataIntegrityException("RotatedAlready: winner's key entry failed verification", *winnerGk.error);
     }
 
     // Without a tag nothing ties this epoch to a member, so adopting it would mean re-wrapping against whatever
@@ -848,9 +846,9 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 auto decrypted = decrypt(core::Buffer::from(privmx::utils::Base64::toString(raw.eventData)));
                 data.payload = decrypted.data;
                 data.authorPubKey = decrypted.authorPubKey;
-            } catch (const core::Exception& e) {
-                data.statusCode = e.getCode();
-            } catch (...) { data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+            } catch (const core::Exception& e) { data.statusCode = e.getCode(); } catch (...) {
+                data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+            }
             auto event = core::EventBuilder::buildEvent<GroupCustomEvent>(
                 "group/" + raw.id + "/" + channelName, data, notification
             );
@@ -1087,9 +1085,7 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
     if (found.error) {
         // `findEncKeyByKeyId` and friends hand back entries whose decryption failed; unchecked, the empty key
         // surfaces as a cipher length complaint instead of the real cause, usually an era boundary.
-        throw core::EncryptionKeyValidationException(
-            "Group key " + keyId + " could not be decrypted", *found.error
-        );
+        throw core::EncryptionKeyValidationException("Group key " + keyId + " could not be decrypted", *found.error);
     }
     _envelopeKeys.set(memoKey, found);
     return found;

@@ -32,9 +32,9 @@ public:
     ) const override final {
         try {
             return convert(model, decrypt(model, encKey, verifiedDio));
-        } catch (const core::Exception& e) {
-            return makeErrorResult(model, e.getCode());
-        } catch (...) { return makeErrorResult(model, ENDPOINT_CORE_EXCEPTION_CODE); }
+        } catch (const core::Exception& e) { return makeErrorResult(model, e.getCode()); } catch (...) {
+            return makeErrorResult(model, ENDPOINT_CORE_EXCEPTION_CODE);
+        }
     }
 
     virtual TRawData decrypt(const TServerModel& model, const DecryptedEncKey& encKey) const = 0;

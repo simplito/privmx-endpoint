@@ -85,9 +85,9 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::decrypt(
             )) :
             std::nullopt;
         result.authorPubKey = encryptedMessageData.authorPubKey;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting message data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting message data");
+    }
     return result;
 }
 
@@ -109,9 +109,9 @@ DecryptedMessageDataV5 MessageDataEncryptorV5::extractPublic(
             }
         }
         result.authorPubKey = encryptedMessageData.authorPubKey;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting message data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting message data");
+    }
     return result;
 }
 

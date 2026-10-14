@@ -72,9 +72,9 @@ DecryptedMessageDataV4 MessageDataEncryptorV4::decrypt(
             )) :
             std::nullopt;
         result.authorPubKey = encryptedMessageData.authorPubKey;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting message data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting message data");
+    }
     return result;
 }
 

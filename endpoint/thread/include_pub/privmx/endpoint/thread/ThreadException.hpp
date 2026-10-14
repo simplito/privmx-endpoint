@@ -60,8 +60,7 @@
         static constexpr unsigned int FULL_CODE = (BASE_SCOPED::SCOPE_CODE << 16) | (CODE);                            \
         NAME() : BASE_SCOPED(MSG, #NAME, CODE) {}                                                                      \
         NAME(std::string new_of_description) : BASE_SCOPED(MSG, #NAME, CODE, std::move(new_of_description)) {}         \
-        NAME(const Exception& cause)                                                                                   \
-            : BASE_SCOPED(MSG, #NAME, CODE, std::string(), cause) {}                                                   \
+        NAME(const Exception& cause) : BASE_SCOPED(MSG, #NAME, CODE, std::string(), cause) {}                          \
         NAME(std::string new_of_description, const Exception& cause)                                                   \
             : BASE_SCOPED(MSG, #NAME, CODE, std::move(new_of_description), cause) {}                                   \
         void rethrow() const override;                                                                                 \

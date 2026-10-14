@@ -59,9 +59,9 @@ ContextCustomEventData EventDataSchemaMapper::decrypt(const server::ContextCusto
             raw.error = core::asError(privmx::endpoint::core::UserVerificationFailureException());
         }
         return _strategyV5->convert(rawEvent, raw);
-    } catch (const core::Exception& e) {
-        return makeErrorResult(rawEvent, e.getCode());
-    } catch (...) { return makeErrorResult(rawEvent, ENDPOINT_CORE_EXCEPTION_CODE); }
+    } catch (const core::Exception& e) { return makeErrorResult(rawEvent, e.getCode()); } catch (...) {
+        return makeErrorResult(rawEvent, ENDPOINT_CORE_EXCEPTION_CODE);
+    }
 }
 
 DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
@@ -88,9 +88,9 @@ DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
         if (!result.error && !verifyDecryptedEventData(raw)) {
             result.error = core::asError(privmx::endpoint::core::UserVerificationFailureException());
         }
-    } catch (const core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("decrypting the internal context event"); }
+    } catch (const core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("decrypting the internal context event");
+    }
     return result;
 }
 

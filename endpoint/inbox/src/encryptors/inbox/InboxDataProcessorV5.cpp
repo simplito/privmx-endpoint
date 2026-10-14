@@ -117,9 +117,9 @@ InboxPublicDataV5AsResult InboxDataProcessorV5::unpackPublic(const Poco::Dynamic
         result.inboxEntriesKeyId = publicDataV5.inboxKeyId;
         result.authorPubKey = publicDataV5.authorPubKey;
 
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("unpacking inbox data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("unpacking inbox data");
+    }
     return result;
 }
 
@@ -151,9 +151,9 @@ InboxPrivateDataV5AsResult InboxDataProcessorV5::unpackPrivate(
         };
         result.authorPubKey = privateDataV5.authorPubKey;
 
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("unpacking inbox data"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("unpacking inbox data");
+    }
     return result;
 }
 

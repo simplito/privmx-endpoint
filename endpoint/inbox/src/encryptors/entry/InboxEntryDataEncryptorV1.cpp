@@ -81,9 +81,9 @@ InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(
 
         result.privateData = privateData;
         result.publicData = publicData;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("unpacking the inbox entry"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("unpacking the inbox entry");
+    }
     return result;
 }
 
@@ -99,8 +99,8 @@ InboxEntryPublicDataResult InboxEntryDataEncryptorV1::decryptPublicOnly(std::str
         publicDataBuffer.readBool(result.keyPreset);
         publicDataBuffer.readOneOctetLengthBuffer(result.usedInboxKeyId);
 
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.error = core::asError(e);
-    } catch (...) { result.error = core::unknownError("unpacking the inbox entry"); }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("unpacking the inbox entry");
+    }
     return result;
 }

@@ -28,9 +28,9 @@ DecryptedEventEncKeyV1 EventKeyProvider::decryptKey(
     std::shared_ptr<const core::Exception> error;
     try {
         encKey = privmx::crypto::EciesEncryptor::decryptFromBase64(_key, encryptedKey, authorPubKey);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        error = core::asError(e);
-    } catch (...) { error = core::unknownError("decrypting the event encryption key"); }
+    } catch (const privmx::endpoint::core::Exception& e) { error = core::asError(e); } catch (...) {
+        error = core::unknownError("decrypting the event encryption key");
+    }
     return DecryptedEventEncKeyV1{
         core::DecryptedVersionedData{.dataStructureVersion = 1, .error = error}, .key = encKey
     };

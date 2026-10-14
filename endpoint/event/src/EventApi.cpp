@@ -24,8 +24,7 @@ using namespace privmx::endpoint::event;
 EventApi EventApi::create(core::Connection& connection) {
     std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
     std::shared_ptr<EventApiImpl> impl(new EventApiImpl(
-        connection, connectionImpl->getUserPrivKey(), connectionImpl->getGateway(),
-        connectionImpl->getEventMiddleware()
+        connection, connectionImpl->getUserPrivKey(), connectionImpl->getGateway(), connectionImpl->getEventMiddleware()
     ));
     return EventApi(impl);
 }

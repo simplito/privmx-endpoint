@@ -49,9 +49,7 @@ std::string StreamApi::createStreamRoom(
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
-    return impl->createStreamRoom(
-        contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl, groups
-    );
+    return impl->createStreamRoom(contextId, users, managers, publicMeta, privateMeta, policies, emptyRoomTtl, groups);
 }
 
 void StreamApi::updateStreamRoom(
