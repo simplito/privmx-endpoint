@@ -73,8 +73,16 @@ public:
      * history, and its metadata carries through untouched — seating a member is not a metadata edit, and
      * `updateGroupPublicMeta`/`updateGroupPrivateMeta` are where that happens.
      *
+     * A call that failed may still take effect: the Bridge may have applied the commit and lost or refused the
+     * answer. For up to 20 minutes, or until the Group's head moves past it, this client resends that request before
+     * it commits anything else to the Group, so a retry of the same call resends it (and returns once it is found
+     * applied), and a different call completes it first. An addition is resent only while the UserVerifier still
+     * vouches for its newcomers' keys. A failed background self-update never holds anything back.
+     *
      * @param groupId ID of the Group
      * @param newMembers the members to add, each with their public key and the role they take
+     * @throws GroupCommitUnresolvedException when an earlier commit of this client to the Group has no known
+     * outcome yet and could not be completed (the message names its kind: add, remove, ...)
      */
     void addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
 
@@ -88,8 +96,16 @@ public:
      * Incremental: only the leavers are named, and the roster that remains is derived from the Group's own
      * verified history. Metadata carries through untouched.
      *
+     * A call that failed may still take effect: the Bridge may have applied the commit and lost or refused the
+     * answer. For up to 20 minutes, or until the Group's head moves past it, this client resends that request before
+     * it commits anything else to the Group, so a retry of the same call resends it (and returns once it is found
+     * applied), and a different call completes it first. An addition is resent only while the UserVerifier still
+     * vouches for its newcomers' keys. A failed background self-update never holds anything back.
+     *
      * @param groupId ID of the Group
      * @param userIds IDs of the members to remove
+     * @throws GroupCommitUnresolvedException when an earlier commit of this client to the Group has no known
+     * outcome yet and could not be completed (the message names its kind: add, remove, ...)
      */
     void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
