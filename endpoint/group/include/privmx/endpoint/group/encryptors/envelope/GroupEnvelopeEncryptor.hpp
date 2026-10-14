@@ -11,22 +11,29 @@
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
+#include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
 #include <privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp>
 
 #include "privmx/endpoint/group/GroupTypes.hpp"
 #include "privmx/endpoint/group/Types.hpp"
+#include "privmx/endpoint/group/encryptors/envelope/EnvelopeWire.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace group {
 
-// Sealed size of a chunk holding `plainLen` bytes. The overhead comes from `CryptoSuite` instead of being
-// restated here, so the two cannot drift apart: an AEAD frame is `[suite id][iv][ciphertext||tag]`, with the
-// ciphertext the same length as the plaintext — no block padding, unlike the CBC framing this replaced.
-// At namespace scope so `ENCRYPTED_CHUNK_SIZE` derives from it instead of restating the arithmetic.
-constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
-    return plainLen + core::CryptoSuite::DEFAULT_FRAME_OVERHEAD;
+// Sealed size of a chunk holding `plainLen` bytes, under `suite`. The overhead comes from `CryptoSuite`
+// instead of being restated here, so the two cannot drift apart: an AEAD frame is
+// `[suite id][iv][ciphertext||tag]`, with the ciphertext the same length as the plaintext — no block
+// padding, unlike the CBC framing this replaced.
+//
+// Takes the suite rather than reading a build-time constant: a file's chunks are addressed as
+// `index * encryptedChunkSize(suite)`, so a container writing with a differently-framed suite would
+// otherwise have its chunks read from the wrong offsets. The suite therefore travels in the file
+// envelope header, and every size here follows it.
+inline ByteCount encryptedChunkSizeFor(ByteCount plainLen, const core::CryptoSuite& suite) {
+    return plainLen + suite.frameOverhead();
 }
 
 /**
@@ -83,9 +90,15 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  * offsets and sizes come from `cipherOffsetOfChunk`, `chunkCount` and `plainChunkSizeAt`, and is stored
  * separately by the caller.
  *
- *   header  = u8 ver | u8 type=3 | u8len groupId | u8len keyId | u8len authorPubKeyDER
+ *   header  = u8 ver | u8 type=3 | u8 suiteId | u8len groupId | u8len keyId | u8len authorPubKeyDER
  *   payload = encrypt(sign(header || u64be plainSize || fileKey32, authorPriv), groupKey32)
  *   body    = for each chunk i: encrypt(plain_i, hmac-sha256(fileKey, CHUNK_KEY_LABEL || u32be i))
+ *
+ * `suiteId` is in the *plaintext* header because a reader needs it before it can address anything: chunk
+ * i sits at `i * encryptedChunkSize(suite)`, and the suite sets the frame overhead. It is re-sealed inside
+ * the payload like the rest of the header, so a rewrite that claimed a differently-framed suite would fail
+ * the header comparison rather than silently shift every offset. Each chunk also carries its own suite tag,
+ * so the body stays self-describing — the header byte is what makes *seeking* possible.
  *
  * `plainSize` sits inside the signature because each chunk authenticates only itself — nothing about chunk N
  * says how many were supposed to follow, so a dropped trailing chunk is otherwise undetectable. Every chunk's
@@ -98,10 +111,14 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  * Written by `packAnonymousFileEnvelope`, read by `unpackAnonymousFileEnvelope`, routed by `peekFile`; body
  * exactly as type 3.
  *
- *   header  = u8 ver | u8 type=4 | u8len groupId | u8len groupPubKeyBase58DER
+ *   header  = u8 ver | u8 type=4 | u8 suiteId | u8len groupId | u8len groupPubKeyBase58DER
  *   payload = u8len ecies(ECIES_DOMAIN || contentKey32)
  *             || encrypt(header || u64be plainSize || fileKey32, contentKey32)
  *   body    = identical to type 3
+ *
+ * The suite here is the **sender's** build default, not the container's: an outsider holds only the group's
+ * public key and cannot know its policy. That is harmless — the header says which one was used, and reads
+ * follow the header.
  *
  * The body is byte-for-byte type 3's — only the header differs, in how it wraps the file key and the size —
  * so the chunk helpers and every size calculation are shared with the member case. No signature, for the same
@@ -110,21 +127,27 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  */
 class GroupEnvelopeEncryptor {
 public:
-    // 2 since the per-chunk key derivation moved from `sha256(fileKey || i)` to a keyed, labelled HMAC.
-    // Headers parse identically across the two, so without the bump a v1 file fails late, at the first MAC.
-    static constexpr std::uint8_t VERSION = 2;
+    // 3 since the file envelope header gained the crypto suite byte. Headers of v2 and v3 parse to
+    // different lengths, but a v2 reader would mistake the suite byte for the start of the payload and
+    // fail at the MAC rather than at the version — hence the bump.
+    //
+    // 2 was the move of the per-chunk key derivation from `sha256(fileKey || i)` to a keyed, labelled HMAC.
+    static constexpr std::uint8_t VERSION = 3;
 
     // Plaintext bytes per file chunk. Fixed rather than carried in the envelope, so a hostile header cannot
     // force a divide-by-zero or an allocation bomb. `VERSION` is the upgrade path if it ever has to change.
     static constexpr ByteCount CHUNK_SIZE = 128 * 1024;
 
-    // Sealed size of a full chunk. Derived, so it cannot drift from `encryptedChunkSizeFor`.
-    static constexpr ByteCount ENCRYPTED_CHUNK_SIZE = encryptedChunkSizeFor(CHUNK_SIZE);
+    // Sealed size of a full chunk under `suite`. Derived, so it cannot drift from `encryptedChunkSizeFor`.
+    static ByteCount encryptedChunkSize(const core::CryptoSuite& suite) {
+        return encryptedChunkSizeFor(CHUNK_SIZE, suite);
+    }
 
-    // Every chunk but the last is exactly `ENCRYPTED_CHUNK_SIZE`, so this is a multiplication rather than a
-    // running sum — which is what makes random access possible without an index or a second pass.
-    static ByteCount cipherOffsetOfChunk(ChunkIndex index) {
-        return static_cast<ByteCount>(index) * ENCRYPTED_CHUNK_SIZE;
+    // Every chunk but the last is exactly `encryptedChunkSize(suite)`, so this is a multiplication rather
+    // than a running sum — which is what makes random access possible without an index or a second pass.
+    // The suite comes from the file envelope header, so a reader knows it before it seeks anywhere.
+    static ByteCount cipherOffsetOfChunk(ChunkIndex index, const core::CryptoSuite& suite) {
+        return static_cast<ByteCount>(index) * encryptedChunkSize(suite);
     }
 
     // An exact multiple of CHUNK_SIZE gets no trailing empty chunk and an empty file gets none at all;
@@ -168,12 +191,14 @@ public:
         return ReadOutcome::Complete;
     }
 
+    // `groupKey` is the container's key **with its suite** — the write algorithm follows the container,
+    // not a build-time constant. Reads take the bare key, since the frame names its own suite.
     core::Buffer packGroupKeyEnvelope(
         const std::string& groupId,
         const std::string& keyId,
         const core::Buffer& content,
         const core::PrivateKey& authorPrivKey,
-        const std::string& groupKey
+        const core::EncKey& groupKey
     );
 
     core::Buffer packAnonymousEnvelope(
@@ -188,16 +213,19 @@ public:
         ByteCount plainSize,
         const std::string& fileKey,
         const core::PrivateKey& authorPrivKey,
-        const std::string& groupKey
+        const core::EncKey& groupKey
     );
 
     EnvelopeFileHeader unpackFileEnvelope(const core::Buffer& envelope, const std::string& groupKey);
 
+    // `suite` is passed in rather than picked here, because the body was already sealed with it: the header
+    // names the suite the chunks were written with, and the two must not be chosen in two places.
     core::Buffer packAnonymousFileEnvelope(
         const std::string& groupId,
         const core::PublicKey& groupPubKey,
         ByteCount plainSize,
-        const std::string& fileKey
+        const std::string& fileKey,
+        const core::CryptoSuite& suite
     );
 
     EnvelopeFileHeader unpackAnonymousFileEnvelope(
@@ -205,7 +233,14 @@ public:
         const core::PrivateKey& groupPrivKey
     );
 
-    core::Buffer encryptChunk(const core::Buffer& plainChunk, const std::string& fileKey, ChunkIndex index);
+    // `suite` is the one named in the file envelope header, so sealing and addressing cannot disagree.
+    core::Buffer encryptChunk(
+        const core::Buffer& plainChunk,
+        const std::string& fileKey,
+        ChunkIndex index,
+        const core::CryptoSuite& suite
+    );
+    // No suite: every chunk frame names its own, so opening follows the data.
     core::Buffer decryptChunk(const core::Buffer& cipherChunk, const std::string& fileKey, ChunkIndex index);
 
     // -- dispatch ----------------------------------------------------------------------------------------
@@ -247,6 +282,13 @@ private:
     static EnvelopeRouting peekFamily(const core::Buffer& envelope, EnvelopeFamily family);
 
     static std::string writeHeader(std::uint8_t type, const std::vector<std::string>& fields);
+    static std::string writeFileHeader(
+        std::uint8_t type,
+        const core::CryptoSuite& suite,
+        const std::vector<std::string>& fields
+    );
+    /// @throws core::UnknownCryptoSuiteException gdy ten build nie zna zestawu nazwanego w naglowku
+    static core::CryptoSuite readFileSuite(EnvelopeReader& cursor);
     static std::string chunkKey(const std::string& fileKey, ChunkIndex index);
 
     // The sealed tail both file types carry: the echoed header, then `u64be plainSize || fileKey32`.

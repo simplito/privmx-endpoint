@@ -1127,7 +1127,9 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
 
 Envelope GroupApiImpl::encrypt(const std::string& groupId, const core::Buffer& content) {
     auto key = getAndValidateModuleCurrentEncKey(getModuleKeys(groupId));
-    return _envelopeEncryptor.packGroupKeyEnvelope(groupId, key.id, content, _userPrivKey, key.key);
+    // `key` carries the container's suite (stamped where the key is read), so the envelope is sealed with
+    // the algorithm the group was created with rather than this build's default.
+    return _envelopeEncryptor.packGroupKeyEnvelope(groupId, key.id, content, _userPrivKey, key);
 }
 
 // The notification is an ordinary member envelope: one `encrypt` under the group's current key, one request
@@ -1227,14 +1229,15 @@ core::Buffer GroupApiImpl::drainChunks(const std::shared_ptr<EnvelopeFileState>&
     std::string out;
     while (state->index < chunks) {
         const ByteCount plainLen = GroupEnvelopeEncryptor::plainChunkSizeAt(state->plainSize, state->index);
-        const ByteCount need = state->reading ? encryptedChunkSizeFor(plainLen) : plainLen;
+        const ByteCount need = state->reading ? encryptedChunkSizeFor(plainLen, state->suite) : plainLen;
         if (state->buffer.size() < need) {
             break;
         }
         core::Buffer piece = core::Buffer::from(state->buffer.substr(0, need));
-        std::string produced = (state->reading ? _envelopeEncryptor.decryptChunk(piece, state->fileKey, state->index) :
-                                                 _envelopeEncryptor.encryptChunk(piece, state->fileKey, state->index))
-                                   .stdString();
+        std::string produced =
+            (state->reading ? _envelopeEncryptor.decryptChunk(piece, state->fileKey, state->index)
+                            : _envelopeEncryptor.encryptChunk(piece, state->fileKey, state->index, state->suite))
+                .stdString();
         if (state->skipInChunk > 0) {
             // A seek can land mid-chunk, but a chunk only opens whole. Drop the head the caller did not ask
             // for, once, on the first chunk after the seek.
@@ -1268,6 +1271,9 @@ FileHandle GroupApiImpl::beginFileEncryption(const std::string& groupId, FileSiz
             .fileKey = core::CryptoSuite::randomBytes(32),
             .index = 0,
             .plainSize = static_cast<ByteCount>(size),
+            // The container's suite, carried on the key. Every chunk is sealed with it and every offset
+            // derives from it, so it is settled here, before the first byte moves.
+            .suite = key.suite,
         })
     );
     return handle;
@@ -1292,6 +1298,9 @@ FileHandle GroupApiImpl::beginFileEncryptionAnonymously(
             .fileKey = core::CryptoSuite::randomBytes(32),
             .index = 0,
             .plainSize = static_cast<ByteCount>(size),
+            // The sender's own default: an outsider holds only the group's public key and cannot see its
+            // policy. The header records which one was used, and reads follow the header.
+            .suite = core::CryptoSuite::defaultForWrite(),
         })
     );
     return handle;
@@ -1337,6 +1346,9 @@ FileHandle GroupApiImpl::beginFileDecryption(const Envelope& envelope) {
             .fileKey = header.fileKey,
             .index = 0,
             .plainSize = header.plainSize,
+            // Read side: whatever the envelope header names, never this build's default — otherwise a file
+            // written by a differently-configured client would be seeked at the wrong offsets.
+            .suite = header.suite,
         })
     );
     return handle;
@@ -1361,7 +1373,8 @@ CipherOffset GroupApiImpl::seekInEncryptedFile(FileHandle fileHandle, FilePositi
     // From here on the caller decides what to read, so "did all of it arrive" is a question this handle can
     // no longer answer. `finishFileDecryption` reports that rather than pretending otherwise.
     state->seeked = true;
-    return static_cast<int64_t>(GroupEnvelopeEncryptor::cipherOffsetOfChunk(state->index));
+    // Offsets follow the suite named in this file's envelope header, not a build-time constant.
+    return static_cast<int64_t>(GroupEnvelopeEncryptor::cipherOffsetOfChunk(state->index, state->suite));
 }
 
 std::shared_ptr<EnvelopeFileState> GroupApiImpl::finishFile(FileHandle fileHandle, bool wantReading) {
@@ -1402,11 +1415,13 @@ Envelope GroupApiImpl::finishFileEncryption(FileHandle fileHandle) {
     if (state->type == ENVELOPE_ANONYMOUS) {
         return _envelopeEncryptor.packAnonymousFileEnvelope(
             state->groupId, core::PublicKey::fromBase58DER(state->groupPubKey), state->plainSize,
-            state->fileKey
+            // The same suite the chunks were sealed with — the header has to describe the body.
+            state->fileKey, state->suite
         );
     }
     return _envelopeEncryptor.packFileEnvelope(
-        state->groupId, state->keyId, state->plainSize, state->fileKey, _userPrivKey, state->groupKey
+        state->groupId, state->keyId, state->plainSize, state->fileKey, _userPrivKey,
+        core::EncKey{.id = state->keyId, .key = state->groupKey, .suite = state->suite}
     );
 }
 

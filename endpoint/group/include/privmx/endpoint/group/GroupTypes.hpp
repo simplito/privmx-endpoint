@@ -18,6 +18,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include "privmx/endpoint/core/crypto/CryptoSuite.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/group/Types.hpp"
 
@@ -39,6 +40,9 @@ struct EnvelopeFileHeader {
     std::string authorPubKey; // base58-DER, signature verified; EMPTY for ENVELOPE_ANONYMOUS
     ByteCount plainSize;
     std::string fileKey; // 32 raw bytes
+    // Named in the plaintext header and re-sealed inside the payload. Every chunk offset derives from it,
+    // so a reader has to know it before it can seek.
+    core::CryptoSuite suite = core::CryptoSuite::defaultForWrite();
 };
 
 // The routing header, read without opening anything.
@@ -64,6 +68,9 @@ struct EnvelopeFileState {
     ByteCount skipInChunk = 0; // read side: bytes to drop off the next chunk after a seek
     bool seeked = false;       // read side: completeness is no longer checkable
     std::string buffer{};      // bytes not yet forming a whole chunk
+    // Write side: the container's suite. Read side: the one named in the file envelope header. Both
+    // directions address chunks with it, so it has to be settled before the first chunk moves.
+    core::CryptoSuite suite = core::CryptoSuite::defaultForWrite();
 };
 
 // A roster split the way `prepareContainerUpdate` wants it.

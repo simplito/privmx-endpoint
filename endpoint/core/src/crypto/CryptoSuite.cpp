@@ -164,6 +164,12 @@ std::size_t CryptoSuite::keyLength() const {
     return requireSpec(_id).keyLength;
 }
 
+std::size_t CryptoSuite::frameOverhead() const {
+    // `[1B SuiteId][IV][ciphertext || tag]`. Szyfrogram ma dlugosc tekstu jawnego - tryb AEAD nie
+    // dopelnia - wiec narzut jest staly dla danego zestawu i nie zalezy od dlugosci danych.
+    return 1 + requireSpec(_id).ivLength + AEAD_TAG_LENGTH;
+}
+
 std::vector<SuiteId> CryptoSuite::known() {
     std::vector<SuiteId> result;
     result.reserve(SUITES.size());

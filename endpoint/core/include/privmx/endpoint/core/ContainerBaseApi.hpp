@@ -191,7 +191,12 @@ protected:
             .currentKeyId = container.keyId,
             .moduleSchemaVersion = _moduleDataSchemaMapper->getDataStructureVersion(container.data.back()),
             .moduleResourceId = container.resourceId.value_or(""),
-            .contextId = container.contextId
+            .contextId = container.contextId,
+            // Zestaw kontenera jedzie razem z kluczami, bo to on decyduje, czym zapisywane sa **itemy**.
+            // Klucz odczytany z serwera nie niesie zestawu - `EncKey::suite` jest ustawiany tylko przy
+            // generowaniu - wiec bez tego pola kazdy zapis itemu szedlby zestawem domyslnym dla buildu,
+            // niezaleznie od polityki kontenera.
+            .cryptoSuite = suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy))
         };
     }
 
@@ -297,6 +302,10 @@ auto ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
     }
     auto keysMap = _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver);
     core::DecryptedEncKeyV2 ret = keysMap.at(location).at(data_entry.keyId);
+    // Klucz wraca z serwera bez zestawu - `EncKey::suite` jest ustawiany tylko przy generowaniu.
+    // Stempel kladziemy tutaj, bo to jest **klucz do zapisu**: wszystko, co nim zostanie zapisane,
+    // ma isc algorytmem wybranym przez kontener, a nie domyslnym dla buildu.
+    ret.suite = suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(moduleObj.policy));
     return ret;
 }
 

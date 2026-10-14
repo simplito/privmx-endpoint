@@ -172,9 +172,13 @@ DecryptedEncKeyV2 ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleKeys
     auto location = EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
     keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver)
-        .at(location)
-        .at(moduleKeys.currentKeyId);
+    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver)
+                   .at(location)
+                   .at(moduleKeys.currentKeyId);
+    // Jak w przeciazeniu biorącym kontener: klucz wraca bez zestawu, a jest kluczem do zapisu.
+    // `ModuleKeys` niesie zestaw wlasnie po to - patrz `containerToModuleKeys`.
+    key.suite = moduleKeys.cryptoSuite;
+    return key;
 }
 
 ModuleKeys ContainerBaseApi::getModuleKeys(

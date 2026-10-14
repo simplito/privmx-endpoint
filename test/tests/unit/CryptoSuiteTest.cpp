@@ -96,18 +96,20 @@ TEST(CryptoSuite, PolicyValueRoundTrips) {
 // Ramka
 // ---------------------------------------------------------------------------------------------
 
-/// `DEFAULT_FRAME_OVERHEAD` jest stala kompilacji, z ktorej `group` liczy rozmiar chunku i adresuje
-/// chunki. Dopoki trzyma ja **kazdy** zestaw z rejestru, zmiana zestawu zapisu nie przestawia
-/// adresowania. Ten test pilnuje tego zalozenia przy kazdym nowym zestawie.
-TEST(CryptoSuite, FrameOverheadHoldsForEverySuite) {
-    const std::string plain(100, 'a');
-
+/// `group` liczy z narzutu rozmiar chunku i adresuje chunki jako `index * encryptedChunkSize(suite)`,
+/// wiec zadeklarowany narzut musi zgadzac sie co do bajta z tym, co ramka faktycznie dokłada.
+/// Rozjazd o jeden bajt znaczy czytanie chunkow spod przesunietych offsetow, a nie blad deszyfrowania.
+TEST(CryptoSuite, FrameOverheadMatchesWhatTheFrameActuallyAdds) {
     for (const SuiteId id : CryptoSuite::known()) {
         const CryptoSuite suite = CryptoSuite::forId(id);
-        const std::string framed = suite.encrypt(keyFor(suite), plain);
 
-        EXPECT_EQ(plain.size() + CryptoSuite::DEFAULT_FRAME_OVERHEAD, framed.size())
-            << "zestaw " << static_cast<int>(id);
+        for (const size_t length : {size_t{0}, size_t{1}, size_t{100}, size_t{5000}}) {
+            const std::string plain(length, 'a');
+            const std::string framed = suite.encrypt(keyFor(suite), plain);
+
+            EXPECT_EQ(plain.size() + suite.frameOverhead(), framed.size())
+                << "zestaw " << static_cast<int>(id) << ", dlugosc " << length;
+        }
     }
 }
 

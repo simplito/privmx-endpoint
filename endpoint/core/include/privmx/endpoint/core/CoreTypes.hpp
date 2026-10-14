@@ -110,6 +110,14 @@ struct ModuleKeys {
     int64_t moduleSchemaVersion;
     std::string moduleResourceId;
     std::string contextId;
+    /**
+     * Zestaw algorytmow kontenera, ktorego te klucze dotycza.
+     *
+     * Potrzebny, bo klucz odczytany z serwera **nie niesie zestawu** - `EncKey::suite` jest ustawiany
+     * tylko przy generowaniu. Bez tego pola kazdy zapis itemu (wiadomosc, wpis KVDB, koperta grupowa)
+     * szedlby zestawem domyslnym dla buildu, mimo ze kontener nazwal inny.
+     */
+    CryptoSuite cryptoSuite = CryptoSuite::defaultForWrite();
 };
 
 struct GroupEpochInfo {

@@ -46,6 +46,10 @@ protected:
     std::string groupKey = privmx::crypto::Crypto::randomBytes(32);
     std::string groupId = "grp1";
     std::string keyId = "0123456789abcdef0123456789abcdef";
+    // Writes take the key **with its suite** (the container's choice); reads take the bare key, since the
+    // frame names its own suite. Hence both forms of the same key here.
+    core::CryptoSuite suite = core::CryptoSuite::defaultForWrite();
+    core::EncKey groupEncKey{.id = keyId, .key = groupKey, .suite = suite};
 
     core::Buffer buf(const std::string& s) { return core::Buffer::from(s); }
 };
@@ -53,7 +57,7 @@ protected:
 // -- round trips ---------------------------------------------------------------------------------------
 
 TEST_F(GroupEnvelope, GroupKeyRoundTrip) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("hello group"), author, groupKey);
+    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("hello group"), author, groupEncKey);
     DecryptedEnvelope out = enc.openGroupKeyEnvelope(env, groupKey);
 
     EXPECT_EQ(out.data.stdString(), "hello group");
@@ -82,12 +86,12 @@ TEST_F(GroupEnvelope, AnonymousEnvelopesAreNotDeterministic) {
 }
 
 TEST_F(GroupEnvelope, EmptyContentRoundTrips) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf(""), author, groupKey);
+    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf(""), author, groupEncKey);
     EXPECT_EQ(enc.openGroupKeyEnvelope(env, groupKey).data.stdString(), "");
 }
 
 TEST_F(GroupEnvelope, PeekRoutesWithoutOpening) {
-    auto r1 = enc.peek(enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupKey));
+    auto r1 = enc.peek(enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupEncKey));
     EXPECT_EQ(r1.type, ENVELOPE_FROM_MEMBER);
     EXPECT_EQ(r1.groupId, groupId);
     EXPECT_EQ(r1.keyId, keyId);
@@ -134,7 +138,7 @@ TEST_F(GroupEnvelope, AnonymousRejectsAMismatchedGroupKey) {
 TEST_F(GroupEnvelope, HeaderIsSignedSoAnEnvelopeCannotBeReplayedIntoAnotherGroup) {
     // A member of both groups re-seals Alice's *same signed inner blob* under group B's key. Her signature still
     // verifies, so only the header being inside that signature stops her "yes" in A becoming a "yes" in B.
-    core::Buffer envA = enc.packGroupKeyEnvelope("groupA", keyId, buf("approve"), author, groupKey);
+    core::Buffer envA = enc.packGroupKeyEnvelope("groupA", keyId, buf("approve"), author, groupEncKey);
 
     std::string otherKey = privmx::crypto::Crypto::randomBytes(32);
     core::DataInnerEncryptorV4 raw;
@@ -160,18 +164,25 @@ TEST_F(GroupEnvelope, HeaderIsSignedSoAnEnvelopeCannotBeReplayedIntoAnotherGroup
 TEST_F(GroupEnvelope, TypeCannotBeRelabelled) {
     // Relabelling a file envelope as a message would hand back the file key as content.
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupKey);
+    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupEncKey);
 
     std::string relabelled = env.stdString();
     relabelled[1] = 1; // TYPE_FILE -> TYPE_GROUP_KEY
-    EXPECT_THROW(enc.openGroupKeyEnvelope(buf(relabelled), groupKey), InvalidEnvelopeFormatException);
+
+    // Refused — but not always on the same check, which is why this does not pin one exception type.
+    // A file header carries a suite byte that a message header does not, so relabelling also shifts every
+    // field after it: depending on the random author key, the parser trips either on the header comparison
+    // or earlier, on a field whose length now reads as garbage. Both are refusals; which one arrives is a
+    // coin flip on the bytes. What must hold in every case is that it throws an endpoint exception rather
+    // than returning the file key as message content — or letting a raw std:: exception escape.
+    EXPECT_THROW(enc.openGroupKeyEnvelope(buf(relabelled), groupKey), core::Exception);
 
     // And a file envelope must not route through the message dispatcher at all.
     EXPECT_THROW(enc.peek(env), InvalidEnvelopeFormatException);
 }
 
 TEST_F(GroupEnvelope, TamperedHeaderFieldsAreRejected) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupKey);
+    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupEncKey);
     for (std::size_t i = 2; i < 2 + 1 + groupId.size() + 1 + keyId.size(); ++i) {
         std::string tampered = env.stdString();
         tampered[i] = static_cast<char>(tampered[i] ^ 0x01);
@@ -197,12 +208,12 @@ TEST_F(GroupEnvelope, AMalformedSignatureFrameThrowsAPrivmxException) {
 }
 
 TEST_F(GroupEnvelope, WrongGroupKeyIsRejected) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupKey);
+    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupEncKey);
     EXPECT_ANY_THROW(enc.openGroupKeyEnvelope(env, privmx::crypto::Crypto::randomBytes(32)));
 }
 
 TEST_F(GroupEnvelope, TamperedCiphertextIsRejected) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("payload here"), author, groupKey);
+    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("payload here"), author, groupEncKey);
     std::string tampered = env.stdString();
     tampered[tampered.size() - 1] = static_cast<char>(tampered[tampered.size() - 1] ^ 0x01);
     EXPECT_ANY_THROW(enc.openGroupKeyEnvelope(buf(tampered), groupKey));
@@ -218,7 +229,7 @@ TEST_F(GroupEnvelope, TruncatedEnvelopesThrowRatherThanParseGarbage) {
 }
 
 TEST_F(GroupEnvelope, UnsupportedVersionIsRejected) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupKey);
+    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupEncKey);
     std::string bumped = env.stdString();
     bumped[0] = 99;
     EXPECT_THROW(enc.peek(buf(bumped)), InvalidEnvelopeFormatException);
@@ -227,7 +238,7 @@ TEST_F(GroupEnvelope, UnsupportedVersionIsRejected) {
 TEST_F(GroupEnvelope, OversizedFieldThrowsInsteadOfTruncating) {
     // One length octet on the wire; a silent wrap would produce an envelope that parses into the wrong group.
     EXPECT_THROW(
-        enc.packGroupKeyEnvelope(std::string(256, 'a'), keyId, buf("x"), author, groupKey),
+        enc.packGroupKeyEnvelope(std::string(256, 'a'), keyId, buf("x"), author, groupEncKey),
         InvalidEnvelopeFormatException
     );
 }
@@ -236,7 +247,7 @@ TEST_F(GroupEnvelope, OversizedFieldThrowsInsteadOfTruncating) {
 
 TEST_F(GroupEnvelope, FileEnvelopeRoundTrip) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 4096, fileKey, author, groupKey);
+    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 4096, fileKey, author, groupEncKey);
     auto header = enc.unpackFileEnvelope(env, groupKey);
 
     EXPECT_EQ(header.groupId, groupId);
@@ -250,15 +261,15 @@ TEST_F(GroupEnvelope, ChunkRoundTripAndSizeIsPredictable) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
     std::string plain(GroupEnvelopeEncryptor::CHUNK_SIZE, 'z');
 
-    core::Buffer cipher = enc.encryptChunk(buf(plain), fileKey, 0);
-    // The read side slices the stream by this constant, so it must hold exactly.
-    EXPECT_EQ(cipher.size(), GroupEnvelopeEncryptor::ENCRYPTED_CHUNK_SIZE);
+    core::Buffer cipher = enc.encryptChunk(buf(plain), fileKey, 0, suite);
+    // The read side slices the stream by this figure, so it must hold exactly.
+    EXPECT_EQ(cipher.size(), GroupEnvelopeEncryptor::encryptedChunkSize(suite));
     EXPECT_EQ(enc.decryptChunk(cipher, fileKey, 0).stdString(), plain);
 }
 
 TEST_F(GroupEnvelope, ChunkCannotBeMovedReorderedOrSpliced) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer chunk0 = enc.encryptChunk(buf("first"), fileKey, 0);
+    core::Buffer chunk0 = enc.encryptChunk(buf("first"), fileKey, 0, suite);
 
     // Same file, different position: the index is bound into the chunk key.
     EXPECT_ANY_THROW(enc.decryptChunk(chunk0, fileKey, 1));
@@ -280,7 +291,7 @@ TEST_F(GroupEnvelope, FileEnvelopeRejectsAnUnsignedSizeChange) {
     // `plainSize` is the only thing that makes a dropped trailing chunk detectable, so it has to be inside
     // the signature rather than alongside it.
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 999999, fileKey, author, groupKey);
+    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 999999, fileKey, author, groupEncKey);
     std::string tampered = env.stdString();
     tampered[tampered.size() - 1] = static_cast<char>(tampered[tampered.size() - 1] ^ 0x01);
     EXPECT_ANY_THROW(enc.unpackFileEnvelope(buf(tampered), groupKey));
@@ -305,7 +316,7 @@ TEST_F(GroupEnvelope, StreamingRoundTripAtAwkwardSizes) {
         const ByteCount chunks = GroupEnvelopeEncryptor::chunkCount(size);
         for (ChunkIndex i = 0; i < chunks; ++i) {
             const ByteCount len = GroupEnvelopeEncryptor::plainChunkSizeAt(size, i);
-            cipher.append(enc.encryptChunk(buf(plain.substr(i * C, len)), fileKey, i).stdString());
+            cipher.append(enc.encryptChunk(buf(plain.substr(i * C, len)), fileKey, i, suite).stdString());
         }
 
         // Open, taking each chunk's sealed length from the declared size alone — the read path's only clue.
@@ -313,7 +324,7 @@ TEST_F(GroupEnvelope, StreamingRoundTripAtAwkwardSizes) {
         std::size_t offset = 0;
         for (ChunkIndex i = 0; i < chunks; ++i) {
             const ByteCount need = encryptedChunkSizeFor(
-                GroupEnvelopeEncryptor::plainChunkSizeAt(size, i)
+                GroupEnvelopeEncryptor::plainChunkSizeAt(size, i), suite
             );
             ASSERT_LE(offset + need, cipher.size()) << "size " << size << " chunk " << i;
             recovered.append(enc.decryptChunk(buf(cipher.substr(offset, need)), fileKey, i).stdString());
@@ -333,8 +344,8 @@ TEST_F(GroupEnvelope, DroppedTrailingChunkIsOnlyCaughtByTheDeclaredSize) {
     EXPECT_EQ(GroupEnvelopeEncryptor::chunkCount(size), 3u);
 
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer chunk0 = enc.encryptChunk(buf(std::string(C, 'a')), fileKey, 0);
-    core::Buffer chunk1 = enc.encryptChunk(buf(std::string(C, 'b')), fileKey, 1);
+    core::Buffer chunk0 = enc.encryptChunk(buf(std::string(C, 'a')), fileKey, 0, suite);
+    core::Buffer chunk1 = enc.encryptChunk(buf(std::string(C, 'b')), fileKey, 1, suite);
     // Both open cleanly on their own — that is exactly why the count has to come from somewhere else.
     EXPECT_NO_THROW(enc.decryptChunk(chunk0, fileKey, 0));
     EXPECT_NO_THROW(enc.decryptChunk(chunk1, fileKey, 1));
@@ -343,17 +354,91 @@ TEST_F(GroupEnvelope, DroppedTrailingChunkIsOnlyCaughtByTheDeclaredSize) {
     std::size_t expected = 0;
     for (ChunkIndex i = 0; i < 3; ++i) {
         expected += encryptedChunkSizeFor(
-            GroupEnvelopeEncryptor::plainChunkSizeAt(size, i)
+            GroupEnvelopeEncryptor::plainChunkSizeAt(size, i), suite
         );
     }
     EXPECT_LT(delivered, expected); // the shortfall the close-time check turns into a refusal
+}
+
+// -- the suite travels with the file ---------------------------------------------------------------------
+//
+// A file's chunks sit at `index * encryptedChunkSize(suite)`. If a reader guessed the suite from its own
+// build instead of taking it from the envelope, every offset past the first chunk would be wrong — and
+// wrong by a whole number of bytes, so it would read *something* rather than fail cleanly.
+
+namespace {
+
+/// Zestaw inny niz domyslny dla buildu - bez tego test nie odroznia "wzielo z naglowka" od "wzielo stala".
+core::CryptoSuite otherSuite() {
+    for (const core::SuiteId id : core::CryptoSuite::known()) {
+        if (id != core::CryptoSuite::defaultForWrite().id()) {
+            return core::CryptoSuite::forId(id);
+        }
+    }
+    throw std::logic_error("rejestr ma tylko jeden zestaw - tego testu nie da sie przeprowadzic");
+}
+
+} // namespace
+
+TEST_F(GroupEnvelope, FileEnvelopeCarriesTheSuiteItWasSealedWith) {
+    const core::CryptoSuite other = otherSuite();
+    std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
+    core::EncKey otherKey{.id = keyId, .key = groupKey, .suite = other};
+
+    auto member = enc.unpackFileEnvelope(
+        enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, otherKey), groupKey
+    );
+    EXPECT_EQ(member.suite.id(), other.id());
+
+    auto anon = enc.unpackAnonymousFileEnvelope(
+        enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey, other), grantKey
+    );
+    EXPECT_EQ(anon.suite.id(), other.id());
+}
+
+/// Offsety musza wynikac z zestawu z naglowka, a nie z ustawienia buildu czytajacego.
+TEST_F(GroupEnvelope, ChunkOffsetsFollowTheSuiteFromTheHeader) {
+    const core::CryptoSuite other = otherSuite();
+    constexpr ByteCount C = GroupEnvelopeEncryptor::CHUNK_SIZE;
+    const ByteCount size = 2 * C + 13;
+    std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
+
+    std::string cipher;
+    std::vector<std::size_t> realOffsets;
+    for (ChunkIndex i = 0; i < GroupEnvelopeEncryptor::chunkCount(size); ++i) {
+        realOffsets.push_back(cipher.size());
+        const ByteCount len = GroupEnvelopeEncryptor::plainChunkSizeAt(size, i);
+        cipher.append(enc.encryptChunk(buf(std::string(len, 'q')), fileKey, i, other).stdString());
+    }
+
+    const auto header = enc.unpackFileEnvelope(
+        enc.packFileEnvelope(groupId, keyId, size, fileKey, author,
+                             core::EncKey{.id = keyId, .key = groupKey, .suite = other}),
+        groupKey
+    );
+    for (ChunkIndex i = 0; i < realOffsets.size(); ++i) {
+        EXPECT_EQ(GroupEnvelopeEncryptor::cipherOffsetOfChunk(i, header.suite), realOffsets[i])
+            << "chunk " << i;
+    }
+}
+
+/// Znacznik zestawu lezy w jawnym naglowku, ale jest **przypieczetowany** razem z reszta naglowka.
+/// Podmiana na zestaw o innym narzucie przestawilaby kazdy offset - dlatego musi sie nie udac.
+TEST_F(GroupEnvelope, RewritingTheSuiteByteIsRejected) {
+    std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
+    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupEncKey);
+
+    std::string rewritten = env.stdString();
+    rewritten[2] = static_cast<char>(otherSuite().id()); // suite byte sits right after ver and type
+
+    EXPECT_THROW(enc.unpackFileEnvelope(buf(rewritten), groupKey), InvalidEnvelopeFormatException);
 }
 
 // -- anonymous files (type 4) --------------------------------------------------------------------------
 
 TEST_F(GroupEnvelope, AnonymousFileEnvelopeRoundTrip) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer env = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 4096, fileKey);
+    core::Buffer env = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 4096, fileKey, suite);
     auto header = enc.unpackAnonymousFileEnvelope(env, grantKey);
 
     EXPECT_EQ(header.type, ENVELOPE_ANONYMOUS);
@@ -369,8 +454,8 @@ TEST_F(GroupEnvelope, AnonymousFileBodyIsIdenticalToAMemberFileBody) {
     // The two file types differ only in how the header wraps the file key. If the bodies ever diverged, the
     // shared chunk arithmetic and the shared streaming path would both be silently wrong for one of them.
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer memberEnv = enc.packFileEnvelope(groupId, keyId, 100, fileKey, author, groupKey);
-    core::Buffer anonEnv = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 100, fileKey);
+    core::Buffer memberEnv = enc.packFileEnvelope(groupId, keyId, 100, fileKey, author, groupEncKey);
+    core::Buffer anonEnv = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 100, fileKey, suite);
 
     auto a = enc.unpackFileEnvelope(memberEnv, groupKey);
     auto b = enc.unpackAnonymousFileEnvelope(anonEnv, grantKey);
@@ -391,6 +476,7 @@ TEST_F(GroupEnvelope, AnonymousFileIsNotALadderRungOracleEither) {
     std::string forged;
     forged.push_back(static_cast<char>(GroupEnvelopeEncryptor::VERSION));
     forged.push_back(4); // TYPE_ANON_FILE
+    forged.push_back(static_cast<char>(suite.id())); // file headers name their suite
     forged.push_back(static_cast<char>(groupId.size()));
     forged.append(groupId);
     std::string pub = grantKey.getPublicKey().toBase58DER();
@@ -404,7 +490,7 @@ TEST_F(GroupEnvelope, AnonymousFileIsNotALadderRungOracleEither) {
 }
 
 TEST_F(GroupEnvelope, AnonymousFileRejectsAMismatchedGroupKey) {
-    core::Buffer env = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, groupKey);
+    core::Buffer env = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, groupKey, suite);
     EXPECT_THROW(
         enc.unpackAnonymousFileEnvelope(env, PrivateKey::generateRandom()), InvalidEnvelopeFormatException
     );
@@ -412,8 +498,8 @@ TEST_F(GroupEnvelope, AnonymousFileRejectsAMismatchedGroupKey) {
 
 TEST_F(GroupEnvelope, FileTypesCannotBeSwappedForEachOther) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer memberEnv = enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupKey);
-    core::Buffer anonEnv = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey);
+    core::Buffer memberEnv = enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupEncKey);
+    core::Buffer anonEnv = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey, suite);
 
     EXPECT_THROW(enc.unpackAnonymousFileEnvelope(memberEnv, grantKey), InvalidEnvelopeFormatException);
     EXPECT_THROW(enc.unpackFileEnvelope(anonEnv, groupKey), InvalidEnvelopeFormatException);
@@ -426,21 +512,21 @@ TEST_F(GroupEnvelope, FileTypesCannotBeSwappedForEachOther) {
 
 TEST_F(GroupEnvelope, PeekFileRoutesBothKindsAndRejectsMessages) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    auto member = enc.peekFile(enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupKey));
+    auto member = enc.peekFile(enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupEncKey));
     EXPECT_EQ(member.type, ENVELOPE_FROM_MEMBER);
     EXPECT_EQ(member.keyId, keyId);
 
-    auto anon = enc.peekFile(enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey));
+    auto anon = enc.peekFile(enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey, suite));
     EXPECT_EQ(anon.type, ENVELOPE_ANONYMOUS);
     EXPECT_EQ(anon.groupPubKey, grantKey.getPublicKey().toBase58DER());
 
     // A message envelope has no body to stream; routing it here would hand back a handle onto nothing.
-    EXPECT_THROW(enc.peekFile(enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupKey)),
+    EXPECT_THROW(enc.peekFile(enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupEncKey)),
                  InvalidEnvelopeFormatException);
     EXPECT_THROW(enc.peekFile(enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("x"))),
                  InvalidEnvelopeFormatException);
     // ...and conversely a file envelope must not route through the message dispatcher.
-    EXPECT_THROW(enc.peek(enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey)),
+    EXPECT_THROW(enc.peek(enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey, suite)),
                  InvalidEnvelopeFormatException);
 }
 
@@ -448,7 +534,8 @@ TEST_F(GroupEnvelope, PeekFileRoutesBothKindsAndRejectsMessages) {
 
 TEST_F(GroupEnvelope, CipherOffsetOfChunkMatchesAnActualStream) {
     // The seek is a multiplication, not a lookup, sound only because every chunk but the last is exactly
-    // ENCRYPTED_CHUNK_SIZE. If that stopped holding, seeks would land mid-chunk — so pin it against a real stream.
+    // encryptedChunkSize(suite). If that stopped holding, seeks would land mid-chunk — so pin it against a
+    // real stream.
     constexpr ByteCount C = GroupEnvelopeEncryptor::CHUNK_SIZE;
     const ByteCount size = 4 * C + 77;
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
@@ -458,10 +545,10 @@ TEST_F(GroupEnvelope, CipherOffsetOfChunkMatchesAnActualStream) {
     for (ChunkIndex i = 0; i < GroupEnvelopeEncryptor::chunkCount(size); ++i) {
         realOffsets.push_back(cipher.size());
         const ByteCount len = GroupEnvelopeEncryptor::plainChunkSizeAt(size, i);
-        cipher.append(enc.encryptChunk(buf(std::string(len, 'k')), fileKey, i).stdString());
+        cipher.append(enc.encryptChunk(buf(std::string(len, 'k')), fileKey, i, suite).stdString());
     }
     for (ChunkIndex i = 0; i < realOffsets.size(); ++i) {
-        EXPECT_EQ(GroupEnvelopeEncryptor::cipherOffsetOfChunk(i), realOffsets[i]) << "chunk " << i;
+        EXPECT_EQ(GroupEnvelopeEncryptor::cipherOffsetOfChunk(i, suite), realOffsets[i]) << "chunk " << i;
     }
 }
 
@@ -472,7 +559,7 @@ TEST_F(GroupEnvelope, ChunksOpenIndependentlyOfEachOther) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
     std::vector<core::Buffer> sealed;
     for (ChunkIndex i = 0; i < 4; ++i) {
-        sealed.push_back(enc.encryptChunk(buf(std::string(C, 'a' + i)), fileKey, i));
+        sealed.push_back(enc.encryptChunk(buf(std::string(C, 'a' + i)), fileKey, i, suite));
     }
     for (int i = 3; i >= 0; --i) {
         EXPECT_EQ(enc.decryptChunk(sealed[i], fileKey, static_cast<ChunkIndex>(i)).stdString(), std::string(C, 'a' + i))

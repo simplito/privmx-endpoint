@@ -771,7 +771,10 @@ TEST_F(GroupTest, envelope_file_range_read_as_documented) {
     // Brana ze zrodla, a nie przepisana. Poprzednio stala byla tu rozpisana recznie jako uklad ramki
     // CBC (`1 + 16 + (plain + 16) + 16`) i rozjechala sie z kodem, gdy ramka stala sie AEAD - test
     // liczyl reszte z dzielenia przez 131121, podczas gdy chunki stoja co 131101.
-    const std::size_t encryptedChunk = group::GroupEnvelopeEncryptor::ENCRYPTED_CHUNK_SIZE;
+    // Suite of the file we just wrote. It travels in the envelope header, so the reader derives the chunk
+    // size from the data rather than from this build's default.
+    const std::size_t encryptedChunk =
+        group::GroupEnvelopeEncryptor::encryptedChunkSize(core::CryptoSuite::defaultForWrite());
     EXPECT_EQ(api.seekInEncryptedFile(api.beginFileDecryption(envelope), from) % encryptedChunk, 0);
 
     // A range reader that stops once it has enough ends mid-chunk, with bytes buffered and most of the file
