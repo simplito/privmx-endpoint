@@ -20,6 +20,7 @@ limitations under the License.
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <mutex>
 #include <set>
 #include <thread>
@@ -41,8 +42,24 @@ limitations under the License.
 
 #include "TreeFakeBridge.hpp"
 
+namespace privmx::endpoint::group {
+// What the wiring tests reach inside GroupApiImpl (a friend of it).
+struct GroupApiImplTestAccess {
+    static void selfUpdate(GroupApiImpl& api, const std::string& groupId) { api.selfUpdate(groupId); }
+    // The destructor's own first steps: no background self-update is scheduled or run from here on, so what a test
+    // counts never depends on the worker's random delay. Self-updates are then only the explicit `selfUpdate` above.
+    static void stopBackgroundSelfUpdates(GroupApiImpl& api) {
+        std::lock_guard<std::mutex> lock(api._selfUpdateMutex);
+        api._selfUpdateStopping = true;
+        api._selfUpdatePending.clear();
+        api._selfUpdateWake.notify_all();
+    }
+};
+} // namespace privmx::endpoint::group
+
 namespace core = privmx::endpoint::core;
 using privmx::crypto::PublicKey;
+using privmx::endpoint::group::GroupApiImplTestAccess;
 
 namespace {
 
@@ -52,14 +69,28 @@ Poco::JSON::Object::Ptr overTheWire(const Poco::Dynamic::Var& value) {
     return privmx::utils::Utils::parseJsonObject(privmx::utils::Utils::stringifyVar(value));
 }
 
-// One group's bridge, shared by every client.
+// One group's bridge, shared by every client. Every request is answered under one lock (`sync`), so the clients'
+// threads and their background self-updates never interleave inside it; a copy shares the lock and never answers.
 struct Bridge {
+    struct Sync {
+        std::mutex m;
+        std::condition_variable cv; // notified on every plan read
+    };
+    std::shared_ptr<Sync> sync = std::make_shared<Sync>();
     std::map<std::string, PrivateKey> users; // the Context user list
     FakeBridge tree;
     server::GroupInfo rest; // everything but the tree, as sent
     std::vector<std::pair<std::string, server::GroupSendCustomEventModel>> events; // (sender, as sent)
+    // Hooks run under the lock. `beforeRemoval` may wait on `sync->cv` with it; the others throw to refuse, `onAdd`
+    // and `onSelfUpdate` before the commit is applied, `afterRemoval` after.
+    std::function<void(std::unique_lock<std::mutex>&)> beforeRemoval = [](std::unique_lock<std::mutex>&) {};
     std::function<void()> afterRemoval = [] {};
     std::function<void()> beforeRotation = [] {}; // runs as a rotation arrives, before it is checked
+    std::function<void()> onAdd = [] {};
+    std::function<void()> onSelfUpdate = [] {};
+    // Every statement a client sent with an add, a removal or a self-update, in order, applied or not.
+    std::vector<server::GroupTreeCommit> received;
+    int planReads = 0; // `groupGet`s in the "plan" scope
 
     server::GroupInfo serve(const std::string& userId, bool plan) const {
         server::GroupInfo info = tree.serve(userId, plan);
@@ -95,6 +126,7 @@ struct Bridge {
     }
 
     Poco::Dynamic::Var answer(const std::string& caller, const std::string& method, Poco::JSON::Object::Ptr params) {
+        std::unique_lock<std::mutex> lock(sync->m);
         const std::string group = method.substr(std::string("context.").size());
         if (method == "context.contextGet") {
             return core::server::ContextGetResult{.context = {.userId = caller, .contextId = CONTEXT}}.toJSON();
@@ -145,8 +177,21 @@ struct Bridge {
         }
         if (group == "groupGet") {
             const auto model = server::GroupGetModel::fromJSON(params);
-            return server::GroupGetResult{.group = serve(caller, model.scope == std::optional<std::string>("plan"))}
-                .toJSON();
+            const bool plan = model.scope == std::optional<std::string>("plan");
+            server::GroupInfo info = serve(caller, plan);
+            if (model.forNewMembers.has_value()) {
+                std::vector<std::int64_t> seats;
+                for (const std::uint32_t seat :
+                     TreeKeys::choosePositions(tree.state, static_cast<std::uint32_t>(model.forNewMembers.value()))) {
+                    seats.push_back(seat);
+                }
+                info.nextFreeSeats = seats;
+            }
+            if (plan) {
+                ++planReads;
+                sync->cv.notify_all();
+            }
+            return server::GroupGetResult{.group = info}.toJSON();
         }
         if (group == "groupGetTreeCommits") {
             const auto model = server::GroupGetTreeCommitsModel::fromJSON(params);
@@ -175,8 +220,55 @@ struct Bridge {
             summary.policy = info.policy;
             return server::GroupListResult{.groups = {summary}, .count = 1}.toJSON();
         }
+        if (group == "groupAddMembers") {
+            const auto model = server::GroupAddMembersModel::fromJSON(params);
+            received.push_back(model.commit);
+            onAdd();
+            std::vector<std::string> ids;
+            for (const server::GroupAddMemberEntry& member : model.members) {
+                ids.push_back(member.userId);
+            }
+            std::vector<std::uint32_t> positions;
+            for (const std::int64_t position : model.transition.positions) {
+                positions.push_back(static_cast<std::uint32_t>(position));
+            }
+            std::vector<server::GroupTreeRefreshedNode> refreshed;
+            for (const server::GroupTreeSeatedNode& node : model.transition.seatedNodes) {
+                refreshed.push_back({node.nodeIndex, node.fromGeneration, node.generation, node.publicKey});
+            }
+            tree.commit(
+                CommitOp::Add, caller, ids, positions, refreshed, model.transition.edges, std::nullopt, model.commit
+            );
+            server::GroupDataEntry head;
+            head.keyId = model.keyId;
+            head.data = model.data;
+            rest.data.push_back(head);
+            rest.history.push_back(
+                {model.keyId, rest.history.back().groupPubKey, privmx::utils::Utils::getNowTimestamp(), caller,
+                 tree.rosterVersion, static_cast<int64_t>(tree.state.epoch)}
+            );
+            return Poco::Dynamic::Var();
+        }
+        if (group == "groupSelfUpdate") {
+            const auto commit = server::GroupTreeCommit::fromJSON(params->getObject("commit"));
+            received.push_back(commit);
+            onSelfUpdate();
+            // A key revocation (a later fix) sends no transition; every self-update here does.
+            if (params->has("transition")) {
+                const auto transition = server::GroupTreeSelfUpdateTransition::fromJSON(
+                    params->getObject("transition")
+                );
+                tree.commit(
+                    CommitOp::SelfUpdate, caller, {}, {}, transition.refreshedNodes, transition.edges, std::nullopt,
+                    commit
+                );
+            }
+            return Poco::Dynamic::Var();
+        }
         if (group == "groupRemoveMembers") {
             const auto model = server::GroupRemoveMembersModel::fromJSON(params);
+            received.push_back(model.commit);
+            beforeRemoval(lock);
             tree.commit(
                 CommitOp::Remove, caller, model.userIds, {}, model.transition.refreshedNodes,
                 model.transition.edges, PublicKey::fromBase58DER(model.groupPubKey), model.commit
@@ -318,6 +410,24 @@ core::EventHolder nextEvent(const std::string& type) {
     throw std::runtime_error("no " + type + " event");
 }
 
+// A statement exactly as sent, for byte-for-byte comparisons.
+std::string bytesOf(const server::GroupTreeCommit& commit) {
+    return commit.serialize();
+}
+
+std::string digestOf(const server::GroupTreeCommit& commit) {
+    return TreeCommits::digest(TreeCommits::fromWire(commit));
+}
+
+std::string prevOf(const server::GroupTreeCommit& commit) {
+    return TreeCommits::fromWire(commit).prevDigest;
+}
+
+// A bridge refusal that is not a lost race (`isRetryableCommitRejection`).
+[[noreturn]] void refuse(const std::string& name = "ACCESS_DENIED", unsigned int code = 0x0030) {
+    throw privmx::utils::PrivmxException(name, privmx::utils::PrivmxException::RPC, code);
+}
+
 // Exposes the grantee resolution every container module runs on a create or an update.
 class GrantingModule : public GroupAwareModuleApi {
 public:
@@ -334,6 +444,7 @@ class GroupApiLyingBridge : public testing::Test {
 protected:
     Bridge bridge;
     std::map<std::string, std::unique_ptr<Client>> clients;
+    bool quiet = false; // every client's background self-updates stopped as it is created
 
     void SetUp() override {
         for (const std::string id : {"alice", "bob", "carol"}) {
@@ -348,8 +459,34 @@ protected:
         auto& client = clients[userId];
         if (!client) {
             client = std::make_unique<Client>(bridge, userId);
+            if (quiet) {
+                GroupApiImplTestAccess::stopBackgroundSelfUpdates(*client->api);
+            }
         }
         return *client->api;
+    }
+
+    void addUsers(const std::vector<std::string>& ids) {
+        for (const std::string& id : ids) {
+            bridge.users.emplace(id, PrivateKey::generateRandom());
+        }
+    }
+
+    // The bridge's state put back as it was at `snapshot` (the statement it took is gone).
+    void rollBackTo(const Bridge& snapshot) {
+        bridge.tree = snapshot.tree;
+        bridge.rest = snapshot.rest;
+    }
+
+    // A member, other than the creator, whose own keyed path needs a self-update right after the group is created
+    // (a node the creator set that it is not seated under). Empty if none.
+    std::string memberNeedingSelfUpdate(const std::vector<std::string>& members) {
+        for (const std::string& id : members) {
+            if (id != "alice" && GroupKeyResolver::nodeNeedingSelfUpdate(bridge.serve(id, false)).has_value()) {
+                return id;
+            }
+        }
+        return {};
     }
 
     core::UserWithPubKey user(const std::string& id) {
@@ -751,4 +888,217 @@ TEST_F(GroupApiLyingBridge, ARotationOvertakenByASelfUpdateIsPlannedAgain) {
         EXPECT_EQ(group.statusCode, 0) << id;
         EXPECT_EQ(group.keyVersion, 2) << id;
     }
+}
+
+// m2 (A5-F3): the client releases at most one statement per prevDigest while the first could still be applied. Each
+// test stops the background self-updates (`quiet`), so `received` holds only what the test's own calls sent.
+
+TEST_F(GroupApiLyingBridge, SECURITY_AnErrorThatIsNotALostRaceMakesTheRetryResendTheSameStatement) {
+    // The bridge takes the removal, then answers ACCESS_DENIED and serves seq 1 again. A retry planned there would be
+    // a second statement at seq 2: a fork the bridge chose, with no concurrency needed.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Bridge atSeq1 = bridge;
+    int removals = 0;
+    bridge.afterRemoval = [&] {
+        if (removals++ == 0) {
+            rollBackTo(atSeq1);
+            refuse();
+        }
+    };
+    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    ASSERT_EQ(bridge.received.size(), 2u);
+    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "the retry signed a new statement at seq 2";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ADroppedAnswerIsNotSignedAgain) {
+    // The removal is applied and the answer lost; the retry finds its own statement at the head and sends nothing.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    int removals = 0;
+    bridge.afterRemoval = [&] {
+        if (removals++ == 0) {
+            throw std::runtime_error("connection dropped");
+        }
+    };
+    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    EXPECT_EQ(bridge.received.size(), 1u);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ADifferentCommitCompletesTheUnresolvedOneFirst) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Bridge atSeq1 = bridge;
+    int removals = 0;
+    bridge.afterRemoval = [&] {
+        if (removals++ == 0) {
+            rollBackTo(atSeq1);
+            refuse();
+        }
+    };
+    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"bob"}));
+    ASSERT_EQ(bridge.received.size(), 3u);
+    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "carol's removal resent first";
+    EXPECT_EQ(prevOf(bridge.received[2]), digestOf(bridge.received[0])) << "bob's removal extends it";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ADifferentCommitIsRefusedWhileTheUnresolvedOneKeepsBeingRefused) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Bridge atSeq1 = bridge;
+    const std::string atP = digestOf(bridge.tree.commits.back());
+    bridge.afterRemoval = [&] {
+        rollBackTo(atSeq1);
+        refuse();
+    };
+    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    try {
+        client("alice").removeGroupMembers(groupId, {"bob"});
+        ADD_FAILURE() << "a second removal was let through";
+    } catch (const GroupCommitUnresolvedException& e) {
+        EXPECT_NE(e.getDescription().find("remove"), std::string::npos) << e.getDescription();
+    } catch (...) { ADD_FAILURE() << "not GroupCommitUnresolvedException"; }
+    ASSERT_FALSE(bridge.received.empty());
+    for (const server::GroupTreeCommit& commit : bridge.received) {
+        if (prevOf(commit) == atP) {
+            EXPECT_EQ(bytesOf(commit), bytesOf(bridge.received[0])) << "a second statement at seq 2";
+        }
+    }
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_TwoCommitsOfOneClientToOneGroupNeverShareAPrevDigest) {
+    // Two threads of one client, one removal each. The first to reach the bridge waits there until the other has read
+    // the same head; that one must not release a statement at it.
+    quiet = true;
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
+    GroupApiImpl& alice = client("alice");
+    const int readsBefore = bridge.planReads;
+    bool waited = false;
+    bridge.beforeRemoval = [&](std::unique_lock<std::mutex>& lock) {
+        if (std::exchange(waited, true)) {
+            return;
+        }
+        bridge.sync->cv.wait_for(lock, std::chrono::seconds(1), [&] { return bridge.planReads >= readsBefore + 2; });
+    };
+    std::atomic<int> failures{0};
+    std::thread other([&] {
+        try {
+            alice.removeGroupMembers(groupId, {"bob"});
+        } catch (...) { ++failures; }
+    });
+    try {
+        alice.removeGroupMembers(groupId, {"carol"});
+    } catch (...) { ++failures; }
+    other.join();
+    EXPECT_EQ(failures.load(), 0);
+    std::set<std::string> prevDigests;
+    for (const server::GroupTreeCommit& commit : bridge.received) {
+        prevDigests.insert(prevOf(commit));
+    }
+    EXPECT_EQ(prevDigests.size(), bridge.received.size()) << "two statements at one prevDigest";
+}
+
+namespace {
+// 49 members: above the 16-seat buckets the tree keys the root and, over seats 32-48, a child of it the creator (seat
+// 0) does not sit under but set. Whoever sits there has a real self-update need from the start.
+std::vector<std::string> crowd() {
+    std::vector<std::string> members = {"alice", "bob", "carol"};
+    for (int i = 0; members.size() < 49; ++i) {
+        members.push_back("member" + std::to_string(i));
+    }
+    return members;
+}
+const std::vector<std::string> CROWD = crowd();
+} // namespace
+
+TEST_F(GroupApiLyingBridge, SECURITY_ASelfUpdateNeverCompletesAnotherOpsUnresolvedCommit) {
+    quiet = true;
+    addUsers({CROWD.begin() + 3, CROWD.end()});
+    const std::string groupId = createGroup(CROWD);
+    const std::string member = memberNeedingSelfUpdate(CROWD);
+    ASSERT_FALSE(member.empty()) << "no member with a self-update need";
+    std::vector<std::string> others;
+    for (const std::string& id : CROWD) {
+        if (id != "alice" && id != member) {
+            others.push_back(id);
+        }
+    }
+    const Bridge atP = bridge;
+    int removals = 0;
+    bridge.afterRemoval = [&] {
+        if (removals++ == 0) {
+            rollBackTo(atP);
+            refuse();
+        }
+    };
+    EXPECT_ANY_THROW(client(member).removeGroupMembers(groupId, {others.at(0)}));
+    ASSERT_EQ(bridge.received.size(), 1u);
+    ASSERT_TRUE(GroupKeyResolver::nodeNeedingSelfUpdate(bridge.serve(member, false)).has_value());
+    EXPECT_NO_THROW(GroupApiImplTestAccess::selfUpdate(client(member), groupId));
+    EXPECT_EQ(bridge.received.size(), 1u) << "a self-update released at the removal's prevDigest";
+    EXPECT_NO_THROW(client(member).removeGroupMembers(groupId, {others.at(1)}));
+    ASSERT_EQ(bridge.received.size(), 3u);
+    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "the unresolved removal is resent first";
+    EXPECT_EQ(prevOf(bridge.received[2]), digestOf(bridge.received[0]));
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ASecondSelfUpdateIsNeverReleasedAtOnePrevDigest) {
+    quiet = true;
+    addUsers({CROWD.begin() + 3, CROWD.end()});
+    const std::string groupId = createGroup(CROWD);
+    const std::string member = memberNeedingSelfUpdate(CROWD);
+    ASSERT_FALSE(member.empty()) << "no member with a self-update need";
+    bridge.onSelfUpdate = [] { refuse(); };
+    EXPECT_ANY_THROW(GroupApiImplTestAccess::selfUpdate(client(member), groupId));
+    ASSERT_EQ(bridge.received.size(), 1u);
+    // An app op that passes `settle` (the self-update yields to it) and fails before it releases anything: eve's key
+    // is not the one the UserVerifier vouches for.
+    EXPECT_ANY_THROW(client(member).addGroupMembers(
+        groupId,
+        {GroupMemberToAdd{
+            .user = {.userId = "eve", .pubKey = PrivateKey::generateRandom().getPublicKey().toBase58DER()},
+            .role = "user"
+        }}
+    ));
+    EXPECT_ANY_THROW(GroupApiImplTestAccess::selfUpdate(client(member), groupId));
+    ASSERT_EQ(bridge.received.size(), 2u);
+    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "a second self-update at one prevDigest";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARefusedSelfUpdateNeverHoldsBackARemoval) {
+    // T4-06 guard: a member draining the shared self-update budget must not hold back the remover's removal.
+    quiet = true;
+    addUsers({CROWD.begin() + 3, CROWD.end()});
+    const std::string groupId = createGroup(CROWD);
+    const std::string member = memberNeedingSelfUpdate(CROWD);
+    ASSERT_FALSE(member.empty()) << "no member with a self-update need";
+    const std::string atP = digestOf(bridge.tree.commits.back());
+    bridge.onSelfUpdate = [] { refuse("GROUP_ROTATION_RATE_LIMIT", 0x621D); };
+    EXPECT_ANY_THROW(GroupApiImplTestAccess::selfUpdate(client(member), groupId));
+    const std::string leaver = member == "carol" ? "bob" : "carol";
+    EXPECT_NO_THROW(client(member).removeGroupMembers(groupId, {leaver}));
+    ASSERT_EQ(bridge.received.size(), 2u) << "the refused self-update was resent";
+    EXPECT_EQ(TreeCommits::fromWire(bridge.received[1]).op, CommitOp::Remove);
+    EXPECT_EQ(prevOf(bridge.received[1]), atP);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AnAddIsResentOnlyToKeysTheVerifierStillVouchesFor) {
+    quiet = true;
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    bridge.onAdd = [] { refuse(); };
+    EXPECT_ANY_THROW(
+        client("alice").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}})
+    );
+    bridge.onAdd = [] {};
+    bridge.users["dave"] = PrivateKey::generateRandom(); // dave's key changed: the add's key is no longer vouched for
+    EXPECT_THROW(client("alice").removeGroupMembers(groupId, {"carol"}), GroupCommitUnresolvedException);
+    const auto adds = std::count_if(bridge.received.begin(), bridge.received.end(), [](const auto& commit) {
+        return TreeCommits::fromWire(commit).op == CommitOp::Add;
+    });
+    EXPECT_EQ(adds, 1) << "the add was resent to a key the verifier no longer vouches for";
 }
