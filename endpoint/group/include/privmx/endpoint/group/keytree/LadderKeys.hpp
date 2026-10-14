@@ -78,16 +78,6 @@ public:
         std::optional<std::uint32_t> prunedBelow = std::nullopt
     );
 
-    // Era-crossing links: the closing era's top key delivered to each entitled principal, one delivery per era.
-    // Addressing a group rather than individuals costs `O(1)` and covers anyone added to that group later.
-    std::vector<ArchiveRung> buildEraLinks(
-        std::uint32_t closingEpoch,
-        const privmx::crypto::PrivateKey& closingEpochKey,
-        const std::vector<EraLinkRecipient>& entitled,
-        const std::string& author,
-        const privmx::crypto::PrivateKey& signer
-    );
-
     // ── Descending ──────────────────────────────────────────────────────────
 
     // Descends from an epoch the caller holds to an older one, greedily taking the largest jump that does not
@@ -100,16 +90,6 @@ public:
         std::uint32_t eraFloor = 1,
         std::optional<std::uint32_t> prunedBelow = std::nullopt,
         std::uint32_t maxWalk = 256
-    );
-
-    // Crosses an era boundary on a link addressed to the caller or one of their groups; on success the closing
-    // era's top key is cached and an ordinary `descend` continues from it.
-    DescentResult crossEraBoundary(
-        const std::vector<ArchiveRung>& available,
-        const std::string& ownUserId,
-        const privmx::crypto::PrivateKey& ownUserKey,
-        const std::vector<std::pair<std::string, privmx::crypto::PrivateKey>>& ownGroupKeys,
-        const std::vector<EpochRegistryEntry>& registry
     );
 
     static std::optional<privmx::crypto::PublicKey> publicKeyOfEpoch(

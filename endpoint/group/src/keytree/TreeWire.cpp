@@ -53,27 +53,11 @@ server::GroupTreeEdge TreeWire::toWire(const TreeEdge& edge) {
 }
 
 server::GroupArchiveRung TreeWire::toWire(const ArchiveRung& rung) {
+    // A submission carries no author: the bridge records whoever made the call.
     server::GroupArchiveRung wire;
     wire.atKeyVersion = static_cast<std::int64_t>(rung.span.at);
     wire.targetKeyVersion = static_cast<std::int64_t>(rung.span.target);
-    switch (rung.recipientKind) {
-    case RungRecipientKind::User:
-        wire.recipientKind = "user";
-        break;
-    case RungRecipientKind::Group:
-        wire.recipientKind = "group";
-        break;
-    default:
-        wire.recipientKind = "epoch";
-        break;
-    }
-    if (!rung.recipientId.empty()) {
-        wire.recipient = rung.recipientId;
-    }
     wire.data = rung.blob;
-    if (!rung.author.empty()) {
-        wire.author = rung.author;
-    }
     return wire;
 }
 

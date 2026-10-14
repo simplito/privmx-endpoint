@@ -150,7 +150,7 @@ protected:
                 wireRungs.push_back(server::GroupArchiveRung{
                     static_cast<std::int64_t>(rung.span.at),
                     static_cast<std::int64_t>(rung.span.target),
-                    std::nullopt, std::nullopt, rung.blob, rung.author,
+                    rung.blob, rung.author,
                 });
             }
             epochKeys.push_back(next);
@@ -399,9 +399,9 @@ TEST_F(ResolverConversion, RegistryFromAnArchiveTakesTheCurrentEpochFromTheGroup
 TEST_F(ResolverConversion, SECURITY_DropsUpwardRungsDuringConversion) {
     server::GroupGetKeyArchiveResult archive = emptyArchive(8);
     archive.rungs = std::vector<server::GroupArchiveRung>{
-        server::GroupArchiveRung{8, 7, std::nullopt, std::nullopt, "ok", std::nullopt},
-        server::GroupArchiveRung{8, 8, std::nullopt, std::nullopt, "self", std::nullopt},
-        server::GroupArchiveRung{8, 9, std::nullopt, std::nullopt, "upward", std::nullopt},
+        server::GroupArchiveRung{8, 7, "ok", std::nullopt},
+        server::GroupArchiveRung{8, 8, "self", std::nullopt},
+        server::GroupArchiveRung{8, 9, "upward", std::nullopt},
     };
     const std::vector<ArchiveRung> rungs = GroupKeyResolver::toDownwardRungs(archive);
     ASSERT_EQ(rungs.size(), 1u) << "only the downward rung may survive conversion";
@@ -641,9 +641,9 @@ TEST_F(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem)
     ASSERT_EQ(result.failure, ResolveFailure::None);
     EXPECT_EQ(result.key->toWIF(), epochKeys[0].toWIF()) << "the newcomer reads epoch 1";
 
-    // Nothing in the archive is addressed to an individual — every rung targets an epoch.
-    for (const server::GroupArchiveRung& rung : fixture.archive.rungs) {
-        EXPECT_FALSE(rung.recipient.has_value() && !rung.recipient.value().empty());
+    // Nothing in the archive is addressed to an individual — every rung opens with an epoch's grant key.
+    for (const ArchiveRung& rung : GroupKeyResolver::toDownwardRungs(fixture.archive)) {
+        EXPECT_TRUE(LadderKeys::openRung(rung, epochKeys[rung.span.at - 1]).has_value());
     }
 }
 

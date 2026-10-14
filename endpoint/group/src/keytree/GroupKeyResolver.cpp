@@ -77,15 +77,6 @@ std::optional<ArchiveRung> convertRung(const privmx::endpoint::group::server::Gr
         static_cast<std::uint32_t>(rung.atKeyVersion),
         static_cast<std::uint32_t>(rung.targetKeyVersion),
     };
-    const std::string kind = rung.recipientKind.value_or("epoch");
-    if (kind == "user") {
-        converted.recipientKind = RungRecipientKind::User;
-    } else if (kind == "group") {
-        converted.recipientKind = RungRecipientKind::Group;
-    } else {
-        converted.recipientKind = RungRecipientKind::Epoch;
-    }
-    converted.recipientId = rung.recipient.value_or("");
     converted.blob = rung.data;
     converted.author = rung.author.value_or("");
     return converted;

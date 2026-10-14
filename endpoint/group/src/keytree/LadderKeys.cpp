@@ -183,7 +183,6 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
     }
     ArchiveRung unitRung;
     unitRung.span = RungSpan{newEpoch, newEpoch - 1};
-    unitRung.recipientKind = RungRecipientKind::Epoch;
     unitRung.blob = sealRung(previousEpochKey.value(), unitRung.span, newGrantPublicKey, signer);
     unitRung.author = author;
     rungs.push_back(unitRung);
@@ -211,42 +210,11 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
         }
         ArchiveRung rung;
         rung.span = RungSpan{newEpoch, *target};
-        rung.recipientKind = RungRecipientKind::Epoch;
         rung.blob = sealRung(targetKey.value(), rung.span, newGrantPublicKey, signer);
         rung.author = author;
         rungs.push_back(rung);
     }
     return rungs;
-}
-
-std::vector<ArchiveRung> LadderKeys::buildEraLinks(
-    std::uint32_t closingEpoch,
-    const privmx::crypto::PrivateKey& closingEpochKey,
-    const std::vector<EraLinkRecipient>& entitled,
-    const std::string& author,
-    const privmx::crypto::PrivateKey& signer
-) {
-    std::vector<ArchiveRung> links;
-    for (const EraLinkRecipient& recipient : entitled) {
-        if (recipient.kind == RungRecipientKind::Epoch) {
-            throw std::invalid_argument("an era link must be addressed to a user or a group, not to an epoch");
-        }
-        if (recipient.id.empty()) {
-            // The bridge pairs `recipientKind` with `recipient`, both going into the rung's stored identity.
-            // Caught here so the caller gets the reason instead of GROUP_ARCHIVE_INVALID from the server.
-            throw std::invalid_argument("an era link addressed to a user or a group has to name it");
-        }
-        ArchiveRung link;
-        // Not a descent step — the recipient's own key opens it — but the server validates every rung uniformly,
-        // so it still has to satisfy `target < at`: addressed at the new era's floor, carrying the closing top key.
-        link.span = RungSpan{closingEpoch + 1, closingEpoch};
-        link.recipientKind = recipient.kind;
-        link.recipientId = recipient.id;
-        link.blob = sealRung(closingEpochKey, link.span, recipient.publicKey, signer);
-        link.author = author;
-        links.push_back(link);
-    }
-    return links;
 }
 
 DescentResult LadderKeys::descend(
@@ -304,9 +272,6 @@ DescentResult LadderKeys::descend(
         // one that does not open to its target's registered key is skipped for the next; blame only when none does.
         std::vector<const ArchiveRung*> candidates;
         for (const ArchiveRung& rung : available) {
-            if (rung.recipientKind != RungRecipientKind::Epoch) {
-                continue; // era links are crossed explicitly, not walked over
-            }
             // Direction invariant. Never traverse an upward rung, even if it somehow got stored: it is exactly
             // the shape that would hand a removed member a later key.
             if (rung.span.target >= rung.span.at) {
@@ -367,51 +332,5 @@ DescentResult LadderKeys::descend(
         return result;
     }
     result.key = currentKey;
-    return result;
-}
-
-DescentResult LadderKeys::crossEraBoundary(
-    const std::vector<ArchiveRung>& available,
-    const std::string& ownUserId,
-    const privmx::crypto::PrivateKey& ownUserKey,
-    const std::vector<std::pair<std::string, privmx::crypto::PrivateKey>>& ownGroupKeys,
-    const std::vector<EpochRegistryEntry>& registry
-) {
-    DescentResult result;
-    for (const ArchiveRung& link : available) {
-        std::optional<privmx::crypto::PrivateKey> opener;
-        if (link.recipientKind == RungRecipientKind::User && link.recipientId == ownUserId) {
-            opener = ownUserKey;
-        } else if (link.recipientKind == RungRecipientKind::Group) {
-            for (const auto& [groupId, groupKey] : ownGroupKeys) {
-                if (groupId == link.recipientId) {
-                    opener = groupKey;
-                    break;
-                }
-            }
-        }
-        if (!opener.has_value()) {
-            continue;
-        }
-
-        const auto recovered = openRung(link, opener.value());
-        if (!recovered.has_value()) {
-            result.failure = DescentFailure::DecryptFailed;
-            continue; // another link may still open
-        }
-        if (!verifyAgainstRegistry(recovered.value(), link.span.target, registry)) {
-            result.failure = DescentFailure::Tampered;
-            result.blame = link.author;
-            return result;
-        }
-        _cache.putGrantKey(link.span.target, recovered.value());
-        result.key = recovered.value();
-        result.reachedEpoch = link.span.target;
-        result.failure = DescentFailure::None;
-        return result;
-    }
-    if (result.failure == DescentFailure::None) {
-        result.failure = DescentFailure::EraBoundary;
-    }
     return result;
 }

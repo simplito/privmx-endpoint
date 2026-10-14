@@ -134,8 +134,6 @@ JSON_STRUCT(GroupTreeSelfUpdateTransition, GROUP_TREE_SELF_UPDATE_TRANSITION_FIE
 #define GROUP_ARCHIVE_RUNG_FIELDS(F)                                                                                   \
     F(atKeyVersion, int64_t)                                                                                           \
     F(targetKeyVersion, int64_t)                                                                                       \
-    F(recipientKind, std::optional<std::string>)                                                                       \
-    F(recipient, std::optional<std::string>)                                                                           \
     F(data, std::string)                                                                                               \
     F(author, std::optional<std::string>)
 JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
