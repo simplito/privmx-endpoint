@@ -27,7 +27,7 @@ public:
     server::EncryptedKeyEntryDataV2 encrypt(
         const EncKeyV2ToEncrypt& key,
         const privmx::crypto::PublicKey& encryptionKey,
-        const crypto::PrivateKey& authorPrivateKey
+        const privmx::crypto::PrivateKey& authorPrivateKey
     );
     DecryptedEncKeyV2 decrypt(
         const server::EncryptedKeyEntryDataV2& encryptedEncKey,

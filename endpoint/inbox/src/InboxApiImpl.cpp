@@ -14,7 +14,6 @@ limitations under the License.
 
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/store/ChunkBufferedStream.hpp>
 #include <privmx/endpoint/store/FileHandle.hpp>
@@ -401,9 +400,7 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
             commitSentInfo = _inboxHandleManager.commitInboxHandle(inboxHandle);
         } catch (const core::DataDifferentThanDeclaredException& e) {
             _inboxHandleManager.abortInboxHandle(inboxHandle);
-            WritingToEntryInteruptedWrittenDataSmallerThenDeclaredException ex;
-            ex.setCause(e);
-            throw ex;
+            throw WritingToEntryInteruptedWrittenDataSmallerThenDeclaredException(e);
         }
         for (auto fileInfo : commitSentInfo.filesInfo) {
             fileIndex++;
@@ -497,7 +494,7 @@ int64_t InboxApiImpl::createInboxFileHandleForRead(const privmx::endpoint::store
     auto messageData = _inboxEntryDataSchemaMapper.decryptInboxEntry(messageRaw, inboxKeys, _groupPrivKeyResolver);
     core::DecryptedEncKey fileMetaEncKey{
         core::EncKey{.id = "", .key = messageData.privateData.filesMetaKey},
-        core::DecryptedVersionedData{.dataStructureVersion = 0, .statusCode = 0}
+        core::DecryptedVersionedData{.dataStructureVersion = 0, .error = nullptr}
     };
     auto decryptionParams = _storeApi.getImpl()->getFileDecryptionParams(file, fileMetaEncKey);
     std::shared_ptr<store::FileReadHandle> handle = _inboxHandleManager.createFileReadHandle(
@@ -532,9 +529,7 @@ core::Buffer InboxApiImpl::readFromFile(const int64_t handle, const int64_t leng
         result = core::Buffer::from(handlePtr->read(length));
     } catch (const store::FileVersionMismatchException& e) {
         closeFile(handle);
-        store::FileVersionMismatchHandleClosedException ex;
-        ex.setCause(e);
-        throw ex;
+        throw store::FileVersionMismatchHandleClosedException(e);
     }
     return result;
 }

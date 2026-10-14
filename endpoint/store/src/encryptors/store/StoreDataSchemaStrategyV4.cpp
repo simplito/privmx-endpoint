@@ -14,7 +14,6 @@ limitations under the License.
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/store/Constants.hpp"
 
@@ -35,7 +34,7 @@ std::tuple<Store, core::DataIntegrityObject> StoreDataSchemaStrategyV4::convert(
 ) const {
     return {
         StoreDataSchemaMapper::toLibStore(
-            store, raw.publicMeta, raw.privateMeta, raw.statusCode, StoreDataSchema::Version::VERSION_4
+            store, raw.publicMeta, raw.privateMeta, raw.statusCode(), StoreDataSchema::Version::VERSION_4
         ),
         core::DataIntegrityObject{
             .creatorUserId = store.lastModifier,

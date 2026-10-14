@@ -278,10 +278,6 @@ int main(int argc, char** argv) {
        
     } catch (const core::Exception& e) {
         cerr << e.getFull() << endl;
-    } catch (const privmx::utils::PrivmxException& e) {
-        cerr << e.what() << endl;
-        cerr << e.getData() << endl;
-        cerr << e.getCode() << endl;
     } catch (const exception& e) {
         cerr << e.what() << endl;
     } catch (...) {

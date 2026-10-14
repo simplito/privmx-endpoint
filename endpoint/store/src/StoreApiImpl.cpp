@@ -15,7 +15,6 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/core/EndpointUtils.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/VarDeserializer.hpp>
 
@@ -431,7 +430,7 @@ void StoreApiImpl::syncFile(const int64_t handle) {
             setNewModuleKeysInCache(file_raw.store.id, storeKey, file_raw.store.version);
             try {
                 auto currentKey = getAndValidateModuleCurrentEncKey(storeKey);
-                if (currentKey.statusCode == 0) {
+                if (currentKey.statusCode() == 0) {
                     writeKey = core::DecryptedEncKey(currentKey);
                 }
             } catch (const core::Exception&) {
@@ -447,9 +446,7 @@ void StoreApiImpl::syncFile(const int64_t handle) {
         handlePtr->sync(encryptionParams.fileDecryptionParams);
     } catch (const store::FileCorruptedException& e) {
         _fileHandleManager.removeHandle(handle);
-        FileSyncFailedHandleCloseException ex("in file read handle");
-        ex.setCause(e);
-        throw ex;
+        throw FileSyncFailedHandleCloseException("in file read handle", e);
     }
 }
 
@@ -465,19 +462,11 @@ void StoreApiImpl::flushFile(const int64_t handle) {
         if (e.getCode() != privmx::endpoint::server::InvalidKeyException().getCode()) {
             e.rethrow();
         }
-    } catch (const privmx::utils::PrivmxException& e) {
-        if (core::ExceptionConverter::convert(e).getCode() !=
-            privmx::endpoint::server::InvalidKeyException().getCode()) {
-            core::ExceptionConverter::rethrowAsCoreException(e);
-        }
     }
     try {
         rw_handle->file->refreshEncKey(getCurrentFileEncKey(rw_handle->getFileId()));
         rw_handle->file->flush();
     } catch (const core::Exception& e) {
-        rw_handle->file->discardPending();
-        e.rethrow();
-    } catch (const privmx::utils::PrivmxException& e) {
         rw_handle->file->discardPending();
         e.rethrow();
     }
@@ -494,10 +483,8 @@ core::DecryptedEncKey StoreApiImpl::getCurrentFileEncKey(const std::string& file
     auto storeKey = containerToModuleKeys(store);
     setNewModuleKeysInCache(store.id, storeKey, store.version);
     auto key = getAndValidateModuleCurrentEncKey(storeKey);
-    if (key.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(key.statusCode)
-        );
+    if (key.error) {
+        throw core::EncryptionKeyValidationException("current encryption key cannot be used", *key.error);
     }
     return key;
 }
@@ -523,9 +510,7 @@ std::string StoreApiImpl::closeFile(const int64_t handle) {
         try {
             return storeFileFinalizeWrite(std::dynamic_pointer_cast<FileWriteHandle>(handlePtr));
         } catch (const core::DataDifferentThanDeclaredException& e) {
-            WritingToFileInteruptedWrittenDataSmallerThenDeclaredException ex;
-            ex.setCause(e);
-            throw ex;
+            throw WritingToFileInteruptedWrittenDataSmallerThenDeclaredException(e);
         }
     }
     return handlePtr->getFileId();
@@ -561,10 +546,8 @@ std::string StoreApiImpl::storeFileFinalizeWriteRequest(
 ) {
     auto serverId = _host;
     auto key = getAndValidateModuleCurrentEncKey(storeKey);
-    if (key.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(key.statusCode)
-        );
+    if (key.error) {
+        throw core::EncryptionKeyValidationException("current encryption key cannot be used", *key.error);
     }
     dynamic::InternalStoreFileMeta internalFileMeta;
     internalFileMeta.version = 4;
@@ -757,10 +740,8 @@ void StoreApiImpl::updateFileMeta(
     // above is not guaranteed to have happened — a caller who may not re-key never gets here.
     assertRekeyNotNeeded(store);
     auto key = getAndValidateModuleCurrentEncKey(store);
-    if (key.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(key.statusCode)
-        );
+    if (key.error) {
+        throw core::EncryptionKeyValidationException("current encryption key cannot be used", *key.error);
     }
     auto fileInternalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(
         file, storeKey, _keyProvider, _groupPrivKeyResolver

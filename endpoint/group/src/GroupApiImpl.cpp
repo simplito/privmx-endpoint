@@ -9,7 +9,6 @@
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/Utils.hpp>
@@ -378,12 +377,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
 
-    try {
-        _serverApi.groupAddMembers(model);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    _serverApi.groupAddMembers(model);
     // No tree-key invalidation and the epoch and grant keypair did not move.
     invalidateModuleKeysInCache(groupId);
 }
@@ -547,12 +541,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
         privmx::crypto::Crypto::hmacSha256(GroupDataSchemaMapper::tagSubkey(ctx.key.key, "confirm-tag"), confInput)
     );
 
-    try {
-        _serverApi.groupRemoveMembers(model);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    _serverApi.groupRemoveMembers(model);
     cache->clearNodeKeys();
     cache->putGrantKey(static_cast<std::uint32_t>(newEpoch), plan.newGrantKey);
     invalidateModuleKeysInCache(groupId);
@@ -651,18 +640,16 @@ void GroupApiImpl::updateGroupPublicMeta(
 
     try {
         _serverApi.groupUpdatePublicMeta(model);
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         // Not reachable against the current bridge: `ROTATED_ALREADY` comes from the rotation family, never
         // from a metadata write. Kept for the day that changes; the retry re-reads and re-tags on its own.
-        auto code = core::ExceptionConverter::convert(e).getCode();
-        if (allowRotationRetry && code == endpoint::server::GroupRotatedAlreadyException().getCode()) {
+        if (allowRotationRetry && e.getCode() == endpoint::server::GroupRotatedAlreadyException().getCode()) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
             updateGroupPublicMeta(groupId, publicMeta, version, false);
             return;
         }
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+        throw;
     }
     // Rotates nothing — not the content key, not the grant key, not the tree. Only the cached view is stale.
     invalidateModuleKeysInCache(groupId);
@@ -695,16 +682,14 @@ void GroupApiImpl::updateGroupPrivateMeta(
 
     try {
         _serverApi.groupUpdatePrivateMeta(model);
-    } catch (const privmx::utils::PrivmxException& e) {
-        auto code = core::ExceptionConverter::convert(e).getCode();
-        if (allowRotationRetry && code == endpoint::server::GroupRotatedAlreadyException().getCode()) {
+    } catch (const privmx::endpoint::core::Exception& e) {
+        if (allowRotationRetry && e.getCode() == endpoint::server::GroupRotatedAlreadyException().getCode()) {
             auto payload = server::RotatedAlreadyPayload::fromJSON(privmx::utils::Utils::parseJsonObject(e.getData()));
             adoptRotatedAlready(groupId, payload);
             updateGroupPrivateMeta(groupId, privateMeta, version, false);
             return;
         }
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+        throw;
     }
     invalidateModuleKeysInCache(groupId);
 }
@@ -737,8 +722,8 @@ void GroupApiImpl::adoptRotatedAlready(const std::string& groupId, const server:
     request.addOne(winnerKeyVec, payload.winnerKeyEntry.keyId, location);
     auto decrypted = _keyProvider->getKeysAndVerify(request);
     const auto& winnerGk = decrypted.at(location).at(payload.winnerKeyEntry.keyId);
-    if (winnerGk.statusCode != 0) {
-        throw GroupDataIntegrityException("RotatedAlready: winner's key entry failed verification");
+    if (winnerGk.error) {
+        throw GroupDataIntegrityException("RotatedAlready: winner's key entry failed verification", *winnerGk.error);
     }
 
     // Without a tag nothing ties this epoch to a member, so adopting it would mean re-wrapping against whatever
@@ -861,11 +846,9 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 auto decrypted = decrypt(core::Buffer::from(privmx::utils::Base64::toString(raw.eventData)));
                 data.payload = decrypted.data;
                 data.authorPubKey = decrypted.authorPubKey;
-            } catch (const core::Exception& e) {
-                data.statusCode = e.getCode();
-            } catch (const privmx::utils::PrivmxException& e) {
-                data.statusCode = core::ExceptionConverter::convert(e).getCode();
-            } catch (...) { data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+            } catch (const core::Exception& e) { data.statusCode = e.getCode(); } catch (...) {
+                data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+            }
             auto event = core::EventBuilder::buildEvent<GroupCustomEvent>(
                 "group/" + raw.id + "/" + channelName, data, notification
             );
@@ -1099,12 +1082,10 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
         throw core::EncryptionKeyValidationException("Group key " + keyId + " could not be resolved");
     }
     const core::DecryptedEncKeyV2 found = atLocation->second.at(keyId);
-    if (found.statusCode != 0) {
+    if (found.error) {
         // `findEncKeyByKeyId` and friends hand back entries whose decryption failed; unchecked, the empty key
         // surfaces as a cipher length complaint instead of the real cause, usually an era boundary.
-        throw core::EncryptionKeyValidationException(
-            "Group key " + keyId + " could not be decrypted (status " + std::to_string(found.statusCode) + ")"
-        );
+        throw core::EncryptionKeyValidationException("Group key " + keyId + " could not be decrypted", *found.error);
     }
     _envelopeKeys.set(memoKey, found);
     return found;

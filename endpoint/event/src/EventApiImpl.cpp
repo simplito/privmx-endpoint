@@ -13,7 +13,6 @@ limitations under the License.
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
 #include "privmx/endpoint/core/EventBuilder.hpp"

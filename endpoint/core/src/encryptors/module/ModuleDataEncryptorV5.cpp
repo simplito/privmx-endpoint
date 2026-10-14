@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/encryptors/module/Constants.hpp>
@@ -55,7 +54,6 @@ DecryptedModuleDataV5 ModuleDataEncryptorV5::decrypt(
     const std::optional<DataIntegrityObject>& verifiedDio
 ) {
     DecryptedModuleDataV5 result;
-    result.statusCode = 0;
     result.dataStructureVersion = ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedModuleData);
@@ -65,8 +63,7 @@ DecryptedModuleDataV5 ModuleDataEncryptorV5::decrypt(
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
             auto tmp_2 = utils::Utils::stringifyVar(encryptedModuleData.publicMetaObject);
             if (tmp_1 != tmp_2) {
-                auto e = ModulePublicDataMismatchException();
-                result.statusCode = e.getCode();
+                result.error = asError(ModulePublicDataMismatchException());
             }
         }
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(
@@ -84,11 +81,9 @@ DecryptedModuleDataV5 ModuleDataEncryptorV5::decrypt(
             .randomId = internalMetaJSON.randomId
         };
         result.authorPubKey = encryptedModuleData.authorPubKey;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = asError(e); } catch (...) {
+        result.error = unknownError("decrypting module data");
+    }
     return result;
 }
 
@@ -97,7 +92,6 @@ DecryptedModuleDataV5 ModuleDataEncryptorV5::extractPublic(
     const std::optional<DataIntegrityObject>& verifiedDio
 ) {
     DecryptedModuleDataV5 result;
-    result.statusCode = 0;
     result.dataStructureVersion = ModuleDataSchema::Version::VERSION_5;
     try {
         result.dio = verifiedDio.has_value() ? verifiedDio.value() : getDIOAndAssertIntegrity(encryptedModuleData);
@@ -107,16 +101,13 @@ DecryptedModuleDataV5 ModuleDataEncryptorV5::extractPublic(
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
             auto tmp_2 = utils::Utils::stringifyVar(encryptedModuleData.publicMetaObject);
             if (tmp_1 != tmp_2) {
-                auto e = ModulePublicDataMismatchException();
-                result.statusCode = e.getCode();
+                result.error = asError(ModulePublicDataMismatchException());
             }
         }
         result.authorPubKey = encryptedModuleData.authorPubKey;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = asError(e); } catch (...) {
+        result.error = unknownError("decrypting module data");
+    }
     return result;
 }
 

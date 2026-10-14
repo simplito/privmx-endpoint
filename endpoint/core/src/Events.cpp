@@ -13,9 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/EventVarSerializer.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/JsonSerializer.hpp"
-#include "privmx/utils/PrivmxException.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -88,16 +86,11 @@ bool Events::isLibBreakEvent(const core::EventHolder& handler) {
 }
 
 LibBreakEvent Events::extractLibBreakEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<LibBreakEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractLibBreakEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<LibBreakEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractLibBreakEventException();
     }
+    return *event;
 }
 
 bool Events::isLibPlatformDisconnectedEvent(const core::EventHolder& handler) {
@@ -105,16 +98,11 @@ bool Events::isLibPlatformDisconnectedEvent(const core::EventHolder& handler) {
 }
 
 LibPlatformDisconnectedEvent Events::extractLibPlatformDisconnectedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<LibPlatformDisconnectedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractLibPlatformDisconnectedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<LibPlatformDisconnectedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractLibPlatformDisconnectedEventException();
     }
+    return *event;
 }
 
 bool Events::isLibConnectedEvent(const core::EventHolder& handler) {
@@ -122,16 +110,11 @@ bool Events::isLibConnectedEvent(const core::EventHolder& handler) {
 }
 
 LibConnectedEvent Events::extractLibConnectedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<LibConnectedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractLibConnectedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<LibConnectedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractLibConnectedEventException();
     }
+    return *event;
 }
 
 bool Events::isLibDisconnectedEvent(const core::EventHolder& handler) {
@@ -139,16 +122,11 @@ bool Events::isLibDisconnectedEvent(const core::EventHolder& handler) {
 }
 
 LibDisconnectedEvent Events::extractLibDisconnectedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<LibDisconnectedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractLibDisconnectedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<LibDisconnectedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractLibDisconnectedEventException();
     }
+    return *event;
 }
 
 bool Events::isCollectionChangedEvent(const core::EventHolder& eventHolder) {
@@ -156,16 +134,11 @@ bool Events::isCollectionChangedEvent(const core::EventHolder& eventHolder) {
 }
 
 CollectionChangedEvent Events::extractCollectionChangedEvent(const core::EventHolder& eventHolder) {
-    try {
-        auto event = std::dynamic_pointer_cast<CollectionChangedEvent>(eventHolder.get());
-        if (!event) {
-            throw CannotExtractCollectionChangedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<CollectionChangedEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractCollectionChangedEventException();
     }
+    return *event;
 }
 
 bool Events::isContextUserAddedEvent(const core::EventHolder& handler) {
@@ -173,16 +146,11 @@ bool Events::isContextUserAddedEvent(const core::EventHolder& handler) {
 }
 
 ContextUserAddedEvent Events::extractContextUserAddedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<ContextUserAddedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractContextUserAddedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<ContextUserAddedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractContextUserAddedEventException();
     }
+    return *event;
 }
 
 bool Events::isContextUserRemovedEvent(const core::EventHolder& handler) {
@@ -190,16 +158,11 @@ bool Events::isContextUserRemovedEvent(const core::EventHolder& handler) {
 }
 
 ContextUserRemovedEvent Events::extractContextUserRemovedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<ContextUserRemovedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractContextUserRemovedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<ContextUserRemovedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractContextUserRemovedEventException();
     }
+    return *event;
 }
 
 bool Events::isContextUsersStatusChangedEvent(const core::EventHolder& handler) {
@@ -207,14 +170,9 @@ bool Events::isContextUsersStatusChangedEvent(const core::EventHolder& handler) 
 }
 
 ContextUsersStatusChangedEvent Events::extractContextUsersStatusChangedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<ContextUsersStatusChangedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractContextUsersStatusChangedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<ContextUsersStatusChangedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractContextUsersStatusChangedEventException();
     }
+    return *event;
 }
