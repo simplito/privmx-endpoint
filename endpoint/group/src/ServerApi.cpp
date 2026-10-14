@@ -76,6 +76,10 @@ server::GroupGetKeyArchiveResult ServerApi::groupGetKeyArchive(server::GroupGetK
     return request<server::GroupGetKeyArchiveResult>("groupGetKeyArchive", model.toJSON());
 }
 
+void ServerApi::groupRepairRung(server::GroupRepairRungModel model) {
+    request("groupRepairRung", model.toJSON());
+}
+
 void ServerApi::groupSendCustomEvent(server::GroupSendCustomEventModel model) {
     request("groupSendCustomEvent", model.toJSON());
 }

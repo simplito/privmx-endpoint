@@ -34,6 +34,8 @@ public:
     void groupPruneArchive(server::GroupPruneArchiveModel model);
     // The Epoch Ladder, fetched only when a client is actually reaching for an older epoch.
     server::GroupGetKeyArchiveResult groupGetKeyArchive(server::GroupGetKeyArchiveModel model);
+    // Appends a repair rung (L-1): any seated member holding both keys of the span.
+    void groupRepairRung(server::GroupRepairRungModel model);
 
     void groupSendCustomEvent(server::GroupSendCustomEventModel model);
 

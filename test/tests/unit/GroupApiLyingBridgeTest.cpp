@@ -37,6 +37,7 @@ limitations under the License.
 #include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp>
 #include <privmx/endpoint/group/keytree/GroupKeyResolver.hpp>
+#include <privmx/endpoint/group/keytree/LadderKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 
@@ -74,8 +75,13 @@ Poco::JSON::Object::Ptr overTheWire(const Poco::Dynamic::Var& value) {
     return privmx::utils::Utils::parseJsonObject(privmx::utils::Utils::stringifyVar(value));
 }
 
+privmx::utils::PrivmxException archiveInvalid() {
+    return privmx::utils::PrivmxException("GROUP_ARCHIVE_INVALID", privmx::utils::PrivmxException::RPC, 0x621F);
+}
+
 // One group's bridge, shared by every client. Every request is answered under one lock (`sync`), so the clients'
-// threads and their background self-updates never interleave inside it; a copy shares the lock and never answers.
+// threads and their background workers never interleave inside it; a test touching the bridge while one may run takes
+// it too. A copy shares the lock and never answers.
 struct Bridge {
     struct Sync {
         std::mutex m;
@@ -98,6 +104,22 @@ struct Bridge {
     std::vector<server::GroupTreeCommit> received;
     int planReads = 0; // `groupGet`s in the "plan" scope
     std::function<void(server::GroupInfo&)> onPlanRead = [](server::GroupInfo&) {}; // edits what a plan read serves
+    std::shared_ptr<std::atomic<int>> verifierCalls = std::make_shared<std::atomic<int>>(0);
+    struct Call {
+        std::string caller;
+        std::string method;
+        Poco::JSON::Object::Ptr params;
+    };
+    std::vector<Call> calls;
+    // The Epoch Ladder as stored: author set to the caller of the operation that stored each rung, as the bridge does.
+    std::vector<server::GroupArchiveRung> rungs;
+    std::int64_t eraFloor = 1;
+
+    std::size_t count(const std::string& caller, const std::string& method) const {
+        return static_cast<std::size_t>(std::count_if(calls.begin(), calls.end(), [&](const Call& call) {
+            return call.caller == caller && call.method == method;
+        }));
+    }
 
     server::GroupInfo serve(const std::string& userId, bool plan) const {
         server::GroupInfo info = tree.serve(userId, plan);
@@ -119,6 +141,13 @@ struct Bridge {
     // The roster entry, history and self-addressed metadata key a removal or a rotation publishes for its epoch.
     template<typename Model>
     void storeNewEpoch(const std::string& caller, const Model& model) {
+        for (server::GroupArchiveRung rung : model.rungs) {
+            if (rung.author.has_value()) {
+                throw archiveInvalid(); // not a field a client may send
+            }
+            rung.author = caller;
+            rungs.push_back(rung);
+        }
         server::GroupDataEntry head;
         head.keyId = model.keyId;
         head.data = model.data;
@@ -134,6 +163,7 @@ struct Bridge {
 
     Poco::Dynamic::Var answer(const std::string& caller, const std::string& method, Poco::JSON::Object::Ptr params) {
         std::unique_lock<std::mutex> lock(sync->m);
+        calls.push_back({caller, method, params});
         const std::string group = method.substr(std::string("context.").size());
         if (method == "context.contextGet") {
             return core::server::ContextGetResult{.context = {.userId = caller, .contextId = CONTEXT}}.toJSON();
@@ -306,6 +336,48 @@ struct Bridge {
             events.emplace_back(caller, server::GroupSendCustomEventModel::fromJSON(params));
             return Poco::Dynamic::Var();
         }
+        if (group == "groupGetKeyArchive") {
+            // `keyHistory` is left empty: the client takes past grant keys off the statements, never from here.
+            const auto model = server::GroupGetKeyArchiveModel::fromJSON(params);
+            server::GroupGetKeyArchiveResult result;
+            result.keyVersion = static_cast<std::int64_t>(tree.state.epoch);
+            result.eraFloor = eraFloor;
+            for (const server::GroupArchiveRung& rung : rungs) {
+                if (rung.atKeyVersion >= model.fromKeyVersion.value_or(1) &&
+                    rung.atKeyVersion <= model.toKeyVersion.value_or(INT64_MAX) && rung.targetKeyVersion >= eraFloor) {
+                    result.rungs.push_back(rung);
+                }
+            }
+            return result.toJSON();
+        }
+        if (group == "groupRepairRung") {
+            // The bridge's rules: a seated caller, a downward span at an existing epoch above the floor, one rung per
+            // span per author, at most four per span.
+            const auto model = server::GroupRepairRungModel::fromJSON(params);
+            server::GroupArchiveRung rung = model.rung;
+            if (!seatOf(tree.state, caller).has_value()) {
+                throw privmx::utils::PrivmxException("ACCESS_DENIED", privmx::utils::PrivmxException::RPC, 0x0001);
+            }
+            if (rung.author.has_value() || rung.targetKeyVersion >= rung.atKeyVersion ||
+                rung.atKeyVersion > static_cast<std::int64_t>(tree.state.epoch) || rung.targetKeyVersion < eraFloor) {
+                throw archiveInvalid();
+            }
+            std::size_t inSpan = 0;
+            for (const server::GroupArchiveRung& stored : rungs) {
+                if (stored.atKeyVersion == rung.atKeyVersion && stored.targetKeyVersion == rung.targetKeyVersion) {
+                    ++inSpan;
+                    if (stored.author == std::optional<std::string>(caller)) {
+                        throw archiveInvalid();
+                    }
+                }
+            }
+            if (inSpan >= 4) {
+                throw archiveInvalid();
+            }
+            rung.author = caller;
+            rungs.push_back(rung);
+            return Poco::Dynamic::Var();
+        }
         if (group == "groupDelete") {
             return Poco::Dynamic::Var();
         }
@@ -339,6 +411,7 @@ class Verifier : public core::UserVerifierInterface {
 public:
     explicit Verifier(const Bridge& bridge) : _bridge(bridge) {}
     std::vector<bool> verify(const std::vector<core::VerificationRequest>& requests) override {
+        ++*_bridge.verifierCalls;
         std::vector<bool> verified;
         for (const auto& request : requests) {
             const auto user = _bridge.users.find(request.senderId);
@@ -464,6 +537,50 @@ protected:
     }
 
     void TearDown() override { clients.clear(); }
+
+    // Polls `done` under the fixture lock until it holds or `timeout` passes; whether it held.
+    bool waitUntil(const std::function<bool()>& done, std::chrono::milliseconds timeout = std::chrono::seconds(5)) {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        for (;;) {
+            {
+                std::unique_lock<std::mutex> guard(bridge.sync->m);
+                if (done()) {
+                    return true;
+                }
+            }
+            if (std::chrono::steady_clock::now() > deadline) {
+                return false;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+    }
+
+    std::size_t count(const std::string& caller, const std::string& method) {
+        std::unique_lock<std::mutex> guard(bridge.sync->m);
+        return bridge.count(caller, method);
+    }
+
+    // Replaces every stored rung of the span with one that opens with no epoch's key.
+    void corrupt(std::int64_t at, std::int64_t target) {
+        std::unique_lock<std::mutex> guard(bridge.sync->m);
+        for (server::GroupArchiveRung& rung : bridge.rungs) {
+            if (rung.atKeyVersion == at && rung.targetKeyVersion == target) {
+                rung.data = LadderKeys::sealRung(
+                    PrivateKey::generateRandom(), RungSpan{static_cast<std::uint32_t>(at), static_cast<std::uint32_t>(target)},
+                    PrivateKey::generateRandom().getPublicKey(), PrivateKey::generateRandom()
+                );
+            }
+        }
+    }
+
+    // The group of four the repair tests start from, with bob holding epoch 1 and alice having removed dave since.
+    std::string groupAtEpoch2WithBobHoldingEpoch1() {
+        bridge.users.emplace("dave", PrivateKey::generateRandom());
+        const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
+        client("bob").resolveGroupPrivKey(groupId);
+        client("alice").removeGroupMembers(groupId, {"dave"});
+        return groupId;
+    }
 
     GroupApiImpl& client(const std::string& userId) {
         auto& client = clients[userId];
@@ -1218,4 +1335,95 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnAddIsResentOnlyToKeysTheVerifierStillVouc
         return TreeCommits::fromWire(commit).op == CommitOp::Add;
     });
     EXPECT_EQ(adds, 1) << "the add was resent to a key the verifier no longer vouches for";
+}
+
+// ── repair rungs (L-1) ───────────────────────────────────────────────────────────────────────────────────────────
+
+TEST_F(GroupApiLyingBridge, SECURITY_AMemberHoldingThePreviousKeyRepairsABrokenUnitRung) {
+    // A broken unit rung (2,1) cuts epoch 1 off for everybody not holding it in session memory. Bob holds it, and
+    // repairs the rung in the background once he sees the rotation; a fresh session of carol's then reads epoch 1.
+    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();
+    corrupt(2, 1);
+    client("bob").resolveGroupPrivKey(groupId);
+    ASSERT_TRUE(waitUntil([&] { return bridge.count("bob", "context.groupRepairRung") == 1; }));
+    const PrivateKey epoch1 = client("carol").resolveGroupPrivKey(groupId, 1);
+    EXPECT_EQ(epoch1.getPublicKey().toBase58DER(), bridge.rest.history.at(0).groupPubKey);
+}
+
+TEST_F(GroupApiLyingBridge, ARepairIsNotSentWhenTheLadderIsIntact) {
+    // The honest path costs one archive fetch per observed rotation: no statements read, no UserVerifier call.
+    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();
+    client("bob").resolveGroupPrivKey(groupId);
+    const int verified = bridge.verifierCalls->load();
+    const std::size_t commitReads = count("bob", "context.groupGetTreeCommits");
+    ASSERT_TRUE(waitUntil([&] { return bridge.count("bob", "context.groupGetKeyArchive") >= 1; }));
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    EXPECT_EQ(count("bob", "context.groupGetKeyArchive"), 1u);
+    EXPECT_EQ(count("bob", "context.groupRepairRung"), 0u);
+    EXPECT_EQ(count("bob", "context.groupGetTreeCommits"), commitReads);
+    EXPECT_EQ(bridge.verifierCalls->load(), verified);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AClientRefusesToCommitARungThatDoesNotOpenToTheChain) {
+    // A wrong key in the remover's cache (a client bug) would be sealed into a skip rung no later commit can replace.
+    bridge.users.emplace("dave", PrivateKey::generateRandom());
+    bridge.users.emplace("erin", PrivateKey::generateRandom());
+    const std::string groupId = createGroup({"alice", "bob", "carol", "dave", "erin"});
+    client("alice").removeGroupMembers(groupId, {"dave"});
+    client("alice").removeGroupMembers(groupId, {"erin"});
+    ASSERT_EQ(LadderKeys::requiredSkipTargets(4, 1), std::vector<std::uint32_t>{2});
+    const auto cache = client("alice").keyCacheOf(groupId);
+    ASSERT_TRUE(cache->getGrantKey(2).has_value());
+    cache->putGrantKey(2, PrivateKey::generateRandom());
+    const std::size_t removals = count("alice", "context.groupRemoveMembers");
+    EXPECT_THROW(client("alice").removeGroupMembers(groupId, {"carol"}), GroupDataIntegrityException);
+    EXPECT_EQ(count("alice", "context.groupRemoveMembers"), removals) << "nothing submitted";
+    EXPECT_FALSE(cache->getGrantKey(2).has_value()) << "forgotten, to be re-gathered by a verified descent";
+    client("alice").removeGroupMembers(groupId, {"carol"});
+    EXPECT_EQ(bridge.tree.state.epoch, 4u);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARepairNeverSealsAKeyTheChainDoesNotName) {
+    bridge.users.emplace("dave", PrivateKey::generateRandom());
+    const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
+    client("bob").resolveGroupPrivKey(groupId);
+    const auto cache = client("bob").keyCacheOf(groupId);
+    cache->putGrantKey(1, PrivateKey::generateRandom()); // a client bug: not epoch 1's key
+    client("alice").removeGroupMembers(groupId, {"dave"});
+    corrupt(2, 1);
+    client("bob").resolveGroupPrivKey(groupId);
+    ASSERT_TRUE(waitUntil([&] { return !cache->getGrantKey(1).has_value(); })) << "checked against the chain, forgotten";
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    EXPECT_EQ(count("bob", "context.groupRepairRung"), 0u);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARepairIsNotSentBelowAFloorThisSessionHasSeen) {
+    // The floor is the bridge's word (T3-30). Lowering it after bob saw it must not make him seal a crossing rung.
+    bridge.users.emplace("dave", PrivateKey::generateRandom());
+    const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
+    client("alice").removeGroupMembers(groupId, {"dave"});
+    {
+        std::unique_lock<std::mutex> guard(bridge.sync->m);
+        bridge.eraFloor = 2;
+    }
+    EXPECT_ANY_THROW(client("bob").resolveGroupPrivKey(groupId, 1)) << "behind the era floor bob now remembers";
+    {
+        std::unique_lock<std::mutex> guard(bridge.sync->m);
+        bridge.eraFloor = 1;
+    }
+    corrupt(2, 1);
+    client("bob").keyCacheOf(groupId)->putGrantKey(1, client("alice").keyCacheOf(groupId)->getGrantKey(1).value());
+    EXPECT_ANY_THROW(client("bob").resolveGroupPrivKey(groupId, 1)); // finds (2,1) broken, queues a check
+    ASSERT_TRUE(waitUntil([&] { return bridge.count("bob", "context.groupGetKeyArchive") >= 3; })) << "the check ran";
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    EXPECT_EQ(count("bob", "context.groupRepairRung"), 0u);
+}
+
+TEST_F(GroupApiLyingBridge, DestroyingAClientWithAQueuedLadderCheckJoinsCleanly) {
+    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();
+    client("bob").resolveGroupPrivKey(groupId); // a check is now queued, due within a second
+    clients.erase("bob");
+    const std::size_t archiveReads = count("bob", "context.groupGetKeyArchive");
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    EXPECT_EQ(count("bob", "context.groupGetKeyArchive"), archiveReads) << "nothing runs after destruction";
 }

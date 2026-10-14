@@ -43,6 +43,17 @@ group::server::GroupGetModel pathRead(const std::string& groupId) {
     };
 }
 
+// A uniform delay in `[0, windowMs]`, so a group's members do not all hit the bridge at once.
+std::chrono::milliseconds jitter(std::int64_t windowMs) {
+    static thread_local std::mt19937_64 random{std::random_device{}()};
+    return std::chrono::milliseconds(std::uniform_int_distribution<std::int64_t>(0, windowMs)(random));
+}
+
+// The floor nothing below may be reached or repaired: the higher of the era floor and the prune watermark.
+std::uint32_t ladderFloorOf(std::int64_t eraFloor, const std::optional<std::int64_t>& prunedBelow) {
+    return static_cast<std::uint32_t>(std::max<std::int64_t>({1, eraFloor, prunedBelow.value_or(1)}));
+}
+
 } // namespace
 
 GroupApiImpl::GroupApiImpl(
@@ -75,6 +86,7 @@ GroupApiImpl::~GroupApiImpl() {
         std::unique_lock<std::mutex> lock(_selfUpdateMutex);
         _selfUpdateStopping = true;
         _selfUpdatePending.clear();
+        _ladderChecks.clear();
     }
     _selfUpdateWake.notify_all();
     if (_selfUpdateWorker.joinable()) {
@@ -527,56 +539,55 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
 std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
     const server::GroupInfo& group,
     std::uint32_t newEpoch,
-    const privmx::crypto::PublicKey& newGrantPublicKey,
+    const privmx::crypto::PrivateKey& newGrantKey,
     const std::optional<privmx::crypto::PrivateKey>& previousEpochKey,
     const std::string& author,
     keytree::TreeKeyCache& cache
 ) {
-    const auto asEpoch = [](const std::optional<int64_t>& value) -> std::optional<std::uint32_t> {
-        return value.has_value() ? std::optional<std::uint32_t>(static_cast<std::uint32_t>(value.value())) :
-                                   std::nullopt;
-    };
     keytree::LadderKeys ladder(cache);
-
-    const std::vector<std::uint32_t> targets = keytree::LadderKeys::requiredSkipTargets(
-        newEpoch, static_cast<std::uint32_t>(group.eraFloor.value_or(1)), asEpoch(group.archivePrunedBelow)
-    );
-    if (targets.empty()) {
-        // Nothing to fetch and nothing to walk.
-        return planOrThrow<std::vector<keytree::ArchiveRung>>([&] {
-            return ladder.buildRungs(
-                newEpoch, newGrantPublicKey, previousEpochKey, static_cast<std::uint32_t>(group.eraFloor.value_or(1)),
-                author, _userPrivKey, true, asEpoch(group.archivePrunedBelow)
-            );
-        });
-    }
-    const server::GroupGetKeyArchiveResult archive = fetchKeyArchive(
-        group, static_cast<int64_t>(targets.back()), static_cast<int64_t>(newEpoch - 1)
-    );
-    const std::uint32_t eraFloor = static_cast<std::uint32_t>(archive.eraFloor);
-    const std::optional<std::uint32_t> prunedBelow = asEpoch(archive.archivePrunedBelow);
-
-    const keytree::RungKeyGathering gathered = ladder.gatherRungKeys(
-        newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive),
-        keytree::GroupKeyResolver::registryFromArchive(group, archive), eraFloor, prunedBelow
-    );
-    LOG_DEBUG(
-        "ladder gather for epoch ",
-        std::to_string(newEpoch) +
-            ": " +
-            std::to_string(gathered.unwraps) +
-            " unwraps for " +
-            std::to_string(targets.size()) +
-            " skip target(s)"
-    )
-    if (!gathered.complete) {
-        throw IncompleteEpochLadderException();
-    }
-    return planOrThrow<std::vector<keytree::ArchiveRung>>([&] {
-        return ladder.buildRungs(
-            newEpoch, newGrantPublicKey, previousEpochKey, eraFloor, author, _userPrivKey, true, prunedBelow
+    // Never a floor lower than one this session has seen: a bridge under-reporting it gets no rung below it.
+    std::uint32_t floor = cache.raiseFloor(ladderFloorOf(group.eraFloor.value_or(1), group.archivePrunedBelow));
+    // What the rungs are checked against before submitting: the chain, never the cache. Without skip targets that is
+    // the verified group's own key (the unit rung's target); with them, the openers' keys (`fetchKeyArchive`).
+    std::vector<keytree::EpochRegistryEntry> registry{
+        {static_cast<std::uint32_t>(group.keyVersion), privmx::crypto::PublicKey::fromBase58DER(group.groupPubKey)}
+    };
+    const std::vector<std::uint32_t> targets = keytree::LadderKeys::requiredSkipTargets(newEpoch, floor);
+    if (!targets.empty()) {
+        const server::GroupGetKeyArchiveResult archive = fetchKeyArchive(
+            group, static_cast<int64_t>(targets.back()), static_cast<int64_t>(newEpoch - 1)
         );
+        floor = cache.raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow));
+        registry = keytree::GroupKeyResolver::registryFromArchive(group, archive);
+        const keytree::RungKeyGathering gathered = ladder.gatherRungKeys(
+            newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive), registry, floor
+        );
+        LOG_DEBUG(
+            "ladder gather for epoch ",
+            std::to_string(newEpoch) +
+                ": " +
+                std::to_string(gathered.unwraps) +
+                " unwraps for " +
+                std::to_string(targets.size()) +
+                " skip target(s)"
+        )
+        if (!gathered.complete) {
+            throw IncompleteEpochLadderException();
+        }
+    }
+    const std::vector<keytree::ArchiveRung> rungs = planOrThrow<std::vector<keytree::ArchiveRung>>([&] {
+        return ladder.buildRungs(newEpoch, newGrantKey.getPublicKey(), previousEpochKey, floor, author, _userPrivKey);
     });
+    // A rung is publishable only at its own epoch, so one sealing a wrong cached key (a client bug) would be a broken
+    // rung forever. Nothing is submitted then; the target is forgotten so the next attempt re-gathers it by descent.
+    if (const auto bad = keytree::LadderKeys::firstRungNotOpeningToTheChain(rungs, newGrantKey, registry)) {
+        cache.forgetGrantKey(bad->target);
+        throw GroupDataIntegrityException(
+            "a rung of this commit does not open to its target's key: " +
+            std::to_string(bad->at) + "->" + std::to_string(bad->target)
+        );
+    }
+    return rungs;
 }
 
 void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
@@ -668,8 +679,7 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
     const std::vector<keytree::ArchiveRung> rungs = abandonHistory ?
         std::vector<keytree::ArchiveRung>{} :
         buildRotationRungs(
-            currentGroup, static_cast<std::uint32_t>(newEpoch), plan.grantKey.getPublicKey(), currentGrantKey,
-            removerId, *cache
+            currentGroup, static_cast<std::uint32_t>(newEpoch), plan.grantKey, currentGrantKey, removerId, *cache
         );
     // The roster that remains, derived from the verified head rather than restated by the caller.
     const std::set<std::string> leaving(userIds.begin(), userIds.end());
@@ -807,6 +817,9 @@ void GroupApiImpl::adoptCommittedEpoch(
     // Minted here and accepted at exactly this epoch (the CAS), so it is the epoch's published key: the metadata
     // refresh that follows opens it without a read.
     _epochKeys.set(memoKeyFor(groupId, std::to_string(statement.keyVersion)), grantKey);
+    // Its rungs passed the self-check against the chain (`buildRotationRungs`) before it was submitted: nothing for
+    // the observed-rotation check to look at.
+    markLadderChecked(groupId, static_cast<std::uint32_t>(statement.keyVersion));
     invalidateModuleKeysInCache(groupId);
 }
 
@@ -869,8 +882,7 @@ bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& pl
         return tree.planRotation(state, rotatorId, _userPrivKey);
     });
     const std::vector<keytree::ArchiveRung> rungs = buildRotationRungs(
-        currentGroup, static_cast<std::uint32_t>(newEpoch), plan.grantKey.getPublicKey(), currentGrantKey, rotatorId,
-        *cache
+        currentGroup, static_cast<std::uint32_t>(newEpoch), plan.grantKey, currentGrantKey, rotatorId, *cache
     );
     const RosterAfterChange roster = rosterFromUserIds(attestedUsers, attestedManagers);
     const std::string newGroupPubKeyStr = plan.grantKey.getPublicKey().toBase58DER();
@@ -970,10 +982,13 @@ void GroupApiImpl::scheduleSelfUpdateIfNeeded(const std::string& groupId, const 
     if (!node.has_value()) {
         return;
     }
+    scheduleSelfUpdate(groupId, backgroundWindowMs(group), keytree::GroupKeyResolver::healsFirst(group, node.value()));
+}
+
+std::int64_t GroupApiImpl::backgroundWindowMs(const server::GroupInfo& group) {
     // ponytail: 8 ms per seat, 1-120 s. One window holds the first healers of a fresh 16k group (~n/32 commits) at
     // the bridge's ~5-10 commits/s only with retries; a per-group rate limit on the bridge is the upgrade path.
-    const std::int64_t windowMs = std::clamp<std::int64_t>(group.numLeaves.value_or(1) * 8, 1000, 120000);
-    scheduleSelfUpdate(groupId, windowMs, keytree::GroupKeyResolver::healsFirst(group, node.value()));
+    return std::clamp<std::int64_t>(group.numLeaves.value_or(1) * 8, 1000, 120000);
 }
 
 void GroupApiImpl::scheduleSelfUpdate(
@@ -989,32 +1004,173 @@ void GroupApiImpl::scheduleSelfUpdate(
     // The healer of a node commits within the window; everybody else under it waits the window out first and then
     // finds (on a path read) the node already refilled, unless that healer is gone. Jitter keeps the healers of
     // different nodes, and the stand-ins, from colliding on the generations they all refresh.
-    static thread_local std::mt19937_64 random{std::random_device{}()};
-    const auto delay = std::chrono::milliseconds(
-        (healsFirst ? 0 : windowMs) + std::uniform_int_distribution<std::int64_t>(0, windowMs)(random)
-    );
+    const auto delay = std::chrono::milliseconds(healsFirst ? 0 : windowMs) + jitter(windowMs);
     _selfUpdatePending[groupId] = {std::chrono::steady_clock::now() + delay, windowMs, attempts};
+    wakeBackgroundWorker();
+}
+
+std::optional<std::chrono::steady_clock::time_point> GroupApiImpl::nextDue() const {
+    std::optional<std::chrono::steady_clock::time_point> due;
+    const auto consider = [&](std::chrono::steady_clock::time_point at) {
+        if (!due.has_value() || at < due.value()) {
+            due = at;
+        }
+    };
+    for (const auto& [groupId, pending] : _selfUpdatePending) {
+        consider(pending.due);
+    }
+    for (const auto& [key, check] : _ladderChecks) {
+        consider(check.due);
+    }
+    return due;
+}
+
+void GroupApiImpl::wakeBackgroundWorker() {
+    if (_selfUpdateStopping) {
+        return; // a late trigger from another thread must never respawn a worker the destructor joined
+    }
     if (!_selfUpdateWorker.joinable()) {
         _selfUpdateWorker = std::thread([this] { runSelfUpdates(); });
     }
     _selfUpdateWake.notify_all();
 }
 
+void GroupApiImpl::scheduleLadderCheck(
+    const std::string& groupId,
+    const std::string& contextId,
+    std::uint32_t at,
+    std::int64_t windowMs
+) {
+    std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+    const std::string key = memoKeyFor(groupId, std::to_string(at));
+    if (_selfUpdateStopping || _ladderChecks.count(key) > 0) {
+        return;
+    }
+    // Jittered so a group's online members do not all check at once; the bridge's serialisation of repairs, and the
+    // re-check right before each one, are what keep concurrent repairs within the per-span cap.
+    _ladderChecks[key] = {groupId, contextId, at, std::chrono::steady_clock::now() + jitter(windowMs)};
+    wakeBackgroundWorker();
+}
+
+void GroupApiImpl::scheduleObservedRotation(
+    const std::string& groupId,
+    const std::string& contextId,
+    std::uint32_t cur,
+    std::int64_t windowMs
+) {
+    {
+        // Several threads resolve keys at once: only the one that moves the mark queues the check.
+        std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+        std::uint32_t& checked = _ladderCheckedAt[groupId];
+        if (checked >= cur) {
+            return;
+        }
+        checked = cur;
+    }
+    scheduleLadderCheck(groupId, contextId, cur, windowMs);
+}
+
+void GroupApiImpl::markLadderChecked(const std::string& groupId, std::uint32_t epoch) {
+    std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+    std::uint32_t& checked = _ladderCheckedAt[groupId];
+    checked = std::max(checked, epoch);
+}
+
+void GroupApiImpl::checkLadderAt(const std::string& groupId, const std::string& contextId, std::uint32_t at) {
+    const auto cache = _treeKeyCaches.get(groupId);
+    server::GroupGetKeyArchiveResult raw;
+    // The rungs at `at` as served, and the floor (never lower than one seen before) nothing is repaired below.
+    const auto unopened = [&]() {
+        server::GroupGetKeyArchiveModel params;
+        params.id = groupId;
+        params.fromKeyVersion = at;
+        params.toKeyVersion = at;
+        raw = _serverApi.groupGetKeyArchive(params);
+        const std::uint32_t floor = cache->raiseFloor(ladderFloorOf(raw.eraFloor, raw.archivePrunedBelow));
+        return keytree::LadderKeys::unopenedSpans(at, keytree::GroupKeyResolver::toDownwardRungs(raw), *cache, floor);
+    };
+    // Cheap stage, the honest path: one fetch, one open per span, no statements read and no UserVerifier call.
+    std::vector<keytree::RungSpan> spans = unopened();
+    if (spans.empty()) {
+        return;
+    }
+    // Something looks broken. The cache decided that, and the cache is not the chain: every key about to be sealed,
+    // and the key it is sealed to, is checked against the epoch's opener first. A mismatch is forgotten, never sealed.
+    const auto openers = _treeVerifier.epochOpeners(groupId, contextId, treeEnvironment(groupId));
+    const auto matchesChain = [&](std::uint32_t epoch) {
+        const auto key = cache->getGrantKey(epoch);
+        const auto opener = openers.find(epoch);
+        if (!key.has_value() || opener == openers.end()) {
+            return false;
+        }
+        if (key->getPublicKey().toBase58DER() != opener->second.groupPubKey) {
+            LOG_WARN("[ladder] a cached grant key is not its epoch's; forgotten: ", std::to_string(epoch))
+            cache->forgetGrantKey(epoch);
+            return false;
+        }
+        return true;
+    };
+    if (!matchesChain(at)) {
+        return;
+    }
+    spans.erase(
+        std::remove_if(spans.begin(), spans.end(), [&](const keytree::RungSpan& span) { return !matchesChain(span.target); }),
+        spans.end()
+    );
+    for (const keytree::RungSpan& span : spans) {
+        // Somebody may have repaired it meanwhile: re-checked right before, so the members who lost the race stop.
+        const std::vector<keytree::RungSpan> still = unopened();
+        if (std::none_of(still.begin(), still.end(), [&](const keytree::RungSpan& s) { return s.target == span.target; })) {
+            continue;
+        }
+        const auto atKey = cache->getGrantKey(at);
+        const auto targetKey = cache->getGrantKey(span.target);
+        if (!atKey.has_value() || !targetKey.has_value()) {
+            continue;
+        }
+        keytree::ArchiveRung rung;
+        rung.span = span;
+        rung.blob = keytree::LadderKeys::sealRung(targetKey.value(), span, atKey->getPublicKey(), _userPrivKey);
+        try {
+            _serverApi.groupRepairRung(server::GroupRepairRungModel{.id = groupId, .rung = keytree::TreeWire::toWire(rung)});
+            LOG_INFO("[ladder] repaired rung ", std::to_string(span.at) + "->" + std::to_string(span.target))
+        } catch (const privmx::utils::PrivmxException& e) {
+            // SPAN_FULL, AUTHOR_HAS_RUNG, ROTATED_ALREADY, the budget: not retried; the next trigger re-checks.
+            LOG_WARN("[ladder] repair refused: ", e.what())
+        }
+    }
+}
+
 void GroupApiImpl::runSelfUpdates() {
     std::unique_lock<std::mutex> lock(_selfUpdateMutex);
     while (!_selfUpdateStopping) {
-        const auto next = std::min_element(
-            _selfUpdatePending.begin(), _selfUpdatePending.end(),
-            [](const auto& a, const auto& b) { return a.second.due < b.second.due; }
-        );
-        if (next == _selfUpdatePending.end()) {
+        const auto due = nextDue();
+        if (!due.has_value()) {
             _selfUpdateWake.wait(lock);
             continue;
         }
-        if (next->second.due > std::chrono::steady_clock::now()) {
-            _selfUpdateWake.wait_until(lock, next->second.due);
+        if (due.value() > std::chrono::steady_clock::now()) {
+            _selfUpdateWake.wait_until(lock, due.value());
             continue;
         }
+        const auto check = std::find_if(_ladderChecks.begin(), _ladderChecks.end(), [&](const auto& entry) {
+            return entry.second.due == due.value();
+        });
+        if (check != _ladderChecks.end()) {
+            const PendingLadderCheck pending = check->second;
+            _ladderChecks.erase(check);
+            lock.unlock();
+            try {
+                checkLadderAt(pending.groupId, pending.contextId, pending.at);
+            } catch (const std::exception& e) {
+                LOG_WARN("[ladder] check dropped: ", e.what())
+            } catch (...) { LOG_WARN("[ladder] check dropped") }
+            lock.lock();
+            continue;
+        }
+        const auto next = std::find_if(_selfUpdatePending.begin(), _selfUpdatePending.end(), [&](const auto& entry) {
+            return entry.second.due == due.value();
+        });
         const std::string groupId = next->first;
         const PendingSelfUpdate pending = next->second;
         _selfUpdateRunning = groupId;
@@ -1538,6 +1694,11 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
 // The tree and version pins stay across reconnects: they only ever move forward, and a new session is no reason
 // to accept a state older than one this process has already verified.
 void GroupApiImpl::processConnectedEvent() {
+    {
+        // Follows the key cache: what was checked is session state.
+        std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+        _ladderCheckedAt.clear();
+    }
     _treeKeyCaches.dropAll();
     dropEnvelopeState();
     invalidateModuleKeysInCache();
@@ -1549,6 +1710,8 @@ void GroupApiImpl::processDisconnectedEvent() {
     {
         std::unique_lock<std::mutex> lock(_selfUpdateMutex);
         _selfUpdatePending.clear();
+        _ladderChecks.clear();
+        _ladderCheckedAt.clear();
     }
     _epochKeys.clear();
     _treeKeyCaches.dropAll();
@@ -1720,10 +1883,19 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(
         group, epoch, _userPrivKey,
         needsDescent ? fetchKeyArchive(group, epoch, currentEpoch) : server::GroupGetKeyArchiveResult{}
     );
+    // A descent that routed around, or stopped at, a broken rung: a holder of both keys can repair it (L-1).
+    for (const keytree::RungSpan& span : resolved.brokenSpans) {
+        scheduleLadderCheck(groupId, group.contextId, span.at, backgroundWindowMs(group));
+    }
     if (resolved.key.has_value()) {
         // The climb to the current epoch went through, so the served path is the caller's to vouch for: refill
         // whatever blanks a removal left on it, and re-key what somebody outside it set, in the background.
         scheduleSelfUpdateIfNeeded(groupId, group);
+        // A rotation this session saw happen: holding both keys, it can check (and repair) the new epoch's rungs.
+        const auto cur = static_cast<std::uint32_t>(currentEpoch);
+        if (cur > 1 && cache->getGrantKey(cur).has_value() && cache->getGrantKey(cur - 1).has_value()) {
+            scheduleObservedRotation(groupId, group.contextId, cur, backgroundWindowMs(group));
+        }
         // The resolver has checked the key against the epoch's published public key on the way here.
         _epochKeys.set(memoKeyFor(groupId, std::to_string(epoch == 0 ? currentEpoch : epoch)), resolved.key.value());
         return resolved.key.value();
@@ -1955,11 +2127,16 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKey
     params.id = group.id;
     params.fromKeyVersion = targetEpoch;
     params.toKeyVersion = currentEpoch;
+    server::GroupGetKeyArchiveResult archive = _serverApi.groupGetKeyArchive(params);
+    _treeKeyCaches.get(group.id)->raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow));
     // `keyHistory` and a rung's `author` are the bridge's word; the statements are the members'.
     return keytree::GroupKeyResolver::authenticated(
-        _serverApi.groupGetKeyArchive(params),
-        _treeVerifier.epochOpeners(group.id, group.contextId, treeEnvironment(group.id))
+        std::move(archive), _treeVerifier.epochOpeners(group.id, group.contextId, treeEnvironment(group.id))
     );
+}
+
+std::shared_ptr<keytree::TreeKeyCache> GroupApiImpl::keyCacheOf(const std::string& groupId) {
+    return _treeKeyCaches.get(groupId);
 }
 
 std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& resolved) {

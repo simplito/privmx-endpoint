@@ -197,6 +197,9 @@ public:
         int64_t currentEpoch
     );
 
+    // The group's session key cache. Internal, for tests that need to plant a wrong key (a client bug) in it.
+    std::shared_ptr<keytree::TreeKeyCache> keyCacheOf(const std::string& groupId);
+
 private:
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
@@ -377,14 +380,45 @@ private:
     void scheduleSelfUpdate(const std::string& groupId, std::int64_t windowMs, bool healsFirst, int attempts = 0);
     void runSelfUpdates();
 
+    // The new epoch's rungs, each checked to open with `newGrantKey` to the key the chain (never the cache) names for
+    // its target before anything is submitted. On failure the offending target is forgotten, so the next attempt
+    // re-gathers it by a verified descent, and GroupDataIntegrityException is thrown.
     std::vector<keytree::ArchiveRung> buildRotationRungs(
         const server::GroupInfo& group,
         std::uint32_t newEpoch,
-        const privmx::crypto::PublicKey& newGrantPublicKey,
+        const privmx::crypto::PrivateKey& newGrantKey,
         const std::optional<privmx::crypto::PrivateKey>& previousEpochKey,
         const std::string& author,
         keytree::TreeKeyCache& cache
     );
+
+    // ── Ladder repair (L-1). Every queue below is guarded by _selfUpdateMutex and served by _selfUpdateWorker. ──
+
+    // `clamp(numLeaves·8 ms, 1 s, 120 s)`: how far a group's members spread their background work.
+    static std::int64_t backgroundWindowMs(const server::GroupInfo& group);
+    // Requires _selfUpdateMutex held. The earliest due time over every background source.
+    std::optional<std::chrono::steady_clock::time_point> nextDue() const;
+    // Requires _selfUpdateMutex held. Starts the worker if needed and wakes it; never after _selfUpdateStopping.
+    void wakeBackgroundWorker();
+    // Queues one check of the rungs at `at`, once per (group, epoch), after a random delay within `windowMs`.
+    void scheduleLadderCheck(
+        const std::string& groupId,
+        const std::string& contextId,
+        std::uint32_t at,
+        std::int64_t windowMs
+    );
+    // A rotation to `cur` this session observed while holding `cur - 1`: check `cur`'s rungs, once.
+    void scheduleObservedRotation(
+        const std::string& groupId,
+        const std::string& contextId,
+        std::uint32_t cur,
+        std::int64_t windowMs
+    );
+    // The epoch's rungs are known good (this client just checked and committed them).
+    void markLadderChecked(const std::string& groupId, std::uint32_t epoch);
+    // On the worker, no lock held: finds spans at `at` no rung opens and repairs those it holds both keys of,
+    // after checking those keys against the chain.
+    void checkLadderAt(const std::string& groupId, const std::string& contextId, std::uint32_t at);
 
     // Includes open file handles, not just the key caches.
     void dropEnvelopeState();
@@ -442,6 +476,14 @@ private:
     std::map<std::string, PendingSelfUpdate> _selfUpdatePending;
     std::optional<std::string> _selfUpdateRunning;
     static constexpr int MAX_SELF_UPDATE_ATTEMPTS = 3;
+    struct PendingLadderCheck {
+        std::string groupId;
+        std::string contextId;
+        std::uint32_t at;
+        std::chrono::steady_clock::time_point due;
+    };
+    std::map<std::string /* groupId|at */, PendingLadderCheck> _ladderChecks;
+    std::map<std::string /* groupId */, std::uint32_t> _ladderCheckedAt; // highest `at` already queued or checked
     bool _selfUpdateStopping = false;
     std::thread _selfUpdateWorker;
 
