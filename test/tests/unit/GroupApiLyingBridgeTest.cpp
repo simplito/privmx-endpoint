@@ -353,7 +353,7 @@ protected:
     }
 
     // A self-update `committer` signs and the bridge stores: the next seq, with the epoch, roster and keys unchanged.
-    void selfUpdateBy(const std::string& committer) {
+    void selfUpdateBy(const std::string& committer, std::optional<std::uint64_t> date = std::nullopt) {
         const PrivateKey& priv = bridge.users.at(committer);
         const TreeGroupState served = GroupKeyResolver::toTreeState(bridge.serve(committer, true));
         TreeKeyCache cache;
@@ -367,8 +367,9 @@ protected:
         const CommitPlan plan = keys.planSelfUpdate(served, committer, priv);
         const auto wire = TreeWire::toSelfUpdateTransition(plan, bridge.tree.state.epoch);
         CommitStatement statement = TreeCommits::statementFor(
-            plan, CommitOp::SelfUpdate, bridge.tree.groupId, privmx::utils::Utils::getNowTimestamp(),
-            bridge.tree.state.epoch, bridge.tree.state.grantPublicKey.toBase58DER(),
+            plan, CommitOp::SelfUpdate, bridge.tree.groupId,
+            date.value_or(static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp())), bridge.tree.state.epoch,
+            bridge.tree.state.grantPublicKey.toBase58DER(),
             static_cast<std::uint64_t>(bridge.tree.rosterVersion), seatedIn(bridge.tree.state), {}, committer, {}, {},
             {}
         );
@@ -549,6 +550,18 @@ TEST_F(GroupApiLyingBridge, SECURITY_NoSecondStatementIsSignedAtASeqTheBridgeCal
     };
     EXPECT_THROW(client("alice").removeGroupMembers(groupId, {"carol"}), GroupDataIntegrityException);
     EXPECT_EQ(removals, 1);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ACommitAfterAStatementDatedAheadOfTheClockIsDatedAsIt) {
+    // N-1, the client half: the bridge takes a date past its tolerance only when it equals the extended statement's,
+    // so alice must sign exactly bob's forward date (chainTo's max), not her own clock and not anything later.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const auto ahead = static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp()) + 15 * 60 * 1000;
+    selfUpdateBy("bob", ahead);
+    client("alice").removeGroupMembers(groupId, {"carol"});
+    const CommitStatement removal = TreeCommits::fromWire(bridge.tree.commits.back());
+    EXPECT_EQ(removal.seq, 3u);
+    EXPECT_EQ(removal.date, ahead);
 }
 
 // T3-29. Without the handle's lock these race on one EnvelopeFileState: heap corruption, lost `written` updates,
