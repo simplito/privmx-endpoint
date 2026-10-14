@@ -1,57 +1,57 @@
 [{
-	"_id": "6aa3c3777442a344f262d1a7|1",
-	"groupId": "6aa3c3777442a344f262d1a7",
+	"_id": "6ace470ef3fa48c06f8f753a|1",
+	"groupId": "6ace470ef3fa48c06f8f753a",
 	"nodeIndex": 1,
 	"generation": 0,
-	"publicKey": "7KZxGxbnQun9aLpsMn5Wi8nJQP8nDFvFpfgKVd5KVsdWVmdy74"
+	"publicKey": "5oDfoAgqXpskRyHPDeYJftvSH8stzhpqe5NXvoJoXcfe1gsHGZ"
 },
 {
-	"_id": "6aa3c3777442a344f262d1a8|1",
-	"groupId": "6aa3c3777442a344f262d1a8",
+	"_id": "6ace470ef3fa48c06f8f753b|1",
+	"groupId": "6ace470ef3fa48c06f8f753b",
 	"nodeIndex": 1,
 	"generation": 0,
-	"publicKey": "7cDvtcZxUD6jV1QTc9ntPX3pNqbMMogeaPMQUQQizngwhAudsf"
+	"publicKey": "58kzt9MVu2xR46ZazHpLunwAux8yvzbmvaJVF2UU3vemdmCjE9"
 },
 {
-	"_id": "6aa3c3777442a344f262d1a8|3",
-	"groupId": "6aa3c3777442a344f262d1a8",
+	"_id": "6ace470ef3fa48c06f8f753b|3",
+	"groupId": "6ace470ef3fa48c06f8f753b",
 	"nodeIndex": 3,
 	"generation": 0,
-	"publicKey": "7NH49iCpWnUN4JixXqC6d3PHv1W8rYVgrdKrDEG5tznca6XhyZ"
+	"publicKey": "7ZHv7Baw41Xm9qyc15BEnBQridLJV9sF5LwBrhHR8ivhMx6rU5"
 },
 {
-	"_id": "6aa3c3777442a344f262d1a9|1",
-	"groupId": "6aa3c3777442a344f262d1a9",
+	"_id": "6ace470ef3fa48c06f8f753c|1",
+	"groupId": "6ace470ef3fa48c06f8f753c",
 	"nodeIndex": 1,
 	"generation": 0,
-	"publicKey": "6hoWKks1djfSwYJ2VvhQyu4A4b9zX5ReRxwSX18Mu2KRzME2Tj"
+	"publicKey": "8biVDCkEYaTbxaWGRFz8Q8yTHGVejKRVvtU1aBoxwY3C7VD2os"
 },
 {
-	"_id": "6aa3c3777442a344f262d1aa|1",
-	"groupId": "6aa3c3777442a344f262d1aa",
+	"_id": "6ace470ef3fa48c06f8f753d|1",
+	"groupId": "6ace470ef3fa48c06f8f753d",
 	"nodeIndex": 1,
 	"generation": 0,
-	"publicKey": "8ZamJ6Bx15dY6WawrRKa2FW5WKmWTPSvzPsh1PJkREwQjMBb7y"
+	"publicKey": "8Q9TEyXwSyc6MTiRZ8sH1cF1iwBcc8oiXkHMeei8kMbTDrDBe2"
 },
 {
-	"_id": "6aa3c3777442a344f262d1aa|3",
-	"groupId": "6aa3c3777442a344f262d1aa",
+	"_id": "6ace470ef3fa48c06f8f753d|3",
+	"groupId": "6ace470ef3fa48c06f8f753d",
 	"nodeIndex": 3,
 	"generation": 1,
-	"publicKey": "55qbgRsvadP94sBCep5SvfLskEAWwzH1CoBanRkskaoKhKZDyG"
+	"publicKey": "7E3i7QUeg1MxfyVCHQaQJz54WCcN6z92kzoax92pijwvmMesBv"
 },
 {
-	"_id": "6aa3c3777442a344f262d1ab|1",
-	"groupId": "6aa3c3777442a344f262d1ab",
+	"_id": "6ace470ef3fa48c06f8f753e|1",
+	"groupId": "6ace470ef3fa48c06f8f753e",
 	"nodeIndex": 1,
 	"generation": 0,
-	"publicKey": "7PjXuamaAbEowQ3Vvn6kjsAiECkveikAfTeHD26GKeqQ2GEKYH"
+	"publicKey": "5uGXhM8LPiGjDgyKVuUh9ViNpmdgRPDQP8jnXE8PkKKT5CgKa7"
 },
 {
-	"_id": "6aa3c3777442a344f262d1ab|3",
-	"groupId": "6aa3c3777442a344f262d1ab",
+	"_id": "6ace470ef3fa48c06f8f753e|3",
+	"groupId": "6ace470ef3fa48c06f8f753e",
 	"nodeIndex": 3,
 	"generation": 0,
-	"publicKey": "7uBQM3iekk3dCMyC3VzCUwf5ZvVZasWG4MnQFFQANyemxebNGf"
+	"publicKey": "6QEmAUYhsZSVZRzn1AJ13ropJ5RTHDaYgPANx7LJ3yM5Mmq71e"
 }]
 
