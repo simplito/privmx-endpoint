@@ -14,6 +14,7 @@
 #include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
 #include <privmx/endpoint/group/keytree/LadderKeys.hpp>
+#include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
@@ -110,9 +111,19 @@ protected:
     std::string rawRemovalRefusal(const std::string& groupId, const std::string& userId, const std::string& groupPubKey) {
         group::ServerApi api(connection->getImpl()->getGateway());
         const auto current = api.groupGet({.groupId = groupId, .scope = std::string("plan")}).group;
-        // The latest served statement: shape-valid and already signed; only its key is swapped.
-        auto statement = api.groupGetTreeCommits({.groupId = groupId, .fromSeq = 0}).commits.back();
-        statement.groupPubKey = groupPubKey;
+        // The latest served statement, extended by one (03: anything else is a lost race, answered before the key is
+        // looked at) and re-signed by this session: shape-valid; only its seq, link and key differ.
+        auto latest = group::keytree::TreeCommits::fromWire(
+            api.groupGetTreeCommits({.groupId = groupId, .fromSeq = 0}).commits.back()
+        );
+        group::keytree::CommitStatement next = latest;
+        next.seq = latest.seq + 1;
+        next.prevDigest = group::keytree::TreeCommits::digest(latest);
+        next.groupId = groupId;
+        next.policy.reset();
+        next.groupPubKey = groupPubKey;
+        group::keytree::TreeCommits::sign(next, connection->getImpl()->getUserPrivKey());
+        const auto statement = group::keytree::TreeCommits::toWire(next);
         group::server::GroupRemoveMembersModel model;
         model.id = groupId;
         model.userIds = {userId};
