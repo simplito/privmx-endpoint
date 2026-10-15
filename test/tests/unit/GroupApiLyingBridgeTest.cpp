@@ -1427,3 +1427,30 @@ TEST_F(GroupApiLyingBridge, DestroyingAClientWithAQueuedLadderCheckJoinsCleanly)
     std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     EXPECT_EQ(count("bob", "context.groupGetKeyArchive"), archiveReads) << "nothing runs after destruction";
 }
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARotationRefusesToCommitARungThatDoesNotOpenToTheChain) {
+    // rotateGroupKey seals skip rungs exactly like a removal, so it goes through the same self-check.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("alice").rotateGroupKey(groupId);
+    client("alice").rotateGroupKey(groupId);
+    ASSERT_EQ(LadderKeys::requiredSkipTargets(4, 1), std::vector<std::uint32_t>{2});
+    const auto cache = client("alice").keyCacheOf(groupId);
+    ASSERT_TRUE(cache->getGrantKey(2).has_value());
+    cache->putGrantKey(2, PrivateKey::generateRandom());
+    const std::size_t rotations = count("alice", "context.groupGenerateNewKey");
+    EXPECT_THROW(client("alice").rotateGroupKey(groupId), GroupDataIntegrityException);
+    EXPECT_EQ(count("alice", "context.groupGenerateNewKey"), rotations) << "nothing submitted";
+    EXPECT_FALSE(cache->getGrantKey(2).has_value()) << "forgotten, to be re-gathered by a verified descent";
+    client("alice").rotateGroupKey(groupId);
+    EXPECT_EQ(bridge.tree.state.epoch, 4u);
+}
+
+TEST_F(GroupApiLyingBridge, ARotatorDoesNotCheckTheLadderOfItsOwnEpoch) {
+    // Its rungs passed the self-check before submitting, as a remover's do: nothing for the observed-rotation check.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("alice").resolveGroupPrivKey(groupId);
+    client("alice").rotateGroupKey(groupId);
+    client("alice").resolveGroupPrivKey(groupId);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500)); // past a small group's 1 s check window
+    EXPECT_EQ(count("alice", "context.groupGetKeyArchive"), 0u);
+}
