@@ -187,7 +187,7 @@ void InboxApiImpl::updateInbox(
                                                                         core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
         currentInbox, currentInboxEntry, currentInboxResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentInbox, groups), policies
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentInbox, groups)
     );
     auto privateKey = core::PrivateKey::fromRaw(ctx.key.key);
     auto pubKey = privateKey.getPublicKey();

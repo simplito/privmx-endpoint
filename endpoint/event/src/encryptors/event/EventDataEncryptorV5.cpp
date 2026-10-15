@@ -14,7 +14,7 @@ limitations under the License.
 #include "privmx/endpoint/event/Constants.hpp"
 #include "privmx/endpoint/event/EventException.hpp"
 #include "privmx/utils/Utils.hpp"
-#include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
@@ -28,7 +28,7 @@ server::EncryptedContextEventDataV5 EventDataEncryptorV5::encrypt(
     result.version = EventDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.encryptedData = _dataEncryptor.signAndEncryptAndEncode(eventData.data, authorPrivateKey, encryptionKey);
-    fieldChecksums.insert(std::make_pair("encryptedData", privmx::crypto::Crypto::sha256(result.encryptedData)));
+    fieldChecksums.insert(std::make_pair("encryptedData", core::FormatHash::sha256(result.encryptedData)));
     if (eventData.type.has_value()) {
         result.type = eventData.type.value();
         fieldChecksums.insert(std::make_pair("type", result.type.value()));
@@ -70,7 +70,7 @@ core::DataIntegrityObject EventDataEncryptorV5::getDIOAndAssertIntegrity(
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedEventData.dio);
     if (dio.structureVersion != EventDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != authorPublicKey.toBase58DER() ||
-        dio.fieldChecksums.at("encryptedData") != privmx::crypto::Crypto::sha256(encryptedEventData.encryptedData) ||
+        dio.fieldChecksums.at("encryptedData") != core::FormatHash::sha256(encryptedEventData.encryptedData) ||
         (encryptedEventData.type.has_value() && dio.fieldChecksums.at("type") != encryptedEventData.type.value())) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }

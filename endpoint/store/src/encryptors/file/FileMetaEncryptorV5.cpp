@@ -15,7 +15,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/store/Constants.hpp"
 #include "privmx/endpoint/store/StoreException.hpp"
-#include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -31,15 +31,15 @@ store::server::EncryptedFileMetaV5 FileMetaEncryptorV5::encrypt(
     result.version = FileDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta = _dataEncryptor.signAndEncode(fileMeta.publicMeta, authorPrivateKey);
-    fieldChecksums.insert(std::make_pair("publicMeta", privmx::crypto::Crypto::sha256(result.publicMeta)));
+    fieldChecksums.insert(std::make_pair("publicMeta", core::FormatHash::sha256(result.publicMeta)));
     try {
         result.publicMetaObject = utils::Utils::parseJsonObject(fileMeta.publicMeta.stdString());
     } catch (...) { result.publicMetaObject = Poco::Dynamic::Var(); }
     result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(fileMeta.privateMeta, authorPrivateKey, encryptionKey);
-    fieldChecksums.insert(std::make_pair("privateMeta", privmx::crypto::Crypto::sha256(result.privateMeta)));
+    fieldChecksums.insert(std::make_pair("privateMeta", core::FormatHash::sha256(result.privateMeta)));
     auto internalMeta = _dataEncryptor.signAndEncryptAndEncode(fileMeta.internalMeta, authorPrivateKey, encryptionKey);
     result.internalMeta = internalMeta;
-    fieldChecksums.insert(std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(internalMeta)));
+    fieldChecksums.insert(std::make_pair("internalMeta", core::FormatHash::sha256(internalMeta)));
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     core::ExpandedDataIntegrityObject expandedDio = {
         fileMeta.dio, FileDataSchema::Version::VERSION_5, fieldChecksums
@@ -118,10 +118,10 @@ core::DataIntegrityObject FileMetaEncryptorV5::getDIOAndAssertIntegrity(
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedFileMeta.dio);
     if (dio.structureVersion != FileDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedFileMeta.authorPubKey ||
-        dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedFileMeta.publicMeta) ||
-        dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedFileMeta.privateMeta) ||
+        dio.fieldChecksums.at("publicMeta") != core::FormatHash::sha256(encryptedFileMeta.publicMeta) ||
+        dio.fieldChecksums.at("privateMeta") != core::FormatHash::sha256(encryptedFileMeta.privateMeta) ||
         dio.fieldChecksums.at("internalMeta") !=
-            privmx::crypto::Crypto::sha256(encryptedFileMeta.internalMeta.value())) {
+            core::FormatHash::sha256(encryptedFileMeta.internalMeta.value())) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;

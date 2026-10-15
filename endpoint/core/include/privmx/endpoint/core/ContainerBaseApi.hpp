@@ -153,11 +153,9 @@ protected:
         const std::string& resourceId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
-        bool forceGenerateNewKey,
-        const std::optional<ContainerPolicyWithoutItem>& policies
+        bool forceGenerateNewKey
     ) {
-        auto plan =
-            planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey, policies);
+        auto plan = planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey);
         plan.ctx.keyEntries = buildRosterKeyEntries(plan);
         return plan.ctx;
     }
@@ -171,10 +169,9 @@ protected:
         const std::string& resourceId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
-        bool forceGenerateNewKey,
-        const std::optional<ContainerPolicyWithoutItem>& policies
+        bool forceGenerateNewKey
     ) {
-        return planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey, policies).ctx;
+        return planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey).ctx;
     }
 
     // The served container struct reduced to what the key cache and the decryptors need. Identical for every
@@ -268,8 +265,7 @@ private:
         const std::string& resourceId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
-        bool forceGenerateNewKey,
-        const std::optional<ContainerPolicyWithoutItem>& policies
+        bool forceGenerateNewKey
     );
 
     std::vector<server::KeyEntrySet> buildRosterKeyEntries(const ContainerUpdatePlan& plan);
@@ -351,8 +347,7 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     const std::string& resourceId,
     const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers,
-    bool forceGenerateNewKey,
-    const std::optional<ContainerPolicyWithoutItem>& policies
+    bool forceGenerateNewKey
 ) {
     auto location{getModuleEncKeyLocation(container, resourceId)};
     auto containerKeys{getAndValidateModuleKeys(container, resourceId)};

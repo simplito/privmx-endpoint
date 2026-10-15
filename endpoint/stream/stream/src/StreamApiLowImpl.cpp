@@ -17,6 +17,7 @@ limitations under the License.
 #include <algorithm>
 
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
@@ -595,7 +596,7 @@ void StreamApiLowImpl::updateStreamRoom(
     auto currentStreamRoomResourceId = currentStreamRoom.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
         currentStreamRoom, currentStreamRoomEntry, currentStreamRoomResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentStreamRoom, groups), policies
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentStreamRoom, groups)
     );
     server::StreamRoomUpdateModel model;
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
@@ -819,7 +820,10 @@ std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> Strea
 }
 
 std::string StreamApiLowImpl::deriveStreamEncryptionKey(privmx::endpoint::core::DecryptedEncKeyV2 encKey) {
-    return privmx::crypto::Crypto::sha256(encKey.key);
+    // Przybite formatem, nie wybierane zestawem kontenera: wynik jest kluczem dla SRTP, ktory
+    // wymaga **32 bajtow**. Zestaw z SHA-512 dalby 64 i zerwal konsumenta, wiec dopoki strumienie
+    // nie dostana wlasnej zwinnosci, skrot jest tu staly.
+    return core::FormatHash::sha256(encKey.key);
 }
 
 core::Buffer StreamApiLowImpl::encryptDataChannelMessage(

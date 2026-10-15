@@ -5,6 +5,7 @@
 
 #include <Poco/JSON/Object.h>
 #include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
@@ -522,7 +523,7 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
         // must stay tied to the identity, context and resource the DIO commits to.
         auto dio = _DIOEncryptor.decodeAndVerify(encData.dio);
         if (dio.creatorPubKey != encData.authorPubKey ||
-            dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encData.internalMeta)) {
+            dio.fieldChecksums.at("internalMeta") != core::FormatHash::sha256(encData.internalMeta)) {
             return {};
         }
         auto raw = _dataEncryptor.decodeAndDecryptAndVerify(

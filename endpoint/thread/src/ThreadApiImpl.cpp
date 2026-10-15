@@ -123,7 +123,7 @@ void ThreadApiImpl::updateThread(
                                                               core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
         currentThread, currentThreadEntry, currentThreadResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentThread, groups), policies
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentThread, groups)
     );
     server::ThreadUpdateModel model;
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list

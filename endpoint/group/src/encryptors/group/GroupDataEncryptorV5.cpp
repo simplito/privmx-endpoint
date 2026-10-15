@@ -2,7 +2,7 @@
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/encryptors/module/DynamicTypes.hpp"
-#include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/encryptors/module/Constants.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -55,12 +55,12 @@ dynamic::EncryptedGroupRosterV5 GroupDataEncryptorV5::encryptRoster(
     std::unordered_map<std::string, std::string> fieldChecksums;
 
     result.internalMeta = encodeInternalMeta(_dataEncryptor, data.internalMeta, authorPrivateKey, encryptionKey);
-    fieldChecksums.insert(std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(result.internalMeta)));
+    fieldChecksums.insert(std::make_pair("internalMeta", core::FormatHash::sha256(result.internalMeta)));
 
     result.membership = _dataEncryptor.signAndEncode(
         core::Buffer::from(privmx::utils::Utils::stringifyVar(data.membership.toJSON())), authorPrivateKey
     );
-    fieldChecksums.insert(std::make_pair("membership", privmx::crypto::Crypto::sha256(result.membership)));
+    fieldChecksums.insert(std::make_pair("membership", core::FormatHash::sha256(result.membership)));
 
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     core::ExpandedDataIntegrityObject expandedDio = {data.dio, 5, fieldChecksums};
@@ -103,8 +103,8 @@ core::DataIntegrityObject GroupDataEncryptorV5::getRosterDIOAndAssertIntegrity(
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedData.dio);
     if (dio.structureVersion != core::ModuleDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedData.authorPubKey ||
-        dio.fieldChecksums.at("internalMeta") != privmx::crypto::Crypto::sha256(encryptedData.internalMeta) ||
-        dio.fieldChecksums.at("membership") != privmx::crypto::Crypto::sha256(encryptedData.membership)) {
+        dio.fieldChecksums.at("internalMeta") != core::FormatHash::sha256(encryptedData.internalMeta) ||
+        dio.fieldChecksums.at("membership") != core::FormatHash::sha256(encryptedData.membership)) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;
@@ -133,7 +133,7 @@ dynamic::EncryptedGroupPublicMetaV5 GroupDataEncryptorV5::encryptPublicMeta(
     std::unordered_map<std::string, std::string> fieldChecksums;
 
     result.publicMeta = _dataEncryptor.signAndEncode(data.publicMeta, authorPrivateKey);
-    fieldChecksums.insert(std::make_pair("publicMeta", privmx::crypto::Crypto::sha256(result.publicMeta)));
+    fieldChecksums.insert(std::make_pair("publicMeta", core::FormatHash::sha256(result.publicMeta)));
     try {
         result.publicMetaObject = privmx::utils::Utils::parseJsonObject(data.publicMeta.stdString());
     } catch (...) { result.publicMetaObject = Poco::Dynamic::Var(); }
@@ -141,7 +141,7 @@ dynamic::EncryptedGroupPublicMetaV5 GroupDataEncryptorV5::encryptPublicMeta(
     result.meta = _dataEncryptor.signAndEncode(
         core::Buffer::from(privmx::utils::Utils::stringifyVar(data.meta.toJSON())), authorPrivateKey
     );
-    fieldChecksums.insert(std::make_pair("meta", privmx::crypto::Crypto::sha256(result.meta)));
+    fieldChecksums.insert(std::make_pair("meta", core::FormatHash::sha256(result.meta)));
 
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     // Only this plane's fields, so the private plane can be rewritten without invalidating this entry.
@@ -191,8 +191,8 @@ core::DataIntegrityObject GroupDataEncryptorV5::getPublicMetaDIOAndAssertIntegri
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedData.dio);
     if (dio.structureVersion != core::ModuleDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedData.authorPubKey ||
-        dio.fieldChecksums.at("publicMeta") != privmx::crypto::Crypto::sha256(encryptedData.publicMeta) ||
-        dio.fieldChecksums.at("meta") != privmx::crypto::Crypto::sha256(encryptedData.meta)) {
+        dio.fieldChecksums.at("publicMeta") != core::FormatHash::sha256(encryptedData.publicMeta) ||
+        dio.fieldChecksums.at("meta") != core::FormatHash::sha256(encryptedData.meta)) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;
@@ -222,12 +222,12 @@ dynamic::EncryptedGroupPrivateMetaV5 GroupDataEncryptorV5::encryptPrivateMeta(
     std::unordered_map<std::string, std::string> fieldChecksums;
 
     result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(data.privateMeta, authorPrivateKey, encryptionKey);
-    fieldChecksums.insert(std::make_pair("privateMeta", privmx::crypto::Crypto::sha256(result.privateMeta)));
+    fieldChecksums.insert(std::make_pair("privateMeta", core::FormatHash::sha256(result.privateMeta)));
 
     result.meta = _dataEncryptor.signAndEncode(
         core::Buffer::from(privmx::utils::Utils::stringifyVar(data.meta.toJSON())), authorPrivateKey
     );
-    fieldChecksums.insert(std::make_pair("meta", privmx::crypto::Crypto::sha256(result.meta)));
+    fieldChecksums.insert(std::make_pair("meta", core::FormatHash::sha256(result.meta)));
 
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     core::ExpandedDataIntegrityObject expandedDio = {data.dio, 5, fieldChecksums};
@@ -268,8 +268,8 @@ core::DataIntegrityObject GroupDataEncryptorV5::getPrivateMetaDIOAndAssertIntegr
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedData.dio);
     if (dio.structureVersion != core::ModuleDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedData.authorPubKey ||
-        dio.fieldChecksums.at("privateMeta") != privmx::crypto::Crypto::sha256(encryptedData.privateMeta) ||
-        dio.fieldChecksums.at("meta") != privmx::crypto::Crypto::sha256(encryptedData.meta)) {
+        dio.fieldChecksums.at("privateMeta") != core::FormatHash::sha256(encryptedData.privateMeta) ||
+        dio.fieldChecksums.at("meta") != core::FormatHash::sha256(encryptedData.meta)) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;

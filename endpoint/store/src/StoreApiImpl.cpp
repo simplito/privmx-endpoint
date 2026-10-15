@@ -147,7 +147,7 @@ void StoreApiImpl::updateStore(
                                                                         core::EndpointUtils::generateId();
     auto ctx = prepareContainerUpdate(
         currentStore, currentStoreEntry, currentStoreResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentStore, groups), policies
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentStore, groups)
     );
     server::StoreUpdateModel model;
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list

@@ -354,8 +354,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
 
     // No new epoch
     auto ctx = prepareContainerUpdateWithoutKeyEntries(
-        // `nullopt`: ta operacja nie zmienia polityki, wiec zestaw bierzemy z polityki samego kontenera.
-        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false, std::nullopt
+        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false
     );
     // Roster only. The metadata entry is not read, not re-encrypted and not re-signed — that is the separation
     // that stops a concurrent metadata write from stranding this write at a version it never committed to.
@@ -504,8 +503,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     drop(roster.managers);
 
     auto ctx = prepareContainerUpdateWithoutKeyEntries(
-        // `nullopt`: ta operacja nie zmienia polityki, wiec zestaw bierzemy z polityki samego kontenera.
-        currentGroup, currentEntry, resourceId, roster.users, roster.managers, true, std::nullopt
+        currentGroup, currentEntry, resourceId, roster.users, roster.managers, true
     );
     const auto selfAddressedKey = buildGroupKeyEntries(
         {core::GroupGrantWithKey{
@@ -611,8 +609,7 @@ MetaWriteContext GroupApiImpl::prepareMetaWrite(const std::string& groupId) {
     // because nothing here is wrapped to anybody.
     const auto roster = rosterFromUserIds(currentGroup.users, currentGroup.managers);
     auto ctx = prepareContainerUpdateWithoutKeyEntries(
-        // `nullopt`: ta operacja nie zmienia polityki, wiec zestaw bierzemy z polityki samego kontenera.
-        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false, std::nullopt
+        currentGroup, currentEntry, resourceId, roster.users, roster.managers, false
     );
 
     // The roster head always sits at the current epoch, so the key selected off it is the current epoch's.

@@ -118,7 +118,7 @@ void KvdbApiImpl::updateKvdb(
     auto currentKvdbResourceId = currentKvdb.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
         currentKvdb, currentKvdbEntry, currentKvdbResourceId, users, managers,
-        forceGenerateNewKey || doesGroupStateForceNewKey(currentKvdb, groups), policies
+        forceGenerateNewKey || doesGroupStateForceNewKey(currentKvdb, groups)
     );
     server::KvdbUpdateModel model;
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list

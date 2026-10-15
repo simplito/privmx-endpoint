@@ -15,7 +15,7 @@ limitations under the License.
 #include "privmx/endpoint/core/DynamicTypes.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
-#include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -35,7 +35,7 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(
         encryptionKey, keyToEncrypt.toJSON(), authorPrivateKey
     );
     std::unordered_map<std::string, std::string> fieldChecksums;
-    fieldChecksums.insert(std::make_pair("encryptedKey", privmx::crypto::Crypto::sha256(result.encryptedKey)));
+    fieldChecksums.insert(std::make_pair("encryptedKey", FormatHash::sha256(result.encryptedKey)));
     fieldChecksums.insert(std::make_pair("secretHash", key.secretHash));
     ExpandedDataIntegrityObject expandedDio = ExpandedDataIntegrityObject{
         key.dio, EncryptionKeyDataSchema::Version::VERSION_2, fieldChecksums
@@ -56,7 +56,7 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(
         ExpandedDataIntegrityObject expandedDio = _DIOEncryptor.decodeAndVerify(encryptedEncKey.dio);
         result.dio = expandedDio;
         if (expandedDio.fieldChecksums.at("encryptedKey") !=
-            privmx::crypto::Crypto::sha256(encryptedEncKey.encryptedKey)) {
+            FormatHash::sha256(encryptedEncKey.encryptedKey)) {
             throw InvalidDataIntegrityObjectChecksumException();
         }
         dynamic::EncryptionKey decryptedKey = dynamic::EncryptionKey::fromJSON(
