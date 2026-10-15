@@ -1,10 +1,9 @@
 [{
-	"_id": "95046ddc6034661401443e0f2c0997fea2c8f6720c1d1d76c95404a2f4c041b3|2|1|epoch|",
-	"groupId": "95046ddc6034661401443e0f2c0997fea2c8f6720c1d1d76c95404a2f4c041b3",
+	"_id": "48f05ed94556402fb02f87085ea7ab9fbf205224087d0695f789a8734c3c3c0e|2|1|user_1",
+	"groupId": "48f05ed94556402fb02f87085ea7ab9fbf205224087d0695f789a8734c3c3c0e",
 	"atKeyVersion": 2,
 	"targetKeyVersion": 1,
-	"data": "ZQK1+zJuBWgXQU1EAC24+zGY1ilQhLAHDr1O7mXjY19zwAMTJJyX08qjXODRW2YtGoPQ1lD13U/NAvxynqa6HtLtozHIz+lRUHKWWd3bE6AzVR8ABuaOB3xjavpKV31QVxOPPWx7mWQWEp0Auf+GwyvgOIgDeyUn/C4GP1uSSTkhXXx7n8K8puvGFKDNsUEavvAKBWRJybLuLKcmEEw51qsHmBP6+4g=",
-	"recipientKind": "epoch",
+	"data": "ZQK1+zJuBWgXQU1EAC24+zGY1ilQhLAHDr1O7mXjY19zwAJceMfJ1hsPu8dQcCUVXzXnbz+OOOhiIIKfabhOa3yaxonoSx4tOGIhIcmSXEvs0PYfZhLPdswUIpVHAK6POEUy0DkSZPWdeguBb7Zxm/oZizJS1OufvmnHk4X0GLJYb3QHBDpklIERdBm2envVOm9xBhMUGS55oyc02ZXtljpl2EZ/GmM=",
 	"author": "user_1"
 }]
 
