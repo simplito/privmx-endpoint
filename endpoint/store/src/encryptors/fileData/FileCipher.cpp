@@ -13,8 +13,9 @@ limitations under the License.
 
 #include <Poco/ByteOrder.h>
 
-#include <privmx/crypto/Crypto.hpp>
+#include <privmx/cryptoservice/base/CoreTypes.hpp>
 #include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
+#include <privmx/endpoint/core/crypto/ProviderAccess.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
 #include <privmx/endpoint/store/StoreTypes.hpp>
 #include <privmx/endpoint/store/encryptors/fileData/FileCipher.hpp>
@@ -131,6 +132,36 @@ const CipherSpec& requireSpec(int64_t type) {
     return *spec;
 }
 
+namespace cs = privmx::cryptoservice;
+
+cs::BytesView view(const std::string& data) {
+    return cs::BytesView(reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
+}
+
+std::string str(const cs::Bytes& data) {
+    return std::string(reinterpret_cast<const char*>(data.data()), data.size());
+}
+
+/**
+ * Szyfr formatu wolany **wprost z providera**, a nie przez `CryptoSuite`.
+ *
+ * `CryptoSuite::encrypt` oprawia wynik we wlasna ramke ze znacznikiem zestawu; tutaj ramka jest
+ * wlasnoscia formatu pliku (`cipherType`) i nie wolno jej dublowac. Dlatego `store` siega po
+ * surowy szyfr tak samo, jak robi to sam `CryptoSuite`.
+ *
+ * Rownowaznosc bajtowa z poprzednia implementacja (`privmx::crypto::Crypto`) zostala sprawdzona
+ * pomiarowo dla obu trybow i wszystkich dlugosci brzegowych, lacznie z zerowa.
+ */
+std::string symEncrypt(cs::SymAlg alg, const std::string& key, const std::string& iv, const std::string& plain) {
+    cs::SymParams params{.cipher = alg, .key = view(key), .iv = view(iv), .aad = {}, .taglen = GCM_TAG_LENGTH};
+    return str(core::cryptoProvider().encrypt(params, view(plain)));
+}
+
+std::string symDecrypt(cs::SymAlg alg, const std::string& key, const std::string& iv, const std::string& cipher) {
+    cs::SymParams params{.cipher = alg, .key = view(key), .iv = view(iv), .aad = {}, .taglen = GCM_TAG_LENGTH};
+    return str(core::cryptoProvider().decrypt(params, view(cipher)));
+}
+
 std::string indexToBE(std::uint64_t index) {
     std::uint32_t indexBE = Poco::ByteOrder::toBigEndian(static_cast<std::uint32_t>(index));
     return std::string(reinterpret_cast<char*>(&indexBE), 4);
@@ -200,16 +231,16 @@ IChunkEncryptor::Chunk FileCipher::encryptChunk(const std::string& chunkKey, con
     if (spec.mode == Mode::Gcm) {
         // `[IV][szyfrogram || tag]`. Tag jest koncowka wyjscia szyfru i to on trafia do tablicy
         // skrotow - nie ma tu osobnego uwierzytelniacza doklejanego przed ramke.
-        const std::string cipherWithTag = privmx::crypto::Crypto::aes256GcmEncrypt(plain, chunkKey, iv);
+        const std::string cipherWithTag = symEncrypt(cs::SymAlg::Aes256Gcm, chunkKey, iv, plain);
         return {
             .data = iv + cipherWithTag,
             .hmac = cipherWithTag.substr(cipherWithTag.size() - spec.hashLength)
         };
     }
 
-    const std::string cipher = privmx::crypto::Crypto::aes256CbcPkcs7Encrypt(plain, chunkKey, iv);
+    const std::string cipher = symEncrypt(cs::SymAlg::Aes256Cbc, chunkKey, iv, plain);
     const std::string ivWithCipher = iv + cipher;
-    const std::string hmac = privmx::crypto::Crypto::hmacSha256(chunkKey, ivWithCipher);
+    const std::string hmac = core::CryptoSuite::forId(spec.hashSuite).mac(chunkKey, ivWithCipher);
     return {.data = hmac + ivWithCipher, .hmac = hmac};
 }
 
@@ -225,18 +256,19 @@ std::string FileCipher::decryptChunk(const std::string& chunkKey, const IChunkEn
         // z osobnego porownania. Tlumaczymy go na ten sam wyjatek co w formacie 1, zeby wolajacy
         // nie musial rozrozniac formatow.
         try {
-            return privmx::crypto::Crypto::aes256GcmDecrypt(chunk.data.substr(spec.ivLength), chunkKey, iv);
+            return symDecrypt(cs::SymAlg::Aes256Gcm, chunkKey, iv, chunk.data.substr(spec.ivLength));
         } catch (...) {
             throw FileChunkInvalidCipherChecksumException();
         }
     }
 
     const std::string ivWithCipher = chunk.data.substr(spec.hashLength);
-    if (privmx::crypto::Crypto::hmacSha256(chunkKey, ivWithCipher) != chunk.data.substr(0, spec.hashLength)) {
+    if (core::CryptoSuite::forId(spec.hashSuite).mac(chunkKey, ivWithCipher) !=
+        chunk.data.substr(0, spec.hashLength)) {
         throw FileChunkInvalidCipherChecksumException();
     }
     const std::string iv = ivWithCipher.substr(0, spec.ivLength);
-    return privmx::crypto::Crypto::aes256CbcPkcs7Decrypt(ivWithCipher.substr(spec.ivLength), chunkKey, iv);
+    return symDecrypt(cs::SymAlg::Aes256Cbc, chunkKey, iv, ivWithCipher.substr(spec.ivLength));
 }
 
 bool FileCipher::frameCarriesHash(const std::string& chunkData, const std::string& hash) const {

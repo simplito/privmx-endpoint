@@ -220,7 +220,7 @@ std::string GroupDataSchemaMapper::rosterTag(
     std::string payload = std::to_string(keyVersion) + "\n" + std::to_string(rosterVersion) + "\n";
     appendList(payload, users);
     appendList(payload, managers);
-    return privmx::utils::Hex::from(privmx::crypto::Crypto::hmacSha256(tagSubkey(key, "roster-tag"), payload));
+    return privmx::utils::Hex::from(core::FormatHash::hmacSha256(tagSubkey(key, "roster-tag"), payload));
 }
 
 std::string GroupDataSchemaMapper::metaPlaneTag(
@@ -238,12 +238,12 @@ std::string GroupDataSchemaMapper::metaPlaneTag(
         std::to_string(metaVersion) +
         "\n";
     return privmx::utils::Hex::from(
-        privmx::crypto::Crypto::hmacSha256(tagSubkey(key, std::string(domain) + "-tag"), payload)
+        core::FormatHash::hmacSha256(tagSubkey(key, std::string(domain) + "-tag"), payload)
     );
 }
 
 std::string GroupDataSchemaMapper::tagSubkey(const std::string& contentKey, const std::string& purpose) {
-    return privmx::crypto::Crypto::kdf(32, contentKey, "privmx/group/" + purpose);
+    return core::FormatHash::kdf(contentKey, "privmx/group/" + purpose, 32);
 }
 
 std::string GroupDataSchemaMapper::publicMetaTag(const std::string& key, int64_t keyVersion, int64_t metaVersion) {

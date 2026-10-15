@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_FORMATHASH_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_FORMATHASH_HPP_
 
+#include <cstddef>
 #include <string>
 
 namespace privmx {
@@ -39,6 +40,24 @@ namespace core {
 class FormatHash {
 public:
     static std::string sha256(const std::string& data);
+
+    /**
+     * @brief HMAC-SHA256 przybity formatem.
+     *
+     * Uzywany tam, gdzie znacznik uwierzytelniajacy jest **czescia definicji struktury**, a nie
+     * wyborem: `secretHash` w `EncKeyV2`, tagi rostera i metadanych grupy, klucz chunku w kopercie
+     * plikowej. Wszystkie sa wersjonowane przez `structureVersion` albo przez wersje koperty,
+     * nie przez znacznik zestawu - czytajacy musi wiedziec z gory, czym weryfikowac.
+     */
+    static std::string hmacSha256(const std::string& key, const std::string& data);
+
+    /**
+     * @brief KDF na SHA-256, przybity formatem.
+     *
+     * Odpowiada `CryptoSuite::deriveKey` dla zestawu z SHA-256, ale bez przechodzenia przez zestaw:
+     * wyprowadzenia opisane tutaj naleza do formatu danych i nie zmieniaja sie razem z nim.
+     */
+    static std::string kdf(const std::string& secret, const std::string& label, std::size_t length);
 };
 
 } // namespace core

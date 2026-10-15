@@ -1,7 +1,7 @@
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp"
 
-#include <privmx/crypto/Crypto.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 
@@ -73,7 +73,7 @@ std::pair<ByteCount, std::string> GroupEnvelopeEncryptor::readFileBody(
 std::string GroupEnvelopeEncryptor::chunkKey(const std::string& fileKey, ChunkIndex index) {
     // Binding the index makes a chunk unusable in any other position; binding the per-file key makes it
     // unusable in any other file. The label keeps this separate from future derivations off the same key.
-    return privmx::crypto::Crypto::hmacSha256(fileKey, CHUNK_KEY_LABEL + EnvelopeWriter::toBE(index, 4));
+    return core::FormatHash::hmacSha256(fileKey, CHUNK_KEY_LABEL + EnvelopeWriter::toBE(index, 4));
 }
 
 std::pair<std::string, std::string> GroupEnvelopeEncryptor::wrapContentKey(

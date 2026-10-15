@@ -14,7 +14,7 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 #include <set>
 
-#include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 #include "privmx/endpoint/core/ContainerBaseApi.hpp"
@@ -261,7 +261,7 @@ std::vector<server::GroupKeyEntrySet> ContainerBaseApi::buildGroupKeyEntries(
             EncKeyV2ToEncrypt{
                 EncKey{.id = key.id, .key = key.key}, dio,
                 EncKeyLocation{.contextId = contextId, .resourceId = resourceId}, keySecret,
-                privmx::crypto::Crypto::hmacSha256(containerSecret, keySecret + contextId + resourceId)
+                FormatHash::hmacSha256(containerSecret, keySecret + contextId + resourceId)
             },
             groupPubKey, _userPrivKey
         );

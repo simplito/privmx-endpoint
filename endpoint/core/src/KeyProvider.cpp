@@ -9,7 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
@@ -253,7 +253,7 @@ server::KeyEntrySet KeyProvider::createKeyEntrySet(
     key_entry_set.data = _encKeyEncryptorV2.encrypt(
         EncKeyV2ToEncrypt{
             EncKey{.id = key.id, .key = key.key}, dio, location, keySecret,
-            privmx::crypto::Crypto::hmacSha256(
+            FormatHash::hmacSha256(
                 containerSecret, keySecret + location.contextId + location.resourceId
             )
         },
@@ -269,7 +269,7 @@ bool KeyProvider::verifyKeysSecret(
     const std::string& containerSecret
 ) {
     for (auto key : decryptedKeys) {
-        auto keySecretHash = privmx::crypto::Crypto::hmacSha256(
+        auto keySecretHash = FormatHash::hmacSha256(
             containerSecret, key.second.keySecret + location.contextId + location.resourceId
         );
         if (key.second.statusCode != 0 ||

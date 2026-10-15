@@ -13,12 +13,46 @@ limitations under the License.
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include <Poco/ByteOrder.h>
 #include <cstring>
-#include <privmx/crypto/Crypto.hpp>
+#include <privmx/cryptoservice/base/CoreTypes.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/crypto/ProviderAccess.hpp>
 #include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::stream;
+
+namespace {
+
+namespace cs = privmx::cryptoservice;
+
+/**
+ * AES-256-GCM kanalu danych, z naglowkiem wiadomosci jako AAD.
+ *
+ * Wolany wprost z providera, a nie przez `CryptoSuite`: ten ostatni oprawia wynik we wlasna ramke
+ * ze znacznikiem zestawu, a tutaj ramka jest wlasnoscia formatu V1 kanalu - jej uklad opisuje
+ * `WIRE_FORMAT_VERSION`, nie zestaw kontenera.
+ *
+ * Rownowaznosc bajtowa z poprzednia implementacja sprawdzona pomiarowo, takze dla niepustego AAD.
+ */
+std::string channelAead(
+    const std::string& key,
+    const std::string& iv,
+    const std::string& aad,
+    const std::string& data,
+    bool encrypting
+) {
+    const auto view = [](const std::string& d) {
+        return cs::BytesView(reinterpret_cast<const std::uint8_t*>(d.data()), d.size());
+    };
+    cs::SymParams params{
+        .cipher = cs::SymAlg::Aes256Gcm, .key = view(key), .iv = view(iv), .aad = view(aad), .taglen = 16
+    };
+    const cs::Bytes out = encrypting ? privmx::endpoint::core::cryptoProvider().encrypt(params, view(data))
+                                     : privmx::endpoint::core::cryptoProvider().decrypt(params, view(data));
+    return std::string(reinterpret_cast<const char*>(out.data()), out.size());
+}
+
+} // namespace
 
 DataChannelMessageEncryptorV1::DataChannelMessageEncryptorV1(const std::vector<Key>& keys) : _keys(keys) {}
 
@@ -36,9 +70,8 @@ core::Buffer DataChannelMessageEncryptorV1::encryptMessage(const DataChannelMess
             .keyId = encKey.keyId
         }
     );
-    std::string ciphertext = privmx::crypto::Crypto::aes256GcmEncrypt(
-        plainMessage.data.stdString(), encKey.key.stdString(), iv, serializedHeader
-    );
+    std::string ciphertext =
+        channelAead(encKey.key.stdString(), iv, serializedHeader, plainMessage.data.stdString(), true);
     return core::Buffer::from(serializedHeader + ciphertext);
 }
 
@@ -65,9 +98,9 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(
         result.seq = parsedEncryptedMessage.header.seq;
         auto decKey = getDencryptionKey(parsedEncryptedMessage.header.keyId);
         result.data = core::Buffer::from(
-            privmx::crypto::Crypto::aes256GcmDecrypt(
-                parsedEncryptedMessage.ciphertext, decKey.key.stdString(), parsedEncryptedMessage.header.iv,
-                parsedEncryptedMessage.serializedHeader
+            channelAead(
+                decKey.key.stdString(), parsedEncryptedMessage.header.iv,
+                parsedEncryptedMessage.serializedHeader, parsedEncryptedMessage.ciphertext, false
             )
         );
         updateSeq(remoteStreamId, parsedEncryptedMessage.header.seq);
