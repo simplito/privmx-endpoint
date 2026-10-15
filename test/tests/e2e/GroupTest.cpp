@@ -384,8 +384,8 @@ TEST_F(GroupTest, updateGroupPrivateMeta_correct_data) {
 }
 
 TEST_F(GroupTest, updateGroupPolicy_correct_data) {
-    // The cheapest statement that a policy write appends no metadata entry: neither counter moves and neither
-    // buffer changes, so no reader has anything to re-verify.
+    // A policy write is a commit that appends no metadata entry: neither counter moves and neither buffer changes,
+    // so no reader has anything to re-verify.
     const std::string groupId = reader->getString("Group_1.groupId");
     group::Group before;
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
@@ -404,7 +404,7 @@ TEST_F(GroupTest, updateGroupPolicy_correct_data) {
     EXPECT_EQ(after.publicMeta.stdString(), before.publicMeta.stdString());
     EXPECT_EQ(after.privateMeta.stdString(), before.privateMeta.stdString());
 
-    // No CAS, so a second write in a row is not a lost race — it simply wins.
+    // Each call is a signed commit planned on a fresh read (T4-10), so a second one in a row extends the first.
     policy.get = "user";
     EXPECT_NO_THROW({ groupApi->updateGroupPolicy(groupId, policy); });
     EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });

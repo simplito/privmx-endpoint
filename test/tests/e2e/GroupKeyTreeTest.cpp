@@ -11,6 +11,7 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/GroupApiImpl.hpp>
+#include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
 #include <privmx/endpoint/group/keytree/LadderKeys.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
@@ -1170,3 +1171,59 @@ TEST_F(GroupKeyTreeTest, SECURITY_repairRung_below_a_cut_floor_is_refused) {
     EXPECT_EQ(refused->first, GROUP_ARCHIVE_INVALID);
     EXPECT_NE(refused->second.find("BELOW_ERA_FLOOR"), std::string::npos) << refused->second;
 }
+
+// ── the signed group policy (T4-10) ──
+
+TEST_F(GroupKeyTreeTest, SECURITY_a_policy_change_is_a_signed_commit_every_member_follows) {
+    // The manager lets every member update; a plain member then removes the manager; a third session, pinned before
+    // either, replays both from its pin: the policy statement, then a removal its committer now holds the role for.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
+    const auto third = connect(3);
+    group::GroupApi thirdGroups = group::GroupApi::create(*third);
+    ASSERT_EQ(thirdGroups.getGroup(groupId).statusCode, 0);
+
+    core::ContainerPolicy everyMember;
+    everyMember.update = "user";
+    ASSERT_NO_THROW({ groupApi->updateGroupPolicy(groupId, everyMember); });
+    disconnect();
+    connectAs(2);
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(1).userId}); });
+
+    group::Group followed;
+    ASSERT_NO_THROW({ followed = thirdGroups.getGroup(groupId); });
+    EXPECT_EQ(followed.statusCode, 0);
+    EXPECT_EQ(followed.keyVersion, 2);
+    EXPECT_EQ(followed.policy.update.value_or(""), "user");
+    EXPECT_EQ(followed.privateMeta.stdString(), "keytree_private") << "carried up by the new remover";
+    const auto commits = group::ServerApi(connection->getImpl()->getGateway())
+                             .groupGetTreeCommits({.groupId = groupId, .fromSeq = 0})
+                             .commits;
+    ASSERT_EQ(commits.size(), 3u);
+    EXPECT_EQ(commits[1].op, "policy");
+    EXPECT_EQ(commits[2].op, "remove");
+    third->disconnect();
+    disconnect();
+    connectAs(1);
+}
+
+TEST_F(GroupKeyTreeTest, a_user_cannot_remove_under_the_default_policy) {
+    // Only managers update by default. The client refuses before signing, so nothing reaches the Bridge and the
+    // chain does not move. (The Bridge's own refusal of a hand-built statement is its test, not this one.)
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
+    disconnect();
+    connectAs(2);
+    const auto seq = [&] {
+        return group::ServerApi(connection->getImpl()->getGateway())
+            .groupGetTreeCommits({.groupId = groupId, .fromSeq = 0})
+            .commits.size();
+    };
+    const std::size_t before = seq();
+    EXPECT_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); }, group::GroupUnauthorizedSignerException);
+    EXPECT_THROW({ groupApi->updateGroupPolicy(groupId, core::ContainerPolicy{}); }, group::GroupUnauthorizedSignerException);
+    EXPECT_EQ(seq(), before);
+    disconnect();
+    connectAs(1);
+}
+

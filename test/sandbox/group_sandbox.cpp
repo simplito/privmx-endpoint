@@ -1112,6 +1112,25 @@ TEST_F(GroupSandbox, S10_group_list) {
     });
 }
 
+// S11 (03): one updateGroupPolicy on a group of n - a signed commit now: a path read, the chain check, one signature
+// and a CAS-ed transaction that hashes the tree - then a session pinned before it catching up across it.
+TEST_F(GroupSandbox, S11_policy_change) {
+    const int n = std::stoi(flag("--s11-n", "4096"));
+    auto s = open(privKeyOf(1));
+    const std::string tag = tagOf("S11", n, 0);
+    row("S11", {{"n", num(n)}, {"tag", q(tag)}}, [&](Fields& f) {
+        const std::string groupId = create(*s->groups, roster(n));
+        auto pinned = open(privKeyOf(1));
+        pinned->groups->getGroup(groupId);
+        core::ContainerPolicy policy;
+        policy.update = "manager";
+        policy.get = "all";
+        timed(f, tag, "policy", [&] { s->groups->updateGroupPolicy(groupId, policy); });
+        timed(f, tag, "pinned_catchup", [&] { pinned->groups->getGroup(groupId); });
+        addMongo(f, groupId);
+    });
+}
+
 // R1 (review of perf-16k): epoch growth without blank accumulation. Each round removes a bucket-0 member (whose
 // path is the remover's, so nothing is blanked) and adds a newcomer, so the tree stays dense while the epoch climbs.
 // Afterwards: a session pinned at epoch 1 catches up, a cold getGroup, warm encrypt/decrypt loops, file chunking.
