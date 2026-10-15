@@ -144,6 +144,8 @@ target_link_libraries(test_unit_TreeKeysTest privmx privmxendpointcore privmxend
 # Tree and roster hashes and the signed bytes of a commit statement, against fixed vectors the bridge must reproduce
 add_executable(test_unit_TreeCommitsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeCommitsTest.cpp)
 target_link_libraries(test_unit_TreeCommitsTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+# The shared vectors `fixtures/keytree/reference.py` writes from the spec (the bridge reads a byte-identical copy)
+target_compile_definitions(test_unit_TreeCommitsTest PRIVATE PRIVMX_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 
 # Seeded random commit sequences against an in-test fake bridge: the node-key invariant, removal confidentiality and commit statements after every step; tree verification against a lying bridge
 add_executable(test_unit_TreeInvariantTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeInvariantTest.cpp)

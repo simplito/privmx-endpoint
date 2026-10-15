@@ -24,6 +24,8 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include <Poco/JSON/Object.h>
+
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -40,6 +42,24 @@ using namespace privmx::endpoint::group::keytree;
 
 // What the bridge derives from the context and the resourceId the genesis statement signs.
 const std::string GROUP_ID = TreeCommits::groupId("ctx", "res");
+
+// A policy object as the bridge stores and serves it.
+Poco::Dynamic::Var policyOf(const std::map<std::string, std::string>& rules) {
+    Poco::JSON::Object::Ptr policy = new Poco::JSON::Object();
+    for (const auto& [field, rule] : rules) {
+        policy->set(field, rule);
+    }
+    return policy;
+}
+
+// What the test groups are created with unless a test says otherwise: every member may commit, so the existing tests,
+// whose removers and adders are plain users, keep their meaning.
+const Poco::Dynamic::Var OPEN_POLICY = policyOf({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}});
+
+// A bridge refusal answering a statement that does not extend the stored latest: a lost race, retryable.
+[[noreturn]] void rotatedAlready() {
+    throw privmx::utils::PrivmxException("ROTATED_ALREADY", privmx::utils::PrivmxException::RPC, 0x621C);
+}
 
 struct Member {
     std::string userId;
@@ -136,7 +156,13 @@ public:
     std::vector<server::GroupTreeCommit> commits;
     // The roster seq 1 seats, served beside the chain from seq 0.
     std::vector<std::string> genesis;
+    std::vector<std::string> genesisManagers;
     std::int64_t rosterVersion = 0;
+    // The managers among the seated; everybody else seated is a user.
+    std::set<std::string> managers;
+    // The group's policy and creator, which every statement's `policyHash` signs (T4-10).
+    Poco::Dynamic::Var policy;
+    std::string creator;
     // The Context user list: whose key a statement must be signed with.
     std::function<privmx::crypto::PublicKey(const std::string&)> keyOf;
     // The group's id, and what it follows from.
@@ -144,7 +170,32 @@ public:
     std::string resourceId = "res";
     std::string contextId = "ctx";
 
+    // The users of a post state: the seated who are not managers.
+    std::vector<std::string> usersOf(const TreeGroupState& post, const std::set<std::string>& postManagers) const {
+        std::vector<std::string> users;
+        for (const std::string& id : seatedIn(post)) {
+            if (postManagers.count(id) == 0) {
+                users.push_back(id);
+            }
+        }
+        return users;
+    }
+    std::vector<std::string> users() const { return usersOf(state, managers); }
+
+    // The rules the stored policy and creator sign.
+    GroupRules rules() const { return TreeCommits::rules(policy, creator); }
+
+    // The shared lost-race check (03): a statement not extending the stored latest is answered ROTATED_ALREADY.
+    void assertExtendsHead(const server::GroupTreeCommit& wire) const {
+        const CommitStatement statement = TreeCommits::fromWire(wire);
+        if (statement.seq != commits.size() + 1 ||
+            (!commits.empty() && statement.prevDigest != TreeCommits::digest(TreeCommits::fromWire(commits.back())))) {
+            rotatedAlready();
+        }
+    }
+
     // The bridge's statement check (§4): every field derived from the post state, nothing taken from the client.
+    // `postPolicy` is the policy after the commit (the stored one but for a creation or a policy commit).
     void checkStatement(
         const server::GroupTreeCommit& wire,
         CommitOp op,
@@ -153,18 +204,26 @@ public:
         std::int64_t postRosterVersion,
         const std::vector<server::GroupTreeRefreshedNode>& refreshed,
         std::vector<std::string> added,
-        std::vector<std::string> removed
+        std::vector<std::string> removed,
+        const std::set<std::string>& postManagers,
+        std::vector<std::string> addedManagers = {},
+        const std::optional<GroupRules>& postRules = std::nullopt
     ) {
         CommitStatement statement;
         ASSERT_NO_THROW(statement = TreeCommits::fromWire(wire));
         EXPECT_EQ(statement.seq, commits.size() + 1);
         EXPECT_EQ(statement.op, op);
+        EXPECT_EQ(statement.policyHash, postRules.value_or(rules()).hash) << "the statement signs another policy";
+        EXPECT_EQ(statement.policy.has_value(), op == CommitOp::Create || op == CommitOp::Policy);
+        const std::vector<std::string> before = users();
+        EXPECT_FALSE(TreeCommits::deltasProblem(statement, {before.begin(), before.end()}, managers).has_value())
+            << "deltas the op's row refuses";
         EXPECT_EQ(statement.groupId, statement.seq == 1 ? resourceId : groupId);
         EXPECT_EQ(statement.treeVersion, TreeMath::TREE_VERSION);
         EXPECT_EQ(statement.keyVersion, post.epoch);
         EXPECT_EQ(statement.groupPubKey, post.grantPublicKey.toBase58DER());
         EXPECT_EQ(statement.rosterVersion, static_cast<std::uint64_t>(postRosterVersion));
-        EXPECT_EQ(statement.rosterHash, TreeCommits::rosterHash(seatedIn(post), {}));
+        EXPECT_EQ(statement.rosterHash, TreeCommits::rosterHash(usersOf(post, postManagers), {postManagers.begin(), postManagers.end()}));
         EXPECT_EQ(statement.committer, committer);
         EXPECT_EQ(statement.committerPubKey, keyOf(committer).toBase58DER());
         EXPECT_EQ(std::optional<std::uint32_t>(statement.committerSeat), seatOf(post, committer));
@@ -177,21 +236,27 @@ public:
             })) << "the statement does not list node " << node.nodeIndex;
         }
         std::sort(added.begin(), added.end());
+        std::sort(addedManagers.begin(), addedManagers.end());
         std::sort(removed.begin(), removed.end());
         EXPECT_EQ(statement.addedUsers, added);
-        EXPECT_TRUE(statement.addedManagers.empty());
+        EXPECT_EQ(statement.addedManagers, addedManagers);
         EXPECT_EQ(statement.removed, removed);
         EXPECT_EQ(statement.treeHash, TreeCommits::treeHash(post)) << "the statement signs another tree";
         EXPECT_TRUE(TreeCommits::verifySignature(statement, keyOf(committer))) << "not signed by the committer";
     }
 
+    // `initialManagers` are the managers among the seated; the policy is the one the statement carries.
     void create(
         const server::GroupTreeState& tree,
         const privmx::crypto::PublicKey& grant,
         const std::string& creator,
-        const server::GroupTreeCommit& commit
+        const server::GroupTreeCommit& commit,
+        const std::set<std::string>& initialManagers = {}
     ) {
         state = TreeWire::toRuntime(tree, 1, grant);
+        managers = initialManagers;
+        this->creator = creator;
+        policy = commit.policy.value_or(Poco::Dynamic::Var());
         std::vector<server::GroupTreeRefreshedNode> refreshed;
         for (const server::GroupTreeNode& node : tree.nodes) {
             EXPECT_EQ(node.setBy, std::optional<std::int64_t>(1));
@@ -199,8 +264,9 @@ public:
                                                                node.publicKey.value_or("")});
         }
         rosterVersion = 1;
-        checkStatement(commit, CommitOp::Create, creator, state, 1, refreshed, {}, {}); // the hash binds the roster
-        genesis = seatedIn(state);
+        checkStatement(commit, CommitOp::Create, creator, state, 1, refreshed, {}, {}, managers); // the hash binds the roster
+        genesis = users();
+        genesisManagers = std::vector<std::string>(managers.begin(), managers.end());
         commits.push_back(commit);
         const auto seat = seatOf(state, creator);
         ASSERT_TRUE(seat.has_value()) << "the creator holds no seat";
@@ -231,7 +297,7 @@ public:
         return known;
     }
 
-    // `subjects` are the users added (with `positions`) or removed. Returns the nodes the commit blanked.
+    // `subjects` are the members added (with `positions`; those in `newManagers` as managers) or removed.
     void commit(
         CommitOp op,
         const std::string& committer,
@@ -240,8 +306,10 @@ public:
         const std::vector<server::GroupTreeRefreshedNode>& refreshed,
         const std::vector<server::GroupTreeEdge>& edges,
         const std::optional<privmx::crypto::PublicKey>& newGrant,
-        const server::GroupTreeCommit& commit
+        const server::GroupTreeCommit& commit,
+        const std::vector<std::string>& newManagers = {}
     ) {
+        assertExtendsHead(commit);
         const auto committerSeat = seatOf(state, committer);
         ASSERT_TRUE(committerSeat.has_value()) << "only a seated member commits";
         std::uint32_t numLeaves = state.numLeaves;
@@ -351,13 +419,41 @@ public:
             post.grantPublicKey = newGrant.value();
         }
         const std::int64_t postRosterVersion = rosterVersion + (op == CommitOp::SelfUpdate ? 0 : 1);
+        std::set<std::string> postManagers = managers;
+        std::vector<std::string> addedUsers;
+        if (op == CommitOp::Add) {
+            for (const std::string& id : subjects) {
+                const bool manager = std::find(newManagers.begin(), newManagers.end(), id) != newManagers.end();
+                if (manager) {
+                    postManagers.insert(id);
+                } else {
+                    addedUsers.push_back(id);
+                }
+            }
+        } else if (op == CommitOp::Remove) {
+            for (const std::string& id : subjects) {
+                postManagers.erase(id);
+            }
+        }
         checkStatement(
-            commit, op, committer, post, postRosterVersion, refreshed,
-            op == CommitOp::Add ? subjects : std::vector<std::string>{},
-            op == CommitOp::Remove ? subjects : std::vector<std::string>{}
+            commit, op, committer, post, postRosterVersion, refreshed, addedUsers,
+            op == CommitOp::Remove ? subjects : std::vector<std::string>{}, postManagers,
+            op == CommitOp::Add ? newManagers : std::vector<std::string>{}
         );
         state = post;
+        managers = postManagers;
         rosterVersion = postRosterVersion;
+        commits.push_back(commit);
+    }
+
+    // What `groupUpdatePolicy` stores: the policy and its statement; the tree, epoch and roster stay.
+    void changePolicy(const std::string& committer, const server::GroupTreeCommit& commit) {
+        assertExtendsHead(commit);
+        ASSERT_TRUE(seatOf(state, committer).has_value()) << "only a seated member commits";
+        ASSERT_TRUE(commit.policy.has_value());
+        const GroupRules next = TreeCommits::rules(commit.policy.value(), creator);
+        checkStatement(commit, CommitOp::Policy, committer, state, rosterVersion, {}, {}, {}, managers, {}, next);
+        policy = commit.policy.value();
         commits.push_back(commit);
     }
 
@@ -369,6 +465,7 @@ public:
         const privmx::crypto::PublicKey& newGrant,
         const server::GroupTreeCommit& commit
     ) {
+        assertExtendsHead(commit);
         ASSERT_TRUE(seatOf(state, committer).has_value()) << "only a seated member rotates";
         // The bridge's `checkGrantEdge`: an edge to a root that has moved on since the rotator read it (a
         // self-update re-keys the root) is refused, as the bridge refuses it, with the problem in the data.
@@ -392,7 +489,7 @@ public:
         for (const TreeEdge& edge : edgesOf({grantEdge})) {
             post.edges.push_back(edge);
         }
-        checkStatement(commit, CommitOp::Rotate, committer, post, rosterVersion + 1, {}, {}, {});
+        checkStatement(commit, CommitOp::Rotate, committer, post, rosterVersion + 1, {}, {}, {}, managers);
         state = post;
         rosterVersion += 1;
         commits.push_back(commit);
@@ -408,7 +505,10 @@ public:
         info.groupPubKey = state.grantPublicKey.toBase58DER();
         info.keyVersion = state.epoch;
         info.rosterVersion = rosterVersion;
-        info.users = seatedIn(state);
+        info.users = users();
+        info.managers = std::vector<std::string>(managers.begin(), managers.end());
+        info.creator = creator;
+        info.policy = policy;
         info.treeVersion = TreeMath::TREE_VERSION;
         info.numLeaves = state.numLeaves;
         std::vector<std::string> seats;
@@ -455,7 +555,7 @@ public:
         }
         if (fromSeq == 0) {
             result.genesisUsers = genesis;
-            result.genesisManagers = std::vector<std::string>();
+            result.genesisManagers = genesisManagers;
         }
         return result;
     }
@@ -467,8 +567,14 @@ public:
         return served;
     }
 
-    // The default scope "path": records of the caller's keyed path only.
+    // The default scope "path": records of the caller's keyed path only. Nothing of the tree to a caller without a seat.
     TreeGroupState servePath(const std::string& userId) const {
+        if (!seatOf(state, userId).has_value()) {
+            TreeGroupState served = state;
+            served.nodes.clear();
+            served.edges.clear();
+            return served;
+        }
         TreeGroupState served = servePlan(userId);
         const auto path = TreeMath::keyedPath(seatOf(state, userId).value(), state.numLeaves);
         served.nodes.clear();

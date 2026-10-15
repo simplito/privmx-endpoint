@@ -46,7 +46,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, UnknownGroupFormatException, 
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupPublicDataMismatchException, "Group public data mismatch", 0x0009)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupDataIntegrityException, "Failed group data integrity check", 0x000A)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupChainBrokenException, "Group version chain link broken (G1)", 0x000B)
-DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupUnauthorizedSignerException, "Group version signer was not an authorized manager (G2)", 0x000C)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupUnauthorizedSignerException, "A group commit was signed by a member the group's signed policy does not allow", 0x000C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupMembershipMismatchException, "Group membership in signed data does not match bridge-served fields", 0x000D)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, InvalidSubscriptionQueryException, "Invalid subscriptionQuery", 0x000E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, RotatedAlreadyException, "Concurrent group key rotation: another manager won and one auto-retry did not resolve it", 0x000F)

@@ -114,7 +114,9 @@ struct Group {
     core::Buffer privateMeta;
 
     /**
-     * Group's policies
+     * Group's policies. Only `update`, `rotateKeys`, `updatePolicy` and `ownerCanBeRemovedFromManagers` (and the
+     * creator) are attested by the signed commit chain; there `inherit`/`default` mean the v3 defaults narrowed by
+     * the Context. Every other field is the Bridge's word.
      */
     core::ContainerPolicy policy;
 

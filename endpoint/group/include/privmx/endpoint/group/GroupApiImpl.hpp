@@ -276,6 +276,9 @@ private:
     // earlier than its, which readers require of the chain. Refused at a seq a statement of ours was refused at as a
     // lost race (T4-17): that one may have been applied, and a second one there would be a fork.
     void chainTo(keytree::CommitStatement& statement, const server::GroupInfo& group);
+    // The served group's signed rules, which a verified read bound to its latest statement (`describes`).
+    static keytree::GroupRules rulesOf(const server::GroupInfo& group);
+    void updateGroupPolicyOnce(const std::string& groupId, const core::ContainerPolicy& policies);
 
     // m2: a commit released to the bridge with no known outcome. A retry resends exactly this.
     struct UnresolvedCommit {
@@ -364,6 +367,7 @@ private:
         const keytree::CommitStatement& statement,
         const std::vector<std::string>& users,
         const std::vector<std::string>& managers,
+        const keytree::GroupRules& rules,
         const privmx::crypto::PrivateKey& grantKey
     );
 

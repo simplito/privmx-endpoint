@@ -71,6 +71,19 @@ namespace {
 
 const std::string CONTEXT = "ctx-lying";
 
+// A policy as the API takes it.
+core::ContainerPolicy policyWith(const std::map<std::string, std::string>& rules) {
+    core::ContainerPolicy policy;
+    for (const auto& [field, rule] : rules) {
+        (field == "update" ? policy.update : field == "rotateKeys" ? policy.rotateKeys :
+         field == "updatePolicy" ? policy.updatePolicy : policy.ownerCanBeRemovedFromManagers) = rule;
+    }
+    return policy;
+}
+
+// OPEN_POLICY as the API takes it.
+const core::ContainerPolicy OPEN = policyWith({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}});
+
 Poco::JSON::Object::Ptr overTheWire(const Poco::Dynamic::Var& value) {
     return privmx::utils::Utils::parseJsonObject(privmx::utils::Utils::stringifyVar(value));
 }
@@ -100,6 +113,8 @@ struct Bridge {
     std::function<void()> afterRotation = [] {};  // runs once the rotation is applied; throws to lose the answer
     std::function<void()> onAdd = [] {};
     std::function<void()> onSelfUpdate = [] {};
+    // Before a policy commit is applied; may release the lock (to let another client commit) and throw to refuse.
+    std::function<void(std::unique_lock<std::mutex>&)> onPolicy = [](std::unique_lock<std::mutex>&) {};
     // Every statement a client sent with an add, a removal, a rotation or a self-update, in order, applied or not.
     std::vector<server::GroupTreeCommit> received;
     int planReads = 0; // `groupGet`s in the "plan" scope
@@ -124,17 +139,14 @@ struct Bridge {
     server::GroupInfo serve(const std::string& userId, bool plan) const {
         server::GroupInfo info = tree.serve(userId, plan);
         info.type = rest.type;
-        info.creator = rest.creator;
         info.createDate = info.lastModificationDate = 1;
         info.data = rest.data;
         info.history = rest.history;
-        info.managers = {};
         info.groupKeys = rest.groupKeys;
         info.publicMeta = rest.publicMeta;
         info.privateMeta = rest.privateMeta;
         info.publicMetaVersion = rest.publicMetaVersion;
         info.privateMetaVersion = rest.privateMetaVersion;
-        info.policy = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
         return info;
     }
 
@@ -194,7 +206,10 @@ struct Bridge {
             tree.resourceId = model.resourceId;
             tree.contextId = model.contextId;
             tree.groupId = TreeCommits::groupId(model.contextId, model.resourceId);
-            tree.create(model.tree, PublicKey::fromBase58DER(model.groupPubKey), caller, model.commit);
+            tree.create(
+                model.tree, PublicKey::fromBase58DER(model.groupPubKey), caller, model.commit,
+                std::set<std::string>(model.managers.begin(), model.managers.end())
+            );
             rest = server::GroupInfo{};
             rest.type = model.type;
             rest.creator = caller;
@@ -263,8 +278,12 @@ struct Bridge {
             received.push_back(model.commit);
             onAdd();
             std::vector<std::string> ids;
+            std::vector<std::string> newManagers;
             for (const server::GroupAddMemberEntry& member : model.members) {
                 ids.push_back(member.userId);
+                if (member.role == "manager") {
+                    newManagers.push_back(member.userId);
+                }
             }
             std::vector<std::uint32_t> positions;
             for (const std::int64_t position : model.transition.positions) {
@@ -275,7 +294,8 @@ struct Bridge {
                 refreshed.push_back({node.nodeIndex, node.fromGeneration, node.generation, node.publicKey});
             }
             tree.commit(
-                CommitOp::Add, caller, ids, positions, refreshed, model.transition.edges, std::nullopt, model.commit
+                CommitOp::Add, caller, ids, positions, refreshed, model.transition.edges, std::nullopt, model.commit,
+                newManagers
             );
             server::GroupDataEntry head;
             head.keyId = model.keyId;
@@ -322,6 +342,13 @@ struct Bridge {
             tree.rotate(caller, model.grantEdge, PublicKey::fromBase58DER(model.groupPubKey), model.commit);
             storeNewEpoch(caller, model);
             afterRotation();
+            return Poco::Dynamic::Var();
+        }
+        if (group == "groupUpdatePolicy") {
+            const auto model = server::GroupUpdatePolicyModel::fromJSON(params);
+            received.push_back(model.commit);
+            onPolicy(lock);
+            tree.changePolicy(caller, model.commit);
             return Poco::Dynamic::Var();
         }
         if (group == "groupUpdatePublicMeta" || group == "groupUpdatePrivateMeta") {
@@ -620,13 +647,20 @@ protected:
         return {.userId = id, .pubKey = bridge.users.at(id).getPublicKey().toBase58DER()};
     }
 
-    std::string createGroup(const std::vector<std::string>& members) {
+    // Created by alice, a manager; the others users. Under the open policy unless a test says otherwise, so every
+    // member may commit (03).
+    std::string createGroup(
+        const std::vector<std::string>& members,
+        const std::optional<core::ContainerPolicy>& policy = OPEN,
+        const std::vector<std::string>& managers = {"alice"}
+    ) {
         std::vector<core::UserWithPubKey> users;
+        std::vector<core::UserWithPubKey> managerKeys;
         for (const auto& id : members) {
-            users.push_back(user(id));
+            (std::find(managers.begin(), managers.end(), id) != managers.end() ? managerKeys : users).push_back(user(id));
         }
         return client("alice").createGroup(
-            CONTEXT, users, {}, core::Buffer::from("public"), core::Buffer::from("private"), std::nullopt
+            CONTEXT, users, managerKeys, core::Buffer::from("public"), core::Buffer::from("private"), policy
         );
     }
 
@@ -647,9 +681,9 @@ protected:
         CommitStatement statement = TreeCommits::statementFor(
             plan, CommitOp::SelfUpdate, bridge.tree.groupId,
             date.value_or(static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp())), bridge.tree.state.epoch,
-            bridge.tree.state.grantPublicKey.toBase58DER(),
-            static_cast<std::uint64_t>(bridge.tree.rosterVersion), seatedIn(bridge.tree.state), {}, committer, {}, {},
-            {}
+            bridge.tree.state.grantPublicKey.toBase58DER(), static_cast<std::uint64_t>(bridge.tree.rosterVersion),
+            bridge.tree.users(), {bridge.tree.managers.begin(), bridge.tree.managers.end()}, committer, {}, {}, {},
+            bridge.tree.rules().hash
         );
         statement.prevDigest = TreeCommits::digest(TreeCommits::fromWire(bridge.tree.commits.back()));
         TreeCommits::sign(statement, priv);
@@ -657,6 +691,72 @@ protected:
             CommitOp::SelfUpdate, committer, {}, {}, wire.refreshedNodes, wire.edges, std::nullopt,
             TreeCommits::toWire(statement)
         );
+    }
+
+    // A plan `committer` makes off the served plan view, as a client of its own would (no GroupApiImpl, so no check of
+    // its role: a colluding member, or the bridge's own statement under a member's key).
+    CommitPlan planBy(const std::string& committer, const std::function<CommitPlan(TreeKeys&, const TreeGroupState&)>& plan) {
+        const PrivateKey& priv = bridge.users.at(committer);
+        const TreeGroupState served = GroupKeyResolver::toTreeState(bridge.serve(committer, true));
+        TreeKeyCache cache;
+        TreeKeys keys(cache);
+        EXPECT_EQ(keys.climbToGrantKey(served, committer, priv, false).failure, ClimbFailure::None);
+        std::vector<TreeMember> members;
+        for (const auto& [id, key] : bridge.users) {
+            members.push_back(TreeMember{id, key.getPublicKey()});
+        }
+        keys.setMemberKeys(members);
+        return plan(keys, served);
+    }
+
+    CommitStatement signedBy(const std::string& committer, CommitStatement statement) {
+        statement.prevDigest = TreeCommits::digest(TreeCommits::fromWire(bridge.tree.commits.back()));
+        TreeCommits::sign(statement, bridge.users.at(committer));
+        return statement;
+    }
+
+    // A removal `committer` signs and the bridge stores (tree only), whatever the policy says.
+    void removalBy(const std::string& committer, const std::vector<std::string>& leaving) {
+        const CommitPlan plan = planBy(committer, [&](TreeKeys& keys, const TreeGroupState& served) {
+            return keys.planRemoval(served, leaving, committer, bridge.users.at(committer));
+        });
+        std::set<std::string> managers = bridge.tree.managers;
+        std::vector<std::string> users;
+        for (const std::string& id : bridge.tree.users()) {
+            if (std::find(leaving.begin(), leaving.end(), id) == leaving.end()) {
+                users.push_back(id);
+            }
+        }
+        for (const std::string& id : leaving) {
+            managers.erase(id);
+        }
+        const CommitStatement statement = signedBy(committer, TreeCommits::statementFor(
+            plan, CommitOp::Remove, bridge.tree.groupId, static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp()),
+            bridge.tree.state.epoch + 1, plan.grantKey.getPublicKey().toBase58DER(),
+            static_cast<std::uint64_t>(bridge.tree.rosterVersion + 1), users, {managers.begin(), managers.end()},
+            committer, {}, {}, leaving, bridge.tree.rules().hash
+        ));
+        const auto wire = TreeWire::toRemovalTransition(plan, bridge.tree.state.epoch);
+        bridge.tree.commit(
+            CommitOp::Remove, committer, leaving, {}, wire.refreshedNodes, wire.edges, plan.grantKey.getPublicKey(),
+            TreeCommits::toWire(statement)
+        );
+    }
+
+    // A policy commit `committer` signs and the bridge stores, as `updateGroupPolicy` builds it.
+    void policyBy(const std::string& committer, const Poco::Dynamic::Var& policy) {
+        const CommitStatement latest = TreeCommits::fromWire(bridge.tree.commits.back());
+        CommitStatement statement = latest;
+        statement.seq = latest.seq + 1;
+        statement.op = CommitOp::Policy;
+        statement.groupId = bridge.tree.groupId;
+        statement.date = std::max<std::uint64_t>(latest.date, privmx::utils::Utils::getNowTimestamp());
+        statement.committer = committer;
+        statement.committerSeat = seatOf(bridge.tree.state, committer).value();
+        statement.path.clear();
+        statement.policy = policy;
+        statement.policyHash = TreeCommits::rules(policy, bridge.tree.creator).hash;
+        bridge.tree.changePolicy(committer, TreeCommits::toWire(signedBy(committer, statement)));
     }
 
     // `sender`'s custom event as the bridge delivers it to alice's subscription on `channel`, under `author`.
@@ -740,8 +840,10 @@ TEST_F(GroupApiLyingBridge, SECURITY_ADeletedGroupsKeysAreNotServedToAGroupRecre
     );
     CommitStatement genesis = TreeCommits::statementFor(
         plan, CommitOp::Create, recreated.resourceId, privmx::utils::Utils::getNowTimestamp(), 1,
-        plan.grantKey.getPublicKey().toBase58DER(), 1, {"alice", "bob"}, {}, "bob", {}, {}, {}
+        plan.grantKey.getPublicKey().toBase58DER(), 1, {"alice", "bob"}, {}, "bob", {}, {}, {},
+        TreeCommits::rules(OPEN_POLICY, "bob").hash
     );
+    genesis.policy = OPEN_POLICY;
     TreeCommits::sign(genesis, bob);
     recreated.create(
         TreeWire::toCreateTree(plan), plan.grantKey.getPublicKey(), "bob", TreeCommits::toWire(genesis)
@@ -1454,3 +1556,122 @@ TEST_F(GroupApiLyingBridge, ARotatorDoesNotCheckTheLadderOfItsOwnEpoch) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1500)); // past a small group's 1 s check window
     EXPECT_EQ(count("alice", "context.groupGetKeyArchive"), 0u);
 }
+
+// ── the signed group policy (T4-10) ──────────────────────────────────────────────────────────────────────────
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARemovalTheBridgeTookFromAMemberWithoutTheRoleIsRefused) {
+    // Default policy: only managers update. bob, a plain user, colludes with the bridge and signs carol's removal;
+    // an honest client would refuse to sign it, so the fixture signs it for him.
+    const std::string groupId = createGroup({"alice", "bob", "carol"}, std::nullopt);
+    client("alice").getGroup(groupId); // pinned
+    removalBy("bob", {"carol"});
+    EXPECT_THROW(client("alice").getGroup(groupId), GroupUnauthorizedSignerException);
+    EXPECT_THROW(client("alice").updateGroupPublicMeta(groupId, core::Buffer::from("x"), 1), GroupUnauthorizedSignerException)
+        << "readGroupForKeys";
+}
+
+TEST_F(GroupApiLyingBridge, APolicyChangeLosingTheRaceToAnAdditionIsPlannedAgain) {
+    // AC 3: the bridge lands bob's addition under alice's first policy commit and answers the roster CAS.
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob");
+    bool first = true;
+    bridge.onPolicy = [&](std::unique_lock<std::mutex>& lock) {
+        if (!std::exchange(first, false)) {
+            return;
+        }
+        lock.unlock();
+        client("bob").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}});
+        lock.lock();
+        throw privmx::utils::PrivmxException("GROUP_ROSTER_VERSION_MISMATCH", privmx::utils::PrivmxException::RPC, 0x6224);
+    };
+    client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}}));
+    const CommitStatement landed = TreeCommits::fromWire(bridge.tree.commits.back());
+    EXPECT_EQ(landed.op, CommitOp::Policy);
+    EXPECT_EQ(landed.seq, 3u) << "planned again on top of the addition";
+    EXPECT_EQ(landed.rosterHash, TreeCommits::fromWire(bridge.tree.commits.at(1)).rosterHash);
+    EXPECT_NO_THROW(client("carol").getGroup(groupId)) << "the chain verifies on another client";
+}
+
+TEST_F(GroupApiLyingBridge, APolicyChangeLosingTheRaceToASelfUpdateIsPlannedAgain) {
+    // The shared lost-race check answers ROTATED_ALREADY for a statement not extending the stored latest.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    bool first = true;
+    bridge.onPolicy = [&](std::unique_lock<std::mutex>&) {
+        if (std::exchange(first, false)) {
+            selfUpdateBy("bob");
+        }
+    };
+    client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}}));
+    EXPECT_EQ(TreeCommits::fromWire(bridge.tree.commits.back()).op, CommitOp::Policy);
+    EXPECT_EQ(bridge.tree.commits.size(), 3u);
+    EXPECT_EQ(bridge.received.size(), 2u) << "one lost race, one landed";
+}
+
+TEST_F(GroupApiLyingBridge, AnAdditionLosingTheRaceToAPolicyChangeIsPlannedAgain) {
+    // The bridge lands bob's policy commit under alice's addition; the retry signs the new policyHash.
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Poco::Dynamic::Var narrowed = policyOf({{"update", "manager"}, {"updatePolicy", "user"}});
+    bool first = true;
+    bridge.onAdd = [&] {
+        if (std::exchange(first, false)) {
+            policyBy("bob", narrowed);
+        }
+    };
+    client("alice").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}});
+    const CommitStatement landed = TreeCommits::fromWire(bridge.tree.commits.back());
+    EXPECT_EQ(landed.op, CommitOp::Add);
+    EXPECT_EQ(landed.seq, 3u);
+    EXPECT_EQ(landed.policyHash, TreeCommits::rules(narrowed, "alice").hash) << "the new policy copied";
+    EXPECT_NO_THROW(client("carol").getGroup(groupId));
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_TheServedPolicyIsTheOneTheChainSigned) {
+    // The bridge widens the served policy without a statement: neither a pinned nor a fresh client takes it.
+    const std::string groupId = createGroup({"alice", "bob", "carol"}, std::nullopt);
+    client("alice").getGroup(groupId);
+    bridge.tree.policy = policyOf({{"update", "all"}, {"rotateKeys", "all"}, {"updatePolicy", "all"}});
+    EXPECT_THROW(client("alice").getGroup(groupId), GroupDataIntegrityException);
+    EXPECT_THROW(client("carol").getGroup(groupId), GroupDataIntegrityException);
+}
+
+TEST_F(GroupApiLyingBridge, ANonMemberCannotChangeAGroupsPolicy) {
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob"});
+    EXPECT_THROW(client("dave").updateGroupPolicy(groupId, OPEN), core::InvalidParamsException);
+    EXPECT_EQ(count("dave", "context.groupUpdatePolicy"), 0u);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AMemberWithoutTheRoleSignsNothing) {
+    // A mistaken app call by an honest member gives a malicious bridge nothing genuinely signed to land.
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob", "carol"}, std::nullopt);
+    EXPECT_THROW(client("bob").removeGroupMembers(groupId, {"carol"}), GroupUnauthorizedSignerException);
+    EXPECT_THROW(client("bob").updateGroupPolicy(groupId, OPEN), GroupUnauthorizedSignerException);
+    EXPECT_THROW(
+        client("bob").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}}),
+        GroupUnauthorizedSignerException
+    );
+    EXPECT_EQ(count("bob", "context.groupRemoveMembers"), 0u);
+    EXPECT_EQ(count("bob", "context.groupUpdatePolicy"), 0u);
+    EXPECT_EQ(count("bob", "context.groupAddMembers"), 0u);
+    EXPECT_TRUE(bridge.received.empty());
+}
+
+TEST_F(GroupApiLyingBridge, AnAdditionOfAnExistingMemberIsRefusedBeforeSigning) {
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob"});
+    EXPECT_THROW(
+        client("alice").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("bob"), .role = "manager"}}),
+        core::InvalidParamsException
+    ) << "a promotion";
+    EXPECT_THROW(
+        client("alice").addGroupMembers(
+            groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}, GroupMemberToAdd{.user = user("dave"), .role = "user"}}
+        ),
+        core::InvalidParamsException
+    ) << "one user twice";
+    EXPECT_EQ(count("alice", "context.groupAddMembers"), 0u);
+}
+

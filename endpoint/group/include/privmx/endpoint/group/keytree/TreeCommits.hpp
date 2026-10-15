@@ -14,8 +14,12 @@ limitations under the License.
 
 #include <cstdint>
 #include <map>
+#include <optional>
+#include <set>
 #include <string>
 #include <vector>
+
+#include <Poco/Dynamic/Var.h>
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
@@ -34,6 +38,7 @@ enum class CommitOp : std::uint8_t {
     Remove = 3,
     SelfUpdate = 4,
     Rotate = 5, // the bridge-side `generateNewGroupKey`
+    Policy = 6, // a policy change: only `policyHash` moves (T4-10)
 };
 
 struct StatementNode {
@@ -63,6 +68,9 @@ struct CommitStatement {
     std::uint64_t rosterVersion = 0;
     std::string rosterHash;
     std::string treeHash;
+    // `TreeCommits::rules(policy, creator).hash` of the group's policy after the commit: the rules that govern commits
+    // and the creator the `owner` atom names, signed into every statement. Raw bytes.
+    std::string policyHash;
     std::string committer;
     // The committer's Context public key (base58 DER) at signing time; the signature verifies against it, and the
     // UserVerifier vouches for the pair.
@@ -74,6 +82,16 @@ struct CommitStatement {
     std::vector<std::string> addedManagers;
     std::vector<std::string> removed;
     std::string signature;
+    // Wire only, on `Create` and `Policy`: the group's whole policy after the commit. Not signed itself; it counts only
+    // once it hashes to `policyHash`, and only its four commit rules do.
+    std::optional<Poco::Dynamic::Var> policy;
+};
+
+// The part of a group's policy its statements sign: who may commit what, and who the owner is. Absent, "inherit"
+// and "default" resolve to the frozen v3 defaults, never to the context policy, which only the bridge holds.
+struct GroupRules {
+    std::string creator, update, rotateKeys, updatePolicy, ownerCanBeRemovedFromManagers;
+    std::string hash; // policyHash, raw
 };
 
 // The hashes and signed bytes both sides compute byte for byte (SHA-256, big-endian integers, length-prefixed
@@ -162,7 +180,40 @@ public:
         const std::string& committer,
         std::vector<std::string> addedUsers,
         std::vector<std::string> addedManagers,
-        std::vector<std::string> removed
+        std::vector<std::string> removed,
+        const std::string& policyHash
+    );
+
+    // `GroupRules` of a policy object (empty = `{}`) and its creator, with `hash` =
+    // `H("pmx-group-policy\0" || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy)
+    // || lp(ownerCanBeRemovedFromManagers))`, each resolved against the frozen v3 defaults (manager, manager, manager,
+    // yes) and hashed verbatim. Throws std::invalid_argument on a non-object policy or a non-string rule.
+    static GroupRules rules(const Poco::Dynamic::Var& policy, const std::string& creator);
+
+    // A policy rule for a member, exactly as the bridge's `PolicyService.userMeetsPolicy`: `,` separates
+    // alternatives, `&` joins atoms that must all hold; `none` is false, `all` true, `user` a roster member, `manager`
+    // a manager, `owner` the creator; `itemOwner` and any unknown atom false.
+    static bool allows(const std::string& rule, bool member, bool manager, bool owner);
+
+    // The role column of the op-effect table (T4-10), on the rules and roster before `statement`: create none (the
+    // committer is the creator), add `update`, remove `update` (and, removing the creator from the managers,
+    // `ownerCanBeRemovedFromManagers` "yes"), rotate `rotateKeys`, selfUpdate a seat, policy `updatePolicy`. False for
+    // an op without a row.
+    static bool permits(
+        const GroupRules& rules,
+        const CommitStatement& statement,
+        const std::set<std::string>& users,
+        const std::set<std::string>& managers
+    );
+
+    // The roster-delta column of the op-effect table on the roster before `statement`: nullopt when the deltas fit the
+    // op, else what is wrong. Only add and remove carry deltas; an addition names newcomers only (an existing member
+    // cannot be promoted), once each; a removal names members, never its committer. Shared by `TreeVerifier`'s replay
+    // and the check before this client signs.
+    static std::optional<std::string> deltasProblem(
+        const CommitStatement& statement,
+        const std::set<std::string>& users,
+        const std::set<std::string>& managers
     );
 
     static server::GroupTreeCommit toWire(const CommitStatement& statement);

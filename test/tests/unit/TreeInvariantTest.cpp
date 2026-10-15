@@ -81,6 +81,8 @@ protected:
     std::uint32_t nextUser = 0;
     // Each member's own client: its pins and verified statements, as kept across reads in one session.
     std::map<std::string, TreeVerifier> verifiers;
+    // The policy the next `create` signs.
+    Poco::Dynamic::Var createPolicy = OPEN_POLICY;
 
     void SetUp() override { reset(); }
 
@@ -92,6 +94,7 @@ protected:
         wrapped.clear();
         knows.clear();
         verifiers.clear();
+        createPolicy = OPEN_POLICY;
     }
 
     TreeVerifier::Environment environment() const {
@@ -125,7 +128,8 @@ protected:
         return GroupKeyResolver::toTreeState(info);
     }
 
-    // Signed as GroupApiImpl signs it: the post state's counters and roster, the committer's own key.
+    // Signed as GroupApiImpl signs it: the post state's counters and roster (`members`, of whom the bridge's managers
+    // minus the removed are managers; at creation the creator), the policy's hash, the committer's own key.
     server::GroupTreeCommit sign(
         const CommitPlan& plan,
         CommitOp op,
@@ -133,16 +137,30 @@ protected:
         std::uint64_t keyVersion,
         const privmx::crypto::PublicKey& grant,
         std::int64_t rosterVersion,
-        const std::vector<std::string>& users,
+        const std::vector<std::string>& members,
         std::vector<std::string> added,
         std::vector<std::string> removed
     ) {
+        std::set<std::string> managers = op == CommitOp::Create ? std::set<std::string>{committer} : bridge.managers;
+        for (const std::string& gone : removed) {
+            managers.erase(gone);
+        }
+        std::vector<std::string> users;
+        for (const std::string& id : members) {
+            if (managers.count(id) == 0) {
+                users.push_back(id);
+            }
+        }
+        const GroupRules rules =
+            op == CommitOp::Create ? TreeCommits::rules(createPolicy, committer) : bridge.rules();
         CommitStatement statement = TreeCommits::statementFor(
             plan, op, op == CommitOp::Create ? std::string("res") : GROUP_ID, 1760000000000, keyVersion,
-            grant.toBase58DER(), static_cast<std::uint64_t>(rosterVersion), users, {}, committer, std::move(added), {},
-            std::move(removed)
+            grant.toBase58DER(), static_cast<std::uint64_t>(rosterVersion), users, {managers.begin(), managers.end()},
+            committer, std::move(added), {}, std::move(removed), rules.hash
         );
-        if (op != CommitOp::Create) {
+        if (op == CommitOp::Create) {
+            statement.policy = createPolicy;
+        } else {
             statement.prevDigest = TreeCommits::digest(TreeCommits::fromWire(bridge.commits.back()));
         }
         TreeCommits::sign(statement, member(committer).priv);
@@ -352,9 +370,10 @@ protected:
         for (const TreeMember& m : members) {
             ids.push_back(m.userId);
         }
+        // The creator a manager, under the open policy: every member may commit unless a test narrows it.
         bridge.create(
             TreeWire::toCreateTree(plan), plan.grantKey.getPublicKey(), creator,
-            sign(plan, CommitOp::Create, creator, 1, plan.grantKey.getPublicKey(), 1, ids, {}, {})
+            sign(plan, CommitOp::Create, creator, 1, plan.grantKey.getPublicKey(), 1, ids, {}, {}), {creator}
         );
         learnPlan(creator, plan);
         closeKnowledge();
@@ -492,6 +511,23 @@ protected:
     }
 };
 
+// What a forged statement says besides the state `change` leaves. Fields are only ever added, never parameters.
+struct ForgeOptions {
+    std::vector<StatementNode> path;
+    std::vector<std::string> added; // addedUsers
+    std::vector<std::string> addedManagers;
+    std::vector<std::string> removed;
+    std::int64_t rosterBump = 0;
+    // An explicit op wins; else the one derivation rule: removed -> Remove, added -> Add, a new epoch -> Rotate,
+    // anything else SelfUpdate.
+    std::optional<CommitOp> op;
+    std::optional<std::string> policyHash;    // default: the current one, or `policy`'s with the creator
+    std::optional<Poco::Dynamic::Var> policy; // the wire policy (create/policy ops); becomes the bridge's
+    // The post-state managers the rosterHash is computed over; default: the bridge's, less `removed`, plus
+    // `addedManagers`.
+    std::optional<std::vector<std::string>> managers;
+};
+
 // A client's verification against a bridge that lies, alone or with a member.
 class TreeVerification : public TreeInvariant {
 protected:
@@ -502,6 +538,38 @@ protected:
     }
 
     const std::string& id(std::size_t index) const { return everyone[index].userId; }
+
+    std::vector<std::string> managersOf() const { return {bridge.managers.begin(), bridge.managers.end()}; }
+
+    // Whether `check` is refused with GroupUnauthorizedSignerException.
+    template<class F>
+    static bool unauthorized(F check) {
+        try {
+            check();
+            return false;
+        } catch (const GroupUnauthorizedSignerException&) {
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
+
+    // The stored chain replayed from genesis, as `epochOpeners` replays it below a pin no read walked: "" when it
+    // passes, "unauthorized" for a role failure, else the integrity refusal's description ("integrity" without one).
+    std::string replay() {
+        TreeVerifier own;
+        own.pinCommitted(
+            GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), bridge.users(), managersOf(), bridge.rules()
+        );
+        try {
+            own.epochOpeners(GROUP_ID, "ctx", environment());
+            return "";
+        } catch (const GroupUnauthorizedSignerException&) {
+            return "unauthorized";
+        } catch (const GroupDataIntegrityException& e) {
+            return e.getDescription().empty() ? "integrity" : e.getDescription();
+        }
+    }
 
     // Whether `check` is refused with GroupDataIntegrityException.
     template<class F>
@@ -517,37 +585,55 @@ protected:
     // A statement the bridge stores with none of its checks — what a malicious bridge, or a member colluding with
     // one, can put in front of a client. `change` edits the stored state; the statement then describes the result
     // exactly (counters, roster, tree hash) and is genuinely signed by `signer`.
-    void forge(
-        const std::string& signer,
-        const std::function<void(TreeGroupState&)>& change,
-        std::vector<StatementNode> path,
-        std::vector<std::string> added = {},
-        std::int64_t rosterBump = 0
-    ) {
+    void forge(const std::string& signer, const std::function<void(TreeGroupState&)>& change, ForgeOptions options = {}) {
         TreeGroupState next = bridge.state;
         change(next);
+        std::set<std::string> managers = bridge.managers;
+        for (const std::string& gone : options.removed) {
+            managers.erase(gone);
+        }
+        managers.insert(options.addedManagers.begin(), options.addedManagers.end());
+        if (options.managers.has_value()) {
+            managers = std::set<std::string>(options.managers->begin(), options.managers->end());
+        }
         CommitStatement statement;
         statement.seq = bridge.commits.size() + 1;
         statement.prevDigest = TreeCommits::digest(TreeCommits::fromWire(bridge.commits.back()));
-        statement.op = CommitOp::SelfUpdate;
+        statement.op = options.op.value_or(
+            !options.removed.empty()                                        ? CommitOp::Remove :
+            !options.added.empty() || !options.addedManagers.empty()        ? CommitOp::Add :
+            next.epoch != bridge.state.epoch                                ? CommitOp::Rotate :
+                                                                              CommitOp::SelfUpdate
+        );
         statement.groupId = GROUP_ID;
         statement.treeVersion = TreeMath::TREE_VERSION;
         statement.date = 1760000000000;
         statement.keyVersion = next.epoch;
         statement.groupPubKey = next.grantPublicKey.toBase58DER();
-        statement.rosterVersion = static_cast<std::uint64_t>(bridge.rosterVersion + rosterBump);
-        statement.rosterHash = TreeCommits::rosterHash(seatedIn(next), {});
+        statement.rosterVersion = static_cast<std::uint64_t>(bridge.rosterVersion + options.rosterBump);
+        statement.rosterHash = TreeCommits::rosterHash(bridge.usersOf(next, managers), {managers.begin(), managers.end()});
         statement.treeHash = TreeCommits::treeHash(next);
+        statement.policyHash = options.policyHash.value_or(
+            options.policy.has_value() ? TreeCommits::rules(options.policy.value(), bridge.creator).hash :
+                                         bridge.rules().hash
+        );
+        statement.policy = options.policy;
         statement.committer = signer;
         statement.committerSeat = seatOf(next, signer).value();
-        for (StatementNode& node : path) {
+        for (StatementNode& node : options.path) {
             node.subtreeHash = TreeCommits::subtreeHash(next, node.nodeIndex);
         }
-        statement.path = std::move(path);
-        statement.addedUsers = std::move(added);
+        statement.path = std::move(options.path);
+        statement.addedUsers = std::move(options.added);
+        statement.addedManagers = std::move(options.addedManagers);
+        statement.removed = std::move(options.removed);
         TreeCommits::sign(statement, member(signer).priv);
         bridge.state = next;
-        bridge.rosterVersion += rosterBump;
+        bridge.managers = managers;
+        bridge.rosterVersion += options.rosterBump;
+        if (options.policy.has_value()) {
+            bridge.policy = options.policy.value();
+        }
         bridge.commits.push_back(TreeCommits::toWire(statement));
     }
 
@@ -780,7 +866,7 @@ TEST_F(TreeVerification, SECURITY_RefusesANodeVouchedByAFormerMember) {
     ASSERT_EQ(original.nodeIndex, 31);
     forge(id(9), [&](TreeGroupState& state) {
         setRecord(state, TreeNodeState{31, 0, NodePublicKey::fromBase58DER(original.publicKey), 1});
-    }, {});
+    });
     EXPECT_THROW(verify(id(10), true), GroupDataIntegrityException);
     EXPECT_THROW(verify(id(10), false), GroupDataIntegrityException);
 }
@@ -796,7 +882,7 @@ TEST_F(TreeVerification, SECURITY_RefusesAStaleGenerationToAClientThatSawTheNewe
     ASSERT_EQ(original.nodeIndex, 31);
     forge(id(3), [&](TreeGroupState& state) {
         setRecord(state, TreeNodeState{31, 0, NodePublicKey::fromBase58DER(original.publicKey), 1});
-    }, {});
+    });
     EXPECT_THROW(verify(id(2), false), GroupDataIntegrityException);
     EXPECT_THROW(verify(id(4), false), GroupDataIntegrityException);
 }
@@ -828,7 +914,7 @@ TEST_F(TreeVerification, SECURITY_RefusesARolledBackAncestorOverAHealedChild) {
         setRecord(
             state, TreeNodeState{127, rootGeneration, NodePublicKey::fromBase58DER(root), bridge.commits.size() + 1}
         );
-    }, {StatementNode{127, rootGeneration, root, ""}});
+    }, {.path = {StatementNode{127, rootGeneration, root, ""}}});
     for (const bool plan : {false, true}) {
         TreeVerifier fresh;
         EXPECT_THROW(
@@ -892,7 +978,7 @@ TEST_F(TreeVerification, SECURITY_RefusesAChainLinkSignedByANonMember) {
     remove(id(35), {id(5)});
     ASSERT_NO_THROW(verify(id(9), false));
     const std::string mallory = newMember().userId;
-    forge(mallory, [&](TreeGroupState& state) { state.leafAssignment[5] = mallory; }, {}, {mallory}, 1);
+    forge(mallory, [&](TreeGroupState& state) { state.leafAssignment[5] = mallory; }, {.added = {mallory}, .rosterBump = 1});
     EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
     // First contact trusts the latest genuine statement by somebody on its roster, but seat 5 changed under the
     // root without the root being re-keyed: the root's voucher signed another subtree.
@@ -987,7 +1073,7 @@ TEST_F(TreeVerification, SECURITY_AChainLinkMustExtendTheStatementBeforeIt) {
     create(40, 0);
     remove(id(35), {id(5)});
     verify(id(9), false);
-    forge(id(9), [](TreeGroupState&) {}, {});
+    forge(id(9), [](TreeGroupState&) {});
     CommitStatement statement = TreeCommits::fromWire(bridge.commits.back());
     statement.prevDigest = std::string(32, 'x');
     TreeCommits::sign(statement, member(id(9)).priv);
@@ -1000,7 +1086,7 @@ TEST_F(TreeVerification, SECURITY_AChainLinkIsNeverDatedBeforeTheOneItExtends) {
     create(40, 0);
     remove(id(35), {id(5)});
     verify(id(9), false);
-    forge(id(9), [](TreeGroupState&) {}, {});
+    forge(id(9), [](TreeGroupState&) {});
     CommitStatement statement = TreeCommits::fromWire(bridge.commits.back());
     statement.date -= 1;
     TreeCommits::sign(statement, member(id(9)).priv);
@@ -1014,7 +1100,7 @@ TEST_F(TreeVerification, SECURITY_AStatementDatedAheadOfTheClockIsRefused) {
     create(40, 0);
     remove(id(35), {id(5)});
     verify(id(9), false);
-    forge(id(9), [](TreeGroupState&) {}, {});
+    forge(id(9), [](TreeGroupState&) {});
     CommitStatement statement = TreeCommits::fromWire(bridge.commits.back());
     const auto dated = [&](std::uint64_t ahead) {
         statement.date = static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp()) + ahead;
@@ -1049,7 +1135,7 @@ TEST_F(TreeVerification, SECURITY_APinMovedOntoAnotherBranchMeanwhileIsNotOverwr
     env.commitsBetween = [&, inner = env.commitsBetween](std::uint64_t fromSeq, std::uint64_t toSeq) {
         if (!moved) {
             moved = true;
-            verifier.pinCommitted(GROUP_ID, "ctx", other, seatedIn(bridge.state), {});
+            verifier.pinCommitted(GROUP_ID, "ctx", other, bridge.users(), managersOf(), bridge.rules());
         }
         return inner(fromSeq, toSeq);
     };
@@ -1063,9 +1149,9 @@ TEST_F(TreeVerification, SECURITY_EpochOpenersRefuseAStatementByANonMemberBelowT
     create(40, 0);
     remove(id(35), {id(5)});
     const std::string mallory = newMember().userId;
-    forge(mallory, [&](TreeGroupState& state) { state.leafAssignment[5] = mallory; }, {}, {mallory}, 1);
+    forge(mallory, [&](TreeGroupState& state) { state.leafAssignment[5] = mallory; }, {.added = {mallory}, .rosterBump = 1});
     TreeVerifier own;
-    own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), seatedIn(bridge.state), {});
+    own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), bridge.users(), managersOf(), bridge.rules());
     EXPECT_THROW(own.epochOpeners(GROUP_ID, "ctx", environment()), GroupDataIntegrityException);
 }
 
@@ -1219,7 +1305,7 @@ TEST_F(TreeVerification, SECURITY_AKeyRevokedNowCannotMoveThePin) {
     };
     EXPECT_NO_THROW(verifierOf(id(9)).verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, env))
         << "an already pinned statement needs no answer for now";
-    forge(id(9), [](TreeGroupState&) {}, {}); // dated 1760000000000, before the revocation
+    forge(id(9), [](TreeGroupState&) {}); // dated 1760000000000, before the revocation
     const server::GroupInfo served = bridge.serve(id(9), false);
     EXPECT_THROW(verifierOf(id(9)).verify(served, TreeVerifier::Scope::Path, env), GroupDataIntegrityException);
     // F1: a first contact takes the latest genuine statement on trust, or an honest committer who rotated their key
@@ -1293,7 +1379,7 @@ TEST_F(TreeVerification, SECURITY_AnOwnCommitIsPinnedSoTheStateItReplacedIsRefus
     own.verify(bridge.serve(id(1), false), TreeVerifier::Scope::Path, environment());
     const server::GroupInfo beforeRemoval = bridge.serve(id(1), false);
     remove(id(1), {id(5)});
-    own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), seatedIn(bridge.state), {});
+    own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), bridge.users(), managersOf(), bridge.rules());
     EXPECT_EQ(own.pinnedKeyVersion(GROUP_ID), bridge.state.epoch);
     EXPECT_THROW(own.verify(beforeRemoval, TreeVerifier::Scope::Path, environment()), GroupHistoryForkException);
     EXPECT_NO_THROW(own.verify(bridge.serve(id(1), false), TreeVerifier::Scope::Path, environment()))
@@ -1407,13 +1493,15 @@ TEST_F(TreeVerification, SECURITY_EpochOpenersReplayTheRosterFromGenesis) {
     // I-1: below a pin no read walked (first contact, an own commit), a member's statement whose roster hash its
     // deltas do not explain passed a replay back from the pin, which cannot tell a removed user from a manager.
     create(40, 0);
-    forge(id(9), [](TreeGroupState&) {}, {});
+    forge(id(9), [](TreeGroupState&) {});
     CommitStatement lying = TreeCommits::fromWire(bridge.commits.back());
-    lying.rosterHash = TreeCommits::rosterHash(seatedIn(bridge.state), {"mallory"}); // a manager no delta seats
+    std::vector<std::string> lyingManagers = managersOf();
+    lyingManagers.push_back("mallory"); // a manager no delta seats
+    lying.rosterHash = TreeCommits::rosterHash(bridge.users(), lyingManagers);
     TreeCommits::sign(lying, member(id(9)).priv);
     bridge.commits.back() = TreeCommits::toWire(lying);
     TreeVerifier own;
-    own.pinCommitted(GROUP_ID, "ctx", lying, seatedIn(bridge.state), {"mallory"});
+    own.pinCommitted(GROUP_ID, "ctx", lying, bridge.users(), lyingManagers, bridge.rules());
     EXPECT_THROW(own.epochOpeners(GROUP_ID, "ctx", environment()), GroupDataIntegrityException);
 
     // And the genesis roster, served unsigned beside the chain, must be the one seq 1's hash binds, even where the
@@ -1423,7 +1511,7 @@ TEST_F(TreeVerification, SECURITY_EpochOpenersReplayTheRosterFromGenesis) {
     remove(id(35), {id(5)});
     bridge.genesis.erase(std::find(bridge.genesis.begin(), bridge.genesis.end(), id(5)));
     TreeVerifier fresh;
-    fresh.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), seatedIn(bridge.state), {});
+    fresh.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), bridge.users(), managersOf(), bridge.rules());
     EXPECT_THROW(fresh.epochOpeners(GROUP_ID, "ctx", environment()), GroupDataIntegrityException);
 }
 
@@ -1454,7 +1542,7 @@ TEST_F(TreeVerification, SECURITY_AChainIsCheckedPageByPageBeforeTheNextPageIsFe
     const auto openers = [&] {
         pages = 0;
         TreeVerifier own;
-        own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), seatedIn(bridge.state), {});
+        own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), bridge.users(), managersOf(), bridge.rules());
         return own.epochOpeners(GROUP_ID, "ctx", env);
     };
     EXPECT_NO_THROW(openers());
@@ -1473,18 +1561,267 @@ TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused
         create(40, 0);
         remove(id(35), {id(5)});
         const PublicKey key = grantKey();
+        // A rotation as its row has it (03): the epoch and roster version one on, no path, the tree unchanged.
         forge(id(9), [&](TreeGroupState& state) {
             state.epoch += 1;
             state.grantPublicKey = key;
-        }, {});
+        }, {.rosterBump = 1, .op = CommitOp::Rotate});
         TreeVerifier own;
-        own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), seatedIn(bridge.state), {});
-        return !refuses([&] { own.epochOpeners(GROUP_ID, "ctx", environment()); });
+        own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), bridge.users(), managersOf(), bridge.rules());
+        try {
+            own.epochOpeners(GROUP_ID, "ctx", environment());
+            return std::string();
+        } catch (const GroupDataIntegrityException& e) {
+            return std::string(e.getDescription()) + "|"; // never empty, so a refusal tells from a pass
+        }
     };
-    EXPECT_TRUE(opensUnder([] { return PrivateKey::generateRandom().getPublicKey(); }));
-    EXPECT_FALSE(opensUnder([&] {
+    EXPECT_EQ(opensUnder([] { return PrivateKey::generateRandom().getPublicKey(); }), "")
+        << "a rotation to a fresh key is a valid row";
+    EXPECT_EQ(opensUnder([&] {
         return PublicKey::fromBase58DER(TreeCommits::fromWire(bridge.commits.front()).groupPubKey);
-    })) << "epoch 1's key at epoch 3";
+    }), "a new epoch's grant key is an earlier epoch's|") << "epoch 1's key at epoch 3, refused by the grant-key rule";
+}
+
+// signed policy (T4-10)
+
+namespace {
+
+std::optional<Poco::Dynamic::Var> wirePolicy(const Poco::Dynamic::Var& policy) {
+    return std::optional<Poco::Dynamic::Var>(std::in_place, policy);
+}
+
+Poco::Dynamic::Var ownerRules() {
+    return policyOf({{"update", "owner"}, {"updatePolicy", "owner"}});
+}
+
+} // namespace
+
+TEST_F(TreeVerification, SECURITY_ARemovalByAMemberThePolicyDoesNotAllowIsRefused) {
+    // AC 1: a member without `update` signs a removal, the bridge stores it; every pinned client refuses it.
+    createPolicy = ownerRules();
+    create(40, 0);
+    verify(id(9), false);
+    ASSERT_EQ(bridge.managers.count(id(0)), 1u);
+    std::vector<std::string> before = bridge.users();
+    remove(id(35), {id(5)});
+    const CommitStatement removal = TreeCommits::fromWire(bridge.commits.back());
+    EXPECT_FALSE(TreeCommits::deltasProblem(removal, {before.begin(), before.end()}, bridge.managers).has_value())
+        << "a removal its row allows: only the role is wrong";
+    EXPECT_EQ(removal.policyHash, bridge.rules().hash) << "and it signs the group's policy";
+    EXPECT_THROW(verify(id(9), false), GroupUnauthorizedSignerException);
+    EXPECT_EQ(replay(), "unauthorized");
+
+    // The same chain with the owner's earlier policy statement letting every member update: it passes.
+    reset();
+    createPolicy = ownerRules();
+    create(40, 0);
+    verify(id(9), false);
+    forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(policyOf({{"update", "user"}, {"updatePolicy", "owner"}}))});
+    remove(id(35), {id(5)});
+    EXPECT_NO_THROW(verify(id(9), false));
+    EXPECT_EQ(replay(), "");
+}
+
+TEST_F(TreeVerification, SECURITY_APolicyChangeByAMemberWithoutUpdatePolicyIsRefused) {
+    // Granting itself the role does not help: a policy statement is judged under the rules it replaces.
+    createPolicy = ownerRules();
+    create(40, 0);
+    verify(id(9), false);
+    forge(id(35), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(policyOf({{"update", "user"}, {"updatePolicy", "user"}}))});
+    EXPECT_THROW(verify(id(9), false), GroupUnauthorizedSignerException);
+    EXPECT_EQ(replay(), "unauthorized");
+}
+
+TEST_F(TreeVerification, SECURITY_ARemovalRelabelledAsSelfUpdateIsRefused) {
+    // A selfUpdate needs no role, so it may move nothing but the tree. A plain user's honest-looking removal, signed
+    // as a selfUpdate under the default (manager-only) policy.
+    createPolicy = Poco::Dynamic::Var();
+    create(40, 0);
+    verify(id(9), false);
+    remove(id(35), {id(5)});
+    CommitStatement relabelled = TreeCommits::fromWire(bridge.commits.back());
+    relabelled.op = CommitOp::SelfUpdate;
+    TreeCommits::sign(relabelled, member(id(35)).priv);
+    bridge.commits.back() = TreeCommits::toWire(relabelled);
+    EXPECT_EQ(replay(), "a selfUpdate statement moves no member");
+    EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_AnEpochOpenedUnderSelfUpdateIsRefused) {
+    createPolicy = Poco::Dynamic::Var();
+    create(40, 0);
+    verify(id(9), false);
+    const PublicKey grant = PrivateKey::generateRandom().getPublicKey();
+    forge(id(35), [&](TreeGroupState& state) {
+        state.epoch += 1;
+        state.grantPublicKey = grant;
+    }, {.op = CommitOp::SelfUpdate});
+    EXPECT_EQ(replay(), "counters the op does not move that way");
+    EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_AnAdditionSmuggledIntoAPolicyStatementIsRefused) {
+    // id(35) may change the policy but not the roster; it names mallory in a policy statement.
+    createPolicy = policyOf({{"update", "manager"}, {"updatePolicy", "user"}});
+    create(40, 0);
+    const std::string mallory = newMember().userId;
+    forge(id(35), [](TreeGroupState&) {},
+          {.added = {mallory}, .rosterBump = 1, .op = CommitOp::Policy, .policy = wirePolicy(policyOf({{"update", "manager"}, {"updatePolicy", "user"}}))});
+    EXPECT_EQ(replay(), "a policy statement moves no member");
+}
+
+TEST_F(TreeVerification, SECURITY_TheOwnerRemovedInsideAnAddStatementIsRefused) {
+    // The owner guard is reachable only through the remove row.
+    createPolicy = policyOf({{"update", "user"}, {"ownerCanBeRemovedFromManagers", "no"}});
+    create(40, 0);
+    const std::string newcomer = newMember().userId;
+    forge(id(35), [](TreeGroupState&) {}, {.added = {newcomer}, .removed = {id(0)}, .rosterBump = 1, .op = CommitOp::Add});
+    EXPECT_EQ(replay(), "an addition adds members and removes none");
+}
+
+TEST_F(TreeVerification, SECURITY_AnAdditionThatPromotesAnExistingMemberIsRefused) {
+    // `update` lets a user add, but not re-add itself as a manager to get the manager-only rules.
+    createPolicy = policyOf({{"update", "user"}, {"updatePolicy", "manager"}});
+    create(40, 0);
+    forge(id(35), [](TreeGroupState&) {}, {.addedManagers = {id(35)}, .rosterBump = 1});
+    EXPECT_EQ(TreeCommits::fromWire(bridge.commits.back()).op, CommitOp::Add);
+    EXPECT_EQ(replay(), "user '" + id(35) + "' is already a member");
+}
+
+TEST_F(TreeVerification, SECURITY_ARotationThatMovesTheTreeIsRefused) {
+    create(40, 0);
+    verify(id(9), false);
+    const PublicKey grant = PrivateKey::generateRandom().getPublicKey();
+    const std::string root = PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    const std::uint32_t generation = recordOf(bridge.state, 63)->generation + 1;
+    forge(id(35), [&](TreeGroupState& state) {
+        state.epoch += 1;
+        state.grantPublicKey = grant;
+        setRecord(state, TreeNodeState{63, generation, NodePublicKey::fromBase58DER(root), bridge.commits.size() + 1});
+    }, {.path = {StatementNode{63, generation, root, ""}}, .rosterBump = 1, .op = CommitOp::Rotate});
+    EXPECT_EQ(replay(), "a rotation or policy statement that moves the tree");
+    EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_AStatementThatChangesThePolicyHashOutsideAPolicyOpIsRefused) {
+    // The bridge serves the policy this self-update signs, so only the row can tell.
+    create(40, 0);
+    verify(id(9), false);
+    forge(id(35), [](TreeGroupState&) {}, {.op = CommitOp::SelfUpdate, .policy = wirePolicy(policyOf({{"update", "all"}}))});
+    EXPECT_EQ(replay(), "a policyHash moved outside a policy statement");
+    EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_APolicyStatementWhoseWirePolicyDoesNotHashToItsPolicyHashIsRefused) {
+    create(40, 0);
+    verify(id(9), false);
+    const Poco::Dynamic::Var all = policyOf({{"update", "all"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}});
+    forge(id(35), [](TreeGroupState&) {},
+          {.op = CommitOp::Policy, .policyHash = TreeCommits::rules(all, id(0)).hash, .policy = wirePolicy(OPEN_POLICY)});
+    bridge.policy = all; // what the statement signs, served
+    EXPECT_EQ(replay(), "a policy that does not hash to the policyHash signed");
+    EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
+}
+
+TEST_F(TreeVerification, SECURITY_AServedPolicyOtherThanTheLatestStatementSignsIsRefused) {
+    create(40, 0);
+    remove(id(35), {id(5)});
+    const server::GroupInfo honest = bridge.serve(id(9), false);
+    const auto lies = std::vector<std::function<void(server::GroupInfo&)>>{
+        [](server::GroupInfo& g) { g.policy = policyOf({{"update", "all"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}}); },
+        [](server::GroupInfo& g) { g.policy = Poco::Dynamic::Var(); },
+        [&](server::GroupInfo& g) { g.creator = id(9); },
+        [](server::GroupInfo& g) { g.policy = Poco::Dynamic::Var("not an object"); },
+    };
+    EXPECT_NO_THROW(TreeVerifier().verify(honest, TreeVerifier::Scope::Path, environment()));
+    EXPECT_NO_THROW(TreeVerifier().verifyListed(honest, environment()));
+    for (std::size_t i = 0; i < lies.size(); ++i) {
+        server::GroupInfo served = honest;
+        lies[i](served);
+        EXPECT_TRUE(refuses([&] { TreeVerifier().verify(served, TreeVerifier::Scope::Path, environment()); })) << i;
+        EXPECT_TRUE(refuses([&] { TreeVerifier().verifyListed(served, environment()); })) << i;
+    }
+    // Fields the statements do not sign are the bridge's, and change nothing.
+    server::GroupInfo unsignedFields = honest;
+    Poco::JSON::Object::Ptr wider = policyOf({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}})
+                                        .extract<Poco::JSON::Object::Ptr>();
+    wider->set("get", "all");
+    unsignedFields.policy = wider;
+    EXPECT_NO_THROW(TreeVerifier().verify(unsignedFields, TreeVerifier::Scope::Path, environment()));
+}
+
+TEST_F(TreeVerification, SECURITY_EpochOpenersReplayThePolicyFromGenesis) {
+    // An out-of-role statement below a pin no read walked (first contact, an own commit) is caught descending.
+    createPolicy = ownerRules();
+    create(40, 0);
+    remove(id(35), {id(5)});
+    selfUpdate(id(9));
+    TreeVerifier own;
+    own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), bridge.users(), managersOf(), bridge.rules());
+    EXPECT_THROW(own.epochOpeners(GROUP_ID, "ctx", environment()), GroupUnauthorizedSignerException);
+}
+
+TEST_F(TreeVerification, FollowsAChainWithPolicyChanges) {
+    // The owner lets every member update, a plain member adds under the new rule, the owner narrows it back.
+    createPolicy = ownerRules();
+    create(40, 0);
+    verify(id(9), false);
+    forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(policyOf({{"update", "user"}, {"updatePolicy", "owner"}}))});
+    remove(id(35), {id(5)});
+    add(std::string(id(35)), 1);
+    forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(ownerRules())});
+    EXPECT_NO_THROW(verify(id(9), false));
+    EXPECT_NO_THROW(verify(id(9), true));
+    EXPECT_EQ(verifierOf(id(9)).epochOpeners(GROUP_ID, "ctx", environment()).size(), 2u);
+    EXPECT_NO_THROW(TreeVerifier().verify(bridge.serve(id(10), false), TreeVerifier::Scope::Path, environment()));
+    EXPECT_EQ(replay(), "");
+}
+
+TEST_F(TreeVerification, AFirstContactTakesThePolicyTheLatestStatementSigns) {
+    // TOFU, as for the roster: a colluding signer's own policy hash, served to match, passes a client with no pin.
+    createPolicy = ownerRules();
+    create(40, 0);
+    verify(id(9), false);
+    const Poco::Dynamic::Var forged = policyOf({{"update", "all"}, {"updatePolicy", "all"}});
+    forge(id(35), [](TreeGroupState&) {}, {.op = CommitOp::SelfUpdate, .policyHash = TreeCommits::rules(forged, id(0)).hash});
+    bridge.policy = forged;
+    EXPECT_NO_THROW(TreeVerifier().verify(bridge.serve(id(10), false), TreeVerifier::Scope::Path, environment()));
+    EXPECT_NO_THROW(TreeVerifier().verifyListed(bridge.serve(id(10), false), environment()));
+    EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException) << "a pinned client replays and refuses it";
+}
+
+TEST_F(TreeVerification, ARoleFailureOnAForgedStatementIsReportedAsIntegrity) {
+    // Out of role and signed by nobody the UserVerifier vouches for: the bridge's, so integrity, not a member's role.
+    createPolicy = ownerRules();
+    create(40, 0);
+    remove(id(35), {id(5)});
+    EXPECT_EQ(replay(), "unauthorized") << "genuinely signed";
+    CommitStatement statement = TreeCommits::fromWire(bridge.commits.back());
+    TreeCommits::sign(statement, PrivateKey::generateRandom());
+    bridge.commits.back() = TreeCommits::toWire(statement);
+    EXPECT_EQ(replay(), "integrity");
+}
+
+TEST_F(TreeVerification, ARotationInTheMiddleOfANonAdjacentWalkChecksOnlyThePath) {
+    // 09's milestone walk skips the self-updates between: `head.treeHash` is then an older statement's.
+    create(40, 0);
+    TreeVerifier::Head head;
+    std::set<std::string> grantKeys;
+    const CommitStatement genesis = TreeCommits::fromWire(bridge.commits.front());
+    head.roster.users = std::set<std::string>(bridge.genesis.begin(), bridge.genesis.end());
+    head.roster.managers = bridge.managers;
+    ASSERT_EQ(TreeVerifier::step(head, genesis, TreeCommits::digest(genesis), grantKeys, true, true), TreeVerifier::Step::Ok);
+    selfUpdate(id(9));
+    rotate(id(9));
+    const CommitStatement rotation = TreeCommits::fromWire(bridge.commits.back());
+    ASSERT_NE(rotation.treeHash, head.treeHash);
+    TreeVerifier::Head skipping = head;
+    std::set<std::string> keys = grantKeys;
+    EXPECT_EQ(TreeVerifier::step(skipping, rotation, TreeCommits::digest(rotation), keys, false, false), TreeVerifier::Step::Ok);
+    EXPECT_EQ(skipping.seq, rotation.seq) << "step advances the head";
+    TreeVerifier::Head adjacent = head;
+    keys = grantKeys;
+    EXPECT_THROW(TreeVerifier::step(adjacent, rotation, TreeCommits::digest(rotation), keys, false, true), GroupDataIntegrityException);
 }
 
 TEST(TreeVerifierCaches, SECURITY_ABoundedCacheKeepsAtMostTwoGenerations) {

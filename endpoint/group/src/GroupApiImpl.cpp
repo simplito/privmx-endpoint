@@ -342,17 +342,19 @@ std::string GroupApiImpl::createGroup(
         .keyId = selfAddressed.at(0).keyId, .groupEpoch = 1, .data = selfAddressed.at(0).data
     };
     model.tree = keytree::TreeWire::toCreateTree(plan);
+    // The policy is signed into the chain (T4-10): the statement carries it, and every later one its hash.
+    const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies.value_or(core::ContainerPolicy{}));
+    const keytree::GroupRules rules = keytree::TreeCommits::rules(policy, creatorId);
     // The group has no id until the bridge stores it, so the first statement names the resourceId instead.
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
         plan, keytree::CommitOp::Create, ctx.resourceId, commitDate(), 1, groupPubKeyStr, 1,
         core::EndpointUtils::usersWithPubKeyToIds(users), core::EndpointUtils::usersWithPubKeyToIds(managers),
-        creatorId, {}, {}, {} // the genesis roster is bound by rosterHash; the bridge serves it beside the chain (I-1)
+        creatorId, {}, {}, {}, // the genesis roster is bound by rosterHash; the bridge serves it beside the chain (I-1)
+        rules.hash
     );
+    statement.policy = policy;
     keytree::TreeCommits::sign(statement, _userPrivKey);
     model.commit = keytree::TreeCommits::toWire(statement);
-    if (policies.has_value()) {
-        model.policy = core::Factory::createPolicyServerObject(policies.value());
-    }
 
     auto result = _serverApi.groupCreate(model);
     // The bridge derives the id from the signed resourceId; any other id is not the group this statement created.
@@ -361,7 +363,7 @@ std::string GroupApiImpl::createGroup(
     }
     _treeVerifier.pinCommitted(
         result.groupId, contextId, statement, core::EndpointUtils::usersWithPubKeyToIds(users),
-        core::EndpointUtils::usersWithPubKeyToIds(managers)
+        core::EndpointUtils::usersWithPubKeyToIds(managers), rules
     );
     const auto cache = _treeKeyCaches.get(result.groupId);
     cache->putGrantKey(1, plan.grantKey);
@@ -369,6 +371,13 @@ std::string GroupApiImpl::createGroup(
 }
 
 void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
+    // The op-effect table's add row names each newcomer once (03): refused here, before anything is read or signed.
+    std::set<std::string> named;
+    for (const GroupMemberToAdd& newMember : newMembers) {
+        if (!named.insert(newMember.user.userId).second) {
+            throw core::InvalidParamsException("user '" + newMember.user.userId + "' is listed twice");
+        }
+    }
     commitWithRetry([&] { addGroupMembersOnce(groupId, newMembers); });
 }
 
@@ -423,6 +432,14 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
         currentGroup, _keyProvider, _groupPrivKeyResolver
     );
     keytree::TreeVerifier::assertSeatsMatchRoster(currentGroup, attestedUsers, attestedManagers);
+    // And never anybody already on it: an addition cannot promote a member (03), and a seat cannot be planned twice.
+    for (const GroupMemberToAdd& newMember : newMembers) {
+        for (const auto* list : {&attestedUsers, &attestedManagers}) {
+            if (std::find(list->begin(), list->end(), newMember.user.userId) != list->end()) {
+                throw core::InvalidParamsException("user '" + newMember.user.userId + "' is already a member");
+            }
+        }
+    }
 
     const auto& allocated = currentGroup.nextFreeSeats;
     if (!allocated.has_value() || allocated.value().size() != newMembers.size()) {
@@ -501,11 +518,12 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
     for (const GroupMemberToAdd& newMember : newMembers) {
         (newMember.role == "manager" ? addedManagers : addedUsers).push_back(newMember.user.userId);
     }
+    const keytree::GroupRules rules = rulesOf(currentGroup);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
         plan, keytree::CommitOp::Add, groupId, commitDate(), static_cast<std::uint64_t>(currentEpoch),
         currentGroup.groupPubKey, static_cast<std::uint64_t>(newRosterVersion),
         core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-        core::EndpointUtils::usersWithPubKeyToIds(roster.managers), adderId, addedUsers, addedManagers, {}
+        core::EndpointUtils::usersWithPubKeyToIds(roster.managers), adderId, addedUsers, addedManagers, {}, rules.hash
     );
     chainTo(statement, currentGroup);
     keytree::TreeCommits::sign(statement, _userPrivKey);
@@ -527,8 +545,8 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
             .newcomers = newcomerKeys,
             .send = [this, sent] { _serverApi.groupAddMembers(*sent); },
             .landed =
-                [this, groupId, contextId, statement, users, managers] {
-                    _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers);
+                [this, groupId, contextId, statement, users, managers, rules] {
+                    _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, rules);
                     invalidateModuleKeysInCache(groupId);
                 },
             .after = {}
@@ -709,10 +727,11 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
     model.keyId = sealed.keyId;
     model.data = sealed.data;
     model.transition = keytree::TreeWire::toRemovalTransition(plan, currentEpoch);
+    const keytree::GroupRules rules = rulesOf(currentGroup);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
         plan, keytree::CommitOp::Remove, groupId, commitDate(), static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr,
         static_cast<std::uint64_t>(newRosterVersion), core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-        core::EndpointUtils::usersWithPubKeyToIds(roster.managers), removerId, {}, {}, userIds
+        core::EndpointUtils::usersWithPubKeyToIds(roster.managers), removerId, {}, {}, userIds, rules.hash
     );
     chainTo(statement, currentGroup);
     keytree::TreeCommits::sign(statement, _userPrivKey);
@@ -741,8 +760,8 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
             .landed =
                 [this, groupId, contextId = currentGroup.contextId, statement,
                  users = core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-                 managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers), grantKey = plan.grantKey] {
-                    adoptCommittedEpoch(groupId, contextId, statement, users, managers, grantKey);
+                 managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers), rules, grantKey = plan.grantKey] {
+                    adoptCommittedEpoch(groupId, contextId, statement, users, managers, rules, grantKey);
                 },
             .after = [this, groupId, abandonHistory, userIds,
                       planes] { refreshMetadataEpochAfterRemoval(groupId, abandonHistory, userIds, planes); }
@@ -809,9 +828,10 @@ void GroupApiImpl::adoptCommittedEpoch(
     const keytree::CommitStatement& statement,
     const std::vector<std::string>& users,
     const std::vector<std::string>& managers,
+    const keytree::GroupRules& rules,
     const privmx::crypto::PrivateKey& grantKey
 ) {
-    _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers);
+    _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, rules);
     // Looked up now, not when planned: `settle` may run this long after, with the group's cache replaced meanwhile.
     _treeKeyCaches.get(groupId)->putGrantKey(static_cast<std::uint32_t>(statement.keyVersion), grantKey);
     // Minted here and accepted at exactly this epoch (the CAS), so it is the epoch's published key: the metadata
@@ -896,9 +916,10 @@ bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& pl
     model.keyId = sealed.keyId;
     model.data = sealed.data;
     model.grantEdge = keytree::TreeWire::toWire(plan.edges.at(0));
+    const keytree::GroupRules rules = rulesOf(currentGroup);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
         plan, keytree::CommitOp::Rotate, groupId, commitDate(), static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr,
-        static_cast<std::uint64_t>(newRosterVersion), attestedUsers, attestedManagers, rotatorId, {}, {}, {}
+        static_cast<std::uint64_t>(newRosterVersion), attestedUsers, attestedManagers, rotatorId, {}, {}, {}, rules.hash
     );
     chainTo(statement, currentGroup);
     keytree::TreeCommits::sign(statement, _userPrivKey);
@@ -922,8 +943,8 @@ bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& pl
             .landed =
                 [this, groupId, contextId = currentGroup.contextId, statement,
                  users = core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-                 managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers), grantKey = plan.grantKey] {
-                    adoptCommittedEpoch(groupId, contextId, statement, users, managers, grantKey);
+                 managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers), rules, grantKey = plan.grantKey] {
+                    adoptCommittedEpoch(groupId, contextId, statement, users, managers, rules, grantKey);
                 },
             .after = [this, groupId, planes] { refreshMetadataEpochAfterRemoval(groupId, false, {}, planes); }
         }
@@ -1264,10 +1285,11 @@ void GroupApiImpl::selfUpdate(const std::string& groupId) {
     model.id = groupId;
     model.expectedKeyVersion = group.keyVersion;
     model.transition = keytree::TreeWire::toSelfUpdateTransition(plan, group.keyVersion);
+    const keytree::GroupRules rules = rulesOf(group);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
         plan, keytree::CommitOp::SelfUpdate, groupId, commitDate(), static_cast<std::uint64_t>(group.keyVersion),
         group.groupPubKey, static_cast<std::uint64_t>(group.rosterVersion), attestedUsers, attestedManagers, memberId,
-        {}, {}, {}
+        {}, {}, {}, rules.hash
     );
     chainTo(statement, group);
     keytree::TreeCommits::sign(statement, _userPrivKey);
@@ -1283,8 +1305,8 @@ void GroupApiImpl::selfUpdate(const std::string& groupId) {
             .newcomers = {},
             .send = [this, sent] { _serverApi.groupSelfUpdate(*sent); },
             .landed =
-                [this, groupId, contextId, statement, users = attestedUsers, managers = attestedManagers] {
-                    _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers);
+                [this, groupId, contextId, statement, users = attestedUsers, managers = attestedManagers, rules] {
+                    _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, rules);
                 },
             .after = {}
         }
@@ -1453,10 +1475,72 @@ void GroupApiImpl::writePrivateMeta(
 }
 
 void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies) {
-    // No read, no key, no envelope: the policy is a bare bridge-held field, so there is nothing to tag or
-    // encrypt. No cache invalidation either — no counter moves and the module key cache keys on `rosterVersion`.
-    _serverApi.groupUpdatePolicy(
-        server::GroupUpdatePolicyModel{.id = groupId, .policy = core::Factory::createPolicyServerObject(policies)}
+    commitWithRetry([&] { updateGroupPolicyOnce(groupId, policies); });
+}
+
+void GroupApiImpl::updateGroupPolicyOnce(const std::string& groupId, const core::ContainerPolicy& policies) {
+    // A signed commit like any other (T4-10): the chain, the CAS and the role check. It moves no node, no epoch and
+    // no roster, so the path view is enough to sign the tree hash as it stands.
+    const server::GroupGetModel getModel = pathRead(groupId);
+    auto group = _serverApi.groupGet(getModel).group;
+    if (!verifyTree(group, getModel, keytree::TreeVerifier::Scope::Path)) {
+        throw core::InvalidParamsException("only a member of a group can change its policy");
+    }
+    const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies);
+    const keytree::GroupRules newRules = keytree::TreeCommits::rules(policy, group.creator);
+    const std::string op = core::ReleaseGate::opKey("policy", {privmx::utils::Hex::from(newRules.hash)});
+    switch (settle(groupId, op, true)) {
+    case Settled::Done:
+        return;
+    case Settled::Reread:
+        group = _serverApi.groupGet(getModel).group;
+        verifyTree(group, getModel, keytree::TreeVerifier::Scope::Path);
+        break;
+    default:
+        break;
+    }
+    const keytree::CommitStatement latest = keytree::TreeCommits::fromWire(group.treeCommit.value());
+    keytree::CommitStatement statement;
+    statement.seq = latest.seq + 1;
+    statement.op = keytree::CommitOp::Policy;
+    statement.groupId = groupId;
+    statement.treeVersion = keytree::TreeMath::TREE_VERSION;
+    statement.date = commitDate();
+    statement.keyVersion = latest.keyVersion;
+    statement.groupPubKey = latest.groupPubKey;
+    statement.rosterVersion = latest.rosterVersion;
+    statement.rosterHash = latest.rosterHash;
+    statement.treeHash = latest.treeHash;
+    statement.policyHash = newRules.hash;
+    statement.committer = keytree::GroupKeyResolver::ownUserId(group).value();
+    statement.committerSeat = static_cast<std::uint32_t>(group.ownLeafPosition.value());
+    statement.policy = policy;
+    chainTo(statement, group);
+    keytree::TreeCommits::sign(statement, _userPrivKey);
+
+    const auto sent = std::make_shared<const server::GroupUpdatePolicyModel>(server::GroupUpdatePolicyModel{
+        .id = groupId,
+        .commit = keytree::TreeCommits::toWire(statement),
+        .expectedKeyVersion = group.keyVersion,
+        .expectedRosterVersion = group.rosterVersion
+    });
+    // Keys are untouched, so nothing is invalidated: the module key cache keys on `rosterVersion`, which stays.
+    submit(
+        groupId, statement,
+        UnresolvedCommit{
+            .op = op,
+            .namesEndState = true,
+            .kind = "policy change",
+            .contextId = group.contextId,
+            .newcomers = {},
+            .send = [this, sent] { _serverApi.groupUpdatePolicy(*sent); },
+            .landed =
+                [this, groupId, contextId = group.contextId, statement, users = group.users,
+                 managers = group.managers, newRules] {
+                    _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, newRules);
+                },
+            .after = {}
+        }
     );
 }
 
@@ -1475,13 +1559,22 @@ Group GroupApiImpl::getGroup(const std::string& groupId) {
     // The tree first, on this same answer: only the verified latest statement says which epoch is current. A caller
     // without a seat gets the group as before, with nothing cached.
     const bool seated = verifyTree(group, params, keytree::TreeVerifier::Scope::Path);
+    // An unseated answer is bound to the chain (`verifyListed`: describes() binds policy, creator and roster; replay
+    // from the pin when this process has one) before the mapper reads any of it; a rollback below the pin counts as
+    // not attested.
+    const bool attested = seated || hasVerifiedGrantKey(group);
     Group result = _groupDataSchemaMapper->validateDecryptAndConvertGroup(
         group, _keyProvider, seated ? resolverOver(&group) : _groupPrivKeyResolver
     );
-    // Outsiders seal anonymous envelopes to it: only as the latest statement vouches for it, which `verifyTree`
-    // checked for a seated caller.
-    if (!seated && !hasVerifiedGrantKey(group)) {
+    if (!attested) {
+        // Outsiders seal anonymous envelopes to it: only as the latest statement vouches for it.
         result.groupPubKey.clear();
+        if (result.statusCode == 0) {
+            // Planes opened under keys the resolver found, on a policy and roster nobody signed: not handed out.
+            result.statusCode = GroupDataIntegrityException().getCode();
+            result.publicMeta = core::Buffer();
+            result.privateMeta = core::Buffer();
+        }
     }
     // Writes take their key from this cache, so only an answer that passed everything may fill it.
     if (seated && result.statusCode == 0) {
@@ -1963,6 +2056,27 @@ void GroupApiImpl::chainTo(keytree::CommitStatement& statement, const server::Gr
     // A clock behind the last committer's signs its date. The bridge takes a date equal to the previous one even
     // past its tolerance, so this never freezes (N-1); keep the max: the exception is equality, not "anything later".
     statement.date = std::max(statement.date, previous.date);
+    // 03: what every reader will check, checked before this member signs it, on the verified read it was planned on
+    // (`describes` bound group.policy, group.creator and the roster to the latest statement). Without it, a mistaken
+    // app call by an honest member gives a malicious bridge a genuinely signed out-of-role statement to land.
+    const std::set<std::string> users(group.users.begin(), group.users.end());
+    const std::set<std::string> managers(group.managers.begin(), group.managers.end());
+    if (const auto problem = keytree::TreeCommits::deltasProblem(statement, users, managers)) {
+        throw core::InvalidParamsException(problem.value());
+    }
+    if (!keytree::TreeCommits::permits(rulesOf(group), statement, users, managers)) {
+        throw GroupUnauthorizedSignerException(
+            "the group's signed policy does not give this member the role this commit needs"
+        );
+    }
+}
+
+keytree::GroupRules GroupApiImpl::rulesOf(const server::GroupInfo& group) {
+    try {
+        return keytree::TreeCommits::rules(group.policy, group.creator);
+    } catch (const std::invalid_argument&) {
+        throw GroupDataIntegrityException("the group's policy does not parse");
+    }
 }
 
 std::shared_ptr<std::mutex> GroupApiImpl::commitLock(const std::string& groupId) {

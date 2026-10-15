@@ -50,6 +50,11 @@ struct StalePlan {};
 //     (T4-19); `epochOpeners`, which reads the chain from seq 1, replays it from the genesis roster.
 //   - The bridge may withhold or delay commits.
 //
+// Roles (T4-10): the rules that govern commits are signed into every statement (`policyHash`), so a replay from a pin,
+// or from genesis in `epochOpeners`, holds every statement to the op-effect table of its op and its committer to the
+// role the rules before it required (`step`). A genuinely signed out-of-role statement throws
+// GroupUnauthorizedSignerException; a first contact takes the latest statement's rules on trust, as its roster.
+//
 // Failures throw GroupDataIntegrityException, rollbacks GroupHistoryForkException. Pins are kept per group in
 // memory and only stored once a verification has passed completely. A latest statement that moves a pin (or is a
 // first contact) needs its committer's key accepted by the UserVerifier both at its date and now (N-3).
@@ -137,14 +142,16 @@ public:
     );
 
     // A commit of this client's own that the bridge accepted is the newest state it knows of: pinned as if read
-    // back, so the next read cannot be the state the commit replaced. `users`/`managers` are the roster it signed.
+    // back, so the next read cannot be the state the commit replaced. `users`/`managers` are the roster it signed,
+    // `rules` the group's rules after it (`statement.policyHash` is their hash).
     // Throws GroupHistoryForkException when a different statement is pinned at the same seq.
     void pinCommitted(
         const std::string& groupId,
         const std::string& contextId,
         const CommitStatement& statement,
         const std::vector<std::string>& users,
-        const std::vector<std::string>& managers
+        const std::vector<std::string>& managers,
+        const GroupRules& rules
     );
 
     // P2: the members seated in the tree must be exactly the attested roster, or the next commit wraps to whoever
@@ -183,7 +190,7 @@ public:
     // then serves a chain that does not reach the seq it claimed a concurrent commit took.
     void assertMaySignAt(const std::string& groupId, std::uint64_t seq);
 
-private:
+    // Public for the unit tests of `step` (a walk that skips statements passes `adjacent = false`).
     // The roster as the statements replay it, with the hash the last of them signed.
     struct Roster {
         std::set<std::string> users;
@@ -191,8 +198,8 @@ private:
         std::string hash;
     };
 
-    // Where a chain of statements has been followed to: the last statement's seq, digest, date and counters, and the
-    // roster replayed up to it.
+    // Where a chain of statements has been followed to: the last statement's seq, digest, date, counters and tree hash,
+    // and the roster and rules replayed up to it.
     struct Head {
         std::uint64_t seq = 0;
         std::string digest;
@@ -201,8 +208,28 @@ private:
         std::uint64_t keyVersion = 0;
         std::string groupPubKey;
         std::uint64_t rosterVersion = 0;
+        GroupRules rules;
+        std::string treeHash;
     };
 
+    enum class Step { Ok, Unauthorized };
+
+    // One statement on top of `head`: the op-effect table (T4-10: seq/op pairing, roster deltas, epoch and grant key,
+    // `rosterVersion`, `policyHash`, an empty path for rotate/policy and, when `adjacent`, their tree hash unchanged),
+    // the grant key per epoch, the roster (`extend`), the policy replay and the role under the rules and roster before
+    // it. A shape failure throws (integrity); a role failure is returned so the caller reports it after the signatures
+    // are checked. The only place that advances `head`, on Ok and on Unauthorized. `digest` is
+    // `TreeCommits::digest(statement)`; `adjacent` is `statement.seq == head.seq + 1`.
+    static Step step(
+        Head& head,
+        const CommitStatement& statement,
+        const std::string& digest,
+        std::set<std::string>& grantKeys,
+        bool checkHash,
+        bool adjacent
+    );
+
+private:
     // What a verified state leaves behind for the next read of the same group: the head at its latest statement.
     struct Pin : Head {
         std::string contextId; // authenticated by the group's id
@@ -239,9 +266,10 @@ private:
 
     // `head` moved along the statements up to `toSeq`, fetched page by page and each page checked before the next is
     // fetched (T4-15): a chain nobody on the roster signed is refused at its first page, not once all of it is held.
-    // Each statement is the next seq, linked by `prevDigest`, genuine (`verifyStatements`), signed by a member of the
-    // roster before it (`extend`), with counters and dates never going back and one grant key per epoch, a new
-    // epoch's not in `grantKeys` (T4-24), which collects it. `each` sees every statement once it passed.
+    // Each statement is the next seq, linked by `prevDigest`, genuine (`verifyStatements`) and passes `step` (its op's
+    // effects, the roster, one grant key per epoch with a new epoch's not in `grantKeys` (T4-24), which collects it,
+    // the policy). A page with a statement out of its committer's role throws GroupUnauthorizedSignerException once
+    // the page's signatures have passed. `each` sees every statement once it passed.
     void followChain(
         const std::string& groupId,
         const std::string& contextId,
@@ -285,16 +313,18 @@ private:
         const CommitStatement& latest,
         const std::vector<std::string>& users,
         const std::vector<std::string>& managers,
+        const GroupRules& rules,
         const std::vector<TreeNodeState>& nodes
     );
 
-    // `stored` moved to `latest` and the roster it signed; under `_mutex`. Generations are the caller's.
+    // `stored` moved to `latest` and the roster and rules it signed; under `_mutex`. Generations are the caller's.
     static void storeLocked(
         Pin& stored,
         const std::string& contextId,
         const CommitStatement& latest,
         const std::vector<std::string>& users,
-        const std::vector<std::string>& managers
+        const std::vector<std::string>& managers,
+        const GroupRules& rules
     );
 
     // `epochOpeners`' last answer per group, extended by the statements since rather than fetched again from seq 1.

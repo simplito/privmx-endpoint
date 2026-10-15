@@ -50,7 +50,10 @@ public:
      * rights) to the created Group
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
-     * @param policies Group's policies
+     * @param policies Group's policies. Who may add, remove, rotate and change the policy (`update`, `rotateKeys`,
+     * `updatePolicy`, `ownerCanBeRemovedFromManagers`) is signed into the Group's commit chain with the creator;
+     * `inherit`/`default` (or absent) mean the v3 defaults (manager, manager, manager, yes), never the Context's,
+     * which can only deny. The creator must hold `update` under them, or it could not write the Group's metadata.
      * @return ID of the created Group
      */
     std::string createGroup(
@@ -169,15 +172,19 @@ public:
     void updateGroupPrivateMeta(const std::string& groupId, const core::Buffer& privateMeta, const int64_t version);
 
     /**
-     * Sets a Group's policies, and nothing else.
+     * Sets a Group's policies, as a signed commit by a member the current policy allows `updatePolicy`.
      *
-     * Takes no version and performs no version check, unlike the two metadata calls. The policies live outside
-     * the Group's encrypted, signed metadata — they always have — so there is no counter for a caller to know
-     * and nothing for a reader to re-verify. Neither metadata version moves, and two callers racing here means
-     * the later write wins.
+     * The rules that govern commits (`update`, `rotateKeys`, `updatePolicy`, `ownerCanBeRemovedFromManagers`) and
+     * the creator are part of the Group's signed state; every member follows the change along the commit chain. The
+     * call is refused for non-members and, before anything is signed, for a member without `updatePolicy`. It may be
+     * retried internally when another commit lands concurrently. No key, epoch or roster moves, and neither metadata
+     * version moves.
      *
-     * That the policies now have a call of their own does **not** make them authenticated. They are held and
-     * enforced by the Bridge, covered by no signature and no tag, exactly as before this call existed.
+     * A narrowing of `update` refuses metadata written by an author who loses it: this call carries such a plane
+     * forward under the caller's name, and is refused before signing when the caller itself would lose `update`
+     * while such a plane exists. Until that carry-forward completes (it is retried by this client's next call on the
+     * Group if it fails), `getGroup` returns a non-zero `statusCode` for such a plane, also to concurrent readers;
+     * any metadata write by a member holding `update` repairs it.
      *
      * @param groupId ID of the Group to update
      * @param policies Group's policies

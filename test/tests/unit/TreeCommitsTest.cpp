@@ -15,6 +15,8 @@ limitations under the License.
  * The bridge computes the same bytes and must get the same hashes, so the expected values below were computed by an
  * independent reference (Python, hashlib, straight from the spec) rather than by this code. The inputs sit next to
  * every expectation; change one and the vector has to be recomputed from the spec, not from the implementation.
+ * The signed-bytes and policy-hash vectors are read from `test/fixtures/keytree/keytree-vectors.json`, which
+ * `test/fixtures/keytree/reference.py` writes; the bridge reads a byte-identical copy of it.
  *
  *     H = sha256; u32/u64 big-endian; lp(s) = u32(len) || s
  *     LH(p)  = H("pmx-tree-leaf\0" || u32(p) || lp(userId))
@@ -24,15 +26,26 @@ limitations under the License.
  *     TH     = H("pmx-tree\0" || u32(n) || CH(root))
  *     RH     = H("pmx-tree-roster\0" || u32(#u) || lp(u)... || u32(#m) || lp(m)...)   lists deduplicated, sorted
  *     SB     = H-tag || lp(groupId) || u32(treeVersion) || u64(seq) || lp(prevDigest) || ...
- *              ... || lp(committer) || lp(committerPubKey) || u32(committerSeat) || ...   see TreeCommits::signedBytes
+ *              ... || RH || TH || PH || lp(committer) || lp(committerPubKey) || u32(committerSeat) || ...
+ *              see TreeCommits::signedBytes and reference.py
+ *     PH     = H("pmx-group-policy\0" || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy)
+ *                || lp(ownerCanBeRemovedFromManagers))      each rule resolved against the frozen v3 defaults
  *              (each path entry: u32(v) || u32(gen) || lp(pk) || subtreeHash)
  */
 
 #include <gtest/gtest.h>
 
+#include <fstream>
+#include <map>
+#include <optional>
+#include <set>
 #include <functional>
+#include <sstream>
 #include <string>
 #include <vector>
+
+#include <Poco/JSON/Array.h>
+#include <Poco/JSON/Object.h>
 
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
@@ -95,7 +108,65 @@ CommitStatement removalStatement() {
     statement.committerSeat = 0;
     statement.path = {StatementNode{3, 2, "pk3", std::string(32, '\x11')}};
     statement.removed = {"bob"};
+    statement.policyHash = TreeCommits::rules(Poco::Dynamic::Var(), "alice").hash;
     return statement;
+}
+
+Poco::JSON::Object::Ptr vectors() {
+    std::ifstream file(std::string(PRIVMX_TEST_FIXTURES_DIR) + "/keytree/keytree-vectors.json");
+    std::stringstream text;
+    text << file.rdbuf();
+    return privmx::utils::Utils::parseJsonObject(text.str());
+}
+
+std::string bytesOf(const std::string& hexString) {
+    return privmx::utils::Hex::toString(hexString);
+}
+
+// A statement of the vectors file, as the wire form both sides read it.
+CommitStatement statementOf(const Poco::JSON::Object::Ptr& wire) {
+    CommitStatement statement;
+    statement.seq = wire->getValue<std::uint64_t>("seq");
+    statement.prevDigest = bytesOf(wire->getValue<std::string>("prevDigest"));
+    const std::string op = wire->getValue<std::string>("op");
+    statement.op = op == "remove" ? CommitOp::Remove : op == "policy" ? CommitOp::Policy : CommitOp::Create;
+    statement.groupId = wire->getValue<std::string>("groupId");
+    statement.treeVersion = wire->getValue<std::uint32_t>("treeVersion");
+    statement.date = wire->getValue<std::uint64_t>("date");
+    statement.keyVersion = wire->getValue<std::uint64_t>("keyVersion");
+    statement.groupPubKey = wire->getValue<std::string>("groupPubKey");
+    statement.rosterVersion = wire->getValue<std::uint64_t>("rosterVersion");
+    statement.rosterHash = bytesOf(wire->getValue<std::string>("rosterHash"));
+    statement.treeHash = bytesOf(wire->getValue<std::string>("treeHash"));
+    statement.policyHash = bytesOf(wire->getValue<std::string>("policyHash"));
+    statement.committer = wire->getValue<std::string>("committer");
+    statement.committerPubKey = wire->getValue<std::string>("committerPubKey");
+    statement.committerSeat = wire->getValue<std::uint32_t>("committerSeat");
+    const auto path = wire->getArray("path");
+    for (std::size_t i = 0; i < path->size(); ++i) {
+        const auto entry = path->getObject(static_cast<unsigned>(i));
+        statement.path.push_back(StatementNode{
+            entry->getValue<std::uint32_t>("nodeIndex"), entry->getValue<std::uint32_t>("generation"),
+            entry->getValue<std::string>("publicKey"), bytesOf(entry->getValue<std::string>("subtreeHash"))
+        });
+    }
+    for (const auto& [name, list] : std::vector<std::pair<std::string, std::vector<std::string>*>>{
+             {"addedUsers", &statement.addedUsers}, {"addedManagers", &statement.addedManagers}, {"removed", &statement.removed}
+         }) {
+        const auto values = wire->getArray(name);
+        for (std::size_t i = 0; i < values->size(); ++i) {
+            list->push_back(values->getElement<std::string>(static_cast<unsigned>(i)));
+        }
+    }
+    return statement;
+}
+
+Poco::Dynamic::Var policyFrom(const std::map<std::string, std::string>& rules) {
+    Poco::JSON::Object::Ptr policy = new Poco::JSON::Object();
+    for (const auto& [field, rule] : rules) {
+        policy->set(field, rule);
+    }
+    return policy;
 }
 
 } // namespace
@@ -185,16 +256,142 @@ TEST(TreeCommitsHashes, AFilledRecordWithoutItsStatementDoesNotHash) {
 // signed bytes
 
 TEST(TreeCommitsStatement, SignedBytesMatchTheReference) {
-    const std::string bytes = TreeCommits::signedBytes(removalStatement());
-    EXPECT_EQ(
-        hex(bytes),
-        "706d782d747265652d636f6d6d697400000000056772702d31000000020000000000000007000000202222222222222222222222222222"
-        "2222222222222222222222222222222222220300000199c82cc00000000000000000040000000347504b0000000000000009d42481d52a"
-        "260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059"
-        "dc17598d00000005616c6963650000000341504b0000000000000001000000030000000200000003706b33111111111111111111111111"
-        "111111111111111111111111111111111111111100000000000000000000000100000003626f62"
-    );
-    EXPECT_EQ(hex(privmx::crypto::Crypto::sha256(bytes)), "c180895bffe8752c1bcd018e315145d3cf02f22739c9d9972114e9d119877677");
+    const auto all = vectors()->getArray("signedBytes");
+    ASSERT_EQ(all->size(), 2u);
+    for (std::size_t i = 0; i < all->size(); ++i) {
+        const auto vector = all->getObject(static_cast<unsigned>(i));
+        const CommitStatement statement = statementOf(vector->getObject("statement"));
+        EXPECT_EQ(hex(TreeCommits::signedBytes(statement)), vector->getValue<std::string>("expectedHex")) << i;
+    }
+    // The first vector is this file's removal statement; the bytes before `policyHash` are those of the old vector.
+    EXPECT_EQ(hex(TreeCommits::signedBytes(removalStatement())), all->getObject(0)->getValue<std::string>("expectedHex"));
+}
+
+TEST(TreeCommitsPolicy, APolicyHashesToTheSharedVectors) {
+    const auto all = vectors()->getArray("policyHash");
+    ASSERT_EQ(all->size(), 6u);
+    for (std::size_t i = 0; i < all->size(); ++i) {
+        const auto vector = all->getObject(static_cast<unsigned>(i));
+        EXPECT_EQ(
+            hex(TreeCommits::rules(vector->get("policy"), vector->getValue<std::string>("creator")).hash),
+            vector->getValue<std::string>("expectedHex")
+        ) << i;
+    }
+}
+
+TEST(TreeCommitsPolicy, InheritDefaultAndAbsentResolveToTheV3Defaults) {
+    const GroupRules absent = TreeCommits::rules(Poco::Dynamic::Var(), "alice");
+    EXPECT_EQ(absent.update, "manager");
+    EXPECT_EQ(absent.rotateKeys, "manager");
+    EXPECT_EQ(absent.updatePolicy, "manager");
+    EXPECT_EQ(absent.ownerCanBeRemovedFromManagers, "yes");
+    EXPECT_EQ(absent.creator, "alice");
+    for (const std::string value : {"inherit", "default"}) {
+        const GroupRules resolved = TreeCommits::rules(
+            policyFrom({{"update", value}, {"rotateKeys", value}, {"updatePolicy", value}, {"ownerCanBeRemovedFromManagers", value}}),
+            "alice"
+        );
+        EXPECT_EQ(resolved.hash, absent.hash) << value;
+    }
+    EXPECT_EQ(TreeCommits::rules(policyFrom({}), "alice").hash, absent.hash) << "{} is no policy";
+    EXPECT_NE(TreeCommits::rules(policyFrom({{"update", "manager"}}), "bob").hash, absent.hash) << "the creator is signed";
+    EXPECT_THROW(TreeCommits::rules(Poco::Dynamic::Var(5), "alice"), std::invalid_argument);
+    Poco::JSON::Object::Ptr numeric = new Poco::JSON::Object();
+    numeric->set("update", 5);
+    EXPECT_THROW(TreeCommits::rules(numeric, "alice"), std::invalid_argument);
+}
+
+TEST(TreeCommitsPolicy, FieldsTheStatementsDoNotSignDoNotChangeTheHash) {
+    const auto base = TreeCommits::rules(policyFrom({{"update", "user"}}), "alice").hash;
+    Poco::JSON::Object::Ptr wider = policyFrom({{"update", "user"}, {"get", "all"}, {"delete", "none"}}).extract<Poco::JSON::Object::Ptr>();
+    Poco::JSON::Object::Ptr item = new Poco::JSON::Object();
+    item->set("get", "all");
+    wider->set("item", item);
+    EXPECT_EQ(TreeCommits::rules(wider, "alice").hash, base);
+    EXPECT_NE(TreeCommits::rules(policyFrom({{"update", "user,manager"}}), "alice").hash, base) << "verbatim";
+}
+
+TEST(TreeCommitsPolicy, RulesAreEvaluatedAsTheBridgeEvaluatesThem) {
+    // (rule, member, manager, owner) -> allowed, as PolicyService.userMeetsPolicy answers it.
+    struct Case {
+        std::string rule;
+        bool member, manager, owner, allowed;
+    };
+    for (const Case& c : std::vector<Case>{
+             {"manager", true, true, false, true},     {"manager", true, false, false, false},
+             {"user", true, false, false, true},       {"user", false, false, false, false},
+             {"owner", false, false, true, true},      {"owner", true, true, false, false},
+             {"manager,owner", true, false, true, true}, {"manager,owner", true, false, false, false},
+             {"owner&user", true, false, true, true},  {"owner&user", false, false, true, false},
+             {"none", true, true, true, false},        {"all", false, false, false, true},
+             {"itemOwner", true, true, true, false},   {"admin", true, true, true, false},
+             {"", true, true, true, false},            {"user,", true, false, false, true},
+         }) {
+        EXPECT_EQ(TreeCommits::allows(c.rule, c.member, c.manager, c.owner), c.allowed)
+            << "'" << c.rule << "' " << c.member << c.manager << c.owner;
+    }
+}
+
+TEST(TreeCommitsPolicy, TheOwnerLeavesTheManagersOnlyIfThePolicySaysSo) {
+    CommitStatement removal = removalStatement(); // alice removes bob
+    removal.removed = {"carol"};
+    const std::set<std::string> users{"alice"};
+    const std::set<std::string> managers{"carol", "bob"};
+    for (const auto& [rule, allowed] : std::vector<std::pair<std::string, bool>>{{"yes", true}, {"no", false}}) {
+        const GroupRules rules =
+            TreeCommits::rules(policyFrom({{"update", "user"}, {"ownerCanBeRemovedFromManagers", rule}}), "carol");
+        EXPECT_EQ(TreeCommits::permits(rules, removal, users, managers), allowed) << rule;
+    }
+    removal.removed = {"bob"}; // not the owner
+    const GroupRules no = TreeCommits::rules(policyFrom({{"update", "user"}, {"ownerCanBeRemovedFromManagers", "no"}}), "carol");
+    EXPECT_TRUE(TreeCommits::permits(no, removal, users, managers));
+}
+
+TEST(TreeCommitsPolicy, AnOpWithoutARowIsNotPermitted) {
+    CommitStatement statement = removalStatement();
+    statement.op = static_cast<CommitOp>(7);
+    const GroupRules open = TreeCommits::rules(policyFrom({{"update", "all"}, {"rotateKeys", "all"}, {"updatePolicy", "all"}}), "alice");
+    EXPECT_FALSE(TreeCommits::permits(open, statement, {"alice"}, {"alice"}));
+    EXPECT_TRUE(TreeCommits::deltasProblem(statement, {"alice"}, {}).has_value());
+}
+
+TEST(TreeCommitsPolicy, DeltasProblemNamesWhatTheRowRefuses) {
+    const std::set<std::string> users{"alice", "bob"};
+    const std::set<std::string> managers{"carol"};
+    CommitStatement add = removalStatement();
+    add.op = CommitOp::Add;
+    add.removed.clear();
+    add.addedUsers = {"dave"};
+    EXPECT_FALSE(TreeCommits::deltasProblem(add, users, managers).has_value());
+    add.addedManagers = {"bob"};
+    EXPECT_EQ(TreeCommits::deltasProblem(add, users, managers), std::optional<std::string>("user 'bob' is already a member"));
+    add.addedManagers = {"dave"};
+    EXPECT_TRUE(TreeCommits::deltasProblem(add, users, managers).has_value()) << "the added lists not disjoint";
+    add.addedManagers.clear();
+    add.addedUsers = {"dave", "dave"};
+    EXPECT_TRUE(TreeCommits::deltasProblem(add, users, managers).has_value()) << "a user listed twice";
+    add.addedUsers = {"dave"};
+    add.removed = {"bob"};
+    EXPECT_TRUE(TreeCommits::deltasProblem(add, users, managers).has_value()) << "an add that removes";
+
+    CommitStatement removal = removalStatement(); // alice removes bob
+    EXPECT_FALSE(TreeCommits::deltasProblem(removal, users, managers).has_value());
+    removal.removed = {"mallory"};
+    EXPECT_TRUE(TreeCommits::deltasProblem(removal, users, managers).has_value()) << "a non-member";
+    removal.removed = {"alice"};
+    EXPECT_TRUE(TreeCommits::deltasProblem(removal, users, managers).has_value()) << "the committer itself";
+    removal.removed.clear();
+    EXPECT_TRUE(TreeCommits::deltasProblem(removal, users, managers).has_value()) << "nobody";
+
+    for (const CommitOp op : {CommitOp::SelfUpdate, CommitOp::Policy, CommitOp::Rotate, CommitOp::Create}) {
+        CommitStatement other = removalStatement();
+        other.op = op;
+        EXPECT_TRUE(TreeCommits::deltasProblem(other, users, managers).has_value()) << "removed on op " << int(op);
+        other.removed.clear();
+        EXPECT_FALSE(TreeCommits::deltasProblem(other, users, managers).has_value());
+        other.addedUsers = {"dave"};
+        EXPECT_TRUE(TreeCommits::deltasProblem(other, users, managers).has_value()) << "added on op " << int(op);
+    }
 }
 
 TEST(TreeCommitsStatement, ASignatureCoversEveryField) {
@@ -218,6 +415,7 @@ TEST(TreeCommitsStatement, ASignatureCoversEveryField) {
         [](CommitStatement& s) { s.rosterVersion += 1; },
         [](CommitStatement& s) { s.rosterHash[0] ^= 1; },
         [](CommitStatement& s) { s.treeHash[31] ^= 1; },
+        [](CommitStatement& s) { s.policyHash[0] ^= 1; },
         [](CommitStatement& s) { s.committer = "mallory"; },
         [](CommitStatement& s) { s.committerPubKey = "MPK"; },
         [](CommitStatement& s) { s.committerSeat = 1; },
@@ -242,8 +440,24 @@ TEST(TreeCommitsStatement, RoundTripsThroughTheWire) {
     const server::GroupTreeCommit wire = TreeCommits::toWire(statement);
     EXPECT_EQ(wire.op, "remove");
     EXPECT_EQ(wire.treeHash, "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d") << "lowercase hex";
+    EXPECT_FALSE(wire.toJSON()->has("policy")) << "only a creation and a policy statement carry the policy";
     const CommitStatement back = TreeCommits::fromWire(server::GroupTreeCommit::fromJSON(wire.toJSON()));
     EXPECT_EQ(TreeCommits::digest(back), TreeCommits::digest(statement));
+
+    CommitStatement change = removalStatement();
+    change.op = CommitOp::Policy;
+    change.removed.clear();
+    change.path.clear();
+    change.policy = policyFrom({{"update", "user"}, {"get", "all"}});
+    change.policyHash = TreeCommits::rules(change.policy.value(), "alice").hash;
+    TreeCommits::sign(change, PrivateKey::generateRandom());
+    const server::GroupTreeCommit changeWire = TreeCommits::toWire(change);
+    EXPECT_EQ(changeWire.op, "policy");
+    const CommitStatement changeBack = TreeCommits::fromWire(server::GroupTreeCommit::deserialize(changeWire.serialize()));
+    EXPECT_EQ(changeBack.op, CommitOp::Policy);
+    EXPECT_EQ(TreeCommits::digest(changeBack), TreeCommits::digest(change));
+    ASSERT_TRUE(changeBack.policy.has_value());
+    EXPECT_EQ(TreeCommits::rules(changeBack.policy.value(), "alice").hash, change.policyHash);
 }
 
 TEST(TreeCommitsStatement, RefusesWhatDoesNotDecode) {
@@ -260,6 +474,9 @@ TEST(TreeCommitsStatement, RefusesWhatDoesNotDecode) {
         }
     };
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.op = "merge"; }));
+    EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.op = "policyX"; }));
+    EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.policyHash = ""; })) << "missing";
+    EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.policyHash = w.policyHash.substr(2); })) << "short";
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.seq = -1; }));
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.committerSeat = std::int64_t(1) << 33; }));
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.treeHash = w.treeHash.substr(2); }));
@@ -280,8 +497,10 @@ TEST(TreeCommitsStatement, AStatementForAPlanDescribesThePostState) {
     TreeKeys keys(cache);
     const CommitPlan plan = keys.planCreate(members, "u1", PrivateKey::generateRandom());
     const CommitStatement statement = TreeCommits::statementFor(
-        plan, CommitOp::Create, "res", 5, 1, "GPK", 1, {"u2", "u0"}, {"u1"}, "u1", {"u2", "u0", "u2"}, {"u1"}, {}
+        plan, CommitOp::Create, "res", 5, 1, "GPK", 1, {"u2", "u0"}, {"u1"}, "u1", {"u2", "u0", "u2"}, {"u1"}, {},
+        std::string(32, '\x33')
     );
+    EXPECT_EQ(statement.policyHash, std::string(32, '\x33'));
     EXPECT_EQ(statement.seq, 1u);
     EXPECT_EQ(statement.committerSeat, 1u);
     ASSERT_EQ(statement.path.size(), 1u);
