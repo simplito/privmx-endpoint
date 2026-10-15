@@ -277,7 +277,12 @@ private:
     // m2: a commit released to the bridge with no known outcome. A retry resends exactly this.
     struct UnresolvedCommit {
         std::string digest; // of the released statement (set by `submit`)
+        std::uint64_t date = 0; // its signed date (set by `submit`)
         std::string op;     // core::ReleaseGate::opKey of what the caller asked for
+        // The op key names the state the call asks for (these members added, those removed): found landed, it is
+        // Done whenever. Otherwise it names an event (a rotation), and a later call with the same key is its retry
+        // only inside RELEASE_WINDOW_MS from `date`; past it, a new request.
+        bool namesEndState = false;
         std::string kind;   // "add", "remove", ... for messages
         std::string contextId;
         std::vector<core::UserWithPubKey> newcomers; // add only: re-checked before every resend
@@ -286,7 +291,7 @@ private:
         std::function<void()> after;                 // best-effort follow-up (a removal's metadata refresh) or empty
     };
     // Proceed: plan on the read. Done: the caller's own op landed (now or before). Reread: another op of this
-    // client was completed first; read again. Deferred: the background self-update yields to another op's commit.
+    // client, or an earlier call of an event op past its window, was completed first; read again. Deferred: the background self-update yields to another op's commit.
     enum class Settled {
         Proceed,
         Done,

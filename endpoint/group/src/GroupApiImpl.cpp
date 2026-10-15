@@ -509,6 +509,7 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
         groupId, statement,
         UnresolvedCommit{
             .op = op,
+            .namesEndState = true,
             .kind = "add",
             .contextId = contextId,
             .newcomers = newcomerKeys,
@@ -720,6 +721,7 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
         groupId, statement,
         UnresolvedCommit{
             .op = op,
+            .namesEndState = true,
             .kind = "remove",
             .contextId = currentGroup.contextId,
             .newcomers = {},
@@ -1816,6 +1818,7 @@ void GroupApiImpl::submit(
     const auto mutex = commitLock(groupId);
     std::unique_lock<std::mutex> lock(*mutex);
     commit.digest = keytree::TreeCommits::digest(statement);
+    commit.date = statement.date;
     const core::ReleaseGate::Released released{
         .seq = statement.seq,
         .prevDigest = statement.prevDigest,
@@ -1896,7 +1899,14 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
         if (pending.after) {
             pending.after();
         }
-        return pending.op == op ? Settled::Done : done;
+        if (pending.op != op) {
+            return done;
+        }
+        // An event op (a rotation) found landed past its window is an earlier call's: this call is a new request,
+        // planned on a fresh read (`after` changed the group). Never Done then, or the key the caller wants replaced
+        // stays current with the call returning success.
+        return pending.namesEndState || commitDate() < pending.date + RELEASE_WINDOW_MS ? Settled::Done
+                                                                                          : Settled::Reread;
     };
     // Landed only when a verified read pinned exactly it, never on what the bridge serves as the head: a served head
     // is unverified, and `landed` cannot refuse it (its `pinCommitted` passes over a statement below the pin). Before

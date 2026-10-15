@@ -124,7 +124,8 @@ public:
      *
      * A call that failed may still take effect, as with `addGroupMembers`/`removeGroupMembers`: a retry resends the
      * same rotation (and returns once it is found applied), and any other commit of this client to the Group
-     * completes it first, for up to 20 minutes or until the Group's head moves past it.
+     * completes it first, for up to 20 minutes or until the Group's head moves past it. A call made later is a new
+     * rotation, even when the failed one turns out to have been applied.
      *
      * @param groupId ID of the Group
      * @throws GroupCommitUnresolvedException when an earlier commit of this client to the Group has no known
