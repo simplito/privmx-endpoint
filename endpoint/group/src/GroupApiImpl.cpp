@@ -839,7 +839,10 @@ bool GroupApiImpl::isRetryableCommitRejection(const privmx::utils::PrivmxExcepti
     case 0x6224: // GROUP_ROSTER_VERSION_MISMATCH
         return true;
     case 0x621E: // GROUP_TREE_INVALID, whose data lists the problems found
-        return e.getData().find("\"STALE_BASE_GENERATION\"") != std::string::npos;
+        // A rotation moves no node, so a self-update under it shows as its grant edge's stale child generation
+        // (the root's); every other commit sees it as a stale base generation.
+        return e.getData().find("\"STALE_BASE_GENERATION\"") != std::string::npos ||
+               e.getData().find("\"STALE_CHILD_GENERATION\"") != std::string::npos;
     default:
         return false;
     }

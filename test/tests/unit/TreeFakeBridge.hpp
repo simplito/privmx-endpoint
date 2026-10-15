@@ -25,6 +25,7 @@ limitations under the License.
 #include <vector>
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/group/keytree/TreeCommits.hpp>
@@ -369,6 +370,18 @@ public:
         const server::GroupTreeCommit& commit
     ) {
         ASSERT_TRUE(seatOf(state, committer).has_value()) << "only a seated member rotates";
+        // The bridge's `checkGrantEdge`: an edge to a root that has moved on since the rotator read it (a
+        // self-update re-keys the root) is refused, as the bridge refuses it, with the problem in the data.
+        const std::uint32_t root = TreeMath::root(state.numLeaves);
+        const TreeNodeState* rootRecord = recordOf(state, root);
+        if (!TreeMath::isLeaf(root) && rootRecord != nullptr && grantEdge.childGeneration.has_value() &&
+            grantEdge.childGeneration.value() != static_cast<std::int64_t>(rootRecord->generation)) {
+            throw privmx::utils::PrivmxException(
+                "GROUP_TREE_INVALID", privmx::utils::PrivmxException::RPC, 0x621E,
+                "[{\"kind\":\"STALE_CHILD_GENERATION\",\"expected\":" + std::to_string(rootRecord->generation) +
+                    ",\"got\":" + std::to_string(grantEdge.childGeneration.value()) + "}]"
+            );
+        }
         TreeGroupState post = state;
         post.epoch += 1;
         post.grantPublicKey = newGrant;

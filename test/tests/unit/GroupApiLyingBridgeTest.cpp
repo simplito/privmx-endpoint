@@ -59,6 +59,7 @@ struct Bridge {
     server::GroupInfo rest; // everything but the tree, as sent
     std::vector<std::pair<std::string, server::GroupSendCustomEventModel>> events; // (sender, as sent)
     std::function<void()> afterRemoval = [] {};
+    std::function<void()> beforeRotation = [] {}; // runs as a rotation arrives, before it is checked
 
     server::GroupInfo serve(const std::string& userId, bool plan) const {
         server::GroupInfo info = tree.serve(userId, plan);
@@ -186,6 +187,7 @@ struct Bridge {
         }
         if (group == "groupGenerateNewKey") {
             const auto model = server::GroupGenerateNewKeyModel::fromJSON(params);
+            beforeRotation();
             tree.rotate(caller, model.grantEdge, PublicKey::fromBase58DER(model.groupPubKey), model.commit);
             storeNewEpoch(caller, model);
             return Poco::Dynamic::Var();
@@ -729,4 +731,24 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARotationIsNotPlannedOnAStateRolledBackBelo
     bridge.tree = atSeq1.tree;
     EXPECT_THROW(client("alice").rotateGroupKey(groupId), GroupHistoryForkException);
     EXPECT_EQ(bridge.tree.commits.size(), 1u) << "nothing was committed";
+}
+
+TEST_F(GroupApiLyingBridge, ARotationOvertakenByASelfUpdateIsPlannedAgain) {
+    // bob's self-update re-keys the root between alice's read and her submit; keyVersion and rosterVersion stay, so
+    // only the grant edge's child generation is stale. That is a lost race like any other: re-read, re-plan, commit.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    int rotations = 0;
+    bridge.beforeRotation = [&] {
+        if (++rotations == 1) {
+            selfUpdateBy("bob");
+        }
+    };
+    client("alice").rotateGroupKey(groupId);
+    EXPECT_EQ(rotations, 2);
+    ASSERT_EQ(bridge.tree.state.epoch, 2u);
+    for (const std::string id : {"bob", "carol"}) {
+        const Group group = client(id).getGroup(groupId);
+        EXPECT_EQ(group.statusCode, 0) << id;
+        EXPECT_EQ(group.keyVersion, 2) << id;
+    }
 }
