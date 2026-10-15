@@ -386,8 +386,9 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
     };
     auto currentGroup = _serverApi.groupGet(getModel).group;
     // Every record a plan reads and every node it wraps to, checked against the statements members signed.
-    verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
-    switch (settle(groupId, currentGroup, op, true)) {
+    // `settle` only after a read that verified: it goes by the pin, and the bridge's unverified word moves nothing.
+    const bool verified = verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+    switch (verified ? settle(groupId, op, true) : Settled::Proceed) {
     case Settled::Done:
         return;
     case Settled::Reread:
@@ -605,12 +606,13 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
         .fromRosterVersion = {}
     };
     auto currentGroup = _serverApi.groupGet(getModel).group;
-    verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+    // `settle` only after a read that verified: it goes by the pin, and the bridge's unverified word moves nothing.
+    const bool verified = verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
     std::vector<std::string> leavingIds = userIds;
     std::sort(leavingIds.begin(), leavingIds.end());
     leavingIds.erase(std::unique(leavingIds.begin(), leavingIds.end()), leavingIds.end());
     const std::string op = core::ReleaseGate::opKey("remove", leavingIds);
-    switch (settle(groupId, currentGroup, op, true)) {
+    switch (verified ? settle(groupId, op, true) : Settled::Proceed) {
     case Settled::Done:
         return std::nullopt;
     case Settled::Reread:
@@ -829,9 +831,10 @@ bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& pl
         .fromRosterVersion = {}
     };
     auto currentGroup = _serverApi.groupGet(getModel).group;
-    verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+    // `settle` only after a read that verified: it goes by the pin, and the bridge's unverified word moves nothing.
+    const bool verified = verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
     const std::string op = core::ReleaseGate::opKey("rotate");
-    switch (settle(groupId, currentGroup, op, true)) {
+    switch (verified ? settle(groupId, op, true) : Settled::Proceed) {
     case Settled::Done:
         return false;
     case Settled::Reread:
@@ -1056,7 +1059,7 @@ void GroupApiImpl::selfUpdate(const std::string& groupId) {
         return;
     }
     // Before the need check: an unresolved self-update of ours is resent (or found landed), never planned again.
-    switch (settle(groupId, pathView, SELF_UPDATE_OP, false)) {
+    switch (settle(groupId, SELF_UPDATE_OP, false)) {
     case Settled::Proceed:
         break;
     case Settled::Deferred:
@@ -1848,12 +1851,7 @@ void GroupApiImpl::submit(
     commit.landed();
 }
 
-GroupApiImpl::Settled GroupApiImpl::settle(
-    const std::string& groupId,
-    const server::GroupInfo& head,
-    const std::string& op,
-    bool mayCompleteOther
-) {
+GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std::string& op, bool mayCompleteOther) {
     std::optional<UnresolvedCommit> first;
     {
         std::lock_guard<std::mutex> lock(_unresolvedMutex);
@@ -1863,12 +1861,11 @@ GroupApiImpl::Settled GroupApiImpl::settle(
         }
         first = it->second;
     }
-    const std::string headDigest = head.treeCommit.has_value() ?
-        keytree::TreeCommits::digest(keytree::TreeCommits::fromWire(head.treeCommit.value())) :
-        std::string();
     // A resent add wraps to its newcomers' keys again: only while the UserVerifier still vouches for them. Outside
     // every lock of ours, like any verifier call.
-    if (!first->newcomers.empty() && headDigest != first->digest && (first->op == op || mayCompleteOther)) {
+    if (!first->newcomers.empty() &&
+        _treeVerifier.pinnedDigest(groupId) != first->digest &&
+        (first->op == op || mayCompleteOther)) {
         try {
             assertUserKeysVerified(first->contextId, first->newcomers);
         } catch (...) {
@@ -1901,7 +1898,10 @@ GroupApiImpl::Settled GroupApiImpl::settle(
         }
         return pending.op == op ? Settled::Done : done;
     };
-    if (headDigest == pending.digest) {
+    // Landed only when a verified read pinned exactly it, never on what the bridge serves as the head: a served head
+    // is unverified, and `landed` cannot refuse it (its `pinCommitted` passes over a statement below the pin). Before
+    // the gate, which lets go of the entry once the pin reaches its seq.
+    if (_treeVerifier.pinnedDigest(groupId) == pending.digest) {
         return finish(Settled::Proceed); // it landed; only the answer was lost
     }
     const auto released = _releaseGate.unresolved(groupId, commitDate(), _treeVerifier.pinnedSeq(groupId));

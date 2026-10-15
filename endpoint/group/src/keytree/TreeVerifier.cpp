@@ -592,6 +592,12 @@ std::uint64_t TreeVerifier::pinnedSeq(const std::string& groupId) {
     return it == _pins.end() ? 0 : it->second.seq;
 }
 
+std::string TreeVerifier::pinnedDigest(const std::string& groupId) {
+    std::lock_guard lock(_mutex);
+    const auto it = _pins.find(groupId);
+    return it == _pins.end() ? std::string() : it->second.digest;
+}
+
 std::uint64_t TreeVerifier::pinnedKeyVersion(const std::string& groupId) {
     std::lock_guard lock(_mutex);
     const auto it = _pins.find(groupId);

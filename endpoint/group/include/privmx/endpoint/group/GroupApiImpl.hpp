@@ -297,15 +297,11 @@ private:
 
     // Per group; held only from release to outcome, never across reads or the UserVerifier.
     std::shared_ptr<std::mutex> commitLock(const std::string& groupId);
-    // Before planning on `head` (a verified read): completes this client's unresolved commit to the group, if any
-    // (resend, or noticing it landed), so no second statement is released at its prevDigest (A5-F3).
-    // `mayCompleteOther`: whether a different op may resend it (every app op; not the background self-update).
-    Settled settle(
-        const std::string& groupId,
-        const server::GroupInfo& head,
-        const std::string& op,
-        bool mayCompleteOther
-    );
+    // Right after a read that verified (`verifyTree` returned true), before planning on it: completes this client's
+    // unresolved commit to the group, if any (resend, or noticing it landed: the pin is exactly it), so no second
+    // statement is released at its prevDigest (A5-F3). `mayCompleteOther`: whether a different op may resend it
+    // (every app op; not the background self-update).
+    Settled settle(const std::string& groupId, const std::string& op, bool mayCompleteOther);
     // Releases a signed statement through the gate (`_releaseGate`) and keeps `commit` until its outcome is known.
     // Throws keytree::StalePlan for a plan behind the pin, GroupCommitUnresolvedException when another statement at
     // its prevDigest is unresolved. A refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo`.

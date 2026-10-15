@@ -158,6 +158,8 @@ public:
     // `seq` and `keyVersion` of the last state verified for the group, 0 if none. Pins are never dropped: an
     // unauthenticated `groupDeleted` must not turn the next read into a first contact.
     std::uint64_t pinnedSeq(const std::string& groupId);
+    // `TreeCommits::digest` of the pinned statement, empty if none.
+    std::string pinnedDigest(const std::string& groupId);
     std::uint64_t pinnedKeyVersion(const std::string& groupId);
 
     // The statement that opened each epoch (the first at its `keyVersion`), off the whole chain up to the pin: a

@@ -91,6 +91,7 @@ struct Bridge {
     // Every statement a client sent with an add, a removal or a self-update, in order, applied or not.
     std::vector<server::GroupTreeCommit> received;
     int planReads = 0; // `groupGet`s in the "plan" scope
+    std::function<void(server::GroupInfo&)> onPlanRead = [](server::GroupInfo&) {}; // edits what a plan read serves
 
     server::GroupInfo serve(const std::string& userId, bool plan) const {
         server::GroupInfo info = tree.serve(userId, plan);
@@ -188,6 +189,7 @@ struct Bridge {
                 info.nextFreeSeats = seats;
             }
             if (plan) {
+                onPlanRead(info);
                 ++planReads;
                 sync->cv.notify_all();
             }
@@ -1000,6 +1002,39 @@ TEST_F(GroupApiLyingBridge, SECURITY_TwoCommitsOfOneClientToOneGroupNeverShareAP
         prevDigests.insert(prevOf(commit));
     }
     EXPECT_EQ(prevDigests.size(), bridge.received.size()) << "two statements at one prevDigest";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AnUnverifiedHeadShowingTheUnresolvedRemovalIsNotTakenAsItsLanding) {
+    // The bridge keeps alice's removal of carol unapplied and refuses it. carol moves the chain on with two
+    // self-updates, which alice's client verifies, so her pin passes the removal's seq on a branch without it. Then
+    // the retry's plan read serves the removal's own statement as the head of a group that fails verification (no
+    // tree version). Nothing there is verified: the removal must not be reported done, with carol still a member on
+    // alice's own pinned chain and the removal's never-published grant key kept for the epoch.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Bridge atP = bridge;
+    int removals = 0;
+    bridge.afterRemoval = [&] {
+        if (removals++ == 0) {
+            rollBackTo(atP);
+            refuse();
+        }
+    };
+    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    ASSERT_EQ(bridge.received.size(), 1u);
+    selfUpdateBy("carol");
+    selfUpdateBy("carol");
+    client("alice").getGroup(groupId); // verifies P -> S_x -> S_y: the pin is past the removal's seq
+    bridge.onPlanRead = [&](server::GroupInfo& info) {
+        info.treeCommit = bridge.received[0];
+        info.treeVersion = std::nullopt;
+    };
+    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}))
+        << "a removal reported done on a head nothing verified";
+    bridge.onPlanRead = [](server::GroupInfo&) {};
+    const Group group = client("alice").getGroup(groupId);
+    EXPECT_EQ(group.keyVersion, 1);
+    EXPECT_NE(std::find(group.users.begin(), group.users.end(), "carol"), group.users.end());
 }
 
 namespace {
