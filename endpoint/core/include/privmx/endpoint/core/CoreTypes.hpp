@@ -29,17 +29,17 @@ struct EncKey {
     std::string id;
     std::string key;
     /**
-     * Zestaw algorytmow, ktorym zapisujemy dane chronione tym kluczem.
+     * The algorithm suite used to write data protected by this key.
      *
-     * Jedzie razem z kluczem, bo `EncKey` i tak przechodzi przez caly lancuch encryptorow -
-     * dzieki temu wybor zestawu nie wymaga osobnego kanalu przez kilkanascie warstw. Jest tez
-     * poprawny merytorycznie: klucz i algorytm, w ktorym sie go uzywa, naleza do siebie.
+     * It travels with the key, because `EncKey` already passes through the whole encryptor chain —
+     * so the suite choice needs no separate channel across a dozen layers. It is also correct on the
+     * merits: a key and the algorithm it is used with belong together.
      *
-     * Dotyczy **wylacznie zapisu**. Odczyt nigdy go nie czyta - bierze zestaw ze znacznika
-     * zapisanego w ramce, wiec dane zapisane dowolnym zestawem zawsze da sie odczytac.
+     * This affects **writing only**. A read never looks at it — it takes the suite from the tag
+     * written into the frame, so data written with any suite can always be read.
      *
-     * Wartosc domyslna to zestaw wybrany na etapie budowania (poziom 1). Dla kontenera,
-     * ktorego polityka nazywa zestaw, nadpisuje ja `ContainerBaseApi` (poziom 2).
+     * The default is the suite chosen at build time (level 1). For a container whose policy names a
+     * suite, `ContainerBaseApi` overrides it (level 2).
      */
     CryptoSuite suite = CryptoSuite::defaultForWrite();
 };
@@ -111,11 +111,11 @@ struct ModuleKeys {
     std::string moduleResourceId;
     std::string contextId;
     /**
-     * Zestaw algorytmow kontenera, ktorego te klucze dotycza.
+     * The algorithm suite of the container these keys belong to.
      *
-     * Potrzebny, bo klucz odczytany z serwera **nie niesie zestawu** - `EncKey::suite` jest ustawiany
-     * tylko przy generowaniu. Bez tego pola kazdy zapis itemu (wiadomosc, wpis KVDB, koperta grupowa)
-     * szedlby zestawem domyslnym dla buildu, mimo ze kontener nazwal inny.
+     * Needed because a key read from the server **carries no suite** — `EncKey::suite` is set only
+     * on generation. Without this field every item write (a message, a KVDB entry, a group envelope)
+     * would use the build's default suite, even though the container named another one.
      */
     CryptoSuite cryptoSuite = CryptoSuite::defaultForWrite();
 };

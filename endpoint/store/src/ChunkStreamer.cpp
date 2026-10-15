@@ -70,7 +70,7 @@ ChunksSentInfo ChunkStreamer::finalize(const std::string& data) {
     }
     commitFile();
     return {
-        // Znacznik formatu laduje w wewnetrznym meta pliku i to po nim odczyt dobiera `FileCipher`.
+        // The format marker lands in the file's internal meta, and a read picks its `FileCipher` by it.
         .cipherType = _cipher.type(),
         .key = _key,
         .hmac = _cipher.topHash(_key, _checksums),
@@ -106,8 +106,8 @@ FileSizeResult ChunkStreamer::getFileSize() const {
     };
 }
 ChunkStreamer::PreparedChunk ChunkStreamer::prepareChunk(const std::string& data) {
-    // Ten sam format co przy odczycie - `FileCipher` jest jedynym miejscem, ktore go zna.
-    // Wczesniej byla tu kopia logiki z `ChunkEncryptor`, czyli dwa miejsca do utrzymania zgodnymi.
+    // The same format as on read — `FileCipher` is the only place that knows it. This used to hold a
+    // copy of `ChunkEncryptor`'s logic, i.e. two places to keep in agreement.
     const auto chunk = _cipher.encryptChunk(_cipher.chunkKey(_key, _seq), data);
     return {.data = chunk.data, .hmac = chunk.hmac};
 }

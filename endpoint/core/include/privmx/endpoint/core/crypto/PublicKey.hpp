@@ -24,32 +24,32 @@ namespace endpoint {
 namespace core {
 
 /**
- * @brief Klucz publiczny jako **typ wartosciowy**.
+ * @brief A public key as a **value type**.
  *
- * `pmx-crypto` oddaje klucze jako `std::shared_ptr<IPublicKey>`, a interfejs nie ma ani
- * porownania, ani konstruktora domyslnego. Endpoint opiera sie na semantyce wartosciowej
- * w `group/keytree` (`std::map`, `std::optional`, leniwe parsowanie) oraz w `ConnectionImpl`.
- * Ten wrapper ja przywraca, dzieki czemu migracja nie rozlewa sie na logike drzewa kluczy.
+ * `pmx-crypto` hands keys back as `std::shared_ptr<IPublicKey>`, and that interface has neither
+ * comparison nor a default constructor. The endpoint relies on value semantics in `group/keytree`
+ * (`std::map`, `std::optional`, lazy parsing) and in `ConnectionImpl`. This wrapper restores them,
+ * so the migration does not spill over into the key-tree logic.
  *
- * Kopiowanie jest tanie i **nie** klonuje klucza - instancje wspoldziela ten sam uchwyt.
- * Klucze sa niezmienne, wiec wspoldzielenie jest bezpieczne.
+ * Copying is cheap and does **not** clone the key — instances share the same handle. Keys are
+ * immutable, so sharing is safe.
  */
 class PublicKey {
 public:
-    /// @throws privmx::cryptoservice::Exception gdy dane nie sa poprawnym kluczem
+    /// @throws privmx::cryptoservice::Exception when the data is not a valid key
     static PublicKey fromBase58DER(const std::string& base58DER);
-    /// @throws privmx::cryptoservice::Exception gdy dane nie sa poprawnym kluczem
+    /// @throws privmx::cryptoservice::Exception when the data is not a valid key
     static PublicKey fromDER(const std::string& der);
 
-    /// @brief Pusty uchwyt. Operacje poza `empty()` i porownaniem rzucaja wyjatek.
+    /// @brief An empty handle. Anything beyond `empty()` and comparison throws.
     PublicKey() = default;
 
     /**
-     * @brief Uchwyt razem z algorytmem, ktoremu odpowiada.
+     * @brief A handle together with the algorithm it corresponds to.
      *
-     * Algorytm jest podawany, bo `pmx-crypto` nie wystawia go z klucza, a endpoint i tak zawsze
-     * wie, czym importowal lub generowal. Klucze uzytkownikow moga byc dowolnego algorytmu, wiec
-     * operacje (podpis, weryfikacja) musza isc za **tym** polem, a nie za stala kompilacji.
+     * The algorithm is passed in because `pmx-crypto` does not expose it from the key, while the
+     * endpoint always knows what it imported or generated. Users' keys may be of any algorithm, so
+     * operations (signing, verification) have to follow **this** field, not a compile-time constant.
      */
     explicit PublicKey(
         std::shared_ptr<privmx::cryptoservice::IPublicKey> key,
@@ -59,10 +59,10 @@ public:
 
     bool empty() const { return _key == nullptr; }
 
-    /// @brief Algorytm tego klucza. Pusty uchwyt oddaje wartosc domyslna i nie nadaje sie do uzycia.
+    /// @brief This key's algorithm. An empty handle reports the default and is not usable.
     privmx::cryptoservice::AsymAlg algorithm() const { return _algorithm; }
 
-    /// Porownanie po postaci kanonicznej (Base58DER), a nie po tozsamosci uchwytu.
+    /// Compares canonical forms (Base58DER), not handle identity.
     bool operator==(const PublicKey& other) const;
     bool operator!=(const PublicKey& other) const { return !(*this == other); }
 
@@ -70,11 +70,11 @@ public:
     std::string toBase58DER() const;
 
     /**
-     * @brief Weryfikuje podpis zlozony nad skrotem SHA-256 wiadomosci.
+     * @brief Verifies a signature made over the message's SHA-256 digest.
      *
-     * Mapuje sie na `SigScheme::Compact`, a **nie** na `CompactWithHash`: ten drugi liczy
-     * `sha256` dodatkowo, dajac ECDSA nad `sha256(sha256(m))`. Nazwa myli - nie "poprawiac".
-     * Dowod pomiarowy: crypto-update/B1-podpisy-compact.md
+     * Maps to `SigScheme::Compact`, **not** `CompactWithHash`: the latter computes a further
+     * `sha256`, giving ECDSA over `sha256(sha256(m))`. The name misleads — do not "fix" this.
+     * Measured proof: crypto-update/sigcompat.cpp
      */
     bool verifyCompactSignatureWithHash(const std::string& message, const std::string& signature) const;
 

@@ -30,15 +30,16 @@ namespace legacy = privmx::crypto;
 
 namespace {
 
-// Wektor z zestawu testowego pmx-crypto (ProviderTest_FromWifAndToWif).
+// A vector from pmx-crypto's own test set (ProviderTest_FromWifAndToWif).
 const std::string WIF{"L1YwTwAr8dQCBzfmXBzh6ggBkYbLuu15Tc7s4bajrRNDbsogs9a5"};
-const std::string MESSAGE{"Wiadomosc do podpisania"};
+const std::string MESSAGE{"A message to be signed"};
 
 } // namespace
 
 // ---------------------------------------------------------------------------------------------
-// Zgodnosc ze stara implementacja. To jest warunek migracji 76 plikow: gdyby ktorykolwiek z tych
-// testow padl, przepiecie modulow zmienialoby dane na wire, a nie tylko typy w kodzie.
+// Compatibility with the old implementation. This is the precondition for migrating 76 files: if
+// any of these tests failed, swapping the modules would change the data on the wire, not just the
+// types in the code.
 // ---------------------------------------------------------------------------------------------
 
 TEST(Keys, WifImportExportMatchesLegacy) {
@@ -75,8 +76,9 @@ TEST(Keys, SharedSecretMatchesLegacy) {
     EXPECT_EQ(legacyPriv.derive(legacyPeer.getPublicKey()), priv.derive(peer));
 }
 
-/// Najwazniejszy test zgodnosci: podpis zlozony nowa implementacja musi przejsc weryfikacje stara
-/// i odwrotnie. Zabezpiecza przed pomylka Compact / CompactWithHash.
+/// The most important compatibility test: a signature made by the new implementation has to pass
+/// verification by the old one, and the other way round. It guards against the Compact /
+/// CompactWithHash mix-up.
 TEST(Keys, SignaturesVerifyAcrossImplementations) {
     const auto legacyPriv = legacy::PrivateKey::fromWIF(WIF);
     const auto priv = PrivateKey::fromWIF(WIF);
@@ -86,9 +88,9 @@ TEST(Keys, SignaturesVerifyAcrossImplementations) {
 
     EXPECT_EQ(65u, sig.size());
     EXPECT_TRUE(priv.getPublicKey().verifyCompactSignatureWithHash(MESSAGE, legacySig))
-        << "nowa weryfikacja nie przyjmuje starego podpisu";
+        << "the new verification does not accept an old signature";
     EXPECT_TRUE(legacyPriv.getPublicKey().verifyCompactSignatureWithHash(MESSAGE, sig))
-        << "stara weryfikacja nie przyjmuje nowego podpisu";
+        << "the old verification does not accept a new signature";
 }
 
 TEST(Keys, SignatureIsRejectedForOtherMessageAndKey) {
@@ -100,20 +102,20 @@ TEST(Keys, SignatureIsRejectedForOtherMessageAndKey) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Klucz niesie swoj algorytm.
+// A key carries its own algorithm.
 //
-// Klucze uzytkownikow moga byc dowolnego algorytmu, wiec podpis i weryfikacja musza isc za tym,
-// co niesie **klucz**, a nie za stala kompilacji. Dopoki jest jeden algorytm, roznicy nie widac -
-// te testy przybijaja mechanizm, zeby dolozenie drugiego (planowane Ed25519) nie wymagalo
-// przegladania miejsc, ktore podpisuja.
+// Users' keys may be of any algorithm, so signing and verification have to follow what the **key**
+// carries, not a compile-time constant. With a single algorithm the difference is invisible — these
+// tests pin the mechanism, so that adding a second one (Ed25519 is planned) does not require
+// sweeping through every place that signs.
 // ---------------------------------------------------------------------------------------------
 
 TEST(KeyAlgorithm, ImportedKeysRememberWhatTheyWereParsedAs) {
     const PrivateKey priv = PrivateKey::fromWIF(WIF);
 
     EXPECT_EQ(DEFAULT_KEY_ALGORITHM, priv.algorithm());
-    // Klucz publiczny dziedziczy algorytm polowy prywatnej - inaczej podpis zlozony jednym
-    // weryfikowalby sie drugim schematem.
+    // The public key inherits the private half's algorithm — otherwise a signature made with one
+    // would be verified under the other's scheme.
     EXPECT_EQ(priv.algorithm(), priv.getPublicKey().algorithm());
     EXPECT_EQ(DEFAULT_KEY_ALGORITHM, PrivateKey::generateRandom().algorithm());
     EXPECT_EQ(
@@ -121,8 +123,8 @@ TEST(KeyAlgorithm, ImportedKeysRememberWhatTheyWereParsedAs) {
     );
 }
 
-/// Postac nieskompresowana to w rozumieniu `pmx-crypto` inny algorytm (ta sama krzywa, inny format
-/// danych). Klucz ma pamietac ten, ktorym go wczytano, a nie domyslny.
+/// As `pmx-crypto` sees it, the uncompressed form is a different algorithm (same curve, different
+/// data format). The key should remember the one it was read with, not the default.
 TEST(KeyAlgorithm, AnUncompressedImportRemembersItsOwnFormat) {
     const PrivateKey priv = PrivateKey::fromWIF(WIF);
     const std::string uncompressed = legacy::PrivateKey::fromWIF(WIF).getPublicKey().getEcc().getPublicKey(false);
@@ -131,12 +133,12 @@ TEST(KeyAlgorithm, AnUncompressedImportRemembersItsOwnFormat) {
     const PublicKey imported = PublicKey::fromDER(uncompressed);
 
     EXPECT_EQ(privmx::cryptoservice::AsymAlg::secp256k1, imported.algorithm());
-    // Mimo innego algorytmu w rejestrze to ten sam klucz - eksport wraca do postaci skompresowanej.
+    // A different algorithm in the registry, yet the same key — the export returns to the compressed form.
     EXPECT_EQ(priv.getPublicKey().toBase58DER(), imported.toBase58DER());
 }
 
-/// Podpis zlozony kluczem weryfikuje sie jego wlasnym schematem - takze gdy klucz publiczny
-/// przyszedl w innym formacie niz prywatny.
+/// A signature made with a key verifies under that key's own scheme — including when the public key
+/// arrived in a different format from the private one.
 TEST(KeyAlgorithm, SigningAndVerifyingFollowTheKey) {
     const PrivateKey priv = PrivateKey::fromWIF(WIF);
     const std::string signature = priv.signToCompactSignatureWithHash(MESSAGE);
@@ -150,7 +152,7 @@ TEST(KeyAlgorithm, SigningAndVerifyingFollowTheKey) {
 TEST(KeyAlgorithm, TheRegistryKnowsExactlyWhatItCanUse) {
     EXPECT_TRUE(isSupportedKeyAlgorithm(DEFAULT_KEY_ALGORITHM));
     EXPECT_TRUE(isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg::secp256k1));
-    // Jeszcze nieobslugiwany - ma byc odmowa pod wlasna nazwa, a nie podpis zlym schematem.
+    // Not supported yet — this has to be a refusal under its own name, not a signature under the wrong scheme.
     EXPECT_FALSE(isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg::ED25519));
     EXPECT_THROW(
         signatureSchemeFor(privmx::cryptoservice::AsymAlg::ED25519), UnsupportedKeyAlgorithmException
@@ -158,7 +160,7 @@ TEST(KeyAlgorithm, TheRegistryKnowsExactlyWhatItCanUse) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Semantyka wartosciowa - to dla niej w ogole powstal wrapper.
+// Value semantics — the reason the wrapper exists at all.
 // ---------------------------------------------------------------------------------------------
 
 TEST(Keys, DefaultConstructedIsEmpty) {
@@ -171,7 +173,7 @@ TEST(Keys, DefaultConstructedIsEmpty) {
 TEST(Keys, PublicKeyComparesByValueNotByHandle) {
     const auto base58 = PrivateKey::fromWIF(WIF).getPublicKey().toBase58DER();
 
-    // Dwa niezalezne parsowania tych samych danych musza byc rowne.
+    // Two independent parses of the same data have to compare equal.
     EXPECT_EQ(PublicKey::fromBase58DER(base58), PublicKey::fromBase58DER(base58));
     EXPECT_NE(PublicKey::fromBase58DER(base58), PrivateKey::generateRandom().getPublicKey());
     EXPECT_EQ(PublicKey(), PublicKey());
@@ -179,7 +181,7 @@ TEST(Keys, PublicKeyComparesByValueNotByHandle) {
 }
 
 TEST(Keys, WorksInsideStandardContainers) {
-    // Dokladnie te uzycia, na ktorych opiera sie group/keytree.
+    // Exactly the uses group/keytree relies on.
     std::map<std::string, PublicKey> byUser;
     byUser.emplace("alice", PrivateKey::generateRandom().getPublicKey());
     std::optional<PrivateKey> maybeKey;
@@ -194,9 +196,9 @@ TEST(Keys, WorksInsideStandardContainers) {
     EXPECT_EQ(copy, byUser.at("alice"));
 }
 
-/// Stara implementacja przyjmowala klucz publiczny w obu postaciach, a dane zewnetrzne
-/// (klucz wyluskany z bloku PGP) przychodza nieskompresowane. Pierwotna wersja wrappera
-/// obslugiwala tylko 33 B i wywracala `convertPGPAsn1KeyToBase58DERKey`.
+/// The old implementation accepted a public key in both forms, and external data (a key extracted
+/// from a PGP block) arrives uncompressed. The wrapper's first version handled only 33 B and broke
+/// `convertPGPAsn1KeyToBase58DERKey`.
 TEST(Keys, FromDerAcceptsCompressedAndUncompressed) {
     const auto legacyPub = legacy::PrivateKey::fromWIF(WIF).getPublicKey();
     const std::string compressed = legacyPub.toDER();
@@ -205,14 +207,14 @@ TEST(Keys, FromDerAcceptsCompressedAndUncompressed) {
     ASSERT_EQ(33u, compressed.size());
     ASSERT_EQ(65u, uncompressed.size());
 
-    // Obie postaci opisuja ten sam klucz, wiec musza dac te sama postac kanoniczna.
+    // Both forms describe the same key, so they have to give the same canonical form.
     EXPECT_EQ(PublicKey::fromDER(compressed), PublicKey::fromDER(uncompressed));
     EXPECT_EQ(legacyPub.toBase58DER(), PublicKey::fromDER(uncompressed).toBase58DER());
 }
 
 TEST(Keys, MalformedInputIsRejected) {
-    EXPECT_ANY_THROW(PublicKey::fromBase58DER("to-nie-jest-klucz"));
-    EXPECT_ANY_THROW(PrivateKey::fromWIF("to-nie-jest-wif"));
+    EXPECT_ANY_THROW(PublicKey::fromBase58DER("this-is-not-a-key"));
+    EXPECT_ANY_THROW(PrivateKey::fromWIF("this-is-not-a-wif"));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -238,6 +240,6 @@ TEST(PublicKeyCacheTest, DoesNotCacheUnparsableKey) {
     auto cache = PublicKeyCache::getInstance();
     cache->clear();
 
-    EXPECT_ANY_THROW(cache->fromBase58DER("to-nie-jest-klucz"));
+    EXPECT_ANY_THROW(cache->fromBase58DER("this-is-not-a-key"));
     EXPECT_EQ(0u, cache->size());
 }

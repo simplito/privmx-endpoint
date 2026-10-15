@@ -26,16 +26,16 @@ using namespace privmx::endpoint::store;
 namespace {
 
 /**
- * Tryb szyfru, czyli uklad ramki i sposob uwierzytelnienia.
+ * The cipher mode: the frame layout and how it is authenticated.
  *
- * Osobny od `type`, bo formatow o tym samym ukladzie ramki moze byc wiele - roznia sie wtedy samym
- * skrotem. Rozgalezianie po `type` wymagaloby dopisania kazdego nowego formatu do kazdego `if`,
- * a pominiecie jednego nie dawaloby bledu kompilacji, tylko plik zapisany w zlym ukladzie.
+ * Separate from `type`, because several formats can share a frame layout and differ only in the
+ * hash. Branching on `type` would mean adding every new format to every `if`, and missing one
+ * would not be a compile error — just a file written in the wrong layout.
  */
 enum class Mode {
-    /// `[HMAC][IV][szyfrogram]`, uwierzytelnienie osobnym HMAC-iem przed ramka.
+    /// `[HMAC][IV][ciphertext]`, authenticated by a separate HMAC in front of the frame.
     CbcHmac,
-    /// `[IV][szyfrogram || tag]`, uwierzytelnienie przez sam tryb AEAD.
+    /// `[IV][ciphertext || tag]`, authenticated by the AEAD mode itself.
     Gcm,
 };
 
@@ -44,30 +44,30 @@ struct CipherSpec {
     Mode mode;
     std::size_t ivLength;
     std::size_t hashLength;
-    /// 0 oznacza format bez dopelnienia blokowego.
+    /// 0 means the format does not pad to a block boundary.
     std::size_t paddingBlock;
     /**
-     * Bajty, ktore ramka dokłada do jawnego tekstu **poza** dopelnieniem.
+     * Bytes the frame adds to the plaintext **beyond** padding.
      *
-     * Podane wprost, a nie liczone z `ivLength + hashLength`, bo te dwie wartosci skladaja sie na
-     * narzut tylko przypadkiem: w formacie 1 skrot jest doklejany przed ramke, w formacie 2 tag
-     * jest czescia wyjscia szyfru. Format, w ktorym skrot ma inna dlugosc niz uwierzytelniacz
-     * w ramce, rozjechalby taki wzor po cichu.
+     * Stated explicitly rather than derived from `ivLength + hashLength`, because those two add up
+     * to the overhead only by coincidence: in format 1 the hash is prepended to the frame, in
+     * format 2 the tag is part of the cipher's output. A format whose hash length differed from
+     * the frame's authenticator would break that formula silently.
      */
     std::size_t fixedOverhead;
     /**
-     * Zestaw, z ktorego format bierze **funkcje skrotu** - klucz chunku i skrot wierzcholkowy
-     * tablicy. Uzywana jest wylacznie czesc skrotowa; szyfr opisuja pozostale pola tego wpisu,
-     * bo tryb i uklad ramki sa wlasnoscia formatu pliku, nie zestawu kontenera.
+     * The suite this format takes its **hash function** from — the chunk key and the table's top
+     * hash. Only the hash part is used; the cipher is described by this entry's other fields,
+     * because the mode and frame layout belong to the file format, not to the container's suite.
      */
     core::SuiteId hashSuite;
 };
 
 /**
- * Rejestr formatow danych pliku.
+ * The registry of file data formats.
  *
- * Stale formatu 1 pochodza z `StoreTypes.hpp`, bo to one opisywaly ten format, zanim dostal nazwe.
- * Raz wydanej wartosci `cipherType` nie wolno przedefiniowac.
+ * Format 1's constants come from `StoreTypes.hpp`, because those described this format before it
+ * had a name. A `cipherType` value that has been issued must never be redefined.
  */
 constexpr std::size_t GCM_IV_LENGTH = 12;
 constexpr std::size_t GCM_TAG_LENGTH = 16;
@@ -77,14 +77,14 @@ constexpr std::array<CipherSpec, 3> CIPHERS{{
      HMAC_SIZE + IV_SIZE, core::SuiteId::Aes256GcmSha256},
     {FileCipher::AES_GCM, Mode::Gcm, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0,
      GCM_IV_LENGTH + GCM_TAG_LENGTH, core::SuiteId::Aes256GcmSha256},
-    // Ramka identyczna jak w formacie 2 - tag AEAD ma 16 B niezaleznie od funkcji skrotu, wiec
-    // krok tablicy skrotow i adresowanie chunkow sie nie zmieniaja. Rozni je sam skrot.
+    // Frame identical to format 2 — an AEAD tag is 16 B whatever the hash function, so the
+    // hash-table stride and chunk addressing do not change. Only the hash differs.
     {FileCipher::AES_GCM_SHA512, Mode::Gcm, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0,
      GCM_IV_LENGTH + GCM_TAG_LENGTH, core::SuiteId::Aes256GcmSha512},
 }};
 
-/// Format pliku odpowiadajacy zestawowi kontenera. Tryb jest zawsze AEAD - zestawy kontenera sa
-/// AEAD-owe, a format 1 (CBC+HMAC) istnieje wylacznie jako zastany uklad plikow juz zapisanych.
+/// The file format matching a container suite. The mode is always AEAD — container suites are
+/// AEAD, and format 1 (CBC+HMAC) exists only as the legacy layout of files already written.
 constexpr int64_t cipherForHashSuite(core::SuiteId suite) {
     for (const auto& spec : CIPHERS) {
         if (spec.mode == Mode::Gcm && spec.hashSuite == suite) {
@@ -95,16 +95,16 @@ constexpr int64_t cipherForHashSuite(core::SuiteId suite) {
 }
 
 /**
- * Format uzywany do zapisu nowych plikow; ustawiany przy konfiguracji buildu przez
- * `PRIVMX_DEFAULT_FILE_CIPHER`. Dotyczy **wylacznie zapisu** - `CIPHERS` pozostaje kompletne
- * niezaleznie od tej wartosci, bo `cipherType` kazdego pliku siedzi w jego wewnetrznym meta.
+ * The format used for writing new files; set at build configuration through
+ * `PRIVMX_DEFAULT_FILE_CIPHER`. It affects **writing only** — `CIPHERS` stays complete whatever
+ * this value is, because every file's `cipherType` sits in its own internal meta.
  */
 #ifndef PRIVMX_DEFAULT_FILE_CIPHER_ID
 #define PRIVMX_DEFAULT_FILE_CIPHER_ID 1
 #endif
 constexpr int64_t DEFAULT_WRITE_CIPHER = PRIVMX_DEFAULT_FILE_CIPHER_ID;
 
-/// Blad budowania zamiast wyjatku przy pierwszym zapisie, gdyby podano nieznany identyfikator.
+/// A build error rather than an exception on the first write, should an unknown id be configured.
 constexpr bool defaultWriteCipherIsKnown() {
     for (const auto& spec : CIPHERS) {
         if (spec.type == DEFAULT_WRITE_CIPHER) {
@@ -113,7 +113,7 @@ constexpr bool defaultWriteCipherIsKnown() {
     }
     return false;
 }
-static_assert(defaultWriteCipherIsKnown(), "PRIVMX_DEFAULT_FILE_CIPHER_ID nie odpowiada zadnemu formatowi");
+static_assert(defaultWriteCipherIsKnown(), "PRIVMX_DEFAULT_FILE_CIPHER_ID matches no known format");
 
 const CipherSpec* findSpec(int64_t type) {
     for (const auto& spec : CIPHERS) {
@@ -143,14 +143,14 @@ std::string str(const cs::Bytes& data) {
 }
 
 /**
- * Szyfr formatu wolany **wprost z providera**, a nie przez `CryptoSuite`.
+ * The format's cipher, called **straight from the provider** rather than through `CryptoSuite`.
  *
- * `CryptoSuite::encrypt` oprawia wynik we wlasna ramke ze znacznikiem zestawu; tutaj ramka jest
- * wlasnoscia formatu pliku (`cipherType`) i nie wolno jej dublowac. Dlatego `store` siega po
- * surowy szyfr tak samo, jak robi to sam `CryptoSuite`.
+ * `CryptoSuite::encrypt` wraps its output in a frame of its own carrying a suite tag; here the
+ * frame belongs to the file format (`cipherType`) and must not be duplicated. So `store` reaches
+ * for the raw cipher exactly as `CryptoSuite` itself does.
  *
- * Rownowaznosc bajtowa z poprzednia implementacja (`privmx::crypto::Crypto`) zostala sprawdzona
- * pomiarowo dla obu trybow i wszystkich dlugosci brzegowych, lacznie z zerowa.
+ * Byte equivalence with the previous implementation (`privmx::crypto::Crypto`) was measured for
+ * both modes across the edge lengths, zero included, before the swap.
  */
 std::string symEncrypt(cs::SymAlg alg, const std::string& key, const std::string& iv, const std::string& plain) {
     cs::SymParams params{.cipher = alg, .key = view(key), .iv = view(iv), .aad = {}, .taglen = GCM_TAG_LENGTH};
@@ -184,9 +184,9 @@ FileCipher FileCipher::forContainerSuite(const std::optional<core::CryptoSuite>&
     }
     const int64_t type = cipherForHashSuite(suite->id());
     if (type == 0) {
-        // Zestaw bez odpowiednika wsrod formatow pliku. Nie cofamy sie po cichu do domyslnego:
-        // kontener zazadal konkretnych algorytmow, wiec zapisanie jego plikow innymi byloby
-        // niezauwazalnym rozjazdem miedzy polityka a tym, co faktycznie lezy na dysku.
+        // A suite with no corresponding file format. We do not quietly fall back to the default:
+        // the container asked for specific algorithms, so writing its files with different ones
+        // would be an unnoticeable divergence between the policy and what is actually on disk.
         throw UnsupportedCipherTypeException("no file format for crypto suite: " + suite->policyValue());
     }
     return FileCipher(type);
@@ -218,9 +218,10 @@ std::size_t FileCipher::paddingBlock() const {
 }
 
 std::string FileCipher::chunkKey(const std::string& fileKey, std::uint64_t index) const {
-    // Skrot pochodzi z zestawu formatu, nie ze stalej. Dla formatow 1 i 2 jest to SHA-256, czyli
-    // dokladnie to, co liczyl tu wczesniej `Crypto::sha256` - pliki zapisane wczesniej czytaja sie
-    // bez zmian. Format 3 liczy to samo SHA-512 i dlatego ma wlasny `cipherType`.
+    // The hash comes from the format's suite, not from a constant. For formats 1 and 2 that is
+    // SHA-256 — exactly what `Crypto::sha256` computed here before, so files written earlier read
+    // unchanged. Format 3 computes the same thing with SHA-512, which is why it has its own
+    // `cipherType`.
     return core::CryptoSuite::forId(requireSpec(_type).hashSuite).hash(fileKey + indexToBE(index));
 }
 
@@ -229,8 +230,8 @@ IChunkEncryptor::Chunk FileCipher::encryptChunk(const std::string& chunkKey, con
     const std::string iv = core::CryptoSuite::randomBytes(spec.ivLength);
 
     if (spec.mode == Mode::Gcm) {
-        // `[IV][szyfrogram || tag]`. Tag jest koncowka wyjscia szyfru i to on trafia do tablicy
-        // skrotow - nie ma tu osobnego uwierzytelniacza doklejanego przed ramke.
+        // `[IV][ciphertext || tag]`. The tag is the tail of the cipher's output and it is what goes
+        // into the hash table — there is no separate authenticator prepended to the frame.
         const std::string cipherWithTag = symEncrypt(cs::SymAlg::Aes256Gcm, chunkKey, iv, plain);
         return {
             .data = iv + cipherWithTag,
@@ -252,9 +253,9 @@ std::string FileCipher::decryptChunk(const std::string& chunkKey, const IChunkEn
             throw FileChunkInvalidCipherChecksumException();
         }
         const std::string iv = chunk.data.substr(0, spec.ivLength);
-        // Uwierzytelnienie robi sam tryb AEAD: blad tagu wychodzi z `aes256GcmDecrypt`, a nie
-        // z osobnego porownania. Tlumaczymy go na ten sam wyjatek co w formacie 1, zeby wolajacy
-        // nie musial rozrozniac formatow.
+        // The AEAD mode authenticates on its own: a bad tag surfaces from the cipher rather than
+        // from a separate comparison. We translate it to the same exception format 1 raises, so the
+        // caller does not have to tell the formats apart.
         try {
             return symDecrypt(cs::SymAlg::Aes256Gcm, chunkKey, iv, chunk.data.substr(spec.ivLength));
         } catch (...) {
@@ -283,15 +284,15 @@ bool FileCipher::frameCarriesHash(const std::string& chunkData, const std::strin
 }
 
 std::string FileCipher::topHash(const std::string& topHashKey, const std::string& hashes) const {
-    // Jak `chunkKey`: skrot z zestawu formatu. Dla formatow 1 i 2 wychodzi HMAC-SHA256, czyli to
-    // samo co wczesniej.
+    // As with `chunkKey`: the hash comes from the format's suite. For formats 1 and 2 that is
+    // HMAC-SHA256, the same as before.
     return core::CryptoSuite::forId(requireSpec(_type).hashSuite).mac(topHashKey, hashes);
 }
 
 std::size_t FileCipher::encryptedChunkSize(std::size_t plainChunkSize) const {
     const CipherSpec& spec = requireSpec(_type);
-    // Dopelnienie PKCS#7 dokleja pelny blok takze wtedy, gdy dane sa juz wielokrotnoscia bloku.
-    // Format bez dopelnienia ma `paddingBlock == 0` - wtedy nie wolno dzielic.
+    // PKCS#7 appends a full block even when the data is already a multiple of the block size.
+    // A format that does not pad has `paddingBlock == 0`, and then we must not divide.
     const std::size_t padding =
         spec.paddingBlock == 0 ? 0 : spec.paddingBlock - (plainChunkSize % spec.paddingBlock);
     return plainChunkSize + padding + spec.fixedOverhead;

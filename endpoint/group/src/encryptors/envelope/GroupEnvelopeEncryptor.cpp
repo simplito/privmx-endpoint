@@ -49,8 +49,8 @@ std::string GroupEnvelopeEncryptor::writeFileHeader(
 core::CryptoSuite GroupEnvelopeEncryptor::readFileSuite(EnvelopeReader& cursor) {
     const auto id = static_cast<core::SuiteId>(cursor.readU8());
     if (!core::CryptoSuite::isKnown(id)) {
-        // Rozrozniamy to od uszkodzonej koperty: plik zapisany zestawem, ktorego ten build nie zna,
-        // jest poprawny - tylko nie dla nas.
+        // We tell this apart from a damaged envelope: a file written with a suite this build does
+        // not know is valid — just not for us.
         throw core::UnknownCryptoSuiteException("file envelope suite: " + std::to_string(static_cast<int>(id)));
     }
     return core::CryptoSuite::forId(id);
@@ -172,8 +172,8 @@ core::Buffer GroupEnvelopeEncryptor::packAnonymousEnvelope(
     // No author signature: the sender is anonymous by construction, so a signature by the throwaway key would
     // attest to nothing. The header is authenticated by being inside this encrypt-then-MAC payload.
     out.append(
-        // Zestaw nadawcy: outsider nie zna polityki kontenera. Ramka niesie znacznik, wiec odbiorca
-        // odczyta ja niezaleznie od tego, czym zapisal autor.
+        // The sender's suite: an outsider does not know the container's policy. The frame carries a
+        // tag, so the recipient reads it whatever the author wrote with.
         _dataEncryptor
             .encrypt(
                 core::Buffer::from(header + content.stdString()),
@@ -282,8 +282,8 @@ core::Buffer GroupEnvelopeEncryptor::packAnonymousFileEnvelope(
     const core::CryptoSuite& suite
 ) {
     auto [wrap, contentKey] = wrapContentKey(groupPubKey);
-    // Zestaw nadawcy, nie kontenera: outsider zna tylko klucz publiczny grupy, wiec jej polityki nie
-    // widzi. Naglowek mowi, ktory zostal uzyty, a odczyt idzie za naglowkiem.
+    // The sender's suite, not the container's: an outsider knows only the group's public key and so
+    // cannot see its policy. The header states which one was used, and a read follows the header.
     std::string header = writeFileHeader(TYPE_ANON_FILE, suite, {groupId, groupPubKey.toBase58DER()});
 
     std::string out = header;
@@ -341,8 +341,8 @@ core::Buffer GroupEnvelopeEncryptor::encryptChunk(
     ChunkIndex index,
     const core::CryptoSuite& suite
 ) {
-    // Zestaw ten sam, co w naglowku koperty - inaczej rozmiar ramki rozjechalby sie z arytmetyka
-    // `cipherOffsetOfChunk`, ktora liczy offsety wlasnie z niego.
+    // The same suite as in the envelope header — otherwise the frame size would drift from the
+    // `cipherOffsetOfChunk` arithmetic, which computes offsets from exactly that.
     return _dataEncryptor.encrypt(plainChunk, core::EncKey{.id = "", .key = chunkKey(fileKey, index), .suite = suite});
 }
 

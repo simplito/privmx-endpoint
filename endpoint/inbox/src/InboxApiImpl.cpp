@@ -101,10 +101,10 @@ std::string InboxApiImpl::createInbox(
 ) {
 
     auto inboxKey = _keyProvider->generateKey(suiteFromPolicy(policies));
-    // Klucz Inboxa ma drugie zastosowanie: jest **takze** surowym kluczem prywatnym secp256k1, z ktorego
-    // bierze sie para kluczy do odbierania wpisow. To pinuje jego dlugosc na 32 bajty niezaleznie od
-    // zestawu symetrycznego. Dzis kazdy zestaw i tak chce 32 bajtow; gdy pojawi sie inny, `fromRaw`
-    // odrzuci klucz i trzeba bedzie rozdzielic te dwa zastosowania zamiast poszerzac klucz kontenera.
+    // The inbox key has a second role: it is **also** a raw secp256k1 private key, the source of the
+    // key pair used to receive entries. That pins its length at 32 bytes regardless of the symmetric
+    // suite. Every suite wants 32 bytes today; should another one appear, `fromRaw` will reject the
+    // key, and the two roles will have to be split rather than the container key widened.
     auto privateKey = core::PrivateKey::fromRaw(inboxKey.key);
     auto pubKey = privateKey.getPublicKey();
 
@@ -415,8 +415,8 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
                 "", core::EndpointUtils::generateId(), _userPrivKeyECC.getPublicKey(), handle->inboxId,
                 handle->inboxResourceId
             );
-            // Klucz efemeryczny wygenerowany na ten jeden wpis, poza jakimkolwiek kontenerem -
-            // nie ma polityki, ktora mogla by wskazac zestaw, wiec zostaje domyslny dla buildu.
+            // An ephemeral key generated for this one entry, outside any container — there is no
+            // policy that could name a suite, so the build's default stands.
             auto encryptedFileMeta = _fileMetaEncryptorV4.encrypt(
                 prepareMeta(fileInfo), _userPrivKeyECC, core::EncKey{.id = "", .key = filesMetaKey}
             );

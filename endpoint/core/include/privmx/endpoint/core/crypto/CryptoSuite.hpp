@@ -21,112 +21,111 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
-// Uwaga: celowo bez podprzestrzeni `crypto`. W drzewie istnieja juz `privmx::crypto`
-// i `privmx::endpoint::crypto`, a trzecia przeslanialaby je dla kodu wewnatrz `core`,
-// gdzie skrocona forma `crypto::PrivateKey` jest w powszechnym uzyciu.
+// Deliberately not in a `crypto` sub-namespace. The tree already has `privmx::crypto` and
+// `privmx::endpoint::crypto`; a third would shadow them for code inside `core`, where the short
+// form `crypto::PrivateKey` is in common use.
 
 /**
- * @brief Identyfikator zestawu algorytmow, zapisywany w ramce zaszyfrowanych danych.
+ * @brief Identifier of an algorithm suite, written into the frame of encrypted data.
  *
- * Wartosci sa czescia formatu danych - raz uzytej nie wolno zmieniac znaczenia.
- * Numer wycofanego zestawu zostaje zarezerwowany i nie jest ponownie uzywany.
+ * The values are part of the data format — once used, a value must never change meaning.
+ * A retired suite's number stays reserved and is not reused.
  */
 enum class SuiteId : std::uint8_t {
     Unknown = 0x00,
-    /// AES-256-GCM + SHA-256 + KDF. Zestaw domyslny dla zapisu.
+    /// AES-256-GCM + SHA-256 + KDF. The default suite for writing.
     Aes256GcmSha256 = 0x01,
     /// AES-256-GCM + SHA-512 + KDF.
     Aes256GcmSha512 = 0x02,
 };
 
 /**
- * @brief Warstwa wyboru algorytmow kryptograficznych.
+ * @brief The algorithm-selection layer.
  *
- * Moduly endpointu wolaja ja intencjami ("policz skrot", "zaszyfruj tym kluczem")
- * i **nie nazywaja algorytmow**. Konkretne algorytmy wynikaja z zestawu (suite),
- * a ten jest zapisany w ramce danych - dzieki czemu odczyt zawsze dziala
- * niezaleznie od tego, czym zapisywal autor.
+ * Endpoint modules call it by intent ("hash this", "encrypt with this key") and **do not name
+ * algorithms**. The concrete algorithms follow from the suite, and the suite is recorded in the
+ * data frame — which is what makes a read work regardless of what the author wrote with.
  *
- * Zapis: wedlug zestawu wybranego dla danej operacji (domyslnie `defaultForWrite()`).
- * Odczyt: zawsze wedlug znacznika odczytanego z danych.
+ * Writing: the suite chosen for the operation (`defaultForWrite()` when nothing says otherwise).
+ * Reading: always the tag read from the data.
  *
- * **Zakres.** Warstwa obejmuje dane szyfrowane kluczem kontenera. **Nie** obejmuje warstwy
- * integralnosci - sumy kontrolne pol w DIO i `secretHash` w `EncKeyV2` pozostaja na stalym
- * SHA-256, wersjonowanym przez `structureVersion` tych struktur. Powod: czytajacy musi wiedziec,
- * czym zweryfikowac, a DIO nie niesie znacznika zestawu; jest tez elementem koperty, a nie tego,
- * co dzieje sie wewnatrz kontenera. Nie przepinac ich na ta warstwe bez zmiany formatu DIO.
+ * **Scope.** This layer covers data encrypted with the container's key. It does **not** cover the
+ * integrity layer — DIO field checksums and `EncKeyV2.secretHash` stay on fixed SHA-256, versioned
+ * by those structures' `structureVersion`. The reason: a reader has to know up front what to verify
+ * with, and a DIO carries no suite tag; it is also part of the envelope rather than of what happens
+ * inside the container. Do not move them onto this layer without changing the DIO format.
  *
- * Format ramki produkowanej przez `encrypt()`:
+ * Frame produced by `encrypt()`:
  * @code
- *   [1B SuiteId][IV][ciphertext || tag AEAD]
+ *   [1B SuiteId][IV][ciphertext || AEAD tag]
  * @endcode
- * Bajt `SuiteId` jest przekazywany jako AAD, wiec jest **uwierzytelniony** -
- * podmiana znacznika na slabszy zestaw unieważnia tag i deszyfrowanie sie nie powiedzie.
+ * The `SuiteId` byte is passed as AAD, so it is **authenticated** — rewriting the tag to name a
+ * weaker suite invalidates the AEAD tag and decryption fails.
  */
 class CryptoSuite {
 public:
     /**
-     * @brief Zestaw uzywany do zapisu, gdy nic go nie wskazuje jawnie.
+     * @brief The suite used for writing when nothing names one explicitly.
      *
-     * Odpowiada stalej kompilacji (poziom 1 wyboru formatu zapisu).
+     * Comes from a build-time constant (level 1 of the write-format choice).
      */
     static CryptoSuite defaultForWrite();
 
     /**
-     * @brief Zestaw o podanym identyfikatorze.
-     * @throws UnknownCryptoSuiteException gdy identyfikator nie jest znany temu buildowi
+     * @brief The suite with the given identifier.
+     * @throws UnknownCryptoSuiteException when this build does not know the identifier
      */
     static CryptoSuite forId(SuiteId id);
 
-    /// @brief Czy ten build potrafi obsluzyc dany zestaw.
+    /// @brief Whether this build can handle the given suite.
     static bool isKnown(SuiteId id);
 
     /**
-     * @brief Wszystkie znane zestawy.
+     * @brief Every known suite.
      *
-     * Rejestr odczytu jest **kompletny w kazdym buildzie** - konfiguracja budowania
-     * wybiera wylacznie domyslny zestaw zapisu, nigdy zakres odczytu. Inaczej klienci
-     * z roznych buildow nie odczytaliby swoich danych.
+     * The read registry is **complete in every build** — the build configuration picks only the
+     * default write suite, never the read range. Otherwise clients built differently could not
+     * read each other's data.
      */
     static std::vector<SuiteId> known();
 
     /**
-     * @brief Zestaw wskazany wartoscia polityki kontenera (poziom 2 wyboru formatu zapisu).
-     * @throws UnknownCryptoSuiteException gdy wartosc nie jest znana temu buildowi
+     * @brief The suite named by a container policy value (level 2 of the write-format choice).
+     * @throws UnknownCryptoSuiteException when this build does not know the value
      */
     static CryptoSuite forPolicyValue(const std::string& value);
 
-    /// @brief Czy wartosc polityki nazywa zestaw znany temu buildowi.
+    /// @brief Whether a policy value names a suite this build knows.
     static bool isKnownPolicyValue(const std::string& value);
 
     SuiteId id() const { return _id; }
 
     /**
-     * @brief Ile bajtow ramka dokłada do tekstu jawnego: `[1B SuiteId][IV][tag AEAD]`.
+     * @brief How many bytes the frame adds to the plaintext: `[1B SuiteId][IV][AEAD tag]`.
      *
-     * Wartosc **tego** zestawu, nie stala globalna. `group` liczy z niej rozmiar zaszyfrowanego
-     * chunku i adresuje chunki jako `index * encryptedChunkSize(suite)`, wiec zestaw o innym
-     * narzucie przestawia adresowanie - i dlatego musi byc znany, zanim cokolwiek zostanie
-     * odczytane. Koperta plikowa niesie go w naglowku.
+     * **This** suite's figure, not a global constant. `group` derives the sealed chunk size from it
+     * and addresses chunks as `index * encryptedChunkSize(suite)`, so a differently-framed suite
+     * moves every offset — which is why it has to be known before anything is read. A file envelope
+     * carries it in its header.
      *
-     * Wczesniej byla tu stala `DEFAULT_FRAME_OVERHEAD` liczona dla zestawu domyslnego dla buildu.
-     * Dzialala, bo wszystkie zestawy w rejestrze maja ten sam narzut - ale wiazala adresowanie
-     * z ustawieniem budowania zamiast z danymi.
+     * This used to be a `DEFAULT_FRAME_OVERHEAD` constant computed for the build's default suite.
+     * It worked, because every suite in the registry has the same overhead — but it tied addressing
+     * to a build setting rather than to the data.
      */
     std::size_t frameOverhead() const;
 
-    /// @brief Nazwa zestawu uzywana w `ContainerPolicy::cryptoSuite`.
+    /// @brief The suite's name as used in `ContainerPolicy::cryptoSuite`.
     std::string policyValue() const;
 
-    /// @brief Wymagana dlugosc klucza symetrycznego tego zestawu, w bajtach.
+    /// @brief The symmetric key length this suite requires, in bytes.
     std::size_t keyLength() const;
 
     /**
-     * @brief Losowe bajty.
+     * @brief Random bytes.
      *
-     * Statyczna, bo losowosc nie zalezy od zestawu - zadna z jego czesci nie zmienia tego, co
-     * znaczy "32 losowe bajty". Dzieki temu wolajacy, ktorzy potrzebuja tylko entropii (generowanie
-     * kluczy, IV, identyfikatorow), nie musza skadkolwiek brac zestawu.
+     * Static, because randomness does not depend on the suite — no part of it changes what "32
+     * random bytes" means. Callers that need only entropy (generating keys, IVs, identifiers) do
+     * not have to obtain a suite from anywhere.
      */
     static std::string randomBytes(std::size_t length);
 
@@ -135,24 +134,24 @@ public:
     std::string deriveKey(const std::string& secret, const std::string& label, std::size_t length) const;
 
     /**
-     * @brief Szyfruje i oprawia w ramke z uwierzytelnionym znacznikiem zestawu.
+     * @brief Encrypts and wraps the result in a frame carrying an authenticated suite tag.
      *
-     * @throws crypto::EncryptInvalidKeyLengthException gdy klucz ma inna dlugosc niz `keyLength()`
+     * @throws crypto::EncryptInvalidKeyLengthException when the key length differs from `keyLength()`
      */
     std::string encrypt(const std::string& key, const std::string& plaintext) const;
 
     /**
-     * @brief Deszyfruje ramke, dobierajac zestaw na podstawie jej znacznika.
+     * @brief Decrypts a frame, picking the suite from its own tag.
      *
-     * Statyczna celowo: odczyt nie wymaga - i nie przyjmuje - wskazania algorytmu.
+     * Static by design: a read does not need — and does not accept — an algorithm to be named.
      *
-     * @throws MalformedCryptoFrameException gdy ramka jest za krotka
-     * @throws UnknownCryptoSuiteException gdy znacznik jest nieznany temu buildowi
-     * @throws crypto::DecryptInvalidKeyLengthException gdy klucz ma inna dlugosc niz `keyLength()`
+     * @throws MalformedCryptoFrameException when the frame is too short
+     * @throws UnknownCryptoSuiteException when this build does not know the tag
+     * @throws crypto::DecryptInvalidKeyLengthException when the key length differs from `keyLength()`
      */
     static std::string decrypt(const std::string& key, const std::string& framed);
 
-    /// @brief Odczytuje sam znacznik zestawu, bez deszyfrowania.
+    /// @brief Reads just the suite tag, without decrypting.
     static SuiteId readSuiteId(const std::string& framed);
 
 private:

@@ -21,9 +21,10 @@ using namespace privmx::endpoint::core;
 
 namespace cs = privmx::cryptoservice;
 
-// WIF i postac surowa nie nazywaja dzis swojego algorytmu - otagowane kodowanie czeka na uzgodnienie
-// z Bridge'em (crypto-update/issue-bridge-crypto-agility.md §3). Import zaklada wiec algorytm domyslny,
-// ale zapamietuje go na kluczu: gdy kodowanie zacznie go niesc, zmienia sie tylko te trzy funkcje.
+// Neither WIF nor the raw form names its algorithm today — a tagged encoding is pending agreement
+// with the bridge (crypto-update/issue-bridge-remaining.md §2). The import therefore assumes the
+// default algorithm but records it on the key: once the encoding carries it, only these three
+// functions change.
 PrivateKey PrivateKey::fromWIF(const std::string& wif) {
     return mapCryptoErrors("PrivateKey::fromWIF", [&] {
         return PrivateKey(
@@ -56,8 +57,8 @@ const cs::IPrivateKey& PrivateKey::require() const {
 }
 
 PublicKey PrivateKey::getPublicKey() const {
-    // Klucz publiczny dziedziczy algorytm swojej polowy prywatnej - inaczej podpis zlozony jednym
-    // weryfikowalby sie drugim schematem.
+    // The public key inherits its private half's algorithm — otherwise a signature made with one
+    // would be verified under the other's scheme.
     return mapCryptoErrors("PrivateKey::getPublicKey", [&] {
         return PublicKey(require().publicKey(), _algorithm);
     });

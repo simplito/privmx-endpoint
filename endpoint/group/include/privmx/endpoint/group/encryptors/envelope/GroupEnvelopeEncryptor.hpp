@@ -49,11 +49,11 @@ inline ByteCount encryptedChunkSizeFor(ByteCount plainLen, const core::CryptoSui
  *   u8 x            one octet
  *   u8len x         one length octet, then x; `EnvelopeWriter::putField` refuses anything above 255 bytes
  *   u32be / u64be   fixed-width big-endian integer
- *   encrypt(p, k)   `core::DataInnerEncryptorV4`, ramka AEAD: `u8 suiteId | iv | ciphertext || tag`.
- *                   Szyfrogram ma dlugosc jawnego tekstu - brak dopelnienia blokowego, inaczej niz
- *                   w zastapionym tu kodowaniu CBC. Narzut jest staly i to z niego liczy sie
- *                   `encryptedChunkSizeFor`; nie przepisywac tej arytmetyki w zadnym innym miejscu
- *                   (test e2e mial ja rozpisana recznie i rozjechal sie przy zmianie ramki).
+ *   encrypt(p, k)   `core::DataInnerEncryptorV4`, an AEAD frame: `u8 suiteId | iv | ciphertext || tag`.
+ *                   The ciphertext is as long as the plaintext — no block padding, unlike the CBC
+ *                   encoding it replaces. The overhead is constant and `encryptedChunkSizeFor` is
+ *                   computed from it; do not restate that arithmetic anywhere else (an e2e test had
+ *                   it spelled out by hand and drifted when the frame changed).
  *   sign(p, priv)   `signAndPackDataWithSignature`; covers only the buffer handed to it, which is why every
  *                   type repeats its header inside the sealed payload.
  *
@@ -287,7 +287,7 @@ private:
         const core::CryptoSuite& suite,
         const std::vector<std::string>& fields
     );
-    /// @throws core::UnknownCryptoSuiteException gdy ten build nie zna zestawu nazwanego w naglowku
+    /// @throws core::UnknownCryptoSuiteException when this build does not know the suite the header names
     static core::CryptoSuite readFileSuite(EnvelopeReader& cursor);
     static std::string chunkKey(const std::string& fileKey, ChunkIndex index);
 

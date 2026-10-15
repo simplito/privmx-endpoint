@@ -20,42 +20,41 @@ namespace endpoint {
 namespace core {
 
 /**
- * @brief Hasze przybite przez format danych, a nie wybierane przez zestaw algorytmow.
+ * @brief Hashes pinned by the data format, rather than chosen by an algorithm suite.
  *
- * Nie kazde uzycie haszu podlega wyborowi z `CryptoSuite`. Czesc z nich jest **czescia definicji
- * formatu** i czytajacy musi wiedziec z gory, czym weryfikowac, bo nie ma przy nich zadnego
- * znacznika:
+ * Not every use of a hash is subject to the `CryptoSuite` choice. Some are **part of the format's
+ * definition**, and a reader has to know up front what to verify with, because they carry no tag:
  *
- *  - suma kontrolna Base58Check (SHA-256 jest wpisany w definicje tego kodowania),
- *  - sumy kontrolne pol w DIO oraz `secretHash` w `EncKeyV2` - wersjonowane przez
- *    `structureVersion` tych struktur, nie przez znacznik zestawu.
+ *  - the Base58Check checksum (SHA-256 is written into that encoding's definition),
+ *  - the DIO field checksums and `EncKeyV2.secretHash` — versioned by those structures'
+ *    `structureVersion`, not by a suite tag.
  *
- * Ta klasa jest dla nich jedynym punktem wejscia. Istnieje po to, zeby takie miejsca nie musialy
- * wolac `privmx::crypto::Crypto` - czyli znikajacego modulu - i zeby odroznienie "hasz ustalony
- * formatem" od "hasz z zestawu" bylo widoczne w kodzie, a nie tylko w komentarzu.
+ * This class is their single entry point. It exists so that such places do not have to call
+ * `privmx::crypto::Crypto` — the module on its way out — and so that the distinction between "a hash
+ * pinned by the format" and "a hash from the suite" is visible in the code, not only in a comment.
  *
- * **Nie uzywac tego do danych szyfrowanych kluczem kontenera** - tam hasz ma pochodzic
- * z `CryptoSuite`, zeby dalo sie go zmienic razem z reszta zestawu.
+ * **Do not use this for data encrypted with a container key** — there the hash should come from
+ * `CryptoSuite`, so it can be changed along with the rest of the suite.
  */
 class FormatHash {
 public:
     static std::string sha256(const std::string& data);
 
     /**
-     * @brief HMAC-SHA256 przybity formatem.
+     * @brief HMAC-SHA256 pinned by the format.
      *
-     * Uzywany tam, gdzie znacznik uwierzytelniajacy jest **czescia definicji struktury**, a nie
-     * wyborem: `secretHash` w `EncKeyV2`, tagi rostera i metadanych grupy, klucz chunku w kopercie
-     * plikowej. Wszystkie sa wersjonowane przez `structureVersion` albo przez wersje koperty,
-     * nie przez znacznik zestawu - czytajacy musi wiedziec z gory, czym weryfikowac.
+     * Used where the authentication tag is **part of a structure's definition** rather than a
+     * choice: `EncKeyV2.secretHash`, the group roster and metadata tags, the chunk key in a file
+     * envelope. All of them are versioned by `structureVersion` or by the envelope version, not by a
+     * suite tag — a reader has to know up front what to verify with.
      */
     static std::string hmacSha256(const std::string& key, const std::string& data);
 
     /**
-     * @brief KDF na SHA-256, przybity formatem.
+     * @brief A SHA-256 KDF pinned by the format.
      *
-     * Odpowiada `CryptoSuite::deriveKey` dla zestawu z SHA-256, ale bez przechodzenia przez zestaw:
-     * wyprowadzenia opisane tutaj naleza do formatu danych i nie zmieniaja sie razem z nim.
+     * Equivalent to `CryptoSuite::deriveKey` for a SHA-256 suite, but without going through a suite:
+     * the derivations covered here belong to the data format and do not change when the suite does.
      */
     static std::string kdf(const std::string& secret, const std::string& label, std::size_t length);
 };

@@ -25,7 +25,7 @@ namespace cs = privmx::cryptoservice;
 
 namespace {
 
-/// Parametry jednego zestawu algorytmow.
+/// The parameters of a single algorithm suite.
 struct SuiteSpec {
     SuiteId id;
     cs::SymAlg sym;
@@ -33,18 +33,17 @@ struct SuiteSpec {
     cs::Kdf kdf;
     std::size_t keyLength;
     std::size_t ivLength;
-    /// Nazwa uzywana w `ContainerPolicy::cryptoSuite`. Limit wartosci polityki to 32 znaki.
+    /// The name used in `ContainerPolicy::cryptoSuite`. A policy value is capped at 32 characters.
     const char* policyName;
 };
 
 /**
- * Rejestr zestawow.
+ * The suite registry.
  *
- * Kompletny w kazdym buildzie - patrz CryptoSuite::known().
- * Oba wpisy sa trybami AEAD, bo tylko one pozwalaja uwierzytelnic znacznik zestawu
- * przez AAD. Tryb AES-256-CBC + HMAC tego nie potrafi (brak AAD w API providera),
- * wiec znacznik lezalby poza zakresem MAC - dokladnie ta wada, ktora ma dzis
- * bajt CipherType w starym formacie.
+ * Complete in every build — see CryptoSuite::known().
+ * Both entries are AEAD modes, because only those let the suite tag be authenticated through AAD.
+ * AES-256-CBC + HMAC cannot do that (the provider API has no AAD), so the tag would sit outside the
+ * MAC's reach — exactly the weakness the old format's CipherType byte has today.
  */
 constexpr std::array<SuiteSpec, 2> SUITES{{
     {SuiteId::Aes256GcmSha256, cs::SymAlg::Aes256Gcm, cs::Hash::Sha256, cs::Kdf::Kdf, 32, 12, "aes256gcm-sha256"},
@@ -52,18 +51,18 @@ constexpr std::array<SuiteSpec, 2> SUITES{{
 }};
 
 /**
- * Zestaw uzywany do zapisu, gdy nic nie wskazuje innego (poziom 1 wyboru formatu).
+ * The suite used for writing when nothing names another one (level 1 of the format choice).
  *
- * Ustawiany przy konfiguracji buildu przez `PRIVMX_DEFAULT_CRYPTO_SUITE`. Dotyczy **wylacznie
- * zapisu** - `SUITES` powyzej pozostaje kompletne niezaleznie od tej wartosci, bo kazda ramka
- * niesie wlasny znacznik. Klient zbudowany z jedna wartoscia czyta dane zapisane kazda inna.
+ * Set at build configuration time through `PRIVMX_DEFAULT_CRYPTO_SUITE`. It affects **writing only**
+ * — `SUITES` above stays complete whatever this value is, because every frame carries its own tag.
+ * A client built with one value reads data written with any other.
  */
 #ifndef PRIVMX_DEFAULT_CRYPTO_SUITE_ID
 #define PRIVMX_DEFAULT_CRYPTO_SUITE_ID 1
 #endif
 constexpr SuiteId DEFAULT_WRITE_SUITE = static_cast<SuiteId>(PRIVMX_DEFAULT_CRYPTO_SUITE_ID);
 
-/// Blad budowania zamiast wyjatku przy pierwszym zapisie, gdyby ktos podal nieznany identyfikator.
+/// A build error instead of an exception on the first write, should someone pass an unknown id.
 constexpr bool defaultWriteSuiteIsKnown() {
     for (const auto& spec : SUITES) {
         if (spec.id == DEFAULT_WRITE_SUITE) {
@@ -72,9 +71,9 @@ constexpr bool defaultWriteSuiteIsKnown() {
     }
     return false;
 }
-static_assert(defaultWriteSuiteIsKnown(), "PRIVMX_DEFAULT_CRYPTO_SUITE_ID nie odpowiada zadnemu zestawowi");
+static_assert(defaultWriteSuiteIsKnown(), "PRIVMX_DEFAULT_CRYPTO_SUITE_ID matches no known suite");
 
-/// Dlugosc tagu AEAD doklejanego przez providera do szyfrogramu.
+/// The length of the AEAD tag the provider appends to the ciphertext.
 constexpr std::size_t AEAD_TAG_LENGTH = 16;
 
 const SuiteSpec* findSpec(SuiteId id) {
@@ -103,13 +102,13 @@ std::string str(const cs::Bytes& data) {
 }
 
 /**
- * Sprawdza dlugosc klucza przed oddaniem go providerowi.
+ * Checks the key length before handing it to the provider.
  *
- * Nie jest to kurtuazja wobec wolajacego, tylko warunek bezpieczenstwa pamieci:
- * `CryptoProvider` przekazuje `key.data()` do `EVP_EncryptInit_ex` **nie patrzac na
- * `key.size()`**, a OpenSSL czyta tyle bajtow, ile wymaga szyfr. Krotszy klucz to odczyt
- * poza buforem. Stary `CryptoPrivmx` mial ten sam warunek
- * ("required: 32, received: N") i nie wolno go bylo zgubic przy migracji.
+ * This is not a courtesy to the caller but a memory-safety condition: `CryptoProvider` passes
+ * `key.data()` to `EVP_EncryptInit_ex` **without looking at `key.size()`**, and OpenSSL reads as
+ * many bytes as the cipher requires. A shorter key means a read past the end of the buffer. The old
+ * `CryptoPrivmx` had the same check ("required: 32, received: N") and it must not be lost in the
+ * migration.
  */
 void requireKeyLength(const SuiteSpec& spec, const std::string& key, bool forEncryption) {
     if (key.size() == spec.keyLength) {
@@ -165,8 +164,8 @@ std::size_t CryptoSuite::keyLength() const {
 }
 
 std::size_t CryptoSuite::frameOverhead() const {
-    // `[1B SuiteId][IV][ciphertext || tag]`. Szyfrogram ma dlugosc tekstu jawnego - tryb AEAD nie
-    // dopelnia - wiec narzut jest staly dla danego zestawu i nie zalezy od dlugosci danych.
+    // `[1B SuiteId][IV][ciphertext || tag]`. The ciphertext is as long as the plaintext — an AEAD
+    // mode does not pad — so the overhead is constant per suite and does not depend on data length.
     return 1 + requireSpec(_id).ivLength + AEAD_TAG_LENGTH;
 }
 
@@ -210,8 +209,8 @@ std::string CryptoSuite::encrypt(const std::string& key, const std::string& plai
         const SuiteSpec& spec = requireSpec(_id);
         requireKeyLength(spec, key, true);
         const std::string iv = randomBytes(spec.ivLength);
-        // Znacznik zestawu jest jednoczesnie pierwszym bajtem ramki i AAD, wiec jego podmiana
-        // uniewaznia tag AEAD.
+        // The suite tag is both the frame's first byte and the AAD, so swapping it invalidates the
+        // AEAD tag.
         const std::string tag(1, static_cast<char>(spec.id));
         cs::SymParams params{
             .cipher = spec.sym, .key = view(key), .iv = view(iv), .aad = view(tag), .taglen = AEAD_TAG_LENGTH
@@ -232,9 +231,8 @@ std::string CryptoSuite::decrypt(const std::string& key, const std::string& fram
         const SuiteSpec& spec = requireSpec(readSuiteId(framed));
         requireKeyLength(spec, key, false);
         const std::size_t headerLength = 1 + spec.ivLength;
-        // Rownosc jest poprawna: ramka dlugosci dokladnie `naglowek + tag` to zaszyfrowany
-        // **pusty** tekst jawny. Odrzucanie jej czynilo puste pole nieodczytywalnym, mimo ze
-        // zapis takiego pola przechodzil bez zarzutu.
+        // Equality is valid: a frame of exactly `header + tag` is an encrypted **empty** plaintext.
+        // Rejecting it made an empty field unreadable, even though writing one went through fine.
         if (framed.size() < headerLength + AEAD_TAG_LENGTH) {
             throw MalformedCryptoFrameException("frame shorter than its header, iv and tag");
         }

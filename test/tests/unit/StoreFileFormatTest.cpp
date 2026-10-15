@@ -10,30 +10,30 @@ limitations under the License.
 */
 
 /**
- * Testy charakteryzujace format danych pliku w `store`.
+ * Characterization tests for the file-data format in `store`.
  *
- * Powstaly przed przebudowa tego formatu, bo `store` nie mial zadnych testow jednostkowych -
- * tylko e2e, ktore wymagaja Bridge'a i nie pokazuja, co dokladnie leci na dysk. Ich zadaniem nie
- * jest opisanie, jak format powinien wygladac, tylko **przybicie tego, jak wyglada dzis**, zeby
- * refaktor dalo sie uznac za bezpieczny.
+ * They were written before that format was rebuilt, because `store` had no unit tests at all — only
+ * e2e ones, which need a bridge and do not show what exactly goes to disk. Their job is not to
+ * describe how the format ought to look, but to **pin down how it looks today**, so the refactor
+ * could be called safe.
  *
- * Dlatego asercje sa celowo doslowne: konkretne rozmiary, konkretne przesuniecia, konkretny uklad
- * ramki. Jesli zmiana formatu jest zamierzona, te liczby nalezy zmienic swiadomie - a nie
- * dopasowac je do nowego wyniku.
+ * That is why the assertions are deliberately literal: specific sizes, specific offsets, a specific
+ * frame layout. If a format change is intended, these numbers should be changed deliberately — not
+ * adjusted to whatever the new result happens to be.
  *
- * Format chunku 1 (cipherType = 1):
+ * Chunk format 1 (cipherType = 1):
  *     [32 B HMAC-SHA256][16 B IV][AES-256-CBC + PKCS#7]
  *   chunkKey = sha256(fileKey || BE32(index))
- *   HMAC liczony z chunkKey nad (IV || szyfrogram)
+ *   the HMAC is computed with chunkKey over (IV || ciphertext)
  *
- * Format chunku 2 (cipherType = 2):
+ * Chunk format 2 (cipherType = 2):
  *     [12 B IV][AES-256-GCM || 16 B tag]
- *   bez dopelnienia; wpisem tablicy skrotow jest tag AEAD z **konca** ramki
+ *   no padding; the hash-table entry is the AEAD tag from the **end** of the frame
  *
- * Format zapisu wybiera `PRIVMX_DEFAULT_FILE_CIPHER` przy konfiguracji, wiec zaden z testow
- * opisujacych konkretny format nie moze opierac sie na `defaultForWrite()` - format podaje sie
- * jawnie. Testy, ktore maja zachodzic w kazdym formacie, chodza petla po `FileCipher::known()`,
- * dzieki czemu kolejny dopisany format od razu dostaje to pokrycie.
+ * The write format is picked by `PRIVMX_DEFAULT_FILE_CIPHER` at configure time, so no test
+ * describing a particular format may rely on `defaultForWrite()` — the format is named explicitly.
+ * Tests that have to hold for every format loop over `FileCipher::known()`, so that the next format
+ * added gets that coverage right away.
  */
 
 #include <string>
@@ -60,11 +60,11 @@ std::string repeat(char c, size_t n) {
 }
 
 /**
- * Format 1 podawany **jawnie**, a nie przez `defaultForWrite()`.
+ * Format 1 named **explicitly**, not via `defaultForWrite()`.
  *
- * Ponizsze testy opisuja konkretny format, nie "ten, ktorym akurat zapisuje ten build" - a format
- * zapisu jest wybierany przy konfiguracji przez `PRIVMX_DEFAULT_FILE_CIPHER`. Bez tego przelaczenie
- * domyslnego formatu wywracalo te testy, chociaz format 1 nie ulegal zmianie.
+ * The tests below describe one particular format, not "whichever this build happens to write with"
+ * — and the write format is chosen at configure time by `PRIVMX_DEFAULT_FILE_CIPHER`. Without this,
+ * switching the default format broke these tests even though format 1 had not changed.
  */
 FileCipher cbc() {
     return FileCipher::forType(FileCipher::AES_CBC_HMAC_SHA256);
@@ -77,7 +77,7 @@ ChunkEncryptor cbcEncryptor(size_t chunkSize = CHUNK) {
 } // namespace
 
 // ---------------------------------------------------------------------------------------------
-// Uklad ramki chunku
+// The chunk frame layout
 // ---------------------------------------------------------------------------------------------
 
 TEST(StoreFileFormat, ChunkLayoutIsHmacThenIvThenCipher) {
@@ -89,15 +89,15 @@ TEST(StoreFileFormat, ChunkLayoutIsHmacThenIvThenCipher) {
     ASSERT_GE(chunk.data.size(), HMAC_SIZE + IV_SIZE);
     EXPECT_EQ(32u, HMAC_SIZE);
     EXPECT_EQ(16u, IV_SIZE);
-    // HMAC stoi na poczatku i jest tym samym, co oddane obok w `Chunk::hmac`.
+    // The HMAC sits at the front and is the same thing returned alongside in `Chunk::hmac`.
     EXPECT_EQ(chunk.hmac, chunk.data.substr(0, HMAC_SIZE));
     EXPECT_EQ(HMAC_SIZE, chunk.hmac.size());
-    // 100 bajtow + PKCS#7 do wielokrotnosci 16 = 112.
+    // 100 bytes + PKCS#7 up to a multiple of 16 = 112.
     EXPECT_EQ(HMAC_SIZE + IV_SIZE + 112u, chunk.data.size());
 }
 
-/// Klucz chunku i HMAC sa deterministyczne - ten test wiaze je z konkretnymi prymitywami,
-/// wiec zmiana ktoregokolwiek z nich przestanie byc niezauwazalna.
+/// The chunk key and the HMAC are deterministic — this test ties them to particular primitives, so
+/// changing either stops being invisible.
 TEST(StoreFileFormat, ChunkKeyAndHmacFollowTheDocumentedFormula) {
     ChunkEncryptor encryptor = cbcEncryptor();
     const uint64_t index = 7;
@@ -117,12 +117,12 @@ TEST(StoreFileFormat, RoundTripForEdgeSizes) {
     for (const size_t size : {size_t{0}, size_t{1}, size_t{15}, size_t{16}, size_t{17}, size_t{4096}}) {
         const std::string plain = repeat('x', size);
         const auto chunk = encryptor.encrypt(3, plain);
-        EXPECT_EQ(plain, encryptor.decrypt(3, chunk)) << "rozmiar " << size;
+        EXPECT_EQ(plain, encryptor.decrypt(3, chunk)) << "size " << size;
     }
 }
 
-/// Indeks chunku wchodzi do klucza, wiec chunk odczytany pod innym indeksem musi zostac odrzucony.
-/// To jest jedyne, co powstrzymuje zamiane chunkow miejscami w obrebie pliku.
+/// The chunk index goes into the key, so a chunk read under a different index has to be rejected.
+/// This is the only thing stopping chunks from being swapped around within a file.
 TEST(StoreFileFormat, ChunkFromAnotherIndexIsRejected) {
     ChunkEncryptor encryptor = cbcEncryptor();
     const auto chunk = encryptor.encrypt(1, repeat('c', 64));
@@ -142,7 +142,7 @@ TEST(StoreFileFormat, HmacNotMatchingTheListIsRejectedBeforeDecryption) {
     ChunkEncryptor encryptor = cbcEncryptor();
     auto chunk = encryptor.encrypt(0, repeat('e', 64));
 
-    chunk.hmac[0] ^= 0xFF; // tak, jakby lista skrotow podawala inny hash niz ramka
+    chunk.hmac[0] ^= 0xFF; // as if the hash list named a different hash than the frame carries
     EXPECT_THROW(encryptor.decrypt(0, chunk), FileChunkInvalidChecksumException);
 }
 
@@ -152,16 +152,16 @@ TEST(StoreFileFormat, HasHashComparesThePrefix) {
 
     EXPECT_TRUE(encryptor.hasHash(chunk.data, chunk.hmac));
     EXPECT_FALSE(encryptor.hasHash(chunk.data, std::string(HMAC_SIZE, '\0')));
-    EXPECT_FALSE(encryptor.hasHash("za krotkie", chunk.hmac));
+    EXPECT_FALSE(encryptor.hasHash("too short", chunk.hmac));
 }
 
 // ---------------------------------------------------------------------------------------------
-// Arytmetyka rozmiarow. Te liczby adresuja chunki w pliku na serwerze, wiec kazda pomylka tutaj
-// to czytanie nie tego fragmentu.
+// Size arithmetic. These numbers address chunks within the file on the server, so any mistake here
+// means reading the wrong fragment.
 // ---------------------------------------------------------------------------------------------
 
 TEST(StoreFileFormat, EncryptedChunkSizeIsPlainPlusPaddingPlusHmacAndIv) {
-    // chunkSize bedacy wielokrotnoscia 16 i tak dostaje pelny blok dopelnienia PKCS#7.
+    // A chunkSize that is a multiple of 16 still gets a full block of PKCS#7 padding.
     EXPECT_EQ(CHUNK + 16 + HMAC_SIZE + IV_SIZE, cbcEncryptor().getEncryptedChunkSize());
     EXPECT_EQ(100u + 12 + HMAC_SIZE + IV_SIZE, cbcEncryptor(100).getEncryptedChunkSize());
 }
@@ -172,22 +172,22 @@ TEST(StoreFileFormat, EncryptedFileSizeMatchesWhatTheChunksActuallyWeigh) {
 
     EXPECT_EQ(0u, encryptor.getEncryptedFileSize(0));
 
-    // Jeden niepelny chunk.
+    // A single partial chunk.
     EXPECT_EQ(
         encryptor.encrypt(0, repeat('g', 100)).data.size(), encryptor.getEncryptedFileSize(100)
     );
 
-    // Dwa chunki: jeden pelny + reszta. Liczymy to tak, jak faktycznie wyjdzie z szyfrowania.
+    // Two chunks: one full + the remainder. We compute it as encryption actually turns out.
     const size_t full = encryptor.encrypt(0, repeat('g', smallChunk)).data.size();
     const size_t tail = encryptor.encrypt(1, repeat('g', 100)).data.size();
     EXPECT_EQ(full + tail, encryptor.getEncryptedFileSize(smallChunk + 100));
 
-    // Rozmiar bedacy dokladna wielokrotnoscia chunku - ostatni chunk jest pelny, nie pusty.
+    // A size that is an exact multiple of the chunk — the last chunk is full, not empty.
     EXPECT_EQ(2 * full, encryptor.getEncryptedFileSize(2 * smallChunk));
 }
 
 // ---------------------------------------------------------------------------------------------
-// Lista skrotow. `HMAC_SIZE` jest tu **krokiem tablicy**, nie tylko dlugoscia skrotu.
+// The hash list. Here `HMAC_SIZE` is the **table stride**, not merely a hash length.
 // ---------------------------------------------------------------------------------------------
 
 TEST(StoreFileFormat, HashListStrideIsHmacSize) {
@@ -241,7 +241,7 @@ TEST(StoreFileFormat, HashListAppendsAndTruncates) {
     list.set(1, std::string(HMAC_SIZE, '1'));
     EXPECT_EQ(2 * HMAC_SIZE, list.getAll().size());
 
-    // Zapis w srodku z obcieciem przycina tablice do tego chunku wlacznie.
+    // A truncating write in the middle cuts the table down to that chunk inclusive.
     list.set(0, std::string(HMAC_SIZE, '2'), true);
     EXPECT_EQ(HMAC_SIZE, list.getAll().size());
     EXPECT_EQ(std::string(HMAC_SIZE, '2'), list.getHash(0));
@@ -251,32 +251,32 @@ TEST(StoreFileFormat, HashListAppendsAndTruncates) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Warstwa `FileCipher`: wybor formatu po znaczniku `cipherType`.
+// The `FileCipher` layer: picking a format by the `cipherType` marker.
 // ---------------------------------------------------------------------------------------------
 
-/// Format zapisu wybiera `PRIVMX_DEFAULT_FILE_CIPHER` przy konfiguracji, wiec test nie moze
-/// przybijac konkretnej wartosci. Przybija to, co musi byc prawda w **kazdym** buildzie: ze
-/// domyslna wartosc jest formatem, ktory ten build potrafi odczytac.
+/// The write format is chosen by `PRIVMX_DEFAULT_FILE_CIPHER` at configure time, so this test
+/// cannot pin a particular value. It pins what has to hold in **every** build: that the default
+/// value is a format this build can read.
 TEST(StoreFileCipher, DefaultForWriteIsAFormatThisBuildCanRead) {
     EXPECT_TRUE(FileCipher::isKnown(FileCipher::defaultForWrite().type()));
-    // Raz wydanych znacznikow nie wolno przedefiniowac.
+    // Once issued, a marker value must never be redefined.
     EXPECT_EQ(1, FileCipher::AES_CBC_HMAC_SHA256);
     EXPECT_EQ(2, FileCipher::AES_GCM);
 }
 
-/// Sprawdza, ze `PRIVMX_DEFAULT_FILE_CIPHER` faktycznie **doszlo do kompilacji biblioteki**, a nie
-/// tylko wypisalo sie przy konfiguracji. Taka cicha strata zdarzyla sie juz raz: definicje dodane
-/// przez `target_compile_definitions` kasowal pozniejszy `set_target_properties(... COMPILE_DEFINITIONS ...)`,
-/// wiec build deklarowal jeden format, a zapisywal innym. Test porownuje wartosc widziana przez
-/// biblioteke z ta, ktora CMake podal temu plikowi.
+/// Checks that `PRIVMX_DEFAULT_FILE_CIPHER` actually **reached the compiled library**, rather than
+/// merely being printed at configure time. Such a silent loss has happened once already: definitions
+/// added by `target_compile_definitions` were wiped by a later
+/// `set_target_properties(... COMPILE_DEFINITIONS ...)`, so the build announced one format and wrote
+/// with another. The test compares the value the library sees with the one CMake gave this file.
 TEST(StoreFileCipher, BuildOptionReachedTheLibrary) {
     EXPECT_EQ(
         static_cast<int64_t>(PRIVMX_DEFAULT_FILE_CIPHER_ID), FileCipher::defaultForWrite().type()
-    ) << "PRIVMX_DEFAULT_FILE_CIPHER nie dotarlo do privmxendpointstore";
+    ) << "PRIVMX_DEFAULT_FILE_CIPHER did not reach privmxendpointstore";
 }
 
-/// Parametry formatu musza zgadzac sie ze stalymi, ktore opisywaly go wczesniej - inaczej
-// refaktor po cichu zmienilby uklad pliku.
+/// The format's parameters have to match the constants that described it before — otherwise the
+/// refactor would have quietly changed the file layout.
 TEST(StoreFileCipher, ParametersMatchTheConstantsTheyReplaced) {
     const FileCipher cipher = cbc();
 
@@ -296,9 +296,9 @@ TEST(StoreFileCipher, UnknownTypeIsRejected) {
     }
 }
 
-/// `ChunkStreamer` liczyl rozmiar pliku wlasna kopia tego samego wzoru co `ChunkEncryptor`.
-/// Teraz oba ida przez `FileCipher`, wiec zgodnosc jest z konstrukcji - ten test to przybija,
-/// bo rozjazd tych dwoch liczb oznacza czytanie nie tego fragmentu pliku.
+/// `ChunkStreamer` used to compute the file size with its own copy of the same formula as
+/// `ChunkEncryptor`. Both now go through `FileCipher`, so agreement holds by construction — this
+/// test pins it, because a drift between those two numbers means reading the wrong part of a file.
 TEST(StoreFileCipher, SizeArithmeticHasOneSource) {
     constexpr size_t chunkSize = 1024;
 
@@ -309,7 +309,7 @@ TEST(StoreFileCipher, SizeArithmeticHasOneSource) {
         for (const uint64_t fileSize :
              {uint64_t{0}, uint64_t{1}, uint64_t{1023}, uint64_t{1024}, uint64_t{5000}}) {
             EXPECT_EQ(cipher.encryptedFileSize(fileSize, chunkSize), encryptor.getEncryptedFileSize(fileSize))
-                << "format " << type << ", rozmiar " << fileSize;
+                << "format " << type << ", size " << fileSize;
         }
         EXPECT_EQ(cipher.encryptedChunkSize(chunkSize), encryptor.getEncryptedChunkSize())
             << "format " << type;
@@ -317,8 +317,8 @@ TEST(StoreFileCipher, SizeArithmeticHasOneSource) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// To, co musi zachodzic w **kazdym** formacie. Te testy sa po to, zeby kolejny dopisany format
-// nie przeszedl bez pokrycia - petla po `FileCipher::known()` obejmie go sama.
+// What has to hold in **every** format. These tests exist so that the next format added does not
+// slip through uncovered — the loop over `FileCipher::known()` picks it up on its own.
 // ---------------------------------------------------------------------------------------------
 
 TEST(StoreFileCipherAllFormats, RoundTripForEdgeSizes) {
@@ -328,13 +328,13 @@ TEST(StoreFileCipherAllFormats, RoundTripForEdgeSizes) {
         for (const size_t size : {size_t{0}, size_t{1}, size_t{15}, size_t{16}, size_t{17}, size_t{4096}}) {
             const std::string plain = repeat('x', size);
             const auto chunk = encryptor.encrypt(3, plain);
-            EXPECT_EQ(plain, encryptor.decrypt(3, chunk)) << "format " << type << ", rozmiar " << size;
+            EXPECT_EQ(plain, encryptor.decrypt(3, chunk)) << "format " << type << ", size " << size;
         }
     }
 }
 
-/// Skrot oddany obok ramki i skrot niesiony w ramce to ta sama rzecz - niezaleznie od tego,
-/// gdzie w ramce format go trzyma. Na tym stoi sprawdzenie przed odszyfrowaniem.
+/// The hash returned alongside the frame and the hash the frame carries are the same thing —
+/// wherever in the frame a format keeps it. The pre-decryption check rests on this.
 TEST(StoreFileCipherAllFormats, ChunkHashIsTheOneCarriedInTheFrame) {
     for (const int64_t type : FileCipher::known()) {
         const FileCipher cipher = FileCipher::forType(type);
@@ -346,7 +346,7 @@ TEST(StoreFileCipherAllFormats, ChunkHashIsTheOneCarriedInTheFrame) {
         EXPECT_TRUE(encryptor.hasHash(chunk.data, chunk.hmac)) << "format " << type;
         EXPECT_FALSE(encryptor.hasHash(chunk.data, std::string(cipher.hashLength(), '\0')))
             << "format " << type;
-        EXPECT_FALSE(encryptor.hasHash("za krotkie", chunk.hmac)) << "format " << type;
+        EXPECT_FALSE(encryptor.hasHash("too short", chunk.hmac)) << "format " << type;
     }
 }
 
@@ -360,7 +360,7 @@ TEST(StoreFileCipherAllFormats, TamperedCiphertextIsRejected) {
     }
 }
 
-/// Indeks chunku wchodzi do klucza w kazdym formacie, wiec chunki nie sa zamienne miejscami.
+/// The chunk index goes into the key in every format, so chunks are not interchangeable.
 TEST(StoreFileCipherAllFormats, ChunkFromAnotherIndexIsRejected) {
     for (const int64_t type : FileCipher::known()) {
         ChunkEncryptor encryptor(KEY, CHUNK, FileCipher::forType(type));
@@ -388,8 +388,8 @@ TEST(StoreFileCipherAllFormats, HashListStrideFollowsTheFormat) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Format 2 (cipherType = 2): AES-256-GCM, ramka `[12 B IV][szyfrogram || 16 B tag]`.
-// Tak samo doslownie jak przy formacie 1 - te liczby adresuja chunki w pliku.
+// Format 2 (cipherType = 2): AES-256-GCM, frame `[12 B IV][ciphertext || 16 B tag]`.
+// As literal as with format 1 — these numbers address chunks within the file.
 // ---------------------------------------------------------------------------------------------
 
 namespace {
@@ -408,7 +408,7 @@ TEST(StoreFileGcmFormat, Parameters) {
 
     EXPECT_EQ(GCM_IV, cipher.ivLength());
     EXPECT_EQ(GCM_TAG, cipher.hashLength());
-    // AEAD jest szyfrem strumieniowym - nie dopelnia, wiec plik nie rosnie do wielokrotnosci bloku.
+    // AEAD is a stream cipher — it does not pad, so the file does not grow to a block multiple.
     EXPECT_EQ(0u, cipher.paddingBlock());
 }
 
@@ -418,9 +418,9 @@ TEST(StoreFileGcmFormat, ChunkLayoutIsIvThenCipherWithTrailingTag) {
 
     const auto chunk = encryptor.encrypt(0, plain);
 
-    // Brak dopelnienia: dlugosc to dokladnie IV + tekst jawny + tag.
+    // No padding: the length is exactly IV + plaintext + tag.
     EXPECT_EQ(GCM_IV + 100u + GCM_TAG, chunk.data.size());
-    // Skrotem chunku jest tag AEAD, czyli **koncowka** ramki - inaczej niz w formacie 1.
+    // The chunk hash is the AEAD tag, i.e. the **end** of the frame — unlike in format 1.
     EXPECT_EQ(GCM_TAG, chunk.hmac.size());
     EXPECT_EQ(chunk.hmac, chunk.data.substr(chunk.data.size() - GCM_TAG));
 }
@@ -449,25 +449,26 @@ TEST(StoreFileGcmFormat, HashNotMatchingTheListIsRejectedBeforeDecryption) {
     ChunkEncryptor encryptor(KEY, CHUNK, gcm());
     auto chunk = encryptor.encrypt(0, repeat('e', 64));
 
-    chunk.hmac[0] ^= 0xFF; // tak, jakby lista skrotow podawala inny hash niz ramka
+    chunk.hmac[0] ^= 0xFF; // as if the hash list named a different hash than the frame carries
     EXPECT_THROW(encryptor.decrypt(0, chunk), FileChunkInvalidChecksumException);
 }
 
-/// Naruszenie szyfrogramu lapie samo uwierzytelnienie AEAD, a nie osobny HMAC przed ramka.
+/// Tampering with the ciphertext is caught by the AEAD authentication itself, not by a separate
+/// HMAC in front of the frame.
 TEST(StoreFileGcmFormat, TamperedCiphertextIsRejectedByTheAeadTag) {
     ChunkEncryptor encryptor(KEY, CHUNK, gcm());
     auto chunk = encryptor.encrypt(0, repeat('d', 64));
 
-    chunk.data[GCM_IV] ^= 0xFF; // pierwszy bajt szyfrogramu, za IV
+    chunk.data[GCM_IV] ^= 0xFF; // the first ciphertext byte, past the IV
     EXPECT_THROW(encryptor.decrypt(0, chunk), FileChunkInvalidCipherChecksumException);
 }
 
 // ---------------------------------------------------------------------------------------------
-// Format 3 (cipherType = 3): AES-256-GCM ze skrotami SHA-512.
+// Format 3 (cipherType = 3): AES-256-GCM with SHA-512 hashes.
 //
-// Uklad ramki jest **taki sam** jak w formacie 2 - tag AEAD ma 16 B niezaleznie od funkcji skrotu.
-// Rozni je tylko to, czym liczony jest klucz chunku i skrot wierzcholkowy tablicy. Format istnieje
-// po to, zeby kontener nazywajacy zestaw z SHA-512 mial dane pliku liczone tym samym skrotem.
+// The frame layout is **identical** to format 2 — an AEAD tag is 16 B whatever the hash function.
+// They differ only in what the chunk key and the table's top hash are computed with. The format
+// exists so that a container naming a SHA-512 suite gets its file data computed with the same hash.
 // ---------------------------------------------------------------------------------------------
 
 namespace {
@@ -478,7 +479,7 @@ FileCipher gcm512() {
 
 } // namespace
 
-/// Gdyby uklad sie roznil, adresowanie chunkow w pliku przestaloby byc wspolne dla obu formatow.
+/// If the layout differed, chunk addressing within a file would stop being shared by the two formats.
 TEST(StoreFileSha512Format, LayoutIsIdenticalToFormatTwo) {
     EXPECT_EQ(gcm().ivLength(), gcm512().ivLength());
     EXPECT_EQ(gcm().hashLength(), gcm512().hashLength());
@@ -486,15 +487,15 @@ TEST(StoreFileSha512Format, LayoutIsIdenticalToFormatTwo) {
     EXPECT_EQ(gcm().encryptedChunkSize(1024), gcm512().encryptedChunkSize(1024));
 }
 
-/// Sedno tego formatu: ten sam uklad, inny skrot. Gdyby klucz chunku wychodzil taki sam, format 3
-/// bylby tylko inna etykieta na formacie 2.
+/// The point of this format: the same layout, a different hash. If the chunk key came out the same,
+/// format 3 would be no more than another label on format 2.
 TEST(StoreFileSha512Format, ChunkKeyAndTopHashDifferFromFormatTwo) {
     EXPECT_NE(gcm().chunkKey(KEY, 0), gcm512().chunkKey(KEY, 0));
 
     const std::string topKey(32, 't');
     const std::string hashes(16, '0');
     EXPECT_NE(gcm().topHash(topKey, hashes), gcm512().topHash(topKey, hashes));
-    // HMAC-SHA512 ma 64 B, HMAC-SHA256 - 32 B.
+    // HMAC-SHA512 is 64 B, HMAC-SHA256 is 32 B.
     EXPECT_EQ(32u, gcm().topHash(topKey, hashes).size());
     EXPECT_EQ(64u, gcm512().topHash(topKey, hashes).size());
 }
@@ -505,16 +506,16 @@ TEST(StoreFileSha512Format, RoundTrip) {
     for (const size_t size : {size_t{0}, size_t{1}, size_t{4096}}) {
         const std::string plain = repeat('y', size);
         const auto chunk = encryptor.encrypt(2, plain);
-        EXPECT_EQ(plain, encryptor.decrypt(2, chunk)) << "rozmiar " << size;
+        EXPECT_EQ(plain, encryptor.decrypt(2, chunk)) << "size " << size;
     }
 }
 
 // ---------------------------------------------------------------------------------------------
-// Wybor formatu z zestawu kontenera (poziom 2).
+// Picking the format from the container's suite (level 2).
 // ---------------------------------------------------------------------------------------------
 
-/// Kontener nazywajacy zestaw dostaje format pliku liczony tym samym skrotem. Bez tego wybor
-/// zestawu zatrzymywalby sie na granicy `store`: pliki szlyby SHA-256 niezaleznie od polityki.
+/// A container naming a suite gets a file format computed with the same hash. Without this, the
+/// suite choice would stop at the `store` boundary: files would use SHA-256 whatever the policy.
 TEST(StoreFileCipherFromSuite, EachSuiteMapsToTheFormatWithItsOwnHash) {
     using core::CryptoSuite;
     using core::SuiteId;
@@ -529,25 +530,25 @@ TEST(StoreFileCipherFromSuite, EachSuiteMapsToTheFormatWithItsOwnHash) {
     );
 }
 
-/// "Brak polityki" to co innego niz "polityka nazywajaca zestaw domyslny" - tylko to pierwsze
-/// ma isc za ustawieniem buildu.
+/// "No policy" is not the same as "a policy naming the default suite" — only the former should
+/// follow the build setting.
 TEST(StoreFileCipherFromSuite, NoSuiteFallsBackToTheBuildDefault) {
     EXPECT_EQ(
         FileCipher::defaultForWrite().type(), FileCipher::forContainerSuite(std::nullopt).type()
     );
 }
 
-/// Kazdy zestaw z rejestru musi miec odpowiednik wsrod formatow pliku - inaczej kontener o takiej
-/// polityce dalby sie utworzyc, ale nie dalby sie zapisac.
+/// Every suite in the registry has to have a counterpart among the file formats — otherwise a
+/// container with such a policy could be created but not written to.
 TEST(StoreFileCipherFromSuite, EverySuiteHasAFileFormat) {
     for (const core::SuiteId id : core::CryptoSuite::known()) {
         EXPECT_NO_THROW(FileCipher::forContainerSuite(core::CryptoSuite::forId(id)))
-            << "zestaw " << static_cast<int>(id);
+            << "suite " << static_cast<int>(id);
     }
 }
 
-/// Dwa formaty daja dwa rozne uklady pliku - gdyby ktorys policzyl rozmiar drugiego, chunki
-/// czytalyby sie spod zlych przesuniec. Ten test przybija, ze sa faktycznie rozlaczne.
+/// The two formats give two different file layouts — if one computed the other's size, chunks would
+/// be read from the wrong offsets. This test pins that they really are distinct.
 TEST(StoreFileGcmFormat, LayoutDiffersFromFormatOne) {
     constexpr size_t chunkSize = 1024;
 

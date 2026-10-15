@@ -22,35 +22,35 @@ namespace endpoint {
 namespace core {
 
 /**
- * @brief Algorytm, ktorym generowane sa **nowe** klucze tozsamosci.
+ * @brief The algorithm **new** identity keys are generated with.
  *
- * Tylko generowanie. Klucz juz istniejacy niesie swoj algorytm ze soba (`PublicKey::algorithm()`,
- * `PrivateKey::algorithm()`) i operacje na nim ida za **nim**, a nie za ta stala - bo klucze
- * uzytkownikow moga byc dowolnego algorytmu, nie tylko tego, ktorym akurat generujemy.
+ * Generation only. A key that already exists carries its own algorithm (`PublicKey::algorithm()`,
+ * `PrivateKey::algorithm()`) and operations on it follow **that**, not this constant — because
+ * users' keys may be of any algorithm, not only the one we happen to generate with.
  *
- * `PrivmxSecp256k1` to secp256k1 z formatami danych PrivMX: czesc prywatna jako samo 32 B,
- * klucz publiczny jako 33 B w postaci skompresowanej. Zwykly `secp256k1` uzywa innych,
- * dluzszych postaci, wiec nie jest zamiennikiem.
+ * `PrivmxSecp256k1` is secp256k1 with PrivMX's data formats: the private part as a bare 32 B, the
+ * public key as 33 B compressed. Plain `secp256k1` uses different, longer forms, so it is not a
+ * drop-in replacement.
  */
 constexpr privmx::cryptoservice::AsymAlg DEFAULT_KEY_ALGORITHM = privmx::cryptoservice::AsymAlg::PrivmxSecp256k1;
 
 /**
- * @brief Schemat podpisu odpowiadajacy algorytmowi klucza.
+ * @brief The signature scheme matching a key's algorithm.
  *
- * Wyprowadzany z klucza, a nie brany ze stalej: dodanie kolejnego algorytmu (planowane Ed25519)
- * ma byc dopisaniem wiersza tutaj, a nie przegladaniem miejsc, ktore podpisuja i weryfikuja.
+ * Derived from the key rather than taken from a constant: adding another algorithm (Ed25519 is
+ * planned) should be one more row here, not a sweep through every place that signs and verifies.
  *
- * Dla krzywych ECDSA jest to **`Compact`**, nie `CompactWithHash`. `Compact` daje ECDSA nad
- * `sha256(m)`; `CompactWithHash` liczy `sha256` dodatkowo, czyli ECDSA nad `sha256(sha256(m))`.
- * Nazwa sugeruje odwrotnosc - zmiana na `CompactWithHash` wyprodukuje podpisy, ktore zweryfikuja
- * sie wylacznie miedzy soba, bez bledu kompilacji ani wykonania.
- * Dowod pomiarowy: crypto-update/B1-podpisy-compact.md
+ * For ECDSA curves this is **`Compact`**, not `CompactWithHash`. `Compact` gives ECDSA over
+ * `sha256(m)`; `CompactWithHash` computes a further `sha256`, i.e. ECDSA over `sha256(sha256(m))`.
+ * The name suggests the opposite — switching to `CompactWithHash` produces signatures that verify
+ * only among themselves, with no compile-time or run-time error.
+ * Measured proof: crypto-update/sigcompat.cpp
  *
- * @throws UnsupportedKeyAlgorithmException gdy algorytm nie ma tu przypisanego schematu
+ * @throws UnsupportedKeyAlgorithmException when the algorithm has no scheme assigned here
  */
 privmx::cryptoservice::SigScheme signatureSchemeFor(privmx::cryptoservice::AsymAlg algorithm);
 
-/// @brief Czy endpoint potrafi uzywac kluczy tego algorytmu.
+/// @brief Whether the endpoint can work with keys of this algorithm.
 bool isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg algorithm);
 
 inline privmx::cryptoservice::BytesView keyBytes(const std::string& data) {

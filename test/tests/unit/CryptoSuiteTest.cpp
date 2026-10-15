@@ -10,14 +10,14 @@ limitations under the License.
 */
 
 /**
- * Testy warstwy zwinnosci algorytmicznej kontenera (`core::CryptoSuite`).
+ * Tests of the container's algorithm-agility layer (`core::CryptoSuite`).
  *
- * Caly sens tej warstwy sprowadza sie do jednego zdania: **zapis idzie za wyborem, odczyt idzie
- * za znacznikiem w danych**. Z tego wynika reszta - rejestr odczytu musi byc kompletny w kazdym
- * buildzie, a znacznik musi byc uwierzytelniony, inaczej dalby sie podmienic na slabszy zestaw.
- * Te testy przybijaja wlasnie te wlasnosci, a nie konkretne algorytmy.
+ * The whole point of this layer comes down to one sentence: **a write follows the choice, a read
+ * follows the tag in the data**. Everything else follows from it — the read registry has to be
+ * complete in every build, and the tag has to be authenticated, or it could be swapped for a weaker
+ * suite. These tests pin those properties, not the particular algorithms.
  *
- * Format ramki: `[1 B SuiteId][12 B IV][szyfrogram || 16 B tag]`, znacznik jako AAD.
+ * Frame format: `[1 B SuiteId][12 B IV][ciphertext || 16 B tag]`, the tag passed as AAD.
  */
 
 #include <string>
@@ -39,12 +39,12 @@ std::string keyFor(const CryptoSuite& suite, char fill = 'k') {
 } // namespace
 
 // ---------------------------------------------------------------------------------------------
-// Rejestr zestawow
+// The suite registry
 // ---------------------------------------------------------------------------------------------
 
-/// Rejestr **odczytu** jest kompletny niezaleznie od konfiguracji budowania. Gdyby opcja budowania
-/// zawezala tez odczyt, klienci zbudowani z roznymi ustawieniami nie odczytaliby swoich danych -
-/// a to jest dokladnie to, czemu ta warstwa ma zapobiegac.
+/// The **read** registry is complete whatever the build configuration. If the build option narrowed
+/// reading too, clients built with different settings could not read each other's data — which is
+/// exactly what this layer exists to prevent.
 TEST(CryptoSuite, EveryBuildCanReadEverySuite) {
     EXPECT_TRUE(CryptoSuite::isKnown(SuiteId::Aes256GcmSha256));
     EXPECT_TRUE(CryptoSuite::isKnown(SuiteId::Aes256GcmSha512));
@@ -59,19 +59,19 @@ TEST(CryptoSuite, DefaultForWriteIsASuiteThisBuildCanRead) {
     EXPECT_TRUE(CryptoSuite::isKnown(CryptoSuite::defaultForWrite().id()));
 }
 
-/// Sprawdza, ze `PRIVMX_DEFAULT_CRYPTO_SUITE` faktycznie **doszlo do kompilacji biblioteki**,
-/// a nie tylko wypisalo sie przy konfiguracji. Taka cicha strata juz sie zdarzyla: definicje
-/// dodane przez `target_compile_definitions` kasowal pozniejszy
-/// `set_target_properties(... COMPILE_DEFINITIONS ...)`, wiec build deklarowal jeden zestaw,
-/// a zapisywal innym - i nic tego nie zglaszalo.
+/// Checks that `PRIVMX_DEFAULT_CRYPTO_SUITE` actually **reached the compiled library**, rather than
+/// merely being printed at configure time. Such a silent loss has already happened: definitions
+/// added by `target_compile_definitions` were wiped by a later
+/// `set_target_properties(... COMPILE_DEFINITIONS ...)`, so the build announced one suite and wrote
+/// with another — and nothing reported it.
 TEST(CryptoSuite, BuildOptionReachedTheLibrary) {
     EXPECT_EQ(
         static_cast<int>(PRIVMX_DEFAULT_CRYPTO_SUITE_ID),
         static_cast<int>(CryptoSuite::defaultForWrite().id())
-    ) << "PRIVMX_DEFAULT_CRYPTO_SUITE nie dotarlo do privmxendpointcore";
+    ) << "PRIVMX_DEFAULT_CRYPTO_SUITE did not reach privmxendpointcore";
 }
 
-/// Wartosci znacznika sa czescia formatu danych - raz wydanej nie wolno przedefiniowac.
+/// The tag values are part of the data format — once issued, a value must never be redefined.
 TEST(CryptoSuite, SuiteIdsAreFrozen) {
     EXPECT_EQ(0x00, static_cast<int>(SuiteId::Unknown));
     EXPECT_EQ(0x01, static_cast<int>(SuiteId::Aes256GcmSha256));
@@ -93,12 +93,13 @@ TEST(CryptoSuite, PolicyValueRoundTrips) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Ramka
+// The frame
 // ---------------------------------------------------------------------------------------------
 
-/// `group` liczy z narzutu rozmiar chunku i adresuje chunki jako `index * encryptedChunkSize(suite)`,
-/// wiec zadeklarowany narzut musi zgadzac sie co do bajta z tym, co ramka faktycznie dokłada.
-/// Rozjazd o jeden bajt znaczy czytanie chunkow spod przesunietych offsetow, a nie blad deszyfrowania.
+/// `group` derives the chunk size from the overhead and addresses chunks as
+/// `index * encryptedChunkSize(suite)`, so the declared overhead has to match to the byte what the
+/// frame actually adds. A one-byte drift means reading chunks from shifted offsets, not a decryption
+/// error.
 TEST(CryptoSuite, FrameOverheadMatchesWhatTheFrameActuallyAdds) {
     for (const SuiteId id : CryptoSuite::known()) {
         const CryptoSuite suite = CryptoSuite::forId(id);
@@ -108,7 +109,7 @@ TEST(CryptoSuite, FrameOverheadMatchesWhatTheFrameActuallyAdds) {
             const std::string framed = suite.encrypt(keyFor(suite), plain);
 
             EXPECT_EQ(plain.size() + suite.frameOverhead(), framed.size())
-                << "zestaw " << static_cast<int>(id) << ", dlugosc " << length;
+                << "suite " << static_cast<int>(id) << ", length " << length;
         }
     }
 }
@@ -116,15 +117,15 @@ TEST(CryptoSuite, FrameOverheadMatchesWhatTheFrameActuallyAdds) {
 TEST(CryptoSuite, FrameStartsWithItsSuiteTag) {
     for (const SuiteId id : CryptoSuite::known()) {
         const CryptoSuite suite = CryptoSuite::forId(id);
-        const std::string framed = suite.encrypt(keyFor(suite), "cokolwiek");
+        const std::string framed = suite.encrypt(keyFor(suite), "anything");
 
-        EXPECT_EQ(static_cast<char>(id), framed[0]) << "zestaw " << static_cast<int>(id);
-        EXPECT_EQ(id, CryptoSuite::readSuiteId(framed)) << "zestaw " << static_cast<int>(id);
+        EXPECT_EQ(static_cast<char>(id), framed[0]) << "suite " << static_cast<int>(id);
+        EXPECT_EQ(id, CryptoSuite::readSuiteId(framed)) << "suite " << static_cast<int>(id);
     }
 }
 
-/// Sedno warstwy: odczyt nie przyjmuje wskazania algorytmu - dobiera go ze znacznika. Dlatego
-/// dane zapisane dowolnym zestawem czytaja sie w buildzie ustawionym na inny zestaw zapisu.
+/// The heart of the layer: a read does not accept an algorithm being named — it picks one from the
+/// tag. That is why data written with any suite reads in a build set to write with another.
 TEST(CryptoSuite, AnySuiteIsReadableRegardlessOfTheWriteDefault) {
     for (const SuiteId id : CryptoSuite::known()) {
         const CryptoSuite suite = CryptoSuite::forId(id);
@@ -133,17 +134,17 @@ TEST(CryptoSuite, AnySuiteIsReadableRegardlessOfTheWriteDefault) {
         for (const std::string& plain : {std::string(), std::string(1, 'x'), std::string(5000, 'y')}) {
             const std::string framed = suite.encrypt(key, plain);
             EXPECT_EQ(plain, CryptoSuite::decrypt(key, framed))
-                << "zestaw " << static_cast<int>(id) << ", dlugosc " << plain.size();
+                << "suite " << static_cast<int>(id) << ", length " << plain.size();
         }
     }
 }
 
-/// Znacznik idzie jako AAD, wiec jest uwierzytelniony. Gdyby nie byl, atakujacy przestawilby go
-/// na zestaw o slabszym skrocie i odczyt poszedlby po jego mysli.
+/// The tag travels as AAD, so it is authenticated. If it were not, an attacker could switch it to a
+/// suite with a weaker hash and the read would go their way.
 TEST(CryptoSuite, SwappingTheSuiteTagInvalidatesTheFrame) {
     const CryptoSuite suite = CryptoSuite::forId(SuiteId::Aes256GcmSha256);
     const std::string key = keyFor(suite);
-    std::string framed = suite.encrypt(key, "tajne");
+    std::string framed = suite.encrypt(key, "secret");
 
     framed[0] = static_cast<char>(SuiteId::Aes256GcmSha512);
 
@@ -153,7 +154,7 @@ TEST(CryptoSuite, SwappingTheSuiteTagInvalidatesTheFrame) {
 TEST(CryptoSuite, TamperedCiphertextIsRejected) {
     const CryptoSuite suite = CryptoSuite::defaultForWrite();
     const std::string key = keyFor(suite);
-    std::string framed = suite.encrypt(key, "tajne");
+    std::string framed = suite.encrypt(key, "secret");
 
     framed[framed.size() - 1] ^= 0xFF;
 
@@ -162,14 +163,14 @@ TEST(CryptoSuite, TamperedCiphertextIsRejected) {
 
 TEST(CryptoSuite, WrongKeyIsRejected) {
     const CryptoSuite suite = CryptoSuite::defaultForWrite();
-    const std::string framed = suite.encrypt(keyFor(suite, 'k'), "tajne");
+    const std::string framed = suite.encrypt(keyFor(suite, 'k'), "secret");
 
     EXPECT_ANY_THROW(CryptoSuite::decrypt(keyFor(suite, 'z'), framed));
 }
 
 TEST(CryptoSuite, UnknownTagIsReportedAsSuchAndNotAsCorruption) {
     const CryptoSuite suite = CryptoSuite::defaultForWrite();
-    std::string framed = suite.encrypt(keyFor(suite), "tajne");
+    std::string framed = suite.encrypt(keyFor(suite), "secret");
 
     framed[0] = static_cast<char>(0x7F);
 
@@ -183,32 +184,33 @@ TEST(CryptoSuite, FrameShorterThanItsOwnOverheadIsRejected) {
 
     for (const size_t cut : {size_t{0}, size_t{1}, framed.size() - 1}) {
         EXPECT_THROW(CryptoSuite::decrypt(keyFor(suite), framed.substr(0, cut)), Exception)
-            << "obcieta do " << cut;
+            << "truncated to " << cut;
     }
 }
 
-/// Klucz za krotki musi zostac odrzucony **przed** wejsciem do OpenSSL-a, ktory czyta tyle bajtow,
-/// ile wymaga algorytm, nie ogladajac sie na dlugosc podanego ciagu.
+/// A key that is too short has to be rejected **before** it reaches OpenSSL, which reads as many
+/// bytes as the algorithm requires without regard for the length of the string it was given.
 TEST(CryptoSuite, KeyOfWrongLengthIsRejectedBeforeReachingTheCipher) {
     for (const SuiteId id : CryptoSuite::known()) {
         const CryptoSuite suite = CryptoSuite::forId(id);
 
-        EXPECT_ANY_THROW(suite.encrypt(std::string(suite.keyLength() - 1, 'k'), "tajne"))
-            << "zestaw " << static_cast<int>(id) << ", klucz za krotki";
-        EXPECT_ANY_THROW(suite.encrypt(std::string(suite.keyLength() + 1, 'k'), "tajne"))
-            << "zestaw " << static_cast<int>(id) << ", klucz za dlugi";
-        EXPECT_ANY_THROW(suite.encrypt(std::string(), "tajne"))
-            << "zestaw " << static_cast<int>(id) << ", klucz pusty";
+        EXPECT_ANY_THROW(suite.encrypt(std::string(suite.keyLength() - 1, 'k'), "secret"))
+            << "suite " << static_cast<int>(id) << ", key too short";
+        EXPECT_ANY_THROW(suite.encrypt(std::string(suite.keyLength() + 1, 'k'), "secret"))
+            << "suite " << static_cast<int>(id) << ", key too long";
+        EXPECT_ANY_THROW(suite.encrypt(std::string(), "secret"))
+            << "suite " << static_cast<int>(id) << ", key empty";
     }
 }
 
 // ---------------------------------------------------------------------------------------------
-// Prymitywy
+// Primitives
 // ---------------------------------------------------------------------------------------------
 
-/// Zestawy roznia sie skrotem - gdyby `hash()` dawal to samo w obu, caly wybor bylby pozorny.
+/// The suites differ in their hash — if `hash()` gave the same result in both, the whole choice
+/// would be illusory.
 TEST(CryptoSuite, SuitesDifferInTheirHash) {
-    const std::string data = "dane";
+    const std::string data = "data";
     const std::string sha256 = CryptoSuite::forId(SuiteId::Aes256GcmSha256).hash(data);
     const std::string sha512 = CryptoSuite::forId(SuiteId::Aes256GcmSha512).hash(data);
 
@@ -223,27 +225,27 @@ TEST(CryptoSuite, MacAndDeriveKeyFollowTheSuite) {
     for (const SuiteId id : CryptoSuite::known()) {
         const CryptoSuite suite = CryptoSuite::forId(id);
 
-        // Deterministyczne - ta sama para wejsc daje ten sam wynik.
-        EXPECT_EQ(suite.mac(key, "dane"), suite.mac(key, "dane")) << "zestaw " << static_cast<int>(id);
-        EXPECT_NE(suite.mac(key, "dane"), suite.mac(key, "inne")) << "zestaw " << static_cast<int>(id);
+        // Deterministic — the same pair of inputs gives the same result.
+        EXPECT_EQ(suite.mac(key, "data"), suite.mac(key, "data")) << "suite " << static_cast<int>(id);
+        EXPECT_NE(suite.mac(key, "data"), suite.mac(key, "other")) << "suite " << static_cast<int>(id);
 
         for (const size_t length : {size_t{16}, size_t{32}, size_t{64}}) {
-            const std::string derived = suite.deriveKey(key, "etykieta", length);
-            EXPECT_EQ(length, derived.size()) << "zestaw " << static_cast<int>(id);
-            EXPECT_EQ(derived, suite.deriveKey(key, "etykieta", length));
-            EXPECT_NE(derived, suite.deriveKey(key, "inna", length));
+            const std::string derived = suite.deriveKey(key, "label", length);
+            EXPECT_EQ(length, derived.size()) << "suite " << static_cast<int>(id);
+            EXPECT_EQ(derived, suite.deriveKey(key, "label", length));
+            EXPECT_NE(derived, suite.deriveKey(key, "other", length));
         }
     }
 }
 
-/// Dlugosc klucza musi zgadzac sie z tym, czego wymaga szyfr zestawu - `generateKey` bierze ja
-/// stad, wiec rozjazd konczylby sie kluczem odrzucanym przy kazdym zapisie.
+/// The key length has to match what the suite's cipher requires — `generateKey` takes it from here,
+/// so a drift would end in a key rejected on every write.
 TEST(CryptoSuite, KeyLengthMatchesWhatTheCipherAccepts) {
     for (const SuiteId id : CryptoSuite::known()) {
         const CryptoSuite suite = CryptoSuite::forId(id);
 
-        EXPECT_EQ(32u, suite.keyLength()) << "zestaw " << static_cast<int>(id);
-        EXPECT_NO_THROW(suite.encrypt(CryptoSuite::randomBytes(suite.keyLength()), "tajne"));
+        EXPECT_EQ(32u, suite.keyLength()) << "suite " << static_cast<int>(id);
+        EXPECT_NO_THROW(suite.encrypt(CryptoSuite::randomBytes(suite.keyLength()), "secret"));
     }
 }
 

@@ -26,13 +26,14 @@ namespace {
 namespace cs = privmx::cryptoservice;
 
 /**
- * AES-256-GCM kanalu danych, z naglowkiem wiadomosci jako AAD.
+ * The data channel's AES-256-GCM, with the message header as AAD.
  *
- * Wolany wprost z providera, a nie przez `CryptoSuite`: ten ostatni oprawia wynik we wlasna ramke
- * ze znacznikiem zestawu, a tutaj ramka jest wlasnoscia formatu V1 kanalu - jej uklad opisuje
- * `WIRE_FORMAT_VERSION`, nie zestaw kontenera.
+ * Called straight on the provider rather than through `CryptoSuite`: the latter wraps its result in
+ * a frame of its own carrying a suite tag, whereas here the frame belongs to the channel's V1
+ * format — its layout is described by `WIRE_FORMAT_VERSION`, not by a container suite.
  *
- * Rownowaznosc bajtowa z poprzednia implementacja sprawdzona pomiarowo, takze dla niepustego AAD.
+ * Byte equivalence with the previous implementation was verified by measurement, including for a
+ * non-empty AAD.
  */
 std::string channelAead(
     const std::string& key,

@@ -26,14 +26,13 @@ struct KeyAlgorithmSpec {
 };
 
 /**
- * Algorytmy kluczy tozsamosci, ktorych endpoint uzywa.
+ * The identity-key algorithms the endpoint works with.
  *
- * Klucze uzytkownikow moga byc dowolnego algorytmu, wiec to jest rejestr **obslugi**, a nie
- * wyboru: wpis tutaj znaczy "umiemy takim kluczem podpisac i zweryfikowac". Dodanie Ed25519
- * bedzie dopisaniem wiersza.
+ * Users' keys may be of any algorithm, so this is a registry of **support**, not of choice: an entry
+ * here means "we can sign and verify with such a key". Adding Ed25519 will be one more row.
  *
- * `PrivmxSecp256k1` i `secp256k1` to ta sama krzywa w dwoch formatach danych - oba podpisuja
- * tak samo. Drugi wystepuje tylko przy imporcie klucza publicznego w postaci nieskompresowanej.
+ * `PrivmxSecp256k1` and `secp256k1` are the same curve in two data formats — both sign identically.
+ * The second one only shows up when importing an uncompressed public key.
  */
 constexpr std::array<KeyAlgorithmSpec, 2> KEY_ALGORITHMS{{
     {cs::AsymAlg::PrivmxSecp256k1, cs::SigScheme::Compact},
@@ -57,7 +56,7 @@ constexpr bool defaultAlgorithmIsSupported() {
     }
     return false;
 }
-static_assert(defaultAlgorithmIsSupported(), "DEFAULT_KEY_ALGORITHM nie ma wpisu w KEY_ALGORITHMS");
+static_assert(defaultAlgorithmIsSupported(), "DEFAULT_KEY_ALGORITHM has no entry in KEY_ALGORITHMS");
 
 } // namespace
 

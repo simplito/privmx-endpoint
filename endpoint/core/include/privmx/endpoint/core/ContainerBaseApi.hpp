@@ -110,35 +110,36 @@ protected:
 
     // Empty rosters build no per-user key entries — for a module that hands its key over some other way.
     /**
-     * @brief Zestaw algorytmow, ktorym nalezy zapisywac dane kontenera o tej polityce.
+     * @brief The suite that data in a container with this policy should be written with.
      *
-     * Poziom 2 wyboru formatu zapisu: polityka kontenera przed stala kompilacji.
-     * Typem jest `ContainerPolicyWithoutItem`, bo `cryptoSuite` siedzi wlasnie tam, a `stream`
-     * uzywa tylko tej czesci polityki.
+     * Level 2 of the write-format choice: the container policy, ahead of the build-time constant.
+     * The type is `ContainerPolicyWithoutItem` because that is where `cryptoSuite` lives, and
+     * `stream` uses only that part of the policy.
      *
-     * @throws UnknownCryptoSuiteException gdy polityka nazywa zestaw nieznany temu buildowi
+     * @throws UnknownCryptoSuiteException when the policy names a suite this build does not know
      */
     static CryptoSuite suiteFromPolicy(const std::optional<ContainerPolicyWithoutItem>& policies);
 
     /**
-     * @brief Uzgadnia `cryptoSuite` polityki wysylanej w aktualizacji z zestawem kontenera.
+     * @brief Reconciles an update policy's `cryptoSuite` with the container's own.
      *
-     * Zestaw jest ustalany przy tworzeniu kontenera i nie zmienia sie. Bridge egzekwuje to doslownie:
-     * aktualizacja niesie **cala** polityke, wiec pominiecie `cryptoSuite` jest dla niego taka sama
-     * zmiana jak podmiana i konczy sie `INVALID_PARAMS`. Wolajacy, ktory zmienia same uprawnienia,
-     * nie ma powodu powtarzac zestawu - dlatego przenosimy go tutaj.
+     * The suite is fixed when the container is created and does not change. The bridge enforces
+     * that literally: an update carries the **whole** policy, so omitting `cryptoSuite` is as much
+     * a change to it as swapping it, and ends in `INVALID_PARAMS`. A caller changing only
+     * permissions has no reason to repeat the suite — so we carry it over here.
      *
-     * Jawnie podany, ale inny zestaw nie jest po cichu nadpisywany: to blad wolajacego i lepiej
-     * zglosic go pod wlasna nazwa, niz czekac na `INVALID_PARAMS` z serwera.
+     * A suite named explicitly but differing is not silently overwritten: that is the caller's
+     * mistake, and it is better reported under its own name than as an `INVALID_PARAMS` from the
+     * server.
      *
-     * @throws CryptoSuiteIsFixedAtCreationException gdy polityka nazywa inny zestaw niz kontener
+     * @throws CryptoSuiteIsFixedAtCreationException when the policy names a different suite
      */
     template<typename TPolicy, typename TContainer>
     static TPolicy policyForUpdate(const TContainer& container, TPolicy policies);
 
-    // `policies` sluzy tu tylko do wyboru zestawu algorytmow dla nowego klucza (patrz `EncKey::suite`);
-    // sama polityka jedzie do Bridge'a osobno. Jest parametrem, a nie czyms doklejanym w modulach,
-    // zeby nowy typ kontenera nie mogl o tym wyborze po cichu zapomniec.
+    // `policies` serves only to pick the algorithm suite for the new key (see `EncKey::suite`); the
+    // policy itself travels to the bridge separately. It is a parameter rather than something the
+    // modules bolt on, so a new container type cannot quietly forget about that choice.
     ContainerCreateContext prepareContainerCreate(
         const std::string& contextId,
         const std::vector<UserWithPubKey>& users,
@@ -189,10 +190,10 @@ protected:
             .moduleSchemaVersion = _moduleDataSchemaMapper->getDataStructureVersion(container.data.back()),
             .moduleResourceId = container.resourceId.value_or(""),
             .contextId = container.contextId,
-            // Zestaw kontenera jedzie razem z kluczami, bo to on decyduje, czym zapisywane sa **itemy**.
-            // Klucz odczytany z serwera nie niesie zestawu - `EncKey::suite` jest ustawiany tylko przy
-            // generowaniu - wiec bez tego pola kazdy zapis itemu szedlby zestawem domyslnym dla buildu,
-            // niezaleznie od polityki kontenera.
+            // The container's suite travels with the keys, because it decides what **items** are
+            // written with. A key read back from the server carries no suite — `EncKey::suite` is
+            // set only on generation — so without this field every item write would use the build's
+            // default suite, whatever the container's policy says.
             .cryptoSuite = suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy))
         };
     }
@@ -298,9 +299,9 @@ auto ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
     }
     auto keysMap = _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver);
     core::DecryptedEncKeyV2 ret = keysMap.at(location).at(data_entry.keyId);
-    // Klucz wraca z serwera bez zestawu - `EncKey::suite` jest ustawiany tylko przy generowaniu.
-    // Stempel kladziemy tutaj, bo to jest **klucz do zapisu**: wszystko, co nim zostanie zapisane,
-    // ma isc algorytmem wybranym przez kontener, a nie domyslnym dla buildu.
+    // The key comes back from the server without a suite — `EncKey::suite` is set only on
+    // generation. We stamp it here because this is the **write key**: everything written with it
+    // should use the algorithm the container chose, not the build's default.
     ret.suite = suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(moduleObj.policy));
     return ret;
 }
@@ -363,13 +364,13 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     if (!_keyProvider->verifyKeysSecret(containerKeys, location, secret)) {
         throw core::EncryptionKeyValidationException();
     }
-    // Zestaw bierzemy **zawsze z serwowanego kontenera**, nigdy z polityki przekazanej do aktualizacji.
+    // The suite comes **always from the served container**, never from the policy passed to the update.
     //
-    // Zestaw jest ustalany przy tworzeniu kontenera i nie zmienia sie - pilnuje tego Bridge, ktory
-    // odrzuca aktualizacje zmieniajaca lub pomijajaca `cryptoSuite`. Polityka wchodzaca nie moze go
-    // wiec legalnie zmienic, a czytanie z niej bylo bledem: wolajacy, ktory zmienia same uprawnienia,
-    // nie powtarza `cryptoSuite`, przez co `suiteFromPolicy` cofalo sie do zestawu **domyslnego dla
-    // buildu**. Kontener utworzony z mocniejszym zestawem zapisywalby wtedy czesc danych slabszym.
+    // The suite is fixed when the container is created and does not change — the bridge enforces that,
+    // rejecting an update that changes or drops `cryptoSuite`. The incoming policy therefore cannot
+    // legally change it, and reading it from there was a bug: a caller changing only permissions does
+    // not repeat `cryptoSuite`, so `suiteFromPolicy` fell back to the **build's default** suite. A
+    // container created with a stronger suite would then have written part of its data weaker.
     const CryptoSuite suite = suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy));
 
     core::EncKey key = currentKey;
@@ -378,8 +379,8 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     if (needNewKey) {
         key = _keyProvider->generateKey(suite);
     } else {
-        // Klucz zostaje ten sam, zmienia sie tylko zestaw zapisu. Jest to bezpieczne, bo znacznik
-        // zestawu siedzi w kazdej ramce z osobna: dane zapisane poprzednim zestawem pozostaja czytelne.
+        // The key stays the same, only the write suite changes. That is safe because the suite tag
+        // sits in each frame separately: data written with the previous suite stays readable.
         key.suite = suite;
     }
     return ContainerUpdatePlan{

@@ -46,8 +46,8 @@ public:
         size_t chunkSize,
         uint64_t fileSize,
         size_t serverRequestChunkSize,
-        // Format zapisu danych pliku. Domyslny parametr jest dla wywolan, ktore nie maja dostepu
-        // do kontenera; sciezka tworzenia pliku podaje go jawnie, na podstawie polityki Store'a.
+        // The file-data write format. The default argument serves calls with no access to the
+        // container; the file-creation path passes it explicitly, from the store's policy.
         FileCipher cipher = FileCipher::defaultForWrite()
     );
     void createRequest(bool enableRandomWrite = false);
@@ -83,7 +83,7 @@ private:
     std::string _checksums;
     uint64_t _fileIndex = 0;
     uint64_t _serverSeq = 0;
-    // Nowe pliki zapisujemy formatem domyslnym; odczyt dobiera format po `cipherType` z meta.
+    // New files are written with the default format; a read picks one by `cipherType` from the meta.
     FileCipher _cipher = FileCipher::defaultForWrite();
 };
 

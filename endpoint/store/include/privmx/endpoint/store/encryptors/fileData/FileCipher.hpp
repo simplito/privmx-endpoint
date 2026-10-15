@@ -27,110 +27,111 @@ namespace endpoint {
 namespace store {
 
 /**
- * @brief Format danych pliku: jeden zestaw parametrow i operacji, wybierany przez `cipherType`.
+ * @brief A file data format: one set of parameters and operations, selected by `cipherType`.
  *
- * **Czemu to nie jest `core::CryptoSuite`.** W kontenerze zestaw algorytmow zmienia tylko
- * *zawartosc* ramki - znacznik siedzi w kazdej ramce z osobna, a ramki nie sa adresowane po
- * przesunieciu. W pliku jest inaczej: dlugosc skrotu jest **krokiem tablicy skrotow**
- * (`chunkIndex * hashLength()`), a rozmiar zaszyfrowanego chunku sluzy do adresowania chunkow
- * w pliku na serwerze (`index * encryptedChunkSize()`). Zmiana algorytmu przestawia wiec caly
- * uklad pliku, a nie tylko jego tresc - i dlatego ma wlasny, grubszy znacznik.
+ * **Why this is not `core::CryptoSuite`.** In a container, the algorithm suite changes only the
+ * frame's *contents* — the tag sits in every frame separately, and frames are not addressed by
+ * offset. A file is different: the hash length is the **hash-table stride**
+ * (`chunkIndex * hashLength()`), and the sealed chunk size addresses chunks within the file on the
+ * server (`index * encryptedChunkSize()`). Changing the algorithm therefore moves the whole file
+ * layout, not just its contents — which is why it gets its own, coarser marker.
  *
- * **Gdzie siedzi znacznik.** `cipherType` w wewnetrznym meta pliku. Pole istnialo wczesniej:
- * bylo zapisywane jako `1` i sprawdzane przy odczycie. Teraz jest to pelnoprawny wybor formatu.
+ * **Where the marker lives.** `cipherType` in the file's internal meta. The field existed before:
+ * it was written as `1` and checked on read. It is now a first-class format choice.
  *
- * Dodanie nowego formatu to wpis w tablicy w `FileCipher.cpp` plus jego wlasne `encryptChunk`
- * i `decryptChunk`. Raz wydanej wartosci `cipherType` nie wolno przedefiniowac - pliki zapisane
- * stara wartoscia zostaja na dysku.
+ * Adding a format means an entry in the table in `FileCipher.cpp` plus its own `encryptChunk` and
+ * `decryptChunk`. A `cipherType` value that has been issued must never be redefined — files written
+ * with the old value are still on disk.
  */
 class FileCipher {
 public:
     /**
-     * AES-256-CBC + PKCS#7, HMAC-SHA256 nad `IV || szyfrogram`.
-     * Ramka: `[32 B HMAC][16 B IV][szyfrogram]`; wpisem tablicy skrotow jest HMAC z poczatku ramki.
+     * AES-256-CBC + PKCS#7, HMAC-SHA256 over `IV || ciphertext`.
+     * Frame: `[32 B HMAC][16 B IV][ciphertext]`; the hash-table entry is the HMAC at the front.
      */
     static constexpr int64_t AES_CBC_HMAC_SHA256 = 1;
 
     /**
-     * AES-256-GCM, skroty SHA-256.
-     * Ramka: `[12 B IV][szyfrogram || 16 B tag]`; wpisem tablicy skrotow jest tag z **konca** ramki.
+     * AES-256-GCM, SHA-256 hashes.
+     * Frame: `[12 B IV][ciphertext || 16 B tag]`; the hash-table entry is the tag at the **end**.
      *
-     * Wzgledem formatu 1: brak dopelnienia blokowego i o polowe mniejszy krok tablicy skrotow
-     * (16 zamiast 32 B), wiec plik na serwerze i jego tablica skrotow sa mniejsze. Uwierzytelnienie
-     * robi sam tryb AEAD, zamiast osobnego HMAC-a doklejanego przed ramke.
+     * Against format 1: no block padding and half the hash-table stride (16 instead of 32 B), so
+     * both the file on the server and its hash table are smaller. Authentication is the AEAD mode's
+     * own, instead of a separate HMAC prepended to the frame.
      */
     static constexpr int64_t AES_GCM = 2;
 
     /**
-     * AES-256-GCM, skroty SHA-512.
+     * AES-256-GCM, SHA-512 hashes.
      *
-     * Ramka jest **taka sama** jak w formacie 2 - tag AEAD ma 16 B niezaleznie od funkcji skrotu,
-     * wiec krok tablicy skrotow i adresowanie chunkow sie nie zmieniaja. Rozni je to, czym liczony
-     * jest klucz chunku i skrot wierzcholkowy tablicy.
+     * The frame is **identical** to format 2 — an AEAD tag is 16 B whatever the hash function, so
+     * the hash-table stride and chunk addressing do not change. What differs is what the chunk key
+     * and the table's top hash are computed with.
      *
-     * Istnieje, bo kontener nazywajacy zestaw z SHA-512 ma miec dane pliku liczone tym samym
-     * skrotem. Bez tego formatu plik w takim kontenerze nadal uzywalby SHA-256 - wybor zestawu
-     * zatrzymywalby sie na granicy `store`.
+     * It exists so that a container naming a SHA-512 suite gets its file data computed with the same
+     * hash. Without this format a file in such a container would still use SHA-256 — the suite
+     * choice would stop at the `store` boundary.
      */
     static constexpr int64_t AES_GCM_SHA512 = 3;
 
     /**
-     * @brief Format o podanym znaczniku.
-     * @throws UnsupportedCipherTypeException gdy ten build nie zna takiego formatu
+     * @brief The format with the given marker.
+     * @throws UnsupportedCipherTypeException when this build does not know the format
      */
     static FileCipher forType(int64_t cipherType);
 
-    /// @brief Format uzywany przy zapisie nowych plikow, gdy nic go nie wskazuje (poziom 1).
+    /// @brief The format used for writing new files when nothing names one (level 1).
     static FileCipher defaultForWrite();
 
     /**
-     * @brief Format odpowiadajacy zestawowi algorytmow kontenera (poziom 2).
+     * @brief The format matching the container's algorithm suite (level 2).
      *
-     * Dane pliku sa danymi kontenera, wiec maja isc tym samym algorytmem i tym samym skrotem, co
-     * reszta jego zawartosci. Kontener, ktory nie nazwal zestawu, dostaje `defaultForWrite()` -
-     * dlatego parametr jest opcjonalny: "brak polityki" to co innego niz "polityka nazywajaca
-     * zestaw domyslny", a tylko to pierwsze ma isc za ustawieniem buildu.
+     * File data is container data, so it should use the same algorithm and the same hash as the rest
+     * of the container's contents. A container that named no suite gets `defaultForWrite()` — hence
+     * the optional parameter: "no policy" is not the same as "a policy naming the default suite",
+     * and only the former should follow the build setting.
      *
-     * @throws UnsupportedCipherTypeException gdy zestaw nie ma odpowiednika wsrod formatow pliku
+     * @throws UnsupportedCipherTypeException when no file format corresponds to the suite
      */
     static FileCipher forContainerSuite(const std::optional<core::CryptoSuite>& suite);
 
     static bool isKnown(int64_t cipherType);
 
-    /// @brief Wszystkie znane formaty. Rejestr odczytu jest kompletny w kazdym buildzie.
+    /// @brief Every known format. The read registry is complete in every build.
     static std::vector<int64_t> known();
 
     int64_t type() const { return _type; }
 
     std::size_t ivLength() const;
 
-    /// @brief Dlugosc skrotu chunku. Jest to **krok tablicy skrotow**, nie tylko rozmiar wyniku.
+    /// @brief The chunk hash length. This is the **hash-table stride**, not just an output size.
     std::size_t hashLength() const;
 
-    /// @brief Rozmiar bloku dopelnienia; 0, gdy format nie dopelnia.
+    /// @brief The padding block size; 0 when the format does not pad.
     std::size_t paddingBlock() const;
 
     /**
-     * @brief Czy ramka niesie podany skrot chunku.
+     * @brief Whether the frame carries the given chunk hash.
      *
-     * Sprawdzane, zanim cokolwiek zostanie odszyfrowane: lapie przypadek, w ktorym serwer poda
-     * chunk z innego miejsca pliku. Gdzie w ramce lezy skrot, zalezy od formatu - w formacie 1
-     * stoi na poczatku, w formacie 2 jest tagiem AEAD na koncu - i dlatego wie o tym `FileCipher`,
-     * a nie wolajacy.
+     * Checked before anything is decrypted: it catches the case where the server serves a chunk
+     * from a different part of the file. Where the hash sits in the frame depends on the format —
+     * format 1 puts it at the front, format 2 uses the AEAD tag at the end — which is why
+     * `FileCipher` knows this and the caller does not.
      */
     bool frameCarriesHash(const std::string& chunkData, const std::string& hash) const;
 
-    /// @brief Klucz chunku o danym indeksie. Indeks wchodzi do klucza, wiec chunki nie sa zamienne.
+    /// @brief The key for the chunk at this index. The index goes into the key, so chunks are not
+    /// interchangeable.
     std::string chunkKey(const std::string& fileKey, std::uint64_t index) const;
 
     IChunkEncryptor::Chunk encryptChunk(const std::string& chunkKey, const std::string& plain) const;
 
     /**
-     * @throws FileChunkInvalidCipherChecksumException gdy skrot ramki sie nie zgadza
+     * @throws FileChunkInvalidCipherChecksumException when the frame's hash does not match
      */
     std::string decryptChunk(const std::string& chunkKey, const IChunkEncryptor::Chunk& chunk) const;
 
-    /// @brief Skrot wiazacy cala tablice skrotow chunkow.
+    /// @brief The hash binding the whole chunk hash table.
     std::string topHash(const std::string& topHashKey, const std::string& hashes) const;
 
     std::size_t encryptedChunkSize(std::size_t plainChunkSize) const;

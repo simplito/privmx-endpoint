@@ -93,9 +93,9 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
 
 CryptoSuite ContainerBaseApi::suiteFromPolicy(const std::optional<ContainerPolicyWithoutItem>& policies) {
     if (policies.has_value() && policies->cryptoSuite.has_value()) {
-        // Rzuca `UnknownCryptoSuiteException`, gdy ten build nie zna nazwanego zestawu. Celowo nie
-        // cofamy sie po cichu do domyslnego: zapis slabszym zestawem niz zadala polityka bylby
-        // niezauwazalnym oslabieniem ochrony kontenera.
+        // Throws `UnknownCryptoSuiteException` when this build does not know the named suite. We
+        // deliberately do not fall back to the default: writing with a weaker suite than the policy
+        // asked for would weaken the container's protection unnoticeably.
         return CryptoSuite::forPolicyValue(policies->cryptoSuite.value());
     }
     return CryptoSuite::defaultForWrite();
@@ -175,8 +175,8 @@ DecryptedEncKeyV2 ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleKeys
     auto key = _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver)
                    .at(location)
                    .at(moduleKeys.currentKeyId);
-    // Jak w przeciazeniu biorącym kontener: klucz wraca bez zestawu, a jest kluczem do zapisu.
-    // `ModuleKeys` niesie zestaw wlasnie po to - patrz `containerToModuleKeys`.
+    // As in the overload taking a container: the key comes back without a suite, yet it is the write
+    // key. That is exactly why `ModuleKeys` carries the suite — see `containerToModuleKeys`.
     key.suite = moduleKeys.cryptoSuite;
     return key;
 }

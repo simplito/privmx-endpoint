@@ -368,14 +368,15 @@ TEST_F(GroupEnvelope, DroppedTrailingChunkIsOnlyCaughtByTheDeclaredSize) {
 
 namespace {
 
-/// Zestaw inny niz domyslny dla buildu - bez tego test nie odroznia "wzielo z naglowka" od "wzielo stala".
+/// A suite other than the build's default — without one the test cannot tell "took it from the
+/// header" apart from "took a constant".
 core::CryptoSuite otherSuite() {
     for (const core::SuiteId id : core::CryptoSuite::known()) {
         if (id != core::CryptoSuite::defaultForWrite().id()) {
             return core::CryptoSuite::forId(id);
         }
     }
-    throw std::logic_error("rejestr ma tylko jeden zestaw - tego testu nie da sie przeprowadzic");
+    throw std::logic_error("the registry holds only one suite - this test cannot be run");
 }
 
 } // namespace
@@ -396,7 +397,7 @@ TEST_F(GroupEnvelope, FileEnvelopeCarriesTheSuiteItWasSealedWith) {
     EXPECT_EQ(anon.suite.id(), other.id());
 }
 
-/// Offsety musza wynikac z zestawu z naglowka, a nie z ustawienia buildu czytajacego.
+/// The offsets have to follow from the header's suite, not from the reading build's setting.
 TEST_F(GroupEnvelope, ChunkOffsetsFollowTheSuiteFromTheHeader) {
     const core::CryptoSuite other = otherSuite();
     constexpr ByteCount C = GroupEnvelopeEncryptor::CHUNK_SIZE;
@@ -422,8 +423,8 @@ TEST_F(GroupEnvelope, ChunkOffsetsFollowTheSuiteFromTheHeader) {
     }
 }
 
-/// Znacznik zestawu lezy w jawnym naglowku, ale jest **przypieczetowany** razem z reszta naglowka.
-/// Podmiana na zestaw o innym narzucie przestawilaby kazdy offset - dlatego musi sie nie udac.
+/// The suite tag sits in the plaintext header, but it is **sealed** along with the rest of it.
+/// Swapping it for a suite with a different overhead would shift every offset — hence it must fail.
 TEST_F(GroupEnvelope, RewritingTheSuiteByteIsRejected) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
     core::Buffer env = enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupEncKey);

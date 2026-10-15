@@ -820,9 +820,9 @@ std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> Strea
 }
 
 std::string StreamApiLowImpl::deriveStreamEncryptionKey(privmx::endpoint::core::DecryptedEncKeyV2 encKey) {
-    // Przybite formatem, nie wybierane zestawem kontenera: wynik jest kluczem dla SRTP, ktory
-    // wymaga **32 bajtow**. Zestaw z SHA-512 dalby 64 i zerwal konsumenta, wiec dopoki strumienie
-    // nie dostana wlasnej zwinnosci, skrot jest tu staly.
+    // Pinned by the format, not chosen by the container's suite: the result is an SRTP key, which
+    // has to be **32 bytes**. A SHA-512 suite would give 64 and break the consumer, so until streams
+    // get agility of their own, the hash here is fixed.
     return core::FormatHash::sha256(encKey.key);
 }
 

@@ -24,29 +24,29 @@ namespace endpoint {
 namespace core {
 
 /**
- * @brief Klucz prywatny jako **typ wartosciowy**. Uzasadnienie: patrz `core::PublicKey`.
+ * @brief A private key as a **value type**. For the rationale see `core::PublicKey`.
  *
- * Kopiowanie wspoldzieli uchwyt, nie klonuje klucza.
+ * Copying shares the handle, it does not clone the key.
  */
 class PrivateKey {
 public:
-    /// @throws privmx::cryptoservice::Exception gdy WIF jest niepoprawny
+    /// @throws privmx::cryptoservice::Exception when the WIF is invalid
     static PrivateKey fromWIF(const std::string& wif);
 
     /**
-     * @brief Klucz z surowych 32 bajtow czesci prywatnej.
+     * @brief A key from the raw 32 bytes of the private part.
      *
-     * Odpowiednik dotychczasowego `ECC::fromPrivateKey` - uzywany tam, gdzie klucz kontenera
-     * pelni role klucza asymetrycznego (inbox, konwersja kluczy).
+     * The equivalent of the former `ECC::fromPrivateKey` — used where a container key plays the role
+     * of an asymmetric key (inbox, key conversion).
      */
     static PrivateKey fromRaw(const std::string& raw);
 
     static PrivateKey generateRandom();
 
-    /// @brief Pusty uchwyt. Operacje poza `empty()` rzucaja wyjatek.
+    /// @brief An empty handle. Anything beyond `empty()` throws.
     PrivateKey() = default;
 
-    /// @brief Uchwyt razem z algorytmem. Uzasadnienie: patrz `core::PublicKey`.
+    /// @brief A handle together with its algorithm. For the rationale see `core::PublicKey`.
     explicit PrivateKey(
         std::shared_ptr<privmx::cryptoservice::IPrivateKey> key,
         privmx::cryptoservice::AsymAlg algorithm = DEFAULT_KEY_ALGORITHM
@@ -55,25 +55,25 @@ public:
 
     bool empty() const { return _key == nullptr; }
 
-    /// @brief Algorytm tego klucza. Pusty uchwyt oddaje wartosc domyslna i nie nadaje sie do uzycia.
+    /// @brief This key's algorithm. An empty handle reports the default and is not usable.
     privmx::cryptoservice::AsymAlg algorithm() const { return _algorithm; }
 
     PublicKey getPublicKey() const;
 
-    /// @brief Surowe 32 bajty czesci prywatnej.
+    /// @brief The raw 32 bytes of the private part.
     std::string getPrivateEncKey() const;
 
     std::string toWIF() const;
 
     /**
-     * @brief Podpisuje skrot SHA-256 wiadomosci.
+     * @brief Signs the message's SHA-256 digest.
      *
-     * Mapuje sie na `SigScheme::Compact` - patrz uwaga przy
+     * Maps to `SigScheme::Compact` — see the note on
      * `PublicKey::verifyCompactSignatureWithHash`.
      */
     std::string signToCompactSignatureWithHash(const std::string& message) const;
 
-    /// @brief Wspolny sekret ECDH z podanym kluczem publicznym.
+    /// @brief The shared ECDH secret with the given public key.
     std::string derive(const PublicKey& publicKey) const;
 
     std::shared_ptr<privmx::cryptoservice::IPrivateKey> impl() const { return _key; }

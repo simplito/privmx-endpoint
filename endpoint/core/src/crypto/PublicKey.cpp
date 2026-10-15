@@ -23,10 +23,10 @@ namespace cs = privmx::cryptoservice;
 
 PublicKey PublicKey::fromBase58DER(const std::string& base58DER) {
     return mapCryptoErrors("PublicKey::fromBase58DER", [&] {
-        // Postac Base58DER nie nazwie dzis swojego algorytmu - uzgodnienie wspolnego, otagowanego
-        // kodowania czeka na Bridge (crypto-update/issue-bridge-crypto-agility.md §3). Do tego czasu
-        // import zaklada algorytm domyslny, ale **zapamietuje** go na kluczu, wiec gdy kodowanie
-        // zacznie go niesc, zmienia sie tylko to miejsce, a nie operacje korzystajace z klucza.
+        // The Base58DER form does not name its algorithm today — agreeing on a shared, tagged
+        // encoding is pending on the bridge (crypto-update/issue-bridge-remaining.md §2). Until
+        // then the import assumes the default algorithm but **records** it on the key, so once the
+        // encoding starts carrying it, only this spot changes, not the operations using the key.
         return PublicKey(
             cryptoProvider().importPublicKey(keyBytes(base58DER), cs::KeyFormat::Base58Der, DEFAULT_KEY_ALGORITHM),
             DEFAULT_KEY_ALGORITHM
@@ -35,19 +35,19 @@ PublicKey PublicKey::fromBase58DER(const std::string& base58DER) {
 }
 
 PublicKey PublicKey::fromDER(const std::string& der) {
-    // Dwie dlugosci, bo stara implementacja przyjmowala obie, a dane zewnetrzne (np. klucz
-    // wyluskany z bloku PGP) przychodza w postaci nieskompresowanej.
+    // Two lengths, because the old implementation accepted both and external data (e.g. a key
+    // extracted from a PGP block) arrives uncompressed.
     //
-    //   33 B - postac skompresowana, format danych PrivMX
-    //   65 B - postac nieskompresowana; `PrivmxSecp256k1` jej nie przyjmuje, wiec import idzie
-    //          przez zwykly `secp256k1` + `Raw`. Eksport i tak zwraca postac skompresowana,
-    //          wiec dla wolajacego nie ma roznicy.
+    //   33 B — compressed form, PrivMX's data format
+    //   65 B — uncompressed form; `PrivmxSecp256k1` does not accept it, so the import goes through
+    //          plain `secp256k1` + `Raw`. The export returns the compressed form either way, so the
+    //          caller sees no difference.
     constexpr std::size_t COMPRESSED_LENGTH = 33;
     constexpr std::size_t UNCOMPRESSED_LENGTH = 65;
     return mapCryptoErrors("PublicKey::fromDER", [&] {
         if (der.size() == UNCOMPRESSED_LENGTH) {
-            // Inny algorytm w rozumieniu `pmx-crypto` (ta sama krzywa, inny format danych), wiec klucz
-            // zapamietuje wlasnie ten - operacje na nim musza isc za formatem, w ktorym go wczytano.
+            // A different algorithm as `pmx-crypto` sees it (same curve, different data format), so
+            // the key records that one — operations on it must follow the format it was read in.
             return PublicKey(
                 cryptoProvider().importPublicKey(keyBytes(der), cs::KeyFormat::Raw, cs::AsymAlg::secp256k1),
                 cs::AsymAlg::secp256k1
@@ -91,8 +91,8 @@ std::string PublicKey::toBase58DER() const {
 
 bool PublicKey::verifyCompactSignatureWithHash(const std::string& message, const std::string& signature) const {
     return mapCryptoErrors("PublicKey::verifyCompactSignatureWithHash", [&] {
-        // Schemat z algorytmu **tego** klucza, nie ze stalej: klucz uzytkownika moze byc dowolnego
-        // algorytmu, a weryfikacja nie swoim schematem odrzucalaby poprawne podpisy.
+        // The scheme comes from **this** key's algorithm, not from a constant: a user's key may be
+        // of any algorithm, and verifying with the wrong scheme would reject valid signatures.
         return require().verify(keyBytes(message), keyBytes(signature), signatureSchemeFor(_algorithm));
     });
 }

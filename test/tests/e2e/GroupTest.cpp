@@ -768,9 +768,9 @@ TEST_F(GroupTest, envelope_file_range_read_as_documented) {
     // The documentation promises the output begins exactly at `from`, despite `from` landing mid-chunk.
     EXPECT_EQ(out, plain.substr(from, length));
     // ...and that the offset it hands back points at a chunk boundary, never into the middle of one.
-    // Brana ze zrodla, a nie przepisana. Poprzednio stala byla tu rozpisana recznie jako uklad ramki
-    // CBC (`1 + 16 + (plain + 16) + 16`) i rozjechala sie z kodem, gdy ramka stala sie AEAD - test
-    // liczyl reszte z dzielenia przez 131121, podczas gdy chunki stoja co 131101.
+    // Taken from the source, not restated. This constant used to be spelled out by hand as the CBC
+    // frame layout (`1 + 16 + (plain + 16) + 16`) and drifted from the code when the frame became
+    // AEAD — the test took the remainder modulo 131121 while chunks stand 131101 apart.
     // Suite of the file we just wrote. It travels in the envelope header, so the reader derives the chunk
     // size from the data rather than from this build's default.
     const std::size_t encryptedChunk =

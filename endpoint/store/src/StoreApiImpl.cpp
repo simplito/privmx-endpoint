@@ -313,8 +313,8 @@ int64_t StoreApiImpl::updateFile(
     std::shared_ptr<FileWriteHandle> handle = _fileHandleManager.createFileWriteHandle(
         result.store.id, fileId, result.file.resourceId, (uint64_t)size, publicMeta, privateMeta, _CHUNK_SIZE,
         _serverRequestChunkSize, _requestApi, internalMeta.randomWrite.value_or(false),
-        // `updateFile` nadpisuje tresc w calosci, wiec nie dziedziczy `cipherType` starej wersji -
-        // idzie za polityka Store'a tak samo jak `createFile`.
+        // `updateFile` overwrites the content in full, so it does not inherit the old version's
+        // `cipherType` — it follows the store's policy just as `createFile` does.
         fileCipherFor(result.store)
     );
     handle->createRequestData();
@@ -375,10 +375,10 @@ FileDecryptionParams StoreApiImpl::getFileDecryptionParams(
 }
 
 int64_t StoreApiImpl::createFileReadHandle(const FileDecryptionParams& storeFileDecryptionParams) {
-    // Odrzucamy tylko format, ktorego ten build nie zna - a nie wszystko poza jedynka.
-    // `FileCipher` niesie wtedy caly uklad pliku: dlugosc IV, krok tablicy skrotow i arytmetyke
-    // rozmiarow. Rejestr odczytu jest kompletny w kazdym buildzie, zeby klient nie przestal
-    // czytac wlasnych plikow po zmianie formatu zapisu.
+    // We reject only a format this build does not know — not everything other than 1. `FileCipher`
+    // then carries the whole file layout: the IV length, the hash-table stride and the size
+    // arithmetic. The read registry is complete in every build so that a client does not stop
+    // reading its own files after the write format changes.
     if (!FileCipher::isKnown(storeFileDecryptionParams.cipherType)) {
         throw UnsupportedCipherTypeException("cipherType: " + std::to_string(storeFileDecryptionParams.cipherType));
     }
@@ -786,15 +786,15 @@ void StoreApiImpl::updateFileMeta(
 
 store::server::Store StoreApiImpl::assertStoreExist(const std::string& storeId) {
     store::server::StoreGetModel params{.storeId = storeId, .type = std::nullopt};
-    // Oddaje Store'a, zamiast wyrzucac odpowiedz: `createFile` potrzebuje jego polityki, zeby
-    // wybrac format zapisu danych pliku, a to zadanie i tak tu leci.
+    // Returns the store instead of discarding the response: `createFile` needs its policy to pick
+    // the file-data write format, and this request goes out here anyway.
     return _serverApi->storeGet(params).store;
 }
 
 FileCipher StoreApiImpl::fileCipherFor(const store::server::Store& store) {
-    // Poziom 2: dane pliku ida tym samym algorytmem, co reszta zawartosci kontenera. Store bez
-    // polityki dostaje format domyslny dla buildu (poziom 1) - dlatego przekazujemy `optional`,
-    // a nie `suiteFromPolicy`, ktore zwraca domyslny zestaw takze dla "brak polityki".
+    // Level 2: file data uses the same algorithm as the rest of the container's contents. A store
+    // with no policy gets the build's default format (level 1) — which is why we pass an `optional`
+    // rather than `suiteFromPolicy`, which returns the default suite for "no policy" too.
     const auto policy = core::Factory::parsePolicyServerObjectWithoutItem(store.policy);
     if (!policy.cryptoSuite.has_value()) {
         return FileCipher::defaultForWrite();

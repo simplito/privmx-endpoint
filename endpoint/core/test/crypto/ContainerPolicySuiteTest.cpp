@@ -10,15 +10,16 @@ limitations under the License.
 */
 
 /**
- * Zestaw algorytmow kontenera a polityka wysylana w aktualizacji.
+ * The container's algorithm suite versus the policy sent in an update.
  *
- * Kontrakt: zestaw jest ustalany przy **tworzeniu** kontenera i juz sie nie zmienia. Bridge egzekwuje
- * to doslownie - aktualizacja niesie cala polityke, wiec pominiecie `cryptoSuite` jest dla niego taka
- * sama zmiana jak podmiana, i konczy sie `INVALID_PARAMS`.
+ * The contract: the suite is fixed when the container is **created** and does not change afterwards.
+ * The bridge enforces that literally — an update carries the whole policy, so to it omitting
+ * `cryptoSuite` is as much a change as swapping it, and ends in `INVALID_PARAMS`.
  *
- * Stad dwie rzeczy, ktorych pilnuja te testy:
- *  - polityka wychodzaca w aktualizacji ma zestaw kontenera, nawet gdy wolajacy go nie powtorzyl;
- *  - jawnie podany, sprzeczny zestaw jest zglaszany **po naszej stronie**, a nie odbijany z serwera.
+ * Hence the two things these tests guard:
+ *  - the policy going out in an update carries the container's suite, even when the caller did not
+ *    repeat it;
+ *  - an explicitly named, conflicting suite is reported **on our side**, not bounced off the server.
  */
 
 #include <optional>
@@ -37,7 +38,7 @@ using namespace privmx::endpoint::core;
 
 namespace {
 
-/// Minimum, ktorego wymaga `policyForUpdate`: cokolwiek z polem `policy`.
+/// The minimum `policyForUpdate` requires: anything with a `policy` field.
 struct FakeContainer {
     Poco::Dynamic::Var policy;
 };
@@ -50,8 +51,8 @@ FakeContainer containerWithSuite(const std::optional<std::string>& suite) {
     return FakeContainer{.policy = obj};
 }
 
-/// `policyForUpdate` jest `protected` i statyczna - dziedziczenie jest tu najprostszym sposobem
-/// dostania sie do niej bez otwierania jej na zewnatrz tylko dla testu.
+/// `policyForUpdate` is `protected` and static — inheriting is the simplest way to reach it without
+/// opening it up to the outside world just for a test.
 struct Reach : ContainerBaseApi {
     using ContainerBaseApi::policyForUpdate;
 };
@@ -67,8 +68,8 @@ const std::string SUITE_B{"aes256gcm-sha512"};
 
 } // namespace
 
-/// Najczestszy przypadek: wolajacy zmienia uprawnienia i nie ma powodu powtarzac zestawu.
-/// Bez przeniesienia Bridge odrzucilby taka aktualizacje.
+/// The commonest case: the caller changes permissions and has no reason to repeat the suite.
+/// Without carrying it over, the bridge would reject such an update.
 TEST(ContainerPolicySuite, OmittedSuiteIsCarriedOverFromTheContainer) {
     const auto result = Reach::policyForUpdate(containerWithSuite(SUITE_A), policyNaming(std::nullopt));
 
@@ -83,8 +84,8 @@ TEST(ContainerPolicySuite, RepeatingTheSameSuiteIsAccepted) {
     EXPECT_EQ(SUITE_A, result.cryptoSuite.value());
 }
 
-/// Zglaszane pod wlasna nazwa, a nie jako `INVALID_PARAMS` z serwera - wolajacy ma wiedziec,
-/// ze probuje zmienic cos, co jest z zalozenia niezmienne.
+/// Reported under its own name rather than as the server's `INVALID_PARAMS` — the caller should
+/// know they are trying to change something that is immutable by design.
 TEST(ContainerPolicySuite, NamingADifferentSuiteIsRefused) {
     EXPECT_THROW(
         Reach::policyForUpdate(containerWithSuite(SUITE_A), policyNaming(SUITE_B)),
@@ -92,7 +93,7 @@ TEST(ContainerPolicySuite, NamingADifferentSuiteIsRefused) {
     );
 }
 
-/// Kontener, ktory nigdy nie nazwal zestawu, nie moze go nabyc pozniej - Bridge tez tego nie przyjmie.
+/// A container that never named a suite cannot acquire one later — the bridge will not accept it either.
 TEST(ContainerPolicySuite, AContainerWithoutASuiteCannotAcquireOne) {
     EXPECT_THROW(
         Reach::policyForUpdate(containerWithSuite(std::nullopt), policyNaming(SUITE_A)),
@@ -106,7 +107,7 @@ TEST(ContainerPolicySuite, AContainerWithoutASuiteStaysWithoutOne) {
     EXPECT_FALSE(result.cryptoSuite.has_value());
 }
 
-/// Przenoszenie dotyczy wylacznie `cryptoSuite` - reszta polityki jest wolajacego i ma przejsc bez zmian.
+/// Only `cryptoSuite` is carried over — the rest of the policy is the caller's and passes through unchanged.
 TEST(ContainerPolicySuite, TheRestOfThePolicyIsLeftAlone) {
     ContainerPolicyWithoutItem policy = policyNaming(std::nullopt);
     policy.update = std::string("manager");
