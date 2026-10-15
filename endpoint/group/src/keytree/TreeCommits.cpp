@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <algorithm>
 #include <limits>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 
@@ -154,6 +155,35 @@ std::vector<std::string> split(const std::string& value, char separator) {
         parts.emplace_back(); // "a," is two alternatives, the second empty, as JavaScript's split has it
     }
     return parts;
+}
+
+// The bridge's group-rule grammar (`PolicyService.isValidPolicyEntry` with the values `validateGroupPolicy` allows),
+// after `resolved`: "none", "all", or `,`-separated alternatives of `&`-joined atoms from user/manager/owner, no part
+// empty, atoms unique within an alternative, alternatives unique (R-POL-1). Throws std::invalid_argument otherwise.
+std::string grammatical(const std::string& field, std::string rule) {
+    if (rule == "none" || rule == "all") {
+        return rule;
+    }
+    std::set<std::string> alternatives;
+    for (const std::string& alternative : split(rule, ',')) {
+        std::vector<std::string> atoms = split(alternative, '&');
+        std::sort(atoms.begin(), atoms.end());
+        const bool known = !atoms.empty() && std::all_of(atoms.begin(), atoms.end(), [](const std::string& atom) {
+            return atom == "user" || atom == "manager" || atom == "owner";
+        });
+        std::string canonical;
+        for (const std::string& atom : atoms) {
+            canonical += atom + "&";
+        }
+        if (!known || std::adjacent_find(atoms.begin(), atoms.end()) != atoms.end() ||
+            !alternatives.insert(canonical).second) {
+            throw std::invalid_argument("policy rule " + field + " is not a group rule: '" + rule + "'");
+        }
+    }
+    if (alternatives.empty()) {
+        throw std::invalid_argument("policy rule " + field + " is empty");
+    }
+    return rule;
 }
 
 template<typename T>
@@ -448,12 +478,15 @@ GroupRules TreeCommits::rules(const Poco::Dynamic::Var& policy, const std::strin
     }
     GroupRules result{
         .creator = creator,
-        .update = resolved(object, "update", "manager"),
-        .rotateKeys = resolved(object, "rotateKeys", "manager"),
-        .updatePolicy = resolved(object, "updatePolicy", "manager"),
+        .update = grammatical("update", resolved(object, "update", "manager")),
+        .rotateKeys = grammatical("rotateKeys", resolved(object, "rotateKeys", "manager")),
+        .updatePolicy = grammatical("updatePolicy", resolved(object, "updatePolicy", "manager")),
         .ownerCanBeRemovedFromManagers = resolved(object, "ownerCanBeRemovedFromManagers", "yes"),
         .hash = {}
     };
+    if (result.ownerCanBeRemovedFromManagers != "yes" && result.ownerCanBeRemovedFromManagers != "no") {
+        throw std::invalid_argument("policy rule ownerCanBeRemovedFromManagers is neither yes nor no");
+    }
     std::string preimage = tag("pmx-group-policy");
     for (const std::string* value :
          {&result.creator, &result.update, &result.rotateKeys, &result.updatePolicy,
@@ -466,8 +499,9 @@ GroupRules TreeCommits::rules(const Poco::Dynamic::Var& policy, const std::strin
 
 bool TreeCommits::allows(const std::string& rule, bool member, bool manager, bool owner) {
     for (const std::string& alternative : split(rule, ',')) {
-        bool all = true;
-        for (const std::string& atom : split(alternative, '&')) {
+        const std::vector<std::string> atoms = split(alternative, '&');
+        bool all = !atoms.empty(); // fails closed: an empty alternative admits nobody (R-POL-1)
+        for (const std::string& atom : atoms) {
             all = all && (atom == "all" || (atom == "user" && member) || (atom == "manager" && manager) ||
                           (atom == "owner" && owner));
         }

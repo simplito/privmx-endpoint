@@ -1664,6 +1664,17 @@ TEST_F(GroupApiLyingBridge, SECURITY_AMemberWithoutTheRoleSignsNothing) {
     EXPECT_TRUE(bridge.received.empty());
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_APolicyOutsideTheGroupGrammarIsNeverSigned) {
+    // R-POL-1: ",manager" would admit anybody under a fail-open reader; the client refuses to sign it.
+    EXPECT_THROW(createGroup({"alice", "bob"}, policyWith({{"update", ",manager"}})), core::InvalidParamsException);
+    EXPECT_EQ(count("alice", "context.groupCreate"), 0u);
+    const std::string groupId = createGroup({"alice", "bob"});
+    EXPECT_THROW(
+        client("alice").updateGroupPolicy(groupId, policyWith({{"rotateKeys", "manager,,user"}})), core::InvalidParamsException
+    );
+    EXPECT_EQ(count("alice", "context.groupUpdatePolicy"), 0u);
+}
+
 TEST_F(GroupApiLyingBridge, AnAdditionOfAnExistingMemberIsRefusedBeforeSigning) {
     addUsers({"dave"});
     const std::string groupId = createGroup({"alice", "bob"});

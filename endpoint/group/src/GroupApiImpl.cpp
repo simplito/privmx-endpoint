@@ -54,6 +54,15 @@ std::uint32_t ladderFloorOf(std::int64_t eraFloor, const std::optional<std::int6
     return static_cast<std::uint32_t>(std::max<std::int64_t>({1, eraFloor, prunedBelow.value_or(1)}));
 }
 
+// The rules of a policy the caller asks to sign: one outside the group grammar is the caller's error (R-POL-1).
+keytree::GroupRules requestedRules(const Poco::Dynamic::Var& policy, const std::string& creator) {
+    try {
+        return keytree::TreeCommits::rules(policy, creator);
+    } catch (const std::invalid_argument& e) {
+        throw core::InvalidParamsException(e.what());
+    }
+}
+
 } // namespace
 
 GroupApiImpl::GroupApiImpl(
@@ -344,7 +353,7 @@ std::string GroupApiImpl::createGroup(
     model.tree = keytree::TreeWire::toCreateTree(plan);
     // The policy is signed into the chain (T4-10): the statement carries it, and every later one its hash.
     const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies.value_or(core::ContainerPolicy{}));
-    const keytree::GroupRules rules = keytree::TreeCommits::rules(policy, creatorId);
+    const keytree::GroupRules rules = requestedRules(policy, creatorId);
     // Commit B: a creator who could not write its own metadata would leave every member's read of the new group
     // refused. Refused before anything is signed.
     const std::vector<std::string> managerIds = core::EndpointUtils::usersWithPubKeyToIds(managers);
@@ -1556,7 +1565,7 @@ void GroupApiImpl::updateGroupPolicyOnce(
         throw core::InvalidParamsException("only a member of a group can change its policy");
     }
     const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies);
-    const keytree::GroupRules newRules = keytree::TreeCommits::rules(policy, group.creator);
+    const keytree::GroupRules newRules = requestedRules(policy, group.creator);
     const std::string op = core::ReleaseGate::opKey("policy", {privmx::utils::Hex::from(newRules.hash)});
     switch (settle(groupId, op, true)) {
     case Settled::Done:

@@ -47,6 +47,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -613,10 +614,9 @@ protected:
         statement.rosterVersion = static_cast<std::uint64_t>(bridge.rosterVersion + options.rosterBump);
         statement.rosterHash = TreeCommits::rosterHash(bridge.usersOf(next, managers), {managers.begin(), managers.end()});
         statement.treeHash = TreeCommits::treeHash(next);
-        statement.policyHash = options.policyHash.value_or(
-            options.policy.has_value() ? TreeCommits::rules(options.policy.value(), bridge.creator).hash :
-                                         bridge.rules().hash
-        );
+        statement.policyHash = options.policyHash.has_value() ? options.policyHash.value() :
+            options.policy.has_value()                         ? TreeCommits::rules(options.policy.value(), bridge.creator).hash :
+                                                                 bridge.rules().hash;
         statement.policy = options.policy;
         statement.committer = signer;
         statement.committerSeat = seatOf(next, signer).value();
@@ -1630,6 +1630,28 @@ TEST_F(TreeVerification, SECURITY_APolicyChangeByAMemberWithoutUpdatePolicyIsRef
     forge(id(35), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policy = wirePolicy(policyOf({{"update", "user"}, {"updatePolicy", "user"}}))});
     EXPECT_THROW(verify(id(9), false), GroupUnauthorizedSignerException);
     EXPECT_EQ(replay(), "unauthorized");
+}
+
+TEST_F(TreeVerification, SECURITY_ARuleWithAnEmptyAlternativeAdmitsNobody) {
+    // R-POL-1: a malicious bridge stores rotateKeys ",manager", signed by a manager it colludes with; evaluated
+    // fail-open, its empty alternative would admit any member. Hashed by hand: `rules` refuses to build it.
+    createPolicy = Poco::Dynamic::Var();
+    create(40, 0);
+    verify(id(9), false);
+    ASSERT_EQ(bridge.managers.count(id(35)), 0u);
+    std::string preimage = TreeCommits::tag("pmx-group-policy");
+    for (const std::string value : {id(0), std::string("manager"), std::string(",manager"), std::string("manager"), std::string("yes")}) {
+        TreeCommits::putLp(preimage, value);
+    }
+    const std::string openHash = privmx::crypto::Crypto::sha256(preimage);
+    forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policyHash = openHash, .policy = wirePolicy(policyOf({{"rotateKeys", ",manager"}}))});
+    const PublicKey grant = PrivateKey::generateRandom().getPublicKey();
+    forge(id(35), [&](TreeGroupState& state) {
+        state.epoch += 1;
+        state.grantPublicKey = grant;
+    }, {.rosterBump = 1, .op = CommitOp::Rotate, .policyHash = openHash});
+    EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException) << "a pinned member";
+    EXPECT_THROW(verify(id(20), false), GroupDataIntegrityException) << "a first contact";
 }
 
 TEST_F(TreeVerification, SECURITY_ARemovalRelabelledAsSelfUpdateIsRefused) {

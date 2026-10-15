@@ -187,12 +187,15 @@ public:
     // `GroupRules` of a policy object (empty = `{}`) and its creator, with `hash` =
     // `H("pmx-group-policy\0" || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy)
     // || lp(ownerCanBeRemovedFromManagers))`, each resolved against the frozen v3 defaults (manager, manager, manager,
-    // yes) and hashed verbatim. Throws std::invalid_argument on a non-object policy or a non-string rule.
+    // yes) and hashed verbatim. Throws std::invalid_argument on a non-object policy, a non-string rule, or a rule outside
+    // the bridge's group grammar (`none`, `all`, or unique alternatives of unique user/manager/owner atoms, no part
+    // empty; `ownerCanBeRemovedFromManagers` yes/no): such a policy is never signed and, served, is an integrity error.
     static GroupRules rules(const Poco::Dynamic::Var& policy, const std::string& creator);
 
     // A policy rule for a member, exactly as the bridge's `PolicyService.userMeetsPolicy`: `,` separates
     // alternatives, `&` joins atoms that must all hold; `none` is false, `all` true, `user` a roster member, `manager`
-    // a manager, `owner` the creator; `itemOwner` and any unknown atom false.
+    // a manager, `owner` the creator; `itemOwner` and any unknown atom false. Fails closed: an empty alternative or atom
+    // admits nobody (the bridge sees atom "" and denies too).
     static bool allows(const std::string& rule, bool member, bool manager, bool owner);
 
     // The role column of the op-effect table (T4-10), on the rules and roster before `statement`: create none (the
