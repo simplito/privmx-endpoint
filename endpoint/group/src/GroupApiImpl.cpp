@@ -345,6 +345,13 @@ std::string GroupApiImpl::createGroup(
     // The policy is signed into the chain (T4-10): the statement carries it, and every later one its hash.
     const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies.value_or(core::ContainerPolicy{}));
     const keytree::GroupRules rules = keytree::TreeCommits::rules(policy, creatorId);
+    // Commit B: a creator who could not write its own metadata would leave every member's read of the new group
+    // refused. Refused before anything is signed.
+    const std::vector<std::string> managerIds = core::EndpointUtils::usersWithPubKeyToIds(managers);
+    const bool creatorManages = std::find(managerIds.begin(), managerIds.end(), creatorId) != managerIds.end();
+    if (!keytree::TreeCommits::allows(rules.update, true, creatorManages, true)) {
+        throw core::InvalidParamsException("the creator must hold update under the group's policy to write its metadata");
+    }
     // The group has no id until the bridge stores it, so the first statement names the resourceId instead.
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
         plan, keytree::CommitOp::Create, ctx.resourceId, commitDate(), 1, groupPubKeyStr, 1,
@@ -609,21 +616,23 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
 }
 
 void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
+    // A narrowing's carry still to do runs first: after the removal its plane would be judged under the new rules.
+    retryPendingCarry(groupId);
     std::optional<bool> historyAbandoned;
-    MetaPlanes planesBefore;
-    commitWithRetry([&] { historyAbandoned = removeGroupMembersOnce(groupId, userIds, planesBefore); });
+    PriorRole prior;
+    commitWithRetry([&] { historyAbandoned = removeGroupMembersOnce(groupId, userIds, prior); });
     // The removal is committed; the metadata entry is now one epoch behind, under a key the departed member
     // still holds. Move it up. Outside the write above on purpose — see the header. Already done when an earlier
     // call's removal turned out to have landed (`settle`).
     if (historyAbandoned.has_value()) {
-        refreshMetadataEpochAfterRemoval(groupId, historyAbandoned.value(), userIds, planesBefore);
+        carryMetadataForward(groupId, CarryScope::Removal, historyAbandoned.value(), userIds, prior);
     }
 }
 
 std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
     const std::string& groupId,
     const std::vector<std::string>& userIds,
-    MetaPlanes& planesBefore
+    PriorRole& prior
 ) {
     // Every departing member's path, because one commit covers their union — and one epoch covers the batch, where
     // removing them one at a time would stale every container the group can read once per member.
@@ -652,7 +661,8 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
     default:
         break;
     }
-    planesBefore = MetaPlanes{currentGroup.publicMeta, currentGroup.privateMeta};
+    // The verified read's rules and roster judge the planes the removal carries (the removed with the role they had).
+    prior = priorOf(currentGroup);
     // Refused before anything is planned: the remover mints the next epoch's grant key, so a member removing itself
     // would walk out holding the key meant to lock it out. The bridge refuses it too.
     const std::string self = _connection.getImpl()->getMyUserId(currentGroup.contextId);
@@ -745,7 +755,6 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
     model.expectedRosterVersion = currentGroup.rosterVersion;
 
     const auto sent = std::make_shared<const server::GroupRemoveMembersModel>(std::move(model));
-    const MetaPlanes planes = planesBefore;
     submit(
         groupId, statement,
         UnresolvedCommit{
@@ -763,8 +772,10 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
                  managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers), rules, grantKey = plan.grantKey] {
                     adoptCommittedEpoch(groupId, contextId, statement, users, managers, rules, grantKey);
                 },
-            .after = [this, groupId, abandonHistory, userIds,
-                      planes] { refreshMetadataEpochAfterRemoval(groupId, abandonHistory, userIds, planes); }
+            .after =
+                [this, groupId, abandonHistory, userIds, prior] {
+                    carryMetadataForward(groupId, CarryScope::Removal, abandonHistory, userIds, prior);
+                }
         }
     );
     return abandonHistory;
@@ -804,7 +815,7 @@ GroupApiImpl::NewEpochRoster GroupApiImpl::sealRosterForNewEpoch(
         ctx.key, ctx.dio, currentGroup.contextId, resourceId, ctx.secret
     );
 
-    // Roster plane only — the metadata entry is not part of this write. `refreshMetadataEpochAfterRemoval`
+    // Roster plane only — the metadata entry is not part of this write. `carryMetadataForward`
     // carries it up to the new epoch once this has committed; see its header for why that is a second call.
     GroupRosterToEncryptV5 rosterToEncrypt{
         .internalMeta = core::
@@ -844,18 +855,19 @@ void GroupApiImpl::adoptCommittedEpoch(
 }
 
 void GroupApiImpl::rotateGroupKey(const std::string& groupId) {
+    retryPendingCarry(groupId);
     bool committedHere = true;
-    MetaPlanes planesBefore;
-    commitWithRetry([&] { committedHere = rotateGroupKeyOnce(groupId, planesBefore); });
+    PriorRole prior;
+    commitWithRetry([&] { committedHere = rotateGroupKeyOnce(groupId, prior); });
     // As after a removal: the metadata planes sit one epoch behind, under the key the rotation replaces. Nobody left,
     // so nobody is accepted as an author beyond the members. Already done when an earlier call's rotation turned out
     // to have landed (`settle`).
     if (committedHere) {
-        refreshMetadataEpochAfterRemoval(groupId, false, {}, planesBefore);
+        carryMetadataForward(groupId, CarryScope::Removal, false, {}, prior);
     }
 }
 
-bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& planesBefore) {
+bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, PriorRole& prior) {
     // Every record, because the statement signs the tree hash, which a rotation leaves as it is.
     server::GroupGetModel getModel{
         .groupId = groupId,
@@ -879,7 +891,7 @@ bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& pl
     default:
         break;
     }
-    planesBefore = MetaPlanes{currentGroup.publicMeta, currentGroup.privateMeta};
+    prior = priorOf(currentGroup);
     const int64_t currentEpoch = currentGroup.keyVersion;
     const int64_t newEpoch = currentEpoch + 1;
     const int64_t newRosterVersion = currentGroup.rosterVersion + 1;
@@ -930,7 +942,6 @@ bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& pl
     model.expectedRosterVersion = currentGroup.rosterVersion;
 
     const auto sent = std::make_shared<const server::GroupGenerateNewKeyModel>(std::move(model));
-    const MetaPlanes planes = planesBefore;
     submit(
         groupId, statement,
         UnresolvedCommit{
@@ -946,7 +957,7 @@ bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& pl
                  managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers), rules, grantKey = plan.grantKey] {
                     adoptCommittedEpoch(groupId, contextId, statement, users, managers, rules, grantKey);
                 },
-            .after = [this, groupId, planes] { refreshMetadataEpochAfterRemoval(groupId, false, {}, planes); }
+            .after = [this, groupId, prior] { carryMetadataForward(groupId, CarryScope::Removal, false, {}, prior); }
         }
     );
     return true;
@@ -1313,63 +1324,104 @@ void GroupApiImpl::selfUpdate(const std::string& groupId) {
     );
 }
 
-void GroupApiImpl::refreshMetadataEpochAfterRemoval(
+bool GroupApiImpl::carryMetadataForward(
     const std::string& groupId,
+    CarryScope scope,
     bool historyAbandoned,
-    const std::vector<std::string>& removed,
-    const MetaPlanes& planesBefore
+    const std::vector<std::string>& losers,
+    const PriorRole& prior
 ) {
     try {
-        // One verified answer decides both whether a plane is behind and what it says: re-signing metadata this
-        // client has not attested would launder whatever the bridge served into an entry under the new epoch's key,
+        // One verified answer decides both whether a plane is carried and what it says: re-signing metadata this
+        // client has not attested would launder whatever the bridge served into an entry under the committer's name,
         // and an unverified epoch would let the bridge talk this out of running.
         const server::GroupInfo group = readGroupForKeys(groupId);
-        // Per plane, because the two sit at epochs of their own: one may already have been carried up by a
-        // concurrent write while the other is still behind.
-        const bool publicBehind = group.publicMeta.keyVersion < group.keyVersion;
-        const bool privateBehind = group.privateMeta.keyVersion < group.keyVersion;
-        if (historyAbandoned) {
-            // A plane behind sits under a key nobody can reach any more, and what it says cannot be attested: start
-            // it over, empty, in the new epoch rather than leave it unreadable for good.
-            if (publicBehind) {
-                writePublicMeta(group, core::Buffer(), group.publicMetaVersion);
+        bool carryPublic = false;
+        bool carryPrivate = false;
+        if (scope == CarryScope::Removal) {
+            // Per plane, because the two sit at epochs of their own: one may already have been carried up by a
+            // concurrent write while the other is still behind.
+            carryPublic = group.publicMeta.keyVersion < group.keyVersion;
+            carryPrivate = group.privateMeta.keyVersion < group.keyVersion;
+            if (historyAbandoned) {
+                // A plane behind sits under a key nobody can reach any more, and what it says cannot be attested:
+                // start it over, empty, in the new epoch rather than leave it unreadable for good.
+                if (carryPublic) {
+                    writePublicMeta(group, core::Buffer(), group.publicMetaVersion);
+                }
+                if (carryPrivate) {
+                    writePrivateMeta(group, core::Buffer(), group.privateMetaVersion);
+                }
+                return true;
             }
-            if (privateBehind) {
-                writePrivateMeta(group, core::Buffer(), group.privateMetaVersion);
-            }
-            return;
+        } else {
+            const auto lost = [&](const std::string& author) {
+                return std::find(losers.begin(), losers.end(), author) != losers.end();
+            };
+            carryPublic = lost(group.publicMeta.author);
+            carryPrivate = lost(group.privateMeta.author);
         }
-        // The removed count as authors only of the very entries served before the removal, written while they were
-        // members: one tagged since under the key they still hold must not be re-signed in the remover's name.
-        const auto asBefore = [](const server::GroupMetaEntry& now, const server::GroupMetaEntry& then) {
-            return now.version == then.version && now.author == then.author && now.keyId == then.keyId &&
-                privmx::utils::Utils::stringifyVar(now.data) == privmx::utils::Utils::stringifyVar(then.data);
-        };
-        const bool unchanged = (!publicBehind || asBefore(group.publicMeta, planesBefore.publicMeta)) &&
-            (!privateBehind || asBefore(group.privateMeta, planesBefore.privateMeta));
-        const Group verified = _groupDataSchemaMapper->validateDecryptAndConvertGroup(
-            group, _keyProvider, resolverOver(&group), unchanged ? removed : std::vector<std::string>{}
-        );
+        // N-2, on every carried plane: only the very entry read before the commit. One tagged since (by a member
+        // removed meanwhile, or by a loser of a narrowing, which still holds the current key) is never re-signed.
+        carryPublic = carryPublic && GroupDataSchemaMapper::sameEntry(group.publicMeta, prior.publicMeta);
+        carryPrivate = carryPrivate && GroupDataSchemaMapper::sameEntry(group.privateMeta, prior.privateMeta);
+        if (!carryPublic && !carryPrivate) {
+            return true; // already current, or written over since: nothing of the read is left to carry
+        }
+        // The entries as read are judged by the read's rules and roster (T4-03): a plane whose author lacked `update`
+        // then is refused here too, so neither a removal nor a narrowing launders it.
+        const Group verified =
+            _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider, resolverOver(&group), prior);
         if (verified.statusCode != 0) {
-            return;
+            return false;
         }
-        if (!publicBehind && !privateBehind) {
-            // Already current — a concurrent metadata write got there first, which is the same outcome.
-            return;
-        }
-        // One write per plane that is behind. A plane already at the current epoch is left alone, so a concurrent
-        // writer keeps its entry.
-        // Both off the one verified read: a metadata write moves neither the head nor the epoch it is checked against.
-        if (publicBehind) {
+        // One write per carried plane, both off the one verified read: a metadata write moves neither the head nor
+        // the epoch it is checked against.
+        if (carryPublic) {
             writePublicMeta(group, verified.publicMeta, verified.publicMetaVersion);
         }
-        if (privateBehind) {
+        if (carryPrivate) {
             writePrivateMeta(group, verified.privateMeta, verified.privateMetaVersion);
         }
+        return true;
     } catch (...) {
-        // Best-effort by design. A failure leaves the group where a removal used to leave it, and the next
-        // metadata write closes the window; throwing here would fail a removal that has already happened.
+        // Best-effort by design. A failure leaves the planes where the commit left them, and the next metadata write
+        // closes the window; throwing here would fail a commit that has already happened.
+        return false;
     }
+}
+
+PriorRole GroupApiImpl::priorOf(const server::GroupInfo& group) {
+    return PriorRole{
+        .rules = rulesOf(group),
+        .users = group.users,
+        .managers = group.managers,
+        .publicMeta = group.publicMeta,
+        .privateMeta = group.privateMeta
+    };
+}
+
+void GroupApiImpl::runPolicyCarry(const std::string& groupId, const PendingCarry& carry) {
+    const bool done = carryMetadataForward(groupId, CarryScope::Policy, false, carry.losers, carry.prior);
+    std::lock_guard<std::mutex> lock(_pendingCarryMutex);
+    if (done) {
+        _pendingCarry.erase(groupId);
+    } else {
+        _pendingCarry[groupId] = carry;
+    }
+}
+
+void GroupApiImpl::retryPendingCarry(const std::string& groupId) {
+    std::optional<PendingCarry> pending;
+    {
+        std::lock_guard<std::mutex> lock(_pendingCarryMutex);
+        const auto it = _pendingCarry.find(groupId);
+        if (it == _pendingCarry.end()) {
+            return;
+        }
+        pending = it->second;
+    }
+    runPolicyCarry(groupId, pending.value());
 }
 
 MetaWriteContext GroupApiImpl::prepareMetaWrite(const server::GroupInfo& currentGroup) {
@@ -1399,6 +1451,9 @@ void GroupApiImpl::updateGroupPublicMeta(
 ) {
     // The default path view is enough: this submits no tree and does not touch the roster at all.
     writePublicMeta(readGroupForKeys(groupId), publicMeta, version);
+    // After, not before: the carry would move the counter this write is checked against. It skips a plane this
+    // write replaced (no longer the entry it read).
+    retryPendingCarry(groupId);
 }
 
 void GroupApiImpl::writePublicMeta(
@@ -1443,6 +1498,7 @@ void GroupApiImpl::updateGroupPrivateMeta(
     const int64_t version
 ) {
     writePrivateMeta(readGroupForKeys(groupId), privateMeta, version);
+    retryPendingCarry(groupId);
 }
 
 void GroupApiImpl::writePrivateMeta(
@@ -1475,10 +1531,23 @@ void GroupApiImpl::writePrivateMeta(
 }
 
 void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies) {
-    commitWithRetry([&] { updateGroupPolicyOnce(groupId, policies); });
+    retryPendingCarry(groupId);
+    std::optional<PendingCarry> carry;
+    commitWithRetry([&] {
+        carry.reset();
+        updateGroupPolicyOnce(groupId, policies, carry);
+    });
+    // A plane whose author lost `update` is refused from now on; carry it under the caller's name (commit B).
+    if (carry.has_value()) {
+        runPolicyCarry(groupId, carry.value());
+    }
 }
 
-void GroupApiImpl::updateGroupPolicyOnce(const std::string& groupId, const core::ContainerPolicy& policies) {
+void GroupApiImpl::updateGroupPolicyOnce(
+    const std::string& groupId,
+    const core::ContainerPolicy& policies,
+    std::optional<PendingCarry>& carry
+) {
     // A signed commit like any other (T4-10): the chain, the CAS and the role check. It moves no node, no epoch and
     // no roster, so the path view is enough to sign the tree hash as it stands.
     const server::GroupGetModel getModel = pathRead(groupId);
@@ -1499,6 +1568,29 @@ void GroupApiImpl::updateGroupPolicyOnce(const std::string& groupId, const core:
     default:
         break;
     }
+    // Commit B: the planes as read, attested under the rules in force, and whose authors the new rules leave without
+    // `update`. Those planes would be refused once this lands; somebody who keeps `update` must carry them.
+    const PriorRole prior = priorOf(group);
+    std::vector<std::string> losers;
+    const Group mapped =
+        _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider, resolverOver(&group), prior);
+    const auto keepsUpdate = [&](const std::string& userId) {
+        const bool manager = std::find(group.managers.begin(), group.managers.end(), userId) != group.managers.end();
+        return keytree::TreeCommits::allows(newRules.update, true, manager, userId == group.creator);
+    };
+    if (mapped.statusCode == 0) {
+        for (const server::GroupMetaEntry* entry : {&group.publicMeta, &group.privateMeta}) {
+            if (!keepsUpdate(entry->author) && std::find(losers.begin(), losers.end(), entry->author) == losers.end()) {
+                losers.push_back(entry->author);
+            }
+        }
+    }
+    const std::string self = keytree::GroupKeyResolver::ownUserId(group).value();
+    if (!losers.empty() && !keepsUpdate(self)) {
+        throw core::InvalidParamsException(
+            "this policy would strand metadata whose author loses update, and the caller would lose it too"
+        );
+    }
     const keytree::CommitStatement latest = keytree::TreeCommits::fromWire(group.treeCommit.value());
     keytree::CommitStatement statement;
     statement.seq = latest.seq + 1;
@@ -1512,7 +1604,7 @@ void GroupApiImpl::updateGroupPolicyOnce(const std::string& groupId, const core:
     statement.rosterHash = latest.rosterHash;
     statement.treeHash = latest.treeHash;
     statement.policyHash = newRules.hash;
-    statement.committer = keytree::GroupKeyResolver::ownUserId(group).value();
+    statement.committer = self;
     statement.committerSeat = static_cast<std::uint32_t>(group.ownLeafPosition.value());
     statement.policy = policy;
     chainTo(statement, group);
@@ -1539,9 +1631,16 @@ void GroupApiImpl::updateGroupPolicyOnce(const std::string& groupId, const core:
                  managers = group.managers, newRules] {
                     _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, newRules);
                 },
-            .after = {}
+            // Found landed by a later call's `settle`: the carry runs there.
+            .after = losers.empty() ? std::function<void()>() :
+                                      [this, groupId, pending = PendingCarry{losers, prior}] {
+                                          runPolicyCarry(groupId, pending);
+                                      }
         }
     );
+    if (!losers.empty()) {
+        carry = PendingCarry{losers, prior};
+    }
 }
 
 void GroupApiImpl::deleteGroup(const std::string& groupId) {
@@ -1552,6 +1651,7 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
 }
 
 Group GroupApiImpl::getGroup(const std::string& groupId) {
+    retryPendingCarry(groupId);
     const server::GroupGetModel params = pathRead(groupId);
     // The head roster entry and the current metadata entry — two entries, whatever the group's age. The cache is
     // keyed on the roster version, because that is the plane key material moves with.
@@ -1810,6 +1910,10 @@ void GroupApiImpl::processDisconnectedEvent() {
     _treeKeyCaches.dropAll();
     dropEnvelopeState();
     invalidateModuleKeysInCache();
+    {
+        std::lock_guard<std::mutex> lock(_pendingCarryMutex);
+        _pendingCarry.clear();
+    }
 }
 
 void GroupApiImpl::dropEnvelopeState() {

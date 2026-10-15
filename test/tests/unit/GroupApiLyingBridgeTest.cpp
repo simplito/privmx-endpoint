@@ -119,6 +119,9 @@ struct Bridge {
     std::vector<server::GroupTreeCommit> received;
     int planReads = 0; // `groupGet`s in the "plan" scope
     std::function<void(server::GroupInfo&)> onPlanRead = [](server::GroupInfo&) {}; // edits what a plan read serves
+    // Edits what any `groupGet` serves `caller`.
+    std::function<void(const std::string&, server::GroupInfo&)> onRead = [](const std::string&, server::GroupInfo&) {};
+    std::function<void()> onMetaWrite = [] {}; // before a metadata write is stored; throws to refuse
     std::shared_ptr<std::atomic<int>> verifierCalls = std::make_shared<std::atomic<int>>(0);
     struct Call {
         std::string caller;
@@ -239,6 +242,7 @@ struct Bridge {
                 }
                 info.nextFreeSeats = seats;
             }
+            onRead(caller, info);
             if (plan) {
                 onPlanRead(info);
                 ++planReads;
@@ -353,6 +357,7 @@ struct Bridge {
         }
         if (group == "groupUpdatePublicMeta" || group == "groupUpdatePrivateMeta") {
             const auto model = server::GroupUpdatePublicMetaModel::fromJSON(params);
+            onMetaWrite();
             auto& plane = group == "groupUpdatePublicMeta" ? rest.publicMeta : rest.privateMeta;
             auto& version = group == "groupUpdatePublicMeta" ? rest.publicMetaVersion : rest.privateMetaVersion;
             version = model.version + 1;
@@ -1673,5 +1678,136 @@ TEST_F(GroupApiLyingBridge, AnAdditionOfAnExistingMemberIsRefusedBeforeSigning) 
         core::InvalidParamsException
     ) << "one user twice";
     EXPECT_EQ(count("alice", "context.groupAddMembers"), 0u);
+}
+
+// ── commit B: the update role for metadata plane authors (T4-03) ─────────────────────────────────────────────
+
+TEST_F(GroupApiLyingBridge, ANarrowingPolicyCarriesUpThePlanesOfAuthorsWhoLostTheRole) {
+    // bob writes under the open policy; alice narrows `update` to managers and carries bob's plane in her name.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("bob's"), 1);
+    client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}, {"updatePolicy", "manager"}}));
+    EXPECT_EQ(bridge.rest.publicMeta.author, "alice");
+    EXPECT_EQ(bridge.rest.privateMeta.author, "alice") << "the creator's own plane is not carried";
+    const Group read = client("carol").getGroup(groupId);
+    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_EQ(read.publicMeta.stdString(), "bob's");
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ANarrowingDoesNotReSignAPlaneWrittenAfterItWasRead) {
+    // N-2's analogue: bob still holds the current key after the narrowing (no epoch moves). The bridge serves alice's
+    // carry a v3 bob tagged after she read v2; re-signing it would launder it into a plane bob may no longer write.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("v2"), 1);
+    const server::GroupMetaEntry v2 = bridge.rest.publicMeta;
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("v3"), 2);
+    const server::GroupMetaEntry v3 = bridge.rest.publicMeta;
+    bridge.rest.publicMeta = v2;
+    bridge.rest.publicMetaVersion = 2;
+    bridge.onPolicy = [&](std::unique_lock<std::mutex>&) {
+        bridge.rest.publicMeta = v3;
+        bridge.rest.publicMetaVersion = 3;
+    };
+    client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}}));
+    EXPECT_EQ(bridge.rest.publicMeta.author, "bob");
+    EXPECT_EQ(bridge.rest.publicMeta.version, 3) << "alice re-signed bob's late entry";
+    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ANarrowingDoesNotCarryALosersPlaneWrittenAfterTheRead) {
+    // bob, still holding `update`, writes a fresh plane between alice's read and her commit; it is not what she read.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("before"), 1);
+    bool first = true;
+    bridge.onPolicy = [&](std::unique_lock<std::mutex>& lock) {
+        if (!std::exchange(first, false)) {
+            return;
+        }
+        lock.unlock();
+        client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("after the read"), 2);
+        lock.lock();
+    };
+    client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}}));
+    EXPECT_EQ(bridge.rest.publicMeta.author, "bob");
+    EXPECT_EQ(bridge.rest.publicMeta.version, 3);
+    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0) << "readers refuse it: bob lost update";
+}
+
+TEST_F(GroupApiLyingBridge, ANarrowingThatWouldStrandAPlaneIsRefusedBeforeSigning) {
+    // bob may change the policy but would lose `update` himself: nobody would carry his plane.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("bob's"), 1);
+    EXPECT_THROW(
+        client("bob").updateGroupPolicy(groupId, policyWith({{"update", "manager"}, {"updatePolicy", "user"}})),
+        core::InvalidParamsException
+    );
+    EXPECT_EQ(count("bob", "context.groupUpdatePolicy"), 0u);
+    EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})))
+        << "alice keeps update and carries it";
+}
+
+TEST_F(GroupApiLyingBridge, ACreationWhoseCreatorCannotUpdateIsRefusedBeforeSigning) {
+    EXPECT_THROW(createGroup({"alice", "bob"}, policyWith({{"update", "none"}})), core::InvalidParamsException);
+    EXPECT_THROW(
+        createGroup({"alice", "bob"}, policyWith({{"update", "manager"}}), {}), core::InvalidParamsException
+    ) << "the creator in users only";
+    EXPECT_EQ(count("alice", "context.groupCreate"), 0u);
+    EXPECT_NO_THROW(createGroup({"alice", "bob"}, policyWith({{"update", "manager"}}))) << "the creator a manager";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotCarryAPlaneWrittenWithoutTheRole) {
+    // bob, a plain user under `update: manager`, writes a plane the bridge stores and every reader refuses. Removing
+    // bob must not launder it into the new epoch under alice's name.
+    const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"update", "manager"}}));
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("no role"), 1);
+    ASSERT_NE(client("carol").getGroup(groupId).statusCode, 0) << "refused already before the removal";
+    client("alice").removeGroupMembers(groupId, {"bob"});
+    EXPECT_EQ(bridge.rest.publicMeta.author, "bob") << "carried under alice's name";
+    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0);
+}
+
+TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedByTheNextCall) {
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("bob's"), 1);
+    bool refuse = true;
+    bridge.onMetaWrite = [&] {
+        if (std::exchange(refuse, false)) {
+            throw privmx::utils::PrivmxException("GROUP_VERSION_MISMATCH", privmx::utils::PrivmxException::RPC, 0x6211);
+        }
+    };
+    EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})));
+    EXPECT_EQ(bridge.rest.publicMeta.author, "bob");
+    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0) << "until the carry completes";
+    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0) << "alice's next read retries it first";
+    EXPECT_EQ(bridge.rest.publicMeta.author, "alice");
+    EXPECT_EQ(client("carol").getGroup(groupId).statusCode, 0);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ASeatStrippedReadServingAWiderPolicyDoesNotAcceptANoRolePlane) {
+    // R2-S2: an unseated answer is verified (verifyListed) before the mapper reads its policy and roster.
+    const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"update", "manager"}}));
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("no role"), 1);
+    client("carol").getGroup(groupId); // carol holds the epoch's key from an honest read
+    const auto stripCarol = [&](const std::string& caller, server::GroupInfo& info) {
+        if (caller != "carol") {
+            return;
+        }
+        auto seats = info.leafAssignment.value();
+        std::replace(seats.begin(), seats.end(), std::string("carol"), std::string());
+        info.leafAssignment = seats;
+        info.ownLeafPosition.reset();
+    };
+    bridge.onRead = [&](const std::string& caller, server::GroupInfo& info) {
+        stripCarol(caller, info);
+        if (caller == "carol") {
+            info.policy = policyOf({{"update", "all"}, {"rotateKeys", "all"}, {"updatePolicy", "all"}});
+        }
+    };
+    const Group widened = client("carol").getGroup(groupId);
+    EXPECT_NE(widened.statusCode, 0);
+    EXPECT_TRUE(widened.publicMeta.stdString().empty() && widened.privateMeta.stdString().empty()) << "no metadata";
+    EXPECT_TRUE(widened.groupPubKey.empty());
+    bridge.onRead = stripCarol;
+    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0) << "the honest policy refuses bob's plane";
 }
 

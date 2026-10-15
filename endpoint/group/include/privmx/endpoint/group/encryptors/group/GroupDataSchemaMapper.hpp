@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -24,10 +25,22 @@
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include "privmx/endpoint/group/Types.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataEncryptorV5.hpp"
+#include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace group {
+
+// The verified read a committer made before its own commit (T4-03, commit B): the signed rules, the roster and both
+// metadata planes as they stood then. A carry-forward judges an entry identical to the one it read by these, so a
+// plane honestly written before a narrowing or by a member just removed is carried, and nothing else.
+struct PriorRole {
+    keytree::GroupRules rules;
+    std::vector<std::string> users;
+    std::vector<std::string> managers;
+    server::GroupMetaEntry publicMeta;
+    server::GroupMetaEntry privateMeta;
+};
 
 class GroupDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
@@ -51,19 +64,24 @@ public:
 
     void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKeyV2& rosterKey);
 
-    // A plane's author and whoever wrapped its key must be on the attested roster, or in `formerMembers`: the
-    // members a removal has just dropped, whose entries the remover's metadata refresh carries up to the new epoch.
+    // A plane's author and whoever wrapped its key must be on the attested roster, and the author must hold `update`
+    // under the group's signed rules (T4-03). With `prior` (a carry-forward only), an entry identical to the one the
+    // committer read before its own commit is judged by that read's rules and roster instead; any other by the
+    // current ones.
     void assertPublicMetaIsAttested(
         const server::GroupInfo& groupInfo,
         const core::DecryptedEncKeyV2& publicMetaKey,
-        const std::vector<std::string>& formerMembers = {}
+        const std::optional<PriorRole>& prior = std::nullopt
     );
 
     void assertPrivateMetaIsAttested(
         const server::GroupInfo& groupInfo,
         const core::DecryptedEncKeyV2& privateMetaKey,
-        const std::vector<std::string>& formerMembers = {}
+        const std::optional<PriorRole>& prior = std::nullopt
     );
+
+    // The same entry as one read before: version, author, key and data. The N-2 guard of every carry-forward.
+    static bool sameEntry(const server::GroupMetaEntry& now, const server::GroupMetaEntry& then);
 
     // `HMAC(subkey, epoch | rosterVersion | roster)`. Lists are sorted and length-prefixed so one roster's tag
     // cannot match another's under a different split; `rosterVersion` binds the counter the monotone pin checks.
@@ -101,14 +119,14 @@ public:
         const std::vector<server::GroupInfo>& groups,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
-        const std::vector<std::string>& formerMembers = {}
+        const std::optional<PriorRole>& prior = std::nullopt
     );
 
     Group validateDecryptAndConvertGroup(
         const server::GroupInfo& groupInfo,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
-        const std::vector<std::string>& formerMembers = {}
+        const std::optional<PriorRole>& prior = std::nullopt
     );
 
     // Deliberately does not open the metadata entry: that plane may sit at an older epoch, and waiting on its

@@ -69,22 +69,27 @@ public:
 
     void rotateGroupKey(const std::string& groupId);
 
-    // Both metadata planes as a removal read them, before it committed.
-    struct MetaPlanes {
-        server::GroupMetaEntry publicMeta;
-        server::GroupMetaEntry privateMeta;
-    };
+    // Which planes a carry-forward moves: after a removal or rotation, the planes behind the new epoch (or, with
+    // history abandoned, starts them over empty); after a narrowing policy commit, the planes whose author lost
+    // `update` (`losers`).
+    enum class CarryScope { Removal, Policy };
 
-    // Called after a removal (or a rotation) commits, never as part of it: an entry left at epoch N is still openable and
-    // re-taggable by the removed member, and best-effort here keeps the removal's own write single-plane. After a
-    // removal that abandoned history no plane behind can be read, so it is started over, empty. `removed` are
-    // accepted as the planes' authors only for entries exactly as in `planesBefore`: written while they were members.
-    void refreshMetadataEpochAfterRemoval(
+    // Called after a removal, rotation or narrowing commits, never as part of it: best-effort, re-signing under the
+    // committer's name only an entry identical to the one it read before its own commit (N-2) whose author held
+    // `update` under that read's rules and roster (`prior`, T4-03). Returns whether nothing is left to carry.
+    bool carryMetadataForward(
         const std::string& groupId,
+        CarryScope scope,
         bool historyAbandoned,
-        const std::vector<std::string>& removed,
-        const MetaPlanes& planesBefore
+        const std::vector<std::string>& losers,
+        const PriorRole& prior
     );
+
+    // A narrowing's carry-forward still to do: the planes' authors who lost `update`, and the read before it.
+    struct PendingCarry {
+        std::vector<std::string> losers;
+        PriorRole prior;
+    };
 
     void updateGroupPublicMeta(
         const std::string& groupId,
@@ -278,7 +283,12 @@ private:
     void chainTo(keytree::CommitStatement& statement, const server::GroupInfo& group);
     // The served group's signed rules, which a verified read bound to its latest statement (`describes`).
     static keytree::GroupRules rulesOf(const server::GroupInfo& group);
-    void updateGroupPolicyOnce(const std::string& groupId, const core::ContainerPolicy& policies);
+    // `carry` is set when the change narrows `update` under a plane's author (commit B).
+    void updateGroupPolicyOnce(
+        const std::string& groupId,
+        const core::ContainerPolicy& policies,
+        std::optional<PendingCarry>& carry
+    );
 
     // m2: a commit released to the bridge with no known outcome. A retry resends exactly this.
     struct UnresolvedCommit {
@@ -331,15 +341,21 @@ private:
     void addGroupMembersOnce(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
     // Returns whether the removal abandoned history (the caller held no current grant key); nullopt when an
     // earlier attempt of the same removal turned out to have landed (`settle` ran its metadata refresh then).
-    // `planesBefore` is what the attempt read, for `refreshMetadataEpochAfterRemoval`.
+    // `prior` is what the attempt read, for `carryMetadataForward`.
     std::optional<bool> removeGroupMembersOnce(
         const std::string& groupId,
         const std::vector<std::string>& userIds,
-        MetaPlanes& planesBefore
+        PriorRole& prior
     );
-    // `planesBefore` is what the attempt read, for `refreshMetadataEpochAfterRemoval`. False when an earlier attempt
-    // of a rotation turned out to have landed (`settle` ran its metadata refresh then).
-    bool rotateGroupKeyOnce(const std::string& groupId, MetaPlanes& planesBefore);
+    // `prior` is what the attempt read, for `carryMetadataForward`. False when an earlier attempt of a rotation turned
+    // out to have landed (`settle` ran its metadata refresh then).
+    bool rotateGroupKeyOnce(const std::string& groupId, PriorRole& prior);
+
+    // The verified read's rules, roster and planes.
+    static PriorRole priorOf(const server::GroupInfo& group);
+    // Runs a narrowing's carry-forward; one that does not complete is kept for `retryPendingCarry`.
+    void runPolicyCarry(const std::string& groupId, const PendingCarry& carry);
+    void retryPendingCarry(const std::string& groupId);
 
     // What a commit opening a new epoch publishes beside the tree, shared by removal and rotation: the roster under a
     // fresh metadata key (a key never used before once history is abandoned), and that key wrapped once to the new
@@ -496,6 +512,10 @@ private:
     std::mutex _unresolvedMutex;                                     // guards both maps
     std::map<std::string, std::shared_ptr<std::mutex>> _commitLocks; // never pruned: one per group committed to
     std::map<std::string, UnresolvedCommit> _unresolved;
+    // ponytail: in memory only. A crash before the retry leaves the planes refused until a member holding `update`
+    // writes metadata (documented on updateGroupPolicy); persist it next to 01's pins if that ever matters.
+    std::mutex _pendingCarryMutex;
+    std::map<std::string, PendingCarry> _pendingCarry;
     core::ReleaseGate _releaseGate{RELEASE_WINDOW_MS};
     friend struct GroupApiImplTestAccess; // tests reach selfUpdate() and stop the worker
 };
