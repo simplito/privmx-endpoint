@@ -86,9 +86,10 @@ struct Bridge {
     std::function<void(std::unique_lock<std::mutex>&)> beforeRemoval = [](std::unique_lock<std::mutex>&) {};
     std::function<void()> afterRemoval = [] {};
     std::function<void()> beforeRotation = [] {}; // runs as a rotation arrives, before it is checked
+    std::function<void()> afterRotation = [] {};  // runs once the rotation is applied; throws to lose the answer
     std::function<void()> onAdd = [] {};
     std::function<void()> onSelfUpdate = [] {};
-    // Every statement a client sent with an add, a removal or a self-update, in order, applied or not.
+    // Every statement a client sent with an add, a removal, a rotation or a self-update, in order, applied or not.
     std::vector<server::GroupTreeCommit> received;
     int planReads = 0; // `groupGet`s in the "plan" scope
     std::function<void(server::GroupInfo&)> onPlanRead = [](server::GroupInfo&) {}; // edits what a plan read serves
@@ -281,9 +282,11 @@ struct Bridge {
         }
         if (group == "groupGenerateNewKey") {
             const auto model = server::GroupGenerateNewKeyModel::fromJSON(params);
+            received.push_back(model.commit);
             beforeRotation();
             tree.rotate(caller, model.grantEdge, PublicKey::fromBase58DER(model.groupPubKey), model.commit);
             storeNewEpoch(caller, model);
+            afterRotation();
             return Poco::Dynamic::Var();
         }
         if (group == "groupUpdatePublicMeta" || group == "groupUpdatePrivateMeta") {
@@ -1035,6 +1038,60 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnUnverifiedHeadShowingTheUnresolvedRemoval
     const Group group = client("alice").getGroup(groupId);
     EXPECT_EQ(group.keyVersion, 1);
     EXPECT_NE(std::find(group.users.begin(), group.users.end(), "carol"), group.users.end());
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARotationCompletesAnUnresolvedRemovalFirst) {
+    // The bridge takes the removal, then answers ACCESS_DENIED and serves the state before it. A rotation planned there
+    // would be a second statement at the removal's prevDigest: the fork A5-F3 is about, through rotateGroupKey.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Bridge atP = bridge;
+    int removals = 0;
+    bridge.afterRemoval = [&] {
+        if (removals++ == 0) {
+            rollBackTo(atP);
+            refuse();
+        }
+    };
+    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
+    ASSERT_EQ(bridge.received.size(), 3u);
+    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "carol's removal resent first";
+    EXPECT_EQ(TreeCommits::fromWire(bridge.received[2]).op, CommitOp::Rotate);
+    EXPECT_EQ(prevOf(bridge.received[2]), digestOf(bridge.received[0])) << "the rotation extends the removal";
+    EXPECT_EQ(bridge.tree.state.epoch, 3u);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARetriedRotationResendsTheSameStatement) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    bridge.beforeRotation = [] { refuse(); };
+    EXPECT_ANY_THROW(client("alice").rotateGroupKey(groupId));
+    bridge.beforeRotation = [] {};
+    EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
+    ASSERT_EQ(bridge.received.size(), 2u);
+    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "the retry signed a new rotation";
+    EXPECT_EQ(bridge.tree.state.epoch, 2u);
+    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2) << "the metadata stayed under the replaced key";
+}
+
+TEST_F(GroupApiLyingBridge, ARotationWhoseAnswerWasLostIsFoundLandedAndItsMetadataCarriedUp) {
+    // Applied, answer lost: the retry finds its own statement pinned, sends nothing, and the metadata refresh the
+    // first call never reached runs then.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    int rotations = 0;
+    bridge.afterRotation = [&] {
+        if (rotations++ == 0) {
+            throw std::runtime_error("connection dropped");
+        }
+    };
+    EXPECT_ANY_THROW(client("alice").rotateGroupKey(groupId));
+    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 1);
+    EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
+    EXPECT_EQ(bridge.received.size(), 1u);
+    EXPECT_EQ(bridge.tree.state.epoch, 2u);
+    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2) << "the metadata stayed under the replaced key";
 }
 
 namespace {

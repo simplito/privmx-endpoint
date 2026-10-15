@@ -122,7 +122,13 @@ public:
      * identity key first, then rotate. Charged to the Group's rotation budget; allowed by the `rotateKeys` policy
      * (managers, by default).
      *
+     * A call that failed may still take effect, as with `addGroupMembers`/`removeGroupMembers`: a retry resends the
+     * same rotation (and returns once it is found applied), and any other commit of this client to the Group
+     * completes it first, for up to 20 minutes or until the Group's head moves past it.
+     *
      * @param groupId ID of the Group
+     * @throws GroupCommitUnresolvedException when an earlier commit of this client to the Group has no known
+     * outcome yet and could not be completed (the message names its kind: add, remove, rotation, ...)
      */
     void rotateGroupKey(const std::string& groupId);
 
