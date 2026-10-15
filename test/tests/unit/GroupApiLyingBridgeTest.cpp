@@ -54,6 +54,11 @@ struct GroupApiImplTestAccess {
         api._selfUpdatePending.clear();
         api._selfUpdateWake.notify_all();
     }
+    // As if the call that released the group's unresolved commit ran `ms` earlier: no clock to move in a unit test.
+    static void ageUnresolved(GroupApiImpl& api, const std::string& groupId, std::uint64_t ms) {
+        std::lock_guard<std::mutex> lock(api._unresolvedMutex);
+        api._unresolved.at(groupId).date -= ms;
+    }
 };
 } // namespace privmx::endpoint::group
 
@@ -1092,6 +1097,26 @@ TEST_F(GroupApiLyingBridge, ARotationWhoseAnswerWasLostIsFoundLandedAndItsMetada
     EXPECT_EQ(bridge.received.size(), 1u);
     EXPECT_EQ(bridge.tree.state.epoch, 2u);
     EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2) << "the metadata stayed under the replaced key";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ALandedRotationWhoseAnswerWasLostStandsInForALaterCallOnlyInsideTheWindow) {
+    // Applied, answer lost, pinned by a read, and nobody commits after it. Past the window a call is a new request
+    // (the key it replaced may have leaked since): it rotates again instead of returning on the old rotation.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    int rotations = 0;
+    bridge.afterRotation = [&] {
+        if (rotations++ == 0) {
+            throw std::runtime_error("connection dropped");
+        }
+    };
+    EXPECT_ANY_THROW(client("alice").rotateGroupKey(groupId));
+    client("alice").getGroup(groupId); // pins the rotation at epoch 2
+    GroupApiImplTestAccess::ageUnresolved(client("alice"), groupId, GroupApiImpl::RELEASE_WINDOW_MS);
+    EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
+    EXPECT_EQ(bridge.received.size(), 2u) << "returned on the old rotation without sending one";
+    EXPECT_EQ(bridge.tree.state.epoch, 3u);
+    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 3);
 }
 
 namespace {
