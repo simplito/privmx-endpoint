@@ -109,7 +109,10 @@ public:
     // The encoders of every preimage and sealed label in the key tree. A domain tag ends in a NUL byte, so no tag is a
     // prefix of another's preimage; integers are big-endian; `putLp` prefixes a string with its u32 length.
     static std::string tag(const char* name);
+    // Forward to core/BigEndian.hpp, the codec of every local blob too.
+    static void putU8(std::string& out, std::uint8_t value);
     static void putU32(std::string& out, std::uint32_t value);
+    static void putU64(std::string& out, std::uint64_t value);
     static void putLp(std::string& out, const std::string& value);
 
     // `H("pmx-tree-leaf\0" || u32(p) || lp(userId))`, "" for a blank seat.

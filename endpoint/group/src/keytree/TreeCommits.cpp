@@ -23,6 +23,7 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
+#include "privmx/endpoint/core/BigEndian.hpp"
 
 using namespace privmx::endpoint::group::keytree;
 namespace server = privmx::endpoint::group::server;
@@ -31,28 +32,23 @@ std::string TreeCommits::tag(const char* name) {
     return std::string(name) + std::string(1, '\0');
 }
 
+void TreeCommits::putU8(std::string& out, std::uint8_t value) {
+    privmx::endpoint::core::bigendian::putU8(out, value);
+}
+
 void TreeCommits::putU32(std::string& out, std::uint32_t value) {
-    for (int shift = 24; shift >= 0; shift -= 8) {
-        out.push_back(static_cast<char>((value >> shift) & 0xFF));
-    }
+    privmx::endpoint::core::bigendian::putU32(out, value);
+}
+
+void TreeCommits::putU64(std::string& out, std::uint64_t value) {
+    privmx::endpoint::core::bigendian::putU64(out, value);
 }
 
 void TreeCommits::putLp(std::string& out, const std::string& value) {
-    putU32(out, static_cast<std::uint32_t>(value.size()));
-    out += value;
+    privmx::endpoint::core::bigendian::putLp(out, value);
 }
 
 namespace {
-
-void putU8(std::string& out, std::uint8_t value) {
-    out.push_back(static_cast<char>(value));
-}
-
-void putU64(std::string& out, std::uint64_t value) {
-    for (int shift = 56; shift >= 0; shift -= 8) {
-        out.push_back(static_cast<char>((value >> shift) & 0xFF));
-    }
-}
 
 void putList(std::string& out, const std::vector<std::string>& values) {
     TreeCommits::putU32(out, static_cast<std::uint32_t>(values.size()));
