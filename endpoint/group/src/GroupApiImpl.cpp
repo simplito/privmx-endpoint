@@ -219,7 +219,8 @@ static TPlan planOrThrow(const std::function<TPlan()>& build) {
 keytree::TreeGroupState GroupApiImpl::climbForPlanning(
     const server::GroupInfo& group,
     const std::shared_ptr<keytree::TreeKeyCache>& cache,
-    bool tolerateBrokenClimb
+    bool tolerateBrokenClimb,
+    const privmx::crypto::PrivateKey* climbKey
 ) {
     if (!keytree::GroupKeyResolver::hasTree(group)) {
         throw core::EncryptionKeyValidationException("this group is not backed by a key tree");
@@ -237,7 +238,8 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
     keytree::TreeKeys tree(*cache);
     // Walk even when the grant key is already cached: a plan needs the node keys along the path, and the cache
     // would otherwise satisfy the request without ever recovering them.
-    const keytree::ClimbResult climb = tree.climbToGrantKey(state, identity.value(), _userPrivKey, false);
+    const keytree::ClimbResult climb =
+        tree.climbToGrantKey(state, identity.value(), climbKey != nullptr ? *climbKey : _userPrivKey, false);
     if (climb.failure != keytree::ClimbFailure::None || !climb.grantKey.has_value()) {
         keytree::ResolveResult asResolve;
         asResolve.failure = keytree::ResolveFailure::ClimbFailed;
@@ -254,7 +256,9 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
         }
         throw core::EncryptionKeyValidationException(describeResolveFailure(asResolve));
     }
-    scheduleSelfUpdateIfNeeded(group.id, group);
+    if (climbKey == nullptr) {
+        scheduleSelfUpdateIfNeeded(group.id, group);
+    }
     return state;
 }
 
@@ -1248,26 +1252,30 @@ void GroupApiImpl::runSelfUpdates() {
 }
 
 void GroupApiImpl::selfUpdate(const std::string& groupId) {
-    // The need first, on the small path view: by now the node's healer, or anybody's commit through it, has most
-    // likely refilled it, and the plan view carries every node record of the tree.
-    const server::GroupGetModel pathModel = pathRead(groupId);
-    auto pathView = _serverApi.groupGet(pathModel).group;
-    if (!verifyTree(pathView, pathModel, keytree::TreeVerifier::Scope::Path)) {
-        return;
+    selfUpdateWith(groupId, nullptr, SELF_UPDATE_OP, false);
+}
+
+bool GroupApiImpl::renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey) {
+    std::optional<privmx::crypto::PrivateKey> previous;
+    try {
+        previous = privmx::crypto::PrivateKey::fromWIF(previousUserPrivKey);
+    } catch (...) {
+        throw core::InvalidParamsException("the previous key is not a private key in WIF");
     }
-    // Before the need check: an unresolved self-update of ours is resent (or found landed), never planned again.
-    switch (settle(groupId, SELF_UPDATE_OP, false)) {
-    case Settled::Proceed:
-        break;
-    case Settled::Deferred:
-        LOG_DEBUG("[selfUpdate] deferred: an earlier commit of this client to the group has no known outcome yet")
-        return;
-    default:
-        return;
+    if (previous->getPublicKey() == _userPrivKey.getPublicKey()) {
+        throw core::InvalidParamsException("the previous key is the current key");
     }
-    if (!keytree::GroupKeyResolver::nodeNeedingSelfUpdate(pathView).has_value()) {
-        return;
-    }
+    bool renewed = false;
+    commitWithRetry([&] { renewed = selfUpdateWith(groupId, &previous.value(), RENEW_LEAF_OP, true); });
+    return renewed;
+}
+
+bool GroupApiImpl::selfUpdateWith(
+    const std::string& groupId,
+    const privmx::crypto::PrivateKey* previousKey,
+    const std::string& op,
+    bool mayCompleteOther
+) {
     server::GroupGetModel getModel{
         .groupId = groupId,
         .type = {},
@@ -1276,28 +1284,86 @@ void GroupApiImpl::selfUpdate(const std::string& groupId) {
         .forNewMembers = {},
         .fromRosterVersion = {}
     };
-    auto group = _serverApi.groupGet(getModel).group;
-    verifyTree(group, getModel, keytree::TreeVerifier::Scope::Plan);
-    // Re-checked on a fresh read: somebody's commit through the same nodes may have refilled them meanwhile.
-    if (!keytree::GroupKeyResolver::hasTree(group) ||
-        !keytree::GroupKeyResolver::hasSupportedTree(group) ||
-        !keytree::GroupKeyResolver::nodeNeedingSelfUpdate(group).has_value()) {
-        return;
+    server::GroupInfo group;
+    keytree::TreeGroupState state;
+    std::pair<std::vector<std::string>, std::vector<std::string>> roster;
+    // What the plan climbs over: the group's shared cache, or the renewal's call-local one, so nothing derived from
+    // the previous key ever reaches a reader, the background worker or a failed renewal's next call.
+    std::shared_ptr<keytree::TreeKeyCache> planCache = _treeKeyCaches.get(groupId);
+    if (previousKey == nullptr) {
+        // The need first, on the small path view: by now the node's healer, or anybody's commit through it, has most
+        // likely refilled it, and the plan view carries every node record of the tree.
+        const server::GroupGetModel pathModel = pathRead(groupId);
+        auto pathView = _serverApi.groupGet(pathModel).group;
+        if (!verifyTree(pathView, pathModel, keytree::TreeVerifier::Scope::Path)) {
+            return false;
+        }
+        // Before the need check: an unresolved self-update of ours is resent (or found landed), never planned again.
+        switch (settle(groupId, op, mayCompleteOther)) {
+        case Settled::Proceed:
+            break;
+        case Settled::Deferred:
+            LOG_DEBUG("[selfUpdate] deferred: an earlier commit of this client to the group has no known outcome yet")
+            return false;
+        default:
+            return false;
+        }
+        if (!keytree::GroupKeyResolver::nodeNeedingSelfUpdate(pathView).has_value()) {
+            return false;
+        }
+        group = _serverApi.groupGet(getModel).group;
+        verifyTree(group, getModel, keytree::TreeVerifier::Scope::Plan);
+        // Re-checked on a fresh read: somebody's commit through the same nodes may have refilled them meanwhile.
+        if (!keytree::GroupKeyResolver::hasTree(group) ||
+            !keytree::GroupKeyResolver::hasSupportedTree(group) ||
+            !keytree::GroupKeyResolver::nodeNeedingSelfUpdate(group).has_value()) {
+            return false;
+        }
+        // A self-update wraps to whoever is seated, so it needs the seats proven against the roster like any commit.
+        roster = _groupDataSchemaMapper->validateAndGetAttestedRoster(group, _keyProvider, _groupPrivKeyResolver);
+        keytree::TreeVerifier::assertSeatsMatchRoster(group, roster.first, roster.second);
+        state = climbForPlanning(group, planCache);
+    } else {
+        // Leaf renewal. No need gate: the need is the leaf not opening with the session's key, checked below.
+        group = _serverApi.groupGet(getModel).group;
+        if (!verifyTree(group, getModel, keytree::TreeVerifier::Scope::Plan)) {
+            throw core::EncryptionKeyValidationException("caller holds no leaf in this group's key tree");
+        }
+        switch (settle(groupId, op, mayCompleteOther)) {
+        case Settled::Done:
+            return true;
+        case Settled::Reread:
+            group = rereadVerified(getModel, keytree::TreeVerifier::Scope::Plan);
+            break;
+        default:
+            break;
+        }
+        // Renewed already: a commit after the directory change wrapped the leaf to the session's key.
+        const keytree::TreeGroupState current = keytree::GroupKeyResolver::toTreeState(group);
+        keytree::TreeKeys sharedTree(*planCache);
+        const std::string ownId = keytree::GroupKeyResolver::ownUserId(group).value();
+        if (sharedTree.climbToGrantKey(current, ownId, _userPrivKey, false).failure == keytree::ClimbFailure::None) {
+            return false;
+        }
+        planCache = std::make_shared<keytree::TreeKeyCache>();
+        const ClimbWith with{planCache, previousKey};
+        state = climbForPlanning(group, planCache, false, previousKey);
+        // After the climb (the roster key resolves only through the grant key it recovered) and on the same read, so
+        // a concurrent epoch change cannot make it check a different state.
+        roster = _groupDataSchemaMapper->validateAndGetAttestedRoster(group, _keyProvider, resolverOver(&group, &with));
+        keytree::TreeVerifier::assertSeatsMatchRoster(group, roster.first, roster.second);
     }
-    // A self-update wraps to whoever is seated, so it needs the seats proven against the roster like any commit.
-    const auto [attestedUsers, attestedManagers] = _groupDataSchemaMapper->validateAndGetAttestedRoster(
-        group, _keyProvider, _groupPrivKeyResolver
-    );
-    keytree::TreeVerifier::assertSeatsMatchRoster(group, attestedUsers, attestedManagers);
-    const auto cache = _treeKeyCaches.get(groupId);
-    const keytree::TreeGroupState state = climbForPlanning(group, cache);
+    const auto& [attestedUsers, attestedManagers] = roster;
     const std::string memberId = keytree::GroupKeyResolver::ownUserId(group).value();
 
-    keytree::TreeKeys tree(*cache);
+    keytree::TreeKeys tree(*planCache);
+    // Own key: the session's, taken locally (`commitRecipientKeys`), never the directory's.
     tree.setMemberKeyStrings(commitRecipientKeys(
         group, keytree::TreeKeys::recipients(state, keytree::TreeKeys::shapeSelfUpdate(state, memberId)), memberId
     ));
-    const keytree::CommitPlan plan = tree.planSelfUpdate(state, memberId, _userPrivKey);
+    const keytree::CommitPlan plan = planOrThrow<keytree::CommitPlan>([&] {
+        return tree.planSelfUpdate(state, memberId, _userPrivKey);
+    });
 
     server::GroupSelfUpdateModel model;
     model.id = groupId;
@@ -1317,8 +1383,10 @@ void GroupApiImpl::selfUpdate(const std::string& groupId) {
     submit(
         groupId, statement,
         UnresolvedCommit{
-            .op = SELF_UPDATE_OP,
-            .kind = "self-update",
+            .op = op,
+            // A renewal names its end state (the leaf opens with the session's key): found landed, it is done.
+            .namesEndState = previousKey != nullptr,
+            .kind = previousKey != nullptr ? "leaf renewal" : "self-update",
             .contextId = contextId,
             .newcomers = {},
             .send = [this, sent] { _serverApi.groupSelfUpdate(*sent); },
@@ -1329,6 +1397,7 @@ void GroupApiImpl::selfUpdate(const std::string& groupId) {
             .after = {}
         }
     );
+    return true;
 }
 
 bool GroupApiImpl::carryMetadataForward(
@@ -1970,10 +2039,14 @@ group::server::GroupInfo GroupApiImpl::readGroupForKeys(const std::string& group
     return group;
 }
 
-core::KeyProvider::GroupPrivKeyResolver GroupApiImpl::resolverOver(const server::GroupInfo* seatedRead) {
-    return [this, seatedRead](const std::string& groupId, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
+core::KeyProvider::GroupPrivKeyResolver GroupApiImpl::resolverOver(
+    const server::GroupInfo* seatedRead,
+    const ClimbWith* with
+) {
+    return [this, seatedRead, with](const std::string& groupId, int64_t epoch)
+               -> std::optional<privmx::crypto::PrivateKey> {
         try {
-            return resolveGroupPrivKey(groupId, epoch, seatedRead);
+            return resolveGroupPrivKey(groupId, epoch, seatedRead, with);
         } catch (const GroupHistoryForkException&) {
             throw; // a rollback is not "no key": it must reach the caller as itself
         } catch (...) {
@@ -2059,11 +2132,12 @@ std::string GroupApiImpl::buildCustomEventSubscriptionQuery(
 privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(
     const std::string& groupId,
     int64_t epoch,
-    const server::GroupInfo* seatedRead
+    const server::GroupInfo* seatedRead,
+    const ClimbWith* with
 ) {
     // An epoch's key never changes: once resolved and matched to its published public key it is served from here,
     // with no read, no tree check, no climb and no ladder. 0 ("current") names no fixed epoch, so it always reads.
-    if (epoch > 0) {
+    if (epoch > 0 && with == nullptr) {
         if (auto cached = _epochKeys.get(memoKeyFor(groupId, std::to_string(epoch))); cached.has_value()) {
             return cached.value();
         }
@@ -2081,13 +2155,20 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(
     const server::GroupInfo& group = reuse ? *seatedRead : fresh.value();
 
     const int64_t currentEpoch = group.keyVersion;
-    const auto cache = _treeKeyCaches.get(groupId);
+    const auto cache = with != nullptr ? with->cache : _treeKeyCaches.get(groupId);
     keytree::GroupKeyResolver resolver(*cache);
     const bool needsDescent = seated && epoch > 0 && epoch < currentEpoch;
     const keytree::ResolveResult resolved = resolver.resolve(
-        group, epoch, _userPrivKey,
+        group, epoch, with != nullptr ? *with->key : _userPrivKey,
         needsDescent ? fetchKeyArchive(group, epoch, currentEpoch) : server::GroupGetKeyArchiveResult{}
     );
+    if (with != nullptr) {
+        // A leaf renewal's previous-key climb: whatever it derived stays in its own cache and dies with the call.
+        if (resolved.key.has_value()) {
+            return resolved.key.value();
+        }
+        throw core::EncryptionKeyValidationException(describeResolveFailure(resolved));
+    }
     // A descent that routed around, or stopped at, a broken rung: a holder of both keys can repair it (L-1).
     for (const keytree::RungSpan& span : resolved.brokenSpans) {
         scheduleLadderCheck(groupId, group.contextId, span.at, backgroundWindowMs(group));

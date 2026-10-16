@@ -137,6 +137,27 @@ public:
     void rotateGroupKey(const std::string& groupId);
 
     /**
+     * Re-wraps the caller's own leaf to its current identity key after that key changed in the Context.
+     *
+     * Call from a session connected with the NEW key, after the Context lists it, and after
+     * Connection::adoptPreviousIdentity(previousUserPrivKey) where the app persists local state. Before the
+     * directory change, settle every group commit of the old session (retry each call that threw
+     * GroupCommitUnresolvedException until it returns or fails for good) and disconnect it.
+     * `previousUserPrivKey` (WIF) is the key the leaf was last wrapped to. One commit per group (a self-update: same
+     * epoch, nothing to re-key in containers). Keep the previous key until every renewal returned, then discard it.
+     *
+     * This restores access; it is not compromise recovery. If the previous key may be compromised, also ask a
+     * manager to rotate the group key. Rotation does not help a member the server keeps on an old branch of the
+     * group history.
+     *
+     * @param groupId ID of the Group
+     * @param previousUserPrivKey the caller's previous identity private key, in WIF
+     * @return true if a commit was made, false if the leaf already opens with the current key
+     * @throws GroupCommitUnresolvedException as `rotateGroupKey`
+     */
+    bool renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey);
+
+    /**
      * Updates a Group's public (unencrypted) metadata, and nothing else.
      *
      * The three things a Group's metadata used to be updated by one call — public metadata, private metadata
