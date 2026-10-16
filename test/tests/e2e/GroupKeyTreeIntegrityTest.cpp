@@ -686,10 +686,10 @@ TEST_F(GroupKeyTreeIntegrityTest, changing_a_members_public_key_locks_them_out_w
     EXPECT_TRUE(contains(afterRotation.users, firstKey.userId)) <<
         "the locked-out member is still on the roster - that is the mismatch this test is about";
 
-    // The retired key gets no route either: it belongs to no context user, so the endpoint has nothing to serve
-    // it. The ciphertext is another matter - the leaf edge is unchanged, which the public API cannot probe.
+    // Bridge-auth regression check: the retired key belongs to no context user, so the Bridge refuses its
+    // session. This says nothing about edges - the leaf edge is unchanged, which the public API cannot probe.
     EXPECT_FALSE(canReadGroupWithRetiredKey(firstKey, groupId)) <<
-        "a key the Bridge no longer knows still got served the group";
+        "the Bridge still authenticated a session of a key the Context no longer lists";
 
     // Only re-seating repairs it, and it repairs it completely: the removal blanks the leaf's path and mints
     // epoch 2, the addition wraps the new leaf to the new key, and the ladder hands back the epoch-1 history.
@@ -705,6 +705,122 @@ TEST_F(GroupKeyTreeIntegrityTest, changing_a_members_public_key_locks_them_out_w
     EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << "re-seating did not restore access; " << lastReadError;
     EXPECT_TRUE(canReadMessageAs(secondKey, messageId)) <<
         "re-seating did not hand back the pre-rotation history; " << lastReadError;
+}
+
+// -- renewing a leaf after a key change (08a) --
+
+TEST_F(GroupKeyTreeIntegrityTest, a_member_who_changed_key_renews_their_leaf_with_the_previous_key) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    const Identity firstKey = newIdentity("renewing_member");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), asMember(firstKey)}); });
+    group::Group atEpoch1;
+    ASSERT_NO_THROW({ atEpoch1 = groupApi->getGroup(groupId); });
+    std::string threadId;
+    ASSERT_NO_THROW({ threadId = createThreadGrantedTo(atEpoch1); });
+    std::string messageId;
+    ASSERT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            threadId, core::Buffer::from("renew_public"), core::Buffer::from("renew_private"),
+            core::Buffer::from("renew_data")
+        );
+    });
+
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
+    ASSERT_FALSE(canReadGroupAs(secondKey, groupId)) << "nothing to renew: the new key already opens the leaf";
+
+    bool renewed = false;
+    ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        renewed = groups.renewLeaf(groupId, firstKey.privKey);
+    }));
+    EXPECT_TRUE(renewed);
+    EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << "the renewal did not restore access; " << lastReadError;
+    EXPECT_TRUE(canReadMessageAs(secondKey, messageId)) << "the group's grant did not come back; " << lastReadError;
+    group::Group afterRenewal;
+    ASSERT_NO_THROW({ afterRenewal = groupApi->getGroup(groupId); });
+    EXPECT_EQ(afterRenewal.statusCode, 0) << "the creator no longer verifies the group after the renewal";
+    EXPECT_EQ(afterRenewal.keyVersion, 1) << "a renewal opens no epoch, so no container needs re-keying";
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, an_old_key_session_cannot_commit_after_the_directory_change) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    const Identity firstKey = newIdentity("old_session_member");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), asMember(firstKey)}); });
+
+    auto oldSession = connectWith(firstKey.privKey);
+    privmx::test::ScopeExit closeIt([&] {
+        try {
+            oldSession->disconnect();
+        } catch (...) {}
+    });
+    auto oldGroups = group::GroupApi::create(*oldSession);
+    ASSERT_EQ(oldGroups.getGroup(groupId).statusCode, 0) << "the old session reads before the change";
+
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
+    // The Bridge resolves the caller by the session's key, so this session is nobody in the Context any more.
+    EXPECT_ANY_THROW(oldGroups.renewLeaf(groupId, secondKey.privKey));
+    const Identity newcomer = newIdentity("old_session_newcomer");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(newcomer.userId, newcomer.pubKey));
+    EXPECT_ANY_THROW(
+        oldGroups.addGroupMembers(groupId, {group::GroupMemberToAdd{.user = asMember(newcomer), .role = "user"}})
+    );
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_FALSE(contains(after.users, newcomer.userId)) << "the old key's session committed an add";
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, renewing_twice_commits_once) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    const Identity firstKey = newIdentity("twice_renewing_member");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), asMember(firstKey)}); });
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
+
+    std::vector<bool> renewed;
+    ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        renewed.push_back(groups.renewLeaf(groupId, firstKey.privKey));
+        renewed.push_back(groups.renewLeaf(groupId, firstKey.privKey));
+    }));
+    EXPECT_EQ(renewed, std::vector<bool>({true, false}));
+    EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << lastReadError;
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, a_single_member_group_survives_its_members_key_change) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    // Nobody else exists to remove and re-add the member, so renewal is the only way back in.
+    const Identity firstKey = newIdentity("sole_member");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW(onFreshSessionWith(firstKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        groupId = groups.createGroup(
+            contextId(), {}, {asMember(firstKey)}, core::Buffer::from("sole_public"), core::Buffer::from("sole_private")
+        );
+    }));
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
+    ASSERT_FALSE(canReadGroupAs(secondKey, groupId));
+
+    bool renewed = false;
+    ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        renewed = groups.renewLeaf(groupId, firstKey.privKey);
+    }));
+    EXPECT_TRUE(renewed);
+    EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << "the sole member is still locked out; " << lastReadError;
 }
 
 // -- churning one member's seat --
