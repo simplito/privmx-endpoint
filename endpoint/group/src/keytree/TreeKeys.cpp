@@ -220,7 +220,7 @@ ClimbResult TreeKeys::climbToGrantKey(
         }
         const auto recovered = unwrapKey(edge->blob, currentKey);
         if (!recovered.has_value()) {
-            result.failure = ClimbFailure::DecryptFailed;
+            result.failure = TreeMath::isLeaf(currentNode) ? ClimbFailure::LeafDidNotOpen : ClimbFailure::DecryptFailed;
             result.tamperedNode = edge->parentIndex; // the parent's setter wrote its edges, garbled ones included
             return result;
         }
@@ -246,7 +246,8 @@ ClimbResult TreeKeys::climbToGrantKey(
     }
     const auto grantKey = unwrapKey(grantEdge->blob, currentKey);
     if (!grantKey.has_value()) {
-        result.failure = ClimbFailure::DecryptFailed;
+        // Still at the leaf only in a one-leaf tree: the grant edge is then our own leaf edge.
+        result.failure = TreeMath::isLeaf(currentNode) ? ClimbFailure::LeafDidNotOpen : ClimbFailure::DecryptFailed;
         return result;
     }
     if (!(state.grantPublicKey == grantKey.value().getPublicKey())) {

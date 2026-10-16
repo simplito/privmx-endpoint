@@ -301,7 +301,8 @@ ResolveResult GroupKeyResolver::resolveWith(
     if (climb.failure != ClimbFailure::None || !climb.grantKey.has_value()) {
         result.failure = ResolveFailure::ClimbFailed;
         result.climb = climb.failure;
-        if (climb.failure == ClimbFailure::Tampered || climb.failure == ClimbFailure::DecryptFailed) {
+        if (climb.failure == ClimbFailure::Tampered || climb.failure == ClimbFailure::DecryptFailed ||
+            climb.failure == ClimbFailure::LeafDidNotOpen) {
             result.blame = tamperedBy(group, climb.tamperedNode);
         }
         return result;

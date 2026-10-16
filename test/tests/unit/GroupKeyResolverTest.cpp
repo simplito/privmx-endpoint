@@ -28,6 +28,7 @@ limitations under the License.
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
+#include <privmx/endpoint/group/GroupApiImpl.hpp>
 #include <privmx/endpoint/group/keytree/GroupKeyResolver.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
@@ -570,8 +571,76 @@ TEST_F(ResolverCurrentEpoch, SECURITY_BlamesTheSetterOfTheNodeWhoseEdgeDoesNotOp
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
     const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
+    // The garbled edge is the member's own leaf edge, which a changed identity key cannot be told apart from.
+    EXPECT_EQ(result.climb, ClimbFailure::LeafDidNotOpen);
+    EXPECT_EQ(result.blame, std::optional<std::string>("creator"));
+}
+
+TEST_F(ResolverCurrentEpoch, SECURITY_BlamesTheSetterOfAGarbledInnerEdge) {
+    // Below 33 seats the root is the only keyed node; here the edge from node 31 to the root is garbled.
+    Fixture fixture = buildFixture(33);
+    setOwnLeafPosition(fixture.group, 0);
+    server::GroupTreeCommit creation;
+    creation.seq = 1;
+    creation.committer = "creator";
+    server::GroupTreeCommit latest;
+    latest.seq = 2;
+    latest.committer = "latest";
+    fixture.group.treeCommits = std::vector<server::GroupTreeCommit>{creation};
+    fixture.group.treeCommit = latest;
+    auto edges = fixture.group.treeEdges.value();
+    std::size_t garbled = 0;
+    for (server::GroupTreeEdge& edge : edges) {
+        if (edge.childKind == "node" && edge.childIndex.value_or(0) == 31) {
+            const PrivateKey somebodyElse = PrivateKey::generateRandom();
+            edge.data = TreeKeys::wrapKey(somebodyElse, somebodyElse.getPublicKey(), fixture.members[0].priv);
+            ++garbled;
+        }
+    }
+    ASSERT_EQ(garbled, 1u);
+    fixture.group.treeEdges = edges;
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
     EXPECT_EQ(result.climb, ClimbFailure::DecryptFailed);
     EXPECT_EQ(result.blame, std::optional<std::string>("creator"));
+}
+
+TEST_F(ResolverCurrentEpoch, SECURITY_ALeafThatDoesNotOpenNamesTheKeyChangeRemedy) {
+    const auto withCommits = [](Fixture& fixture) {
+        fixture.group.ownLeafPosition = 0;
+        server::GroupTreeCommit creation;
+        creation.seq = 1;
+        creation.committer = "creator";
+        server::GroupTreeCommit latest;
+        latest.seq = 2;
+        latest.committer = "latest";
+        fixture.group.treeCommits = std::vector<server::GroupTreeCommit>{creation};
+        fixture.group.treeCommit = latest;
+    };
+    const PrivateKey changed = PrivateKey::generateRandom();
+    {
+        Fixture fixture = buildFixture(4);
+        withCommits(fixture);
+        TreeKeyCache store;
+        GroupKeyResolver resolver(store);
+        const ResolveResult result = resolver.resolve(fixture.group, 0, changed, fixture.archive);
+        ASSERT_EQ(result.climb, ClimbFailure::LeafDidNotOpen);
+        const std::string message = GroupApiImpl::describeResolveFailure(result);
+        EXPECT_NE(message.find("renewLeaf"), std::string::npos) << message;
+        EXPECT_NE(message.find("wrapped by creator"), std::string::npos) << message;
+    }
+    {
+        Fixture fixture = buildFixture(1);
+        withCommits(fixture);
+        TreeKeyCache store;
+        GroupKeyResolver resolver(store);
+        const ResolveResult result = resolver.resolve(fixture.group, 0, changed, fixture.archive);
+        ASSERT_EQ(result.climb, ClimbFailure::LeafDidNotOpen);
+        const std::string message = GroupApiImpl::describeResolveFailure(result);
+        EXPECT_NE(message.find("renewLeaf"), std::string::npos) << message;
+        EXPECT_NE(message.find("wrapped by latest"), std::string::npos) << "a one-leaf grant edge is the latest's";
+    }
 }
 
 // resolving an older epoch — tree then ladder

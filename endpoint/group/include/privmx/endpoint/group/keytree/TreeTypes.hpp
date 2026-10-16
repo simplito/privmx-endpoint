@@ -127,6 +127,9 @@ enum class ClimbFailure {
     NotAMember,    // the caller holds no leaf in this tree
     MissingEdge,   // the chain is broken: no edge leads on from a node we reached
     DecryptFailed, // an edge did not open with the key we hold
+    // The first edge above our own leaf does not open with the key we hold: our identity key changed since it was
+    // wrapped, or its wrapper garbled it. `tamperedNode` as for `DecryptFailed` (unset in a one-leaf tree).
+    LeafDidNotOpen,
     // A recovered key does not match the published one: corrupted, substituted, or from another tree. A security
     // event, not a transient failure — never retry, it is deterministic and adversarial.
     Tampered,
@@ -137,7 +140,8 @@ struct ClimbResult {
     ClimbFailure failure = ClimbFailure::None;
     // Deepest node reached before stopping. Partial progress is still cached and useful.
     std::uint32_t reachedNode = 0;
-    // The node whose edge failed, when `failure` is `Tampered` or `DecryptFailed`; none for the grant edge.
+    // The node whose edge failed, when `failure` is `Tampered`, `DecryptFailed` or `LeafDidNotOpen`; none for the grant
+    // edge.
     std::optional<std::uint32_t> tamperedNode;
 };
 

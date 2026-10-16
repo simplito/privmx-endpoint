@@ -242,7 +242,8 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
         keytree::ResolveResult asResolve;
         asResolve.failure = keytree::ResolveFailure::ClimbFailed;
         asResolve.climb = climb.failure;
-        if (climb.failure == keytree::ClimbFailure::Tampered || climb.failure == keytree::ClimbFailure::DecryptFailed) {
+        if (climb.failure == keytree::ClimbFailure::Tampered || climb.failure == keytree::ClimbFailure::DecryptFailed ||
+            climb.failure == keytree::ClimbFailure::LeafDidNotOpen) {
             asResolve.blame = keytree::GroupKeyResolver::tamperedBy(group, climb.tamperedNode);
         }
         // Garbled wraps must not let whoever garbled them block their own removal: the state is verified, and a
@@ -2392,6 +2393,13 @@ std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& r
         }
         if (resolved.climb == keytree::ClimbFailure::NotAMember) {
             return "Group key unavailable: caller holds no leaf in the key tree";
+        }
+        if (resolved.climb == keytree::ClimbFailure::LeafDidNotOpen) {
+            // A changed identity key looks the same as a garbled leaf edge, so the setter is still named.
+            return "Group key unavailable: the edge to your own leaf does not open with your current key. If you "
+                   "changed your identity key, call renewLeaf with the previous key; without it, ask a manager to "
+                   "remove and re-add you" +
+                (resolved.blame.has_value() ? " (wrapped by " + resolved.blame.value() + ")" : "");
         }
         if (resolved.climb == keytree::ClimbFailure::DecryptFailed) {
             return "Group key unavailable: a key tree edge does not open" +

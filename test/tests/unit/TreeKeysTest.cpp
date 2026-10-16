@@ -508,6 +508,43 @@ TEST_F(TreeKeysClimb, ReportsAMissingEdgeDistinctlyFromTampering) {
     EXPECT_EQ(climb(group.state, group.members[0]).failure, ClimbFailure::MissingEdge);
 }
 
+// A member whose identity key changed holds a key its leaf edge was never wrapped to. That is reported at the leaf,
+// not as a garbled edge somewhere in the tree, and still names the node whose setter wrote the edge.
+TEST_F(TreeKeysClimb, SECURITY_ALeafEdgeThatDoesNotOpenIsReportedAtTheLeaf) {
+    const Group group = create(40);
+    const TestMember renamed{group.members[0].userId, PrivateKey::generateRandom()};
+    const ClimbResult result = climb(group.state, renamed);
+    EXPECT_EQ(result.failure, ClimbFailure::LeafDidNotOpen);
+    EXPECT_FALSE(result.grantKey.has_value());
+    EXPECT_EQ(result.tamperedNode, std::optional<std::uint32_t>(31u)) << "the leaf's first keyed ancestor";
+}
+
+TEST_F(TreeKeysClimb, SECURITY_AOneLeafGrantEdgeThatDoesNotOpenIsReportedAtTheLeaf) {
+    const Group group = create(1);
+    const TestMember renamed{group.members[0].userId, PrivateKey::generateRandom()};
+    const ClimbResult result = climb(group.state, renamed);
+    EXPECT_EQ(result.failure, ClimbFailure::LeafDidNotOpen);
+    EXPECT_FALSE(result.tamperedNode.has_value()) << "the grant edge has no node above it";
+}
+
+// Below 33 seats the root is the only keyed node, so a node->node edge needs a bigger tree.
+TEST_F(TreeKeysClimb, AGarbledInnerEdgeIsStillDecryptFailed) {
+    Group group = create(40);
+    std::size_t garbled = 0;
+    for (TreeEdge& edge : group.state.edges) {
+        if (!edge.isGrantEdge && edge.childKind == EdgeChildKind::Node && edge.childIndex == 31u) {
+            edge.blob = TreeKeys::wrapKey(
+                PrivateKey::generateRandom(), PrivateKey::generateRandom().getPublicKey(), group.members[0].priv
+            );
+            ++garbled;
+        }
+    }
+    ASSERT_EQ(garbled, 1u);
+    const ClimbResult result = climb(group.state, group.members[0]);
+    EXPECT_EQ(result.failure, ClimbFailure::DecryptFailed);
+    EXPECT_EQ(result.tamperedNode, std::optional<std::uint32_t>(TreeMath::root(40)));
+}
+
 // The same authorship boundary inside a whole state: an edge re-issued by somebody else is followed as readily
 // as the original — the climb verifies keys against the published node keys and asks nothing about who wrote them.
 TEST_F(TreeKeysClimb, AnEdgeReissuedByAStrangerIsStillFollowed) {
