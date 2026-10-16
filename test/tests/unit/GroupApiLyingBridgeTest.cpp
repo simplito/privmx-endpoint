@@ -2291,6 +2291,72 @@ TEST_F(GroupApiLyingBridge, HonestSiblingsAtDifferentSeqsConvergeWithoutAFork) {
     EXPECT_EQ(alice2.getGroup(groupId).statusCode, 0);
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_AnOwnRemovalOverASiblingsFirstContactIsSavedBeforeTheCallReturns) {
+    // bob2 took the group by first contact and never synced it; bob1 then saved its own first contact (seq 1). bob2's
+    // removal of carol (seq 2) must be in the slot, and stay in bob2's memory, when the call returns. Base (row e):
+    // the slot kept seq 1 and bob2 fell back to it, so the pre-removal state was taken again.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Bridge beforeRemoval = bridge;
+    GroupApiImpl& bob2 = sibling("bob");
+    bob2.getGroup(groupId); // first contact, unsaved (no worker save in a quiet fixture)
+    client("bob").getGroup(groupId);
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
+    bob2.removeGroupMembers(groupId, {"carol"}); // within PIN_SYNC_INTERVAL: no sync first
+    EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(bob2, groupId), 2u) << "never below its own removal";
+    const auto stored = storedPin(groupId, bridge.users.at("bob"));
+    ASSERT_TRUE(stored.has_value());
+    EXPECT_EQ(stored->seq, 2u) << "in the store before the call returned";
+    EXPECT_FALSE(stored->forked);
+    rollBackTo(beforeRemoval);
+    EXPECT_THROW(bob2.getGroup(groupId), GroupHistoryForkException);
+    EXPECT_THROW(sibling("bob").getGroup(groupId), GroupHistoryForkException) << "and the next session";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AnOwnRemovalLinkedOverASiblingsSaveIsSavedBeforeTheCallReturns) {
+    // Both instances synced at seq 1; alice2 saves bob's self-update (seq 2), alice1 removes carol (seq 3) without a
+    // sync first. Row j keeps seq 2 in the slot until the link; once linked, the removal is written before the call
+    // returns. Base: re-queued as a minor move, PIN_SAVE_IDLE_INTERVAL later (never, for a killed tab).
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    GroupApiImpl& alice2 = sibling("alice");
+    selfUpdateBy("bob");
+    const Bridge beforeRemoval = bridge;
+    alice2.resolveGroupPrivKey(groupId);
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(alice2));
+    client("alice").removeGroupMembers(groupId, {"carol"}); // within PIN_SYNC_INTERVAL: no sync first
+    const auto stored = storedPin(groupId, bridge.users.at("alice"));
+    ASSERT_TRUE(stored.has_value());
+    EXPECT_EQ(stored->seq, 3u) << "in the store before the call returned";
+    EXPECT_FALSE(stored->forked);
+    kill("alice");
+    rollBackTo(beforeRemoval);
+    EXPECT_THROW(sibling("alice").getGroup(groupId), GroupHistoryForkException);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AdoptionNeverLowersAPinThatMovedPastItsFirstContact) {
+    // Under the new key alice took the group by first contact (seq 1), then verified bob's removal of carol (seq 2)
+    // and saved it. The previous key's slot still holds seq 1; adopting it afterwards (renewLeaf adopts on every call)
+    // must not bring the pin back below the removal. Base: `firstContact` stayed set, so the record replaced the pin
+    // and the slot.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob", "carol"}); // seq 1 in the previous key's slot
+    const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
+    const Bridge beforeRemoval = bridge;
+    client("alice").getGroup(groupId); // the new key's first contact
+    removalBy("bob", {"carol"});
+    client("alice").getGroup(groupId); // seq 2, a verified step
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("alice")));
+    client("alice").adoptPreviousIdentity(previous);
+    EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 2u);
+    EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u) << "the current slot is not lowered";
+    rollBackTo(beforeRemoval);
+    EXPECT_THROW(client("alice").getGroup(groupId), GroupHistoryForkException);
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_ABrokenStoreStopsKeyHandOutAfterThreeFailedSaves) {
     // A store that refuses saves must not leave the device acting on pins it cannot keep (a frozen slot below a
     // removal it saw). Reads and decryption keep working.

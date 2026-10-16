@@ -3062,14 +3062,16 @@ void GroupApiImpl::syncPins(bool force) {
     linkPins(unlinked);
 }
 
-void GroupApiImpl::linkPins(const std::vector<std::string>& groups) {
+bool GroupApiImpl::linkPins(const std::vector<std::string>& groups) {
+    bool ahead = false;
     for (const std::string& groupId : groups) {
         try {
-            _treeVerifier.link(groupId, treeEnvironment(groupId));
+            ahead = _treeVerifier.link(groupId, treeEnvironment(groupId)) || ahead;
         } catch (const std::exception& e) {
             LOG_WARN("[pins] link of group ", groupId, " pending: ", e.what())
         }
     }
+    return ahead;
 }
 
 void GroupApiImpl::pinsMoved(bool major) {
@@ -3093,63 +3095,72 @@ bool GroupApiImpl::savePins(bool all) {
         return true;
     }
     bool saved = false;
-    std::vector<std::string> unlinked;
-    {
-        std::lock_guard<std::mutex> lock(_pinSaveMutex);
-        keytree::TreeVerifier::PinSet mine;
-        mine.tree = _treeVerifier.exportPins(all || _pinSaveFull);
-        mine.planes = _groupDataSchemaMapper->exportVersionPins();
-        std::optional<keytree::TreeVerifier::PinSet> stored;
-        std::string blob;
-        try {
-            saved = core::updateSealed(
-                *_pinStore, _userPrivKey, _pinStoreKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION,
-                [&](const std::optional<std::string>& body) {
-                    stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
-                    if (stored.has_value()) {
-                        return keytree::PinBlob::encode(keytree::PinBlob::mergeForSave(mine, stored.value()));
-                    }
-                    // Nothing stored, another version or a bad tag: overwritten with every pin in full.
-                    if (body.has_value()) {
-                        LOG_WARN("[pins] the stored pins do not parse; overwritten")
-                    }
-                    return keytree::PinBlob::encode(
-                        all || _pinSaveFull ? mine
-                                            : keytree::TreeVerifier::PinSet{_treeVerifier.exportPins(true), mine.planes}
-                    );
-                },
-                &blob
-            );
-        } catch (const std::exception& e) {
-            LOG_WARN("[pins] the pin store does not save: ", e.what())
-        } catch (...) { LOG_WARN("[pins] the pin store does not save") }
-        if (saved) {
-            // Re-import: what a sibling saved meanwhile reaches this instance too.
-            unlinked = _treeVerifier.applyStored(&mine.tree, stored.value_or(keytree::TreeVerifier::PinSet{}), true);
-            if (stored.has_value()) {
-                _groupDataSchemaMapper->importVersionPins(stored->planes);
+    // A link that keeps this instance's pin above the slot's record (an own or observed removal past a sibling's
+    // save) writes it now, not on the idle cadence. ponytail: two rounds; a sibling that wins every race in between
+    // leaves the rest to the next save.
+    for (int round = 0; round < 2; ++round) {
+        std::vector<std::string> unlinked;
+        {
+            std::lock_guard<std::mutex> lock(_pinSaveMutex);
+            keytree::TreeVerifier::PinSet mine;
+            mine.tree = _treeVerifier.exportPins(all || _pinSaveFull);
+            mine.planes = _groupDataSchemaMapper->exportVersionPins();
+            std::optional<keytree::TreeVerifier::PinSet> stored;
+            std::string blob;
+            try {
+                saved = core::updateSealed(
+                    *_pinStore, _userPrivKey, _pinStoreKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION,
+                    [&](const std::optional<std::string>& body) {
+                        stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
+                        if (stored.has_value()) {
+                            return keytree::PinBlob::encode(keytree::PinBlob::mergeForSave(mine, stored.value()));
+                        }
+                        // Nothing stored, another version or a bad tag: overwritten with every pin in full.
+                        if (body.has_value()) {
+                            LOG_WARN("[pins] the stored pins do not parse; overwritten")
+                        }
+                        return keytree::PinBlob::encode(
+                            all || _pinSaveFull
+                                ? mine
+                                : keytree::TreeVerifier::PinSet{_treeVerifier.exportPins(true), mine.planes}
+                        );
+                    },
+                    &blob
+                );
+            } catch (const std::exception& e) {
+                LOG_WARN("[pins] the pin store does not save: ", e.what())
+            } catch (...) { LOG_WARN("[pins] the pin store does not save") }
+            if (saved) {
+                // Re-import: what a sibling saved meanwhile reaches this instance too.
+                unlinked =
+                    _treeVerifier.applyStored(&mine.tree, stored.value_or(keytree::TreeVerifier::PinSet{}), true);
+                if (stored.has_value()) {
+                    _groupDataSchemaMapper->importVersionPins(stored->planes);
+                }
+                _lastBlob = blob;
+                _pinSaveFailures = 0;
+                _pinSaveFull = false;
+            } else {
+                _pinSaveFull = true;
+                ++_pinSaveFailures;
             }
-            _lastBlob = blob;
-            _pinSaveFailures = 0;
-            _pinSaveFull = false;
-        } else {
-            _pinSaveFull = true;
-            ++_pinSaveFailures;
+        }
+        {
+            std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+            if (saved) {
+                _lastPinSave = std::chrono::steady_clock::now();
+            } else if (!_selfUpdateStopping) {
+                const auto retry = std::chrono::steady_clock::now() + PIN_SAVE_INTERVAL;
+                if (!_pinSaveDue.has_value() || retry < _pinSaveDue.value()) {
+                    _pinSaveDue = retry;
+                }
+                wakeBackgroundWorker();
+            }
+        }
+        if (!linkPins(unlinked) || !saved) {
+            break;
         }
     }
-    {
-        std::unique_lock<std::mutex> lock(_selfUpdateMutex);
-        if (saved) {
-            _lastPinSave = std::chrono::steady_clock::now();
-        } else if (!_selfUpdateStopping) {
-            const auto retry = std::chrono::steady_clock::now() + PIN_SAVE_INTERVAL;
-            if (!_pinSaveDue.has_value() || retry < _pinSaveDue.value()) {
-                _pinSaveDue = retry;
-            }
-            wakeBackgroundWorker();
-        }
-    }
-    linkPins(unlinked);
     return saved;
 }
 

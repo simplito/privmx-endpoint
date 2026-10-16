@@ -557,8 +557,9 @@ private:
     void syncPins(bool force = false);
     void pinsMoved(bool major);
     bool savePins(bool all = false);
-    // Groups a merge left unlinked, linked one page each (`TreeVerifier::link`); failures stay pending.
-    void linkPins(const std::vector<std::string>& groups);
+    // Groups a merge left unlinked, linked one page each (`TreeVerifier::link`); failures stay pending. True when a
+    // link kept a pin the slot is behind.
+    bool linkPins(const std::vector<std::string>& groups);
     // Fail closed: after PIN_SAVE_FAILURES_MAX failed saves in a row, one more try, then LocalStateUnavailableException.
     void assertLocalStateSaved();
     // The adoption itself (`adoptPreviousIdentity`, and the bodies `ConnectionImpl::adoptPreviousIdentity` staged).

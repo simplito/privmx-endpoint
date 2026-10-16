@@ -222,9 +222,11 @@ TEST(PinBlob, DecideCoversEveryRow) {
     EXPECT_EQ(PinBlob::decide(&m, &elsewhere), Case::Fork);
     // d: one state
     EXPECT_EQ(PinBlob::decide(&m, &r), Case::Same);
-    // e: memory never synced (a first contact here) and the slot holds something else
+    // e: memory never synced, still its first contact here, and the slot holds a later record
     Pin r11 = pinAt(11, "D11");
-    EXPECT_EQ(PinBlob::decide(&m, &r11), Case::TakeStored);
+    Pin tofu = m;
+    tofu.firstContact = true;
+    EXPECT_EQ(PinBlob::decide(&tofu, &r11), Case::TakeStored);
     // f: a link pending
     Pin pending = m;
     pending.synced = at(p9);
@@ -262,6 +264,27 @@ TEST(PinBlob, DecideCoversEveryRow) {
     EXPECT_EQ(merged(m, r12).digest, "D12");           // j: stored, unmarked until the link
     EXPECT_FALSE(merged(m, r12).forked);
     EXPECT_EQ(merged(pending, r11).digest, "D11");     // f: stored
+}
+
+TEST(PinBlob, SECURITY_ANeverSyncedPinIsReplacedOnlyWhileStillItsFirstContact) {
+    // A pin taken by first contact stays unsynced until its first save, and may move meanwhile (an own removal, a
+    // verified step). A sibling's record must not then replace it: the two are linked by hash (row j), and one seq
+    // with two digests is a fork (row i). Base: row e took the record whatever it was, below the own removal.
+    const Pin p9 = pinAt(9, "D9");
+    const Pin r11 = pinAt(11, "D11");
+    Pin moved = pinAt(10, "D10"); // first contact at 9 here, then the own removal at 10
+    EXPECT_EQ(PinBlob::decide(&moved, &p9), Case::Unlinked);
+    EXPECT_EQ(PinBlob::decide(&moved, &r11), Case::Unlinked);
+    const Pin other10 = pinAt(10, "D10'");
+    EXPECT_EQ(PinBlob::decide(&moved, &other10), Case::Fork);
+    Pin tofu = moved;
+    tofu.firstContact = true;
+    EXPECT_EQ(PinBlob::decide(&tofu, &p9), Case::Unlinked) << "a first contact is never lowered either";
+    EXPECT_EQ(PinBlob::decide(&tofu, &other10), Case::Fork);
+    PinSet mine, stored;
+    mine.tree["g"] = moved;
+    stored.tree["g"] = p9;
+    EXPECT_EQ(PinBlob::mergeForSave(mine, stored).tree.at("g").digest, "D9") << "the slot keeps R until the link";
 }
 
 TEST(PinBlob, SECURITY_ASeqZeroRecordNeverReplacesAPin) {

@@ -228,8 +228,8 @@ public:
         std::uint64_t seenAt = 0;
         bool forked = false;
         // 01, memory only. `synced`: (seq, digest) of the stored record as this instance last saw it. `firstContact`:
-        // taken by TOFU in this instance. `unlinked`: a sibling's stored record not yet shown to be on one chain with
-        // this pin (`link`); the pin is not used until it is.
+        // taken by TOFU in this instance and not moved since. `unlinked`: a sibling's stored record not yet shown to be
+        // on one chain with this pin (`link`); the pin is not used until it is.
         std::optional<std::pair<std::uint64_t, std::string>> synced;
         bool firstContact = false;
         std::shared_ptr<const Pin> unlinked;
@@ -250,8 +250,8 @@ public:
     std::vector<std::string> applyStored(const std::map<std::string, Pin>* exported, const PinSet& stored, bool wrote);
     // Resolves a pending `unlinked`: the statements between the lower and the higher of the two, by hash only (both
     // were verified by an instance of this device). Linked: the pin becomes the higher; not: `forked`. A transport
-    // failure throws and leaves it pending.
-    void link(const std::string& groupId, const Environment& environment);
+    // failure throws and leaves it pending. True when linked with this pin the higher: the slot is behind it.
+    bool link(const std::string& groupId, const Environment& environment);
     // Forked or unlinked: no verified state to hand out until a read links or refuses it.
     bool needsRead(const std::string& groupId);
     // 01 adoption of a previous identity's records: the groups among `groups` with no pin, a seq-0 one or a

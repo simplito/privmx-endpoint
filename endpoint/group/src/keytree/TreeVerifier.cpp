@@ -654,6 +654,9 @@ void TreeVerifier::storeLocked(
     const std::vector<std::string>& managers,
     const GroupRules& rules
 ) {
+    if (stored.seq != latest.seq) {
+        stored.firstContact = false; // moved past the first contact: verified (or own) knowledge from here on
+    }
     stored.contextId = contextId;
     stored.seq = latest.seq;
     stored.digest = TreeCommits::digest(latest);
@@ -1072,10 +1075,10 @@ std::vector<std::string> TreeVerifier::applyStored(
     return unlinked;
 }
 
-void TreeVerifier::link(const std::string& groupId, const Environment& environment) {
+bool TreeVerifier::link(const std::string& groupId, const Environment& environment) {
     const Pin pin = pinOf(groupId);
     if (!pin.unlinked || pin.forked) {
-        return;
+        return false;
     }
     const Pin& other = *pin.unlinked;
     bool linked = pin.seq == other.seq && pin.digest == other.digest;
@@ -1103,11 +1106,12 @@ void TreeVerifier::link(const std::string& groupId, const Environment& environme
         linked = linked && digest == higher.digest;
     }
     std::optional<bool> moved;
+    bool ahead = false;
     {
         std::lock_guard lock(_mutex);
         Pin& stored = _pins[groupId];
         if (stored.unlinked != pin.unlinked || stored.seq != pin.seq || stored.digest != pin.digest) {
-            return; // moved meanwhile; the next use looks again
+            return false; // moved meanwhile; the next use looks again
         }
         const Snapshot before = snapshotOf(stored);
         if (!linked) {
@@ -1131,9 +1135,11 @@ void TreeVerifier::link(const std::string& groupId, const Environment& environme
         if (!moved.has_value()) {
             _dirty.insert(groupId); // the slot holds the other record: the next save writes this one
             moved = false;
+            ahead = other.seq < stored.seq;
         }
     }
     notify(moved);
+    return ahead;
 }
 
 bool TreeVerifier::needsRead(const std::string& groupId) {
