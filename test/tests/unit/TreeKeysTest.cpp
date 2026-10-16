@@ -1060,14 +1060,17 @@ TEST_F(TreeKeysSelfUpdate, RefillsTheBlanksOnItsOwnPathAndNothingElse) {
     EXPECT_NE(climb(group.state, group.members[5]).failure, ClimbFailure::None);
 }
 
-TEST_F(TreeKeysSelfUpdate, RefusesWhatItCannotCommit) {
+TEST_F(TreeKeysSelfUpdate, RefusesAStrangerAndPlansAOneLeafTree) {
     const Group alone = create(1);
-    EXPECT_THROW(
-        planBy(alone, 0, [&](TreeKeys& keys, const TestMember& who) {
-            return keys.planSelfUpdate(alone.state, who.userId, who.priv);
-        }),
-        std::invalid_argument
-    ) << "a one-leaf tree has nothing to refresh";
+    const CommitPlan solo = planBy(alone, 0, [&](TreeKeys& keys, const TestMember& who) {
+        return keys.planSelfUpdate(alone.state, who.userId, who.priv);
+    });
+    EXPECT_TRUE(solo.refreshed.empty()) << "a one-leaf tree has no node to refresh";
+    ASSERT_EQ(solo.edges.size(), 1u) << "only the grant edge is re-wrapped";
+    EXPECT_TRUE(solo.edges[0].isGrantEdge);
+    EXPECT_EQ(solo.edges[0].childKind, EdgeChildKind::User);
+    EXPECT_EQ(solo.edges[0].childUserId, alone.members[0].userId);
+    EXPECT_EQ(solo.epoch, alone.state.epoch);
     const Group group = create(4);
     EXPECT_THROW(
         planBy(group, 0, [&](TreeKeys& keys, const TestMember& who) {
@@ -1081,6 +1084,57 @@ TEST_F(TreeKeysSelfUpdate, RefusesWhatItCannotCommit) {
     EXPECT_THROW(keys.planSelfUpdate(group.state, group.members[0].userId, group.members[0].priv),
                  std::invalid_argument)
         << "re-linking the grant edge needs the grant key, climbed for first";
+}
+
+// Leaf renewal: climb with the key the leaf was wrapped to, plan with the new one as the member's own key.
+static CommitPlan renew(
+    const TreeGroupState& state,
+    const std::vector<TreeMember>& roster,
+    const std::string& userId,
+    const PrivateKey& previous,
+    const PrivateKey& current
+) {
+    TreeKeyCache cache;
+    TreeKeys keys(cache);
+    if (keys.climbToGrantKey(state, userId, previous, false).failure != ClimbFailure::None) {
+        throw std::runtime_error(userId + " cannot climb with the previous key");
+    }
+    std::vector<TreeMember> withNewKey = roster;
+    for (TreeMember& member : withNewKey) {
+        if (member.userId == userId) {
+            member.publicKey = current.getPublicKey();
+        }
+    }
+    keys.setMemberKeys(withNewKey);
+    return keys.planSelfUpdate(state, userId, current);
+}
+
+TEST_F(TreeKeysSelfUpdate, ARenewalMovesTheLeafToTheNewKeyAndOffThePreviousOne) {
+    Group group = create(40, 3);
+    const TestMember previous = group.members[0];
+    const PrivateKey current = PrivateKey::generateRandom();
+    const auto grant = group.state.grantPublicKey;
+    const CommitPlan plan = renew(group.state, publicOf(group.members), previous.userId, previous.priv, current);
+    group.state = applied(group.state, plan);
+    group.members[0].priv = current;
+
+    EXPECT_EQ(group.state.grantPublicKey, grant) << "a renewal is not a rotation";
+    expectEveryoneSeatedClimbs(group);
+    EXPECT_EQ(climb(group.state, previous).failure, ClimbFailure::LeafDidNotOpen);
+    for (const TreeEdge& edge : plan.edges) {
+        EXPECT_FALSE(TreeKeys::unwrapKey(edge.blob, previous.priv).has_value())
+            << "an edge of the renewal opens with the previous key";
+    }
+}
+
+TEST_F(TreeKeysSelfUpdate, AOneLeafTreeRenewsItsGrantEdgeToTheNewKey) {
+    Group group = create(1);
+    const TestMember previous = group.members[0];
+    const PrivateKey current = PrivateKey::generateRandom();
+    const CommitPlan plan = renew(group.state, publicOf(group.members), previous.userId, previous.priv, current);
+    group.state = applied(group.state, plan);
+    EXPECT_EQ(climb(group.state, TestMember{previous.userId, current}).failure, ClimbFailure::None);
+    EXPECT_EQ(climb(group.state, previous).failure, ClimbFailure::LeafDidNotOpen);
 }
 
 // every commit
