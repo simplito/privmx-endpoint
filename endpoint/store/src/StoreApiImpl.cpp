@@ -756,15 +756,9 @@ void StoreApiImpl::updateFileMeta(
     if (statusCode != 0) {
         throw FileDataIntegrityException("statusCode=" + std::to_string(statusCode));
     }
-    // Still guarded: the server-struct key fetch, unlike the `ModuleKeys` one, does not assert, and the re-key
-    // above is not guaranteed to have happened — a caller who may not re-key never gets here.
-    assertRekeyNotNeeded(store);
-    auto key = getAndValidateModuleCurrentEncKey(store);
-    if (key.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(key.statusCode)
-        );
-    }
+    // The Store's current key, not the newest data entry's: a re-key leaves that one under the key it replaced
+    // (F-05b). Still guarded, the re-key above not being guaranteed to have happened.
+    auto key = getAndValidateModuleCurrentEncKey(storeKey);
     auto fileInternalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(
         file, storeKey, _keyProvider, _groupPrivKeyResolver
     );

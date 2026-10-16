@@ -95,10 +95,8 @@ protected:
     // in: by `GroupAwareModuleApi` for a container, by the group itself for its own tree.
     void initGroupPrivKeyResolver(const core::KeyProvider::GroupPrivKeyResolver& resolver);
 
-    // The key new content is written under; throws unless `assertWriteKey` accepts it.
-    template<typename ModuleStruct>
-    auto getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
-        -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.resourceId, core::DecryptedEncKeyV2());
+    // The key new content is written under: the one at `currentKeyId`. Throws if it is stale or unless
+    // `assertWriteKey` accepts it.
     core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys);
 
     // Both the key id and a V1 entry are the server's word alone, so only a verified V2 entry may pick what new
@@ -293,24 +291,6 @@ private:
 };
 
 template<typename ModuleStruct>
-auto ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
-    -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.resourceId, core::DecryptedEncKeyV2()) {
-    auto data_entry = moduleObj.data.back();
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    auto location{getModuleEncKeyLocation(moduleObj, moduleObj.resourceId)};
-    if constexpr (module_has_keys<ModuleStruct>::value) {
-        keyProviderRequest.addOne(moduleObj.keys, data_entry.keyId, location);
-    }
-    if constexpr (module_has_group_keys<ModuleStruct>::value) {
-        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location, data_entry.keyId);
-    }
-    auto keysMap = _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver);
-    core::DecryptedEncKeyV2 ret = keysMap.at(location).at(data_entry.keyId);
-    assertWriteKey(ret);
-    return ret;
-}
-
-template<typename ModuleStruct>
 auto ContainerBaseApi::getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceId)
     -> decltype(moduleObj.contextId, core::EncKeyLocation()) {
     core::EncKeyLocation location{.contextId = moduleObj.contextId, .resourceId = resourceId.value_or("")};
@@ -353,7 +333,14 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     auto containerKeys{getAndValidateModuleKeys(
         container, resourceId, onlyCurrentKey ? std::optional<std::string>(entry.keyId) : std::nullopt
     )};
+    // `entry` is the newest data entry, which a re-key leaves under the key it replaced: it is opened with that
+    // key, but the key kept on is the container's current one, or the update hands the replaced key, which a
+    // removed member holds, back the role of the current key (F-05a). A group has no `keyId` of its own.
     auto currentKey{findEncKeyByKeyId(containerKeys, entry.keyId)};
+    auto keptKey{currentKey};
+    if constexpr (std::is_base_of_v<server::ContainerInfoBase, TContainer>) {
+        keptKey = findEncKeyByKeyId(containerKeys, container.keyId);
+    }
     std::string secret;
     if constexpr (std::is_same_v<std::decay_t<decltype(entry.data)>, Poco::Dynamic::Var>) {
         secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data, currentKey).secret;
@@ -361,11 +348,11 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
         // Inbox special Case
         secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data.toJSON(), currentKey).secret;
     }
-    auto roster{core::UsersKeysResolver::create(container, users, managers, forceGenerateNewKey, currentKey)};
+    auto roster{core::UsersKeysResolver::create(container, users, managers, forceGenerateNewKey, keptKey)};
     if (!_keyProvider->verifyKeysSecret(containerKeys, location, secret)) {
         throw core::EncryptionKeyValidationException();
     }
-    core::EncKey key = currentKey;
+    core::EncKey key = keptKey;
     core::DataIntegrityObject dio = _connection.getImpl()->createDIO(container.contextId, resourceId);
     bool needNewKey = roster->doNeedNewKey();
     if (needNewKey) {
