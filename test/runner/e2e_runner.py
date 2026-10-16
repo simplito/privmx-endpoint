@@ -230,7 +230,7 @@ def parse_cli_args(argv: Sequence[str]) -> tuple[argparse.Namespace, str | None,
     parser.add_argument(
         "--docker-image",
         default=e2e_common.DEFAULT_BRIDGE_DOCKER_IMAGE,
-        help=f"Bridge docker image for --start-bridge (default: {e2e_common.DEFAULT_BRIDGE_DOCKER_IMAGE}).",
+        help=f"Bridge docker image for the test run and for --start-bridge (default: {e2e_common.DEFAULT_BRIDGE_DOCKER_IMAGE}).",
     )
 
     args, passthrough_args = parser.parse_known_args(argv)
@@ -342,6 +342,7 @@ def main(
                     init_file_path,
                     dataset_dir_path,
                     run_passthrough_args,
+                    args.docker_image,
                 )
                 for idx, test_name in enumerate(tests)
             ]

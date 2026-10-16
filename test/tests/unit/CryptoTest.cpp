@@ -42,7 +42,11 @@ protected:
     const std::string _BIP39_seed_withPassword = privmx::utils::Hex::toString(
         "b4d611c2a1cc7b8fccfb14623fb800bde4764388ff766673dccf54cc4b65d35cbc0ff296dde8b3246075458d75f7c4bc3e2c4242c2d4e1c2268e942f040ae943"
     );
-    const std::string _BIP39_publicKeyBase58DER_withPassword = "L5tTbvbugT3jkzZzF7kQcWpWyLPuocPEvFgmDxHHZgfLWs9scJaX";
+    // Untagged on purpose: `ExtKey` still goes through the legacy `crypto` module, whose base58 export
+    // carries no algorithm tag. BIP32/ExtKey is a separate migration, and when it lands this value
+    // becomes the tagged one — the same bytes behind an 0x81 tag.
+    const std::string _BIP39_publicKeyBase58DER_withPassword_untaggedExtKey =
+        "67r77s6cs14ErtuLqCv4cgsHUm7dQTvGKx3Mb5DxSXCAUuPygY";
     const std::string _BIP39_publicKeyBase58DERAddress_withPassword = "1NbGbcmEVw8nUsRmfeN6m1GQtJX62BwRyS";
     const std::string _BIP39_privateKeyWIF_withPassword = "L4eMAP7f7PSGCY8fNVMv66JDczN6wDnGv4ZL2nwf4kTZxvmtp8D6";
     const std::string _BIP39_chainCode_withPassword = privmx::utils::Hex::toString(
@@ -347,7 +351,7 @@ TEST_F(CryptoTest, ExtKey_getPublicKey) {
     EXPECT_NO_THROW({
         publicKey = ext_key.getPublicKey();
     });
-    EXPECT_EQ(publicKey,_BIP39_publicKeyBase58DER_withPassword);
+    EXPECT_EQ(publicKey,_BIP39_publicKeyBase58DER_withPassword_untaggedExtKey);
 }
 
 TEST_F(CryptoTest, ExtKey_getPrivateEncKey) {

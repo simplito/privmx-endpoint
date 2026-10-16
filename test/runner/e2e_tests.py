@@ -36,9 +36,9 @@ def list_tests(test_file_path: str, passthrough_args: Sequence[str]) -> list[str
     return tests
 
 
-def pre_test(index: int, dataset_dir_path: str, test_name: str) -> BridgeInfo:
+def pre_test(index: int, dataset_dir_path: str, test_name: str, docker_image: str) -> BridgeInfo:
     e2e_common.log(f"[PRE-TEST] {test_name}")
-    bridge_info = create_bridge_docker(index, e2e_common.DEFAULT_BRIDGE_DOCKER_IMAGE, dataset_dir_path)
+    bridge_info = create_bridge_docker(index, docker_image, dataset_dir_path)
     try:
         prepare_bridge_context(bridge_info, dataset_dir_path)
         return bridge_info
@@ -82,13 +82,14 @@ def run_single_test(
     init_file_path: str,
     dataset_dir_path: str,
     passthrough_args: Sequence[str],
+    docker_image: str = e2e_common.DEFAULT_BRIDGE_DOCKER_IMAGE,
 ) -> tuple[str, bool, int, bytes | str, bytes | str]:
     last_result: tuple[str, bool, int, bytes | str, bytes | str] = (test_name, False, -1, b"", b"")
 
     for attempt in range(1, e2e_common.RETRY_COUNT + 2):
         bridge_info: BridgeInfo | None = None
         try:
-            bridge_info = pre_test(index, dataset_dir_path, test_name)
+            bridge_info = pre_test(index, dataset_dir_path, test_name, docker_image)
             print(f"Running: {test_name}")
             success, rc, out, err = execute_test(
                 test_file_path,
