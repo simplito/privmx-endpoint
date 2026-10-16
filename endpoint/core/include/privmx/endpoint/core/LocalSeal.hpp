@@ -39,7 +39,7 @@ constexpr std::uint8_t COMMIT_RELEASED_VERSION = 1;
 // K = kdf(32, identity private key, label). Binding the slot's key means a blob copied to another slot (another
 // identity, Bridge or kind) fails.
 std::string sealLocal(
-    const crypto::PrivateKey& identity,
+    const ::privmx::crypto::PrivateKey& identity,
     const std::string& label,
     std::uint8_t version,
     const std::string& storeKey,
@@ -48,7 +48,7 @@ std::string sealLocal(
 
 // The body, or nullopt when the blob is too short, of another version or its tag does not verify (constant time).
 std::optional<std::string> openLocal(
-    const crypto::PrivateKey& identity,
+    const ::privmx::crypto::PrivateKey& identity,
     const std::string& label,
     std::uint8_t version,
     const std::string& storeKey,
@@ -60,7 +60,7 @@ std::optional<std::string> openLocal(
 // store or `merge` throws. `sealed`, when given, receives the blob saved.
 bool updateSealed(
     PinStoreInterface& store,
-    const crypto::PrivateKey& identity,
+    const ::privmx::crypto::PrivateKey& identity,
     const std::string& storeKey,
     const std::string& label,
     std::uint8_t version,

@@ -349,11 +349,49 @@ void GroupDataSchemaMapper::assertNotBelowPins(const server::GroupInfo& groupInf
 void GroupDataSchemaMapper::storeVersionPins(const server::GroupInfo& groupInfo) {
     // Compare again and store under one lock: two concurrent verifications must not both pass against the same
     // stale pin, or the later one could accept a version older than the one already verified.
+    bool rose = false;
+    {
+        std::lock_guard lock(_pinMutex);
+        assertNotBelowPins(groupInfo);
+        for (auto [pins, value] : {std::make_pair(&_verifiedRosterVersions, groupInfo.rosterVersion),
+                                   std::make_pair(&_verifiedPublicMetaVersions, groupInfo.publicMetaVersion),
+                                   std::make_pair(&_verifiedPrivateMetaVersions, groupInfo.privateMetaVersion)}) {
+            int64_t& pinned = (*pins)[groupInfo.id];
+            rose = rose || value > pinned;
+            pinned = value;
+        }
+    }
+    if (rose && _onPinsMoved) {
+        _onPinsMoved(false);
+    }
+}
+
+std::map<std::string, std::array<std::int64_t, 3>> GroupDataSchemaMapper::exportVersionPins() {
     std::lock_guard lock(_pinMutex);
-    assertNotBelowPins(groupInfo);
-    _verifiedRosterVersions[groupInfo.id] = groupInfo.rosterVersion;
-    _verifiedPublicMetaVersions[groupInfo.id] = groupInfo.publicMetaVersion;
-    _verifiedPrivateMetaVersions[groupInfo.id] = groupInfo.privateMetaVersion;
+    std::map<std::string, std::array<std::int64_t, 3>> pins;
+    for (const auto& [groupId, value] : _verifiedRosterVersions) {
+        pins[groupId][0] = value;
+    }
+    for (const auto& [groupId, value] : _verifiedPublicMetaVersions) {
+        pins[groupId][1] = value;
+    }
+    for (const auto& [groupId, value] : _verifiedPrivateMetaVersions) {
+        pins[groupId][2] = value;
+    }
+    return pins;
+}
+
+void GroupDataSchemaMapper::importVersionPins(const std::map<std::string, std::array<std::int64_t, 3>>& stored) {
+    std::lock_guard lock(_pinMutex);
+    for (const auto& [groupId, counters] : stored) {
+        std::map<std::string, int64_t>* pins[] = {
+            &_verifiedRosterVersions, &_verifiedPublicMetaVersions, &_verifiedPrivateMetaVersions
+        };
+        for (std::size_t i = 0; i < 3; ++i) {
+            int64_t& pinned = (*pins[i])[groupId];
+            pinned = std::max(pinned, counters[i]);
+        }
+    }
 }
 
 std::pair<uint32_t, core::DataIntegrityObject> GroupDataSchemaMapper::validateDataIntegrity(

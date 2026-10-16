@@ -12,10 +12,13 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREEVERIFIER_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREEVERIFIER_HPP_
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -44,9 +47,9 @@ struct StalePlan {};
 // since-blanked child.
 //
 // What it cannot close, by design:
-//   - First contact (no pin for the group in this verifier, which lives as long as its GroupApi; pins survive
-//     reconnects and deletion events, not a new GroupApi) trusts the latest validly signed state: trust on first
-//     use, as for any delivery service. That state may be any seq, so a first contact is not bound to genesis
+//   - First contact (no pin for the group: per GroupApi without a PinStore, per device, Bridge and identity with one,
+//     whose pins every GroupApi of that identity loads and saves, T4-16) trusts the latest validly signed state: trust
+//     on first use, as for any delivery service. That state may be any seq, so a first contact is not bound to genesis
 //     (T4-19); `epochOpeners`, which reads the chain from seq 1, replays it from the genesis roster.
 //   - The bridge may withhold or delay commits.
 //
@@ -212,6 +215,54 @@ public:
         std::string treeHash;
     };
 
+    // What a verified state leaves behind for the next read of the same group: the head at its latest statement.
+    struct Pin : Head {
+        std::string contextId; // authenticated by the group's id
+        // Highest generation seen per node index. A blank keeps its generation, so blanking never lowers it.
+        std::map<std::uint32_t, std::uint32_t> generations;
+        std::uint64_t refusedSeq = 0; // `refusedAsLostRace`
+        // 01, persisted. A pin loaded without its roster (a compact record) replays it from genesis before it is
+        // extended (`chainFromGenesis`); `seenAt` orders which rosters the blob keeps; `forked` (sticky) refuses
+        // every read: two instances of this device verified incompatible histories.
+        bool hasRoster = true;
+        std::uint64_t seenAt = 0;
+        bool forked = false;
+        // 01, memory only. `synced`: (seq, digest) of the stored record as this instance last saw it. `firstContact`:
+        // taken by TOFU in this instance. `unlinked`: a sibling's stored record not yet shown to be on one chain with
+        // this pin (`link`); the pin is not used until it is.
+        std::optional<std::pair<std::uint64_t, std::string>> synced;
+        bool firstContact = false;
+        std::shared_ptr<const Pin> unlinked;
+    };
+
+    // 01: pins and version-pin counters as the PinBlob holds them.
+    struct PinSet {
+        std::map<std::string, Pin> tree;
+        std::map<std::string, std::array<std::int64_t, 3>> planes; // rosterVersion, publicMetaVersion, privateMetaVersion
+    };
+
+    // Copies of the pins for a save: moved since the last export (or all, with `all`) whole, the rest compact (no
+    // roster, no generations). Clears the moved set.
+    std::map<std::string, Pin> exportPins(bool all);
+    // The memory side of the merge (PinBlob::decide) for every group in `stored` (and in `*exported`, after a save
+    // that `wrote` it). `exported` null: a sync, compared with the pins as they stand. Returns the groups left
+    // `unlinked`, for `link`.
+    std::vector<std::string> applyStored(const std::map<std::string, Pin>* exported, const PinSet& stored, bool wrote);
+    // Resolves a pending `unlinked`: the statements between the lower and the higher of the two, by hash only (both
+    // were verified by an instance of this device). Linked: the pin becomes the higher; not: `forked`. A transport
+    // failure throws and leaves it pending.
+    void link(const std::string& groupId, const Environment& environment);
+    // Forked or unlinked: no verified state to hand out until a read links or refuses it.
+    bool needsRead(const std::string& groupId);
+    // 01 adoption of a previous identity's records: the groups among `groups` with no pin, a seq-0 one or a
+    // first-contact one, with that pin (seq, digest, synced) as it stands; `adopt` then replaces exactly those that
+    // still stand so.
+    std::map<std::string, Pin> adoptable(const std::vector<std::string>& groups);
+    void adopt(const std::map<std::string, Pin>& taken, const std::map<std::string, Pin>& seen);
+    // Set once, before use: called after `_mutex` is released whenever something persistent moved. `major`: the
+    // context, epoch, roster, rules or `forked` changed, or `refusedSeq` rose; tree-only moves (self-updates) are minor.
+    void onPinsMoved(std::function<void(bool major)> callback);
+
     enum class Step { Ok, Unauthorized };
 
     // One statement on top of `head`: the op-effect table (T4-10: seq/op pairing, roster deltas, epoch and grant key,
@@ -230,13 +281,6 @@ public:
     );
 
 private:
-    // What a verified state leaves behind for the next read of the same group: the head at its latest statement.
-    struct Pin : Head {
-        std::string contextId; // authenticated by the group's id
-        // Highest generation seen per node index. A blank keeps its generation, so blanking never lowers it.
-        std::map<std::uint32_t, std::uint32_t> generations;
-        std::uint64_t refusedSeq = 0; // `refusedAsLostRace`
-    };
 
     // Signature by `committerPubKey`, that key accepted by the UserVerifier for the committer at the statement's
     // date, and naming this group (at seq 1 through `TreeCommits::groupId`) and tree version. Results are cached per
@@ -304,8 +348,9 @@ private:
     // lock every fresh session out of the group, and with it every commit that could move the group past it.
     bool movesPin(const std::string& groupId, const CommitStatement& latest);
 
-    // `latest` stored as the group's pin, with `nodes`' generations, if the pin is still `seen`; otherwise `seen` is
-    // refreshed to the pin as it now stands and nothing is stored (another verification moved it meanwhile).
+    // `latest` stored as the group's pin, with `nodes`' generations, if the pin is still `seen` (and neither forked nor
+    // unlinked); otherwise `seen` is refreshed to the pin as it now stands and nothing is stored (another verification,
+    // or a sync, moved it meanwhile). `firstContact`: the pin is taken on trust.
     bool storeIfPinned(
         const std::string& groupId,
         Pin& seen,
@@ -314,8 +359,34 @@ private:
         const std::vector<std::string>& users,
         const std::vector<std::string>& managers,
         const GroupRules& rules,
-        const std::vector<TreeNodeState>& nodes
+        const std::vector<TreeNodeState>& nodes,
+        bool firstContact
     );
+    // What `movedLocked` compares: a pin's persisted scalars, without its roster (a 16k roster is not copied per read).
+    struct Snapshot {
+        std::string contextId;
+        std::uint64_t seq = 0;
+        std::string digest;
+        std::uint64_t keyVersion = 0;
+        std::string rosterHash;
+        std::string rulesHash;
+        std::uint64_t refusedSeq = 0;
+        bool hasRoster = true;
+        bool forked = false;
+    };
+    static Snapshot snapshotOf(const Pin& pin);
+    // Whether `after` differs from `before` in what is persisted: nullopt if not, else whether the move is major.
+    // Marks the group moved. Under `_mutex`.
+    std::optional<bool> movedLocked(
+        const std::string& groupId,
+        const Snapshot& before,
+        const Pin& after,
+        bool generationsRaised
+    );
+    // Calls the `onPinsMoved` callback; never under `_mutex`.
+    void notify(std::optional<bool> major);
+    // Forked: throws GroupHistoryForkException; unlinked: links it (`link`). Then the pin as it stands.
+    Pin usablePin(const std::string& groupId, const Environment& environment);
 
     // `stored` moved to `latest` and the roster and rules it signed; under `_mutex`. Generations are the caller's.
     static void storeLocked(
@@ -334,9 +405,31 @@ private:
         std::map<std::uint64_t, CommitStatement> byEpoch;
     };
 
+    // `known` (empty or a memo ending at or below the pin) continued to the pin from genesis: every statement checked
+    // as `followChain` checks it, ending exactly at the pinned statement (so the replayed roster reproduces the pinned
+    // `rosterHash`). Throws GroupDataIntegrityException otherwise. On return `known.head` is the pin's head.
+    void chainFromGenesis(
+        const std::string& groupId,
+        const std::string& contextId,
+        Openers& known,
+        std::uint64_t pinSeq,
+        const std::string& pinDigest,
+        const Environment& environment
+    );
+    // The memo for the pinned statement, or `chainFromGenesis` from the best memo below it, memoized.
+    Openers openersAt(
+        const std::string& groupId,
+        const std::string& contextId,
+        std::uint64_t pinSeq,
+        const std::string& pinDigest,
+        const Environment& environment
+    );
+
     std::mutex _mutex;
     // Never evicted: a dropped pin turns the next read into a first contact the bridge may answer with any old state.
     std::map<std::string, Pin> _pins;
+    std::set<std::string> _dirty; // groups moved since the last `exportPins`
+    std::function<void(bool)> _onPinsMoved;
     // ponytail: 16 groups' rosters per generation (a 16k roster is ~2 MB); an evicted group refetches from seq 1.
     Bounded<Openers> _openers{16};
     Bounded<bool> _verifiedStatements{4096};

@@ -1,7 +1,9 @@
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_ENCRYPTORS_GROUP_GROUPDATASCHEMAMAPPER_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_ENCRYPTORS_GROUP_GROUPDATASCHEMAMAPPER_HPP_
 
+#include <array>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -61,6 +63,12 @@ public:
     // Moves the pins to this response's counters. Call only once every check of the read has passed; compares
     // again under the lock, so a concurrent verification that got further makes this one a fork.
     void storeVersionPins(const server::GroupInfo& groupInfo);
+
+    // 01: the version pins per group (rosterVersion, publicMetaVersion, privateMetaVersion) for the pin blob, and
+    // stored ones merged back per counter by max. `onPinsMoved(false)` runs (outside the lock) when a counter rose.
+    std::map<std::string, std::array<std::int64_t, 3>> exportVersionPins();
+    void importVersionPins(const std::map<std::string, std::array<std::int64_t, 3>>& stored);
+    void onPinsMoved(std::function<void(bool major)> callback) { _onPinsMoved = std::move(callback); }
 
     void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKeyV2& rosterKey);
 
@@ -185,6 +193,7 @@ private:
     std::map<std::string, int64_t> _verifiedRosterVersions;
     std::map<std::string, int64_t> _verifiedPublicMetaVersions;
     std::map<std::string, int64_t> _verifiedPrivateMetaVersions;
+    std::function<void(bool)> _onPinsMoved;
 };
 
 } // namespace group
