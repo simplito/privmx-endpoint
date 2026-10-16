@@ -102,6 +102,10 @@ struct Bridge {
     };
     std::shared_ptr<Sync> sync = std::make_shared<Sync>();
     std::map<std::string, PrivateKey> users; // the Context user list
+    // Keys each user held before `changeUserKey`, with the time each was replaced (ms), for the Verifier.
+    std::map<std::string, std::vector<std::pair<std::string, std::int64_t>>> retiredKeys;
+    // What `contextListUsers` serves for a user instead of its key in `users` (a lying listing).
+    std::map<std::string, PrivateKey> listedKeys;
     FakeBridge tree;
     server::GroupInfo rest; // everything but the tree, as sent
     std::vector<std::pair<std::string, server::GroupSendCustomEventModel>> events; // (sender, as sent)
@@ -176,9 +180,26 @@ struct Bridge {
         );
     }
 
-    Poco::Dynamic::Var answer(const std::string& caller, const std::string& method, Poco::JSON::Object::Ptr params) {
+    // The registrar's `context/addUserToContext` upsert: one key per user, the old one replaced.
+    void changeUserKey(const std::string& user, const PrivateKey& newKey) {
+        std::unique_lock<std::mutex> lock(sync->m);
+        retiredKeys[user].emplace_back(users.at(user).getPublicKey().toBase58DER(), privmx::utils::Utils::getNowTimestamp());
+        users.at(user) = newKey;
+    }
+
+    // `sessionPub`: the key the caller's session logged in with. The bridge resolves the caller by it
+    // (CloudAccessValidator), so a session of a key the Context no longer lists is refused everything.
+    Poco::Dynamic::Var answer(
+        const std::string& caller,
+        const std::string& sessionPub,
+        const std::string& method,
+        Poco::JSON::Object::Ptr params
+    ) {
         std::unique_lock<std::mutex> lock(sync->m);
         calls.push_back({caller, method, params});
+        if (users.count(caller) == 0 || users.at(caller).getPublicKey().toBase58DER() != sessionPub) {
+            throw privmx::utils::PrivmxException("ACCESS_DENIED", privmx::utils::PrivmxException::RPC, 0x0030);
+        }
         const std::string group = method.substr(std::string("context.").size());
         if (method == "context.contextGet") {
             return core::server::ContextGetResult{.context = {.userId = caller, .contextId = CONTEXT}}.toJSON();
@@ -188,7 +209,8 @@ struct Bridge {
             for (const auto& [id, key] : users) {
                 core::server::UserIdentityWithStatusAndAction user;
                 user.id = id;
-                user.pub = key.getPublicKey().toBase58DER();
+                const auto listed = listedKeys.find(id);
+                user.pub = (listed != listedKeys.end() ? listed->second : key).getPublicKey().toBase58DER();
                 user.status = "inactive";
                 result.users.push_back(user);
             }
@@ -419,8 +441,9 @@ struct Bridge {
 
 class Gateway : public privmx::privfs::RpcGateway {
 public:
-    Gateway(Bridge& bridge, const std::string& userId)
-        : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr(), std::nullopt), _bridge(bridge), _userId(userId) {}
+    Gateway(Bridge& bridge, const std::string& userId, const PrivateKey& sessionKey)
+        : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr(), std::nullopt), _bridge(bridge), _userId(userId),
+          _sessionPub(sessionKey.getPublicKey().toBase58DER()) {}
 
     Poco::Dynamic::Var request(
         const std::string& method,
@@ -428,7 +451,7 @@ public:
         privmx::rpc::MessageSendOptionsEx,
         privmx::utils::CancellationToken::Ptr
     ) override {
-        const Poco::Dynamic::Var result = _bridge.answer(_userId, method, overTheWire(params));
+        const Poco::Dynamic::Var result = _bridge.answer(_userId, _sessionPub, method, overTheWire(params));
         return result.isEmpty() ? result : Poco::Dynamic::Var(overTheWire(result));
     }
     bool isConnected() override { return true; }
@@ -436,20 +459,27 @@ public:
 private:
     Bridge& _bridge;
     std::string _userId;
+    std::string _sessionPub;
 };
 
-// The application's: each user's real key, nobody else's.
+// The application's: each user's real key, nobody else's. A key replaced by `changeUserKey` still vouches for what
+// it signed before it was replaced, and for nothing after (the date is capped at now).
 class Verifier : public core::UserVerifierInterface {
 public:
     explicit Verifier(const Bridge& bridge) : _bridge(bridge) {}
     std::vector<bool> verify(const std::vector<core::VerificationRequest>& requests) override {
         ++*_bridge.verifierCalls;
+        const std::int64_t now = privmx::utils::Utils::getNowTimestamp();
         std::vector<bool> verified;
         for (const auto& request : requests) {
             const auto user = _bridge.users.find(request.senderId);
-            verified.push_back(
-                user != _bridge.users.end() && user->second.getPublicKey().toBase58DER() == request.senderPubKey
-            );
+            bool ok = user != _bridge.users.end() && user->second.getPublicKey().toBase58DER() == request.senderPubKey;
+            if (const auto retired = _bridge.retiredKeys.find(request.senderId); !ok && retired != _bridge.retiredKeys.end()) {
+                for (const auto& [pub, until] : retired->second) {
+                    ok = ok || (pub == request.senderPubKey && std::min(request.date, now) <= until);
+                }
+            }
+            verified.push_back(ok);
         }
         return verified;
     }
@@ -470,7 +500,7 @@ struct Client {
 
     Client(Bridge& bridge, const std::string& userId) {
         connectionImpl->setUserVerifier(std::make_shared<Verifier>(bridge));
-        connectionImpl->connectOver(new Gateway(bridge, userId), bridge.users.at(userId));
+        connectionImpl->connectOver(new Gateway(bridge, userId, bridge.users.at(userId)), bridge.users.at(userId));
         connection = ConnectionOf(connectionImpl);
         groupApi = GroupApi::create(connection);
         api = groupApi.getImpl();
@@ -1872,3 +1902,160 @@ TEST_F(GroupApiLyingBridge, SECURITY_ASeatStrippedReadServingAWiderPolicyDoesNot
     EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0) << "the honest policy refuses bob's plane";
 }
 
+
+// ── leaf renewal after an identity key change (08a) ────────────────────────────────────────────────────────────
+
+namespace {
+
+// Bob's identity key changes in the Context; his session under the old key is dropped. Returns the old key.
+PrivateKey changeKeyOf(Bridge& bridge, std::map<std::string, std::unique_ptr<Client>>& clients, const std::string& id) {
+    const PrivateKey previous = bridge.users.at(id);
+    bridge.changeUserKey(id, PrivateKey::generateRandom());
+    clients.erase(id);
+    return previous;
+}
+
+std::size_t sent(const Bridge& bridge) {
+    return bridge.received.size();
+}
+
+} // namespace
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARenewalIsSignedWithTheNewKeyAndClimbsWithThePreviousOne) {
+    quiet = true;
+    // Bob creates the group, so statements under his previous key vouch for nodes the renewal does not re-key.
+    const std::string groupId = client("bob").createGroup(
+        CONTEXT, {user("bob"), user("carol")}, {user("alice")}, core::Buffer::from("public"),
+        core::Buffer::from("private"), OPEN
+    );
+    const PrivateKey grant = client("alice").resolveGroupPrivKey(groupId); // alice and carol pin bob's statement
+    client("carol").resolveGroupPrivKey(groupId);
+    const PrivateKey previous = changeKeyOf(bridge, clients, "bob");
+    EXPECT_THROW(client("bob").resolveGroupPrivKey(groupId), core::EncryptionKeyValidationException);
+
+    EXPECT_TRUE(client("bob").renewLeaf(groupId, previous.toWIF()));
+    ASSERT_EQ(sent(bridge), 1u);
+    const CommitStatement renewal = TreeCommits::fromWire(bridge.received.back());
+    EXPECT_EQ(renewal.op, CommitOp::SelfUpdate);
+    EXPECT_EQ(renewal.committerPubKey, bridge.users.at("bob").getPublicKey().toBase58DER()) << "signed with the new key";
+    EXPECT_EQ(renewal.keyVersion, 1u) << "no new epoch, nothing to re-key in containers";
+    EXPECT_EQ(bridge.tree.commits.size(), 2u);
+
+    clients.erase("bob"); // a fresh session of the new key: nothing cached from the renewal
+    EXPECT_EQ(client("bob").resolveGroupPrivKey(groupId).getPublicKey(), grant.getPublicKey());
+    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0) << "alice's pin sits at bob's old-key statement";
+    EXPECT_EQ(client("alice").resolveGroupPrivKey(groupId).getPublicKey(), grant.getPublicKey());
+    EXPECT_EQ(client("carol").getGroup(groupId).statusCode, 0);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AfterRenewalThePreviousKeyOpensNoCurrentEdge) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const PrivateKey previous = changeKeyOf(bridge, clients, "bob");
+    ASSERT_TRUE(client("bob").renewLeaf(groupId, previous.toWIF()));
+    TreeKeyCache cache;
+    TreeKeys keys(cache);
+    const TreeGroupState served = GroupKeyResolver::toTreeState(bridge.serve("bob", true));
+    EXPECT_EQ(keys.climbToGrantKey(served, "bob", previous, false).failure, ClimbFailure::LeafDidNotOpen);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARenewalWithAKeyThatDoesNotOpenTheLeafCommitsNothingAndCachesNothing) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    changeKeyOf(bridge, clients, "bob");
+    EXPECT_THROW(
+        client("bob").renewLeaf(groupId, PrivateKey::generateRandom().toWIF()), core::EncryptionKeyValidationException
+    );
+    EXPECT_EQ(sent(bridge), 0u);
+    try {
+        client("bob").resolveGroupPrivKey(groupId, 1);
+        FAIL() << "the leaf opened";
+    } catch (const core::EncryptionKeyValidationException& e) {
+        EXPECT_NE(std::string(e.what()).find("renewLeaf"), std::string::npos) << e.what();
+    }
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AFailedRenewalLeavesNoGrantKeyCached) {
+    // The previous-key climb goes through; the commit then fails on a recipient key. Nothing it derived may serve
+    // this session afterwards: not the shared cache, not the epoch memo.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const PrivateKey previous = changeKeyOf(bridge, clients, "bob");
+    bridge.listedKeys.emplace("carol", PrivateKey::generateRandom());
+    EXPECT_THROW(client("bob").renewLeaf(groupId, previous.toWIF()), core::UserVerificationFailureException);
+    EXPECT_EQ(sent(bridge), 0u);
+    EXPECT_THROW(client("bob").resolveGroupPrivKey(groupId, 1), core::EncryptionKeyValidationException);
+    EXPECT_THROW(client("bob").resolveGroupPrivKey(groupId), core::EncryptionKeyValidationException);
+    EXPECT_ANY_THROW(client("bob").encrypt(groupId, core::Buffer::from("x")));
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARenewalWrapsOthersOnlyToKeysTheVerifierVouchesFor) {
+    // The bridge lists a key of its own for carol; the renewal would wrap the fresh root to it.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const PrivateKey previous = changeKeyOf(bridge, clients, "bob");
+    bridge.listedKeys.emplace("carol", PrivateKey::generateRandom());
+    EXPECT_THROW(client("bob").renewLeaf(groupId, previous.toWIF()), core::UserVerificationFailureException);
+    EXPECT_EQ(bridge.tree.commits.size(), 1u) << "nothing committed";
+    bridge.listedKeys.clear();
+    EXPECT_TRUE(client("bob").renewLeaf(groupId, previous.toWIF()));
+}
+
+TEST_F(GroupApiLyingBridge, ARenewalOfALeafThatAlreadyOpensCommitsNothing) {
+    // carol's self-update after the change wrapped bob's leaf to his new key already.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const PrivateKey previous = changeKeyOf(bridge, clients, "bob");
+    selfUpdateBy("carol");
+    EXPECT_FALSE(client("bob").renewLeaf(groupId, previous.toWIF()));
+    EXPECT_EQ(sent(bridge), 0u);
+    EXPECT_EQ(bridge.tree.commits.size(), 2u);
+}
+
+TEST_F(GroupApiLyingBridge, ACommitBeforeTheDirectoryChangeIsOpenedByThePreviousKey) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    selfUpdateBy("carol"); // wraps bob's leaf to the key he holds now
+    const PrivateKey previous = changeKeyOf(bridge, clients, "bob");
+    EXPECT_TRUE(client("bob").renewLeaf(groupId, previous.toWIF()));
+    clients.erase("bob");
+    EXPECT_NO_THROW(client("bob").resolveGroupPrivKey(groupId));
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARenewalRefusesAStateRolledBackBelowThePin) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const PrivateKey previous = changeKeyOf(bridge, clients, "bob");
+    const Bridge beforeRenewal = bridge;
+    ASSERT_TRUE(client("bob").renewLeaf(groupId, previous.toWIF())); // pins the renewal
+    rollBackTo(beforeRenewal);
+    EXPECT_THROW(client("bob").renewLeaf(groupId, previous.toWIF()), GroupHistoryForkException);
+    EXPECT_EQ(sent(bridge), 1u) << "nothing committed on the rolled-back state";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AnOldKeySessionCannotRenewAfterTheDirectoryChange) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").resolveGroupPrivKey(groupId);
+    const std::unique_ptr<Client> oldSession = std::move(clients.at("bob"));
+    const PrivateKey previous = bridge.users.at("bob");
+    bridge.changeUserKey("bob", PrivateKey::generateRandom());
+    EXPECT_ANY_THROW(oldSession->api->renewLeaf(groupId, PrivateKey::generateRandom().toWIF()));
+    EXPECT_ANY_THROW(oldSession->api->rotateGroupKey(groupId));
+    EXPECT_EQ(sent(bridge), 0u) << "the bridge refused the old key's session before any commit";
+    EXPECT_THROW(oldSession->api->renewLeaf(groupId, previous.toWIF()), core::InvalidParamsException)
+        << "the previous key is the session's own";
+}
+
+TEST_F(GroupApiLyingBridge, AOneMemberGroupRenews) {
+    quiet = true;
+    const std::string groupId = client("bob").createGroup(
+        CONTEXT, {user("bob")}, {}, core::Buffer::from("public"), core::Buffer::from("private"), OPEN
+    );
+    const PrivateKey grant = client("bob").resolveGroupPrivKey(groupId);
+    const PrivateKey previous = changeKeyOf(bridge, clients, "bob");
+    EXPECT_TRUE(client("bob").renewLeaf(groupId, previous.toWIF()));
+    clients.erase("bob");
+    EXPECT_EQ(client("bob").resolveGroupPrivKey(groupId).getPublicKey(), grant.getPublicKey());
+    EXPECT_FALSE(client("bob").renewLeaf(groupId, previous.toWIF())) << "renewed already";
+}
