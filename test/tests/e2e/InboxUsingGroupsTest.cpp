@@ -791,3 +791,61 @@ TEST_F(InboxUsingGroupsTest, SECURITY_entries_sent_after_a_rekey_are_sealed_to_t
     EXPECT_EQ(entry.data.stdString(), "after_rekey");
     EXPECT_EQ(inboxApi->getInbox(inboxId).statusCode, 0);
 }
+
+TEST_F(InboxUsingGroupsTest, SECURITY_a_rekey_by_a_plain_user_moves_the_entries_key_and_rewrites_no_inbox_data) {
+    // rotateKeys is a user right, update a manager's. A re-key that took the rotator's Inbox data let a plain
+    // user replace the metadata, the file limits the Bridge enforces on send and the entries key. Only the
+    // entries key may move, so the head keeps the manager's signed data.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2)}, std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("plain_rekey_pub"), core::Buffer::from("plain_rekey_priv")
+        );
+    });
+    group::Group sharedGroup = groupApi->getGroup(groupId);
+    std::string inboxId;
+    ASSERT_NO_THROW({
+        inboxId = createInboxWithGroups(
+            contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<group::Group>{sharedGroup}
+        );
+    });
+    inbox::ServerApi rawAsManager(connection->getImpl()->getGateway());
+    inbox::server::InboxGetModel get;
+    get.id = inboxId;
+    const auto keyBefore = rawAsManager.inboxGet(get).inbox.keyId;
+
+    disconnect();
+    connectAs(2);
+    inbox::Inbox seen;
+    ASSERT_NO_THROW({ seen = inboxApi->getInbox(inboxId); });
+    ASSERT_EQ(seen.statusCode, 0);
+    ASSERT_NO_THROW({
+        inboxApi->rotateInboxKeys(
+            inboxId, std::vector<core::UserWithPubKey>{user(1)}, std::vector<core::UserWithPubKey>{user(1)},
+            seen.version, false
+        );
+    });
+
+    disconnect();
+    connectAs(1);
+    inbox::ServerApi raw(connection->getImpl()->getGateway());
+    const auto keyAfter = raw.inboxGet(get).inbox.keyId;
+    ASSERT_NE(keyAfter, keyBefore);
+    auto publicData = raw.inboxGetPublicView(get).publicData.extract<Poco::JSON::Object::Ptr>();
+    EXPECT_EQ(publicData->getValue<std::string>("inboxKeyId"), keyAfter) << "entries are not sealed to the new key";
+
+    inbox::Inbox after;
+    ASSERT_NO_THROW({ after = inboxApi->getInbox(inboxId); });
+    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(after.lastModifier, userId(1)) << "the head is the plain user's data, not the manager's";
+    EXPECT_EQ(after.publicMeta.stdString(), "group_inbox_public");
+    EXPECT_EQ(after.privateMeta.stdString(), "group_inbox_private");
+    ASSERT_NO_THROW({ submitEntry(inboxId, "after_plain_rekey"); });
+    std::string entryId;
+    ASSERT_NO_THROW({ entryId = onlyEntryId(inboxId); });
+    inbox::InboxEntry entry;
+    EXPECT_NO_THROW({ entry = inboxApi->readEntry(entryId); });
+    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(entry.data.stdString(), "after_plain_rekey");
+}

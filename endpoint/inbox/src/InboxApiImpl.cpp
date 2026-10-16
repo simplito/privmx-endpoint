@@ -241,22 +241,14 @@ void InboxApiImpl::rotateInboxKeys(
 ) {
     auto currentInbox = getServerInbox(inboxId);
     auto currentInboxData = getInboxCurrentDataEntry(currentInbox).data;
-    // Senders seal entries to the public key in the Inbox data, so the data is re-encrypted under the new key:
-    // left as it was, new entries would stay sealed to the replaced key, which a removed member holds (F-05d).
-    auto current = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(
-        currentInbox, _keyProvider, _groupPrivKeyResolver
-    );
-    if (current.statusCode != 0) {
-        throw InboxDataIntegrityException("statusCode=" + std::to_string(current.statusCode));
-    }
+    // Senders seal entries to the public key in the Inbox data, so it moves to the new key: left as it was, new
+    // entries would stay sealed to the replaced key, which a removed member holds (F-05d).
     rotateContainerKeys<server::InboxRotateKeysModel>(
         inboxId, currentInbox, users, managers, version, force, knownGroupKeys,
         [&](const server::InboxRotateKeysModel& model) { _serverApi->inboxRotateKeys(model); },
         [&](server::InboxRotateKeysModel& model, const core::ContainerUpdateContext& ctx) {
-            model.data = encryptInboxData(
-                currentInboxData, getFilesConfigOptOrDefault(current.filesConfig), current.publicMeta,
-                current.privateMeta, ctx, ctx.location.resourceId
-            );
+            model.inboxPubKey =
+                privmx::crypto::PrivateKey(privmx::crypto::ECC::fromPrivateKey(ctx.key.key)).getPublicKey().toBase58DER();
         }
     );
 
