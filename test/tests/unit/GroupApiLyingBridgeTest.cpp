@@ -1701,6 +1701,30 @@ TEST_F(GroupApiLyingBridge, SECURITY_TheReadAfterCompletingAnUnresolvedCommitIsV
     EXPECT_EQ(count("bob", "context.groupUpdatePolicy"), 0u);
 }
 
+TEST_F(GroupApiLyingBridge, APolicyChangeIsNotTakenForAnotherThatSignsTheSameRules) {
+    // The op key named only the signed rules: a call differing in a Bridge-held field returned on the earlier one.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    int policies = 0;
+    bridge.onPolicy = [&](std::unique_lock<std::mutex>&) {
+        if (policies++ == 0) {
+            refuse();
+        }
+    };
+    core::ContainerPolicy first = OPEN;
+    first.get = "all";
+    core::ContainerPolicy second = OPEN;
+    second.get = "manager";
+    EXPECT_ANY_THROW(client("alice").updateGroupPolicy(groupId, first));
+    EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, second));
+    ASSERT_GE(bridge.received.size(), 2u);
+    const CommitStatement landed = TreeCommits::fromWire(bridge.tree.commits.back());
+    EXPECT_EQ(landed.op, CommitOp::Policy);
+    ASSERT_TRUE(landed.policy.has_value());
+    EXPECT_NE(privmx::utils::Utils::stringifyVar(landed.policy.value()).find(R"("get":"manager")"), std::string::npos)
+        << "the second call returned on the first one's policy";
+}
+
 TEST_F(GroupApiLyingBridge, AnAdditionOfAnExistingMemberIsRefusedBeforeSigning) {
     addUsers({"dave"});
     const std::string groupId = createGroup({"alice", "bob"});

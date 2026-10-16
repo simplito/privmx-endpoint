@@ -1563,7 +1563,9 @@ void GroupApiImpl::updateGroupPolicyOnce(
     }
     const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies);
     const keytree::GroupRules newRules = requestedRules(policy, group.creator);
-    const std::string op = core::ReleaseGate::opKey("policy", {privmx::utils::Hex::from(newRules.hash)});
+    // The whole wire policy, not only the signed rules: two calls differing in a Bridge-held field (`get`, `item.*`)
+    // name different end states, and one must never return on the other.
+    const std::string op = core::ReleaseGate::opKey("policy", {privmx::utils::Utils::stringifyVar(policy)});
     switch (settle(groupId, op, true)) {
     case Settled::Done:
         return;
