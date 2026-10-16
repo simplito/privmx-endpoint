@@ -256,7 +256,8 @@ PinBlob::Case PinBlob::decide(const Pin* mine, const Pin* stored) {
     if (!m->synced.has_value()) {
         // Never synced: the slot's record is unrelated to M by anything this instance saw. Only a pin still at its
         // first contact here gives way, and only to a later record (the next read walks forward from R); a pin that
-        // moved since (an own commit, a verified step) is linked by hash like row j, one seq apart is a fork.
+        // moved since (an own commit, a verified step) is linked like row j (`TreeVerifier::link`, a member chain), at
+        // one seq a fork.
         if (r->seq == m->seq) {
             return Case::Fork; // i
         }

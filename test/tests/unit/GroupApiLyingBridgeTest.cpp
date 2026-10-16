@@ -2268,6 +2268,50 @@ TEST_F(GroupApiLyingBridge, SECURITY_ASiblingsForkAboveTheSeqIsLinkedAndRefused)
     }
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_ASiblingsFirstContactIsNeverLinkedOverAVerifiedRemovalByHashAlone) {
+    // bob1 verified alice's removal of carol (seq 2). bob2, a first contact, is served carol's self-update at seq 3:
+    // its prevDigest is the removal's, its tree the one before it (carol seated). Genuine and on its own roster, so
+    // bob2 takes it on trust, but no member chain leads from seq 2 to it. Base: `link` walked 2 -> 3 by hash, so the
+    // forged state replaced bob1's pin (fork first) or reached the slot and bob1 through row h1 (honest first).
+    for (const bool honestFirst : {true, false}) {
+        SCOPED_TRACE(honestFirst ? "honest first" : "fork first");
+        siblings.clear();
+        clients.clear();
+        bridge = Bridge{};
+        SetUp();
+        quiet = true;
+        store = std::make_shared<MemoryPinStore>();
+        const std::string groupId = createGroup({"alice", "bob", "carol"});
+        const Bridge beforeRemoval = bridge;
+        GroupApiImpl& bob2 = sibling("bob"); // has loaded the slot: nothing for the group
+        client("bob").getGroup(groupId);     // first contact at seq 1
+        client("alice").removeGroupMembers(groupId, {"carol"});
+        client("bob").getGroup(groupId); // seq 2, a verified step
+        if (honestFirst) {
+            ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
+        }
+        const server::GroupTreeCommit removal = bridge.tree.commits.back();
+        rollBackTo(beforeRemoval);
+        bridge.tree.commits.push_back(removal); // the chain names the removal, the tree is the one before it
+        selfUpdateBy("carol");                  // seq 3 on digest(2)
+        EXPECT_EQ(bob2.getGroup(groupId).statusCode, 0) << "taken on trust: the first-contact boundary";
+        GroupApiImpl& second = honestFirst ? bob2 : client("bob");
+        if (!honestFirst) {
+            ASSERT_TRUE(GroupApiImplTestAccess::savePins(bob2)); // row a
+        }
+        ASSERT_TRUE(GroupApiImplTestAccess::savePins(second)); // unlinked; the member chain fails: forked
+        ASSERT_TRUE(GroupApiImplTestAccess::savePins(second));
+        const auto stored = storedPin(groupId, bridge.users.at("bob"));
+        ASSERT_TRUE(stored.has_value());
+        EXPECT_TRUE(stored->forked);
+        GroupApiImplTestAccess::elapse(client("bob"));
+        GroupApiImplTestAccess::elapse(bob2);
+        EXPECT_THROW(client("bob").getGroup(groupId), GroupHistoryForkException);
+        EXPECT_THROW(client("bob").encrypt(groupId, core::Buffer::from("x")), GroupHistoryForkException);
+        EXPECT_THROW(bob2.getGroup(groupId), GroupHistoryForkException);
+    }
+}
+
 TEST_F(GroupApiLyingBridge, HonestSiblingsAtDifferentSeqsConvergeWithoutAFork) {
     quiet = true;
     store = std::make_shared<MemoryPinStore>();

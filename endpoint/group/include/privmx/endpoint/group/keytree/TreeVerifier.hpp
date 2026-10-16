@@ -248,9 +248,10 @@ public:
     // that `wrote` it). `exported` null: a sync, compared with the pins as they stand. Returns the groups left
     // `unlinked`, for `link`.
     std::vector<std::string> applyStored(const std::map<std::string, Pin>* exported, const PinSet& stored, bool wrote);
-    // Resolves a pending `unlinked`: the statements between the lower and the higher of the two, by hash only (both
-    // were verified by an instance of this device). Linked: the pin becomes the higher; not: `forked`. A transport
-    // failure throws and leaves it pending. True when linked with this pin the higher: the slot is behind it.
+    // Resolves a pending `unlinked`: the statements between the lower and the higher of the two, checked as a read
+    // checks a chain from its pin (`verifyChain`: signatures, roles, roster), not by hash only, since either end may
+    // stand on a first contact. Linked: the pin becomes the higher; not: `forked`. A transport failure or a withheld
+    // page throws and leaves it pending. True when linked with this pin the higher: the slot is behind it.
     bool link(const std::string& groupId, const Environment& environment);
     // Forked or unlinked: no verified state to hand out until a read links or refuses it.
     bool needsRead(const std::string& groupId);
@@ -324,13 +325,14 @@ private:
         const std::function<void(const CommitStatement&)>& each
     );
 
-    // The chain from the pin to `latest` (`followChain`), ending exactly at `latest`. A new epoch's grant key is
-    // compared with the pinned one only; `epochOpeners` holds every earlier epoch's.
+    // The chain from the pin to `toSeq` (`followChain`), ending exactly at the statement with `toDigest`. A new
+    // epoch's grant key is compared with the pinned one only; `epochOpeners` holds every earlier epoch's.
     void verifyChain(
         const std::string& groupId,
         const std::string& contextId,
         const Pin& pin,
-        const CommitStatement& latest,
+        std::uint64_t toSeq,
+        const std::string& toDigest,
         const Environment& environment
     );
 

@@ -39,6 +39,9 @@ namespace {
     throw GroupDataIntegrityException(why);
 }
 
+// `link`: the bridge answered a page short or empty (withheld, not disproved).
+struct Withheld {};
+
 CommitStatement parse(const server::GroupTreeCommit& wire) {
     try {
         return TreeCommits::fromWire(wire);
@@ -385,7 +388,8 @@ void TreeVerifier::verifyChain(
     const std::string& groupId,
     const std::string& contextId,
     const Pin& pin,
-    const CommitStatement& latest,
+    std::uint64_t toSeq,
+    const std::string& toDigest,
     const Environment& environment
 ) {
     if (pin.contextId != contextId) {
@@ -405,8 +409,8 @@ void TreeVerifier::verifyChain(
         head.treeHash = pin.treeHash;
         grantKeys = std::move(known.grantKeys);
     }
-    followChain(groupId, contextId, head, grantKeys, latest.seq, environment, [](const CommitStatement&) {});
-    if (head.digest != TreeCommits::digest(latest)) {
+    followChain(groupId, contextId, head, grantKeys, toSeq, environment, [](const CommitStatement&) {});
+    if (head.digest != toDigest) {
         reject();
     }
 }
@@ -523,7 +527,7 @@ void TreeVerifier::verify(const server::GroupInfo& group, Scope scope, const Env
                 throw GroupHistoryForkException();
             }
             if (latest.seq > pin.seq) {
-                verifyChain(group.id, group.contextId, pin, latest, environment);
+                verifyChain(group.id, group.contextId, pin, latest.seq, TreeCommits::digest(latest), environment);
             }
         } else if (!onRoster(group.users, group.managers, latest.committer)) {
             reject(); // trust on first use: the latest genuine statement, by somebody on the roster it attests
@@ -695,7 +699,7 @@ void TreeVerifier::verifyListed(const server::GroupInfo& summary, const Environm
                 }
                 return;
             }
-            verifyChain(summary.id, summary.contextId, pin, latest, environment);
+            verifyChain(summary.id, summary.contextId, pin, latest.seq, TreeCommits::digest(latest), environment);
         }
         // Pinned like a member's read, so the next listing cannot go back to a state from before a removal. No tree
         // was checked, so no generations: those stay whatever a member's read pinned.
@@ -1083,27 +1087,33 @@ bool TreeVerifier::link(const std::string& groupId, const Environment& environme
     const Pin& other = *pin.unlinked;
     bool linked = pin.seq == other.seq && pin.digest == other.digest;
     if (pin.seq != other.seq) {
+        // A member chain from the lower to the higher, every statement checked as a read checks it, not a hash walk:
+        // either end may stand on a first contact (its own, or a sibling's), whose statements below it nobody here
+        // verified, so a hash link would let a state taken on trust replace one verified past a removal.
         const Pin& lower = pin.seq < other.seq ? pin : other;
         const Pin& higher = pin.seq < other.seq ? other : pin;
-        std::uint64_t seq = lower.seq;
-        std::string digest = lower.digest;
-        linked = true;
-        while (linked && seq < higher.seq) {
-            const server::GroupGetTreeCommitsResult answer = environment.commitsBetween(seq, higher.seq);
-            if (answer.commits.empty() || answer.commits.size() > higher.seq - seq) {
-                reject(); // withheld, not disproved: stays pending
+        Environment checked = environment;
+        checked.commitsBetween = [&environment](std::uint64_t fromSeq, std::uint64_t toSeq) {
+            server::GroupGetTreeCommitsResult answer = environment.commitsBetween(fromSeq, toSeq);
+            if (answer.commits.empty() || answer.commits.size() > toSeq - fromSeq) {
+                throw Withheld{};
             }
-            for (const server::GroupTreeCommit& wire : answer.commits) {
-                const CommitStatement statement = parse(wire);
-                if (statement.seq != seq + 1 || statement.prevDigest != digest) {
-                    linked = false;
-                    break;
-                }
-                seq = statement.seq;
-                digest = TreeCommits::digest(statement);
-            }
+            return answer;
+        };
+        bool withheld = false;
+        try {
+            verifyChain(groupId, pin.contextId, lower, higher.seq, higher.digest, checked);
+            linked = true;
+        } catch (const Withheld&) {
+            withheld = true;
+        } catch (const GroupDataIntegrityException&) {
+            linked = false;
+        } catch (const GroupUnauthorizedSignerException&) {
+            linked = false;
         }
-        linked = linked && digest == higher.digest;
+        if (withheld) {
+            reject(); // withheld, not disproved: stays pending
+        }
     }
     std::optional<bool> moved;
     bool ahead = false;
