@@ -188,27 +188,6 @@ void InboxApiImpl::updateInbox(
         currentInbox, currentInboxEntry, currentInboxResourceId, users, managers,
         forceGenerateNewKey || doesGroupStateForceNewKey(currentInbox, groups)
     );
-    auto eccKey = privmx::crypto::ECC::fromPrivateKey(ctx.key.key);
-    auto privateKey = privmx::crypto::PrivateKey(eccKey);
-    auto pubKey = privateKey.getPublicKey();
-    InboxDataProcessorModelV5 inboxDataIn{
-        .storeId = currentInboxData.storeId,
-        .threadId = currentInboxData.threadId,
-        .filesConfig = getFilesConfigOptOrDefault(fileConfig),
-        .privateData =
-            {.privateMeta = privateMeta,
-             .internalMeta =
-                 InboxInternalMetaV5{
-                     .secret = ctx.secret, .resourceId = currentInboxResourceId, .randomId = ctx.dio.randomId
-                 },
-             .dio = ctx.dio},
-        .publicData = {
-            .publicMeta = publicMeta,
-            .inboxEntriesPubKeyBase58DER = pubKey.toBase58DER(),
-            .inboxEntriesKeyId = ctx.key.id
-        }
-    };
-
     server::InboxUpdateModel inboxUpdateModel;
     inboxUpdateModel.id = inboxId;
     inboxUpdateModel.resourceId = currentInboxResourceId;
@@ -218,7 +197,9 @@ void InboxApiImpl::updateInbox(
     inboxUpdateModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     inboxUpdateModel.version = version;
     inboxUpdateModel.force = force;
-    inboxUpdateModel.data = _inboxDataSchemaMapper->encrypt(inboxDataIn, ctx.key.key);
+    inboxUpdateModel.data = encryptInboxData(
+        currentInboxData, getFilesConfigOptOrDefault(fileConfig), publicMeta, privateMeta, ctx, currentInboxResourceId
+    );
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
     // revokes every grant the Inbox had.
     fillContainerGroupGrants(
@@ -260,9 +241,23 @@ void InboxApiImpl::rotateInboxKeys(
 ) {
     auto currentInbox = getServerInbox(inboxId);
     auto currentInboxData = getInboxCurrentDataEntry(currentInbox).data;
+    // Senders seal entries to the public key in the Inbox data, so the data is re-encrypted under the new key:
+    // left as it was, new entries would stay sealed to the replaced key, which a removed member holds (F-05d).
+    auto current = _inboxDataSchemaMapper->validateDecryptAndConvertInbox(
+        currentInbox, _keyProvider, _groupPrivKeyResolver
+    );
+    if (current.statusCode != 0) {
+        throw InboxDataIntegrityException("statusCode=" + std::to_string(current.statusCode));
+    }
     rotateContainerKeys<server::InboxRotateKeysModel>(
         inboxId, currentInbox, users, managers, version, force, knownGroupKeys,
-        [&](const server::InboxRotateKeysModel& model) { _serverApi->inboxRotateKeys(model); }
+        [&](const server::InboxRotateKeysModel& model) { _serverApi->inboxRotateKeys(model); },
+        [&](server::InboxRotateKeysModel& model, const core::ContainerUpdateContext& ctx) {
+            model.data = encryptInboxData(
+                currentInboxData, getFilesConfigOptOrDefault(current.filesConfig), current.publicMeta,
+                current.privateMeta, ctx, ctx.location.resourceId
+            );
+        }
     );
 
     // The entries and their files live in the inner Thread and Store, so re-keying only the Inbox would leave every
@@ -575,6 +570,33 @@ store::FileMetaToEncryptV4 InboxApiImpl::prepareMeta(const privmx::endpoint::inb
 
 inbox::server::InboxDataEntry InboxApiImpl::getInboxCurrentDataEntry(inbox::server::InboxInfo inboxRaw) {
     return inboxRaw.data.back();
+}
+
+inbox::server::InboxData InboxApiImpl::encryptInboxData(
+    const inbox::server::InboxData& current,
+    const inbox::FilesConfig& filesConfig,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const core::ContainerUpdateContext& ctx,
+    const std::string& resourceId
+) {
+    auto pubKey = privmx::crypto::PrivateKey(privmx::crypto::ECC::fromPrivateKey(ctx.key.key)).getPublicKey();
+    InboxDataProcessorModelV5 inboxDataIn{
+        .storeId = current.storeId,
+        .threadId = current.threadId,
+        .filesConfig = filesConfig,
+        .privateData =
+            {.privateMeta = privateMeta,
+             .internalMeta =
+                 InboxInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
+             .dio = ctx.dio},
+        .publicData = {
+            .publicMeta = publicMeta,
+            .inboxEntriesPubKeyBase58DER = pubKey.toBase58DER(),
+            .inboxEntriesKeyId = ctx.key.id
+        }
+    };
+    return _inboxDataSchemaMapper->encrypt(inboxDataIn, ctx.key.key);
 }
 
 InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inboxId) {

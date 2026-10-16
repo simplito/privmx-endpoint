@@ -107,7 +107,8 @@ JSON_STRUCT(InboxCreateResult, INBOX_CREATE_RESULT_FIELDS);
     F(groupKeys, std::optional<std::vector<core::server::GroupKeyEntrySet>>)
 JSON_STRUCT(InboxUpdateModel, INBOX_UPDATE_MODEL_FIELDS);
 
-#define INBOX_ROTATE_KEYS_MODEL_EXTRA_FIELDS(F)
+// `data`: the Inbox data re-encrypted under the new key, so its entries public key is the new key's (F-05d).
+#define INBOX_ROTATE_KEYS_MODEL_EXTRA_FIELDS(F) F(data, InboxData)
 JSON_STRUCT_EXT(InboxRotateKeysModel, core::server::ContainerRotateKeysModelBase, INBOX_ROTATE_KEYS_MODEL_EXTRA_FIELDS);
 
 #define INBOX_GET_MODEL_FIELDS(F)                                                                                      \

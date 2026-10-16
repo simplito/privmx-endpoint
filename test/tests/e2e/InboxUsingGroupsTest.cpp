@@ -6,7 +6,9 @@
 #include <privmx/utils/Utils.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/inbox/InboxApi.hpp>
+#include <privmx/endpoint/inbox/ServerApi.hpp>
 #include <privmx/endpoint/inbox/VarSerializer.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
@@ -721,4 +723,71 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
     EXPECT_NO_THROW({ oldEpochEntry = inboxApi->readEntry(oldEpochEntryId); });
     EXPECT_EQ(oldEpochEntry.statusCode, 0);
     EXPECT_EQ(oldEpochEntry.data.stdString(), "old_epoch_data");
+}
+
+TEST_F(InboxUsingGroupsTest, SECURITY_entries_sent_after_a_rekey_are_sealed_to_the_new_key) {
+    // F-05d, honest Bridge. Senders seal an entry to the public key in the Inbox data, derived from the key the
+    // data was written under. A re-key wrote no data, so entries sent after user_3's removal from G and the re-key
+    // were still sealed to K1's key pair, which user_3 holds.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("f05d_pub"), core::Buffer::from("f05d_priv")
+        );
+    });
+    group::Group sharedGroup = groupApi->getGroup(groupId);
+    std::string inboxId;
+    ASSERT_NO_THROW({
+        inboxId = createInboxWithGroups(
+            contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<group::Group>{sharedGroup}
+        );
+    });
+    inbox::ServerApi raw(connection->getImpl()->getGateway());
+    const auto inboxKeyId = [&] {
+        inbox::server::InboxGetModel get;
+        get.id = inboxId;
+        return raw.inboxGet(get).inbox.keyId;
+    };
+    // What a sender reads: the key id and public key entries are sealed to.
+    const auto entriesKey = [&] {
+        inbox::server::InboxGetModel get;
+        get.id = inboxId;
+        auto publicData = raw.inboxGetPublicView(get).publicData.extract<Poco::JSON::Object::Ptr>();
+        return std::make_pair(
+            publicData->getValue<std::string>("inboxKeyId"), publicData->getValue<std::string>("inboxPubKey")
+        );
+    };
+    const auto removedMembersEntriesKey = entriesKey();
+    ASSERT_EQ(removedMembersEntriesKey.first, inboxKeyId());
+
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {userId(3)}); });
+    inbox::Inbox stale = inboxApi->getInbox(inboxId);
+    ASSERT_NO_THROW({
+        inboxApi->rotateInboxKeys(
+            inboxId, std::vector<core::UserWithPubKey>{user(1)}, std::vector<core::UserWithPubKey>{user(1)},
+            stale.version, false
+        );
+    });
+    const auto afterRekey = entriesKey();
+    EXPECT_EQ(afterRekey.first, inboxKeyId()) << "entries are not sealed to the Inbox's current key";
+    EXPECT_NE(afterRekey.first, removedMembersEntriesKey.first);
+    EXPECT_NE(afterRekey.second, removedMembersEntriesKey.second) << "entries stay sealed to a key user_3 holds";
+
+    // The re-signed data still verifies, and what is sent now opens for the members who stay.
+    inbox::Inbox rekeyed;
+    ASSERT_NO_THROW({ rekeyed = inboxApi->getInbox(inboxId); });
+    EXPECT_EQ(rekeyed.statusCode, 0);
+    EXPECT_EQ(rekeyed.publicMeta.stdString(), "group_inbox_public");
+    EXPECT_EQ(rekeyed.privateMeta.stdString(), "group_inbox_private");
+    ASSERT_NO_THROW({ submitEntry(inboxId, "after_rekey"); });
+    disconnect();
+    connectAs(2);
+    std::string entryId;
+    ASSERT_NO_THROW({ entryId = onlyEntryId(inboxId); });
+    inbox::InboxEntry entry;
+    EXPECT_NO_THROW({ entry = inboxApi->readEntry(entryId); });
+    EXPECT_EQ(entry.statusCode, 0);
+    EXPECT_EQ(entry.data.stdString(), "after_rekey");
+    EXPECT_EQ(inboxApi->getInbox(inboxId).statusCode, 0);
 }
