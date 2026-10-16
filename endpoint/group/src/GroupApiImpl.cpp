@@ -429,8 +429,7 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
     case Settled::Done:
         return;
     case Settled::Reread:
-        currentGroup = _serverApi.groupGet(getModel).group;
-        verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+        currentGroup = rereadVerified(getModel, keytree::TreeVerifier::Scope::Plan);
         break;
     default:
         break;
@@ -664,8 +663,7 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
     case Settled::Done:
         return std::nullopt;
     case Settled::Reread:
-        currentGroup = _serverApi.groupGet(getModel).group;
-        verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+        currentGroup = rereadVerified(getModel, keytree::TreeVerifier::Scope::Plan);
         break;
     default:
         break;
@@ -894,8 +892,7 @@ bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, PriorRole& pri
     case Settled::Done:
         return false;
     case Settled::Reread:
-        currentGroup = _serverApi.groupGet(getModel).group;
-        verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
+        currentGroup = rereadVerified(getModel, keytree::TreeVerifier::Scope::Plan);
         break;
     default:
         break;
@@ -1571,8 +1568,7 @@ void GroupApiImpl::updateGroupPolicyOnce(
     case Settled::Done:
         return;
     case Settled::Reread:
-        group = _serverApi.groupGet(getModel).group;
-        verifyTree(group, getModel, keytree::TreeVerifier::Scope::Path);
+        group = rereadVerified(getModel, keytree::TreeVerifier::Scope::Path);
         break;
     default:
         break;
@@ -2111,6 +2107,17 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(
         _treeKeyCaches.drop(groupId);
     }
     throw core::EncryptionKeyValidationException(describeResolveFailure(resolved));
+}
+
+privmx::endpoint::group::server::GroupInfo GroupApiImpl::rereadVerified(
+    const server::GroupGetModel& model,
+    keytree::TreeVerifier::Scope scope
+) {
+    server::GroupInfo group = _serverApi.groupGet(model).group;
+    if (!verifyTree(group, model, scope)) {
+        throw GroupDataIntegrityException("the read after an earlier commit landed carries no tree this client checks");
+    }
+    return group;
 }
 
 bool GroupApiImpl::verifyTree(

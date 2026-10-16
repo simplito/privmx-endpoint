@@ -1675,6 +1675,32 @@ TEST_F(GroupApiLyingBridge, SECURITY_APolicyOutsideTheGroupGrammarIsNeverSigned)
     EXPECT_EQ(count("alice", "context.groupUpdatePolicy"), 0u);
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_TheReadAfterCompletingAnUnresolvedCommitIsVerifiedBeforeSigning) {
+    // bob's policy change completes his unresolved addition first and reads again. That answer, an unsupported tree
+    // serving a policy that lets anybody change the policy, was taken unverified: bob signed outside his role.
+    quiet = true;
+    addUsers({"dave"});
+    const std::string groupId = createGroup(
+        {"alice", "bob", "carol"}, policyWith({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "manager"}})
+    );
+    int adds = 0;
+    bridge.onAdd = [&] {
+        if (adds++ == 0) {
+            refuse();
+        }
+    };
+    EXPECT_ANY_THROW(client("bob").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}}));
+    bridge.onRead = [&](const std::string& caller, server::GroupInfo& info) {
+        if (caller == "bob" && adds == 2) {
+            info.treeVersion = 2;
+            info.policy = policyOf({{"update", "all"}, {"rotateKeys", "all"}, {"updatePolicy", "all"}});
+        }
+    };
+    EXPECT_THROW(client("bob").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})), GroupDataIntegrityException);
+    EXPECT_EQ(adds, 2) << "the addition was not completed first";
+    EXPECT_EQ(count("bob", "context.groupUpdatePolicy"), 0u);
+}
+
 TEST_F(GroupApiLyingBridge, AnAdditionOfAnExistingMemberIsRefusedBeforeSigning) {
     addUsers({"dave"});
     const std::string groupId = createGroup({"alice", "bob"});

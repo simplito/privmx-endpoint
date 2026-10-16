@@ -620,6 +620,10 @@ void TreeVerifier::pinCommitted(
     const std::vector<std::string>& managers,
     const GroupRules& rules
 ) {
+    // The pin's roster is what the next catch-up replays from: never a set the statement's hash does not bind.
+    if (TreeCommits::rosterHash(users, managers) != statement.rosterHash) {
+        throw GroupDataIntegrityException("the roster pinned with a commit is not the one it signed");
+    }
     std::lock_guard lock(_mutex);
     Pin& stored = _pins[groupId];
     if (stored.seq > statement.seq) {

@@ -1515,6 +1515,19 @@ TEST_F(TreeVerification, SECURITY_EpochOpenersReplayTheRosterFromGenesis) {
     EXPECT_THROW(fresh.epochOpeners(GROUP_ID, "ctx", environment()), GroupDataIntegrityException);
 }
 
+TEST_F(TreeVerification, SECURITY_AnOwnCommitIsPinnedOnlyWithTheRosterItSigned) {
+    // An own commit pinned beside a roster the bridge served: the next catch-up replays from it, and a non-member the
+    // bridge put there would pass as a committer.
+    create(4, 0);
+    const CommitStatement latest = TreeCommits::fromWire(bridge.commits.back());
+    std::vector<std::string> users = bridge.users();
+    users.push_back("mallory");
+    TreeVerifier own;
+    EXPECT_THROW(own.pinCommitted(GROUP_ID, "ctx", latest, users, managersOf(), bridge.rules()), GroupDataIntegrityException);
+    EXPECT_EQ(own.pinnedSeq(GROUP_ID), 0u);
+    EXPECT_NO_THROW(own.pinCommitted(GROUP_ID, "ctx", latest, bridge.users(), managersOf(), bridge.rules()));
+}
+
 TEST_F(TreeVerification, SECURITY_NoSecondStatementIsSignedAtASeqRefusedAsALostRace) {
     // T4-17: "a concurrent commit took that seq" is the bridge's word, and it may have applied the statement all the
     // same. A second statement at that seq would be a fork of the bridge's choosing.

@@ -266,6 +266,9 @@ private:
     // could climb, and the caller refuses both. Any failure is re-read (`model`) once into `group` and checked
     // again: a torn read, or a concurrent read having pinned a newer state, passes the second time.
     bool verifyTree(server::GroupInfo& group, const server::GroupGetModel& model, keytree::TreeVerifier::Scope scope);
+    // The read after `settle` completed an earlier commit (Settled::Reread). The read before it verified, so this
+    // one must too: a commit is never planned or signed on an answer nobody checked.
+    server::GroupInfo rereadVerified(const server::GroupGetModel& model, keytree::TreeVerifier::Scope scope);
 
     // Whether a group carries the grant key its latest statement vouches for, at or past the state this process
     // verified (TreeVerifier::verifyListed). A failure is logged, not thrown.
