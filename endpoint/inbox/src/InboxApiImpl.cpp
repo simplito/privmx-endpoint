@@ -99,6 +99,9 @@ std::string InboxApiImpl::createInbox(
     const std::optional<core::ContainerPolicyWithoutItem>& policies,
     const std::vector<core::GroupGrantWithKey>& groups
 ) {
+    // Before the inner Store and Thread exist: nothing of this Inbox may be wrapped to a key the verifier refuses.
+    auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
+    assertUserKeysVerified(contextId, all_users);
 
     auto inboxKey = _keyProvider->generateKey();
     auto eccKey = privmx::crypto::ECC::fromPrivateKey(inboxKey.key);
@@ -148,7 +151,6 @@ std::string InboxApiImpl::createInbox(
     createInboxModel.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     createInboxModel.data = _inboxDataSchemaMapper->encrypt(inboxDataIn, inboxKey.key);
     createInboxModel.keyId = inboxKey.id;
-    auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
     auto keysList = _keyProvider->prepareKeysList(
         all_users, inboxKey, inboxDIO, {.contextId = contextId, .resourceId = resourceId}, inboxSecret
     );
@@ -315,7 +317,7 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
         setNewModuleKeysInCache(inbox.id, containerToModuleKeys(inbox), inbox.version);
     }
     std::vector<Inbox> inboxes = _inboxDataSchemaMapper->validateDecryptAndConvertInboxes(
-        inboxesListResult.inboxes, _keyProvider, _groupPrivKeyResolver
+        inboxesListResult.inboxes, _keyProvider, _groupPrivKeyResolver, contextId
     );
     return core::PagingList<inbox::Inbox>({.totalAvailable = inboxesListResult.count, .readItems = inboxes});
 }

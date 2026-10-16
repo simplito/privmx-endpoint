@@ -102,22 +102,7 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
 
 void ContainerBaseApi::assertUserKeysVerified(const std::string& contextId, const std::vector<UserWithPubKey>& users) {
     // As for the author of anything this client reads: the application vouches for each pair.
-    std::vector<VerificationRequest> requests;
-    const int64_t now = privmx::utils::Utils::getNowTimestamp();
-    for (const auto& user : users) {
-        requests.push_back(
-            {.contextId = contextId,
-             .senderId = user.userId,
-             .senderPubKey = user.pubKey,
-             .date = now,
-             .bridgeIdentity = std::nullopt}
-        );
-    }
-    const auto verified = requests.empty() ? std::vector<bool>{} :
-                                             _connection.getImpl()->getUserVerifier()->verify(requests);
-    if (verified.size() != requests.size() || std::find(verified.begin(), verified.end(), false) != verified.end()) {
-        throw UserVerificationFailureException();
-    }
+    _connection.getImpl()->getUserVerifier()->assertKeysVerified(contextId, users);
 }
 
 ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
@@ -130,6 +115,7 @@ ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
     auto dio = _connection.getImpl()->createDIO(contextId, resourceId);
     auto secret = _keyProvider->generateSecret();
     auto allUsers = EndpointUtils::uniqueListUserWithPubKey(users, managers);
+    assertUserKeysVerified(contextId, allUsers);
     auto keyEntries = _keyProvider->prepareKeysList(
         allUsers, key, dio, {.contextId = contextId, .resourceId = resourceId}, secret
     );
@@ -137,6 +123,10 @@ ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
 }
 
 std::vector<server::KeyEntrySet> ContainerBaseApi::buildRosterKeyEntries(const ContainerUpdatePlan& plan) {
+    // A new key goes to the whole new roster; otherwise only the added users get the current one.
+    assertUserKeysVerified(
+        plan.ctx.location.contextId, plan.needNewKey ? plan.roster->getNewUsers() : plan.roster->getUsersToAddKey()
+    );
     std::vector<server::KeyEntrySet> keyEntries;
     if (plan.needNewKey) {
         keyEntries = _keyProvider->prepareKeysList(

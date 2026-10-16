@@ -661,7 +661,7 @@ TEST_F(StreamLowTest, userValidator_false) {
         );
         EXPECT_FALSE(Streams.readItems[0].statusCode == 0);
     });
-    EXPECT_NO_THROW({
+    EXPECT_THROW({
         streamApiLow->createStreamRoom(
             reader->getString("Context_1.contextId"),
             std::vector<core::UserWithPubKey>{core::UserWithPubKey{
@@ -676,7 +676,7 @@ TEST_F(StreamLowTest, userValidator_false) {
             core::Buffer::from("private"),
             std::nullopt
         );
-    });
+    }, core::Exception);
     EXPECT_THROW({
         streamApiLow->updateStreamRoom(
             streamRoomId_1,
@@ -712,4 +712,34 @@ TEST_F(StreamLowTest, userValidator_false) {
     } else {
         FAIL();
     }
+}
+
+TEST_F(StreamLowTest, SECURITY_a_key_the_verifier_refuses_is_never_wrapped_to) {
+    // user_2's listed key is one the application's verifier refuses (a substituted key, as far as the client can
+    // tell). Create, update (an added user and a new key) and rotate all refuse before the key is wrapped to it.
+    const std::string contextId = reader->getString("Context_1.contextId");
+    auto u = [&](std::initializer_list<int> indexes) {
+        std::vector<core::UserWithPubKey> result;
+        for (int i : indexes) {
+            result.push_back({.userId = reader->getString("Login.user_" + std::to_string(i) + "_id"),
+                              .pubKey = reader->getString("Login.user_" + std::to_string(i) + "_pubKey")});
+        }
+        return result;
+    };
+    const std::string withBoth = streamApiLow->createStreamRoom(contextId, u({1, 2}), u({1}), core::Buffer::from("public"), core::Buffer::from("private"), std::nullopt);
+    const std::string withOne = streamApiLow->createStreamRoom(contextId, u({1}), u({1}), core::Buffer::from("public"), core::Buffer::from("private"), std::nullopt);
+    const auto listed = [&] { return streamApiLow->listStreamRooms(contextId, {.skip=0, .limit=1, .sortOrder="desc"}).totalAvailable; };
+    const auto before = listed();
+    connection->setUserVerifier(
+        std::make_shared<core::RefusingKeyVerifier>(std::set<std::string>{u({2})[0].pubKey})
+    );
+    core::expectVerificationFailure([&] { streamApiLow->createStreamRoom(contextId, u({1, 2}), u({1}), core::Buffer::from("public"), core::Buffer::from("private"), std::nullopt); });
+    core::expectVerificationFailure([&] { streamApiLow->updateStreamRoom(withOne, u({1, 2}), u({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, false, std::nullopt); });
+    core::expectVerificationFailure([&] { streamApiLow->updateStreamRoom(withBoth, u({1, 2}), u({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, true, std::nullopt); });
+    core::expectVerificationFailure([&] { streamApiLow->rotateStreamRoomKeys(withBoth, u({1, 2}), u({1}), 1, false); });
+    EXPECT_EQ(listed(), before);
+    EXPECT_EQ(streamApiLow->getStreamRoom(withBoth).version, 1);
+    EXPECT_EQ(streamApiLow->getStreamRoom(withOne).version, 1);
+    // Without user_2 nothing is refused.
+    EXPECT_NO_THROW({ streamApiLow->updateStreamRoom(withBoth, u({1}), u({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, true, std::nullopt); });
 }
