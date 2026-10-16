@@ -117,7 +117,7 @@ public:
     // roster nor a statement, so it is never verified itself): its latest statement is genuine and describes the
     // served grant key, counters and roster, and its committer is on that roster. A pinned group must also continue
     // its pin (the pinned statement at its seq, a member-signed chain above it). No tree is checked; the pin is
-    // stored or moved up to the statement, so the writer is on first use only once per GroupApi. A statement below
+    // stored or moved up to the statement, so the writer is on first use only once per GroupApi (per device with a PinStore). A statement below
     // the pin passes, and `pinnedSeq` tells it apart. Throws GroupDataIntegrityException.
     void verifyListed(const server::GroupInfo& summary, const Environment& environment);
 
