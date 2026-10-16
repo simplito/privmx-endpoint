@@ -126,6 +126,27 @@ void Connection::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier
     impl->setUserVerifier(verifier);
 }
 
+void Connection::setPinStore(std::shared_ptr<PinStoreInterface> store) {
+    auto impl = getImpl();
+    impl->setPinStore(store);
+}
+
+void Connection::adoptPreviousIdentity(const std::string& previousUserPrivKey) {
+    auto impl = getImpl();
+    std::optional<privmx::crypto::PrivateKey> previous;
+    try {
+        previous = privmx::crypto::PrivateKey::fromWIF(previousUserPrivKey);
+    } catch (...) {
+        throw InvalidParamsException("the previous key is not a private key in WIF");
+    }
+    try {
+        impl->adoptPreviousIdentity(previous.value());
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 std::vector<std::string> Connection::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto impl = getImpl();
     assertConnection(impl);

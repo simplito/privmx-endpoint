@@ -104,6 +104,49 @@ int privmx_endpoint_setUserVerifier(Connection* ptr, void* ctx, privmx_user_veri
     });
 }
 
+namespace {
+
+// One call out to an application callback with the same args/res memory handling as the user verifier's.
+template<typename Callback>
+Poco::Dynamic::Var callOut(void* ctx, Callback callback, const Poco::Dynamic::Var& request) {
+    pson_value* res = nullptr;
+    pson_value* args = (pson_value*)(new Poco::Dynamic::Var(request));
+    try {
+        callback(ctx, args, &res);
+    } catch (...) {
+        delete (Poco::Dynamic::Var*)args;
+        if (res != nullptr) {
+            pson_free_value(res);
+        }
+        throw;
+    }
+    delete (Poco::Dynamic::Var*)args;
+    if (res == nullptr) {
+        return Poco::Dynamic::Var();
+    }
+    const Poco::Dynamic::Var resVal = *(reinterpret_cast<const Poco::Dynamic::Var*>(res));
+    pson_free_value(res);
+    return resVal;
+}
+
+} // namespace
+
+int privmx_endpoint_setPinStore(
+    Connection* ptr,
+    void* ctx,
+    privmx_pin_store_load load,
+    privmx_pin_store_save save,
+    pson_value** res
+) {
+    return CApiExecutor::execFunc(res, [&] {
+        core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;
+        return _ptr->setPinStore(
+            [ctx, load](const Poco::Dynamic::Var& request) { return callOut(ctx, load, request); },
+            [ctx, save](const Poco::Dynamic::Var& request) { return callOut(ctx, save, request); }
+        );
+    });
+}
+
 int privmx_endpoint_execConnection(Connection* ptr, int method, const pson_value* args, pson_value** res) {
     return CApiExecutor::execFunc(res, [&] {
         core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;

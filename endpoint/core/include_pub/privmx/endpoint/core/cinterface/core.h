@@ -15,10 +15,15 @@ int privmx_endpoint_execEventQueue(EventQueue* ptr, int method, const pson_value
 
 typedef struct Connection Connection;
 typedef int (*privmx_user_verifier)(void* ctx, const pson_value* args, pson_value** res);
+typedef int (*privmx_pin_store_load)(void* ctx, const pson_value* args, pson_value** res); // [key] -> binary|null
+typedef int (*privmx_pin_store_save)(void* ctx, const pson_value* args, pson_value** res); // [key, blob, expected] -> bool
 
 int privmx_endpoint_newConnection(Connection** outPtr);
 int privmx_endpoint_freeConnection(Connection* ptr);
 int privmx_endpoint_setUserVerifier(Connection* ptr, void* ctx, privmx_user_verifier verifier, pson_value** res);
+int privmx_endpoint_setPinStore(
+    Connection* ptr, void* ctx, privmx_pin_store_load load, privmx_pin_store_save save, pson_value** res
+);
 int privmx_endpoint_execConnection(Connection* ptr, int method, const pson_value* args, pson_value** res);
 
 typedef struct BackendRequester BackendRequester;
