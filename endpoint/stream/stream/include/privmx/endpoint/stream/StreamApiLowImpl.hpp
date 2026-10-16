@@ -150,18 +150,16 @@ private:
             std::shared_ptr<DataChannelMessageEncryptorV1> _messageEncryptor,
             const std::string _streamRoomId,
             std::shared_ptr<WebRTCInterface> _webRtc,
-            const std::vector<std::string>& _subscriptionsIds,
-            const std::string& _encryptionKeyId = ""
+            const std::vector<std::string>& _subscriptionsIds
         )
             : messageEncryptor(_messageEncryptor), streamRoomId(_streamRoomId), webRtc(_webRtc),
-              subscriptionsIds(_subscriptionsIds), encryptionKeyId(_encryptionKeyId) {}
+              subscriptionsIds(_subscriptionsIds) {}
         std::shared_ptr<StreamData> publisherStream;
         std::shared_ptr<SubscriptionData> subscriberStream;
         std::shared_ptr<DataChannelMessageEncryptorV1> messageEncryptor;
         std::string streamRoomId;
         std::shared_ptr<WebRTCInterface> webRtc;
         std::vector<std::string> subscriptionsIds;
-        std::string encryptionKeyId;
     };
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
 
@@ -191,10 +189,8 @@ private:
 
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
-    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(
-        server::StreamRoomInfo streamRoomInfo,
-        const std::string& encryptionKeyId
-    );
+    // LOCAL: the room's current key (`keyId`), what this client encrypts under. REMOTE: every key that opens.
+    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo);
     std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> extractStreamRoomKeys(
         server::StreamRoomInfo streamRoomInfo
     );
