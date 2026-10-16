@@ -79,6 +79,18 @@ public:
         return {};
     }
 
+    // The slot of kind `prefix` ending in `suffix` (an identity's public key).
+    std::string keyWith(const std::string& prefix, const std::string& suffix) {
+        std::lock_guard<std::mutex> lock(_mutex);
+        for (const auto& [key, blob] : _slots) {
+            if (key.rfind(prefix, 0) == 0 && key.size() >= suffix.size() &&
+                key.compare(key.size() - suffix.size(), suffix.size(), suffix) == 0) {
+                return key;
+            }
+        }
+        return {};
+    }
+
     int savesOf(const std::string& prefix) {
         std::lock_guard<std::mutex> lock(_mutex);
         int total = 0;
