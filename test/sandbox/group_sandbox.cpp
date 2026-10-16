@@ -18,6 +18,7 @@
 #include "BaseGroupTest.hpp"
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/BackendRequester.hpp>
+#include <privmx/endpoint/core/PinStoreInterface.hpp>
 #include <privmx/endpoint/inbox/InboxApi.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
@@ -226,6 +227,37 @@ protected:
     std::unique_ptr<Session> open(const std::string& privKey) {
         auto session = std::make_unique<Session>();
         session->connection = connectWith(privKey);
+        session->groups = std::make_shared<group::GroupApi>(group::GroupApi::create(*session->connection));
+        return session;
+    }
+
+    // 01: the application's store (compare-and-swap per key), kept in memory for the run.
+    class MemoryStore : public core::PinStoreInterface {
+    public:
+        core::Buffer load(const std::string& key) override {
+            std::lock_guard<std::mutex> lock(_mutex);
+            return core::Buffer::from(_slots[key]);
+        }
+        bool save(const std::string& key, const core::Buffer& blob, const core::Buffer& expected) override {
+            std::lock_guard<std::mutex> lock(_mutex);
+            if (_slots[key] != expected.stdString()) return false;
+            _slots[key] = blob.stdString();
+            ++saves;
+            bytes += blob.size();
+            return true;
+        }
+        std::atomic<int> saves{0};
+        std::atomic<size_t> bytes{0};
+
+    private:
+        std::mutex _mutex;
+        std::map<std::string, std::string> _slots;
+    };
+
+    std::unique_ptr<Session> openWith(const std::string& privKey, const std::shared_ptr<MemoryStore>& store) {
+        auto session = std::make_unique<Session>();
+        session->connection = connectWith(privKey);
+        session->connection->setPinStore(store);
         session->groups = std::make_shared<group::GroupApi>(group::GroupApi::create(*session->connection));
         return session;
     }
@@ -1207,4 +1239,62 @@ TEST_F(GroupSandbox, R2_thread_hot_path_single_group) {
             hotPath(f, tag, who + "_", threads, threadId, calls);
         }
     });
+}
+
+// R3 (01): persisted pins. A cold getGroup in a session whose store holds the pin from an earlier session, k commits
+// behind, next to one without a store; an own removal (saved before it returns) and the encrypt hot path with and
+// without a store.
+TEST_F(GroupSandbox, R3_persisted_pins) {
+    const int n = std::stoi(flag("--r3-n", "256"));
+    for (const int k : intsFlag("--r3-k", "0,8,64")) {
+        const std::string tag = tagOf("R3", n, 0, ".k" + std::to_string(k));
+        row("R3", {{"n", num(n)}, {"k", num(k)}, {"tag", q(tag)}}, [&](Fields& f) {
+            auto owner = open(privKeyOf(1));
+            const Roster users = roster(n);
+            const std::string groupId = create(*owner->groups, users, Roster{user(1), user(2)});
+            const auto store = std::make_shared<MemoryStore>();
+            {
+                auto first = openWith(privKeyOf(3), store);
+                first->groups->getGroup(groupId);
+            } // saved on the way out
+            const int savesBefore = store->saves;
+            for (int i = 0; i < k; ++i) {
+                owner->groups->rotateGroupKey(groupId);
+            }
+            {
+                auto cold = open(privKeyOf(3));
+                timed(f, tag, "cold_getGroup_no_store", [&] { cold->groups->getGroup(groupId); });
+            }
+            {
+                auto cold = openWith(privKeyOf(3), store);
+                timed(f, tag, "cold_getGroup_persisted_pin", [&] { cold->groups->getGroup(groupId); });
+                const int loops = 100;
+                timed(f, tag, "encrypt_x100_store", [&] {
+                    for (int i = 0; i < loops; ++i) cold->groups->encrypt(groupId, core::Buffer::from("x"));
+                });
+            }
+            {
+                auto plain = open(privKeyOf(3));
+                plain->groups->getGroup(groupId);
+                timed(f, tag, "encrypt_x100_no_store", [&] {
+                    for (int i = 0; i < 100; ++i) plain->groups->encrypt(groupId, core::Buffer::from("x"));
+                });
+            }
+            {
+                auto plain = open(privKeyOf(2));
+                plain->groups->getGroup(groupId);
+                timed(f, tag, "removal_no_store", [&] { plain->groups->removeGroupMembers(groupId, {users[n - 1].userId}); });
+            }
+            {
+                const auto removerStore = std::make_shared<MemoryStore>();
+                auto withStore = openWith(privKeyOf(2), removerStore);
+                withStore->groups->getGroup(groupId);
+                const int before = removerStore->saves;
+                timed(f, tag, "removal_store", [&] { withStore->groups->removeGroupMembers(groupId, {users[n - 2].userId}); });
+                f.push_back({"own_commit_saves", num(removerStore->saves.load() - before)});
+            }
+            f.push_back({"saves_n", num(store->saves.load() - savesBefore)});
+            f.push_back({"blob_b", num(store->bytes.load())});
+        });
+    }
 }
