@@ -257,7 +257,8 @@ public:
     bool needsRead(const std::string& groupId);
     // 01 adoption of a previous identity's records: the groups among `groups` with no pin, a seq-0 one or a
     // first-contact one, with that pin (seq, digest, synced) as it stands; `adopt` then replaces exactly those that
-    // still stand so.
+    // still stand so, except a first contact at or above the record's seq: that one keeps its state and is `unlinked`
+    // to the record (never lowered to it).
     std::map<std::string, Pin> adoptable(const std::vector<std::string>& groups);
     void adopt(const std::map<std::string, Pin>& taken, const std::map<std::string, Pin>& seen);
     // Set once, before use: called after `_mutex` is released whenever something persistent moved. `major`: the

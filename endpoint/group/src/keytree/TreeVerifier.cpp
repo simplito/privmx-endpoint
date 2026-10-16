@@ -1177,12 +1177,21 @@ void TreeVerifier::adopt(const std::map<std::string, Pin>& taken, const std::map
     for (const auto& [groupId, record] : taken) {
         const auto was = seen.find(groupId);
         const auto it = _pins.find(groupId);
-        const Pin* current = it == _pins.end() ? nullptr : &it->second;
+        Pin* current = it == _pins.end() ? nullptr : &it->second;
         const bool unchanged = was != seen.end() &&
             (current == nullptr ? was->second.seq == 0 && was->second.digest.empty()
                                 : current->seq == was->second.seq && current->digest == was->second.digest);
         if (!unchanged) {
             continue; // verified meanwhile: the current identity's state stands
+        }
+        if (current != nullptr && current->seq > 0 && record.seq <= current->seq) {
+            // A first contact at or above the record: never lowered to it (it may be the state before a removal the
+            // first contact shows), and not used until `link` shows a member chain from the record up to it.
+            current->refusedSeq = std::max(current->refusedSeq, record.refusedSeq);
+            if (!current->unlinked && !current->forked) {
+                current->unlinked = std::make_shared<const Pin>(record);
+            }
+            continue;
         }
         Pin adopted = record;
         adopted.refusedSeq = std::max(adopted.refusedSeq, current != nullptr ? current->refusedSeq : 0);

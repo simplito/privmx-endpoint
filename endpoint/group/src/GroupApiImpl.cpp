@@ -3239,6 +3239,10 @@ void GroupApiImpl::adoptBody(const keytree::TreeVerifier::PinSet& adopted) {
                     continue;
                 }
                 keytree::TreeVerifier::Pin next = adopted.tree.at(groupId);
+                if (pin.seq > 0 && next.seq <= pin.seq) {
+                    taken[groupId] = next; // a first contact at or above it: linked in memory (`adopt`), slot kept
+                    continue;
+                }
                 if (record != slot.tree.end()) {
                     next.refusedSeq = std::max(next.refusedSeq, record->second.refusedSeq);
                 }

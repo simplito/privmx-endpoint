@@ -2748,3 +2748,47 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARenewalAdoptsThePreviousKeysPinsFirst) {
     EXPECT_THROW(client("bob").renewLeaf(groupId, previous.toWIF()), GroupHistoryForkException);
     EXPECT_EQ(sent(bridge), 0u);
 }
+
+TEST_F(GroupApiLyingBridge, SECURITY_AdoptionNeverLowersAFirstContactToTheOlderRecord) {
+    // bob's previous key pinned seq 1. Under the new key his first contact is alice's removal of carol (seq 3); then
+    // the bridge serves the state before it (seq 2, carol's self-update), which continues seq 1. renewLeaf adopts
+    // first: the older record must not replace the first contact. Base: it did, so seq 2 passed and the renewal was
+    // planned and sent on a tree that still seats carol.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").resolveGroupPrivKey(groupId); // seq 1 under bob's previous key
+    clients.erase("bob");
+    const PrivateKey previous = changeKeyOf(bridge, clients, "bob");
+    selfUpdateBy("carol"); // seq 2
+    const Bridge beforeRemoval = bridge;
+    client("alice").removeGroupMembers(groupId, {"carol"}); // seq 3
+    client("bob").getGroup(groupId);                       // the new key's first contact
+    ASSERT_EQ(GroupApiImplTestAccess::pinnedSeq(client("bob"), groupId), 3u);
+    rollBackTo(beforeRemoval);
+    const std::size_t before = sent(bridge);
+    EXPECT_ANY_THROW(client("bob").renewLeaf(groupId, previous.toWIF()));
+    EXPECT_EQ(sent(bridge), before) << "nothing planned on the pre-removal state";
+    EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("bob"), groupId), 3u);
+    const auto stored = storedPin(groupId, bridge.users.at("bob"));
+    EXPECT_TRUE(!stored.has_value() || stored->seq == 3u) << "the slot is not lowered either";
+}
+
+TEST_F(GroupApiLyingBridge, AFirstContactAboveThePreviousKeysRecordIsLinkedToItAndStaysUsable) {
+    // The same with an honest bridge: adoption links the first contact to the previous key's record by a member chain
+    // (seq 1 -> 3), so the renewal and the reads after it go on at seq 3 (a pending or failed link would throw).
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").resolveGroupPrivKey(groupId);
+    clients.erase("bob");
+    const PrivateKey previous = changeKeyOf(bridge, clients, "bob");
+    selfUpdateBy("carol");
+    client("alice").removeGroupMembers(groupId, {"carol"});
+    client("bob").getGroup(groupId);
+    EXPECT_NO_THROW(client("bob").renewLeaf(groupId, previous.toWIF()));
+    EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("bob"), groupId), 3u);
+    EXPECT_EQ(client("bob").getGroup(groupId).statusCode, 0);
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
+    EXPECT_FALSE(storedPin(groupId, bridge.users.at("bob"))->forked);
+}
