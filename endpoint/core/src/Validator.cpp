@@ -251,14 +251,11 @@ void Validator::validatePubKeyBase58DER(const string& value, const string& stack
 }
 
 void Validator::validatePubKeyFormat(const string& value, const string& stack_trace) {
-    // A DER-encoded point is 33 bytes compressed or 65 uncompressed; the decode itself enforces
-    // the base58 alphabet and checksum, so corrupted keys fail here instead of at decryption time.
-    std::string der;
-    try {
-        der = privmx::utils::Base58::decodeWithChecksum(value, FormatHash::sha256);
-    } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER")); }
-    if (der.size() != 33 && der.size() != 65) {
-        throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER length"));
+    // Base58 alphabet, checksum, a known algorithm tag and the length that algorithm requires — all of
+    // which `isTaggedPublicKeyFormat` reads off the encoding, so a corrupted key fails here instead of
+    // at decryption time, without the scalar multiplication a full check costs.
+    if (!isTaggedPublicKeyFormat(value)) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER"));
     }
 }
 

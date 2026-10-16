@@ -53,6 +53,39 @@ privmx::cryptoservice::SigScheme signatureSchemeFor(privmx::cryptoservice::AsymA
 /// @brief Whether the endpoint can work with keys of this algorithm.
 bool isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg algorithm);
 
+/// @brief A public key as it travels: the algorithm its tag named, and the bytes behind the tag.
+struct TaggedPublicKey {
+    privmx::cryptoservice::AsymAlg algorithm;
+    std::string rawKey;
+};
+
+/**
+ * @brief Encodes a public key as `Base58Check(tag || rawKey)`.
+ *
+ * This is the only encoding a key travels in. It exists because a key has to say which algorithm it
+ * is — contract point 2 — and because the bridge now refuses anything untagged. The tags are shared
+ * wire format with the bridge (`src/utils/crypto/VerifyKey.ts`) and must not drift from it.
+ *
+ * @throws UnsupportedKeyAlgorithmException when the algorithm has no encoding of its own
+ * @throws MalformedEncryptionKeyException when the raw key is not the length the algorithm requires
+ */
+std::string encodeTaggedPublicKey(const std::string& rawKey, privmx::cryptoservice::AsymAlg algorithm);
+
+/**
+ * @brief Reads a tagged public key, taking the algorithm from the tag rather than assuming one.
+ *
+ * @throws MalformedEncryptionKeyException when the encoding, the tag or the length is wrong
+ */
+TaggedPublicKey decodeTaggedPublicKey(const std::string& base58);
+
+/**
+ * @brief Whether a string is a well-formed tagged key, **without building the curve point**.
+ *
+ * For `Validator::validatePubKeyFormat`, which screens a wholesale list of keys where the operation
+ * uses only a handful; the expensive subgroup check happens when a key is actually turned into a point.
+ */
+bool isTaggedPublicKeyFormat(const std::string& base58);
+
 inline privmx::cryptoservice::BytesView keyBytes(const std::string& data) {
     return privmx::cryptoservice::BytesView(reinterpret_cast<const std::uint8_t*>(data.data()), data.size());
 }

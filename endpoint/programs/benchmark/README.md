@@ -48,7 +48,7 @@ Both tools read the connection credentials from an **INI file** whose path is gi
 ```ini
 [Login]
 user_1_privKey = Kx9ftJtfa4Af941f9jYR44dKxv9uWMxkJBk3XgdSYy6M5i6zcXxS
-user_1_pubKey  = 6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM
+user_1_pubKey  = L5tcPe1CjgyqPyHgf6B5VN2tLLvXEMKcsmhodvtPK4Hta49qvZcF
 user_1_id      = user_1
 solutionId     = a37a4e8f-8034-441e-8da8-d0d1744a228e
 instanceUrl    = http://localhost/

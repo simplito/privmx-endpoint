@@ -23,13 +23,13 @@ namespace cs = privmx::cryptoservice;
 
 PublicKey PublicKey::fromBase58DER(const std::string& base58DER) {
     return mapCryptoErrors("PublicKey::fromBase58DER", [&] {
-        // The Base58DER form does not name its algorithm today — agreeing on a shared, tagged
-        // encoding is pending on the bridge (crypto-update/issue-bridge-remaining.md §2). Until
-        // then the import assumes the default algorithm but **records** it on the key, so once the
-        // encoding starts carrying it, only this spot changes, not the operations using the key.
+        // The algorithm comes from the key's own tag, never from a default. An untagged key — the
+        // encoding used before the 3.0.0 cut — is refused by `decodeTaggedPublicKey` rather than
+        // guessed at, which is also what the bridge does with one.
+        const TaggedPublicKey tagged = decodeTaggedPublicKey(base58DER);
         return PublicKey(
-            cryptoProvider().importPublicKey(keyBytes(base58DER), cs::KeyFormat::Base58Der, DEFAULT_KEY_ALGORITHM),
-            DEFAULT_KEY_ALGORITHM
+            cryptoProvider().importPublicKey(keyBytes(tagged.rawKey), cs::KeyFormat::Der, tagged.algorithm),
+            tagged.algorithm
         );
     });
 }
@@ -85,7 +85,13 @@ std::string PublicKey::toDER() const {
 
 std::string PublicKey::toBase58DER() const {
     return mapCryptoErrors("PublicKey::toBase58DER", [&] {
-        return keyString(require().export_(cs::KeyFormat::Base58Der));
+        // Built from the DER export rather than asking the provider for `Base58Der`, because the tag
+        // has to go **inside** the Base58Check payload — a checksum over untagged bytes would not
+        // cover the tag. A key imported as `secp256k1` (uncompressed) exports compressed and is
+        // encoded under the one secp256k1 tag, so a key has exactly one spelling either way.
+        const cs::AsymAlg algorithm =
+            _algorithm == cs::AsymAlg::secp256k1 ? cs::AsymAlg::PrivmxSecp256k1 : _algorithm;
+        return encodeTaggedPublicKey(keyString(require().export_(cs::KeyFormat::Der)), algorithm);
     });
 }
 

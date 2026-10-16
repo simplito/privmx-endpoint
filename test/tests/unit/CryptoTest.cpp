@@ -42,7 +42,7 @@ protected:
     const std::string _BIP39_seed_withPassword = privmx::utils::Hex::toString(
         "b4d611c2a1cc7b8fccfb14623fb800bde4764388ff766673dccf54cc4b65d35cbc0ff296dde8b3246075458d75f7c4bc3e2c4242c2d4e1c2268e942f040ae943"
     );
-    const std::string _BIP39_publicKeyBase58DER_withPassword = "67r77s6cs14ErtuLqCv4cgsHUm7dQTvGKx3Mb5DxSXCAUuPygY";
+    const std::string _BIP39_publicKeyBase58DER_withPassword = "L5tTbvbugT3jkzZzF7kQcWpWyLPuocPEvFgmDxHHZgfLWs9scJaX";
     const std::string _BIP39_publicKeyBase58DERAddress_withPassword = "1NbGbcmEVw8nUsRmfeN6m1GQtJX62BwRyS";
     const std::string _BIP39_privateKeyWIF_withPassword = "L4eMAP7f7PSGCY8fNVMv66JDczN6wDnGv4ZL2nwf4kTZxvmtp8D6";
     const std::string _BIP39_chainCode_withPassword = privmx::utils::Hex::toString(
@@ -53,21 +53,26 @@ protected:
 TEST_F(CryptoTest, verifySignature) {
     core::Buffer sign = core::Buffer::from(privmx::utils::Hex::toString("1bf40aa304605ed8f94f3dc03564332f341a7620f419839c762151c50342366377207cf547e1c3837e796dd1b29e13d0772b3b9d0d53315b28fba7a4ed385d1fc4"));
     EXPECT_THROW({
-        cryptoApi->verifySignature(core::Buffer::from("data"), core::Buffer::from("sign"), "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
+        cryptoApi->verifySignature(core::Buffer::from("data"), core::Buffer::from("sign"), "L5vkdRVHpz99Wohor79hWczzv7LmWAoVQ3axynJ7fQATA7szwGWe");
     }, core::Exception);
     EXPECT_THROW({
-        cryptoApi->verifySignature(core::Buffer::from("data"), sign, "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHH");
+        cryptoApi->verifySignature(core::Buffer::from("data"), sign, "L5vkdRVHpz99Wohor79hWczzv7LmWAoVQ3axynJ7fQATA7szwGWf");
+    }, core::Exception);
+    // The same key in the encoding used before the 3.0.0 cut. A key has to carry its algorithm, so an
+    // untagged one is refused rather than read as secp256k1 by assumption.
+    EXPECT_THROW({
+        cryptoApi->verifySignature(core::Buffer::from("data"), sign, "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
     }, core::Exception);
     bool status;
     EXPECT_NO_THROW({
-       status = cryptoApi->verifySignature(core::Buffer::from("data"), sign, "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
+       status = cryptoApi->verifySignature(core::Buffer::from("data"), sign, "L5vkdRVHpz99Wohor79hWczzv7LmWAoVQ3axynJ7fQATA7szwGWe");
     });
     EXPECT_EQ(status, true);
 }
 
 TEST_F(CryptoTest, signData) {
     EXPECT_THROW({
-        cryptoApi->signData(core::Buffer::from("data"), "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
+        cryptoApi->signData(core::Buffer::from("data"), "L5vkdRVHpz99Wohor79hWczzv7LmWAoVQ3axynJ7fQATA7szwGWe");
     }, core::Exception);
     core::Buffer sign;
     EXPECT_NO_THROW({
@@ -75,7 +80,7 @@ TEST_F(CryptoTest, signData) {
     });
     bool status;
     EXPECT_NO_THROW({
-       status = cryptoApi->verifySignature(core::Buffer::from("data"), sign, "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
+       status = cryptoApi->verifySignature(core::Buffer::from("data"), sign, "L5vkdRVHpz99Wohor79hWczzv7LmWAoVQ3axynJ7fQATA7szwGWe");
     });
     EXPECT_EQ(status, true);
 } 
@@ -117,7 +122,7 @@ TEST_F(CryptoTest, derivePrivateKey2) {
 
 TEST_F(CryptoTest, derivePublicKey) {
     EXPECT_THROW({
-        cryptoApi->derivePublicKey("8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
+        cryptoApi->derivePublicKey("L5vkdRVHpz99Wohor79hWczzv7LmWAoVQ3axynJ7fQATA7szwGWe");
     }, core::Exception);
     std::string keyInBase58DER;
     EXPECT_NO_THROW({
@@ -126,7 +131,7 @@ TEST_F(CryptoTest, derivePublicKey) {
     EXPECT_NO_THROW({
         privmx::endpoint::core::PublicKey::fromBase58DER(keyInBase58DER);
     });
-    EXPECT_EQ(keyInBase58DER, "8Qsc1FF9xQp3ziWLEVpAoAp4RcpBpiQ4E9oBbuKfwdqRC5KpHq");
+    EXPECT_EQ(keyInBase58DER, "L5vkdRVHpz99Wohor79hWczzv7LmWAoVQ3axynJ7fQATA7szwGWe");
 }
 
 TEST_F(CryptoTest, generateKeySymmetric) {
@@ -175,7 +180,7 @@ TEST_F(CryptoTest, convertPGPAsn1KeyToBase58DERKey) {
     EXPECT_NO_THROW({
         privmx::endpoint::core::PublicKey::fromBase58DER(keyInBase58DER);
     });
-    EXPECT_EQ(keyInBase58DER, "7qiWDFa1gEEiEowrBxrGNfKNV9oLtpYGTnZeQ7Y82CdJ7qBTPe");
+    EXPECT_EQ(keyInBase58DER, "L5vBUKhJ9qrxwTwuHd7AYiaVRRQJVKsbYFpbkF6KsrF1wzq3tQbQ");
 }
 
 TEST_F(CryptoTest, generateBip39) {

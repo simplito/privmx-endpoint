@@ -20,6 +20,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PublicKey.hpp>
 
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/crypto/KeyFormats.hpp>
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
@@ -47,12 +48,19 @@ TEST(Keys, WifImportExportMatchesLegacy) {
     EXPECT_EQ(WIF, PrivateKey::fromWIF(WIF).toWIF());
 }
 
-TEST(Keys, PublicKeyEncodingMatchesLegacy) {
+/// The key itself is unchanged; only how it is spelled on the wire is. The DER bytes still match the old
+/// implementation byte for byte — the base58 form deliberately does not, because it now carries an
+/// algorithm tag in front of exactly those bytes.
+TEST(Keys, PublicKeyEncodingMatchesLegacyUnderTheTag) {
     const auto legacyPriv = legacy::PrivateKey::fromWIF(WIF);
     const auto priv = PrivateKey::fromWIF(WIF);
 
-    EXPECT_EQ(legacyPriv.getPublicKey().toBase58DER(), priv.getPublicKey().toBase58DER());
     EXPECT_EQ(legacyPriv.getPublicKey().toDER(), priv.getPublicKey().toDER());
+
+    const std::string tagged = priv.getPublicKey().toBase58DER();
+    EXPECT_NE(legacyPriv.getPublicKey().toBase58DER(), tagged);
+    EXPECT_EQ(encodeTaggedPublicKey(legacyPriv.getPublicKey().toDER(), DEFAULT_KEY_ALGORITHM), tagged);
+    EXPECT_EQ(priv.getPublicKey().toDER(), decodeTaggedPublicKey(tagged).rawKey);
 }
 
 TEST(Keys, RawPrivatePartMatchesLegacy) {
@@ -64,14 +72,14 @@ TEST(Keys, FromRawMatchesLegacyEccFromPrivateKey) {
     const auto legacyKey = legacy::PrivateKey(legacy::ECC::fromPrivateKey(raw));
 
     EXPECT_EQ(legacyKey.toWIF(), PrivateKey::fromRaw(raw).toWIF());
-    EXPECT_EQ(legacyKey.getPublicKey().toBase58DER(), PrivateKey::fromRaw(raw).getPublicKey().toBase58DER());
+    EXPECT_EQ(legacyKey.getPublicKey().toDER(), PrivateKey::fromRaw(raw).getPublicKey().toDER());
 }
 
 TEST(Keys, SharedSecretMatchesLegacy) {
     const auto legacyPriv = legacy::PrivateKey::fromWIF(WIF);
     const auto legacyPeer = legacy::PrivateKey::generateRandom();
     const auto priv = PrivateKey::fromWIF(WIF);
-    const auto peer = PublicKey::fromBase58DER(legacyPeer.getPublicKey().toBase58DER());
+    const auto peer = PublicKey::fromDER(legacyPeer.getPublicKey().toDER());
 
     EXPECT_EQ(legacyPriv.derive(legacyPeer.getPublicKey()), priv.derive(peer));
 }
@@ -207,14 +215,25 @@ TEST(Keys, FromDerAcceptsCompressedAndUncompressed) {
     ASSERT_EQ(33u, compressed.size());
     ASSERT_EQ(65u, uncompressed.size());
 
-    // Both forms describe the same key, so they have to give the same canonical form.
+    // Both forms describe the same key, so they have to give the same canonical form — under the one
+    // secp256k1 tag, even though the uncompressed import is a different `AsymAlg` internally. A second
+    // spelling would make a key stop comparing equal to itself.
     EXPECT_EQ(PublicKey::fromDER(compressed), PublicKey::fromDER(uncompressed));
-    EXPECT_EQ(legacyPub.toBase58DER(), PublicKey::fromDER(uncompressed).toBase58DER());
+    EXPECT_EQ(PublicKey::fromDER(compressed).toBase58DER(), PublicKey::fromDER(uncompressed).toBase58DER());
+    EXPECT_EQ(compressed, decodeTaggedPublicKey(PublicKey::fromDER(uncompressed).toBase58DER()).rawKey);
 }
 
 TEST(Keys, MalformedInputIsRejected) {
     EXPECT_ANY_THROW(PublicKey::fromBase58DER("this-is-not-a-key"));
     EXPECT_ANY_THROW(PrivateKey::fromWIF("this-is-not-a-wif"));
+}
+
+/// The cut: a key in the pre-3.0.0 encoding is refused by name, not read as secp256k1 by assumption.
+TEST(Keys, AnUntaggedKeyIsRefused) {
+    const auto legacyPub = legacy::PrivateKey::fromWIF(WIF).getPublicKey();
+
+    EXPECT_ANY_THROW(PublicKey::fromBase58DER(legacyPub.toBase58DER()));
+    EXPECT_NO_THROW(PublicKey::fromBase58DER(PublicKey::fromDER(legacyPub.toDER()).toBase58DER()));
 }
 
 // ---------------------------------------------------------------------------------------------

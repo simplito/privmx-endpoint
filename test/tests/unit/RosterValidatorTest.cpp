@@ -31,6 +31,7 @@ limitations under the License.
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
 #include <privmx/endpoint/core/crypto/FormatHash.hpp>
+#include <privmx/endpoint/core/crypto/KeyFormats.hpp>
 #include <privmx/utils/Base58.hpp>
 
 using privmx::endpoint::core::PrivateKey;
@@ -94,27 +95,33 @@ TEST(RosterValidator, RefusesAnEmptyUserId) {
     EXPECT_THROW(Validator::validateUserListFormat(users, "field:users"), privmx::endpoint::core::Exception);
 }
 
-TEST(RosterValidator, AcceptsAnUncompressedEncodingToo) {
-    // 65 bytes rather than 33. Nothing in the platform emits these today, but a format check that refused them
-    // would be rejecting a legitimate encoding of the same key.
-    std::string der(65, '\0');
-    der[0] = 0x04;
-    EXPECT_NO_THROW(
-        Validator::validatePubKeyFormat(
-            privmx::utils::Base58::encodeWithChecksum(der, privmx::endpoint::core::FormatHash::sha256), "field:pubKey"
-        ));
+TEST(RosterValidator, RefusesAnEncodingWithoutAnAlgorithmTag) {
+    // The encodings used before the 3.0.0 cut: a bare compressed point, and a bare uncompressed one. Both are
+    // well-formed Base58Check and both are refused, because a key has to say which algorithm it is. A key
+    // imported from an uncompressed point is re-encoded compressed under the secp256k1 tag.
+    for (const std::size_t length : {std::size_t{33}, std::size_t{65}}) {
+        std::string der(length, '\0');
+        der[0] = length == 33 ? 0x02 : 0x04;
+        EXPECT_THROW(
+            Validator::validatePubKeyFormat(
+                privmx::utils::Base58::encodeWithChecksum(der, privmx::endpoint::core::FormatHash::sha256),
+                "field:pubKey"
+            ),
+            privmx::endpoint::core::Exception
+        ) << "length " << length;
+    }
 }
 
 TEST(RosterValidator, WhatItDeliberatelyDoesNotDo) {
-    // A 33-byte string with a correct checksum whose x has no square root on the curve: well-formed, not a
+    // A correctly tagged key of the right length whose x has no square root on the curve: well-formed, not a
     // point. The cheap check passes it and the full check refuses it, which is safe — it fails at first use.
     std::string der(33, '\0');
     der[0] = 0x02;
     for (std::size_t i = 1; i < der.size(); ++i) {
         der[i] = static_cast<char>(0xFF);   // x = 2^256-1 > p, so no point exists
     }
-    const std::string encoded = privmx::utils::Base58::encodeWithChecksum(
-        der, privmx::endpoint::core::FormatHash::sha256
+    const std::string encoded = privmx::endpoint::core::encodeTaggedPublicKey(
+        der, privmx::endpoint::core::DEFAULT_KEY_ALGORITHM
     );
     EXPECT_NO_THROW(Validator::validatePubKeyFormat(encoded, "field:pubKey"));
     EXPECT_THROW(Validator::validatePubKeyBase58DER(encoded, "field:pubKey"), privmx::endpoint::core::Exception);

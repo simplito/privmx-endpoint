@@ -24,15 +24,15 @@ AUTH=$(echo -n "$AUTH_DATA" | base64 -w0)
 URL=http://localhost:${DOCKER_BRIDGE_PORT}/api
 
 user_1_privKey=Kx9ftJtfa4Af941f9jYR44dKxv9uWMxkJBk3XgdSYy6M5i6zcXxS
-user_1_pubKey=6GdpXA9ro6hDabKKFsnuq4EJ1NYNLqsnLzTLCAyL55FMSk8xSM
+user_1_pubKey=L5tcPe1CjgyqPyHgf6B5VN2tLLvXEMKcsmhodvtPK4Hta49qvZcF
 user_1_id=user_1
 
 user_2_privKey=L2KX5JrHkGBzGvMJ41bDhwgwN1JpqGKYk8feJEyri8bdqkqd84kt
-user_2_pubKey=86uPnTCSQ2WzEoM1EYGWt2dEc1jmR51HrVw5wTydxiDyuHDMty
+user_2_pubKey=L5vSfDGVnGamDjwtgn9jxy5rjHXARkPr1HDK7gdgKNBXYgZuuMZX
 user_2_id=user_2
 
 user_3_privKey=KxViitzdcW4unZxZPEiTzU2mzAaEPipXyeS7j7jB2fDnHNKM2LJe
-user_3_pubKey=6KYkRBd2GxTFBKchyLmXVtGP88TSwGobZ9Y4Ve1fnhKauSk7x5
+user_3_pubKey=L5tfJZuECrTh9ztQxUtYTyhiNS3H9Rv3oauxifBrMQ1WeHbcYbte
 user_3_id=user_3
 
 echo "Creating solution"
