@@ -671,7 +671,7 @@ core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(
     core::ListQueryMapper::map(model, query);
     auto streamRoomsList = _serverApi->streamRoomList(model);
     auto streamRooms = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRooms(
-        streamRoomsList.list, _keyProvider, _groupPrivKeyResolver
+        streamRoomsList.list, _keyProvider, _groupPrivKeyResolver, contextId
     );
     return core::PagingList<StreamRoom>({.totalAvailable = streamRoomsList.count, .readItems = streamRooms});
 }

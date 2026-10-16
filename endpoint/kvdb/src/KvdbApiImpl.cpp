@@ -201,7 +201,7 @@ core::PagingList<Kvdb> KvdbApiImpl::listKvdbs(
         setNewModuleKeysInCache(kvdb.id, containerToModuleKeys(kvdb), kvdb.version);
     }
     std::vector<Kvdb> kvdbs = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdbs(
-        kvdbsList.kvdbs, _keyProvider, _groupPrivKeyResolver
+        kvdbsList.kvdbs, _keyProvider, _groupPrivKeyResolver, contextId
     );
     return core::PagingList<Kvdb>({.totalAvailable = kvdbsList.count, .readItems = kvdbs});
 }

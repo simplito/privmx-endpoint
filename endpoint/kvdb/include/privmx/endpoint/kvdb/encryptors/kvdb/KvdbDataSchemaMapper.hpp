@@ -60,7 +60,8 @@ public:
     std::vector<Kvdb> validateDecryptAndConvertKvdbs(
         const std::vector<server::KvdbInfo>& kvdbs,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
-        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
+        const std::optional<std::string>& expectedContextId = std::nullopt
     );
 
     Kvdb validateDecryptAndConvertKvdb(

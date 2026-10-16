@@ -61,6 +61,9 @@ public:
     );
     std::string buildSubscriptionQueryInternal(EventSelectorType selectorType, const std::string& selectorId);
 
+    // Whether the subscription query `channel` was made for exactly `contextId` (its `contextId=` selector).
+    static bool subscribedTo(const std::string& channel, const std::string& contextId);
+
 private:
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();

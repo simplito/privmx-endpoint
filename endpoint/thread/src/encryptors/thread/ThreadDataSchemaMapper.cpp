@@ -120,7 +120,8 @@ Thread ThreadDataSchemaMapper::toLibThread(
 std::vector<Thread> ThreadDataSchemaMapper::validateDecryptAndConvertThreads(
     const std::vector<server::ThreadInfo>& threads,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
-    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
+    const std::optional<std::string>& expectedContextId
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Thread>(
         threads, keyProvider, _connection, [&](const server::ThreadInfo& t) { return validateDataIntegrity(t); },
@@ -132,7 +133,7 @@ std::vector<Thread> ThreadDataSchemaMapper::validateDecryptAndConvertThreads(
         [](const server::ThreadInfo& t, uint32_t code) {
             return toLibThread(t, {}, {}, code, ThreadDataSchema::Version::UNKNOWN);
         },
-        groupPrivKeyResolver
+        groupPrivKeyResolver, expectedContextId
     );
 }
 

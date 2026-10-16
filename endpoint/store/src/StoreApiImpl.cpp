@@ -234,7 +234,7 @@ core::PagingList<Store> StoreApiImpl::listStores(
         setNewModuleKeysInCache(store.id, containerToModuleKeys(store), store.version);
     }
     auto stores = _storeDataSchemaMapper->validateDecryptAndConvertStores(
-        storesList.stores, _keyProvider, _groupPrivKeyResolver
+        storesList.stores, _keyProvider, _groupPrivKeyResolver, contextId
     );
     return core::PagingList<Store>({.totalAvailable = storesList.count, .readItems = stores});
 }

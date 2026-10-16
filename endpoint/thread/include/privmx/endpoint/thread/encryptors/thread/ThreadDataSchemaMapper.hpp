@@ -64,7 +64,8 @@ public:
     std::vector<Thread> validateDecryptAndConvertThreads(
         const std::vector<server::ThreadInfo>& threads,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
-        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
+        const std::optional<std::string>& expectedContextId = std::nullopt
     );
 
     Thread validateDecryptAndConvertThread(

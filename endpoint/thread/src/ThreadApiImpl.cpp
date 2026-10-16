@@ -209,7 +209,7 @@ core::PagingList<Thread> ThreadApiImpl::listThreads(
         setNewModuleKeysInCache(thread.id, containerToModuleKeys(thread), thread.version);
     }
     std::vector<Thread> threads = _threadDataSchemaMapper->validateDecryptAndConvertThreads(
-        threadsList.threads, _keyProvider, _groupPrivKeyResolver
+        threadsList.threads, _keyProvider, _groupPrivKeyResolver, contextId
     );
     return core::PagingList<Thread>({.totalAvailable = threadsList.count, .readItems = threads});
 }

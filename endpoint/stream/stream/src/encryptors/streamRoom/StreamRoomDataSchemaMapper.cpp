@@ -97,7 +97,8 @@ std::pair<uint32_t, std::optional<core::DataIntegrityObject>> StreamRoomDataSche
 std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStreamRooms(
     const std::vector<server::StreamRoomInfo>& streamRooms,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
-    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
+    const std::optional<std::string>& expectedContextId
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<StreamRoom>(
         streamRooms, keyProvider, _connection,
@@ -110,7 +111,7 @@ std::vector<StreamRoom> StreamRoomDataSchemaMapper::validateDecryptAndConvertStr
         [](const server::StreamRoomInfo& room, uint32_t code) {
             return toLibStreamRoom(room, {}, {}, code, StreamRoomDataSchema::Version::UNKNOWN);
         },
-        groupPrivKeyResolver
+        groupPrivKeyResolver, expectedContextId
     );
 }
 

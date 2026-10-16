@@ -192,6 +192,9 @@ target_link_libraries(test_unit_GroupEnvelopeKeyFilterTest privmx privmxendpoint
 # Commit plans to the wire shapes the bridge receives (real EC keys; each state is climbed to prove members who should still have access do)
 add_executable(test_unit_TreeWireTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeWireTest.cpp)
 target_link_libraries(test_unit_TreeWireTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+# 07A: context listings and context custom events bound to the context asked for; event keys only to vouched keys
+add_executable(test_unit_ContextBindingTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/ContextBindingTest.cpp)
+target_link_libraries(test_unit_ContextBindingTest privmx privmxendpointcore privmxendpointevent Poco::Foundation GTest::GTest GTest::Main)
 add_executable(test_unit_GroupCustomChannelTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupCustomChannelTest.cpp)
 target_link_libraries(test_unit_GroupCustomChannelTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 

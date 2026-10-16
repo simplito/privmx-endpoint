@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_DATASCHEMAMAPPERUTILS_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_DATASCHEMAMAPPERUTILS_HPP_
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -143,7 +144,10 @@ public:
             const std::optional<DataIntegrityObject>&
         )> decrypt,
         std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError,
-        const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+        const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
+        // A context listing: an item the server files under another context is refused, and the verifier is asked
+        // under this one. Empty for a by-id read, which has no context of its own to compare with.
+        const std::optional<std::string>& expectedContextId = std::nullopt
     ) {
         if (items.empty()) {
             return std::vector<TLib>{};
@@ -155,6 +159,10 @@ public:
         std::vector<std::optional<DataIntegrityObject>> verifiedDios(items.size());
 
         for (size_t i = 0; i < items.size(); i++) {
+            if (expectedContextId.has_value() && items[i].contextId != expectedContextId.value()) {
+                result[i] = toLibError(items[i], UserVerificationFailureException().getCode());
+                continue;
+            }
             auto [code, verifiedDio] = validateIntegrity(items[i]);
             if (code != 0) {
                 result[i] = toLibError(items[i], code);
@@ -175,7 +183,9 @@ public:
                 keyRequest.addGroupKeys(items[i].groupKeys, getLocation(items[i]));
             }
         }
-        auto allKeys = keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver);
+        const bool anyLeft = std::any_of(result.begin(), result.end(), [](const TLib& r) { return r.statusCode == 0; });
+        const auto allKeys = anyLeft ? keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver) :
+                                       decltype(keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver)){};
         std::set<std::string> seenRandomIds;
 
         for (size_t i = 0; i < items.size(); i++) {
@@ -207,7 +217,7 @@ public:
                 continue;
             }
             verifyReqs.push_back(
-                {.contextId = result[i].contextId,
+                {.contextId = expectedContextId.value_or(result[i].contextId),
                  .senderId = result[i].lastModifier,
                  .senderPubKey = dios[i].creatorPubKey,
                  .date = result[i].lastModificationDate,
