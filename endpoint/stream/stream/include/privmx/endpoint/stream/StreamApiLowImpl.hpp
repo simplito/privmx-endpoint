@@ -189,6 +189,8 @@ private:
 
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
+    // Hands the room's key set to the media layer and the data channel encryptor.
+    void applyRoomKeys(StreamRoomData& room, const server::StreamRoomInfo& streamRoomInfo);
     // LOCAL: the room's current key (`keyId`), what this client encrypts under. REMOTE: every key that opens.
     std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo);
     std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> extractStreamRoomKeys(

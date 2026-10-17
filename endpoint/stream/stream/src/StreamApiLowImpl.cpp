@@ -142,9 +142,17 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         // The LOCAL key is chosen again from the updated room: one kept from join time would leave this client's
         // media and data channel under a key a re-key replaced, which a removed member holds (F-05c).
         if (streamRoomData.has_value()) {
-            std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(raw);
-            streamRoomData.value()->webRtc->updateKeys(eventData.streamRoomId, keys);
-            streamRoomData.value()->messageEncryptor->updateKey(keys);
+            applyRoomKeys(*streamRoomData.value(), raw);
+            // The Bridge sends this on a removal from a granted group too. A live publication writes nothing more,
+            // so without a re-key here it would stay under the key the removed member holds.
+            if (streamRoomData.value()->publisherStream && isRekeyNeeded(raw)) {
+                try {
+                    invalidateModuleKeysInCache(eventData.streamRoomId);
+                    ensureRoomKeyIsFresh(eventData.streamRoomId);
+                } catch (const std::exception& e) {
+                    LOG_ERROR("streamRoomUpdated: re-key of a stale room failed: ", e.what());
+                }
+            }
             for (const auto& internalSubscription : streamRoomData.value()->subscriptionsIds) {
                 subscriptions.erase(
                     remove(subscriptions.begin(), subscriptions.end(), internalSubscription), subscriptions.end()
@@ -642,6 +650,10 @@ void StreamApiLowImpl::ensureRoomKeyIsFresh(const std::string& streamRoomId) {
     if (isRekeyNeeded(keys)) {
         autoRotateStreamRoomKeys(streamRoomId);
         keys = getNewModuleKeysAndUpdateCache(streamRoomId);
+        // The sender moves now: our own streamRoomUpdated would move it only when it arrives, or never if lost.
+        server::StreamRoomGetModel getModel;
+        getModel.id = streamRoomId;
+        applyRoomKeys(*getStreamRoomData(streamRoomId), _serverApi->streamRoomGet(getModel).streamRoom);
     }
     // Backstop: a re-key that did not happen — a caller the room's `rotateKeys` policy refuses — has already
     // thrown by now, so reaching here still stale would mean the rotation silently did nothing.
@@ -776,6 +788,12 @@ void StreamApiLowImpl::setNewOfferOnReconfigure(const int64_t sessionId, const S
     model.sessionId = sessionId;
     model.offer = sessionDescription;
     _serverApi->streamSetNewOffer(model);
+}
+
+void StreamApiLowImpl::applyRoomKeys(StreamRoomData& room, const server::StreamRoomInfo& streamRoomInfo) {
+    std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoomInfo);
+    room.webRtc->updateKeys(room.streamRoomId, keys);
+    room.messageEncryptor->updateKey(keys);
 }
 
 std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo) {

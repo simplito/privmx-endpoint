@@ -748,3 +748,41 @@ TEST_F(StreamRoomUsingGroupsTest, SECURITY_the_local_media_key_follows_a_rekey) 
     EXPECT_EQ(localKeyId(afterRekey.value()), *added.begin()) << "media stays under a key user_3 holds";
     EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
 }
+
+TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_removal_from_a_granted_group) {
+    // Audit 05a final-1, honest Bridge. The only staleness check ran at publishStream/updateStream, so a stream
+    // already being published stayed under K1 after user_3 left G, and user_3, still subscribed, kept decrypting
+    // it. The Bridge now tells the room about the removal and the publishing client re-keys.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("live_pub"), core::Buffer::from("live_priv")
+        );
+    });
+    group::Group sharedGroup = groupApi->getGroup(groupId);
+    std::string streamRoomId;
+    ASSERT_NO_THROW({
+        streamRoomId = createStreamRoomWithGroups(
+            contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<group::Group>{sharedGroup}
+        );
+    });
+    auto webRtc = std::make_shared<KeyRecordingWebRTC>();
+    ASSERT_NO_THROW({ streamApi->joinStreamRoom(streamRoomId, webRtc); });
+    ASSERT_NO_THROW({ streamApi->createStream(streamRoomId); }); // this client encrypts outgoing media
+    const std::string removedMembersKey = localKeyId(webRtc->updates().front());
+    ASSERT_FALSE(removedMembersKey.empty());
+
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {userId(3)}); });
+
+    // No publishStream or updateStream from here on: only the removal itself can move the sender.
+    std::string local = removedMembersKey;
+    for (int i = 0; i < 100 && local == removedMembersKey; ++i) {
+        local = localKeyId(webRtc->updates().back());
+        if (local == removedMembersKey) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    EXPECT_NE(local, removedMembersKey) << "the publication stays under a key user_3 holds";
+    stream::StreamRoom room = streamApi->getStreamRoom(streamRoomId);
+    EXPECT_TRUE(room.staleGroups.empty()) << "the room was not re-keyed";
+    EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
+}
