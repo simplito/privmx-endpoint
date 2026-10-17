@@ -282,8 +282,14 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
             asResolve.blame = keytree::GroupKeyResolver::tamperedBy(group, climb.tamperedNode);
         }
         // Garbled wraps must not let whoever garbled them block their own removal: the state is verified, and a
-        // removal wraps only fresh keys to public ones.
-        if (tolerateBrokenClimb && climb.failure != keytree::ClimbFailure::NotAMember) {
+        // removal wraps only fresh keys to public ones. Except a leaf that does not open with nothing cached for
+        // this epoch: that is most likely our own key change, and planning on would abandon every member's history
+        // when a renewLeaf restores it.
+        const auto cachedGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(group.keyVersion));
+        const bool historyStillReachable =
+            cachedGrantKey.has_value() && cachedGrantKey->getPublicKey().toBase58DER() == group.groupPubKey;
+        if (tolerateBrokenClimb && climb.failure != keytree::ClimbFailure::NotAMember &&
+            (climb.failure != keytree::ClimbFailure::LeafDidNotOpen || historyStillReachable)) {
             LOG_WARN("[climbForPlanning] planning without the climb: ", describeResolveFailure(asResolve))
             return state;
         }

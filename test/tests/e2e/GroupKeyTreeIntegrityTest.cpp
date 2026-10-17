@@ -860,6 +860,55 @@ TEST_F(GroupKeyTreeIntegrityTest, a_single_member_group_survives_its_members_key
     EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << "the sole member is still locked out; " << lastReadError;
 }
 
+TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_manager_who_changed_key_cannot_remove_before_renewing) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    // Audit 05a final-1 (tolerant removal climb, older than 08a). The removal tolerated a leaf that did not open
+    // and, with no grant key cached, went out with abandonHistory: every member lost every earlier epoch because
+    // one manager ran the documented key change. It must fail closed like rotate and add, pointing at renewLeaf.
+    const Identity firstKey = newIdentity("rekeyed_manager");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = createTreeGroup({user(1), user(2), user(3), asMember(firstKey)}, {user(1), asMember(firstKey)});
+    });
+    group::Group atEpoch1;
+    ASSERT_NO_THROW({ atEpoch1 = groupApi->getGroup(groupId); });
+    std::string threadId;
+    ASSERT_NO_THROW({ threadId = createThreadGrantedTo(atEpoch1); });
+    std::string messageId;
+    ASSERT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            threadId, core::Buffer::from("history_public"), core::Buffer::from("history_private"),
+            core::Buffer::from("history_data")
+        );
+    });
+    ASSERT_TRUE(canReadMessage(2, messageId)) << lastReadError;
+
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
+    std::string refusal;
+    ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        try {
+            groups.removeGroupMembers(groupId, {user(3).userId});
+        } catch (const core::Exception& e) {
+            refusal = e.getFull();
+        }
+    }));
+    EXPECT_NE(refusal.find("renewLeaf"), std::string::npos) << "the removal was not refused: '" << refusal << "'";
+    EXPECT_EQ(groupApi->getGroup(groupId).keyVersion, 1) << "a removal landed";
+    EXPECT_TRUE(canReadMessage(2, messageId)) << "user_2 lost the group's history; " << lastReadError;
+
+    // After the renewal the same removal goes through and keeps the history.
+    ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        ASSERT_TRUE(groups.renewLeaf(groupId, firstKey.privKey));
+        groups.removeGroupMembers(groupId, {user(3).userId});
+    }));
+    EXPECT_EQ(groupApi->getGroup(groupId).keyVersion, 2);
+    EXPECT_TRUE(canReadMessage(2, messageId)) << "the removal after renewing cut the history; " << lastReadError;
+}
+
 // -- churning one member's seat --
 
 TEST_F(GroupKeyTreeIntegrityTest, add_and_remove_the_same_member_repeatedly_keeps_the_tree_consistent) {
