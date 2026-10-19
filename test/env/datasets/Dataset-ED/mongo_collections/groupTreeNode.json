@@ -1,0 +1,57 @@
+[{
+	"_id": "6ad5e8c9fc33052568f5b557|1",
+	"groupId": "6ad5e8c9fc33052568f5b557",
+	"nodeIndex": 1,
+	"generation": 0,
+	"publicKey": "2JX4babrCcQKuQVeYmXaAzRMEsZHZREW2eLD1pVGWtGZkDrwqdZKRdKoKPum9iACFDhgzi1oqYocrkMFRM5QVvmNHK9ArUc"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b558|1",
+	"groupId": "6ad5e8c9fc33052568f5b558",
+	"nodeIndex": 1,
+	"generation": 0,
+	"publicKey": "2JHg1j7m5mhvaKruGyq1hY76KNr2s2Nh9svFfVCPW4WpEbgLUdkXQCXcZuRPZCx3ighiBE5X1g44pixB37xL7KANxiy6rx2"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b558|3",
+	"groupId": "6ad5e8c9fc33052568f5b558",
+	"nodeIndex": 3,
+	"generation": 0,
+	"publicKey": "2JT3NPMpmNyVooDn5T4kwyWJtNZYwQsriHQEmzmVRh3ndGvfvB2g4PbrEHhro3k4bem7s3pWLVjC7eKjntSWJefYUgJGwDu"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b559|1",
+	"groupId": "6ad5e8c9fc33052568f5b559",
+	"nodeIndex": 1,
+	"generation": 0,
+	"publicKey": "2J6JGkyzB7GBirKdQ33wdrRmLhej3cVDdSF23w25TU1MXaYkwxoT9FRdTF8mExGhLZiHcqx4TtaJyUavwfnTHsQ47hEK7HY"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b55a|1",
+	"groupId": "6ad5e8c9fc33052568f5b55a",
+	"nodeIndex": 1,
+	"generation": 0,
+	"publicKey": "2JUFV4pq9NtmQd919PdSofebMQdtezhuWPPeAfRi55xoF3UfmnyttWigD7XooxMQb9HDrsvoN1jbf974HURf6LqvsSaZB48"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b55a|3",
+	"groupId": "6ad5e8c9fc33052568f5b55a",
+	"nodeIndex": 3,
+	"generation": 1,
+	"publicKey": "2JRegTWgAmEgrC53BqdgADmxYLXJhAQfrdEK1tqty9p8bnFjsRB2PikUKDd24J1PBUWeTnQNBPHAT2Y9cKouWcysiEZJVNp"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b55b|1",
+	"groupId": "6ad5e8c9fc33052568f5b55b",
+	"nodeIndex": 1,
+	"generation": 0,
+	"publicKey": "2J7Cxy539XrcXqKs5xtFWkQJNfaF8E1NK2QFChku8eWbxWUKqaacV4M5djxnbbzdTMqc8kNqu97BNHXqRzyNB1ugrukzLpp"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b55b|3",
+	"groupId": "6ad5e8c9fc33052568f5b55b",
+	"nodeIndex": 3,
+	"generation": 0,
+	"publicKey": "2JSp1hVaqtSCTsEzrrzABqs6pwY7W3Siu4VUn248RMvuSzHXQJShEwiXTGBrpQPSWkER16YwnmZN8oVQALGCxH3Fs4G2JTK"
+}]
+

@@ -1,0 +1,344 @@
+[{
+	"_id": "6ad5e8c9fc33052568f5b556",
+	"contextId": "cd0c329f-ad0f-4c2c-9e66-3d3faec25986",
+	"type": "group",
+	"groupPubKey": "2JStqxmM5fb4rdwi2deCMrJDkS1eehcuQd78n9Rbiw4TVMLYBiSQjmDDBrnavoKgX9W51hah7djV9aaiFRxf2CjTk2ijG7B",
+	"creator": "user_1",
+	"createDate": 1.79240365716E+12,
+	"lastModifier": "user_1",
+	"lastModificationDate": 1.79240365716E+12,
+	"keyId": "28dab399bb728d9cbdc5050ff5236abe",
+	"users": [
+		"user_1"
+	],
+	"managers": [
+		"user_1"
+	],
+	"publicMetaVersion": 1,
+	"privateMetaVersion": 1,
+	"rosterVersion": 1,
+	"policy": {},
+	"numLeaves": 1,
+	"leafAssignment": [
+		"user_1"
+	],
+	"keyVersion": 1,
+	"eraFloor": 1,
+	"groupKeys": [
+		{
+			"keys": [
+				{
+					"keyId": "28dab399bb728d9cbdc5050ff5236abe",
+					"data": {
+						"dio": "AUAuwAIk4bFLIg8YTPrhcxYqJDtuW5gJWN9rBhWBzmpBtTkA61Qm1NNkOwaCaXUUFrrR/UalB3mspfOkjHi//0ELeyJicmlkZ2VJZGVudGl0eSI6eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjEyMzQ1L2FwaS92Mi4wIn0sImNvbnRleHRJZCI6ImNkMGMzMjlmLWFkMGYtNGMyYy05ZTY2LTNkM2ZhZWMyNTk4NiIsImNyZWF0b3JQdWJsaWNLZXkiOiIySkV5OUVrRERvRmtDdzY0OEdXOUt3Mm1Gd2Y3R014S1NKczY1MlV4RllyN0RUUWNxTHdDSE51MXRydUJQRXRhUXZacFhVQmlyM0Z4UmFLTUpNa2RqV1Nqakw1ekV3VCIsImNyZWF0b3JVc2VySWQiOiJ1c2VyXzEiLCJmaWVsZENoZWNrc3VtcyI6eyJlbmNyeXB0ZWRLZXkiOiJtV2FHNS9LMXV0czBIekl5dmZLSlJsTWtPNkVPaFZTODFKQ25OWkF0N2xBPSIsInNlY3JldEhhc2giOiJpZ2FlNXpWYndkUjl0NS95MWsrSExUdmFuOWh2Y3V2MnEyOW1PTmZoZlhZPSJ9LCJyYW5kb21JZCI6Ijg5OWI3NjdjYjgxODhhY2YiLCJyZXNvdXJjZUlkIjoiMzdkNzc5NDEtOWZmMi00ZjEzLWEwYjQtMmY5YzkzMDVkNDBkIiwic3RydWN0dXJlVmVyc2lvbiI6MiwidGltZXN0YW1wIjoxNzkyNDAzNjU3MTUzLCJ2ZXJzaW9uIjoxfQ==",
+						"encryptedKey": "WYqYeP3NANjN6dw837VOnc1mn2+kHXjA33OWw0hTVHoBHcZQJqQtDDnFqaXYhpIK8PVnb6dST3B7tcmK5DWHRO6BPSg2ty0VSMXYq2CBbQpBSeU4FFcDD+1c/r9s2P0ZmQvNSDBVpHxOTRJpi+gt07seM1ZpvNBhbVNfGZBTxbM+6+aJ0sRp+wZ4DADqHKtYf/rNanA5gr/9l8yi/kYQ1MVzVfwqyPYXplObslYY39co+T1IOLjsUpzR039Ru4aastgs/xsk1y9EktAZNnP292Y0pzBXvXUrosdsa7jKGwKEGYq/k+j2BgVMDKsyfc28k2WWKfit43IzSJDRS3PoZYgB",
+						"version": 2
+					},
+					"groupEpoch": 1
+				}
+			],
+			"group": "6ad5e8c9fc33052568f5b556"
+		}
+	],
+	"clientResourceId": "37d77941-9ff2-4f13-a0b4-2f9c9305d40d"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b557",
+	"contextId": "cd0c329f-ad0f-4c2c-9e66-3d3faec25986",
+	"type": "group",
+	"groupPubKey": "2JXN67RSTHuALm8MJztyTqFW3SBznfE9xZyR7qjxqmWKXe3GXFuoa6ta9JZsMGMgkQUAk1HmMyNZYm6q2xM5yCFzporRhAf",
+	"creator": "user_1",
+	"createDate": 1.792403657193E+12,
+	"lastModifier": "user_1",
+	"lastModificationDate": 1.792403657193E+12,
+	"keyId": "92faac1eb8a31187e7b4264434a5e15f",
+	"users": [
+		"user_1",
+		"user_2"
+	],
+	"managers": [
+		"user_1"
+	],
+	"publicMetaVersion": 1,
+	"privateMetaVersion": 1,
+	"rosterVersion": 1,
+	"policy": {},
+	"numLeaves": 2,
+	"leafAssignment": [
+		"user_1",
+		"user_2"
+	],
+	"keyVersion": 1,
+	"eraFloor": 1,
+	"groupKeys": [
+		{
+			"keys": [
+				{
+					"keyId": "92faac1eb8a31187e7b4264434a5e15f",
+					"data": {
+						"dio": "AUChEkEZpv/RG+dKjlXdbedcjeNNj9Je1vMgL18gL6Bv2K4Lv8BD1fRweLuJniWlqbnCV+iCON1j0n3/FBe0FbkBeyJicmlkZ2VJZGVudGl0eSI6eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjEyMzQ1L2FwaS92Mi4wIn0sImNvbnRleHRJZCI6ImNkMGMzMjlmLWFkMGYtNGMyYy05ZTY2LTNkM2ZhZWMyNTk4NiIsImNyZWF0b3JQdWJsaWNLZXkiOiIySkV5OUVrRERvRmtDdzY0OEdXOUt3Mm1Gd2Y3R014S1NKczY1MlV4RllyN0RUUWNxTHdDSE51MXRydUJQRXRhUXZacFhVQmlyM0Z4UmFLTUpNa2RqV1Nqakw1ekV3VCIsImNyZWF0b3JVc2VySWQiOiJ1c2VyXzEiLCJmaWVsZENoZWNrc3VtcyI6eyJlbmNyeXB0ZWRLZXkiOiJjTE9vSVIrakRoQmNRNUJvbU1nR1M1QTlLVGs5SDIvRmpZb3NmakdYbGRBPSIsInNlY3JldEhhc2giOiIyY0dDMHN4TUNXSHF2aG9aWVNlNWNQMGl2bytxdS8yTnRaS2sxd203dnNRPSJ9LCJyYW5kb21JZCI6IjYyZDRlZGFiNTU4NTAyODMiLCJyZXNvdXJjZUlkIjoiNjExMTA4MmYtMjBjNC00YTk5LTlkMzEtYzAwNDM1MWRhMTAyIiwic3RydWN0dXJlVmVyc2lvbiI6MiwidGltZXN0YW1wIjoxNzkyNDAzNjU3MTg3LCJ2ZXJzaW9uIjoxfQ==",
+						"encryptedKey": "WYqYeP3NANjN6dw837VOnc1mn2+kHXjA33OWw0hTVHoBL0VMYPaQsu1oHw0CtJcMPseBtqI+v+HKvvCi3AC8IcIO6ETq/fgDRITt0S3ukHZCsCAK/eVHWe1AIGZO0eXdd4fUH6WohQ/Bx1yDMQgNxBvlwXolJHn88WLFf8Z1+V/7/HOnty2LQa3mAGpQXCJJy9Ibnhjjg+xI/9oaKW2olXAypSiRuyy56SYbIo6sk5l1qqIGF5OlsWbUPgn/e2ltvPfrOJPheCW2kelw5fsgTyfpEgPwj8SSQLmVY97CXWEpE6e6sIIv3vO8GTbQxnF4sdmu5JNhqZae9oaN4DIjd6+z",
+						"version": 2
+					},
+					"groupEpoch": 1
+				}
+			],
+			"group": "6ad5e8c9fc33052568f5b557"
+		}
+	],
+	"clientResourceId": "6111082f-20c4-4a99-9d31-c004351da102"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b558",
+	"contextId": "cd0c329f-ad0f-4c2c-9e66-3d3faec25986",
+	"type": "group",
+	"groupPubKey": "2JTcqY67tcgvat3hLDjHrzq3iR7X76xqf9Rf1LZHu2Ycq9ANxHEbzGN64JX9xtxdSpjAHmV5vB4X1q9UP3y4j62YF797TVo",
+	"creator": "user_1",
+	"createDate": 1.792403657226E+12,
+	"lastModifier": "user_1",
+	"lastModificationDate": 1.792403657226E+12,
+	"keyId": "ac4d15acffb32626e17dd3d265966e26",
+	"users": [
+		"user_1",
+		"user_2",
+		"user_3"
+	],
+	"managers": [
+		"user_1"
+	],
+	"publicMetaVersion": 1,
+	"privateMetaVersion": 1,
+	"rosterVersion": 1,
+	"policy": {},
+	"numLeaves": 3,
+	"leafAssignment": [
+		"user_1",
+		"user_2",
+		"user_3"
+	],
+	"keyVersion": 1,
+	"eraFloor": 1,
+	"groupKeys": [
+		{
+			"keys": [
+				{
+					"keyId": "ac4d15acffb32626e17dd3d265966e26",
+					"data": {
+						"dio": "AUDgJvKthR59wm6xtfPkqjeO3CCbIfOiUxQSVFx8ZLtz+E3I22mlmND7mNzzTPDLou5lUafQzZG5KGwByUtiOc8GeyJicmlkZ2VJZGVudGl0eSI6eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjEyMzQ1L2FwaS92Mi4wIn0sImNvbnRleHRJZCI6ImNkMGMzMjlmLWFkMGYtNGMyYy05ZTY2LTNkM2ZhZWMyNTk4NiIsImNyZWF0b3JQdWJsaWNLZXkiOiIySkV5OUVrRERvRmtDdzY0OEdXOUt3Mm1Gd2Y3R014S1NKczY1MlV4RllyN0RUUWNxTHdDSE51MXRydUJQRXRhUXZacFhVQmlyM0Z4UmFLTUpNa2RqV1Nqakw1ekV3VCIsImNyZWF0b3JVc2VySWQiOiJ1c2VyXzEiLCJmaWVsZENoZWNrc3VtcyI6eyJlbmNyeXB0ZWRLZXkiOiJ6am9mVHFxajYyY09zUlM3L2hpRE5naUZRWWZ1ZWc0eDI0UjhxZkZsem1rPSIsInNlY3JldEhhc2giOiJuWGFCa2JEaXZKM09adEQwdjRMU3N0aE1WRVg0Q29CdzBZdTFZc1pQVndJPSJ9LCJyYW5kb21JZCI6IjA1ZDQyYmIzMGZlZDg5YTYiLCJyZXNvdXJjZUlkIjoiZThmZTQ5NjEtMDE4ZC00YTQ0LTlkOTQtM2YyOTM5NDEwZGU0Iiwic3RydWN0dXJlVmVyc2lvbiI6MiwidGltZXN0YW1wIjoxNzkyNDAzNjU3MjIwLCJ2ZXJzaW9uIjoxfQ==",
+						"encryptedKey": "WYqYeP3NANjN6dw837VOnc1mn2+kHXjA33OWw0hTVHoBX6pWAzPTHjLLx4cRsvlTJut5Msq+nyxPmNLxyQglQmO8iqxOaOMaR5xW/2sQdD1OlVHexRzMCKhiYBxwKK+pt2ZH6sdIbjvUQpd9Nkv8dE4UDeZbPFu14f+UBbak1xChxh8j5lywK/N0kfkBFaMcZGdBw9egdsz8/x7MGa8aWdCd6hblKkE450vOclRzl9R2qlxvFwmqoo/ObSihO9cn6vGLmswGCkDIsJTM9e65qYZZkCr+i4v363PKA7fPhhtZd7uB+h4qxoJUSNqJpfKF8NYCFJwESv1c1mMSgNfdJhrM",
+						"version": 2
+					},
+					"groupEpoch": 1
+				}
+			],
+			"group": "6ad5e8c9fc33052568f5b558"
+		}
+	],
+	"clientResourceId": "e8fe4961-018d-4a44-9d94-3f2939410de4"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b559",
+	"contextId": "c8128f44-a175-407b-a50d-a47893882911",
+	"type": "group",
+	"groupPubKey": "2JKQzBEtN2MTwP873MVQJtdf1c3d49p7vgjMTdSmACPWG9vUuXe3iA2bowup6Bi1bKk3UYpQKHKmaq5g1rZuS5ePc1vjY85",
+	"creator": "user_1",
+	"createDate": 1.792403657258E+12,
+	"lastModifier": "user_1",
+	"lastModificationDate": 1.792403657258E+12,
+	"keyId": "5c30ad22e66d1cea4d5f2ec4db19a76b",
+	"users": [
+		"user_1",
+		"user_2"
+	],
+	"managers": [
+		"user_1"
+	],
+	"publicMetaVersion": 1,
+	"privateMetaVersion": 1,
+	"rosterVersion": 1,
+	"policy": {},
+	"numLeaves": 2,
+	"leafAssignment": [
+		"user_1",
+		"user_2"
+	],
+	"keyVersion": 1,
+	"eraFloor": 1,
+	"groupKeys": [
+		{
+			"keys": [
+				{
+					"keyId": "5c30ad22e66d1cea4d5f2ec4db19a76b",
+					"data": {
+						"dio": "AUBRaPKmyVadBOQ4leInzO5qKiSEGiACQW/ERoKCXd0CSvZC6vTnqV95F7JRl2Y1/9WP8HYVHAHac3C+EI6PtlQGeyJicmlkZ2VJZGVudGl0eSI6eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjEyMzQ1L2FwaS92Mi4wIn0sImNvbnRleHRJZCI6ImM4MTI4ZjQ0LWExNzUtNDA3Yi1hNTBkLWE0Nzg5Mzg4MjkxMSIsImNyZWF0b3JQdWJsaWNLZXkiOiIySkV5OUVrRERvRmtDdzY0OEdXOUt3Mm1Gd2Y3R014S1NKczY1MlV4RllyN0RUUWNxTHdDSE51MXRydUJQRXRhUXZacFhVQmlyM0Z4UmFLTUpNa2RqV1Nqakw1ekV3VCIsImNyZWF0b3JVc2VySWQiOiJ1c2VyXzEiLCJmaWVsZENoZWNrc3VtcyI6eyJlbmNyeXB0ZWRLZXkiOiJsNC80V2hERjZ4NElOTnpiYUFoeGdNc1NOaDRzYk9mdWhRUFJrdGFSbjhvPSIsInNlY3JldEhhc2giOiJjbFlyMnl6dnlnVGtUc2N2SlBqdnhmbDJPR25TL3ZlMENlSXlCMzlnTHNrPSJ9LCJyYW5kb21JZCI6ImE4NzQ1ZTQwNTVhMWVmYTAiLCJyZXNvdXJjZUlkIjoiODFlNTYxMTQtMWVjNS00YzViLWEyOTYtN2FlOTI5NGI4ZWI0Iiwic3RydWN0dXJlVmVyc2lvbiI6MiwidGltZXN0YW1wIjoxNzkyNDAzNjU3MjUzLCJ2ZXJzaW9uIjoxfQ==",
+						"encryptedKey": "WYqYeP3NANjN6dw837VOnc1mn2+kHXjA33OWw0hTVHoBAa3u61w+XxvRt7wFGaNwPW23v3+NenNQ+K3TGUShLA2ES49m1lI8BsMZNZqKRhYDFzTZTVYt7XR6v+oByjc2hoBXVWPg1w7Rxn5wmehSc/FO2779PLaPw0oEXkX0n1Q/9PoR9IrRJGOtxL1SNFT8+whOrL/HhIj08/NxOlxPNAaiGqLDpfG1H75T2NGk1XlFpvNsc+mjCdZ5ZZnCt1nvpi8Llf6x/Qb1wZkhFHERcw34himTI3vJjuBsFf6+5t+9dhqqyaXs23r4t8ceuvrQj0rMLNVYMkZ3vtqcAvqbm3ze",
+						"version": 2
+					},
+					"groupEpoch": 1
+				}
+			],
+			"group": "6ad5e8c9fc33052568f5b559"
+		}
+	],
+	"clientResourceId": "81e56114-1ec5-4c5b-a296-7ae9294b8eb4"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b55a",
+	"contextId": "c8128f44-a175-407b-a50d-a47893882911",
+	"type": "group",
+	"groupPubKey": "2JMy6H9cqdVnFCxNU21U3kXS3Deufs9EwEMcRJbtZCyxHxjPpuvGTR1TAz2Yy53eys9Dwq95bXguRASyPt8dqBuM2j3fyY1",
+	"creator": "user_1",
+	"createDate": 1.792403657272E+12,
+	"lastModifier": "user_1",
+	"lastModificationDate": 1.79240365829E+12,
+	"keyId": "b048416c633f14d3bbb124be68153694",
+	"users": [
+		"user_1",
+		"user_2"
+	],
+	"managers": [
+		"user_1"
+	],
+	"publicMetaVersion": 2,
+	"privateMetaVersion": 2,
+	"rosterVersion": 2,
+	"policy": {},
+	"numLeaves": 3,
+	"leafAssignment": [
+		"user_1",
+		"user_2",
+		""
+	],
+	"keyVersion": 2,
+	"eraFloor": 1,
+	"groupKeys": [
+		{
+			"keys": [
+				{
+					"keyId": "589a1ad616fff449c6090091f559fc2c",
+					"data": {
+						"dio": "AUAxlr6DK3V8sr6XrXUBlB0aazAyvIPrwKsv+tvRXdYsSZrWTCIQ1TS4zgaDEA0Se/aKo9YGWhJRxLyU3jxJm3AHeyJicmlkZ2VJZGVudGl0eSI6eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjEyMzQ1L2FwaS92Mi4wIn0sImNvbnRleHRJZCI6ImM4MTI4ZjQ0LWExNzUtNDA3Yi1hNTBkLWE0Nzg5Mzg4MjkxMSIsImNyZWF0b3JQdWJsaWNLZXkiOiIySkV5OUVrRERvRmtDdzY0OEdXOUt3Mm1Gd2Y3R014S1NKczY1MlV4RllyN0RUUWNxTHdDSE51MXRydUJQRXRhUXZacFhVQmlyM0Z4UmFLTUpNa2RqV1Nqakw1ekV3VCIsImNyZWF0b3JVc2VySWQiOiJ1c2VyXzEiLCJmaWVsZENoZWNrc3VtcyI6eyJlbmNyeXB0ZWRLZXkiOiJTTWlaUmMvTHRzVFBETjJrd2tGZ2ZKQnFGNThnNG1FdEF1ZENZQ3U0elRFPSIsInNlY3JldEhhc2giOiI4anErQTF1UFZRVUJHS0QwdE9QZjRtVFArNFA2WEl5ZWR2TkhuNVBOemc4PSJ9LCJyYW5kb21JZCI6IjEyYTdjYzU2ZWYxMWI4YzMiLCJyZXNvdXJjZUlkIjoiYzc5NzE3MmYtZDQyMy00M2RhLWI2MDUtYTVhYzdmMzkzNjU4Iiwic3RydWN0dXJlVmVyc2lvbiI6MiwidGltZXN0YW1wIjoxNzkyNDAzNjU3MjY1LCJ2ZXJzaW9uIjoxfQ==",
+						"encryptedKey": "WYqYeP3NANjN6dw837VOnc1mn2+kHXjA33OWw0hTVHoBeW32ztyUeEyIJDjhHsmtMkroi2ZTW/ErBYXDAc82UKTFIVSii+bnM+45PAsND4yqD5cV84veAMr06PNBsgkPYjTej/3j3/mc/VMulCMTsVaeA7CTa6sUZbIIfD5886A9QXGUKxM7exTlSHdwNDVHjKc1NY5aVROOXE9b0tV7tUSrO72CLhDtZJNdNLj8oq7sXvXYWWBbB+Sq5MQL0Pak55KssiY+cFhVHnbK9sIUM+lZvKbHU8/YKOZqh11sM+ZoxfCKpj+b+XR+DF4k662JkZSmpIH0xOQB+szT6qnKIvQy",
+						"version": 2
+					},
+					"groupEpoch": 1
+				}
+			],
+			"group": "6ad5e8c9fc33052568f5b55a"
+		},
+		{
+			"group": "6ad5e8c9fc33052568f5b55a",
+			"keys": [
+				{
+					"keyId": "b048416c633f14d3bbb124be68153694",
+					"data": {
+						"dio": "AUAU9sryozfpLuF4Q3wT+mwjPsRB/UH4e/qzYuaBVJQEqXsGOYqOByX2qAzVhz92iD2hhqjx9NzGCZ9fbBBBknUAeyJicmlkZ2VJZGVudGl0eSI6eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjEyMzQ1L2FwaS92Mi4wIn0sImNvbnRleHRJZCI6ImM4MTI4ZjQ0LWExNzUtNDA3Yi1hNTBkLWE0Nzg5Mzg4MjkxMSIsImNyZWF0b3JQdWJsaWNLZXkiOiIySkV5OUVrRERvRmtDdzY0OEdXOUt3Mm1Gd2Y3R014S1NKczY1MlV4RllyN0RUUWNxTHdDSE51MXRydUJQRXRhUXZacFhVQmlyM0Z4UmFLTUpNa2RqV1Nqakw1ekV3VCIsImNyZWF0b3JVc2VySWQiOiJ1c2VyXzEiLCJmaWVsZENoZWNrc3VtcyI6eyJlbmNyeXB0ZWRLZXkiOiJ2ejhyK3d5SFdOTkltN2ZsWUkrMkJFZDdjdGVHZ3JtckNzNEFobGVJT1k4PSIsInNlY3JldEhhc2giOiJQU3dxZ0Q3ZFBYSzdBQVlDQm9oR3JQdEJyM2xMai9aK2xCOXNZT051dExZPSJ9LCJyYW5kb21JZCI6Ijc0MjI5MTRiYTQ1ZmRiMWUiLCJyZXNvdXJjZUlkIjoiYzc5NzE3MmYtZDQyMy00M2RhLWI2MDUtYTVhYzdmMzkzNjU4Iiwic3RydWN0dXJlVmVyc2lvbiI6MiwidGltZXN0YW1wIjoxNzkyNDAzNjU4MTQzLCJ2ZXJzaW9uIjoxfQ==",
+						"encryptedKey": "WYqYeP3NANjN6dw837VOnc1mn2+kHXjA33OWw0hTVHoBgg8iJMFmNw8Olly5me5Ccd9/wIC3GAgccChTXNJQ3KWEWiYANi/Avh5ToqAQGFdLXnnp4JAWlqKQdxMA2ZbAgb6xePpALF2xHL5PNPBCbd3PVRUu9XrbJDXsgJHHtp839ksx9US7GU+Mj3eFlPzrfv+5Q6KvrRTjQ09DWLWmgNWuBpsKjUbMMVBiV67s4AyLKKF64JSxYTrGysPCzq61s911RNU9IgwE5bEBMyE1cJY4A/BUCbfbq46OaOm137luUURQtx0FrnbcjsxXQgkFmhealIknsq6ZvsvzpdKO9nVC",
+						"version": 2
+					},
+					"groupEpoch": 2
+				}
+			]
+		}
+	],
+	"clientResourceId": "c797172f-d423-43da-b605-a5ac7f393658",
+	"keyHistory": [
+		{
+			"keyVersion": 1,
+			"groupPubKey": "2JcWQ7rCEXpuT19qBgeR3VnLey5kRyunK2YBPNizdVyBsmmNoMPB1xK2ncz9y4NJooij7VxMnhoXwMGmSJQU6Mi1uuNNZYR"
+		}
+	]
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b55b",
+	"contextId": "c8128f44-a175-407b-a50d-a47893882911",
+	"type": "group",
+	"groupPubKey": "2J8B7Pu1EDBTbTJ8oCf7jQJqD9wa9ZhGh5K6Gt1uJznFoHVf3kTcnxH8WCEJcuNKTyosDDhauw5feFPCWEeDzD9Tv9gfNvb",
+	"creator": "user_1",
+	"createDate": 1.792403657286E+12,
+	"lastModifier": "user_1",
+	"lastModificationDate": 1.792403657286E+12,
+	"keyId": "e534a017c2002977dcf5ecd1375e27aa",
+	"users": [
+		"user_1",
+		"user_2",
+		"user_3"
+	],
+	"managers": [
+		"user_1"
+	],
+	"publicMetaVersion": 1,
+	"privateMetaVersion": 1,
+	"rosterVersion": 1,
+	"policy": {},
+	"numLeaves": 3,
+	"leafAssignment": [
+		"user_1",
+		"user_2",
+		"user_3"
+	],
+	"keyVersion": 1,
+	"eraFloor": 1,
+	"groupKeys": [
+		{
+			"keys": [
+				{
+					"keyId": "e534a017c2002977dcf5ecd1375e27aa",
+					"data": {
+						"dio": "AUBHkRiGWtO1caADQi9C7ca/yoVCkEqBxv0YXVh3jgWMC03cYgOCE503di8JFUbAAlApUMY+J3Dck3qvw/9ERcUKeyJicmlkZ2VJZGVudGl0eSI6eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjEyMzQ1L2FwaS92Mi4wIn0sImNvbnRleHRJZCI6ImM4MTI4ZjQ0LWExNzUtNDA3Yi1hNTBkLWE0Nzg5Mzg4MjkxMSIsImNyZWF0b3JQdWJsaWNLZXkiOiIySkV5OUVrRERvRmtDdzY0OEdXOUt3Mm1Gd2Y3R014S1NKczY1MlV4RllyN0RUUWNxTHdDSE51MXRydUJQRXRhUXZacFhVQmlyM0Z4UmFLTUpNa2RqV1Nqakw1ekV3VCIsImNyZWF0b3JVc2VySWQiOiJ1c2VyXzEiLCJmaWVsZENoZWNrc3VtcyI6eyJlbmNyeXB0ZWRLZXkiOiIvYnNvWU1oRDVkRnB5eTR4djNLQ0F0YjRIMksrNkhJanhGVTJydVoyMTlzPSIsInNlY3JldEhhc2giOiJBZ0VSSmZReDNDL052b3ZvcVZ0V09WVjJaV2I0akNDNFpqUUVNdUF3VVlJPSJ9LCJyYW5kb21JZCI6IjNlZTJhNzFjOGE0NDhhNGIiLCJyZXNvdXJjZUlkIjoiOWM3YmUyYTctZDA4NC00YWYwLTk2NTktNDRhMDZjZDI3MGE1Iiwic3RydWN0dXJlVmVyc2lvbiI6MiwidGltZXN0YW1wIjoxNzkyNDAzNjU3Mjc5LCJ2ZXJzaW9uIjoxfQ==",
+						"encryptedKey": "WYqYeP3NANjN6dw837VOnc1mn2+kHXjA33OWw0hTVHoBoXDfnmiHfSOTQgdn/hysYtilZF24sx23YlivbSG5NxhIHR7jr6Lbs3at/uCbzhx3O80cWQOPPOh5yswtZ18VkOXtRbO3YNRBATVS/J4CIggnSIbBU2xbYN4fUlSV0ty8kzMKuyqzgp8ww8XLap01f2l2StRStL48UVJz9UuTR8bgiRoBEwGe/ziZstUB0dsDJsnNp0D0dH9O1KJlMV8rfcjtbnKQSqEwBa3Olm5ayfVivtpBNzliJ5Q0x/P3R8F1mHtrLCNKvyrhMejCQTf4W3d+NBLppwT/Yj18I+deAoiO",
+						"version": 2
+					},
+					"groupEpoch": 1
+				}
+			],
+			"group": "6ad5e8c9fc33052568f5b55b"
+		}
+	],
+	"clientResourceId": "9c7be2a7-d084-4af0-9659-44a06cd270a5"
+},
+{
+	"_id": "6ad5e8c9fc33052568f5b55c",
+	"contextId": "c8128f44-a175-407b-a50d-a47893882911",
+	"type": "group",
+	"groupPubKey": "2JGypN7T7KR2oqmrgBVzMNn3twYiduX2i3YQjdgKyb23w79yxuZcnmSQUAkfF4sYDQRyLAGxpYnDnf9PmwW25B2BbPqRQyE",
+	"creator": "user_1",
+	"createDate": 1.792403657304E+12,
+	"lastModifier": "user_1",
+	"lastModificationDate": 1.792403657304E+12,
+	"keyId": "0cb99ab3bd69fc4d5d6a7c7370f7e5c1",
+	"users": [
+		"user_1"
+	],
+	"managers": [
+		"user_1"
+	],
+	"publicMetaVersion": 1,
+	"privateMetaVersion": 1,
+	"rosterVersion": 1,
+	"policy": {},
+	"numLeaves": 1,
+	"leafAssignment": [
+		"user_1"
+	],
+	"keyVersion": 1,
+	"eraFloor": 1,
+	"groupKeys": [
+		{
+			"keys": [
+				{
+					"keyId": "0cb99ab3bd69fc4d5d6a7c7370f7e5c1",
+					"data": {
+						"dio": "AUBMFN2GIp1VAcesAFhWpDvYcYxmh4MT0JbRuUTninKxjeTdHbhh0IEXiPN1TeC6gmDnzkpL6dHlGjrZBfpR5tQAeyJicmlkZ2VJZGVudGl0eSI6eyJ1cmwiOiJodHRwOi8vbG9jYWxob3N0OjEyMzQ1L2FwaS92Mi4wIn0sImNvbnRleHRJZCI6ImM4MTI4ZjQ0LWExNzUtNDA3Yi1hNTBkLWE0Nzg5Mzg4MjkxMSIsImNyZWF0b3JQdWJsaWNLZXkiOiIySkV5OUVrRERvRmtDdzY0OEdXOUt3Mm1Gd2Y3R014S1NKczY1MlV4RllyN0RUUWNxTHdDSE51MXRydUJQRXRhUXZacFhVQmlyM0Z4UmFLTUpNa2RqV1Nqakw1ekV3VCIsImNyZWF0b3JVc2VySWQiOiJ1c2VyXzEiLCJmaWVsZENoZWNrc3VtcyI6eyJlbmNyeXB0ZWRLZXkiOiJWN0RINHFZdlA1SzRqSHMvOTFnWVlTYVUwSThvOXRIRnptZXNkeTdvWjc0PSIsInNlY3JldEhhc2giOiJOMWF2MDRudUltNUZJR1l1OTVWMWhuUHhxSGtrTVQ5UkpWUlBwTmE1NjdBPSJ9LCJyYW5kb21JZCI6IjliM2I0ZTMyNTVhNmQyZWUiLCJyZXNvdXJjZUlkIjoiOWE3YWIwNmYtZDk0Mi00YzM4LWE3ZjktY2RkZTY5YmZhYjYxIiwic3RydWN0dXJlVmVyc2lvbiI6MiwidGltZXN0YW1wIjoxNzkyNDAzNjU3MjkzLCJ2ZXJzaW9uIjoxfQ==",
+						"encryptedKey": "WYqYeP3NANjN6dw837VOnc1mn2+kHXjA33OWw0hTVHoB/sjB/UDu7gZtjtLf82I/Tw83kpAygoXUfW5mJH6UH3Yk9+xJVklhYQImI6LtilbhpnhQ8os6Nncod7U6oGZZSeQ2tt2PmgJcIwumdzGwpY6eNSPOEo9OwieVr6OI4tXaacUQgoW54ZghqGnrNigDXAVVt6mLNns7cAFIuj5pjvsD3CgYfh5NCjd2D9sC9G0Cq2XGH4K6iycBrFesjMndlPCA5ShbitZpsNbePXycFC3uxYdwZ0zuJQ3PQkBT5szeHmI1QAjyuT51fs3daL4ZdpYHY5QLBfWkJRn8yzEqx/gf",
+						"version": 2
+					},
+					"groupEpoch": 1
+				}
+			],
+			"group": "6ad5e8c9fc33052568f5b55c"
+		}
+	],
+	"clientResourceId": "9a7ab06f-d942-4c38-a7f9-cdde69bfab61"
+}]
+

@@ -19,6 +19,6 @@ cmake .. -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=$GENERATORS_DIR/conan_toolch
        -DPRIVMX_ENABLE_TESTS_E2E=ON \
        -DPRIVMX_DEFAULT_CRYPTO_SUITE=aes256gcm-sha256 \
        -DPRIVMX_DEFAULT_FILE_CIPHER=aes256cbc-hmac-sha256 \
-       -DPRIVMX_DEFAULT_KEY_ALGORITHM=secp256k1
+       -DPRIVMX_DEFAULT_KEY_ALGORITHM=ed25519
 cmake --build . --parallel "$(nproc)"
 source $GENERATORS_DIR/deactivate_conanbuild.sh
