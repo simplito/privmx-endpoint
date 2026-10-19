@@ -8,6 +8,11 @@ find_package(GTest REQUIRED)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/fixtures)
 
 # Data set Generator
+# The bridge-side half. It links the endpoint because it derives the dataset's user keys with it, so
+# they are always of the algorithm this build generates — see the comment at the top of the source.
+add_executable(test_env_DockerSetupInit ${CMAKE_CURRENT_SOURCE_DIR}/env/create_dataset/DockerSetupInit.cpp)
+target_link_libraries(test_env_DockerSetupInit privmx privmxendpointcore Poco::Foundation Poco::JSON)
+
 add_executable(test_env_DockerSetupData ${CMAKE_CURRENT_SOURCE_DIR}/env/create_dataset/DockerSetupData.cpp)
 target_link_libraries(test_env_DockerSetupData privmx privmxendpointcore privmxendpointcrypto privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointevent privmxendpointkvdb privmxendpointlock privmxendpointsearch privmxendpointgroup Poco::Foundation Poco::Util)
 

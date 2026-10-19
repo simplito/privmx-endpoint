@@ -14,7 +14,8 @@ BUILD_PATH="${SCRIPT_PATH}/../../../build/test"
 }
 {
     echo Filling Docker with initial data
-    "${SCRIPT_PATH}/DockerSetupInit.sh" empty_server_and_mongo-teamserver-1
+    cd "${SCRIPT_PATH}"
+    "${BUILD_PATH}/test_env_DockerSetupInit" empty_server_and_mongo-teamserver-1
     "${BUILD_PATH}/test_env_DockerSetupData"
 } || {
     echo Failed to fill docker

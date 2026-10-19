@@ -63,6 +63,22 @@ E2E_TIME=0
 
 fmt_time() { printf '%02d:%02d:%02d' $(($1 / 3600)) $(($1 % 3600 / 60)) $(($1 % 60)); }
 
+# The test binaries are linked with RUNPATH, which the loader applies only to their own direct
+# dependencies — not to what libprivmxendpointcore.so in turn needs. Without the Conan runtime on
+# LD_LIBRARY_PATH every binary that reaches Poco fails to start ("libPocoNetSSLd.so.102: cannot open
+# shared object file"), which reads like a test failure but is not one.
+CONANRUN="$(find "$BUILD_DIR" -maxdepth 4 -name conanrun.sh -print -quit 2>/dev/null)"
+if [[ -n "$CONANRUN" ]]; then
+    # `set -u` off while sourcing: the generated script appends to LD_LIBRARY_PATH without checking
+    # whether it is set, which is an error under `set -u`.
+    set +u
+    # shellcheck disable=SC1090
+    source "$CONANRUN"
+    set -u
+else
+    echo "Warning: no conanrun.sh under '$BUILD_DIR'; tests may fail to load their shared libraries." >&2
+fi
+
 if [[ "$RUN_UNIT" -eq 1 ]]; then
     echo "=== Unit tests ==="
     UNIT_START=$SECONDS
