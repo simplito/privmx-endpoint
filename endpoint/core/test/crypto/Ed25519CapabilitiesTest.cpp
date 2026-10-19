@@ -225,6 +225,35 @@ TEST(Ed25519Composed, SignsAndIsWrappedToThroughOneIdentity) {
     EXPECT_EQ(alice.derive(bob.getPublicKey()), bob.derive(alice.getPublicKey()));
 }
 
+/**
+ * Mixing algorithms across one shared secret is refused by name, in both directions.
+ *
+ * It cannot be made to work — Diffie-Hellman needs both ends on one curve — so the only question is
+ * how it fails. Left to the providers it fails twice over: with a composed recipient OpenSSL trips an
+ * assertion and **aborts the process**, and with two plain keys pmx-crypto says "Wrong type of
+ * private key", which names neither key and reads like corruption rather than a pairing that was
+ * never possible. That message cost real time to trace back to a group whose members were simply of
+ * two algorithms.
+ */
+TEST(Ed25519Composed, MixingAlgorithmsIsRefusedByNameNotByTheProvider) {
+    const PrivateKey composed = composedIdentity(std::string(32, 'a'));
+    const PrivateKey plain = PrivateKey::generateRandom(cs::AsymAlg::PrivmxSecp256k1);
+    const std::string containerKey(32, 'k');
+
+    EXPECT_THROW(
+        Ecies::encrypt(composed.getPublicKey(), containerKey, plain), MalformedEncryptionKeyException
+    );
+    EXPECT_THROW(
+        Ecies::encrypt(plain.getPublicKey(), containerKey, composed), MalformedEncryptionKeyException
+    );
+    // Same on the way back, where a sender key is named to be verified against.
+    const std::string wrapped = Ecies::encrypt(plain.getPublicKey(), containerKey, plain);
+    EXPECT_THROW(Ecies::decrypt(composed, wrapped, plain.getPublicKey()), MalformedEncryptionKeyException);
+
+    // Matching ends still work, so the check rejects only what was impossible anyway.
+    EXPECT_EQ(containerKey, Ecies::decrypt(plain, wrapped, plain.getPublicKey()));
+}
+
 /// One tagged string carries both halves, so `UserWithPubKey.pubKey` stays a single field and a key
 /// still compares equal to itself after a round trip through the wire format.
 TEST(Ed25519Composed, RoundTripsThroughTheTaggedEncoding) {

@@ -71,7 +71,13 @@ InboxEntryResult InboxEntryDataSchemaStrategyV1::decryptEntry(
         auto encKey = keyProvider->getKeysAndVerify(keyProviderRequest, groupPrivKeyResolver)
                           .at(location)
                           .at(msgPublicData.usedInboxKeyId);
-        auto privKeyECC = core::PrivateKey::fromRaw(encKey.key);
+        // The inbox key doubles as the seed of the keypair entries are sealed to, and raw bytes name
+        // no algorithm — so it has to come from somewhere. The sender's key is the other end of that
+        // very ECDH, so by construction it is of the same algorithm, and it travels in the entry's
+        // public part. Taking the build's default instead derives a different keypair from the same
+        // bytes, and nothing written by a differently configured client could be read.
+        auto senderPubKey = core::PublicKey::fromBase58DER(msgPublicData.userPubKey);
+        auto privKeyECC = core::PrivateKey::fromRaw(encKey.key, senderPubKey.algorithm());
         auto decrypted = decrypt(msgData, privKeyECC);
         result.statusCode = encKey.statusCode;
         result.publicData = decrypted.publicData;

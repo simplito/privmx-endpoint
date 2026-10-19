@@ -72,6 +72,16 @@ public:
     void disconnect();
     const privfs::RpcGateway::Ptr& getGateway() const { return _gateway; }
     const core::PrivateKey& getUserPrivKey() const { return _userPrivKey; }
+
+    /**
+     * @brief Whether this connection has no user behind it (`connectPublic`).
+     *
+     * Its private key is then a throwaway minted at connect time and stands for nobody, so a caller
+     * that needs a key of some particular algorithm may mint another one instead of reporting that
+     * this one will not do. For a named user the key is the user, and swapping it would mean sending
+     * under somebody else's name.
+     */
+    bool isAnonymous() const { return _isAnonymous; }
     const std::string& getHost() const { return _host; }
     const std::shared_ptr<KeyProvider>& getKeyProvider() const { return _keyProvider; }
     const std::shared_ptr<EventMiddleware>& getEventMiddleware() const { return _eventMiddleware; }
@@ -119,6 +129,7 @@ private:
     const int64_t _connectionId;
     privfs::RpcGateway::Ptr _gateway;
     core::PrivateKey _userPrivKey;
+    bool _isAnonymous = false;
     std::string _host;
     BridgeIdentity _bridgeIdentity;
     rpc::ServerConfig _serverConfig;

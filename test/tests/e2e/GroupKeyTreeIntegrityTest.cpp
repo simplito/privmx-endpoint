@@ -12,6 +12,7 @@
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
@@ -88,7 +89,15 @@ protected:
         std::string pubKey;
     };
     Identity newIdentity(const std::string& userId) {
-        const privmx::endpoint::core::PrivateKey key = privmx::endpoint::core::PrivateKey::generateRandom();
+        // Of the dataset's algorithm, not this build's. Container keys reach members by being wrapped
+        // to their public key over Diffie-Hellman, which needs both ends on the same curve, so a
+        // group cannot mix algorithms. Real members come from the context and are all of one; a
+        // member invented here has to match them, or seating it fails with "Wrong type of private
+        // key" — which says nothing about the group and everything about this helper.
+        const auto algorithm =
+            privmx::endpoint::core::PublicKey::fromBase58DER(user(1).pubKey).algorithm();
+        const privmx::endpoint::core::PrivateKey key =
+            privmx::endpoint::core::PrivateKey::generateRandom(algorithm);
         return Identity{
             .userId = userId, .privKey = key.toWIF(), .pubKey = key.getPublicKey().toBase58DER()
         };

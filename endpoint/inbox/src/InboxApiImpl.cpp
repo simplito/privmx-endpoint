@@ -101,11 +101,15 @@ std::string InboxApiImpl::createInbox(
 ) {
 
     auto inboxKey = _keyProvider->generateKey(suiteFromPolicy(policies));
-    // The inbox key has a second role: it is **also** a raw secp256k1 private key, the source of the
-    // key pair used to receive entries. That pins its length at 32 bytes regardless of the symmetric
-    // suite. Every suite wants 32 bytes today; should another one appear, `fromRaw` will reject the
-    // key, and the two roles will have to be split rather than the container key widened.
-    auto privateKey = core::PrivateKey::fromRaw(inboxKey.key);
+    // The inbox key has a second role: it is **also** the raw private key behind the key pair used to
+    // receive entries. That pins its length at 32 bytes regardless of the symmetric suite. Every
+    // suite wants 32 bytes today; should another one appear, `fromRaw` will reject the key, and the
+    // two roles will have to be split rather than the container key widened.
+    //
+    // Of the creator's algorithm, not this build's: every entry is sealed to this key by a sender's
+    // own key, and an ECDH needs both ends on the same curve. The creator's identity is the one
+    // algorithm we know the context's users are on.
+    auto privateKey = core::PrivateKey::fromRaw(inboxKey.key, _userPrivKey.algorithm());
     auto pubKey = privateKey.getPublicKey();
 
     auto randName{InboxDataHelper::getRandomName()};
@@ -189,7 +193,8 @@ void InboxApiImpl::updateInbox(
         currentInbox, currentInboxEntry, currentInboxResourceId, users, managers,
         forceGenerateNewKey || doesGroupStateForceNewKey(currentInbox, groups)
     );
-    auto privateKey = core::PrivateKey::fromRaw(ctx.key.key);
+    // Same reasoning as in `createInbox`: the entries key pair follows an identity, never the build.
+    auto privateKey = core::PrivateKey::fromRaw(ctx.key.key, _userPrivKey.algorithm());
     auto pubKey = privateKey.getPublicKey();
     InboxDataProcessorModelV5 inboxDataIn{
         .storeId = currentInboxData.storeId,
@@ -382,6 +387,15 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
     auto _userPrivKeyECC =
         (handle->userPrivKey.has_value() ? core::PrivateKey::fromWIF(handle->userPrivKey.value()) :
                                            _userPrivKey);
+    // The entry is sealed to the inbox key by this key, so the two have to be on the same curve. An
+    // anonymous connection's key stands for nobody — it was minted at connect time out of this
+    // build's default — so it is replaced rather than refused. A key that names a user is left
+    // alone: swapping it would send the entry under somebody else's name, and if it cannot reach
+    // this inbox the caller should hear so.
+    if (_connection.getImpl()->isAnonymous() && !handle->userPrivKey.has_value() &&
+        _userPrivKeyECC.algorithm() != inboxPubKeyECC.algorithm()) {
+        _userPrivKeyECC = core::PrivateKey::generateRandom(inboxPubKeyECC.algorithm());
+    }
     auto _userPubKeyECC = _userPrivKeyECC.getPublicKey();
     std::string filesMetaKey;
     bool hasFiles = !handle->inboxFileHandles.empty();

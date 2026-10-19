@@ -48,17 +48,43 @@ std::string wrapKeyFor(const std::string& sharedSecret) {
     return FormatHash::kdf(sharedSecret, WRAP_KDF_LABEL, CryptoSuite::defaultForWrite().keyLength());
 }
 
-std::string wrapToComposedIdentity(const PublicKey& pub, const std::string& data, const PrivateKey& sender) {
-    // Checked before the keys reach OpenSSL, which does not merely fail on a type mismatch here: it
-    // trips an internal assertion and **aborts the process** (`keymgmt_lib.c: match_type`). Both ends
-    // of a shared secret have to be the same algorithm, and a key that names a composed algorithm
-    // without carrying its agreement half is not usable as either end.
-    if (!keyAlgorithmNeedsAgreementKey(sender.algorithm()) ||
-        agreementAlgorithmFor(sender.algorithm()) != agreementAlgorithmFor(pub.algorithm())) {
+/**
+ * The curve a key actually agrees secrets on.
+ *
+ * A composed identity agrees on its second half; everything else agrees on itself. `secp256k1` and
+ * `PrivmxSecp256k1` are one curve in two spellings — the registry keeps them apart only because
+ * their data formats differ — so they must not be read as two.
+ */
+cs::AsymAlg agreementCurveOf(cs::AsymAlg algorithm) {
+    if (keyAlgorithmNeedsAgreementKey(algorithm)) {
+        return agreementAlgorithmFor(algorithm);
+    }
+    return algorithm == cs::AsymAlg::secp256k1 ? cs::AsymAlg::PrivmxSecp256k1 : algorithm;
+}
+
+/**
+ * Both ends of a shared secret have to be on one curve.
+ *
+ * Checked here because the alternative is worse in both directions: with a composed identity OpenSSL
+ * does not fail but trips an internal assertion and **aborts the process**
+ * (`keymgmt_lib.c: match_type`), and with two plain keys pmx-crypto reports "Wrong type of private
+ * key", which names neither key nor algorithm and reads like a corrupted key rather than a pairing
+ * that was never possible.
+ */
+void assertSameCurve(const PublicKey& pub, const PrivateKey& sender, const std::string& what) {
+    if (agreementCurveOf(pub.algorithm()) != agreementCurveOf(sender.algorithm())) {
         throw MalformedEncryptionKeyException(
-            "cannot wrap to a composed identity with a sender key of another algorithm"
+            what + ": the two keys are of different algorithms (" +
+            std::to_string(static_cast<int>(sender.algorithm())) + " and " +
+            std::to_string(static_cast<int>(pub.algorithm())) +
+            "), and a shared secret needs both ends on one curve"
         );
     }
+}
+
+std::string wrapToComposedIdentity(const PublicKey& pub, const std::string& data, const PrivateKey& sender) {
+    // A key that names a composed algorithm without carrying its agreement half is not usable as
+    // either end; `assertSameCurve` has already ruled out the two naming different ones.
     if (pub.agreementImpl() == pub.impl() || sender.agreementImpl() == sender.impl()) {
         throw MalformedEncryptionKeyException("composed identity is missing its agreement half");
     }
@@ -90,6 +116,7 @@ std::string Ecies::encrypt(const PublicKey& pub, const std::string& data, const 
         if (pub.empty() || privForSignature.empty()) {
             throw MalformedEncryptionKeyException("ecies encrypt with an empty key");
         }
+        assertSameCurve(pub, privForSignature, "ecies encrypt");
         if (keyAlgorithmNeedsAgreementKey(pub.algorithm())) {
             return wrapToComposedIdentity(pub, data, privForSignature);
         }
@@ -108,6 +135,9 @@ std::string Ecies::decrypt(
         }
         if (pubOfSignature.has_value() && pubOfSignature->empty()) {
             throw MalformedEncryptionKeyException("ecies decrypt against an empty signer key");
+        }
+        if (pubOfSignature.has_value()) {
+            assertSameCurve(pubOfSignature.value(), priv, "ecies decrypt");
         }
         if (keyAlgorithmNeedsAgreementKey(priv.algorithm())) {
             return unwrapForComposedIdentity(priv, cipher);

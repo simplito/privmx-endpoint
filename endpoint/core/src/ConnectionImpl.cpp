@@ -168,6 +168,7 @@ void ConnectionImpl::connectPublic(
     };
     auto key = core::PrivateKey::generateRandom();
     _userPrivKey = key;
+    _isAnonymous = true;
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
     // Granica z warstwa sieciowa - patrz uwaga przy `createGatewayFromEcdhexConnection`.

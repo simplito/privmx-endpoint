@@ -214,6 +214,36 @@ TEST(KeyAlgorithm, AnEd25519IdentityLoadsOnAnyBuild) {
     EXPECT_EQ(priv.getPublicKey().toBase58DER(), PrivateKey::fromWIF(priv.toWIF()).getPublicKey().toBase58DER());
 }
 
+/**
+ * Raw bytes name no algorithm, so `fromRaw` and `generateRandom` must take one when the key has to
+ * match something that already exists.
+ *
+ * This is what a container key being reused as a keypair depends on — an inbox derives its entry
+ * keypair from the container key, and a reader on a differently configured build would otherwise
+ * derive a different keypair from the very same bytes and open nothing.
+ */
+TEST(KeyAlgorithm, DerivedAndGeneratedKeysHonourTheAlgorithmTheyAreGiven) {
+    const std::string secret = PrivateKey::fromWIF(WIF).getPrivateEncKey();
+
+    for (const auto algorithm :
+         {privmx::cryptoservice::AsymAlg::PrivmxSecp256k1, privmx::cryptoservice::AsymAlg::ED25519}) {
+        EXPECT_EQ(algorithm, PrivateKey::fromRaw(secret, algorithm).algorithm());
+        EXPECT_EQ(algorithm, PrivateKey::generateRandom(algorithm).algorithm());
+        // Deterministic, so two readers of the same container key reach the same keypair.
+        EXPECT_EQ(
+            PrivateKey::fromRaw(secret, algorithm).getPublicKey().toBase58DER(),
+            PrivateKey::fromRaw(secret, algorithm).getPublicKey().toBase58DER()
+        );
+    }
+
+    // The same bytes under two algorithms are two different keys — which is exactly why the
+    // algorithm cannot be left to the build.
+    EXPECT_NE(
+        PrivateKey::fromRaw(secret, privmx::cryptoservice::AsymAlg::PrivmxSecp256k1).getPublicKey().toBase58DER(),
+        PrivateKey::fromRaw(secret, privmx::cryptoservice::AsymAlg::ED25519).getPublicKey().toBase58DER()
+    );
+}
+
 TEST(KeyAlgorithm, APrivateKeyThatNamesNothingWeCanReadIsRefused) {
     // Right length, tag of no algorithm in the registry.
     const std::string unknownTag = privmx::utils::Base58::encodeWithChecksum(
