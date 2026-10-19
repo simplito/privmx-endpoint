@@ -60,41 +60,44 @@ PrivateKey identityFromSecret(const std::string& secret, cs::AsymAlg algorithm) 
 
 } // namespace
 
-// A WIF carries 32 secret bytes and says nothing about the algorithm. It does not need to: it is the
-// *private* side, never compared or stored by the bridge, and the public side says which algorithm
-// it is through its tag. So the secret is read out and the identity built from it.
+// The algorithm comes from the key, never from this build. A build option picks what *new* keys are
+// made of; it must not decide whether an existing key can be used at all, or the same private key
+// would be a different identity — or none — depending on how the library happened to be configured.
 PrivateKey PrivateKey::fromWIF(const std::string& wif) {
     return mapCryptoErrors("PrivateKey::fromWIF", [&] {
-        if (!keyAlgorithmNeedsAgreementKey(defaultKeyAlgorithm())) {
+        const TaggedPrivateKey decoded = decodePrivateKey(wif);
+        if (decoded.wasWif) {
+            // Imported through the provider rather than from the decoded secret, so a WIF keeps
+            // round-tripping to exactly the string it came from, compression flag and all.
             return PrivateKey(
-                cryptoProvider().importPrivateKey(keyBytes(wif), cs::KeyFormat::Wif, defaultKeyAlgorithm()),
-                defaultKeyAlgorithm()
+                cryptoProvider().importPrivateKey(keyBytes(wif), cs::KeyFormat::Wif, decoded.algorithm),
+                decoded.algorithm
             );
         }
-        // The WIF's 32 bytes are the secret; which curve they end up on is this build's choice.
-        auto carrier = cryptoProvider().importPrivateKey(
-            keyBytes(wif), cs::KeyFormat::Wif, cs::AsymAlg::PrivmxSecp256k1
-        );
-        return identityFromSecret(keyString(carrier->export_(cs::KeyFormat::Raw)), defaultKeyAlgorithm());
+        return identityFromSecret(decoded.secret, decoded.algorithm);
     });
 }
 
 PrivateKey PrivateKey::fromRaw(const std::string& raw) {
-    return mapCryptoErrors("PrivateKey::fromRaw", [&] {
-        return identityFromSecret(raw, defaultKeyAlgorithm());
-    });
+    return fromRaw(raw, defaultKeyAlgorithm());
+}
+
+PrivateKey PrivateKey::fromRaw(const std::string& raw, cs::AsymAlg algorithm) {
+    return mapCryptoErrors("PrivateKey::fromRaw", [&] { return identityFromSecret(raw, algorithm); });
 }
 
 PrivateKey PrivateKey::generateRandom() {
+    return generateRandom(defaultKeyAlgorithm());
+}
+
+PrivateKey PrivateKey::generateRandom(cs::AsymAlg algorithm) {
     return mapCryptoErrors("PrivateKey::generateRandom", [&] {
-        if (!keyAlgorithmNeedsAgreementKey(defaultKeyAlgorithm())) {
-            return PrivateKey(cryptoProvider().generatePrivateKey(defaultKeyAlgorithm()), defaultKeyAlgorithm());
+        if (!keyAlgorithmNeedsAgreementKey(algorithm)) {
+            return PrivateKey(cryptoProvider().generatePrivateKey(algorithm), algorithm);
         }
         // Generated through a secret rather than two independent keys, so the identity stays
         // reconstructible from one value — the property `toWIF` depends on.
-        return identityFromSecret(
-            keyString(cryptoProvider().randomBytes(32)), defaultKeyAlgorithm()
-        );
+        return identityFromSecret(keyString(cryptoProvider().randomBytes(32)), algorithm);
     });
 }
 
@@ -133,16 +136,14 @@ std::string PrivateKey::getPrivateEncKey() const {
 std::string PrivateKey::toWIF() const {
     return mapCryptoErrors("PrivateKey::toWIF", [&] {
         if (!_secret.empty()) {
-            // A composed identity has no single key to export, and pmx-crypto's WIF is EC-only. The
-            // secret both halves came from is what a WIF would have to carry anyway, so it goes out
-            // through the same encoding — `fromWIF` reads it back and rebuilds the identity.
+            // A composed identity has no single key to export, and pmx-crypto's WIF is EC-only, so it
+            // goes out in the tagged encoding instead. That is also what makes it readable anywhere:
+            // the tag says which algorithm the secret is for, so any build can rebuild this identity.
             require();
-            return keyString(
-                cryptoProvider()
-                    .importPrivateKey(keyBytes(_secret), cs::KeyFormat::Raw, cs::AsymAlg::PrivmxSecp256k1)
-                    ->export_(cs::KeyFormat::Wif)
-            );
+            return encodePrivateKey(_secret, _algorithm);
         }
+        // secp256k1 stays a plain WIF. A WIF already names the curve by being one, so it is as
+        // self-describing as a tagged key, and keeping it means existing keys and configs still work.
         return keyString(require().export_(cs::KeyFormat::Wif));
     });
 }

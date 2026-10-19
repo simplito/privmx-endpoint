@@ -257,6 +257,40 @@ TEST_F(TreeKeysBuild, RejectsAnEmptyMemberList) {
     EXPECT_THROW(keys.build({}, PrivateKey::generateRandom()), std::invalid_argument);
 }
 
+/**
+ * The tree's own keys follow the identity that builds it, not this build's `PRIVMX_DEFAULT_KEY_ALGORITHM`.
+ *
+ * Every key in the tree is wrapped to, or wrapped with, the identities in the group, and a shared
+ * secret needs both ends on the same curve. Taking the build's algorithm instead made a client
+ * configured one way unable to touch a group whose members hold keys of the other — the group
+ * created fine right up to the first wrap, which failed with "Wrong type of private key".
+ *
+ * Both algorithms are run, so the test says the same thing whichever way the build is configured.
+ */
+TEST_F(TreeKeysBuild, TreeKeysTakeTheBuildersAlgorithmNotTheBuilds) {
+    for (const auto algorithm :
+         {privmx::cryptoservice::AsymAlg::PrivmxSecp256k1, privmx::cryptoservice::AsymAlg::ED25519}) {
+        const PrivateKey signer = PrivateKey::generateRandom(algorithm);
+        std::vector<TestMember> members;
+        for (std::uint32_t i = 0; i < 4; ++i) {
+            members.push_back(TestMember{"user" + std::to_string(i), PrivateKey::generateRandom(algorithm)});
+        }
+        TreeKeyCache store;
+        TreeKeys keys(store);
+
+        const BuildPlan plan = keys.build(publicOf(members), signer);
+
+        EXPECT_EQ(algorithm, plan.grantKey.algorithm()) << "the grant key ignored the builder";
+        for (const auto& [node, key] : plan.nodeKeys) {
+            EXPECT_EQ(algorithm, key.algorithm()) << "node " << node << " ignored the builder";
+        }
+        // The point of matching: with the algorithms aligned the wraps actually open again.
+        for (const TreeEdge& edge : plan.edges) {
+            EXPECT_FALSE(edge.blob.empty());
+        }
+    }
+}
+
 class TreeKeysClimb : public TreeKeysTestBase {};
 
 TEST_F(TreeKeysClimb, EveryMemberReachesTheGrantKey) {

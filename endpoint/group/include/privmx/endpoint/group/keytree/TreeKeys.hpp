@@ -103,6 +103,14 @@ public:
     );
 
 private:
+    /**
+     * @brief A fresh key for a node or a grant, of the acting identity's algorithm.
+     *
+     * Not of the build's: a tree key only ever exists to be wrapped to, or wrapped with, the
+     * identities in the group, and a shared secret needs both ends on the same curve.
+     */
+    static core::PrivateKey freshKey(const core::PrivateKey& signer);
+
     static const TreeEdge* findEdgeFromNode(
         const TreeGroupState& state,
         std::uint32_t childIndex,

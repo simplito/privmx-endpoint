@@ -23,6 +23,16 @@ using namespace privmx::endpoint::group::keytree;
 
 TreeKeys::TreeKeys(TreeKeyCache& cache) : _cache(cache) {}
 
+privmx::endpoint::core::PrivateKey TreeKeys::freshKey(const core::PrivateKey& signer) {
+    // Of the acting identity's algorithm, not this build's. Every key in the tree is wrapped to, or
+    // wrapped with, the identities in the group, and a shared secret needs both ends on the same
+    // curve — a node key minted to this build's taste cannot be wrapped to a member of another
+    // algorithm, nor read by one. The build option says what a *new group* is made of; from then on
+    // the group's own keys decide, which is what lets a client built one way work on a group made by
+    // a client built the other.
+    return core::PrivateKey::generateRandom(signer.algorithm());
+}
+
 std::string TreeKeys::wrapKey(
     const core::PrivateKey& keyToWrap,
     const core::PublicKey& to,
@@ -259,7 +269,7 @@ BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const core::Pr
     // Mint a fresh independent random keypair for every internal node. Never derived from anything.
     std::map<std::uint32_t, core::PrivateKey> nodeKeys;
     for (std::uint32_t node = 1; node < nodeCount; node += 2) {
-        const core::PrivateKey key = core::PrivateKey::generateRandom();
+        const core::PrivateKey key = freshKey(signer);
         nodeKeys[node] = key;
         plan.nodes.push_back(TreeNodeState{node, 0, key.getPublicKey()});
         plan.nodeKeys.emplace_back(node, key);
@@ -288,7 +298,7 @@ BuildPlan TreeKeys::build(const std::vector<TreeMember>& members, const core::Pr
 
     // The grant keypair sits above the root, joined by a single edge. Keeping it separate is what stops tree
     // growth from advancing the epoch and invalidating every container granted to the group.
-    plan.grantKey = core::PrivateKey::generateRandom();
+    plan.grantKey = freshKey(signer);
     TreeEdge grantEdge;
     grantEdge.isGrantEdge = true;
     grantEdge.parentGeneration = 1; // epoch 1
@@ -354,7 +364,7 @@ AdditionPlan TreeKeys::planAddition(
     std::map<std::uint32_t, core::PrivateKey> refreshed;
     std::map<std::uint32_t, std::uint32_t> generationOf;
     for (const std::uint32_t node : newPath) {
-        const core::PrivateKey key = core::PrivateKey::generateRandom();
+        const core::PrivateKey key = freshKey(signer);
         const TreeNodeState* existing = findNode(state, node);
         const std::uint32_t generation = existing == nullptr ? 0 : existing->generation + 1;
         refreshed.emplace(node, key);
@@ -477,7 +487,7 @@ RemovalPlan TreeKeys::planRemoval(
     // let the removed member compute forward, and the server cannot detect that — it lives or dies on this line.
     std::map<std::uint32_t, core::PrivateKey> refreshed;
     for (const std::uint32_t node : path) {
-        refreshed[node] = core::PrivateKey::generateRandom();
+        refreshed[node] = freshKey(signer);
     }
 
     for (const std::uint32_t node : path) {
@@ -538,7 +548,7 @@ RemovalPlan TreeKeys::planRemoval(
     }
 
     // A fresh grant keypair, re-linked to the refreshed root. This is the epoch bump.
-    plan.newGrantKey = core::PrivateKey::generateRandom();
+    plan.newGrantKey = freshKey(signer);
     const std::uint32_t rootIndex = TreeMath::root(state.numLeaves);
     plan.grantEdge.isGrantEdge = true;
     plan.grantEdge.parentGeneration = plan.newEpoch;

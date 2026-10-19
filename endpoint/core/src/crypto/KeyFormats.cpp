@@ -15,6 +15,7 @@ limitations under the License.
 
 #include <privmx/utils/Base58.hpp>
 
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/KeyFormats.hpp>
@@ -215,6 +216,64 @@ std::string encodeTaggedPublicKey(
     return privmx::utils::Base58::encodeWithChecksum(
         std::string(1, static_cast<char>(spec->keyTag)) + rawKey + rawAgreementKey, FormatHash::sha256
     );
+}
+
+namespace {
+
+/// The network byte of a Bitcoin-style WIF. A WIF is a secp256k1 private key by construction, which
+/// is why reading one needs no tag and never consults the build's default.
+constexpr std::uint8_t WIF_NETWORK_BYTE = 0x80;
+constexpr std::size_t IDENTITY_SECRET_LENGTH = 32;
+
+} // namespace
+
+std::string encodePrivateKey(const std::string& secret, cs::AsymAlg algorithm) {
+    const KeyAlgorithmSpec* spec = findSpec(algorithm);
+    if (spec == nullptr || spec->keyTag == UNTAGGED) {
+        throw UnsupportedKeyAlgorithmException(
+            "no private key encoding for asymmetric algorithm: " + std::to_string(static_cast<int>(algorithm))
+        );
+    }
+    if (secret.size() != IDENTITY_SECRET_LENGTH) {
+        throw MalformedEncryptionKeyException(
+            "identity secret of " + std::to_string(secret.size()) + " bytes, expected " +
+            std::to_string(IDENTITY_SECRET_LENGTH)
+        );
+    }
+    return privmx::utils::Base58::encodeWithChecksum(
+        std::string(1, static_cast<char>(spec->keyTag)) + secret, FormatHash::sha256
+    );
+}
+
+TaggedPrivateKey decodePrivateKey(const std::string& base58) {
+    std::string payload;
+    try {
+        payload = privmx::utils::Base58::decodeWithChecksum(base58, FormatHash::sha256);
+    } catch (...) {
+        // Its own code, not the generic malformed-key one: a failed checksum means the key was
+        // mistyped or truncated in transit, which is a different thing for a caller to report than a
+        // key that decodes cleanly but is of an algorithm or length we cannot use.
+        throw privmx::endpoint::crypto::InvalidChecksumException("private key is not valid Base58Check");
+    }
+    if (payload.empty()) {
+        throw MalformedEncryptionKeyException("private key is empty");
+    }
+    const auto first = static_cast<std::uint8_t>(payload[0]);
+    // A WIF: network byte, the secret, and an optional compression flag. It names secp256k1 by being
+    // a WIF, so it is read as one on every build — the build's default has no say here.
+    if (first == WIF_NETWORK_BYTE &&
+        (payload.size() == 1 + IDENTITY_SECRET_LENGTH || payload.size() == 2 + IDENTITY_SECRET_LENGTH)) {
+        return TaggedPrivateKey{
+            .algorithm = cs::AsymAlg::PrivmxSecp256k1,
+            .secret = payload.substr(1, IDENTITY_SECRET_LENGTH),
+            .wasWif = true,
+        };
+    }
+    const KeyAlgorithmSpec* spec = findSpecByTag(first);
+    if (spec == nullptr || payload.size() != 1 + IDENTITY_SECRET_LENGTH) {
+        throw MalformedEncryptionKeyException("private key carries no algorithm this build can read");
+    }
+    return TaggedPrivateKey{.algorithm = spec->algorithm, .secret = payload.substr(1), .wasWif = false};
 }
 
 TaggedPublicKey decodeTaggedPublicKey(const std::string& base58) {

@@ -80,7 +80,9 @@ std::pair<std::string, std::string> GroupEnvelopeEncryptor::wrapContentKey(
     const core::PublicKey& groupPubKey
 ) {
     // Throwaway, never retained: it exists only to carry out one ECDH with the group's identity key.
-    core::PrivateKey ephemeralPrivKey = core::PrivateKey::generateRandom();
+    // Of the group key's algorithm, not this build's: an ECDH has to have both ends on the same curve,
+    // and the group key was chosen when the group was made — possibly by a client built differently.
+    core::PrivateKey ephemeralPrivKey = core::PrivateKey::generateRandom(groupPubKey.algorithm());
     std::string contentKey = core::CryptoSuite::randomBytes(CONTENT_KEY_SIZE);
     std::string wrap = core::Ecies::encrypt(
         groupPubKey, ECIES_DOMAIN + contentKey, ephemeralPrivKey

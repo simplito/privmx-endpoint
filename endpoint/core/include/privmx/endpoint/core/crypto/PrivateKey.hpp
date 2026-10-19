@@ -38,10 +38,25 @@ public:
      *
      * The equivalent of the former `ECC::fromPrivateKey` — used where a container key plays the role
      * of an asymmetric key (inbox, key conversion).
+     *
+     * Raw bytes name no algorithm, so one has to be supplied from outside. The overload without it
+     * takes this build's default, which is right only where the key is being **made**; a key that has
+     * to match one somebody else already derived must be given that one's algorithm, or the two sides
+     * compute different keys from the same bytes.
      */
     static PrivateKey fromRaw(const std::string& raw);
+    static PrivateKey fromRaw(const std::string& raw, privmx::cryptoservice::AsymAlg algorithm);
 
+    /**
+     * @brief A fresh random key.
+     *
+     * The overload without an algorithm uses this build's default — correct for a key that answers to
+     * nothing else. A key that will take part in a shared secret with an existing key must be made
+     * with **that** key's algorithm instead: Diffie-Hellman needs both ends on the same curve, so a
+     * key generated to this build's taste cannot be wrapped to, or signed for, an identity of another.
+     */
     static PrivateKey generateRandom();
+    static PrivateKey generateRandom(privmx::cryptoservice::AsymAlg algorithm);
 
     /// @brief An empty handle. Anything beyond `empty()` throws.
     PrivateKey() = default;

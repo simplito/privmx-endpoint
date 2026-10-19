@@ -171,9 +171,16 @@ void ConnectionImpl::connectPublic(
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
     // Granica z warstwa sieciowa - patrz uwaga przy `createGatewayFromEcdhexConnection`.
-    _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(
-        privmx::crypto::PrivateKey::fromWIF(key.toWIF()), options, solutionId
-    );
+    //
+    // The same split of roles as in `connect()`: an identity that cannot agree keys cannot be the key
+    // the channel runs on. Here the identity is throwaway anyway and there is nobody to prove it to,
+    // so the channel simply gets its own secp256k1 key with no tie back to it. Passing the identity's
+    // own encoding would not work either — a composed identity spells itself with an algorithm tag,
+    // which the secp256k1-only WIF parser below cannot read.
+    auto transportKey = keyAlgorithmNeedsAgreementKey(key.algorithm())
+        ? privmx::crypto::PrivateKey::generateRandom()
+        : privmx::crypto::PrivateKey::fromWIF(key.toWIF());
+    _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(transportKey, options, solutionId);
     _serverApi.emplace(_gateway);
     _serverConfig = _gateway->getInfo().cast<rpc::EcdheConnectionInfo>()->serverConfig;
     _eventMiddleware = std::shared_ptr<EventMiddleware>(

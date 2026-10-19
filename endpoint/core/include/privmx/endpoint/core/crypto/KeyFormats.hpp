@@ -76,6 +76,41 @@ bool isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg algorithm);
  */
 std::string messageToSignFor(privmx::cryptoservice::AsymAlg algorithm, const std::string& message);
 
+/// @brief A private key as it travels: the algorithm the encoding named, and the secret itself.
+struct TaggedPrivateKey {
+    privmx::cryptoservice::AsymAlg algorithm;
+    /// The 32 secret bytes the identity is built from.
+    std::string secret;
+    /// True when it arrived as a WIF, which names secp256k1 by being one.
+    bool wasWif;
+};
+
+/**
+ * @brief Encodes a private key as `Base58Check(tag || secret)`.
+ *
+ * A private key has to name its algorithm for the same reason a public one does: otherwise the same
+ * string means different identities on differently configured builds, and a build option stops being
+ * a default and starts deciding which keys work at all.
+ *
+ * The tag is the algorithm's, the same byte its public key carries — a public and a private key are
+ * never read by the same function, and their lengths differ anyway (a secret is 32 bytes, a public
+ * key 33 or 64).
+ *
+ * @throws UnsupportedKeyAlgorithmException when the algorithm has no encoding of its own
+ * @throws MalformedEncryptionKeyException when the secret is not 32 bytes
+ */
+std::string encodePrivateKey(const std::string& secret, privmx::cryptoservice::AsymAlg algorithm);
+
+/**
+ * @brief Reads a private key, taking the algorithm from the key rather than from this build.
+ *
+ * Accepts both the tagged encoding and a plain WIF. A WIF needs no tag: it *is* a secp256k1 private
+ * key, so it reads the same on every build.
+ *
+ * @throws MalformedEncryptionKeyException when the encoding names no algorithm this build can read
+ */
+TaggedPrivateKey decodePrivateKey(const std::string& base58);
+
 /// @brief A public key as it travels: the algorithm its tag named, and the bytes behind the tag.
 struct TaggedPublicKey {
     privmx::cryptoservice::AsymAlg algorithm;
