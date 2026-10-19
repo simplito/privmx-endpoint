@@ -144,12 +144,11 @@ TEST(Ed25519Capabilities, X25519CanDoTheKeyAgreementEd25519Cannot) {
 
 namespace {
 
-/// One secret, two keys. The sub-seeds are domain-separated rather than being the same 32 bytes fed
-/// to both algorithms: Ed25519 hashes its seed into a scalar and X25519 clamps its one, so the same
-/// bytes would mean two keys whose private scalars are related in a way nobody has analysed.
-std::shared_ptr<cs::IPrivateKey> fromSeed(const std::string& seed, const std::string& label, cs::AsymAlg algorithm) {
-    const std::string subSeed = FormatHash::kdf(seed, label, 32);
-    return cryptoProvider().privateKeyFromSeed(keyBytes(subSeed), algorithm);
+/// One secret, two keys, each of a different algorithm — the shape the composed identity needed.
+/// The split is pmx-crypto's: `IExtKey` derives a separate sub-seed per usage, so the signing and
+/// the agreement key never come from the same bytes.
+std::shared_ptr<cs::IPrivateKey> fromSeed(const std::string& seed, cs::KeyUsageScheme usage, cs::AsymAlg algorithm) {
+    return cryptoProvider().extKeyFromSeed(keyBytes(seed), algorithm)->privateKey(usage);
 }
 
 } // namespace
@@ -175,22 +174,34 @@ TEST(Ed25519Capabilities, AComposedIdentityCanBothSignAndBeWrappedTo) {
     EXPECT_EQ(32u, keyString(aliceAgreement->publicKey()->export_(cs::KeyFormat::Raw)).size());
 }
 
-/// A seed now rebuilds a usable key on both curves — `privateKeyFromSeed` in pmx-crypto. This is
-/// what lets an identity stay a single private value while being two keys.
+/// A seed now rebuilds a usable key for each usage — `extKeyFromSeed` in pmx-crypto. This is what
+/// lets an identity stay a single private value while being two keys.
 TEST(Ed25519Capabilities, AKeyCanBeRebuiltFromASeedAlone) {
     const std::string seed(32, 'a');
 
-    auto signing = fromSeed(seed, "privmx-identity-sign", cs::AsymAlg::ED25519);
+    auto signing = fromSeed(seed, cs::KeyUsageScheme::Sign, cs::AsymAlg::ED25519);
     ASSERT_NE(nullptr, signing);
     EXPECT_NO_THROW(signing->sign(keyBytes("data"), cs::SigScheme::Default));
     EXPECT_EQ(
         keyString(signing->publicKey()->export_(cs::KeyFormat::Raw)),
-        keyString(fromSeed(seed, "privmx-identity-sign", cs::AsymAlg::ED25519)->publicKey()->export_(cs::KeyFormat::Raw))
-    );
+        keyString(fromSeed(seed, cs::KeyUsageScheme::Sign, cs::AsymAlg::ED25519)
+                      ->publicKey()
+                      ->export_(cs::KeyFormat::Raw))
+    ) << "the same seed gave two different signing keys";
 
-    auto agreement = fromSeed(seed, "privmx-identity-dh", cs::AsymAlg::X25519);
+    // Naming ED25519 asks for the identity, and the agreement half of an Ed25519 identity is X25519 —
+    // the pairing lives in pmx-crypto now, not in a table here.
+    auto agreement = fromSeed(seed, cs::KeyUsageScheme::DerEnc, cs::AsymAlg::ED25519);
     auto peer = cryptoProvider().generatePrivateKey(cs::AsymAlg::X25519);
     EXPECT_NO_THROW(agreement->deriveSharedSecret(*peer->publicKey()));
+
+    // The two halves must never be the same bytes: Ed25519 hashes its seed into a scalar and X25519
+    // clamps its one, so sharing a seed would give two keys whose scalars are related in a way
+    // nobody has analysed.
+    EXPECT_NE(
+        keyString(signing->publicKey()->export_(cs::KeyFormat::Raw)),
+        keyString(agreement->publicKey()->export_(cs::KeyFormat::Raw))
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -201,14 +212,12 @@ namespace {
 
 /// An Ed25519 identity regardless of what this build's default algorithm is, so these tests describe
 /// the composed key itself rather than the build setting.
+///
+/// Built through the same call the endpoint uses, not assembled by hand: a helper that derived the
+/// two halves its own way would keep passing while the real identity changed underneath it, and
+/// these tests are the only thing that says the composed key works at all.
 PrivateKey composedIdentity(const std::string& secret) {
-    const std::string signingSeed = deriveIdentitySeed(secret, false);
-    const std::string agreementSeed = deriveIdentitySeed(secret, true);
-    return PrivateKey(
-        cryptoProvider().privateKeyFromSeed(keyBytes(signingSeed), cs::AsymAlg::ED25519),
-        cs::AsymAlg::ED25519,
-        cryptoProvider().privateKeyFromSeed(keyBytes(agreementSeed), cs::AsymAlg::X25519)
-    );
+    return PrivateKey::fromRaw(secret, cs::AsymAlg::ED25519);
 }
 
 } // namespace

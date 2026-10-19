@@ -26,10 +26,12 @@ namespace {
 /**
  * Builds an identity out of one secret.
  *
- * An algorithm that signs and agrees keys with the same key — secp256k1 — gets that one key. One
- * that only signs gets a second, key-agreement key beside it, derived from a domain-separated
- * sub-secret of the same 32 bytes. That is what keeps an identity a single private key: a WIF still
- * carries everything needed to rebuild it.
+ * An algorithm that signs and agrees keys with the same key — secp256k1 — gets that one key, and the
+ * secret *is* that key's scalar. One that only signs gets a second, key-agreement key beside it, and
+ * both come from the secret through `IExtKey`: pmx-crypto splits the seed and knows which algorithm
+ * answers which job (`KeyUsageScheme`). That is what keeps an identity a single private key — a WIF
+ * still carries everything needed to rebuild it — while leaving the derivation to the crypto library
+ * rather than defining a second one here.
  */
 constexpr std::size_t IDENTITY_SECRET_LENGTH = 32;
 
@@ -39,21 +41,20 @@ PrivateKey identityFromSecret(const std::string& secret, cs::AsymAlg algorithm) 
             cryptoProvider().importPrivateKey(keyBytes(secret), cs::KeyFormat::Raw, algorithm), algorithm
         );
     }
-    // Checked rather than left to the KDF: `deriveIdentitySeed` hashes whatever it is given into 32
-    // bytes, so without this a one-byte "secret" would quietly become a perfectly valid identity.
-    // The one-key path gets this check from the provider, which rejects a wrong-sized scalar.
+    // Checked rather than left to the key derivation, which hashes whatever it is given into a seed,
+    // so without this a one-byte "secret" would quietly become a perfectly valid identity. The
+    // one-key path gets this check from the provider, which rejects a wrong-sized scalar.
     if (secret.size() != IDENTITY_SECRET_LENGTH) {
         throw MalformedEncryptionKeyException(
             "identity secret of " + std::to_string(secret.size()) + " bytes, expected " +
             std::to_string(IDENTITY_SECRET_LENGTH)
         );
     }
+    const auto extKey = cryptoProvider().extKeyFromSeed(keyBytes(secret), algorithm);
     return PrivateKey(
-        cryptoProvider().privateKeyFromSeed(keyBytes(deriveIdentitySeed(secret, false)), algorithm),
+        extKey->privateKey(cs::KeyUsageScheme::Sign),
         algorithm,
-        cryptoProvider().privateKeyFromSeed(
-            keyBytes(deriveIdentitySeed(secret, true)), agreementAlgorithmFor(algorithm)
-        ),
+        extKey->privateKey(cs::KeyUsageScheme::DerEnc),
         secret
     );
 }

@@ -64,9 +64,6 @@ struct KeyAlgorithmSpec {
 
 constexpr std::uint8_t UNTAGGED = 0x00;
 
-/// Label separating the two halves derived from one secret; see `deriveIdentitySeed`.
-constexpr const char* SIGNING_SEED_LABEL = "privmx-identity-sign";
-constexpr const char* AGREEMENT_SEED_LABEL = "privmx-identity-dh";
 
 /**
  * The identity-key algorithms the endpoint works with.
@@ -179,13 +176,6 @@ cs::AsymAlg agreementAlgorithmFor(cs::AsymAlg algorithm) {
         );
     }
     return spec->agreementAlgorithm;
-}
-
-std::string deriveIdentitySeed(const std::string& secret, bool forAgreement) {
-    // Domain-separated rather than feeding the same bytes to both algorithms: Ed25519 hashes its seed
-    // into a scalar and X25519 clamps its one, so the same bytes would give two keys whose private
-    // scalars are related in a way nobody has analysed.
-    return FormatHash::kdf(secret, forAgreement ? AGREEMENT_SEED_LABEL : SIGNING_SEED_LABEL, 32);
 }
 
 std::string encodeTaggedPublicKey(

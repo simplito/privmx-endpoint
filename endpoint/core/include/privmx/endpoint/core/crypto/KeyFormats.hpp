@@ -134,14 +134,6 @@ bool keyAlgorithmNeedsAgreementKey(privmx::cryptoservice::AsymAlg algorithm);
 privmx::cryptoservice::AsymAlg agreementAlgorithmFor(privmx::cryptoservice::AsymAlg algorithm);
 
 /**
- * @brief The 32-byte sub-secret one half of a composed identity is built from.
- *
- * Both halves come from one secret — what a WIF already carries — so an identity still travels as a
- * single private key. The halves are domain-separated, never the same bytes twice.
- */
-std::string deriveIdentitySeed(const std::string& secret, bool forAgreement);
-
-/**
  * @brief Encodes a public key as `Base58Check(tag || rawKey || rawAgreementKey)`.
  *
  * This is the only encoding a key travels in. It exists because a key has to say which algorithm it

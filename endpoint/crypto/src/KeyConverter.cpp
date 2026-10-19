@@ -38,7 +38,10 @@ std::string KeyConverter::cryptoKeyConvertPEMToWIF(const std::string& keyPEM) {
     base64 = std::regex_replace(base64, std::regex("\n|\r|\t"), "");
     auto decoded = utils::Base64::toString(base64);
     std::string extractedKey{decoded.substr(7, 32)};
-    auto privateKey{core::PrivateKey::fromRaw(extractedKey)};
+    // An EC key by the marker it arrived under, so the scalar is read on secp256k1 whatever this
+    // build generates with. Letting `fromRaw` take the build's default turned an "EC PRIVATE KEY"
+    // into an Ed25519 identity, and the WIF handed back named a key the caller never had.
+    auto privateKey{core::PrivateKey::fromRaw(extractedKey, privmx::cryptoservice::AsymAlg::PrivmxSecp256k1)};
     auto wif{privateKey.toWIF()};
     return wif;
 }
