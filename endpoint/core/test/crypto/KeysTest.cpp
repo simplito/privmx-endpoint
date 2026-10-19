@@ -37,6 +37,25 @@ const std::string MESSAGE{"A message to be signed"};
 
 } // namespace
 
+namespace {
+
+/**
+ * The cases below describe secp256k1: they compare against the old implementation, which has no
+ * other curve, or they reason about compressed and uncompressed points.
+ *
+ * Under `PRIVMX_DEFAULT_KEY_ALGORITHM=ed25519` the endpoint correctly builds a different kind of
+ * key, so these comparisons have nothing to say rather than something false. They skip, which keeps
+ * the suite honest about which build it is describing.
+ */
+bool isSecp256k1Build() {
+    return defaultKeyAlgorithm() == privmx::cryptoservice::AsymAlg::PrivmxSecp256k1;
+}
+
+} // namespace
+
+#define SKIP_UNLESS_SECP256K1()                                                                    \
+    if (!isSecp256k1Build()) GTEST_SKIP() << "describes secp256k1; this build generates other keys"
+
 // ---------------------------------------------------------------------------------------------
 // Compatibility with the old implementation. This is the precondition for migrating 76 files: if
 // any of these tests failed, swapping the modules would change the data on the wire, not just the
@@ -52,6 +71,7 @@ TEST(Keys, WifImportExportMatchesLegacy) {
 /// implementation byte for byte — the base58 form deliberately does not, because it now carries an
 /// algorithm tag in front of exactly those bytes.
 TEST(Keys, PublicKeyEncodingMatchesLegacyUnderTheTag) {
+    SKIP_UNLESS_SECP256K1();
     const auto legacyPriv = legacy::PrivateKey::fromWIF(WIF);
     const auto priv = PrivateKey::fromWIF(WIF);
 
@@ -59,7 +79,7 @@ TEST(Keys, PublicKeyEncodingMatchesLegacyUnderTheTag) {
 
     const std::string tagged = priv.getPublicKey().toBase58DER();
     EXPECT_NE(legacyPriv.getPublicKey().toBase58DER(), tagged);
-    EXPECT_EQ(encodeTaggedPublicKey(legacyPriv.getPublicKey().toDER(), DEFAULT_KEY_ALGORITHM), tagged);
+    EXPECT_EQ(encodeTaggedPublicKey(legacyPriv.getPublicKey().toDER(), defaultKeyAlgorithm()), tagged);
     EXPECT_EQ(priv.getPublicKey().toDER(), decodeTaggedPublicKey(tagged).rawKey);
 }
 
@@ -68,6 +88,7 @@ TEST(Keys, RawPrivatePartMatchesLegacy) {
 }
 
 TEST(Keys, FromRawMatchesLegacyEccFromPrivateKey) {
+    SKIP_UNLESS_SECP256K1();
     const std::string raw = legacy::PrivateKey::fromWIF(WIF).getPrivateEncKey();
     const auto legacyKey = legacy::PrivateKey(legacy::ECC::fromPrivateKey(raw));
 
@@ -76,6 +97,7 @@ TEST(Keys, FromRawMatchesLegacyEccFromPrivateKey) {
 }
 
 TEST(Keys, SharedSecretMatchesLegacy) {
+    SKIP_UNLESS_SECP256K1();
     const auto legacyPriv = legacy::PrivateKey::fromWIF(WIF);
     const auto legacyPeer = legacy::PrivateKey::generateRandom();
     const auto priv = PrivateKey::fromWIF(WIF);
@@ -88,6 +110,7 @@ TEST(Keys, SharedSecretMatchesLegacy) {
 /// verification by the old one, and the other way round. It guards against the Compact /
 /// CompactWithHash mix-up.
 TEST(Keys, SignaturesVerifyAcrossImplementations) {
+    SKIP_UNLESS_SECP256K1();
     const auto legacyPriv = legacy::PrivateKey::fromWIF(WIF);
     const auto priv = PrivateKey::fromWIF(WIF);
 
@@ -121,19 +144,20 @@ TEST(Keys, SignatureIsRejectedForOtherMessageAndKey) {
 TEST(KeyAlgorithm, ImportedKeysRememberWhatTheyWereParsedAs) {
     const PrivateKey priv = PrivateKey::fromWIF(WIF);
 
-    EXPECT_EQ(DEFAULT_KEY_ALGORITHM, priv.algorithm());
+    EXPECT_EQ(defaultKeyAlgorithm(), priv.algorithm());
     // The public key inherits the private half's algorithm — otherwise a signature made with one
     // would be verified under the other's scheme.
     EXPECT_EQ(priv.algorithm(), priv.getPublicKey().algorithm());
-    EXPECT_EQ(DEFAULT_KEY_ALGORITHM, PrivateKey::generateRandom().algorithm());
+    EXPECT_EQ(defaultKeyAlgorithm(), PrivateKey::generateRandom().algorithm());
     EXPECT_EQ(
-        DEFAULT_KEY_ALGORITHM, PublicKey::fromBase58DER(priv.getPublicKey().toBase58DER()).algorithm()
+        defaultKeyAlgorithm(), PublicKey::fromBase58DER(priv.getPublicKey().toBase58DER()).algorithm()
     );
 }
 
 /// As `pmx-crypto` sees it, the uncompressed form is a different algorithm (same curve, different
 /// data format). The key should remember the one it was read with, not the default.
 TEST(KeyAlgorithm, AnUncompressedImportRemembersItsOwnFormat) {
+    SKIP_UNLESS_SECP256K1();
     const PrivateKey priv = PrivateKey::fromWIF(WIF);
     const std::string uncompressed = legacy::PrivateKey::fromWIF(WIF).getPublicKey().getEcc().getPublicKey(false);
     ASSERT_EQ(65u, uncompressed.size());
@@ -148,6 +172,7 @@ TEST(KeyAlgorithm, AnUncompressedImportRemembersItsOwnFormat) {
 /// A signature made with a key verifies under that key's own scheme — including when the public key
 /// arrived in a different format from the private one.
 TEST(KeyAlgorithm, SigningAndVerifyingFollowTheKey) {
+    SKIP_UNLESS_SECP256K1();
     const PrivateKey priv = PrivateKey::fromWIF(WIF);
     const std::string signature = priv.signToCompactSignatureWithHash(MESSAGE);
 
@@ -158,12 +183,14 @@ TEST(KeyAlgorithm, SigningAndVerifyingFollowTheKey) {
 }
 
 TEST(KeyAlgorithm, TheRegistryKnowsExactlyWhatItCanUse) {
-    EXPECT_TRUE(isSupportedKeyAlgorithm(DEFAULT_KEY_ALGORITHM));
+    EXPECT_TRUE(isSupportedKeyAlgorithm(defaultKeyAlgorithm()));
     EXPECT_TRUE(isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg::secp256k1));
-    // Not supported yet — this has to be a refusal under its own name, not a signature under the wrong scheme.
-    EXPECT_FALSE(isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg::ED25519));
+    EXPECT_TRUE(isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg::ED25519));
+    // Still a refusal under its own name for anything the registry does not cover, rather than a
+    // signature under some guessed scheme.
+    EXPECT_FALSE(isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg::MLDSA65));
     EXPECT_THROW(
-        signatureSchemeFor(privmx::cryptoservice::AsymAlg::ED25519), UnsupportedKeyAlgorithmException
+        signatureSchemeFor(privmx::cryptoservice::AsymAlg::MLDSA65), UnsupportedKeyAlgorithmException
     );
 }
 
@@ -208,6 +235,7 @@ TEST(Keys, WorksInsideStandardContainers) {
 /// from a PGP block) arrives uncompressed. The wrapper's first version handled only 33 B and broke
 /// `convertPGPAsn1KeyToBase58DERKey`.
 TEST(Keys, FromDerAcceptsCompressedAndUncompressed) {
+    SKIP_UNLESS_SECP256K1();
     const auto legacyPub = legacy::PrivateKey::fromWIF(WIF).getPublicKey();
     const std::string compressed = legacyPub.toDER();
     const std::string uncompressed = legacyPub.getEcc().getPublicKey(false);
@@ -230,6 +258,7 @@ TEST(Keys, MalformedInputIsRejected) {
 
 /// The cut: a key in the pre-3.0.0 encoding is refused by name, not read as secp256k1 by assumption.
 TEST(Keys, AnUntaggedKeyIsRefused) {
+    SKIP_UNLESS_SECP256K1();
     const auto legacyPub = legacy::PrivateKey::fromWIF(WIF).getPublicKey();
 
     EXPECT_ANY_THROW(PublicKey::fromBase58DER(legacyPub.toBase58DER()));

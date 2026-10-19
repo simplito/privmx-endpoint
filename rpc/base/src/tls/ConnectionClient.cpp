@@ -118,20 +118,29 @@ void ConnectionClient::ecdheHandshake(
 }
 
 void ConnectionClient::ecdhexHandshake(
-    const PrivateKey& key, 
-    const std::optional<std::string>& solution, 
-    const std::optional<crypto::PublicKey>& serverPubKey
+    const PrivateKey& key,
+    const std::optional<std::string>& solution,
+    const std::optional<crypto::PublicKey>& serverPubKey,
+    const std::optional<SplitIdentity>& identity
 ) {
     _ecdhex_private_key = key;
     string timestamp = Utils::getNowTimestampStr();
     string nonce = Base64::from(Crypto::randomBytes(32));
-    string msg = string("ecdhexlogin ").append(nonce).append(" ").append(timestamp);
-    string signature = key.signToCompactSignatureWithHash(msg);
+    // Without a split identity the signing key *is* the key the channel is agreed with, and that is
+    // what binds the two together. Once they are separate keys the signature has to name the
+    // transport key itself, or a captured one could be replayed onto someone else's channel.
+    string msg = identity.has_value()
+        ? string("ecdhexlogin ").append(identity->transportKey).append(" ").append(nonce).append(" ").append(timestamp)
+        : string("ecdhexlogin ").append(nonce).append(" ").append(timestamp);
+    string signature = identity.has_value() ? identity->sign(msg) : key.signToCompactSignatureWithHash(msg);
     string public_key = key.getPublicKey().toDER();
     Object::Ptr packet = new Object();
     packet->set("type", "ecdhex");
     packet->set("agent", getClientAgent());
     packet->set("key", BinaryString(public_key));
+    if (identity.has_value()) {
+        packet->set("identityKey", identity->identityKey);
+    }
     packet->set("nonce", nonce);
     packet->set("timestamp", timestamp);
     packet->set("signature", Base64::from(signature));

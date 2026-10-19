@@ -42,8 +42,8 @@ RpcGateway::Ptr RpcGateway::createGatewayFromEcdheConnection(const std::optional
     return new RpcGateway(connection, nullopt);
 }
 
-RpcGateway::Ptr RpcGateway::createGatewayFromEcdhexConnection(const crypto::PrivateKey& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey) {
-    auto connection = rpc::ConnectionManager::getInstance()->createEcdhexConnection({.key = key, .solution = solution, .serverPubKey = serverPubKey}, options);
+RpcGateway::Ptr RpcGateway::createGatewayFromEcdhexConnection(const crypto::PrivateKey& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey, const std::optional<rpc::SplitIdentity>& identity) {
+    auto connection = rpc::ConnectionManager::getInstance()->createEcdhexConnection({.key = key, .solution = solution, .serverPubKey = serverPubKey, .identity = identity}, options);
     return new RpcGateway(connection, nullopt);
 }
 

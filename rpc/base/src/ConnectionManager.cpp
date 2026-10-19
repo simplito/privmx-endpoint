@@ -33,7 +33,7 @@ AuthorizedConnection::Ptr ConnectionManager::createEcdheConnection(const EcdheOp
 AuthorizedConnection::Ptr ConnectionManager::createEcdhexConnection(const EcdhexOptions& auth, const ConnectionOptions& options) {
     auto full_options = fillOptions(options);
     AuthorizedConnection::Ptr connection = new AuthorizedConnection(full_options);
-    connection->ecdhexConnect(auth.key, auth.solution, auth.serverPubKey);
+    connection->ecdhexConnect(auth.key, auth.solution, auth.serverPubKey, auth.identity);
     connection->init();
     return connection;
 }

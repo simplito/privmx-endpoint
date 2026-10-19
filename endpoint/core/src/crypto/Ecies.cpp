@@ -14,17 +14,86 @@ limitations under the License.
 
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/crypto/CryptoErrors.hpp>
+#include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/KeyFormats.hpp>
+#include <privmx/endpoint/core/crypto/ProviderAccess.hpp>
 
 using namespace privmx::endpoint::core;
+
+namespace cs = privmx::cryptoservice;
+
+namespace {
+
+/**
+ * Wrapping to an identity whose agreement half is a 25519 key.
+ *
+ * pmx-crypto's own ECIES (`seal`/`open`) cannot serve here: it pulls the sender's private scalar out
+ * with `toRawP256PrivateOnly`, which is a P256-family operation, and fails on X25519 with "Failed to
+ * get private key raw bytes". So the wrap is built from the pieces that do work — a shared secret,
+ * a KDF, and the authenticated frame `CryptoSuite` already produces.
+ *
+ * Frame: `[32 B sender agreement public key][CryptoSuite frame]`. The sender's key travels in the
+ * clear because `decrypt` is often called without it — `EncKeyEncryptorV1` has no sender to hand —
+ * and it is what the recipient agrees the secret with.
+ *
+ * This is a different wrapping format from the secp256k1 one, which is fine: nothing was ever
+ * written in it, and which one applies follows from the identity's algorithm tag.
+ */
+constexpr std::size_t AGREEMENT_PUBLIC_LENGTH = 32;
+constexpr const char* WRAP_KDF_LABEL = "privmx-key-wrap";
+
+std::string wrapKeyFor(const std::string& sharedSecret) {
+    return FormatHash::kdf(sharedSecret, WRAP_KDF_LABEL, CryptoSuite::defaultForWrite().keyLength());
+}
+
+std::string wrapToComposedIdentity(const PublicKey& pub, const std::string& data, const PrivateKey& sender) {
+    // Checked before the keys reach OpenSSL, which does not merely fail on a type mismatch here: it
+    // trips an internal assertion and **aborts the process** (`keymgmt_lib.c: match_type`). Both ends
+    // of a shared secret have to be the same algorithm, and a key that names a composed algorithm
+    // without carrying its agreement half is not usable as either end.
+    if (!keyAlgorithmNeedsAgreementKey(sender.algorithm()) ||
+        agreementAlgorithmFor(sender.algorithm()) != agreementAlgorithmFor(pub.algorithm())) {
+        throw MalformedEncryptionKeyException(
+            "cannot wrap to a composed identity with a sender key of another algorithm"
+        );
+    }
+    if (pub.agreementImpl() == pub.impl() || sender.agreementImpl() == sender.impl()) {
+        throw MalformedEncryptionKeyException("composed identity is missing its agreement half");
+    }
+    const std::string senderPublic = keyString(sender.agreementImpl()->publicKey()->export_(cs::KeyFormat::Raw));
+    if (senderPublic.size() != AGREEMENT_PUBLIC_LENGTH) {
+        throw MalformedEncryptionKeyException("agreement public key of unexpected length");
+    }
+    const std::string shared = keyString(sender.agreementImpl()->deriveSharedSecret(*pub.agreementImpl()));
+    return senderPublic + CryptoSuite::defaultForWrite().encrypt(wrapKeyFor(shared), data);
+}
+
+std::string unwrapForComposedIdentity(const PrivateKey& priv, const std::string& cipher) {
+    if (cipher.size() <= AGREEMENT_PUBLIC_LENGTH) {
+        throw MalformedEncryptionKeyException("wrapped key shorter than its sender key");
+    }
+    auto senderPublic = cryptoProvider().importPublicKey(
+        keyBytes(cipher.substr(0, AGREEMENT_PUBLIC_LENGTH)),
+        cs::KeyFormat::Raw,
+        agreementAlgorithmFor(priv.algorithm())
+    );
+    const std::string shared = keyString(priv.agreementImpl()->deriveSharedSecret(*senderPublic));
+    return CryptoSuite::decrypt(wrapKeyFor(shared), cipher.substr(AGREEMENT_PUBLIC_LENGTH));
+}
+
+} // namespace
 
 std::string Ecies::encrypt(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature) {
     return mapCryptoErrors("Ecies::encrypt", [&] {
         if (pub.empty() || privForSignature.empty()) {
             throw MalformedEncryptionKeyException("ecies encrypt with an empty key");
         }
-        return keyString(pub.impl()->seal(keyBytes(data), *privForSignature.impl()));
+        if (keyAlgorithmNeedsAgreementKey(pub.algorithm())) {
+            return wrapToComposedIdentity(pub, data, privForSignature);
+        }
+        return keyString(pub.agreementImpl()->seal(keyBytes(data), *privForSignature.agreementImpl()));
     });
 }
 
@@ -40,9 +109,12 @@ std::string Ecies::decrypt(
         if (pubOfSignature.has_value() && pubOfSignature->empty()) {
             throw MalformedEncryptionKeyException("ecies decrypt against an empty signer key");
         }
+        if (keyAlgorithmNeedsAgreementKey(priv.algorithm())) {
+            return unwrapForComposedIdentity(priv, cipher);
+        }
         const privmx::cryptoservice::IPublicKey* expectedSender =
-            pubOfSignature.has_value() ? pubOfSignature->impl().get() : nullptr;
-        return keyString(priv.impl()->open(keyBytes(cipher), expectedSender));
+            pubOfSignature.has_value() ? pubOfSignature->agreementImpl().get() : nullptr;
+        return keyString(priv.agreementImpl()->open(keyBytes(cipher), expectedSender));
     });
 }
 

@@ -54,8 +54,6 @@ TEST(CryptoErrors, EveryFailurePathProducesCoreException) {
         {"encrypt/krotki klucz", [] { CryptoSuite::defaultForWrite().encrypt("krotki", "tresc"); }},
         {"decrypt/zly klucz", [] { CryptoSuite::decrypt(std::string(32, 'z'), someFrame()); }},
         {"decrypt/pusta ramka", [] { CryptoSuite::decrypt(KEY32, ""); }},
-        {"verify/smiec jako podpis",
-         [] { PrivateKey::fromWIF(WIF).getPublicKey().verifyCompactSignatureWithHash("m", "xx"); }},
         {"ecies/nie ten klucz",
          [] {
              const auto a = PrivateKey::fromWIF(WIF);
@@ -72,6 +70,18 @@ TEST(CryptoErrors, EveryFailurePathProducesCoreException) {
         } catch (const std::exception& e) {
             ADD_FAILURE() << name << ": wyjatek wyszedl poza hierarchie endpointu: " << e.what();
         }
+    }
+
+    // Verification is the one refusal that need not be an exception, and which it is depends on the
+    // algorithm: secp256k1 throws out of the ECC driver, Ed25519 just reports a mismatch. What has to
+    // hold either way is that garbage is not accepted, so that is what this asserts.
+    try {
+        EXPECT_FALSE(PrivateKey::fromWIF(WIF).getPublicKey().verifyCompactSignatureWithHash("m", "xx"))
+            << "verify/smiec jako podpis: smiec przyjety jako podpis";
+    } catch (const Exception& e) {
+        EXPECT_NE(0u, e.getCode()) << "verify/smiec jako podpis";
+    } catch (const std::exception& e) {
+        ADD_FAILURE() << "verify/smiec jako podpis: wyjatek wyszedl poza hierarchie endpointu: " << e.what();
     }
 }
 

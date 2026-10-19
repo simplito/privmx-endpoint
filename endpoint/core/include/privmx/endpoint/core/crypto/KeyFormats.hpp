@@ -31,8 +31,19 @@ namespace core {
  * `PrivmxSecp256k1` is secp256k1 with PrivMX's data formats: the private part as a bare 32 B, the
  * public key as 33 B compressed. Plain `secp256k1` uses different, longer forms, so it is not a
  * drop-in replacement.
+ *
+ * Chosen at build configuration time by `PRIVMX_DEFAULT_KEY_ALGORITHM`, expressed as the algorithm's
+ * wire tag so that the build option and the encoding cannot drift apart. It affects **generation
+ * only** — the registry stays complete whatever this is, or clients built differently could not read
+ * each other's keys.
  */
-constexpr privmx::cryptoservice::AsymAlg DEFAULT_KEY_ALGORITHM = privmx::cryptoservice::AsymAlg::PrivmxSecp256k1;
+/**
+ * A function, not a macro-driven constant: `PRIVMX_DEFAULT_KEY_ALGORITHM_TAG` is defined for the
+ * library's own translation units only. A constant in this header would read the fallback in every
+ * consumer — including the tests — and quietly describe a different build from the one linked in.
+ * `CryptoSuite::defaultForWrite()` is a function for the same reason.
+ */
+privmx::cryptoservice::AsymAlg defaultKeyAlgorithm();
 
 /**
  * @brief The signature scheme matching a key's algorithm.
@@ -53,23 +64,67 @@ privmx::cryptoservice::SigScheme signatureSchemeFor(privmx::cryptoservice::AsymA
 /// @brief Whether the endpoint can work with keys of this algorithm.
 bool isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg algorithm);
 
+/**
+ * @brief The bytes to hand the key, so that every algorithm signs the message's SHA-256 digest.
+ *
+ * `signToCompactSignatureWithHash` promises a signature over that digest. secp256k1's `Compact`
+ * scheme computes it inside the provider; Ed25519's `Default` signs whatever it is given. Without
+ * this the two would sign different things and a bridge verifying over the digest — as it does —
+ * would reject every Ed25519 signature.
+ *
+ * @throws UnsupportedKeyAlgorithmException when the algorithm is not in the registry
+ */
+std::string messageToSignFor(privmx::cryptoservice::AsymAlg algorithm, const std::string& message);
+
 /// @brief A public key as it travels: the algorithm its tag named, and the bytes behind the tag.
 struct TaggedPublicKey {
     privmx::cryptoservice::AsymAlg algorithm;
+    /// The signing half, or the whole key when the algorithm does both jobs.
     std::string rawKey;
+    /// The key-agreement half, empty unless the algorithm needs a separate one.
+    std::string rawAgreementKey;
 };
 
 /**
- * @brief Encodes a public key as `Base58Check(tag || rawKey)`.
+ * @brief Whether an identity of this algorithm needs a second key to agree container keys with.
+ *
+ * True for Ed25519, which signs but has no Diffie-Hellman. See `KeyAlgorithmSpec::agreementAlgorithm`.
+ */
+bool keyAlgorithmNeedsAgreementKey(privmx::cryptoservice::AsymAlg algorithm);
+
+/**
+ * @brief The algorithm of the agreement half.
+ * @throws UnsupportedKeyAlgorithmException when the algorithm needs no separate agreement key
+ */
+privmx::cryptoservice::AsymAlg agreementAlgorithmFor(privmx::cryptoservice::AsymAlg algorithm);
+
+/**
+ * @brief The 32-byte sub-secret one half of a composed identity is built from.
+ *
+ * Both halves come from one secret — what a WIF already carries — so an identity still travels as a
+ * single private key. The halves are domain-separated, never the same bytes twice.
+ */
+std::string deriveIdentitySeed(const std::string& secret, bool forAgreement);
+
+/**
+ * @brief Encodes a public key as `Base58Check(tag || rawKey || rawAgreementKey)`.
  *
  * This is the only encoding a key travels in. It exists because a key has to say which algorithm it
  * is — contract point 2 — and because the bridge now refuses anything untagged. The tags are shared
  * wire format with the bridge (`src/utils/crypto/VerifyKey.ts`) and must not drift from it.
  *
+ * Both halves live behind one tag so that an identity stays **one string**: `UserWithPubKey.pubKey`
+ * and the bridge's `contextUser.userPubKey` are single fields, and a key compares equal to itself.
+ *
+ * @param rawAgreementKey empty unless `keyAlgorithmNeedsAgreementKey(algorithm)`
  * @throws UnsupportedKeyAlgorithmException when the algorithm has no encoding of its own
- * @throws MalformedEncryptionKeyException when the raw key is not the length the algorithm requires
+ * @throws MalformedEncryptionKeyException when either half is not the length the algorithm requires
  */
-std::string encodeTaggedPublicKey(const std::string& rawKey, privmx::cryptoservice::AsymAlg algorithm);
+std::string encodeTaggedPublicKey(
+    const std::string& rawKey,
+    privmx::cryptoservice::AsymAlg algorithm,
+    const std::string& rawAgreementKey = ""
+);
 
 /**
  * @brief Reads a tagged public key, taking the algorithm from the tag rather than assuming one.

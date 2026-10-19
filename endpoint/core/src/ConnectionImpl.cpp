@@ -64,14 +64,34 @@ void ConnectionImpl::connect(
     // Granica z warstwa sieciowa: `privfs`/`rpc` nadal operuja na `privmx::crypto`, bo ich migracja
     // jest osobnym zadaniem. Konwersja przez WIF kosztuje jedno parsowanie na polaczenie.
     // Do usuniecia, gdy warstwa sieciowa przejdzie na pmx-crypto.
-    auto legacyKey = privmx::crypto::PrivateKey::fromWIF(key.toWIF());
+    //
+    // An identity that cannot agree keys cannot be the key the channel runs on, so the two roles come
+    // apart: a throwaway secp256k1 key carries the channel, and the identity only signs. The signature
+    // then has to name the transport key — `SplitIdentity` says why.
+    const bool identityCanCarryTheChannel = !keyAlgorithmNeedsAgreementKey(key.algorithm());
+    auto legacyKey = identityCanCarryTheChannel
+        ? privmx::crypto::PrivateKey::fromWIF(key.toWIF())
+        : privmx::crypto::PrivateKey::generateRandom();
+    std::optional<rpc::SplitIdentity> splitIdentity;
+    if (!identityCanCarryTheChannel) {
+        splitIdentity = rpc::SplitIdentity{
+            .identityKey = key.getPublicKey().toBase58DER(),
+            // Spelled the way the bridge spells the transport key it derives from the handshake, or the
+            // signature covers a different string on each side.
+            .transportKey = core::PublicKey::fromDER(legacyKey.getPublicKey().toDER()).toBase58DER(),
+            .sign = [key](const std::string& message) { return key.signToCompactSignatureWithHash(message); },
+        };
+    }
     if (verificationOptions.bridgePubKey.has_value()) {
         _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(
             legacyKey, options, solutionId,
-            privmx::crypto::PublicKey::fromBase58DER(verificationOptions.bridgePubKey.value())
+            privmx::crypto::PublicKey::fromBase58DER(verificationOptions.bridgePubKey.value()),
+            splitIdentity
         );
     } else {
-        _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(legacyKey, options, solutionId);
+        _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(
+            legacyKey, options, solutionId, std::nullopt, splitIdentity
+        );
     }
     _serverApi.emplace(_gateway);
     _host = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->host;

@@ -37,11 +37,35 @@ struct KeyAlgorithmSpec {
      * curve, one tag — or a key would have two spellings and no longer compare equal to itself.
      */
     std::uint8_t keyTag;
-    /** Length of the raw key behind the tag, in bytes. */
+    /** Length of the raw signing key behind the tag, in bytes. */
     std::size_t publicKeyLength;
+    /**
+     * The algorithm the identity agrees keys with, when that is not the signing algorithm itself.
+     *
+     * Ed25519 signs and cannot do Diffie-Hellman, but an identity here has to do both: a container
+     * key reaches a member by being wrapped to their public key (`EncKeyEncryptorV2` → ECIES). So an
+     * Ed25519 identity is really two keys, and its tagged encoding carries both — signing half first,
+     * agreement half second. `NoAlg` means the one key does both jobs, as secp256k1 does.
+     */
+    cs::AsymAlg agreementAlgorithm;
+    /** Length of the raw agreement key, or 0 when there is none. */
+    std::size_t agreementKeyLength;
+    /**
+     * Whether `signatureScheme` already digests the message before signing it.
+     *
+     * `SigScheme::Compact` is ECDSA over `sha256(m)` — the provider does that hash. Ed25519's
+     * `Default` signs the message as given, hashing only inside its own construction. Both have to
+     * end up signing the same bytes, because the bridge verifies over a SHA-256 digest either way,
+     * so an algorithm that does not digest gets one applied before the key ever sees the message.
+     */
+    bool schemeDigestsTheMessage;
 };
 
 constexpr std::uint8_t UNTAGGED = 0x00;
+
+/// Label separating the two halves derived from one secret; see `deriveIdentitySeed`.
+constexpr const char* SIGNING_SEED_LABEL = "privmx-identity-sign";
+constexpr const char* AGREEMENT_SEED_LABEL = "privmx-identity-dh";
 
 /**
  * The identity-key algorithms the endpoint works with.
@@ -56,9 +80,10 @@ constexpr std::uint8_t UNTAGGED = 0x00;
  * They sit at 0x80 and above, where a SEC1 point prefix cannot be (0x02/0x03 compressed, 0x04/0x06/0x07
  * uncompressed), so a key in the old untagged encoding fails as an unknown tag instead of being misread.
  */
-constexpr std::array<KeyAlgorithmSpec, 2> KEY_ALGORITHMS{{
-    {cs::AsymAlg::PrivmxSecp256k1, cs::SigScheme::Compact, 0x81, 33},
-    {cs::AsymAlg::secp256k1, cs::SigScheme::Compact, UNTAGGED, 33},
+constexpr std::array<KeyAlgorithmSpec, 3> KEY_ALGORITHMS{{
+    {cs::AsymAlg::PrivmxSecp256k1, cs::SigScheme::Compact, 0x81, 33, cs::AsymAlg::NoAlg, 0, true},
+    {cs::AsymAlg::secp256k1, cs::SigScheme::Compact, UNTAGGED, 33, cs::AsymAlg::NoAlg, 0, true},
+    {cs::AsymAlg::ED25519, cs::SigScheme::Default, 0x82, 32, cs::AsymAlg::X25519, 32, false},
 }};
 
 const KeyAlgorithmSpec* findSpecByTag(std::uint8_t tag) {
@@ -82,21 +107,43 @@ const KeyAlgorithmSpec* findSpec(cs::AsymAlg algorithm) {
     return nullptr;
 }
 
-constexpr bool defaultAlgorithmIsSupported() {
+/**
+ * The algorithm new identity keys are generated with (level 1 of the choice).
+ *
+ * Set at build configuration time by `PRIVMX_DEFAULT_KEY_ALGORITHM`, expressed as the algorithm's
+ * wire tag so the option and the encoding cannot name different things. It affects **generation
+ * only** — `KEY_ALGORITHMS` stays complete whatever this is, because a key says which algorithm it
+ * is, and a client built one way must still read keys made the other way.
+ */
+#ifndef PRIVMX_DEFAULT_KEY_ALGORITHM_TAG
+#define PRIVMX_DEFAULT_KEY_ALGORITHM_TAG 0x81
+#endif
+
+constexpr cs::AsymAlg algorithmForDefaultTag() {
     for (const auto& spec : KEY_ALGORITHMS) {
-        if (spec.algorithm == DEFAULT_KEY_ALGORITHM) {
-            return true;
+        if (spec.keyTag == PRIVMX_DEFAULT_KEY_ALGORITHM_TAG) {
+            return spec.algorithm;
         }
     }
-    return false;
+    return cs::AsymAlg::NoAlg;
 }
-static_assert(defaultAlgorithmIsSupported(), "DEFAULT_KEY_ALGORITHM has no entry in KEY_ALGORITHMS");
+
+/// A build error rather than an exception on the first key generated, if the tag names nothing.
+constexpr cs::AsymAlg DEFAULT_ALGORITHM = algorithmForDefaultTag();
+static_assert(
+    DEFAULT_ALGORITHM != cs::AsymAlg::NoAlg,
+    "PRIVMX_DEFAULT_KEY_ALGORITHM_TAG matches no entry in KEY_ALGORITHMS"
+);
 
 } // namespace
 
 namespace privmx {
 namespace endpoint {
 namespace core {
+
+cs::AsymAlg defaultKeyAlgorithm() {
+    return DEFAULT_ALGORITHM;
+}
 
 bool isSupportedKeyAlgorithm(cs::AsymAlg algorithm) {
     return findSpec(algorithm) != nullptr;
@@ -110,7 +157,41 @@ cs::SigScheme signatureSchemeFor(cs::AsymAlg algorithm) {
     return spec->signatureScheme;
 }
 
-std::string encodeTaggedPublicKey(const std::string& rawKey, cs::AsymAlg algorithm) {
+std::string messageToSignFor(cs::AsymAlg algorithm, const std::string& message) {
+    const KeyAlgorithmSpec* spec = findSpec(algorithm);
+    if (spec == nullptr) {
+        throw UnsupportedKeyAlgorithmException("asymmetric algorithm: " + std::to_string(static_cast<int>(algorithm)));
+    }
+    return spec->schemeDigestsTheMessage ? message : FormatHash::sha256(message);
+}
+
+bool keyAlgorithmNeedsAgreementKey(cs::AsymAlg algorithm) {
+    const KeyAlgorithmSpec* spec = findSpec(algorithm);
+    return spec != nullptr && spec->agreementAlgorithm != cs::AsymAlg::NoAlg;
+}
+
+cs::AsymAlg agreementAlgorithmFor(cs::AsymAlg algorithm) {
+    const KeyAlgorithmSpec* spec = findSpec(algorithm);
+    if (spec == nullptr || spec->agreementAlgorithm == cs::AsymAlg::NoAlg) {
+        throw UnsupportedKeyAlgorithmException(
+            "algorithm has no separate agreement key: " + std::to_string(static_cast<int>(algorithm))
+        );
+    }
+    return spec->agreementAlgorithm;
+}
+
+std::string deriveIdentitySeed(const std::string& secret, bool forAgreement) {
+    // Domain-separated rather than feeding the same bytes to both algorithms: Ed25519 hashes its seed
+    // into a scalar and X25519 clamps its one, so the same bytes would give two keys whose private
+    // scalars are related in a way nobody has analysed.
+    return FormatHash::kdf(secret, forAgreement ? AGREEMENT_SEED_LABEL : SIGNING_SEED_LABEL, 32);
+}
+
+std::string encodeTaggedPublicKey(
+    const std::string& rawKey,
+    cs::AsymAlg algorithm,
+    const std::string& rawAgreementKey
+) {
     const KeyAlgorithmSpec* spec = findSpec(algorithm);
     if (spec == nullptr || spec->keyTag == UNTAGGED) {
         // `secp256k1` lands here: it is an import-only spelling of `PrivmxSecp256k1`, and the caller is
@@ -125,8 +206,14 @@ std::string encodeTaggedPublicKey(const std::string& rawKey, cs::AsymAlg algorit
             std::to_string(spec->publicKeyLength)
         );
     }
+    if (rawAgreementKey.size() != spec->agreementKeyLength) {
+        throw MalformedEncryptionKeyException(
+            "agreement key of " + std::to_string(rawAgreementKey.size()) + " bytes, expected " +
+            std::to_string(spec->agreementKeyLength)
+        );
+    }
     return privmx::utils::Base58::encodeWithChecksum(
-        std::string(1, static_cast<char>(spec->keyTag)) + rawKey, FormatHash::sha256
+        std::string(1, static_cast<char>(spec->keyTag)) + rawKey + rawAgreementKey, FormatHash::sha256
     );
 }
 
@@ -148,13 +235,18 @@ TaggedPublicKey decodeTaggedPublicKey(const std::string& base58) {
             "unknown public key tag: 0x" + std::to_string(static_cast<int>(static_cast<std::uint8_t>(payload[0])))
         );
     }
-    if (payload.size() != 1 + spec->publicKeyLength) {
+    const std::size_t expected = spec->publicKeyLength + spec->agreementKeyLength;
+    if (payload.size() != 1 + expected) {
         throw MalformedEncryptionKeyException(
             "tagged public key of " + std::to_string(payload.size() - 1) + " bytes, expected " +
-            std::to_string(spec->publicKeyLength)
+            std::to_string(expected)
         );
     }
-    return TaggedPublicKey{.algorithm = spec->algorithm, .rawKey = payload.substr(1)};
+    return TaggedPublicKey{
+        .algorithm = spec->algorithm,
+        .rawKey = payload.substr(1, spec->publicKeyLength),
+        .rawAgreementKey = payload.substr(1 + spec->publicKeyLength),
+    };
 }
 
 bool isTaggedPublicKeyFormat(const std::string& base58) {
@@ -168,7 +260,7 @@ bool isTaggedPublicKeyFormat(const std::string& base58) {
         return false;
     }
     const KeyAlgorithmSpec* spec = findSpecByTag(static_cast<std::uint8_t>(payload[0]));
-    return spec != nullptr && payload.size() == 1 + spec->publicKeyLength;
+    return spec != nullptr && payload.size() == 1 + spec->publicKeyLength + spec->agreementKeyLength;
 }
 
 } // namespace core

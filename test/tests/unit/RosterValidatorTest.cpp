@@ -113,15 +113,20 @@ TEST(RosterValidator, RefusesAnEncodingWithoutAnAlgorithmTag) {
 }
 
 TEST(RosterValidator, WhatItDeliberatelyDoesNotDo) {
-    // A correctly tagged key of the right length whose x has no square root on the curve: well-formed, not a
-    // point. The cheap check passes it and the full check refuses it, which is safe — it fails at first use.
+    // Specific to secp256k1: the gap between the two checks is a byte string that is a well-formed key
+    // but not a point on the curve, and "not a point" is a notion this curve has. Under another
+    // identity algorithm the same gap exists but is reached differently, so this case describes the
+    // build it was written for rather than asserting something false about the other.
+    if (privmx::endpoint::core::defaultKeyAlgorithm() != privmx::cryptoservice::AsymAlg::PrivmxSecp256k1) {
+        GTEST_SKIP() << "describes the secp256k1 curve check";
+    }
     std::string der(33, '\0');
     der[0] = 0x02;
     for (std::size_t i = 1; i < der.size(); ++i) {
         der[i] = static_cast<char>(0xFF);   // x = 2^256-1 > p, so no point exists
     }
     const std::string encoded = privmx::endpoint::core::encodeTaggedPublicKey(
-        der, privmx::endpoint::core::DEFAULT_KEY_ALGORITHM
+        der, privmx::endpoint::core::defaultKeyAlgorithm()
     );
     EXPECT_NO_THROW(Validator::validatePubKeyFormat(encoded, "field:pubKey"));
     EXPECT_THROW(Validator::validatePubKeyBase58DER(encoded, "field:pubKey"), privmx::endpoint::core::Exception);

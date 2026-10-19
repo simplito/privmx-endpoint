@@ -488,6 +488,26 @@ struct EcdheOptions
     }
 };
 
+/**
+ * An identity that is not the key the channel is agreed with.
+ *
+ * The `ecdhex` handshake used one key for both jobs: the signature proving who is logging in, and the
+ * Diffie-Hellman the channel's secret comes from. An identity whose algorithm cannot do key agreement
+ * — Ed25519 — has to split them, so it signs with its own key while the channel runs on a throwaway
+ * secp256k1 one.
+ *
+ * Everything here is pre-computed by the caller. This layer deliberately knows nothing about key
+ * encodings or algorithms: it has no access to the endpoint's key types and should not grow one.
+ */
+struct SplitIdentity {
+    /// What the bridge looks the user up by, in whatever encoding both sides agreed on.
+    std::string identityKey;
+    /// The transport key spelled the same way the bridge spells it; it is part of the signed message.
+    std::string transportKey;
+    /// Signs a message with the identity key. The handshake decides what the message is.
+    std::function<std::string(const std::string&)> sign;
+};
+
 struct EcdhexOptions
 {
     Poco::Dynamic::Var serializeToVar(){
@@ -506,6 +526,8 @@ struct EcdhexOptions
     crypto::PrivateKey key;
     std::optional<std::string> solution;
     std::optional<crypto::PublicKey> serverPubKey;
+    /// Set when the identity logging in is not the key the channel is agreed with; see `SplitIdentity`.
+    std::optional<SplitIdentity> identity;
 };
 
 struct SrpOptions

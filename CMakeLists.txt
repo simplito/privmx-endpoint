@@ -47,6 +47,27 @@ else()
 endif()
 message(STATUS "Crypto suite for writing - PRIVMX_DEFAULT_CRYPTO_SUITE=${PRIVMX_DEFAULT_CRYPTO_SUITE} (id ${PRIVMX_DEFAULT_CRYPTO_SUITE_ID})")
 
+# Algorithm new identity keys are generated with. A third axis, independent of the two below: those
+# pick how container data is written, this picks what a user *is*.
+#
+# "ed25519" is really Ed25519 for signatures plus X25519 for key agreement, carried as one tagged key —
+# Ed25519 alone cannot be an identity here, because container keys reach a member by Diffie-Hellman.
+# Reading is unaffected: a key says which algorithm it is, so a client built one way still reads keys
+# made the other way.
+set(PRIVMX_DEFAULT_KEY_ALGORITHM "secp256k1" CACHE STRING "Algorithm used for new identity keys")
+set_property(CACHE PRIVMX_DEFAULT_KEY_ALGORITHM PROPERTY STRINGS "secp256k1" "ed25519")
+
+if(PRIVMX_DEFAULT_KEY_ALGORITHM STREQUAL "secp256k1")
+    set(PRIVMX_DEFAULT_KEY_ALGORITHM_TAG 0x81)
+elseif(PRIVMX_DEFAULT_KEY_ALGORITHM STREQUAL "ed25519")
+    set(PRIVMX_DEFAULT_KEY_ALGORITHM_TAG 0x82)
+else()
+    message(FATAL_ERROR
+        "Unknown PRIVMX_DEFAULT_KEY_ALGORITHM='${PRIVMX_DEFAULT_KEY_ALGORITHM}'. "
+        "Known values: secp256k1, ed25519")
+endif()
+message(STATUS "Identity key algorithm - PRIVMX_DEFAULT_KEY_ALGORITHM=${PRIVMX_DEFAULT_KEY_ALGORITHM} (tag ${PRIVMX_DEFAULT_KEY_ALGORITHM_TAG})")
+
 # Format danych pliku w `store`, uzywany do ZAPISU nowych plikow. Celowo osobna os niz
 # PRIVMX_DEFAULT_CRYPTO_SUITE: zestawy kontenerow roznia sie haszem, a formaty plikow trybem
 # szyfru, wiec jedno nie wynika z drugiego. Rozdzielenie pozwala tez na migracje po kawalku -

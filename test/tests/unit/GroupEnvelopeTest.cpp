@@ -142,7 +142,10 @@ TEST_F(GroupEnvelope, HeaderIsSignedSoAnEnvelopeCannotBeReplayedIntoAnotherGroup
 
     std::string otherKey = privmx::crypto::Crypto::randomBytes(32);
     core::DataInnerEncryptorV4 raw;
-    std::size_t headerLen = 2 + 1 + std::string("groupA").size() + 1 + keyId.size() + 1 + 33;
+    // Taken from the key, not restated: an author key is 33 bytes on secp256k1 and 64 on a composed
+    // Ed25519 identity, so a hard-coded length silently reads the wrong offset under another build.
+    const std::size_t authorKeyLen = author.getPublicKey().toDER().size();
+    std::size_t headerLen = 2 + 1 + std::string("groupA").size() + 1 + keyId.size() + 1 + authorKeyLen;
     core::Buffer sealed = raw.decrypt(buf(envA.stdString().substr(headerLen)), groupKey);
 
     std::string forgedHeader;

@@ -53,9 +53,10 @@ public:
      */
     explicit PublicKey(
         std::shared_ptr<privmx::cryptoservice::IPublicKey> key,
-        privmx::cryptoservice::AsymAlg algorithm = DEFAULT_KEY_ALGORITHM
+        privmx::cryptoservice::AsymAlg algorithm = defaultKeyAlgorithm(),
+        std::shared_ptr<privmx::cryptoservice::IPublicKey> agreementKey = nullptr
     )
-        : _key(std::move(key)), _algorithm(algorithm) {}
+        : _key(std::move(key)), _algorithm(algorithm), _agreementKey(std::move(agreementKey)) {}
 
     bool empty() const { return _key == nullptr; }
 
@@ -80,11 +81,24 @@ public:
 
     std::shared_ptr<privmx::cryptoservice::IPublicKey> impl() const { return _key; }
 
+    /**
+     * @brief The half a shared secret is agreed with, which is not always the half that signs.
+     *
+     * An Ed25519 identity cannot do Diffie-Hellman, so it carries a second X25519 key and this is it.
+     * For an algorithm that does both jobs this is the same handle as `impl()`, so callers that wrap
+     * keys (`Ecies`, `derive`) can use it unconditionally.
+     */
+    std::shared_ptr<privmx::cryptoservice::IPublicKey> agreementImpl() const {
+        return _agreementKey != nullptr ? _agreementKey : _key;
+    }
+
 private:
     const privmx::cryptoservice::IPublicKey& require() const;
 
     std::shared_ptr<privmx::cryptoservice::IPublicKey> _key;
-    privmx::cryptoservice::AsymAlg _algorithm = DEFAULT_KEY_ALGORITHM;
+    privmx::cryptoservice::AsymAlg _algorithm = defaultKeyAlgorithm();
+    /// Null unless the algorithm signs but cannot agree keys; see `agreementImpl()`.
+    std::shared_ptr<privmx::cryptoservice::IPublicKey> _agreementKey;
 };
 
 } // namespace core

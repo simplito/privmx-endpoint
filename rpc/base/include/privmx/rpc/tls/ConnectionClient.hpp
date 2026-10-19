@@ -40,10 +40,15 @@ public:
         const std::optional<std::string>& solution = std::nullopt, 
         const std::optional<crypto::PublicKey>& serverPubKey = std::nullopt
     );
+    /**
+     * @param key the key the channel's secret is agreed with; also the identity unless @p identity is set
+     * @param identity set when the one logging in cannot do key agreement and so cannot be @p key
+     */
     void ecdhexHandshake(
         const crypto::PrivateKey& key,
-        const std::optional<std::string>& solution, 
-        const std::optional<crypto::PublicKey>& serverPubKey
+        const std::optional<std::string>& solution,
+        const std::optional<crypto::PublicKey>& serverPubKey,
+        const std::optional<SplitIdentity>& identity = std::nullopt
     );
     void srpHandshake(const std::string& hashmail, const std::string& password, Poco::Int32 tickets = 1);
     void srpHandshake2(const std::string& username, const std::string& host, const std::string& password, Poco::Int32 tickets = 1, GatewayProperties::Ptr properties = nullptr);

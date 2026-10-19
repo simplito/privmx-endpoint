@@ -49,9 +49,12 @@ public:
     /// @brief A handle together with its algorithm. For the rationale see `core::PublicKey`.
     explicit PrivateKey(
         std::shared_ptr<privmx::cryptoservice::IPrivateKey> key,
-        privmx::cryptoservice::AsymAlg algorithm = DEFAULT_KEY_ALGORITHM
+        privmx::cryptoservice::AsymAlg algorithm = defaultKeyAlgorithm(),
+        std::shared_ptr<privmx::cryptoservice::IPrivateKey> agreementKey = nullptr,
+        const std::string& secret = ""
     )
-        : _key(std::move(key)), _algorithm(algorithm) {}
+        : _key(std::move(key)), _algorithm(algorithm), _agreementKey(std::move(agreementKey)),
+          _secret(secret) {}
 
     bool empty() const { return _key == nullptr; }
 
@@ -78,11 +81,31 @@ public:
 
     std::shared_ptr<privmx::cryptoservice::IPrivateKey> impl() const { return _key; }
 
+    /**
+     * @brief The half a shared secret is agreed with, which is not always the half that signs.
+     *
+     * An Ed25519 identity cannot do Diffie-Hellman, so it carries a second X25519 key and this is it.
+     * For an algorithm that does both jobs this is the same handle as `impl()`.
+     */
+    std::shared_ptr<privmx::cryptoservice::IPrivateKey> agreementImpl() const {
+        return _agreementKey != nullptr ? _agreementKey : _key;
+    }
+
 private:
     const privmx::cryptoservice::IPrivateKey& require() const;
 
     std::shared_ptr<privmx::cryptoservice::IPrivateKey> _key;
-    privmx::cryptoservice::AsymAlg _algorithm = DEFAULT_KEY_ALGORITHM;
+    privmx::cryptoservice::AsymAlg _algorithm = defaultKeyAlgorithm();
+    /// Null unless the algorithm signs but cannot agree keys; see `agreementImpl()`.
+    std::shared_ptr<privmx::cryptoservice::IPrivateKey> _agreementKey;
+    /**
+     * The secret both halves of a composed identity were derived from; empty otherwise.
+     *
+     * A composed identity has no single key to export, and pmx-crypto's WIF is an EC-only format, so
+     * `toWIF` and `getPrivateEncKey` hand back this instead. It is the identity in the sense that
+     * matters: feed it back to `fromRaw` and the same two halves come out.
+     */
+    std::string _secret;
 };
 
 } // namespace core

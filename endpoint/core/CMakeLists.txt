@@ -16,7 +16,8 @@ target_compile_options(privmxendpointcore PRIVATE -fPIC -Wall -Wextra)
 # PRIVMX_DEFAULT_CRYPTO_SUITE_ID: wybor zestawu zapisu (poziom 1). Patrz glowny CMakeLists.
 target_compile_definitions(privmxendpointcore
     PRIVATE MINIMAL_BUILD
-    PRIVATE PRIVMX_DEFAULT_CRYPTO_SUITE_ID=${PRIVMX_DEFAULT_CRYPTO_SUITE_ID})
+    PRIVATE PRIVMX_DEFAULT_CRYPTO_SUITE_ID=${PRIVMX_DEFAULT_CRYPTO_SUITE_ID}
+    PRIVATE PRIVMX_DEFAULT_KEY_ALGORITHM_TAG=${PRIVMX_DEFAULT_KEY_ALGORITHM_TAG})
 # privmxcryptolib jest PUBLIC, bo publiczne naglowki core (crypto/PrivateKey.hpp i spokrewnione)
 # wystawiaja typy z pmx-crypto - konsumenci potrzebuja jego sciezek include.
 target_link_libraries(privmxendpointcore PRIVATE Poco::Foundation privmx PUBLIC privmxcryptolib)

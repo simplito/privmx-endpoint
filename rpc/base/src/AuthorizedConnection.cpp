@@ -202,9 +202,9 @@ void AuthorizedConnection::ecdheConnect(const crypto::PrivateKey& key, const std
     activate();
 }
 
-void AuthorizedConnection::ecdhexConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey) {
+void AuthorizedConnection::ecdhexConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey, const std::optional<SplitIdentity>& identity) {
     ClientEndpoint endpoint(_tickets_manager, _options);
-    endpoint.connection.ecdhexHandshake(key, solution, serverPubKey);
+    endpoint.connection.ecdhexHandshake(key, solution, serverPubKey, identity);
     endpoint.connection.ticketRequest(endpoint.TICKETS_MAX_COUNT);
     sendRequest(endpoint);
     EcdhexConnectionInfo::Ptr info = new EcdhexConnectionInfo();
