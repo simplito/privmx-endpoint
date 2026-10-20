@@ -69,8 +69,8 @@ public:
         const std::string& secret = "",
         std::shared_ptr<privmx::cryptoservice::IPrivateKey> kemKey = nullptr
     )
-        : _key(std::move(key)), _algorithm(algorithm), _agreementKey(std::move(agreementKey)), _secret(secret),
-          _kemKey(std::move(kemKey)) {}
+        : _key(std::move(key)), _algorithm(algorithm), _agreementKey(std::move(agreementKey)),
+          _kemKey(std::move(kemKey)), _secret(secret) {}
 
     bool empty() const { return _key == nullptr; }
 

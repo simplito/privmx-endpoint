@@ -58,17 +58,31 @@ struct ApiKey {
     string secret;
 };
 
+/// A deleter type rather than `decltype(&pclose)`: `pclose` is declared with attributes, and naming
+/// its function-pointer type as a template argument drops them, which the compiler warns about.
+struct PipeCloser {
+    void operator()(FILE* pipe) const { pclose(pipe); }
+};
+
 string runCommand(const string& command) {
     array<char, 256> buffer{};
     string output;
-    // `pclose` returns the child's status, so a command that fails is not mistaken for one that
-    // printed nothing — which is how the shell version let a broken bridge pass for a working one.
-    unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), &pclose);
+    unique_ptr<FILE, PipeCloser> pipe(popen(command.c_str(), "r"));
     if (pipe == nullptr) {
         throw runtime_error("cannot run: " + command);
     }
     while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
         output += buffer.data();
+    }
+    // Closed by hand so the child's exit status can be read — a deleter has nowhere to report it, and
+    // a command that fails must not be mistaken for one that printed nothing. That is how the shell
+    // version this replaced let a broken bridge pass for a working one. The handle above still covers
+    // the throwing path.
+    const int status = pclose(pipe.release());
+    if (status != 0) {
+        throw runtime_error(
+            command + " exited with status " + to_string(status) + (output.empty() ? "" : ":\n" + output)
+        );
     }
     return output;
 }
