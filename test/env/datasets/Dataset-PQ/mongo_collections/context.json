@@ -1,0 +1,23 @@
+[{
+	"_id": "35df56df-20cd-4818-813e-01df9954564a",
+	"created": 1.792484793755E+12,
+	"modified": 1.792484793755E+12,
+	"name": "MainContext",
+	"description": "Context nr 1",
+	"scope": "private",
+	"solution": "22477feb-40b1-4469-8d2e-81fc30572bc7",
+	"shares": [],
+	"policy": {}
+},
+{
+	"_id": "e989ec9e-f523-4f55-a2a6-5bc9192a3cec",
+	"created": 1.792484794296E+12,
+	"modified": 1.792484794296E+12,
+	"name": "SecondaryContext",
+	"description": "Context nr 2",
+	"scope": "private",
+	"solution": "22477feb-40b1-4469-8d2e-81fc30572bc7",
+	"shares": [],
+	"policy": {}
+}]
+
