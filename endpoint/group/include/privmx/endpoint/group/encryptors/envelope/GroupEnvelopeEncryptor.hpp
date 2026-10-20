@@ -47,7 +47,9 @@ inline ByteCount encryptedChunkSizeFor(ByteCount plainLen, const core::CryptoSui
  * ## Notation
  *
  *   u8 x            one octet
- *   u8len x         one length octet, then x; `EnvelopeWriter::putField` refuses anything above 255 bytes
+ *   u16len x        two big-endian length octets, then x; `EnvelopeWriter::putField` refuses anything
+ *                   above 65535 bytes. One octet sufficed until a post-quantum identity's public key
+ *                   reached 1248 bytes — see `VERSION`.
  *   u32be / u64be   fixed-width big-endian integer
  *   encrypt(p, k)   `core::DataInnerEncryptorV4`, an AEAD frame: `u8 suiteId | iv | ciphertext || tag`.
  *                   The ciphertext is as long as the plaintext — no block padding, unlike the CBC
@@ -61,7 +63,7 @@ inline ByteCount encryptedChunkSizeFor(ByteCount plainLen, const core::CryptoSui
  *
  * Written by `packGroupKeyEnvelope`, opened by `openGroupKeyEnvelope`, routed by `peek`.
  *
- *   header  = u8 ver | u8 type=1 | u8len groupId | u8len keyId | u8len authorPubKeyDER
+ *   header  = u8 ver | u8 type=1 | u16len groupId | u16len keyId | u16len authorPubKeyDER
  *   payload = encrypt(sign(header || content, authorPriv), groupKey32)
  *
  * Re-sealing the header stops a member of two groups re-sealing another member's signed content into the
@@ -73,8 +75,8 @@ inline ByteCount encryptedChunkSizeFor(ByteCount plainLen, const core::CryptoSui
  * Written by `packAnonymousEnvelope`, opened by `openAnonymousEnvelope`, routed by `peek`. The key wrap is
  * built by `wrapContentKey` and undone by `unwrapContentKey`.
  *
- *   header  = u8 ver | u8 type=2 | u8len groupId | u8len groupPubKeyBase58DER
- *   payload = u8len ecies(ECIES_DOMAIN || contentKey32) || encrypt(header || content, contentKey32)
+ *   header  = u8 ver | u8 type=2 | u16len groupId | u16len groupPubKeyBase58DER
+ *   payload = u16len ecies(ECIES_DOMAIN || contentKey32) || encrypt(header || content, contentKey32)
  *
  * No author signature: the sender is anonymous by construction, so one by their throwaway key would attest to
  * nothing. Header integrity rests on the payload's own encrypt-then-MAC instead.
@@ -90,7 +92,7 @@ inline ByteCount encryptedChunkSizeFor(ByteCount plainLen, const core::CryptoSui
  * offsets and sizes come from `cipherOffsetOfChunk`, `chunkCount` and `plainChunkSizeAt`, and is stored
  * separately by the caller.
  *
- *   header  = u8 ver | u8 type=3 | u8 suiteId | u8len groupId | u8len keyId | u8len authorPubKeyDER
+ *   header  = u8 ver | u8 type=3 | u8 suiteId | u16len groupId | u16len keyId | u16len authorPubKeyDER
  *   payload = encrypt(sign(header || u64be plainSize || fileKey32, authorPriv), groupKey32)
  *   body    = for each chunk i: encrypt(plain_i, hmac-sha256(fileKey, CHUNK_KEY_LABEL || u32be i))
  *
@@ -111,8 +113,8 @@ inline ByteCount encryptedChunkSizeFor(ByteCount plainLen, const core::CryptoSui
  * Written by `packAnonymousFileEnvelope`, read by `unpackAnonymousFileEnvelope`, routed by `peekFile`; body
  * exactly as type 3.
  *
- *   header  = u8 ver | u8 type=4 | u8 suiteId | u8len groupId | u8len groupPubKeyBase58DER
- *   payload = u8len ecies(ECIES_DOMAIN || contentKey32)
+ *   header  = u8 ver | u8 type=4 | u8 suiteId | u16len groupId | u16len groupPubKeyBase58DER
+ *   payload = u16len ecies(ECIES_DOMAIN || contentKey32)
  *             || encrypt(header || u64be plainSize || fileKey32, contentKey32)
  *   body    = identical to type 3
  *
@@ -132,7 +134,12 @@ public:
     // fail at the MAC rather than at the version — hence the bump.
     //
     // 2 was the move of the per-chunk key derivation from `sha256(fileKey || i)` to a keyed, labelled HMAC.
-    static constexpr std::uint8_t VERSION = 3;
+    //
+    // 4 widened every field's length prefix from one octet to two. A post-quantum identity's public key
+    // is 1248 bytes and the author's key is a field, so one octet stopped being enough. A v3 reader
+    // would take the high octet for the whole length and parse the rest as garbage, so the version
+    // has to move with the format.
+    static constexpr std::uint8_t VERSION = 4;
 
     // Plaintext bytes per file chunk. Fixed rather than carried in the envelope, so a hostile header cannot
     // force a divide-by-zero or an allocation bomb. `VERSION` is the upgrade path if it ever has to change.

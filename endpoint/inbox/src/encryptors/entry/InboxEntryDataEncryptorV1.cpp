@@ -27,8 +27,12 @@ std::string InboxEntryDataEncryptorV1::encrypt(
     core::PrivateKey& userPriv,
     core::PublicKey& inboxPub
 ) {
+    // Two-octet lengths on the fields that carry a key, and on the public block that holds one. A
+    // sender's public key was 33 bytes when this format was written; a post-quantum identity is 1248,
+    // about 1.7 kB in base58, so one octet no longer spans it. The key id and the files-meta key are
+    // short by construction and keep theirs.
     utils::BinaryBufferBE sendDataBuffer;
-    sendDataBuffer.writeOneOctetLengthBuffer(data.publicData.userPubKey);
+    sendDataBuffer.writeTwoOctetLengthBuffer(data.publicData.userPubKey);
     sendDataBuffer.writeBool(data.publicData.keyPreset);
     sendDataBuffer.writeOneOctetLengthBuffer(data.publicData.usedInboxKeyId);
 
@@ -37,11 +41,12 @@ std::string InboxEntryDataEncryptorV1::encrypt(
     dataSecuredBuffer.writeOneOctetLengthBuffer(filesMetaKeyBase64);
     dataSecuredBuffer.writeRaw(data.privateData.text);
 
-    // Ta sama ramka co dotychczas skladana recznie: 'e' || pub33(nadawca) || pub33(odbiorca) || ecies.
+    // The same frame as the one previously assembled by hand: the ECIES wrap, which for a
+    // post-quantum recipient also carries its ML-KEM ciphertext.
     auto cipherWithKey = core::Ecies::encrypt(inboxPub, dataSecuredBuffer.str(), userPriv);
 
     utils::BinaryBufferBE concatBuffer;
-    concatBuffer.writeOneOctetLengthBuffer(sendDataBuffer.str());
+    concatBuffer.writeTwoOctetLengthBuffer(sendDataBuffer.str());
     concatBuffer.writeRaw(cipherWithKey);
     return utils::Base64::from(concatBuffer.str());
 }
@@ -55,11 +60,11 @@ InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(
         result.statusCode = 0;
         utils::BinaryBufferBE wholeBuffer(utils::Base64::toString(serializedBase64));
         std::string publicDataStr;
-        wholeBuffer.readOneOctetLengthBuffer(publicDataStr);
+        wholeBuffer.readTwoOctetLengthBuffer(publicDataStr);
         InboxEntryPublicData publicData;
 
         utils::BinaryBufferBE sendDataBuffer(publicDataStr);
-        sendDataBuffer.readOneOctetLengthBuffer(publicData.userPubKey);
+        sendDataBuffer.readTwoOctetLengthBuffer(publicData.userPubKey);
         sendDataBuffer.readBool(publicData.keyPreset);
         sendDataBuffer.readOneOctetLengthBuffer(publicData.usedInboxKeyId);
 
@@ -90,10 +95,10 @@ InboxEntryPublicDataResult InboxEntryDataEncryptorV1::decryptPublicOnly(std::str
         result.statusCode = 0;
         utils::BinaryBufferBE wholeBuffer(utils::Base64::toString(serializedBase64));
         std::string publicDataStr;
-        wholeBuffer.readOneOctetLengthBuffer(publicDataStr);
+        wholeBuffer.readTwoOctetLengthBuffer(publicDataStr);
 
         utils::BinaryBufferBE publicDataBuffer(publicDataStr);
-        publicDataBuffer.readOneOctetLengthBuffer(result.userPubKey);
+        publicDataBuffer.readTwoOctetLengthBuffer(result.userPubKey);
         publicDataBuffer.readBool(result.keyPreset);
         publicDataBuffer.readOneOctetLengthBuffer(result.usedInboxKeyId);
 

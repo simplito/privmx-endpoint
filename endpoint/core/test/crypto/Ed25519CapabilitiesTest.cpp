@@ -263,6 +263,108 @@ TEST(Ed25519Composed, MixingAlgorithmsIsRefusedByNameNotByTheProvider) {
     EXPECT_EQ(containerKey, Ecies::decrypt(plain, wrapped, plain.getPublicKey()));
 }
 
+// ---------------------------------------------------------------------------------------------
+// The post-quantum identity (tag 0x83): Ed25519 signing, key agreement over X25519 **and**
+// ML-KEM-768.
+//
+// The point of these tests is to tell a real hybrid from one that only looks like it. pmx-crypto
+// offers `X25519MLKEM768` as a single algorithm whose `deriveSharedSecret` happily returns 32
+// bytes — and those 32 bytes are the bare X25519 ECDH, with the ML-KEM half contributing nothing.
+// Using it would have compiled, passed every other test, and shipped a library that is
+// post-quantum in name only. So what is checked here is that the ML-KEM half actually *changes
+// the answer*.
+// ---------------------------------------------------------------------------------------------
+
+namespace {
+
+PrivateKey pqIdentity(const std::string& secret) {
+    return PrivateKey::fromRaw(secret, cs::AsymAlg::X25519MLKEM768);
+}
+
+} // namespace
+
+TEST(PostQuantumIdentity, CarriesThreeHalvesUnderOneTag) {
+    const PrivateKey alice = pqIdentity(std::string(32, 'a'));
+
+    EXPECT_EQ(cs::AsymAlg::X25519MLKEM768, alice.algorithm());
+    EXPECT_NE(nullptr, alice.kemImpl()) << "no encapsulation half";
+
+    const TaggedPublicKey decoded = decodeTaggedPublicKey(alice.getPublicKey().toBase58DER());
+    EXPECT_EQ(cs::AsymAlg::X25519MLKEM768, decoded.algorithm);
+    EXPECT_EQ(32u, decoded.rawKey.size()) << "Ed25519 signing half";
+    EXPECT_EQ(32u, decoded.rawAgreementKey.size()) << "X25519 agreement half";
+    EXPECT_EQ(1184u, decoded.rawKemKey.size()) << "ML-KEM-768 encapsulation half";
+
+    // Still one string, so `UserWithPubKey.pubKey` stays a single field.
+    const PublicKey reparsed = PublicKey::fromBase58DER(alice.getPublicKey().toBase58DER());
+    EXPECT_EQ(alice.getPublicKey(), reparsed);
+}
+
+TEST(PostQuantumIdentity, SignsAndIsWrappedToThroughOneIdentity) {
+    const PrivateKey alice = pqIdentity(std::string(32, 'a'));
+    const PrivateKey bob = pqIdentity(std::string(32, 'b'));
+    const std::string containerKey(32, 'k');
+
+    const std::string signature = alice.signToCompactSignatureWithHash("a message");
+    EXPECT_TRUE(alice.getPublicKey().verifyCompactSignatureWithHash("a message", signature));
+
+    const std::string wrapped = Ecies::encrypt(bob.getPublicKey(), containerKey, alice);
+    EXPECT_EQ(containerKey, Ecies::decrypt(bob, wrapped));
+}
+
+/**
+ * The test that would have caught a hybrid in name only.
+ *
+ * The wrap carries an ML-KEM ciphertext, and the secret behind it is chosen fresh on every call —
+ * so two wraps of the same key to the same recipient differ, and the frame is longer than the
+ * classical one by exactly one ciphertext. A wrap that quietly dropped the ML-KEM half would be
+ * the same length as tag 0x82's and would still decrypt.
+ */
+TEST(PostQuantumIdentity, TheEncapsulationHalfReallyEntersTheWrap) {
+    const PrivateKey alice = pqIdentity(std::string(32, 'a'));
+    const PrivateKey bob = pqIdentity(std::string(32, 'b'));
+    const PrivateKey classicalBob = composedIdentity(std::string(32, 'b'));
+    const std::string containerKey(32, 'k');
+
+    const std::string pq = Ecies::encrypt(bob.getPublicKey(), containerKey, alice);
+    const std::string classical =
+        Ecies::encrypt(classicalBob.getPublicKey(), containerKey, composedIdentity(std::string(32, 'a')));
+
+    constexpr std::size_t ML_KEM_768_CIPHERTEXT = 1088;
+    EXPECT_EQ(classical.size() + ML_KEM_768_CIPHERTEXT, pq.size())
+        << "the wrap carries no ML-KEM ciphertext, so the post-quantum half cannot be in the secret";
+
+    // Encapsulation draws fresh randomness, so the same key wrapped twice is two different frames —
+    // while a Diffie-Hellman between the same two keys would repeat.
+    EXPECT_NE(pq, Ecies::encrypt(bob.getPublicKey(), containerKey, alice));
+}
+
+/// Damaging only the ML-KEM ciphertext must break the unwrap. If it did not, the ML-KEM secret
+/// would not be reaching the key derivation and the identity would be classical with extra bytes.
+TEST(PostQuantumIdentity, CorruptingTheKemCiphertextBreaksTheUnwrap) {
+    const PrivateKey alice = pqIdentity(std::string(32, 'a'));
+    const PrivateKey bob = pqIdentity(std::string(32, 'b'));
+    const std::string containerKey(32, 'k');
+
+    std::string wrapped = Ecies::encrypt(bob.getPublicKey(), containerKey, alice);
+    ASSERT_EQ(containerKey, Ecies::decrypt(bob, wrapped));
+
+    // One byte inside the ciphertext, past the 32-byte sender key and well before the frame.
+    wrapped[100] = static_cast<char>(wrapped[100] ^ 0xFF);
+    EXPECT_ANY_THROW(Ecies::decrypt(bob, wrapped));
+}
+
+/// A post-quantum identity and a classical one are different identities, and wrapping across them
+/// is refused rather than silently falling back to the classical half they share.
+TEST(PostQuantumIdentity, DoesNotMixWithTheClassicalIdentity) {
+    const std::string secret(32, 'a');
+    const PrivateKey pq = pqIdentity(secret);
+    const PrivateKey classical = composedIdentity(secret);
+
+    EXPECT_NE(pq.getPublicKey().toBase58DER(), classical.getPublicKey().toBase58DER());
+    EXPECT_ANY_THROW(Ecies::decrypt(classical, Ecies::encrypt(pq.getPublicKey(), "key", pq)));
+}
+
 /// One tagged string carries both halves, so `UserWithPubKey.pubKey` stays a single field and a key
 /// still compares equal to itself after a round trip through the wire format.
 TEST(Ed25519Composed, RoundTripsThroughTheTaggedEncoding) {

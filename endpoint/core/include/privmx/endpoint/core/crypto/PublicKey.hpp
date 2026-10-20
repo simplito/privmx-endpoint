@@ -54,9 +54,13 @@ public:
     explicit PublicKey(
         std::shared_ptr<privmx::cryptoservice::IPublicKey> key,
         privmx::cryptoservice::AsymAlg algorithm = defaultKeyAlgorithm(),
-        std::shared_ptr<privmx::cryptoservice::IPublicKey> agreementKey = nullptr
+        std::shared_ptr<privmx::cryptoservice::IPublicKey> agreementKey = nullptr,
+        std::shared_ptr<privmx::cryptoservice::IPublicKey> kemKey = nullptr
     )
-        : _key(std::move(key)), _algorithm(algorithm), _agreementKey(std::move(agreementKey)) {}
+        : _key(std::move(key)),
+          _algorithm(algorithm),
+          _agreementKey(std::move(agreementKey)),
+          _kemKey(std::move(kemKey)) {}
 
     bool empty() const { return _key == nullptr; }
 
@@ -92,6 +96,15 @@ public:
         return _agreementKey != nullptr ? _agreementKey : _key;
     }
 
+    /**
+     * @brief The half a sender encapsulates to, or null when the identity has no post-quantum one.
+     *
+     * Unlike `agreementImpl()` this has no fallback: a key encapsulation is a different operation
+     * from a Diffie-Hellman and there is nothing sensible to substitute. Callers ask
+     * `keyAlgorithmNeedsKemKey(algorithm())` and leave the post-quantum term out when there is none.
+     */
+    std::shared_ptr<privmx::cryptoservice::IPublicKey> kemImpl() const { return _kemKey; }
+
 private:
     const privmx::cryptoservice::IPublicKey& require() const;
 
@@ -99,6 +112,8 @@ private:
     privmx::cryptoservice::AsymAlg _algorithm = defaultKeyAlgorithm();
     /// Null unless the algorithm signs but cannot agree keys; see `agreementImpl()`.
     std::shared_ptr<privmx::cryptoservice::IPublicKey> _agreementKey;
+    /// Null unless the algorithm has a key-encapsulation half; see `kemImpl()`.
+    std::shared_ptr<privmx::cryptoservice::IPublicKey> _kemKey;
 };
 
 } // namespace core

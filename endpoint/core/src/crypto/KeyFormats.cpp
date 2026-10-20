@@ -27,7 +27,22 @@ namespace cs = privmx::cryptoservice;
 namespace {
 
 struct KeyAlgorithmSpec {
+    /**
+     * What the identity is called — the value `PublicKey::algorithm()` reports and the tag decodes to.
+     *
+     * Not always the algorithm of any one of its keys: a composed identity is several keys, and this
+     * names the whole. Use `signingAlgorithm` or `agreementAlgorithm` when a half has to be handed
+     * to the provider.
+     */
     cs::AsymAlg algorithm;
+    /**
+     * The algorithm of the half that signs.
+     *
+     * Equal to `algorithm` for a one-key identity. For a composed one it is the only value the
+     * provider will accept for the signing key, so importing or deriving that half must use this and
+     * never `algorithm` — which may name a construction the provider has no usable key for.
+     */
+    cs::AsymAlg signingAlgorithm;
     cs::SigScheme signatureScheme;
     /**
      * The algorithm's byte in the tagged public-key encoding, or `UNTAGGED` when the algorithm has no
@@ -51,6 +66,21 @@ struct KeyAlgorithmSpec {
     cs::AsymAlg agreementAlgorithm;
     /** Length of the raw agreement key, or 0 when there is none. */
     std::size_t agreementKeyLength;
+    /**
+     * A key-encapsulation algorithm whose secret is mixed into every wrap beside the Diffie-Hellman one.
+     *
+     * This is what makes an identity post-quantum for **confidentiality**. A KEM is not a
+     * Diffie-Hellman: the sender encapsulates against the recipient's public key, getting a secret
+     * and a ciphertext it must send along, so the two cannot be interchanged — hence a field of its
+     * own rather than another `agreementAlgorithm`.
+     *
+     * Both secrets go through one KDF, so breaking the wrap means breaking X25519 **and**
+     * ML-KEM-768. `NoAlg` means the identity has no post-quantum half and the wrap is the classical
+     * one, byte for byte.
+     */
+    cs::AsymAlg kemAlgorithm;
+    /** Length of the raw KEM public key, or 0 when there is none. */
+    std::size_t kemKeyLength;
     /**
      * Whether `signatureScheme` already digests the message before signing it.
      *
@@ -78,10 +108,27 @@ constexpr std::uint8_t UNTAGGED = 0x00;
  * They sit at 0x80 and above, where a SEC1 point prefix cannot be (0x02/0x03 compressed, 0x04/0x06/0x07
  * uncompressed), so a key in the old untagged encoding fails as an unknown tag instead of being misread.
  */
-constexpr std::array<KeyAlgorithmSpec, 3> KEY_ALGORITHMS{{
-    {cs::AsymAlg::PrivmxSecp256k1, cs::SigScheme::Compact, 0x81, 33, cs::AsymAlg::NoAlg, 0, true},
-    {cs::AsymAlg::secp256k1, cs::SigScheme::Compact, UNTAGGED, 33, cs::AsymAlg::NoAlg, 0, true},
-    {cs::AsymAlg::ED25519, cs::SigScheme::Default, 0x82, 32, cs::AsymAlg::X25519, 32, false},
+constexpr std::array<KeyAlgorithmSpec, 4> KEY_ALGORITHMS{{
+    {cs::AsymAlg::PrivmxSecp256k1, cs::AsymAlg::PrivmxSecp256k1, cs::SigScheme::Compact, 0x81, 33,
+     cs::AsymAlg::NoAlg, 0, cs::AsymAlg::NoAlg, 0, true},
+    {cs::AsymAlg::secp256k1, cs::AsymAlg::secp256k1, cs::SigScheme::Compact, UNTAGGED, 33,
+     cs::AsymAlg::NoAlg, 0, cs::AsymAlg::NoAlg, 0, true},
+    {cs::AsymAlg::ED25519, cs::AsymAlg::ED25519, cs::SigScheme::Default, 0x82, 32,
+     cs::AsymAlg::X25519, 32, cs::AsymAlg::NoAlg, 0, false},
+    // The same identity as 0x82 with an ML-KEM-768 half added, so container keys reach it through a
+    // secret that an adversary must break both X25519 and ML-KEM-768 to recover.
+    //
+    // Signing stays Ed25519 on purpose. The urgent quantum risk here is harvest-now-decrypt-later:
+    // a wrapped container key recorded today can be opened by a machine that does not exist yet,
+    // while a signature only has to hold while it is being checked. Confidentiality is what needs
+    // the post-quantum half first; an ML-DSA signing half is a separate row, and is blocked anyway
+    // until pmx-crypto can derive a hybrid signature key from a seed.
+    //
+    // Named by `X25519MLKEM768` because that is what the key agreement is. It is *our* composition
+    // of two primitives, never pmx-crypto's key of that name — that one's `deriveSharedSecret`
+    // quietly drops the ML-KEM half and its `encapsulate` throws, so the halves are driven here.
+    {cs::AsymAlg::X25519MLKEM768, cs::AsymAlg::ED25519, cs::SigScheme::Default, 0x83, 32,
+     cs::AsymAlg::X25519, 32, cs::AsymAlg::MLKEM768, 1184, false},
 }};
 
 const KeyAlgorithmSpec* findSpecByTag(std::uint8_t tag) {
@@ -178,10 +225,34 @@ cs::AsymAlg agreementAlgorithmFor(cs::AsymAlg algorithm) {
     return spec->agreementAlgorithm;
 }
 
+cs::AsymAlg signingAlgorithmFor(cs::AsymAlg algorithm) {
+    const KeyAlgorithmSpec* spec = findSpec(algorithm);
+    if (spec == nullptr) {
+        throw UnsupportedKeyAlgorithmException("asymmetric algorithm: " + std::to_string(static_cast<int>(algorithm)));
+    }
+    return spec->signingAlgorithm;
+}
+
+bool keyAlgorithmNeedsKemKey(cs::AsymAlg algorithm) {
+    const KeyAlgorithmSpec* spec = findSpec(algorithm);
+    return spec != nullptr && spec->kemAlgorithm != cs::AsymAlg::NoAlg;
+}
+
+cs::AsymAlg kemAlgorithmFor(cs::AsymAlg algorithm) {
+    const KeyAlgorithmSpec* spec = findSpec(algorithm);
+    if (spec == nullptr || spec->kemAlgorithm == cs::AsymAlg::NoAlg) {
+        throw UnsupportedKeyAlgorithmException(
+            "algorithm has no key-encapsulation half: " + std::to_string(static_cast<int>(algorithm))
+        );
+    }
+    return spec->kemAlgorithm;
+}
+
 std::string encodeTaggedPublicKey(
     const std::string& rawKey,
     cs::AsymAlg algorithm,
-    const std::string& rawAgreementKey
+    const std::string& rawAgreementKey,
+    const std::string& rawKemKey
 ) {
     const KeyAlgorithmSpec* spec = findSpec(algorithm);
     if (spec == nullptr || spec->keyTag == UNTAGGED) {
@@ -203,8 +274,17 @@ std::string encodeTaggedPublicKey(
             std::to_string(spec->agreementKeyLength)
         );
     }
+    if (rawKemKey.size() != spec->kemKeyLength) {
+        throw MalformedEncryptionKeyException(
+            "KEM key of " + std::to_string(rawKemKey.size()) + " bytes, expected " +
+            std::to_string(spec->kemKeyLength)
+        );
+    }
+    // Fixed-length halves in a fixed order, so the split on the way back is by length alone and the
+    // encoding needs no separators to get wrong.
     return privmx::utils::Base58::encodeWithChecksum(
-        std::string(1, static_cast<char>(spec->keyTag)) + rawKey + rawAgreementKey, FormatHash::sha256
+        std::string(1, static_cast<char>(spec->keyTag)) + rawKey + rawAgreementKey + rawKemKey,
+        FormatHash::sha256
     );
 }
 
@@ -284,7 +364,7 @@ TaggedPublicKey decodeTaggedPublicKey(const std::string& base58) {
             "unknown public key tag: 0x" + std::to_string(static_cast<int>(static_cast<std::uint8_t>(payload[0])))
         );
     }
-    const std::size_t expected = spec->publicKeyLength + spec->agreementKeyLength;
+    const std::size_t expected = spec->publicKeyLength + spec->agreementKeyLength + spec->kemKeyLength;
     if (payload.size() != 1 + expected) {
         throw MalformedEncryptionKeyException(
             "tagged public key of " + std::to_string(payload.size() - 1) + " bytes, expected " +
@@ -294,7 +374,8 @@ TaggedPublicKey decodeTaggedPublicKey(const std::string& base58) {
     return TaggedPublicKey{
         .algorithm = spec->algorithm,
         .rawKey = payload.substr(1, spec->publicKeyLength),
-        .rawAgreementKey = payload.substr(1 + spec->publicKeyLength),
+        .rawAgreementKey = payload.substr(1 + spec->publicKeyLength, spec->agreementKeyLength),
+        .rawKemKey = payload.substr(1 + spec->publicKeyLength + spec->agreementKeyLength),
     };
 }
 
@@ -309,7 +390,8 @@ bool isTaggedPublicKeyFormat(const std::string& base58) {
         return false;
     }
     const KeyAlgorithmSpec* spec = findSpecByTag(static_cast<std::uint8_t>(payload[0]));
-    return spec != nullptr && payload.size() == 1 + spec->publicKeyLength + spec->agreementKeyLength;
+    return spec != nullptr &&
+           payload.size() == 1 + spec->publicKeyLength + spec->agreementKeyLength + spec->kemKeyLength;
 }
 
 } // namespace core

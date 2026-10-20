@@ -30,7 +30,8 @@ std::uint64_t EnvelopeReader::readU64() {
 }
 
 std::string EnvelopeReader::readField() {
-    std::size_t len = readU8();
+    const std::size_t high = readU8();
+    const std::size_t len = (high << 8) | readU8();
     require(len);
     std::string value = _buf.substr(_pos, len);
     _pos += len;
@@ -55,10 +56,11 @@ void EnvelopeReader::require(std::size_t n) const {
 }
 
 void EnvelopeWriter::putField(std::string& out, const std::string& value) {
-    if (value.size() > 255) {
-        throw InvalidEnvelopeFormatException("envelope field exceeds 255 bytes");
+    if (value.size() > 0xFFFF) {
+        throw InvalidEnvelopeFormatException("envelope field exceeds 65535 bytes");
     }
-    out.push_back(static_cast<char>(value.size()));
+    out.push_back(static_cast<char>((value.size() >> 8) & 0xFF));
+    out.push_back(static_cast<char>(value.size() & 0xFF));
     out.append(value);
 }
 

@@ -52,19 +52,28 @@ message(STATUS "Crypto suite for writing - PRIVMX_DEFAULT_CRYPTO_SUITE=${PRIVMX_
 #
 # "ed25519" is really Ed25519 for signatures plus X25519 for key agreement, carried as one tagged key —
 # Ed25519 alone cannot be an identity here, because container keys reach a member by Diffie-Hellman.
+# It keeps the short name it was introduced under; "ed25519x25519mlkem768" names all three of its
+# algorithms because there the composition is the point.
 # Reading is unaffected: a key says which algorithm it is, so a client built one way still reads keys
 # made the other way.
 set(PRIVMX_DEFAULT_KEY_ALGORITHM "secp256k1" CACHE STRING "Algorithm used for new identity keys")
-set_property(CACHE PRIVMX_DEFAULT_KEY_ALGORITHM PROPERTY STRINGS "secp256k1" "ed25519")
+set_property(CACHE PRIVMX_DEFAULT_KEY_ALGORITHM PROPERTY STRINGS "secp256k1" "ed25519" "ed25519x25519mlkem768")
 
 if(PRIVMX_DEFAULT_KEY_ALGORITHM STREQUAL "secp256k1")
     set(PRIVMX_DEFAULT_KEY_ALGORITHM_TAG 0x81)
 elseif(PRIVMX_DEFAULT_KEY_ALGORITHM STREQUAL "ed25519")
     set(PRIVMX_DEFAULT_KEY_ALGORITHM_TAG 0x82)
+elseif(PRIVMX_DEFAULT_KEY_ALGORITHM STREQUAL "ed25519x25519mlkem768")
+    # Every algorithm the identity is made of, in the order its encoding carries them: Ed25519 signs,
+    # X25519 agrees keys, ML-KEM-768 encapsulates them. Spelled out rather than called "post-quantum",
+    # which says what it is for instead of what it is — and ages badly besides.
+    #
+    # The same name the bridge gives this identity (`VerifyKey.ts`), so one grep finds both sides.
+    set(PRIVMX_DEFAULT_KEY_ALGORITHM_TAG 0x83)
 else()
     message(FATAL_ERROR
         "Unknown PRIVMX_DEFAULT_KEY_ALGORITHM='${PRIVMX_DEFAULT_KEY_ALGORITHM}'. "
-        "Known values: secp256k1, ed25519")
+        "Known values: secp256k1, ed25519, ed25519x25519mlkem768")
 endif()
 message(STATUS "Identity key algorithm - PRIVMX_DEFAULT_KEY_ALGORITHM=${PRIVMX_DEFAULT_KEY_ALGORITHM} (tag ${PRIVMX_DEFAULT_KEY_ALGORITHM_TAG})")
 

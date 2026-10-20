@@ -33,13 +33,25 @@ PublicKey PublicKey::fromBase58DER(const std::string& base58DER) {
                 tagged.algorithm
             );
         }
-        // Two halves behind one tag: the one that verifies signatures, then the one keys are wrapped to.
+        // Halves behind one tag, in the order the encoding fixes: the one that verifies signatures,
+        // the one keys are agreed with, and — for a post-quantum identity — the one they are
+        // encapsulated to. Each goes in under *its own* algorithm; the tag's algorithm names the
+        // whole identity and may be a construction the provider has no single key for.
+        std::shared_ptr<cs::IPublicKey> kemKey;
+        if (keyAlgorithmNeedsKemKey(tagged.algorithm)) {
+            kemKey = cryptoProvider().importPublicKey(
+                keyBytes(tagged.rawKemKey), cs::KeyFormat::Raw, kemAlgorithmFor(tagged.algorithm)
+            );
+        }
         return PublicKey(
-            cryptoProvider().importPublicKey(keyBytes(tagged.rawKey), cs::KeyFormat::Raw, tagged.algorithm),
+            cryptoProvider().importPublicKey(
+                keyBytes(tagged.rawKey), cs::KeyFormat::Raw, signingAlgorithmFor(tagged.algorithm)
+            ),
             tagged.algorithm,
             cryptoProvider().importPublicKey(
                 keyBytes(tagged.rawAgreementKey), cs::KeyFormat::Raw, agreementAlgorithmFor(tagged.algorithm)
-            )
+            ),
+            kemKey
         );
     });
 }
@@ -53,20 +65,27 @@ PublicKey PublicKey::fromDER(const std::string& der) {
     //          plain `secp256k1` + `Raw`. The export returns the compressed form either way, so the
     //          caller sees no difference.
     //   64 B — a composed identity, `ed25519(32) || x25519(32)`; see `toDER`.
+    //   1248 B — the same with an ML-KEM-768 half after it.
     constexpr std::size_t COMPRESSED_LENGTH = 33;
     constexpr std::size_t UNCOMPRESSED_LENGTH = 65;
     constexpr std::size_t COMPOSED_LENGTH = 64;
+    constexpr std::size_t POST_QUANTUM_LENGTH = 1248;
+    constexpr std::size_t HALF = 32;
     return mapCryptoErrors("PublicKey::fromDER", [&] {
-        if (der.size() == COMPOSED_LENGTH) {
-            constexpr std::size_t HALF = COMPOSED_LENGTH / 2;
+        if (der.size() == COMPOSED_LENGTH || der.size() == POST_QUANTUM_LENGTH) {
+            const bool postQuantum = der.size() == POST_QUANTUM_LENGTH;
             return PublicKey(
                 cryptoProvider().importPublicKey(
                     keyBytes(der.substr(0, HALF)), cs::KeyFormat::Raw, cs::AsymAlg::ED25519
                 ),
-                cs::AsymAlg::ED25519,
+                postQuantum ? cs::AsymAlg::X25519MLKEM768 : cs::AsymAlg::ED25519,
                 cryptoProvider().importPublicKey(
-                    keyBytes(der.substr(HALF)), cs::KeyFormat::Raw, cs::AsymAlg::X25519
-                )
+                    keyBytes(der.substr(HALF, HALF)), cs::KeyFormat::Raw, cs::AsymAlg::X25519
+                ),
+                postQuantum ? cryptoProvider().importPublicKey(
+                                  keyBytes(der.substr(2 * HALF)), cs::KeyFormat::Raw, cs::AsymAlg::MLKEM768
+                              )
+                            : nullptr
             );
         }
         if (der.size() == UNCOMPRESSED_LENGTH) {
@@ -113,11 +132,18 @@ std::string PublicKey::toDER() const {
             return keyString(require().export_(cs::KeyFormat::Der));
         }
         // A composed identity has no DER of its own — pmx-crypto does not implement one for 25519 —
-        // and it would be the wrong shape anyway, being two keys. Its binary form is the same bytes
-        // the tagged encoding carries, without the tag: `ed25519(32) || x25519(32)`. The length
-        // tells it apart from the 33- and 65-byte secp256k1 forms, which is what `fromDER` keys on.
+        // and it would be the wrong shape anyway, being several keys. Its binary form is the same
+        // bytes the tagged encoding carries, without the tag: `ed25519(32) || x25519(32)`, and the
+        // ML-KEM-768 half after it for a post-quantum identity. The length tells these apart from
+        // the 33- and 65-byte secp256k1 forms, which is what `fromDER` keys on.
+        //
+        // Every half has to be here. Leaving the post-quantum one out still produced a readable key
+        // — the composed Ed25519 one — so an author recorded in a group envelope came back as a
+        // *different identity* than the one that wrote it, and the roster check failed on a key
+        // nobody had mistyped.
         return keyString(require().export_(cs::KeyFormat::Raw)) +
-               keyString(_agreementKey->export_(cs::KeyFormat::Raw));
+               keyString(_agreementKey->export_(cs::KeyFormat::Raw)) +
+               (_kemKey != nullptr ? keyString(_kemKey->export_(cs::KeyFormat::Raw)) : std::string());
     });
 }
 
@@ -137,10 +163,16 @@ std::string PublicKey::toBase58DER() const {
                 "an identity of this algorithm needs an agreement key and carries none"
             );
         }
+        if (keyAlgorithmNeedsKemKey(algorithm) && _kemKey == nullptr) {
+            throw MalformedEncryptionKeyException(
+                "a post-quantum identity needs a key-encapsulation key and carries none"
+            );
+        }
         return encodeTaggedPublicKey(
             keyString(require().export_(cs::KeyFormat::Raw)),
             algorithm,
-            keyString(_agreementKey->export_(cs::KeyFormat::Raw))
+            keyString(_agreementKey->export_(cs::KeyFormat::Raw)),
+            _kemKey != nullptr ? keyString(_kemKey->export_(cs::KeyFormat::Raw)) : std::string()
         );
     });
 }

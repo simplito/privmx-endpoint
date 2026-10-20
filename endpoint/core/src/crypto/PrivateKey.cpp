@@ -50,12 +50,23 @@ PrivateKey identityFromSecret(const std::string& secret, cs::AsymAlg algorithm) 
             std::to_string(IDENTITY_SECRET_LENGTH)
         );
     }
-    const auto extKey = cryptoProvider().extKeyFromSeed(keyBytes(secret), algorithm);
+    // The signing and agreement halves come from one ext key, so pmx-crypto keeps them on separate
+    // sub-seeds. The post-quantum half is a third algorithm with no place in that pairing, so it
+    // gets an ext key of its own — ML-KEM-768 named directly, which also stretches the seed to the
+    // 64 bytes its keygen wants.
+    const auto extKey = cryptoProvider().extKeyFromSeed(keyBytes(secret), signingAlgorithmFor(algorithm));
+    std::shared_ptr<cs::IPrivateKey> kemKey;
+    if (keyAlgorithmNeedsKemKey(algorithm)) {
+        kemKey = cryptoProvider()
+                     .extKeyFromSeed(keyBytes(secret), kemAlgorithmFor(algorithm))
+                     ->privateKey(cs::KeyUsageScheme::DerEnc);
+    }
     return PrivateKey(
         extKey->privateKey(cs::KeyUsageScheme::Sign),
         algorithm,
         extKey->privateKey(cs::KeyUsageScheme::DerEnc),
-        secret
+        secret,
+        kemKey
     );
 }
 
@@ -116,7 +127,8 @@ PublicKey PrivateKey::getPublicKey() const {
         return PublicKey(
             require().publicKey(),
             _algorithm,
-            _agreementKey != nullptr ? _agreementKey->publicKey() : nullptr
+            _agreementKey != nullptr ? _agreementKey->publicKey() : nullptr,
+            _kemKey != nullptr ? _kemKey->publicKey() : nullptr
         );
     });
 }

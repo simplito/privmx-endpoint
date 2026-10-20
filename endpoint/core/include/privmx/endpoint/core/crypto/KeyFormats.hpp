@@ -118,6 +118,8 @@ struct TaggedPublicKey {
     std::string rawKey;
     /// The key-agreement half, empty unless the algorithm needs a separate one.
     std::string rawAgreementKey;
+    /// The key-encapsulation half, empty unless the algorithm has a post-quantum one.
+    std::string rawKemKey;
 };
 
 /**
@@ -134,7 +136,34 @@ bool keyAlgorithmNeedsAgreementKey(privmx::cryptoservice::AsymAlg algorithm);
 privmx::cryptoservice::AsymAlg agreementAlgorithmFor(privmx::cryptoservice::AsymAlg algorithm);
 
 /**
- * @brief Encodes a public key as `Base58Check(tag || rawKey || rawAgreementKey)`.
+ * @brief Whether an identity of this algorithm carries a key-encapsulation half.
+ *
+ * True for the post-quantum identity, whose wrapped keys are protected by a secret drawn from both
+ * X25519 and ML-KEM-768. A KEM is not interchangeable with Diffie-Hellman: the sender encapsulates
+ * against the recipient's public key and must ship the resulting ciphertext, so the wrap carries
+ * one more field. See `KeyAlgorithmSpec::kemAlgorithm`.
+ */
+bool keyAlgorithmNeedsKemKey(privmx::cryptoservice::AsymAlg algorithm);
+
+/**
+ * @brief The algorithm of the half that signs, which is not always what the identity is called.
+ *
+ * A composed identity is several keys under one name, and that name may be a construction the
+ * provider has no single key for. Anything that hands the signing half to pmx-crypto — importing it,
+ * deriving it from a seed — must use this rather than the identity's own algorithm.
+ *
+ * @throws UnsupportedKeyAlgorithmException when the algorithm is not in the registry
+ */
+privmx::cryptoservice::AsymAlg signingAlgorithmFor(privmx::cryptoservice::AsymAlg algorithm);
+
+/**
+ * @brief The algorithm of the key-encapsulation half.
+ * @throws UnsupportedKeyAlgorithmException when the algorithm has no such half
+ */
+privmx::cryptoservice::AsymAlg kemAlgorithmFor(privmx::cryptoservice::AsymAlg algorithm);
+
+/**
+ * @brief Encodes a public key as `Base58Check(tag || rawKey || rawAgreementKey || rawKemKey)`.
  *
  * This is the only encoding a key travels in. It exists because a key has to say which algorithm it
  * is — contract point 2 — and because the bridge now refuses anything untagged. The tags are shared
@@ -144,13 +173,15 @@ privmx::cryptoservice::AsymAlg agreementAlgorithmFor(privmx::cryptoservice::Asym
  * and the bridge's `contextUser.userPubKey` are single fields, and a key compares equal to itself.
  *
  * @param rawAgreementKey empty unless `keyAlgorithmNeedsAgreementKey(algorithm)`
+ * @param rawKemKey empty unless `keyAlgorithmNeedsKemKey(algorithm)`
  * @throws UnsupportedKeyAlgorithmException when the algorithm has no encoding of its own
- * @throws MalformedEncryptionKeyException when either half is not the length the algorithm requires
+ * @throws MalformedEncryptionKeyException when any half is not the length the algorithm requires
  */
 std::string encodeTaggedPublicKey(
     const std::string& rawKey,
     privmx::cryptoservice::AsymAlg algorithm,
-    const std::string& rawAgreementKey = ""
+    const std::string& rawAgreementKey = "",
+    const std::string& rawKemKey = ""
 );
 
 /**

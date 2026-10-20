@@ -42,6 +42,8 @@ namespace {
  * written in it, and which one applies follows from the identity's algorithm tag.
  */
 constexpr std::size_t AGREEMENT_PUBLIC_LENGTH = 32;
+/// An ML-KEM-768 ciphertext. Fixed by the algorithm, which is what lets the frame split by length.
+constexpr std::size_t KEM_CIPHERTEXT_LENGTH = 1088;
 constexpr const char* WRAP_KDF_LABEL = "privmx-key-wrap";
 
 std::string wrapKeyFor(const std::string& sharedSecret) {
@@ -92,21 +94,46 @@ std::string wrapToComposedIdentity(const PublicKey& pub, const std::string& data
     if (senderPublic.size() != AGREEMENT_PUBLIC_LENGTH) {
         throw MalformedEncryptionKeyException("agreement public key of unexpected length");
     }
-    const std::string shared = keyString(sender.agreementImpl()->deriveSharedSecret(*pub.agreementImpl()));
-    return senderPublic + CryptoSuite::defaultForWrite().encrypt(wrapKeyFor(shared), data);
+    std::string shared = keyString(sender.agreementImpl()->deriveSharedSecret(*pub.agreementImpl()));
+    // The post-quantum term, when the recipient has one. A key encapsulation is not a Diffie-Hellman:
+    // the secret is chosen here and the recipient can only reach it through the ciphertext, which
+    // therefore travels with the wrap. Both secrets go through one KDF, so recovering the wrapping
+    // key means breaking X25519 **and** ML-KEM-768, not either.
+    std::string kemCiphertext;
+    if (keyAlgorithmNeedsKemKey(pub.algorithm())) {
+        if (pub.kemImpl() == nullptr) {
+            throw MalformedEncryptionKeyException("post-quantum identity is missing its encapsulation half");
+        }
+        const auto [kemSecret, ciphertext] = pub.kemImpl()->encapsulate();
+        shared += keyString(kemSecret);
+        kemCiphertext = keyString(ciphertext);
+    }
+    return senderPublic + kemCiphertext + CryptoSuite::defaultForWrite().encrypt(wrapKeyFor(shared), data);
 }
 
 std::string unwrapForComposedIdentity(const PrivateKey& priv, const std::string& cipher) {
-    if (cipher.size() <= AGREEMENT_PUBLIC_LENGTH) {
-        throw MalformedEncryptionKeyException("wrapped key shorter than its sender key");
+    // The KEM ciphertext has one length for a given algorithm, so the frame still splits by length
+    // alone. An identity with no post-quantum half reads exactly the frame it always did.
+    const std::size_t kemLength =
+        keyAlgorithmNeedsKemKey(priv.algorithm()) ? KEM_CIPHERTEXT_LENGTH : 0;
+    if (cipher.size() <= AGREEMENT_PUBLIC_LENGTH + kemLength) {
+        throw MalformedEncryptionKeyException("wrapped key shorter than its own header");
     }
     auto senderPublic = cryptoProvider().importPublicKey(
         keyBytes(cipher.substr(0, AGREEMENT_PUBLIC_LENGTH)),
         cs::KeyFormat::Raw,
         agreementAlgorithmFor(priv.algorithm())
     );
-    const std::string shared = keyString(priv.agreementImpl()->deriveSharedSecret(*senderPublic));
-    return CryptoSuite::decrypt(wrapKeyFor(shared), cipher.substr(AGREEMENT_PUBLIC_LENGTH));
+    std::string shared = keyString(priv.agreementImpl()->deriveSharedSecret(*senderPublic));
+    if (kemLength != 0) {
+        if (priv.kemImpl() == nullptr) {
+            throw MalformedEncryptionKeyException("post-quantum identity is missing its encapsulation half");
+        }
+        shared += keyString(
+            priv.kemImpl()->decapsulate(keyBytes(cipher.substr(AGREEMENT_PUBLIC_LENGTH, kemLength)))
+        );
+    }
+    return CryptoSuite::decrypt(wrapKeyFor(shared), cipher.substr(AGREEMENT_PUBLIC_LENGTH + kemLength));
 }
 
 } // namespace

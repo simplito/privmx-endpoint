@@ -45,8 +45,15 @@ private:
 
 class EnvelopeWriter {
 public:
-    // Throws above 255 bytes: the wire uses a single length octet, so a silent truncation would produce an
-    // envelope that parses cleanly into the wrong thing. Real fields are far below this.
+    /**
+     * Throws above 65535 bytes: the length is two octets, so a silent truncation would produce an
+     * envelope that parses cleanly into the wrong thing.
+     *
+     * One octet was enough until an identity carried a post-quantum half — an ML-KEM-768 public key
+     * alone is 1184 bytes, and the author's key goes in a field. "Real fields are far below this"
+     * was true right up to the moment it was not, which is why the limit throws instead of
+     * truncating.
+     */
     static void putField(std::string& out, const std::string& value);
 
     static std::string toBE(std::uint64_t value, int bytes);

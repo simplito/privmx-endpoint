@@ -66,10 +66,11 @@ public:
         std::shared_ptr<privmx::cryptoservice::IPrivateKey> key,
         privmx::cryptoservice::AsymAlg algorithm = defaultKeyAlgorithm(),
         std::shared_ptr<privmx::cryptoservice::IPrivateKey> agreementKey = nullptr,
-        const std::string& secret = ""
+        const std::string& secret = "",
+        std::shared_ptr<privmx::cryptoservice::IPrivateKey> kemKey = nullptr
     )
         : _key(std::move(key)), _algorithm(algorithm), _agreementKey(std::move(agreementKey)),
-          _secret(secret) {}
+          _secret(secret), _kemKey(std::move(kemKey)) {}
 
     bool empty() const { return _key == nullptr; }
 
@@ -106,6 +107,14 @@ public:
         return _agreementKey != nullptr ? _agreementKey : _key;
     }
 
+    /**
+     * @brief The half that decapsulates, or null when the identity has no post-quantum one.
+     *
+     * No fallback, for the same reason as `PublicKey::kemImpl()`: decapsulation is not something
+     * another kind of key can stand in for.
+     */
+    std::shared_ptr<privmx::cryptoservice::IPrivateKey> kemImpl() const { return _kemKey; }
+
 private:
     const privmx::cryptoservice::IPrivateKey& require() const;
 
@@ -113,6 +122,8 @@ private:
     privmx::cryptoservice::AsymAlg _algorithm = defaultKeyAlgorithm();
     /// Null unless the algorithm signs but cannot agree keys; see `agreementImpl()`.
     std::shared_ptr<privmx::cryptoservice::IPrivateKey> _agreementKey;
+    /// Null unless the algorithm has a key-encapsulation half; see `kemImpl()`.
+    std::shared_ptr<privmx::cryptoservice::IPrivateKey> _kemKey;
     /**
      * The secret both halves of a composed identity were derived from; empty otherwise.
      *

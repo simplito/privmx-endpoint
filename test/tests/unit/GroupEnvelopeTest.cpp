@@ -142,23 +142,25 @@ TEST_F(GroupEnvelope, HeaderIsSignedSoAnEnvelopeCannotBeReplayedIntoAnotherGroup
 
     std::string otherKey = privmx::crypto::Crypto::randomBytes(32);
     core::DataInnerEncryptorV4 raw;
-    // Taken from the key, not restated: an author key is 33 bytes on secp256k1 and 64 on a composed
-    // Ed25519 identity, so a hard-coded length silently reads the wrong offset under another build.
-    const std::size_t authorKeyLen = author.getPublicKey().toDER().size();
-    std::size_t headerLen = 2 + 1 + std::string("groupA").size() + 1 + keyId.size() + 1 + authorKeyLen;
-    core::Buffer sealed = raw.decrypt(buf(envA.stdString().substr(headerLen)), groupKey);
+    // The header is built with the writer the format itself uses, not spelled out here. An author key
+    // is 33 bytes on secp256k1, 64 on a composed Ed25519 identity and 1248 on a post-quantum one, and
+    // the length prefix is two octets — a header restated by hand goes stale the moment either moves,
+    // and then reads the wrong offset instead of failing.
+    const std::string der = author.getPublicKey().toDER();
+    std::string headerA;
+    headerA.push_back(static_cast<char>(GroupEnvelopeEncryptor::VERSION));
+    headerA.push_back(1);
+    EnvelopeWriter::putField(headerA, "groupA");
+    EnvelopeWriter::putField(headerA, keyId);
+    EnvelopeWriter::putField(headerA, der);
+    core::Buffer sealed = raw.decrypt(buf(envA.stdString().substr(headerA.size())), groupKey);
 
     std::string forgedHeader;
     forgedHeader.push_back(static_cast<char>(GroupEnvelopeEncryptor::VERSION));
     forgedHeader.push_back(1);
-    std::string other = "groupB";
-    forgedHeader.push_back(static_cast<char>(other.size()));
-    forgedHeader.append(other);
-    forgedHeader.push_back(static_cast<char>(keyId.size()));
-    forgedHeader.append(keyId);
-    std::string der = author.getPublicKey().toDER();
-    forgedHeader.push_back(static_cast<char>(der.size()));
-    forgedHeader.append(der);
+    EnvelopeWriter::putField(forgedHeader, "groupB");
+    EnvelopeWriter::putField(forgedHeader, keyId);
+    EnvelopeWriter::putField(forgedHeader, der);
 
     core::Buffer forged = buf(forgedHeader + raw.encrypt(sealed, core::EncKey{.id = "", .key = otherKey}).stdString());
     EXPECT_THROW(enc.openGroupKeyEnvelope(forged, otherKey), InvalidEnvelopeFormatException);
@@ -239,9 +241,12 @@ TEST_F(GroupEnvelope, UnsupportedVersionIsRejected) {
 }
 
 TEST_F(GroupEnvelope, OversizedFieldThrowsInsteadOfTruncating) {
-    // One length octet on the wire; a silent wrap would produce an envelope that parses into the wrong group.
+    // Two length octets on the wire; a silent wrap would produce an envelope that parses into the
+    // wrong group. A field that fits must still be accepted — the limit moved when a post-quantum
+    // author key stopped fitting in one octet, and a check left at the old bound would reject it.
+    EXPECT_NO_THROW(enc.packGroupKeyEnvelope(std::string(256, 'a'), keyId, buf("x"), author, groupEncKey));
     EXPECT_THROW(
-        enc.packGroupKeyEnvelope(std::string(256, 'a'), keyId, buf("x"), author, groupEncKey),
+        enc.packGroupKeyEnvelope(std::string(65536, 'a'), keyId, buf("x"), author, groupEncKey),
         InvalidEnvelopeFormatException
     );
 }
