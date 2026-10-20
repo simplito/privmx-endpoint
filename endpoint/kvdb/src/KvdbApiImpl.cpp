@@ -86,8 +86,8 @@ std::string KvdbApiImpl::createKvdb(
     };
     server::KvdbCreateModel create_kvdb_model;
     fillContainerCreateModel(
-        create_kvdb_model, contextId, users, managers, ctx,
-        _kvdbDataSchemaMapper->encrypt(kvdbDataToEncrypt, ctx.key), groups
+        create_kvdb_model, contextId, users, managers, ctx, _kvdbDataSchemaMapper->encrypt(kvdbDataToEncrypt, ctx.key),
+        groups
     );
     create_kvdb_model.type = type;
     if (policies.has_value()) {

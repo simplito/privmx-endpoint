@@ -1,8 +1,8 @@
 #include <algorithm>
 
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/utils/JsonHelper.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -43,16 +43,14 @@ GroupApiImpl::GroupApiImpl(
     : ContainerBaseApi(userPrivKey, keyProvider, host, eventMiddleware, connection), _serverApi(ServerApi(gateway)),
       _subscriber(gateway), _groupDataSchemaMapper(std::make_shared<GroupDataSchemaMapper>(userPrivKey, connection)) {
     // A group opens its own metadata key by climbing its own tree, so it resolves its grant key for itself.
-    initGroupPrivKeyResolver(
-        [this](const std::string& groupId, int64_t epoch) -> std::optional<core::PrivateKey> {
-            try {
-                return resolveGroupPrivKey(groupId, epoch);
-            } catch (...) {
-                // caller holds no leaf in this group's tree at this epoch — skip
-                return std::nullopt;
-            }
+    initGroupPrivKeyResolver([this](const std::string& groupId, int64_t epoch) -> std::optional<core::PrivateKey> {
+        try {
+            return resolveGroupPrivKey(groupId, epoch);
+        } catch (...) {
+            // caller holds no leaf in this group's tree at this epoch — skip
+            return std::nullopt;
         }
-    );
+    });
     initModuleDataSchemaMapper(_groupDataSchemaMapper);
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&GroupApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
@@ -723,8 +721,7 @@ void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::Con
     auto currentGroup = _serverApi.groupGet(getModel).group;
     _serverApi.groupUpdatePolicy(
         server::GroupUpdatePolicyModel{
-            .id = groupId,
-            .policy = core::Factory::createPolicyServerObject(policyForUpdate(currentGroup, policies))
+            .id = groupId, .policy = core::Factory::createPolicyServerObject(policyForUpdate(currentGroup, policies))
         }
     );
 }
@@ -1159,10 +1156,7 @@ DecryptedEnvelope GroupApiImpl::decrypt(const Envelope& envelope) {
     return _envelopeEncryptor.openAnonymousEnvelope(envelope, grantKeyForPubKey(routing.groupId, routing.groupPubKey));
 }
 
-core::PrivateKey GroupApiImpl::grantKeyForPubKey(
-    const std::string& groupId,
-    const std::string& groupPubKeyBase58
-) {
+core::PrivateKey GroupApiImpl::grantKeyForPubKey(const std::string& groupId, const std::string& groupPubKeyBase58) {
     // A published grant public key's epoch is immutable, so the lookup is memoized like `_envelopeKeys`.
     // Without it every anonymous envelope pays a `groupGet` here on top of `resolveGroupPrivKey`'s.
     const std::string memoKey = memoKeyFor(groupId, groupPubKeyBase58);
@@ -1191,9 +1185,7 @@ Envelope GroupApiImpl::encryptAnonymously(
 ) {
     // Public information only — no membership, no server call. That is the whole point: the sender is outside
     // the group and must stay able to write into it knowing nothing but its id and its identity key.
-    return _envelopeEncryptor.packAnonymousEnvelope(
-        groupId, core::PublicKey::fromBase58DER(groupPubKey), content
-    );
+    return _envelopeEncryptor.packAnonymousEnvelope(groupId, core::PublicKey::fromBase58DER(groupPubKey), content);
 }
 
 // -- envelope files --------------------------------------------------------------------------------------
@@ -1231,10 +1223,10 @@ core::Buffer GroupApiImpl::drainChunks(const std::shared_ptr<EnvelopeFileState>&
             break;
         }
         core::Buffer piece = core::Buffer::from(state->buffer.substr(0, need));
-        std::string produced =
-            (state->reading ? _envelopeEncryptor.decryptChunk(piece, state->fileKey, state->index)
-                            : _envelopeEncryptor.encryptChunk(piece, state->fileKey, state->index, state->suite))
-                .stdString();
+        std::string produced = (state->reading ?
+                                    _envelopeEncryptor.decryptChunk(piece, state->fileKey, state->index) :
+                                    _envelopeEncryptor.encryptChunk(piece, state->fileKey, state->index, state->suite))
+                                   .stdString();
         if (state->skipInChunk > 0) {
             // A seek can land mid-chunk, but a chunk only opens whole. Drop the head the caller did not ask
             // for, once, on the first chunk after the seek.

@@ -5,11 +5,11 @@
 
 #include <Poco/JSON/Object.h>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/endpoint/core/crypto/FormatHash.hpp>
-#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
 #include <privmx/endpoint/core/encryptors/module/Constants.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -19,10 +19,7 @@
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
-GroupDataSchemaMapper::GroupDataSchemaMapper(
-    const core::PrivateKey& userPrivKey,
-    const core::Connection& connection
-)
+GroupDataSchemaMapper::GroupDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection)
     : core::BaseModuleDataSchemaMapper(userPrivKey, connection) {}
 
 Poco::Dynamic::Var GroupDataSchemaMapper::encryptPublicMeta(const GroupPublicMetaToEncryptV5& data) {
@@ -527,8 +524,7 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
             return {};
         }
         auto raw = _dataEncryptor.decodeAndDecryptAndVerify(
-            encData.internalMeta, core::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey),
-            encKey.key
+            encData.internalMeta, core::PublicKeyCache::getInstance()->fromBase58DER(encData.authorPubKey), encKey.key
         );
         auto parsed = core::dynamic::ModuleInternalMetaV5::fromJSON(
             privmx::utils::Utils::parseJsonObject(raw.stdString())

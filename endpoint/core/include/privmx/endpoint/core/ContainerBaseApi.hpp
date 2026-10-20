@@ -333,8 +333,10 @@ TPolicy ContainerBaseApi::policyForUpdate(const TContainer& container, TPolicy p
     const auto current = Factory::parsePolicyServerObjectWithoutItem(container.policy).cryptoSuite;
     if (policies.cryptoSuite.has_value() && policies.cryptoSuite != current) {
         throw CryptoSuiteIsFixedAtCreationException(
-            "container: " + (current.has_value() ? current.value() : std::string("none")) +
-            ", requested: " + policies.cryptoSuite.value()
+            "container: " +
+            (current.has_value() ? current.value() : std::string("none")) +
+            ", requested: " +
+            policies.cryptoSuite.value()
         );
     }
     policies.cryptoSuite = current;

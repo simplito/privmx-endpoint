@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Logger.hpp>
@@ -147,10 +147,7 @@ void KeyDecryptionAndVerificationRequest::markAsCompleted() {
     _completed = true;
 }
 
-KeyProvider::KeyProvider(
-    const core::PrivateKey& key,
-    std::function<std::shared_ptr<UserVerifier>()> getUserVerifier
-)
+KeyProvider::KeyProvider(const core::PrivateKey& key, std::function<std::shared_ptr<UserVerifier>()> getUserVerifier)
     : _key(key), _getUserVerifier(getUserVerifier) {}
 
 EncKey KeyProvider::generateKey(const CryptoSuite& suite) {
@@ -281,10 +278,7 @@ bool KeyProvider::verifyKeysSecret(
     return true;
 }
 
-DecryptedEncKeyV2 KeyProvider::decryptKeyEntry(
-    const server::KeyEntry& keyEntry,
-    const core::PrivateKey& privKey
-) {
+DecryptedEncKeyV2 KeyProvider::decryptKeyEntry(const server::KeyEntry& keyEntry, const core::PrivateKey& privKey) {
     DecryptedEncKeyV2 decryptedEncKey;
     decryptedEncKey.statusCode = 0;
     if (keyEntry.data.type() == typeid(Poco::JSON::Object::Ptr)) {

@@ -84,8 +84,8 @@ PublicKey PublicKey::fromDER(const std::string& der) {
                 ),
                 postQuantum ? cryptoProvider().importPublicKey(
                                   keyBytes(der.substr(2 * HALF)), cs::KeyFormat::Raw, cs::AsymAlg::MLKEM768
-                              )
-                            : nullptr
+                              ) :
+                              nullptr
             );
         }
         if (der.size() == UNCOMPRESSED_LENGTH) {
@@ -97,9 +97,7 @@ PublicKey PublicKey::fromDER(const std::string& der) {
             );
         }
         if (der.size() != COMPRESSED_LENGTH) {
-            throw MalformedEncryptionKeyException(
-                "public key DER of unexpected length: " + std::to_string(der.size())
-            );
+            throw MalformedEncryptionKeyException("public key DER of unexpected length: " + std::to_string(der.size()));
         }
         // secp256k1 by definition, not by this build's default: a 33-byte compressed point is one of
         // that curve's encodings and nothing else's. Reading it as whatever the build happens to
@@ -142,8 +140,8 @@ std::string PublicKey::toDER() const {
         // *different identity* than the one that wrote it, and the roster check failed on a key
         // nobody had mistyped.
         return keyString(require().export_(cs::KeyFormat::Raw)) +
-               keyString(_agreementKey->export_(cs::KeyFormat::Raw)) +
-               (_kemKey != nullptr ? keyString(_kemKey->export_(cs::KeyFormat::Raw)) : std::string());
+            keyString(_agreementKey->export_(cs::KeyFormat::Raw)) +
+            (_kemKey != nullptr ? keyString(_kemKey->export_(cs::KeyFormat::Raw)) : std::string());
     });
 }
 
@@ -153,8 +151,7 @@ std::string PublicKey::toBase58DER() const {
         // has to go **inside** the Base58Check payload — a checksum over untagged bytes would not
         // cover the tag. A key imported as `secp256k1` (uncompressed) exports compressed and is
         // encoded under the one secp256k1 tag, so a key has exactly one spelling either way.
-        const cs::AsymAlg algorithm =
-            _algorithm == cs::AsymAlg::secp256k1 ? cs::AsymAlg::PrivmxSecp256k1 : _algorithm;
+        const cs::AsymAlg algorithm = _algorithm == cs::AsymAlg::secp256k1 ? cs::AsymAlg::PrivmxSecp256k1 : _algorithm;
         if (!keyAlgorithmNeedsAgreementKey(algorithm)) {
             return encodeTaggedPublicKey(keyString(require().export_(cs::KeyFormat::Der)), algorithm);
         }
@@ -169,8 +166,7 @@ std::string PublicKey::toBase58DER() const {
             );
         }
         return encodeTaggedPublicKey(
-            keyString(require().export_(cs::KeyFormat::Raw)),
-            algorithm,
+            keyString(require().export_(cs::KeyFormat::Raw)), algorithm,
             keyString(_agreementKey->export_(cs::KeyFormat::Raw)),
             _kemKey != nullptr ? keyString(_kemKey->export_(cs::KeyFormat::Raw)) : std::string()
         );

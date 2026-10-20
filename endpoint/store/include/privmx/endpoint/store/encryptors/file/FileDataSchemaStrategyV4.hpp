@@ -14,8 +14,8 @@ limitations under the License.
 
 #include <tuple>
 
-#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategyDIO.hpp>
 
 #include "privmx/endpoint/store/ServerTypes.hpp"

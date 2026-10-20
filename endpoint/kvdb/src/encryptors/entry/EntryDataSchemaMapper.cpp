@@ -19,10 +19,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
-EntryDataSchemaMapper::EntryDataSchemaMapper(
-    const core::PrivateKey& userPrivKey,
-    const core::Connection& connection
-)
+EntryDataSchemaMapper::EntryDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection)
     : _userPrivKey(userPrivKey), _connection(connection) {
     _strategyV5 = std::make_shared<EntryDataSchemaStrategyV5>();
     _strategyMapper.registerStrategy(KvdbEntryDataSchema::Version::VERSION_5, _strategyV5);

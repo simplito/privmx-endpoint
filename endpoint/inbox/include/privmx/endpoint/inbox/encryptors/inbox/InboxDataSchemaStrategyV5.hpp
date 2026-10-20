@@ -16,8 +16,8 @@ limitations under the License.
 #include <tuple>
 
 #include <Poco/Dynamic/Var.h>
-#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/encryptors/TypedDataSchemaStrategy.hpp>
 
 #include "privmx/endpoint/inbox/InboxTypes.hpp"

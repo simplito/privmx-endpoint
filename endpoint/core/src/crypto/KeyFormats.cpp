@@ -94,7 +94,6 @@ struct KeyAlgorithmSpec {
 
 constexpr std::uint8_t UNTAGGED = 0x00;
 
-
 /**
  * The identity-key algorithms the endpoint works with.
  *
@@ -109,12 +108,12 @@ constexpr std::uint8_t UNTAGGED = 0x00;
  * uncompressed), so a key in the old untagged encoding fails as an unknown tag instead of being misread.
  */
 constexpr std::array<KeyAlgorithmSpec, 4> KEY_ALGORITHMS{{
-    {cs::AsymAlg::PrivmxSecp256k1, cs::AsymAlg::PrivmxSecp256k1, cs::SigScheme::Compact, 0x81, 33,
-     cs::AsymAlg::NoAlg, 0, cs::AsymAlg::NoAlg, 0, true},
-    {cs::AsymAlg::secp256k1, cs::AsymAlg::secp256k1, cs::SigScheme::Compact, UNTAGGED, 33,
-     cs::AsymAlg::NoAlg, 0, cs::AsymAlg::NoAlg, 0, true},
-    {cs::AsymAlg::ED25519, cs::AsymAlg::ED25519, cs::SigScheme::Default, 0x82, 32,
-     cs::AsymAlg::X25519, 32, cs::AsymAlg::NoAlg, 0, false},
+    {cs::AsymAlg::PrivmxSecp256k1, cs::AsymAlg::PrivmxSecp256k1, cs::SigScheme::Compact, 0x81, 33, cs::AsymAlg::NoAlg,
+     0, cs::AsymAlg::NoAlg, 0, true},
+    {cs::AsymAlg::secp256k1, cs::AsymAlg::secp256k1, cs::SigScheme::Compact, UNTAGGED, 33, cs::AsymAlg::NoAlg, 0,
+     cs::AsymAlg::NoAlg, 0, true},
+    {cs::AsymAlg::ED25519, cs::AsymAlg::ED25519, cs::SigScheme::Default, 0x82, 32, cs::AsymAlg::X25519, 32,
+     cs::AsymAlg::NoAlg, 0, false},
     // The same identity as 0x82 with an ML-KEM-768 half added, so container keys reach it through a
     // secret that an adversary must break both X25519 and ML-KEM-768 to recover.
     //
@@ -127,8 +126,8 @@ constexpr std::array<KeyAlgorithmSpec, 4> KEY_ALGORITHMS{{
     // Named by `X25519MLKEM768` because that is what the key agreement is. It is *our* composition
     // of two primitives, never pmx-crypto's key of that name — that one's `deriveSharedSecret`
     // quietly drops the ML-KEM half and its `encapsulate` throws, so the halves are driven here.
-    {cs::AsymAlg::X25519MLKEM768, cs::AsymAlg::ED25519, cs::SigScheme::Default, 0x83, 32,
-     cs::AsymAlg::X25519, 32, cs::AsymAlg::MLKEM768, 1184, false},
+    {cs::AsymAlg::X25519MLKEM768, cs::AsymAlg::ED25519, cs::SigScheme::Default, 0x83, 32, cs::AsymAlg::X25519, 32,
+     cs::AsymAlg::MLKEM768, 1184, false},
 }};
 
 const KeyAlgorithmSpec* findSpecByTag(std::uint8_t tag) {
@@ -264,27 +263,29 @@ std::string encodeTaggedPublicKey(
     }
     if (rawKey.size() != spec->publicKeyLength) {
         throw MalformedEncryptionKeyException(
-            "public key of " + std::to_string(rawKey.size()) + " bytes, expected " +
+            "public key of " +
+            std::to_string(rawKey.size()) +
+            " bytes, expected " +
             std::to_string(spec->publicKeyLength)
         );
     }
     if (rawAgreementKey.size() != spec->agreementKeyLength) {
         throw MalformedEncryptionKeyException(
-            "agreement key of " + std::to_string(rawAgreementKey.size()) + " bytes, expected " +
+            "agreement key of " +
+            std::to_string(rawAgreementKey.size()) +
+            " bytes, expected " +
             std::to_string(spec->agreementKeyLength)
         );
     }
     if (rawKemKey.size() != spec->kemKeyLength) {
         throw MalformedEncryptionKeyException(
-            "KEM key of " + std::to_string(rawKemKey.size()) + " bytes, expected " +
-            std::to_string(spec->kemKeyLength)
+            "KEM key of " + std::to_string(rawKemKey.size()) + " bytes, expected " + std::to_string(spec->kemKeyLength)
         );
     }
     // Fixed-length halves in a fixed order, so the split on the way back is by length alone and the
     // encoding needs no separators to get wrong.
     return privmx::utils::Base58::encodeWithChecksum(
-        std::string(1, static_cast<char>(spec->keyTag)) + rawKey + rawAgreementKey + rawKemKey,
-        FormatHash::sha256
+        std::string(1, static_cast<char>(spec->keyTag)) + rawKey + rawAgreementKey + rawKemKey, FormatHash::sha256
     );
 }
 
@@ -306,7 +307,9 @@ std::string encodePrivateKey(const std::string& secret, cs::AsymAlg algorithm) {
     }
     if (secret.size() != IDENTITY_SECRET_LENGTH) {
         throw MalformedEncryptionKeyException(
-            "identity secret of " + std::to_string(secret.size()) + " bytes, expected " +
+            "identity secret of " +
+            std::to_string(secret.size()) +
+            " bytes, expected " +
             std::to_string(IDENTITY_SECRET_LENGTH)
         );
     }
@@ -350,9 +353,7 @@ TaggedPublicKey decodeTaggedPublicKey(const std::string& base58) {
     std::string payload;
     try {
         payload = privmx::utils::Base58::decodeWithChecksum(base58, FormatHash::sha256);
-    } catch (...) {
-        throw MalformedEncryptionKeyException("public key is not valid Base58Check");
-    }
+    } catch (...) { throw MalformedEncryptionKeyException("public key is not valid Base58Check"); }
     if (payload.empty()) {
         throw MalformedEncryptionKeyException("public key is empty");
     }
@@ -367,7 +368,9 @@ TaggedPublicKey decodeTaggedPublicKey(const std::string& base58) {
     const std::size_t expected = spec->publicKeyLength + spec->agreementKeyLength + spec->kemKeyLength;
     if (payload.size() != 1 + expected) {
         throw MalformedEncryptionKeyException(
-            "tagged public key of " + std::to_string(payload.size() - 1) + " bytes, expected " +
+            "tagged public key of " +
+            std::to_string(payload.size() - 1) +
+            " bytes, expected " +
             std::to_string(expected)
         );
     }
@@ -383,15 +386,13 @@ bool isTaggedPublicKeyFormat(const std::string& base58) {
     std::string payload;
     try {
         payload = privmx::utils::Base58::decodeWithChecksum(base58, FormatHash::sha256);
-    } catch (...) {
-        return false;
-    }
+    } catch (...) { return false; }
     if (payload.empty()) {
         return false;
     }
     const KeyAlgorithmSpec* spec = findSpecByTag(static_cast<std::uint8_t>(payload[0]));
     return spec != nullptr &&
-           payload.size() == 1 + spec->publicKeyLength + spec->agreementKeyLength + spec->kemKeyLength;
+        payload.size() == 1 + spec->publicKeyLength + spec->agreementKeyLength + spec->kemKeyLength;
 }
 
 } // namespace core

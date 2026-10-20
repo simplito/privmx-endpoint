@@ -18,8 +18,8 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreTypes.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
-#include "privmx/endpoint/core/crypto/CryptoSuite.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include "privmx/endpoint/core/crypto/CryptoSuite.hpp"
 #include "privmx/endpoint/group/Types.hpp"
 
 namespace privmx {

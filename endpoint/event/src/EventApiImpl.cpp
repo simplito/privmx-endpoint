@@ -10,11 +10,11 @@ limitations under the License.
 */
 
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/endpoint/core/crypto/Ecies.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
+#include <privmx/endpoint/core/crypto/Ecies.hpp>
 
 #include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/event/Constants.hpp"

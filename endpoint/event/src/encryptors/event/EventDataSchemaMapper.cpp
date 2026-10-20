@@ -12,20 +12,17 @@ limitations under the License.
 #include "privmx/endpoint/event/encryptors/event/EventDataSchemaMapper.hpp"
 
 #include <Poco/JSON/Object.h>
-#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 #include "privmx/endpoint/event/EventException.hpp"
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
-EventDataSchemaMapper::EventDataSchemaMapper(
-    const core::PrivateKey& userPrivKey,
-    const core::Connection& connection
-)
+EventDataSchemaMapper::EventDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection)
     : _userPrivKey(userPrivKey), _connection(connection), _eventKeyProvider(userPrivKey) {
     _strategyV5 = std::make_shared<EventDataSchemaStrategyV5>();
     _strategyMapper.registerStrategy(EventDataSchema::Version::VERSION_5, _strategyV5);

@@ -48,8 +48,8 @@ std::string channelAead(
     cs::SymParams params{
         .cipher = cs::SymAlg::Aes256Gcm, .key = view(key), .iv = view(iv), .aad = view(aad), .taglen = 16
     };
-    const cs::Bytes out = encrypting ? privmx::endpoint::core::cryptoProvider().encrypt(params, view(data))
-                                     : privmx::endpoint::core::cryptoProvider().decrypt(params, view(data));
+    const cs::Bytes out = encrypting ? privmx::endpoint::core::cryptoProvider().encrypt(params, view(data)) :
+                                       privmx::endpoint::core::cryptoProvider().decrypt(params, view(data));
     return std::string(reinterpret_cast<const char*>(out.data()), out.size());
 }
 
@@ -71,8 +71,9 @@ core::Buffer DataChannelMessageEncryptorV1::encryptMessage(const DataChannelMess
             .keyId = encKey.keyId
         }
     );
-    std::string ciphertext =
-        channelAead(encKey.key.stdString(), iv, serializedHeader, plainMessage.data.stdString(), true);
+    std::string ciphertext = channelAead(
+        encKey.key.stdString(), iv, serializedHeader, plainMessage.data.stdString(), true
+    );
     return core::Buffer::from(serializedHeader + ciphertext);
 }
 
@@ -98,12 +99,10 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(
     try {
         result.seq = parsedEncryptedMessage.header.seq;
         auto decKey = getDencryptionKey(parsedEncryptedMessage.header.keyId);
-        result.data = core::Buffer::from(
-            channelAead(
-                decKey.key.stdString(), parsedEncryptedMessage.header.iv,
-                parsedEncryptedMessage.serializedHeader, parsedEncryptedMessage.ciphertext, false
-            )
-        );
+        result.data = core::Buffer::from(channelAead(
+            decKey.key.stdString(), parsedEncryptedMessage.header.iv, parsedEncryptedMessage.serializedHeader,
+            parsedEncryptedMessage.ciphertext, false
+        ));
         updateSeq(remoteStreamId, parsedEncryptedMessage.header.seq);
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();

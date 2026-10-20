@@ -12,10 +12,10 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_DATAINNERENCRYPTORV4_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_DATAINNERENCRYPTORV4_HPP_
 
-#include "privmx/endpoint/core/crypto/PrivateKey.hpp"
-#include "privmx/endpoint/core/crypto/PublicKey.hpp"
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/CoreTypes.hpp"
+#include "privmx/endpoint/core/crypto/PrivateKey.hpp"
+#include "privmx/endpoint/core/crypto/PublicKey.hpp"
 
 namespace privmx {
 namespace endpoint {

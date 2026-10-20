@@ -57,9 +57,7 @@ public:
         std::shared_ptr<privmx::cryptoservice::IPublicKey> agreementKey = nullptr,
         std::shared_ptr<privmx::cryptoservice::IPublicKey> kemKey = nullptr
     )
-        : _key(std::move(key)),
-          _algorithm(algorithm),
-          _agreementKey(std::move(agreementKey)),
+        : _key(std::move(key)), _algorithm(algorithm), _agreementKey(std::move(agreementKey)),
           _kemKey(std::move(kemKey)) {}
 
     bool empty() const { return _key == nullptr; }

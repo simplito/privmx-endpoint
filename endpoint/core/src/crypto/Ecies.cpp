@@ -76,8 +76,10 @@ cs::AsymAlg agreementCurveOf(cs::AsymAlg algorithm) {
 void assertSameCurve(const PublicKey& pub, const PrivateKey& sender, const std::string& what) {
     if (agreementCurveOf(pub.algorithm()) != agreementCurveOf(sender.algorithm())) {
         throw MalformedEncryptionKeyException(
-            what + ": the two keys are of different algorithms (" +
-            std::to_string(static_cast<int>(sender.algorithm())) + " and " +
+            what +
+            ": the two keys are of different algorithms (" +
+            std::to_string(static_cast<int>(sender.algorithm())) +
+            " and " +
             std::to_string(static_cast<int>(pub.algorithm())) +
             "), and a shared secret needs both ends on one curve"
         );
@@ -114,24 +116,19 @@ std::string wrapToComposedIdentity(const PublicKey& pub, const std::string& data
 std::string unwrapForComposedIdentity(const PrivateKey& priv, const std::string& cipher) {
     // The KEM ciphertext has one length for a given algorithm, so the frame still splits by length
     // alone. An identity with no post-quantum half reads exactly the frame it always did.
-    const std::size_t kemLength =
-        keyAlgorithmNeedsKemKey(priv.algorithm()) ? KEM_CIPHERTEXT_LENGTH : 0;
+    const std::size_t kemLength = keyAlgorithmNeedsKemKey(priv.algorithm()) ? KEM_CIPHERTEXT_LENGTH : 0;
     if (cipher.size() <= AGREEMENT_PUBLIC_LENGTH + kemLength) {
         throw MalformedEncryptionKeyException("wrapped key shorter than its own header");
     }
     auto senderPublic = cryptoProvider().importPublicKey(
-        keyBytes(cipher.substr(0, AGREEMENT_PUBLIC_LENGTH)),
-        cs::KeyFormat::Raw,
-        agreementAlgorithmFor(priv.algorithm())
+        keyBytes(cipher.substr(0, AGREEMENT_PUBLIC_LENGTH)), cs::KeyFormat::Raw, agreementAlgorithmFor(priv.algorithm())
     );
     std::string shared = keyString(priv.agreementImpl()->deriveSharedSecret(*senderPublic));
     if (kemLength != 0) {
         if (priv.kemImpl() == nullptr) {
             throw MalformedEncryptionKeyException("post-quantum identity is missing its encapsulation half");
         }
-        shared += keyString(
-            priv.kemImpl()->decapsulate(keyBytes(cipher.substr(AGREEMENT_PUBLIC_LENGTH, kemLength)))
-        );
+        shared += keyString(priv.kemImpl()->decapsulate(keyBytes(cipher.substr(AGREEMENT_PUBLIC_LENGTH, kemLength))));
     }
     return CryptoSuite::decrypt(wrapKeyFor(shared), cipher.substr(AGREEMENT_PUBLIC_LENGTH + kemLength));
 }
@@ -169,17 +166,14 @@ std::string Ecies::decrypt(
         if (keyAlgorithmNeedsAgreementKey(priv.algorithm())) {
             return unwrapForComposedIdentity(priv, cipher);
         }
-        const privmx::cryptoservice::IPublicKey* expectedSender =
-            pubOfSignature.has_value() ? pubOfSignature->agreementImpl().get() : nullptr;
+        const privmx::cryptoservice::IPublicKey* expectedSender = pubOfSignature.has_value() ?
+            pubOfSignature->agreementImpl().get() :
+            nullptr;
         return keyString(priv.agreementImpl()->open(keyBytes(cipher), expectedSender));
     });
 }
 
-std::string Ecies::encryptToBase64(
-    const PublicKey& pub,
-    const std::string& data,
-    const PrivateKey& privForSignature
-) {
+std::string Ecies::encryptToBase64(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature) {
     return privmx::utils::Base64::from(encrypt(pub, data, privForSignature));
 }
 

@@ -1,9 +1,9 @@
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp"
 
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
 #include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
-#include <privmx/endpoint/core/CoreException.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
 #include "privmx/endpoint/group/encryptors/envelope/EnvelopeWire.hpp"
@@ -76,17 +76,13 @@ std::string GroupEnvelopeEncryptor::chunkKey(const std::string& fileKey, ChunkIn
     return core::FormatHash::hmacSha256(fileKey, CHUNK_KEY_LABEL + EnvelopeWriter::toBE(index, 4));
 }
 
-std::pair<std::string, std::string> GroupEnvelopeEncryptor::wrapContentKey(
-    const core::PublicKey& groupPubKey
-) {
+std::pair<std::string, std::string> GroupEnvelopeEncryptor::wrapContentKey(const core::PublicKey& groupPubKey) {
     // Throwaway, never retained: it exists only to carry out one ECDH with the group's identity key.
     // Of the group key's algorithm, not this build's: an ECDH has to have both ends on the same curve,
     // and the group key was chosen when the group was made — possibly by a client built differently.
     core::PrivateKey ephemeralPrivKey = core::PrivateKey::generateRandom(groupPubKey.algorithm());
     std::string contentKey = core::CryptoSuite::randomBytes(CONTENT_KEY_SIZE);
-    std::string wrap = core::Ecies::encrypt(
-        groupPubKey, ECIES_DOMAIN + contentKey, ephemeralPrivKey
-    );
+    std::string wrap = core::Ecies::encrypt(groupPubKey, ECIES_DOMAIN + contentKey, ephemeralPrivKey);
     return {wrap, contentKey};
 }
 
@@ -97,8 +93,7 @@ std::string GroupEnvelopeEncryptor::unwrapContentKey(
 ) {
     // The key we resolved must be the key the envelope names, or a hostile server could steer us onto another
     // epoch's key with only the ECIES 4-byte checksum between us and a wrong answer.
-    if (groupPrivKey.getPublicKey() !=
-        core::PublicKeyCache::getInstance()->fromBase58DER(groupPubKeyBase58)) {
+    if (groupPrivKey.getPublicKey() != core::PublicKeyCache::getInstance()->fromBase58DER(groupPubKeyBase58)) {
         throw InvalidEnvelopeFormatException("resolved group key does not match the key named by the envelope");
     }
     std::string unwrapped = core::Ecies::decrypt(groupPrivKey, wrap);
@@ -228,8 +223,9 @@ core::Buffer GroupEnvelopeEncryptor::packFileEnvelope(
     const core::PrivateKey& authorPrivKey,
     const core::EncKey& groupKey
 ) {
-    std::string header =
-        writeFileHeader(TYPE_FILE, groupKey.suite, {groupId, keyId, authorPrivKey.getPublicKey().toDER()});
+    std::string header = writeFileHeader(
+        TYPE_FILE, groupKey.suite, {groupId, keyId, authorPrivKey.getPublicKey().toDER()}
+    );
     // `plainSize` inside the signature is the only thing that makes a dropped trailing chunk detectable —
     // each chunk authenticates itself, but nothing about chunk N says how many were supposed to follow.
     std::string body = header + EnvelopeWriter::toBE(plainSize, 8) + fileKey;

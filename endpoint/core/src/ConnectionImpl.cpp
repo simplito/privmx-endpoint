@@ -69,9 +69,8 @@ void ConnectionImpl::connect(
     // apart: a throwaway secp256k1 key carries the channel, and the identity only signs. The signature
     // then has to name the transport key — `SplitIdentity` says why.
     const bool identityCanCarryTheChannel = !keyAlgorithmNeedsAgreementKey(key.algorithm());
-    auto legacyKey = identityCanCarryTheChannel
-        ? privmx::crypto::PrivateKey::fromWIF(key.toWIF())
-        : privmx::crypto::PrivateKey::generateRandom();
+    auto legacyKey = identityCanCarryTheChannel ? privmx::crypto::PrivateKey::fromWIF(key.toWIF()) :
+                                                  privmx::crypto::PrivateKey::generateRandom();
     std::optional<rpc::SplitIdentity> splitIdentity;
     if (!identityCanCarryTheChannel) {
         splitIdentity = rpc::SplitIdentity{
@@ -85,8 +84,7 @@ void ConnectionImpl::connect(
     if (verificationOptions.bridgePubKey.has_value()) {
         _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(
             legacyKey, options, solutionId,
-            privmx::crypto::PublicKey::fromBase58DER(verificationOptions.bridgePubKey.value()),
-            splitIdentity
+            privmx::crypto::PublicKey::fromBase58DER(verificationOptions.bridgePubKey.value()), splitIdentity
         );
     } else {
         _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(
@@ -178,9 +176,9 @@ void ConnectionImpl::connectPublic(
     // so the channel simply gets its own secp256k1 key with no tie back to it. Passing the identity's
     // own encoding would not work either — a composed identity spells itself with an algorithm tag,
     // which the secp256k1-only WIF parser below cannot read.
-    auto transportKey = keyAlgorithmNeedsAgreementKey(key.algorithm())
-        ? privmx::crypto::PrivateKey::generateRandom()
-        : privmx::crypto::PrivateKey::fromWIF(key.toWIF());
+    auto transportKey = keyAlgorithmNeedsAgreementKey(key.algorithm()) ?
+        privmx::crypto::PrivateKey::generateRandom() :
+        privmx::crypto::PrivateKey::fromWIF(key.toWIF());
     _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(transportKey, options, solutionId);
     _serverApi.emplace(_gateway);
     _serverConfig = _gateway->getInfo().cast<rpc::EcdheConnectionInfo>()->serverConfig;

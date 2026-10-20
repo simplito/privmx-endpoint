@@ -59,8 +59,7 @@ server::InboxData InboxDataProcessorV5::packForServer(
     );
     serverPrivateData.authorPubKey = authorPubKeyECC;
     core::ExpandedDataIntegrityObject privateDataExpandedDio = {
-        plainData.privateData.dio, InboxDataSchema::Version::VERSION_5,
-        privateDataMapOfDataSha256
+        plainData.privateData.dio, InboxDataSchema::Version::VERSION_5, privateDataMapOfDataSha256
     };
     serverPrivateData.dio = _DIOEncryptor.signAndEncode(privateDataExpandedDio, authorPrivateKey);
 

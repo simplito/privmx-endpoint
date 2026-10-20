@@ -46,7 +46,9 @@ PrivateKey identityFromSecret(const std::string& secret, cs::AsymAlg algorithm) 
     // one-key path gets this check from the provider, which rejects a wrong-sized scalar.
     if (secret.size() != IDENTITY_SECRET_LENGTH) {
         throw MalformedEncryptionKeyException(
-            "identity secret of " + std::to_string(secret.size()) + " bytes, expected " +
+            "identity secret of " +
+            std::to_string(secret.size()) +
+            " bytes, expected " +
             std::to_string(IDENTITY_SECRET_LENGTH)
         );
     }
@@ -62,10 +64,7 @@ PrivateKey identityFromSecret(const std::string& secret, cs::AsymAlg algorithm) 
                      ->privateKey(cs::KeyUsageScheme::DerEnc);
     }
     return PrivateKey(
-        extKey->privateKey(cs::KeyUsageScheme::Sign),
-        algorithm,
-        extKey->privateKey(cs::KeyUsageScheme::DerEnc),
-        secret,
+        extKey->privateKey(cs::KeyUsageScheme::Sign), algorithm, extKey->privateKey(cs::KeyUsageScheme::DerEnc), secret,
         kemKey
     );
 }
@@ -125,9 +124,7 @@ PublicKey PrivateKey::getPublicKey() const {
     // would be verified under the other's scheme — and both halves, so it can be wrapped to.
     return mapCryptoErrors("PrivateKey::getPublicKey", [&] {
         return PublicKey(
-            require().publicKey(),
-            _algorithm,
-            _agreementKey != nullptr ? _agreementKey->publicKey() : nullptr,
+            require().publicKey(), _algorithm, _agreementKey != nullptr ? _agreementKey->publicKey() : nullptr,
             _kemKey != nullptr ? _kemKey->publicKey() : nullptr
         );
     });

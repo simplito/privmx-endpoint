@@ -8,11 +8,11 @@
 #include <utility>
 #include <vector>
 
-#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
-#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/encryptors/DataInnerEncryptorV4.hpp>
 
 #include "privmx/endpoint/group/GroupTypes.hpp"
@@ -235,10 +235,7 @@ public:
         const core::CryptoSuite& suite
     );
 
-    EnvelopeFileHeader unpackAnonymousFileEnvelope(
-        const core::Buffer& envelope,
-        const core::PrivateKey& groupPrivKey
-    );
+    EnvelopeFileHeader unpackAnonymousFileEnvelope(const core::Buffer& envelope, const core::PrivateKey& groupPrivKey);
 
     // `suite` is the one named in the file envelope header, so sealing and addressing cannot disagree.
     core::Buffer encryptChunk(
@@ -261,10 +258,7 @@ public:
     EnvelopeRouting peekFile(const core::Buffer& envelope) { return peekFamily(envelope, EnvelopeFamily::File); }
 
     DecryptedEnvelope openGroupKeyEnvelope(const core::Buffer& envelope, const std::string& groupKey);
-    DecryptedEnvelope openAnonymousEnvelope(
-        const core::Buffer& envelope,
-        const core::PrivateKey& groupPrivKey
-    );
+    DecryptedEnvelope openAnonymousEnvelope(const core::Buffer& envelope, const core::PrivateKey& groupPrivKey);
 
 private:
     // The type octet of each envelope type, as the format notes above spell them out.

@@ -25,10 +25,7 @@ namespace core {
 
 class DIOEncryptorV1 {
 public:
-    std::string signAndEncode(
-        const core::ExpandedDataIntegrityObject& dio,
-        const core::PrivateKey& authorKey
-    );
+    std::string signAndEncode(const core::ExpandedDataIntegrityObject& dio, const core::PrivateKey& authorKey);
     core::ExpandedDataIntegrityObject decodeAndVerify(const std::string& signedDio);
 
 private:

@@ -15,9 +15,6 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-std::string EncKeyEncryptorV1::decrypt(
-    const std::string& encryptedEncKey,
-    const core::PrivateKey& decryptionKey
-) {
+std::string EncKeyEncryptorV1::decrypt(const std::string& encryptedEncKey, const core::PrivateKey& decryptionKey) {
     return core::Ecies::decryptFromBase64(decryptionKey, encryptedEncKey);
 }

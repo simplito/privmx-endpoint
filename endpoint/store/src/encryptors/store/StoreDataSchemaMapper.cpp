@@ -21,10 +21,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
-StoreDataSchemaMapper::StoreDataSchemaMapper(
-    const core::PrivateKey& userPrivKey,
-    const core::Connection& connection
-)
+StoreDataSchemaMapper::StoreDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection)
     : core::BaseModuleDataSchemaMapper(userPrivKey, connection) {
     _strategyV4 = std::make_shared<StoreDataSchemaStrategyV4>();
     _strategyMapper.registerStrategy(core::ModuleDataSchema::Version::VERSION_4, _strategyV4);

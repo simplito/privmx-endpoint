@@ -385,14 +385,14 @@ void InboxApiImpl::sendEntry(const int64_t inboxHandle) {
 
     auto inboxPubKeyECC = core::PublicKey::fromBase58DER(publicData.inboxEntriesPubKeyBase58DER);
     auto _userPrivKeyECC =
-        (handle->userPrivKey.has_value() ? core::PrivateKey::fromWIF(handle->userPrivKey.value()) :
-                                           _userPrivKey);
+        (handle->userPrivKey.has_value() ? core::PrivateKey::fromWIF(handle->userPrivKey.value()) : _userPrivKey);
     // The entry is sealed to the inbox key by this key, so the two have to be on the same curve. An
     // anonymous connection's key stands for nobody — it was minted at connect time out of this
     // build's default — so it is replaced rather than refused. A key that names a user is left
     // alone: swapping it would send the entry under somebody else's name, and if it cannot reach
     // this inbox the caller should hear so.
-    if (_connection.getImpl()->isAnonymous() && !handle->userPrivKey.has_value() &&
+    if (_connection.getImpl()->isAnonymous() &&
+        !handle->userPrivKey.has_value() &&
         _userPrivKeyECC.algorithm() != inboxPubKeyECC.algorithm()) {
         _userPrivKeyECC = core::PrivateKey::generateRandom(inboxPubKeyECC.algorithm());
     }

@@ -14,9 +14,9 @@ limitations under the License.
 #include "privmx/endpoint/core/crypto/PrivateKey.hpp"
 #include <privmx/utils/Base58.hpp>
 
-#include "privmx/endpoint/core/crypto/FormatHash.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/Validator.hpp"
+#include "privmx/endpoint/core/crypto/FormatHash.hpp"
 #include "privmx/utils/Utils.hpp"
 
 using namespace std;

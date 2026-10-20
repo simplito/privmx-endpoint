@@ -12,8 +12,8 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_SINGLETONSHOLDER_HPP
 #define _PRIVMXLIB_ENDPOINT_CORE_SINGLETONSHOLDER_HPP
 
-#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Executor.hpp>
 #include <privmx/utils/Logger.hpp>
 

@@ -23,11 +23,7 @@ namespace inbox {
 
 class InboxEntryDataEncryptorV1 {
 public:
-    std::string encrypt(
-        InboxEntrySendModel data,
-        core::PrivateKey& userPriv,
-        core::PublicKey& inboxPub
-    );
+    std::string encrypt(InboxEntrySendModel data, core::PrivateKey& userPriv, core::PublicKey& inboxPub);
     InboxEntryDataResult decrypt(std::string& serializedBase64, core::PrivateKey& inboxPriv);
     InboxEntryPublicDataResult decryptPublicOnly(std::string& serializedBase64);
 };

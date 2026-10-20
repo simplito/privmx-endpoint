@@ -97,10 +97,7 @@ public:
         const core::PrivateKey& signer
     );
 
-    static std::optional<core::PrivateKey> unwrapKey(
-        const std::string& blob,
-        const core::PrivateKey& with
-    );
+    static std::optional<core::PrivateKey> unwrapKey(const std::string& blob, const core::PrivateKey& with);
 
 private:
     /**

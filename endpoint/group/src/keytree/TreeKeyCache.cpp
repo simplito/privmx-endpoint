@@ -16,11 +16,7 @@ limitations under the License.
 
 using namespace privmx::endpoint::group::keytree;
 
-void TreeKeyCache::putNodeKey(
-    std::uint32_t nodeIndex,
-    std::uint32_t generation,
-    const core::PrivateKey& key
-) {
+void TreeKeyCache::putNodeKey(std::uint32_t nodeIndex, std::uint32_t generation, const core::PrivateKey& key) {
     std::unique_lock lock(_mutex);
     // `insert_or_assign`, not `operator[]`: subscripting default-constructs the value, and a default-constructed
     // EC key generates a fresh keypair (`ECC::ECC()` calls `genPair()`) — ~225 us thrown away per insertion.

@@ -15,13 +15,13 @@ limitations under the License.
 #include "privmx/endpoint/event/EventTypes.hpp"
 #include "privmx/endpoint/event/ServerTypes.hpp"
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/endpoint/core/crypto/Ecies.hpp>
-#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
+#include <privmx/endpoint/core/crypto/Ecies.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 
 namespace privmx {
 namespace endpoint {

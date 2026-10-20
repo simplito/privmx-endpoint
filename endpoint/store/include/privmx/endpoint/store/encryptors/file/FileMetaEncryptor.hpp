@@ -16,10 +16,10 @@ limitations under the License.
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV4.hpp"
 #include "privmx/endpoint/store/encryptors/file/FileMetaEncryptorV5.hpp"
 #include <optional>
-#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 
 namespace privmx {
 namespace endpoint {

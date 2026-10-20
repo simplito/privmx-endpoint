@@ -18,10 +18,10 @@ limitations under the License.
 #include <string>
 
 #include <Poco/Dynamic/Var.h>
-#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/encryptors/VersionStrategyMapper.hpp>
 
 #include "privmx/endpoint/event/Constants.hpp"

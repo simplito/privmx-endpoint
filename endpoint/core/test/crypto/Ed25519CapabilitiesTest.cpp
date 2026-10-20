@@ -184,9 +184,9 @@ TEST(Ed25519Capabilities, AKeyCanBeRebuiltFromASeedAlone) {
     EXPECT_NO_THROW(signing->sign(keyBytes("data"), cs::SigScheme::Default));
     EXPECT_EQ(
         keyString(signing->publicKey()->export_(cs::KeyFormat::Raw)),
-        keyString(fromSeed(seed, cs::KeyUsageScheme::Sign, cs::AsymAlg::ED25519)
-                      ->publicKey()
-                      ->export_(cs::KeyFormat::Raw))
+        keyString(
+            fromSeed(seed, cs::KeyUsageScheme::Sign, cs::AsymAlg::ED25519)->publicKey()->export_(cs::KeyFormat::Raw)
+        )
     ) << "the same seed gave two different signing keys";
 
     // Naming ED25519 asks for the identity, and the agreement half of an Ed25519 identity is X25519 —
@@ -249,12 +249,8 @@ TEST(Ed25519Composed, MixingAlgorithmsIsRefusedByNameNotByTheProvider) {
     const PrivateKey plain = PrivateKey::generateRandom(cs::AsymAlg::PrivmxSecp256k1);
     const std::string containerKey(32, 'k');
 
-    EXPECT_THROW(
-        Ecies::encrypt(composed.getPublicKey(), containerKey, plain), MalformedEncryptionKeyException
-    );
-    EXPECT_THROW(
-        Ecies::encrypt(plain.getPublicKey(), containerKey, composed), MalformedEncryptionKeyException
-    );
+    EXPECT_THROW(Ecies::encrypt(composed.getPublicKey(), containerKey, plain), MalformedEncryptionKeyException);
+    EXPECT_THROW(Ecies::encrypt(plain.getPublicKey(), containerKey, composed), MalformedEncryptionKeyException);
     // Same on the way back, where a sender key is named to be verified against.
     const std::string wrapped = Ecies::encrypt(plain.getPublicKey(), containerKey, plain);
     EXPECT_THROW(Ecies::decrypt(composed, wrapped, plain.getPublicKey()), MalformedEncryptionKeyException);
@@ -327,8 +323,9 @@ TEST(PostQuantumIdentity, TheEncapsulationHalfReallyEntersTheWrap) {
     const std::string containerKey(32, 'k');
 
     const std::string pq = Ecies::encrypt(bob.getPublicKey(), containerKey, alice);
-    const std::string classical =
-        Ecies::encrypt(classicalBob.getPublicKey(), containerKey, composedIdentity(std::string(32, 'a')));
+    const std::string classical = Ecies::encrypt(
+        classicalBob.getPublicKey(), containerKey, composedIdentity(std::string(32, 'a'))
+    );
 
     constexpr std::size_t ML_KEM_768_CIPHERTEXT = 1088;
     EXPECT_EQ(classical.size() + ML_KEM_768_CIPHERTEXT, pq.size())
@@ -390,8 +387,7 @@ TEST(Ed25519Composed, IsDeterministicInItsSecret) {
     const std::string secret(32, 'a');
 
     EXPECT_EQ(
-        composedIdentity(secret).getPublicKey().toBase58DER(),
-        composedIdentity(secret).getPublicKey().toBase58DER()
+        composedIdentity(secret).getPublicKey().toBase58DER(), composedIdentity(secret).getPublicKey().toBase58DER()
     );
     EXPECT_NE(
         composedIdentity(secret).getPublicKey().toBase58DER(),

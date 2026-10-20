@@ -124,8 +124,7 @@ void ChunkDataProvider::cacheChunk(uint32_t chunkNumber, const std::string& encr
 
 std::string ChunkDataProvider::requestSegment(uint32_t segmentNumber) {
     server::BufferReadRangeSlice range{
-        server::BufferReadRange{.type = "slice"}, _segmentSize * segmentNumber,
-        _segmentSize * (segmentNumber + 1)
+        server::BufferReadRange{.type = "slice"}, _segmentSize * segmentNumber, _segmentSize * (segmentNumber + 1)
     };
     server::StoreFileReadModel fileDataModel{};
     fileDataModel.fileId = _fileId;

@@ -11,8 +11,8 @@ limitations under the License.
 
 #include "privmx/endpoint/event/encryptors/event/EventDataSchemaStrategyV5.hpp"
 
-#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
+#include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 #include "privmx/endpoint/event/Constants.hpp"
 

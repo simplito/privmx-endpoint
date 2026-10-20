@@ -59,13 +59,11 @@ public:
  * juz naleza do hierarchii endpointu, przepuszczamy bez zmian - inaczej wlasna walidacja
  * wrapperow (np. `MalformedEncryptionKeyException` z pustego klucza) gubilaby swoj kod.
  */
-template <typename F>
+template<typename F>
 decltype(auto) mapCryptoErrors(const char* context, F&& fn) {
     try {
         return fn();
-    } catch (const Exception&) {
-        throw;
-    } catch (const privmx::utils::PrivmxException&) {
+    } catch (const Exception&) { throw; } catch (const privmx::utils::PrivmxException&) {
         throw;
     } catch (const std::exception& e) {
         CryptoErrors::rethrow(e, context);

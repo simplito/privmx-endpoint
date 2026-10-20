@@ -14,10 +14,10 @@ limitations under the License.
 
 #include <string>
 
-#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/HandleManager.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
 
 #include "privmx/endpoint/store/ChunkBufferedStream.hpp"

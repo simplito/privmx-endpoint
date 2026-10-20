@@ -55,8 +55,9 @@ bool isSecp256k1Build() {
 
 } // namespace
 
-#define SKIP_UNLESS_SECP256K1()                                                                    \
-    if (!isSecp256k1Build()) GTEST_SKIP() << "describes secp256k1; this build generates other keys"
+#define SKIP_UNLESS_SECP256K1()                                                                                        \
+    if (!isSecp256k1Build())                                                                                           \
+    GTEST_SKIP() << "describes secp256k1; this build generates other keys"
 
 // ---------------------------------------------------------------------------------------------
 // Compatibility with the old implementation. This is the precondition for migrating 76 files: if
@@ -204,10 +205,13 @@ TEST(KeyAlgorithm, AnEd25519IdentityLoadsOnAnyBuild) {
     const std::string signature = priv.signToCompactSignatureWithHash(MESSAGE);
     EXPECT_EQ(64u, signature.size());
     EXPECT_TRUE(priv.getPublicKey().verifyCompactSignatureWithHash(MESSAGE, signature));
-    EXPECT_FALSE(priv.derive(PrivateKey::fromWIF(encodePrivateKey(
-                                 std::string(32, '\x07'), privmx::cryptoservice::AsymAlg::ED25519
-                             )).getPublicKey())
-                     .empty());
+    EXPECT_FALSE(
+        priv.derive(
+                PrivateKey::fromWIF(encodePrivateKey(std::string(32, '\x07'), privmx::cryptoservice::AsymAlg::ED25519))
+                    .getPublicKey()
+        )
+            .empty()
+    );
 
     // The identity survives an export/import cycle whole — `toWIF` has to emit the tagged form here,
     // since pmx-crypto's WIF is EC-only and could not carry it.
@@ -293,9 +297,7 @@ TEST(KeyAlgorithm, TheRegistryKnowsExactlyWhatItCanUse) {
     // Still a refusal under its own name for anything the registry does not cover, rather than a
     // signature under some guessed scheme.
     EXPECT_FALSE(isSupportedKeyAlgorithm(privmx::cryptoservice::AsymAlg::MLDSA65));
-    EXPECT_THROW(
-        signatureSchemeFor(privmx::cryptoservice::AsymAlg::MLDSA65), UnsupportedKeyAlgorithmException
-    );
+    EXPECT_THROW(signatureSchemeFor(privmx::cryptoservice::AsymAlg::MLDSA65), UnsupportedKeyAlgorithmException);
 }
 
 // ---------------------------------------------------------------------------------------------

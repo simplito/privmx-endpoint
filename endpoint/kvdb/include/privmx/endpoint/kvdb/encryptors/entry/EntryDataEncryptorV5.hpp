@@ -16,10 +16,10 @@ limitations under the License.
 
 #include "privmx/endpoint/kvdb/KvdbTypes.hpp"
 #include "privmx/endpoint/kvdb/ServerTypes.hpp"
-#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 

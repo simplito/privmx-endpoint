@@ -54,8 +54,7 @@ TEST(CryptoErrors, EveryFailurePathProducesCoreException) {
         {"encrypt/krotki klucz", [] { CryptoSuite::defaultForWrite().encrypt("krotki", "tresc"); }},
         {"decrypt/zly klucz", [] { CryptoSuite::decrypt(std::string(32, 'z'), someFrame()); }},
         {"decrypt/pusta ramka", [] { CryptoSuite::decrypt(KEY32, ""); }},
-        {"ecies/nie ten klucz",
-         [] {
+        {"ecies/nie ten klucz", [] {
              const auto a = PrivateKey::fromWIF(WIF);
              Ecies::decrypt(PrivateKey::generateRandom(), Ecies::encrypt(a.getPublicKey(), "tresc", a));
          }},
@@ -65,9 +64,7 @@ TEST(CryptoErrors, EveryFailurePathProducesCoreException) {
         try {
             action();
             ADD_FAILURE() << name << ": oczekiwano wyjatku, nie bylo zadnego";
-        } catch (const Exception& e) {
-            EXPECT_NE(0u, e.getCode()) << name;
-        } catch (const std::exception& e) {
+        } catch (const Exception& e) { EXPECT_NE(0u, e.getCode()) << name; } catch (const std::exception& e) {
             ADD_FAILURE() << name << ": wyjatek wyszedl poza hierarchie endpointu: " << e.what();
         }
     }
@@ -101,8 +98,7 @@ TEST(CryptoErrors, AuthenticationFailureKeepsItsOwnCode) {
 
 TEST(CryptoErrors, WifChecksumFailureKeepsItsOwnCode) {
     EXPECT_THROW(
-        PrivateKey::fromWIF("L1YwTwAr8dQCBzfmXBzh6ggBkYbLuu15Tc7s4bajrRNDbsogs9a6"),
-        epcrypto::InvalidChecksumException
+        PrivateKey::fromWIF("L1YwTwAr8dQCBzfmXBzh6ggBkYbLuu15Tc7s4bajrRNDbsogs9a6"), epcrypto::InvalidChecksumException
     );
 }
 

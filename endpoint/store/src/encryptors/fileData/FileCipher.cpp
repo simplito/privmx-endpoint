@@ -73,14 +73,14 @@ constexpr std::size_t GCM_IV_LENGTH = 12;
 constexpr std::size_t GCM_TAG_LENGTH = 16;
 
 constexpr std::array<CipherSpec, 3> CIPHERS{{
-    {FileCipher::AES_CBC_HMAC_SHA256, Mode::CbcHmac, IV_SIZE, HMAC_SIZE, CHUNK_PADDING,
-     HMAC_SIZE + IV_SIZE, core::SuiteId::Aes256GcmSha256},
-    {FileCipher::AES_GCM, Mode::Gcm, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0,
-     GCM_IV_LENGTH + GCM_TAG_LENGTH, core::SuiteId::Aes256GcmSha256},
+    {FileCipher::AES_CBC_HMAC_SHA256, Mode::CbcHmac, IV_SIZE, HMAC_SIZE, CHUNK_PADDING, HMAC_SIZE + IV_SIZE,
+     core::SuiteId::Aes256GcmSha256},
+    {FileCipher::AES_GCM, Mode::Gcm, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0, GCM_IV_LENGTH + GCM_TAG_LENGTH,
+     core::SuiteId::Aes256GcmSha256},
     // Frame identical to format 2 — an AEAD tag is 16 B whatever the hash function, so the
     // hash-table stride and chunk addressing do not change. Only the hash differs.
-    {FileCipher::AES_GCM_SHA512, Mode::Gcm, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0,
-     GCM_IV_LENGTH + GCM_TAG_LENGTH, core::SuiteId::Aes256GcmSha512},
+    {FileCipher::AES_GCM_SHA512, Mode::Gcm, GCM_IV_LENGTH, GCM_TAG_LENGTH, 0, GCM_IV_LENGTH + GCM_TAG_LENGTH,
+     core::SuiteId::Aes256GcmSha512},
 }};
 
 /// The file format matching a container suite. The mode is always AEAD — container suites are
@@ -233,10 +233,7 @@ IChunkEncryptor::Chunk FileCipher::encryptChunk(const std::string& chunkKey, con
         // `[IV][ciphertext || tag]`. The tag is the tail of the cipher's output and it is what goes
         // into the hash table — there is no separate authenticator prepended to the frame.
         const std::string cipherWithTag = symEncrypt(cs::SymAlg::Aes256Gcm, chunkKey, iv, plain);
-        return {
-            .data = iv + cipherWithTag,
-            .hmac = cipherWithTag.substr(cipherWithTag.size() - spec.hashLength)
-        };
+        return {.data = iv + cipherWithTag, .hmac = cipherWithTag.substr(cipherWithTag.size() - spec.hashLength)};
     }
 
     const std::string cipher = symEncrypt(cs::SymAlg::Aes256Cbc, chunkKey, iv, plain);
@@ -258,14 +255,11 @@ std::string FileCipher::decryptChunk(const std::string& chunkKey, const IChunkEn
         // caller does not have to tell the formats apart.
         try {
             return symDecrypt(cs::SymAlg::Aes256Gcm, chunkKey, iv, chunk.data.substr(spec.ivLength));
-        } catch (...) {
-            throw FileChunkInvalidCipherChecksumException();
-        }
+        } catch (...) { throw FileChunkInvalidCipherChecksumException(); }
     }
 
     const std::string ivWithCipher = chunk.data.substr(spec.hashLength);
-    if (core::CryptoSuite::forId(spec.hashSuite).mac(chunkKey, ivWithCipher) !=
-        chunk.data.substr(0, spec.hashLength)) {
+    if (core::CryptoSuite::forId(spec.hashSuite).mac(chunkKey, ivWithCipher) != chunk.data.substr(0, spec.hashLength)) {
         throw FileChunkInvalidCipherChecksumException();
     }
     const std::string iv = ivWithCipher.substr(0, spec.ivLength);
@@ -293,8 +287,7 @@ std::size_t FileCipher::encryptedChunkSize(std::size_t plainChunkSize) const {
     const CipherSpec& spec = requireSpec(_type);
     // PKCS#7 appends a full block even when the data is already a multiple of the block size.
     // A format that does not pad has `paddingBlock == 0`, and then we must not divide.
-    const std::size_t padding =
-        spec.paddingBlock == 0 ? 0 : spec.paddingBlock - (plainChunkSize % spec.paddingBlock);
+    const std::size_t padding = spec.paddingBlock == 0 ? 0 : spec.paddingBlock - (plainChunkSize % spec.paddingBlock);
     return plainChunkSize + padding + spec.fixedOverhead;
 }
 

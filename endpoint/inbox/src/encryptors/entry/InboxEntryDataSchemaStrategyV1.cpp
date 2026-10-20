@@ -37,10 +37,7 @@ std::string InboxEntryDataSchemaStrategyV1::encrypt(
     return _encryptor.encrypt(data, userPriv, inboxPub);
 }
 
-InboxEntryDataResult InboxEntryDataSchemaStrategyV1::decrypt(
-    std::string& data,
-    core::PrivateKey& inboxPriv
-) const {
+InboxEntryDataResult InboxEntryDataSchemaStrategyV1::decrypt(std::string& data, core::PrivateKey& inboxPriv) const {
     return _encryptor.decrypt(data, inboxPriv);
 }
 

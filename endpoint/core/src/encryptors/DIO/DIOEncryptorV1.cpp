@@ -19,10 +19,7 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-std::string DIOEncryptorV1::signAndEncode(
-    const ExpandedDataIntegrityObject& dio,
-    const core::PrivateKey& authorKey
-) {
+std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio, const core::PrivateKey& authorKey) {
     if (dio.creatorPubKey != authorKey.getPublicKey().toBase58DER()) {
         throw DataIntegrityObjectMismatchEncKeyException();
     }

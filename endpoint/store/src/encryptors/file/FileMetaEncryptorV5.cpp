@@ -41,9 +41,7 @@ store::server::EncryptedFileMetaV5 FileMetaEncryptorV5::encrypt(
     result.internalMeta = internalMeta;
     fieldChecksums.insert(std::make_pair("internalMeta", core::FormatHash::sha256(internalMeta)));
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
-    core::ExpandedDataIntegrityObject expandedDio = {
-        fileMeta.dio, FileDataSchema::Version::VERSION_5, fieldChecksums
-    };
+    core::ExpandedDataIntegrityObject expandedDio = {fileMeta.dio, FileDataSchema::Version::VERSION_5, fieldChecksums};
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;
 }
@@ -120,8 +118,7 @@ core::DataIntegrityObject FileMetaEncryptorV5::getDIOAndAssertIntegrity(
         dio.creatorPubKey != encryptedFileMeta.authorPubKey ||
         dio.fieldChecksums.at("publicMeta") != core::FormatHash::sha256(encryptedFileMeta.publicMeta) ||
         dio.fieldChecksums.at("privateMeta") != core::FormatHash::sha256(encryptedFileMeta.privateMeta) ||
-        dio.fieldChecksums.at("internalMeta") !=
-            core::FormatHash::sha256(encryptedFileMeta.internalMeta.value())) {
+        dio.fieldChecksums.at("internalMeta") != core::FormatHash::sha256(encryptedFileMeta.internalMeta.value())) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;

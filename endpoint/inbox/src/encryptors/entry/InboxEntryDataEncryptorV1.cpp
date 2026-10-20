@@ -9,11 +9,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
-#include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/BinaryBufferBE.hpp>
 
 #include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataEncryptorV1.hpp"
@@ -51,10 +51,7 @@ std::string InboxEntryDataEncryptorV1::encrypt(
     return utils::Base64::from(concatBuffer.str());
 }
 
-InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(
-    std::string& serializedBase64,
-    core::PrivateKey& inboxPriv
-) {
+InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(std::string& serializedBase64, core::PrivateKey& inboxPriv) {
     InboxEntryDataResult result;
     try {
         result.statusCode = 0;

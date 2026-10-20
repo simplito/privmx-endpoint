@@ -29,8 +29,8 @@ ChunkStreamer::ChunkStreamer(
     size_t serverRequestChunkSize,
     FileCipher cipher
 )
-    : _requestApi(requestApi), _chunkSize(chunkSize), _fileSize(fileSize),
-      _chunkBufferedStream(serverRequestChunkSize), _cipher(cipher) {}
+    : _requestApi(requestApi), _chunkSize(chunkSize), _fileSize(fileSize), _chunkBufferedStream(serverRequestChunkSize),
+      _cipher(cipher) {}
 
 void ChunkStreamer::createRequest(bool randomWriteSupport) {
     _key = core::CryptoSuite::randomBytes(32);
@@ -100,10 +100,7 @@ FileSizeResult ChunkStreamer::getFileSize() const {
         return {.size = 0, .checksumSize = 0};
     }
     const uint64_t parts = (_fileSize + _chunkSize - 1) / _chunkSize;
-    return {
-        .size = _cipher.encryptedFileSize(_fileSize, _chunkSize),
-        .checksumSize = parts * _cipher.hashLength()
-    };
+    return {.size = _cipher.encryptedFileSize(_fileSize, _chunkSize), .checksumSize = parts * _cipher.hashLength()};
 }
 ChunkStreamer::PreparedChunk ChunkStreamer::prepareChunk(const std::string& data) {
     // The same format as on read — `FileCipher` is the only place that knows it. This used to hold a

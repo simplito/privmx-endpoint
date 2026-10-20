@@ -15,9 +15,9 @@ limitations under the License.
 #include <memory>
 #include <string>
 
+#include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
-#include <privmx/endpoint/core/KeyProvider.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/thread/ServerTypes.hpp>
 
@@ -42,11 +42,7 @@ public:
 
     static inbox::server::InboxMessageServer unpackInboxOrigMessage(const std::string& serialized);
 
-    std::string encrypt(
-        const InboxEntrySendModel& data,
-        core::PrivateKey& userPriv,
-        core::PublicKey& inboxPub
-    );
+    std::string encrypt(const InboxEntrySendModel& data, core::PrivateKey& userPriv, core::PublicKey& inboxPub);
     InboxEntryDataResult decrypt(std::string& data, core::PrivateKey& inboxPriv);
     InboxEntryPublicDataResult decryptPublicOnly(std::string& data);
 

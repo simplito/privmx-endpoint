@@ -7,8 +7,8 @@
 #include "privmx/endpoint/event/SubscriberImpl.hpp"
 #include "privmx/endpoint/event/encryptors/event/EventDataSchemaMapper.hpp"
 #include <atomic>
-#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/encryptors/DataEncryptorV4.hpp>
 #include <privmx/endpoint/event/EventKeyProvider.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>

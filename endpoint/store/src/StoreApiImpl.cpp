@@ -113,8 +113,8 @@ std::string StoreApiImpl::createStore(
     };
     server::StoreCreateModel storeCreateModel;
     fillContainerCreateModel(
-        storeCreateModel, contextId, users, managers, ctx,
-        _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key), groups
+        storeCreateModel, contextId, users, managers, ctx, _storeDataSchemaMapper->encrypt(storeDataToEncrypt, ctx.key),
+        groups
     );
     if (type.length() > 0) {
         storeCreateModel.type = type;

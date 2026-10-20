@@ -114,8 +114,10 @@ void requireKeyLength(const SuiteSpec& spec, const std::string& key, bool forEnc
     if (key.size() == spec.keyLength) {
         return;
     }
-    const std::string detail =
-        "required: " + std::to_string(spec.keyLength) + ", received: " + std::to_string(key.size());
+    const std::string detail = "required: " +
+        std::to_string(spec.keyLength) +
+        ", received: " +
+        std::to_string(key.size());
     if (forEncryption) {
         throw privmx::endpoint::crypto::EncryptInvalidKeyLengthException(detail);
     }

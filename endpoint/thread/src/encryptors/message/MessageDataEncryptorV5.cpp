@@ -44,9 +44,7 @@ server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(
         result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(
             messageData.internalMeta.value(), authorPrivateKey, encryptionKey
         );
-        fieldChecksums.insert(
-            std::make_pair("internalMeta", core::FormatHash::sha256(result.internalMeta.value()))
-        );
+        fieldChecksums.insert(std::make_pair("internalMeta", core::FormatHash::sha256(result.internalMeta.value())));
     }
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     core::ExpandedDataIntegrityObject expandedDio = {
@@ -135,8 +133,8 @@ core::DataIntegrityObject MessageDataEncryptorV5::getDIOAndAssertIntegrity(
         dio.fieldChecksums.at("privateMeta") != core::FormatHash::sha256(encryptedMessageData.privateMeta) ||
         dio.fieldChecksums.at("data") != core::FormatHash::sha256(encryptedMessageData.data) ||
         (encryptedMessageData.internalMeta.has_value() &&
-         dio.fieldChecksums.at("internalMeta") !=
-             core::FormatHash::sha256(encryptedMessageData.internalMeta.value()))) {
+         dio.fieldChecksums.at("internalMeta") != core::FormatHash::sha256(encryptedMessageData.internalMeta.value())
+        )) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;

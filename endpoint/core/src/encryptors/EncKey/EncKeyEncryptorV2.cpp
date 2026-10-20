@@ -15,8 +15,8 @@ limitations under the License.
 #include "privmx/endpoint/core/DynamicTypes.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
-#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Utils.hpp>
 using namespace privmx::endpoint::core;
@@ -31,9 +31,7 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(
     dynamic::EncryptionKey keyToEncrypt{
         .id = key.id, .key = utils::Base64::from(key.key), .keySecret = utils::Base64::from(key.keySecret)
     };
-    result.encryptedKey = core::Ecies::encryptObjectToBase64(
-        encryptionKey, keyToEncrypt.toJSON(), authorPrivateKey
-    );
+    result.encryptedKey = core::Ecies::encryptObjectToBase64(encryptionKey, keyToEncrypt.toJSON(), authorPrivateKey);
     std::unordered_map<std::string, std::string> fieldChecksums;
     fieldChecksums.insert(std::make_pair("encryptedKey", FormatHash::sha256(result.encryptedKey)));
     fieldChecksums.insert(std::make_pair("secretHash", key.secretHash));
@@ -55,8 +53,7 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(
         assertDataFormat(encryptedEncKey);
         ExpandedDataIntegrityObject expandedDio = _DIOEncryptor.decodeAndVerify(encryptedEncKey.dio);
         result.dio = expandedDio;
-        if (expandedDio.fieldChecksums.at("encryptedKey") !=
-            FormatHash::sha256(encryptedEncKey.encryptedKey)) {
+        if (expandedDio.fieldChecksums.at("encryptedKey") != FormatHash::sha256(encryptedEncKey.encryptedKey)) {
             throw InvalidDataIntegrityObjectChecksumException();
         }
         dynamic::EncryptionKey decryptedKey = dynamic::EncryptionKey::fromJSON(

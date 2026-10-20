@@ -17,7 +17,6 @@ limitations under the License.
 #include <algorithm>
 
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
@@ -25,6 +24,7 @@ limitations under the License.
 #include <privmx/endpoint/core/Factory.hpp>
 #include <privmx/endpoint/core/ListQueryMapper.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
+#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/utils/Logger.hpp>
 
 #include "privmx/endpoint/core/EventBuilder.hpp"

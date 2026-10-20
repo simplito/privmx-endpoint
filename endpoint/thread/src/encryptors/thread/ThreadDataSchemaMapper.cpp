@@ -21,10 +21,7 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
-ThreadDataSchemaMapper::ThreadDataSchemaMapper(
-    const core::PrivateKey& userPrivKey,
-    const core::Connection& connection
-)
+ThreadDataSchemaMapper::ThreadDataSchemaMapper(const core::PrivateKey& userPrivKey, const core::Connection& connection)
     : core::BaseModuleDataSchemaMapper(userPrivKey, connection) {
     _strategyMapper.registerStrategy(
         core::ModuleDataSchema::Version::VERSION_4, std::make_shared<ThreadDataSchemaStrategyV4>()
