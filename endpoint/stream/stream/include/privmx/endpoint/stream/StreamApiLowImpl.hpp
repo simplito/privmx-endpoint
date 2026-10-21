@@ -158,6 +158,7 @@ private:
     void processNotificationEvent(const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
+    void closeAllStreamRoomConnections();
 
     static std::vector<server::StreamSubscription> mapSubscriptions(
         const std::vector<StreamSubscription>& subscriptions

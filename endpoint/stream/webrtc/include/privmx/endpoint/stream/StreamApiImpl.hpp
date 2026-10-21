@@ -122,6 +122,8 @@ public:
     void sendData(const StreamHandle& streamHandle, core::Buffer data);
 
 private:
+    void processDisconnectedEvent();
+
     enum StreamStatus {
         Offline = 0,
         Online = 1
@@ -231,6 +233,7 @@ private:
     libwebrtc::RTCConfiguration _configuration;
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     int _connectedListenerId, _disconnectedListenerId;
+    std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<StreamApiLow> _api;
     std::shared_ptr<WebRTCImpl> _webRTC;
 };

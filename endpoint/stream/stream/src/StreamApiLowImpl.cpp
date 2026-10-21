@@ -63,17 +63,7 @@ StreamApiLowImpl::StreamApiLowImpl(
 
 StreamApiLowImpl::~StreamApiLowImpl() {
     LOG_TRACE("~StreamApiLowImpl() Start");
-    _streamRoomMap.forAll([&]([[maybe_unused]] std::string key,
-                              std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> roomValue) {
-        if (roomValue->publisherStream) {
-            roomValue->publisherStream.reset();
-        }
-        if (roomValue->subscriberStream) {
-            roomValue->subscriberStream.reset();
-        }
-        roomValue->webRtc->closeAll(roomValue->streamRoomId);
-    });
-    _streamRoomMap.clear();
+    closeAllStreamRoomConnections();
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
@@ -235,7 +225,29 @@ void StreamApiLowImpl::processConnectedEvent() {}
 
 void StreamApiLowImpl::processDisconnectedEvent() {
     LOG_TRACE("StreamApiLowImpl recived DisconnectedEvent");
+    closeAllStreamRoomConnections();
     privmx::utils::ManualManagedClass<StreamApiLowImpl>::cleanup();
+}
+
+void StreamApiLowImpl::closeAllStreamRoomConnections() {
+    // closes the PeerConnections locally only - the server is not notified, so this is safe on a lost connection
+    _streamRoomMap.forAllLockSave([&]([[maybe_unused]] const std::string& streamRoomId,
+                                      const std::shared_ptr<StreamRoomData>& room) {
+        if (room->publisherStream) {
+            if (room->publisherStream->streamHandle.has_value()) {
+                _handleToRoomId.erase(room->publisherStream->streamHandle.value());
+            }
+            room->publisherStream.reset();
+        }
+        if (room->subscriberStream) {
+            if (room->subscriberStream->streamHandle.has_value()) {
+                _handleToRoomId.erase(room->subscriberStream->streamHandle.value());
+            }
+            room->subscriberStream.reset();
+        }
+        room->webRtc->closeAll(room->streamRoomId);
+    });
+    _streamRoomMap.clear();
 }
 
 std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::createEmptyStreamRoomData(
