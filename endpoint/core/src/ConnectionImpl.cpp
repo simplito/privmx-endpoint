@@ -281,7 +281,14 @@ std::string ConnectionImpl::localStateSlot(const std::string& kind, const crypto
 void ConnectionImpl::adoptPreviousIdentity(const crypto::PrivateKey& previous) {
     const std::shared_ptr<PinStoreInterface> store = getPinStore();
     const std::string previousPub = previous.getPublicKey().toBase58DER();
-    if (!store || previousPub == _userPrivKey.getPublicKey().toBase58DER()) {
+    if (previousPub == _userPrivKey.getPublicKey().toBase58DER()) {
+        return;
+    }
+    {
+        std::unique_lock lock(_mutex);
+        _identityChanged = true;
+    }
+    if (!store) {
         return;
     }
     const std::string slot = localStateSlot(localstate::GROUP_PINS, previous.getPublicKey());
@@ -301,6 +308,11 @@ void ConnectionImpl::adoptPreviousIdentity(const crypto::PrivateKey& previous) {
 std::map<std::string, std::string> ConnectionImpl::getStagedPinBodies() {
     std::shared_lock lock(_mutex);
     return _stagedPinBodies;
+}
+
+bool ConnectionImpl::identityChanged() {
+    std::shared_lock lock(_mutex);
+    return _identityChanged;
 }
 
 std::vector<std::string> ConnectionImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

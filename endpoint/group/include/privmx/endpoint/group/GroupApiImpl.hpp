@@ -1,6 +1,7 @@
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPIIMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_GROUPAPIIMPL_HPP_
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -352,7 +353,8 @@ private:
 
     // `group` must have passed `verifyTree` at plan scope. `removing` (a removal of these users): a climb that fails on
     // the served edges (not on membership) is logged and the state returned anyway — a removal plans from public state
-    // alone; a leaf that does not open only when history stays reachable or a leaving member wrote that edge.
+    // alone; but a leaf that does not open after an identity key change this client knows of (`identityChanged`)
+    // is refused, pointing at renewLeaf, unless history stays reachable.
     // `climbKey`: climb with it instead of the session's key, and schedule no self-update off the climb.
     keytree::TreeGroupState climbForPlanning(
         const server::GroupInfo& group,
@@ -584,6 +586,9 @@ private:
     std::chrono::steady_clock::time_point _lastPinSync;
     std::string _lastBlob; // the slot as last loaded or saved here
     std::set<std::string> _adoptedIdentities;
+    // A previous identity key was handed to `adoptPreviousIdentity` (renewLeaf), pins stored or not; together with
+    // ConnectionImpl::identityChanged, what `climbForPlanning` knows of an own key change.
+    std::atomic<bool> _identityChanged{false};
     // Under `_selfUpdateMutex`: when the worker saves next, and when the last save succeeded.
     std::optional<std::chrono::steady_clock::time_point> _pinSaveDue;
     std::chrono::steady_clock::time_point _lastPinSave;

@@ -105,6 +105,11 @@ public:
      * applied), and a different call completes it first. An addition is resent only while the UserVerifier still
      * vouches for its newcomers' keys. A failed background self-update never holds anything back.
      *
+     * When the caller's own leaf does not open, the removal still goes through (a member that garbled it cannot
+     * block its own removal) and, unless this session holds the current Group key, abandons the Group's history for
+     * every member. After the caller's identity key changed and Connection::adoptPreviousIdentity was called, it is
+     * refused instead: call renewLeaf first.
+     *
      * @param groupId ID of the Group
      * @param userIds IDs of the members to remove
      * @throws GroupCommitUnresolvedException when an earlier commit of this client to the Group has no known
@@ -140,7 +145,8 @@ public:
      * Re-wraps the caller's own leaf to its current identity key after that key changed in the Context.
      *
      * Call from a session connected with the NEW key, after the Context lists it, and after
-     * Connection::adoptPreviousIdentity(previousUserPrivKey) where the app persists local state. Before the
+     * Connection::adoptPreviousIdentity(previousUserPrivKey) (also without a pin store: it is how this client learns
+     * its key changed, so a removal made before renewing is refused rather than abandoning history). Before the
      * directory change, settle every group commit of the old session (retry each call that threw
      * GroupCommitUnresolvedException until it returns or fails for good) and disconnect it.
      * `previousUserPrivKey` (WIF) is the key the leaf was last wrapped to. One commit per group (a self-update: same

@@ -161,9 +161,12 @@ protected:
     // Runs `body(groupApi, threadApi)` on a brand-new session: a session open while the tree changed keeps the
     // keys it already recovered, and would answer "still has access" long after the answer became no.
     template <typename Body>
-    void onFreshSessionWith(const std::string& privKey, Body body) {
+    void onFreshSessionWith(const std::string& privKey, Body body, const std::optional<std::string>& previousKey = {}) {
         auto freshConnection = connectWith(privKey);
         privmx::test::ScopeExit closeIt([&] { freshConnection->disconnect(); });
+        if (previousKey.has_value()) {
+            freshConnection->adoptPreviousIdentity(previousKey.value()); // 08a: right after connect
+        }
         auto groups = group::GroupApi::create(*freshConnection);
         auto threads = thread::ThreadApi::create(*freshConnection, groups);
         body(groups, threads);
@@ -889,7 +892,9 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_manager_who_changed_key_cannot_remo
     const Identity secondKey = newIdentity(firstKey.userId);
     ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
     // Round 3: also user_1, the creator, who set the node above the manager's leaf. The garbler tolerance blamed
-    // that setter and let the removal out with abandonHistory.
+    // that setter and let the removal out with abandonHistory. The session follows the documented key change
+    // (adoptPreviousIdentity right after connect), which is how it knows the leaf is its own key change; without it
+    // the removal goes through as in the base (SECURITY-NOTES 08-A2).
     for (const std::string& leaving : {user(3).userId, user(1).userId}) {
         std::string refusal;
         ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
@@ -898,7 +903,7 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_manager_who_changed_key_cannot_remo
             } catch (const core::Exception& e) {
                 refusal = e.getFull();
             }
-        }));
+        }, firstKey.privKey));
         EXPECT_NE(refusal.find("renewLeaf"), std::string::npos)
             << "removing " << leaving << " was not refused: '" << refusal << "'";
     }
@@ -909,7 +914,7 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_manager_who_changed_key_cannot_remo
     ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
         ASSERT_TRUE(groups.renewLeaf(groupId, firstKey.privKey));
         groups.removeGroupMembers(groupId, {user(3).userId});
-    }));
+    }, firstKey.privKey));
     EXPECT_EQ(groupApi->getGroup(groupId).keyVersion, 2);
     EXPECT_TRUE(canReadMessage(2, messageId)) << "the removal after renewing cut the history; " << lastReadError;
 }

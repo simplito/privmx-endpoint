@@ -282,24 +282,17 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
             asResolve.blame = keytree::GroupKeyResolver::tamperedBy(group, climb.tamperedNode);
         }
         // Garbled wraps must not let whoever garbled them block their own removal: the state is verified, and a
-        // removal wraps only fresh keys to public ones. A leaf that does not open is either our own identity key
-        // change (renewLeaf restores it, so planning on would needlessly abandon every member's history) or a
-        // garbled wrap by the setter of the node above it; the climb cannot tell them apart. So it is refused
-        // unless history stays reachable anyway, or its blamed setter is one of the members being removed and our
-        // own latest statement shows we still sign with the key we climb with. After a key change the blamed
-        // setter is just whoever last set that node (the creator, an adder, a healing sibling), so being removed
-        // says nothing about who broke the edge; without that proof it is refused, pointing at renewLeaf.
+        // removal wraps only fresh keys to public ones, so it plans without the climb whatever the blame says. The one
+        // exception uses no server data: a leaf that does not open after a key change this client was told about
+        // (adoptPreviousIdentity) is our own key change, and renewLeaf restores it; planning on would abandon every
+        // member's history for nothing, unless the grant key is cached and history stays reachable anyway. A key
+        // changed without that call gets this base behaviour (the removal abandons history).
         const auto cachedGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(group.keyVersion));
         const bool historyStillReachable =
             cachedGrantKey.has_value() && cachedGrantKey->getPublicKey().toBase58DER() == group.groupPubKey;
-        const auto ownLastKey = keytree::GroupKeyResolver::latestCommitterPubKey(group, identity.value());
-        const bool ownKeyUnchanged =
-            ownLastKey.has_value() &&
-            ownLastKey.value() == (climbKey != nullptr ? *climbKey : _userPrivKey).getPublicKey().toBase58DER();
-        const bool blamedIsLeaving = removing != nullptr && ownKeyUnchanged && asResolve.blame.has_value() &&
-            std::find(removing->begin(), removing->end(), asResolve.blame.value()) != removing->end();
-        if (removing != nullptr && climb.failure != keytree::ClimbFailure::NotAMember &&
-            (climb.failure != keytree::ClimbFailure::LeafDidNotOpen || historyStillReachable || blamedIsLeaving)) {
+        const bool ownKeyChange = climb.failure == keytree::ClimbFailure::LeafDidNotOpen && !historyStillReachable &&
+            (_identityChanged || _connection.getImpl()->identityChanged());
+        if (removing != nullptr && climb.failure != keytree::ClimbFailure::NotAMember && !ownKeyChange) {
             LOG_WARN("[climbForPlanning] planning without the climb: ", describeResolveFailure(asResolve))
             return state;
         }
@@ -3198,11 +3191,12 @@ void GroupApiImpl::assertLocalStateSaved() {
 }
 
 void GroupApiImpl::adoptPreviousIdentity(const privmx::crypto::PrivateKey& previous) {
-    if (!_pinStore) {
-        return;
-    }
     const std::string previousPub = previous.getPublicKey().toBase58DER();
     if (previousPub == _userPrivKey.getPublicKey().toBase58DER()) {
+        return;
+    }
+    _identityChanged = true;
+    if (!_pinStore) {
         return;
     }
     {
