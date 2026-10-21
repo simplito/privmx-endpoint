@@ -33,7 +33,10 @@ public:
         _dataChannel->RegisterObserver(_dataChannelObserver.get());
         LOG_TRACE("DataChannelImpl created")
     }
-    inline ~DataChannelImpl() { LOG_TRACE("DataChannelImpl destroyed") }
+    inline ~DataChannelImpl() {
+        _dataChannel->UnregisterObserver();
+        LOG_TRACE("DataChannelImpl destroyed")
+    }
     void updateOnTrackInterface(std::shared_ptr<OnTrackInterface> onTrackInterface) {
         std::unique_lock<std::mutex> lock(m);
         _onTrackInterface = onTrackInterface;
