@@ -324,6 +324,21 @@ void WebRTCImpl::AddAudioTrack(
     libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack,
     std::string id
 ) {
+    {
+        std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
+        auto it = jc->peerConnection->audioTracks.find(id);
+        if (it != jc->peerConnection->audioTracks.end()) {
+            if (it->second.sender->set_track(audioTrack)) {
+                jc->peerConnection->mediaStream->RemoveTrack(it->second.track);
+                jc->peerConnection->mediaStream->AddTrack(audioTrack);
+                it->second.track = audioTrack;
+                return;
+            }
+            jc->peerConnection->mediaStream->RemoveTrack(it->second.track);
+            jc->peerConnection->pc->RemoveTrack(it->second.sender);
+            jc->peerConnection->audioTracks.erase(it);
+        }
+    }
     jc->peerConnection->mediaStream->AddTrack(audioTrack);
     auto sender = jc->peerConnection->pc->AddTrack(
         audioTrack,
@@ -338,8 +353,8 @@ void WebRTCImpl::AddAudioTrack(
     }
     {
         std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
-        jc->peerConnection->audioTracks.insert(
-            std::make_pair(id, AudioTrackInfo{.track = audioTrack, .sender = sender, .frameCryptor = frameCryptor})
+        jc->peerConnection->audioTracks.insert_or_assign(
+            id, AudioTrackInfo{.track = audioTrack, .sender = sender, .frameCryptor = frameCryptor}
         );
     }
 }
@@ -349,6 +364,23 @@ void WebRTCImpl::AddVideoTrack(
     libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack> videoTrack,
     std::string id
 ) {
+    {
+        std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
+        auto it = jc->peerConnection->videoTracks.find(id);
+        if (it != jc->peerConnection->videoTracks.end()) {
+            // the same device added again swaps the track on its sender, so the connection negotiates no
+            // second m-line for it and the sender keeps its frame cryptor
+            if (it->second.sender->set_track(videoTrack)) {
+                jc->peerConnection->mediaStream->RemoveTrack(it->second.track);
+                jc->peerConnection->mediaStream->AddTrack(videoTrack);
+                it->second.track = videoTrack;
+                return;
+            }
+            jc->peerConnection->mediaStream->RemoveTrack(it->second.track);
+            jc->peerConnection->pc->RemoveTrack(it->second.sender);
+            jc->peerConnection->videoTracks.erase(it);
+        }
+    }
     jc->peerConnection->mediaStream->AddTrack(videoTrack);
     auto sender = jc->peerConnection->pc->AddTrack(
         videoTrack,
@@ -363,8 +395,8 @@ void WebRTCImpl::AddVideoTrack(
     }
     {
         std::unique_lock<std::shared_mutex> lock(jc->peerConnection->trackMutex);
-        jc->peerConnection->videoTracks.insert(
-            std::make_pair(id, VideoTrackInfo{.track = videoTrack, .sender = sender, .frameCryptor = frameCryptor})
+        jc->peerConnection->videoTracks.insert_or_assign(
+            id, VideoTrackInfo{.track = videoTrack, .sender = sender, .frameCryptor = frameCryptor}
         );
     }
 }
