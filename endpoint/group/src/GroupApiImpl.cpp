@@ -252,7 +252,7 @@ static TPlan planOrThrow(const std::function<TPlan()>& build) {
 keytree::TreeGroupState GroupApiImpl::climbForPlanning(
     const server::GroupInfo& group,
     const std::shared_ptr<keytree::TreeKeyCache>& cache,
-    bool tolerateBrokenClimb,
+    const std::vector<std::string>* removing,
     const privmx::crypto::PrivateKey* climbKey
 ) {
     if (!keytree::GroupKeyResolver::hasTree(group)) {
@@ -282,14 +282,17 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
             asResolve.blame = keytree::GroupKeyResolver::tamperedBy(group, climb.tamperedNode);
         }
         // Garbled wraps must not let whoever garbled them block their own removal: the state is verified, and a
-        // removal wraps only fresh keys to public ones. Except a leaf that does not open with nothing cached for
-        // this epoch: that is most likely our own key change, and planning on would abandon every member's history
-        // when a renewLeaf restores it.
+        // removal wraps only fresh keys to public ones. A leaf that does not open is either our own identity key
+        // change (renewLeaf restores it, so planning on would needlessly abandon every member's history) or a
+        // garbled wrap by the setter of the node above it; the climb cannot tell them apart. So it is refused
+        // unless history stays reachable anyway, or its blamed setter is one of the members being removed.
         const auto cachedGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(group.keyVersion));
         const bool historyStillReachable =
             cachedGrantKey.has_value() && cachedGrantKey->getPublicKey().toBase58DER() == group.groupPubKey;
-        if (tolerateBrokenClimb && climb.failure != keytree::ClimbFailure::NotAMember &&
-            (climb.failure != keytree::ClimbFailure::LeafDidNotOpen || historyStillReachable)) {
+        const bool blamedIsLeaving = removing != nullptr && asResolve.blame.has_value() &&
+            std::find(removing->begin(), removing->end(), asResolve.blame.value()) != removing->end();
+        if (removing != nullptr && climb.failure != keytree::ClimbFailure::NotAMember &&
+            (climb.failure != keytree::ClimbFailure::LeafDidNotOpen || historyStillReachable || blamedIsLeaving)) {
             LOG_WARN("[climbForPlanning] planning without the climb: ", describeResolveFailure(asResolve))
             return state;
         }
@@ -726,7 +729,7 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
     const int64_t newRosterVersion = currentGroup.rosterVersion + 1;
 
     const auto cache = _treeKeyCaches.get(groupId);
-    const keytree::TreeGroupState state = climbForPlanning(currentGroup, cache, true);
+    const keytree::TreeGroupState state = climbForPlanning(currentGroup, cache, &userIds);
     // Without the current grant key (a broken climb and nothing cached) the removal still goes through, and the
     // epochs before it become unreachable. A malicious bridge can force this by garbling edges (edges are not in
     // the tree hash) — it could destroy history anyway.
@@ -1400,7 +1403,7 @@ bool GroupApiImpl::selfUpdateWith(
         }
         planCache = std::make_shared<keytree::TreeKeyCache>();
         const ClimbWith with{planCache, previousKey};
-        state = climbForPlanning(group, planCache, false, previousKey);
+        state = climbForPlanning(group, planCache, nullptr, previousKey);
         // After the climb (the roster key resolves only through the grant key it recovered) and on the same read, so
         // a concurrent epoch change cannot make it check a different state.
         roster = _groupDataSchemaMapper->validateAndGetAttestedRoster(group, _keyProvider, resolverOver(&group, &with));

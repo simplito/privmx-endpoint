@@ -350,13 +350,14 @@ private:
     void submit(const std::string& groupId, const keytree::CommitStatement& statement, UnresolvedCommit commit);
     void forgetUnresolved(const std::string& groupId, const std::string& digest);
 
-    // `group` must have passed `verifyTree` at plan scope. `tolerateBrokenClimb`: a climb that fails on the served
-    // edges (not on membership) is logged and the state returned anyway — a removal plans from public state alone.
+    // `group` must have passed `verifyTree` at plan scope. `removing` (a removal of these users): a climb that fails on
+    // the served edges (not on membership) is logged and the state returned anyway — a removal plans from public state
+    // alone; a leaf that does not open only when history stays reachable or a leaving member wrote that edge.
     // `climbKey`: climb with it instead of the session's key, and schedule no self-update off the climb.
     keytree::TreeGroupState climbForPlanning(
         const server::GroupInfo& group,
         const std::shared_ptr<keytree::TreeKeyCache>& cache,
-        bool tolerateBrokenClimb = false,
+        const std::vector<std::string>* removing = nullptr,
         const privmx::crypto::PrivateKey* climbKey = nullptr
     );
 

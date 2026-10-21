@@ -2032,6 +2032,34 @@ TEST_F(GroupApiLyingBridge, SECURITY_AfterRenewalThePreviousKeyOpensNoCurrentEdg
     EXPECT_EQ(keys.climbToGrantKey(served, "bob", previous, false).failure, ClimbFailure::LeafDidNotOpen);
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_AMemberWhoGarblesAManagersLeafEdgeCannotBlockItsOwnRemoval) {
+    // Final audit 05a round 2: a garbled leaf edge reads as LeafDidNotOpen, like a changed identity key. Refusing it
+    // with nothing cached let its writer (here bob's self-update of the root) stay a member for good: the manager's
+    // key never changed, so renewLeaf, rotate and its own self-update all fail on the same edge.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    selfUpdateBy("bob");
+    std::size_t garbled = 0;
+    for (TreeEdge& edge : bridge.tree.state.edges) {
+        if (edge.childKind == EdgeChildKind::User && edge.childUserId == "alice") {
+            const PrivateKey somebodyElse = PrivateKey::generateRandom();
+            edge.blob = TreeKeys::wrapKey(somebodyElse, somebodyElse.getPublicKey(), bridge.users.at("bob"));
+            ++garbled;
+        }
+    }
+    ASSERT_EQ(garbled, 1u);
+    clients.erase("alice"); // a fresh session: no grant key cached
+
+    // Removing somebody else stays refused: the edge may as well be alice's own key change.
+    EXPECT_THROW(client("alice").removeGroupMembers(groupId, {"carol"}), core::EncryptionKeyValidationException);
+    EXPECT_EQ(bridge.tree.state.epoch, 1u);
+    // Removing its writer goes through.
+    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"bob"}));
+    EXPECT_EQ(bridge.tree.state.epoch, 2u);
+    const auto users = bridge.tree.users();
+    EXPECT_EQ(std::find(users.begin(), users.end(), "bob"), users.end()) << "bob is still a member";
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_ARenewalWithAKeyThatDoesNotOpenTheLeafCommitsNothingAndCachesNothing) {
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
