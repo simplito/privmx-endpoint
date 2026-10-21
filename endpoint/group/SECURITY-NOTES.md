@@ -1,11 +1,128 @@
 # Trellis: wektory ataku i ich status
 
-Notatki robocze do grup opartych na drzewie kluczy (audyty 3, 4 i 5, przeglądy poprawek, poprawki 06, 08a, 01, 07A i 05a; stan 2026-10-16). Model zagrożeń: złośliwy
-Bridge (dowolne dane, wstrzymywanie, przestawianie, zmowa z członkami), uczciwi klienci z aplikacyjnym
+Notatki robocze do grup opartych na drzewie kluczy (audyty 3, 4 i 5, przeglądy poprawek, zadania Trellis m4, m3, m1, m2,
+06, 03, 08a, 01, 07A i 05a, audyt końcowy; stan szczytu stosu `trellis/05a-container-key-fixes`, 2026-10-21). Model
+zagrożeń: złośliwy Bridge (dowolne dane, wstrzymywanie, przestawianie, zmowa z członkami), uczciwi klienci z aplikacyjnym
 UserVerifierem, złośliwi i usunięci członkowie. Specyfikacją jest whitepaper; tu tylko stan kodu.
 
-Statusy: **naprawione**, **częściowo**, **granica** (świadomie poza zakresem, z uzasadnieniem), **odrzucone**
+Statusy: **naprawione**, **częściowo**, **granica** (świadomie poza zakresem, z uzasadnieniem; lista w „Granice, które
+zostają”), **odłożone** (projekt gotowy, wdrożenie odłożone decyzją użytkownika; lista w „Co dalej”), **odrzucone**
 (zgłoszenie błędne albo poprawka gorsza od stanu obecnego), **otwarte** (info, bez poprawki).
+
+Bramka końcowa szczytu (2026-10-21, Endpoint `315acd70`, Bridge `6549385`): unit 24/24 binariów, 633 testy, 0 błędów;
+Bridge build, 1606 testów, lint czysty; e2e pełny zestaw 363/363 (baza 325/325), bez ponowień, w tym wszystkie 35 testów
+`SECURITY_*` e2e; perf bez regresji, rozmiary zmienione tylko zamierzenie (03, 06). Audyt końcowy: trzy rundy, poprawki
+08-A2..08-A4 i F-05e..F-05g. Dwie uwagi koordynatora po rundzie 3 nie są na szczycie (patrz „Co dalej”).
+
+## Stan zbiorczy
+
+Stos (każda gałąź na poprzedniej, w obu repozytoriach): `fix/group-key-tree-audit` (baza: audyty 3-5) → m4 → m3 → m1 →
+m2 → 06 → 03 → 08a → 01 → 07a → 05a. Kolumna „gałąź” wskazuje, gdzie poprawka weszła (`trellis/<id>-…`); „baza” to stan
+sprzed stosu. Kolumna „testy” podaje testy główne; pełna lista jest w wierszu szczegółów. „-” = brak nazwanego testu.
+
+| id | status | gałąź | testy |
+|---|---|---|---|
+| T3-01 | naprawione | baza | `KeyProviderGroupKeysTest.v1_*`, e2e `SECURITY_an_unsigned_v1_key_entry_*` |
+| T3-02 | naprawione | baza | `GroupEnvelopeKeyFilterTest.SECURITY_AHeadKeyFromAnEarlierEpochIsRefused`, `GroupApiLyingBridge.SECURITY_EveryKeyReadRefusesAStateRolledBackBelowThePin` |
+| T3-03 | naprawione | baza (03: skład pinu) | `TreeVerification.SECURITY_AnOwnCommitIsPinnedOnlyWithTheRosterItSigned` |
+| T3-04 | naprawione dla seq=1; seq ≥ 2 granica (TOFU, T4-19) | baza | `SECURITY_AGenesisStatementIsRefusedUnderAnotherGroupsId` |
+| T3-05 | częściowo; reszta odłożona (05) | baza | - |
+| T3-06 | naprawione (TOFU raz na urządzenie) | baza, 01 | `SECURITY_AListedGroupIsPinnedOnFirstUse`, `SECURITY_AListingsGrantKeyIsTakenOnlyAtThePinnedState` |
+| T3-07 | naprawione | baza (Bridge) | - |
+| T3-08 | naprawione | baza, 01 | `GroupApiLyingBridge.SECURITY_ADeletionEventLeavesThePinsInPlace`, `SECURITY_ADeletionEventLeavesThePersistedPinsInPlace` |
+| T3-09 | naprawione (z T4-02) | baza | testy T4-02 |
+| T3-10 | naprawione | baza, 01 | e2e `SECURITY_a_listed_group_key_is_handed_out_only_as_a_vouched_statement_names_it`, `GroupApiLyingBridge.SECURITY_AListingKeyIsHandedOutAcrossSessionsOnlyAtThePersistedState` |
+| T3-11 | naprawione | baza | e2e `SECURITY_a_key_the_application_does_not_vouch_for_gets_no_seat` |
+| T3-12 | naprawione (podszycie); granica (wiązanie z epoką) | baza | `GroupApiLyingBridge.SECURITY_AnEventIsTakenOnlyFromTheUserWhoseKeySignedIt` |
+| T3-13 | naprawione | baza | - (ścieżka usunięta) |
+| T3-14 | naprawione | baza | `SECURITY_RefusesARecordOffThePathView` |
+| T3-15 | naprawione | baza (Bridge) | Bridge „SECURITY: a version mismatch hands the group's key state only to somebody who may read the group” |
+| T3-16 | naprawione | baza, 08a | `ResolverCurrentEpoch.SECURITY_BlamesTheSetterOfTheNodeWhoseEdgeDoesNotOpen`, `SECURITY_BlamesTheSetterOfAGarbledInnerEdge` |
+| T3-17 | naprawione | baza | - (test w „Co dalej”) |
+| T3-18 | naprawione | baza (Bridge) | - |
+| T3-19 | naprawione | baza | - (test w „Co dalej”) |
+| T3-20 | naprawione | baza | - (test w „Co dalej”) |
+| T3-21 | naprawione (T4-14) | baza, m3 | testy T4-14 |
+| T3-22 | naprawione | baza | `SECURITY_AnotherStatementAtThePinnedSeqIsAFork` |
+| T3-23 | naprawione (T4-02) | baza | testy T4-02 |
+| T3-24 | naprawione | baza, 01 | `TreeVerifierCaches.SECURITY_ABoundedCacheKeepsAtMostTwoGenerations`, `PinBlob.SECURITY_NoRecordIsDroppedByTheBudget` |
+| T3-25 | otwarte (prymityw, low-S) | - | - |
+| T3-26 / I1 | naprawione | baza | `ResolverDetection.SECURITY_ATreeOfAnotherVersionIsRefusedNotClimbed`, Bridge „no commit is accepted on a version 2 group” |
+| T3-27 | naprawione | m1 (+m2, 06) | e2e `GroupKeyTreeTest.a_one_member_group_rotates_and_still_reads_its_history`, `SECURITY_a_plain_member_cannot_rotate_the_group_key`; `GroupApiLyingBridge.ARotationOvertakenByASelfUpdateIsPlannedAgain` |
+| T3-28 | otwarte (prymityw, statyczne ECDH) | - | - |
+| T3-29 | naprawione | m4 | `GroupApiLyingBridge.SECURITY_ConcurrentChunksOnOneFileHandleSealOneWholeFile`, `SECURITY_ConcurrentFinishesCloseAFileHandleOnce` |
+| T3-30 | otwarte (info); granica podłogi zawężona | 06 | `GroupApiLyingBridge.SECURITY_ARepairIsNotSentBelowAFloorThisSessionHasSeen`, `LadderKeysRepair.TheRememberedFloorNeverGoesDown` |
+| N1 (grupy) | naprawione | baza | `GroupRosterTag.SECURITY_AHeadKeyWrappedBySomebodyOffTheRosterIsRejected` |
+| N1 (kontenery) | granica; zamknięcie odłożone (05) | - | - |
+| N2 | granica (R10); zamknięcie odłożone (05) | - | - |
+| N3 | naprawione (T4-02) | baza | testy T4-02 |
+| N4 / L1 | naprawione | baza | - (test w „Co dalej”) |
+| N5 / L4 | naprawione | baza (Bridge) | Bridge „a refused selfUpdate, addition or removal is charged…”, „SECURITY: a rotation whose statement is wrong…” |
+| H1, M1, L2 | odrzucone | - | - |
+| H2 | naprawione | baza | - |
+| M2 | naprawione | baza | - |
+| M3 | naprawione | baza | `EpochOpenersFetchOnlyTheStatementsSinceTheLastAnswer` |
+| M4 | naprawione | baza | `AListingIsPutToTheUserVerifierInOneCall` |
+| L3 | naprawione | baza (05a usunął szablon) | - |
+| I2 | granica | - | - |
+| T4-01 | naprawione | baza | `SECURITY_AGroupIsVerifiedOnlyInTheContextItsIdFollowsFrom`, `GroupRosterTag.SECURITY_AGroupServedInAContextItsIdDoesNotFollowFromIsRefused` |
+| T4-02, T4-17, T4-18 | naprawione | baza, m2 | `SECURITY_AChainLinkMustExtendTheStatementBeforeIt`, `SECURITY_NoSecondStatementIsSignedAtASeqRefusedAsALostRace`, `SECURITY_AListedStatementAtThePinnedSeqOtherThanThePinnedOneIsAFork` |
+| T4-03 | naprawione | baza, 03 | `GroupRosterTag.SECURITY_AMetadataPlaneWrittenWithoutTheUpdateRoleIsRefused`, `GroupApiLyingBridge.SECURITY_ARemovalDoesNotCarryAPlaneWrittenWithoutTheRole`, e2e `a_removal_carries_up_the_metadata_the_removed_member_wrote` |
+| T4-04 | daty naprawione (N-1: m4); N-3 częściowo, granica, reszta odłożona (04) | baza, m4 | Bridge „SECURITY: removeMember accepts an honest removal after a statement dated ahead of the bridge's clock (N-1)”, `GroupApiLyingBridge.SECURITY_ACommitAfterAStatementDatedAheadOfTheClockIsDatedAsIt`, `SECURITY_AKeyRevokedNowCannotMoveThePin` |
+| T4-05 | naprawione | baza (Bridge) | - |
+| T4-06, T4-11, T4-12 | naprawione | baza (Bridge), m2 | `GroupApiLyingBridge.SECURITY_ARefusedSelfUpdateNeverHoldsBackARemoval` |
+| T4-07 | naprawione; granica (epoka koperty) | baza | `GroupEnvelopeKeyFilter.SECURITY_KeepsOnlyTheGroupsOwnRoutes`, `GroupCustomChannelTest.SECURITY_an_event_opens_only_on_the_channel_it_was_sealed_for` |
+| T4-08 | naprawione | baza | `LadderKeysDescend.SECURITY_AnHonestRungRelabelledByTheBridgeBlamesNobody` |
+| T4-09 | naprawione | baza | `SECURITY_ACallersGrantKeyBehindThePinIsNotTaken`, `GroupApiLyingBridge.SECURITY_ACallersGrantKeyOtherThanThePinnedOneIsNotWrappedTo` |
+| T4-10 | naprawione; granica (TOFU polityki) | 03 | `TreeVerification.SECURITY_ARemovalByAMemberThePolicyDoesNotAllowIsRefused`, `TreeCommitsPolicy.SECURITY_ARuleOutsideTheGroupGrammarIsRefused`, `GroupApiLyingBridge.SECURITY_TheReadAfterCompletingAnUnresolvedCommitIsVerifiedBeforeSigning`, e2e `GroupKeyTreeTest.SECURITY_a_policy_change_is_a_signed_commit_every_member_follows` |
+| T4-13 | naprawione | baza (Bridge) | - |
+| T4-14 | naprawione | baza, m3, 01 | `GroupApiLyingBridge.SECURITY_ADeletedGroupsKeysAreNotServedToAGroupRecreatedUnderItsId`, `SECURITY_ARecreatedGroupIsAForkInTheNextSession`, Bridge „deleting a context's groups prunes its tombstones…” |
+| T4-15 | naprawione | baza | `SECURITY_AChainIsCheckedPageByPageBeforeTheNextPageIsFetched` |
+| T4-16 | naprawione | 01 | sekcja „Trwałe piny (01)” |
+| T4-19 | granica (TOFU pierwszego kontaktu urządzenia) | 01 zawęża | - |
+| T4-20 | naprawione | baza | Bridge „a lost race hands back only where the epoch is now” |
+| T4-21 | granica | - | - |
+| T4-22 | naprawione | baza | - |
+| T4-23 | naprawione | baza (Bridge) | Bridge „rejects an edge carrying a field its kind does not have” |
+| T4-24 | naprawione | m3 | `SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused`, e2e `GroupKeyTreeTest.SECURITY_a_new_epoch_under_a_key_from_below_the_era_floor_is_refused`, `SECURITY_a_group_key_re_encoded_uncompressed_is_refused` |
+| T4-25 | naprawione | baza | - (test w „Co dalej”) |
+| I-1 | naprawione | baza | `SECURITY_EpochOpenersReplayTheRosterFromGenesis` |
+| I-6 | naprawione | baza | - |
+| A5-F1 | naprawione | baza | `SECURITY_AKeyRevokedNowCannotMoveThePin` |
+| A5-F2 | granica; zamknięcie odłożone (04) | - | - |
+| A5-F3 | naprawione (fork); granica (wrabianie) | m2, 01 | `ReleaseGate.SECURITY_*`, `GroupApiLyingBridge.SECURITY_ADroppedAnswerIsNotSignedAgain`, `SECURITY_AReleasedStatementSurvivesARestartBeforeThePinSave`, e2e `GroupKeyTreeIntegrityTest.SECURITY_an_honestly_refused_commit_holds_back_the_next_one_only_until_the_head_moves` |
+| A5-F4 | naprawione | baza | `SECURITY_AStatementDatedAheadOfTheClockIsRefused` |
+| L-1 | naprawione | 06 | `GroupApiLyingBridge.SECURITY_AMemberHoldingThePreviousKeyRepairsABrokenUnitRung`, `SECURITY_ARotationRefusesToCommitARungThatDoesNotOpenToTheChain`, e2e `GroupKeyTreeTest.repairRung_*`, `SECURITY_repairRung_*` |
+| L-2 | naprawione | 06 | e2e `SECURITY_a_rung_naming_a_recipientKind_is_refused`, Bridge migracja 075 |
+| L-3 | naprawione | 06 | - (kod usunięty) |
+| 08-A | naprawione (etap A) | 08a | e2e `GroupKeyTreeIntegrityTest.a_member_who_changed_key_renews_their_leaf_with_the_previous_key`, `a_single_member_group_survives_its_members_key_change`; `GroupApiLyingBridge.SECURITY_ARenewalIsSignedWithTheNewKeyAndClimbsWithThePreviousOne` |
+| 08-A2 | naprawione (audyt końcowy r1, 077a6706; zawężone w 08-A3, 08-A4) | 05a | e2e `GroupKeyTreeIntegrityTest.SECURITY_a_manager_who_changed_key_cannot_remove_before_renewing` |
+| 08-A3 | naprawione (audyt końcowy r2, 3065b77c) | 05a | `GroupApiLyingBridge.SECURITY_AMemberWhoGarblesAManagersLeafEdgeCannotBlockItsOwnRemoval` |
+| 08-A4 | naprawione (audyt końcowy r3, cc0ef885); reguła do zastąpienia, otwarte (uwaga koordynatora 10:12, „Co dalej”) | 05a | `GroupApiLyingBridge.SECURITY_AManagerWhoChangedKeyCannotRemoveTheSiblingWhoHealedItsLeafEdge`, `SECURITY_AManagerWhoChangedKeyCannotRemoveTheCreatorBeforeRenewing`, e2e `SECURITY_a_manager_who_changed_key_cannot_remove_before_renewing` (usuwa też twórcę) |
+| 01-A | naprawione dla grup widzianych przez urządzenie; pierwszy kontakt granica | 01 | `TreeVerification.SECURITY_AnImportedPinRefusesAStateRolledBackBelowIt`, `GroupApiLyingBridge.SECURITY_APinSavedByOneSessionRefusesARollbackInTheNext`, e2e `pins_saved_by_one_session_carry_the_next_across_a_removal` |
+| 01-B | naprawione | 01 | `PinBlob.DecideCoversEveryRow`, `GroupApiLyingBridge.SECURITY_ASiblingsFirstContactIsNeverLinkedOverAVerifiedRemovalByHashAlone`, e2e `two_live_sessions_of_one_user_converge_on_one_store` |
+| 01-C | naprawione | 01 | `GroupApiLyingBridge.SECURITY_AnEnvelopeNamingAGroupWithoutTheCallersSeatPinsNothing` |
+| 01-D | naprawione | 01 | `LocalSeal.SECURITY_ABlobMovedToAnotherSlotIsIgnored`, `GroupApiLyingBridge.SECURITY_PinsOfAnotherBridgeAreNotLoaded` |
+| 01-E | naprawione (fail closed) | 01 | `GroupApiLyingBridge.SECURITY_ABrokenStoreStopsKeyHandOutAfterThreeFailedSaves` |
+| 01-F | naprawione | 01 | `GroupApiLyingBridge.SECURITY_AReleasedStatementSurvivesARestartBeforeThePinSave`, `ReleaseGate.APersistedGateHoldsWhatTheReleasingOneHeld` |
+| 01-G | naprawione | 01 | `GroupApiLyingBridge.SECURITY_AdoptionNeverLowersAPinThatMovedPastItsFirstContact`, `SECURITY_AdoptionNeverLowersAFirstContactToTheOlderRecord` |
+| 07A-1 | naprawione | 07a | e2e `{Thread,Store,Kvdb,Inbox,StreamLow}Test.SECURITY_a_key_the_verifier_refuses_is_never_wrapped_to`, `ContextEventApi.SECURITY_AnEventKeyIsNeverWrappedToAKeyTheVerifierRefuses` |
+| 07A-2 | naprawione | 07a | `ContextBinding.SECURITY_AListedContainerFromAnotherContextIsRefused` |
+| 07A-3 | naprawione | 07a | `ContextEventBinding.SECURITY_AnEventIsVerifiedUnderTheAuthorTheApplicationIsTold`, `ContextEventApi.SECURITY_AnEventFromAnotherContextThanSubscribedIsRefused` |
+| F-05a | naprawione | 05a | e2e `ThreadUsingGroupsTest.SECURITY_a_metadata_update_after_a_rekey_keeps_the_new_key` |
+| F-05b | naprawione | 05a | e2e `StoreUsingGroupsTest.SECURITY_file_meta_updated_after_a_rekey_goes_under_the_new_key` |
+| F-05c | naprawione | 05a | e2e `StreamRoomUsingGroupsTest.SECURITY_the_local_media_key_follows_a_rekey` |
+| F-05d | naprawione | 05a | e2e `InboxUsingGroupsTest.SECURITY_entries_sent_after_a_rekey_are_sealed_to_the_new_key`, `SECURITY_a_rekey_by_a_plain_user_moves_the_entries_key_and_rewrites_no_inbox_data`, Bridge `ContainerRotateKeys.test.ts` |
+| F-05e | naprawione (audyt końcowy r1, Bridge de57430, Endpoint 7bdf3f02) | 05a | e2e `StreamRoomUsingGroupsTest.SECURITY_a_live_publication_rekeys_after_a_removal_from_a_granted_group`, Bridge „SECURITY: a removal tells the stream rooms granted to the group, so a live publication re-keys” |
+| F-05f | naprawione (audyt końcowy r2, Bridge 6549385, test Endpoint b2979737) | 05a | e2e `StreamRoomUsingGroupsTest.SECURITY_a_live_publication_rekeys_after_a_rotation_of_a_granted_group`, Bridge „SECURITY: a rotation tells the stream rooms granted to the group, so a live publication re-keys” |
+| F-05g | naprawione (audyt końcowy r3, 315acd70); kolejność sprzątania otwarta (uwaga koordynatora, „Co dalej”) | 05a | e2e `StreamRoomUsingGroupsTest.SECURITY_a_live_publication_stops_when_its_rekey_is_refused` |
+| 04 | odłożone (N-3 reszta, A5-F2, antydatowanie wycofanym lub skradzionym kluczem) | - | - |
+| 05 (pełny łańcuch) | odłożone (N1 kontenery, N2, R10, reszta T3-05, kontekst odczytu po id) | - | - |
+| 07B | odłożone (Z6: domyślny weryfikator bez ciągłości klucza) | - | - |
+| 09 | odłożone (wydajność: pierwsze zejście O(commity)) | - | - |
+| 11 | odłożone (R7 wina poszlakowa, R8) | - | - |
+
+Szczegóły poniżej, według audytów i zadań. Nazwy gałęzi w szczegółach podają numer zadania w nawiasie.
 
 ## Audyt 3
 
@@ -155,22 +272,100 @@ Wady przy uczciwym Bridge: usunięty członek czytał NOWE dane, bo pisarz brał
 | F-05g | Gdy automatyczne przekluczenie trwającej publikacji (F-05e/F-05f) nie wyszło, błąd był tylko logowany: publikacja dalej szyfrowała media i ramki kanału danych kluczem pokoju sprzed usunięcia, który usunięty członek ma, a Bridge nie wyrzuca go z Janusa. Zwykła przyczyna: polityka pokoju `rotateKeys: "manager"` i publikujący zwykły użytkownik (ACCESS_DENIED → StaleKeyRekeyRequiredException); też przejściowy błąd sieci lub Bridge | naprawione (audyt 05a final-3; niepełna poprawka 7bdf3f02 na `trellis/05a-container-key-fixes`) | Na każdy błąd tej gałęzi klient zatrzymuje publikację (`stopPublication`): zamyka wychodzące połączenie WebRTC (media i kanał danych), usuwa uchwyt i wyrejestrowuje strumień w Bridge (best effort; Bridge wysyła `streamUnpublished`, więc aplikacja się dowiaduje). Ponowne `publishStream` przeklucza albo rzuca, jak każda publikacja. Nie dodano: przekluczania przez nie publikującego uczestnika z prawem rotacji. Test e2e: `StreamRoomUsingGroupsTest.SECURITY_a_live_publication_stops_when_its_rekey_is_refused` |
 | 08-A2 | Usunięcie przez managera, którego klucz tożsamości się zmienił (przed `renewLeaf`), tolerowało `LeafDidNotOpen` i bez klucza grantu w pamięci szło z `abandonHistory`: każdy członek tracił całą historię grupy i jej kontenerów | naprawione (audyt 05a final-1; tolerancja sprzed stosu, przyczyna wykrywalna od 08a) | `climbForPlanning`: w trybie tolerancyjnym `LeafDidNotOpen` jest odrzucane z komunikatem o `renewLeaf`, chyba że pamięć ma klucz grantu bieżącej epoki (wtedy historia zostaje). Inne zepsute krawędzie nadal tolerowane (granica I2); zawężone w 08-A3. Test e2e: `GroupKeyTreeIntegrityTest.SECURITY_a_manager_who_changed_key_cannot_remove_before_renewing` |
 | 08-A3 | Poprawka 08-A2 pozwalała członkowi zablokować własne usunięcie: zaszyfrowana do śmieci krawędź nad liściem managera (np. przez self-update rodzeństwa) też daje `LeafDidNotOpen`, więc manager bez klucza grantu w pamięci (każda nowa sesja) nie mógł go usunąć, a `renewLeaf`, rotacja i własny self-update padały na tej samej krawędzi. Członek zostawał w grupie i czytał nowe dane przy uczciwym Bridge | naprawione (audyt 05a final-2; wprowadzone przez 077a6706 na `trellis/05a-container-key-fixes`) | `climbForPlanning(removing)`: w usunięciu `LeafDidNotOpen` jest tolerowane także, gdy obwiniony autor krawędzi (`tamperedBy`, setter węzła nad liściem, z podpisanego statementu) jest wśród usuwanych; wtedy usunięcie idzie (z `abandonHistory`, gdy nic nie ma w pamięci). Usunięcie kogoś innego nadal odmawia (granica: zepsute krawędzie kosztują dostępność; najpierw usuń autora). Test: `GroupApiLyingBridge.SECURITY_AMemberWhoGarblesAManagersLeafEdgeCannotBlockItsOwnRemoval` |
-| 08-A4 | Tolerancja 08-A3 przywracała 08-A2: po zmianie klucza tożsamości obwiniony setter węzła nad liściem managera to uczciwy członek, który ostatnio ustawił ten węzeł (twórca, dodający, leczący się sąsiad; w grupie do 32 miejsc kluczowany jest tylko korzeń, więc po prostu autor ostatniego commita). Manager, który przed `renewLeaf` usuwał właśnie jego, przechodził z `abandonHistory` i każdy członek tracił całą historię grupy i jej kontenerów, bez żadnego złośliwego aktora | naprawione (audyt 05a final-3; wprowadzone przez 3065b77c na `trellis/05a-container-key-fixes`) | `climbForPlanning(removing)`: tolerancja „obwiniony jest wśród usuwanych” obowiązuje tylko, gdy najnowszy podany z grupą statement usuwającego (`GroupKeyResolver::latestCommitterPubKey`) jest podpisany kluczem, którym się wspina; inaczej odmowa z komunikatem o `renewLeaf`. Koszt (granica: dostępność wobec złośliwego członka psującego krawędzie): gdy żaden statement usuwającego nie jest już podawany (w małych grupach każdy commit nadpisuje korzeń), manager z zepsutą krawędzią nie usunie jej autora sam; robi to inny manager. Testy: `GroupApiLyingBridge.SECURITY_AManagerWhoChangedKeyCannotRemoveTheSiblingWhoHealedItsLeafEdge`, `...CannotRemoveTheCreatorBeforeRenewing`, `...GarblesAManagersLeafEdgeCannotBlockItsOwnRemoval` (64 miejsca, by statement twórcy został podany); e2e `GroupKeyTreeIntegrityTest.SECURITY_a_manager_who_changed_key_cannot_remove_before_renewing` usuwa też twórcę |
+| 08-A4 | Tolerancja 08-A3 przywracała 08-A2: po zmianie klucza tożsamości obwiniony setter węzła nad liściem managera to uczciwy członek, który ostatnio ustawił ten węzeł (twórca, dodający, leczący się sąsiad; w grupie do 32 miejsc kluczowany jest tylko korzeń, więc po prostu autor ostatniego commita). Manager, który przed `renewLeaf` usuwał właśnie jego, przechodził z `abandonHistory` i każdy członek tracił całą historię grupy i jej kontenerów, bez żadnego złośliwego aktora | naprawione (audyt 05a final-3; wprowadzone przez 3065b77c na `trellis/05a-container-key-fixes`) | `climbForPlanning(removing)`: tolerancja „obwiniony jest wśród usuwanych” obowiązuje tylko, gdy najnowszy podany z grupą statement usuwającego (`GroupKeyResolver::latestCommitterPubKey`) jest podpisany kluczem, którym się wspina; inaczej odmowa z komunikatem o `renewLeaf`. Koszt (granica: dostępność wobec złośliwego członka psującego krawędzie): gdy żaden statement usuwającego nie jest już podawany (w małych grupach każdy commit nadpisuje korzeń), manager z zepsutą krawędzią nie usunie jej autora sam; robi to inny manager. Testy: `GroupApiLyingBridge.SECURITY_AManagerWhoChangedKeyCannotRemoveTheSiblingWhoHealedItsLeafEdge`, `...CannotRemoveTheCreatorBeforeRenewing`, `...GarblesAManagersLeafEdgeCannotBlockItsOwnRemoval` (64 miejsca, by statement twórcy został podany); e2e `GroupKeyTreeIntegrityTest.SECURITY_a_manager_who_changed_key_cannot_remove_before_renewing` usuwa też twórcę. Otwarte (przegląd commitu): `latestCommitterPubKey` czyta też statementy podane przez serwer, których klient nie weryfikował, a manager, który nigdy nie commitował, nie ma żadnego, więc członek psujący krawędź nad jego liściem blokuje własne usunięcie także przy uczciwym Bridge; reguła bez danych serwera w „Co dalej” |
 
 ## Granice, które zostają
 
-- **Pierwszy kontakt (TOFU):** urządzenie (z `PinStore`; bez niego każda instancja `GroupApi`) bez pinu dla grupy przyjmuje najnowszy poprawnie podpisany stan; tak samo po usunięciu albo utracie slotu i po zmianie klucza bez `adoptPreviousIdentity`. Bridge, który nigdy nie pokaże klientowi usunięcia, jest nie do wykrycia bez kanału pozapasmowego.
-- **Domyślny UserVerifier (Z6, 07B odłożone):** przyjmuje każdą parę (użytkownik, klucz). 07A sprawia, że każdy klucz, do którego się szyfruje, przechodzi przez weryfikator, ale aplikacja bez własnego weryfikatora nie jest chroniona przed podstawieniem klucza przez Bridge. Odczyty kontenera po id pytają w kontekście podanym przez serwer (wiązanie z podpisanym kontekstem kontenera należy do pełnego łańcucha 05).
-- **Kontenery (N1, N2, R10):** lista grantów, lista managerów i `keyId` kontenera nie są podpisane. Każdy użytkownik kontekstu w zmowie z Bridge może podsunąć poprawnie podpisany wpis V2 z własnym kluczem. Przy uczciwym Bridge pisarz bierze bieżący klucz kontenera (F-05a..d).
-- **Dostępność zależy od Bridge:** wstrzymanie, psucie krawędzi, wymuszenie `abandonHistory`.
-- **Store random-write:** zapis w miejscu idzie pod kluczem pliku, więc usunięty członek znający klucz pliku czyta takie zapisy. Ograniczenie projektu.
-- **Polityka grupy (T4-10):** polityka kontekstu tylko odmawia; pierwszy kontakt TOFU obejmuje politykę; poza 4 regułami commitów pola polityki grupy nie są podpisane.
-- **Zmiana klucza tożsamości (N-3, A5-F1, A5-F2):** „teraz” sprawdzane tylko dla najnowszego oświadczenia, które przesuwa istniejący pin. Odnowienie liścia (08-A) przywraca dostęp, ale do 04 nie odbiera starego klucza członkom, którzy go wciąż uznają.
+Przyjęte świadomie. Żadna nie jest luką do naprawy w tym stosie; whitepaper uzasadnia każdą (§11 „Ryzyka szczątkowe”, §15).
+
+- **Brak tajności wstecz:** nowi członkowie (także dodani ponownie) czytają historię ery; przejęty bieżący klucz grupy
+  ujawnia wcześniejsze epoki. Wymaganie W1.
+- **Skład widoczny dla serwera:** Bridge egzekwuje uprawnienia na jawnym składzie. Wymaganie W3.
+- **Dostępność wobec złośliwego członka lub Bridge:** wstrzymywanie, opóźnianie, psucie krawędzi, wymuszenie
+  `abandonHistory` (I2), DoS w granicach budżetów, wstrzymywanie i usuwanie napraw szczebli. Wina przy nieczytelnej
+  krawędzi jest poszlaką (R7, krawędzie niepodpisane). Członek w zmowie z Bridge może zapisać klucze węzłów poza zbiorami
+  reguł commitu (R8); poufności to nie narusza, bo zostaje ich autorem. Niepodpisana podłoga ery (T3-30): klient pamięta
+  najwyższą widzianą w sesji.
+- **Pierwszy kontakt (TOFU):** urządzenie bez pinu dla grupy (z `PinStore`; bez niego każda instancja `GroupApi`)
+  przyjmuje najnowszy poprawnie podpisany stan, razem ze składem i polityką; tak samo po utracie slotu i po zmianie
+  klucza bez `adoptPreviousIdentity`.
+- **Spójność rozwidleń (D1) i wstrzymane usunięcie:** Bridge, który nigdy nie pokaże urządzeniu usunięcia, jest nie do
+  wykrycia bez kanału pozapasmowego; uczciwy commit na takiej gałęzi może owinąć klucz usuniętemu.
+- **Insiderzy:** członek może przekazać dalej wszystko, co zna (klucz grupy, klucze kontenerów).
+- **Utrata lub kradzież klucza tożsamości:** leczy usunięcie i ponowne dodanie. Do tego czasu posiadacz starego klucza w
+  zmowie z Bridge może antydatować oświadczenie wycofanym albo skradzionym kluczem (N-3, A5-F2); „teraz” sprawdzane jest
+  tylko dla najnowszego oświadczenia, które przesuwa istniejący pin. `renewLeaf` (08-A) przywraca dostęp, ale nie
+  odbiera go staremu kluczowi.
+- **Z6, weryfikator aplikacji:** aplikacja dostarcza poprawny UserVerifier. Domyślny przyjmuje każdą parę, więc nie
+  chroni przed podstawieniem klucza przez Bridge; 07A sprawia tylko, że każdy klucz, do którego się szyfruje, przez niego
+  przechodzi.
+- **Kontenery do czasu ich przebudowy (N1 kontenery, N2, R10 przy złośliwym Bridge):** lista grantów, listy managerów i
+  użytkowników oraz `keyId` kontenera są słowem serwera; odczyt po id pyta weryfikator w kontekście podanym przez
+  serwer. Usunięty członek czytający NOWE dane przy uczciwym Bridge byłby luką: F-05a..g ją zamykają.
+- **Store random-write:** zapis w miejscu idzie pod kluczem pliku, który zna usunięty członek.
+- **Anonimowi nadawcy:** nadawcy kopert typu 2/4 i wpisów Inboxa są anonimowi z konstrukcji i pieczętują do klucza
+  podanego przez serwer.
+- **Polityka grupy (T4-10):** podpisane są tylko 4 reguły commitów i twórca; pozostałe pola egzekwuje Bridge, polityka
+  kontekstu może tylko odmówić.
+- **Wydajność:** pierwsze zejście do starej epoki w sesji kosztuje O(commity) (łańcuch od genezy); tak samo pin bez
+  składu wczytany z magazynu.
+- **Prymitywy:** ECDSA bez low-S (T3-25), statyczne ECDH/ECIES (T3-28), osłabione IND-CCA obecnego ECIES (R11), brak
+  odporności postkwantowej, liść = klucz tożsamości. Wymagania w `zalezne-od-prymitywow/`.
 
 ## Co dalej
 
-1. Podpisany roster kontenera (managerowie + granty): N1 dla kontenerów, N2, reszta T3-05.
-2. Podpisana rotacja/unieważnienie klucza tożsamości w łańcuchu: reszta N-3 (A5-F1, A5-F2).
-3. ~~Trwałe, chronione piny~~ (01, per urządzenie; między urządzeniami pozostaje TOFU pierwszego kontaktu).
-4. Drobne: T3-25 (low-S).
-5. Testy: T3-17, T3-19, T3-20, N4, T4-25.
+### Odłożone zadania (decyzja użytkownika; projekty w `whitepaper-trellis/tasks/impl/*-design.md`)
+
+| zadanie | co zamyka | granica do tego czasu | dlaczego odłożone |
+|---|---|---|---|
+| 04 podpisana zmiana klucza tożsamości (z nią 08 etap B, `changeIdentityKey`) | reszta N-3, A5-F2, opakowania dla wycofanego klucza | antydatowanie wycofanym lub skradzionym kluczem; leczy usunięcie i ponowne dodanie | atak wymaga kradzieży klucza i zmowy z Bridge, skutek leczy już usunięcie; zmiana dotyka każdego przejścia łańcucha (~12,5 osobodnia) |
+| 09 łańcuch kamieni milowych | koszt pierwszego zejścia O(commity) | tylko wydajność (kilkadziesiąt ms przy kilkudziesięciu epokach) | nowy format i nowa ścieżka TOFU się nie opłacają (~10 osobodni) |
+| 11 dodatki oświadczenia | R8, poszlakowość winy R7 | dostępność i przypisanie winy, nie poufność | przebudowa każdego testu podrabiającego oświadczenia (~14-16 osobodni) |
+| 05 pełny podpisany łańcuch kontenera | N1 kontenery, N2, R10, reszta T3-05, kontekst odczytu po id | lista grantów, managerów i `keyId` od Bridge | atak wymaga złośliwego Bridge w zmowie z użytkownikiem kontekstu; dotyka każdego rodzaju kontenera i re-key istniejących (~20 osobodni) |
+| 07B ciągłość klucza jako domyślny weryfikator | Z6 dla aplikacji bez własnego weryfikatora | domyślny weryfikator przyjmuje wszystko | zmienia zachowanie domyślne: bez 04 każda legalna zmiana klucza odcina użytkownika |
+
+### Znane drobne (audyt końcowy, rundy 1-3; niepoprawione)
+
+1. Zapisy pinów (`_pinSaveMutex`) kolejkują gorące ścieżki za I/O magazynu aplikacji, a magazyn odmawiający zapisu
+   powoduje ponowny pełny zapis.
+2. 07A zmieniło, co rzucają create/rotate kontenerów i `emitEvent` (`UserVerificationFailureException`), bez opisu w
+   publicznych nagłówkach.
+3. `streamRoomUpdated` stosuje migawkę pokoju ze zdarzenia bez sprawdzenia wersji, więc spóźnione zdarzenie może cofnąć
+   klucz LOCAL publikującego do klucza sprzed usunięcia (runda 2).
+4. Migracja 075 przepisuje wszystkie wiersze szczebli w jednej transakcji, czego migracja 073 świadomie unika (runda 3).
+5. F-05g, część opcjonalna: uczestnik z prawem rotacji, który nie publikuje, nie przeklucza pokoju na zdarzenie;
+   zatrzymanie publikacji już zamyka wyciek.
+
+### Otwarte uwagi koordynatora (po rundzie 3; nie na szczycie `315acd70`)
+
+1. **Usunięcie, gdy własny liść usuwającego się nie otwiera (08-A2..08-A4).** Rundy 1-3 oscylowały między „złośliwy
+   członek blokuje własne usunięcie” a „manager po zmianie klucza po cichu porzuca historię”. Reguła 08-A4 opiera się na
+   statementach podanych przez serwer (`latestCommitterPubKey`, w tym niezweryfikowanych) i nie działa dla managera bez
+   żadnego statementu. Wymagana reguła bez danych serwera: (1) gdy ten klient wie, że jego klucz się zmienił
+   (`adoptPreviousIdentity` w tej sesji), odmowa z komunikatem o `renewLeaf`; (2) inaczej usunięcie jak w bazie (bez
+   wspinania; `abandonHistory`, gdy klucz grantu nieosiągalny), bez względu na wskazanie winy; (3) usunąć
+   `latestCommitterPubKey`. Aplikacja, która zmienia klucz bez `adoptPreviousIdentity`, dostaje wtedy zachowanie bazy.
+2. **Kolejność w `StreamApiLowImpl::stopPublication` (F-05g).** Gdy `webRtc->close` rzuci, funkcja kończy się przed
+   usunięciem uchwytu, wyzerowaniem `publisherStream` i `streamUnpublish`, więc publikacja może dalej nadawać starym
+   kluczem. Wymagane: najpierw `streamUnpublish`, potem zamknięcie lokalne, potem uchwyt i `publisherStream`, każdy krok
+   osobno chroniony; test z atrapą `close`, która rzuca.
+
+Każda zmiana po `315acd70` / `6549385` wymaga nowej bramki.
+
+### Testy i bramka
+
+1. Brakujące testy: T3-17, T3-19, T3-20, N4, T4-25; natychmiastowe podanie kluczy w `ensureRoomKeyIsFresh` (F-05e) nie
+   ma osobnego testu (własne zdarzenie rotacji przesuwa klucz tak samo).
+2. Test e2e Bridge m1 nr 8 (`shouldRotateAOneMemberGroupAndKeepOneGrantEdgeThroughGrowingAndShrinking`) nie był
+   uruchamiany na tej maszynie (harness e2e Bridge tu nie działa).
+3. Testy e2e rundy 1 (08-A2, F-05e) przeszły na szczycie (bramka lekka rundy 3 i bramka końcowa), ale nie sprawdzono, że
+   failują na rodzicu; sprawdzono to dla testów unit 08-A3, 08-A4, testu Bridge F-05f i e2e F-05g.
+4. m2, runda 3: wynik e2e nie został wpisany do dziennika (`E2E_RESULT` w `m2-progress.md`); pełny zestaw na szczycie
+   przechodzi.
+
+### Prymitywy i API
+
+1. T3-25 (low-S), T3-28, R11: przy zmianie prymitywów (`zalezne-od-prymitywow/`).
+2. API: `renewLeaf` dla wszystkich grup jednym wywołaniem, dokończenie w tle, `adoptPreviousIdentity` jako opcja
+   `connect`, wiązania (webendpoint, Java, Swift, C#) dla `rotateGroupKey`, `renewLeaf`, `setPinStore`,
+   `adoptPreviousIdentity`.
