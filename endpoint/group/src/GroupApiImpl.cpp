@@ -307,7 +307,8 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
         // exception uses no server data: a leaf that does not open with the session's key but climbs with a previous
         // identity key this client was given (adoptPreviousIdentity) is our own key change, and renewLeaf restores
         // it; planning on would abandon every member's history for nothing, unless the grant key is cached and
-        // history stays reachable anyway. A garbled edge above the leaf opens with neither key, so renewLeaf cannot
+        // history stays reachable anyway (a landed renewal caches it, so a member re-wrapping the leaf edge to the
+        // previous public key cannot bring the refusal back within the epoch). A garbled edge above the leaf opens with neither key, so renewLeaf cannot
         // fix it and the removal goes on; so does one after a key changed without adoptPreviousIdentity (base
         // behaviour: the removal abandons history).
         if (removing != nullptr && climb.failure != keytree::ClimbFailure::NotAMember) {
@@ -1472,8 +1473,14 @@ bool GroupApiImpl::selfUpdateWith(
             .newcomers = {},
             .send = [this, sent] { _serverApi.groupSelfUpdate(*sent); },
             .landed =
-                [this, groupId, contextId, statement, users = attestedUsers, managers = attestedManagers, rules] {
+                [this, groupId, contextId, statement, users = attestedUsers, managers = attestedManagers, rules,
+                 grantKey = plan.grantKey] {
                     _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, rules);
+                    // The epoch's own grant key (a self-update keeps the epoch; the climb checked it against the
+                    // verified state), now landed. A renewal planned on a scratch cache, so without this the next
+                    // removal would ask the leaf again, and the edges name no recipient: a member wrapping it back to
+                    // the previous public key would get the removal refused after every renewal (08-A5).
+                    _treeKeyCaches.get(groupId)->putGrantKey(static_cast<std::uint32_t>(statement.keyVersion), grantKey);
                 },
             .after = {}
         }

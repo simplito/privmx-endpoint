@@ -2059,6 +2059,25 @@ void garbleLeafEdgeOf(Bridge& bridge, const std::string& owner, const std::strin
     ASSERT_EQ(garbled, 1u);
 }
 
+// `wrapper` re-wraps the genuine key above `owner`'s leaf to `to` (a valid wrap, not garbage): the edges name no
+// recipient key, so any member holding the parent can address `owner`'s edge to a key of its choice, e.g. `owner`'s
+// previous public key. Needs `wrapper`'s own edge under the same parent (in up to 32 seats: the root).
+void rewrapLeafEdgeOf(Bridge& bridge, const std::string& owner, const std::string& wrapper, const PublicKey& to) {
+    const auto userEdge = [&](const std::string& id) {
+        return std::find_if(bridge.tree.state.edges.begin(), bridge.tree.state.edges.end(), [&](const TreeEdge& e) {
+            return e.childKind == EdgeChildKind::User && e.childUserId == id;
+        });
+    };
+    const auto owners = userEdge(owner);
+    const auto wrappers = userEdge(wrapper);
+    ASSERT_NE(owners, bridge.tree.state.edges.end());
+    ASSERT_NE(wrappers, bridge.tree.state.edges.end());
+    ASSERT_EQ(owners->parentIndex, wrappers->parentIndex);
+    const auto parent = TreeKeys::unwrapKey(wrappers->blob, bridge.users.at(wrapper));
+    ASSERT_TRUE(parent.has_value());
+    owners->blob = TreeKeys::wrapKey(parent.value(), to, bridge.users.at(wrapper));
+}
+
 void expectRemoved(const Bridge& bridge, const std::string& userId) {
     EXPECT_EQ(bridge.tree.state.epoch, 2u) << "the removal did not land";
     const auto users = bridge.tree.users();
@@ -2184,6 +2203,30 @@ TEST_F(GroupApiLyingBridge, SECURITY_AGarblerCannotBlockItsRemovalByAManagerThat
     garbleLeafEdgeOf(bridge, "alice", "bob");
     EXPECT_NO_THROW(alice.removeGroupMembers(groupId, {"bob"}));
     expectRemoved(bridge, "bob");
+}
+
+// Final audit 05a round 6: the edges name no recipient key, so the garbler need not garble. After alice's renewal it
+// wraps the genuine root to alice's PREVIOUS public key: the session key fails at the leaf, the previous key climbs,
+// and ea7395ec refused the removal again ("call renewLeaf"), as often as bob re-wrapped after each renewal. A landed
+// renewal now leaves the epoch's grant key in the group's cache, so the removal goes on with history kept.
+TEST_F(GroupApiLyingBridge, SECURITY_AMemberCannotBlockItsRemovalByWrappingARenewedManagersLeafToThePreviousKey) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
+    GroupApiImpl& alice = clientAdopting("alice", previous);
+    ASSERT_TRUE(alice.renewLeaf(groupId, previous.toWIF()));
+    selfUpdateBy("bob");
+    rewrapLeafEdgeOf(bridge, "alice", "bob", previous.getPublicKey());
+    {
+        TreeKeyCache cache;
+        TreeKeys keys(cache);
+        const TreeGroupState served = GroupKeyResolver::toTreeState(bridge.serve("alice", true));
+        ASSERT_EQ(keys.climbToGrantKey(served, "alice", previous, false).failure, ClimbFailure::None)
+            << "the previous key must climb, or this is the garbage case";
+    }
+    EXPECT_NO_THROW(alice.removeGroupMembers(groupId, {"bob"}));
+    expectRemoved(bridge, "bob");
+    EXPECT_NO_THROW(client("carol").resolveGroupPrivKey(groupId, 1)) << "the removal cut the history";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARenewalWithAKeyThatDoesNotOpenTheLeafCommitsNothingAndCachesNothing) {
