@@ -83,6 +83,40 @@ private:
     std::vector<Message> _messages;
 };
 
+// Counts the video frames which reach the subscriber, so the tests can tell a decrypted Stream from a dead one.
+class VideoFrameCollector : public stream::OnTrackInterface {
+public:
+    virtual void OnRemoteTrack(stream::Track tack, stream::TrackAction action) override {
+    }
+    virtual void OnData(std::shared_ptr<stream::Data> data) override {
+        if(data->type != stream::DataType::VIDEO) {
+            return;
+        }
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _frameCount++;
+        }
+        _condition.notify_all();
+    }
+
+    bool waitForFrames(size_t expectedCount, const std::chrono::milliseconds& timeout) {
+        std::unique_lock<std::mutex> lock(_mutex);
+        return _condition.wait_for(lock, timeout, [this, expectedCount]() {
+            return _frameCount >= expectedCount;
+        });
+    }
+
+    void reset() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _frameCount = 0;
+    }
+
+private:
+    mutable std::mutex _mutex;
+    std::condition_variable _condition;
+    size_t _frameCount = 0;
+};
+
 using privmx::test::ScopeExit;
 
 enum ConnectionType {
@@ -207,6 +241,18 @@ protected:
         api->publishStream(handle);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
         return handle;
+    }
+    std::vector<stream::StreamSubscription> allSubscriptions(
+        const std::shared_ptr<stream::StreamApi>& api,
+        const std::string& streamRoomId
+    ) {
+        std::vector<stream::StreamSubscription> subscriptions;
+        for(const auto& publishedStream : api->listStreams(streamRoomId)) {
+            for(const auto& track : publishedStream.tracks) {
+                subscriptions.push_back(stream::StreamSubscription{publishedStream.id, track.mid});
+            }
+        }
+        return subscriptions;
     }
     StreamClient createClient(const std::string& userId, const std::string& pubKey, const std::string& privKey) {
         StreamClient client;
@@ -1535,6 +1581,69 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
     });
     EXPECT_NO_THROW({
         streamApi->leaveStreamRoom(streamRoomId_1);
+    });
+}
+
+TEST_F(StreamTest, republishedStream_isStillDecryptedBySubscriber) {
+    auto client2 = createClient(
+        reader->getString("Login.user_2_id"),
+        reader->getString("Login.user_2_pubKey"),
+        reader->getString("Login.user_2_privKey")
+    );
+    ScopeExit cleanup([&client2]() { client2.disconnect(); });
+    auto streamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
+
+    stream::StreamHandle handle;
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId);
+        handle = streamApi->createStream(streamRoomId);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
+        streamApi->publishStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+    std::vector<stream::StreamSubscription> subscriptions;
+    EXPECT_NO_THROW({
+        subscriptions = allSubscriptions(client2.streamApi, streamRoomId);
+    });
+    ASSERT_FALSE(subscriptions.empty());
+    auto collector = std::make_shared<VideoFrameCollector>();
+    stream::SubscriberStreamHandle subscriberHandle;
+    EXPECT_NO_THROW({
+        client2.streamApi->joinStreamRoom(streamRoomId);
+        client2.streamApi->addRemoteStreamListener(streamRoomId, std::nullopt, collector);
+        subscriberHandle = client2.streamApi->createSubscriberStream(streamRoomId, subscriptions);
+    });
+    ASSERT_TRUE(collector->waitForFrames(1, std::chrono::seconds(20)))
+        << "the subscriber received no video before the republication";
+
+    // unpublishing and publishing again makes the media server reuse the subscriber's receiver
+    EXPECT_NO_THROW({
+        streamApi->removeStream(handle);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+        handle = streamApi->createStream(streamRoomId);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
+        streamApi->publishStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+    std::vector<stream::StreamSubscription> republishedSubscriptions;
+    EXPECT_NO_THROW({
+        republishedSubscriptions = allSubscriptions(client2.streamApi, streamRoomId);
+    });
+    ASSERT_FALSE(republishedSubscriptions.empty());
+    collector->reset();
+    EXPECT_NO_THROW({
+        client2.streamApi->updateSubscriberStream(subscriberHandle, republishedSubscriptions, subscriptions);
+    });
+    EXPECT_TRUE(collector->waitForFrames(1, std::chrono::seconds(20)))
+        << "the subscriber stopped decrypting the video after the Stream was published again";
+
+    EXPECT_NO_THROW({
+        client2.streamApi->leaveStreamRoom(streamRoomId);
+    });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId);
     });
 }
 
