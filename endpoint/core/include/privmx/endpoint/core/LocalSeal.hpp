@@ -30,9 +30,6 @@ namespace localstate {
 constexpr const char* GROUP_PINS = "group-pins";
 constexpr const char* GROUP_PINS_LABEL = "privmx/group/pins";
 constexpr std::uint8_t GROUP_PINS_VERSION = 1;
-constexpr const char* COMMIT_RELEASED = "commit-released";
-constexpr const char* COMMIT_RELEASED_LABEL = "privmx/commit/released";
-constexpr std::uint8_t COMMIT_RELEASED_VERSION = 1;
 } // namespace localstate
 
 // blob = u8 version || body || tag, tag = HMAC-SHA256(K, u8 version || lp(storeKey) || body),

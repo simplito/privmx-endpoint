@@ -466,7 +466,8 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
     const std::vector<server::GroupInfo>& groups,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
-    const std::optional<PriorRole>& prior
+    const std::optional<PriorRole>& prior,
+    bool storePins
 ) {
     if (groups.empty()) {
         return {};
@@ -602,7 +603,7 @@ std::vector<Group> GroupDataSchemaMapper::validateDecryptAndConvertGroups(
         }
     }
     // Only a group that passed every step moves its pins.
-    for (size_t i = 0; i < result.size(); i++) {
+    for (size_t i = 0; i < result.size() && storePins; i++) {
         if (result[i].statusCode != 0) {
             continue;
         }
@@ -649,9 +650,10 @@ Group GroupDataSchemaMapper::validateDecryptAndConvertGroup(
     const server::GroupInfo& groupInfo,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
-    const std::optional<PriorRole>& prior
+    const std::optional<PriorRole>& prior,
+    bool storePins
 ) {
-    return validateDecryptAndConvertGroups({groupInfo}, keyProvider, groupPrivKeyResolver, prior)[0];
+    return validateDecryptAndConvertGroups({groupInfo}, keyProvider, groupPrivKeyResolver, prior, storePins)[0];
 }
 
 std::pair<std::vector<std::string>, std::vector<std::string>> GroupDataSchemaMapper::validateAndGetAttestedRoster(

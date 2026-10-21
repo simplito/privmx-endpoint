@@ -132,14 +132,14 @@ public:
     void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
 
     /**
-     * Sets where the library keeps state between sessions (key-tree pins of the groups this device verified, commits
-     * released without a known outcome). Without a store every new GroupApi reads each group on trust once (TOFU);
-     * with one, only the first contact of this device with a group does.
+     * Sets where the library keeps state between sessions (key-tree pins of the groups this device verified). Without
+     * a store every new GroupApi reads each group on trust once (TOFU); with one, only the first contact of this device
+     * with a group does.
      *
      * Call it right after `connect`, before creating any module API: a GroupApi reads the store once, when it is
      * created. Slots are per identity key and per Bridge (URL, public key and instance id of `connect`). The store
-     * must be local to the device: one the Bridge can write lets the Bridge delete or roll back the saved state,
-     * which weakens protection back to first contact (it can never plant a state). Ignored on a `connectPublic`
+     * must be local to the device: one the Bridge can write lets the Bridge delete the saved state (protection back to
+     * first contact) or roll it back to an older saved one (it can never plant a state). Ignored on a `connectPublic`
      * connection. See PinStoreInterface for the atomicity and threading contract.
      * @param store an implementation of the PinStoreInterface, or nullptr to keep state in memory only
      */
@@ -147,8 +147,8 @@ public:
 
     /**
      * After the user's identity key changed: carries the pins the store holds for the previous key over to the
-     * current one, for every GroupApi created afterwards. A pin of the previous key is taken only for a group this
-     * device has no state for under the current key (or only a first contact); it never replaces or raises one.
+     * current one, for every GroupApi created afterwards (and saves them under the current key). A pin of the previous
+     * key is taken only for a group with no pin under the current key; it never replaces or raises one.
      * Call it right after `connect` and `setPinStore`, before creating any module API. Without a store, or nothing
      * stored for the previous key, nothing is carried over. Either way it tells this client its key changed: a
      * GroupApi::removeGroupMembers whose own leaf does not open but opens with the previous key is then refused until

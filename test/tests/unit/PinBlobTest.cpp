@@ -29,7 +29,6 @@ namespace core = privmx::endpoint::core;
 using namespace privmx::endpoint::group::keytree;
 using Pin = TreeVerifier::Pin;
 using PinSet = TreeVerifier::PinSet;
-using Case = PinBlob::Case;
 
 namespace {
 
@@ -82,7 +81,6 @@ void expectSameRecord(const Pin& a, const Pin& b, bool full) {
     EXPECT_EQ(a.treeHash, b.treeHash);
     EXPECT_EQ(a.refusedSeq, b.refusedSeq);
     EXPECT_EQ(a.seenAt, b.seenAt);
-    EXPECT_EQ(a.forked, b.forked);
     EXPECT_EQ(b.hasRoster, full);
     if (full) {
         EXPECT_EQ(a.roster.users, b.roster.users);
@@ -105,10 +103,6 @@ std::string bodyWithFlags(std::uint8_t flags) {
     return body;
 }
 
-std::optional<std::pair<std::uint64_t, std::string>> at(const Pin& pin) {
-    return std::make_pair(pin.seq, pin.digest);
-}
-
 } // namespace
 
 TEST(PinBlob, RoundTripKeepsEveryField) {
@@ -120,10 +114,9 @@ TEST(PinBlob, RoundTripKeepsEveryField) {
     compact.roster.managers.clear();
     compact.generations.clear();
     pins.tree["compact"] = compact;
-    Pin forked = pinAt(7, "D7", 2);
-    forked.forked = true;
-    forked.refusedSeq = 8;
-    pins.tree["forked"] = forked;
+    Pin refused = pinAt(7, "D7", 2);
+    refused.refusedSeq = 8;
+    pins.tree["refused"] = refused;
     Pin lostRace;
     lostRace.refusedSeq = 3;
     pins.tree["lostRace"] = lostRace;
@@ -134,11 +127,10 @@ TEST(PinBlob, RoundTripKeepsEveryField) {
     ASSERT_EQ(back.tree.size(), 4u);
     expectSameRecord(pins.tree.at("full"), back.tree.at("full"), true);
     expectSameRecord(pins.tree.at("compact"), back.tree.at("compact"), false);
-    expectSameRecord(pins.tree.at("forked"), back.tree.at("forked"), true);
+    expectSameRecord(pins.tree.at("refused"), back.tree.at("refused"), true);
     EXPECT_EQ(back.tree.at("lostRace").seq, 0u);
     EXPECT_EQ(back.tree.at("lostRace").refusedSeq, 3u);
     EXPECT_EQ(back.planes, pins.planes);
-    EXPECT_FALSE(back.tree.at("full").synced.has_value()) << "memory-only fields are not stored";
 }
 
 TEST(PinBlob, SECURITY_ALengthPastTheEndIsRefused) {
@@ -158,7 +150,7 @@ TEST(PinBlob, SECURITY_ALengthPastTheEndIsRefused) {
 
 TEST(PinBlob, UnknownFlagBitsAreRefused) {
     EXPECT_TRUE(PinBlob::decode(bodyWithFlags(0)).has_value());
-    EXPECT_TRUE(PinBlob::decode(bodyWithFlags(4)).has_value()); // forked
+    EXPECT_EQ(PinBlob::decode(bodyWithFlags(4)), std::nullopt); // bit 2 was `forked` before the fork boundary
     EXPECT_EQ(PinBlob::decode(bodyWithFlags(8)), std::nullopt);
     EXPECT_EQ(PinBlob::decode(bodyWithFlags(0x80)), std::nullopt);
     std::string nodesWithoutRoster = bodyWithFlags(2);
@@ -205,86 +197,29 @@ TEST(PinBlob, SECURITY_NoRecordIsDroppedByTheBudget) {
     EXPECT_FALSE(back.tree.at("G").hasRoster) << "the oldest is the first to go compact";
 }
 
-TEST(PinBlob, DecideCoversEveryRow) {
+TEST(PinBlob, SECURITY_TheHigherSeqWinsAndAPinIsNeverLowered) {
+    // Both sides are this device's verified state: the higher commit wins, whichever side holds it, so a sibling's
+    // later record moves this instance forward and a slot rolled back (or a sibling behind) never moves it back.
     const Pin p9 = pinAt(9, "D9");
-    Pin m = pinAt(10, "D10");
-    Pin r = pinAt(10, "D10");
-    // a: nothing stored
-    EXPECT_EQ(PinBlob::decide(&m, nullptr), Case::TakeMine);
-    // b: nothing in memory
-    EXPECT_EQ(PinBlob::decide(nullptr, &r), Case::TakeStored);
-    // c: either forked, or another context
-    Pin forked = r;
-    forked.forked = true;
-    EXPECT_EQ(PinBlob::decide(&m, &forked), Case::Fork);
-    Pin elsewhere = r;
-    elsewhere.contextId = "other";
-    EXPECT_EQ(PinBlob::decide(&m, &elsewhere), Case::Fork);
-    // d: one state
-    EXPECT_EQ(PinBlob::decide(&m, &r), Case::Same);
-    // e: memory never synced, still its first contact here, and the slot holds a later record
-    Pin r11 = pinAt(11, "D11");
-    Pin tofu = m;
-    tofu.firstContact = true;
-    EXPECT_EQ(PinBlob::decide(&tofu, &r11), Case::TakeStored);
-    // f: a link pending
-    Pin pending = m;
-    pending.synced = at(p9);
-    pending.unlinked = std::make_shared<const Pin>(r11);
-    EXPECT_EQ(PinBlob::decide(&pending, &r11), Case::Pending);
-    // g: the slot is what memory last synced with; memory moved on
-    m.synced = at(p9);
-    EXPECT_EQ(PinBlob::decide(&m, &p9), Case::TakeMine);
-    // h1: memory is what it synced; the slot moved past it
-    Pin still = p9;
-    still.synced = at(p9);
-    EXPECT_EQ(PinBlob::decide(&still, &r11), Case::TakeStored);
-    // h2: memory is what it synced; the slot went back (local storage rolled back)
-    Pin p5 = pinAt(5, "D5");
-    EXPECT_EQ(PinBlob::decide(&still, &p5), Case::TakeMine);
-    // i: both moved since the sync, to one seq with two digests
-    Pin other10 = pinAt(10, "D10'");
-    EXPECT_EQ(PinBlob::decide(&m, &other10), Case::Fork);
-    // j: both moved since the sync, to different seqs
-    Pin r12 = pinAt(12, "D12");
-    EXPECT_EQ(PinBlob::decide(&m, &r12), Case::Unlinked);
+    const Pin p10 = pinAt(10, "D10");
+    const Pin other10 = pinAt(10, "D10'");
+    EXPECT_EQ(PinBlob::higher(&p9, &p10).digest, "D10");
+    EXPECT_EQ(PinBlob::higher(&p10, &p9).digest, "D10");
+    EXPECT_EQ(PinBlob::higher(nullptr, &p9).digest, "D9");
+    EXPECT_EQ(PinBlob::higher(&p9, nullptr).digest, "D9");
+    // One seq, two digests: the fork boundary. Not reconciled; each side keeps its own.
+    EXPECT_EQ(PinBlob::higher(&p10, &other10).digest, "D10");
+    EXPECT_EQ(PinBlob::higher(&other10, &p10).digest, "D10'");
 
-    // The slot's side of each row.
     const auto merged = [](const Pin& mine, const Pin& stored) {
         PinSet a, b;
         a.tree["g"] = mine;
         b.tree["g"] = stored;
         return PinBlob::mergeForSave(a, b).tree.at("g");
     };
-    EXPECT_EQ(merged(m, p9).digest, "D10");            // g: mine
-    EXPECT_EQ(merged(still, r11).digest, "D11");       // h1: stored
-    EXPECT_EQ(merged(still, p5).digest, "D9");         // h2: mine
-    EXPECT_TRUE(merged(m, other10).forked);            // i: stored, forked
-    EXPECT_EQ(merged(m, other10).digest, "D10'");
-    EXPECT_EQ(merged(m, r12).digest, "D12");           // j: stored, unmarked until the link
-    EXPECT_FALSE(merged(m, r12).forked);
-    EXPECT_EQ(merged(pending, r11).digest, "D11");     // f: stored
-}
-
-TEST(PinBlob, SECURITY_ANeverSyncedPinIsReplacedOnlyWhileStillItsFirstContact) {
-    // A pin taken by first contact stays unsynced until its first save, and may move meanwhile (an own removal, a
-    // verified step). A sibling's record must not then replace it: the two are linked by hash (row j), and one seq
-    // with two digests is a fork (row i). Base: row e took the record whatever it was, below the own removal.
-    const Pin p9 = pinAt(9, "D9");
-    const Pin r11 = pinAt(11, "D11");
-    Pin moved = pinAt(10, "D10"); // first contact at 9 here, then the own removal at 10
-    EXPECT_EQ(PinBlob::decide(&moved, &p9), Case::Unlinked);
-    EXPECT_EQ(PinBlob::decide(&moved, &r11), Case::Unlinked);
-    const Pin other10 = pinAt(10, "D10'");
-    EXPECT_EQ(PinBlob::decide(&moved, &other10), Case::Fork);
-    Pin tofu = moved;
-    tofu.firstContact = true;
-    EXPECT_EQ(PinBlob::decide(&tofu, &p9), Case::Unlinked) << "a first contact is never lowered either";
-    EXPECT_EQ(PinBlob::decide(&tofu, &other10), Case::Fork);
-    PinSet mine, stored;
-    mine.tree["g"] = moved;
-    stored.tree["g"] = p9;
-    EXPECT_EQ(PinBlob::mergeForSave(mine, stored).tree.at("g").digest, "D9") << "the slot keeps R until the link";
+    EXPECT_EQ(merged(p9, p10).digest, "D10") << "the slot ahead stays";
+    EXPECT_EQ(merged(p10, p9).digest, "D10") << "a slot behind is moved up";
+    EXPECT_EQ(merged(p10, other10).digest, "D10") << "a tie is written as this instance holds it";
 }
 
 TEST(PinBlob, SECURITY_ASeqZeroRecordNeverReplacesAPin) {
@@ -292,8 +227,9 @@ TEST(PinBlob, SECURITY_ASeqZeroRecordNeverReplacesAPin) {
     const Pin pin = pinAt(7, "D7");
     Pin lostRace;
     lostRace.refusedSeq = 9;
-    EXPECT_EQ(PinBlob::decide(&pin, &lostRace), Case::TakeMine);
-    EXPECT_EQ(PinBlob::decide(&lostRace, &pin), Case::TakeStored);
+    EXPECT_EQ(PinBlob::higher(&pin, &lostRace).digest, "D7");
+    EXPECT_EQ(PinBlob::higher(&lostRace, &pin).digest, "D7");
+    EXPECT_EQ(PinBlob::higher(&lostRace, &pin).refusedSeq, 9u);
     PinSet mine, stored;
     mine.tree["g"] = pin;
     stored.tree["g"] = lostRace;

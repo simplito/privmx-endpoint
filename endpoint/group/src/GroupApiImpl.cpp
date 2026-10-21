@@ -82,14 +82,13 @@ GroupApiImpl::GroupApiImpl(
     initModuleDataSchemaMapper(_groupDataSchemaMapper);
     _pinnedGroupEpoch = [this](const std::string& groupId) { return pinnedKeyVersion(groupId); };
     // 01: the pins this identity saved on this Bridge (any instance, any session) before anything reads a group.
+    // Loaded once; instances running side by side meet again in the slot at each save (`PinBlob::higher`).
     const auto connectionImpl = connection.getImpl();
     _pinStore = connectionImpl->getPinStore();
     if (_pinStore) {
         _pinStoreKey = connectionImpl->localStateSlot(core::localstate::GROUP_PINS, userPrivKey.getPublicKey());
-        _releasedKey = connectionImpl->localStateSlot(core::localstate::COMMIT_RELEASED, userPrivKey.getPublicKey());
         // Unreadable, corrupted or deleted: this instance starts as a first contact for every group (as without a store).
-        syncPins(true);
-        loadReleased();
+        loadPins();
         for (const auto& [previousPub, body] : connectionImpl->getStagedPinBodies()) {
             const auto adopted = keytree::PinBlob::decode(body);
             if (!adopted.has_value()) {
@@ -1828,8 +1827,10 @@ Group GroupApiImpl::getGroup(const std::string& groupId) {
     // from the pin when this process has one) before the mapper reads any of it; a rollback below the pin counts as
     // not attested.
     const bool attested = seated || hasVerifiedGrantKey(group);
+    // An answer refused below as not attested must not move the version pins either, or the next honest answer
+    // would look like a rollback.
     Group result = _groupDataSchemaMapper->validateDecryptAndConvertGroup(
-        group, _keyProvider, seated ? resolverOver(&group) : _groupPrivKeyResolver
+        group, _keyProvider, seated ? resolverOver(&group) : _groupPrivKeyResolver, std::nullopt, attested
     );
     if (!attested) {
         // Outsiders seal anonymous envelopes to it: only as the latest statement vouches for it.
@@ -1859,8 +1860,6 @@ core::PagingList<GroupSummary> GroupApiImpl::listGroups(
     auto groupsList = _serverApi.groupList(model);
     std::vector<GroupSummary> groups;
     groups.reserve(groupsList.groups.size());
-    syncPins();
-    assertLocalStateSaved();
     for (const auto& group : groupsList.groups) {
         groups.push_back(GroupDataSchemaMapper::toLibGroupSummary(group));
         // What an outsider would seal anonymous envelopes to. A listing carries no statement to vouch for it, so only
@@ -1887,8 +1886,6 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
     const std::vector<std::string>& groupIds
 ) {
     std::unordered_map<std::string, core::GroupEpochInfo> epochs;
-    syncPins();
-    assertLocalStateSaved();
     // A container key is about to be wrapped to these grant keys, so each comes off the group's latest statement.
     // A writer outside the group trusts that the signer, vouched by the UserVerifier, is a member (TOFU on membership).
     // The listing (constant size) says which epoch is current; one this process has pinned is taken from the pin,
@@ -2174,7 +2171,6 @@ void GroupApiImpl::assertHeadKeyAtEpoch(const server::GroupInfo& group) {
 }
 
 std::uint64_t GroupApiImpl::pinnedKeyVersion(const std::string& groupId) {
-    syncPins();
     return _treeVerifier.pinnedKeyVersion(groupId);
 }
 
@@ -2184,7 +2180,6 @@ bool GroupApiImpl::agreesWithPin(
     std::int64_t keyVersion,
     const std::string& groupPubKey
 ) {
-    syncPins();
     return _treeVerifier.agreesWithPin(groupId, contextId, keyVersion, groupPubKey);
 }
 
@@ -2312,7 +2307,6 @@ bool GroupApiImpl::verifyTree(
         !keytree::GroupKeyResolver::ownUserId(group).has_value()) {
         return false;
     }
-    syncPins();
     // The hash binds the seat to a user id, not to this caller: every climb starts there and every commit signs as it.
     // Checked before `verify` stores anything, so a served group with somebody else's seat (an envelope may name any
     // group id) is never pinned; `verify` still proves the binding.
@@ -2363,8 +2357,6 @@ std::uint64_t GroupApiImpl::commitDate() {
 
 void GroupApiImpl::chainTo(keytree::CommitStatement& statement, const server::GroupInfo& group) {
     // 01: nothing is signed on pins this device cannot keep, or behind what a sibling instance saved meanwhile.
-    assertLocalStateSaved();
-    syncPins();
     _treeVerifier.assertMaySignAt(group.id, statement.seq);
     const keytree::CommitStatement previous = keytree::TreeCommits::fromWire(group.treeCommit.value());
     statement.prevDigest = keytree::TreeCommits::digest(previous);
@@ -2434,13 +2426,6 @@ void GroupApiImpl::submit(
         throw GroupCommitUnresolvedException("an earlier commit to this group has no known outcome yet");
     case core::ReleaseGate::Verdict::Ok:
         break;
-    }
-    // m2 9.1: the entry is in the store before the statement leaves, so a restart cannot sign a second one at P.
-    if (_pinStore) {
-        const auto open = _releaseGate.unresolved(groupId, commitDate(), _treeVerifier.pinnedSeq(groupId));
-        if (!open.has_value() || open->digest != released.digest) {
-            saveReleased(groupId, released);
-        }
     }
     _releaseGate.record(groupId, released);
     {
@@ -2726,12 +2711,10 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
 }
 
 core::DecryptedEncKeyV2 GroupApiImpl::currentEncKey(const std::string& groupId) {
-    assertLocalStateSaved();
-    syncPins();
     core::ModuleKeys keys = getModuleKeys(groupId);
     // A cached head behind the epoch verified since (a read for a key, a commit of our own, a sibling instance's
-    // save) is re-read, not refused; so is one whose pin awaits a link or is forked (the read links or refuses).
-    if (isRekeyNeeded(keys) || _treeVerifier.needsRead(groupId)) {
+    // save) is re-read, not refused.
+    if (isRekeyNeeded(keys)) {
         keys = getNewModuleKeysAndUpdateCache(groupId);
     }
     return getAndValidateModuleCurrentEncKey(keys);
@@ -3059,60 +3042,30 @@ DecryptedFileInfo GroupApiImpl::finishFileDecryption(FileHandle fileHandle) {
     };
 }
 
-void GroupApiImpl::syncPins(bool force) {
-    if (!_pinStore) {
+void GroupApiImpl::loadPins() {
+    std::string blob;
+    try {
+        blob = _pinStore->load(_pinStoreKey).stdString();
+    } catch (const std::exception& e) {
+        LOG_WARN("[pins] the pin store does not load: ", e.what())
+        return;
+    } catch (...) {
+        LOG_WARN("[pins] the pin store does not load")
         return;
     }
-    std::vector<std::string> unlinked;
-    {
-        std::lock_guard<std::mutex> lock(_pinSaveMutex);
-        const auto now = std::chrono::steady_clock::now();
-        if (!force && now < _lastPinSync + PIN_SYNC_INTERVAL) {
-            return;
-        }
-        _lastPinSync = now;
-        std::string blob;
-        try {
-            blob = _pinStore->load(_pinStoreKey).stdString();
-        } catch (const std::exception& e) {
-            LOG_WARN("[pins] the pin store does not load: ", e.what())
-            return;
-        } catch (...) {
-            LOG_WARN("[pins] the pin store does not load")
-            return;
-        }
-        if (blob == _lastBlob) {
-            return; // unchanged since this instance last saw it
-        }
-        _lastBlob = blob;
-        if (blob.empty()) {
-            return;
-        }
-        const auto body = core::openLocal(
-            _userPrivKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION, _pinStoreKey, blob
-        );
-        const auto stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
-        if (!stored.has_value()) {
-            // The same as a deleted blob: first contact for what it held (it is overwritten by the next save).
-            LOG_WARN("[pins] the stored pins fail their integrity check; ignored")
-            return;
-        }
-        unlinked = _treeVerifier.applyStored(nullptr, stored.value(), false);
-        _groupDataSchemaMapper->importVersionPins(stored->planes);
+    if (blob.empty()) {
+        return;
     }
-    linkPins(unlinked);
-}
-
-bool GroupApiImpl::linkPins(const std::vector<std::string>& groups) {
-    bool ahead = false;
-    for (const std::string& groupId : groups) {
-        try {
-            ahead = _treeVerifier.link(groupId, treeEnvironment(groupId)) || ahead;
-        } catch (const std::exception& e) {
-            LOG_WARN("[pins] link of group ", groupId, " pending: ", e.what())
-        }
+    const auto body =
+        core::openLocal(_userPrivKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION, _pinStoreKey, blob);
+    const auto stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
+    if (!stored.has_value()) {
+        // The same as a deleted blob: first contact for what it held (it is overwritten by the next save).
+        LOG_WARN("[pins] the stored pins fail their integrity check; ignored")
+        return;
     }
-    return ahead;
+    _treeVerifier.mergeStored(stored->tree);
+    _groupDataSchemaMapper->importVersionPins(stored->planes);
 }
 
 void GroupApiImpl::pinsMoved(bool major) {
@@ -3136,90 +3089,56 @@ bool GroupApiImpl::savePins(bool all) {
         return true;
     }
     bool saved = false;
-    // A link that keeps this instance's pin above the slot's record (an own or observed removal past a sibling's
-    // save) writes it now, not on the idle cadence. ponytail: two rounds; a sibling that wins every race in between
-    // leaves the rest to the next save.
-    for (int round = 0; round < 2; ++round) {
-        std::vector<std::string> unlinked;
-        {
-            std::lock_guard<std::mutex> lock(_pinSaveMutex);
-            keytree::TreeVerifier::PinSet mine;
-            mine.tree = _treeVerifier.exportPins(all || _pinSaveFull);
-            mine.planes = _groupDataSchemaMapper->exportVersionPins();
-            std::optional<keytree::TreeVerifier::PinSet> stored;
-            std::string blob;
-            try {
-                saved = core::updateSealed(
-                    *_pinStore, _userPrivKey, _pinStoreKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION,
-                    [&](const std::optional<std::string>& body) {
-                        stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
-                        if (stored.has_value()) {
-                            return keytree::PinBlob::encode(keytree::PinBlob::mergeForSave(mine, stored.value()));
-                        }
-                        // Nothing stored, another version or a bad tag: overwritten with every pin in full.
-                        if (body.has_value()) {
-                            LOG_WARN("[pins] the stored pins do not parse; overwritten")
-                        }
-                        return keytree::PinBlob::encode(
-                            all || _pinSaveFull
-                                ? mine
-                                : keytree::TreeVerifier::PinSet{_treeVerifier.exportPins(true), mine.planes}
-                        );
-                    },
-                    &blob
-                );
-            } catch (const std::exception& e) {
-                LOG_WARN("[pins] the pin store does not save: ", e.what())
-            } catch (...) { LOG_WARN("[pins] the pin store does not save") }
-            if (saved) {
-                // Re-import: what a sibling saved meanwhile reaches this instance too.
-                unlinked =
-                    _treeVerifier.applyStored(&mine.tree, stored.value_or(keytree::TreeVerifier::PinSet{}), true);
-                if (stored.has_value()) {
-                    _groupDataSchemaMapper->importVersionPins(stored->planes);
-                }
-                _lastBlob = blob;
-                _pinSaveFailures = 0;
-                _pinSaveFull = false;
-            } else {
-                _pinSaveFull = true;
-                ++_pinSaveFailures;
-            }
-        }
-        {
-            std::unique_lock<std::mutex> lock(_selfUpdateMutex);
-            if (saved) {
-                _lastPinSave = std::chrono::steady_clock::now();
-            } else if (!_selfUpdateStopping) {
-                const auto retry = std::chrono::steady_clock::now() + PIN_SAVE_INTERVAL;
-                if (!_pinSaveDue.has_value() || retry < _pinSaveDue.value()) {
-                    _pinSaveDue = retry;
-                }
-                wakeBackgroundWorker();
-            }
-        }
-        if (!linkPins(unlinked) || !saved) {
-            break;
-        }
-    }
-    return saved;
-}
-
-void GroupApiImpl::assertLocalStateSaved() {
-    if (!_pinStore) {
-        return;
-    }
     {
         std::lock_guard<std::mutex> lock(_pinSaveMutex);
-        if (_pinSaveFailures < PIN_SAVE_FAILURES_MAX) {
-            return;
+        keytree::TreeVerifier::PinSet mine;
+        mine.tree = _treeVerifier.exportPins(all || _pinSaveFull);
+        mine.planes = _groupDataSchemaMapper->exportVersionPins();
+        std::optional<keytree::TreeVerifier::PinSet> stored;
+        try {
+            saved = core::updateSealed(
+                *_pinStore, _userPrivKey, _pinStoreKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION,
+                [&](const std::optional<std::string>& body) {
+                    stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
+                    if (stored.has_value()) {
+                        return keytree::PinBlob::encode(keytree::PinBlob::mergeForSave(mine, stored.value()));
+                    }
+                    // Nothing stored, another version or a bad tag: overwritten with every pin in full.
+                    if (body.has_value()) {
+                        LOG_WARN("[pins] the stored pins do not parse; overwritten")
+                    }
+                    return keytree::PinBlob::encode(
+                        all || _pinSaveFull ? mine
+                                            : keytree::TreeVerifier::PinSet{_treeVerifier.exportPins(true), mine.planes}
+                    );
+                }
+            );
+        } catch (const std::exception& e) {
+            LOG_WARN("[pins] the pin store does not save: ", e.what())
+        } catch (...) { LOG_WARN("[pins] the pin store does not save") }
+        if (saved) {
+            // What another instance of this device saved meanwhile comes in too (`PinBlob::higher`).
+            if (stored.has_value()) {
+                _treeVerifier.mergeStored(stored->tree);
+                _groupDataSchemaMapper->importVersionPins(stored->planes);
+            }
+            _pinSaveFull = false;
+        } else {
+            // Not fail-closed: the pins in memory still protect this instance; the slot is retried in full.
+            _pinSaveFull = true;
         }
     }
-    // A device must not go on acting on pins it cannot keep: a store that stays full would freeze the persisted state
-    // below a removal it has seen.
-    if (!savePins()) {
-        throw core::LocalStateUnavailableException("the pin store keeps refusing saves");
+    std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+    if (saved) {
+        _lastPinSave = std::chrono::steady_clock::now();
+    } else if (!_selfUpdateStopping) {
+        const auto retry = std::chrono::steady_clock::now() + PIN_SAVE_INTERVAL;
+        if (!_pinSaveDue.has_value() || retry < _pinSaveDue.value()) {
+            _pinSaveDue = retry;
+        }
+        wakeBackgroundWorker();
     }
+    return saved;
 }
 
 void GroupApiImpl::adoptPreviousIdentity(const privmx::crypto::PrivateKey& previous) {
@@ -3262,110 +3181,17 @@ void GroupApiImpl::adoptPreviousIdentity(const privmx::crypto::PrivateKey& previ
 }
 
 void GroupApiImpl::adoptBody(const keytree::TreeVerifier::PinSet& adopted) {
-    std::lock_guard<std::mutex> lock(_pinSaveMutex);
-    std::vector<std::string> groups;
-    for (const auto& [groupId, record] : adopted.tree) {
-        if (record.seq > 0) {
-            groups.push_back(groupId);
+    // Only for groups with no pin under the current key: whoever holds the previous key can write its slot, so its
+    // records never replace or raise a pin. Written under the current key at once.
+    _treeVerifier.mergeStored(adopted.tree, true);
+    // The same for the version pins: raised by such a record, they would refuse honest answers as rollbacks.
+    const auto current = _groupDataSchemaMapper->exportVersionPins();
+    std::map<std::string, std::array<std::int64_t, 3>> unpinned;
+    for (const auto& [groupId, counters] : adopted.planes) {
+        if (current.count(groupId) == 0) {
+            unpinned.emplace(groupId, counters);
         }
     }
-    // Only groups with no state under the current key, or only a first contact of this instance.
-    const std::map<std::string, keytree::TreeVerifier::Pin> seen = _treeVerifier.adoptable(groups);
-    std::map<std::string, keytree::TreeVerifier::Pin> taken;
-    std::optional<keytree::TreeVerifier::PinSet> stored;
-    const bool saved = core::updateSealed(
-        *_pinStore, _userPrivKey, _pinStoreKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION,
-        [&](const std::optional<std::string>& body) {
-            taken.clear();
-            stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
-            keytree::TreeVerifier::PinSet slot = stored.value_or(keytree::TreeVerifier::PinSet{});
-            for (const auto& [groupId, pin] : seen) {
-                const auto record = slot.tree.find(groupId);
-                // The slot has nothing for it, or only what this instance wrote for its first contact.
-                const bool free = record == slot.tree.end() || record->second.seq == 0 ||
-                    (pin.firstContact && pin.synced ==
-                         std::optional<std::pair<std::uint64_t, std::string>>({record->second.seq, record->second.digest}));
-                if (!free) {
-                    continue;
-                }
-                keytree::TreeVerifier::Pin next = adopted.tree.at(groupId);
-                if (pin.seq > 0 && next.seq <= pin.seq) {
-                    taken[groupId] = next; // a first contact at or above it: linked in memory (`adopt`), slot kept
-                    continue;
-                }
-                if (record != slot.tree.end()) {
-                    next.refusedSeq = std::max(next.refusedSeq, record->second.refusedSeq);
-                }
-                taken[groupId] = next;
-                slot.tree[groupId] = next;
-            }
-            for (const auto& [groupId, record] : adopted.tree) {
-                if (record.refusedSeq > 0) {
-                    keytree::TreeVerifier::Pin& kept = slot.tree[groupId];
-                    kept.refusedSeq = std::max(kept.refusedSeq, record.refusedSeq);
-                }
-            }
-            for (const auto& [groupId, counters] : adopted.planes) {
-                auto& kept = slot.planes[groupId];
-                for (std::size_t i = 0; i < 3; ++i) {
-                    kept[i] = std::max(kept[i], counters[i]);
-                }
-            }
-            return keytree::PinBlob::encode(slot);
-        }
-    );
-    if (!saved) {
-        throw core::LocalStateUnavailableException("the pin store refused the adopted pins");
-    }
-    _treeVerifier.adopt(taken, seen); // the rest of the slot comes in with the next sync
-
-    _groupDataSchemaMapper->importVersionPins(adopted.planes);
-}
-
-void GroupApiImpl::loadReleased() {
-    try {
-        const std::string blob = _pinStore->load(_releasedKey).stdString();
-        if (blob.empty()) {
-            return;
-        }
-        const auto body = core::openLocal(
-            _userPrivKey, core::localstate::COMMIT_RELEASED_LABEL, core::localstate::COMMIT_RELEASED_VERSION,
-            _releasedKey, blob
-        );
-        const auto entries = body.has_value() ? core::ReleaseGate::decode(body.value()) : std::nullopt;
-        if (!entries.has_value()) {
-            LOG_WARN("[pins] the released commits fail their integrity check; ignored")
-            return;
-        }
-        _releaseGate.merge(entries.value());
-    } catch (const std::exception& e) { LOG_WARN("[pins] the released commits do not load: ", e.what()) }
-}
-
-void GroupApiImpl::saveReleased(const std::string& groupId, const core::ReleaseGate::Released& released) {
-    const std::uint64_t now = commitDate();
-    const bool saved = core::updateSealed(
-        *_pinStore, _userPrivKey, _releasedKey, core::localstate::COMMIT_RELEASED_LABEL,
-        core::localstate::COMMIT_RELEASED_VERSION,
-        [&](const std::optional<std::string>& body) {
-            std::map<std::string, core::ReleaseGate::Released> entries = _releaseGate.open(now);
-            const auto stored = body.has_value() ? core::ReleaseGate::decode(body.value()) : std::nullopt;
-            const auto keep = [&](const std::string& key, const core::ReleaseGate::Released& entry) {
-                if (now >= entry.date + RELEASE_WINDOW_MS) {
-                    return; // only open entries are written
-                }
-                const auto it = entries.find(key);
-                if (it == entries.end() || core::ReleaseGate::newer(entry, it->second)) {
-                    entries[key] = entry;
-                }
-            };
-            for (const auto& [key, entry] : stored.value_or(std::map<std::string, core::ReleaseGate::Released>{})) {
-                keep(key, entry);
-            }
-            keep(groupId, released);
-            return core::ReleaseGate::encode(entries);
-        }
-    );
-    if (!saved) {
-        throw core::LocalStateUnavailableException("the released commit could not be saved");
-    }
+    _groupDataSchemaMapper->importVersionPins(unpinned);
+    savePins(true);
 }

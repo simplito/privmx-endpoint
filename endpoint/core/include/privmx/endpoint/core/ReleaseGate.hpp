@@ -23,7 +23,7 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
-// m2 (A5-F3): at most one unresolved released statement per chain key. A statement the bridge may have applied
+// m2 (A5-F3): at most one unresolved released statement per chain key, per GroupApi instance (memory only). A statement the bridge may have applied
 // while answering with an error must not be followed by a different one at the same prevDigest, or the bridge holds
 // two valid links by one committer: a fork it chose. Resolved lazily: an entry is gone once the caller's pin reaches
 // its seq or its window has passed. Callers serialise check + record per key.
@@ -46,21 +46,12 @@ public:
     // Stale: next.seq <= pinnedSeq. Held: an open entry at the same prevDigest with another digest, unless the
     // entry yields and `next` does not. Ok otherwise; the same digest again (a resend) is always Ok.
     Verdict check(const std::string& key, const Released& next, std::uint64_t now, std::uint64_t pinnedSeq);
-    // Keeps the newer of the stored and the incoming entry by `newer` (the order a persisted merge uses too).
+    // Keeps the newer of the stored and the incoming entry by `newer`.
     void record(const std::string& key, const Released& next);
     std::optional<Released> unresolved(const std::string& key, std::uint64_t now, std::uint64_t pinnedSeq);
     // Total order: (seq, !yields, date, digest); a full tie is the same entry. At one seq a non-yielding entry always
-    // wins, so a merge never leaves only a yielding entry for a prevDigest a non-yielding statement was released at.
+    // wins, so `record` never leaves only a yielding entry for a prevDigest a non-yielding statement was released at.
     static bool newer(const Released& a, const Released& b);
-    // 01 (m2 9.1): the entries whose window is still open at `now`, for the persisted blob; and stored entries merged
-    // back in, per key the newer by `newer` (what `record` keeps).
-    std::map<std::string, Released> open(std::uint64_t now);
-    void merge(const std::map<std::string, Released>& entries);
-    // The persisted body: u32 n || n x (lp(key) || u64 seq || lp(prevDigest) || lp(digest) || u64 date || u8 yields),
-    // sorted by key. `decode` refuses (nullopt) a length past the end, trailing bytes, yields not 0/1 and unsorted or
-    // duplicate keys.
-    static std::string encode(const std::map<std::string, Released>& entries);
-    static std::optional<std::map<std::string, Released>> decode(const std::string& body);
     // Injective operation key: lp(kind) || lp(part)*, lp = u32 big-endian length || bytes. No separator a user id
     // could contain makes two different operations equal.
     static std::string opKey(const std::string& kind, const std::vector<std::string>& parts = {});

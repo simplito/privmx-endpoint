@@ -59,17 +59,12 @@ struct GroupApiImplTestAccess {
         api._selfUpdatePending.clear();
         api._selfUpdateWake.notify_all();
     }
-    // 01: as if the sync and save intervals had passed (no clock to move in a unit test).
-    static void elapse(GroupApiImpl& api) {
-        {
-            std::lock_guard<std::mutex> lock(api._pinSaveMutex);
-            api._lastPinSync = {};
-        }
-        std::lock_guard<std::mutex> lock(api._selfUpdateMutex);
-        api._lastPinSave = {};
-    }
     static bool savePins(GroupApiImpl& api) { return api.savePins(); }
-    static void syncPins(GroupApiImpl& api) { api.syncPins(true); }
+    static std::array<std::int64_t, 3> versionPins(GroupApiImpl& api, const std::string& groupId) {
+        const auto all = api._groupDataSchemaMapper->exportVersionPins();
+        const auto it = all.find(groupId);
+        return it == all.end() ? std::array<std::int64_t, 3>{0, 0, 0} : it->second;
+    }
     static std::uint64_t pinnedSeq(GroupApiImpl& api, const std::string& groupId) {
         return api._treeVerifier.pinnedSeq(groupId);
     }
@@ -1986,6 +1981,34 @@ TEST_F(GroupApiLyingBridge, SECURITY_ASeatStrippedReadServingAWiderPolicyDoesNot
     EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0) << "the honest policy refuses bob's plane";
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_AnUnattestedReadMovesNoVersionPin) {
+    // getGroup refuses an unseated answer whose statement is behind the pin as not attested; its metadata planes must
+    // not move the version pins on the way (base: stored before the refusal, so a pin rose on a refused answer).
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("carol").getGroup(groupId);
+    const server::GroupTreeCommit atSeq1 = bridge.tree.commits.back();
+    selfUpdateBy("bob");
+    ASSERT_EQ(client("carol").getGroup(groupId).statusCode, 0); // pinned at seq 2
+    const std::array<std::int64_t, 3> before = GroupApiImplTestAccess::versionPins(client("carol"), groupId);
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("v2"), 1);
+    bridge.onRead = [&](const std::string& caller, server::GroupInfo& info) {
+        if (caller != "carol") {
+            return;
+        }
+        auto seats = info.leafAssignment.value();
+        std::replace(seats.begin(), seats.end(), std::string("carol"), std::string());
+        info.leafAssignment = seats;
+        info.ownLeafPosition.reset();
+        info.treeCommit = atSeq1; // genuine, but behind carol's pin
+    };
+    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_EQ(GroupApiImplTestAccess::versionPins(client("carol"), groupId), before);
+    bridge.onRead = [](const std::string&, server::GroupInfo&) {};
+    EXPECT_EQ(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_GT(GroupApiImplTestAccess::versionPins(client("carol"), groupId)[1], before[1]);
+}
+
 
 // ── leaf renewal after an identity key change (08a) ────────────────────────────────────────────────────────────
 
@@ -2386,9 +2409,9 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnOwnRemovalIsInTheStoreBeforeTheCallReturn
     EXPECT_THROW(client("alice").getGroup(groupId), GroupHistoryForkException);
 }
 
-TEST_F(GroupApiLyingBridge, SECURITY_ALiveSiblingRefusesThePreRemovalStateOnceTheOtherSawTheRemoval) {
-    // Two live instances of alice on one device. The bridge shows the removal to one and keeps the other on the state
-    // before it; once the first saved, the second picks the pin up before it seals.
+TEST_F(GroupApiLyingBridge, SECURITY_ALiveSiblingTakesTheRemovalAtItsNextSave) {
+    // Two live instances of alice on one device. One verified the removal and saved it; the other meets that record
+    // at its next save (they do not poll each other) and from then on refuses the pre-removal state.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
@@ -2399,15 +2422,16 @@ TEST_F(GroupApiLyingBridge, SECURITY_ALiveSiblingRefusesThePreRemovalStateOnceTh
     client("alice").resolveGroupPrivKey(groupId); // alice1 pins epoch 2
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("alice")));
     rollBackTo(beforeRemoval);
-    GroupApiImplTestAccess::elapse(alice2); // PIN_SYNC_INTERVAL later
-    EXPECT_THROW(alice2.encrypt(groupId, core::Buffer::from("x")), GroupHistoryForkException)
-        << "base: sealed under the epoch 1 key carol holds";
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(alice2));
+    EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(alice2, groupId), 2u);
+    EXPECT_THROW(alice2.encrypt(groupId, core::Buffer::from("x")), GroupHistoryForkException);
     EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u);
 }
 
-TEST_F(GroupApiLyingBridge, SECURITY_ASiblingsForkAtTheSameSeqMarksTheGroupForked) {
-    // alice1 verifies bob's removal at seq 2; alice2 is served carol's self-update at seq 2 instead. Whichever saves
-    // second finds two digests at one seq: the group is forked for the whole device.
+TEST_F(GroupApiLyingBridge, ALongerBranchShownToASiblingWinsTheSlot_ForkBoundary) {
+    // The fork boundary, stated: the bridge shows alice1 bob's removal (seq 2) and alice2 two self-updates of carol on
+    // the state before it (seq 3). The higher record wins the slot; the instances are not reconciled. A bridge able to
+    // do this can as well withhold the removal from every instance (SECURITY-NOTES, fork boundary).
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
@@ -2418,95 +2442,13 @@ TEST_F(GroupApiLyingBridge, SECURITY_ASiblingsForkAtTheSameSeqMarksTheGroupForke
     client("alice").resolveGroupPrivKey(groupId);
     rollBackTo(atSeq1);
     selfUpdateBy("carol");
+    selfUpdateBy("carol");
     alice2.resolveGroupPrivKey(groupId);
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("alice")));
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(alice2));
-    EXPECT_TRUE(storedPin(groupId, bridge.users.at("alice"))->forked);
-    EXPECT_THROW(alice2.getGroup(groupId), GroupHistoryForkException);
-    GroupApiImplTestAccess::elapse(client("alice"));
+    EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 3u);
     rollBackTo(honest);
-    EXPECT_THROW(client("alice").getGroup(groupId), GroupHistoryForkException) << "the sibling's proof reaches it";
-    EXPECT_THROW(sibling("alice").getGroup(groupId), GroupHistoryForkException) << "and a fresh instance";
-}
-
-TEST_F(GroupApiLyingBridge, SECURITY_ASiblingsForkAboveTheSeqIsLinkedAndRefused) {
-    // alice1 at bob's removal (seq 2), alice2 at carol's branch (seq 3, two self-updates on the pre-removal state).
-    // Different seqs: the second saver links the two by hash before using its pin, fails, and marks the fork. Both
-    // save orders end the same; the slot never holds carol's branch unmarked once the honest instance saved.
-    for (const bool honestFirst : {true, false}) {
-        SCOPED_TRACE(honestFirst ? "honest first" : "fork first");
-        siblings.clear();
-        clients.clear();
-        bridge = Bridge{};
-        SetUp();
-        quiet = true;
-        store = std::make_shared<MemoryPinStore>();
-        const std::string groupId = createGroup({"alice", "bob", "carol"});
-        GroupApiImpl& alice2 = sibling("alice");
-        const Bridge atSeq1 = bridge;
-        client("bob").removeGroupMembers(groupId, {"carol"});
-        client("alice").resolveGroupPrivKey(groupId);
-        rollBackTo(atSeq1);
-        selfUpdateBy("carol");
-        selfUpdateBy("carol");
-        alice2.resolveGroupPrivKey(groupId); // the bridge serves carol's branch from here on
-        GroupApiImpl& first = honestFirst ? client("alice") : alice2;
-        GroupApiImpl& second = honestFirst ? alice2 : client("alice");
-        ASSERT_TRUE(GroupApiImplTestAccess::savePins(first));
-        ASSERT_TRUE(GroupApiImplTestAccess::savePins(second)); // row j, then the link fails: forked
-        ASSERT_TRUE(GroupApiImplTestAccess::savePins(second));
-        const auto stored = storedPin(groupId, bridge.users.at("alice"));
-        ASSERT_TRUE(stored.has_value());
-        EXPECT_TRUE(stored->forked);
-        GroupApiImplTestAccess::elapse(alice2);
-        GroupApiImplTestAccess::elapse(client("alice"));
-        EXPECT_THROW(alice2.getGroup(groupId), GroupHistoryForkException);
-        EXPECT_THROW(client("alice").getGroup(groupId), GroupHistoryForkException);
-    }
-}
-
-TEST_F(GroupApiLyingBridge, SECURITY_ASiblingsFirstContactIsNeverLinkedOverAVerifiedRemovalByHashAlone) {
-    // bob1 verified alice's removal of carol (seq 2). bob2, a first contact, is served carol's self-update at seq 3:
-    // its prevDigest is the removal's, its tree the one before it (carol seated). Genuine and on its own roster, so
-    // bob2 takes it on trust, but no member chain leads from seq 2 to it. Base: `link` walked 2 -> 3 by hash, so the
-    // forged state replaced bob1's pin (fork first) or reached the slot and bob1 through row h1 (honest first).
-    for (const bool honestFirst : {true, false}) {
-        SCOPED_TRACE(honestFirst ? "honest first" : "fork first");
-        siblings.clear();
-        clients.clear();
-        bridge = Bridge{};
-        SetUp();
-        quiet = true;
-        store = std::make_shared<MemoryPinStore>();
-        const std::string groupId = createGroup({"alice", "bob", "carol"});
-        const Bridge beforeRemoval = bridge;
-        GroupApiImpl& bob2 = sibling("bob"); // has loaded the slot: nothing for the group
-        client("bob").getGroup(groupId);     // first contact at seq 1
-        client("alice").removeGroupMembers(groupId, {"carol"});
-        client("bob").getGroup(groupId); // seq 2, a verified step
-        if (honestFirst) {
-            ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
-        }
-        const server::GroupTreeCommit removal = bridge.tree.commits.back();
-        rollBackTo(beforeRemoval);
-        bridge.tree.commits.push_back(removal); // the chain names the removal, the tree is the one before it
-        selfUpdateBy("carol");                  // seq 3 on digest(2)
-        EXPECT_EQ(bob2.getGroup(groupId).statusCode, 0) << "taken on trust: the first-contact boundary";
-        GroupApiImpl& second = honestFirst ? bob2 : client("bob");
-        if (!honestFirst) {
-            ASSERT_TRUE(GroupApiImplTestAccess::savePins(bob2)); // row a
-        }
-        ASSERT_TRUE(GroupApiImplTestAccess::savePins(second)); // unlinked; the member chain fails: forked
-        ASSERT_TRUE(GroupApiImplTestAccess::savePins(second));
-        const auto stored = storedPin(groupId, bridge.users.at("bob"));
-        ASSERT_TRUE(stored.has_value());
-        EXPECT_TRUE(stored->forked);
-        GroupApiImplTestAccess::elapse(client("bob"));
-        GroupApiImplTestAccess::elapse(bob2);
-        EXPECT_THROW(client("bob").getGroup(groupId), GroupHistoryForkException);
-        EXPECT_THROW(client("bob").encrypt(groupId, core::Buffer::from("x")), GroupHistoryForkException);
-        EXPECT_THROW(bob2.getGroup(groupId), GroupHistoryForkException);
-    }
+    EXPECT_THROW(alice2.getGroup(groupId), GroupHistoryForkException) << "the honest state is refused, not taken";
 }
 
 TEST_F(GroupApiLyingBridge, HonestSiblingsAtDifferentSeqsConvergeWithoutAFork) {
@@ -2521,21 +2463,18 @@ TEST_F(GroupApiLyingBridge, HonestSiblingsAtDifferentSeqsConvergeWithoutAFork) {
     alice2.resolveGroupPrivKey(groupId); // seq 4
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("alice")));
     const std::size_t pagesBefore = count("alice", "context.groupGetTreeCommits");
-    ASSERT_TRUE(GroupApiImplTestAccess::savePins(alice2)); // row j: linked, one page
-    EXPECT_EQ(count("alice", "context.groupGetTreeCommits"), pagesBefore + 1);
-    ASSERT_TRUE(GroupApiImplTestAccess::savePins(alice2)); // the linked pin, now the slot's
-    GroupApiImplTestAccess::syncPins(client("alice"));
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(alice2));
+    EXPECT_EQ(count("alice", "context.groupGetTreeCommits"), pagesBefore) << "a merge reads nothing";
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("alice"))); // meets alice2's record
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 4u);
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(alice2, groupId), 4u);
-    EXPECT_FALSE(storedPin(groupId, bridge.users.at("alice"))->forked);
     EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
     EXPECT_EQ(alice2.getGroup(groupId).statusCode, 0);
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnOwnRemovalOverASiblingsFirstContactIsSavedBeforeTheCallReturns) {
-    // bob2 took the group by first contact and never synced it; bob1 then saved its own first contact (seq 1). bob2's
-    // removal of carol (seq 2) must be in the slot, and stay in bob2's memory, when the call returns. Base (row e):
-    // the slot kept seq 1 and bob2 fell back to it, so the pre-removal state was taken again.
+    // bob2 took the group by first contact and never saved it; bob1 then saved its own first contact (seq 1). bob2's
+    // removal of carol (seq 2) must be in the slot, and stay in bob2's memory, when the call returns.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
@@ -2544,21 +2483,19 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnOwnRemovalOverASiblingsFirstContactIsSave
     bob2.getGroup(groupId); // first contact, unsaved (no worker save in a quiet fixture)
     client("bob").getGroup(groupId);
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
-    bob2.removeGroupMembers(groupId, {"carol"}); // within PIN_SYNC_INTERVAL: no sync first
+    bob2.removeGroupMembers(groupId, {"carol"});
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(bob2, groupId), 2u) << "never below its own removal";
     const auto stored = storedPin(groupId, bridge.users.at("bob"));
     ASSERT_TRUE(stored.has_value());
     EXPECT_EQ(stored->seq, 2u) << "in the store before the call returned";
-    EXPECT_FALSE(stored->forked);
     rollBackTo(beforeRemoval);
     EXPECT_THROW(bob2.getGroup(groupId), GroupHistoryForkException);
     EXPECT_THROW(sibling("bob").getGroup(groupId), GroupHistoryForkException) << "and the next session";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnOwnRemovalLinkedOverASiblingsSaveIsSavedBeforeTheCallReturns) {
-    // Both instances synced at seq 1; alice2 saves bob's self-update (seq 2), alice1 removes carol (seq 3) without a
-    // sync first. Row j keeps seq 2 in the slot until the link; once linked, the removal is written before the call
-    // returns. Base: re-queued as a minor move, PIN_SAVE_IDLE_INTERVAL later (never, for a killed tab).
+    // alice2 saves bob's self-update (seq 2), alice1 then removes carol (seq 3): the higher record, written before the
+    // call returns.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
@@ -2567,11 +2504,10 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnOwnRemovalLinkedOverASiblingsSaveIsSavedB
     const Bridge beforeRemoval = bridge;
     alice2.resolveGroupPrivKey(groupId);
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(alice2));
-    client("alice").removeGroupMembers(groupId, {"carol"}); // within PIN_SYNC_INTERVAL: no sync first
+    client("alice").removeGroupMembers(groupId, {"carol"});
     const auto stored = storedPin(groupId, bridge.users.at("alice"));
     ASSERT_TRUE(stored.has_value());
     EXPECT_EQ(stored->seq, 3u) << "in the store before the call returned";
-    EXPECT_FALSE(stored->forked);
     kill("alice");
     rollBackTo(beforeRemoval);
     EXPECT_THROW(sibling("alice").getGroup(groupId), GroupHistoryForkException);
@@ -2580,8 +2516,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnOwnRemovalLinkedOverASiblingsSaveIsSavedB
 TEST_F(GroupApiLyingBridge, SECURITY_AdoptionNeverLowersAPinThatMovedPastItsFirstContact) {
     // Under the new key alice took the group by first contact (seq 1), then verified bob's removal of carol (seq 2)
     // and saved it. The previous key's slot still holds seq 1; adopting it afterwards (renewLeaf adopts on every call)
-    // must not bring the pin back below the removal. Base: `firstContact` stayed set, so the record replaced the pin
-    // and the slot.
+    // must not bring the pin back below the removal.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"}); // seq 1 in the previous key's slot
@@ -2598,26 +2533,22 @@ TEST_F(GroupApiLyingBridge, SECURITY_AdoptionNeverLowersAPinThatMovedPastItsFirs
     EXPECT_THROW(client("alice").getGroup(groupId), GroupHistoryForkException);
 }
 
-TEST_F(GroupApiLyingBridge, SECURITY_ABrokenStoreStopsKeyHandOutAfterThreeFailedSaves) {
-    // A store that refuses saves must not leave the device acting on pins it cannot keep (a frozen slot below a
-    // removal it saw). Reads and decryption keep working.
+TEST_F(GroupApiLyingBridge, ABrokenStoreDoesNotStopTheClientAndIsRetried) {
+    // A store that refuses saves leaves the pins in memory (as without a store); nothing throws, and the next save
+    // once the store recovers writes them in full.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
-    const Envelope sealed = client("bob").encrypt(groupId, core::Buffer::from("hi"));
     store->failSaves = true;
     for (int i = 0; i < 3; ++i) {
         EXPECT_FALSE(GroupApiImplTestAccess::savePins(client("alice")));
     }
-    EXPECT_THROW(client("alice").encrypt(groupId, core::Buffer::from("x")), core::LocalStateUnavailableException);
-    bridge.users.emplace("dave", PrivateKey::generateRandom());
-    EXPECT_THROW(
-        client("alice").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}}),
-        core::LocalStateUnavailableException
-    );
-    EXPECT_EQ(client("alice").decrypt(sealed).data.stdString(), "hi");
-    store->failSaves = false;
     EXPECT_NO_THROW(client("alice").encrypt(groupId, core::Buffer::from("x")));
+    client("bob").removeGroupMembers(groupId, {"carol"});
+    client("alice").resolveGroupPrivKey(groupId);
+    store->failSaves = false;
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("alice")));
+    EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u);
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnEnvelopeNamingAGroupWithoutTheCallersSeatPinsNothing) {
@@ -2695,26 +2626,6 @@ TEST_F(GroupApiLyingBridge, SECURITY_ADeletionEventLeavesThePersistedPinsInPlace
     clients.erase("alice");
     bridge.tree = atSeq1.tree;
     EXPECT_THROW(client("alice").getGroup(groupId), GroupHistoryForkException);
-}
-
-TEST_F(GroupApiLyingBridge, SECURITY_ALostRaceRefusalSurvivesTheNextSession) {
-    // T4-17 across sessions: the bridge took alice's removal at seq 2, called it a lost race and serves seq 1 again.
-    // The next session must not sign a second statement at seq 2 either.
-    quiet = true;
-    store = std::make_shared<MemoryPinStore>();
-    const std::string groupId = createGroup({"alice", "bob", "carol"});
-    const Bridge atSeq1 = bridge;
-    int removals = 0;
-    bridge.afterRemoval = [&] {
-        ++removals;
-        bridge.tree = atSeq1.tree;
-        bridge.rest = atSeq1.rest;
-        throw privmx::utils::PrivmxException("ROTATED_ALREADY", privmx::utils::PrivmxException::RPC, 0x621C);
-    };
-    EXPECT_THROW(client("alice").removeGroupMembers(groupId, {"carol"}), GroupDataIntegrityException);
-    kill("alice"); // the refusal was saved with the throttled pin save or not at all: only the release is synchronous
-    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
-    EXPECT_EQ(removals, 1) << "a second statement at seq 2";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AListingKeyIsHandedOutAcrossSessionsOnlyAtThePersistedState) {
@@ -2840,7 +2751,8 @@ TEST_F(GroupApiLyingBridge, AdoptPreviousIdentityCarriesThePinsToTheNewKey) {
     EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u) << "carried to the new key's slot";
 }
 
-TEST_F(GroupApiLyingBridge, AnAdoptedRecordReplacesAFirstContactPin) {
+TEST_F(GroupApiLyingBridge, AnAdoptedRecordNeverReplacesAFirstContactPin) {
+    // The previous key's slot is writable by whoever holds that key: it only fills groups with no pin.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob"});
@@ -2852,8 +2764,7 @@ TEST_F(GroupApiLyingBridge, AnAdoptedRecordReplacesAFirstContactPin) {
     client("alice").getGroup(groupId); // the new key's first contact: seq 1, on trust
     ASSERT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 1u);
     client("alice").adoptPreviousIdentity(previous);
-    EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 2u);
-    EXPECT_THROW(client("alice").getGroup(groupId), GroupHistoryForkException);
+    EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 1u) << "the first contact stays";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnAdoptedRecordNeverRaisesAnExistingPin) {
@@ -2871,13 +2782,15 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnAdoptedRecordNeverRaisesAnExistingPin) {
     pin.seq = 9;
     pin.digest = std::string(32, 'p');
     planted.tree[groupId] = pin;
+    planted.planes[groupId] = {99, 99, 99};
+    const std::array<std::int64_t, 3> versionsBefore = GroupApiImplTestAccess::versionPins(client("alice"), groupId);
     const std::string current = store->keyWith("group-pins/", "/" + bridge.users.at("alice").getPublicKey().toBase58DER());
     const std::string previousSlot = current.substr(0, current.rfind('/') + 1) + previous.getPublicKey().toBase58DER();
     store->put(previousSlot, core::sealLocal(previous, PinBlob::LABEL, PinBlob::VERSION, previousSlot, PinBlob::encode(planted)));
-    const std::string before = store->get(current);
     client("alice").adoptPreviousIdentity(previous);
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 2u);
-    EXPECT_EQ(store->get(current), before) << "the current slot is unchanged";
+    EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u) << "the current slot is not raised";
+    EXPECT_EQ(GroupApiImplTestAccess::versionPins(client("alice"), groupId), versionsBefore) << "nor the version pins";
     EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
 }
 
@@ -2903,31 +2816,6 @@ TEST_F(GroupApiLyingBridge, SECURITY_ACorruptedPreviousIdentityBlobAbortsTheAdop
     store->put(slot, good);
     client("alice").adoptPreviousIdentity(previous);
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 2u) << "a retry once the slot is fixed";
-}
-
-TEST_F(GroupApiLyingBridge, SECURITY_AReleasedStatementSurvivesARestartBeforeThePinSave) {
-    // m2 9.1: the bridge may have applied alice's removal while answering with an error. A restart (killed, nothing
-    // saved but the write-ahead entry) must not sign a different statement at the same prevDigest.
-    quiet = true;
-    store = std::make_shared<MemoryPinStore>();
-    const std::string groupId = createGroup({"alice", "bob", "carol"});
-    bridge.beforeRemoval = [](std::unique_lock<std::mutex>&) { refuse(); };
-    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
-    ASSERT_EQ(sent(bridge), 1u);
-    kill("alice");
-    EXPECT_THROW(client("alice").rotateGroupKey(groupId), GroupCommitUnresolvedException);
-    EXPECT_EQ(sent(bridge), 1u) << "base: a rotation signed at the removal's prevDigest";
-}
-
-TEST_F(GroupApiLyingBridge, AReleasedEntryIsWrittenBeforeTheRequestIsSent) {
-    quiet = true;
-    store = std::make_shared<MemoryPinStore>();
-    const std::string groupId = createGroup({"alice", "bob", "carol"});
-    store->failSaves = true;
-    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
-    EXPECT_EQ(sent(bridge), 0u) << "nothing sent without the entry";
-    store->failSaves = false;
-    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARenewalAdoptsThePreviousKeysPinsFirst) {
@@ -2971,9 +2859,9 @@ TEST_F(GroupApiLyingBridge, SECURITY_AdoptionNeverLowersAFirstContactToTheOlderR
     EXPECT_TRUE(!stored.has_value() || stored->seq == 3u) << "the slot is not lowered either";
 }
 
-TEST_F(GroupApiLyingBridge, AFirstContactAboveThePreviousKeysRecordIsLinkedToItAndStaysUsable) {
-    // The same with an honest bridge: adoption links the first contact to the previous key's record by a member chain
-    // (seq 1 -> 3), so the renewal and the reads after it go on at seq 3 (a pending or failed link would throw).
+TEST_F(GroupApiLyingBridge, AFirstContactAboveThePreviousKeysRecordStaysUsable) {
+    // The same with an honest bridge: adoption leaves the first contact (seq 3) as it is, so the renewal and the reads
+    // after it go on at seq 3.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
@@ -2987,5 +2875,5 @@ TEST_F(GroupApiLyingBridge, AFirstContactAboveThePreviousKeysRecordIsLinkedToItA
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("bob"), groupId), 3u);
     EXPECT_EQ(client("bob").getGroup(groupId).statusCode, 0);
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
-    EXPECT_FALSE(storedPin(groupId, bridge.users.at("bob"))->forked);
+    EXPECT_EQ(storedPin(groupId, bridge.users.at("bob"))->seq, 3u);
 }

@@ -26,7 +26,7 @@ namespace group {
 namespace keytree {
 
 // 01: the body of the `group-pins` slot (sealed by core `sealLocal`), and the rule two instances of one device merge
-// their pins by. Integers big-endian, lp = u32 length || bytes:
+// their pins by (`higher`). Integers big-endian, lp = u32 length || bytes:
 //
 //   body   = u32 count || record*count                                   (sorted by groupId, no duplicates)
 //   record = lp(groupId) || lp(contextId) || u64 seq || lp(digest) || u64 date
@@ -34,7 +34,7 @@ namespace keytree {
 //          || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy) || lp(ownerCanBeRemovedFromManagers)
 //          || lp(rulesHash) || lp(treeHash) || u64 refusedSeq || u64 seenAt
 //          || u64 planeRosterVersion || u64 planePublicMetaVersion || u64 planePrivateMetaVersion
-//          || u8 flags        bit0 roster present, bit1 nodes present (requires bit0), bit2 forked, others 0
+//          || u8 flags        bit0 roster present, bit1 nodes present (requires bit0), others 0
 //          || [u32 nUsers || lp(user)* || u32 nManagers || lp(manager)*]          if bit0
 //          || [u32 nNodes || (u32 nodeIndex || u32 generation)*]                   if bit1
 //
@@ -47,24 +47,18 @@ public:
     // ponytail: full rosters up to 1 MiB, the rest compact (one genesis replay each); per-group slots if it bites.
     static constexpr std::size_t BUDGET = 1 << 20;
 
-    // Per group, the merge of the pin in memory (M, as exported) with the stored record (R), S = M.synced:
-    //   TakeMine   R absent; or R is what this instance last synced with (M moved since); or the slot went back (h2)
-    //   TakeStored M absent; or M was never synced (a first contact here); or M is S and R moved past it
-    //   Same       one state
-    //   Fork       either forked, another context, or two digests at one seq: `forked` in the slot and in memory
-    //   Pending    M waits for a link already: the slot keeps R
-    //   Unlinked   both moved since S at different seqs: the slot keeps R, M is held until `TreeVerifier::link`
-    // A seq-0 side counts as absent; refusedSeq, seenAt and the planes are merged by max whatever the case.
-    enum class Case { TakeMine, TakeStored, Same, Fork, Pending, Unlinked };
-
     // Two passes, no record ever dropped: every group compact, then by seenAt descending upgraded to full while the
     // body stays within BUDGET (above it, compact records are still all written).
     static std::string encode(const TreeVerifier::PinSet& pins);
     // Strict: nullopt on a length past the end, trailing bytes, unknown flag bits, bit1 without bit0, unsorted or
     // duplicate group ids.
     static std::optional<TreeVerifier::PinSet> decode(const std::string& body);
-    static Case decide(const TreeVerifier::Pin* mine, const TreeVerifier::Pin* stored);
-    // The slot's side of `decide` for every group.
+    // Two records of one group, both verified on this device: the higher seq wins; at one seq `mine` stays (with
+    // `other`'s roster and generations folded in at the same digest). A seq-0 side counts as absent. `refusedSeq` and
+    // `seenAt` by max; generations by max when `other` wins. Two branches at one seq are not reconciled: the device
+    // keeps whichever it holds, as a bridge able to fork could as well withhold (SECURITY-NOTES, fork boundary).
+    static TreeVerifier::Pin higher(const TreeVerifier::Pin* mine, const TreeVerifier::Pin* other);
+    // `higher` for every group, planes by max: what a save writes.
     static TreeVerifier::PinSet mergeForSave(const TreeVerifier::PinSet& mine, const TreeVerifier::PinSet& stored);
 };
 

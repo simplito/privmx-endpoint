@@ -73,8 +73,8 @@ public:
     bool renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey);
 
     // 01: the pins the PinStore holds for `previous` (an earlier identity key of this user), taken only for groups
-    // with no pin under the current key or only a first-contact one; never replaces or raises a verified pin. No
-    // store, the current key, or adopted already: nothing. Throws core::LocalStateIntegrityException when the previous
+    // with no pin under the current key (never replacing or raising one) and saved under the current key. No store,
+    // the current key, or adopted already: nothing. Throws core::LocalStateIntegrityException when the previous
     // key's stored pins do not open (nothing adopted), and what the store throws.
     void adoptPreviousIdentity(const privmx::crypto::PrivateKey& previous);
 
@@ -557,38 +557,25 @@ private:
     std::map<std::string, PendingCarry> _pendingCarry;
     core::ReleaseGate _releaseGate{RELEASE_WINDOW_MS};
     // 01: pins kept in the connection's PinStore, shared by every GroupApi of this identity on this Bridge.
-    // `syncPins` loads the slot (at most once per PIN_SYNC_INTERVAL unless forced; an unchanged blob costs a compare)
-    // and merges it into memory; `savePins` merges memory into the slot (compare-and-swap) and re-imports it. Saves
-    // run on the worker (major moves within PIN_SAVE_INTERVAL, minor ones within PIN_SAVE_IDLE_INTERVAL), after every
-    // own commit but a background self-update before the call returns, on disconnect and in the destructor.
-    void syncPins(bool force = false);
+    // `loadPins` merges the slot into memory once, at construction; `savePins` merges memory into the slot
+    // (compare-and-swap, `PinBlob::higher`) and the result back into memory. Saves run on the worker (major moves
+    // within PIN_SAVE_INTERVAL, minor ones within PIN_SAVE_IDLE_INTERVAL), after every own commit but a background
+    // self-update before the call returns, on disconnect and in the destructor. A failed save is logged and retried in
+    // full; the pins in memory keep protecting this instance meanwhile.
+    void loadPins();
     void pinsMoved(bool major);
     bool savePins(bool all = false);
-    // Groups a merge left unlinked, linked one page each (`TreeVerifier::link`); failures stay pending. True when a
-    // link kept a pin the slot is behind.
-    bool linkPins(const std::vector<std::string>& groups);
-    // Fail closed: after PIN_SAVE_FAILURES_MAX failed saves in a row, one more try, then LocalStateUnavailableException.
-    void assertLocalStateSaved();
     // The adoption itself (`adoptPreviousIdentity`, and the bodies `ConnectionImpl::adoptPreviousIdentity` staged).
     void adoptBody(const keytree::TreeVerifier::PinSet& adopted);
-    // m2 9.1: the gate's entries in the `commit-released` slot: loaded at construction, written ahead of every
-    // release (`submit`). A save that does not happen throws and nothing is sent.
-    void loadReleased();
-    void saveReleased(const std::string& groupId, const core::ReleaseGate::Released& released);
 
-    // ponytail constants: 1 s for major moves and the sync, 30 s for self-update-only moves, 3 failed saves.
+    // ponytail constants: 1 s for major moves, 30 s for self-update-only moves.
     static constexpr std::chrono::milliseconds PIN_SAVE_INTERVAL{1000};
     static constexpr std::chrono::milliseconds PIN_SAVE_IDLE_INTERVAL{30000};
-    static constexpr std::chrono::milliseconds PIN_SYNC_INTERVAL{1000};
-    static constexpr int PIN_SAVE_FAILURES_MAX = 3;
 
     std::shared_ptr<core::PinStoreInterface> _pinStore; // set once, in the constructor
-    std::string _pinStoreKey, _releasedKey;
-    std::mutex _pinSaveMutex; // serialises save, sync and adoption; guards the four below
+    std::string _pinStoreKey;
+    std::mutex _pinSaveMutex; // serialises saves; guards the two below
     bool _pinSaveFull = false;
-    int _pinSaveFailures = 0;
-    std::chrono::steady_clock::time_point _lastPinSync;
-    std::string _lastBlob; // the slot as last loaded or saved here
     std::set<std::string> _adoptedIdentities;
     // The previous identity keys handed to `adoptPreviousIdentity` (renewLeaf), pins stored or not; together with
     // ConnectionImpl::previousIdentities, what `climbForPlanning` knows of an own key change.

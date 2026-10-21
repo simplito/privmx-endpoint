@@ -651,7 +651,7 @@ protected:
         const auto decoded = PinBlob::decode(PinBlob::encode(pins));
         EXPECT_TRUE(decoded.has_value());
         auto next = std::make_unique<TreeVerifier>();
-        next->applyStored(nullptr, decoded.value_or(TreeVerifier::PinSet{}), false);
+        next->mergeStored(decoded.value_or(TreeVerifier::PinSet{}).tree);
         return next;
     }
 
@@ -1976,7 +1976,7 @@ TEST_F(TreeVerification, SECURITY_ARosterlessPinIsReplayedFromGenesisBeforeItIsE
     pin.seq = 2;
     pin.digest = std::string(32, 'x');
     TreeVerifier offChain;
-    offChain.applyStored(nullptr, PinBlob::decode(PinBlob::encode(pins)).value(), false);
+    offChain.mergeStored(PinBlob::decode(PinBlob::encode(pins)).value().tree);
     EXPECT_THROW(
         offChain.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment()), GroupDataIntegrityException
     );
@@ -2004,76 +2004,45 @@ TEST_F(TreeVerification, SECURITY_ALoadedPinMovesOnlyUnderTheNowQuestion) {
     EXPECT_THROW(next->verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, env), GroupDataIntegrityException);
 }
 
-TEST_F(TreeVerification, SECURITY_AForkedPinRefusesEveryRead) {
-    create(40, 0);
-    verify(id(9), false);
-    TreeVerifier::PinSet pins;
-    pins.tree = verifierOf(id(9)).exportPins(true);
-    pins.tree.at(GROUP_ID).forked = true;
-    TreeVerifier next;
-    next.applyStored(nullptr, PinBlob::decode(PinBlob::encode(pins)).value(), false);
-    const server::GroupInfo served = bridge.serve(id(9), false);
-    EXPECT_THROW(next.verify(served, TreeVerifier::Scope::Path, environment()), GroupHistoryForkException);
-    EXPECT_THROW(next.verifyListed(served, environment()), GroupHistoryForkException);
-    EXPECT_THROW(next.assertMaySignAt(GROUP_ID, 2), GroupHistoryForkException);
-    EXPECT_FALSE(next.pinnedAt(GROUP_ID, "ctx", served.keyVersion, served.groupPubKey));
-    EXPECT_FALSE(next.agreesWithPin(GROUP_ID, "ctx", served.keyVersion, served.groupPubKey));
-    EXPECT_TRUE(next.needsRead(GROUP_ID));
-}
-
-TEST_F(TreeVerification, SECURITY_AnUnlinkedPinIsLinkedBeforeUse) {
-    // Row j: this instance synced at seq 2 and moved to 3; a sibling stored seq 5 meanwhile.
+TEST_F(TreeVerification, SECURITY_AHigherStoredRecordIsTakenAndReadsContinueFromIt) {
+    // Another instance of this device verified further (seq 5) while this one stood at seq 3: its record is taken
+    // as this device's verified state, and the next read is checked against it.
     create(40, 0);
     selfUpdate(id(1));
-    verify(id(9), false);
-    TreeVerifier& mine = verifierOf(id(9));
-    const auto exported = mine.exportPins(true);
-    mine.applyStored(&exported, TreeVerifier::PinSet{}, true); // saved: synced at seq 2
     selfUpdate(id(2));
     verify(id(9), false); // seq 3
+    TreeVerifier& mine = verifierOf(id(9));
     selfUpdate(id(3));
     selfUpdate(id(4));
     TreeVerifier sibling;
     sibling.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment()); // seq 5
-    const TreeVerifier::Pin siblings = sibling.exportPins(true).at(GROUP_ID);
     const server::GroupInfo served = bridge.serve(id(9), false);
-
-    // Transport failure: still pending, and no verified state is handed out meanwhile.
-    TreeVerifier::Environment down = environment();
-    down.commitsBetween = [](std::uint64_t, std::uint64_t) -> server::GroupGetTreeCommitsResult {
-        throw std::runtime_error("offline");
-    };
-    const std::vector<std::string> unlinked = mine.applyStored(nullptr, storedWith(siblings), false);
-    ASSERT_EQ(unlinked, std::vector<std::string>{GROUP_ID});
-    EXPECT_THROW(mine.link(GROUP_ID, down), std::runtime_error);
-    EXPECT_TRUE(mine.needsRead(GROUP_ID));
-    EXPECT_FALSE(mine.pinnedAt(GROUP_ID, "ctx", served.keyVersion, served.groupPubKey));
-    // Linked: the higher of the two, one chain.
-    mine.link(GROUP_ID, environment());
-    EXPECT_FALSE(mine.needsRead(GROUP_ID));
+    mine.mergeStored(storedWith(sibling.exportPins(true).at(GROUP_ID)).tree);
     EXPECT_EQ(mine.pinnedSeq(GROUP_ID), 5u);
     EXPECT_TRUE(mine.pinnedAt(GROUP_ID, "ctx", served.keyVersion, served.groupPubKey));
-
-    // Not linked (the sibling's record is another branch at seq 5): forked, every read refused.
-    TreeVerifier other;
-    other.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment());
-    const auto otherExported = other.exportPins(true);
-    other.applyStored(&otherExported, TreeVerifier::PinSet{}, true);
     selfUpdate(id(5));
-    other.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment()); // 6, synced at 5
-    TreeVerifier::Pin branch = siblings;
+    EXPECT_NO_THROW(mine.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment()));
+    EXPECT_EQ(mine.pinnedSeq(GROUP_ID), 6u);
+}
+
+TEST_F(TreeVerification, SECURITY_ARecordOfAnotherBranchMakesReadsFailNotPass) {
+    // The fork boundary: two instances shown two branches are not reconciled. The higher record wins, and the branch
+    // this instance is then served is refused as a rollback, never taken in silence.
+    create(40, 0);
+    selfUpdate(id(1));
+    verify(id(9), false); // seq 2
+    TreeVerifier& mine = verifierOf(id(9));
+    TreeVerifier::Pin branch = mine.exportPins(true).at(GROUP_ID);
     branch.seq = 8;
     branch.digest = std::string(32, 'b');
-    ASSERT_EQ(other.applyStored(nullptr, storedWith(branch), false), std::vector<std::string>{GROUP_ID});
-    selfUpdate(id(6));
-    selfUpdate(id(7));
-    EXPECT_THROW(other.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment()), GroupHistoryForkException)
-        << "the read links first, and the link fails";
-    EXPECT_THROW(other.assertMaySignAt(GROUP_ID, 9), GroupHistoryForkException);
+    mine.mergeStored(storedWith(branch).tree);
+    EXPECT_EQ(mine.pinnedSeq(GROUP_ID), 8u);
+    selfUpdate(id(2));
+    EXPECT_THROW(mine.verify(bridge.serve(id(9), false), TreeVerifier::Scope::Path, environment()), GroupHistoryForkException);
 }
 
 TEST_F(TreeVerification, AnImportedPinIsNeverLowered) {
-    // Row h2: the slot went back (local storage restored); memory keeps its verified pin.
+    // The slot went back (local storage restored): memory keeps its verified pin.
     create(40, 0);
     verify(id(9), false);
     TreeVerifier::Pin old = verifierOf(id(9)).exportPins(true).at(GROUP_ID);
@@ -2081,11 +2050,8 @@ TEST_F(TreeVerification, AnImportedPinIsNeverLowered) {
     selfUpdate(id(2));
     verify(id(9), false);
     TreeVerifier& mine = verifierOf(id(9));
-    const auto exported = mine.exportPins(true);
-    mine.applyStored(&exported, TreeVerifier::PinSet{}, true);
-    EXPECT_TRUE(mine.applyStored(nullptr, storedWith(old), false).empty());
+    mine.mergeStored(storedWith(old).tree);
     EXPECT_EQ(mine.pinnedSeq(GROUP_ID), 3u);
-    EXPECT_FALSE(mine.needsRead(GROUP_ID));
 }
 
 TEST_F(TreeVerification, ASeqZeroImportOnlyRaisesRefusedSeq) {
@@ -2094,12 +2060,12 @@ TEST_F(TreeVerification, ASeqZeroImportOnlyRaisesRefusedSeq) {
     TreeVerifier::Pin lostRace;
     lostRace.refusedSeq = 7;
     TreeVerifier& mine = verifierOf(id(9));
-    mine.applyStored(nullptr, storedWith(lostRace), false);
+    mine.mergeStored(storedWith(lostRace).tree);
     EXPECT_EQ(mine.pinnedSeq(GROUP_ID), 1u);
     EXPECT_THROW(mine.assertMaySignAt(GROUP_ID, 7), GroupDataIntegrityException);
     EXPECT_NO_THROW(mine.assertMaySignAt(GROUP_ID, 8));
     TreeVerifier fresh;
-    fresh.applyStored(nullptr, storedWith(lostRace), false);
+    fresh.mergeStored(storedWith(lostRace).tree);
     EXPECT_EQ(fresh.pinnedSeq(GROUP_ID), 0u) << "no pin from a seq-0 record";
 }
 

@@ -127,14 +127,18 @@ public:
         const std::vector<server::GroupInfo>& groups,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
-        const std::optional<PriorRole>& prior = std::nullopt
+        const std::optional<PriorRole>& prior = std::nullopt,
+        // false: compare with the version pins but never move them (an answer the caller may still refuse).
+        bool storePins = true
     );
 
     Group validateDecryptAndConvertGroup(
         const server::GroupInfo& groupInfo,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
         const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
-        const std::optional<PriorRole>& prior = std::nullopt
+        const std::optional<PriorRole>& prior = std::nullopt,
+        // false: compare with the version pins but never move them (an answer the caller may still refuse).
+        bool storePins = true
     );
 
     // Deliberately does not open the metadata entry: that plane may sit at an older epoch, and waiting on its

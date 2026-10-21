@@ -1662,7 +1662,8 @@ TEST_F(GroupKeyTreeIntegrityTest, pins_saved_by_one_session_carry_the_next_acros
 }
 
 TEST_F(GroupKeyTreeIntegrityTest, two_live_sessions_of_one_user_converge_on_one_store) {
-    // Two GroupApis of one connection are two instances on one store: what one verifies reaches the other.
+    // Two GroupApis of one connection are two instances on one store: each verifies on its own and both save into
+    // the one slot (the higher record wins), so neither falls back after the other saw the removal.
     const std::string groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(2)});
     const auto store = std::make_shared<TestPinStore>();
     disconnect();

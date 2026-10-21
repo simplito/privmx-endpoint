@@ -39,9 +39,6 @@ namespace {
     throw GroupDataIntegrityException(why);
 }
 
-// `link`: the bridge answered a page short or empty (withheld, not disproved).
-struct Withheld {};
-
 CommitStatement parse(const server::GroupTreeCommit& wire) {
     try {
         return TreeCommits::fromWire(wire);
@@ -515,18 +512,20 @@ void TreeVerifier::verify(const server::GroupInfo& group, Scope scope, const Env
             toVerify.push_back(statement);
         }
     }
-    verifyStatements(group.id, group.contextId, toVerify, environment, movesPin(group.id, latest));
+    bool checkedNow = movesPin(group.id, latest);
+    verifyStatements(group.id, group.contextId, toVerify, environment, checkedNow);
 
     // History: never behind what this session has verified, and connected to it by statements of members. Against
     // the pin as it stands when this state is stored: one a concurrent verification moved meanwhile, perhaps onto
     // another branch, is checked against afresh rather than overwritten.
-    Pin pin = usablePin(group.id, environment);
+    Pin pin = pinOf(group.id);
     for (;;) {
         if (pin.seq != 0) {
             if (latest.seq < pin.seq || (latest.seq == pin.seq && TreeCommits::digest(latest) != pin.digest)) {
                 throw GroupHistoryForkException();
             }
             if (latest.seq > pin.seq) {
+                assertValidNow(group.id, group.contextId, latest, environment, checkedNow);
                 verifyChain(group.id, group.contextId, pin, latest.seq, TreeCommits::digest(latest), environment);
             }
         } else if (!onRoster(group.users, group.managers, latest.committer)) {
@@ -540,14 +539,25 @@ void TreeVerifier::verify(const server::GroupInfo& group, Scope scope, const Env
         }
         // Everything passed; only now does this state become the reference for the next read.
         if (storeIfPinned(
-                group.id, pin, group.contextId, latest, group.users, group.managers, servedRules(group), state.nodes,
-                pin.seq == 0
+                group.id, pin, group.contextId, latest, group.users, group.managers, servedRules(group), state.nodes
             )) {
             return;
         }
-        if (pin.forked || pin.unlinked) {
-            pin = usablePin(group.id, environment); // a sync marked it meanwhile
-        }
+    }
+}
+
+void TreeVerifier::assertValidNow(
+    const std::string& groupId,
+    const std::string& contextId,
+    const CommitStatement& latest,
+    const Environment& environment,
+    bool& checkedNow
+) {
+    // N-3 for a pin that appeared or moved after `movesPin` looked (a concurrent read, or stored records merged in):
+    // the latest statement moves it, so its committer's key must be accepted now too.
+    if (!checkedNow) {
+        verifyStatements(groupId, contextId, {latest}, environment, true);
+        checkedNow = true;
     }
 }
 
@@ -559,14 +569,13 @@ bool TreeVerifier::storeIfPinned(
     const std::vector<std::string>& users,
     const std::vector<std::string>& managers,
     const GroupRules& rules,
-    const std::vector<TreeNodeState>& nodes,
-    bool firstContact
+    const std::vector<TreeNodeState>& nodes
 ) {
     std::optional<bool> moved;
     {
         std::lock_guard lock(_mutex);
         Pin& stored = _pins[groupId];
-        if (stored.seq != seen.seq || stored.digest != seen.digest || stored.forked || stored.unlinked) {
+        if (stored.seq != seen.seq || stored.digest != seen.digest) {
             seen = stored;
             return false;
         }
@@ -577,9 +586,6 @@ bool TreeVerifier::storeIfPinned(
             std::uint32_t& generation = stored.generations[node.nodeIndex];
             raised = raised || node.generation > generation;
             generation = std::max(generation, node.generation);
-        }
-        if (firstContact) {
-            stored.firstContact = true;
         }
         moved = movedLocked(groupId, before, stored, raised);
     }
@@ -596,8 +602,7 @@ TreeVerifier::Snapshot TreeVerifier::snapshotOf(const Pin& pin) {
         .rosterHash = pin.roster.hash,
         .rulesHash = pin.rules.hash,
         .refusedSeq = pin.refusedSeq,
-        .hasRoster = pin.hasRoster,
-        .forked = pin.forked
+        .hasRoster = pin.hasRoster
     };
 }
 
@@ -609,7 +614,7 @@ std::optional<bool> TreeVerifier::movedLocked(
 ) {
     const bool major = before.contextId != after.contextId || before.keyVersion != after.keyVersion ||
         before.rosterHash != after.roster.hash || before.rulesHash != after.rules.hash ||
-        before.forked != after.forked || after.refusedSeq > before.refusedSeq;
+        after.refusedSeq > before.refusedSeq;
     const bool minor = before.seq != after.seq || before.digest != after.digest || before.hasRoster != after.hasRoster ||
         generationsRaised;
     if (!major && !minor) {
@@ -629,21 +634,6 @@ void TreeVerifier::onPinsMoved(std::function<void(bool)> callback) {
     _onPinsMoved = std::move(callback);
 }
 
-TreeVerifier::Pin TreeVerifier::usablePin(const std::string& groupId, const Environment& environment) {
-    // ponytail: a few rounds; only a sync racing every link keeps it pending, and then the read is refused.
-    for (int round = 0; round < 4; ++round) {
-        Pin pin = pinOf(groupId);
-        if (pin.forked) {
-            throw GroupHistoryForkException(); // two instances of this device verified incompatible histories
-        }
-        if (!pin.unlinked) {
-            return pin;
-        }
-        link(groupId, environment);
-    }
-    reject("the group's pin is still being reconciled with another instance's");
-}
-
 TreeVerifier::Pin TreeVerifier::pinOf(const std::string& groupId) {
     std::lock_guard lock(_mutex);
     const auto it = _pins.find(groupId);
@@ -658,9 +648,6 @@ void TreeVerifier::storeLocked(
     const std::vector<std::string>& managers,
     const GroupRules& rules
 ) {
-    if (stored.seq != latest.seq) {
-        stored.firstContact = false; // moved past the first contact: verified (or own) knowledge from here on
-    }
     stored.contextId = contextId;
     stored.seq = latest.seq;
     stored.digest = TreeCommits::digest(latest);
@@ -683,11 +670,12 @@ void TreeVerifier::verifyListed(const server::GroupInfo& summary, const Environm
     if (!describes(latest, summary) || !onRoster(summary.users, summary.managers, latest.committer)) {
         reject();
     }
-    verifyStatements(summary.id, summary.contextId, {latest}, environment, movesPin(summary.id, latest));
+    bool checkedNow = movesPin(summary.id, latest);
+    verifyStatements(summary.id, summary.contextId, {latest}, environment, checkedNow);
 
     // A group this process has verified is taken only as a continuation of that state; below the pin is the caller's.
     // Against the pin as it stands when this one is stored, as in `verify`.
-    Pin pin = usablePin(summary.id, environment);
+    Pin pin = pinOf(summary.id);
     for (;;) {
         if (pin.seq != 0) {
             if (latest.seq < pin.seq) {
@@ -699,18 +687,15 @@ void TreeVerifier::verifyListed(const server::GroupInfo& summary, const Environm
                 }
                 return;
             }
+            assertValidNow(summary.id, summary.contextId, latest, environment, checkedNow);
             verifyChain(summary.id, summary.contextId, pin, latest.seq, TreeCommits::digest(latest), environment);
         }
         // Pinned like a member's read, so the next listing cannot go back to a state from before a removal. No tree
         // was checked, so no generations: those stay whatever a member's read pinned.
         if (storeIfPinned(
-                summary.id, pin, summary.contextId, latest, summary.users, summary.managers, servedRules(summary), {},
-                pin.seq == 0
+                summary.id, pin, summary.contextId, latest, summary.users, summary.managers, servedRules(summary), {}
             )) {
             return;
-        }
-        if (pin.forked || pin.unlinked) {
-            pin = usablePin(summary.id, environment);
         }
     }
 }
@@ -731,9 +716,6 @@ void TreeVerifier::pinCommitted(
     {
         std::lock_guard lock(_mutex);
         Pin& stored = _pins[groupId];
-        if (stored.forked) {
-            throw GroupHistoryForkException();
-        }
         if (stored.seq > statement.seq) {
             return; // a read has verified a later state already
         }
@@ -779,7 +761,7 @@ bool TreeVerifier::pinnedAt(
 ) {
     std::lock_guard lock(_mutex);
     const auto it = _pins.find(groupId);
-    return it != _pins.end() && !it->second.forked && !it->second.unlinked && it->second.contextId == contextId &&
+    return it != _pins.end() && it->second.contextId == contextId &&
         !groupPubKey.empty() &&
         it->second.groupPubKey == groupPubKey &&
         static_cast<std::int64_t>(it->second.keyVersion) == keyVersion;
@@ -822,7 +804,7 @@ std::map<std::uint64_t, CommitStatement> TreeVerifier::epochOpeners(
     {
         std::lock_guard lock(_mutex);
         const auto it = _pins.find(groupId);
-        if (it == _pins.end() || it->second.seq == 0 || it->second.contextId != contextId || it->second.forked) {
+        if (it == _pins.end() || it->second.seq == 0 || it->second.contextId != contextId) {
             reject();
         }
         pinSeq = it->second.seq;
@@ -924,12 +906,6 @@ void TreeVerifier::assertMaySignAt(const std::string& groupId, std::uint64_t seq
     if (it == _pins.end()) {
         return;
     }
-    if (it->second.forked) {
-        throw GroupHistoryForkException();
-    }
-    if (it->second.unlinked) {
-        reject("the group's pin is being reconciled with another instance's; read the group again");
-    }
     if (seq <= it->second.refusedSeq) {
         reject(); // the bridge said a concurrent commit took that seq, and now serves none there
     }
@@ -953,22 +929,7 @@ TreeVerifier::Pin compactOf(const TreeVerifier::Pin& pin) {
     compact.refusedSeq = pin.refusedSeq;
     compact.hasRoster = false;
     compact.seenAt = pin.seenAt;
-    compact.forked = pin.forked;
-    compact.synced = pin.synced;
-    compact.firstContact = pin.firstContact;
-    compact.unlinked = pin.unlinked;
     return compact;
-}
-
-bool sameState(const TreeVerifier::Pin* a, const TreeVerifier::Pin* b) {
-    if (a == nullptr || b == nullptr) {
-        return a == b;
-    }
-    return a->seq == b->seq && a->digest == b->digest && a->unlinked == b->unlinked && a->forked == b->forked;
-}
-
-std::optional<std::pair<std::uint64_t, std::string>> stateOf(const TreeVerifier::Pin& pin) {
-    return std::make_pair(pin.seq, pin.digest);
 }
 
 } // namespace
@@ -983,221 +944,16 @@ std::map<std::string, TreeVerifier::Pin> TreeVerifier::exportPins(bool all) {
     return exported;
 }
 
-std::vector<std::string> TreeVerifier::applyStored(
-    const std::map<std::string, Pin>* exported,
-    const PinSet& stored,
-    bool wrote
-) {
-    std::vector<std::string> unlinked;
-    bool forkedHere = false;
-    {
-        std::lock_guard lock(_mutex);
-        std::set<std::string> groups;
-        for (const auto& [groupId, record] : stored.tree) {
-            groups.insert(groupId);
-        }
-        if (exported != nullptr) {
-            for (const auto& [groupId, pin] : *exported) {
-                groups.insert(groupId);
-            }
-        }
-        for (const std::string& groupId : groups) {
-            const auto r = stored.tree.find(groupId);
-            const Pin* record = r == stored.tree.end() ? nullptr : &r->second;
-            const auto c = _pins.find(groupId);
-            Pin* current = c == _pins.end() ? nullptr : &c->second;
-            const Pin* mine = current;
-            if (exported != nullptr) {
-                const auto e = exported->find(groupId);
-                mine = e == exported->end() ? nullptr : &e->second;
-            }
-            const PinBlob::Case row = PinBlob::decide(mine, record);
-            const bool asExported = exported == nullptr || sameState(mine, current);
-            const bool realRecord = record != nullptr && record->seq > 0;
-            if (row == PinBlob::Case::Fork) {
-                if (current != nullptr && !current->forked) {
-                    current->forked = true;
-                    if (!wrote) {
-                        _dirty.insert(groupId); // the slot does not say so yet
-                        forkedHere = true;
-                    }
-                }
-            } else if (asExported) {
-                switch (row) {
-                case PinBlob::Case::TakeMine:
-                    if (wrote && current != nullptr && current->seq > 0) {
-                        current->synced = stateOf(*current);
-                    }
-                    break;
-                case PinBlob::Case::TakeStored: {
-                    Pin taken = *record;
-                    if (current != nullptr) {
-                        taken.refusedSeq = std::max(taken.refusedSeq, current->refusedSeq);
-                        taken.seenAt = std::max(taken.seenAt, current->seenAt);
-                    }
-                    taken.synced = stateOf(*record);
-                    taken.firstContact = false;
-                    taken.unlinked.reset();
-                    _pins[groupId] = std::move(taken);
-                    current = &_pins[groupId];
-                    break;
-                }
-                case PinBlob::Case::Same:
-                    current->synced = stateOf(*record);
-                    break;
-                case PinBlob::Case::Unlinked:
-                    current->unlinked = std::make_shared<const Pin>(*record);
-                    current->synced = stateOf(*record);
-                    unlinked.push_back(groupId);
-                    break;
-                default: // Pending: a link is already due
-                    break;
-                }
-            } else if (current != nullptr) {
-                // Moved after the export, by steps of this instance from the exported pin.
-                if (wrote && row == PinBlob::Case::TakeMine && mine != nullptr && mine->seq > 0) {
-                    current->synced = stateOf(*mine);
-                } else if (row == PinBlob::Case::Same) {
-                    current->synced = stateOf(*record);
-                } else if (realRecord && !current->unlinked &&
-                           (current->seq != record->seq || current->digest != record->digest)) {
-                    current->unlinked = std::make_shared<const Pin>(*record);
-                    current->synced = stateOf(*record);
-                    unlinked.push_back(groupId);
-                }
-            }
-            if (record != nullptr && (current != nullptr || record->refusedSeq > 0)) {
-                Pin& pin = current != nullptr ? *current : _pins[groupId];
-                pin.refusedSeq = std::max(pin.refusedSeq, record->refusedSeq);
-                pin.seenAt = std::max(pin.seenAt, record->seenAt);
-            }
-        }
-    }
-    if (forkedHere) {
-        notify(true);
-    }
-    return unlinked;
-}
-
-bool TreeVerifier::link(const std::string& groupId, const Environment& environment) {
-    const Pin pin = pinOf(groupId);
-    if (!pin.unlinked || pin.forked) {
-        return false;
-    }
-    const Pin& other = *pin.unlinked;
-    bool linked = pin.seq == other.seq && pin.digest == other.digest;
-    if (pin.seq != other.seq) {
-        // A member chain from the lower to the higher, every statement checked as a read checks it, not a hash walk:
-        // either end may stand on a first contact (its own, or a sibling's), whose statements below it nobody here
-        // verified, so a hash link would let a state taken on trust replace one verified past a removal.
-        const Pin& lower = pin.seq < other.seq ? pin : other;
-        const Pin& higher = pin.seq < other.seq ? other : pin;
-        Environment checked = environment;
-        checked.commitsBetween = [&environment](std::uint64_t fromSeq, std::uint64_t toSeq) {
-            server::GroupGetTreeCommitsResult answer = environment.commitsBetween(fromSeq, toSeq);
-            if (answer.commits.empty() || answer.commits.size() > toSeq - fromSeq) {
-                throw Withheld{};
-            }
-            return answer;
-        };
-        bool withheld = false;
-        try {
-            verifyChain(groupId, pin.contextId, lower, higher.seq, higher.digest, checked);
-            linked = true;
-        } catch (const Withheld&) {
-            withheld = true;
-        } catch (const GroupDataIntegrityException&) {
-            linked = false;
-        } catch (const GroupUnauthorizedSignerException&) {
-            linked = false;
-        }
-        if (withheld) {
-            reject(); // withheld, not disproved: stays pending
-        }
-    }
-    std::optional<bool> moved;
-    bool ahead = false;
-    {
-        std::lock_guard lock(_mutex);
-        Pin& stored = _pins[groupId];
-        if (stored.unlinked != pin.unlinked || stored.seq != pin.seq || stored.digest != pin.digest) {
-            return false; // moved meanwhile; the next use looks again
-        }
-        const Snapshot before = snapshotOf(stored);
-        if (!linked) {
-            stored.forked = true;
-        } else if (other.seq > stored.seq) {
-            Pin next = other;
-            next.refusedSeq = std::max(next.refusedSeq, stored.refusedSeq);
-            next.seenAt = std::max(next.seenAt, stored.seenAt);
-            for (const auto& [node, generation] : stored.generations) {
-                std::uint32_t& kept = next.generations[node];
-                kept = std::max(kept, generation);
-            }
-            next.synced = stored.synced;
-            next.firstContact = false;
-            next.unlinked.reset();
-            stored = std::move(next);
-        } else {
-            stored.unlinked.reset();
-        }
-        moved = movedLocked(groupId, before, stored, false);
-        if (!moved.has_value()) {
-            _dirty.insert(groupId); // the slot holds the other record: the next save writes this one
-            moved = false;
-            ahead = other.seq < stored.seq;
-        }
-    }
-    notify(moved);
-    return ahead;
-}
-
-bool TreeVerifier::needsRead(const std::string& groupId) {
+void TreeVerifier::mergeStored(const std::map<std::string, Pin>& stored, bool onlyUnpinned) {
     std::lock_guard lock(_mutex);
-    const auto it = _pins.find(groupId);
-    return it != _pins.end() && (it->second.forked || it->second.unlinked);
-}
-
-std::map<std::string, TreeVerifier::Pin> TreeVerifier::adoptable(const std::vector<std::string>& groups) {
-    std::lock_guard lock(_mutex);
-    std::map<std::string, Pin> result;
-    for (const std::string& groupId : groups) {
+    for (const auto& [groupId, record] : stored) {
         const auto it = _pins.find(groupId);
-        if (it == _pins.end()) {
-            result.emplace(groupId, Pin{});
-        } else if (it->second.seq == 0 || it->second.firstContact) {
-            result.emplace(groupId, compactOf(it->second));
-        }
-    }
-    return result;
-}
-
-void TreeVerifier::adopt(const std::map<std::string, Pin>& taken, const std::map<std::string, Pin>& seen) {
-    std::lock_guard lock(_mutex);
-    for (const auto& [groupId, record] : taken) {
-        const auto was = seen.find(groupId);
-        const auto it = _pins.find(groupId);
-        Pin* current = it == _pins.end() ? nullptr : &it->second;
-        const bool unchanged = was != seen.end() &&
-            (current == nullptr ? was->second.seq == 0 && was->second.digest.empty()
-                                : current->seq == was->second.seq && current->digest == was->second.digest);
-        if (!unchanged) {
-            continue; // verified meanwhile: the current identity's state stands
-        }
-        if (current != nullptr && current->seq > 0 && record.seq <= current->seq) {
-            // A first contact at or above the record: never lowered to it (it may be the state before a removal the
-            // first contact shows), and not used until `link` shows a member chain from the record up to it.
-            current->refusedSeq = std::max(current->refusedSeq, record.refusedSeq);
-            if (!current->unlinked && !current->forked) {
-                current->unlinked = std::make_shared<const Pin>(record);
-            }
+        if (onlyUnpinned && it != _pins.end() && it->second.seq > 0) {
             continue;
         }
-        Pin adopted = record;
-        adopted.refusedSeq = std::max(adopted.refusedSeq, current != nullptr ? current->refusedSeq : 0);
-        adopted.synced = stateOf(record);
-        adopted.firstContact = false;
-        adopted.unlinked.reset();
-        _pins[groupId] = std::move(adopted);
+        Pin kept = PinBlob::higher(it == _pins.end() ? nullptr : &it->second, &record);
+        if (kept.seq > 0 || kept.refusedSeq > 0) {
+            _pins[groupId] = std::move(kept);
+        }
     }
 }

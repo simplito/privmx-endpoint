@@ -59,8 +59,8 @@ struct StalePlan {};
 // GroupUnauthorizedSignerException; a first contact takes the latest statement's rules on trust, as its roster.
 //
 // Failures throw GroupDataIntegrityException, rollbacks GroupHistoryForkException. Pins are kept per group in
-// memory and only stored once a verification has passed completely. A latest statement that moves a pin (or is a
-// first contact) needs its committer's key accepted by the UserVerifier both at its date and now (N-3).
+// memory and only stored once a verification has passed completely. A latest statement that moves a pin needs its
+// committer's key accepted by the UserVerifier both at its date and now (N-3); a first contact checks it at its date.
 class TreeVerifier {
 public:
     // At most twice `cap` entries: two generations rather than an LRU, as in `PublicKeyCache`. The bridge chooses how
@@ -222,17 +222,9 @@ public:
         std::map<std::uint32_t, std::uint32_t> generations;
         std::uint64_t refusedSeq = 0; // `refusedAsLostRace`
         // 01, persisted. A pin loaded without its roster (a compact record) replays it from genesis before it is
-        // extended (`chainFromGenesis`); `seenAt` orders which rosters the blob keeps; `forked` (sticky) refuses
-        // every read: two instances of this device verified incompatible histories.
+        // extended (`chainFromGenesis`); `seenAt` orders which rosters the blob keeps.
         bool hasRoster = true;
         std::uint64_t seenAt = 0;
-        bool forked = false;
-        // 01, memory only. `synced`: (seq, digest) of the stored record as this instance last saw it. `firstContact`:
-        // taken by TOFU in this instance and not moved since. `unlinked`: a sibling's stored record not yet shown to be
-        // on one chain with this pin (`link`); the pin is not used until it is.
-        std::optional<std::pair<std::uint64_t, std::string>> synced;
-        bool firstContact = false;
-        std::shared_ptr<const Pin> unlinked;
     };
 
     // 01: pins and version-pin counters as the PinBlob holds them.
@@ -244,25 +236,15 @@ public:
     // Copies of the pins for a save: moved since the last export (or all, with `all`) whole, the rest compact (no
     // roster, no generations). Clears the moved set.
     std::map<std::string, Pin> exportPins(bool all);
-    // The memory side of the merge (PinBlob::decide) for every group in `stored` (and in `*exported`, after a save
-    // that `wrote` it). `exported` null: a sync, compared with the pins as they stand. Returns the groups left
-    // `unlinked`, for `link`.
-    std::vector<std::string> applyStored(const std::map<std::string, Pin>* exported, const PinSet& stored, bool wrote);
-    // Resolves a pending `unlinked`: the statements between the lower and the higher of the two, checked as a read
-    // checks a chain from its pin (`verifyChain`: signatures, roles, roster), not by hash only, since either end may
-    // stand on a first contact. Linked: the pin becomes the higher; not: `forked`. A transport failure or a withheld
-    // page throws and leaves it pending. True when linked with this pin the higher: the slot is behind it.
-    bool link(const std::string& groupId, const Environment& environment);
-    // Forked or unlinked: no verified state to hand out until a read links or refuses it.
-    bool needsRead(const std::string& groupId);
-    // 01 adoption of a previous identity's records: the groups among `groups` with no pin, a seq-0 one or a
-    // first-contact one, with that pin (seq, digest, synced) as it stands; `adopt` then replaces exactly those that
-    // still stand so, except a first contact at or above the record's seq: that one keeps its state and is `unlinked`
-    // to the record (never lowered to it).
-    std::map<std::string, Pin> adoptable(const std::vector<std::string>& groups);
-    void adopt(const std::map<std::string, Pin>& taken, const std::map<std::string, Pin>& seen);
+    // Records this device verified (the slot, or a previous identity's slot) merged into memory by `PinBlob::higher`:
+    // per group the higher seq wins, a tie keeps the pin in memory; `refusedSeq` and `seenAt` by max, generations by
+    // max when the record wins. A stored record is this device's own verified state, so it is taken without a read.
+    // Two instances that verified different branches simply converge on the higher one (a fork is a boundary, not
+    // detected here: a bridge able to fork can withhold just as well). `onlyUnpinned`: records only for groups with no
+    // pin yet (a previous identity's slot, which whoever holds that key can write: it must never raise a pin).
+    void mergeStored(const std::map<std::string, Pin>& stored, bool onlyUnpinned = false);
     // Set once, before use: called after `_mutex` is released whenever something persistent moved. `major`: the
-    // context, epoch, roster, rules or `forked` changed, or `refusedSeq` rose; tree-only moves (self-updates) are minor.
+    // context, epoch, roster or rules changed, or `refusedSeq` rose; tree-only moves (self-updates) are minor.
     void onPinsMoved(std::function<void(bool major)> callback);
 
     enum class Step { Ok, Unauthorized };
@@ -350,10 +332,19 @@ private:
     // which takes the latest genuine statement on trust: there an honest committer who rotated their key since would
     // lock every fresh session out of the group, and with it every commit that could move the group past it.
     bool movesPin(const std::string& groupId, const CommitStatement& latest);
+    // The latest statement's committer key accepted now as well, unless `checkedNow` says that was done: for a latest
+    // statement that moves a pin found only after `movesPin` looked. Sets `checkedNow`.
+    void assertValidNow(
+        const std::string& groupId,
+        const std::string& contextId,
+        const CommitStatement& latest,
+        const Environment& environment,
+        bool& checkedNow
+    );
 
-    // `latest` stored as the group's pin, with `nodes`' generations, if the pin is still `seen` (and neither forked nor
-    // unlinked); otherwise `seen` is refreshed to the pin as it now stands and nothing is stored (another verification,
-    // or a sync, moved it meanwhile). `firstContact`: the pin is taken on trust.
+    // `latest` stored as the group's pin, with `nodes`' generations, if the pin is still `seen`; otherwise `seen` is
+    // refreshed to the pin as it now stands and nothing is stored (another verification, or a merge of stored
+    // records, moved it meanwhile).
     bool storeIfPinned(
         const std::string& groupId,
         Pin& seen,
@@ -362,8 +353,7 @@ private:
         const std::vector<std::string>& users,
         const std::vector<std::string>& managers,
         const GroupRules& rules,
-        const std::vector<TreeNodeState>& nodes,
-        bool firstContact
+        const std::vector<TreeNodeState>& nodes
     );
     // What `movedLocked` compares: a pin's persisted scalars, without its roster (a 16k roster is not copied per read).
     struct Snapshot {
@@ -375,7 +365,6 @@ private:
         std::string rulesHash;
         std::uint64_t refusedSeq = 0;
         bool hasRoster = true;
-        bool forked = false;
     };
     static Snapshot snapshotOf(const Pin& pin);
     // Whether `after` differs from `before` in what is persisted: nullopt if not, else whether the move is major.
@@ -388,8 +377,6 @@ private:
     );
     // Calls the `onPinsMoved` callback; never under `_mutex`.
     void notify(std::optional<bool> major);
-    // Forked: throws GroupHistoryForkException; unlinked: links it (`link`). Then the pin as it stands.
-    Pin usablePin(const std::string& groupId, const Environment& environment);
 
     // `stored` moved to `latest` and the roster and rules it signed; under `_mutex`. Generations are the caller's.
     static void storeLocked(

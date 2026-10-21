@@ -13,7 +13,6 @@ limitations under the License.
 
 #include <tuple>
 
-#include "privmx/endpoint/core/BigEndian.hpp"
 
 using namespace privmx::endpoint::core;
 
@@ -76,65 +75,6 @@ const ReleaseGate::Released* ReleaseGate::openLocked(
         return nullptr;
     }
     return &it->second;
-}
-
-std::map<std::string, ReleaseGate::Released> ReleaseGate::open(std::uint64_t now) {
-    std::lock_guard<std::mutex> lock(_mutex);
-    std::map<std::string, Released> result;
-    for (const auto& [key, entry] : _released) {
-        if (now < entry.date + _windowMs) {
-            result.emplace(key, entry);
-        }
-    }
-    return result;
-}
-
-void ReleaseGate::merge(const std::map<std::string, Released>& entries) {
-    for (const auto& [key, entry] : entries) {
-        record(key, entry);
-    }
-}
-
-std::string ReleaseGate::encode(const std::map<std::string, Released>& entries) {
-    std::string out;
-    bigendian::putU32(out, static_cast<std::uint32_t>(entries.size()));
-    for (const auto& [key, entry] : entries) {
-        bigendian::putLp(out, key);
-        bigendian::putU64(out, entry.seq);
-        bigendian::putLp(out, entry.prevDigest);
-        bigendian::putLp(out, entry.digest);
-        bigendian::putU64(out, entry.date);
-        bigendian::putU8(out, entry.yields ? 1 : 0);
-    }
-    return out;
-}
-
-std::optional<std::map<std::string, ReleaseGate::Released>> ReleaseGate::decode(const std::string& body) {
-    try {
-        bigendian::Reader in(body);
-        std::map<std::string, Released> entries;
-        const std::uint32_t count = in.u32();
-        for (std::uint32_t i = 0; i < count; ++i) {
-            const std::string key = in.lp();
-            Released entry;
-            entry.seq = in.u64();
-            entry.prevDigest = in.lp();
-            entry.digest = in.lp();
-            entry.date = in.u64();
-            const std::uint8_t yields = in.u8();
-            if (yields > 1 || (!entries.empty() && entries.rbegin()->first >= key)) {
-                return std::nullopt;
-            }
-            entry.yields = yields == 1;
-            entries.emplace_hint(entries.end(), key, entry);
-        }
-        if (!in.done()) {
-            return std::nullopt;
-        }
-        return entries;
-    } catch (const std::out_of_range&) {
-        return std::nullopt;
-    }
 }
 
 bool ReleaseGate::newer(const Released& a, const Released& b) {

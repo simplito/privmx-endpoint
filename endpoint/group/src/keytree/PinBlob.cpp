@@ -28,7 +28,6 @@ namespace {
 
 constexpr std::uint8_t ROSTER = 1;
 constexpr std::uint8_t NODES = 2;
-constexpr std::uint8_t FORKED = 4;
 
 std::uint64_t counter(std::int64_t value) {
     return value < 0 ? 0 : static_cast<std::uint64_t>(value);
@@ -71,7 +70,7 @@ std::string record(const std::string& groupId, const Pin& pin, const Planes& pla
     for (const std::int64_t value : planes) {
         be::putU64(out, counter(value));
     }
-    be::putU8(out, static_cast<std::uint8_t>((full ? ROSTER | NODES : 0) | (pin.forked ? FORKED : 0)));
+    be::putU8(out, full ? ROSTER | NODES : 0);
     if (full) {
         putSet(out, pin.roster.users);
         putSet(out, pin.roster.managers);
@@ -197,10 +196,9 @@ std::optional<PinSet> PinBlob::decode(const std::string& body) {
                 value = signedCounter(in.u64());
             }
             const std::uint8_t flags = in.u8();
-            if ((flags & ~(ROSTER | NODES | FORKED)) != 0 || ((flags & NODES) != 0 && (flags & ROSTER) == 0)) {
+            if ((flags & ~(ROSTER | NODES)) != 0 || ((flags & NODES) != 0 && (flags & ROSTER) == 0)) {
                 return std::nullopt;
             }
-            pin.forked = (flags & FORKED) != 0;
             pin.hasRoster = (flags & ROSTER) != 0;
             if (pin.hasRoster) {
                 pin.roster.users = readSet(in);
@@ -236,46 +234,38 @@ std::optional<PinSet> PinBlob::decode(const std::string& body) {
     }
 }
 
-PinBlob::Case PinBlob::decide(const Pin* mine, const Pin* stored) {
+Pin PinBlob::higher(const Pin* mine, const Pin* other) {
     const Pin* m = mine != nullptr && mine->seq > 0 ? mine : nullptr;
-    const Pin* r = stored != nullptr && stored->seq > 0 ? stored : nullptr;
-    if (r == nullptr) {
-        return Case::TakeMine; // a
-    }
-    if (m == nullptr) {
-        return Case::TakeStored; // b
-    }
-    if (m->forked || r->forked || m->contextId != r->contextId) {
-        return Case::Fork; // c
-    }
-    const std::pair<std::uint64_t, std::string> atR{r->seq, r->digest};
-    const std::pair<std::uint64_t, std::string> atM{m->seq, m->digest};
-    if (atM == atR) {
-        return Case::Same; // d
-    }
-    if (!m->synced.has_value()) {
-        // Never synced: the slot's record is unrelated to M by anything this instance saw. Only a pin still at its
-        // first contact here gives way, and only to a later record (the next read walks forward from R); a pin that
-        // moved since (an own commit, a verified step) is linked like row j (`TreeVerifier::link`, a member chain), at
-        // one seq a fork.
-        if (r->seq == m->seq) {
-            return Case::Fork; // i
+    const Pin* r = other != nullptr && other->seq > 0 ? other : nullptr;
+    Pin kept;
+    if (r != nullptr && (m == nullptr || r->seq > m->seq)) {
+        kept = *r;
+        if (m != nullptr) {
+            for (const auto& [node, generation] : m->generations) {
+                std::uint32_t& value = kept.generations[node];
+                value = std::max(value, generation);
+            }
         }
-        return m->firstContact && r->seq > m->seq ? Case::TakeStored : Case::Unlinked; // e, j
+    } else if (m != nullptr) {
+        kept = *m;
+        if (r != nullptr && r->seq == m->seq && r->digest == m->digest) {
+            if (!kept.hasRoster && r->hasRoster) {
+                kept.roster = r->roster;
+                kept.hasRoster = true;
+            }
+            for (const auto& [node, generation] : r->generations) {
+                std::uint32_t& value = kept.generations[node];
+                value = std::max(value, generation);
+            }
+        }
     }
-    if (m->unlinked) {
-        return Case::Pending; // f
+    for (const Pin* side : {mine, other}) {
+        if (side != nullptr) {
+            kept.refusedSeq = std::max(kept.refusedSeq, side->refusedSeq);
+            kept.seenAt = std::max(kept.seenAt, side->seenAt);
+        }
     }
-    if (m->synced.value() == atR) {
-        return Case::TakeMine; // g
-    }
-    if (m->synced.value() == atM && r->seq != m->seq) {
-        return r->seq > m->seq ? Case::TakeStored : Case::TakeMine; // h1, h2 (the slot went back)
-    }
-    if (r->seq == m->seq) {
-        return Case::Fork; // i
-    }
-    return Case::Unlinked; // j
+    return kept;
 }
 
 PinSet PinBlob::mergeForSave(const PinSet& mine, const PinSet& stored) {
@@ -290,40 +280,7 @@ PinSet PinBlob::mergeForSave(const PinSet& mine, const PinSet& stored) {
     }
     PinSet merged;
     for (const std::string& groupId : groups) {
-        const Pin* m = find(mine.tree, groupId);
-        const Pin* r = find(stored.tree, groupId);
-        Pin kept;
-        switch (decide(m, r)) {
-        case Case::TakeMine:
-            if (m != nullptr) {
-                kept = *m;
-            }
-            break;
-        case Case::Same:
-            kept = *m;
-            if (!kept.hasRoster && r->hasRoster) {
-                kept.roster = r->roster;
-                kept.hasRoster = true;
-            }
-            for (const auto& [node, generation] : r->generations) {
-                std::uint32_t& value = kept.generations[node];
-                value = std::max(value, generation);
-            }
-            break;
-        case Case::Fork:
-            kept = *r;
-            kept.forked = true;
-            break;
-        default: // TakeStored, Pending, Unlinked
-            kept = *r;
-            break;
-        }
-        for (const Pin* side : {m, r}) {
-            if (side != nullptr) {
-                kept.refusedSeq = std::max(kept.refusedSeq, side->refusedSeq);
-                kept.seenAt = std::max(kept.seenAt, side->seenAt);
-            }
-        }
+        Pin kept = higher(find(mine.tree, groupId), find(stored.tree, groupId));
         if (kept.seq > 0 || kept.refusedSeq > 0) {
             merged.tree.emplace(groupId, std::move(kept));
         }
