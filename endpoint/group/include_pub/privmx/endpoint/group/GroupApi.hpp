@@ -108,7 +108,7 @@ public:
      * When the caller's own leaf does not open, the removal still goes through (a member that garbled it cannot
      * block its own removal) and, unless this session holds the current Group key, abandons the Group's history for
      * every member. After the caller's identity key changed and Connection::adoptPreviousIdentity was called, it is
-     * refused instead: call renewLeaf first.
+     * refused instead while the previous key still opens the leaf: call renewLeaf first.
      *
      * @param groupId ID of the Group
      * @param userIds IDs of the members to remove

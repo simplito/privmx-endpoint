@@ -353,9 +353,13 @@ private:
 
     // `group` must have passed `verifyTree` at plan scope. `removing` (a removal of these users): a climb that fails on
     // the served edges (not on membership) is logged and the state returned anyway — a removal plans from public state
-    // alone; but a leaf that does not open after an identity key change this client knows of (`identityChanged`)
-    // is refused, pointing at renewLeaf, unless history stays reachable.
+    // alone; but a leaf that does not open with the session's key and climbs with a previous identity key this
+    // client was given (`climbsWithPreviousIdentity`) is refused, pointing at renewLeaf, unless history stays
+    // reachable: renewLeaf fixes exactly that case, and nothing else.
     // `climbKey`: climb with it instead of the session's key, and schedule no self-update off the climb.
+    // Whether one of the previous identity keys (adoptPreviousIdentity, here or on the connection) climbs `state` to
+    // its grant key. Climbs on a scratch cache, so nothing derived from a previous key reaches a reader.
+    bool climbsWithPreviousIdentity(const keytree::TreeGroupState& state, const std::string& memberId);
     keytree::TreeGroupState climbForPlanning(
         const server::GroupInfo& group,
         const std::shared_ptr<keytree::TreeKeyCache>& cache,
@@ -586,9 +590,10 @@ private:
     std::chrono::steady_clock::time_point _lastPinSync;
     std::string _lastBlob; // the slot as last loaded or saved here
     std::set<std::string> _adoptedIdentities;
-    // A previous identity key was handed to `adoptPreviousIdentity` (renewLeaf), pins stored or not; together with
-    // ConnectionImpl::identityChanged, what `climbForPlanning` knows of an own key change.
-    std::atomic<bool> _identityChanged{false};
+    // The previous identity keys handed to `adoptPreviousIdentity` (renewLeaf), pins stored or not; together with
+    // ConnectionImpl::previousIdentities, what `climbForPlanning` knows of an own key change.
+    std::mutex _previousIdentitiesMutex;
+    std::vector<privmx::crypto::PrivateKey> _previousIdentities; // under `_previousIdentitiesMutex`
     // Under `_selfUpdateMutex`: when the worker saves next, and when the last save succeeded.
     std::optional<std::chrono::steady_clock::time_point> _pinSaveDue;
     std::chrono::steady_clock::time_point _lastPinSave;

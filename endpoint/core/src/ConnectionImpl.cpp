@@ -21,6 +21,7 @@ limitations under the License.
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include <algorithm>
 #include <cstdint>
 #include <privmx/endpoint/core/SingletonsHolder.hpp>
 #include <privmx/rpc/Types.hpp>
@@ -286,7 +287,11 @@ void ConnectionImpl::adoptPreviousIdentity(const crypto::PrivateKey& previous) {
     }
     {
         std::unique_lock lock(_mutex);
-        _identityChanged = true;
+        if (std::none_of(_previousIdentities.begin(), _previousIdentities.end(), [&](const crypto::PrivateKey& k) {
+                return k.getPublicKey().toBase58DER() == previousPub;
+            })) {
+            _previousIdentities.push_back(previous);
+        }
     }
     if (!store) {
         return;
@@ -310,9 +315,9 @@ std::map<std::string, std::string> ConnectionImpl::getStagedPinBodies() {
     return _stagedPinBodies;
 }
 
-bool ConnectionImpl::identityChanged() {
+std::vector<privmx::crypto::PrivateKey> ConnectionImpl::previousIdentities() {
     std::shared_lock lock(_mutex);
-    return _identityChanged;
+    return _previousIdentities;
 }
 
 std::vector<std::string> ConnectionImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

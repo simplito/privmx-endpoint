@@ -2159,6 +2159,33 @@ TEST_F(GroupApiLyingBridge, SECURITY_AManagerWhoChangedKeyAndAdoptedCannotRemove
     expectRefusedUntilRenewal(clientAdopting("alice", previous), bridge, groupId, "bob");
 }
 
+// Final audit 05a round 5: an adopted key change refuses a removal only while renewLeaf can fix the leaf, i.e. while
+// the previous key climbs it. A member that garbles the edge above the manager's leaf breaks it for both keys, so the
+// removal goes through as in the base, in the session that adopted and after a renewal alike. 1d66831e refused both
+// (a session-wide flag), and renewLeaf could not clear it.
+TEST_F(GroupApiLyingBridge, SECURITY_AGarblerCannotBlockItsRemovalByAManagerThatAdoptedAndHasNotRenewed) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
+    GroupApiImpl& alice = clientAdopting("alice", previous);
+    selfUpdateBy("bob");
+    garbleLeafEdgeOf(bridge, "alice", "bob");
+    EXPECT_NO_THROW(alice.removeGroupMembers(groupId, {"bob"}));
+    expectRemoved(bridge, "bob");
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AGarblerCannotBlockItsRemovalByAManagerThatRenewedInThisSession) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
+    GroupApiImpl& alice = clientAdopting("alice", previous);
+    ASSERT_TRUE(alice.renewLeaf(groupId, previous.toWIF()));
+    selfUpdateBy("bob");
+    garbleLeafEdgeOf(bridge, "alice", "bob");
+    EXPECT_NO_THROW(alice.removeGroupMembers(groupId, {"bob"}));
+    expectRemoved(bridge, "bob");
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_ARenewalWithAKeyThatDoesNotOpenTheLeafCommitsNothingAndCachesNothing) {
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});

@@ -151,8 +151,8 @@ public:
      * device has no state for under the current key (or only a first contact); it never replaces or raises one.
      * Call it right after `connect` and `setPinStore`, before creating any module API. Without a store, or nothing
      * stored for the previous key, nothing is carried over. Either way it tells this client its key changed: a
-     * GroupApi::removeGroupMembers whose own leaf does not open is then refused until GroupApi::renewLeaf, instead of
-     * abandoning the group's history.
+     * GroupApi::removeGroupMembers whose own leaf does not open but opens with the previous key is then refused until
+     * GroupApi::renewLeaf, instead of abandoning the group's history.
      * @param previousUserPrivKey the previous identity private key in WIF
      * @throws LocalStateIntegrityException when the previous key's stored pins fail their integrity check
      */

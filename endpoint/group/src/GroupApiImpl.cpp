@@ -249,6 +249,19 @@ static TPlan planOrThrow(const std::function<TPlan()>& build) {
     }
 }
 
+bool GroupApiImpl::climbsWithPreviousIdentity(const keytree::TreeGroupState& state, const std::string& memberId) {
+    std::vector<privmx::crypto::PrivateKey> previous = _connection.getImpl()->previousIdentities();
+    {
+        std::lock_guard<std::mutex> lock(_previousIdentitiesMutex);
+        previous.insert(previous.end(), _previousIdentities.begin(), _previousIdentities.end());
+    }
+    return std::any_of(previous.begin(), previous.end(), [&](const privmx::crypto::PrivateKey& key) {
+        keytree::TreeKeyCache scratch;
+        return keytree::TreeKeys(scratch).climbToGrantKey(state, memberId, key, false).failure ==
+            keytree::ClimbFailure::None;
+    });
+}
+
 keytree::TreeGroupState GroupApiImpl::climbForPlanning(
     const server::GroupInfo& group,
     const std::shared_ptr<keytree::TreeKeyCache>& cache,
@@ -281,20 +294,32 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
             climb.failure == keytree::ClimbFailure::LeafDidNotOpen) {
             asResolve.blame = keytree::GroupKeyResolver::tamperedBy(group, climb.tamperedNode);
         }
+        if (climbKey != nullptr && climb.failure == keytree::ClimbFailure::LeafDidNotOpen) {
+            // A renewal: the previous key does not open the leaf either, so renewLeaf cannot help here.
+            throw core::EncryptionKeyValidationException(
+                "Group key unavailable: the edge to your own leaf opens neither with your current key nor with the "
+                "previous one; ask a manager to remove and re-add you, or remove the member that wrote it" +
+                (asResolve.blame.has_value() ? " (wrapped by " + asResolve.blame.value() + ")" : "")
+            );
+        }
         // Garbled wraps must not let whoever garbled them block their own removal: the state is verified, and a
         // removal wraps only fresh keys to public ones, so it plans without the climb whatever the blame says. The one
-        // exception uses no server data: a leaf that does not open after a key change this client was told about
-        // (adoptPreviousIdentity) is our own key change, and renewLeaf restores it; planning on would abandon every
-        // member's history for nothing, unless the grant key is cached and history stays reachable anyway. A key
-        // changed without that call gets this base behaviour (the removal abandons history).
-        const auto cachedGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(group.keyVersion));
-        const bool historyStillReachable =
-            cachedGrantKey.has_value() && cachedGrantKey->getPublicKey().toBase58DER() == group.groupPubKey;
-        const bool ownKeyChange = climb.failure == keytree::ClimbFailure::LeafDidNotOpen && !historyStillReachable &&
-            (_identityChanged || _connection.getImpl()->identityChanged());
-        if (removing != nullptr && climb.failure != keytree::ClimbFailure::NotAMember && !ownKeyChange) {
-            LOG_WARN("[climbForPlanning] planning without the climb: ", describeResolveFailure(asResolve))
-            return state;
+        // exception uses no server data: a leaf that does not open with the session's key but climbs with a previous
+        // identity key this client was given (adoptPreviousIdentity) is our own key change, and renewLeaf restores
+        // it; planning on would abandon every member's history for nothing, unless the grant key is cached and
+        // history stays reachable anyway. A garbled edge above the leaf opens with neither key, so renewLeaf cannot
+        // fix it and the removal goes on; so does one after a key changed without adoptPreviousIdentity (base
+        // behaviour: the removal abandons history).
+        if (removing != nullptr && climb.failure != keytree::ClimbFailure::NotAMember) {
+            const auto cachedGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(group.keyVersion));
+            const bool historyStillReachable =
+                cachedGrantKey.has_value() && cachedGrantKey->getPublicKey().toBase58DER() == group.groupPubKey;
+            const bool ownKeyChange = climb.failure == keytree::ClimbFailure::LeafDidNotOpen &&
+                !historyStillReachable && climbsWithPreviousIdentity(state, identity.value());
+            if (!ownKeyChange) {
+                LOG_WARN("[climbForPlanning] planning without the climb: ", describeResolveFailure(asResolve))
+                return state;
+            }
         }
         throw core::EncryptionKeyValidationException(describeResolveFailure(asResolve));
     }
@@ -3195,7 +3220,15 @@ void GroupApiImpl::adoptPreviousIdentity(const privmx::crypto::PrivateKey& previ
     if (previousPub == _userPrivKey.getPublicKey().toBase58DER()) {
         return;
     }
-    _identityChanged = true;
+    {
+        std::lock_guard<std::mutex> lock(_previousIdentitiesMutex);
+        const auto known = [&](const privmx::crypto::PrivateKey& k) {
+            return k.getPublicKey().toBase58DER() == previousPub;
+        };
+        if (std::none_of(_previousIdentities.begin(), _previousIdentities.end(), known)) {
+            _previousIdentities.push_back(previous);
+        }
+    }
     if (!_pinStore) {
         return;
     }

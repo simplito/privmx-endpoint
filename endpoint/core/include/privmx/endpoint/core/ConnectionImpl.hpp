@@ -106,9 +106,9 @@ public:
     void adoptPreviousIdentity(const crypto::PrivateKey& previous);
     // The bodies `adoptPreviousIdentity` staged, by previous public key.
     std::map<std::string, std::string> getStagedPinBodies();
-    // Whether `adoptPreviousIdentity` was called with a key other than the current one (stored pins or not): the
-    // only knowledge of an identity key change this client has that the Bridge did not supply.
-    bool identityChanged();
+    // The keys `adoptPreviousIdentity` was called with, other than the current one (stored pins or not): the only
+    // knowledge of an identity key change this client has that the Bridge did not supply.
+    std::vector<crypto::PrivateKey> previousIdentities();
     std::string getMyUserId(const std::string& contextId);
     DataIntegrityObject createDIO(
         const std::string& contextId,
@@ -153,7 +153,7 @@ private:
     std::shared_ptr<UserVerifier> _userVerifier;
     std::shared_ptr<PinStoreInterface> _pinStore; // under _mutex
     std::map<std::string, std::string> _stagedPinBodies; // under _mutex
-    bool _identityChanged = false; // under _mutex
+    std::vector<crypto::PrivateKey> _previousIdentities; // under _mutex
     bool _public = false;
     std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
