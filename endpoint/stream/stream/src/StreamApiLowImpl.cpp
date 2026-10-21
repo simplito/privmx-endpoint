@@ -425,20 +425,32 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
 
 void StreamApiLowImpl::stopPublication(StreamRoomData& room) {
     const auto streamData = room.publisherStream;
-    room.webRtc->close(room.streamRoomId, "publisher");
-    if (streamData->streamHandle.has_value()) {
-        _handleToRoomId.erase(streamData->streamHandle.value());
+    if (!streamData) {
+        return;
     }
-    room.publisherStream.reset();
-    if (streamData->sessionId.has_value()) {
+    // Every step runs whatever the others do. The unpublish goes first: an honest Bridge then stops forwarding the
+    // publication to every subscriber even if the local teardown fails.
+    const auto attempt = []([[maybe_unused]] const char* step, const auto& run) {
         try {
+            run();
+        } catch (const std::exception& e) {
+            LOG_ERROR("stopPublication: ", step, " failed: ", e.what());
+        } catch (...) {
+            LOG_ERROR("stopPublication: ", step, " failed");
+        }
+    };
+    if (streamData->sessionId.has_value()) {
+        attempt("unpublish", [&] {
             server::StreamUnpublishModel model;
             model.sessionId = streamData->sessionId.value();
             _serverApi->streamUnpublish(model);
-        } catch (const std::exception& e) {
-            LOG_ERROR("stopPublication: unpublish failed: ", e.what());
-        }
+        });
     }
+    attempt("closing the publisher connection", [&] { room.webRtc->close(room.streamRoomId, "publisher"); });
+    if (streamData->streamHandle.has_value()) {
+        attempt("dropping the handle", [&] { _handleToRoomId.erase(streamData->streamHandle.value()); });
+    }
+    room.publisherStream.reset();
 }
 
 void StreamApiLowImpl::removeStream(const StreamHandle& streamHandle) {

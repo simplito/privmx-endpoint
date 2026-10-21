@@ -178,7 +178,8 @@ private:
 
     /** Re-keys the room if its key has gone stale, then refuses to go on if it somehow still is. */
     void ensureRoomKeyIsFresh(const std::string& streamRoomId);
-    // Closes the outgoing peer connection and unpublishes (best effort); the handle is gone afterwards.
+    // Unpublishes, closes the outgoing peer connection and drops the handle, each step whatever the others do (a
+    // failure is logged); the publisher state is cleared afterwards.
     void stopPublication(StreamRoomData& room);
 
     /**
@@ -215,6 +216,7 @@ private:
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
     privmx::utils::ThreadSaveMap<Handle, std::string> _handleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
+    friend struct StreamApiLowImplTestAccess; // tests drive stopPublication over a fake WebRTC and gateway
 };
 
 } // namespace stream
