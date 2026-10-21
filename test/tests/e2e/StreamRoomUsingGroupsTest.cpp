@@ -786,3 +786,40 @@ TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_rem
     EXPECT_TRUE(room.staleGroups.empty()) << "the room was not re-keyed";
     EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
 }
+
+TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_rotation_of_a_granted_group) {
+    // Audit 05a final-2: as after a removal, a rotation (after a suspected compromise) must move a live publication
+    // off the pre-rotation room key. The Bridge now tells the room about the rotation too.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("live_pub"), core::Buffer::from("live_priv")
+        );
+    });
+    group::Group sharedGroup = groupApi->getGroup(groupId);
+    std::string streamRoomId;
+    ASSERT_NO_THROW({
+        streamRoomId = createStreamRoomWithGroups(
+            contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<group::Group>{sharedGroup}
+        );
+    });
+    auto webRtc = std::make_shared<KeyRecordingWebRTC>();
+    ASSERT_NO_THROW({ streamApi->joinStreamRoom(streamRoomId, webRtc); });
+    ASSERT_NO_THROW({ streamApi->createStream(streamRoomId); }); // this client encrypts outgoing media
+    const std::string preRotationKey = localKeyId(webRtc->updates().front());
+    ASSERT_FALSE(preRotationKey.empty());
+
+    ASSERT_NO_THROW({ groupApi->rotateGroupKey(groupId); });
+
+    // No publishStream or updateStream from here on: only the rotation itself can move the sender.
+    std::string local = preRotationKey;
+    for (int i = 0; i < 100 && local == preRotationKey; ++i) {
+        local = localKeyId(webRtc->updates().back());
+        if (local == preRotationKey) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    EXPECT_NE(local, preRotationKey) << "the publication stays under the pre-rotation key";
+    stream::StreamRoom room = streamApi->getStreamRoom(streamRoomId);
+    EXPECT_TRUE(room.staleGroups.empty()) << "the room was not re-keyed";
+    EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
+}
