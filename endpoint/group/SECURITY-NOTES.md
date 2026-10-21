@@ -26,7 +26,7 @@ bramki `ReleaseGate` do slotu `commit-released`, blokada po trzech nieudanych za
 Zostaje rdzeń (pin, łańcuch od pinu, generacje, wersje płaszczyzn) i trwały slot: ładowany raz w konstruktorze,
 scalany przy każdym zapisie regułą „wyższy seq wygrywa” (`PinBlob::higher`). Adopcja pinów poprzedniego klucza
 wypełnia tylko grupy bez pinu. Przy okazji poprawione dwie uwagi audytu przypięć: 12-A i 12-B niżej. Bramka gałęzi:
-unit 24/24 binariów, 634 testy, 0 błędów; e2e w sekcji „Bramka 12” na końcu.
+unit 24/24 binariów, 634 testy, 0 błędów; e2e podzbiór grupowy 201/201 bez ponowień, zestawy drzewa kluczy 66/66 na buildzie końcowym (`37bcd2ae`, Bridge `privmx-bridge:trellis-05a` bez zmian). Perf nie mierzony: zmiana nie dotyka ścieżek gorących poza rzadszym zapisem.
 
 ## Stan zbiorczy
 
