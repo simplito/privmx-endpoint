@@ -1741,6 +1741,41 @@ TEST_F(StreamTest, listStreamRoomParticipants_after_disconnect_without_leave) {
     EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
 }
 
+TEST_F(StreamTest, disconnect_whilePublishing_tearsDownLocalMedia) {
+    auto streamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
+    stream::StreamHandle handle;
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId);
+        handle = streamApi->createStream(streamRoomId);
+    });
+    // a real camera exercises the capturer teardown, the fake track keeps the test running without one
+    auto videoDevices = streamApi->getVideoDevices();
+    EXPECT_NO_THROW({
+        if(videoDevices.empty()) {
+            streamApi->getImpl()->addFakeVideoTrack(handle);
+        } else {
+            streamApi->addTrack(handle, videoDevices[0], stream::MediaTrackConstrains{});
+        }
+    });
+    EXPECT_NO_THROW({
+        streamApi->publishStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+    // the connection drops with the Stream still published and the Stream Room still joined
+    EXPECT_NO_THROW({
+        connection->disconnect();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+
+    EXPECT_THROW({
+        streamApi->listStreams(streamRoomId);
+    }, core::Exception);
+    EXPECT_THROW({
+        streamApi->leaveStreamRoom(streamRoomId);
+    }, core::Exception);
+}
+
 TEST_F(StreamTest, listStreamRoomParticipants_publisher) {
     auto streamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
     auto client2 = createClient(

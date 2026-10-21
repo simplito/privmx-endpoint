@@ -1,3 +1,8 @@
+#include <algorithm>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 #include <gtest/gtest.h>
 #include "../utils/BaseTest.hpp"
 #include "../utils/FalseUserVerifierInterface.hpp"
@@ -59,6 +64,63 @@ public:
     void close(const std::string& streamRoomId, const std::string& connectionType) override final {return;};
     void updateKeys(const std::string& streamRoomId, const std::vector<stream::Key>& keys) override final {return;};
 
+};
+
+// Records what StreamApiLow asks the WebRTC layer to close, so the teardown can be asserted.
+class RecordingWebRTC : public privmx::endpoint::stream::WebRTCInterface
+{
+public:
+    std::string createOfferAndSetLocalDescription(const std::string&, const std::string&) override {return "";};
+    std::string createAnswerAndSetDescriptions(
+        const std::string&,
+        const std::string&,
+        const std::string&,
+        const std::string&
+    ) override {return "";};
+    void setAnswerAndSetRemoteDescription(
+        const std::string&,
+        const std::string&,
+        const std::string&,
+        const std::string&
+    ) override {return;};
+    void updateSessionId(const std::string&, const int64_t, const std::string&) override {return;};
+    void closeAll(const std::string& streamRoomId) override {
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            _closedStreamRooms.push_back(streamRoomId);
+        }
+        _condition.notify_all();
+    };
+    void close(const std::string&, const std::string& connectionType) override {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _closedConnections.push_back(connectionType);
+    };
+    void updateKeys(const std::string&, const std::vector<stream::Key>&) override {return;};
+
+    bool waitForCloseAll(size_t expectedCount, const std::chrono::milliseconds& timeout) {
+        std::unique_lock<std::mutex> lock(_mutex);
+        return _condition.wait_for(lock, timeout, [this, expectedCount]() {
+            return _closedStreamRooms.size() >= expectedCount;
+        });
+    }
+    std::vector<std::string> closedStreamRooms() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _closedStreamRooms;
+    }
+    std::vector<std::string> closedConnections() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _closedConnections;
+    }
+    size_t closeAllCount() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _closedStreamRooms.size();
+    }
+
+private:
+    std::mutex _mutex;
+    std::condition_variable _condition;
+    std::vector<std::string> _closedStreamRooms;
+    std::vector<std::string> _closedConnections;
 };
 
 class StreamLowTest : public privmx::test::BaseTest {
@@ -760,4 +822,59 @@ TEST_F(StreamLowTest, falseUserVerifierInterface) {
     } else {
         FAIL();
     }
+}
+
+TEST_F(StreamLowTest, disconnect_closesWebRtcConnectionsOfJoinedStreamRoom) {
+    auto webRtc = std::make_shared<RecordingWebRTC>();
+    std::string streamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
+    ASSERT_FALSE(streamRoomId.empty());
+    EXPECT_NO_THROW({
+        streamApiLow->joinStreamRoom(streamRoomId, webRtc);
+    });
+    // the joined Stream Room stays open as long as the connection lives
+    EXPECT_EQ(webRtc->closeAllCount(), 0);
+
+    connection->disconnect();
+
+    EXPECT_TRUE(webRtc->waitForCloseAll(1, std::chrono::seconds(5)))
+        << "the WebRTC layer was not asked to close the Stream Room after the disconnect";
+    EXPECT_EQ(webRtc->closedStreamRooms(), std::vector<std::string>{streamRoomId});
+}
+
+TEST_F(StreamLowTest, disconnect_closesEveryJoinedStreamRoom) {
+    auto webRtc = std::make_shared<RecordingWebRTC>();
+    std::string firstStreamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
+    std::string secondStreamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
+    ASSERT_FALSE(firstStreamRoomId.empty());
+    ASSERT_FALSE(secondStreamRoomId.empty());
+    EXPECT_NO_THROW({
+        streamApiLow->joinStreamRoom(firstStreamRoomId, webRtc);
+        streamApiLow->joinStreamRoom(secondStreamRoomId, webRtc);
+    });
+
+    connection->disconnect();
+
+    ASSERT_TRUE(webRtc->waitForCloseAll(2, std::chrono::seconds(5)))
+        << "not every joined Stream Room was closed after the disconnect";
+    std::vector<std::string> closedStreamRooms = webRtc->closedStreamRooms();
+    std::vector<std::string> expectedStreamRooms{firstStreamRoomId, secondStreamRoomId};
+    std::sort(closedStreamRooms.begin(), closedStreamRooms.end());
+    std::sort(expectedStreamRooms.begin(), expectedStreamRooms.end());
+    EXPECT_EQ(closedStreamRooms, expectedStreamRooms);
+}
+
+TEST_F(StreamLowTest, disconnect_afterLeaveStreamRoom_doesNotCloseTwice) {
+    auto webRtc = std::make_shared<RecordingWebRTC>();
+    std::string streamRoomId = fastStreamRoom(reader->getString("Context_1.contextId"));
+    ASSERT_FALSE(streamRoomId.empty());
+    EXPECT_NO_THROW({
+        streamApiLow->joinStreamRoom(streamRoomId, webRtc);
+        streamApiLow->leaveStreamRoom(streamRoomId);
+    });
+    ASSERT_EQ(webRtc->closeAllCount(), 1);
+
+    connection->disconnect();
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    EXPECT_EQ(webRtc->closeAllCount(), 1);
 }
