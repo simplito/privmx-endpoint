@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <chrono>
 #include <mutex>
 #include <set>
@@ -667,7 +668,14 @@ public:
     ) override {}
     void updateSessionId(const std::string&, const int64_t, const std::string&) override {}
     void closeAll(const std::string&) override {}
-    void close(const std::string&, const std::string&) override {}
+    void close(const std::string&, const std::string& connectionType) override {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _closed.push_back(connectionType);
+    }
+    std::vector<std::string> closed() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _closed;
+    }
     void updateKeys(const std::string&, const std::vector<stream::Key>& keys) override {
         std::lock_guard<std::mutex> lock(_mutex);
         _updates.push_back(keys);
@@ -680,6 +688,7 @@ public:
 private:
     std::mutex _mutex;
     std::vector<std::vector<stream::Key>> _updates;
+    std::vector<std::string> _closed;
 };
 
 std::string localKeyId(const std::vector<stream::Key>& keys) {
@@ -822,4 +831,52 @@ TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_rot
     stream::StreamRoom room = streamApi->getStreamRoom(streamRoomId);
     EXPECT_TRUE(room.staleGroups.empty()) << "the room was not re-keyed";
     EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
+}
+
+TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_stops_when_its_rekey_is_refused) {
+    // Audit 05a final-3, honest Bridge. The room lets only managers re-key, so user_2's automatic re-key after the
+    // removal is refused. It was only logged: user_2's publication went on under the key user_3 holds.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("live_pub"), core::Buffer::from("live_priv")
+        );
+    });
+    group::Group sharedGroup = groupApi->getGroup(groupId);
+    core::ContainerPolicyWithoutItem policy;
+    policy.rotateKeys = "manager";
+    std::string streamRoomId;
+    ASSERT_NO_THROW({
+        streamRoomId = streamApi->createStreamRoom(
+            contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("group_room_public"), core::Buffer::from("group_room_private"), policy, std::nullopt,
+            std::vector<core::GroupGrantWithKey>{
+                {.groupId = groupId, .role = "user", .groupPubKey = sharedGroup.groupPubKey}
+            }
+        );
+    });
+
+    auto conn2 = connect(2);
+    privmx::test::ScopeExit closeIt([&] { conn2->disconnect(); });
+    auto groups2 = group::GroupApi::create(*conn2);
+    auto streams2 = stream::StreamApiLow::create(*conn2, groups2);
+    auto webRtc = std::make_shared<KeyRecordingWebRTC>();
+    ASSERT_NO_THROW({ streams2.joinStreamRoom(streamRoomId, webRtc); });
+    stream::StreamHandle handle = 0;
+    ASSERT_NO_THROW({ handle = streams2.createStream(streamRoomId); }); // user_2 encrypts outgoing media
+
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {userId(3)}); });
+
+    auto publisherClosed = [&] {
+        const auto closed = webRtc->closed();
+        return std::find(closed.begin(), closed.end(), "publisher") != closed.end();
+    };
+    for (int i = 0; i < 100 && !publisherClosed(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    EXPECT_TRUE(publisherClosed()) << "the publication goes on under a key user_3 holds";
+    EXPECT_EQ(streamApi->getStreamRoom(streamRoomId).staleGroups.size(), 1u) << "user_2 was not refused";
+    EXPECT_ANY_THROW({ streams2.publishStream(handle); }) << "the stopped publication's handle still works";
+    EXPECT_NO_THROW({ streams2.leaveStreamRoom(streamRoomId); });
 }

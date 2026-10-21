@@ -150,7 +150,11 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
                     invalidateModuleKeysInCache(eventData.streamRoomId);
                     ensureRoomKeyIsFresh(eventData.streamRoomId);
                 } catch (const std::exception& e) {
-                    LOG_ERROR("streamRoomUpdated: re-key of a stale room failed: ", e.what());
+                    // Fail closed: left running, the publication keeps sending media and data channel frames under
+                    // the stale key until the next publishStream/updateStream. The Bridge's streamUnpublished tells
+                    // the app; publishing again re-keys or throws, as for any publication.
+                    LOG_ERROR("streamRoomUpdated: re-key of a stale room failed, stopping the publication: ", e.what());
+                    stopPublication(*streamRoomData.value());
                 }
             }
             for (const auto& internalSubscription : streamRoomData.value()->subscriptionsIds) {
@@ -416,6 +420,24 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
         return StreamPublishResult{.published = true, .data = data};
     } else {
         return StreamPublishResult{.published = false, .data = std::nullopt};
+    }
+}
+
+void StreamApiLowImpl::stopPublication(StreamRoomData& room) {
+    const auto streamData = room.publisherStream;
+    room.webRtc->close(room.streamRoomId, "publisher");
+    if (streamData->streamHandle.has_value()) {
+        _handleToRoomId.erase(streamData->streamHandle.value());
+    }
+    room.publisherStream.reset();
+    if (streamData->sessionId.has_value()) {
+        try {
+            server::StreamUnpublishModel model;
+            model.sessionId = streamData->sessionId.value();
+            _serverApi->streamUnpublish(model);
+        } catch (const std::exception& e) {
+            LOG_ERROR("stopPublication: unpublish failed: ", e.what());
+        }
     }
 }
 

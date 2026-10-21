@@ -178,6 +178,8 @@ private:
 
     /** Re-keys the room if its key has gone stale, then refuses to go on if it somehow still is. */
     void ensureRoomKeyIsFresh(const std::string& streamRoomId);
+    // Closes the outgoing peer connection and unpublishes (best effort); the handle is gone afterwards.
+    void stopPublication(StreamRoomData& room);
 
     /**
      * Re-keys a StreamRoom whose key has gone stale, without being asked to.
