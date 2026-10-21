@@ -285,11 +285,18 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
         // removal wraps only fresh keys to public ones. A leaf that does not open is either our own identity key
         // change (renewLeaf restores it, so planning on would needlessly abandon every member's history) or a
         // garbled wrap by the setter of the node above it; the climb cannot tell them apart. So it is refused
-        // unless history stays reachable anyway, or its blamed setter is one of the members being removed.
+        // unless history stays reachable anyway, or its blamed setter is one of the members being removed and our
+        // own latest statement shows we still sign with the key we climb with. After a key change the blamed
+        // setter is just whoever last set that node (the creator, an adder, a healing sibling), so being removed
+        // says nothing about who broke the edge; without that proof it is refused, pointing at renewLeaf.
         const auto cachedGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(group.keyVersion));
         const bool historyStillReachable =
             cachedGrantKey.has_value() && cachedGrantKey->getPublicKey().toBase58DER() == group.groupPubKey;
-        const bool blamedIsLeaving = removing != nullptr && asResolve.blame.has_value() &&
+        const auto ownLastKey = keytree::GroupKeyResolver::latestCommitterPubKey(group, identity.value());
+        const bool ownKeyUnchanged =
+            ownLastKey.has_value() &&
+            ownLastKey.value() == (climbKey != nullptr ? *climbKey : _userPrivKey).getPublicKey().toBase58DER();
+        const bool blamedIsLeaving = removing != nullptr && ownKeyUnchanged && asResolve.blame.has_value() &&
             std::find(removing->begin(), removing->end(), asResolve.blame.value()) != removing->end();
         if (removing != nullptr && climb.failure != keytree::ClimbFailure::NotAMember &&
             (climb.failure != keytree::ClimbFailure::LeafDidNotOpen || historyStillReachable || blamedIsLeaving)) {

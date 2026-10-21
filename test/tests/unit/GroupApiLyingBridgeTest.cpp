@@ -2036,8 +2036,16 @@ TEST_F(GroupApiLyingBridge, SECURITY_AMemberWhoGarblesAManagersLeafEdgeCannotBlo
     // Final audit 05a round 2: a garbled leaf edge reads as LeafDidNotOpen, like a changed identity key. Refusing it
     // with nothing cached let its writer (here bob's self-update of the root) stay a member for good: the manager's
     // key never changed, so renewLeaf, rotate and its own self-update all fail on the same edge.
+    // Round 3: tolerated only while alice's own latest served statement shows the key she climbs with. Here that is
+    // her creation, still vouching for the keyed node over seats 32..63. With 48 seats or fewer bob's self-update
+    // rewrites every keyed node, and nothing of hers stays served.
     quiet = true;
-    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    std::vector<std::string> members{"alice", "bob", "carol"};
+    for (int i = 0; i < 61; ++i) {
+        members.push_back("member" + std::string(i < 10 ? "0" : "") + std::to_string(i));
+        bridge.users.emplace(members.back(), PrivateKey::generateRandom());
+    }
+    const std::string groupId = createGroup(members);
     selfUpdateBy("bob");
     std::size_t garbled = 0;
     for (TreeEdge& edge : bridge.tree.state.edges) {
@@ -2058,6 +2066,47 @@ TEST_F(GroupApiLyingBridge, SECURITY_AMemberWhoGarblesAManagersLeafEdgeCannotBlo
     EXPECT_EQ(bridge.tree.state.epoch, 2u);
     const auto users = bridge.tree.users();
     EXPECT_EQ(std::find(users.begin(), users.end(), "bob"), users.end()) << "bob is still a member";
+}
+
+namespace {
+
+// alice changed key and, before renewLeaf, removes `setter`, the member who last set the node above her leaf.
+void expectRefusedUntilRenewal(
+    GroupApiImpl& alice,
+    const Bridge& bridge,
+    const std::string& groupId,
+    const std::string& setter
+) {
+    try {
+        alice.removeGroupMembers(groupId, {setter});
+        ADD_FAILURE() << "the removal was not refused";
+    } catch (const core::EncryptionKeyValidationException& e) {
+        EXPECT_NE(std::string(e.what()).find("renewLeaf"), std::string::npos) << e.what();
+    }
+    EXPECT_EQ(bridge.tree.state.epoch, 1u) << "a removal landed, with abandonHistory";
+}
+
+} // namespace
+
+TEST_F(GroupApiLyingBridge, SECURITY_AManagerWhoChangedKeyCannotRemoveTheSiblingWhoHealedItsLeafEdge) {
+    // Final audit 05a round 3: the garbler tolerance above blamed whoever last set the node over the remover's leaf,
+    // which after a key change is an honest member: the creator, an adder, or a healing sibling. Removing that member
+    // went out with abandonHistory and every member lost every earlier epoch, the 08-A2 harm.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    selfUpdateBy("bob"); // bob, alice's sibling, now set the node above alice's leaf
+    changeKeyOf(bridge, clients, "alice");
+    expectRefusedUntilRenewal(client("alice"), bridge, groupId, "bob");
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AManagerWhoChangedKeyCannotRemoveTheCreatorBeforeRenewing) {
+    quiet = true;
+    const std::string groupId = client("bob").createGroup( // bob, the creator, set every node
+        CONTEXT, {user("bob"), user("carol")}, {user("alice")}, core::Buffer::from("public"),
+        core::Buffer::from("private"), OPEN
+    );
+    changeKeyOf(bridge, clients, "alice");
+    expectRefusedUntilRenewal(client("alice"), bridge, groupId, "bob");
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARenewalWithAKeyThatDoesNotOpenTheLeafCommitsNothingAndCachesNothing) {

@@ -888,15 +888,20 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_manager_who_changed_key_cannot_remo
 
     const Identity secondKey = newIdentity(firstKey.userId);
     ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
-    std::string refusal;
-    ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
-        try {
-            groups.removeGroupMembers(groupId, {user(3).userId});
-        } catch (const core::Exception& e) {
-            refusal = e.getFull();
-        }
-    }));
-    EXPECT_NE(refusal.find("renewLeaf"), std::string::npos) << "the removal was not refused: '" << refusal << "'";
+    // Round 3: also user_1, the creator, who set the node above the manager's leaf. The garbler tolerance blamed
+    // that setter and let the removal out with abandonHistory.
+    for (const std::string& leaving : {user(3).userId, user(1).userId}) {
+        std::string refusal;
+        ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+            try {
+                groups.removeGroupMembers(groupId, {leaving});
+            } catch (const core::Exception& e) {
+                refusal = e.getFull();
+            }
+        }));
+        EXPECT_NE(refusal.find("renewLeaf"), std::string::npos)
+            << "removing " << leaving << " was not refused: '" << refusal << "'";
+    }
     EXPECT_EQ(groupApi->getGroup(groupId).keyVersion, 1) << "a removal landed";
     EXPECT_TRUE(canReadMessage(2, messageId)) << "user_2 lost the group's history; " << lastReadError;
 

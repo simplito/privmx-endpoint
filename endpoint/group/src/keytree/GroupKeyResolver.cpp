@@ -250,6 +250,21 @@ std::optional<std::string> GroupKeyResolver::tamperedBy(
     return std::nullopt;
 }
 
+std::optional<std::string> GroupKeyResolver::latestCommitterPubKey(
+    const server::GroupInfo& group,
+    const std::string& userId
+) {
+    std::optional<std::int64_t> latestSeq;
+    std::optional<std::string> key;
+    for (const server::GroupTreeCommit& statement : statements(group)) {
+        if (statement.committer == userId && (!latestSeq.has_value() || statement.seq > latestSeq.value())) {
+            latestSeq = statement.seq;
+            key = statement.committerPubKey;
+        }
+    }
+    return key;
+}
+
 // `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group, which no longer
 // carries them: the bridge serves the ladder separately, and the walk stays ignorant of where they came from.
 ResolveResult GroupKeyResolver::resolveWith(

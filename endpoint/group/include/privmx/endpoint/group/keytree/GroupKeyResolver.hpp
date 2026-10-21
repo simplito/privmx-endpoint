@@ -92,6 +92,9 @@ public:
         const std::optional<std::uint32_t>& tamperedNode
     );
 
+    // The key `userId` signed its latest statement served with the group, if one is served.
+    static std::optional<std::string> latestCommitterPubKey(const server::GroupInfo& group, const std::string& userId);
+
     // Whether the tree is in the one layout this client reads (TreeMath::TREE_VERSION). Older groups are refused,
     // not migrated.
     static bool hasSupportedTree(const server::GroupInfo& group);
