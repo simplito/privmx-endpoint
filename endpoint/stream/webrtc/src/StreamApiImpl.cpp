@@ -454,7 +454,8 @@ void StreamApiImpl::stopCapturerOfReplacedTrack(
     const std::string& trackId
 ) {
     auto videoTrack = streamData->videoTracks.get(trackId);
-    if (videoTrack.has_value() && videoTrack.value()->capturer.get() != NULL &&
+    if (videoTrack.has_value() &&
+        videoTrack.value()->capturer.get() != NULL &&
         videoTrack.value()->capturer->CaptureStarted()) {
         videoTrack.value()->capturer->StopCapture();
     }
@@ -530,10 +531,7 @@ void StreamApiImpl::revertTracksUpdateOnPeerConnection(
     );
 }
 
-void StreamApiImpl::applyTracksUpdate(
-    const std::shared_ptr<StreamData>& streamData,
-    const StreamTracksUpdate& update
-) {
+void StreamApiImpl::applyTracksUpdate(const std::shared_ptr<StreamData>& streamData, const StreamTracksUpdate& update) {
     for (const auto& audio : update.audioTracksToAdd) {
         auto trackInfo = streamData->audioTracks.get(audio.first);
         if (trackInfo.has_value()) {
@@ -555,7 +553,8 @@ void StreamApiImpl::applyTracksUpdate(
     }
     for (const auto& video : update.videoTracksToRemove) {
         auto trackInfo = streamData->videoTracks.get(video.first);
-        if (trackInfo.has_value() && trackInfo.value()->capturer.get() != NULL &&
+        if (trackInfo.has_value() &&
+            trackInfo.value()->capturer.get() != NULL &&
             trackInfo.value()->capturer->CaptureStarted()) {
             trackInfo.value()->capturer->StopCapture();
         }
