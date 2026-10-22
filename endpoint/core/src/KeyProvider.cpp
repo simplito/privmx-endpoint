@@ -394,9 +394,9 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
             // that opened, so it never saw a later dead one, while one unreachable epoch of group A blocked the key
             // group B opens fine.
             LOG_WARN(
-                "[KeyProvider] group key route failed; keyId: ", entry.first, ", group: ", firstFailureGroupId,
-                ", statusCode: ", firstFailure->statusCode, ", opened by another route: ",
-                (chosen->statusCode == 0 ? "yes" : "no")
+                "KeyProvider::decryptAndVerifyGroupKeys: a group key route failed; keyId: ", entry.first,
+                ", group: ", firstFailureGroupId, ", statusCode: ", firstFailure->statusCode,
+                ", opened by another route: ", (chosen->statusCode == 0 ? "yes" : "no")
             )
         }
         result.insert(std::make_pair(entry.first, chosen.value()));
