@@ -51,28 +51,13 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
     wanted.insert(managerIds.begin(), managerIds.end());
 
     std::unordered_map<std::string, std::string> pubKeyByUserId;
-    constexpr size_t BRIDGE_MAX_BATCH_SIZE = 100; // The bridge listing caps at 100
     auto it = wanted.begin();
     while (it != wanted.end()) {
-        Poco::JSON::Array::Ptr ids = new Poco::JSON::Array();
+        std::vector<std::string> ids;
         for (size_t i = 0; i < BRIDGE_MAX_BATCH_SIZE && it != wanted.end(); ++i, ++it) {
-            ids->add(*it);
+            ids.push_back(*it);
         }
-        Poco::JSON::Object::Ptr in = new Poco::JSON::Object();
-        in->set("$in", ids);
-        Poco::JSON::Object::Ptr query = new Poco::JSON::Object();
-        query->set("#userId", in);
-        auto page = _connection.listContextUsers(
-            contextId,
-            PagingQuery{
-                .skip = 0,
-                .limit = static_cast<int64_t>(ids->size()),
-                .sortOrder = "asc",
-                .lastId = std::nullopt,
-                .sortBy = std::nullopt,
-                .queryAsJson = privmx::utils::Utils::stringify(query)
-            }
-        );
+        auto page = _connection.listContextUsers(contextId, pageOfIds("#userId", ids));
         for (const auto& userInfo : page.readItems) {
             pubKeyByUserId.emplace(userInfo.user.userId, userInfo.user.pubKey);
         }
@@ -319,4 +304,23 @@ std::vector<server::GroupKeyEntrySet> ContainerBaseApi::buildGroupKeyEntries(
         );
     }
     return result;
+}
+
+PagingQuery ContainerBaseApi::pageOfIds(const std::string& field, const std::vector<std::string>& ids) {
+    Poco::JSON::Array::Ptr idArray = new Poco::JSON::Array();
+    for (const std::string& id : ids) {
+        idArray->add(id);
+    }
+    Poco::JSON::Object::Ptr in = new Poco::JSON::Object();
+    in->set("$in", idArray);
+    Poco::JSON::Object::Ptr query = new Poco::JSON::Object();
+    query->set(field, in);
+    return PagingQuery{
+        .skip = 0,
+        .limit = static_cast<int64_t>(ids.size()),
+        .sortOrder = "asc",
+        .lastId = std::nullopt,
+        .sortBy = std::nullopt,
+        .queryAsJson = privmx::utils::Utils::stringify(query)
+    };
 }

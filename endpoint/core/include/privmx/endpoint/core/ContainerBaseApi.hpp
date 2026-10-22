@@ -100,6 +100,11 @@ protected:
     // content is encrypted under. V1 keys stay readable for old data.
     static void assertWriteKey(const core::DecryptedEncKey& key);
 
+    // The bridge's list calls answer at most this many items a page.
+    static constexpr std::size_t BRIDGE_MAX_BATCH_SIZE = 100;
+    // One page of the items whose `field` is one of `ids` (at most BRIDGE_MAX_BATCH_SIZE of them).
+    static PagingQuery pageOfIds(const std::string& field, const std::vector<std::string>& ids);
+
     template<typename ModuleStruct>
     auto getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceId = std::nullopt)
         -> decltype(moduleObj.contextId, core::EncKeyLocation());

@@ -1885,27 +1885,9 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
     // anything else is read with `groupGet` (roster and statement, which grow) and verified. Returns the ids served
     // behind the state this process has verified for them.
     const auto take = [&](const std::vector<std::string>& ids) {
-        Poco::JSON::Array::Ptr idArray = new Poco::JSON::Array();
-        for (const auto& id : ids) {
-            idArray->add(id);
-        }
-        Poco::JSON::Object::Ptr in = new Poco::JSON::Object();
-        in->set("$in", idArray);
-        Poco::JSON::Object::Ptr query = new Poco::JSON::Object();
-        query->set("#id", in);
         server::GroupListModel model;
         model.contextId = contextId;
-        core::ListQueryMapper::map(
-            model,
-            core::PagingQuery{
-                .skip = 0,
-                .limit = static_cast<int64_t>(ids.size()),
-                .sortOrder = "asc",
-                .lastId = std::nullopt,
-                .sortBy = std::nullopt,
-                .queryAsJson = privmx::utils::Utils::stringify(query)
-            }
-        );
+        core::ListQueryMapper::map(model, pageOfIds("#id", ids));
         std::vector<std::string> behind;
         std::vector<server::GroupSummary> listed;
         try {
@@ -1950,10 +1932,9 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
         }
         return behind;
     };
-    constexpr size_t BATCH = 100; // The bridge listing caps at 100
-    for (size_t offset = 0; offset < groupIds.size(); offset += BATCH) {
+    for (size_t offset = 0; offset < groupIds.size(); offset += BRIDGE_MAX_BATCH_SIZE) {
         const std::vector<std::string> behind = take(std::vector<std::string>(
-            groupIds.begin() + offset, groupIds.begin() + std::min(offset + BATCH, groupIds.size())
+            groupIds.begin() + offset, groupIds.begin() + std::min(offset + BRIDGE_MAX_BATCH_SIZE, groupIds.size())
         ));
         // Behind may be a read that lagged a concurrent one; read once more, and still behind gets no key.
         if (!behind.empty()) {
