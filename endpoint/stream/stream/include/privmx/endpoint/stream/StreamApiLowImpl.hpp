@@ -192,6 +192,7 @@ private:
 
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
+    server::StreamRoomInfo getRawStreamRoom(const std::string& streamRoomId);
     // `streamRoomUpdated` for a joined room: the LOCAL key follows the room's current key (F-05c); a live publication
     // in a room gone stale re-keys it (F-05e/f), and stops when the re-key fails or the current key is unusable (F-05g).
     void applyRoomUpdate(StreamRoomData& room, const server::StreamRoomInfo& raw);

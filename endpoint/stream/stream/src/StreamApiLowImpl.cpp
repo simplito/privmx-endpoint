@@ -246,9 +246,7 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     if (_streamRoomMap.has(streamRoomId)) {
         throw AlreadyJoinedStreamRoomException();
     }
-    server::StreamRoomGetModel model;
-    model.id = streamRoomId;
-    auto streamRoom = _serverApi->streamRoomGet(model).streamRoom;
+    auto streamRoom = getRawStreamRoom(streamRoomId);
     std::shared_ptr<DataChannelMessageEncryptorV1> dataChannelMessageEncryptorV1;
     std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom);
     dataChannelMessageEncryptorV1 = std::make_shared<DataChannelMessageEncryptorV1>(keys);
@@ -616,9 +614,7 @@ void StreamApiLowImpl::updateStreamRoom(
     const std::vector<core::GroupGrantWithKey>& groups
 ) {
 
-    server::StreamRoomGetModel getModel;
-    getModel.id = streamRoomId;
-    auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
+    auto currentStreamRoom = getRawStreamRoom(streamRoomId);
     auto currentStreamRoomEntry = currentStreamRoom.data.back();
     auto currentStreamRoomResourceId = currentStreamRoom.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
@@ -656,9 +652,7 @@ void StreamApiLowImpl::rotateStreamRoomKeys(
     const bool force,
     const std::vector<core::GroupGrantWithKey>& knownGroupKeys
 ) {
-    server::StreamRoomGetModel getModel;
-    getModel.id = streamRoomId;
-    auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
+    auto currentStreamRoom = getRawStreamRoom(streamRoomId);
     rotateContainerKeys<server::StreamRoomRotateKeysModel>(
         streamRoomId, currentStreamRoom, users, managers, version, force, knownGroupKeys,
         [&](const server::StreamRoomRotateKeysModel& model) { _serverApi->streamRoomRotateKeys(model); }
@@ -671,9 +665,7 @@ void StreamApiLowImpl::ensureRoomKeyIsFresh(const std::string& streamRoomId) {
         autoRotateStreamRoomKeys(streamRoomId);
         keys = getNewModuleKeysAndUpdateCache(streamRoomId);
         // The sender moves now: our own streamRoomUpdated would move it only when it arrives, or never if lost.
-        server::StreamRoomGetModel getModel;
-        getModel.id = streamRoomId;
-        applyRoomKeys(*getStreamRoomData(streamRoomId), _serverApi->streamRoomGet(getModel).streamRoom);
+        applyRoomKeys(*getStreamRoomData(streamRoomId), getRawStreamRoom(streamRoomId));
     }
     // Backstop: a re-key that did not happen — a caller the room's `rotateKeys` policy refuses — has already
     // thrown by now, so reaching here still stale would mean the rotation silently did nothing.
@@ -683,11 +675,7 @@ void StreamApiLowImpl::ensureRoomKeyIsFresh(const std::string& streamRoomId) {
 void StreamApiLowImpl::autoRotateStreamRoomKeys(const std::string& streamRoomId) {
     autoRotateContainerKeys<server::StreamRoomRotateKeysModel, server::StreamRoomInfo>(
         streamRoomId,
-        [&] {
-            server::StreamRoomGetModel getModel;
-            getModel.id = streamRoomId;
-            return _serverApi->streamRoomGet(getModel).streamRoom;
-        },
+        [&] { return getRawStreamRoom(streamRoomId); },
         [&](const server::StreamRoomRotateKeysModel& model) { _serverApi->streamRoomRotateKeys(model); }
     );
 }
@@ -723,6 +711,12 @@ void StreamApiLowImpl::deleteStreamRoom(const std::string& streamRoomId) {
     server::StreamRoomDeleteModel model;
     model.id = streamRoomId;
     _serverApi->streamRoomDelete(model);
+}
+
+stream::server::StreamRoomInfo StreamApiLowImpl::getRawStreamRoom(const std::string& streamRoomId) {
+    server::StreamRoomGetModel model;
+    model.id = streamRoomId;
+    return _serverApi->streamRoomGet(model).streamRoom;
 }
 
 std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoomData(const std::string& streamRoomId) {
@@ -763,9 +757,7 @@ std::string StreamApiLowImpl::buildSubscriptionQuery(
 }
 
 std::pair<core::ModuleKeys, int64_t> StreamApiLowImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
-    server::StreamRoomGetModel params;
-    params.id = moduleId;
-    auto stream = _serverApi->streamRoomGet(params).streamRoom;
+    auto stream = getRawStreamRoom(moduleId);
     // validate stream Data before returning data
     _streamRoomDataSchemaMapper->assertDataIntegrity(stream);
     return std::make_pair(containerToModuleKeys(stream), stream.version);
