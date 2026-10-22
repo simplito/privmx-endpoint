@@ -33,6 +33,8 @@ limitations under the License.
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
 
+#include "TreeTestOps.hpp"
+
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
 using namespace privmx::endpoint::group::keytree;
@@ -94,9 +96,9 @@ protected:
         const TreeGroupState state = runtime(group);
         const Member& who = group.members[committer];
         EXPECT_EQ(keys.climbToGrantKey(state, who.userId, who.priv, false).failure, ClimbFailure::None);
-        keys.setMemberKeys(publicOf(group.members));
+        treetest::setMemberKeys(keys, publicOf(group.members));
         const CommitPlan result = plan(keys, state, who);
-        group.tree = TreeWire::afterCommit(group.tree, result);
+        group.tree = treetest::afterCommit(group.tree, result);
         group.epoch = result.epoch;
         group.grant = result.grantKey.getPublicKey();
         group.setters[result.seq] = who.userId;
@@ -113,7 +115,7 @@ protected:
         const Member newcomer{"new" + std::to_string(group.members.size()), PrivateKey::generateRandom()};
         const CommitPlan plan = commit(group, adder, [&](TreeKeys& keys, const TreeGroupState& state, const Member& who) {
             return keys.planAddition(
-                state, publicOf({newcomer}), TreeKeys::choosePositions(state, 1), who.userId, who.priv
+                state, publicOf({newcomer}), treetest::choosePositions(state, 1), who.userId, who.priv
             );
         });
         group.members.push_back(newcomer);

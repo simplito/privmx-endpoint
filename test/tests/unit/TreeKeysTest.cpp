@@ -15,7 +15,7 @@ limitations under the License.
  * No server, no docker, no network, but no crypto stubs either — every wrap is a genuine ECIES encryption and
  * every climb a genuine decryption, because the properties under test are cryptographic ones: that a removed
  * member cannot reach a refreshed key, and that a corrupted edge is detected rather than silently producing the
- * wrong key. States are carried from one commit to the next by `TreeWire::afterCommit`, the bridge's storage rule.
+ * wrong key. States are carried from one commit to the next by `treetest::afterCommit`, the bridge's storage rule.
  *
  * Groups above 32 seats appear throughout: below that the root is the only keyed node, and the interesting cases —
  * blank nodes, edges skipping a blank, a commit wrapping through a blank to a whole bucket — need a second one.
@@ -41,6 +41,8 @@ limitations under the License.
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
+
+#include "TreeTestOps.hpp"
 
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
@@ -95,7 +97,7 @@ protected:
     // The state the bridge stores once it accepts the commit.
     static TreeGroupState applied(const TreeGroupState& before, const CommitPlan& plan) {
         TreeGroupState after =
-            TreeWire::toRuntime(TreeWire::afterCommit(wireOf(before), plan), plan.epoch, plan.grantKey.getPublicKey());
+            TreeWire::toRuntime(treetest::afterCommit(wireOf(before), plan), plan.epoch, plan.grantKey.getPublicKey());
         after.commitSeq = plan.seq;
         after.setters = before.setters;
         after.setters[plan.seq] = plan.shape.leafAssignment.at(plan.shape.committerSeat).value();
@@ -129,7 +131,7 @@ protected:
         if (keys.climbToGrantKey(group.state, who.userId, who.priv, false).failure != ClimbFailure::None) {
             throw std::runtime_error(who.userId + " cannot climb");
         }
-        keys.setMemberKeys(publicOf(group.members));
+        treetest::setMemberKeys(keys, publicOf(group.members));
         return plan(keys, who);
     }
 
@@ -151,7 +153,7 @@ protected:
             makeMembers(count, "new" + std::to_string(group.members.size()) + "-");
         const CommitPlan plan = planBy(group, adder, [&](TreeKeys& keys, const TestMember& who) {
             return keys.planAddition(
-                group.state, publicOf(newcomers), TreeKeys::choosePositions(group.state, count), who.userId, who.priv
+                group.state, publicOf(newcomers), treetest::choosePositions(group.state, count), who.userId, who.priv
             );
         });
         group.members.insert(group.members.end(), newcomers.begin(), newcomers.end());
@@ -862,7 +864,7 @@ TEST_F(TreeKeysRemoval, SECURITY_PlansWithoutAClimbWhenEveryWrapIsGarbled) {
 
     TreeKeyCache cold;
     TreeKeys keys(cold);
-    keys.setMemberKeys(publicOf(group.members));
+    treetest::setMemberKeys(keys, publicOf(group.members));
     const CommitPlan plan = keys.planRemoval(
         group.state, {group.members[0].userId}, group.members[35].userId, group.members[35].priv
     );
@@ -1003,7 +1005,7 @@ TEST_F(TreeKeysAddition, RequiresTheGrantKeyAndSaysSo) {
     const Group group = create(4);
     TreeKeyCache empty;
     TreeKeys keys(empty);
-    keys.setMemberKeys(publicOf(group.members));
+    treetest::setMemberKeys(keys, publicOf(group.members));
     const std::vector<TestMember> newcomer = makeMembers(1, "new");
     EXPECT_THROW(
         keys.planAddition(group.state, publicOf(newcomer), {4}, group.members[0].userId, group.members[0].priv),
@@ -1030,10 +1032,10 @@ TEST_F(TreeKeysAddition, ChoosesTheLowestBlankThenAppends) {
     TreeGroupState state;
     state.numLeaves = 4;
     state.leafAssignment = {std::string("a"), std::nullopt, std::string("c"), std::nullopt};
-    EXPECT_EQ(TreeKeys::choosePositions(state, 1), Nodes({1}));
-    EXPECT_EQ(TreeKeys::choosePositions(state, 3), Nodes({1, 3, 4}));
+    EXPECT_EQ(treetest::choosePositions(state, 1), Nodes({1}));
+    EXPECT_EQ(treetest::choosePositions(state, 3), Nodes({1, 3, 4}));
     state.leafAssignment = {std::string("a"), std::string("b"), std::string("c"), std::string("d")};
-    EXPECT_EQ(TreeKeys::choosePositions(state, 1), Nodes({4})) << "no blanks: append";
+    EXPECT_EQ(treetest::choosePositions(state, 1), Nodes({4})) << "no blanks: append";
 }
 
 // self-update
@@ -1080,7 +1082,7 @@ TEST_F(TreeKeysSelfUpdate, RefusesAStrangerAndPlansAOneLeafTree) {
     );
     TreeKeyCache empty;
     TreeKeys keys(empty);
-    keys.setMemberKeys(publicOf(group.members));
+    treetest::setMemberKeys(keys, publicOf(group.members));
     EXPECT_THROW(keys.planSelfUpdate(group.state, group.members[0].userId, group.members[0].priv),
                  std::invalid_argument)
         << "re-linking the grant edge needs the grant key, climbed for first";
@@ -1105,7 +1107,7 @@ static CommitPlan renew(
             member.publicKey = current.getPublicKey();
         }
     }
-    keys.setMemberKeys(withNewKey);
+    treetest::setMemberKeys(keys, withNewKey);
     return keys.planSelfUpdate(state, userId, current);
 }
 

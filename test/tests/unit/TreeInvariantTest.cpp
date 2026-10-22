@@ -61,6 +61,8 @@ limitations under the License.
 #include <privmx/endpoint/group/keytree/TreeVerifier.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
 
+#include "TreeTestOps.hpp"
+
 #include "TreeFakeBridge.hpp"
 
 using privmx::crypto::PrivateKey;
@@ -203,7 +205,7 @@ protected:
         TreeKeys keys(cache);
         const ClimbResult climb = keys.climbToGrantKey(served, committer, member(committer).priv, false);
         EXPECT_EQ(climb.failure, ClimbFailure::None) << committer << " cannot climb to plan";
-        keys.setMemberKeys(roster());
+        treetest::setMemberKeys(keys, roster());
         return plan(keys, served);
     }
 
@@ -334,7 +336,7 @@ protected:
         }
         std::sort(a.begin(), a.end());
         std::sort(b.begin(), b.end());
-        EXPECT_EQ(a, b) << "TreeWire::afterCommit disagrees with the storage rule";
+        EXPECT_EQ(a, b) << "treetest::afterCommit disagrees with the storage rule";
         ASSERT_EQ(mine.nodes.size(), bridge.state.nodes.size());
         for (const TreeNodeState& node : mine.nodes) {
             const TreeNodeState* other = recordOf(bridge.state, node.nodeIndex);
@@ -398,7 +400,7 @@ protected:
         for (const std::string& id : ids) {
             newcomers.push_back(TreeMember{id, member(id).publicKey});
         }
-        const auto positions = TreeKeys::choosePositions(bridge.state, count);
+        const auto positions = treetest::choosePositions(bridge.state, count);
         const server::GroupTreeState before = wireState();
         const CommitPlan plan = planBy(adder, [&](TreeKeys& keys, const TreeGroupState& served) {
             return keys.planAddition(served, newcomers, positions, adder, member(adder).priv);
@@ -416,7 +418,7 @@ protected:
             sign(plan, CommitOp::Add, adder, bridge.state.epoch, bridge.state.grantPublicKey, bridge.rosterVersion + 1,
                  after, ids, {})
         );
-        expectSameAsAfterCommit(TreeWire::afterCommit(before, plan));
+        expectSameAsAfterCommit(treetest::afterCommit(before, plan));
         learnPlan(adder, plan);
         closeKnowledge();
         checkInvariants(false);
@@ -439,7 +441,7 @@ protected:
             sign(plan, CommitOp::Remove, remover, bridge.state.epoch + 1, plan.grantKey.getPublicKey(),
                  bridge.rosterVersion + 1, after, {}, leaving)
         );
-        expectSameAsAfterCommit(TreeWire::afterCommit(before, plan));
+        expectSameAsAfterCommit(treetest::afterCommit(before, plan));
         learnPlan(remover, plan);
         closeKnowledge();
         checkInvariants(true);
@@ -456,7 +458,7 @@ protected:
             sign(plan, CommitOp::SelfUpdate, memberId, bridge.state.epoch, bridge.state.grantPublicKey,
                  bridge.rosterVersion, seatedIn(bridge.state), {}, {})
         );
-        expectSameAsAfterCommit(TreeWire::afterCommit(before, plan));
+        expectSameAsAfterCommit(treetest::afterCommit(before, plan));
         learnPlan(memberId, plan);
         closeKnowledge();
         checkInvariants(false);

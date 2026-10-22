@@ -26,7 +26,7 @@ limitations under the License.
  * string on all 33 edges of a tree.
  *
  * Every case is one commit by a named member: its `before` and `after` states (the after state by the bridge's
- * storage rule, `TreeWire::afterCommit`), the nodes it refreshed, the signed commit statement (`commit`, signature
+ * storage rule, `treetest::afterCommit`), the nodes it refreshed, the signed commit statement (`commit`, signature
  * in full), the post state's `treeHash` and roster (`users`, `managers`, `rosterVersion`). Removals also carry
  * `setters` (the committer of each statement `before`'s filled nodes cite) and `blanked` (what the removal blanks
  * besides the remover's path, ascending); additions carry `blanked: []`. Cases from the A-prime test vectors carry
@@ -60,6 +60,8 @@ limitations under the License.
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
+
+#include "TreeTestOps.hpp"
 
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
@@ -299,9 +301,9 @@ CommitPlan commitBy(
     if (keys.climbToGrantKey(state, who.userId, who.priv, false).failure != ClimbFailure::None) {
         throw std::runtime_error(committer + " cannot climb");
     }
-    keys.setMemberKeys(publicOf(group.members));
+    treetest::setMemberKeys(keys, publicOf(group.members));
     const CommitPlan result = plan(keys, state, who);
-    group.tree = TreeWire::afterCommit(group.tree, result);
+    group.tree = treetest::afterCommit(group.tree, result);
     group.epoch = result.epoch;
     group.grantKey = result.grantKey;
     group.grantKeys.putGrantKey(result.epoch, result.grantKey);
@@ -366,7 +368,7 @@ std::string groupAdd(Group& group, const std::string& adder, std::uint32_t count
     }
     const CommitPlan plan = commitBy(group, adder, [&](TreeKeys& keys, const TreeGroupState& state, const Member& who) {
         return keys.planAddition(
-            state, publicOf(newcomers), TreeKeys::choosePositions(state, count), who.userId, who.priv
+            state, publicOf(newcomers), treetest::choosePositions(state, count), who.userId, who.priv
         );
     });
     group.rosterVersion += 1;

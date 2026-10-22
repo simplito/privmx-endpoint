@@ -44,6 +44,8 @@ limitations under the License.
 #include <privmx/endpoint/core/LocalSeal.hpp>
 #include <privmx/endpoint/group/keytree/PinBlob.hpp>
 
+#include "TreeTestOps.hpp"
+
 #include "MemoryPinStore.hpp"
 #include "TreeFakeBridge.hpp"
 
@@ -276,7 +278,7 @@ struct Bridge {
             if (model.forNewMembers.has_value()) {
                 std::vector<std::int64_t> seats;
                 for (const std::uint32_t seat :
-                     TreeKeys::choosePositions(tree.state, static_cast<std::uint32_t>(model.forNewMembers.value()))) {
+                     treetest::choosePositions(tree.state, static_cast<std::uint32_t>(model.forNewMembers.value()))) {
                     seats.push_back(seat);
                 }
                 info.nextFreeSeats = seats;
@@ -789,7 +791,7 @@ protected:
         for (const auto& [id, key] : bridge.users) {
             members.push_back(TreeMember{id, key.getPublicKey()});
         }
-        keys.setMemberKeys(members);
+        treetest::setMemberKeys(keys, members);
         const CommitPlan plan = keys.planSelfUpdate(served, committer, priv);
         const auto wire = TreeWire::toSelfUpdateTransition(plan, bridge.tree.state.epoch);
         CommitStatement statement = TreeCommits::statementFor(
@@ -819,7 +821,7 @@ protected:
         for (const auto& [id, key] : bridge.users) {
             members.push_back(TreeMember{id, key.getPublicKey()});
         }
-        keys.setMemberKeys(members);
+        treetest::setMemberKeys(keys, members);
         return plan(keys, served);
     }
 

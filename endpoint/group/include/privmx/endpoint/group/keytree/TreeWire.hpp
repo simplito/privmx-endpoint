@@ -56,12 +56,6 @@ public:
         const CommitPlan& plan,
         std::int64_t baseKeyVersion
     );
-
-    // The whole state after a commit, by the bridge's storage rule: blanked nodes keep their generation and lose
-    // their key, refreshed ones are replaced, and every edge hanging off either is replaced by the plan's. A record
-    // growth pushed into a bucket (an old root at a low level) goes with its edges. The live path never needs this;
-    // the conformance fixture and the tests do.
-    static server::GroupTreeState afterCommit(const server::GroupTreeState& before, const CommitPlan& plan);
 };
 
 } // namespace keytree
