@@ -1887,17 +1887,17 @@ TEST_F(TreeVerification, ARotationInTheMiddleOfANonAdjacentWalkChecksOnlyThePath
     EXPECT_THROW(TreeVerifier::step(adjacent, rotation, TreeCommits::digest(rotation), keys, false, true), GroupDataIntegrityException);
 }
 
-TEST(TreeVerifierCaches, SECURITY_ABoundedCacheKeepsAtMostTwoGenerations) {
-    // T3-24: the bridge chooses how many distinct statements it serves; what the verifier caches of them is capped.
+TEST(TreeVerifierCaches, SECURITY_ABoundedCacheKeepsAtMostItsCap) {
+    // The bridge chooses how many distinct statements it serves; what the verifier caches of them is capped.
     TreeVerifier::Bounded<int> cache(2);
-    cache.put("a", 1);
-    cache.put("b", 2);
-    cache.put("c", 3); // "a" and "b" move to the previous generation
-    ASSERT_NE(cache.find("a"), nullptr) << "found in the previous generation, and taken back into the current";
-    cache.put("d", 4); // the current one is full again: "c" and "a" move, "b" goes
-    EXPECT_EQ(cache.find("b"), nullptr);
-    ASSERT_NE(cache.find("a"), nullptr);
-    EXPECT_EQ(*cache.find("a"), 1);
+    cache.add("a", 1);
+    cache.add("b", 2);
+    ASSERT_FALSE(cache.get("a").isNull()) << "\"a\" is now the most recently used";
+    cache.add("c", 3); // full: the least recently used, "b", goes
+    EXPECT_TRUE(cache.get("b").isNull());
+    EXPECT_EQ(cache.size(), 2u);
+    ASSERT_FALSE(cache.get("a").isNull());
+    EXPECT_EQ(*cache.get("a"), 1);
 }
 
 // 01: pins loaded from the store

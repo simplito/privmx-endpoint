@@ -147,12 +147,12 @@ bool TreeVerifier::checkStatements(const std::vector<Claim>& claims, const Envir
         std::lock_guard lock(_mutex);
         for (const Claim& claim : claims) {
             Pending entry{.claim = &claim, .atDate = std::nullopt, .atNow = std::nullopt};
-            if (_verifiedStatements.find(verifiedKey(*claim.contextId, *claim.groupId, *claim.statement)) == nullptr) {
+            if (!_verifiedStatements.has(verifiedKey(*claim.contextId, *claim.groupId, *claim.statement))) {
                 entry.atDate = 0;
             }
             if (claim.now) {
-                const std::uint64_t* accepted = _acceptedNow.find(keyNow(claim));
-                if (accepted == nullptr || now > *accepted + NOW_ANSWER_REUSE_MS) {
+                const auto accepted = _acceptedNow.get(keyNow(claim));
+                if (accepted.isNull() || now > *accepted + NOW_ANSWER_REUSE_MS) {
                     entry.atNow = 0;
                 }
             }
@@ -227,12 +227,12 @@ bool TreeVerifier::checkStatements(const std::vector<Claim>& claims, const Envir
         const bool atDate = !entry.atDate.has_value() || verified[entry.atDate.value()];
         const bool atNow = !entry.atNow.has_value() || verified[entry.atNow.value()];
         if (entry.atDate.has_value() && atDate) {
-            _verifiedStatements.put(
+            _verifiedStatements.add(
                 verifiedKey(*entry.claim->contextId, *entry.claim->groupId, *entry.claim->statement), true
             );
         }
         if (entry.atNow.has_value() && atNow) {
-            _acceptedNow.put(keyNow(*entry.claim), now);
+            _acceptedNow.add(keyNow(*entry.claim), now);
         }
         all = all && atDate && atNow;
     }
@@ -823,19 +823,19 @@ TreeVerifier::Openers TreeVerifier::openersAt(
     Openers known;
     {
         std::lock_guard lock(_mutex);
-        const Openers* memo = _openers.find(groupId);
-        if (memo != nullptr && memo->head.seq == pinSeq && memo->head.digest == pinDigest) {
+        const auto memo = _openers.get(groupId);
+        if (!memo.isNull() && memo->head.seq == pinSeq && memo->head.digest == pinDigest) {
             return *memo;
         }
-        if (memo != nullptr && memo->head.seq <= pinSeq) {
+        if (!memo.isNull() && memo->head.seq <= pinSeq) {
             known = *memo;
         }
     }
     chainFromGenesis(groupId, contextId, known, pinSeq, pinDigest, environment);
     std::lock_guard lock(_mutex);
-    const Openers* stored = _openers.find(groupId);
-    if (stored == nullptr || stored->head.seq < known.head.seq) {
-        _openers.put(groupId, known);
+    const auto stored = _openers.get(groupId);
+    if (stored.isNull() || stored->head.seq < known.head.seq) {
+        _openers.add(groupId, known);
     }
     return known;
 }

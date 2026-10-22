@@ -23,6 +23,8 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include <Poco/LRUCache.h>
+
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
 
 #include "privmx/endpoint/group/ServerTypes.hpp"
@@ -59,37 +61,10 @@ namespace keytree {
 // committer's key accepted by the UserVerifier both at its date and now (N-3); a first contact checks it at its date.
 class TreeVerifier {
 public:
-    // At most twice `cap` entries: two generations rather than an LRU, as in `PublicKeyCache`. The bridge chooses how
-    // many distinct statements and groups it serves, so nothing it feeds a cache may grow without bound (T3-24).
+    // The bridge chooses how many distinct statements and groups it serves, so nothing it feeds a cache may grow
+    // without bound.
     template<typename V>
-    class Bounded {
-    public:
-        explicit Bounded(std::size_t cap) : _cap(cap) {}
-        const V* find(const std::string& key) {
-            if (const auto it = _current.find(key); it != _current.end()) {
-                return &it->second;
-            }
-            const auto old = _previous.find(key);
-            if (old == _previous.end()) {
-                return nullptr;
-            }
-            V value = std::move(old->second);
-            _previous.erase(old);
-            return &put(key, std::move(value));
-        }
-        V& put(const std::string& key, V value) {
-            if (_current.size() >= _cap && _current.count(key) == 0) {
-                _previous = std::move(_current);
-                _current.clear();
-            }
-            return _current[key] = std::move(value);
-        }
-
-    private:
-        std::size_t _cap;
-        std::map<std::string, V> _current;
-        std::map<std::string, V> _previous;
-    };
+    using Bounded = Poco::LRUCache<std::string, V>;
 
     // How much of the tree the response carries: one seat's path ("path", the default `groupGet`), or every
     // record ("plan"/"full").
@@ -416,7 +391,7 @@ private:
     std::map<std::string, Pin> _pins;
     std::set<std::string> _dirty; // groups moved since the last `exportPins`
     std::function<void(bool)> _onPinsMoved;
-    // ponytail: 16 groups' rosters per generation (a 16k roster is ~2 MB); an evicted group refetches from seq 1.
+    // Limit: 16 groups' rosters (a 16k roster is ~2 MB); an evicted group refetches from seq 1.
     Bounded<Openers> _openers{16};
     Bounded<bool> _verifiedStatements{4096};
     // `contextId \0 userId \0 pubKey` -> when the UserVerifier last accepted that key "now", reused for
