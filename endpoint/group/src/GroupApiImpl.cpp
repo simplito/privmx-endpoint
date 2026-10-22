@@ -249,11 +249,7 @@ static TPlan planOrThrow(const std::function<TPlan()>& build) {
 }
 
 bool GroupApiImpl::climbsWithPreviousIdentity(const keytree::TreeGroupState& state, const std::string& memberId) {
-    std::vector<privmx::crypto::PrivateKey> previous = _connection.getImpl()->previousIdentities();
-    {
-        std::lock_guard<std::mutex> lock(_previousIdentitiesMutex);
-        previous.insert(previous.end(), _previousIdentities.begin(), _previousIdentities.end());
-    }
+    const std::vector<privmx::crypto::PrivateKey> previous = _connection.getImpl()->previousIdentities();
     return std::any_of(previous.begin(), previous.end(), [&](const privmx::crypto::PrivateKey& key) {
         keytree::TreeKeyCache scratch;
         return keytree::TreeKeys(scratch).climbToGrantKey(state, memberId, key, false).failure ==
@@ -3130,33 +3126,22 @@ bool GroupApiImpl::savePins(bool all) {
 
 void GroupApiImpl::adoptPreviousIdentity(const privmx::crypto::PrivateKey& previous) {
     const std::string previousPub = previous.getPublicKey().toBase58DER();
-    if (previousPub == _userPrivKey.getPublicKey().toBase58DER()) {
-        return;
-    }
-    {
-        std::lock_guard<std::mutex> lock(_previousIdentitiesMutex);
-        const auto known = [&](const privmx::crypto::PrivateKey& k) {
-            return k.getPublicKey().toBase58DER() == previousPub;
-        };
-        if (std::none_of(_previousIdentities.begin(), _previousIdentities.end(), known)) {
-            _previousIdentities.push_back(previous);
-        }
-    }
-    if (!_pinStore) {
-        return;
-    }
     {
         std::lock_guard<std::mutex> lock(_pinSaveMutex);
         if (_adoptedIdentities.count(previousPub) > 0) {
             return;
         }
     }
-    const std::string slot =
-        _connection.getImpl()->localStateSlot(core::localstate::GROUP_PINS, previous.getPublicKey());
-    const std::string blob = _pinStore->load(slot).stdString();
-    if (!blob.empty()) {
-        const auto body = core::openLocal(previous, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION, slot, blob);
-        const auto adopted = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
+    // The connection records the key (for `climbsWithPreviousIdentity`) and stages what its slot holds; it throws
+    // when the slot does not open. The current key, or no store: nothing staged, nothing to adopt.
+    const auto connectionImpl = _connection.getImpl();
+    connectionImpl->adoptPreviousIdentity(previous);
+    if (!_pinStore || previousPub == _userPrivKey.getPublicKey().toBase58DER()) {
+        return;
+    }
+    const auto staged = connectionImpl->getStagedPinBodies();
+    if (const auto it = staged.find(previousPub); it != staged.end()) {
+        const auto adopted = keytree::PinBlob::decode(it->second);
         if (!adopted.has_value()) {
             // Never ignored: corrupting the slot must not be a way to turn adoption off.
             throw core::LocalStateIntegrityException("the previous identity's group pins do not open");

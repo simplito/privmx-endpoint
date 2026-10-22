@@ -358,7 +358,7 @@ private:
     // client was given (`climbsWithPreviousIdentity`) is refused, pointing at renewLeaf, unless history stays
     // reachable: renewLeaf fixes exactly that case, and nothing else.
     // `climbKey`: climb with it instead of the session's key, and schedule no self-update off the climb.
-    // Whether one of the previous identity keys (adoptPreviousIdentity, here or on the connection) climbs `state` to
+    // Whether one of the previous identity keys (ConnectionImpl::previousIdentities) climbs `state` to
     // its grant key. Climbs on a scratch cache, so nothing derived from a previous key reaches a reader.
     bool climbsWithPreviousIdentity(const keytree::TreeGroupState& state, const std::string& memberId);
     keytree::TreeGroupState climbForPlanning(
@@ -577,10 +577,6 @@ private:
     std::mutex _pinSaveMutex; // serialises saves; guards the two below
     bool _pinSaveFull = false;
     std::set<std::string> _adoptedIdentities;
-    // The previous identity keys handed to `adoptPreviousIdentity` (renewLeaf), pins stored or not; together with
-    // ConnectionImpl::previousIdentities, what `climbForPlanning` knows of an own key change.
-    std::mutex _previousIdentitiesMutex;
-    std::vector<privmx::crypto::PrivateKey> _previousIdentities; // under `_previousIdentitiesMutex`
     // Under `_selfUpdateMutex`: when the worker saves next, and when the last save succeeded.
     std::optional<std::chrono::steady_clock::time_point> _pinSaveDue;
     std::chrono::steady_clock::time_point _lastPinSave;
