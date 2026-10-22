@@ -32,6 +32,8 @@ limitations under the License.
 
 #include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
+
+#include "TestHelpers.hpp"
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
 
 namespace {
@@ -42,15 +44,6 @@ using namespace privmx::endpoint::group::keytree;
 
 // What the bridge derives from the context and the resourceId the genesis statement signs.
 const std::string GROUP_ID = TreeCommits::groupId("ctx", "res");
-
-// A policy object as the bridge stores and serves it.
-Poco::Dynamic::Var policyOf(const std::map<std::string, std::string>& rules) {
-    Poco::JSON::Object::Ptr policy = new Poco::JSON::Object();
-    for (const auto& [field, rule] : rules) {
-        policy->set(field, rule);
-    }
-    return policy;
-}
 
 // What the test groups are created with unless a test says otherwise: every member may commit, so the existing tests,
 // whose removers and adders are plain users, keep their meaning.

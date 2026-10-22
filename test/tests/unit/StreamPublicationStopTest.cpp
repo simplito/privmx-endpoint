@@ -26,6 +26,8 @@ limitations under the License.
 #include <privmx/endpoint/stream/StreamApiLowImpl.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 
+#include "TestHelpers.hpp"
+
 namespace core = privmx::endpoint::core;
 namespace stream = privmx::endpoint::stream;
 using privmx::crypto::PrivateKey;
@@ -124,10 +126,6 @@ public:
 private:
     Log& _log;
     bool _failClose;
-};
-
-struct ConnectionOf : core::Connection {
-    explicit ConnectionOf(const std::shared_ptr<core::ConnectionImpl>& impl) { _ptr = impl; }
 };
 
 // Stops a live publication (session 42, handle 7) with the Bridge and the media layer failing as asked; returns

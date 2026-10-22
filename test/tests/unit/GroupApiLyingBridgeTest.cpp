@@ -47,8 +47,8 @@ limitations under the License.
 #include "GroupApiImplTestAccess.hpp"
 #include "TreeTestOps.hpp"
 #include "MemoryPinStore.hpp"
+#include "TestHelpers.hpp"
 #include "TreeFakeBridge.hpp"
-
 
 namespace core = privmx::endpoint::core;
 using privmx::crypto::PublicKey;
@@ -70,10 +70,6 @@ core::ContainerPolicy policyWith(const std::map<std::string, std::string>& rules
 
 // OPEN_POLICY as the API takes it.
 const core::ContainerPolicy OPEN = policyWith({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}});
-
-Poco::JSON::Object::Ptr overTheWire(const Poco::Dynamic::Var& value) {
-    return privmx::utils::Utils::parseJsonObject(privmx::utils::Utils::stringifyVar(value));
-}
 
 privmx::utils::PrivmxException archiveInvalid() {
     return privmx::utils::PrivmxException("GROUP_ARCHIVE_INVALID", privmx::utils::PrivmxException::RPC, 0x621F);
@@ -475,10 +471,6 @@ private:
     const Bridge& _bridge;
 };
 
-struct ConnectionOf : core::Connection {
-    explicit ConnectionOf(const std::shared_ptr<core::ConnectionImpl>& impl) { _ptr = impl; }
-};
-
 struct Client {
     std::shared_ptr<core::ConnectionImpl> connectionImpl = std::make_shared<core::ConnectionImpl>();
     core::Connection connection;
@@ -539,21 +531,6 @@ void race(int threads, const std::function<void(int)>& body) {
     for (auto& thread : running) {
         thread.join();
     }
-}
-
-// The next event of `type` from the shared queue; the others are dropped.
-core::EventHolder nextEvent(const std::string& type) {
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-    while (std::chrono::steady_clock::now() < deadline) {
-        if (const auto event = core::EventQueueImpl::getInstance()->getEvent(); event.has_value()) {
-            if (event->type() == type) {
-                return event.value();
-            }
-            continue;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
-    throw std::runtime_error("no " + type + " event");
 }
 
 // A statement exactly as sent, for byte-for-byte comparisons.

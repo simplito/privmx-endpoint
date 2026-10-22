@@ -55,6 +55,8 @@ limitations under the License.
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 
+#include "TestHelpers.hpp"
+
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
 using namespace privmx::endpoint::group::keytree;
@@ -159,14 +161,6 @@ CommitStatement statementOf(const Poco::JSON::Object::Ptr& wire) {
         }
     }
     return statement;
-}
-
-Poco::Dynamic::Var policyFrom(const std::map<std::string, std::string>& rules) {
-    Poco::JSON::Object::Ptr policy = new Poco::JSON::Object();
-    for (const auto& [field, rule] : rules) {
-        policy->set(field, rule);
-    }
-    return policy;
 }
 
 } // namespace
@@ -288,13 +282,13 @@ TEST(TreeCommitsPolicy, InheritDefaultAndAbsentResolveToTheV3Defaults) {
     EXPECT_EQ(absent.creator, "alice");
     for (const std::string value : {"inherit", "default"}) {
         const GroupRules resolved = TreeCommits::rules(
-            policyFrom({{"update", value}, {"rotateKeys", value}, {"updatePolicy", value}, {"ownerCanBeRemovedFromManagers", value}}),
+            policyOf({{"update", value}, {"rotateKeys", value}, {"updatePolicy", value}, {"ownerCanBeRemovedFromManagers", value}}),
             "alice"
         );
         EXPECT_EQ(resolved.hash, absent.hash) << value;
     }
-    EXPECT_EQ(TreeCommits::rules(policyFrom({}), "alice").hash, absent.hash) << "{} is no policy";
-    EXPECT_NE(TreeCommits::rules(policyFrom({{"update", "manager"}}), "bob").hash, absent.hash) << "the creator is signed";
+    EXPECT_EQ(TreeCommits::rules(policyOf({}), "alice").hash, absent.hash) << "{} is no policy";
+    EXPECT_NE(TreeCommits::rules(policyOf({{"update", "manager"}}), "bob").hash, absent.hash) << "the creator is signed";
     EXPECT_THROW(TreeCommits::rules(Poco::Dynamic::Var(5), "alice"), std::invalid_argument);
     Poco::JSON::Object::Ptr numeric = new Poco::JSON::Object();
     numeric->set("update", 5);
@@ -302,13 +296,13 @@ TEST(TreeCommitsPolicy, InheritDefaultAndAbsentResolveToTheV3Defaults) {
 }
 
 TEST(TreeCommitsPolicy, FieldsTheStatementsDoNotSignDoNotChangeTheHash) {
-    const auto base = TreeCommits::rules(policyFrom({{"update", "user"}}), "alice").hash;
-    Poco::JSON::Object::Ptr wider = policyFrom({{"update", "user"}, {"get", "all"}, {"delete", "none"}}).extract<Poco::JSON::Object::Ptr>();
+    const auto base = TreeCommits::rules(policyOf({{"update", "user"}}), "alice").hash;
+    Poco::JSON::Object::Ptr wider = policyOf({{"update", "user"}, {"get", "all"}, {"delete", "none"}}).extract<Poco::JSON::Object::Ptr>();
     Poco::JSON::Object::Ptr item = new Poco::JSON::Object();
     item->set("get", "all");
     wider->set("item", item);
     EXPECT_EQ(TreeCommits::rules(wider, "alice").hash, base);
-    EXPECT_NE(TreeCommits::rules(policyFrom({{"update", "user,manager"}}), "alice").hash, base) << "verbatim";
+    EXPECT_NE(TreeCommits::rules(policyOf({{"update", "user,manager"}}), "alice").hash, base) << "verbatim";
 }
 
 TEST(TreeCommitsPolicy, RulesAreEvaluatedAsTheBridgeEvaluatesThem) {
@@ -342,14 +336,14 @@ TEST(TreeCommitsPolicy, SECURITY_ARuleOutsideTheGroupGrammarIsRefused) {
         for (const std::string rule : {",manager", "manager,,user", "manager,", "&manager", "manager&", " manager",
                                        "admin", "itemOwner", "manager&manager", "user&manager,manager&user",
                                        "all&manager", "none,user", ""}) {
-            EXPECT_THROW(TreeCommits::rules(policyFrom({{field, rule}}), "alice"), std::invalid_argument)
+            EXPECT_THROW(TreeCommits::rules(policyOf({{field, rule}}), "alice"), std::invalid_argument)
                 << field << " '" << rule << "'";
         }
         for (const std::string rule : {"none", "all", "owner&user,manager", "manager,owner"}) {
-            EXPECT_NO_THROW(TreeCommits::rules(policyFrom({{field, rule}}), "alice")) << field << " '" << rule << "'";
+            EXPECT_NO_THROW(TreeCommits::rules(policyOf({{field, rule}}), "alice")) << field << " '" << rule << "'";
         }
     }
-    EXPECT_THROW(TreeCommits::rules(policyFrom({{"ownerCanBeRemovedFromManagers", "maybe"}}), "alice"), std::invalid_argument);
+    EXPECT_THROW(TreeCommits::rules(policyOf({{"ownerCanBeRemovedFromManagers", "maybe"}}), "alice"), std::invalid_argument);
 }
 
 TEST(TreeCommitsPolicy, TheOwnerLeavesTheManagersOnlyIfThePolicySaysSo) {
@@ -359,18 +353,18 @@ TEST(TreeCommitsPolicy, TheOwnerLeavesTheManagersOnlyIfThePolicySaysSo) {
     const std::set<std::string> managers{"carol", "bob"};
     for (const auto& [rule, allowed] : std::vector<std::pair<std::string, bool>>{{"yes", true}, {"no", false}}) {
         const GroupRules rules =
-            TreeCommits::rules(policyFrom({{"update", "user"}, {"ownerCanBeRemovedFromManagers", rule}}), "carol");
+            TreeCommits::rules(policyOf({{"update", "user"}, {"ownerCanBeRemovedFromManagers", rule}}), "carol");
         EXPECT_EQ(TreeCommits::permits(rules, removal, users, managers), allowed) << rule;
     }
     removal.removed = {"bob"}; // not the owner
-    const GroupRules no = TreeCommits::rules(policyFrom({{"update", "user"}, {"ownerCanBeRemovedFromManagers", "no"}}), "carol");
+    const GroupRules no = TreeCommits::rules(policyOf({{"update", "user"}, {"ownerCanBeRemovedFromManagers", "no"}}), "carol");
     EXPECT_TRUE(TreeCommits::permits(no, removal, users, managers));
 }
 
 TEST(TreeCommitsPolicy, AnOpWithoutARowIsNotPermitted) {
     CommitStatement statement = removalStatement();
     statement.op = static_cast<CommitOp>(7);
-    const GroupRules open = TreeCommits::rules(policyFrom({{"update", "all"}, {"rotateKeys", "all"}, {"updatePolicy", "all"}}), "alice");
+    const GroupRules open = TreeCommits::rules(policyOf({{"update", "all"}, {"rotateKeys", "all"}, {"updatePolicy", "all"}}), "alice");
     EXPECT_FALSE(TreeCommits::permits(open, statement, {"alice"}, {"alice"}));
     EXPECT_TRUE(TreeCommits::deltasProblem(statement, {"alice"}, {}).has_value());
 }
@@ -468,7 +462,7 @@ TEST(TreeCommitsStatement, RoundTripsThroughTheWire) {
     change.op = CommitOp::Policy;
     change.removed.clear();
     change.path.clear();
-    change.policy = policyFrom({{"update", "user"}, {"get", "all"}});
+    change.policy = policyOf({{"update", "user"}, {"get", "all"}});
     change.policyHash = TreeCommits::rules(change.policy.value(), "alice").hash;
     TreeCommits::sign(change, PrivateKey::generateRandom());
     const server::GroupTreeCommit changeWire = TreeCommits::toWire(change);

@@ -40,6 +40,8 @@ limitations under the License.
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/utils/Utils.hpp>
 
+#include "TestHelpers.hpp"
+
 namespace core = privmx::endpoint::core;
 namespace event = privmx::endpoint::event;
 using privmx::crypto::PrivateKey;
@@ -47,10 +49,6 @@ using privmx::crypto::PrivateKey;
 namespace {
 
 const int64_t REFUSED = core::UserVerificationFailureException().getCode();
-
-struct ConnectionOf : core::Connection {
-    explicit ConnectionOf(const std::shared_ptr<core::ConnectionImpl>& impl) { _ptr = impl; }
-};
 
 // The application's verifier: vouches for exactly the (user, key) pairs it was given, and records every request.
 class Verifier : public core::UserVerifierInterface {
@@ -198,10 +196,6 @@ TEST_F(ContextEventBinding, SECURITY_AnEventIsVerifiedUnderTheContextTheApplicat
 
 // --- subscriptions and emitting, over a fake Bridge ---------------------------------------------------------------
 
-Poco::JSON::Object::Ptr overTheWire(const Poco::Dynamic::Var& value) {
-    return privmx::utils::Utils::parseJsonObject(privmx::utils::Utils::stringifyVar(value));
-}
-
 struct Bridge {
     std::vector<std::pair<std::string, event::server::ContextEmitCustomEventModel>> sent; // (sender, as sent)
 };
@@ -267,20 +261,6 @@ struct Client {
         return {.userId = userId, .pubKey = key.getPublicKey().toBase58DER()};
     }
 };
-
-core::EventHolder nextEvent(const std::string& type) {
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-    while (std::chrono::steady_clock::now() < deadline) {
-        if (const auto event = core::EventQueueImpl::getInstance()->getEvent(); event.has_value()) {
-            if (event->type() == type) {
-                return event.value();
-            }
-            continue;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
-    throw std::runtime_error("no " + type + " event");
-}
 
 class ContextEventApi : public testing::Test {
 protected:
