@@ -1045,7 +1045,7 @@ void GroupApiImpl::commitWithRetry(const std::function<void()>& attempt) {
         try {
             attempt();
             return;
-        } catch (const keytree::StalePlan&) {
+        } catch (const StalePlan&) {
             // Another commit of this client to the group landed while this one was planned on the head before it.
             if (attemptNo < MAX_ATTEMPTS) {
                 LOG_DEBUG("group commit planned behind this client's own commit, re-planning")
@@ -1297,7 +1297,7 @@ void GroupApiImpl::runSelfUpdates() {
         bool lostRace = false;
         try {
             selfUpdate(groupId);
-        } catch (const keytree::StalePlan&) {
+        } catch (const StalePlan&) {
             lostRace = true; // planned behind a commit of this client's own; re-plan like a lost race
         } catch (const privmx::utils::PrivmxException& e) {
             lostRace = isRetryableCommitRejection(e);
@@ -2407,7 +2407,7 @@ void GroupApiImpl::submit(
     commit.seq = statement.seq;
     commit.date = statement.date;
     if (statement.seq <= _treeVerifier.pinnedSeq(groupId)) {
-        throw keytree::StalePlan{}; // planned behind a state this client verified (or committed) since
+        throw StalePlan{}; // planned behind a state this client verified (or committed) since
     }
     {
         // Replaces a pending background self-update only now, when the op superseding it is actually released.

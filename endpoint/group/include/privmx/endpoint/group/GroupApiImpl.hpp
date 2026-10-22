@@ -5,6 +5,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <map>
 #include <memory>
@@ -38,6 +39,12 @@
 namespace privmx {
 namespace endpoint {
 namespace group {
+
+// A plan whose base is behind the pin (the client's own commit, or a read, moved it meanwhile). Retryable: a fresh
+// read plans on the newer head. Not an endpoint exception; `commitWithRetry` and the self-update worker handle it.
+struct StalePlan : std::exception {
+    const char* what() const noexcept override { return "group commit planned behind the pinned state"; }
+};
 
 class GroupApiImpl : protected core::ContainerBaseApi {
 public:
@@ -347,7 +354,7 @@ private:
     // behind the pin, or failing again for another op, it is dropped and the caller plans afresh. `mayCompleteOther`:
     // whether a different op may resend it (every app op; not the background self-update).
     Settled settle(const std::string& groupId, const std::string& op, bool mayCompleteOther);
-    // Sends a signed statement and keeps `commit` until its outcome is known. Throws keytree::StalePlan for a plan
+    // Sends a signed statement and keeps `commit` until its outcome is known. Throws StalePlan for a plan
     // behind the pin. A refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo` (T4-17).
     void submit(const std::string& groupId, const keytree::CommitStatement& statement, UnresolvedCommit commit);
     void forgetUnresolved(const std::string& groupId, const std::string& digest);
