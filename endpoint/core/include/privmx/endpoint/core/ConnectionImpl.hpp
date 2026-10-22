@@ -95,10 +95,7 @@ public:
     // whose key is random) keeps it in memory only. A GroupApi reads it once, when created.
     void setPinStore(std::shared_ptr<PinStoreInterface> store);
     std::shared_ptr<PinStoreInterface> getPinStore();
-    // hex(SHA256(lp(url) || lp(pubKey or "") || lp(instanceId or ""))) of the Bridge this connection reached: every
-    // local-state slot is named and sealed under it, so a second Bridge reached with the same key has slots of its own.
-    std::string localStateScope();
-    // `<kind>/<scope>/<public key of identity>`.
+    // `<kind>/<scope>/<public key of identity>`, scope = `localStateScope()`.
     std::string localStateSlot(const std::string& kind, const crypto::PublicKey& identity);
     // 01: the group pins the store holds for `previous` (an identity key this user had before), opened with it and
     // kept for every GroupApi created afterwards to adopt. Nothing stored: nothing to adopt. Throws
@@ -126,6 +123,9 @@ public:
     inline bool isConnected() { return _gateway->isConnected(); };
 
 private:
+    // hex(SHA256(lp(url) || lp(pubKey or "") || lp(instanceId or ""))) of the Bridge this connection reached: every
+    // local-state slot is named and sealed under it, so a second Bridge reached with the same key has slots of its own.
+    std::string localStateScope();
     void assertServerVersion();
     std::string generateDIORandomId();
     DataIntegrityObject createDIOExt(
@@ -154,7 +154,7 @@ private:
     std::shared_ptr<PinStoreInterface> _pinStore; // under _mutex
     std::map<std::string, std::string> _stagedPinBodies; // under _mutex
     std::vector<crypto::PrivateKey> _previousIdentities; // under _mutex
-    bool _public = false;
+    bool _public = false; // set once, in connectPublic, before the impl is shared
     std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
     std::shared_ptr<SubscriberImpl> _subscriber;
