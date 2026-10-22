@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 #include "BaseGroupTest.hpp"
+#include "MemoryPinStore.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -281,40 +282,6 @@ protected:
     // Why the last `canRead*` probe came back false, when it failed rather than just decrypting to nothing.
     std::string lastReadError;
     std::shared_ptr<thread::ThreadApi> threadApi;
-};
-
-// 01: the application's store as PinStoreInterface asks for it (compare-and-swap per key under one lock).
-class TestPinStore : public core::PinStoreInterface {
-public:
-    core::Buffer load(const std::string& key) override {
-        std::lock_guard<std::mutex> lock(_mutex);
-        return core::Buffer::from(_slots[key]);
-    }
-    bool save(const std::string& key, const core::Buffer& blob, const core::Buffer& expected) override {
-        std::lock_guard<std::mutex> lock(_mutex);
-        if (_slots[key] != expected.stdString()) {
-            return false;
-        }
-        _slots[key] = blob.stdString();
-        return true;
-    }
-    // Every slot's bytes, for "did anything change" and for corrupting what was saved.
-    std::map<std::string, std::string> slots() {
-        std::lock_guard<std::mutex> lock(_mutex);
-        return _slots;
-    }
-    void corruptEverySlot() {
-        std::lock_guard<std::mutex> lock(_mutex);
-        for (auto& [key, blob] : _slots) {
-            if (!blob.empty()) {
-                blob[blob.size() / 2] ^= 0x01;
-            }
-        }
-    }
-
-private:
-    std::mutex _mutex;
-    std::map<std::string, std::string> _slots;
 };
 
 static constexpr const char* MANAGEMENT_API_MISSING =
@@ -1611,7 +1578,7 @@ TEST_F(GroupKeyTreeIntegrityTest, pins_saved_by_one_session_carry_the_next_acros
     // Session A saves its pins; user_2 removes user_3; session B loads A's pins and verifies the chain from them
     // (a real Bridge serves the honest chain: B reads and seals as before, and its save moves the slot on).
     const std::string groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(2)});
-    const auto store = std::make_shared<TestPinStore>();
+    const auto store = std::make_shared<MemoryPinStore>();
     disconnect();
     privmx::test::ScopeExit restore([&] { connectAs(1); });
     const std::string key = reader->getString("Login.user_1_privKey");
@@ -1648,7 +1615,7 @@ TEST_F(GroupKeyTreeIntegrityTest, two_live_sessions_of_one_user_converge_on_one_
     // Two GroupApis of one connection are two instances on one store: each verifies on its own and both save into
     // the one slot (the higher record wins), so neither falls back after the other saw the removal.
     const std::string groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(2)});
-    const auto store = std::make_shared<TestPinStore>();
+    const auto store = std::make_shared<MemoryPinStore>();
     disconnect();
     privmx::test::ScopeExit restore([&] { connectAs(1); });
     auto session = connectWith(reader->getString("Login.user_1_privKey"));
@@ -1673,7 +1640,7 @@ TEST_F(GroupKeyTreeIntegrityTest, two_live_sessions_of_one_user_converge_on_one_
 
 TEST_F(GroupKeyTreeIntegrityTest, a_corrupted_pin_blob_is_ignored_and_the_session_reads_as_before) {
     const std::string groupId = createTreeGroup({user(1), user(2)});
-    const auto store = std::make_shared<TestPinStore>();
+    const auto store = std::make_shared<MemoryPinStore>();
     disconnect();
     privmx::test::ScopeExit restore([&] { connectAs(1); });
     const std::string key = reader->getString("Login.user_1_privKey");

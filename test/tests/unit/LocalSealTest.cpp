@@ -130,7 +130,7 @@ TEST(LocalSeal, UpdateSealedRetriesOnACompareAndSwapMiss) {
     });
     EXPECT_TRUE(saved);
     EXPECT_EQ(merges, 2);
-    EXPECT_EQ(store.casMisses, 1);
+    EXPECT_EQ(store.casMisses(), 1);
     const auto body = core::openLocal(me, LABEL, 1, SLOT, store.get(SLOT));
     ASSERT_TRUE(body.has_value());
     EXPECT_EQ(namesIn(body.value()), (std::set<std::string>{"sibling", "me"}));
@@ -174,7 +174,7 @@ TEST(LocalSeal, SECURITY_TwoInterleavedSaversNeverLoseEachOthersEntries) {
     const auto body = core::openLocal(me, LABEL, 1, SLOT, store.get(SLOT));
     ASSERT_TRUE(body.has_value());
     EXPECT_EQ(namesIn(body.value()), (std::set<std::string>{"a", "b"}));
-    EXPECT_GE(store.casMisses, 1);
+    EXPECT_GE(store.casMisses(), 1);
 }
 
 TEST(LocalSeal, UpdateSealedGivesUpWhenEverySaveMisses) {

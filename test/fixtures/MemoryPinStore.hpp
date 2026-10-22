@@ -29,7 +29,6 @@ public:
         std::string blob;
         {
             std::lock_guard<std::mutex> lock(_mutex);
-            ++loads;
             const auto it = _slots.find(key);
             blob = it == _slots.end() ? std::string() : it->second;
         }
@@ -49,11 +48,11 @@ public:
         const auto it = _slots.find(key);
         const std::string current = it == _slots.end() ? std::string() : it->second;
         if (current != expected.stdString()) {
-            ++casMisses;
+            ++_casMisses;
             return false;
         }
         _slots[key] = blob.stdString();
-        ++saves[key];
+        ++_saves[key];
         return true;
     }
 
@@ -66,17 +65,6 @@ public:
     void put(const std::string& key, const std::string& blob) {
         std::lock_guard<std::mutex> lock(_mutex);
         _slots[key] = blob;
-    }
-
-    // The slot whose key starts with `prefix` (the tests know the kind, not the Bridge scope).
-    std::string keyOf(const std::string& prefix) {
-        std::lock_guard<std::mutex> lock(_mutex);
-        for (const auto& [key, blob] : _slots) {
-            if (key.rfind(prefix, 0) == 0) {
-                return key;
-            }
-        }
-        return {};
     }
 
     // The slot of kind `prefix` ending in `suffix` (an identity's public key).
@@ -94,7 +82,7 @@ public:
     int savesOf(const std::string& prefix) {
         std::lock_guard<std::mutex> lock(_mutex);
         int total = 0;
-        for (const auto& [key, count] : saves) {
+        for (const auto& [key, count] : _saves) {
             if (key.rfind(prefix, 0) == 0) {
                 total += count;
             }
@@ -102,15 +90,34 @@ public:
         return total;
     }
 
+    int casMisses() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _casMisses;
+    }
+
+    // Every slot's bytes, for "did anything change".
+    std::map<std::string, std::string> slots() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _slots;
+    }
+
+    void corruptEverySlot() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        for (auto& [key, blob] : _slots) {
+            if (!blob.empty()) {
+                blob[blob.size() / 2] ^= 0x01;
+            }
+        }
+    }
+
     std::function<void(const std::string&)> afterLoad = [](const std::string&) {};
     std::atomic<bool> failSaves{false};
-    int loads = 0;
-    int casMisses = 0;
-    std::map<std::string, int> saves;
 
 private:
     std::mutex _mutex;
     std::map<std::string, std::string> _slots;
+    int _casMisses = 0;
+    std::map<std::string, int> _saves;
 };
 
 #endif // _PRIVMXLIB_TEST_MEMORYPINSTORE_HPP_
