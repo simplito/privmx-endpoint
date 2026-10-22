@@ -42,6 +42,10 @@ Matrix/Element; reszta do decyzji. Zmiany:
   indeks `streamRoom.groups.groupId` (migracja 076).
 - **Zostają (rekomendacja przyjęta):** D1 (03), D3 (N-3), D5 (08-A2..A5), D6 (N-1), D7 (m3).
 
+Bramka 13 (Endpoint `f7666f5e`, Bridge `b1645da`): unit 23/23 binariów, 629 testów, 0 błędów; Bridge 1607 testów,
+lint czysty; e2e pełny zestaw 363/363 bez ponowień i bez `[ERROR]` na `privmx-bridge:trellis-13`. Perf nie mierzony:
+zmiany tylko usuwają pracę (bramka, jedno pytanie weryfikatora) albo dodają indeks.
+
 ## Stan zbiorczy
 
 Stos (każda gałąź na poprzedniej, w obu repozytoriach): `fix/group-key-tree-audit` (baza: audyty 3-5) → m4 → m3 → m1 →
