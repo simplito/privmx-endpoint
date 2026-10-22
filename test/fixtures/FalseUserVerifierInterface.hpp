@@ -43,6 +43,8 @@ inline void expectVerificationFailure(const std::function<void()>& call) {
         ADD_FAILURE() << "expected UserVerificationFailureException, nothing was thrown";
     } catch (const Exception& e) {
         EXPECT_EQ(e.getCode(), UserVerificationFailureException().getCode()) << e.getFull();
+    } catch (...) {
+        ADD_FAILURE() << "expected UserVerificationFailureException, something else was thrown";
     }
 }
 
