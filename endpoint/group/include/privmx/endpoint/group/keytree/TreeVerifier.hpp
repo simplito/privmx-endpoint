@@ -104,7 +104,7 @@ public:
         const std::string& contextId,
         std::int64_t keyVersion,
         const std::string& groupPubKey
-    );
+    ) const;
 
     // A grant key handed in from outside (a caller's `GroupGrantWithKey`): unpinned groups are the caller's word,
     // a pinned one only exactly at its pin — an older epoch is one a removed member may still hold.
@@ -113,7 +113,7 @@ public:
         const std::string& contextId,
         std::int64_t keyVersion,
         const std::string& groupPubKey
-    );
+    ) const;
 
     // A commit of this client's own that the bridge accepted is the newest state it knows of: pinned as if read
     // back, so the next read cannot be the state the commit replaced. `users`/`managers` are the roster it signed,
@@ -138,10 +138,10 @@ public:
 
     // `seq` and `keyVersion` of the last state verified for the group, 0 if none. Pins are never dropped: an
     // unauthenticated `groupDeleted` must not turn the next read into a first contact.
-    std::uint64_t pinnedSeq(const std::string& groupId);
+    std::uint64_t pinnedSeq(const std::string& groupId) const;
     // `TreeCommits::digest` of the pinned statement, empty if none.
-    std::string pinnedDigest(const std::string& groupId);
-    std::uint64_t pinnedKeyVersion(const std::string& groupId);
+    std::string pinnedDigest(const std::string& groupId) const;
+    std::uint64_t pinnedKeyVersion(const std::string& groupId) const;
 
     // The statement that opened each epoch (the first at its `keyVersion`), off the whole chain up to the pin: a
     // statement for every seq from 1, each genuine as `verifyStatements` checks it and chained to the one before by
@@ -291,7 +291,14 @@ private:
     );
 
     // The pin for the group, or an empty one (seq 0) if none.
-    Pin pinOf(const std::string& groupId);
+    Pin pinOf(const std::string& groupId) const;
+    // One field of the group's pin, empty if none.
+    template<typename T>
+    T pinned(const std::string& groupId, T Head::*field) const {
+        std::lock_guard lock(_mutex);
+        const auto it = _pins.find(groupId);
+        return it == _pins.end() ? T{} : it->second.*field;
+    }
 
     // `statement` applied to `roster`: signed by somebody on it, and with `checkHash` leaving exactly the roster it
     // signs. `followChain` checks the hash at seq 1 (the genesis roster is the bridge's) and at the last statement:
@@ -302,7 +309,7 @@ private:
     // Whether `latest` would move an existing pin: what needs the committer's key valid now (N-3). Not a first contact,
     // which takes the latest genuine statement on trust: there an honest committer who rotated their key since would
     // lock every fresh session out of the group, and with it every commit that could move the group past it.
-    bool movesPin(const std::string& groupId, const CommitStatement& latest);
+    bool movesPin(const std::string& groupId, const CommitStatement& latest) const;
     // The latest statement's committer key accepted now as well, unless `checkedNow` says that was done: for a latest
     // statement that moves a pin found only after `movesPin` looked. Sets `checkedNow`.
     void assertValidNow(
@@ -386,7 +393,7 @@ private:
         const Environment& environment
     );
 
-    std::mutex _mutex;
+    mutable std::mutex _mutex;
     // Never evicted: a dropped pin turns the next read into a first contact the bridge may answer with any old state.
     std::map<std::string, Pin> _pins;
     std::set<std::string> _dirty; // groups moved since the last `exportPins`

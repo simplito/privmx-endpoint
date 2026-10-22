@@ -11,6 +11,9 @@ limitations under the License.
 #include "privmx/endpoint/group/keytree/PinBlob.hpp"
 
 #include <algorithm>
+#include <array>
+#include <limits>
+#include <map>
 #include <set>
 #include <stdexcept>
 #include <vector>
@@ -34,7 +37,7 @@ std::uint64_t counter(std::int64_t value) {
 }
 
 std::int64_t signedCounter(std::uint64_t value) {
-    if (value > static_cast<std::uint64_t>(INT64_MAX)) {
+    if (value > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
         throw std::out_of_range("counter");
     }
     return static_cast<std::int64_t>(value);
@@ -97,6 +100,15 @@ const Pin* find(const std::map<std::string, Pin>& pins, const std::string& group
     return it == pins.end() ? nullptr : &it->second;
 }
 
+void addGroupIds(std::set<std::string>& groups, const PinSet& pins) {
+    for (const auto& [groupId, pin] : pins.tree) {
+        groups.insert(groupId);
+    }
+    for (const auto& [groupId, planes] : pins.planes) {
+        groups.insert(groupId);
+    }
+}
+
 Planes planesOf(const PinSet& pins, const std::string& groupId) {
     const auto it = pins.planes.find(groupId);
     return it == pins.planes.end() ? Planes{0, 0, 0} : it->second;
@@ -106,12 +118,7 @@ Planes planesOf(const PinSet& pins, const std::string& groupId) {
 
 std::string PinBlob::encode(const PinSet& pins) {
     std::set<std::string> groups;
-    for (const auto& [groupId, pin] : pins.tree) {
-        groups.insert(groupId);
-    }
-    for (const auto& [groupId, planes] : pins.planes) {
-        groups.insert(groupId);
-    }
+    addGroupIds(groups, pins);
     struct Entry {
         std::string compact;
         std::string full; // empty when there is no roster to keep
@@ -242,8 +249,7 @@ Pin PinBlob::higher(const Pin* mine, const Pin* other) {
         kept = *r;
         if (m != nullptr) {
             for (const auto& [node, generation] : m->generations) {
-                std::uint32_t& value = kept.generations[node];
-                value = std::max(value, generation);
+                raiseGeneration(kept.generations, node, generation);
             }
         }
     } else if (m != nullptr) {
@@ -254,8 +260,7 @@ Pin PinBlob::higher(const Pin* mine, const Pin* other) {
                 kept.hasRoster = true;
             }
             for (const auto& [node, generation] : r->generations) {
-                std::uint32_t& value = kept.generations[node];
-                value = std::max(value, generation);
+                raiseGeneration(kept.generations, node, generation);
             }
         }
     }
@@ -270,14 +275,8 @@ Pin PinBlob::higher(const Pin* mine, const Pin* other) {
 
 PinSet PinBlob::mergeForSave(const PinSet& mine, const PinSet& stored) {
     std::set<std::string> groups;
-    for (const PinSet* side : {&mine, &stored}) {
-        for (const auto& [groupId, pin] : side->tree) {
-            groups.insert(groupId);
-        }
-        for (const auto& [groupId, planes] : side->planes) {
-            groups.insert(groupId);
-        }
-    }
+    addGroupIds(groups, mine);
+    addGroupIds(groups, stored);
     PinSet merged;
     for (const std::string& groupId : groups) {
         Pin kept = higher(find(mine.tree, groupId), find(stored.tree, groupId));

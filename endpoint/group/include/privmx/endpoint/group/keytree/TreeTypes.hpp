@@ -193,6 +193,18 @@ struct TreeMember {
     privmx::crypto::PublicKey publicKey;
 };
 
+// `generations[node]` raised to `generation` if that is higher; whether it rose.
+inline bool raiseGeneration(
+    std::map<std::uint32_t, std::uint32_t>& generations,
+    std::uint32_t node,
+    std::uint32_t generation
+) {
+    std::uint32_t& value = generations[node];
+    const bool rose = generation > value;
+    value = std::max(value, generation);
+    return rose;
+}
+
 // The record of `nodeIndex`, or null when it has none.
 template<typename State>
 auto* findRecord(State& state, std::uint32_t nodeIndex) {

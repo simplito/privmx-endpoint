@@ -1862,7 +1862,7 @@ TEST_F(TreeVerification, ARoleFailureOnAForgedStatementIsReportedAsIntegrity) {
     CommitStatement statement = TreeCommits::fromWire(bridge.commits.back());
     TreeCommits::sign(statement, PrivateKey::generateRandom());
     bridge.commits.back() = TreeCommits::toWire(statement);
-    EXPECT_EQ(replay(), "integrity");
+    EXPECT_EQ(replay(), "a statement not genuine, or its committer's key not accepted");
 }
 
 TEST_F(TreeVerification, ARotationInTheMiddleOfANonAdjacentWalkChecksOnlyThePath) {
