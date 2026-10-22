@@ -134,15 +134,18 @@ public:
 
     // ── Primitives, exposed for tests and for the ladder module ─────────────
 
+    // `label` is sealed in front of the key; `unwrapKey` refuses a blob that does not start with it.
     static std::string wrapKey(
         const privmx::crypto::PrivateKey& keyToWrap,
         const privmx::crypto::PublicKey& to,
-        const privmx::crypto::PrivateKey& signer
+        const privmx::crypto::PrivateKey& signer,
+        const std::string& label = ""
     );
 
     static std::optional<privmx::crypto::PrivateKey> unwrapKey(
         const std::string& blob,
-        const privmx::crypto::PrivateKey& with
+        const privmx::crypto::PrivateKey& with,
+        const std::string& label = ""
     );
 
 private:

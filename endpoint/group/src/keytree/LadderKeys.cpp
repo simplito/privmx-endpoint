@@ -17,11 +17,10 @@ limitations under the License.
 #include <stdexcept>
 #include <string>
 
-#include <privmx/crypto/EciesEncryptor.hpp>
-
 #include <privmx/endpoint/core/BigEndian.hpp>
 
 #include "privmx/endpoint/group/keytree/TreeCommits.hpp"
+#include "privmx/endpoint/group/keytree/TreeKeys.hpp"
 
 using namespace privmx::endpoint::group::keytree;
 
@@ -44,21 +43,15 @@ std::string LadderKeys::sealRung(
     const privmx::crypto::PublicKey& to,
     const privmx::crypto::PrivateKey& signer
 ) {
-    return privmx::crypto::EciesEncryptor::encryptToBase64(to, rungLabel(span) + key.toWIF(), signer);
+    return TreeKeys::wrapKey(key, to, signer, rungLabel(span));
 }
 
 std::optional<privmx::crypto::PrivateKey> LadderKeys::openRung(
     const ArchiveRung& rung,
     const privmx::crypto::PrivateKey& with
 ) {
-    try {
-        const std::string label = rungLabel(rung.span);
-        const std::string plain = privmx::crypto::EciesEncryptor::decryptFromBase64(with, rung.blob);
-        if (plain.compare(0, label.size(), label) != 0) {
-            return std::nullopt; // sealed for another span: relabelled, so not this rung's sealer's doing
-        }
-        return privmx::crypto::PrivateKey::fromWIF(plain.substr(label.size()));
-    } catch (...) { return std::nullopt; }
+    // A rung sealed for another span does not open: relabelled, so not this rung's sealer's doing.
+    return TreeKeys::unwrapKey(rung.blob, with, rungLabel(rung.span));
 }
 
 std::optional<privmx::crypto::PublicKey> LadderKeys::publicKeyOfEpoch(
@@ -303,7 +296,6 @@ DescentResult LadderKeys::descend(
 
     std::uint32_t current = from;
     privmx::crypto::PrivateKey currentKey = startKey.value();
-    std::set<std::uint32_t> visited{from};
 
     while (current > goal) {
         if (result.hops >= maxWalk) {
@@ -318,14 +310,10 @@ DescentResult LadderKeys::descend(
         std::vector<const ArchiveRung*> candidates;
         for (const ArchiveRung& rung : available) {
             // Direction invariant. Never traverse an upward rung, even if it somehow got stored: it is exactly
-            // the shape that would hand a removed member a later key.
-            if (rung.span.target >= rung.span.at) {
-                continue;
+            // the shape that would hand a removed member a later key. It also makes every hop strictly descend.
+            if (rung.span.target < rung.span.at && rung.span.at == current && rung.span.target >= goal) {
+                candidates.push_back(&rung);
             }
-            if (rung.span.at != current || rung.span.target < goal) {
-                continue;
-            }
-            candidates.push_back(&rung);
         }
         if (candidates.empty()) {
             result.failure = floorFailure != DescentFailure::None ? floorFailure : DescentFailure::MissingRung;
@@ -374,13 +362,6 @@ DescentResult LadderKeys::descend(
         _cache.putGrantKey(current, currentKey);
         result.reachedEpoch = current;
         ++result.hops;
-
-        if (visited.count(current) > 0) {
-            // Defensive: a malformed rung set must not spin forever.
-            result.failure = DescentFailure::MissingRung;
-            return result;
-        }
-        visited.insert(current);
     }
 
     if (current > to) {

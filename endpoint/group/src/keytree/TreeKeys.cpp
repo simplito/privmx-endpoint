@@ -27,18 +27,23 @@ TreeKeys::TreeKeys(TreeKeyCache& cache) : _cache(cache) {}
 std::string TreeKeys::wrapKey(
     const privmx::crypto::PrivateKey& keyToWrap,
     const privmx::crypto::PublicKey& to,
-    const privmx::crypto::PrivateKey& signer
+    const privmx::crypto::PrivateKey& signer,
+    const std::string& label
 ) {
-    return privmx::crypto::EciesEncryptor::encryptToBase64(to, keyToWrap.toWIF(), signer);
+    return privmx::crypto::EciesEncryptor::encryptToBase64(to, label + keyToWrap.toWIF(), signer);
 }
 
 std::optional<privmx::crypto::PrivateKey> TreeKeys::unwrapKey(
     const std::string& blob,
-    const privmx::crypto::PrivateKey& with
+    const privmx::crypto::PrivateKey& with,
+    const std::string& label
 ) {
     try {
-        const std::string wif = privmx::crypto::EciesEncryptor::decryptFromBase64(with, blob);
-        return privmx::crypto::PrivateKey::fromWIF(wif);
+        const std::string plain = privmx::crypto::EciesEncryptor::decryptFromBase64(with, blob);
+        if (plain.compare(0, label.size(), label) != 0) {
+            return std::nullopt;
+        }
+        return privmx::crypto::PrivateKey::fromWIF(plain.substr(label.size()));
     } catch (...) {
         // A blob that does not open, or does not carry a WIF, is a data problem for the caller to report.
         return std::nullopt;
