@@ -674,8 +674,7 @@ void StreamApiLowImpl::ensureRoomKeyIsFresh(const std::string& streamRoomId) {
 
 void StreamApiLowImpl::autoRotateStreamRoomKeys(const std::string& streamRoomId) {
     autoRotateContainerKeys<server::StreamRoomRotateKeysModel, server::StreamRoomInfo>(
-        streamRoomId,
-        [&] { return getRawStreamRoom(streamRoomId); },
+        streamRoomId, [&] { return getRawStreamRoom(streamRoomId); },
         [&](const server::StreamRoomRotateKeysModel& model) { _serverApi->streamRoomRotateKeys(model); }
     );
 }

@@ -96,9 +96,9 @@ Poco::Dynamic::Var callOut(void* ctx, Callback callback, const Poco::Dynamic::Va
 int privmx_endpoint_setUserVerifier(Connection* ptr, void* ctx, privmx_user_verifier verifier, pson_value** res) {
     return CApiExecutor::execFunc(res, [&] {
         core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;
-        return _ptr->setUserVerifier(
-            [ctx, verifier](const Poco::Dynamic::Var& request) { return callOut(ctx, verifier, request); }
-        );
+        return _ptr->setUserVerifier([ctx, verifier](const Poco::Dynamic::Var& request) {
+            return callOut(ctx, verifier, request);
+        });
     });
 }
 

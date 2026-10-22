@@ -154,7 +154,7 @@ private:
     std::shared_ptr<PinStoreInterface> _pinStore; // under _mutex
     std::map<std::string, std::string> _stagedPinBodies; // under _mutex
     std::vector<crypto::PrivateKey> _previousIdentities; // under _mutex
-    bool _public = false; // set once, in connectPublic, before the impl is shared
+    bool _public = false;                                // set once, in connectPublic, before the impl is shared
     std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
     std::shared_ptr<SubscriberImpl> _subscriber;

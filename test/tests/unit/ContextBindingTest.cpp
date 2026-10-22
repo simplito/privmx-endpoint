@@ -354,9 +354,7 @@ TEST_F(ContextEventApi, SECURITY_AnEventKeyIsNeverWrappedToAKeyTheVerifierRefuse
 TEST(ConnectionState, AdoptPreviousIdentityNeedsAConnection) {
     // Never connected: no Bridge to name the slot after, no current key to compare against.
     ConnectionOf connection(std::make_shared<core::ConnectionImpl>());
-    EXPECT_THROW(
-        connection.adoptPreviousIdentity(PrivateKey::generateRandom().toWIF()), core::NotConnectedException
-    );
+    EXPECT_THROW(connection.adoptPreviousIdentity(PrivateKey::generateRandom().toWIF()), core::NotConnectedException);
 }
 
 } // namespace
