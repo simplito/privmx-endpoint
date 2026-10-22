@@ -128,28 +128,28 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupKeyResolver::auth
             .keyVersion = static_cast<std::int64_t>(epoch), .groupPubKey = statement.groupPubKey
         });
     }
-    std::vector<server::GroupArchiveRung> openerSealed;
-    std::vector<server::GroupArchiveRung> others;
     for (server::GroupArchiveRung& rung : archive.rungs) {
         const auto opener = openers.find(static_cast<std::uint64_t>(rung.atKeyVersion));
         const auto sealer = privmx::crypto::EciesEncryptor::senderOf(rung.data);
         if (opener != openers.end() && sealer.has_value() && sealer->toBase58DER() == opener->second.committerPubKey) {
             rung.author = opener->second.committer;
-            openerSealed.push_back(rung);
         } else {
             rung.author.reset(); // the bridge's word is no attribution
-            others.push_back(rung);
         }
     }
+    // Opener-sealed rungs first, so the cap per span never drops one of them for one the bridge added.
+    auto& rungs = archive.rungs;
+    std::stable_partition(rungs.begin(), rungs.end(), [](const auto& rung) { return rung.author.has_value(); });
     std::map<std::pair<std::int64_t, std::int64_t>, std::size_t> perSpan;
-    archive.rungs.clear();
-    for (const auto* list : {&openerSealed, &others}) {
-        for (const server::GroupArchiveRung& rung : *list) {
-            if (++perSpan[{rung.atKeyVersion, rung.targetKeyVersion}] <= MAX_SERVED_RUNGS_PER_SPAN) {
-                archive.rungs.push_back(rung);
+    rungs.erase(
+        std::remove_if(
+            rungs.begin(), rungs.end(),
+            [&](const auto& rung) {
+                return ++perSpan[{rung.atKeyVersion, rung.targetKeyVersion}] > MAX_SERVED_RUNGS_PER_SPAN;
             }
-        }
-    }
+        ),
+        rungs.end()
+    );
     return archive;
 }
 
