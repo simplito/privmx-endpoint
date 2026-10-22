@@ -80,9 +80,6 @@ target_link_libraries(test_e2e_GroupKeyTreeTest privmx privmxendpointcore privmx
 # add and remove of one member. Needs the Bridge management API key from the dataset ini to register context users.
 add_executable(test_e2e_GroupKeyTreeIntegrityTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupKeyTreeIntegrityTest.cpp)
 target_link_libraries(test_e2e_GroupKeyTreeIntegrityTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
-# Sandbox: group (Trellis) perf/usage scenarios against a live Bridge - a tool, not part of the e2e suite
-add_executable(group_sandbox ${CMAKE_CURRENT_SOURCE_DIR}/sandbox/group_sandbox.cpp)
-target_link_libraries(group_sandbox privmx privmxendpointcore privmxendpointthread privmxendpointstore privmxendpointinbox privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 # Lock
 add_executable(test_e2e_LockTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/LockTest.cpp)
 target_link_libraries(test_e2e_LockTest privmx privmxendpointcore privmxendpointstore privmxendpointlock Poco::Foundation Poco::Util GTest::GTest)
