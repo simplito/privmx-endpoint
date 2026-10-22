@@ -744,12 +744,12 @@ TEST_F(StreamRoomUsingGroupsTest, SECURITY_the_local_media_key_follows_a_rekey) 
 
     // The rotation reaches the joined room as a streamRoomUpdated event carrying both keys.
     std::optional<std::vector<stream::Key>> afterRekey;
-    for (int i = 0; i < 100 && !afterRekey.has_value(); ++i) {
+    privmx::test::waitUntil([&] {
         for (const auto& keys : webRtc->updates()) {
             if (remoteKeyIds(keys).size() == 2) afterRekey = keys;
         }
-        if (!afterRekey.has_value()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+        return afterRekey.has_value();
+    });
     ASSERT_TRUE(afterRekey.has_value()) << "no key update after the re-key";
     std::set<std::string> added = remoteKeyIds(afterRekey.value());
     added.erase(removedMembersKey);
@@ -785,11 +785,8 @@ TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_rem
     ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {userId(3)}); });
 
     // No publishStream or updateStream from here on: only the removal itself can move the sender.
-    std::string local = removedMembersKey;
-    for (int i = 0; i < 100 && local == removedMembersKey; ++i) {
-        local = localKeyId(webRtc->updates().back());
-        if (local == removedMembersKey) std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+    std::string local;
+    privmx::test::waitUntil([&] { return (local = localKeyId(webRtc->updates().back())) != removedMembersKey; });
     EXPECT_NE(local, removedMembersKey) << "the publication stays under a key user_3 holds";
     stream::StreamRoom room = streamApi->getStreamRoom(streamRoomId);
     EXPECT_TRUE(room.staleGroups.empty()) << "the room was not re-keyed";
@@ -822,11 +819,8 @@ TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_rot
     ASSERT_NO_THROW({ groupApi->rotateGroupKey(groupId); });
 
     // No publishStream or updateStream from here on: only the rotation itself can move the sender.
-    std::string local = preRotationKey;
-    for (int i = 0; i < 100 && local == preRotationKey; ++i) {
-        local = localKeyId(webRtc->updates().back());
-        if (local == preRotationKey) std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+    std::string local;
+    privmx::test::waitUntil([&] { return (local = localKeyId(webRtc->updates().back())) != preRotationKey; });
     EXPECT_NE(local, preRotationKey) << "the publication stays under the pre-rotation key";
     stream::StreamRoom room = streamApi->getStreamRoom(streamRoomId);
     EXPECT_TRUE(room.staleGroups.empty()) << "the room was not re-keyed";
@@ -872,10 +866,7 @@ TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_stops_when_its_rek
         const auto closed = webRtc->closed();
         return std::find(closed.begin(), closed.end(), "publisher") != closed.end();
     };
-    for (int i = 0; i < 100 && !publisherClosed(); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    EXPECT_TRUE(publisherClosed()) << "the publication goes on under a key user_3 holds";
+    EXPECT_TRUE(privmx::test::waitUntil(publisherClosed)) << "the publication goes on under a key user_3 holds";
     EXPECT_EQ(streamApi->getStreamRoom(streamRoomId).staleGroups.size(), 1u) << "user_2 was not refused";
     EXPECT_ANY_THROW({ streams2.publishStream(handle); }) << "the stopped publication's handle still works";
     EXPECT_NO_THROW({ streams2.leaveStreamRoom(streamRoomId); });
