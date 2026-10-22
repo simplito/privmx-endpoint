@@ -49,6 +49,7 @@ limitations under the License.
 
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/endpoint/core/BigEndian.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/group/GroupException.hpp>
@@ -1679,7 +1680,7 @@ TEST_F(TreeVerification, SECURITY_ARuleWithAnEmptyAlternativeAdmitsNobody) {
     ASSERT_EQ(bridge.managers.count(id(35)), 0u);
     std::string preimage = TreeCommits::tag("pmx-group-policy");
     for (const std::string value : {id(0), std::string("manager"), std::string(",manager"), std::string("manager"), std::string("yes")}) {
-        TreeCommits::putLp(preimage, value);
+        privmx::endpoint::core::bigendian::putLp(preimage, value);
     }
     const std::string openHash = privmx::crypto::Crypto::sha256(preimage);
     forge(id(0), [](TreeGroupState&) {}, {.op = CommitOp::Policy, .policyHash = openHash, .policy = wirePolicy(policyOf({{"rotateKeys", ",manager"}}))});

@@ -14,7 +14,6 @@ limitations under the License.
 #include <algorithm>
 #include <limits>
 #include <set>
-#include <sstream>
 #include <stdexcept>
 
 #include <Poco/JSON/Object.h>
@@ -27,33 +26,18 @@ limitations under the License.
 
 using namespace privmx::endpoint::group::keytree;
 namespace server = privmx::endpoint::group::server;
+namespace be = privmx::endpoint::core::bigendian;
 
 std::string TreeCommits::tag(const char* name) {
     return std::string(name) + std::string(1, '\0');
 }
 
-void TreeCommits::putU8(std::string& out, std::uint8_t value) {
-    privmx::endpoint::core::bigendian::putU8(out, value);
-}
-
-void TreeCommits::putU32(std::string& out, std::uint32_t value) {
-    privmx::endpoint::core::bigendian::putU32(out, value);
-}
-
-void TreeCommits::putU64(std::string& out, std::uint64_t value) {
-    privmx::endpoint::core::bigendian::putU64(out, value);
-}
-
-void TreeCommits::putLp(std::string& out, const std::string& value) {
-    privmx::endpoint::core::bigendian::putLp(out, value);
-}
-
 namespace {
 
 void putList(std::string& out, const std::vector<std::string>& values) {
-    TreeCommits::putU32(out, static_cast<std::uint32_t>(values.size()));
+    be::putU32(out, static_cast<std::uint32_t>(values.size()));
     for (const std::string& value : values) {
-        TreeCommits::putLp(out, value);
+        be::putLp(out, value);
     }
 }
 
@@ -103,7 +87,7 @@ std::string childHash(
 
 std::string treeHashOver(std::uint32_t numLeaves, const std::string& rootHash) {
     std::string preimage = TreeCommits::tag("pmx-tree");
-    TreeCommits::putU32(preimage, numLeaves);
+    be::putU32(preimage, numLeaves);
     preimage += rootHash;
     return privmx::crypto::Crypto::sha256(preimage);
 }
@@ -140,19 +124,6 @@ std::string resolved(const Poco::JSON::Object::Ptr& policy, const std::string& f
     return rule == "inherit" || rule == "default" ? fallback : rule;
 }
 
-std::vector<std::string> split(const std::string& value, char separator) {
-    std::vector<std::string> parts;
-    std::stringstream stream(value);
-    std::string part;
-    while (std::getline(stream, part, separator)) {
-        parts.push_back(part);
-    }
-    if (!value.empty() && value.back() == separator) {
-        parts.emplace_back(); // "a," is two alternatives, the second empty, as JavaScript's split has it
-    }
-    return parts;
-}
-
 // The bridge's group-rule grammar (`PolicyService.isValidPolicyEntry` with the values `validateGroupPolicy` allows),
 // after `resolved`: "none", "all", or `,`-separated alternatives of `&`-joined atoms from user/manager/owner, no part
 // empty, atoms unique within an alternative, alternatives unique (R-POL-1). Throws std::invalid_argument otherwise.
@@ -161,8 +132,8 @@ std::string grammatical(const std::string& field, std::string rule) {
         return rule;
     }
     std::set<std::string> alternatives;
-    for (const std::string& alternative : split(rule, ',')) {
-        std::vector<std::string> atoms = split(alternative, '&');
+    for (const std::string& alternative : privmx::utils::Utils::split(rule, ",")) {
+        std::vector<std::string> atoms = privmx::utils::Utils::split(alternative, "&");
         std::sort(atoms.begin(), atoms.end());
         const bool known = !atoms.empty() && std::all_of(atoms.begin(), atoms.end(), [](const std::string& atom) {
             return atom == "user" || atom == "manager" || atom == "owner";
@@ -175,9 +146,6 @@ std::string grammatical(const std::string& field, std::string rule) {
             !alternatives.insert(canonical).second) {
             throw std::invalid_argument("policy rule " + field + " is not a group rule: '" + rule + "'");
         }
-    }
-    if (alternatives.empty()) {
-        throw std::invalid_argument("policy rule " + field + " is empty");
     }
     return rule;
 }
@@ -194,8 +162,8 @@ T inRange(std::int64_t value, const char* field) {
 
 std::string TreeCommits::leafHash(std::uint32_t position, const std::string& userId) {
     std::string preimage = tag("pmx-tree-leaf");
-    putU32(preimage, position);
-    putLp(preimage, userId);
+    be::putU32(preimage, position);
+    be::putLp(preimage, userId);
     return privmx::crypto::Crypto::sha256(preimage);
 }
 
@@ -209,25 +177,25 @@ std::string TreeCommits::nodeHash(
     std::string preimage;
     if (TreeMath::isKeyed(nodeIndex, numLeaves)) {
         preimage = tag("pmx-tree-node");
-        putU32(preimage, nodeIndex);
-        putU8(preimage, record != nullptr ? 1 : 0);
+        be::putU32(preimage, nodeIndex);
+        be::putU8(preimage, record != nullptr ? 1 : 0);
         if (record != nullptr) {
-            putU32(preimage, record->generation);
-            putU8(preimage, record->publicKey.has_value() ? 1 : 0);
+            be::putU32(preimage, record->generation);
+            be::putU8(preimage, record->publicKey.has_value() ? 1 : 0);
             if (record->publicKey.has_value()) {
                 if (!record->setBy.has_value()) {
                     throw std::invalid_argument(
                         "filled node " + std::to_string(nodeIndex) + " names no statement that set its key"
                     );
                 }
-                putLp(preimage, record->publicKey->toBase58DER());
-                putU64(preimage, record->setBy.value());
+                be::putLp(preimage, record->publicKey->toBase58DER());
+                be::putU64(preimage, record->setBy.value());
             }
         }
     } else {
         // A bucket node: whatever record a server attaches to it is not part of the tree, and not hashed.
         preimage = tag("pmx-tree-inner");
-        putU32(preimage, nodeIndex);
+        be::putU32(preimage, nodeIndex);
     }
     preimage += leftHash;
     preimage += rightHash;
@@ -279,8 +247,8 @@ std::string TreeCommits::rosterHash(std::vector<std::string> users, std::vector<
 
 std::string TreeCommits::groupId(const std::string& contextId, const std::string& resourceId) {
     std::string preimage = tag("pmx-group-id");
-    putLp(preimage, contextId);
-    putLp(preimage, resourceId);
+    be::putLp(preimage, contextId);
+    be::putLp(preimage, resourceId);
     return privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(preimage));
 }
 
@@ -290,26 +258,26 @@ std::string TreeCommits::signedBytes(const CommitStatement& statement) {
         throw std::invalid_argument("commit statement hashes must be 32 bytes");
     }
     std::string bytes = tag("pmx-tree-commit");
-    putLp(bytes, statement.groupId);
-    putU32(bytes, statement.treeVersion);
-    putU64(bytes, statement.seq);
-    putLp(bytes, statement.prevDigest);
-    putU8(bytes, static_cast<std::uint8_t>(statement.op));
-    putU64(bytes, statement.date);
-    putU64(bytes, statement.keyVersion);
-    putLp(bytes, statement.groupPubKey);
-    putU64(bytes, statement.rosterVersion);
+    be::putLp(bytes, statement.groupId);
+    be::putU32(bytes, statement.treeVersion);
+    be::putU64(bytes, statement.seq);
+    be::putLp(bytes, statement.prevDigest);
+    be::putU8(bytes, static_cast<std::uint8_t>(statement.op));
+    be::putU64(bytes, statement.date);
+    be::putU64(bytes, statement.keyVersion);
+    be::putLp(bytes, statement.groupPubKey);
+    be::putU64(bytes, statement.rosterVersion);
     bytes += statement.rosterHash;
     bytes += statement.treeHash;
     bytes += statement.policyHash;
-    putLp(bytes, statement.committer);
-    putLp(bytes, statement.committerPubKey);
-    putU32(bytes, statement.committerSeat);
-    putU32(bytes, static_cast<std::uint32_t>(statement.path.size()));
+    be::putLp(bytes, statement.committer);
+    be::putLp(bytes, statement.committerPubKey);
+    be::putU32(bytes, statement.committerSeat);
+    be::putU32(bytes, static_cast<std::uint32_t>(statement.path.size()));
     for (const StatementNode& node : statement.path) {
-        putU32(bytes, node.nodeIndex);
-        putU32(bytes, node.generation);
-        putLp(bytes, node.publicKey);
+        be::putU32(bytes, node.nodeIndex);
+        be::putU32(bytes, node.generation);
+        be::putLp(bytes, node.publicKey);
         if (node.subtreeHash.size() != 32) {
             throw std::invalid_argument("commit statement hashes must be 32 bytes");
         }
@@ -334,16 +302,9 @@ bool TreeCommits::verifySignature(const CommitStatement& statement, const privmx
 
 std::string TreeCommits::opKey(const std::string& kind, const std::vector<std::string>& parts) {
     std::string out;
-    const auto lp = [&out](const std::string& field) {
-        const auto size = static_cast<std::uint32_t>(field.size());
-        for (int shift = 24; shift >= 0; shift -= 8) {
-            out.push_back(static_cast<char>((size >> shift) & 0xFF));
-        }
-        out += field;
-    };
-    lp(kind);
+    be::putLp(out, kind);
     for (const std::string& part : parts) {
-        lp(part);
+        be::putLp(out, part);
     }
     return out;
 }
@@ -503,15 +464,15 @@ GroupRules TreeCommits::rules(const Poco::Dynamic::Var& policy, const std::strin
     for (const std::string* value :
          {&result.creator, &result.update, &result.rotateKeys, &result.updatePolicy,
           &result.ownerCanBeRemovedFromManagers}) {
-        putLp(preimage, *value);
+        be::putLp(preimage, *value);
     }
     result.hash = privmx::crypto::Crypto::sha256(preimage);
     return result;
 }
 
 bool TreeCommits::allows(const std::string& rule, bool member, bool manager, bool owner) {
-    for (const std::string& alternative : split(rule, ',')) {
-        const std::vector<std::string> atoms = split(alternative, '&');
+    for (const std::string& alternative : privmx::utils::Utils::split(rule, ",")) {
+        const std::vector<std::string> atoms = privmx::utils::Utils::split(alternative, "&");
         bool all = !atoms.empty(); // fails closed: an empty alternative admits nobody (R-POL-1)
         for (const std::string& atom : atoms) {
             all = all && (atom == "all" || (atom == "user" && member) || (atom == "manager" && manager) ||

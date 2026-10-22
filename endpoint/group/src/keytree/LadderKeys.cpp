@@ -13,12 +13,13 @@ limitations under the License.
 
 #include <algorithm>
 #include <cstddef>
-#include <functional>
 #include <set>
 #include <stdexcept>
 #include <string>
 
 #include <privmx/crypto/EciesEncryptor.hpp>
+
+#include <privmx/endpoint/core/BigEndian.hpp>
 
 #include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 
@@ -28,8 +29,8 @@ namespace {
 
 std::string rungLabel(const RungSpan& span) {
     std::string label = TreeCommits::tag("pmx-rung");
-    TreeCommits::putU32(label, span.at);
-    TreeCommits::putU32(label, span.target);
+    privmx::endpoint::core::bigendian::putU32(label, span.at);
+    privmx::endpoint::core::bigendian::putU32(label, span.target);
     return label;
 }
 
