@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREETYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREETYPES_HPP_
 
+#include <algorithm>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -191,6 +192,15 @@ struct TreeMember {
     std::string userId;
     privmx::crypto::PublicKey publicKey;
 };
+
+// The record of `nodeIndex`, or null when it has none.
+template<typename State>
+auto* findRecord(State& state, std::uint32_t nodeIndex) {
+    const auto it = std::find_if(state.nodes.begin(), state.nodes.end(), [&](const TreeNodeState& node) {
+        return node.nodeIndex == nodeIndex;
+    });
+    return it == state.nodes.end() ? nullptr : &*it;
+}
 
 } // namespace keytree
 } // namespace group

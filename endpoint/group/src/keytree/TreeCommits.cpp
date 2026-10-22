@@ -55,15 +55,6 @@ std::string fromHex32(const std::string& hex) {
     return privmx::utils::Hex::toString(hex);
 }
 
-const TreeNodeState* findRecord(const TreeGroupState& state, std::uint32_t nodeIndex) {
-    for (const TreeNodeState& node : state.nodes) {
-        if (node.nodeIndex == nodeIndex) {
-            return &node;
-        }
-    }
-    return nullptr;
-}
-
 std::string childHash(
     const TreeGroupState& state,
     std::uint32_t nodeIndex,

@@ -14,6 +14,7 @@ limitations under the License.
 #include <algorithm>
 #include <limits>
 
+#include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
 
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
@@ -131,7 +132,7 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupKeyResolver::auth
     std::vector<server::GroupArchiveRung> others;
     for (server::GroupArchiveRung& rung : archive.rungs) {
         const auto opener = openers.find(static_cast<std::uint64_t>(rung.atKeyVersion));
-        const auto sealer = TreeKeys::sealerOf(rung.data);
+        const auto sealer = privmx::crypto::EciesEncryptor::senderOf(rung.data);
         if (opener != openers.end() && sealer.has_value() && sealer->toBase58DER() == opener->second.committerPubKey) {
             rung.author = opener->second.committer;
             openerSealed.push_back(rung);
