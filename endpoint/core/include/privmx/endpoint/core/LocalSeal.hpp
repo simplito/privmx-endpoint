@@ -54,15 +54,14 @@ std::optional<std::string> openLocal(
 
 // load -> openLocal -> merge(stored body, or nullopt for nothing stored / unopenable) -> sealLocal ->
 // save(expected = loaded). Retries on a compare-and-swap miss; false once the attempts are spent. Throws what the
-// store or `merge` throws. `sealed`, when given, receives the blob saved.
+// store or `merge` throws.
 bool updateSealed(
     PinStoreInterface& store,
     const ::privmx::crypto::PrivateKey& identity,
     const std::string& storeKey,
     const std::string& label,
     std::uint8_t version,
-    const std::function<std::string(const std::optional<std::string>&)>& merge,
-    std::string* sealed = nullptr
+    const std::function<std::string(const std::optional<std::string>&)>& merge
 );
 
 } // namespace core

@@ -87,8 +87,7 @@ bool privmx::endpoint::core::updateSealed(
     const std::string& storeKey,
     const std::string& label,
     std::uint8_t version,
-    const std::function<std::string(const std::optional<std::string>&)>& merge,
-    std::string* sealed
+    const std::function<std::string(const std::optional<std::string>&)>& merge
 ) {
     for (int attempt = 0; attempt < CAS_ATTEMPTS; ++attempt) {
         const std::string loaded = store.load(storeKey).stdString();
@@ -96,9 +95,6 @@ bool privmx::endpoint::core::updateSealed(
                                                                 : openLocal(identity, label, version, storeKey, loaded);
         const std::string blob = sealLocal(identity, label, version, storeKey, merge(body));
         if (store.save(storeKey, Buffer::from(blob), Buffer::from(loaded))) {
-            if (sealed != nullptr) {
-                *sealed = blob;
-            }
             return true;
         }
     }
