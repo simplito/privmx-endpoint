@@ -183,9 +183,10 @@ public:
                 keyRequest.addGroupKeys(items[i].groupKeys, getLocation(items[i]));
             }
         }
-        const bool anyLeft = std::any_of(result.begin(), result.end(), [](const TLib& r) { return r.statusCode == 0; });
-        const auto allKeys = anyLeft ? keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver) :
-                                       decltype(keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver)){};
+        if (std::none_of(result.begin(), result.end(), [](const TLib& r) { return r.statusCode == 0; })) {
+            return result; // all refused already: nothing to open or verify
+        }
+        const auto allKeys = keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver);
         std::set<std::string> seenRandomIds;
 
         for (size_t i = 0; i < items.size(); i++) {
