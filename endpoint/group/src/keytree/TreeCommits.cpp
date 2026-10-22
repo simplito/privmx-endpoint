@@ -55,15 +55,19 @@ std::string fromHex32(const std::string& hex) {
     return privmx::utils::Hex::toString(hex);
 }
 
+// The leaf hash of a seat, blank when the state does not reach it.
+std::string seatHash(const TreeGroupState& state, std::uint32_t position) {
+    const bool known = position < state.leafAssignment.size();
+    return TreeCommits::leafHash(position, known ? state.leafAssignment[position].value_or("") : "");
+}
+
 std::string childHash(
     const TreeGroupState& state,
     std::uint32_t nodeIndex,
     std::map<std::uint32_t, std::string>* memo = nullptr
 ) {
     if (TreeMath::isLeaf(nodeIndex)) {
-        const std::uint32_t position = TreeMath::leafPosition(nodeIndex);
-        const bool known = position < state.leafAssignment.size();
-        return TreeCommits::leafHash(position, known ? state.leafAssignment[position].value_or("") : "");
+        return seatHash(state, TreeMath::leafPosition(nodeIndex));
     }
     std::string hash = TreeCommits::nodeHash(
         nodeIndex, state.numLeaves, findRecord(state, nodeIndex),
@@ -212,8 +216,7 @@ std::string TreeCommits::treeHashAlongPath(
         throw std::invalid_argument("copath hashes do not fit the tree");
     }
     std::uint32_t current = TreeMath::leafNode(position);
-    const bool known = position < state.leafAssignment.size();
-    std::string hash = leafHash(position, known ? state.leafAssignment[position].value_or("") : "");
+    std::string hash = seatHash(state, position);
     for (std::size_t i = 0; i < path.size(); ++i) {
         const std::string sibling = fromHex32(copathHashes[i]);
         const bool currentIsLeft = current < path[i];
