@@ -17,11 +17,7 @@ limitations under the License.
 using namespace privmx::endpoint::group::keytree;
 
 std::uint32_t TreeMath::pow2(std::uint32_t exponent) {
-    std::uint32_t value = 1;
-    for (std::uint32_t i = 0; i < exponent; ++i) {
-        value *= 2;
-    }
-    return value;
+    return exponent < 32 ? 1u << exponent : 0u;
 }
 
 void TreeMath::assertNumLeaves(std::uint32_t numLeaves) {
@@ -69,12 +65,7 @@ std::uint32_t TreeMath::level(std::uint32_t nodeIndex) {
 }
 
 std::uint32_t TreeMath::root(std::uint32_t numLeaves) {
-    assertNumLeaves(numLeaves);
-    std::uint32_t w = 1;
-    while (w < numLeaves) {
-        w *= 2;
-    }
-    return w - 1;
+    return pow2(depth(numLeaves)) - 1;
 }
 
 std::uint32_t TreeMath::depth(std::uint32_t numLeaves) {
@@ -109,14 +100,9 @@ std::uint32_t TreeMath::rightStep(std::uint32_t nodeIndex) {
 }
 
 std::uint32_t TreeMath::parentStep(std::uint32_t nodeIndex) {
-    // Bitwise form is `(x | 2^k) & ~(2^(k+1))`. A node of level k has exactly k trailing 1-bits, so its bit k
-    // is 0 and the OR is an addition; the AND then clears bit k+1 if it is set.
-    const std::uint32_t k = level(nodeIndex);
-    const std::uint32_t bit = pow2(k);
-    const std::uint32_t withBitSet = nodeIndex + bit;
-    const std::uint32_t nextBit = bit * 2;
-    const bool nextBitIsSet = (withBitSet / nextBit) % 2 == 1;
-    return nextBitIsSet ? withBitSet - nextBit : withBitSet;
+    // A node of level k has exactly k trailing 1-bits: set bit k, clear bit k+1.
+    const std::uint32_t bit = pow2(level(nodeIndex));
+    return (nodeIndex | bit) & ~(bit << 1);
 }
 
 std::uint32_t TreeMath::left(std::uint32_t nodeIndex, std::uint32_t numLeaves) {
