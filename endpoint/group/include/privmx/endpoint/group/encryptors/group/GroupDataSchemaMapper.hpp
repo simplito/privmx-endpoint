@@ -191,12 +191,11 @@ private:
     // Own DIO encryptor, for the one envelope `GroupDataEncryptorV5` has no method for: the internal-meta view.
     core::DIOEncryptorV1 _DIOEncryptor;
     GroupDataEncryptorV5 _groupEncryptor;
-    // Monotone pins, one per plane: a tag stays valid forever, so only a pin refuses a genuinely tagged
-    // rollback. The counters move independently, so one pin over all three would reject legitimate states.
+    // Monotone pins per group: roster, publicMeta and privateMeta version. A tag stays valid forever, so only a pin
+    // refuses a genuinely tagged rollback. The counters move independently, so each is compared on its own.
+    using VersionPin = std::array<std::int64_t, 3>;
     std::mutex _pinMutex;
-    std::map<std::string, int64_t> _verifiedRosterVersions;
-    std::map<std::string, int64_t> _verifiedPublicMetaVersions;
-    std::map<std::string, int64_t> _verifiedPrivateMetaVersions;
+    std::map<std::string, VersionPin> _versionPins;
     std::function<void(bool)> _onPinsMoved;
 };
 

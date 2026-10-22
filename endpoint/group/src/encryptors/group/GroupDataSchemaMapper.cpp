@@ -26,10 +26,6 @@ bool onRoster(const std::vector<std::string>& users, const std::vector<std::stri
         std::find(managers.begin(), managers.end(), userId) != managers.end();
 }
 
-bool onRoster(const privmx::endpoint::group::server::GroupInfo& groupInfo, const std::string& userId) {
-    return onRoster(groupInfo.users, groupInfo.managers, userId);
-}
-
 // A plane's key opened, the plane and its key written by somebody on the roster, and the plane's author holding
 // `update` under the signed rules (T4-03). Anybody in the context can wrap a key to the group's public grant key and
 // tag a plane under it; the roster says who belongs to the group and its signed policy who writes its metadata. The
@@ -51,7 +47,8 @@ void assertWrittenByMember(
     const std::vector<std::string>& managers = asRead ? prior->managers : groupInfo.managers;
     const std::string& author = entry.author;
     const bool manager = std::find(managers.begin(), managers.end(), author) != managers.end();
-    if (key.statusCode != 0 || !onRoster(users, managers, author) || !onRoster(users, managers, key.dio.creatorUserId) ||
+    const bool member = manager || std::find(users.begin(), users.end(), author) != users.end();
+    if (key.statusCode != 0 || !member || !onRoster(users, managers, key.dio.creatorUserId) ||
         !keytree::TreeCommits::allows(rules.update, true, manager, author == rules.creator)) {
         throw GroupMembershipMismatchException();
     }
@@ -126,7 +123,7 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
     }
     // The head key is wrapped by whoever opened the epoch, a member until a removal opens the next one. Anybody
     // else's entry (a removed member's, the UserVerifier vouching only that it is theirs) is a key they chose.
-    if (!onRoster(groupInfo, rosterKey.dio.creatorUserId)) {
+    if (!onRoster(groupInfo.users, groupInfo.managers, rosterKey.dio.creatorUserId)) {
         throw GroupMembershipMismatchException();
     }
     auto encData = dynamic::EncryptedGroupRosterV5::fromJSON(groupInfo.data.back().data);
@@ -163,13 +160,13 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
     }
 }
 
-// `keyVersion` may legitimately lag the group's current epoch, but never lead it. What keeps the other plane
-// from being served here is the domain-separated tag, plus a parse that refuses an envelope with no `publicMeta`.
 bool GroupDataSchemaMapper::sameEntry(const server::GroupMetaEntry& now, const server::GroupMetaEntry& then) {
     return now.version == then.version && now.author == then.author && now.keyId == then.keyId &&
         privmx::utils::Utils::stringifyVar(now.data) == privmx::utils::Utils::stringifyVar(then.data);
 }
 
+// `keyVersion` may legitimately lag the group's current epoch, but never lead it. What keeps the other plane
+// from being served here is the domain-separated tag, plus a parse that refuses an envelope with no `publicMeta`.
 void GroupDataSchemaMapper::assertPublicMetaIsAttested(
     const server::GroupInfo& groupInfo,
     const core::DecryptedEncKeyV2& publicMetaKey,
@@ -333,13 +330,13 @@ core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const serve
 }
 
 void GroupDataSchemaMapper::assertNotBelowPins(const server::GroupInfo& groupInfo) {
-    const auto pinned = [](const std::map<std::string, int64_t>& pins, const std::string& groupId) {
-        const auto it = pins.find(groupId);
-        return it == pins.end() ? int64_t(0) : it->second;
-    };
-    if (groupInfo.rosterVersion < pinned(_verifiedRosterVersions, groupInfo.id) ||
-        groupInfo.publicMetaVersion < pinned(_verifiedPublicMetaVersions, groupInfo.id) ||
-        groupInfo.privateMetaVersion < pinned(_verifiedPrivateMetaVersions, groupInfo.id)) {
+    const auto it = _versionPins.find(groupInfo.id);
+    if (it == _versionPins.end()) {
+        return;
+    }
+    const VersionPin& pinned = it->second;
+    if (groupInfo.rosterVersion < pinned[0] || groupInfo.publicMetaVersion < pinned[1] ||
+        groupInfo.privateMetaVersion < pinned[2]) {
         // A shorter answer than one already seen is a validly tagged *past* state — a rollback, not an error the
         // tag itself can catch, because that older tag was genuine when it was made.
         throw GroupHistoryForkException();
@@ -353,13 +350,12 @@ void GroupDataSchemaMapper::storeVersionPins(const server::GroupInfo& groupInfo)
     {
         std::lock_guard lock(_pinMutex);
         assertNotBelowPins(groupInfo);
-        for (auto [pins, value] : {std::make_pair(&_verifiedRosterVersions, groupInfo.rosterVersion),
-                                   std::make_pair(&_verifiedPublicMetaVersions, groupInfo.publicMetaVersion),
-                                   std::make_pair(&_verifiedPrivateMetaVersions, groupInfo.privateMetaVersion)}) {
-            int64_t& pinned = (*pins)[groupInfo.id];
-            rose = rose || value > pinned;
-            pinned = value;
+        VersionPin& pinned = _versionPins[groupInfo.id];
+        const VersionPin now{groupInfo.rosterVersion, groupInfo.publicMetaVersion, groupInfo.privateMetaVersion};
+        for (std::size_t i = 0; i < now.size(); ++i) {
+            rose = rose || now[i] > pinned[i];
         }
+        pinned = now;
     }
     if (rose && _onPinsMoved) {
         _onPinsMoved(false);
@@ -368,28 +364,15 @@ void GroupDataSchemaMapper::storeVersionPins(const server::GroupInfo& groupInfo)
 
 std::map<std::string, std::array<std::int64_t, 3>> GroupDataSchemaMapper::exportVersionPins() {
     std::lock_guard lock(_pinMutex);
-    std::map<std::string, std::array<std::int64_t, 3>> pins;
-    for (const auto& [groupId, value] : _verifiedRosterVersions) {
-        pins[groupId][0] = value;
-    }
-    for (const auto& [groupId, value] : _verifiedPublicMetaVersions) {
-        pins[groupId][1] = value;
-    }
-    for (const auto& [groupId, value] : _verifiedPrivateMetaVersions) {
-        pins[groupId][2] = value;
-    }
-    return pins;
+    return _versionPins;
 }
 
 void GroupDataSchemaMapper::importVersionPins(const std::map<std::string, std::array<std::int64_t, 3>>& stored) {
     std::lock_guard lock(_pinMutex);
     for (const auto& [groupId, counters] : stored) {
-        std::map<std::string, int64_t>* pins[] = {
-            &_verifiedRosterVersions, &_verifiedPublicMetaVersions, &_verifiedPrivateMetaVersions
-        };
-        for (std::size_t i = 0; i < 3; ++i) {
-            int64_t& pinned = (*pins[i])[groupId];
-            pinned = std::max(pinned, counters[i]);
+        VersionPin& pinned = _versionPins[groupId];
+        for (std::size_t i = 0; i < pinned.size(); ++i) {
+            pinned[i] = std::max(pinned[i], counters[i]);
         }
     }
 }
