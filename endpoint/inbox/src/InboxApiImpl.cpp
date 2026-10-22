@@ -39,6 +39,13 @@ using namespace privmx::endpoint::inbox;
 using namespace privmx::endpoint;
 using namespace privmx::utils;
 
+namespace {
+// Senders seal entries to the public half of the Inbox key.
+privmx::crypto::PublicKey entriesPubKeyOf(const std::string& inboxKey) {
+    return privmx::crypto::PrivateKey(privmx::crypto::ECC::fromPrivateKey(inboxKey)).getPublicKey();
+}
+} // namespace
+
 const int64_t InboxApiImpl::_CHUNK_SIZE = 128 * 1024;
 
 InboxApiImpl::InboxApiImpl(
@@ -104,9 +111,7 @@ std::string InboxApiImpl::createInbox(
     auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
 
     auto inboxKey = _keyProvider->generateKey();
-    auto eccKey = privmx::crypto::ECC::fromPrivateKey(inboxKey.key);
-    auto privateKey = privmx::crypto::PrivateKey(eccKey);
-    auto pubKey = privateKey.getPublicKey();
+    auto pubKey = entriesPubKeyOf(inboxKey.key);
 
     auto randName{InboxDataHelper::getRandomName()};
     auto randNameAsBuf{privmx::endpoint::core::Buffer::from(randName)};
@@ -247,8 +252,7 @@ void InboxApiImpl::rotateInboxKeys(
         inboxId, currentInbox, users, managers, version, force, knownGroupKeys,
         [&](const server::InboxRotateKeysModel& model) { _serverApi->inboxRotateKeys(model); },
         [&](server::InboxRotateKeysModel& model, const core::ContainerUpdateContext& ctx) {
-            model.inboxPubKey =
-                privmx::crypto::PrivateKey(privmx::crypto::ECC::fromPrivateKey(ctx.key.key)).getPublicKey().toBase58DER();
+            model.inboxPubKey = entriesPubKeyOf(ctx.key.key).toBase58DER();
         }
     );
 
@@ -572,7 +576,7 @@ inbox::server::InboxData InboxApiImpl::encryptInboxData(
     const core::ContainerUpdateContext& ctx,
     const std::string& resourceId
 ) {
-    auto pubKey = privmx::crypto::PrivateKey(privmx::crypto::ECC::fromPrivateKey(ctx.key.key)).getPublicKey();
+    auto pubKey = entriesPubKeyOf(ctx.key.key);
     InboxDataProcessorModelV5 inboxDataIn{
         .storeId = current.storeId,
         .threadId = current.threadId,
