@@ -1539,7 +1539,8 @@ TEST_F(GroupApiLyingBridge, ARepairIsNotSentWhenTheLadderIsIntact) {
     const int verified = bridge.verifierCalls->load();
     const std::size_t commitReads = count("bob", "context.groupGetTreeCommits");
     ASSERT_TRUE(waitUntil([&] { return bridge.count("bob", "context.groupGetKeyArchive") >= 1; }));
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    EXPECT_EQ(GroupApiImplTestAccess::queuedLadderChecks(client("bob")), 0u);
+    clients.erase("bob"); // joins the worker: the check that fetched has finished
     EXPECT_EQ(count("bob", "context.groupGetKeyArchive"), 1u);
     EXPECT_EQ(count("bob", "context.groupRepairRung"), 0u);
     EXPECT_EQ(count("bob", "context.groupGetTreeCommits"), commitReads);
@@ -1575,7 +1576,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARepairNeverSealsAKeyTheChainDoesNotName) {
     corrupt(2, 1);
     client("bob").resolveGroupPrivKey(groupId);
     ASSERT_TRUE(waitUntil([&] { return !cache->getGrantKey(1).has_value(); })) << "checked against the chain, forgotten";
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    clients.erase("bob"); // joins the worker: the check that forgot it has finished
     EXPECT_EQ(count("bob", "context.groupRepairRung"), 0u);
 }
 
@@ -1598,7 +1599,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARepairIsNotSentBelowAFloorThisSessionHasSe
     GroupApiImplTestAccess::keyCacheOf(client("bob"), groupId)->putGrantKey(1, epoch1);
     EXPECT_ANY_THROW(client("bob").resolveGroupPrivKey(groupId, 1)); // finds (2,1) broken, queues a check
     ASSERT_TRUE(waitUntil([&] { return bridge.count("bob", "context.groupGetKeyArchive") >= 3; })) << "the check ran";
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    clients.erase("bob"); // joins the worker: the check has finished
     EXPECT_EQ(count("bob", "context.groupRepairRung"), 0u);
 }
 
@@ -1634,7 +1635,8 @@ TEST_F(GroupApiLyingBridge, ARotatorDoesNotCheckTheLadderOfItsOwnEpoch) {
     client("alice").resolveGroupPrivKey(groupId);
     client("alice").rotateGroupKey(groupId);
     client("alice").resolveGroupPrivKey(groupId);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1500)); // past a small group's 1 s check window
+    EXPECT_EQ(GroupApiImplTestAccess::queuedLadderChecks(client("alice")), 0u);
+    clients.erase("alice"); // joins the worker: a check it had already taken has finished
     EXPECT_EQ(count("alice", "context.groupGetKeyArchive"), 0u);
 }
 
@@ -2655,7 +2657,7 @@ TEST_F(GroupApiLyingBridge, ADisconnectFlushesThePins) {
     ASSERT_TRUE(waitUntil([&] { return !GroupApiImplTestAccess::pinSaveDue(client("alice")); }));
     selfUpdateBy("bob");
     client("alice").resolveGroupPrivKey(groupId); // seq 2, minor
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    EXPECT_TRUE(GroupApiImplTestAccess::pinSaveScheduled(client("alice"))) << "on the idle cadence";
     EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 1u) << "not on the idle cadence yet";
     clients.at("alice")->connectionImpl->getEventMiddleware()->emitDisconnectedEvent();
     EXPECT_TRUE(waitUntil([&] { return storedPin(groupId, bridge.users.at("alice"))->seq == 2u; }));
@@ -2673,7 +2675,7 @@ TEST_F(GroupApiLyingBridge, ASelfUpdateStormIsSavedAtTheIdleInterval) {
         selfUpdateBy(i % 2 == 0 ? "bob" : "carol");
         client("alice").resolveGroupPrivKey(groupId);
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    EXPECT_TRUE(GroupApiImplTestAccess::pinSaveScheduled(client("alice"))) << "on the idle cadence";
     EXPECT_EQ(store->savesOf(slot), before) << "no save before PIN_SAVE_IDLE_INTERVAL";
 }
 
@@ -2681,21 +2683,22 @@ TEST_F(GroupApiLyingBridge, ABurstOfMajorMovesIsSavedAtMostOncePerInterval) {
     store = std::make_shared<MemoryPinStore>();
     addUsers({"dave", "erin", "frank"});
     const std::string groupId = createGroup({"alice", "bob", "carol", "dave", "erin", "frank"});
+    // The interval stretched past the test's run time: whatever the machine's speed, none of it elapses in the burst.
+    GroupApiImplTestAccess::setPinSaveInterval(client("alice"), std::chrono::hours(1));
     client("alice").resolveGroupPrivKey(groupId);
     const std::string slot = store->keyWith("group-pins/", "/" + bridge.users.at("alice").getPublicKey().toBase58DER());
     ASSERT_TRUE(waitUntil([&] { return !GroupApiImplTestAccess::pinSaveDue(client("alice")); }));
     const int before = store->savesOf(slot);
-    const auto start = std::chrono::steady_clock::now();
     for (const std::string leaving : {"carol", "dave", "erin"}) {
         removalBy("bob", {leaving});
         client("alice").resolveGroupPrivKey(groupId); // a new epoch each: major
     }
-    const auto spent = std::chrono::steady_clock::now() - start;
-    if (spent < std::chrono::milliseconds(900)) {
-        EXPECT_LE(store->savesOf(slot) - before, 2) << "at most one save per PIN_SAVE_INTERVAL";
-    }
+    // createGroup's own save may still be in flight on the worker; nothing else fits in one interval.
+    EXPECT_LE(store->savesOf(slot) - before, 1) << "at most one save per PIN_SAVE_INTERVAL";
+    EXPECT_TRUE(GroupApiImplTestAccess::pinSaveScheduled(client("alice"))) << "the burst is queued";
+    GroupApiImplTestAccess::setPinSaveInterval(client("alice"), std::chrono::milliseconds(0)); // the interval elapses
     EXPECT_TRUE(waitUntil([&] { return storedPin(groupId, bridge.users.at("alice"))->seq == 4u; }))
-        << "and the last move is saved within it";
+        << "and the last move is saved once it has";
 }
 
 TEST_F(GroupApiLyingBridge, AdoptPreviousIdentityCarriesThePinsToTheNewKey) {
