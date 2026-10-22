@@ -168,8 +168,9 @@ TEST(StreamPublicationStop, TheUnpublishGoesOutBeforeTheLocalClose) {
 }
 
 TEST(StreamPublicationStop, SECURITY_ARoomUpdateWithNoUsableCurrentKeyStopsTheLivePublication) {
-    // 13 (D4 gap): the room's current key does not open (here: not among the served keys at all). The update throws as
-    // before, but the live publication is stopped first instead of going on under the previous key.
+    // 13 (D4 gap): the room's current key does not open (here: not among the served keys at all). The live
+    // publication is stopped instead of going on under the previous key, and the update does not throw, so the
+    // notification handler still emits StreamRoomUpdatedEvent.
     Log log;
     const PrivateKey key = PrivateKey::generateRandom();
     const privmx::privfs::RpcGateway::Ptr gateway = new Gateway(log, false);
@@ -180,7 +181,7 @@ TEST(StreamPublicationStop, SECURITY_ARoomUpdateWithNoUsableCurrentKeyStopsTheLi
     Access::publishing(api, "room", std::make_shared<BrokenWebRTC>(log, false), 42, 7);
     stream::server::StreamRoomInfo raw;
     raw.keyId = "not-served";
-    EXPECT_ANY_THROW(Access::applyRoomUpdate(api, "room", raw));
+    EXPECT_NO_THROW(Access::applyRoomUpdate(api, "room", raw));
     EXPECT_FALSE(Access::isPublishing(api, "room"));
     std::lock_guard<std::mutex> lock(log.m);
     EXPECT_EQ(log.steps, UNPUBLISH_THEN_CLOSE);

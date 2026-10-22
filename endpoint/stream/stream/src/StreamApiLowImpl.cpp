@@ -814,12 +814,13 @@ void StreamApiLowImpl::applyRoomUpdate(StreamRoomData& room, const server::Strea
     try {
         applyRoomKeys(room, raw);
     } catch (const std::exception& e) {
-        // No usable current key (V1 or unopenable): a live publication must not go on under the old one.
+        // No usable current key (V1 or unopenable): a live publication must not go on under the old one. Not
+        // rethrown, so the app still gets its StreamRoomUpdatedEvent.
+        LOG_ERROR("streamRoomUpdated: the room's current key is unusable: ", e.what());
         if (room.publisherStream) {
-            LOG_ERROR("streamRoomUpdated: the room's current key is unusable, stopping the publication: ", e.what());
             stopPublication(room);
         }
-        throw;
+        return;
     }
     // The Bridge sends this on a removal from a granted group too. A live publication writes nothing more,
     // so without a re-key here it would stay under the key the removed member holds.
