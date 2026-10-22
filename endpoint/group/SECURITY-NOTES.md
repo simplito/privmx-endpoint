@@ -343,6 +343,19 @@ Whitepaper opisuje reguły protokołu; poniższe zachowanie implementacji było 
   użytkowników i każdej grupy z grantem w jej bieżącej epoce, zapisuje zmianę i ponawia zapis elementu. Gdy klucz
   wymienił w międzyczasie ktoś inny, tylko odświeża klucze; gdy polityka nie pozwala, zgłasza, że klucz musi wymienić
   menedżer.
+- **Zastąpienie późniejszego wywołania.** Zastosowany commit zastępuje późniejsze wywołanie tej samej operacji, gdy
+  operacja nazywa stan końcowy (dodanie, usunięcie, zmiana polityki, odnowienie liścia); rotacja tylko w oknie 2T od
+  swojej daty (`UnresolvedCommit::namesEndState`).
+- **Samoaktualizacja w tle a nierozstrzygnięty commit.** Samoaktualizacja w tle nie wysyła cudzego nierozstrzygniętego
+  oświadczenia, a jej własne ustępuje operacji, która samoaktualizacją nie jest.
+- **Przepisanie metadanych po zmianie polityki.** Nieudane przepisanie płaszczyzn po zawężającej zmianie polityki ten
+  sam klient ponawia przy kolejnych operacjach na grupie, dopóki trwa sesja (`PendingCarry`, tylko w pamięci).
+- **Kolejność zatrzymania publikacji.** Najpierw `streamUnpublish` (uczciwy Bridge przestaje przekazywać strumień
+  nawet przy nieudanym sprzątaniu lokalnym), potem zamknięcie połączenia wychodzącego, potem zwolnienie publikacji;
+  każdy krok niezależnie od pozostałych (F-05g).
+- **Brak krawędzi przy wspinaniu.** Brak potrzebnej krawędzi kończy wspinanie błędem bez wskazania winnego.
+- **Weryfikator tożsamości.** Odpowiedzi klient pamięta po skrócie oświadczenia; pytania o oświadczenia wielu grup
+  czytanych razem zbiera w jedno wywołanie (M4, T3-24).
 
 ## Granice, które zostają
 
