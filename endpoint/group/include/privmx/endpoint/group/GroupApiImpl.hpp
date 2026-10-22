@@ -58,10 +58,6 @@ public:
     );
     ~GroupApiImpl();
 
-    // m2: how long a released statement with no known outcome holds back a different one at its prevDigest. An honest
-    // bridge refuses a statement dated more than DATE_TOLERANCE_MS behind its clock; twice that covers both clocks.
-    static constexpr std::uint64_t RELEASE_WINDOW_MS = 2 * keytree::TreeCommits::DATE_TOLERANCE_MS;
-
     std::string createGroup(
         const std::string& contextId,
         const std::vector<core::UserWithPubKey>& users,
@@ -83,28 +79,6 @@ public:
     // the current key, or adopted already: nothing. Throws core::LocalStateIntegrityException when the previous
     // key's stored pins do not open (nothing adopted), and what the store throws.
     void adoptPreviousIdentity(const privmx::crypto::PrivateKey& previous);
-
-    // Which planes a carry-forward moves: after a removal or rotation, the planes behind the new epoch (or, with
-    // history abandoned, starts them over empty); after a narrowing policy commit, the planes whose author lost
-    // `update` (`losers`).
-    enum class CarryScope { Removal, Policy };
-
-    // Called after a removal, rotation or narrowing commits, never as part of it: best-effort, re-signing under the
-    // committer's name only an entry identical to the one it read before its own commit (N-2) whose author held
-    // `update` under that read's rules and roster (`prior`, T4-03). Returns whether nothing is left to carry.
-    bool carryMetadataForward(
-        const std::string& groupId,
-        CarryScope scope,
-        bool historyAbandoned,
-        const std::vector<std::string>& losers,
-        const PriorRole& prior
-    );
-
-    // A narrowing's carry-forward still to do: the planes' authors who lost `update`, and the read before it.
-    struct PendingCarry {
-        std::vector<std::string> losers;
-        PriorRole prior;
-    };
 
     void updateGroupPublicMeta(
         const std::string& groupId,
@@ -182,6 +156,48 @@ public:
     Envelope finishFileEncryption(FileHandle fileHandle);
     DecryptedFileInfo finishFileDecryption(FileHandle fileHandle);
 
+    // The group's own route to its head entry's key must be at the answer's (verified) `keyVersion`: a key from an
+    // earlier epoch is one a member removed since still holds. Throws GroupDataIntegrityException.
+    static void assertHeadKeyAtEpoch(const server::GroupInfo& group);
+
+    // The epoch of the newest state verified (or committed) for the group, 0 if none.
+    std::uint64_t pinnedKeyVersion(const std::string& groupId);
+
+    // See `TreeVerifier::agreesWithPin`.
+    bool agreesWithPin(
+        const std::string& groupId,
+        const std::string& contextId,
+        std::int64_t keyVersion,
+        const std::string& groupPubKey
+    );
+
+private:
+    // m2: how long a released statement with no known outcome holds back a different one at its prevDigest. An honest
+    // bridge refuses a statement dated more than DATE_TOLERANCE_MS behind its clock; twice that covers both clocks.
+    static constexpr std::uint64_t RELEASE_WINDOW_MS = 2 * keytree::TreeCommits::DATE_TOLERANCE_MS;
+
+    // Which planes a carry-forward moves: after a removal or rotation, the planes behind the new epoch (or, with
+    // history abandoned, starts them over empty); after a narrowing policy commit, the planes whose author lost
+    // `update` (`losers`).
+    enum class CarryScope { NewEpoch, Policy };
+
+    // Called after a removal, rotation or narrowing commits, never as part of it: best-effort, re-signing under the
+    // committer's name only an entry identical to the one it read before its own commit (N-2) whose author held
+    // `update` under that read's rules and roster (`prior`, T4-03). Returns whether nothing is left to carry.
+    bool carryMetadataForward(
+        const std::string& groupId,
+        CarryScope scope,
+        bool historyAbandoned,
+        const std::vector<std::string>& losers,
+        const PriorRole& prior
+    );
+
+    // A narrowing's carry-forward still to do: the planes' authors who lost `update`, and the read before it.
+    struct PendingCarry {
+        std::vector<std::string> losers;
+        PriorRole prior;
+    };
+
     // Narrowing the archive first keeps the key provider to one grant-key resolution per envelope opened,
     // rather than one per key the group has ever held. Only the group's own routes: its key is wrapped to itself.
     static std::vector<core::server::GroupKeysEntry> filterToKeyId(
@@ -201,21 +217,6 @@ public:
 
     static std::string describeResolveFailure(const keytree::ResolveResult& resolved);
 
-    // The group's own route to its head entry's key must be at the answer's (verified) `keyVersion`: a key from an
-    // earlier epoch is one a member removed since still holds. Throws GroupDataIntegrityException.
-    static void assertHeadKeyAtEpoch(const server::GroupInfo& group);
-
-    // The epoch of the newest state verified (or committed) for the group, 0 if none.
-    std::uint64_t pinnedKeyVersion(const std::string& groupId);
-
-    // See `TreeVerifier::agreesWithPin`.
-    bool agreesWithPin(
-        const std::string& groupId,
-        const std::string& contextId,
-        std::int64_t keyVersion,
-        const std::string& groupPubKey
-    );
-
     // The ladder between the two epochs, as the group's statements vouch for it (GroupKeyResolver::authenticated).
     // `group` must have passed `verifyTree`, which pins it.
     server::GroupGetKeyArchiveResult fetchKeyArchive(
@@ -227,7 +228,6 @@ public:
     // The group's session key cache. Internal, for tests that need to plant a wrong key (a client bug) in it.
     std::shared_ptr<keytree::TreeKeyCache> keyCacheOf(const std::string& groupId);
 
-private:
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
     void processConnectedEvent();
     void processDisconnectedEvent();
@@ -269,8 +269,8 @@ private:
     // Kept in one place so the epoch guard cannot drift between the two callers.
     // `currentGroup` comes from `readGroupForKeys`.
     MetaWriteContext prepareMetaWrite(const server::GroupInfo& currentGroup);
-    void writePublicMeta(const server::GroupInfo& currentGroup, const core::Buffer& publicMeta, int64_t version);
-    void writePrivateMeta(const server::GroupInfo& currentGroup, const core::Buffer& privateMeta, int64_t version);
+    // One metadata plane (public or private) at `version + 1`, under the current epoch's key.
+    void writeMeta(const server::GroupInfo& currentGroup, bool publicPlane, const core::Buffer& meta, int64_t version);
 
     std::map<std::string, std::string> resolveMemberKeys(
         const std::string& contextId,
@@ -358,16 +358,28 @@ private:
     // behind the pin. A refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo` (T4-17).
     void submit(const std::string& groupId, const keytree::CommitStatement& statement, UnresolvedCommit commit);
     void forgetUnresolved(const std::string& groupId, const std::string& digest);
+    // The commit's outcome is known and it landed: forgotten, `landed`, and the pins saved (but a self-update's).
+    void complete(const std::string& groupId, const UnresolvedCommit& commit);
+    // A read to plan a commit for `op` on: verified, with this client's unresolved commit to the group settled first.
+    // nullopt: `op` itself landed (Settled::Done). An unverified read is returned to be refused by the plan, unless
+    // `refuseUnverified` (which throws) is given.
+    std::optional<server::GroupInfo> readForCommit(
+        const server::GroupGetModel& model,
+        keytree::TreeVerifier::Scope scope,
+        const std::string& op,
+        bool mayCompleteOther = true,
+        const std::function<void()>& refuseUnverified = {}
+    );
 
+    // Whether one of the previous identity keys (ConnectionImpl::previousIdentities) climbs `state` to its grant
+    // key. Climbs on a scratch cache, so nothing derived from a previous key reaches a reader.
+    bool climbsWithPreviousIdentity(const keytree::TreeGroupState& state, const std::string& memberId);
     // `group` must have passed `verifyTree` at plan scope. `removing` (a removal of these users): a climb that fails on
     // the served edges (not on membership) is logged and the state returned anyway — a removal plans from public state
     // alone; but a leaf that does not open with the session's key and climbs with a previous identity key this
     // client was given (`climbsWithPreviousIdentity`) is refused, pointing at renewLeaf, unless history stays
     // reachable: renewLeaf fixes exactly that case, and nothing else.
     // `climbKey`: climb with it instead of the session's key, and schedule no self-update off the climb.
-    // Whether one of the previous identity keys (ConnectionImpl::previousIdentities) climbs `state` to
-    // its grant key. Climbs on a scratch cache, so nothing derived from a previous key reaches a reader.
-    bool climbsWithPreviousIdentity(const keytree::TreeGroupState& state, const std::string& memberId);
     keytree::TreeGroupState climbForPlanning(
         const server::GroupInfo& group,
         const std::shared_ptr<keytree::TreeKeyCache>& cache,
@@ -412,15 +424,13 @@ private:
         bool abandonHistory
     );
 
-    // After this client's commit opened `statement.keyVersion`: pins it before anything reads the group again (the
-    // state it replaced is refused from then on) and keeps the new grant key, the epoch's published one. `users` /
-    // `managers` are the roster the statement signed. An `UnresolvedCommit::landed`, so it takes nothing by reference.
-    void adoptCommittedEpoch(
-        const std::string& groupId,
+    // The `UnresolvedCommit::landed` of a commit that opened `statement.keyVersion`: pins it before anything reads the
+    // group again (the state it replaced is refused from then on) and keeps the new grant key, the epoch's published
+    // one. `roster` is the one the statement signed. Captures copies, nothing by reference.
+    std::function<void()> landedEpoch(
         const std::string& contextId,
         const keytree::CommitStatement& statement,
-        const std::vector<std::string>& users,
-        const std::vector<std::string>& managers,
+        const RosterAfterChange& roster,
         const keytree::GroupRules& rules,
         const privmx::crypto::PrivateKey& grantKey
     );
@@ -467,6 +477,9 @@ private:
     std::optional<std::chrono::steady_clock::time_point> nextDue() const;
     // Requires _selfUpdateMutex held. Starts the worker if needed and wakes it; never after _selfUpdateStopping.
     void wakeBackgroundWorker();
+    // For good: nothing is scheduled or run in the background from here on (pending work is dropped, the worker
+    // joined). The destructor's first step; tests call it to count commits without the worker's random delays.
+    void stopBackgroundWorker();
     // Queues one check of the rungs at `at`, once per (group, epoch), after a random delay within `windowMs`.
     void scheduleLadderCheck(
         const std::string& groupId,
@@ -530,6 +543,12 @@ private:
     // a hot session keeps the ones it already held — as it would by keeping the keys themselves.
     privmx::utils::ThreadSaveMap<std::string, privmx::crypto::PrivateKey> _epochKeys;
 
+    // Lock order (a later one may be taken while holding an earlier one, never the reverse):
+    //   commitLock(groupId) -> _pinSaveMutex -> _selfUpdateMutex.
+    // `landed` runs under the commit lock and moves pins (`pinsMoved` takes _selfUpdateMutex); `savePins` merges under
+    // _pinSaveMutex. _unresolvedMutex and _pendingCarryMutex are leaves: nothing else is
+    // taken under them. The worker holds _selfUpdateMutex only between tasks, never while running one.
+    //
     // Background self-updates run on a thread of their own rather than the shared executor: a task there waits out
     // its random delay, and a handful of groups waiting at once would hold every pool thread and stall event
     // delivery for all modules. Joined in the destructor; pending ones are dropped on disconnect.
@@ -587,6 +606,7 @@ private:
     // Under `_selfUpdateMutex`: when the worker saves next, and when the last save succeeded.
     std::optional<std::chrono::steady_clock::time_point> _pinSaveDue;
     std::chrono::steady_clock::time_point _lastPinSave;
+    std::chrono::milliseconds _pinSaveInterval = PIN_SAVE_INTERVAL; // under `_selfUpdateMutex`; tests stretch it
     friend struct GroupApiImplTestAccess; // tests reach selfUpdate() and stop the worker
 };
 

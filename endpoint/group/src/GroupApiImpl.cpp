@@ -45,6 +45,43 @@ group::server::GroupGetModel pathRead(const std::string& groupId) {
     };
 }
 
+// `groupGet` in the "plan" scope: every node record a plan resolves through, plus the departing members' paths
+// (`forUserIds`) or seats for the newcomers (`forNewMembers`).
+group::server::GroupGetModel planRead(
+    const std::string& groupId,
+    std::optional<std::vector<std::string>> forUserIds = std::nullopt,
+    std::optional<std::int64_t> forNewMembers = std::nullopt
+) {
+    return group::server::GroupGetModel{
+        .groupId = groupId,
+        .type = {},
+        .scope = std::string("plan"),
+        .forUserIds = forUserIds,
+        .forNewMembers = forNewMembers,
+        .fromRosterVersion = {}
+    };
+}
+
+// Bridge application error codes a commit can be refused with as a lost race.
+enum BridgeError : unsigned int {
+    ROTATED_ALREADY = 0x621C,
+    GROUP_TREE_INVALID = 0x621E, // its data lists the problems found
+    GROUP_ROSTER_VERSION_MISMATCH = 0x6224,
+};
+
+// Attempts of one app commit against a base that moved (`commitWithRetry`).
+constexpr int MAX_COMMIT_ATTEMPTS = 3;
+
+// How far a group's members spread their background work: this much per seat, within the bounds.
+constexpr std::int64_t BACKGROUND_MS_PER_SEAT = 8;
+constexpr std::int64_t BACKGROUND_WINDOW_MIN_MS = 1000;
+constexpr std::int64_t BACKGROUND_WINDOW_MAX_MS = 120000;
+
+// " (wrapped by <who>)", or nothing without a culprit.
+std::string blameSuffix(const std::optional<std::string>& who, const std::string& as = "wrapped by") {
+    return who.has_value() ? " (" + as + " " + who.value() + ")" : "";
+}
+
 // A uniform delay in `[0, windowMs]`, so a group's members do not all hit the bridge at once.
 std::chrono::milliseconds jitter(std::int64_t windowMs) {
     static thread_local std::mt19937_64 random{std::random_device{}()};
@@ -119,16 +156,7 @@ GroupApiImpl::GroupApiImpl(
 }
 
 GroupApiImpl::~GroupApiImpl() {
-    {
-        std::unique_lock<std::mutex> lock(_selfUpdateMutex);
-        _selfUpdateStopping = true;
-        _selfUpdatePending.clear();
-        _ladderChecks.clear();
-    }
-    _selfUpdateWake.notify_all();
-    if (_selfUpdateWorker.joinable()) {
-        _selfUpdateWorker.join();
-    }
+    stopBackgroundWorker();
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
@@ -137,10 +165,6 @@ GroupApiImpl::~GroupApiImpl() {
     if (_pinStore) {
         savePins();
     }
-}
-
-static void rejectConflictingRosterKey(const std::string& userId) {
-    throw core::InvalidParamsException("user '" + userId + "' is listed with two different public keys");
 }
 
 dynamic::MembershipBlock GroupApiImpl::buildMembershipBlock(
@@ -180,7 +204,7 @@ std::vector<keytree::TreeMember> GroupApiImpl::toTreeMembers(
         const auto inserted = seen.emplace(user.userId, user.pubKey);
         if (!inserted.second) {
             if (inserted.first->second != user.pubKey) {
-                rejectConflictingRosterKey(user.userId);
+                throw core::InvalidParamsException("user '" + user.userId + "' is listed with two different public keys");
             }
             continue; // a manager listed as a user too gets one leaf, not two
         }
@@ -194,14 +218,14 @@ RosterAfterChange GroupApiImpl::rosterFromUserIds(
     const std::vector<std::string>& users,
     const std::vector<std::string>& managers
 ) {
-    RosterAfterChange roster;
-    for (const std::string& userId : users) {
-        roster.users.push_back(core::UserWithPubKey{.userId = userId, .pubKey = std::string()});
-    }
-    for (const std::string& managerId : managers) {
-        roster.managers.push_back(core::UserWithPubKey{.userId = managerId, .pubKey = std::string()});
-    }
-    return roster;
+    const auto toBare = [](const std::vector<std::string>& ids) {
+        std::vector<core::UserWithPubKey> bare;
+        for (const std::string& id : ids) {
+            bare.push_back(core::UserWithPubKey{.userId = id, .pubKey = std::string()});
+        }
+        return bare;
+    };
+    return RosterAfterChange{.users = toBare(users), .managers = toBare(managers)};
 }
 
 // Public keys for exactly these members, from the Context user list. One listing round trip per 100 of them.
@@ -295,7 +319,7 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
             throw core::EncryptionKeyValidationException(
                 "Group key unavailable: the edge to your own leaf opens neither with your current key nor with the "
                 "previous one; ask a manager to remove and re-add you, or remove the member that wrote it" +
-                (asResolve.blame.has_value() ? " (wrapped by " + asResolve.blame.value() + ")" : "")
+                blameSuffix(asResolve.blame)
             );
         }
         // Garbled wraps must not let whoever garbled them block their own removal: the state is verified, and a
@@ -483,27 +507,14 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
     const std::string op = keytree::TreeCommits::opKey("add", opParts);
     // One read, not two: the bridge holds the roster, so it allocates the seats and serves every node record the
     // plan resolves through in the same answer.
-    server::GroupGetModel getModel{
-        .groupId = groupId,
-        .type = {},
-        .scope = std::string("plan"),
-        .forUserIds = {},
-        .forNewMembers = static_cast<std::int64_t>(newMembers.size()),
-        .fromRosterVersion = {}
-    };
-    auto currentGroup = _serverApi.groupGet(getModel).group;
-    // Every record a plan reads and every node it wraps to, checked against the statements members signed.
-    // `settle` only after a read that verified: it goes by the pin, and the bridge's unverified word moves nothing.
-    const bool verified = verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
-    switch (verified ? settle(groupId, op, true) : Settled::Proceed) {
-    case Settled::Done:
+    const std::optional<server::GroupInfo> read = readForCommit(
+        planRead(groupId, std::nullopt, static_cast<std::int64_t>(newMembers.size())), keytree::TreeVerifier::Scope::Plan,
+        op
+    );
+    if (!read.has_value()) {
         return;
-    case Settled::Reread:
-        currentGroup = rereadVerified(getModel, keytree::TreeVerifier::Scope::Plan);
-        break;
-    default:
-        break;
     }
+    const server::GroupInfo& currentGroup = read.value();
     const auto& currentEntry = currentGroup.data.back();
     const auto resourceId = currentGroup.resourceId.value_or(core::EndpointUtils::generateId());
     const int64_t currentEpoch = currentGroup.keyVersion;
@@ -540,15 +551,24 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
     const keytree::TreeGroupState state = climbForPlanning(currentGroup, cache);
     const std::string adderId = keytree::GroupKeyResolver::ownUserId(currentGroup).value();
 
+    // The roster after the change, derived rather than restated. Bare ids: nothing here wraps a key to them,
+    // so the public keys the caller used to supply were never read.
+    RosterAfterChange roster = rosterFromUserIds(attestedUsers, attestedManagers);
+    server::GroupAddMembersModel model;
     std::vector<core::UserWithPubKey> newcomerKeys;
     std::vector<keytree::TreeMember> treeNewcomers;
     std::vector<std::string> newcomerIds;
+    std::vector<std::string> addedUsers;
+    std::vector<std::string> addedManagers;
     for (const GroupMemberToAdd& newMember : newMembers) {
+        const std::string& id = newMember.user.userId;
+        const bool manager = newMember.role == "manager";
         newcomerKeys.push_back(newMember.user);
-        treeNewcomers.push_back(
-            keytree::TreeMember{newMember.user.userId, privmx::crypto::PublicKey::fromBase58DER(newMember.user.pubKey)}
-        );
-        newcomerIds.push_back(newMember.user.userId);
+        treeNewcomers.push_back(keytree::TreeMember{id, privmx::crypto::PublicKey::fromBase58DER(newMember.user.pubKey)});
+        newcomerIds.push_back(id);
+        (manager ? roster.managers : roster.users).push_back(core::UserWithPubKey{.userId = id, .pubKey = std::string()});
+        (manager ? addedManagers : addedUsers).push_back(id);
+        model.members.push_back(server::GroupAddMemberEntry{.userId = id, .role = newMember.role});
     }
     // The newcomers' paths are filled to these keys, as the caller's word for them; existing members' keys go through
     // the same check in `commitRecipientKeys`.
@@ -567,14 +587,6 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
         return tree.planAddition(state, treeNewcomers, positions, adderId, _userPrivKey);
     });
 
-    // The roster after the change, derived rather than restated. Bare ids: nothing here wraps a key to them,
-    // so the public keys the caller used to supply were never read.
-    RosterAfterChange roster = rosterFromUserIds(attestedUsers, attestedManagers);
-    for (const GroupMemberToAdd& newMember : newMembers) {
-        (newMember.role == "manager" ? roster.managers : roster.users)
-            .push_back(core::UserWithPubKey{.userId = newMember.user.userId, .pubKey = std::string()});
-    }
-
     // No new epoch
     auto ctx = prepareContainerUpdateWithoutKeyEntries(
         currentGroup, currentEntry, resourceId, roster.users, roster.managers, false
@@ -590,19 +602,10 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
         )
     };
 
-    server::GroupAddMembersModel model;
     model.id = groupId;
-    for (const GroupMemberToAdd& newMember : newMembers) {
-        model.members.push_back(server::GroupAddMemberEntry{.userId = newMember.user.userId, .role = newMember.role});
-    }
     model.keyId = ctx.key.id;
     model.data = _groupDataSchemaMapper->encryptRoster(rosterToEncrypt, ctx.key.key);
     model.transition = keytree::TreeWire::toAdditionTransition(plan, currentEpoch);
-    std::vector<std::string> addedUsers;
-    std::vector<std::string> addedManagers;
-    for (const GroupMemberToAdd& newMember : newMembers) {
-        (newMember.role == "manager" ? addedManagers : addedUsers).push_back(newMember.user.userId);
-    }
     const keytree::GroupRules rules = rulesOf(currentGroup);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
         plan, keytree::CommitOp::Add, groupId, commitDate(), static_cast<std::uint64_t>(currentEpoch),
@@ -633,8 +636,7 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
                 [this, groupId, contextId, statement, users, managers, rules] {
                     _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, rules);
                     invalidateModuleKeysInCache(groupId);
-                },
-            .after = {}
+                }
         }
     );
 }
@@ -703,7 +705,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     // still holds. Move it up. Outside the write above on purpose — see the header. Already done when an earlier
     // call's removal turned out to have landed (`settle`).
     if (historyAbandoned.has_value()) {
-        carryMetadataForward(groupId, CarryScope::Removal, historyAbandoned.value(), userIds, prior);
+        carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), userIds, prior);
     }
 }
 
@@ -714,30 +716,16 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
 ) {
     // Every departing member's path, because one commit covers their union — and one epoch covers the batch, where
     // removing them one at a time would stale every container the group can read once per member.
-    server::GroupGetModel getModel{
-        .groupId = groupId,
-        .type = {},
-        .scope = std::string("plan"),
-        .forUserIds = userIds,
-        .forNewMembers = {},
-        .fromRosterVersion = {}
-    };
-    auto currentGroup = _serverApi.groupGet(getModel).group;
-    // `settle` only after a read that verified: it goes by the pin, and the bridge's unverified word moves nothing.
-    const bool verified = verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
     std::vector<std::string> leavingIds = userIds;
     std::sort(leavingIds.begin(), leavingIds.end());
     leavingIds.erase(std::unique(leavingIds.begin(), leavingIds.end()), leavingIds.end());
     const std::string op = keytree::TreeCommits::opKey("remove", leavingIds);
-    switch (verified ? settle(groupId, op, true) : Settled::Proceed) {
-    case Settled::Done:
+    const std::optional<server::GroupInfo> read =
+        readForCommit(planRead(groupId, userIds), keytree::TreeVerifier::Scope::Plan, op);
+    if (!read.has_value()) {
         return std::nullopt;
-    case Settled::Reread:
-        currentGroup = rereadVerified(getModel, keytree::TreeVerifier::Scope::Plan);
-        break;
-    default:
-        break;
     }
+    const server::GroupInfo& currentGroup = read.value();
     // The verified read's rules and roster judge the planes the removal carries (the removed with the role they had).
     prior = priorOf(currentGroup);
     // Refused before anything is planned: the remover mints the next epoch's grant key, so a member removing itself
@@ -839,19 +827,13 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
             .namesEndState = true,
             .kind = "remove",
             .contextId = currentGroup.contextId,
-            .newcomers = {},
             .send = [this, sent] { _serverApi.groupRemoveMembers(*sent); },
             // Pinned before anything reads the group again, or the next read could be the state with the leaver
             // still in.
-            .landed =
-                [this, groupId, contextId = currentGroup.contextId, statement,
-                 users = core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-                 managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers), rules, grantKey = plan.grantKey] {
-                    adoptCommittedEpoch(groupId, contextId, statement, users, managers, rules, grantKey);
-                },
+            .landed = landedEpoch(currentGroup.contextId, statement, roster, rules, plan.grantKey),
             .after =
                 [this, groupId, abandonHistory, userIds, prior] {
-                    carryMetadataForward(groupId, CarryScope::Removal, abandonHistory, userIds, prior);
+                    carryMetadataForward(groupId, CarryScope::NewEpoch, abandonHistory, userIds, prior);
                 }
         }
     );
@@ -910,25 +892,27 @@ GroupApiImpl::NewEpochRoster GroupApiImpl::sealRosterForNewEpoch(
     };
 }
 
-void GroupApiImpl::adoptCommittedEpoch(
-    const std::string& groupId,
+std::function<void()> GroupApiImpl::landedEpoch(
     const std::string& contextId,
     const keytree::CommitStatement& statement,
-    const std::vector<std::string>& users,
-    const std::vector<std::string>& managers,
+    const RosterAfterChange& roster,
     const keytree::GroupRules& rules,
     const privmx::crypto::PrivateKey& grantKey
 ) {
-    _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, rules);
-    // Looked up now, not when planned: `settle` may run this long after, with the group's cache replaced meanwhile.
-    _treeKeyCaches.get(groupId)->putGrantKey(static_cast<std::uint32_t>(statement.keyVersion), grantKey);
-    // Minted here and accepted at exactly this epoch (the CAS), so it is the epoch's published key: the metadata
-    // refresh that follows opens it without a read.
-    _epochKeys.set(memoKeyFor(groupId, std::to_string(statement.keyVersion)), grantKey);
-    // Its rungs passed the self-check against the chain (`buildRotationRungs`) before it was submitted: nothing for
-    // the observed-rotation check to look at.
-    markLadderChecked(groupId, static_cast<std::uint32_t>(statement.keyVersion));
-    invalidateModuleKeysInCache(groupId);
+    return [this, contextId, statement, users = core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+            managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers), rules, grantKey] {
+        const std::string& groupId = statement.groupId;
+        _treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, rules);
+        // Looked up now, not when planned: `settle` may run this long after, with the group's cache replaced meanwhile.
+        _treeKeyCaches.get(groupId)->putGrantKey(static_cast<std::uint32_t>(statement.keyVersion), grantKey);
+        // Minted here and accepted at exactly this epoch (the CAS), so it is the epoch's published key: the metadata
+        // refresh that follows opens it without a read.
+        _epochKeys.set(memoKeyFor(groupId, std::to_string(statement.keyVersion)), grantKey);
+        // Its rungs passed the self-check against the chain (`buildRotationRungs`) before it was submitted: nothing
+        // for the observed-rotation check to look at.
+        markLadderChecked(groupId, static_cast<std::uint32_t>(statement.keyVersion));
+        invalidateModuleKeysInCache(groupId);
+    };
 }
 
 void GroupApiImpl::rotateGroupKey(const std::string& groupId) {
@@ -940,33 +924,18 @@ void GroupApiImpl::rotateGroupKey(const std::string& groupId) {
     // so nobody is accepted as an author beyond the members. Already done when an earlier call's rotation turned out
     // to have landed (`settle`).
     if (committedHere) {
-        carryMetadataForward(groupId, CarryScope::Removal, false, {}, prior);
+        carryMetadataForward(groupId, CarryScope::NewEpoch, false, {}, prior);
     }
 }
 
 bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, PriorRole& prior) {
     // Every record, because the statement signs the tree hash, which a rotation leaves as it is.
-    server::GroupGetModel getModel{
-        .groupId = groupId,
-        .type = {},
-        .scope = std::string("plan"),
-        .forUserIds = {},
-        .forNewMembers = {},
-        .fromRosterVersion = {}
-    };
-    auto currentGroup = _serverApi.groupGet(getModel).group;
-    // `settle` only after a read that verified: it goes by the pin, and the bridge's unverified word moves nothing.
-    const bool verified = verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
     const std::string op = keytree::TreeCommits::opKey("rotate");
-    switch (verified ? settle(groupId, op, true) : Settled::Proceed) {
-    case Settled::Done:
+    const std::optional<server::GroupInfo> read = readForCommit(planRead(groupId), keytree::TreeVerifier::Scope::Plan, op);
+    if (!read.has_value()) {
         return false;
-    case Settled::Reread:
-        currentGroup = rereadVerified(getModel, keytree::TreeVerifier::Scope::Plan);
-        break;
-    default:
-        break;
     }
+    const server::GroupInfo& currentGroup = read.value();
     prior = priorOf(currentGroup);
     const int64_t currentEpoch = currentGroup.keyVersion;
     const int64_t newEpoch = currentEpoch + 1;
@@ -1024,36 +993,29 @@ bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, PriorRole& pri
             .op = op,
             .kind = "rotation",
             .contextId = currentGroup.contextId,
-            .newcomers = {},
             .send = [this, sent] { _serverApi.groupGenerateNewKey(*sent); },
             // Pinned before anything reads the group again: the state under the replaced key is refused from here on.
-            .landed =
-                [this, groupId, contextId = currentGroup.contextId, statement,
-                 users = core::EndpointUtils::usersWithPubKeyToIds(roster.users),
-                 managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers), rules, grantKey = plan.grantKey] {
-                    adoptCommittedEpoch(groupId, contextId, statement, users, managers, rules, grantKey);
-                },
-            .after = [this, groupId, prior] { carryMetadataForward(groupId, CarryScope::Removal, false, {}, prior); }
+            .landed = landedEpoch(currentGroup.contextId, statement, roster, rules, plan.grantKey),
+            .after = [this, groupId, prior] { carryMetadataForward(groupId, CarryScope::NewEpoch, false, {}, prior); }
         }
     );
     return true;
 }
 
 void GroupApiImpl::commitWithRetry(const std::function<void()>& attempt) {
-    constexpr int MAX_ATTEMPTS = 3;
     for (int attemptNo = 1;; ++attemptNo) {
         try {
             attempt();
             return;
         } catch (const StalePlan&) {
             // Another commit of this client to the group landed while this one was planned on the head before it.
-            if (attemptNo < MAX_ATTEMPTS) {
+            if (attemptNo < MAX_COMMIT_ATTEMPTS) {
                 LOG_DEBUG("group commit planned behind this client's own commit, re-planning")
                 continue;
             }
             throw RotatedAlreadyException();
         } catch (const privmx::utils::PrivmxException& e) {
-            if (attemptNo < MAX_ATTEMPTS && isRetryableCommitRejection(e)) {
+            if (attemptNo < MAX_COMMIT_ATTEMPTS && isRetryableCommitRejection(e)) {
                 LOG_DEBUG("group commit planned against a moved base, re-planning: ", e.what())
                 continue;
             }
@@ -1072,10 +1034,10 @@ bool GroupApiImpl::isRetryableCommitRejection(const privmx::utils::PrivmxExcepti
         return false; // not a bridge application error
     }
     switch (code & 0x0000FFFF) {
-    case 0x621C: // ROTATED_ALREADY
-    case 0x6224: // GROUP_ROSTER_VERSION_MISMATCH
+    case ROTATED_ALREADY:
+    case GROUP_ROSTER_VERSION_MISMATCH:
         return true;
-    case 0x621E: // GROUP_TREE_INVALID, whose data lists the problems found
+    case GROUP_TREE_INVALID:
         // A rotation moves no node, so a self-update under it shows as its grant edge's stale child generation
         // (the root's); every other commit sees it as a stale base generation.
         return e.getData().find("\"STALE_BASE_GENERATION\"") != std::string::npos ||
@@ -1096,7 +1058,9 @@ void GroupApiImpl::scheduleSelfUpdateIfNeeded(const std::string& groupId, const 
 std::int64_t GroupApiImpl::backgroundWindowMs(const server::GroupInfo& group) {
     // ponytail: 8 ms per seat, 1-120 s. One window holds the first healers of a fresh 16k group (~n/32 commits) at
     // the bridge's ~5-10 commits/s only with retries; a per-group rate limit on the bridge is the upgrade path.
-    return std::clamp<std::int64_t>(group.numLeaves.value_or(1) * 8, 1000, 120000);
+    return std::clamp<std::int64_t>(
+        group.numLeaves.value_or(1) * BACKGROUND_MS_PER_SEAT, BACKGROUND_WINDOW_MIN_MS, BACKGROUND_WINDOW_MAX_MS
+    );
 }
 
 void GroupApiImpl::scheduleSelfUpdate(
@@ -1134,6 +1098,19 @@ std::optional<std::chrono::steady_clock::time_point> GroupApiImpl::nextDue() con
         consider(_pinSaveDue.value());
     }
     return due;
+}
+
+void GroupApiImpl::stopBackgroundWorker() {
+    {
+        std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+        _selfUpdateStopping = true;
+        _selfUpdatePending.clear();
+        _ladderChecks.clear();
+    }
+    _selfUpdateWake.notify_all();
+    if (_selfUpdateWorker.joinable()) {
+        _selfUpdateWorker.join();
+    }
 }
 
 void GroupApiImpl::wakeBackgroundWorker() {
@@ -1350,14 +1327,7 @@ bool GroupApiImpl::selfUpdateWith(
     const std::string& op,
     bool mayCompleteOther
 ) {
-    server::GroupGetModel getModel{
-        .groupId = groupId,
-        .type = {},
-        .scope = std::string("plan"),
-        .forUserIds = {},
-        .forNewMembers = {},
-        .fromRosterVersion = {}
-    };
+    const server::GroupGetModel getModel = planRead(groupId);
     server::GroupInfo group;
     keytree::TreeGroupState state;
     std::pair<std::vector<std::string>, std::vector<std::string>> roster;
@@ -1399,19 +1369,14 @@ bool GroupApiImpl::selfUpdateWith(
         state = climbForPlanning(group, planCache);
     } else {
         // Leaf renewal. No need gate: the need is the leaf not opening with the session's key, checked below.
-        group = _serverApi.groupGet(getModel).group;
-        if (!verifyTree(group, getModel, keytree::TreeVerifier::Scope::Plan)) {
-            throw core::EncryptionKeyValidationException("caller holds no leaf in this group's key tree");
-        }
-        switch (settle(groupId, op, mayCompleteOther)) {
-        case Settled::Done:
+        std::optional<server::GroupInfo> read =
+            readForCommit(getModel, keytree::TreeVerifier::Scope::Plan, op, mayCompleteOther, [] {
+                throw core::EncryptionKeyValidationException("caller holds no leaf in this group's key tree");
+            });
+        if (!read.has_value()) {
             return true;
-        case Settled::Reread:
-            group = rereadVerified(getModel, keytree::TreeVerifier::Scope::Plan);
-            break;
-        default:
-            break;
         }
+        group = std::move(read.value());
         // Renewed already: a commit after the directory change wrapped the leaf to the session's key.
         const keytree::TreeGroupState current = keytree::GroupKeyResolver::toTreeState(group);
         keytree::TreeKeys sharedTree(*planCache);
@@ -1462,7 +1427,6 @@ bool GroupApiImpl::selfUpdateWith(
             .namesEndState = previousKey != nullptr,
             .kind = previousKey != nullptr ? "leaf renewal" : "self-update",
             .contextId = contextId,
-            .newcomers = {},
             .send = [this, sent] { _serverApi.groupSelfUpdate(*sent); },
             .landed =
                 [this, groupId, contextId, statement, users = attestedUsers, managers = attestedManagers, rules,
@@ -1473,8 +1437,7 @@ bool GroupApiImpl::selfUpdateWith(
                     // removal would ask the leaf again, and the edges name no recipient: a member wrapping it back to
                     // the previous public key would get the removal refused after every renewal (08-A5).
                     _treeKeyCaches.get(groupId)->putGrantKey(static_cast<std::uint32_t>(statement.keyVersion), grantKey);
-                },
-            .after = {}
+                }
         }
     );
     return true;
@@ -1494,7 +1457,7 @@ bool GroupApiImpl::carryMetadataForward(
         const server::GroupInfo group = readGroupForKeys(groupId);
         bool carryPublic = false;
         bool carryPrivate = false;
-        if (scope == CarryScope::Removal) {
+        if (scope == CarryScope::NewEpoch) {
             // Per plane, because the two sit at epochs of their own: one may already have been carried up by a
             // concurrent write while the other is still behind.
             carryPublic = group.publicMeta.keyVersion < group.keyVersion;
@@ -1503,10 +1466,10 @@ bool GroupApiImpl::carryMetadataForward(
                 // A plane behind sits under a key nobody can reach any more, and what it says cannot be attested:
                 // start it over, empty, in the new epoch rather than leave it unreadable for good.
                 if (carryPublic) {
-                    writePublicMeta(group, core::Buffer(), group.publicMetaVersion);
+                    writeMeta(group, true, core::Buffer(), group.publicMetaVersion);
                 }
                 if (carryPrivate) {
-                    writePrivateMeta(group, core::Buffer(), group.privateMetaVersion);
+                    writeMeta(group, false, core::Buffer(), group.privateMetaVersion);
                 }
                 return true;
             }
@@ -1534,15 +1497,19 @@ bool GroupApiImpl::carryMetadataForward(
         // One write per carried plane, both off the one verified read: a metadata write moves neither the head nor
         // the epoch it is checked against.
         if (carryPublic) {
-            writePublicMeta(group, verified.publicMeta, verified.publicMetaVersion);
+            writeMeta(group, true, verified.publicMeta, verified.publicMetaVersion);
         }
         if (carryPrivate) {
-            writePrivateMeta(group, verified.privateMeta, verified.privateMetaVersion);
+            writeMeta(group, false, verified.privateMeta, verified.privateMetaVersion);
         }
         return true;
-    } catch (...) {
+    } catch (const std::exception& e) {
         // Best-effort by design. A failure leaves the planes where the commit left them, and the next metadata write
         // closes the window; throwing here would fail a commit that has already happened.
+        LOG_WARN("[carryMetadataForward] group ", groupId, " metadata not carried forward: ", e.what())
+        return false;
+    } catch (...) {
+        LOG_WARN("[carryMetadataForward] group ", groupId, " metadata not carried forward")
         return false;
     }
 }
@@ -1606,46 +1573,10 @@ void GroupApiImpl::updateGroupPublicMeta(
     const int64_t version
 ) {
     // The default path view is enough: this submits no tree and does not touch the roster at all.
-    writePublicMeta(readGroupForKeys(groupId), publicMeta, version);
+    writeMeta(readGroupForKeys(groupId), true, publicMeta, version);
     // After, not before: the carry would move the counter this write is checked against. It skips a plane this
     // write replaced (no longer the entry it read).
     retryPendingCarry(groupId);
-}
-
-void GroupApiImpl::writePublicMeta(
-    const server::GroupInfo& currentGroup,
-    const core::Buffer& publicMeta,
-    const int64_t version
-) {
-    const std::string& groupId = currentGroup.id;
-    auto w = prepareMetaWrite(currentGroup);
-    GroupPublicMetaToEncryptV5 toEncrypt{
-        .publicMeta = publicMeta,
-        .dio = w.ctx.dio,
-        .meta = dynamic::MetaBlock{
-            // The same `version` feeds the CAS field below, so the version this commits to and the version
-            // the bridge checks cannot disagree.
-            .metaTag = GroupDataSchemaMapper::publicMetaTag(w.ctx.key.key, w.currentEpoch, version + 1),
-            .keyId = w.ctx.key.id,
-            .keyVersion = w.currentEpoch,
-            .metaVersion = version + 1
-        }
-    };
-
-    server::GroupUpdatePublicMetaModel model;
-    model.id = groupId;
-    model.resourceId = w.resourceId;
-    model.keyId = w.ctx.key.id;
-    // No force field, unlike the other containers: the entry commits the version it lands at, so a write that
-    // skipped the version check could only land a tag no reader will accept.
-    model.version = version;
-    model.data = _groupDataSchemaMapper->encryptPublicMeta(toEncrypt);
-
-    // A metadata write is never answered with `ROTATED_ALREADY` (that is the commits'); a version conflict is the
-    // caller's to re-read, like any other.
-    _serverApi.groupUpdatePublicMeta(model);
-    // Rotates nothing — not the content key, not the grant key, not the tree. Only the cached view is stale.
-    invalidateModuleKeysInCache(groupId);
 }
 
 void GroupApiImpl::updateGroupPrivateMeta(
@@ -1653,37 +1584,54 @@ void GroupApiImpl::updateGroupPrivateMeta(
     const core::Buffer& privateMeta,
     const int64_t version
 ) {
-    writePrivateMeta(readGroupForKeys(groupId), privateMeta, version);
+    writeMeta(readGroupForKeys(groupId), false, privateMeta, version);
     retryPendingCarry(groupId);
 }
 
-void GroupApiImpl::writePrivateMeta(
+void GroupApiImpl::writeMeta(
     const server::GroupInfo& currentGroup,
-    const core::Buffer& privateMeta,
+    bool publicPlane,
+    const core::Buffer& meta,
     const int64_t version
 ) {
-    const std::string& groupId = currentGroup.id;
-    auto w = prepareMetaWrite(currentGroup);
-    GroupPrivateMetaToEncryptV5 toEncrypt{
-        .privateMeta = privateMeta,
-        .dio = w.ctx.dio,
-        .meta = dynamic::MetaBlock{
-            .metaTag = GroupDataSchemaMapper::privateMetaTag(w.ctx.key.key, w.currentEpoch, version + 1),
-            .keyId = w.ctx.key.id,
-            .keyVersion = w.currentEpoch,
-            .metaVersion = version + 1
-        }
+    const auto w = prepareMetaWrite(currentGroup);
+    // The same `version` feeds the CAS field below, so the version this commits to and the version the bridge checks
+    // cannot disagree.
+    const dynamic::MetaBlock block{
+        .metaTag = (publicPlane ? GroupDataSchemaMapper::publicMetaTag : GroupDataSchemaMapper::privateMetaTag)(
+            w.ctx.key.key, w.currentEpoch, version + 1
+        ),
+        .keyId = w.ctx.key.id,
+        .keyVersion = w.currentEpoch,
+        .metaVersion = version + 1
     };
-
-    server::GroupUpdatePrivateMetaModel model;
-    model.id = groupId;
-    model.resourceId = w.resourceId;
-    model.keyId = w.ctx.key.id;
-    model.version = version;
-    model.data = _groupDataSchemaMapper->encryptPrivateMeta(toEncrypt, w.ctx.key.key);
-
-    _serverApi.groupUpdatePrivateMeta(model);
-    invalidateModuleKeysInCache(groupId);
+    // No force field, unlike the other containers: the entry commits the version it lands at, so a write that
+    // skipped the version check could only land a tag no reader will accept.
+    const auto fill = [&](auto& model) {
+        model.id = currentGroup.id;
+        model.resourceId = w.resourceId;
+        model.keyId = w.ctx.key.id;
+        model.version = version;
+    };
+    // A metadata write is never answered with `ROTATED_ALREADY` (that is the commits'); a version conflict is the
+    // caller's to re-read, like any other.
+    if (publicPlane) {
+        server::GroupUpdatePublicMetaModel model;
+        fill(model);
+        model.data = _groupDataSchemaMapper->encryptPublicMeta(
+            GroupPublicMetaToEncryptV5{.publicMeta = meta, .dio = w.ctx.dio, .meta = block}
+        );
+        _serverApi.groupUpdatePublicMeta(model);
+    } else {
+        server::GroupUpdatePrivateMetaModel model;
+        fill(model);
+        model.data = _groupDataSchemaMapper->encryptPrivateMeta(
+            GroupPrivateMetaToEncryptV5{.privateMeta = meta, .dio = w.ctx.dio, .meta = block}, w.ctx.key.key
+        );
+        _serverApi.groupUpdatePrivateMeta(model);
+    }
+    // Rotates nothing — not the content key, not the grant key, not the tree. Only the cached view is stale.
+    invalidateModuleKeysInCache(currentGroup.id);
 }
 
 void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies) {
@@ -1781,7 +1729,6 @@ void GroupApiImpl::updateGroupPolicyOnce(
             .namesEndState = true,
             .kind = "policy change",
             .contextId = group.contextId,
-            .newcomers = {},
             .send = [this, sent] { _serverApi.groupUpdatePolicy(*sent); },
             .landed =
                 [this, groupId, contextId = group.contextId, statement, users = group.users,
@@ -2271,6 +2218,32 @@ privmx::endpoint::group::server::GroupInfo GroupApiImpl::rereadVerified(
     return group;
 }
 
+std::optional<privmx::endpoint::group::server::GroupInfo> GroupApiImpl::readForCommit(
+    const server::GroupGetModel& model,
+    keytree::TreeVerifier::Scope scope,
+    const std::string& op,
+    bool mayCompleteOther,
+    const std::function<void()>& refuseUnverified
+) {
+    server::GroupInfo group = _serverApi.groupGet(model).group;
+    // Every record a plan reads and every node it wraps to, checked against the statements members signed. `settle`
+    // only after a read that verified: it goes by the pin, and the bridge's unverified word moves nothing.
+    if (!verifyTree(group, model, scope)) {
+        if (refuseUnverified) {
+            refuseUnverified();
+        }
+        return group; // planning on it refuses it (`climbForPlanning`)
+    }
+    switch (settle(model.groupId, op, mayCompleteOther)) {
+    case Settled::Done:
+        return std::nullopt;
+    case Settled::Reread:
+        return rereadVerified(model, scope);
+    default:
+        return group;
+    }
+}
+
 bool GroupApiImpl::verifyTree(
     server::GroupInfo& group,
     const server::GroupGetModel& model,
@@ -2404,6 +2377,10 @@ void GroupApiImpl::submit(
         }
         throw; // any failure keeps the body: the bridge may have applied it, and a retry resends it
     }
+    complete(groupId, commit);
+}
+
+void GroupApiImpl::complete(const std::string& groupId, const UnresolvedCommit& commit) {
     forgetUnresolved(groupId, commit.digest);
     commit.landed();
     if (commit.op != SELF_UPDATE_OP) {
@@ -2448,11 +2425,7 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
         pending = it->second;
     }
     const auto finish = [&](Settled done) {
-        forgetUnresolved(groupId, pending.digest);
-        pending.landed();
-        if (pending.op != SELF_UPDATE_OP) {
-            savePins();
-        }
+        complete(groupId, pending);
         lock.unlock();
         if (pending.after) {
             pending.after();
@@ -2486,8 +2459,9 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
     _treeVerifier.assertMaySignAt(groupId, pending.seq); // T4-17
     try {
         pending.send();
-    } catch (const privmx::utils::PrivmxException& e) {
-        if (isRetryableCommitRejection(e)) {
+    } catch (const std::exception& e) {
+        const auto* rejection = dynamic_cast<const privmx::utils::PrivmxException*>(&e);
+        if (rejection != nullptr && isRetryableCommitRejection(*rejection)) {
             _treeVerifier.refusedAsLostRace(groupId, pending.seq);
             throw;
         }
@@ -2495,13 +2469,6 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
             throw;
         }
         // Another op: one resend was tried; the earlier commit is dropped and this op plans afresh (13).
-        LOG_WARN("[settle] an earlier ", pending.kind, " to group ", groupId, " is dropped unresolved: ", e.what())
-        forgetUnresolved(groupId, pending.digest);
-        return Settled::Proceed;
-    } catch (const std::exception& e) {
-        if (pending.op == op) {
-            throw;
-        }
         LOG_WARN("[settle] an earlier ", pending.kind, " to group ", groupId, " is dropped unresolved: ", e.what())
         forgetUnresolved(groupId, pending.digest);
         return Settled::Proceed;
@@ -2543,7 +2510,7 @@ std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& r
     case keytree::ResolveFailure::ClimbFailed:
         if (resolved.climb == keytree::ClimbFailure::Tampered) {
             return "Group key tree verification failed: a node key does not match the published public key" +
-                (resolved.blame.has_value() ? " (wrapped by " + resolved.blame.value() + ")" : "");
+                blameSuffix(resolved.blame);
         }
         if (resolved.climb == keytree::ClimbFailure::NotAMember) {
             return "Group key unavailable: caller holds no leaf in the key tree";
@@ -2553,11 +2520,10 @@ std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& r
             return "Group key unavailable: the edge to your own leaf does not open with your current key. If you "
                    "changed your identity key, call renewLeaf with the previous key; without it, ask a manager to "
                    "remove and re-add you" +
-                (resolved.blame.has_value() ? " (wrapped by " + resolved.blame.value() + ")" : "");
+                blameSuffix(resolved.blame);
         }
         if (resolved.climb == keytree::ClimbFailure::DecryptFailed) {
-            return "Group key unavailable: a key tree edge does not open" +
-                (resolved.blame.has_value() ? " (wrapped by " + resolved.blame.value() + ")" : "");
+            return "Group key unavailable: a key tree edge does not open" + blameSuffix(resolved.blame);
         }
         return "Group key unavailable: the key tree could not be climbed";
     case keytree::ResolveFailure::DescentFailed:
@@ -2567,8 +2533,7 @@ std::string GroupApiImpl::describeResolveFailure(const keytree::ResolveResult& r
         case keytree::DescentFailure::Pruned:
             return "History this old has been pruned and is no longer recoverable";
         case keytree::DescentFailure::Tampered:
-            return "Epoch ladder verification failed" +
-                (resolved.blame.has_value() ? " (rung published by " + resolved.blame.value() + ")" : "");
+            return "Epoch ladder verification failed" + blameSuffix(resolved.blame, "rung published by");
         default:
             return "Group key unavailable: the epoch ladder could not be descended";
         }
@@ -3042,7 +3007,7 @@ void GroupApiImpl::pinsMoved(bool major) {
         return; // the destructor's final save covers it
     }
     const auto now = std::chrono::steady_clock::now();
-    const auto due = major ? std::max(now, _lastPinSave + PIN_SAVE_INTERVAL) : _lastPinSave + PIN_SAVE_IDLE_INTERVAL;
+    const auto due = major ? std::max(now, _lastPinSave + _pinSaveInterval) : _lastPinSave + PIN_SAVE_IDLE_INTERVAL;
     if (!_pinSaveDue.has_value() || due < _pinSaveDue.value()) {
         _pinSaveDue = due;
         wakeBackgroundWorker();

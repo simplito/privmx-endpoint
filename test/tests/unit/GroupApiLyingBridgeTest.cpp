@@ -44,43 +44,11 @@ limitations under the License.
 #include <privmx/endpoint/core/LocalSeal.hpp>
 #include <privmx/endpoint/group/keytree/PinBlob.hpp>
 
+#include "GroupApiImplTestAccess.hpp"
 #include "TreeTestOps.hpp"
-
 #include "MemoryPinStore.hpp"
 #include "TreeFakeBridge.hpp"
 
-namespace privmx::endpoint::group {
-// What the wiring tests reach inside GroupApiImpl (a friend of it).
-struct GroupApiImplTestAccess {
-    static void selfUpdate(GroupApiImpl& api, const std::string& groupId) { api.selfUpdate(groupId); }
-    // The destructor's own first steps: no background self-update is scheduled or run from here on, so what a test
-    // counts never depends on the worker's random delay. Self-updates are then only the explicit `selfUpdate` above.
-    static void stopBackgroundSelfUpdates(GroupApiImpl& api) {
-        std::lock_guard<std::mutex> lock(api._selfUpdateMutex);
-        api._selfUpdateStopping = true;
-        api._selfUpdatePending.clear();
-        api._selfUpdateWake.notify_all();
-    }
-    static bool savePins(GroupApiImpl& api) { return api.savePins(); }
-    static std::array<std::int64_t, 3> versionPins(GroupApiImpl& api, const std::string& groupId) {
-        const auto all = api._groupDataSchemaMapper->exportVersionPins();
-        const auto it = all.find(groupId);
-        return it == all.end() ? std::array<std::int64_t, 3>{0, 0, 0} : it->second;
-    }
-    static std::uint64_t pinnedSeq(GroupApiImpl& api, const std::string& groupId) {
-        return api._treeVerifier.pinnedSeq(groupId);
-    }
-    static bool pinSaveDue(GroupApiImpl& api) {
-        std::lock_guard<std::mutex> lock(api._selfUpdateMutex);
-        return api._pinSaveDue.has_value() && api._pinSaveDue.value() <= std::chrono::steady_clock::now();
-    }
-    // As if the call that released the group's unresolved commit ran `ms` earlier: no clock to move in a unit test.
-    static void ageUnresolved(GroupApiImpl& api, const std::string& groupId, std::uint64_t ms) {
-        std::lock_guard<std::mutex> lock(api._unresolvedMutex);
-        api._unresolved.at(groupId).date -= ms;
-    }
-};
-} // namespace privmx::endpoint::group
 
 namespace core = privmx::endpoint::core;
 using privmx::crypto::PublicKey;
@@ -1443,7 +1411,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ALandedRotationWhoseAnswerWasLostStandsInFo
     };
     EXPECT_ANY_THROW(client("alice").rotateGroupKey(groupId));
     client("alice").getGroup(groupId); // pins the rotation at epoch 2
-    GroupApiImplTestAccess::ageUnresolved(client("alice"), groupId, GroupApiImpl::RELEASE_WINDOW_MS);
+    GroupApiImplTestAccess::ageUnresolved(client("alice"), groupId, GroupApiImplTestAccess::RELEASE_WINDOW_MS);
     EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
     EXPECT_EQ(bridge.received.size(), 2u) << "returned on the old rotation without sending one";
     EXPECT_EQ(bridge.tree.state.epoch, 3u);
@@ -1586,7 +1554,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AClientRefusesToCommitARungThatDoesNotOpenT
     client("alice").removeGroupMembers(groupId, {"dave"});
     client("alice").removeGroupMembers(groupId, {"erin"});
     ASSERT_EQ(LadderKeys::requiredSkipTargets(4, 1), std::vector<std::uint32_t>{2});
-    const auto cache = client("alice").keyCacheOf(groupId);
+    const auto cache = GroupApiImplTestAccess::keyCacheOf(client("alice"), groupId);
     ASSERT_TRUE(cache->getGrantKey(2).has_value());
     cache->putGrantKey(2, PrivateKey::generateRandom());
     const std::size_t removals = count("alice", "context.groupRemoveMembers");
@@ -1601,7 +1569,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARepairNeverSealsAKeyTheChainDoesNotName) {
     bridge.users.emplace("dave", PrivateKey::generateRandom());
     const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
     client("bob").resolveGroupPrivKey(groupId);
-    const auto cache = client("bob").keyCacheOf(groupId);
+    const auto cache = GroupApiImplTestAccess::keyCacheOf(client("bob"), groupId);
     cache->putGrantKey(1, PrivateKey::generateRandom()); // a client bug: not epoch 1's key
     client("alice").removeGroupMembers(groupId, {"dave"});
     corrupt(2, 1);
@@ -1626,7 +1594,8 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARepairIsNotSentBelowAFloorThisSessionHasSe
         bridge.eraFloor = 1;
     }
     corrupt(2, 1);
-    client("bob").keyCacheOf(groupId)->putGrantKey(1, client("alice").keyCacheOf(groupId)->getGrantKey(1).value());
+    const PrivateKey epoch1 = GroupApiImplTestAccess::keyCacheOf(client("alice"), groupId)->getGrantKey(1).value();
+    GroupApiImplTestAccess::keyCacheOf(client("bob"), groupId)->putGrantKey(1, epoch1);
     EXPECT_ANY_THROW(client("bob").resolveGroupPrivKey(groupId, 1)); // finds (2,1) broken, queues a check
     ASSERT_TRUE(waitUntil([&] { return bridge.count("bob", "context.groupGetKeyArchive") >= 3; })) << "the check ran";
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
@@ -1648,7 +1617,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARotationRefusesToCommitARungThatDoesNotOpe
     client("alice").rotateGroupKey(groupId);
     client("alice").rotateGroupKey(groupId);
     ASSERT_EQ(LadderKeys::requiredSkipTargets(4, 1), std::vector<std::uint32_t>{2});
-    const auto cache = client("alice").keyCacheOf(groupId);
+    const auto cache = GroupApiImplTestAccess::keyCacheOf(client("alice"), groupId);
     ASSERT_TRUE(cache->getGrantKey(2).has_value());
     cache->putGrantKey(2, PrivateKey::generateRandom());
     const std::size_t rotations = count("alice", "context.groupGenerateNewKey");

@@ -33,6 +33,8 @@ limitations under the License.
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
 
+#include "GroupApiImplTestAccess.hpp"
+
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
 using namespace privmx::endpoint::group::keytree;
@@ -626,7 +628,7 @@ TEST_F(ResolverCurrentEpoch, SECURITY_ALeafThatDoesNotOpenNamesTheKeyChangeRemed
         GroupKeyResolver resolver(store);
         const ResolveResult result = resolver.resolve(fixture.group, 0, changed, fixture.archive);
         ASSERT_EQ(result.climb, ClimbFailure::LeafDidNotOpen);
-        const std::string message = GroupApiImpl::describeResolveFailure(result);
+        const std::string message = GroupApiImplTestAccess::describeResolveFailure(result);
         EXPECT_NE(message.find("renewLeaf"), std::string::npos) << message;
         EXPECT_NE(message.find("wrapped by creator"), std::string::npos) << message;
     }
@@ -637,7 +639,7 @@ TEST_F(ResolverCurrentEpoch, SECURITY_ALeafThatDoesNotOpenNamesTheKeyChangeRemed
         GroupKeyResolver resolver(store);
         const ResolveResult result = resolver.resolve(fixture.group, 0, changed, fixture.archive);
         ASSERT_EQ(result.climb, ClimbFailure::LeafDidNotOpen);
-        const std::string message = GroupApiImpl::describeResolveFailure(result);
+        const std::string message = GroupApiImplTestAccess::describeResolveFailure(result);
         EXPECT_NE(message.find("renewLeaf"), std::string::npos) << message;
         EXPECT_NE(message.find("wrapped by latest"), std::string::npos) << "a one-leaf grant edge is the latest's";
     }
