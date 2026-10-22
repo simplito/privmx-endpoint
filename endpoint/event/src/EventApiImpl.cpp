@@ -27,6 +27,18 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
 
+namespace {
+// Whether the subscription query `channel` was made for exactly `contextId` (its `contextId=` selector).
+bool subscribedTo(const std::string& channel, const std::string& contextId) {
+    try {
+        const auto selectors = core::SubscriptionQueryObj(channel).selectors();
+        return selectors.size() == 1 &&
+            selectors[0].selectorKey == "contextId" &&
+            selectors[0].selectorValue == contextId;
+    } catch (...) { return false; }
+}
+} // namespace
+
 EventApiImpl::EventApiImpl(
     const core::Connection& connection,
     const privmx::crypto::PrivateKey& userPrivKey,
@@ -153,14 +165,6 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
         );
         _eventMiddleware->emitApiEvent(event);
     });
-}
-
-bool EventApiImpl::subscribedTo(const std::string& channel, const std::string& contextId) {
-    try {
-        const auto selectors = core::SubscriptionQueryObj(channel).selectors();
-        return selectors.size() == 1 && selectors[0].selectorKey == "contextId" &&
-            selectors[0].selectorValue == contextId;
-    } catch (...) { return false; }
 }
 
 void EventApiImpl::processConnectedEvent() {}

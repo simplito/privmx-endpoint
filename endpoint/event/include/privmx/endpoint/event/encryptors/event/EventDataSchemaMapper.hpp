@@ -52,9 +52,6 @@ public:
 
     EventDataSchema::Version getDataStructureVersion(const server::ContextCustomEventData& rawEvent);
 
-    // The signed DIO names the same author and context as the envelope the application is told about.
-    static bool boundToEnvelope(const server::ContextCustomEventData& rawEvent, const core::DataIntegrityObject& dio);
-
 private:
     static ContextCustomEventData makeErrorResult(const server::ContextCustomEventData& rawEvent, int64_t errorCode);
     bool verifyDecryptedEventData(const server::ContextCustomEventData& rawEvent, const DecryptedEventDataV5& data);

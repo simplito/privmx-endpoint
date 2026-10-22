@@ -101,20 +101,13 @@ DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
     return result;
 }
 
-bool EventDataSchemaMapper::boundToEnvelope(
-    const server::ContextCustomEventData& rawEvent,
-    const core::DataIntegrityObject& dio
-) {
-    return dio.creatorUserId == rawEvent.author.id && dio.contextId == rawEvent.id;
-}
-
 // The verifier is asked about exactly the (context, user) the application is told, so a DIO of another author or
 // context cannot be delivered under the envelope's names.
 bool EventDataSchemaMapper::verifyDecryptedEventData(
     const server::ContextCustomEventData& rawEvent,
     const DecryptedEventDataV5& data
 ) {
-    if (!boundToEnvelope(rawEvent, data.dio)) {
+    if (data.dio.creatorUserId != rawEvent.author.id || data.dio.contextId != rawEvent.id) {
         return false;
     }
     std::vector<core::VerificationRequest> verifierInput{};
