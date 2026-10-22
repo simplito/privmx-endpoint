@@ -533,11 +533,6 @@ void race(int threads, const std::function<void(int)>& body) {
     }
 }
 
-// A statement exactly as sent, for byte-for-byte comparisons.
-std::string bytesOf(const server::GroupTreeCommit& commit) {
-    return commit.serialize();
-}
-
 std::string digestOf(const server::GroupTreeCommit& commit) {
     return TreeCommits::digest(TreeCommits::fromWire(commit));
 }
@@ -1199,7 +1194,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnErrorThatIsNotALostRaceMakesTheRetryResen
     EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
     EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
     ASSERT_EQ(bridge.received.size(), 2u);
-    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "the retry signed a new statement at seq 2";
+    EXPECT_EQ(bridge.received[1].serialize(), bridge.received[0].serialize()) << "the retry signed a new statement at seq 2";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ADroppedAnswerIsNotSignedAgain) {
@@ -1231,7 +1226,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ADifferentCommitCompletesTheUnresolvedOneFi
     EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
     EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"bob"}));
     ASSERT_EQ(bridge.received.size(), 3u);
-    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "carol's removal resent first";
+    EXPECT_EQ(bridge.received[1].serialize(), bridge.received[0].serialize()) << "carol's removal resent first";
     EXPECT_EQ(prevOf(bridge.received[2]), digestOf(bridge.received[0])) << "bob's removal extends it";
 }
 
@@ -1250,9 +1245,9 @@ TEST_F(GroupApiLyingBridge, ADifferentCommitResendsTheUnresolvedOneOnceThenPlans
     EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
     EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"bob"}));
     ASSERT_EQ(bridge.received.size(), 3u);
-    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "carol's removal resent first";
+    EXPECT_EQ(bridge.received[1].serialize(), bridge.received[0].serialize()) << "carol's removal resent first";
     EXPECT_EQ(prevOf(bridge.received[2]), atP) << "bob's removal planned at the same head";
-    EXPECT_NE(bytesOf(bridge.received[2]), bytesOf(bridge.received[0]));
+    EXPECT_NE(bridge.received[2].serialize(), bridge.received[0].serialize());
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_TwoCommitsOfOneClientToOneGroupNeverShareAPrevDigest) {
@@ -1337,7 +1332,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARotationCompletesAnUnresolvedRemovalFirst)
     EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
     EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
     ASSERT_EQ(bridge.received.size(), 3u);
-    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "carol's removal resent first";
+    EXPECT_EQ(bridge.received[1].serialize(), bridge.received[0].serialize()) << "carol's removal resent first";
     EXPECT_EQ(TreeCommits::fromWire(bridge.received[2]).op, CommitOp::Rotate);
     EXPECT_EQ(prevOf(bridge.received[2]), digestOf(bridge.received[0])) << "the rotation extends the removal";
     EXPECT_EQ(bridge.tree.state.epoch, 3u);
@@ -1351,7 +1346,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARetriedRotationResendsTheSameStatement) {
     bridge.beforeRotation = [] {};
     EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
     ASSERT_EQ(bridge.received.size(), 2u);
-    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "the retry signed a new rotation";
+    EXPECT_EQ(bridge.received[1].serialize(), bridge.received[0].serialize()) << "the retry signed a new rotation";
     EXPECT_EQ(bridge.tree.state.epoch, 2u);
     EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2) << "the metadata stayed under the replaced key";
 }
@@ -1435,7 +1430,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ASelfUpdateNeverCompletesAnotherOpsUnresolv
     EXPECT_EQ(bridge.received.size(), 1u) << "a self-update released at the removal's prevDigest";
     EXPECT_NO_THROW(client(member).removeGroupMembers(groupId, {others.at(1)}));
     ASSERT_EQ(bridge.received.size(), 3u);
-    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "the unresolved removal is resent first";
+    EXPECT_EQ(bridge.received[1].serialize(), bridge.received[0].serialize()) << "the unresolved removal is resent first";
     EXPECT_EQ(prevOf(bridge.received[2]), digestOf(bridge.received[0]));
 }
 
@@ -1459,7 +1454,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ASecondSelfUpdateIsNeverReleasedAtOnePrevDi
     ));
     EXPECT_ANY_THROW(GroupApiImplTestAccess::selfUpdate(client(member), groupId));
     ASSERT_EQ(bridge.received.size(), 2u);
-    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "a second self-update at one prevDigest";
+    EXPECT_EQ(bridge.received[1].serialize(), bridge.received[0].serialize()) << "a second self-update at one prevDigest";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARefusedSelfUpdateNeverHoldsBackARemoval) {
@@ -1524,24 +1519,52 @@ TEST_F(GroupApiLyingBridge, ARepairIsNotSentWhenTheLadderIsIntact) {
     EXPECT_EQ(bridge.verifierCalls->load(), verified);
 }
 
-TEST_F(GroupApiLyingBridge, SECURITY_AClientRefusesToCommitARungThatDoesNotOpenToTheChain) {
-    // A wrong key in the remover's cache (a client bug) would be sealed into a skip rung no later commit can replace.
-    bridge.users.emplace("dave", PrivateKey::generateRandom());
-    bridge.users.emplace("erin", PrivateKey::generateRandom());
+// A commit opening an epoch and the bridge call that submits it.
+struct EpochCommit {
+    std::string name;
+    std::string method;
+    std::function<void(GroupApiImpl&, const std::string& groupId, const std::string& member)> commit;
+};
+
+class GroupApiLyingBridgeEpochCommit : public GroupApiLyingBridge, public testing::WithParamInterface<EpochCommit> {};
+
+TEST_P(GroupApiLyingBridgeEpochCommit, SECURITY_AClientRefusesToCommitARungThatDoesNotOpenToTheChain) {
+    // A wrong key in the committer's cache (a client bug) would be sealed into a skip rung no later commit can replace.
+    // A removal and a rotation seal skip rungs alike, so both go through the same self-check.
+    const EpochCommit& op = GetParam();
+    addUsers({"dave", "erin"});
     const std::string groupId = createGroup({"alice", "bob", "carol", "dave", "erin"});
-    client("alice").removeGroupMembers(groupId, {"dave"});
-    client("alice").removeGroupMembers(groupId, {"erin"});
+    op.commit(client("alice"), groupId, "dave");
+    op.commit(client("alice"), groupId, "erin");
     ASSERT_EQ(LadderKeys::requiredSkipTargets(4, 1), std::vector<std::uint32_t>{2});
     const auto cache = GroupApiImplTestAccess::keyCacheOf(client("alice"), groupId);
     ASSERT_TRUE(cache->getGrantKey(2).has_value());
     cache->putGrantKey(2, PrivateKey::generateRandom());
-    const std::size_t removals = count("alice", "context.groupRemoveMembers");
-    EXPECT_THROW(client("alice").removeGroupMembers(groupId, {"carol"}), GroupDataIntegrityException);
-    EXPECT_EQ(count("alice", "context.groupRemoveMembers"), removals) << "nothing submitted";
+    const std::size_t sent = count("alice", op.method);
+    EXPECT_THROW(op.commit(client("alice"), groupId, "carol"), GroupDataIntegrityException);
+    EXPECT_EQ(count("alice", op.method), sent) << "nothing submitted";
     EXPECT_FALSE(cache->getGrantKey(2).has_value()) << "forgotten, to be re-gathered by a verified descent";
-    client("alice").removeGroupMembers(groupId, {"carol"});
+    op.commit(client("alice"), groupId, "carol");
     EXPECT_EQ(bridge.tree.state.epoch, 4u);
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    ,
+    GroupApiLyingBridgeEpochCommit,
+    testing::Values(
+        EpochCommit{
+            "Removal", "context.groupRemoveMembers",
+            [](GroupApiImpl& api, const std::string& groupId, const std::string& member) {
+                api.removeGroupMembers(groupId, {member});
+            }
+        },
+        EpochCommit{
+            "Rotation", "context.groupGenerateNewKey",
+            [](GroupApiImpl& api, const std::string& groupId, const std::string&) { api.rotateGroupKey(groupId); }
+        }
+    ),
+    [](const testing::TestParamInfo<EpochCommit>& info) { return info.param.name; }
+);
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARepairNeverSealsAKeyTheChainDoesNotName) {
     bridge.users.emplace("dave", PrivateKey::generateRandom());
@@ -1587,23 +1610,6 @@ TEST_F(GroupApiLyingBridge, DestroyingAClientWithAQueuedLadderCheckJoinsCleanly)
     const std::size_t archiveReads = count("bob", "context.groupGetKeyArchive");
     std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     EXPECT_EQ(count("bob", "context.groupGetKeyArchive"), archiveReads) << "nothing runs after destruction";
-}
-
-TEST_F(GroupApiLyingBridge, SECURITY_ARotationRefusesToCommitARungThatDoesNotOpenToTheChain) {
-    // rotateGroupKey seals skip rungs exactly like a removal, so it goes through the same self-check.
-    const std::string groupId = createGroup({"alice", "bob", "carol"});
-    client("alice").rotateGroupKey(groupId);
-    client("alice").rotateGroupKey(groupId);
-    ASSERT_EQ(LadderKeys::requiredSkipTargets(4, 1), std::vector<std::uint32_t>{2});
-    const auto cache = GroupApiImplTestAccess::keyCacheOf(client("alice"), groupId);
-    ASSERT_TRUE(cache->getGrantKey(2).has_value());
-    cache->putGrantKey(2, PrivateKey::generateRandom());
-    const std::size_t rotations = count("alice", "context.groupGenerateNewKey");
-    EXPECT_THROW(client("alice").rotateGroupKey(groupId), GroupDataIntegrityException);
-    EXPECT_EQ(count("alice", "context.groupGenerateNewKey"), rotations) << "nothing submitted";
-    EXPECT_FALSE(cache->getGrantKey(2).has_value()) << "forgotten, to be re-gathered by a verified descent";
-    client("alice").rotateGroupKey(groupId);
-    EXPECT_EQ(bridge.tree.state.epoch, 4u);
 }
 
 TEST_F(GroupApiLyingBridge, ARotatorDoesNotCheckTheLadderOfItsOwnEpoch) {
