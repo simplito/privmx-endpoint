@@ -133,14 +133,10 @@ void Connection::setPinStore(std::shared_ptr<PinStoreInterface> store) {
 
 void Connection::adoptPreviousIdentity(const std::string& previousUserPrivKey) {
     auto impl = getImpl();
-    std::optional<privmx::crypto::PrivateKey> previous;
+    assertConnection(impl);
+    Validator::validatePrivKeyWIF(previousUserPrivKey, "field:previousUserPrivKey ");
     try {
-        previous = privmx::crypto::PrivateKey::fromWIF(previousUserPrivKey);
-    } catch (...) {
-        throw InvalidParamsException("the previous key is not a private key in WIF");
-    }
-    try {
-        impl->adoptPreviousIdentity(previous.value());
+        impl->adoptPreviousIdentity(privmx::crypto::PrivateKey::fromWIF(previousUserPrivKey));
     } catch (const privmx::utils::PrivmxException& e) {
         core::ExceptionConverter::rethrowAsCoreException(e);
         throw core::Exception("ExceptionConverter rethrow error");
