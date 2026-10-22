@@ -19,6 +19,12 @@ class GroupApiImpl;
 
 /**
  * 'GroupApi' is a class representing Endpoint's API for Groups.
+ *
+ * A membership, key or policy change that failed may still take effect: the Bridge may have applied it and lost or
+ * refused the answer. For a bounded time, or until the Group changes in some other way, this client resends that
+ * change before it makes any other change to the Group: a retry of the same call resends it (and returns once it is
+ * found applied), and a different call completes it first. Key refreshes this client runs in the background never
+ * hold anything back.
  */
 class GroupApi : public privmx::endpoint::core::BaseApiClass<GroupApiImpl> {
 public:
@@ -51,9 +57,9 @@ public:
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
      * @param policies Group's policies. Who may add, remove, rotate and change the policy (`update`, `rotateKeys`,
-     * `updatePolicy`, `ownerCanBeRemovedFromManagers`) is signed into the Group's commit chain with the creator;
-     * `inherit`/`default` (or absent) mean the v3 defaults (manager, manager, manager, yes), never the Context's,
-     * which can only deny. The creator must hold `update` under them, or it could not write the Group's metadata.
+     * `updatePolicy`, `ownerCanBeRemovedFromManagers`) is signed into the Group's state with the creator;
+     * `inherit`/`default` (or absent) mean the built-in defaults (manager, manager, manager, yes), not the
+     * Context's; the Context can only deny further. The creator must hold `update` under them, or it could not write the Group's metadata.
      * @return ID of the created Group
      */
     std::string createGroup(
@@ -76,11 +82,8 @@ public:
      * history, and its metadata carries through untouched — seating a member is not a metadata edit, and
      * `updateGroupPublicMeta`/`updateGroupPrivateMeta` are where that happens.
      *
-     * A call that failed may still take effect: the Bridge may have applied the commit and lost or refused the
-     * answer. For up to 20 minutes, or until the Group's head moves past it, this client resends that request before
-     * it commits anything else to the Group, so a retry of the same call resends it (and returns once it is found
-     * applied), and a different call completes it first. An addition is resent only while the UserVerifier still
-     * vouches for its newcomers' keys. A failed background self-update never holds anything back.
+     * A failed call may still take effect (see the class note); it is resent only while the UserVerifier still
+     * vouches for the newcomers' keys.
      *
      * @param groupId ID of the Group
      * @param newMembers the members to add, each with their public key and the role they take
@@ -97,11 +100,7 @@ public:
      * Incremental: only the leavers are named, and the roster that remains is derived from the Group's own
      * verified history. Metadata carries through untouched.
      *
-     * A call that failed may still take effect: the Bridge may have applied the commit and lost or refused the
-     * answer. For up to 20 minutes, or until the Group's head moves past it, this client resends that request before
-     * it commits anything else to the Group, so a retry of the same call resends it (and returns once it is found
-     * applied), and a different call completes it first. An addition is resent only while the UserVerifier still
-     * vouches for its newcomers' keys. A failed background self-update never holds anything back.
+     * A failed call may still take effect (see the class note).
      *
      * When the caller's own leaf does not open, the removal still goes through (a member that garbled it cannot
      * block its own removal) and, unless this session holds the current Group key, abandons the Group's history for
@@ -126,10 +125,8 @@ public:
      * identity key first, then rotate. Charged to the Group's rotation budget; allowed by the `rotateKeys` policy
      * (managers, by default).
      *
-     * A call that failed may still take effect, as with `addGroupMembers`/`removeGroupMembers`: a retry resends the
-     * same rotation (and returns once it is found applied), and any other commit of this client to the Group
-     * completes it first, for up to 20 minutes or until the Group's head moves past it. A call made later is a new
-     * rotation, even when the failed one turns out to have been applied.
+     * A failed call may still take effect (see the class note). A call made after it was found applied is a new
+     * rotation.
      *
      * @param groupId ID of the Group
      */
