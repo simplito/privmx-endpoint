@@ -316,6 +316,34 @@ Wady przy uczciwym Bridge: usunięty członek czytał NOWE dane, bo pisarz brał
 | 08-A4 | Tolerancja 08-A3 przywracała 08-A2: po zmianie klucza tożsamości obwiniony setter węzła nad liściem managera to uczciwy członek, który ostatnio ustawił ten węzeł (twórca, dodający, leczący się sąsiad; w grupie do 32 miejsc kluczowany jest tylko korzeń, więc po prostu autor ostatniego commita). Manager, który przed `renewLeaf` usuwał właśnie jego, przechodził z `abandonHistory` i każdy członek tracił całą historię grupy i jej kontenerów, bez żadnego złośliwego aktora | naprawione (audyt 05a final-3, cc0ef885; reguła zastąpiona po przeglądzie commitu, 1d66831e; wprowadzone przez 3065b77c na `trellis/05a-container-key-fixes`) | cc0ef885 opierało tolerancję na `GroupKeyResolver::latestCommitterPubKey`: statementy podane przez serwer (także niezweryfikowane), a manager, który nigdy nie commitował, nie miał żadnego. 1d66831e usuwa tę funkcję; obowiązuje reguła 08-A2: po zmianie klucza z `adoptPreviousIdentity` każde usunięcie z nieotwierającym się własnym liściem, który otwiera poprzedni klucz, jest odrzucane do `renewLeaf`, niezależnie od tego, kogo się usuwa (twórcę, leczącego się sąsiada, kogokolwiek), chyba że historia zostaje osiągalna. Testy: `GroupApiLyingBridge.SECURITY_AManagerWhoChangedKeyAndAdoptedCannotRemoveTheSiblingWhoHealedItsLeafEdge` (też: po `renewLeaf` usunięcie idzie i epoka 1 zostaje osiągalna), `SECURITY_AManagerWhoChangedKeyAndAdoptedCannotRemoveTheCreatorBeforeRenewing` (oba przechodzą też na 315acd70, które odmawiało; failują przy wyłączonej regule); e2e `GroupKeyTreeIntegrityTest.SECURITY_a_manager_who_changed_key_cannot_remove_before_renewing` usuwa też twórcę |
 | 08-A5 | Reguła rundy 5 (ea7395ec) oddawała decyzję członkowi, którego się usuwa: krawędzie nie wiążą klucza odbiorcy (`TreeEdge` go nie ma, krawędzie nie wchodzą do hasza drzewa), więc członek, który robi self-update (do 32 miejsc: nowy korzeń i krawędź do każdego liścia), może poprawnie zaszyfrować korzeń do POPRZEDNIEGO klucza publicznego managera (publiczny z jego statementów i katalogu). Klucz sesji pada na liściu, poprzedni klucz wspina się do klucza grantu, a `renewLeaf` planował na osobnej pamięci podręcznej i self-update nie zmienia epoki, więc pamięć grupy nie dostawała klucza grantu: każde usunięcie tego członka było odrzucane do `renewLeaf`, a członek powtarzał self-update po zdarzeniu odnowienia. Przy uczciwym Bridge czytał dalej nowe dane | naprawione (audyt 05a final-6, c2cf5a10; wprowadzone przez ea7395ec / 1d66831e na `trellis/05a-container-key-fixes`) | Hak `landed` self-updatu (także odnowienia) wkłada klucz grantu bieżącej epoki (sprawdzony przy wspinaniu względem zweryfikowanego stanu, zaakceptowany przez CAS na tej epoce) do pamięci grupy, jak `adoptCommittedEpoch` po usunięciu. Następne usunięcie ma wtedy historię osiągalną i idzie bez wspinania, cokolwiek członek zrobi z krawędzią liścia. Nieudane odnowienie nadal nie zostawia nic w pamięci (`landed` biegnie tylko po przyjęciu). Reszta: w nowej sesji albo po zmianie epoki (pamięć bez klucza grantu) członek może wymusić jeszcze jedno `renewLeaf` przed usunięciem, nie więcej (granica dostępności). Test (failuje na 51d9b2b7): `GroupApiLyingBridge.SECURITY_AMemberCannotBlockItsRemovalByWrappingARenewedManagersLeafToThePreviousKey` (po odnowieniu bob zawija korzeń do poprzedniego klucza alice; usunięcie boba idzie, epoka 1 zostaje osiągalna) |
 
+## Zachowanie klienta przeniesione z whitepapera
+
+Whitepaper opisuje reguły protokołu; poniższe zachowanie implementacji było w nim do skrócenia z 2026-10-22.
+
+- **Samoaktualizacja w tle.** Klient sprawdza potrzebę po udanym wspinaniu, także tym przed własnym commitem. Dla
+  pustego albo przejmowanego węzła `v` leczącym jest członek o najniższym zajętym miejscu w poddrzewie `v`; każdy
+  wyznacza go sam z przypisania miejsc. Leczący startuje z opóźnieniem z `[0, W]`, pozostali z `[W, 2W]`; gdy przyjdzie
+  kolej nie-leczącego, sprawdza on najpierw widok ścieżki i dopiero przy wciąż istniejącej potrzebie czyta widok planu.
+  Najwyżej jedna zaplanowana samoaktualizacja na grupę; przegrany wyścig: nowe opóźnienie z `[0, W]` i plan na świeżym
+  stanie w ramach limitu prób, rezygnacja, gdy potrzeby już nie ma; inne odrzucenia tylko do dziennika (następny odczyt
+  zaplanuje ponownie). Wartości `W` i limitu prób: dodatek A whitepapera.
+- **Nieznany wynik commitu.** Odczyt po rozliczeniu przechodzi pełną weryfikację, zanim klient podpisze kolejne
+  oświadczenie. Pamięć nierozstrzygniętego oświadczenia nie przeżywa restartu instancji. Po oknie 2T uczciwy Bridge
+  odrzuca stare oświadczenie z powodu daty.
+- **Budżety Bridge.** Dodanie nie ma własnego budżetu. Budżet przegranych wyścigów jest dziesięciokrotny, bo członek
+  leczący drzewo po usunięciu przegrywa ich wiele. Jednostka jest rezerwowana niepodzielnie przed walidacją i zwracana,
+  gdy operacja jej nie zużyła. Przyjęty commit obciąża budżet swojego rodzaju. Odrzucenie przy sprawdzaniu drzewa albo
+  oświadczenia obciąża jeden budżet: wyłącznie nieaktualna generacja budżet przegranych wyścigów, odrzucone usunięcie
+  budżet usunięć, każde inne odrzucenie budżet odrzuceń. Odrzucenie wcześniejsze (nieaktualna epoka, wersja składu,
+  numer commitu) nie obciąża żadnego.
+- **Odczyt piszącego spoza grupy.** Oświadczenie starsze od przypięcia nie jest błędem (odczyt mógł minąć się ze
+  współbieżnym); takie grupy klient czyta raz ponownie, poczynając od listy grup. Odczytu, który nie przeszedł
+  weryfikacji, nie powtarza.
+- **Automatyczna wymiana klucza kontenera.** Klient odczytuje kontener ponownie, losuje nowy klucz, opakowuje go dla
+  użytkowników i każdej grupy z grantem w jej bieżącej epoce, zapisuje zmianę i ponawia zapis elementu. Gdy klucz
+  wymienił w międzyczasie ktoś inny, tylko odświeża klucze; gdy polityka nie pozwala, zgłasza, że klucz musi wymienić
+  menedżer.
+
 ## Granice, które zostają
 
 Przyjęte świadomie. Żadna nie jest luką do naprawy w tym stosie; whitepaper uzasadnia każdą (§11 „Ryzyka szczątkowe”, §15).
