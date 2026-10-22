@@ -213,6 +213,7 @@ std::map<std::string, std::string> GroupApiImpl::resolveMemberKeys(
         return {};
     }
     const ContainerRoster resolved = resolveRosterPubKeys(contextId, userIds, {});
+    assertUserKeysVerified(contextId, resolved.users);
     std::map<std::string, std::string> keys;
     for (const core::UserWithPubKey& user : resolved.users) {
         keys.emplace(user.userId, user.pubKey);

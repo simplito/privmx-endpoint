@@ -83,9 +83,6 @@ public:
         const std::function<int64_t(const std::string&)>& pinnedEpoch
     );
 
-    // Whether this user's entry for `keyId` is a V1 one: told apart without decrypting, a V1 entry being a bare string.
-    static bool hasUnsignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId);
-
 protected:
     void initModuleDataSchemaMapper(std::shared_ptr<core::BaseModuleDataSchemaMapper> mapper) {
         _moduleDataSchemaMapper = std::move(mapper);
@@ -120,13 +117,12 @@ protected:
     };
 
     // A container carries its members as bare user ids, but re-wrapping its key needs a public key per member,
-    // and the Context user list is where those live. Throws if a member has left it. `verify`: the UserVerifier
-    // vouches for every pair here; false only for a caller that wraps through `prepareContainerUpdate`, which asks it.
+    // and the Context user list is where those live. Throws if a member has left it. The listing is only the
+    // Bridge's word for these keys: wrap to them only after `assertUserKeysVerified`.
     ContainerRoster resolveRosterPubKeys(
         const std::string& contextId,
         const std::vector<std::string>& userIds,
-        const std::vector<std::string>& managerIds,
-        bool verify = true
+        const std::vector<std::string>& managerIds
     );
 
     // The application's UserVerifier vouches for every (userId, pubKey) pair, each one a key something is about to be
@@ -223,19 +219,17 @@ protected:
     // Stale: a group the server lists in `staleGroups`, or one `groupsBehindPins` finds — the server's list alone
     // would let it keep a removed member reading new content. Or a current key behind an unsigned (V1) entry, which
     // `assertWriteKey` refuses to write under: a re-key is the way out for a legacy container.
-    bool isRekeyNeeded(const server::ContainerInfoBase& container) {
-        return !staleGroupsOf(container.groupKeys, container.keyId, container.staleGroups).empty() ||
-            hasUnsignedEntry(container.keys, container.keyId);
+    bool isRekeyNeeded(const server::ContainerInfoBase& c) const {
+        return !rekeyReason(c.keys, c.groupKeys, c.keyId, c.staleGroups).empty();
     }
-    bool isRekeyNeeded(const ModuleKeys& moduleKeys) {
-        return !staleGroupsOf(moduleKeys.groupKeys, moduleKeys.currentKeyId, moduleKeys.staleGroups).empty() ||
-            hasUnsignedEntry(moduleKeys.keys, moduleKeys.currentKeyId);
+    bool isRekeyNeeded(const ModuleKeys& k) const {
+        return !rekeyReason(k.keys, k.groupKeys, k.currentKeyId, k.staleGroups).empty();
     }
 
     // Refuses a key that is stale — see `isRekeyNeeded`. Called where the answer decides whether to encrypt; the
     // container update and re-key calls are deliberately not guarded, a re-key being the way out.
-    void assertRekeyNotNeeded(const server::ContainerInfoBase& container);
-    void assertRekeyNotNeeded(const ModuleKeys& moduleKeys);
+    void assertRekeyNotNeeded(const server::ContainerInfoBase& container) const;
+    void assertRekeyNotNeeded(const ModuleKeys& moduleKeys) const;
 
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
     core::KeyProvider::GroupPrivKeyResolver _groupPrivKeyResolver;
@@ -272,13 +266,15 @@ private:
 
     std::vector<server::KeyEntrySet> buildRosterKeyEntries(const ContainerUpdatePlan& plan);
 
-    static void assertNoStaleGroups(const std::vector<std::string>& staleGroups);
-    static void assertSignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId);
-    std::vector<std::string> staleGroupsOf(
+    // Why `keyId` needs a re-key (see `isRekeyNeeded`), or "" when it does not.
+    std::string rekeyReason(
+        const std::vector<server::KeyEntry>& keys,
         const std::vector<server::GroupKeysEntry>& groupKeys,
         const std::string& keyId,
         const std::vector<std::string>& staleGroups
-    );
+    ) const;
+    // Whether this user's entry for `keyId` is a V1 one: told apart without decrypting, a V1 entry being a bare string.
+    static bool hasUnsignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId);
 
     static core::ContainerKeyCache::CachedModuleKeys convertModuleKeysToContainerKeyCacheFormat(
         const ModuleKeys& moduleKeys,

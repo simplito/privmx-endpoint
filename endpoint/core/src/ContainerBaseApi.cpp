@@ -45,8 +45,7 @@ void ContainerBaseApi::initGroupPrivKeyResolver(const KeyProvider::GroupPrivKeyR
 ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
     const std::string& contextId,
     const std::vector<std::string>& userIds,
-    const std::vector<std::string>& managerIds,
-    bool verify
+    const std::vector<std::string>& managerIds
 ) {
     std::set<std::string> wanted(userIds.begin(), userIds.end());
     wanted.insert(managerIds.begin(), managerIds.end());
@@ -91,17 +90,7 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
         }
         return resolved;
     };
-    ContainerRoster roster{.users = resolve(userIds), .managers = resolve(managerIds)};
-    if (!verify) {
-        return roster;
-    }
-    // The listing is only the bridge's word for these keys.
-    std::vector<UserWithPubKey> all;
-    for (const auto& userId : wanted) {
-        all.push_back(UserWithPubKey{.userId = userId, .pubKey = pubKeyByUserId.at(userId)});
-    }
-    assertUserKeysVerified(contextId, all);
-    return roster;
+    return ContainerRoster{.users = resolve(userIds), .managers = resolve(managerIds)};
 }
 
 void ContainerBaseApi::assertUserKeysVerified(const std::string& contextId, const std::vector<UserWithPubKey>& users) {
@@ -147,14 +136,16 @@ std::vector<server::KeyEntrySet> ContainerBaseApi::buildRosterKeyEntries(const C
     return keyEntries;
 }
 
-void ContainerBaseApi::assertRekeyNotNeeded(const server::ContainerInfoBase& container) {
-    assertNoStaleGroups(staleGroupsOf(container.groupKeys, container.keyId, container.staleGroups));
-    assertSignedEntry(container.keys, container.keyId);
+void ContainerBaseApi::assertRekeyNotNeeded(const server::ContainerInfoBase& c) const {
+    if (auto reason = rekeyReason(c.keys, c.groupKeys, c.keyId, c.staleGroups); !reason.empty()) {
+        throw StaleKeyRekeyRequiredException(reason);
+    }
 }
 
-void ContainerBaseApi::assertRekeyNotNeeded(const ModuleKeys& moduleKeys) {
-    assertNoStaleGroups(staleGroupsOf(moduleKeys.groupKeys, moduleKeys.currentKeyId, moduleKeys.staleGroups));
-    assertSignedEntry(moduleKeys.keys, moduleKeys.currentKeyId);
+void ContainerBaseApi::assertRekeyNotNeeded(const ModuleKeys& k) const {
+    if (auto reason = rekeyReason(k.keys, k.groupKeys, k.currentKeyId, k.staleGroups); !reason.empty()) {
+        throw StaleKeyRekeyRequiredException(reason);
+    }
 }
 
 bool ContainerBaseApi::hasUnsignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId) {
@@ -163,20 +154,22 @@ bool ContainerBaseApi::hasUnsignedEntry(const std::vector<server::KeyEntry>& key
     });
 }
 
-void ContainerBaseApi::assertSignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId) {
-    if (hasUnsignedEntry(keys, keyId)) {
-        throw StaleKeyRekeyRequiredException("the current key is an unsigned (V1) entry");
-    }
-}
-
-std::vector<std::string> ContainerBaseApi::staleGroupsOf(
+std::string ContainerBaseApi::rekeyReason(
+    const std::vector<server::KeyEntry>& keys,
     const std::vector<server::GroupKeysEntry>& groupKeys,
     const std::string& keyId,
     const std::vector<std::string>& staleGroups
-) {
+) const {
     std::vector<std::string> stale = groupsBehindPins(groupKeys, keyId, _pinnedGroupEpoch);
     stale.insert(stale.end(), staleGroups.begin(), staleGroups.end());
-    return stale;
+    if (!stale.empty()) {
+        std::string names = "staleGroups=";
+        for (size_t i = 0; i < stale.size(); ++i) {
+            names += (i == 0 ? "" : ",") + stale[i];
+        }
+        return names;
+    }
+    return hasUnsignedEntry(keys, keyId) ? "the current key is an unsigned (V1) entry" : "";
 }
 
 // A route's epoch is the server's label, but a key opened through it opens only under that epoch's grant key, so a
@@ -199,17 +192,6 @@ std::vector<std::string> ContainerBaseApi::groupsBehindPins(
         }
     }
     return behind;
-}
-
-void ContainerBaseApi::assertNoStaleGroups(const std::vector<std::string>& staleGroups) {
-    if (staleGroups.empty()) {
-        return;
-    }
-    std::string names;
-    for (const auto& groupId : staleGroups) {
-        names += names.empty() ? groupId : "," + groupId;
-    }
-    throw StaleKeyRekeyRequiredException("staleGroups=" + names);
 }
 
 DecryptedEncKeyV2 ContainerBaseApi::findEncKeyByKeyId(

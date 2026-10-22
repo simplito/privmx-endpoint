@@ -201,7 +201,7 @@ protected:
             return;
         }
         // Not verified here: `rotateContainerKeys` wraps through `prepareContainerUpdate`, which asks the verifier.
-        auto roster = resolveRosterPubKeys(container.contextId, container.users, container.managers, false);
+        auto roster = resolveRosterPubKeys(container.contextId, container.users, container.managers);
         try {
             rotateContainerKeys<TRotateModel>(
                 moduleId, container, roster.users, roster.managers, container.version, false, {}, sendRotateRequest
