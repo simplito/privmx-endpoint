@@ -1544,13 +1544,10 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_listed_group_key_is_handed_out_only
     EXPECT_EQ(listedKey(), verified);
 }
 
-TEST_F(
-    GroupKeyTreeIntegrityTest,
-    SECURITY_an_honestly_refused_commit_holds_back_the_next_one_only_until_the_head_moves
-) {
-    // m2 (A5-F3): the Bridge refuses user_1's add only after the statement left the client (an id the context does
-    // not know), so as far as user_1 can tell it may have been applied. Another statement of user_1's at the same
-    // head would be a second link at one prevDigest; it is held back until the head moves (here: user_3 commits).
+TEST_F(GroupKeyTreeIntegrityTest, an_honestly_refused_commit_does_not_hold_back_the_next_one) {
+    // m2, simplified in 13: the Bridge refuses user_1's add only after the statement left the client (an id the context
+    // does not know), so as far as user_1 can tell it may have been applied. The next operation resends it once, finds
+    // it refused again, drops it and goes on.
     if (!hasManagementApi()) {
         GTEST_SKIP() << MANAGEMENT_API_MISSING;
     }
@@ -1560,26 +1557,12 @@ TEST_F(
     EXPECT_ANY_THROW(
         groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = asMember(stranger), .role = "user"}})
     );
-    EXPECT_THROW(groupApi->removeGroupMembers(groupId, {user(2).userId}), group::GroupCommitUnresolvedException)
-        << "a second statement released at the refused one's prevDigest";
-
-    const Identity newcomer = newIdentity("m2_newcomer");
-    registerContextUser(newcomer.userId, newcomer.pubKey);
-    {
-        auto other = connect(3);
-        privmx::test::ScopeExit closeIt([&] { other->disconnect(); });
-        auto groups = group::GroupApi::create(*other);
-        ASSERT_NO_THROW(
-            groups.addGroupMembers(groupId, {group::GroupMemberToAdd{.user = asMember(newcomer), .role = "user"}})
-        );
-    }
-    EXPECT_NO_THROW(groupApi->removeGroupMembers(groupId, {user(2).userId})) << "still held after the head moved";
+    EXPECT_NO_THROW(groupApi->removeGroupMembers(groupId, {user(2).userId}));
 
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
     EXPECT_EQ(after.statusCode, 0);
     EXPECT_EQ(after.keyVersion, 2);
-    EXPECT_TRUE(contains(after.users, newcomer.userId)) << "the removal did not extend user_3's addition";
     EXPECT_FALSE(contains(after.users, user(2).userId));
     EXPECT_FALSE(contains(after.users, stranger.userId));
 }

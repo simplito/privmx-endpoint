@@ -332,6 +332,22 @@ bool TreeCommits::verifySignature(const CommitStatement& statement, const privmx
     } catch (...) { return false; }
 }
 
+std::string TreeCommits::opKey(const std::string& kind, const std::vector<std::string>& parts) {
+    std::string out;
+    const auto lp = [&out](const std::string& field) {
+        const auto size = static_cast<std::uint32_t>(field.size());
+        for (int shift = 24; shift >= 0; shift -= 8) {
+            out.push_back(static_cast<char>((size >> shift) & 0xFF));
+        }
+        out += field;
+    };
+    lp(kind);
+    for (const std::string& part : parts) {
+        lp(part);
+    }
+    return out;
+}
+
 std::string TreeCommits::digest(const CommitStatement& statement) {
     return privmx::crypto::Crypto::sha256(signedBytes(statement) + statement.signature);
 }

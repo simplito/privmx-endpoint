@@ -21,7 +21,6 @@
 
 #include "privmx/endpoint/core/ContainerBaseApi.hpp"
 #include "privmx/endpoint/core/PinStoreInterface.hpp"
-#include "privmx/endpoint/core/ReleaseGate.hpp"
 #include "privmx/endpoint/group/GroupApi.hpp"
 #include "privmx/endpoint/group/GroupTypes.hpp"
 #include "privmx/endpoint/group/ServerApi.hpp"
@@ -312,11 +311,14 @@ private:
         std::optional<PendingCarry>& carry
     );
 
-    // m2: a commit released to the bridge with no known outcome. A retry resends exactly this.
+    // m2: a commit released to the bridge with no known outcome. A retry of the same operation resends exactly this
+    // (no second statement, no wasted epoch); any other operation drops it after one resend and plans afresh (13: the
+    // hold that refused other operations is gone, the fork it closed is one a bridge can reach by withholding).
     struct UnresolvedCommit {
         std::string digest; // of the released statement (set by `submit`)
+        std::uint64_t seq = 0;  // its seq (set by `submit`)
         std::uint64_t date = 0; // its signed date (set by `submit`)
-        std::string op;     // core::ReleaseGate::opKey of what the caller asked for
+        std::string op;     // keytree::TreeCommits::opKey of what the caller asked for
         // The op key names the state the call asks for (these members added, those removed): found landed, it is
         // Done whenever. Otherwise it names an event (a rotation), and a later call with the same key is its retry
         // only inside RELEASE_WINDOW_MS from `date`; past it, a new request.
@@ -336,18 +338,17 @@ private:
         Reread,
         Deferred
     };
-    inline static const std::string SELF_UPDATE_OP = core::ReleaseGate::opKey("selfUpdate");
+    inline static const std::string SELF_UPDATE_OP = keytree::TreeCommits::opKey("selfUpdate");
 
     // Per group; held only from release to outcome, never across reads or the UserVerifier.
     std::shared_ptr<std::mutex> commitLock(const std::string& groupId);
     // Right after a read that verified (`verifyTree` returned true), before planning on it: completes this client's
-    // unresolved commit to the group, if any (resend, or noticing it landed: the pin is exactly it), so no second
-    // statement is released at its prevDigest (A5-F3). `mayCompleteOther`: whether a different op may resend it
-    // (every app op; not the background self-update).
+    // unresolved commit to the group, if any (resend, or noticing it landed: the pin is exactly it). Past its window,
+    // behind the pin, or failing again for another op, it is dropped and the caller plans afresh. `mayCompleteOther`:
+    // whether a different op may resend it (every app op; not the background self-update).
     Settled settle(const std::string& groupId, const std::string& op, bool mayCompleteOther);
-    // Releases a signed statement through the gate (`_releaseGate`) and keeps `commit` until its outcome is known.
-    // Throws keytree::StalePlan for a plan behind the pin, GroupCommitUnresolvedException when another statement at
-    // its prevDigest is unresolved. A refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo`.
+    // Sends a signed statement and keeps `commit` until its outcome is known. Throws keytree::StalePlan for a plan
+    // behind the pin. A refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo` (T4-17).
     void submit(const std::string& groupId, const keytree::CommitStatement& statement, UnresolvedCommit commit);
     void forgetUnresolved(const std::string& groupId, const std::string& digest);
 
@@ -431,7 +432,7 @@ private:
         const std::string& op,
         bool mayCompleteOther
     );
-    inline static const std::string RENEW_LEAF_OP = core::ReleaseGate::opKey("renewLeaf");
+    inline static const std::string RENEW_LEAF_OP = keytree::TreeCommits::opKey("renewLeaf");
     // Schedules one when `group` (a seated, verified read) shows the caller's path needs it: within a window that
     // grows with the group for the seat that heals first, one window later for any other (`healsFirst`).
     void scheduleSelfUpdateIfNeeded(const std::string& groupId, const server::GroupInfo& group);
@@ -555,7 +556,6 @@ private:
     // writes metadata (documented on updateGroupPolicy); persist it next to 01's pins if that ever matters.
     std::mutex _pendingCarryMutex;
     std::map<std::string, PendingCarry> _pendingCarry;
-    core::ReleaseGate _releaseGate{RELEASE_WINDOW_MS};
     // 01: pins kept in the connection's PinStore, shared by every GroupApi of this identity on this Bridge.
     // `loadPins` merges the slot into memory once, at construction; `savePins` merges memory into the slot
     // (compare-and-swap, `PinBlob::higher`) and the result back into memory. Saves run on the worker (major moves

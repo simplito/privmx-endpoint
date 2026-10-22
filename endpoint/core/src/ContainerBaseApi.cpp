@@ -45,7 +45,8 @@ void ContainerBaseApi::initGroupPrivKeyResolver(const KeyProvider::GroupPrivKeyR
 ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
     const std::string& contextId,
     const std::vector<std::string>& userIds,
-    const std::vector<std::string>& managerIds
+    const std::vector<std::string>& managerIds,
+    bool verify
 ) {
     std::set<std::string> wanted(userIds.begin(), userIds.end());
     wanted.insert(managerIds.begin(), managerIds.end());
@@ -91,6 +92,9 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
         return resolved;
     };
     ContainerRoster roster{.users = resolve(userIds), .managers = resolve(managerIds)};
+    if (!verify) {
+        return roster;
+    }
     // The listing is only the bridge's word for these keys.
     std::vector<UserWithPubKey> all;
     for (const auto& userId : wanted) {

@@ -192,6 +192,9 @@ private:
 
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
+    // `streamRoomUpdated` for a joined room: the LOCAL key follows the room's current key (F-05c); a live publication
+    // in a room gone stale re-keys it (F-05e/f), and stops when the re-key fails or the current key is unusable (F-05g).
+    void applyRoomUpdate(StreamRoomData& room, const server::StreamRoomInfo& raw);
     // Hands the room's key set to the media layer and the data channel encryptor.
     void applyRoomKeys(StreamRoomData& room, const server::StreamRoomInfo& streamRoomInfo);
     // LOCAL: the room's current key (`keyId`), what this client encrypts under. REMOTE: every key that opens.

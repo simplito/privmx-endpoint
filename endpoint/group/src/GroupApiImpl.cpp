@@ -483,7 +483,7 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
     for (const GroupMemberToAdd* newMember : byId) {
         opParts.insert(opParts.end(), {newMember->user.userId, newMember->role, newMember->user.pubKey});
     }
-    const std::string op = core::ReleaseGate::opKey("add", opParts);
+    const std::string op = keytree::TreeCommits::opKey("add", opParts);
     // One read, not two: the bridge holds the roster, so it allocates the seats and serves every node record the
     // plan resolves through in the same answer.
     server::GroupGetModel getModel{
@@ -731,7 +731,7 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
     std::vector<std::string> leavingIds = userIds;
     std::sort(leavingIds.begin(), leavingIds.end());
     leavingIds.erase(std::unique(leavingIds.begin(), leavingIds.end()), leavingIds.end());
-    const std::string op = core::ReleaseGate::opKey("remove", leavingIds);
+    const std::string op = keytree::TreeCommits::opKey("remove", leavingIds);
     switch (verified ? settle(groupId, op, true) : Settled::Proceed) {
     case Settled::Done:
         return std::nullopt;
@@ -960,7 +960,7 @@ bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, PriorRole& pri
     auto currentGroup = _serverApi.groupGet(getModel).group;
     // `settle` only after a read that verified: it goes by the pin, and the bridge's unverified word moves nothing.
     const bool verified = verifyTree(currentGroup, getModel, keytree::TreeVerifier::Scope::Plan);
-    const std::string op = core::ReleaseGate::opKey("rotate");
+    const std::string op = keytree::TreeCommits::opKey("rotate");
     switch (verified ? settle(groupId, op, true) : Settled::Proceed) {
     case Settled::Done:
         return false;
@@ -1302,10 +1302,6 @@ void GroupApiImpl::runSelfUpdates() {
             selfUpdate(groupId);
         } catch (const keytree::StalePlan&) {
             lostRace = true; // planned behind a commit of this client's own; re-plan like a lost race
-        } catch (const GroupCommitUnresolvedException& e) {
-            // Held back by an earlier statement of this client's at the same base; the next read that shows the
-            // need schedules it again.
-            LOG_DEBUG("[selfUpdate] group key tree self-update deferred: ", e.what())
         } catch (const privmx::utils::PrivmxException& e) {
             lostRace = isRetryableCommitRejection(e);
             if (!lostRace) {
@@ -1722,7 +1718,7 @@ void GroupApiImpl::updateGroupPolicyOnce(
     const keytree::GroupRules newRules = requestedRules(policy, group.creator);
     // The whole wire policy, not only the signed rules: two calls differing in a Bridge-held field (`get`, `item.*`)
     // name different end states, and one must never return on the other.
-    const std::string op = core::ReleaseGate::opKey("policy", {privmx::utils::Utils::stringifyVar(policy)});
+    const std::string op = keytree::TreeCommits::opKey("policy", {privmx::utils::Utils::stringifyVar(policy)});
     switch (settle(groupId, op, true)) {
     case Settled::Done:
         return;
@@ -2411,23 +2407,11 @@ void GroupApiImpl::submit(
     const auto mutex = commitLock(groupId);
     std::unique_lock<std::mutex> lock(*mutex);
     commit.digest = keytree::TreeCommits::digest(statement);
+    commit.seq = statement.seq;
     commit.date = statement.date;
-    const core::ReleaseGate::Released released{
-        .seq = statement.seq,
-        .prevDigest = statement.prevDigest,
-        .digest = commit.digest,
-        .date = statement.date,
-        .yields = commit.op == SELF_UPDATE_OP
-    };
-    switch (_releaseGate.check(groupId, released, commitDate(), _treeVerifier.pinnedSeq(groupId))) {
-    case core::ReleaseGate::Verdict::Stale:
-        throw keytree::StalePlan{};
-    case core::ReleaseGate::Verdict::Held:
-        throw GroupCommitUnresolvedException("an earlier commit to this group has no known outcome yet");
-    case core::ReleaseGate::Verdict::Ok:
-        break;
+    if (statement.seq <= _treeVerifier.pinnedSeq(groupId)) {
+        throw keytree::StalePlan{}; // planned behind a state this client verified (or committed) since
     }
-    _releaseGate.record(groupId, released);
     {
         // Replaces a pending background self-update only now, when the op superseding it is actually released.
         std::lock_guard<std::mutex> guard(_unresolvedMutex);
@@ -2440,7 +2424,7 @@ void GroupApiImpl::submit(
         if (isRetryableCommitRejection(e)) {
             _treeVerifier.refusedAsLostRace(groupId, statement.seq);
         }
-        throw; // any failure keeps the gate entry and the body: the bridge may have applied it
+        throw; // any failure keeps the body: the bridge may have applied it, and a retry resends it
     }
     forgetUnresolved(groupId, commit.digest);
     commit.landed();
@@ -2467,13 +2451,11 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
         try {
             assertUserKeysVerified(first->contextId, first->newcomers);
         } catch (...) {
-            forgetUnresolved(groupId, first->digest); // the gate entry stays: nothing else is released at its base
+            forgetUnresolved(groupId, first->digest);
             if (first->op == op) {
                 throw;
             }
-            throw GroupCommitUnresolvedException(
-                "an earlier add to this group has no known outcome yet, and its newcomers' keys are no longer verified"
-            );
+            return Settled::Proceed; // not resent to unvouched keys; this op plans afresh
         }
     }
     const auto mutex = commitLock(groupId);
@@ -2483,7 +2465,7 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
         std::lock_guard<std::mutex> guard(_unresolvedMutex);
         const auto it = _unresolved.find(groupId);
         if (it == _unresolved.end() || it->second.digest != first->digest) {
-            return Settled::Proceed; // settled meanwhile; the gate decides at `submit`
+            return Settled::Proceed; // settled meanwhile
         }
         pending = it->second;
     }
@@ -2512,9 +2494,9 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
     if (_treeVerifier.pinnedDigest(groupId) == pending.digest) {
         return finish(Settled::Proceed); // it landed; only the answer was lost
     }
-    const auto released = _releaseGate.unresolved(groupId, commitDate(), _treeVerifier.pinnedSeq(groupId));
-    if (!released.has_value() || released->digest != pending.digest) {
-        forgetUnresolved(groupId, pending.digest); // superseded, or its window closed
+    // Superseded (the pin passed its seq), or past its window (an honest bridge refuses it by its date by now).
+    if (_treeVerifier.pinnedSeq(groupId) >= pending.seq || commitDate() >= pending.date + RELEASE_WINDOW_MS) {
+        forgetUnresolved(groupId, pending.digest);
         return Settled::Proceed;
     }
     if (pending.op == SELF_UPDATE_OP && op != SELF_UPDATE_OP) {
@@ -2523,23 +2505,28 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
     if (pending.op != op && !mayCompleteOther) {
         return Settled::Deferred;
     }
-    _treeVerifier.assertMaySignAt(groupId, released->seq); // T4-17
+    _treeVerifier.assertMaySignAt(groupId, pending.seq); // T4-17
     try {
         pending.send();
     } catch (const privmx::utils::PrivmxException& e) {
         if (isRetryableCommitRejection(e)) {
-            _treeVerifier.refusedAsLostRace(groupId, released->seq);
+            _treeVerifier.refusedAsLostRace(groupId, pending.seq);
             throw;
         }
         if (pending.op == op) {
             throw;
         }
-        throw GroupCommitUnresolvedException("an earlier " + pending.kind + " to this group has no known outcome yet");
-    } catch (...) {
+        // Another op: one resend was tried; the earlier commit is dropped and this op plans afresh (13).
+        LOG_WARN("[settle] an earlier ", pending.kind, " to group ", groupId, " is dropped unresolved: ", e.what())
+        forgetUnresolved(groupId, pending.digest);
+        return Settled::Proceed;
+    } catch (const std::exception& e) {
         if (pending.op == op) {
             throw;
         }
-        throw GroupCommitUnresolvedException("an earlier " + pending.kind + " to this group has no known outcome yet");
+        LOG_WARN("[settle] an earlier ", pending.kind, " to group ", groupId, " is dropped unresolved: ", e.what())
+        forgetUnresolved(groupId, pending.digest);
+        return Settled::Proceed;
     }
     return finish(Settled::Reread);
 }

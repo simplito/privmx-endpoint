@@ -1288,7 +1288,10 @@ TEST_F(GroupApiLyingBridge, SECURITY_ADifferentCommitCompletesTheUnresolvedOneFi
     EXPECT_EQ(prevOf(bridge.received[2]), digestOf(bridge.received[0])) << "bob's removal extends it";
 }
 
-TEST_F(GroupApiLyingBridge, SECURITY_ADifferentCommitIsRefusedWhileTheUnresolvedOneKeepsBeingRefused) {
+TEST_F(GroupApiLyingBridge, ADifferentCommitResendsTheUnresolvedOneOnceThenPlansAfresh) {
+    // 13 (D2 removed): carol's removal has no known outcome and the bridge keeps refusing it. bob's removal resends it
+    // once, byte for byte, then drops it and plans its own statement at the same head. Two statements at one prevDigest
+    // are then possible: the fork boundary (a bridge able to do this can as well withhold the removal).
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     const Bridge atSeq1 = bridge;
@@ -1298,18 +1301,11 @@ TEST_F(GroupApiLyingBridge, SECURITY_ADifferentCommitIsRefusedWhileTheUnresolved
         refuse();
     };
     EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
-    try {
-        client("alice").removeGroupMembers(groupId, {"bob"});
-        ADD_FAILURE() << "a second removal was let through";
-    } catch (const GroupCommitUnresolvedException& e) {
-        EXPECT_NE(e.getDescription().find("remove"), std::string::npos) << e.getDescription();
-    } catch (...) { ADD_FAILURE() << "not GroupCommitUnresolvedException"; }
-    ASSERT_FALSE(bridge.received.empty());
-    for (const server::GroupTreeCommit& commit : bridge.received) {
-        if (prevOf(commit) == atP) {
-            EXPECT_EQ(bytesOf(commit), bytesOf(bridge.received[0])) << "a second statement at seq 2";
-        }
-    }
+    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"bob"}));
+    ASSERT_EQ(bridge.received.size(), 3u);
+    EXPECT_EQ(bytesOf(bridge.received[1]), bytesOf(bridge.received[0])) << "carol's removal resent first";
+    EXPECT_EQ(prevOf(bridge.received[2]), atP) << "bob's removal planned at the same head";
+    EXPECT_NE(bytesOf(bridge.received[2]), bytesOf(bridge.received[0]));
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_TwoCommitsOfOneClientToOneGroupNeverShareAPrevDigest) {
@@ -1546,7 +1542,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnAddIsResentOnlyToKeysTheVerifierStillVouc
     );
     bridge.onAdd = [] {};
     bridge.users["dave"] = PrivateKey::generateRandom(); // dave's key changed: the add's key is no longer vouched for
-    EXPECT_THROW(client("alice").removeGroupMembers(groupId, {"carol"}), GroupCommitUnresolvedException);
+    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"carol"})) << "the add is dropped, not resent";
     const auto adds = std::count_if(bridge.received.begin(), bridge.received.end(), [](const auto& commit) {
         return TreeCommits::fromWire(commit).op == CommitOp::Add;
     });

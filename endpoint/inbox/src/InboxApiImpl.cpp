@@ -99,9 +99,9 @@ std::string InboxApiImpl::createInbox(
     const std::optional<core::ContainerPolicyWithoutItem>& policies,
     const std::vector<core::GroupGrantWithKey>& groups
 ) {
-    // Before the inner Store and Thread exist: nothing of this Inbox may be wrapped to a key the verifier refuses.
+    // The inner Store is created first and asks the verifier about these users before anything exists, so a refused
+    // key stops the Inbox with nothing created; the Inbox key itself is wrapped to the same list.
     auto all_users = core::EndpointUtils::uniqueListUserWithPubKey(users, managers);
-    assertUserKeysVerified(contextId, all_users);
 
     auto inboxKey = _keyProvider->generateKey();
     auto eccKey = privmx::crypto::ECC::fromPrivateKey(inboxKey.key);

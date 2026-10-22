@@ -120,11 +120,13 @@ protected:
     };
 
     // A container carries its members as bare user ids, but re-wrapping its key needs a public key per member,
-    // and the Context user list is where those live. Throws if a member has left it.
+    // and the Context user list is where those live. Throws if a member has left it. `verify`: the UserVerifier
+    // vouches for every pair here; false only for a caller that wraps through `prepareContainerUpdate`, which asks it.
     ContainerRoster resolveRosterPubKeys(
         const std::string& contextId,
         const std::vector<std::string>& userIds,
-        const std::vector<std::string>& managerIds
+        const std::vector<std::string>& managerIds,
+        bool verify = true
     );
 
     // The application's UserVerifier vouches for every (userId, pubKey) pair, each one a key something is about to be

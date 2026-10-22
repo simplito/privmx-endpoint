@@ -167,6 +167,10 @@ public:
 
     // Identity of a statement as signed, for caching and for comparing two copies.
     static std::string digest(const CommitStatement& statement);
+    // Injective key of an operation a caller asked for (what a resend after an unknown outcome is matched by):
+    // lp(kind) || lp(part)*, lp = u32 big-endian length || bytes, so no separator a user id could hold makes two
+    // different operations equal.
+    static std::string opKey(const std::string& kind, const std::vector<std::string>& parts = {});
 
     // A statement over the post state a plan describes. The roster lists are the post-commit roster; the deltas
     // are sorted and deduplicated here (at seq 1 empty: `rosterHash` binds the genesis roster). Unsigned.

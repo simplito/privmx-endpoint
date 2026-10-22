@@ -142,21 +142,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         // The LOCAL key is chosen again from the updated room: one kept from join time would leave this client's
         // media and data channel under a key a re-key replaced, which a removed member holds (F-05c).
         if (streamRoomData.has_value()) {
-            applyRoomKeys(*streamRoomData.value(), raw);
-            // The Bridge sends this on a removal from a granted group too. A live publication writes nothing more,
-            // so without a re-key here it would stay under the key the removed member holds.
-            if (streamRoomData.value()->publisherStream && isRekeyNeeded(raw)) {
-                try {
-                    invalidateModuleKeysInCache(eventData.streamRoomId);
-                    ensureRoomKeyIsFresh(eventData.streamRoomId);
-                } catch (const std::exception& e) {
-                    // Fail closed: left running, the publication keeps sending media and data channel frames under
-                    // the stale key until the next publishStream/updateStream. The Bridge's streamUnpublished tells
-                    // the app; publishing again re-keys or throws, as for any publication.
-                    LOG_ERROR("streamRoomUpdated: re-key of a stale room failed, stopping the publication: ", e.what());
-                    stopPublication(*streamRoomData.value());
-                }
-            }
+            applyRoomUpdate(*streamRoomData.value(), raw);
             for (const auto& internalSubscription : streamRoomData.value()->subscriptionsIds) {
                 subscriptions.erase(
                     remove(subscriptions.begin(), subscriptions.end(), internalSubscription), subscriptions.end()
@@ -822,6 +808,33 @@ void StreamApiLowImpl::setNewOfferOnReconfigure(const int64_t sessionId, const S
     model.sessionId = sessionId;
     model.offer = sessionDescription;
     _serverApi->streamSetNewOffer(model);
+}
+
+void StreamApiLowImpl::applyRoomUpdate(StreamRoomData& room, const server::StreamRoomInfo& raw) {
+    try {
+        applyRoomKeys(room, raw);
+    } catch (const std::exception& e) {
+        // No usable current key (V1 or unopenable): a live publication must not go on under the old one.
+        if (room.publisherStream) {
+            LOG_ERROR("streamRoomUpdated: the room's current key is unusable, stopping the publication: ", e.what());
+            stopPublication(room);
+        }
+        throw;
+    }
+    // The Bridge sends this on a removal from a granted group too. A live publication writes nothing more,
+    // so without a re-key here it would stay under the key the removed member holds.
+    if (room.publisherStream && isRekeyNeeded(raw)) {
+        try {
+            invalidateModuleKeysInCache(room.streamRoomId);
+            ensureRoomKeyIsFresh(room.streamRoomId);
+        } catch (const std::exception& e) {
+            // Fail closed: left running, the publication keeps sending media and data channel frames under
+            // the stale key until the next publishStream/updateStream. The Bridge's streamUnpublished tells
+            // the app; publishing again re-keys or throws, as for any publication.
+            LOG_ERROR("streamRoomUpdated: re-key of a stale room failed, stopping the publication: ", e.what());
+            stopPublication(room);
+        }
+    }
 }
 
 void StreamApiLowImpl::applyRoomKeys(StreamRoomData& room, const server::StreamRoomInfo& streamRoomInfo) {

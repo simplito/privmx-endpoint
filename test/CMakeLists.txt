@@ -160,9 +160,6 @@ target_link_libraries(test_unit_GroupKeyResolverTest privmx privmxendpointcore p
 # GroupApiImpl's wiring against a lying bridge: real clients over an in-memory gateway (ConnectionImpl::connectOver)
 add_executable(test_unit_GroupApiLyingBridgeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupApiLyingBridgeTest.cpp)
 target_link_libraries(test_unit_GroupApiLyingBridgeTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
-# m2: one released statement per prevDigest (core::ReleaseGate alone)
-add_executable(test_unit_ReleaseGateTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/ReleaseGateTest.cpp)
-target_link_libraries(test_unit_ReleaseGateTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
 
 # 01: local state sealing, the compare-and-swap update and the Var store (core alone)
 add_executable(test_unit_LocalSealTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/LocalSealTest.cpp)

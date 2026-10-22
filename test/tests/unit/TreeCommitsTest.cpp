@@ -535,3 +535,15 @@ TEST(TreeCommitsStatement, AStatementForAPlanDescribesThePostState) {
     EXPECT_EQ(statement.treeHash, TreeCommits::treeHash(post)) << "the refreshed nodes carry setBy = seq";
     EXPECT_EQ(statement.path[0].subtreeHash, TreeCommits::subtreeHash(post, 3)) << "and their post-state subtree";
 }
+
+TEST(TreeCommits, SECURITY_OpKeysOfDifferentOperationsNeverCollide) {
+    // A resend after an unknown outcome is matched by this key: two different operations must never share one.
+    EXPECT_NE(TreeCommits::opKey("remove", {std::string("a\0b", 3)}), TreeCommits::opKey("remove", {"a", "b"}));
+    EXPECT_NE(
+        TreeCommits::opKey("add", {"ab", "user", "K", "c", "user", "K"}),
+        TreeCommits::opKey("add", {"a", "buser", "K", "c", "user", "K"})
+    );
+    EXPECT_NE(TreeCommits::opKey("ab"), TreeCommits::opKey("a", {"b"}));
+    EXPECT_NE(TreeCommits::opKey("remove", {}), TreeCommits::opKey("remove", {""}));
+    EXPECT_EQ(TreeCommits::opKey("remove", {"a", "b"}), TreeCommits::opKey("remove", {"a", "b"}));
+}

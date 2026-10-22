@@ -84,8 +84,6 @@ public:
      *
      * @param groupId ID of the Group
      * @param newMembers the members to add, each with their public key and the role they take
-     * @throws GroupCommitUnresolvedException when an earlier commit of this client to the Group has no known
-     * outcome yet and could not be completed (the message names its kind: add, remove, ...)
      */
     void addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
 
@@ -112,8 +110,6 @@ public:
      *
      * @param groupId ID of the Group
      * @param userIds IDs of the members to remove
-     * @throws GroupCommitUnresolvedException when an earlier commit of this client to the Group has no known
-     * outcome yet and could not be completed (the message names its kind: add, remove, ...)
      */
     void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
@@ -136,8 +132,6 @@ public:
      * rotation, even when the failed one turns out to have been applied.
      *
      * @param groupId ID of the Group
-     * @throws GroupCommitUnresolvedException when an earlier commit of this client to the Group has no known
-     * outcome yet and could not be completed (the message names its kind: add, remove, rotation, ...)
      */
     void rotateGroupKey(const std::string& groupId);
 
@@ -147,8 +141,8 @@ public:
      * Call from a session connected with the NEW key, after the Context lists it, and after
      * Connection::adoptPreviousIdentity(previousUserPrivKey) (also without a pin store: it is how this client learns
      * its key changed, so a removal made before renewing is refused rather than abandoning history). Before the
-     * directory change, settle every group commit of the old session (retry each call that threw
-     * GroupCommitUnresolvedException until it returns or fails for good) and disconnect it.
+     * directory change, settle every group commit of the old session (retry each call that failed with an unknown
+     * outcome until it returns or fails for good) and disconnect it.
      * `previousUserPrivKey` (WIF) is the key the leaf was last wrapped to. One commit per group (a self-update: same
      * epoch, nothing to re-key in containers). Keep the previous key until every renewal returned, then discard it.
      *
@@ -159,7 +153,6 @@ public:
      * @param groupId ID of the Group
      * @param previousUserPrivKey the caller's previous identity private key, in WIF
      * @return true if a commit was made, false if the leaf already opens with the current key
-     * @throws GroupCommitUnresolvedException as `rotateGroupKey`
      */
     bool renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey);
 
