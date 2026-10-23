@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOWIMPL_HPP_
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
@@ -160,6 +161,14 @@ private:
         std::string streamRoomId;
         std::shared_ptr<WebRTCInterface> webRtc;
         std::vector<std::string> subscriptionsIds;
+        // Bound at join: a later room state naming another resource or context is not this room's.
+        std::string resourceId;
+        std::string contextId;
+        // The LOCAL key last handed to the media layer.
+        std::string localKeyId;
+        // Guards `publisherStream` and `localKeyId`, which the API thread (create/publish/update/remove) and the
+        // notification thread (applyRoomUpdate) both read and reset. Recursive: an update stops a publication under it.
+        std::recursive_mutex mutex;
     };
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
 
@@ -195,8 +204,10 @@ private:
     server::StreamRoomInfo getRawStreamRoom(const std::string& streamRoomId);
     // `streamRoomUpdated` for a joined room: the LOCAL key follows the room's current key (F-05c); a live publication
     // in a room gone stale re-keys it (F-05e/f), and stops when the re-key fails or the current key is unusable (F-05g).
+    // A snapshot naming another key than the one in use, or a stale one, is not applied: the keys come from a fresh
+    // read, so a delayed or replayed pre-rotation update cannot bring the old key back (M2).
     void applyRoomUpdate(StreamRoomData& room, const server::StreamRoomInfo& raw);
-    // Hands the room's key set to the media layer and the data channel encryptor.
+    // Hands the room's key set to the media layer and the data channel encryptor; refuses a state of another room.
     void applyRoomKeys(StreamRoomData& room, const server::StreamRoomInfo& streamRoomInfo);
     // LOCAL: the room's current key (`keyId`), what this client encrypts under. REMOTE: every key that opens.
     std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo);

@@ -131,13 +131,24 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         if (raw.type.value_or(std::string(STREAM_TYPE_FILTER_FLAG)) != STREAM_TYPE_FILTER_FLAG) {
             return;
         }
-        auto eventData = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(
-            raw, _keyProvider, _groupPrivKeyResolver
-        );
+        auto streamRoomData = _streamRoomMap.get(raw.id);
+        StreamRoom eventData;
+        try {
+            eventData = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRoom(
+                raw, _keyProvider, _groupPrivKeyResolver
+            );
+        } catch (...) {
+            // E.g. the application's UserVerifier throwing. An update this client could not read may be the re-key
+            // of a removal: a live publication does not go on under the key it replaced. Rethrown, so it is logged
+            // as any failed notification.
+            if (streamRoomData.has_value()) {
+                stopPublication(*streamRoomData.value());
+            }
+            throw;
+        }
         auto event = core::EventBuilder::buildEvent<StreamRoomUpdatedEvent, StreamRoom>(
             "stream", eventData, notification
         );
-        auto streamRoomData = _streamRoomMap.get(eventData.streamRoomId);
         auto subscriptions = notification.subscriptions;
         // The LOCAL key is chosen again from the updated room: one kept from join time would leave this client's
         // media and data channel under a key a re-key replaced, which a removed member holds (F-05c).
@@ -263,6 +274,9 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     std::shared_ptr<StreamRoomData> streamRoomData = std::make_shared<StreamRoomData>(
         dataChannelMessageEncryptorV1, streamRoomId, webRtc, subscriptionsIds
     );
+    streamRoomData->resourceId = streamRoom.resourceId.value_or("");
+    streamRoomData->contextId = streamRoom.contextId;
+    streamRoomData->localKeyId = streamRoom.keyId;
     _streamRoomMap.set(streamRoomId, streamRoomData);
     return streamRoomData;
 }
@@ -304,6 +318,7 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
     _eventMiddleware->notificationEventListenerRemoveSubscriptionIds(_notificationListenerId, room->subscriptionsIds);
 
     LOG_DEBUG("StreamApiLowImpl:leaveStreamRoom", "gently close of streams");
+    std::unique_lock<std::recursive_mutex> lock(room->mutex);
     if (room->publisherStream) {
         if (room->publisherStream->streamHandle.has_value()) {
             _handleToRoomId.erase(room->publisherStream->streamHandle.value());
@@ -314,6 +329,7 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
             _handleToRoomId.erase(room->subscriberStream->streamHandle.value());
         }
     }
+    lock.unlock();
     room->webRtc->closeAll(room->streamRoomId);
     _streamRoomMap.erase(streamRoomId);
     server::StreamRoomLeaveModel model;
@@ -324,6 +340,7 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
 StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
     auto streamHandle{nextId()};
     auto room = getStreamRoomData(streamRoomId);
+    std::lock_guard<std::recursive_mutex> lock(room->mutex);
     if (room->publisherStream) {
         throw StreamAlreadyPublishedException();
     }
@@ -337,6 +354,9 @@ StreamHandle StreamApiLowImpl::createStream(const std::string& streamRoomId) {
 // Publishing stream
 StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHandle) {
     auto room = getStreamRoomData(streamHandle);
+    // Held to the end: a room update arriving meanwhile waits, then sees the live publication. One handled before
+    // has stopped the handle (checked next) or left the room stale (ensureRoomKeyIsFresh, after the lock).
+    std::lock_guard<std::recursive_mutex> lock(room->mutex);
     if (!room->publisherStream || room->publisherStream->streamHandle != streamHandle) {
         throw StreamHandleNotInitialized();
     }
@@ -374,6 +394,7 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
 
 StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHandle) {
     auto room = getStreamRoomData(streamHandle);
+    std::lock_guard<std::recursive_mutex> lock(room->mutex);
     if (!room->publisherStream || room->publisherStream->streamHandle != streamHandle) {
         throw StreamHandleNotInitialized();
     }
@@ -408,6 +429,7 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
 }
 
 void StreamApiLowImpl::stopPublication(StreamRoomData& room) {
+    std::lock_guard<std::recursive_mutex> lock(room.mutex);
     const auto streamData = room.publisherStream;
     if (!streamData) {
         return;
@@ -439,6 +461,7 @@ void StreamApiLowImpl::stopPublication(StreamRoomData& room) {
 
 void StreamApiLowImpl::removeStream(const StreamHandle& streamHandle) {
     auto room = getStreamRoomData(streamHandle);
+    std::lock_guard<std::recursive_mutex> lock(room->mutex);
     if (!room->publisherStream) {
         throw StreamHandleNotInitialized();
     }
@@ -802,37 +825,41 @@ void StreamApiLowImpl::setNewOfferOnReconfigure(const int64_t sessionId, const S
 }
 
 void StreamApiLowImpl::applyRoomUpdate(StreamRoomData& room, const server::StreamRoomInfo& raw) {
+    std::lock_guard<std::recursive_mutex> lock(room.mutex);
     try {
-        applyRoomKeys(room, raw);
-    } catch (const std::exception& e) {
-        // No usable current key (V1 or unopenable): a live publication must not go on under the old one. Not
-        // rethrown, so the app still gets its StreamRoomUpdatedEvent.
-        LOG_ERROR("streamRoomUpdated: the room's current key is unusable: ", e.what());
+        if (raw.keyId == room.localKeyId && !isRekeyNeeded(raw)) {
+            applyRoomKeys(room, raw); // the key in use, at most with more keys to receive under
+            return;
+        }
+        invalidateModuleKeysInCache(room.streamRoomId);
+        // The Bridge sends this on a removal from a granted group too. A live publication writes nothing more,
+        // so without a re-key here it would stay under the key the removed member holds.
         if (room.publisherStream) {
-            stopPublication(room);
-        }
-        return;
-    }
-    // The Bridge sends this on a removal from a granted group too. A live publication writes nothing more,
-    // so without a re-key here it would stay under the key the removed member holds.
-    if (room.publisherStream && isRekeyNeeded(raw)) {
-        try {
-            invalidateModuleKeysInCache(room.streamRoomId);
             ensureRoomKeyIsFresh(room.streamRoomId);
-        } catch (const std::exception& e) {
-            // Fail closed: left running, the publication keeps sending media and data channel frames under
-            // the stale key until the next publishStream/updateStream. The Bridge's streamUnpublished tells
-            // the app; publishing again re-keys or throws, as for any publication.
-            LOG_ERROR("streamRoomUpdated: re-key of a stale room failed, stopping the publication: ", e.what());
-            stopPublication(room);
         }
+        applyRoomKeys(room, getRawStreamRoom(room.streamRoomId));
+    } catch (const std::exception& e) {
+        // Fail closed: no usable current key (V1 or unopenable), a failed re-key, or a state of another room. Left
+        // running, the publication would keep sending media and data channel frames under the old key. Not
+        // rethrown, so the app still gets its StreamRoomUpdatedEvent; the Bridge's streamUnpublished tells it.
+        LOG_ERROR("streamRoomUpdated: no usable fresh key for the room, stopping the publication: ", e.what());
+        stopPublication(room);
+    } catch (...) {
+        LOG_ERROR("streamRoomUpdated: no usable fresh key for the room, stopping the publication");
+        stopPublication(room);
     }
 }
 
 void StreamApiLowImpl::applyRoomKeys(StreamRoomData& room, const server::StreamRoomInfo& streamRoomInfo) {
+    if (streamRoomInfo.id != room.streamRoomId || streamRoomInfo.resourceId.value_or("") != room.resourceId ||
+        streamRoomInfo.contextId != room.contextId) {
+        throw core::ContainerMismatchException("not the joined room " + room.streamRoomId);
+    }
     std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoomInfo);
+    std::lock_guard<std::recursive_mutex> lock(room.mutex);
     room.webRtc->updateKeys(room.streamRoomId, keys);
     room.messageEncryptor->updateKey(keys);
+    room.localKeyId = streamRoomInfo.keyId;
 }
 
 std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo) {
