@@ -388,7 +388,7 @@ CommitShape TreeKeys::shapeSelfUpdate(const TreeGroupState& state, const std::st
         throw std::invalid_argument("member " + memberId + " holds no leaf in this tree");
     }
     // A one-leaf tree has no node to refresh, but its grant edge is re-wrapped to the member: how a sole member
-    // renews its leaf after an identity key change. The background self-update never selects such a tree.
+    // renews its leaf after an identity key change. The deferred self-update never selects such a tree.
     CommitShape shape;
     shape.numLeaves = state.numLeaves;
     shape.leafAssignment = state.leafAssignment;

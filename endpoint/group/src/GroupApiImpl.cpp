@@ -72,7 +72,7 @@ enum BridgeError : unsigned int {
 // Attempts of one app commit against a base that moved (`commitWithRetry`).
 constexpr int MAX_COMMIT_ATTEMPTS = 3;
 
-// How far a group's members spread their background work: this much per seat, within the bounds.
+// How far a group's members spread their deferred work: this much per seat, within the bounds.
 constexpr std::int64_t BACKGROUND_MS_PER_SEAT = 8;
 constexpr std::int64_t BACKGROUND_WINDOW_MIN_MS = 1000;
 constexpr std::int64_t BACKGROUND_WINDOW_MAX_MS = 120000;
@@ -156,12 +156,11 @@ GroupApiImpl::GroupApiImpl(
 }
 
 GroupApiImpl::~GroupApiImpl() {
-    stopBackgroundWorker();
     _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     _guardedExecutor.reset();
-    // Last: notification tasks may move pins until the executor is gone, and nothing respawns the worker now.
+    // Last: notification tasks may move pins until the executor is gone.
     if (_pinStore) {
         savePins();
     }
@@ -489,6 +488,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
         }
     }
     commitWithRetry([&] { addGroupMembersOnce(groupId, newMembers); });
+    runDueWork(groupId);
 }
 
 void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
@@ -707,6 +707,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     if (historyAbandoned.has_value()) {
         carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), userIds, prior);
     }
+    runDueWork(groupId);
 }
 
 std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
@@ -926,6 +927,7 @@ void GroupApiImpl::rotateGroupKey(const std::string& groupId) {
     if (committedHere) {
         carryMetadataForward(groupId, CarryScope::NewEpoch, false, {}, prior);
     }
+    runDueWork(groupId);
 }
 
 bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, PriorRole& prior) {
@@ -1069,8 +1071,8 @@ void GroupApiImpl::scheduleSelfUpdate(
     bool healsFirst,
     int attempts
 ) {
-    std::unique_lock<std::mutex> lock(_selfUpdateMutex);
-    if (_selfUpdateStopping || _selfUpdatePending.count(groupId) > 0 || _selfUpdateRunning == groupId) {
+    std::unique_lock<std::mutex> lock(_dueMutex);
+    if (_selfUpdatePending.count(groupId) > 0) {
         return;
     }
     // The healer of a node commits within the window; everybody else under it waits the window out first and then
@@ -1078,49 +1080,6 @@ void GroupApiImpl::scheduleSelfUpdate(
     // different nodes, and the stand-ins, from colliding on the generations they all refresh.
     const auto delay = std::chrono::milliseconds(healsFirst ? 0 : windowMs) + jitter(windowMs);
     _selfUpdatePending[groupId] = {std::chrono::steady_clock::now() + delay, windowMs, attempts};
-    wakeBackgroundWorker();
-}
-
-std::optional<std::chrono::steady_clock::time_point> GroupApiImpl::nextDue() const {
-    std::optional<std::chrono::steady_clock::time_point> due;
-    const auto consider = [&](std::chrono::steady_clock::time_point at) {
-        if (!due.has_value() || at < due.value()) {
-            due = at;
-        }
-    };
-    for (const auto& [groupId, pending] : _selfUpdatePending) {
-        consider(pending.due);
-    }
-    for (const auto& [key, check] : _ladderChecks) {
-        consider(check.due);
-    }
-    if (_pinSaveDue.has_value()) {
-        consider(_pinSaveDue.value());
-    }
-    return due;
-}
-
-void GroupApiImpl::stopBackgroundWorker() {
-    {
-        std::unique_lock<std::mutex> lock(_selfUpdateMutex);
-        _selfUpdateStopping = true;
-        _selfUpdatePending.clear();
-        _ladderChecks.clear();
-    }
-    _selfUpdateWake.notify_all();
-    if (_selfUpdateWorker.joinable()) {
-        _selfUpdateWorker.join();
-    }
-}
-
-void GroupApiImpl::wakeBackgroundWorker() {
-    if (_selfUpdateStopping) {
-        return; // a late trigger from another thread must never respawn a worker the destructor joined
-    }
-    if (!_selfUpdateWorker.joinable()) {
-        _selfUpdateWorker = std::thread([this] { runSelfUpdates(); });
-    }
-    _selfUpdateWake.notify_all();
 }
 
 void GroupApiImpl::scheduleLadderCheck(
@@ -1129,15 +1088,14 @@ void GroupApiImpl::scheduleLadderCheck(
     std::uint32_t at,
     std::int64_t windowMs
 ) {
-    std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+    std::unique_lock<std::mutex> lock(_dueMutex);
     const std::string key = memoKeyFor(groupId, std::to_string(at));
-    if (_selfUpdateStopping || _ladderChecks.count(key) > 0) {
+    if (_ladderChecks.count(key) > 0) {
         return;
     }
     // Jittered so a group's online members do not all check at once; the bridge's serialisation of repairs, and the
     // re-check right before each one, are what keep concurrent repairs within the per-span cap.
     _ladderChecks[key] = {groupId, contextId, at, std::chrono::steady_clock::now() + jitter(windowMs)};
-    wakeBackgroundWorker();
 }
 
 void GroupApiImpl::scheduleObservedRotation(
@@ -1148,7 +1106,7 @@ void GroupApiImpl::scheduleObservedRotation(
 ) {
     {
         // Several threads resolve keys at once: only the one that moves the mark queues the check.
-        std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+        std::unique_lock<std::mutex> lock(_dueMutex);
         std::uint32_t& checked = _ladderCheckedAt[groupId];
         if (checked >= cur) {
             return;
@@ -1159,7 +1117,7 @@ void GroupApiImpl::scheduleObservedRotation(
 }
 
 void GroupApiImpl::markLadderChecked(const std::string& groupId, std::uint32_t epoch) {
-    std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+    std::unique_lock<std::mutex> lock(_dueMutex);
     std::uint32_t& checked = _ladderCheckedAt[groupId];
     checked = std::max(checked, epoch);
 }
@@ -1229,48 +1187,38 @@ void GroupApiImpl::checkLadderAt(const std::string& groupId, const std::string& 
     }
 }
 
-void GroupApiImpl::runSelfUpdates() {
-    std::unique_lock<std::mutex> lock(_selfUpdateMutex);
-    while (!_selfUpdateStopping) {
-        const auto due = nextDue();
-        if (!due.has_value()) {
-            _selfUpdateWake.wait(lock);
-            continue;
+void GroupApiImpl::runDueWork(const std::string& groupId) {
+    if (_dueWorkOff) {
+        return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    std::vector<PendingLadderCheck> checks;
+    std::optional<PendingSelfUpdate> update;
+    bool savePinsNow = false;
+    {
+        std::unique_lock<std::mutex> lock(_dueMutex);
+        for (auto it = _ladderChecks.begin(); it != _ladderChecks.end();) {
+            if (it->second.groupId == groupId && it->second.due <= now) {
+                checks.push_back(it->second);
+                it = _ladderChecks.erase(it);
+            } else {
+                ++it;
+            }
         }
-        if (due.value() > std::chrono::steady_clock::now()) {
-            _selfUpdateWake.wait_until(lock, due.value());
-            continue;
+        if (const auto it = _selfUpdatePending.find(groupId); it != _selfUpdatePending.end() && it->second.due <= now) {
+            update = it->second;
+            _selfUpdatePending.erase(it);
         }
-        if (_pinSaveDue == due) {
-            _pinSaveDue.reset();
-            lock.unlock();
-            savePins();
-            lock.lock();
-            continue;
-        }
-        const auto check = std::find_if(_ladderChecks.begin(), _ladderChecks.end(), [&](const auto& entry) {
-            return entry.second.due == due.value();
-        });
-        if (check != _ladderChecks.end()) {
-            const PendingLadderCheck pending = check->second;
-            _ladderChecks.erase(check);
-            lock.unlock();
-            try {
-                checkLadderAt(pending.groupId, pending.contextId, pending.at);
-            } catch (const std::exception& e) {
-                LOG_WARN("[ladder] check dropped: ", e.what())
-            } catch (...) { LOG_WARN("[ladder] check dropped") }
-            lock.lock();
-            continue;
-        }
-        const auto next = std::find_if(_selfUpdatePending.begin(), _selfUpdatePending.end(), [&](const auto& entry) {
-            return entry.second.due == due.value();
-        });
-        const std::string groupId = next->first;
-        const PendingSelfUpdate pending = next->second;
-        _selfUpdateRunning = groupId;
-        _selfUpdatePending.erase(next);
-        lock.unlock();
+        savePinsNow = _pinsMovedMajor || (_pinsMoved && now - _lastPinSave >= PIN_SAVE_IDLE_INTERVAL);
+    }
+    for (const PendingLadderCheck& check : checks) {
+        try {
+            checkLadderAt(check.groupId, check.contextId, check.at);
+        } catch (const std::exception& e) {
+            LOG_WARN("[ladder] check dropped: ", e.what())
+        } catch (...) { LOG_WARN("[ladder] check dropped") }
+    }
+    if (update.has_value()) {
         bool lostRace = false;
         try {
             selfUpdate(groupId);
@@ -1284,18 +1232,20 @@ void GroupApiImpl::runSelfUpdates() {
         } catch (const std::exception& e) {
             LOG_WARN("[selfUpdate] group key tree self-update dropped: ", e.what())
         } catch (...) { LOG_WARN("[selfUpdate] group key tree self-update dropped") }
-        lock.lock();
-        _selfUpdateRunning.reset();
-        // A lost race goes back in the queue with a fresh random delay, so the members that collided spread out
-        // instead of colliding again on an immediate re-plan.
-        if (lostRace && pending.attempts + 1 < MAX_SELF_UPDATE_ATTEMPTS) {
-            lock.unlock();
-            // It already waited its turn once.
-            scheduleSelfUpdate(groupId, pending.windowMs, true, pending.attempts + 1);
-            lock.lock();
+        {
+            // What its own reads recorded meanwhile describes the state before its commit.
+            std::unique_lock<std::mutex> lock(_dueMutex);
+            _selfUpdatePending.erase(groupId);
+        }
+        // A lost race is recorded again with a fresh random delay, so the members that collided spread out.
+        if (lostRace && update->attempts + 1 < MAX_SELF_UPDATE_ATTEMPTS) {
+            scheduleSelfUpdate(groupId, update->windowMs, true, update->attempts + 1);
         } else if (lostRace) {
             LOG_WARN("[selfUpdate] group key tree self-update dropped after repeated concurrent commits")
         }
+    }
+    if (savePinsNow) {
+        savePins();
     }
 }
 
@@ -1318,6 +1268,7 @@ bool GroupApiImpl::renewLeaf(const std::string& groupId, const std::string& prev
     adoptPreviousIdentity(previous.value());
     bool renewed = false;
     commitWithRetry([&] { renewed = selfUpdateWith(groupId, &previous.value(), RENEW_LEAF_OP, true); });
+    runDueWork(groupId);
     return renewed;
 }
 
@@ -1332,7 +1283,7 @@ bool GroupApiImpl::selfUpdateWith(
     keytree::TreeGroupState state;
     std::pair<std::vector<std::string>, std::vector<std::string>> roster;
     // What the plan climbs over: the group's shared cache, or the renewal's call-local one, so nothing derived from
-    // the previous key ever reaches a reader, the background worker or a failed renewal's next call.
+    // the previous key ever reaches a reader, a deferred self-update or a failed renewal's next call.
     std::shared_ptr<keytree::TreeKeyCache> planCache = _treeKeyCaches.get(groupId);
     if (previousKey == nullptr) {
         // The need first, on the small path view: by now the node's healer, or anybody's commit through it, has most
@@ -1577,6 +1528,7 @@ void GroupApiImpl::updateGroupPublicMeta(
     // After, not before: the carry would move the counter this write is checked against. It skips a plane this
     // write replaced (no longer the entry it read).
     retryPendingCarry(groupId);
+    runDueWork(groupId);
 }
 
 void GroupApiImpl::updateGroupPrivateMeta(
@@ -1586,6 +1538,7 @@ void GroupApiImpl::updateGroupPrivateMeta(
 ) {
     writeMeta(readGroupForKeys(groupId), false, privateMeta, version);
     retryPendingCarry(groupId);
+    runDueWork(groupId);
 }
 
 void GroupApiImpl::writeMeta(
@@ -1645,6 +1598,7 @@ void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::Con
     if (carry.has_value()) {
         runPolicyCarry(groupId, carry.value());
     }
+    runDueWork(groupId);
 }
 
 void GroupApiImpl::updateGroupPolicyOnce(
@@ -1787,6 +1741,7 @@ Group GroupApiImpl::getGroup(const std::string& groupId) {
         assertHeadKeyAtEpoch(group);
         setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.rosterVersion);
     }
+    runDueWork(groupId);
     return result;
 }
 
@@ -1976,7 +1931,7 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
 void GroupApiImpl::processConnectedEvent() {
     {
         // Follows the key cache: what was checked is session state.
-        std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+        std::unique_lock<std::mutex> lock(_dueMutex);
         _ladderCheckedAt.clear();
     }
     _treeKeyCaches.dropAll();
@@ -1988,15 +1943,12 @@ void GroupApiImpl::processConnectedEvent() {
 // same call retried on the next connection must resend that statement, not be held back by it.
 void GroupApiImpl::processDisconnectedEvent() {
     {
-        std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+        std::unique_lock<std::mutex> lock(_dueMutex);
         _selfUpdatePending.clear();
         _ladderChecks.clear();
         _ladderCheckedAt.clear();
-        if (_pinStore) {
-            _pinSaveDue = std::chrono::steady_clock::now(); // flush on disconnect
-            wakeBackgroundWorker();
-        }
     }
+    savePins();
     _epochKeys.clear();
     _treeKeyCaches.dropAll();
     dropEnvelopeState();
@@ -2189,7 +2141,8 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(
     }
     if (resolved.key.has_value()) {
         // The climb to the current epoch went through, so the served path is the caller's to vouch for: refill
-        // whatever blanks a removal left on it, and re-key what somebody outside it set, in the background.
+        // whatever blanks a removal left on it, and re-key what somebody outside it set. Only recorded here: it runs
+        // at the end of a later GroupApi call on the group (`runDueWork`), never inside a container's key lookup.
         scheduleSelfUpdateIfNeeded(groupId, group);
         // A rotation this session saw happen: holding both keys, it can check (and repair) the new epoch's rungs.
         const auto cur = static_cast<std::uint32_t>(currentEpoch);
@@ -2364,7 +2317,7 @@ void GroupApiImpl::submit(
         throw StalePlan{}; // planned behind a state this client verified (or committed) since
     }
     {
-        // Replaces a pending background self-update only now, when the op superseding it is actually released.
+        // Replaces a pending deferred self-update only now, when the op superseding it is actually released.
         std::lock_guard<std::mutex> guard(_unresolvedMutex);
         _unresolved[groupId] = commit;
     }
@@ -2451,7 +2404,7 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
         return Settled::Proceed;
     }
     if (pending.op == SELF_UPDATE_OP && op != SELF_UPDATE_OP) {
-        return Settled::Proceed; // yields; the body stays for the worker until this op is released
+        return Settled::Proceed; // yields; the body stays for a later self-update until this op is released
     }
     if (pending.op != op && !mayCompleteOther) {
         return Settled::Deferred;
@@ -3002,16 +2955,9 @@ void GroupApiImpl::pinsMoved(bool major) {
     if (!_pinStore) {
         return;
     }
-    std::unique_lock<std::mutex> lock(_selfUpdateMutex);
-    if (_selfUpdateStopping) {
-        return; // the destructor's final save covers it
-    }
-    const auto now = std::chrono::steady_clock::now();
-    const auto due = major ? std::max(now, _lastPinSave + _pinSaveInterval) : _lastPinSave + PIN_SAVE_IDLE_INTERVAL;
-    if (!_pinSaveDue.has_value() || due < _pinSaveDue.value()) {
-        _pinSaveDue = due;
-        wakeBackgroundWorker();
-    }
+    std::unique_lock<std::mutex> lock(_dueMutex);
+    _pinsMoved = true;
+    _pinsMovedMajor = _pinsMovedMajor || major;
 }
 
 bool GroupApiImpl::savePins(bool all) {
@@ -3021,6 +2967,11 @@ bool GroupApiImpl::savePins(bool all) {
     bool saved = false;
     {
         std::lock_guard<std::mutex> lock(_pinSaveMutex);
+        {
+            // Before the export: a move after it marks the pins again.
+            std::unique_lock<std::mutex> dueLock(_dueMutex);
+            _pinsMoved = _pinsMovedMajor = false;
+        }
         keytree::TreeVerifier::PinSet mine;
         mine.tree = _treeVerifier.exportPins(all || _pinSaveFull);
         mine.planes = _groupDataSchemaMapper->exportVersionPins();
@@ -3058,15 +3009,11 @@ bool GroupApiImpl::savePins(bool all) {
             _pinSaveFull = true;
         }
     }
-    std::unique_lock<std::mutex> lock(_selfUpdateMutex);
+    std::unique_lock<std::mutex> lock(_dueMutex);
     if (saved) {
         _lastPinSave = std::chrono::steady_clock::now();
-    } else if (!_selfUpdateStopping) {
-        const auto retry = std::chrono::steady_clock::now() + PIN_SAVE_INTERVAL;
-        if (!_pinSaveDue.has_value() || retry < _pinSaveDue.value()) {
-            _pinSaveDue = retry;
-        }
-        wakeBackgroundWorker();
+    } else {
+        _pinsMoved = _pinsMovedMajor = true; // retried at the next flush
     }
     return saved;
 }

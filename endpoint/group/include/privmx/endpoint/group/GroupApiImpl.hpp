@@ -3,7 +3,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -13,7 +12,6 @@
 #include <optional>
 #include <set>
 #include <string>
-#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -41,7 +39,7 @@ namespace endpoint {
 namespace group {
 
 // A plan whose base is behind the pin (the client's own commit, or a read, moved it meanwhile). Retryable: a fresh
-// read plans on the newer head. Not an endpoint exception; `commitWithRetry` and the self-update worker handle it.
+// read plans on the newer head. Not an endpoint exception; `commitWithRetry` and `runDueWork` handle it.
 struct StalePlan : std::exception {
     const char* what() const noexcept override { return "group commit planned behind the pinned state"; }
 };
@@ -116,7 +114,7 @@ public:
     // `seatedRead`: a read of this group the caller has already verified (`verifyTree`, seated). Its own current
     // epoch then resolves off it rather than off a second read that would verify the same thing again.
     // `with`: climb with another key over another cache (leaf renewal); nothing then reaches `_epochKeys`, the
-    // group's shared cache or the background queue.
+    // group's shared cache or the due-work records.
     struct ClimbWith {
         std::shared_ptr<keytree::TreeKeyCache> cache;
         const privmx::crypto::PrivateKey* key;
@@ -338,7 +336,7 @@ private:
         std::function<void()> after;                 // best-effort follow-up (a removal's metadata refresh) or empty
     };
     // Proceed: plan on the read. Done: the caller's own op landed (now or before). Reread: another op of this
-    // client, or an earlier call of an event op past its window, was completed first; read again. Deferred: the background self-update yields to another op's commit.
+    // client, or an earlier call of an event op past its window, was completed first; read again. Deferred: a self-update yields to another op's commit.
     enum class Settled {
         Proceed,
         Done,
@@ -352,7 +350,7 @@ private:
     // Right after a read that verified (`verifyTree` returned true), before planning on it: completes this client's
     // unresolved commit to the group, if any (resend, or noticing it landed: the pin is exactly it). Past its window,
     // behind the pin, or failing again for another op, it is dropped and the caller plans afresh. `mayCompleteOther`:
-    // whether a different op may resend it (every app op; not the background self-update).
+    // whether a different op may resend it (every app op; not the deferred self-update).
     Settled settle(const std::string& groupId, const std::string& op, bool mayCompleteOther);
     // Sends a signed statement and keeps `commit` until its outcome is known. Throws StalePlan for a plan
     // behind the pin. A refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo` (T4-17).
@@ -450,12 +448,15 @@ private:
         bool mayCompleteOther
     );
     inline static const std::string RENEW_LEAF_OP = keytree::TreeCommits::opKey("renewLeaf");
-    // Schedules one when `group` (a seated, verified read) shows the caller's path needs it: within a window that
-    // grows with the group for the seat that heals first, one window later for any other (`healsFirst`).
+    // Records one when `group` (a seated, verified read) shows the caller's path needs it, due not before a random
+    // point within a window that grows with the group for the seat that heals first, one window later for any other
+    // (`healsFirst`), so a group's members do not all commit at once. At most one recorded per group.
     void scheduleSelfUpdateIfNeeded(const std::string& groupId, const server::GroupInfo& group);
-    // At most one pending or running per group, after a random delay so a group's members do not all commit at once.
     void scheduleSelfUpdate(const std::string& groupId, std::int64_t windowMs, bool healsFirst, int attempts = 0);
-    void runSelfUpdates();
+    // The flush point, at the end of a public call on `groupId` that succeeded: runs the group's due ladder checks
+    // and self-update, then saves the pins if they are due. Best-effort: failures are logged, never thrown. Key
+    // resolution for containers only records work; nothing commits there.
+    void runDueWork(const std::string& groupId);
 
     // The new epoch's rungs, each checked to open with `newGrantKey` to the key the chain (never the cache) names for
     // its target before anything is submitted. On failure the offending target is forgotten, so the next attempt
@@ -469,18 +470,11 @@ private:
         keytree::TreeKeyCache& cache
     );
 
-    // ── Ladder repair (L-1). Every queue below is guarded by _selfUpdateMutex and served by _selfUpdateWorker. ──
+    // ── Ladder repair (L-1). Recorded under _dueMutex, run by `runDueWork`. ──
 
-    // `clamp(numLeaves·8 ms, 1 s, 120 s)`: how far a group's members spread their background work.
+    // `clamp(numLeaves·8 ms, 1 s, 120 s)`: how far a group's members spread their deferred work.
     static std::int64_t backgroundWindowMs(const server::GroupInfo& group);
-    // Requires _selfUpdateMutex held. The earliest due time over every background source.
-    std::optional<std::chrono::steady_clock::time_point> nextDue() const;
-    // Requires _selfUpdateMutex held. Starts the worker if needed and wakes it; never after _selfUpdateStopping.
-    void wakeBackgroundWorker();
-    // For good: nothing is scheduled or run in the background from here on (pending work is dropped, the worker
-    // joined). The destructor's first step; tests call it to count commits without the worker's random delays.
-    void stopBackgroundWorker();
-    // Queues one check of the rungs at `at`, once per (group, epoch), after a random delay within `windowMs`.
+    // Records one check of the rungs at `at`, once per (group, epoch), due not before a random delay within `windowMs`.
     void scheduleLadderCheck(
         const std::string& groupId,
         const std::string& contextId,
@@ -496,7 +490,7 @@ private:
     );
     // The epoch's rungs are known good (this client just checked and committed them).
     void markLadderChecked(const std::string& groupId, std::uint32_t epoch);
-    // On the worker, no lock held: finds spans at `at` no rung opens and repairs those it holds both keys of,
+    // From `runDueWork`, no lock held: finds spans at `at` no rung opens and repairs those it holds both keys of,
     // after checking those keys against the chain.
     void checkLadderAt(const std::string& groupId, const std::string& contextId, std::uint32_t at);
 
@@ -543,24 +537,18 @@ private:
     // a hot session keeps the ones it already held — as it would by keeping the keys themselves.
     privmx::utils::ThreadSaveMap<std::string, privmx::crypto::PrivateKey> _epochKeys;
 
-    // Lock order (a later one may be taken while holding an earlier one, never the reverse):
-    //   commitLock(groupId) -> _pinSaveMutex -> _selfUpdateMutex.
-    // `landed` runs under the commit lock and moves pins (`pinsMoved` takes _selfUpdateMutex); `savePins` merges under
-    // _pinSaveMutex. _unresolvedMutex and _pendingCarryMutex are leaves: nothing else is
-    // taken under them. The worker holds _selfUpdateMutex only between tasks, never while running one.
+    // Lock order: commitLock(groupId) -> _pinSaveMutex -> _dueMutex. _dueMutex, _unresolvedMutex and
+    // _pendingCarryMutex are leaves; `runDueWork` holds none of them while running a task.
     //
-    // Background self-updates run on a thread of their own rather than the shared executor: a task there waits out
-    // its random delay, and a handful of groups waiting at once would hold every pool thread and stall event
-    // delivery for all modules. Joined in the destructor; pending ones are dropped on disconnect.
-    std::mutex _selfUpdateMutex;
-    std::condition_variable _selfUpdateWake;
+    // No thread of its own: deferred work (self-updates, ladder checks, pin saves) is recorded and runs at the end
+    // of the next public call on the group, after `due` (a "not before"). Records are dropped on disconnect.
+    std::mutex _dueMutex;
     struct PendingSelfUpdate {
         std::chrono::steady_clock::time_point due;
         std::int64_t windowMs; // the delay window it was scheduled with, reused by a retry
         int attempts;          // lost races so far, counted toward MAX_SELF_UPDATE_ATTEMPTS
     };
     std::map<std::string, PendingSelfUpdate> _selfUpdatePending;
-    std::optional<std::string> _selfUpdateRunning;
     static constexpr int MAX_SELF_UPDATE_ATTEMPTS = 3;
     struct PendingLadderCheck {
         std::string groupId;
@@ -570,8 +558,7 @@ private:
     };
     std::map<std::string /* groupId|at */, PendingLadderCheck> _ladderChecks;
     std::map<std::string /* groupId */, std::uint32_t> _ladderCheckedAt; // highest `at` already queued or checked
-    bool _selfUpdateStopping = false;
-    std::thread _selfUpdateWorker;
+    bool _dueWorkOff = false; // tests: `runDueWork` does nothing
 
     // m2 (A5-F3): one released statement per prevDigest. The bodies survive reconnects on purpose: a dropped
     // connection is the commonest unknown outcome, and the same call retried after it must resend, not be held back.
@@ -584,18 +571,17 @@ private:
     std::map<std::string, PendingCarry> _pendingCarry;
     // 01: pins kept in the connection's PinStore, shared by every GroupApi of this identity on this Bridge.
     // `loadPins` merges the slot into memory once, at construction; `savePins` merges memory into the slot
-    // (compare-and-swap, `PinBlob::higher`) and the result back into memory. Saves run on the worker (major moves
-    // within PIN_SAVE_INTERVAL, minor ones within PIN_SAVE_IDLE_INTERVAL), after every own commit but a background
-    // self-update before the call returns, on disconnect and in the destructor. A failed save is logged and retried in
-    // full; the pins in memory keep protecting this instance meanwhile.
+    // (compare-and-swap, `PinBlob::higher`) and the result back into memory. `pinsMoved` only marks them; saves run
+    // after every own commit but a self-update before the call returns, in `runDueWork` (a major move at once, minor
+    // ones once PIN_SAVE_IDLE_INTERVAL has passed since the last save), on disconnect and in the destructor. A failed
+    // save is logged and retried in full at the next flush; the pins in memory keep protecting this instance meanwhile.
     void loadPins();
     void pinsMoved(bool major);
     bool savePins(bool all = false);
     // The adoption itself (`adoptPreviousIdentity`, and the bodies `ConnectionImpl::adoptPreviousIdentity` staged).
     void adoptBody(const keytree::TreeVerifier::PinSet& adopted);
 
-    // ponytail constants: 1 s for major moves, 30 s for self-update-only moves.
-    static constexpr std::chrono::milliseconds PIN_SAVE_INTERVAL{1000};
+    // ponytail constant: 30 s for self-update-only moves.
     static constexpr std::chrono::milliseconds PIN_SAVE_IDLE_INTERVAL{30000};
 
     std::shared_ptr<core::PinStoreInterface> _pinStore; // set once, in the constructor
@@ -603,11 +589,11 @@ private:
     std::mutex _pinSaveMutex; // serialises saves; guards the two below
     bool _pinSaveFull = false;
     std::set<std::string> _adoptedIdentities;
-    // Under `_selfUpdateMutex`: when the worker saves next, and when the last save succeeded.
-    std::optional<std::chrono::steady_clock::time_point> _pinSaveDue;
+    // Under `_dueMutex`: moved since the last save (a major move among them), and when the last save succeeded.
+    bool _pinsMoved = false;
+    bool _pinsMovedMajor = false;
     std::chrono::steady_clock::time_point _lastPinSave;
-    std::chrono::milliseconds _pinSaveInterval = PIN_SAVE_INTERVAL; // under `_selfUpdateMutex`; tests stretch it
-    friend struct GroupApiImplTestAccess; // tests reach selfUpdate() and stop the worker
+    friend struct GroupApiImplTestAccess; // tests reach selfUpdate() and turn `runDueWork` off
 };
 
 } // namespace group

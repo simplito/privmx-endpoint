@@ -28,9 +28,22 @@ struct GroupApiImplTestAccess {
     static constexpr std::uint64_t RELEASE_WINDOW_MS = GroupApiImpl::RELEASE_WINDOW_MS;
 
     static void selfUpdate(GroupApiImpl& api, const std::string& groupId) { api.selfUpdate(groupId); }
-    // No background work is scheduled or run from here on, so what a test counts never depends on the worker's random
-    // delay. Self-updates are then only the explicit `selfUpdate` above.
-    static void stopBackgroundSelfUpdates(GroupApiImpl& api) { api.stopBackgroundWorker(); }
+    // The flush point does nothing from here on, so what a test counts never depends on the random due times.
+    // Self-updates are then only the explicit `selfUpdate` above, pin saves only the synchronous ones.
+    static void stopDueWork(GroupApiImpl& api) { api._dueWorkOff = true; }
+    // Whatever is recorded for the group made due now, then the flush point run (as at the end of a public call).
+    static void runDueWorkNow(GroupApiImpl& api, const std::string& groupId) {
+        {
+            std::lock_guard<std::mutex> lock(api._dueMutex);
+            for (auto& [key, check] : api._ladderChecks) {
+                check.due = {};
+            }
+            for (auto& [id, pending] : api._selfUpdatePending) {
+                pending.due = {};
+            }
+        }
+        api.runDueWork(groupId);
+    }
     static bool savePins(GroupApiImpl& api) { return api.savePins(); }
     static std::array<std::int64_t, 3> versionPins(GroupApiImpl& api, const std::string& groupId) {
         const auto all = api._groupDataSchemaMapper->exportVersionPins();
@@ -40,25 +53,8 @@ struct GroupApiImplTestAccess {
     static std::uint64_t pinnedSeq(GroupApiImpl& api, const std::string& groupId) {
         return api._treeVerifier.pinnedSeq(groupId);
     }
-    static bool pinSaveDue(GroupApiImpl& api) {
-        std::lock_guard<std::mutex> lock(api._selfUpdateMutex);
-        return api._pinSaveDue.has_value() && api._pinSaveDue.value() <= std::chrono::steady_clock::now();
-    }
-    // A save is queued, and not yet due.
-    static bool pinSaveScheduled(GroupApiImpl& api) {
-        std::lock_guard<std::mutex> lock(api._selfUpdateMutex);
-        return api._pinSaveDue.has_value() && api._pinSaveDue.value() > std::chrono::steady_clock::now();
-    }
-    // The spacing between saves of major moves (PIN_SAVE_INTERVAL); a queued save is re-planned under the new one.
-    static void setPinSaveInterval(GroupApiImpl& api, std::chrono::milliseconds interval) {
-        {
-            std::lock_guard<std::mutex> lock(api._selfUpdateMutex);
-            api._pinSaveInterval = interval;
-        }
-        api.pinsMoved(true);
-    }
     static std::size_t queuedLadderChecks(GroupApiImpl& api) {
-        std::lock_guard<std::mutex> lock(api._selfUpdateMutex);
+        std::lock_guard<std::mutex> lock(api._dueMutex);
         return api._ladderChecks.size();
     }
     // As if the call that released the group's unresolved commit ran `ms` earlier: no clock to move in a unit test.
