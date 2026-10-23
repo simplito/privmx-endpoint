@@ -337,7 +337,8 @@ keytree::TreeGroupState GroupApiImpl::climbForPlanning(
         if (removing != nullptr && climb.failure != keytree::ClimbFailure::NotAMember) {
             const auto cachedGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(group.keyVersion));
             const bool historyStillReachable =
-                cachedGrantKey.has_value() && cachedGrantKey->getPublicKey().toBase58DER() == group.groupPubKey;
+                cachedGrantKey.has_value() &&
+                cachedGrantKey->getPublicKey().toBase58DER() == keytree::TreeVerifier::canonicalKey(group.groupPubKey);
             const bool ownKeyChange = climb.failure == keytree::ClimbFailure::LeafDidNotOpen &&
                 !historyStillReachable && climbsWithPreviousIdentity(state, identity.value());
             if (!ownKeyChange) {
@@ -770,7 +771,8 @@ std::optional<bool> GroupApiImpl::removeGroupMembersOnce(
     // epochs before it become unreachable. A malicious bridge can force this by garbling edges (edges are not in
     // the tree hash) — it could destroy history anyway.
     auto currentGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(currentEpoch));
-    if (currentGrantKey.has_value() && currentGrantKey->getPublicKey().toBase58DER() != currentGroup.groupPubKey) {
+    if (currentGrantKey.has_value() &&
+        currentGrantKey->getPublicKey().toBase58DER() != keytree::TreeVerifier::canonicalKey(currentGroup.groupPubKey)) {
         currentGrantKey.reset(); // not the epoch's key: wrapped into the unit rung it would cut history off anyway
     }
     const bool abandonHistory = !currentGrantKey.has_value();
@@ -973,7 +975,8 @@ bool GroupApiImpl::rotateGroupKeyOnce(const std::string& groupId, PriorRole& pri
     const auto cache = _treeKeyCaches.get(groupId);
     const keytree::TreeGroupState state = climbForPlanning(currentGroup, cache);
     const auto currentGrantKey = cache->getGrantKey(static_cast<std::uint32_t>(currentEpoch));
-    if (!currentGrantKey.has_value() || currentGrantKey->getPublicKey().toBase58DER() != currentGroup.groupPubKey) {
+    if (!currentGrantKey.has_value() ||
+        currentGrantKey->getPublicKey().toBase58DER() != keytree::TreeVerifier::canonicalKey(currentGroup.groupPubKey)) {
         throw core::EncryptionKeyValidationException("rotating the group key needs the current grant key");
     }
     const auto [attestedUsers, attestedManagers] =
@@ -1174,7 +1177,7 @@ void GroupApiImpl::checkLadderAt(const std::string& groupId, const std::string& 
         if (!key.has_value() || opener == openers.end()) {
             return false;
         }
-        if (key->getPublicKey().toBase58DER() != opener->second.groupPubKey) {
+        if (key->getPublicKey().toBase58DER() != keytree::TreeVerifier::canonicalKey(opener->second.groupPubKey)) {
             LOG_WARN("[ladder] a cached grant key is not its epoch's; forgotten: ", std::to_string(epoch))
             cache->forgetGrantKey(epoch);
             return false;

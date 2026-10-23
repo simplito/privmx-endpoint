@@ -26,6 +26,7 @@ limitations under the License.
 #include <set>
 #include <thread>
 
+#include <privmx/crypto/utils/Base58.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
@@ -97,6 +98,8 @@ struct Bridge {
     std::function<void(std::unique_lock<std::mutex>&)> beforeRemoval = [](std::unique_lock<std::mutex>&) {};
     std::function<void()> afterRemoval = [] {};
     std::function<void()> beforeRotation = [] {}; // runs as a rotation arrives, before it is checked
+    // Edits a rotation's statement as stored.
+    std::function<void(server::GroupTreeCommit&)> onRotationCommit = [](server::GroupTreeCommit&) {};
     std::function<void()> afterRotation = [] {};  // runs once the rotation is applied; throws to lose the answer
     std::function<void()> onAdd = [] {};
     std::function<void()> afterAdd = [] {}; // runs once the add is applied; throws to lose the answer
@@ -369,6 +372,7 @@ struct Bridge {
             received.push_back(model.commit);
             beforeRotation();
             tree.rotate(caller, model.grantEdge, PublicKey::fromBase58DER(model.groupPubKey), model.commit);
+            onRotationCommit(tree.commits.back());
             storeNewEpoch(caller, model);
             afterRotation();
             return Poco::Dynamic::Var();
@@ -1226,6 +1230,45 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARotationIsNotPlannedOnAStateRolledBackBelo
     bridge.tree = atSeq1.tree;
     EXPECT_THROW(client("alice").rotateGroupKey(groupId), GroupHistoryForkException);
     EXPECT_EQ(bridge.tree.commits.size(), 1u) << "nothing was committed";
+}
+
+TEST_F(GroupApiLyingBridge, AGrantKeySignedInItsUncompressedSpellingIsStillTheEpochsKey) {
+    // bob's rotation is signed (by bob) with the new grant key spelled uncompressed, and served that way. alice's
+    // cached grant key is the same point: she rotates and removes on, history kept.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    std::string spelled;
+    bridge.onRotationCommit = [&](server::GroupTreeCommit& commit) {
+        CommitStatement statement = TreeCommits::fromWire(commit);
+        spelled = privmx::utils::Base58::encodeWithChecksum(
+            PublicKey::fromBase58DER(statement.groupPubKey).getEcc().getPublicKey(false)
+        );
+        statement.groupPubKey = spelled;
+        TreeCommits::sign(statement, bridge.users.at("bob"));
+        commit = TreeCommits::toWire(statement);
+    };
+    bridge.onRead = [&](const std::string&, server::GroupInfo& info) {
+        if (info.keyVersion == 2 && !spelled.empty()) {
+            info.groupPubKey = spelled;
+        }
+    };
+    try {
+        client("bob").rotateGroupKey(groupId);
+    } catch (...) {} // bob's own pin holds the statement as he signed it
+    bridge.onRotationCommit = [](server::GroupTreeCommit&) {};
+    ASSERT_FALSE(spelled.empty());
+    ASSERT_EQ(bridge.tree.state.epoch, 2u);
+    const Bridge atEpoch2 = bridge;
+    EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
+    EXPECT_EQ(bridge.tree.state.epoch, 3u);
+    rollBackTo(atEpoch2);
+    bridge.rungs = atEpoch2.rungs;
+    clients.erase("alice");
+    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    EXPECT_EQ(bridge.tree.state.epoch, 3u);
+    EXPECT_TRUE(std::any_of(bridge.rungs.begin(), bridge.rungs.end(), [](const server::GroupArchiveRung& rung) {
+        return rung.atKeyVersion == 3 && rung.targetKeyVersion == 2;
+    })) << "the removal kept history: the unit rung down to epoch 2";
 }
 
 TEST_F(GroupApiLyingBridge, ARotationOvertakenByASelfUpdateIsPlannedAgain) {

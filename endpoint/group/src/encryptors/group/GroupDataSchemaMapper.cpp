@@ -141,7 +141,13 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
             privmx::utils::Utils::parseJsonObject(membershipRaw.stdString())
         );
     } catch (...) { throw GroupMembershipMismatchException(); }
-    if (membership.groupPubKey != groupInfo.groupPubKey || membership.keyId != groupInfo.data.back().keyId) {
+    // The grant key compared as a point: one spelled uncompressed is another string for the same key.
+    bool sameGrantKey = false;
+    try {
+        sameGrantKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(membership.groupPubKey) ==
+            privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(groupInfo.groupPubKey);
+    } catch (...) {}
+    if (!sameGrantKey || membership.keyId != groupInfo.data.back().keyId) {
         throw GroupMembershipMismatchException();
     }
     const std::string expected = rosterTag(

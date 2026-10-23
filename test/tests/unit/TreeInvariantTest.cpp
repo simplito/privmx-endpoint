@@ -1722,6 +1722,43 @@ TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused
     }, true), "a new epoch's grant key is an earlier epoch's|") << "and in its uncompressed spelling too";
 }
 
+TEST_F(TreeVerification, SECURITY_APinnedGrantKeyIsComparedInItsCanonicalSpelling) {
+    // The pin holds its epoch's grant key as signed, here spelled uncompressed. The next epoch republishing that
+    // point (compressed) is an earlier epoch's key all the same: refused when the chain is followed from the pin.
+    create(40, 0);
+    remove(id(35), {id(5)});
+    const PublicKey key = PrivateKey::generateRandom().getPublicKey();
+    forge(id(9), [&](TreeGroupState& state) {
+        state.epoch += 1;
+        state.grantPublicKey = key;
+    }, {.rosterBump = 1, .op = CommitOp::Rotate});
+    CommitStatement spelled = TreeCommits::fromWire(bridge.commits.back());
+    spelled.groupPubKey = privmx::utils::Base58::encodeWithChecksum(key.getEcc().getPublicKey(false));
+    ASSERT_NE(spelled.groupPubKey, key.toBase58DER());
+    TreeCommits::sign(spelled, member(id(9)).priv);
+    bridge.commits.back() = TreeCommits::toWire(spelled);
+    TreeVerifier& own = verifierOf(id(9));
+    own.pinCommitted(GROUP_ID, "ctx", spelled, bridge.users(), managersOf(), bridge.rules());
+    forge(id(9), [&](TreeGroupState& state) {
+        state.epoch += 1;
+        state.grantPublicKey = key;
+    }, {.rosterBump = 1, .op = CommitOp::Rotate});
+    expectRefusal([&] { verify(id(9), false); }, "a new epoch's grant key is an earlier epoch's");
+}
+
+TEST_F(TreeVerification, SECURITY_PinnedAtComparesGrantKeysCanonicallyAndFailsClosed) {
+    create(4, 0);
+    const CommitStatement latest = TreeCommits::fromWire(bridge.commits.back());
+    TreeVerifier own;
+    own.pinCommitted(GROUP_ID, "ctx", latest, bridge.users(), managersOf(), bridge.rules());
+    const PublicKey key = PublicKey::fromBase58DER(latest.groupPubKey);
+    const std::string spelled = privmx::utils::Base58::encodeWithChecksum(key.getEcc().getPublicKey(false));
+    EXPECT_TRUE(own.pinnedAt(GROUP_ID, "ctx", 1, spelled)) << "the same point in its other spelling";
+    EXPECT_TRUE(own.agreesWithPin(GROUP_ID, "ctx", 1, spelled));
+    EXPECT_FALSE(own.pinnedAt(GROUP_ID, "ctx", 1, "not a key"));
+    EXPECT_FALSE(own.agreesWithPin(GROUP_ID, "ctx", 1, "not a key"));
+}
+
 // signed policy
 
 namespace {

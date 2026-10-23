@@ -217,6 +217,10 @@ public:
     // from genesis to it and keeps it as a pin, or refuses as a fork if it is not on the chain.
     static bool isHint(const Pin& pin) { return pin.seq > 0 && pin.groupPubKey.empty(); }
 
+    // One spelling per key (the same point base58'd uncompressed is another string but the same grant key): what
+    // grant keys are compared by. Throws GroupDataIntegrityException on one that does not parse.
+    static std::string canonicalKey(const std::string& base58);
+
     // Pins and version-pin counters as the PinBlob holds them.
     struct PinSet {
         std::map<std::string, Pin> tree;

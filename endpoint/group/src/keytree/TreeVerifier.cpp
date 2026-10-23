@@ -42,13 +42,6 @@ CommitStatement parse(const server::GroupTreeCommit& wire) {
     } catch (const std::invalid_argument& e) { reject(e.what()); }
 }
 
-// One spelling per key: the same point base58'd uncompressed is another string but the same grant key.
-std::string canonicalKey(const std::string& base58) {
-    try {
-        return privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(base58).toBase58DER();
-    } catch (...) { reject("a grant key that does not parse"); }
-}
-
 std::uint64_t nowMs() {
     return static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp());
 }
@@ -115,6 +108,12 @@ bool seatedAt(const TreeGroupState& state, std::uint32_t seat, const std::string
 }
 
 } // namespace
+
+std::string TreeVerifier::canonicalKey(const std::string& base58) {
+    try {
+        return privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(base58).toBase58DER();
+    } catch (...) { reject("a grant key that does not parse"); }
+}
 
 void TreeVerifier::verifyStatements(
     const std::string& groupId,
@@ -824,12 +823,21 @@ bool TreeVerifier::pinnedAt(
     std::int64_t keyVersion,
     const std::string& groupPubKey
 ) const {
-    std::lock_guard lock(_mutex);
-    const auto it = _pins.find(groupId);
-    return it != _pins.end() && it->second.contextId == contextId &&
-        !groupPubKey.empty() &&
-        it->second.groupPubKey == groupPubKey &&
-        static_cast<std::int64_t>(it->second.keyVersion) == keyVersion;
+    std::string pinnedKey;
+    {
+        std::lock_guard lock(_mutex);
+        const auto it = _pins.find(groupId);
+        if (it == _pins.end() || it->second.contextId != contextId || it->second.groupPubKey.empty() ||
+            static_cast<std::int64_t>(it->second.keyVersion) != keyVersion) {
+            return false;
+        }
+        pinnedKey = it->second.groupPubKey;
+    }
+    try {
+        return canonicalKey(groupPubKey) == canonicalKey(pinnedKey);
+    } catch (const GroupDataIntegrityException&) {
+        return false; // a key that does not parse is no pinned one
+    }
 }
 
 bool TreeVerifier::agreesWithPin(
