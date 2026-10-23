@@ -31,6 +31,7 @@ struct GroupApiImplTestAccess {
     // The flush point does nothing from here on, so what a test counts never depends on the random due times.
     // Self-updates are then only the explicit `selfUpdate` above, pin saves only the synchronous ones.
     static void stopDueWork(GroupApiImpl& api) { api._dueWorkOff = true; }
+    static std::size_t maxArchiveSpans() { return GroupApiImpl::MAX_ARCHIVE_SPANS; }
     // Whatever is recorded for the group made due now, then the flush point run (as at the end of a public call).
     static void runDueWorkNow(GroupApiImpl& api, const std::string& groupId) {
         {

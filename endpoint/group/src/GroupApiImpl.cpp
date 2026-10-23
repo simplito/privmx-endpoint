@@ -669,14 +669,29 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
     };
     const std::vector<std::uint32_t> targets = keytree::LadderKeys::requiredSkipTargets(newEpoch, floor);
     if (!targets.empty()) {
-        const server::GroupGetKeyArchiveResult archive = fetchKeyArchive(
-            group, static_cast<int64_t>(targets.back()), static_cast<int64_t>(newEpoch - 1)
-        );
+        // The gather descends from the previous epoch through each target not held yet, nearest first: those
+        // canonical paths are all it reads. Only if a rung on them fails is the whole window read, as before.
+        std::vector<keytree::RungSpan> path;
+        std::uint32_t from = newEpoch - 1;
+        for (const std::uint32_t target : targets) {
+            if (!cache.getGrantKey(target).has_value()) {
+                const auto leg = keytree::LadderMath::canonicalDescent(from, target, floor);
+                path.insert(path.end(), leg.begin(), leg.end());
+            }
+            from = target;
+        }
+        server::GroupGetKeyArchiveResult archive = fetchKeyArchive(group, path);
         floor = cache.raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow));
         registry = keytree::GroupKeyResolver::registryFromArchive(group, archive);
-        const keytree::RungKeyGathering gathered = ladder.gatherRungKeys(
+        keytree::RungKeyGathering gathered = ladder.gatherRungKeys(
             newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive), registry, floor
         );
+        if (!gathered.complete) {
+            archive = fetchKeyArchive(group, static_cast<int64_t>(targets.back()), static_cast<int64_t>(newEpoch - 1));
+            floor = cache.raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow));
+            registry = keytree::GroupKeyResolver::registryFromArchive(group, archive);
+            gathered = ladder.gatherRungKeys(newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive), registry, floor);
+        }
         LOG_DEBUG(
             "ladder gather for epoch ",
             std::to_string(newEpoch) +
@@ -2148,10 +2163,10 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(
     const auto cache = with != nullptr ? with->cache : _treeKeyCaches.get(groupId);
     keytree::GroupKeyResolver resolver(*cache);
     const bool needsDescent = seated && epoch > 0 && epoch < currentEpoch;
-    const keytree::ResolveResult resolved = resolver.resolve(
-        group, epoch, with != nullptr ? *with->key : _userPrivKey,
-        needsDescent ? fetchKeyArchive(group, epoch, currentEpoch) : server::GroupGetKeyArchiveResult{}
-    );
+    const privmx::crypto::PrivateKey& ownKey = with != nullptr ? *with->key : _userPrivKey;
+    const keytree::ResolveResult resolved = needsDescent ?
+        resolveDescending(resolver, group, epoch, ownKey) :
+        resolver.resolve(group, epoch, ownKey, server::GroupGetKeyArchiveResult{});
     if (with != nullptr) {
         // A leaf renewal's previous-key climb: whatever it derived stays in its own cache and dies with the call.
         if (resolved.key.has_value()) {
@@ -2475,6 +2490,67 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKey
     params.id = group.id;
     params.fromKeyVersion = targetEpoch;
     params.toKeyVersion = currentEpoch;
+    return fetchKeyArchive(group, params);
+}
+
+privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKeyArchive(
+    const server::GroupInfo& group,
+    const std::vector<keytree::RungSpan>& spans
+) {
+    server::GroupGetKeyArchiveModel params;
+    params.id = group.id;
+    params.spans = std::vector<server::GroupArchiveSpan>{};
+    for (const keytree::RungSpan& span : spans) {
+        params.spans->push_back(server::GroupArchiveSpan{.at = span.at, .target = span.target});
+    }
+    return fetchKeyArchive(group, params);
+}
+
+keytree::ResolveResult GroupApiImpl::resolveDescending(
+    keytree::GroupKeyResolver& resolver,
+    const server::GroupInfo& group,
+    int64_t epoch,
+    const privmx::crypto::PrivateKey& ownKey
+) {
+    // Anything but a broken or missing rung is the answer: the whole window would refuse the same way.
+    const auto settled = [](const keytree::ResolveResult& resolved) {
+        return resolved.failure != keytree::ResolveFailure::DescentFailed ||
+            resolved.descent == keytree::DescentFailure::EraBoundary ||
+            resolved.descent == keytree::DescentFailure::Pruned;
+    };
+    const auto current = static_cast<std::uint32_t>(group.keyVersion);
+    const std::uint32_t floor =
+        _treeKeyCaches.get(group.id)->raiseFloor(ladderFloorOf(group.eraFloor.value_or(1), group.archivePrunedBelow));
+    // Below the floor the descent ends at the floor whatever was fetched, so the path goes no lower.
+    const std::uint32_t goal = std::max(static_cast<std::uint32_t>(epoch), floor);
+    const std::vector<keytree::RungSpan> path = keytree::LadderMath::canonicalDescent(current, goal, floor);
+    server::GroupGetKeyArchiveResult archive = fetchKeyArchive(group, path);
+    keytree::ResolveResult resolved = resolver.resolve(group, epoch, ownKey, archive);
+    if (settled(resolved)) {
+        return resolved;
+    }
+    const std::vector<keytree::RungSpan> detour =
+        keytree::LadderMath::detourSpans(std::max(resolved.reachedEpoch, goal), goal, floor, path);
+    if (!detour.empty() && detour.size() <= MAX_ARCHIVE_SPANS) {
+        const server::GroupGetKeyArchiveResult around = fetchKeyArchive(group, detour);
+        archive.rungs.insert(archive.rungs.end(), around.rungs.begin(), around.rungs.end());
+        archive.eraFloor = std::max(archive.eraFloor, around.eraFloor);
+        if (around.archivePrunedBelow.has_value()) {
+            archive.archivePrunedBelow = std::max(archive.archivePrunedBelow.value_or(1), around.archivePrunedBelow.value());
+        }
+        resolved = resolver.resolve(group, epoch, ownKey, archive);
+        if (settled(resolved)) {
+            return resolved;
+        }
+    }
+    LOG_WARN("[ladder] the descent path to epoch ", std::to_string(epoch), " of ", group.id, " is broken; reading the whole window")
+    return resolver.resolve(group, epoch, ownKey, fetchKeyArchive(group, epoch, group.keyVersion));
+}
+
+privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKeyArchive(
+    const server::GroupInfo& group,
+    const server::GroupGetKeyArchiveModel& params
+) {
     server::GroupGetKeyArchiveResult archive = _serverApi.groupGetKeyArchive(params);
     _treeKeyCaches.get(group.id)->raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow));
     // `keyHistory` and a rung's `author` are the bridge's word; the statements are the members'.
@@ -2591,8 +2667,23 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
     core::ModuleKeys moduleKeys = getModuleKeys(groupId);
     auto candidates = filterToKeyId(moduleKeys.groupKeys, groupId, keyId);
     if (candidates.empty()) {
-        moduleKeys = getNewModuleKeysAndUpdateCache(groupId);
-        candidates = filterToKeyId(moduleKeys.groupKeys, groupId, keyId);
+        // `groupGet` serves only the current epochs, so a past epoch's key is looked up by its id. Its entry is the
+        // bridge's word like any other: the DIO, the descent to its epoch and the opener check below decide.
+        server::GroupGetEpochKeysModel lookup;
+        lookup.id = groupId;
+        lookup.keyIds = std::vector<std::string>{keyId};
+        candidates = filterToKeyId(_serverApi.groupGetEpochKeys(lookup).groupKeys, groupId, keyId);
+        // An epoch past the verified pin (a rotation this session has not read yet) has no opener to check its
+        // wrapper against: read the group as before, which makes it the head key.
+        const bool pastThePin = std::any_of(candidates.begin(), candidates.end(), [&](const auto& entry) {
+            return std::any_of(entry.keys.begin(), entry.keys.end(), [&](const auto& key) {
+                return key.groupEpoch.value_or(0) > static_cast<std::int64_t>(_treeVerifier.pinnedKeyVersion(groupId));
+            });
+        });
+        if (candidates.empty() || pastThePin) {
+            moduleKeys = getNewModuleKeysAndUpdateCache(groupId);
+            candidates = filterToKeyId(moduleKeys.groupKeys, groupId, keyId);
+        }
     }
     if (candidates.empty()) {
         throw core::EncryptionKeyValidationException("Group " + groupId + " publishes no key " + keyId);
@@ -2616,6 +2707,11 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
         throw core::EncryptionKeyValidationException(
             "Group key " + keyId + " could not be decrypted (status " + std::to_string(found.statusCode) + ")"
         );
+    }
+    // The id sealed inside the entry, not the label the bridge filed it under: another epoch's entry relabelled with
+    // this keyId opens fine, and memoized it would stand in for the real key for the rest of the session.
+    if (found.id != keyId) {
+        throw core::EncryptionKeyValidationException("Group key " + keyId + " is served under another key's id");
     }
     // The head key's wrapper was checked against the roster by the verified read the module keys came from; an
     // earlier epoch's against who opened it, or a member envelope could come from anybody in the context.
@@ -2689,14 +2785,16 @@ privmx::crypto::PrivateKey GroupApiImpl::grantKeyForPubKey(
         return resolveGroupPrivKey(groupId, cached.value());
     }
 
-    auto group = _serverApi.groupGet(pathRead(groupId)).group;
     auto target = privmx::crypto::PublicKey::fromBase58DER(groupPubKeyBase58);
+    server::GroupGetEpochKeysModel lookup;
+    lookup.id = groupId;
+    lookup.groupPubKeys = std::vector<std::string>{target.toBase58DER()}; // as stored: compressed
     // `keyHistory` is the bridge's word: only an epoch whose own key turns out to be the target is remembered.
-    for (const auto& entry : keytree::GroupKeyResolver::registryFromGroupHistory(group)) {
-        if (entry.grantPublicKey == target) {
-            const privmx::crypto::PrivateKey key = resolveGroupPrivKey(groupId, entry.epoch);
+    for (const auto& entry : _serverApi.groupGetEpochKeys(lookup).keyHistory) {
+        if (privmx::crypto::PublicKey::fromBase58DER(entry.groupPubKey) == target) {
+            const privmx::crypto::PrivateKey key = resolveGroupPrivKey(groupId, entry.keyVersion);
             if (key.getPublicKey() == target) {
-                _envelopeGrantEpochs.set(memoKey, entry.epoch);
+                _envelopeGrantEpochs.set(memoKey, entry.keyVersion);
                 return key;
             }
         }

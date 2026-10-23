@@ -356,26 +356,6 @@ TEST_F(ResolverConversion, DistinguishesTheGrantEdgeFromOrdinaryEdges) {
     EXPECT_EQ(grantEdges, 1u) << "exactly one edge joins the grant keypair to the root";
 }
 
-TEST_F(ResolverConversion, RegistryIncludesTheCurrentEpochNotJustHistory) {
-    Fixture fixture = buildFixture(2);
-    const PrivateKey older = PrivateKey::generateRandom();
-    fixture.group.keyVersion = 5;
-    fixture.group.keyHistory = std::vector<server::GroupKeyHistoryEntry>{
-        server::GroupKeyHistoryEntry{4, older.getPublicKey().toBase58DER()},
-    };
-
-    const std::vector<EpochRegistryEntry> registry = GroupKeyResolver::registryFromGroupHistory(fixture.group);
-    ASSERT_EQ(registry.size(), 2u);
-    // The newest epoch lives in `groupPubKey`, not in `keyHistory`; missing that would leave it unverifiable,
-    // and an unverifiable key is one the client refuses.
-    const auto current = LadderKeys::publicKeyOfEpoch(5, registry);
-    ASSERT_TRUE(current.has_value());
-    EXPECT_EQ(current.value(), fixture.grantKey.getPublicKey());
-    const auto past = LadderKeys::publicKeyOfEpoch(4, registry);
-    ASSERT_TRUE(past.has_value());
-    EXPECT_EQ(past.value(), older.getPublicKey());
-}
-
 // The overload `resolve()` actually calls: history from the archive, current epoch from the group.
 TEST_F(ResolverConversion, RegistryFromAnArchiveTakesTheCurrentEpochFromTheGroup) {
     Fixture fixture = buildFixture(2);
@@ -773,7 +753,6 @@ TEST_F(ResolverOldEpoch, SECURITY_AKeyVersionPast32BitsIsRefusedNotWrapped) {
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
     EXPECT_THROW(resolver.resolve(fixture.group, 0, fixture.members[1].priv, fixture.archive), GroupDataIntegrityException);
-    EXPECT_THROW(GroupKeyResolver::registryFromGroupHistory(fixture.group), GroupDataIntegrityException);
 }
 
 TEST_F(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {

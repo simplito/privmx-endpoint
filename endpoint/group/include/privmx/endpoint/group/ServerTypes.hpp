@@ -376,11 +376,35 @@ JSON_STRUCT(GroupPruneArchiveModel, GROUP_PRUNE_ARCHIVE_MODEL_FIELDS);
     F(rung, GroupArchiveRung)
 JSON_STRUCT(GroupRepairRungModel, GROUP_REPAIR_RUNG_MODEL_FIELDS);
 
+// One span of the Epoch Ladder: the rungs sealing epoch `target`'s grant key to epoch `at`'s.
+#define GROUP_ARCHIVE_SPAN_FIELDS(F)                                                                                   \
+    F(at, int64_t)                                                                                                     \
+    F(target, int64_t)
+JSON_STRUCT(GroupArchiveSpan, GROUP_ARCHIVE_SPAN_FIELDS);
+
+// A closed window `[fromKeyVersion, toKeyVersion]`, or instead only the rungs of `spans` (at most 128): the one path a
+// descent walks, O(log distance) spans rather than every rung in between.
 #define GROUP_GET_KEY_ARCHIVE_MODEL_FIELDS(F)                                                                          \
     F(id, std::string)                                                                                                 \
     F(fromKeyVersion, std::optional<int64_t>)                                                                          \
-    F(toKeyVersion, std::optional<int64_t>)
+    F(toKeyVersion, std::optional<int64_t>)                                                                            \
+    F(spans, std::optional<std::vector<GroupArchiveSpan>>)
 JSON_STRUCT(GroupGetKeyArchiveModel, GROUP_GET_KEY_ARCHIVE_MODEL_FIELDS);
+
+// Past epochs by what an envelope names (at most 32 of each): `groupGet` serves only the current epoch and the ones
+// the metadata heads sit at.
+#define GROUP_GET_EPOCH_KEYS_MODEL_FIELDS(F)                                                                           \
+    F(id, std::string)                                                                                                 \
+    F(keyIds, std::optional<std::vector<std::string>>)                                                                 \
+    F(groupPubKeys, std::optional<std::vector<std::string>>)
+JSON_STRUCT(GroupGetEpochKeysModel, GROUP_GET_EPOCH_KEYS_MODEL_FIELDS);
+
+// The epochs found, in `groupGet`'s shapes; `keyHistory` lists the current epoch too when it was asked for.
+#define GROUP_GET_EPOCH_KEYS_RESULT_FIELDS(F)                                                                          \
+    F(keyVersion, int64_t)                                                                                             \
+    F(groupKeys, std::vector<core::server::GroupKeysEntry>)                                                            \
+    F(keyHistory, std::vector<GroupKeyHistoryEntry>)
+JSON_STRUCT(GroupGetEpochKeysResult, GROUP_GET_EPOCH_KEYS_RESULT_FIELDS);
 
 #define GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS(F)                                                                         \
     F(keyVersion, int64_t)                                                                                             \

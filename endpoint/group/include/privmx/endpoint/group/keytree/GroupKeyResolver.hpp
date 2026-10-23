@@ -55,6 +55,8 @@ struct ResolveResult {
     std::optional<std::string> blame;
     // Spans the descent found broken (`DescentResult::brokenSpans`), on success and on failure alike.
     std::vector<RungSpan> brokenSpans;
+    // Where a failed descent stopped (`DescentResult::reachedEpoch`): the epoch a way round has to leave from.
+    std::uint32_t reachedEpoch = 0;
 };
 
 // Resolves a group's grant private key for an epoch: climb the tree to the current one, then descend the ladder
@@ -103,9 +105,6 @@ public:
 
     // The bridge rejects upward rungs too, but trusting it on that would trust the one party assumed hostile.
     static std::vector<ArchiveRung> toDownwardRungs(const server::GroupGetKeyArchiveResult& archive);
-
-    // `groupPubKey` is the current epoch, `keyHistory` the past ones.
-    static std::vector<EpochRegistryEntry> registryFromGroupHistory(const server::GroupInfo& group);
 
     // The current epoch still comes from the group, not the archive, because an epoch this client cannot
     // verify is one it refuses to accept a key for.

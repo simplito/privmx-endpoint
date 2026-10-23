@@ -222,6 +222,29 @@ private:
         int64_t targetEpoch,
         int64_t currentEpoch
     );
+    // Only the rungs of `spans`, authenticated the same way.
+    server::GroupGetKeyArchiveResult fetchKeyArchive(
+        const server::GroupInfo& group,
+        const std::vector<keytree::RungSpan>& spans
+    );
+    server::GroupGetKeyArchiveResult fetchKeyArchive(
+        const server::GroupInfo& group,
+        const server::GroupGetKeyArchiveModel& params
+    );
+
+    // `resolver.resolve` for an epoch below the current one, fetching as little of the ladder as it can: first the
+    // canonical descent path (LadderMath::canonicalDescent), then, if a rung on it fails, the ways round the epoch it
+    // stopped at (LadderMath::detourSpans), and only then the closed window `[epoch, current]` as before. Every
+    // attempt is verified exactly as one over the whole window; an era boundary or a prune ends it at once.
+    keytree::ResolveResult resolveDescending(
+        keytree::GroupKeyResolver& resolver,
+        const server::GroupInfo& group,
+        int64_t epoch,
+        const privmx::crypto::PrivateKey& ownKey
+    );
+
+    // Spans per `groupGetKeyArchive` call the bridge serves.
+    static constexpr std::size_t MAX_ARCHIVE_SPANS = 128;
 
     // The group's session key cache. Internal, for tests that need to plant a wrong key (a client bug) in it.
     std::shared_ptr<keytree::TreeKeyCache> keyCacheOf(const std::string& groupId);
@@ -512,11 +535,12 @@ private:
     // Length-prefixed `groupId`, so one pair cannot collide with another under a different split.
     static std::string memoKeyFor(const std::string& groupId, const std::string& suffix);
 
-    // Reaches back through the whole archive, however old the key is.
+    // Reaches back through the whole archive, however old the key is. A key past the cached head comes from
+    // `groupGetEpochKeys` by its id, not from a re-read of the group (`groupGet` serves only the current epochs).
     core::DecryptedEncKeyV2 encKeyById(const std::string& groupId, const std::string& keyId);
 
     // The sender only ever held a public key, so its epoch is recovered from the group's published history
-    // rather than carried on the wire.
+    // (`groupGetEpochKeys` by that key) rather than carried on the wire.
     privmx::crypto::PrivateKey grantKeyForPubKey(const std::string& groupId, const std::string& groupPubKeyBase58);
 
     std::shared_ptr<EnvelopeFile> getFileState(FileHandle fileHandle, bool wantReading);

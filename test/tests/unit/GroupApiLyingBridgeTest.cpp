@@ -21,6 +21,7 @@ limitations under the License.
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <iostream>
 #include <mutex>
 #include <set>
 #include <thread>
@@ -119,6 +120,10 @@ struct Bridge {
     // The Epoch Ladder as stored: author set to the caller of the operation that stored each rung, as the bridge does.
     std::vector<server::GroupArchiveRung> rungs;
     std::int64_t eraFloor = 1;
+    // Whether `groupGetKeyArchive` honours `spans` (false: an older bridge's answer to them, no rungs at all).
+    bool servesSpans = true;
+    // Edits what `groupGetEpochKeys` serves.
+    std::function<void(server::GroupGetEpochKeysResult&)> onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
 
     std::size_t count(const std::string& caller, const std::string& method) const {
         return static_cast<std::size_t>(std::count_if(calls.begin(), calls.end(), [&](const Call& call) {
@@ -132,7 +137,20 @@ struct Bridge {
         info.createDate = info.lastModificationDate = 1;
         info.data = rest.data;
         info.history = rest.history;
-        info.groupKeys = rest.groupKeys;
+        // As the bridge does: only the current epoch and the ones the metadata heads sit at. Any other epoch's key
+        // comes from `groupGetEpochKeys`.
+        info.groupKeys = std::vector<core::server::GroupKeysEntry>{};
+        for (const auto& entry : rest.groupKeys.value_or(std::vector<core::server::GroupKeysEntry>{})) {
+            core::server::GroupKeysEntry served{.group = entry.group, .keys = {}};
+            for (const auto& key : entry.keys) {
+                const std::int64_t epoch = key.groupEpoch.value_or(0);
+                if (epoch == static_cast<std::int64_t>(tree.state.epoch) || epoch == rest.publicMeta.keyVersion ||
+                    epoch == rest.privateMeta.keyVersion) {
+                    served.keys.push_back(key);
+                }
+            }
+            info.groupKeys->push_back(served);
+        }
         info.publicMeta = rest.publicMeta;
         info.privateMeta = rest.privateMeta;
         info.publicMetaVersion = rest.publicMetaVersion;
@@ -379,12 +397,50 @@ struct Bridge {
             server::GroupGetKeyArchiveResult result;
             result.keyVersion = static_cast<std::int64_t>(tree.state.epoch);
             result.eraFloor = eraFloor;
+            if (model.spans.has_value()) {
+                if (model.fromKeyVersion.has_value() || model.toKeyVersion.has_value() || model.spans->size() > 128) {
+                    throw privmx::utils::PrivmxException("INVALID_PARAMS", privmx::utils::PrivmxException::RPC, 0x0002);
+                }
+                for (const server::GroupArchiveRung& rung : rungs) {
+                    const bool asked = std::any_of(model.spans->begin(), model.spans->end(), [&](const auto& span) {
+                        return span.at == rung.atKeyVersion && span.target == rung.targetKeyVersion;
+                    });
+                    if (servesSpans && asked && rung.targetKeyVersion >= eraFloor) {
+                        result.rungs.push_back(rung);
+                    }
+                }
+                return result.toJSON();
+            }
             for (const server::GroupArchiveRung& rung : rungs) {
                 if (rung.atKeyVersion >= model.fromKeyVersion.value_or(1) &&
                     rung.atKeyVersion <= model.toKeyVersion.value_or(INT64_MAX) && rung.targetKeyVersion >= eraFloor) {
                     result.rungs.push_back(rung);
                 }
             }
+            return result.toJSON();
+        }
+        if (group == "groupGetEpochKeys") {
+            // The epochs whose key entry has one of the keyIds, or whose grant key is one of the given ones.
+            const auto model = server::GroupGetEpochKeysModel::fromJSON(params);
+            const auto keyIds = model.keyIds.value_or(std::vector<std::string>{});
+            const auto pubKeys = model.groupPubKeys.value_or(std::vector<std::string>{});
+            server::GroupGetEpochKeysResult result;
+            result.keyVersion = static_cast<std::int64_t>(tree.state.epoch);
+            for (const auto& entry : rest.groupKeys.value_or(std::vector<core::server::GroupKeysEntry>{})) {
+                for (const auto& key : entry.keys) {
+                    if (std::find(keyIds.begin(), keyIds.end(), key.keyId) != keyIds.end()) {
+                        result.groupKeys.push_back({.group = entry.group, .keys = {key}});
+                    }
+                }
+            }
+            std::set<std::int64_t> listed;
+            for (const auto& entry : rest.history) {
+                if (std::find(pubKeys.begin(), pubKeys.end(), entry.groupPubKey) != pubKeys.end() &&
+                    listed.insert(entry.keyVersion).second) {
+                    result.keyHistory.push_back({.keyVersion = entry.keyVersion, .groupPubKey = entry.groupPubKey});
+                }
+            }
+            onEpochKeys(result);
             return result.toJSON();
         }
         if (group == "groupRepairRung") {
@@ -3052,15 +3108,15 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEpochTheHistoryMislabelsIsNotRemembered) 
     const std::string epoch1 = bridge.tree.state.grantPublicKey.toBase58DER();
     const Envelope sealed = client("bob").encryptAnonymously(groupId, epoch1, core::Buffer::from("to epoch 1"));
     client("alice").rotateGroupKey(groupId);
-    // The fake serves no `keyHistory`; the past epoch as an honest bridge lists it, and then mislabelled.
+    // The epoch as `groupGetEpochKeys` serves it for the envelope's grant key: mislabelled, then as an honest bridge.
     std::int64_t labelled = 2;
-    bridge.onRead = [&](const std::string&, server::GroupInfo& info) {
-        info.keyHistory = std::vector<server::GroupKeyHistoryEntry>{{.keyVersion = labelled, .groupPubKey = epoch1}};
+    bridge.onEpochKeys = [&](server::GroupGetEpochKeysResult& result) {
+        result.keyHistory = {{.keyVersion = labelled, .groupPubKey = epoch1}};
     };
     EXPECT_ANY_THROW(client("alice").decrypt(sealed));
     labelled = 1;
     EXPECT_EQ(client("alice").decrypt(sealed).data.stdString(), "to epoch 1");
-    bridge.onRead = [](const std::string&, server::GroupInfo&) {};
+    bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_TheGroupKeyResolverPassesAForkThrough) {
@@ -3099,4 +3155,158 @@ TEST_F(GroupApiLyingBridge, SECURITY_12B_APinMergedInDuringTheVerifierCallStillN
     bridge.onVerify = [] {};
     EXPECT_TRUE(merged);
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(carol, groupId), 1u) << "moved by a key not valid now";
+}
+
+// ── past epochs off groupGet: groupGetEpochKeys and the ladder by span ─────────────────────────────────────────
+
+namespace {
+
+// What `caller` asked `groupGetKeyArchive` for, in order.
+std::vector<server::GroupGetKeyArchiveModel> archiveAsks(const Bridge& bridge, const std::string& caller) {
+    std::vector<server::GroupGetKeyArchiveModel> asks;
+    for (const Bridge::Call& call : bridge.calls) {
+        if (call.caller == caller && call.method == "context.groupGetKeyArchive") {
+            asks.push_back(server::GroupGetKeyArchiveModel::fromJSON(call.params));
+        }
+    }
+    return asks;
+}
+
+std::vector<RungSpan> spansOf(const server::GroupGetKeyArchiveModel& ask) {
+    std::vector<RungSpan> spans;
+    for (const auto& span : ask.spans.value_or(std::vector<server::GroupArchiveSpan>{})) {
+        spans.push_back(RungSpan{static_cast<std::uint32_t>(span.at), static_cast<std::uint32_t>(span.target)});
+    }
+    return spans;
+}
+
+// The stored rungs an ask is answered with: those of its spans, or of its window.
+std::size_t rungsServed(const Bridge& bridge, const server::GroupGetKeyArchiveModel& ask) {
+    const std::vector<RungSpan> spans = spansOf(ask);
+    return static_cast<std::size_t>(std::count_if(bridge.rungs.begin(), bridge.rungs.end(), [&](const auto& rung) {
+        const RungSpan span{static_cast<std::uint32_t>(rung.atKeyVersion), static_cast<std::uint32_t>(rung.targetKeyVersion)};
+        return ask.spans.has_value() ?
+            std::find(spans.begin(), spans.end(), span) != spans.end() :
+            rung.atKeyVersion >= ask.fromKeyVersion.value_or(1) && rung.atKeyVersion <= ask.toKeyVersion.value_or(INT64_MAX);
+    }));
+}
+
+constexpr std::uint32_t ROTATIONS = 40;
+
+} // namespace
+
+class GroupApiLyingBridgeOldEpochs : public GroupApiLyingBridge {
+protected:
+    std::string groupId;
+    Envelope sealed;
+
+    // A group of three whose epoch 1 alice wrote `sealed` under, `ROTATIONS` rotations ago: epoch 1 is then far below
+    // what `groupGet` serves (the current epoch and the metadata heads', carried up by every rotation).
+    void SetUp() override {
+        GroupApiLyingBridge::SetUp();
+        quiet = true;
+        groupId = createGroup({"alice", "bob", "carol"});
+        sealed = client("alice").encrypt(groupId, core::Buffer::from("at epoch 1"));
+        rotate();
+    }
+
+    void rotate() {
+        for (std::uint32_t i = 0; i < ROTATIONS; ++i) {
+            client("alice").rotateGroupKey(groupId);
+        }
+        ASSERT_EQ(bridge.tree.state.epoch, ROTATIONS + 1);
+        const server::GroupInfo read = bridge.serve("bob", false);
+        for (const auto& key : read.groupKeys->at(0).keys) {
+            ASSERT_GT(key.groupEpoch.value_or(0), 1) << "epoch 1 must not come with groupGet";
+        }
+    }
+};
+
+TEST_F(GroupApiLyingBridgeOldEpochs, AnEnvelopeSealedFarBelowWhatGroupGetServesOpensByItsKeyId) {
+    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1");
+    EXPECT_EQ(count("bob", "context.groupGetEpochKeys"), 1u);
+    const auto asks = archiveAsks(bridge, "bob");
+    ASSERT_EQ(asks.size(), 1u) << "the path held";
+    const std::vector<RungSpan> path = LadderMath::canonicalDescent(ROTATIONS + 1, 1, 1);
+    EXPECT_EQ(spansOf(asks[0]), path) << "only the descent path is asked for";
+    server::GroupGetKeyArchiveModel window;
+    window.fromKeyVersion = 1;
+    window.toKeyVersion = ROTATIONS + 1;
+    const std::size_t served = rungsServed(bridge, asks[0]);
+    const std::size_t windowed = rungsServed(bridge, window);
+    std::cout << "[transfer] epoch 1 from epoch " << ROTATIONS + 1 << ": " << path.size() << " spans, " << served
+              << " rungs; the closed window serves " << windowed << " rungs" << std::endl;
+    EXPECT_EQ(served, path.size()) << "one rung per span on an honest ladder";
+    EXPECT_LT(served * 4, windowed);
+    // Cached as before: a second envelope under the same key asks nothing.
+    const std::size_t calls = bridge.calls.size();
+    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1");
+    EXPECT_EQ(bridge.calls.size(), calls);
+}
+
+TEST_F(GroupApiLyingBridgeOldEpochs, AnAnonymousEnvelopeToAFarOlderEpochOpensByItsGrantKey) {
+    const std::string epoch1 = bridge.rest.history.at(0).groupPubKey;
+    const Envelope anonymous = client("carol").encryptAnonymously(groupId, epoch1, core::Buffer::from("to epoch 1"));
+    EXPECT_EQ(client("bob").decrypt(anonymous).data.stdString(), "to epoch 1");
+    EXPECT_EQ(count("bob", "context.groupGetEpochKeys"), 1u);
+    const auto asks = archiveAsks(bridge, "bob");
+    ASSERT_EQ(asks.size(), 1u);
+    EXPECT_EQ(spansOf(asks[0]), LadderMath::canonicalDescent(ROTATIONS + 1, 1, 1));
+}
+
+TEST_F(GroupApiLyingBridgeOldEpochs, AGarbageRungOnThePathIsRoutedRoundByADetourNotTheWindow) {
+    const std::vector<RungSpan> path = LadderMath::canonicalDescent(ROTATIONS + 1, 1, 1);
+    corrupt(path.at(1).at, path.at(1).target);
+    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1");
+    const auto asks = archiveAsks(bridge, "bob");
+    ASSERT_EQ(asks.size(), 2u) << "the path, then the ways round the epoch it stopped at";
+    const std::vector<RungSpan> detour = spansOf(asks[1]);
+    EXPECT_EQ(detour, LadderMath::detourSpans(path.at(1).at, 1, 1, path));
+    EXPECT_FALSE(asks[1].fromKeyVersion.has_value());
+    EXPECT_LE(detour.size(), GroupApiImplTestAccess::maxArchiveSpans());
+}
+
+TEST_F(GroupApiLyingBridgeOldEpochs, ABridgeServingNoSpanFallsBackToTheClosedWindow) {
+    bridge.servesSpans = false; // as if it ignored them
+    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1");
+    const auto asks = archiveAsks(bridge, "bob");
+    // The path; no detour, the only span at the odd current epoch being the unit rung already asked for; the window.
+    ASSERT_TRUE(LadderMath::detourSpans(ROTATIONS + 1, 1, 1, LadderMath::canonicalDescent(ROTATIONS + 1, 1, 1)).empty());
+    ASSERT_EQ(asks.size(), 2u);
+    EXPECT_TRUE(asks[0].spans.has_value());
+    EXPECT_FALSE(asks[1].spans.has_value());
+    EXPECT_EQ(asks[1].fromKeyVersion, std::optional<std::int64_t>(1));
+    EXPECT_EQ(asks[1].toKeyVersion, std::optional<std::int64_t>(ROTATIONS + 1));
+}
+
+TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_AnEntryOfAnotherEpochServedForTheKeyIdIsRefused) {
+    // The bridge answers the keyId lookup with what it likes. Whatever it serves goes through the same checks as
+    // before: the key the entry opens with is its labelled epoch's, reached by the verified descent.
+    const std::string keyId = bridge.rest.data.at(0).keyId;
+    const auto epochEntry = [&](std::int64_t epoch) {
+        for (const auto& key : bridge.rest.groupKeys->at(0).keys) {
+            if (key.groupEpoch.value_or(0) == epoch) {
+                return key;
+            }
+        }
+        throw std::logic_error("no entry");
+    };
+    const std::vector<std::function<void(core::server::GroupKeyEntry&)>> lies{
+        [](auto& key) { key.groupEpoch = 2; },                          // relabelled to a later epoch
+        [&](auto& key) { key.data = epochEntry(2).data; },              // another epoch's entry under this label
+        [&](auto& key) { key = epochEntry(2); key.keyId = keyId; },     // another epoch's entry under this keyId
+        [&](auto& key) { key = epochEntry(ROTATIONS + 1); key.keyId = keyId; }, // the current one's
+    };
+    for (std::size_t i = 0; i < lies.size(); ++i) {
+        bridge.onEpochKeys = [&](server::GroupGetEpochKeysResult& result) {
+            for (auto& entry : result.groupKeys) {
+                for (auto& key : entry.keys) {
+                    lies[i](key);
+                }
+            }
+        };
+        EXPECT_ANY_THROW(client("bob").decrypt(sealed)) << "lie " << i;
+    }
+    bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
+    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1") << "the honest answer still opens it";
 }

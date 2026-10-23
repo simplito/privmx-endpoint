@@ -76,6 +76,10 @@ server::GroupGetKeyArchiveResult ServerApi::groupGetKeyArchive(server::GroupGetK
     return request<server::GroupGetKeyArchiveResult>("groupGetKeyArchive", model.toJSON());
 }
 
+server::GroupGetEpochKeysResult ServerApi::groupGetEpochKeys(server::GroupGetEpochKeysModel model) {
+    return request<server::GroupGetEpochKeysResult>("groupGetEpochKeys", model.toJSON());
+}
+
 void ServerApi::groupRepairRung(server::GroupRepairRungModel model) {
     request("groupRepairRung", model.toJSON());
 }

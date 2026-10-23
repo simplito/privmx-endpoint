@@ -167,29 +167,6 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupKeyResolver::auth
     return archive;
 }
 
-std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromGroupHistory(const server::GroupInfo& group) {
-    std::vector<EpochRegistryEntry> registry;
-    // `keyHistory` holds the PAST epochs only; the current one lives in `groupPubKey`. Missing that distinction
-    // would leave the newest epoch unverifiable, and an unverifiable key is one this client refuses to accept.
-    if (group.keyHistory.has_value()) {
-        for (const server::GroupKeyHistoryEntry& entry : group.keyHistory.value()) {
-            registry.push_back(
-                EpochRegistryEntry{
-                    epochOf(entry.keyVersion),
-                    privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(entry.groupPubKey),
-                }
-            );
-        }
-    }
-    registry.push_back(
-        EpochRegistryEntry{
-            epochOf(group.keyVersion),
-            privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey),
-        }
-    );
-    return registry;
-}
-
 std::optional<std::string> GroupKeyResolver::ownUserId(const server::GroupInfo& group) {
     if (!group.ownLeafPosition.has_value() || !group.leafAssignment.has_value()) {
         return std::nullopt;
@@ -331,6 +308,7 @@ ResolveResult GroupKeyResolver::resolveWith(
     LadderKeys ladder(_cache);
     const DescentResult descent = ladder.descend(currentEpoch, wanted, rungs, registry, eraFloor, prunedBelow);
     result.brokenSpans = descent.brokenSpans;
+    result.reachedEpoch = descent.reachedEpoch;
     if (descent.failure != DescentFailure::None || !descent.key.has_value()) {
         result.failure = ResolveFailure::DescentFailed;
         result.descent = descent.failure;
