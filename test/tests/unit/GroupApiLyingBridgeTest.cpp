@@ -930,6 +930,18 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsTakenOnlyUnderTheCurrentEpochsKey)
     EXPECT_NE(deliver(groupId, "chat", 0, "bob").statusCode, 0);
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsNotTakenUnderAKeyCachedBehindThePinnedEpoch) {
+    // alice's cached head is from before carol removed bob, which a later read of hers verified (epoch 2); bob still
+    // seals under epoch 1. The cache alone must not make that key current.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("alice").encrypt(groupId, core::Buffer::from("warm")); // alice caches epoch 1's head
+    client("bob").encrypt(groupId, core::Buffer::from("warm"));   // and so does bob
+    client("carol").removeGroupMembers(groupId, {"bob"});
+    client("alice").resolveGroupPrivKey(groupId); // pins epoch 2; the cached head stays
+    client("bob").sendCustomEvent(groupId, "chat", core::Buffer::from("still here"), {});
+    EXPECT_NE(deliver(groupId, "chat", 0, "bob").statusCode, 0);
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_ACallersGrantKeyOtherThanThePinnedOneIsNotWrappedTo) {
     // T4-09: a module granting a container to a group takes the caller's grant key only exactly at the pin.
     const std::string groupId = createGroup({"alice", "bob"});

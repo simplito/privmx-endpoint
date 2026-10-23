@@ -1893,9 +1893,13 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 // A member's event, for the group the bridge labels it with, under the current epoch's key: a removed
                 // member holds only the earlier ones. The channel it was sealed for is checked once it is open.
                 const auto routing = _envelopeEncryptor.peek(envelope);
+                // A cached head behind the pinned epoch is no current key (as in `currentEncKey`).
+                core::ModuleKeys keys = getModuleKeys(raw.id);
+                if (routing.keyId != keys.currentKeyId || isRekeyNeeded(keys)) {
+                    keys = getNewModuleKeysAndUpdateCache(raw.id);
+                }
                 if (routing.type != ENVELOPE_FROM_MEMBER || routing.groupId != raw.id ||
-                    (routing.keyId != getModuleKeys(raw.id).currentKeyId &&
-                     routing.keyId != getNewModuleKeysAndUpdateCache(raw.id).currentKeyId)) {
+                    routing.keyId != keys.currentKeyId) {
                     throw InvalidEnvelopeFormatException("a custom event must be sealed by a member under the current key");
                 }
                 auto decrypted = decrypt(envelope);
