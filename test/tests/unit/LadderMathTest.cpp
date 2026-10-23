@@ -94,6 +94,14 @@ TEST_F(LadderSkipTargets, HandlesLargeEpochs) {
     }
 }
 
+TEST_F(LadderSkipTargets, HandlesEpochsPastTwoToTheThirtyFirst) {
+    // A 32-bit span wraps to 0 there, and the next `%` divides by it.
+    const Targets targets = LadderMath::skipRungTargets(0x80000000u, 1);
+    EXPECT_EQ(targets.size(), 30u) << "2^31 - 2^j for j = 1..30; j = 31 lands on 0, below the floor";
+    EXPECT_EQ(targets.back(), 0x80000000u - 2);
+    EXPECT_EQ(LadderMath::skipRungTargets(0xFFFFFFFFu, 1), Targets({}));
+}
+
 // rungSpansFor
 class LadderRungSpans : public LadderMathTestBase {};
 

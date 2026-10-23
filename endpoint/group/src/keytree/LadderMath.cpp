@@ -29,11 +29,12 @@ std::vector<std::uint32_t> LadderMath::skipRungTargets(std::uint32_t newEpoch, s
     assertEpoch(newEpoch, "newEpoch");
     assertEpoch(eraFloor, "eraFloor");
     std::vector<std::uint32_t> targets;
-    for (std::uint32_t span = 2; span <= newEpoch; span *= 2) {
+    // 64-bit: a 32-bit span wraps to 0 past 2^31 and the next `%` divides by it.
+    for (std::uint64_t span = 2; span <= newEpoch; span *= 2) {
         if (newEpoch % span != 0) {
             continue;
         }
-        const std::uint32_t target = newEpoch - span;
+        const auto target = static_cast<std::uint32_t>(newEpoch - span);
         if (target < eraFloor) {
             continue;
         }
