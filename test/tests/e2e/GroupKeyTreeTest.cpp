@@ -111,19 +111,7 @@ protected:
     std::string rawRemovalRefusal(const std::string& groupId, const std::string& userId, const std::string& groupPubKey) {
         group::ServerApi api(connection->getImpl()->getGateway());
         const auto current = api.groupGet({.groupId = groupId, .scope = std::string("plan")}).group;
-        // The latest served statement, extended by one (03: anything else is a lost race, answered before the key is
-        // looked at) and re-signed by this session: shape-valid; only its seq, link and key differ.
-        auto latest = group::keytree::TreeCommits::fromWire(
-            api.groupGetTreeCommits({.groupId = groupId, .fromSeq = 0}).commits.back()
-        );
-        group::keytree::CommitStatement next = latest;
-        next.seq = latest.seq + 1;
-        next.prevDigest = group::keytree::TreeCommits::digest(latest);
-        next.groupId = groupId;
-        next.policy.reset();
-        next.groupPubKey = groupPubKey;
-        group::keytree::TreeCommits::sign(next, connection->getImpl()->getUserPrivKey());
-        const auto statement = group::keytree::TreeCommits::toWire(next);
+        const auto statement = nextStatement(api, groupId, groupPubKey);
         group::server::GroupRemoveMembersModel model;
         model.id = groupId;
         model.userIds = {userId};
@@ -141,6 +129,45 @@ protected:
             return std::string(e.what()) + " | " + e.getData();
         }
         return "";
+    }
+
+    // A rotation sent straight to the Bridge, valid in shape only (its grant edge is not).
+    void sendRawRotation(const std::string& groupId) {
+        group::ServerApi api(connection->getImpl()->getGateway());
+        const auto current = api.groupGet({.groupId = groupId, .scope = std::string("plan")}).group;
+        const auto groupPubKey = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
+        group::server::GroupGenerateNewKeyModel model;
+        model.id = groupId;
+        model.groupPubKey = groupPubKey;
+        model.data = Poco::Dynamic::Var(std::string("x"));
+        model.keyId = "m3-raw";
+        model.grantEdge = {.isGrantEdge = true, .parentIndex = 0, .parentGeneration = 0, .childKind = "node",
+                           .childIndex = 0, .childGeneration = 0, .childUserId = std::nullopt, .data = "x"};
+        model.commit = nextStatement(api, groupId, groupPubKey);
+        model.rungs = {{.atKeyVersion = current.keyVersion + 1, .targetKeyVersion = current.keyVersion, .data = "x"}};
+        model.expectedKeyVersion = current.keyVersion;
+        model.expectedRosterVersion = current.rosterVersion;
+        api.groupGenerateNewKey(model);
+    }
+
+    // The latest served statement, extended by one (03: anything else is a lost race, answered before the key is
+    // looked at) and re-signed by this session: shape-valid; only its seq, link and key differ.
+    group::server::GroupTreeCommit nextStatement(
+        group::ServerApi& api,
+        const std::string& groupId,
+        const std::string& groupPubKey
+    ) {
+        auto latest = group::keytree::TreeCommits::fromWire(
+            api.groupGetTreeCommits({.groupId = groupId, .fromSeq = 0}).commits.back()
+        );
+        group::keytree::CommitStatement next = latest;
+        next.seq = latest.seq + 1;
+        next.prevDigest = group::keytree::TreeCommits::digest(latest);
+        next.groupId = groupId;
+        next.policy.reset();
+        next.groupPubKey = groupPubKey;
+        group::keytree::TreeCommits::sign(next, connection->getImpl()->getUserPrivKey());
+        return group::keytree::TreeCommits::toWire(next);
     }
 
     // ── the Epoch Ladder, raw: what the bridge accepts and serves, not what this client would send ──
@@ -929,11 +956,19 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_rotate_the_group_key) {
     disconnect();
     connectAs(2);
     EXPECT_THROW({ groupApi->rotateGroupKey(groupId); }, core::Exception) << "a non-manager rotated the group key";
+    // The client refuses that before sending anything; this is what the Bridge says to one sent anyway.
+    auto refused = refusalOf([&] { sendRawRotation(groupId); });
+    ASSERT_TRUE(refused.has_value()) << "the bridge let a non-manager rotate";
+    EXPECT_EQ(refused->first, ACCESS_DENIED) << refused->second;
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
     EXPECT_EQ(after.keyVersion, 1) << "nothing was committed";
     disconnect();
     connectAs(1);
+    // Control: the same rotation from a manager gets past the policy gate, so the refusal above is about the caller.
+    refused = refusalOf([&] { sendRawRotation(groupId); });
+    ASSERT_TRUE(refused.has_value()) << "a shape-only rotation was accepted";
+    EXPECT_NE(refused->first, ACCESS_DENIED) << refused->second;
 }
 
 // -- rejections the server owes us --
@@ -989,8 +1024,19 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_remove_anybody) {
     EXPECT_THROW({
         groupApi->removeGroupMembers(groupId, {user(3).userId});
     }, core::Exception) << "a non-manager removed a member";
+    // The client refuses that before sending anything; this is what the Bridge says to one sent anyway.
+    const auto fresh = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    const auto refusal = rawRemovalRefusal(groupId, user(3).userId, fresh);
+    EXPECT_NE(refusal.find("policy is not met"), std::string::npos) << "the bridge let a non-manager remove: " << refusal;
     disconnect();
     connectAs(1);
+    // Control: the same removal from a manager gets past the policy gate, so the refusal above is about the caller.
+    const auto control = rawRemovalRefusal(groupId, user(3).userId, fresh);
+    EXPECT_FALSE(control.empty()) << "a shape-only removal was accepted";
+    EXPECT_EQ(control.find("policy is not met"), std::string::npos) << control;
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_NE(std::find(after.users.begin(), after.users.end(), user(3).userId), after.users.end());
 }
 
 
