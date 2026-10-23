@@ -2336,9 +2336,18 @@ void GroupApiImpl::submit(
     if (statement.seq <= _treeVerifier.pinnedSeq(groupId)) {
         throw StalePlan{}; // planned behind a state this client verified (or committed) since
     }
+    // T4-17 under the lock: a concurrent commit of ours may have been refused as a lost race since this was planned.
+    _treeVerifier.assertMaySignAt(groupId, statement.seq);
     {
-        // Replaces a pending deferred self-update only now, when the op superseding it is actually released.
         std::lock_guard<std::mutex> guard(_unresolvedMutex);
+        // m2: another commit of ours, released with no known outcome since this was planned, may land at this seq.
+        // `settle` completes it on the re-plan. A deferred self-update yields instead.
+        const auto it = _unresolved.find(groupId);
+        if (it != _unresolved.end() && it->second.digest != commit.digest && it->second.seq >= statement.seq &&
+            it->second.op != SELF_UPDATE_OP) {
+            throw StalePlan{};
+        }
+        // Replaces a pending deferred self-update only now, when the op superseding it is actually released.
         _unresolved[groupId] = commit;
     }
     try {

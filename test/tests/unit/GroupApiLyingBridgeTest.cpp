@@ -626,6 +626,8 @@ protected:
         return bridge.count(caller, method);
     }
 
+    int removeTwoOnOneHead(const std::string& groupId, const std::function<void()>& firstArrives);
+
     // Replaces every stored rung of the span with one that opens with no epoch's key.
     void corrupt(std::int64_t at, std::int64_t target) {
         std::unique_lock<std::mutex> guard(bridge.sync->m);
@@ -1244,20 +1246,37 @@ TEST_F(GroupApiLyingBridge, ADifferentCommitResendsTheUnresolvedOneOnceThenPlans
     EXPECT_NE(bridge.received[2].serialize(), bridge.received[0].serialize());
 }
 
-TEST_F(GroupApiLyingBridge, SECURITY_TwoCommitsOfOneClientToOneGroupNeverShareAPrevDigest) {
-    // Two threads of one client, one removal each. The first to reach the bridge waits there until the other has read
-    // the same head; that one must not release a statement at it.
-    quiet = true;
-    addUsers({"dave"});
-    const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
+namespace {
+// Each distinct statement the bridge received at its own prevDigest (a resend is the same statement).
+bool noTwoStatementsShareAPrevDigest(const std::vector<server::GroupTreeCommit>& received) {
+    std::map<std::string, std::string> prevByDigest;
+    for (const server::GroupTreeCommit& commit : received) {
+        prevByDigest[digestOf(commit)] = prevOf(commit);
+    }
+    std::set<std::string> prevs;
+    for (const auto& [digest, prev] : prevByDigest) {
+        prevs.insert(prev);
+    }
+    return prevs.size() == prevByDigest.size();
+}
+} // namespace
+
+// Two threads of alice's client, removing bob and carol. Whichever reaches the bridge first waits there until the
+// other has read the head it was planned on, then `firstArrives` runs (it may throw to refuse). Returns the failures.
+int GroupApiLyingBridge::removeTwoOnOneHead(const std::string& groupId, const std::function<void()>& firstArrives) {
     GroupApiImpl& alice = client("alice");
     const int readsBefore = bridge.planReads;
     bool waited = false;
+    bool bothRead = false;
     bridge.beforeRemoval = [&](std::unique_lock<std::mutex>& lock) {
         if (std::exchange(waited, true)) {
             return;
         }
-        bridge.sync->cv.wait_for(lock, std::chrono::seconds(1), [&] { return bridge.planReads >= readsBefore + 2; });
+        // Bounded only so that a regression fails rather than hangs: the other thread's read takes no lock of ours.
+        bothRead = bridge.sync->cv.wait_for(lock, std::chrono::seconds(30), [&] {
+            return bridge.planReads >= readsBefore + 2;
+        });
+        firstArrives();
     };
     std::atomic<int> failures{0};
     std::thread other([&] {
@@ -1269,12 +1288,29 @@ TEST_F(GroupApiLyingBridge, SECURITY_TwoCommitsOfOneClientToOneGroupNeverShareAP
         alice.removeGroupMembers(groupId, {"carol"});
     } catch (...) { ++failures; }
     other.join();
-    EXPECT_EQ(failures.load(), 0);
-    std::set<std::string> prevDigests;
-    for (const server::GroupTreeCommit& commit : bridge.received) {
-        prevDigests.insert(prevOf(commit));
-    }
-    EXPECT_EQ(prevDigests.size(), bridge.received.size()) << "two statements at one prevDigest";
+    EXPECT_TRUE(bothRead) << "the second removal did not read the head the first was planned on";
+    return failures.load();
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_TwoCommitsOfOneClientToOneGroupNeverShareAPrevDigest) {
+    // The first removal lands; the second, planned on the same head, must not be released at it.
+    quiet = true;
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
+    EXPECT_EQ(removeTwoOnOneHead(groupId, [] {}), 0);
+    EXPECT_TRUE(noTwoStatementsShareAPrevDigest(bridge.received));
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ACommitPlannedBeforeAnotherWasLeftUnresolvedIsNotReleasedAtItsSeq) {
+    // M3: the first removal is refused with no known outcome (it stays unresolved and may still land at seq 2). The
+    // second was planned on the same head before that: released as planned it would be a second statement at seq 2.
+    // It re-plans instead, resending the unresolved one first and extending it.
+    quiet = true;
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
+    EXPECT_EQ(removeTwoOnOneHead(groupId, [] { refuse(); }), 1);
+    EXPECT_TRUE(noTwoStatementsShareAPrevDigest(bridge.received));
+    EXPECT_EQ(bridge.tree.state.epoch, 3u) << "both removals landed, one after the other";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnUnverifiedHeadShowingTheUnresolvedRemovalIsNotTakenAsItsLanding) {
