@@ -2356,8 +2356,12 @@ void GroupApiImpl::submit(
     if (statement.seq <= _treeVerifier.pinnedSeq(groupId)) {
         throw StalePlan{}; // planned behind a state this client verified (or committed) since
     }
-    // Under the lock: a concurrent commit of ours may have been refused as a lost race since this was planned.
-    _treeVerifier.assertMaySignAt(groupId, statement.seq);
+    // Under the lock: a concurrent commit of ours may have been refused as a lost race since this was planned. That
+    // is honest concurrency, so re-planned; a plan read that still serves no statement at that seq is refused there
+    // (`chainTo`).
+    if (!_treeVerifier.maySignAt(groupId, statement.seq)) {
+        throw StalePlan{};
+    }
     {
         std::lock_guard<std::mutex> guard(_unresolvedMutex);
         // Another commit of ours, released with no known outcome since this was planned, may land at this seq.
@@ -2400,9 +2404,13 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
         }
         first = it->second;
     }
+    // Landed and built upon since: on the verified chain below the pin. A read, so before the lock. First: a landed
+    // add is no failure, whatever the UserVerifier says of its newcomers now.
+    const bool landedBelowPin = _treeVerifier.pinnedSeq(groupId) > first->seq &&
+        _treeVerifier.chainedToPin(groupId, first->seq, first->digest, treeEnvironment(groupId));
     // A resent add wraps to its newcomers' keys again: only while the UserVerifier still vouches for them. Outside
     // every lock of ours, like any verifier call.
-    if (!first->newcomers.empty() &&
+    if (!landedBelowPin && !first->newcomers.empty() &&
         _treeVerifier.pinnedDigest(groupId) != first->digest &&
         (first->op == op || mayCompleteOther)) {
         try {
@@ -2415,9 +2423,6 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
             return Settled::Proceed; // not resent to unvouched keys; this op plans afresh
         }
     }
-    // Landed and built upon since: on the verified chain below the pin. A read, so before the lock.
-    const bool landedBelowPin = _treeVerifier.pinnedSeq(groupId) > first->seq &&
-        _treeVerifier.chainedToPin(groupId, first->seq, first->digest, treeEnvironment(groupId));
     const auto mutex = commitLock(groupId);
     std::unique_lock<std::mutex> lock(*mutex);
     UnresolvedCommit pending;

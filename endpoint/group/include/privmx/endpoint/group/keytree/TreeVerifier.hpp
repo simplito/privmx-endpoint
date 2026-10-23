@@ -175,6 +175,8 @@ public:
     // Throws GroupDataIntegrityException when a statement at `seq` or later was refused as a lost race: the bridge
     // then serves a chain that does not reach the seq it claimed a concurrent commit took.
     void assertMaySignAt(const std::string& groupId, std::uint64_t seq);
+    // The same as a question: false where `assertMaySignAt` throws.
+    bool maySignAt(const std::string& groupId, std::uint64_t seq) const;
 
     // Public for the unit tests of `step` (a walk that skips statements passes `adjacent = false`).
     // The roster as the statements replay it, with the hash the last of them signed.

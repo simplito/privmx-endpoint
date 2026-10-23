@@ -99,6 +99,7 @@ struct Bridge {
     std::function<void()> beforeRotation = [] {}; // runs as a rotation arrives, before it is checked
     std::function<void()> afterRotation = [] {};  // runs once the rotation is applied; throws to lose the answer
     std::function<void()> onAdd = [] {};
+    std::function<void()> afterAdd = [] {}; // runs once the add is applied; throws to lose the answer
     std::function<void()> onSelfUpdate = [] {};
     // Before a policy commit is applied; may release the lock (to let another client commit) and throw to refuse.
     std::function<void(std::unique_lock<std::mutex>&)> onPolicy = [](std::unique_lock<std::mutex>&) {};
@@ -332,6 +333,7 @@ struct Bridge {
                 {model.keyId, rest.history.back().groupPubKey, privmx::utils::Utils::getNowTimestamp(), caller,
                  tree.rosterVersion, static_cast<int64_t>(tree.state.epoch)}
             );
+            afterAdd();
             return Poco::Dynamic::Var();
         }
         if (group == "groupSelfUpdate") {
@@ -1419,6 +1421,63 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnUnverifiedHeadShowingTheUnresolvedRemoval
     const Group group = client("alice").getGroup(groupId);
     EXPECT_EQ(group.keyVersion, 1);
     EXPECT_NE(std::find(group.users.begin(), group.users.end(), "carol"), group.users.end());
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARemovalThatNeverLandedIsNotTakenAsLandedBelowThePin) {
+    // The same without the tampered plan read: the removal never landed and the pin passed its seq on a branch without
+    // it, so it is not on the chain to the pin. The retry plans afresh and removes carol for real.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Bridge atP = bridge;
+    int removals = 0;
+    bridge.afterRemoval = [&] {
+        if (removals++ == 0) {
+            rollBackTo(atP);
+            refuse();
+        }
+    };
+    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    ASSERT_EQ(bridge.received.size(), 1u);
+    selfUpdateBy("carol");
+    selfUpdateBy("carol");
+    client("alice").getGroup(groupId);
+    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    EXPECT_EQ(bridge.received.size(), 2u) << "the removal was taken as landed and not sent again";
+    const Group group = client("alice").getGroup(groupId);
+    EXPECT_EQ(std::find(group.users.begin(), group.users.end(), "carol"), group.users.end());
+    EXPECT_EQ(group.keyVersion, 2);
+}
+
+TEST_F(GroupApiLyingBridge, AnOwnCommitLostToAnotherCommitMakesTheOneQueuedBehindItRePlan) {
+    // Two removals of alice's planned on one head; the first is refused as a lost race to dave's self-update, which
+    // took its seq. The second, waiting for the commit lock with a plan at that seq, re-plans: honest concurrency,
+    // not an integrity failure.
+    quiet = true;
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
+    EXPECT_EQ(removeTwoOnOneHead(groupId, [&] {
+        selfUpdateBy("dave");
+        refuse("ROTATED_ALREADY", 0x621C);
+    }), 0);
+    EXPECT_TRUE(noTwoStatementsShareAPrevDigest(bridge.received));
+    EXPECT_EQ(bridge.tree.state.epoch, 3u) << "both removals landed, one after the other";
+}
+
+TEST_F(GroupApiLyingBridge, ALandedAddIsNotReportedFailedOnceItsNewcomerIsNoLongerVouchedFor) {
+    // alice's add of dave lands but its answer is lost; bob builds on it, alice's pin passes it, and only then does
+    // the verifier stop vouching for dave's key. Retried, the add is found landed: success, nothing resent.
+    quiet = true;
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const std::vector<GroupMemberToAdd> dave{GroupMemberToAdd{.user = user("dave"), .role = "user"}};
+    bridge.afterAdd = [] { refuse(); };
+    EXPECT_ANY_THROW(client("alice").addGroupMembers(groupId, dave));
+    bridge.afterAdd = [] {};
+    selfUpdateBy("bob");
+    client("alice").getGroup(groupId);
+    bridge.users["dave"] = PrivateKey::generateRandom();
+    EXPECT_NO_THROW(client("alice").addGroupMembers(groupId, dave));
+    EXPECT_EQ(bridge.received.size(), 1u);
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARotationCompletesAnUnresolvedRemovalFirst) {

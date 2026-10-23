@@ -1005,14 +1005,15 @@ void TreeVerifier::refusedAsLostRace(const std::string& groupId, std::uint64_t s
 }
 
 void TreeVerifier::assertMaySignAt(const std::string& groupId, std::uint64_t seq) {
-    std::lock_guard lock(_mutex);
-    const auto it = _pins.find(groupId);
-    if (it == _pins.end()) {
-        return;
-    }
-    if (seq <= it->second.refusedSeq) {
+    if (!maySignAt(groupId, seq)) {
         reject("a seq the bridge said a concurrent commit took, and now serves none at");
     }
+}
+
+bool TreeVerifier::maySignAt(const std::string& groupId, std::uint64_t seq) const {
+    std::lock_guard lock(_mutex);
+    const auto it = _pins.find(groupId);
+    return it == _pins.end() || seq > it->second.refusedSeq;
 }
 
 namespace {
