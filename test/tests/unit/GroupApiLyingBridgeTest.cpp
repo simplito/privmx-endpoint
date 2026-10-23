@@ -545,6 +545,18 @@ std::string prevOf(const server::GroupTreeCommit& commit) {
     throw privmx::utils::PrivmxException(name, privmx::utils::PrivmxException::RPC, code);
 }
 
+// `call` refused with `E` for `reason` (a fragment of `what()`): a SECURITY test that only checks the type passes
+// when a later check throws the same type for another reason, and so misses the check it is about going away.
+template<typename E>
+void expectRefusal(const std::function<void()>& call, const std::string& reason) {
+    try {
+        call();
+        ADD_FAILURE() << "not refused; expected: " << reason;
+    } catch (const E& e) {
+        EXPECT_NE(std::string(e.what()).find(reason), std::string::npos) << "refused for another reason: " << e.what();
+    }
+}
+
 // Exposes the grantee resolution every container module runs on a create or an update.
 class GrantingModule : public GroupAwareModuleApi {
 public:
@@ -1758,6 +1770,24 @@ TEST_F(GroupApiLyingBridge, APolicyChangeIsNotTakenForAnotherThatSignsTheSameRul
     ASSERT_TRUE(landed.policy.has_value());
     EXPECT_NE(privmx::utils::Utils::stringifyVar(landed.policy.value()).find(R"("get":"manager")"), std::string::npos)
         << "the second call returned on the first one's policy";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ASeatTheBridgeAllocatesOutsideTheFreeSeatsIsRefusedBeforeSigning) {
+    // H2: the seat numbers index the plan's arrays. -1 (0xFFFFFFFF as a seat) wrapped the leaf count to 0 and wrote
+    // past the seats; a seat far out allocated gigabytes; a taken one would seat dave over a member.
+    quiet = true;
+    addUsers({"dave"});
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    for (const std::int64_t seat : {std::int64_t{-1}, std::int64_t{0}, std::int64_t{3 + 1}, std::int64_t{1} << 31}) {
+        bridge.onPlanRead = [seat](server::GroupInfo& info) { info.nextFreeSeats = std::vector<std::int64_t>{seat}; };
+        expectRefusal<GroupDataIntegrityException>(
+            [&] { client("alice").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}}); },
+            "the bridge allocated a seat that is taken or out of range"
+        );
+    }
+    EXPECT_TRUE(bridge.received.empty()) << "a statement was signed";
+    bridge.onPlanRead = [](server::GroupInfo&) {};
+    EXPECT_NO_THROW(client("alice").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}}));
 }
 
 TEST_F(GroupApiLyingBridge, AnAdditionOfAnExistingMemberIsRefusedBeforeSigning) {

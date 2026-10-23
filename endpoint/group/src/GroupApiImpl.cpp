@@ -541,14 +541,20 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
     if (!allocated.has_value() || allocated.value().size() != newMembers.size()) {
         throw core::Exception("bridge did not allocate a seat for every newcomer");
     }
-    std::vector<std::uint32_t> positions;
-    for (const std::int64_t seat : allocated.value()) {
-        positions.push_back(static_cast<std::uint32_t>(seat));
-    }
 
     // Handle for the whole operation
     const auto cache = _treeKeyCaches.get(groupId);
     const keytree::TreeGroupState state = climbForPlanning(currentGroup, cache);
+    // The bridge's seat numbers index the plan's arrays: each must be a free seat of the tree the newcomers grow (H2).
+    const auto seatLimit = static_cast<std::int64_t>(state.numLeaves) + static_cast<std::int64_t>(newMembers.size());
+    std::vector<std::uint32_t> positions;
+    for (const std::int64_t seat : allocated.value()) {
+        if (seat < 0 || seat >= seatLimit ||
+            (seat < static_cast<std::int64_t>(state.numLeaves) && state.leafAssignment.at(seat).has_value())) {
+            throw GroupDataIntegrityException("the bridge allocated a seat that is taken or out of range");
+        }
+        positions.push_back(static_cast<std::uint32_t>(seat));
+    }
     const std::string adderId = keytree::GroupKeyResolver::ownUserId(currentGroup).value();
 
     // The roster after the change, derived rather than restated. Bare ids: nothing here wraps a key to them,

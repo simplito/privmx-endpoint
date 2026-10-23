@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
 
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -214,6 +215,9 @@ std::vector<std::uint32_t> TreeMath::keyedNodes(std::uint32_t numLeaves) {
 std::uint32_t TreeMath::numLeavesToSeat(std::uint32_t position, std::uint32_t currentNumLeaves) {
     if (position < currentNumLeaves) {
         return currentNumLeaves;
+    }
+    if (position == std::numeric_limits<std::uint32_t>::max()) {
+        throw std::invalid_argument("seat " + std::to_string(position) + " is out of range");
     }
     return position + 1;
 }
