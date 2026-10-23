@@ -2,6 +2,7 @@
 #include "privmx/endpoint/group/GroupException.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/group/Types.hpp>
+#include <privmx/endpoint/core/BigEndian.hpp>
 #include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 
 using namespace privmx::endpoint;
@@ -77,7 +78,7 @@ std::string SubscriberImpl::channelNameFromQuery(const std::string& subscription
 namespace {
 std::string channelPrefix(const std::string& channelName) {
     std::string prefix = keytree::TreeCommits::tag("pmx-event");
-    keytree::TreeCommits::putLp(prefix, channelName);
+    core::bigendian::putLp(prefix, channelName);
     return prefix;
 }
 } // namespace

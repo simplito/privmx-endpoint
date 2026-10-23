@@ -129,9 +129,9 @@ protected:
 
 } // namespace
 
-TEST_F(KeyProviderGroupKeysTest, dead_route_marks_the_key_even_though_a_later_route_opens_it) {
-    // Fail closed: group_b yields the right key, but group_a's failure still marks it. The same shape covers
-    // "this epoch is not mine to reach" and "the server served a DIO that does not verify".
+TEST_F(KeyProviderGroupKeysTest, a_dead_route_does_not_block_a_key_a_later_route_opens) {
+    // group_a's epoch is not reachable, group_b yields the key: the key is usable, whatever the order of the routes;
+    // an epoch of group_a must not block group_b.
     const auto groupA = privmx::crypto::PrivateKey::generateRandom();
     const auto groupB = privmx::crypto::PrivateKey::generateRandom();
 
@@ -143,17 +143,15 @@ TEST_F(KeyProviderGroupKeysTest, dead_route_marks_the_key_even_though_a_later_ro
     const auto keys = _keyProvider->getKeysAndVerify(request, resolverOver(openable, log));
 
     const auto& key = keys.at(_location).at(KEY_ID);
-    EXPECT_EQ(key.statusCode, UnknownEncryptionKeyVersionException().getCode());
-    // `statusCode` withholds the key without erasing what was found.
+    EXPECT_EQ(key.statusCode, 0);
     EXPECT_EQ(key.id, KEY_ID);
     EXPECT_EQ(key.key, _containerKey.key);
-    // Both tried: nothing can tell a route is dead without attempting it.
+    // Both tried, in order.
     EXPECT_EQ(log.attempted, (std::vector<std::string>{GROUP_A, GROUP_B}));
 }
 
-TEST_F(KeyProviderGroupKeysTest, opening_on_the_first_route_leaves_no_mark) {
-    // The honest limit of the mark: the search stops on success, so a dead group_b is never attempted and never
-    // reported. Detection stays order-dependent until the key-free DIO checks run over every route first.
+TEST_F(KeyProviderGroupKeysTest, opening_on_the_first_route_stops_the_search) {
+    // The search stops on success, so group_b is never attempted.
     const auto groupA = privmx::crypto::PrivateKey::generateRandom();
     const auto groupB = privmx::crypto::PrivateKey::generateRandom();
 

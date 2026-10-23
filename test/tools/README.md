@@ -61,7 +61,7 @@ Coverage: tree version 3 (buckets of 16 seats, blank nodes without a `publicKey`
 counts from 1 to 64; removals at every position of 2, 5 and 17 seats and the cases that leave blank nodes above the
 buckets (including a batch and a removed creator), each with the unit rung it publishes; additions that grow the tree
 (moving the root, or dropping an old root of 16 seats into a bucket), a batch across 32 seats and refilled blanks;
-self-updates refilling a blank; and the A-prime vectors V1-V10 (tagged `id`): dense creation, the adder's fills, and
+self-updates refilling a blank; and the named vectors V1-V10 (tagged `id`): dense creation, the adder's fills, and
 the knowledge closure a removal blanks. Removals carry `setters` and `blanked`, additions `blanked: []`; the bridge
 asserts its own derivation equals them. Every case names its committer and the nodes it refreshed, and carries the signed
 commit statement (`commit`), the post state's `treeHash`, `users`/`managers`/`rosterVersion`; filled node records

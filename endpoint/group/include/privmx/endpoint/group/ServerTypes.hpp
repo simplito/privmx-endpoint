@@ -79,6 +79,7 @@ JSON_STRUCT(GroupTreeCommitPathEntry, GROUP_TREE_COMMIT_PATH_ENTRY_FIELDS);
     F(rosterVersion, int64_t)                                                                                          \
     F(rosterHash, std::string)                                                                                         \
     F(treeHash, std::string)                                                                                           \
+    F(policyHash, std::string)                                                                                         \
     F(committer, std::string)                                                                                          \
     F(committerPubKey, std::string)                                                                                    \
     F(committerSeat, int64_t)                                                                                          \
@@ -86,7 +87,8 @@ JSON_STRUCT(GroupTreeCommitPathEntry, GROUP_TREE_COMMIT_PATH_ENTRY_FIELDS);
     F(addedUsers, std::vector<std::string>)                                                                            \
     F(addedManagers, std::vector<std::string>)                                                                         \
     F(removed, std::vector<std::string>)                                                                               \
-    F(signature, std::string)
+    F(signature, std::string)                                                                                          \
+    F(policy, std::optional<Poco::Dynamic::Var>)
 JSON_STRUCT(GroupTreeCommit, GROUP_TREE_COMMIT_FIELDS);
 
 #define GROUP_TREE_STATE_FIELDS(F)                                                                                     \
@@ -134,8 +136,6 @@ JSON_STRUCT(GroupTreeSelfUpdateTransition, GROUP_TREE_SELF_UPDATE_TRANSITION_FIE
 #define GROUP_ARCHIVE_RUNG_FIELDS(F)                                                                                   \
     F(atKeyVersion, int64_t)                                                                                           \
     F(targetKeyVersion, int64_t)                                                                                       \
-    F(recipientKind, std::optional<std::string>)                                                                       \
-    F(recipient, std::optional<std::string>)                                                                           \
     F(data, std::string)                                                                                               \
     F(author, std::optional<std::string>)
 JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
@@ -212,7 +212,6 @@ JSON_STRUCT(GroupKeyEntrySetForNewGroup, GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELD
     F(privateMeta, Poco::Dynamic::Var)                                                                                 \
     F(keyId, std::string)                                                                                              \
     F(type, std::string)                                                                                               \
-    F(policy, std::optional<Poco::Dynamic::Var>)                                                                       \
     F(groupPubKey, std::string)                                                                                        \
     F(groupKeys, std::optional<GroupKeyEntrySetForNewGroup>)                                                           \
     F(tree, GroupTreeState)                                                                                            \
@@ -238,11 +237,13 @@ JSON_STRUCT(GroupUpdatePublicMetaModel, GROUP_UPDATE_PUBLIC_META_MODEL_FIELDS);
     F(version, int64_t)
 JSON_STRUCT(GroupUpdatePrivateMetaModel, GROUP_UPDATE_PRIVATE_META_MODEL_FIELDS);
 
-// No version and no CAS: the policy touches neither metadata counter, appends no entry, and is covered by no
-// tag — as it never was. A dedicated RPC does not make it authenticated.
+// A policy change is a signed commit: the policy travels as `commit.policy`, bound by its `policyHash`, and
+// lands under the same CAS as any commit. It touches neither metadata counter and appends no entry.
 #define GROUP_UPDATE_POLICY_MODEL_FIELDS(F)                                                                            \
     F(id, std::string)                                                                                                 \
-    F(policy, Poco::Dynamic::Var)
+    F(commit, GroupTreeCommit)                                                                                         \
+    F(expectedKeyVersion, int64_t)                                                                                     \
+    F(expectedRosterVersion, int64_t)
 JSON_STRUCT(GroupUpdatePolicyModel, GROUP_UPDATE_POLICY_MODEL_FIELDS);
 
 #define GROUP_CREATE_RESULT_FIELDS(F) F(groupId, std::string)
@@ -320,6 +321,21 @@ JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
     F(abandonHistory, std::optional<bool>)
 JSON_STRUCT(GroupRemoveMembersModel, GROUP_REMOVE_MEMBERS_MODEL_FIELDS);
 
+// Advances the epoch without removing anybody: a fresh grant key on the one grant edge (to the unchanged root, or
+// to the sole member of a one-leaf tree), the rungs down to the old epochs, and the roster republished under it.
+#define GROUP_GENERATE_NEW_KEY_MODEL_FIELDS(F)                                                                         \
+    F(id, std::string)                                                                                                 \
+    F(groupPubKey, std::string)                                                                                        \
+    F(data, Poco::Dynamic::Var)                                                                                        \
+    F(keyId, std::string)                                                                                              \
+    F(grantEdge, GroupTreeEdge)                                                                                        \
+    F(commit, GroupTreeCommit)                                                                                         \
+    F(rungs, std::vector<GroupArchiveRung>)                                                                            \
+    F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
+    F(expectedKeyVersion, int64_t)                                                                                     \
+    F(expectedRosterVersion, int64_t)
+JSON_STRUCT(GroupGenerateNewKeyModel, GROUP_GENERATE_NEW_KEY_MODEL_FIELDS);
+
 // Refills the caller's own keyed path: no epoch change, no roster change, nothing for anybody else to notice.
 #define GROUP_SELF_UPDATE_MODEL_FIELDS(F)                                                                              \
     F(id, std::string)                                                                                                 \
@@ -353,6 +369,12 @@ JSON_STRUCT(GroupCutEraModel, GROUP_CUT_ERA_MODEL_FIELDS);
     F(belowEpoch, int64_t)                                                                                             \
     F(expectedKeyVersion, int64_t)
 JSON_STRUCT(GroupPruneArchiveModel, GROUP_PRUNE_ARCHIVE_MODEL_FIELDS);
+
+// One more rung for a span an epoch already published; the bridge records the caller as its author.
+#define GROUP_REPAIR_RUNG_MODEL_FIELDS(F)                                                                              \
+    F(id, std::string)                                                                                                 \
+    F(rung, GroupArchiveRung)
+JSON_STRUCT(GroupRepairRungModel, GROUP_REPAIR_RUNG_MODEL_FIELDS);
 
 #define GROUP_GET_KEY_ARCHIVE_MODEL_FIELDS(F)                                                                          \
     F(id, std::string)                                                                                                 \

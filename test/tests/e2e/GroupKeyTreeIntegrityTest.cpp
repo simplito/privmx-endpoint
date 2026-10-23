@@ -1,11 +1,14 @@
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <chrono>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
 #include <vector>
 #include "BaseGroupTest.hpp"
+#include "MemoryPinStore.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -13,11 +16,15 @@
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/endpoint/core/PinStoreInterface.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
+#include <privmx/endpoint/group/GroupApiImpl.hpp>
+#include <privmx/endpoint/group/keytree/LadderMath.hpp>
 #include <privmx/endpoint/thread/ServerApi.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 
@@ -155,9 +162,12 @@ protected:
     // Runs `body(groupApi, threadApi)` on a brand-new session: a session open while the tree changed keeps the
     // keys it already recovered, and would answer "still has access" long after the answer became no.
     template <typename Body>
-    void onFreshSessionWith(const std::string& privKey, Body body) {
+    void onFreshSessionWith(const std::string& privKey, Body body, const std::optional<std::string>& previousKey = {}) {
         auto freshConnection = connectWith(privKey);
         privmx::test::ScopeExit closeIt([&] { freshConnection->disconnect(); });
+        if (previousKey.has_value()) {
+            freshConnection->adoptPreviousIdentity(previousKey.value()); // right after connect
+        }
         auto groups = group::GroupApi::create(*freshConnection);
         auto threads = thread::ThreadApi::create(*freshConnection, groups);
         body(groups, threads);
@@ -608,7 +618,7 @@ TEST_F(GroupKeyTreeIntegrityTest, rotating_the_epoch_does_not_take_back_a_compro
         );
     });
 
-    // The finding: user_2's leaf was never re-wrapped, so their key opens the epoch the rotation minted - and
+    // The limit: user_2's leaf was never re-wrapped, so their key opens the epoch the rotation minted - and
     // with it content written afterwards, which needs that epoch's key and no earlier one.
     EXPECT_TRUE(canReadMessage(2, afterRotation)) <<
         "expected the compromised key to keep reading - a rotation is not post-compromise security; " <<
@@ -683,10 +693,10 @@ TEST_F(GroupKeyTreeIntegrityTest, changing_a_members_public_key_locks_them_out_w
     EXPECT_TRUE(contains(afterRotation.users, firstKey.userId)) <<
         "the locked-out member is still on the roster - that is the mismatch this test is about";
 
-    // The retired key gets no route either: it belongs to no context user, so the endpoint has nothing to serve
-    // it. The ciphertext is another matter - the leaf edge is unchanged, which the public API cannot probe.
+    // Bridge-auth regression check: the retired key belongs to no context user, so the Bridge refuses its
+    // session. This says nothing about edges - the leaf edge is unchanged, which the public API cannot probe.
     EXPECT_FALSE(canReadGroupWithRetiredKey(firstKey, groupId)) <<
-        "a key the Bridge no longer knows still got served the group";
+        "the Bridge still authenticated a session of a key the Context no longer lists";
 
     // Only re-seating repairs it, and it repairs it completely: the removal blanks the leaf's path and mints
     // epoch 2, the addition wraps the new leaf to the new key, and the ladder hands back the epoch-1 history.
@@ -702,6 +712,177 @@ TEST_F(GroupKeyTreeIntegrityTest, changing_a_members_public_key_locks_them_out_w
     EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << "re-seating did not restore access; " << lastReadError;
     EXPECT_TRUE(canReadMessageAs(secondKey, messageId)) <<
         "re-seating did not hand back the pre-rotation history; " << lastReadError;
+}
+
+// -- renewing a leaf after a key change --
+
+TEST_F(GroupKeyTreeIntegrityTest, a_member_who_changed_key_renews_their_leaf_with_the_previous_key) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    const Identity firstKey = newIdentity("renewing_member");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), asMember(firstKey)}); });
+    group::Group atEpoch1;
+    ASSERT_NO_THROW({ atEpoch1 = groupApi->getGroup(groupId); });
+    std::string threadId;
+    ASSERT_NO_THROW({ threadId = createThreadGrantedTo(atEpoch1); });
+    std::string messageId;
+    ASSERT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            threadId, core::Buffer::from("renew_public"), core::Buffer::from("renew_private"),
+            core::Buffer::from("renew_data")
+        );
+    });
+
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
+    ASSERT_FALSE(canReadGroupAs(secondKey, groupId)) << "nothing to renew: the new key already opens the leaf";
+
+    bool renewed = false;
+    ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        renewed = groups.renewLeaf(groupId, firstKey.privKey);
+    }));
+    EXPECT_TRUE(renewed);
+    EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << "the renewal did not restore access; " << lastReadError;
+    EXPECT_TRUE(canReadMessageAs(secondKey, messageId)) << "the group's grant did not come back; " << lastReadError;
+    group::Group afterRenewal;
+    ASSERT_NO_THROW({ afterRenewal = groupApi->getGroup(groupId); });
+    EXPECT_EQ(afterRenewal.statusCode, 0) << "the creator no longer verifies the group after the renewal";
+    EXPECT_EQ(afterRenewal.keyVersion, 1) << "a renewal opens no epoch, so no container needs re-keying";
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, an_old_key_session_cannot_commit_after_the_directory_change) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    const Identity firstKey = newIdentity("old_session_member");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), asMember(firstKey)}); });
+
+    auto oldSession = connectWith(firstKey.privKey);
+    privmx::test::ScopeExit closeIt([&] {
+        try {
+            oldSession->disconnect();
+        } catch (...) {}
+    });
+    auto oldGroups = group::GroupApi::create(*oldSession);
+    ASSERT_EQ(oldGroups.getGroup(groupId).statusCode, 0) << "the old session reads before the change";
+
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
+    // The Bridge resolves the caller by the session's key, so this session is nobody in the Context any more.
+    EXPECT_ANY_THROW(oldGroups.renewLeaf(groupId, secondKey.privKey));
+    const Identity newcomer = newIdentity("old_session_newcomer");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(newcomer.userId, newcomer.pubKey));
+    EXPECT_ANY_THROW(
+        oldGroups.addGroupMembers(groupId, {group::GroupMemberToAdd{.user = asMember(newcomer), .role = "user"}})
+    );
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_FALSE(contains(after.users, newcomer.userId)) << "the old key's session committed an add";
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, renewing_twice_commits_once) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    const Identity firstKey = newIdentity("twice_renewing_member");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), asMember(firstKey)}); });
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
+
+    std::vector<bool> renewed;
+    ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        renewed.push_back(groups.renewLeaf(groupId, firstKey.privKey));
+        renewed.push_back(groups.renewLeaf(groupId, firstKey.privKey));
+    }));
+    EXPECT_EQ(renewed, std::vector<bool>({true, false}));
+    EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << lastReadError;
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, a_single_member_group_survives_its_members_key_change) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    // Nobody else exists to remove and re-add the member, so renewal is the only way back in.
+    const Identity firstKey = newIdentity("sole_member");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW(onFreshSessionWith(firstKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        groupId = groups.createGroup(
+            contextId(), {}, {asMember(firstKey)}, core::Buffer::from("sole_public"), core::Buffer::from("sole_private")
+        );
+    }));
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
+    ASSERT_FALSE(canReadGroupAs(secondKey, groupId));
+
+    bool renewed = false;
+    ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        renewed = groups.renewLeaf(groupId, firstKey.privKey);
+    }));
+    EXPECT_TRUE(renewed);
+    EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << "the sole member is still locked out; " << lastReadError;
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_manager_who_changed_key_cannot_remove_before_renewing) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    // A removal by a manager whose leaf does not open (after the documented key change, with no grant key cached)
+    // must fail closed like rotate and add, pointing at renewLeaf, rather than go out with abandonHistory and cost
+    // every member every earlier epoch.
+    const Identity firstKey = newIdentity("rekeyed_manager");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = createTreeGroup({user(1), user(2), user(3), asMember(firstKey)}, {user(1), asMember(firstKey)});
+    });
+    group::Group atEpoch1;
+    ASSERT_NO_THROW({ atEpoch1 = groupApi->getGroup(groupId); });
+    std::string threadId;
+    ASSERT_NO_THROW({ threadId = createThreadGrantedTo(atEpoch1); });
+    std::string messageId;
+    ASSERT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            threadId, core::Buffer::from("history_public"), core::Buffer::from("history_private"),
+            core::Buffer::from("history_data")
+        );
+    });
+    ASSERT_TRUE(canReadMessage(2, messageId)) << lastReadError;
+
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
+    // Also user_1, the creator, who set the node above the manager's leaf: that setter must not be blamed as a
+    // garbler. The session follows the documented key change (adoptPreviousIdentity right after connect), which is
+    // how it knows the leaf is its own key change; without it the removal goes through and abandons history.
+    for (const std::string& leaving : {user(3).userId, user(1).userId}) {
+        std::string refusal;
+        ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+            try {
+                groups.removeGroupMembers(groupId, {leaving});
+            } catch (const core::Exception& e) {
+                refusal = e.getFull();
+            }
+        }, firstKey.privKey));
+        EXPECT_NE(refusal.find("renewLeaf"), std::string::npos)
+            << "removing " << leaving << " was not refused: '" << refusal << "'";
+    }
+    EXPECT_EQ(groupApi->getGroup(groupId).keyVersion, 1) << "a removal landed";
+    EXPECT_TRUE(canReadMessage(2, messageId)) << "user_2 lost the group's history; " << lastReadError;
+
+    // After the renewal the same removal goes through and keeps the history.
+    ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        ASSERT_TRUE(groups.renewLeaf(groupId, firstKey.privKey));
+        groups.removeGroupMembers(groupId, {user(3).userId});
+    }, firstKey.privKey));
+    EXPECT_EQ(groupApi->getGroup(groupId).keyVersion, 2);
+    EXPECT_TRUE(canReadMessage(2, messageId)) << "the removal after renewing cut the history; " << lastReadError;
 }
 
 // -- churning one member's seat --
@@ -1107,7 +1288,7 @@ TEST_F(GroupKeyTreeIntegrityTest, two_concurrent_public_meta_writes_still_serial
 }
 
 TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_up_the_metadata_the_removed_member_wrote) {
-    // T4-03: the planes' author is the member removed; it wrote them while a member, so the remover carries them up
+    // The planes' author is the member removed; it wrote them while a member, so the remover carries them up
     // under its own name rather than leaving them unattested.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(2)}); });
@@ -1284,7 +1465,7 @@ bool failsUserVerification(Call call) {
 } // namespace
 
 TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_key_the_application_does_not_vouch_for_gets_no_seat) {
-    // T3-11: a seat is filled to the key given for it, and that key comes off the Bridge's user listing. One the
+    // A seat is filled to the key given for it, and that key comes off the Bridge's user listing. One the
     // application does not vouch for may be the Bridge's own, which would then climb to the grant key.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
@@ -1297,7 +1478,7 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_key_the_application_does_not_vouch_
 }
 
 TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_listed_group_key_is_handed_out_only_as_a_vouched_statement_names_it) {
-    // T3-10: an outsider seals anonymous envelopes to the listed key. Unless the latest statement naming it is by
+    // An outsider seals anonymous envelopes to the listed key. Unless the latest statement naming it is by
     // somebody the application vouches for, the key may be the Bridge's. A listing carries no statement, so the key
     // is handed out only once a read in this session has verified one naming it (the creator's own commit counts,
     // hence another member's session).
@@ -1327,4 +1508,155 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_listed_group_key_is_handed_out_only
     const std::string verified = groups.getGroup(groupId).groupPubKey;
     EXPECT_FALSE(verified.empty());
     EXPECT_EQ(listedKey(), verified);
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, an_honestly_refused_commit_does_not_hold_back_the_next_one) {
+    // The Bridge refuses user_1's add only after the statement left the client (an id the context
+    // does not know), so as far as user_1 can tell it may have been applied. The next operation resends it once, finds
+    // it refused again, drops it and goes on.
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(3)}); });
+    const Identity stranger = newIdentity("m2_not_in_context");
+    EXPECT_ANY_THROW(
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = asMember(stranger), .role = "user"}})
+    );
+    EXPECT_NO_THROW(groupApi->removeGroupMembers(groupId, {user(2).userId}));
+
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(after.keyVersion, 2);
+    EXPECT_FALSE(contains(after.users, user(2).userId));
+    EXPECT_FALSE(contains(after.users, stranger.userId));
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, ladder_a_removal_leaves_a_ladder_that_needs_no_repair) {
+    // user_2 stays online across three removals and reads after each, so it holds both keys of every new epoch and
+    // records a check of its rungs, run at its next GroupApi call on the group. An honest remover's rungs open: nothing gets repaired, and every stored
+    // rung is the remover's.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
+    auto online = connect(2);
+    privmx::test::ScopeExit closeIt([&] { online->disconnect(); });
+    auto onlineGroups = group::GroupApi::create(*online);
+    ASSERT_NO_THROW({ onlineGroups.getImpl()->resolveGroupPrivKey(groupId); });
+    for (int round = 0; round < 3; ++round) {
+        if (round > 0) {
+            ASSERT_NO_THROW({ groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}}); });
+        }
+        ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); });
+        ASSERT_NO_THROW({ onlineGroups.getImpl()->resolveGroupPrivKey(groupId); });
+    }
+    // One window of a small group (1 s): every recorded check is due, and the call's flush point runs them.
+    std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+    ASSERT_NO_THROW({ onlineGroups.getGroup(groupId); });
+    group::server::GroupGetKeyArchiveModel model;
+    model.id = groupId;
+    const auto rungs = group::ServerApi(connection->getImpl()->getGateway()).groupGetKeyArchive(model).rungs;
+    std::size_t owed = 0;
+    for (std::uint32_t epoch = 2; epoch <= 4; ++epoch) {
+        owed += group::keytree::LadderMath::rungSpansFor(epoch, 1).size();
+    }
+    EXPECT_EQ(rungs.size(), owed) << "a repair was sent for a ladder that needed none";
+    for (const auto& rung : rungs) {
+        EXPECT_EQ(rung.author, std::optional<std::string>(user(1).userId));
+    }
+}
+
+// -- pins kept between sessions --
+
+TEST_F(GroupKeyTreeIntegrityTest, a_session_without_a_pin_store_still_reads_its_groups) {
+    const std::string groupId = createTreeGroup({user(1), user(2)});
+    EXPECT_TRUE(canReadGroup(1, groupId)) << lastReadError;
+    EXPECT_TRUE(canReadGroup(2, groupId)) << lastReadError;
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, pins_saved_by_one_session_carry_the_next_across_a_removal) {
+    // Session A saves its pins; user_2 removes user_3; session B loads A's pins and verifies the chain from them
+    // (a real Bridge serves the honest chain: B reads and seals as before, and its save moves the slot on).
+    const std::string groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(2)});
+    const auto store = std::make_shared<MemoryPinStore>();
+    disconnect();
+    privmx::test::ScopeExit restore([&] { connectAs(1); });
+    const std::string key = reader->getString("Login.user_1_privKey");
+    {
+        auto session = connectWith(key);
+        session->setPinStore(store);
+        {
+            auto groups = group::GroupApi::create(*session);
+            ASSERT_EQ(groups.getGroup(groupId).statusCode, 0);
+        } // the GroupApi saves as it goes
+        session->disconnect();
+    }
+    const auto first = store->slots();
+    ASSERT_FALSE(first.empty());
+    {
+        auto remover = connect(2);
+        group::GroupApi::create(*remover).removeGroupMembers(groupId, {user(3).userId});
+        remover->disconnect();
+    }
+    auto session = connectWith(key);
+    privmx::test::ScopeExit closeIt([&] { session->disconnect(); });
+    session->setPinStore(store);
+    {
+        auto groups = group::GroupApi::create(*session);
+        const group::Group read = groups.getGroup(groupId);
+        EXPECT_EQ(read.statusCode, 0);
+        EXPECT_EQ(read.keyVersion, 2);
+        EXPECT_NO_THROW(groups.encrypt(groupId, core::Buffer::from("after the removal")));
+    }
+    EXPECT_NE(store->slots(), first);
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, two_live_sessions_of_one_user_converge_on_one_store) {
+    // Two GroupApis of one connection are two instances on one store: each verifies on its own and both save into
+    // the one slot (the higher record wins), so neither falls back after the other saw the removal.
+    const std::string groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(2)});
+    const auto store = std::make_shared<MemoryPinStore>();
+    disconnect();
+    privmx::test::ScopeExit restore([&] { connectAs(1); });
+    auto session = connectWith(reader->getString("Login.user_1_privKey"));
+    privmx::test::ScopeExit closeIt([&] { session->disconnect(); });
+    session->setPinStore(store);
+    auto first = group::GroupApi::create(*session);
+    auto second = group::GroupApi::create(*session);
+    ASSERT_EQ(first.getGroup(groupId).statusCode, 0);
+    ASSERT_EQ(second.getGroup(groupId).statusCode, 0);
+    {
+        auto remover = connect(2);
+        group::GroupApi::create(*remover).removeGroupMembers(groupId, {user(3).userId});
+        remover->disconnect();
+    }
+    ASSERT_EQ(first.getGroup(groupId).keyVersion, 2); // the removal is a major move: saved before the call returns
+    const group::Group read = second.getGroup(groupId);
+    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_EQ(read.keyVersion, 2);
+    EXPECT_NO_THROW(second.encrypt(groupId, core::Buffer::from("converged")));
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, a_corrupted_pin_blob_is_ignored_and_the_session_reads_as_before) {
+    const std::string groupId = createTreeGroup({user(1), user(2)});
+    const auto store = std::make_shared<MemoryPinStore>();
+    disconnect();
+    privmx::test::ScopeExit restore([&] { connectAs(1); });
+    const std::string key = reader->getString("Login.user_1_privKey");
+    {
+        auto session = connectWith(key);
+        session->setPinStore(store);
+        {
+            auto groups = group::GroupApi::create(*session);
+            ASSERT_EQ(groups.getGroup(groupId).statusCode, 0);
+        }
+        session->disconnect();
+    }
+    store->corruptEverySlot();
+    auto session = connectWith(key);
+    privmx::test::ScopeExit closeIt([&] { session->disconnect(); });
+    session->setPinStore(store);
+    auto groups = group::GroupApi::create(*session);
+    EXPECT_EQ(groups.getGroup(groupId).statusCode, 0);
+    EXPECT_NO_THROW(groups.encrypt(groupId, core::Buffer::from("as before")));
 }

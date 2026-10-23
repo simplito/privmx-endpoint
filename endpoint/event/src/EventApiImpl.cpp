@@ -12,6 +12,8 @@ limitations under the License.
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/Subscriber.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
@@ -24,6 +26,18 @@ limitations under the License.
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::event;
+
+namespace {
+// Whether the subscription query `channel` was made for exactly `contextId` (its `contextId=` selector).
+bool subscribedTo(const std::string& channel, const std::string& contextId) {
+    try {
+        const auto selectors = core::SubscriptionQueryObj(channel).selectors();
+        return selectors.size() == 1 &&
+            selectors[0].selectorKey == "contextId" &&
+            selectors[0].selectorValue == contextId;
+    } catch (...) { return false; }
+}
+} // namespace
 
 EventApiImpl::EventApiImpl(
     const core::Connection& connection,
@@ -135,7 +149,16 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
         if (channel == "context/custom/" INTERNAL_EVENT_CHANNEL_NAME "|contextId=" + rawEvent.id) {
             return;
         }
-        auto resultEventData = _eventDataSchemaMapper.decrypt(rawEvent);
+        // An event the server files under another context than the one subscribed to is refused, never decrypted.
+        auto resultEventData = subscribedTo(channel, rawEvent.id) ?
+            _eventDataSchemaMapper.decrypt(rawEvent) :
+            ContextCustomEventData{
+                .contextId = rawEvent.id,
+                .userId = rawEvent.author.id,
+                .payload = {},
+                .statusCode = core::UserVerificationFailureException().getCode(),
+                .schemaVersion = EventDataSchema::Version::UNKNOWN
+            };
         auto customChannelName = privmx::utils::Utils::split(privmx::utils::Utils::split(channel, "/")[2], "|")[0];
         auto event = core::EventBuilder::buildEvent<privmx::endpoint::event::ContextCustomEvent>(
             "context/" + rawEvent.id + "/" + customChannelName, resultEventData, notification
@@ -157,6 +180,8 @@ void EventApiImpl::emitEventEx(
     Poco::Dynamic::Var encryptedEventData,
     const std::string& encryptionKey
 ) {
+    // The event key is wrapped to each of these, so the application vouches for each pair first.
+    _connection.getImpl()->getUserVerifier()->assertKeysVerified(contextId, users);
     server::ContextEmitCustomEventModel model;
     model.contextId = contextId;
     model.data = encryptedEventData;

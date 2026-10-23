@@ -84,7 +84,7 @@ public:
     // The members a commit of this shape wraps to directly — whose long-term public keys it needs. Ascending.
     static std::vector<std::string> recipients(const TreeGroupState& state, const CommitShape& shape);
 
-    // ── Planning: one commit each. Member keys come from `setMemberKeys*` (newcomers' from the arguments). ──
+    // ── Planning: one commit each. Member keys come from `setMemberKeyStrings` (newcomers' from the arguments). ──
 
     // Epoch 1, a fresh grant key.
     CommitPlan planCreate(
@@ -110,6 +110,15 @@ public:
         const privmx::crypto::PrivateKey& signer
     );
 
+    // Next epoch, a fresh grant key, no node touched: the one grant edge, wrapped to the root's published key, or
+    // in a one-leaf tree (whose root is the sole member's leaf) to the rotator's own key, `signer`. `state` must
+    // carry every record (the "plan" view): the statement signs its tree hash, which a rotation leaves as it is.
+    CommitPlan planRotation(
+        const TreeGroupState& state,
+        const std::string& rotatorId,
+        const privmx::crypto::PrivateKey& signer
+    );
+
     // Same epoch and grant key, which must already be in the cache (climb first).
     CommitPlan planSelfUpdate(
         const TreeGroupState& state,
@@ -117,34 +126,27 @@ public:
         const privmx::crypto::PrivateKey& signer
     );
 
-    // Supplies the members' long-term public keys, which are not part of the tree state.
-    void setMemberKeys(const std::vector<TreeMember>& members);
-
-    // The same keys as base58 strings, parsed only when a wrap needs one. Overrides any earlier `setMemberKeys`.
+    // Supplies the members' long-term public keys, which are not part of the tree state, as base58 strings parsed
+    // only when a wrap needs one. Replaces any keys supplied before.
     void setMemberKeyStrings(std::map<std::string, std::string> membersByUserId);
-
-    // Seats for `count` newcomers: blanks a removal left, lowest first, then appended past the last leaf.
-    // The live path asks the server for this instead; here for planning against a state already in hand.
-    static std::vector<std::uint32_t> choosePositions(const TreeGroupState& state, std::uint32_t count);
 
     static std::optional<std::uint32_t> positionOf(const TreeGroupState& state, const std::string& userId);
 
     // ── Primitives, exposed for tests and for the ladder module ─────────────
 
+    // `label` is sealed in front of the key; `unwrapKey` refuses a blob that does not start with it.
     static std::string wrapKey(
         const privmx::crypto::PrivateKey& keyToWrap,
         const privmx::crypto::PublicKey& to,
-        const privmx::crypto::PrivateKey& signer
+        const privmx::crypto::PrivateKey& signer,
+        const std::string& label = ""
     );
 
     static std::optional<privmx::crypto::PrivateKey> unwrapKey(
         const std::string& blob,
-        const privmx::crypto::PrivateKey& with
+        const privmx::crypto::PrivateKey& with,
+        const std::string& label = ""
     );
-
-    // The sender key a wrapped blob carries (`wrapKey`'s `signer`). It opens only through the ECDH with that key, so
-    // whoever sealed it holds the sender's private key or the recipient's. Nullopt for a blob that does not parse.
-    static std::optional<privmx::crypto::PublicKey> sealerOf(const std::string& blob);
 
 private:
     // The single planner behind every operation (§6): blank `shape.blanked`, mint fresh keys for
@@ -163,13 +165,11 @@ private:
 
     privmx::crypto::PrivateKey currentGrantKey(const TreeGroupState& state) const;
 
-    static const TreeNodeState* findNode(const TreeGroupState& state, std::uint32_t nodeIndex);
-
     // Parsed on first use.
     std::optional<privmx::crypto::PublicKey> memberKey(const std::string& userId);
 
     TreeKeyCache& _cache;
-    // Parsed keys: supplied whole by `setMemberKeys`, or filled in on demand from the strings below.
+    // Parsed keys: newcomers' from planning, or filled in on demand from the strings below.
     std::map<std::string, privmx::crypto::PublicKey> _memberKeys;
     // Unparsed roster from `setMemberKeyStrings`, base58-DER per user id.
     std::map<std::string, std::string> _memberKeyStrings;

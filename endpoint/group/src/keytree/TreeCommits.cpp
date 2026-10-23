@@ -13,47 +13,31 @@ limitations under the License.
 
 #include <algorithm>
 #include <limits>
+#include <set>
 #include <stdexcept>
+
+#include <Poco/JSON/Object.h>
 
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
+#include "privmx/endpoint/core/BigEndian.hpp"
 
 using namespace privmx::endpoint::group::keytree;
 namespace server = privmx::endpoint::group::server;
+namespace be = privmx::endpoint::core::bigendian;
 
 std::string TreeCommits::tag(const char* name) {
     return std::string(name) + std::string(1, '\0');
 }
 
-void TreeCommits::putU32(std::string& out, std::uint32_t value) {
-    for (int shift = 24; shift >= 0; shift -= 8) {
-        out.push_back(static_cast<char>((value >> shift) & 0xFF));
-    }
-}
-
-void TreeCommits::putLp(std::string& out, const std::string& value) {
-    putU32(out, static_cast<std::uint32_t>(value.size()));
-    out += value;
-}
-
 namespace {
 
-void putU8(std::string& out, std::uint8_t value) {
-    out.push_back(static_cast<char>(value));
-}
-
-void putU64(std::string& out, std::uint64_t value) {
-    for (int shift = 56; shift >= 0; shift -= 8) {
-        out.push_back(static_cast<char>((value >> shift) & 0xFF));
-    }
-}
-
 void putList(std::string& out, const std::vector<std::string>& values) {
-    TreeCommits::putU32(out, static_cast<std::uint32_t>(values.size()));
+    be::putU32(out, static_cast<std::uint32_t>(values.size()));
     for (const std::string& value : values) {
-        TreeCommits::putLp(out, value);
+        be::putLp(out, value);
     }
 }
 
@@ -71,13 +55,10 @@ std::string fromHex32(const std::string& hex) {
     return privmx::utils::Hex::toString(hex);
 }
 
-const TreeNodeState* findRecord(const TreeGroupState& state, std::uint32_t nodeIndex) {
-    for (const TreeNodeState& node : state.nodes) {
-        if (node.nodeIndex == nodeIndex) {
-            return &node;
-        }
-    }
-    return nullptr;
+// The leaf hash of a seat, blank when the state does not reach it.
+std::string seatHash(const TreeGroupState& state, std::uint32_t position) {
+    const bool known = position < state.leafAssignment.size();
+    return TreeCommits::leafHash(position, known ? state.leafAssignment[position].value_or("") : "");
 }
 
 std::string childHash(
@@ -86,9 +67,7 @@ std::string childHash(
     std::map<std::uint32_t, std::string>* memo = nullptr
 ) {
     if (TreeMath::isLeaf(nodeIndex)) {
-        const std::uint32_t position = TreeMath::leafPosition(nodeIndex);
-        const bool known = position < state.leafAssignment.size();
-        return TreeCommits::leafHash(position, known ? state.leafAssignment[position].value_or("") : "");
+        return seatHash(state, TreeMath::leafPosition(nodeIndex));
     }
     std::string hash = TreeCommits::nodeHash(
         nodeIndex, state.numLeaves, findRecord(state, nodeIndex),
@@ -103,7 +82,7 @@ std::string childHash(
 
 std::string treeHashOver(std::uint32_t numLeaves, const std::string& rootHash) {
     std::string preimage = TreeCommits::tag("pmx-tree");
-    TreeCommits::putU32(preimage, numLeaves);
+    be::putU32(preimage, numLeaves);
     preimage += rootHash;
     return privmx::crypto::Crypto::sha256(preimage);
 }
@@ -120,8 +99,50 @@ const char* opName(CommitOp op) {
         return "selfUpdate";
     case CommitOp::Rotate:
         return "rotate";
+    case CommitOp::Policy:
+        return "policy";
     }
     return "";
+}
+
+// The v3 rules a statement signs for an absent, "inherit" or "default" value: frozen with the format, NOT the
+// bridge's context defaults (the context only vetoes).
+std::string resolved(const Poco::JSON::Object::Ptr& policy, const std::string& field, const char* fallback) {
+    const Poco::Dynamic::Var value = policy.isNull() ? Poco::Dynamic::Var() : policy->get(field);
+    if (value.isEmpty()) {
+        return fallback;
+    }
+    if (!value.isString()) {
+        throw std::invalid_argument("policy rule " + field + " is not a string");
+    }
+    const std::string rule = value.convert<std::string>();
+    return rule == "inherit" || rule == "default" ? fallback : rule;
+}
+
+// The bridge's group-rule grammar (`PolicyService.isValidPolicyEntry` with the values `validateGroupPolicy` allows),
+// after `resolved`: "none", "all", or `,`-separated alternatives of `&`-joined atoms from user/manager/owner, no part
+// empty, atoms unique within an alternative, alternatives unique. Throws std::invalid_argument otherwise.
+std::string grammatical(const std::string& field, std::string rule) {
+    if (rule == "none" || rule == "all") {
+        return rule;
+    }
+    std::set<std::string> alternatives;
+    for (const std::string& alternative : privmx::utils::Utils::split(rule, ",")) {
+        std::vector<std::string> atoms = privmx::utils::Utils::split(alternative, "&");
+        std::sort(atoms.begin(), atoms.end());
+        const bool known = !atoms.empty() && std::all_of(atoms.begin(), atoms.end(), [](const std::string& atom) {
+            return atom == "user" || atom == "manager" || atom == "owner";
+        });
+        std::string canonical;
+        for (const std::string& atom : atoms) {
+            canonical += atom + "&";
+        }
+        if (!known || std::adjacent_find(atoms.begin(), atoms.end()) != atoms.end() ||
+            !alternatives.insert(canonical).second) {
+            throw std::invalid_argument("policy rule " + field + " is not a group rule: '" + rule + "'");
+        }
+    }
+    return rule;
 }
 
 template<typename T>
@@ -136,8 +157,8 @@ T inRange(std::int64_t value, const char* field) {
 
 std::string TreeCommits::leafHash(std::uint32_t position, const std::string& userId) {
     std::string preimage = tag("pmx-tree-leaf");
-    putU32(preimage, position);
-    putLp(preimage, userId);
+    be::putU32(preimage, position);
+    be::putLp(preimage, userId);
     return privmx::crypto::Crypto::sha256(preimage);
 }
 
@@ -151,25 +172,25 @@ std::string TreeCommits::nodeHash(
     std::string preimage;
     if (TreeMath::isKeyed(nodeIndex, numLeaves)) {
         preimage = tag("pmx-tree-node");
-        putU32(preimage, nodeIndex);
-        putU8(preimage, record != nullptr ? 1 : 0);
+        be::putU32(preimage, nodeIndex);
+        be::putU8(preimage, record != nullptr ? 1 : 0);
         if (record != nullptr) {
-            putU32(preimage, record->generation);
-            putU8(preimage, record->publicKey.has_value() ? 1 : 0);
+            be::putU32(preimage, record->generation);
+            be::putU8(preimage, record->publicKey.has_value() ? 1 : 0);
             if (record->publicKey.has_value()) {
                 if (!record->setBy.has_value()) {
                     throw std::invalid_argument(
                         "filled node " + std::to_string(nodeIndex) + " names no statement that set its key"
                     );
                 }
-                putLp(preimage, record->publicKey->toBase58DER());
-                putU64(preimage, record->setBy.value());
+                be::putLp(preimage, record->publicKey->toBase58DER());
+                be::putU64(preimage, record->setBy.value());
             }
         }
     } else {
         // A bucket node: whatever record a server attaches to it is not part of the tree, and not hashed.
         preimage = tag("pmx-tree-inner");
-        putU32(preimage, nodeIndex);
+        be::putU32(preimage, nodeIndex);
     }
     preimage += leftHash;
     preimage += rightHash;
@@ -195,8 +216,7 @@ std::string TreeCommits::treeHashAlongPath(
         throw std::invalid_argument("copath hashes do not fit the tree");
     }
     std::uint32_t current = TreeMath::leafNode(position);
-    const bool known = position < state.leafAssignment.size();
-    std::string hash = leafHash(position, known ? state.leafAssignment[position].value_or("") : "");
+    std::string hash = seatHash(state, position);
     for (std::size_t i = 0; i < path.size(); ++i) {
         const std::string sibling = fromHex32(copathHashes[i]);
         const bool currentIsLeft = current < path[i];
@@ -221,36 +241,37 @@ std::string TreeCommits::rosterHash(std::vector<std::string> users, std::vector<
 
 std::string TreeCommits::groupId(const std::string& contextId, const std::string& resourceId) {
     std::string preimage = tag("pmx-group-id");
-    putLp(preimage, contextId);
-    putLp(preimage, resourceId);
+    be::putLp(preimage, contextId);
+    be::putLp(preimage, resourceId);
     return privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(preimage));
 }
 
 std::string TreeCommits::signedBytes(const CommitStatement& statement) {
-    if (statement.rosterHash.size() != 32 || statement.treeHash.size() != 32 ||
+    if (statement.rosterHash.size() != 32 || statement.treeHash.size() != 32 || statement.policyHash.size() != 32 ||
         statement.prevDigest.size() != (statement.seq == 1 ? 0 : 32)) {
         throw std::invalid_argument("commit statement hashes must be 32 bytes");
     }
     std::string bytes = tag("pmx-tree-commit");
-    putLp(bytes, statement.groupId);
-    putU32(bytes, statement.treeVersion);
-    putU64(bytes, statement.seq);
-    putLp(bytes, statement.prevDigest);
-    putU8(bytes, static_cast<std::uint8_t>(statement.op));
-    putU64(bytes, statement.date);
-    putU64(bytes, statement.keyVersion);
-    putLp(bytes, statement.groupPubKey);
-    putU64(bytes, statement.rosterVersion);
+    be::putLp(bytes, statement.groupId);
+    be::putU32(bytes, statement.treeVersion);
+    be::putU64(bytes, statement.seq);
+    be::putLp(bytes, statement.prevDigest);
+    be::putU8(bytes, static_cast<std::uint8_t>(statement.op));
+    be::putU64(bytes, statement.date);
+    be::putU64(bytes, statement.keyVersion);
+    be::putLp(bytes, statement.groupPubKey);
+    be::putU64(bytes, statement.rosterVersion);
     bytes += statement.rosterHash;
     bytes += statement.treeHash;
-    putLp(bytes, statement.committer);
-    putLp(bytes, statement.committerPubKey);
-    putU32(bytes, statement.committerSeat);
-    putU32(bytes, static_cast<std::uint32_t>(statement.path.size()));
+    bytes += statement.policyHash;
+    be::putLp(bytes, statement.committer);
+    be::putLp(bytes, statement.committerPubKey);
+    be::putU32(bytes, statement.committerSeat);
+    be::putU32(bytes, static_cast<std::uint32_t>(statement.path.size()));
     for (const StatementNode& node : statement.path) {
-        putU32(bytes, node.nodeIndex);
-        putU32(bytes, node.generation);
-        putLp(bytes, node.publicKey);
+        be::putU32(bytes, node.nodeIndex);
+        be::putU32(bytes, node.generation);
+        be::putLp(bytes, node.publicKey);
         if (node.subtreeHash.size() != 32) {
             throw std::invalid_argument("commit statement hashes must be 32 bytes");
         }
@@ -273,6 +294,15 @@ bool TreeCommits::verifySignature(const CommitStatement& statement, const privmx
     } catch (...) { return false; }
 }
 
+std::string TreeCommits::opKey(const std::string& kind, const std::vector<std::string>& parts) {
+    std::string out;
+    be::putLp(out, kind);
+    for (const std::string& part : parts) {
+        be::putLp(out, part);
+    }
+    return out;
+}
+
 std::string TreeCommits::digest(const CommitStatement& statement) {
     return privmx::crypto::Crypto::sha256(signedBytes(statement) + statement.signature);
 }
@@ -290,7 +320,8 @@ CommitStatement TreeCommits::statementFor(
     const std::string& committer,
     std::vector<std::string> addedUsers,
     std::vector<std::string> addedManagers,
-    std::vector<std::string> removed
+    std::vector<std::string> removed,
+    const std::string& policyHash
 ) {
     CommitStatement statement;
     statement.seq = plan.seq;
@@ -303,6 +334,7 @@ CommitStatement TreeCommits::statementFor(
     statement.rosterVersion = rosterVersion;
     statement.rosterHash = rosterHash(users, managers);
     statement.treeHash = plan.treeHash;
+    statement.policyHash = policyHash;
     statement.committer = committer;
     statement.committerSeat = plan.shape.committerSeat;
     for (const RefreshedNode& refreshed : plan.refreshed) {
@@ -332,6 +364,7 @@ server::GroupTreeCommit TreeCommits::toWire(const CommitStatement& statement) {
     wire.rosterVersion = static_cast<std::int64_t>(statement.rosterVersion);
     wire.rosterHash = privmx::utils::Hex::from(statement.rosterHash);
     wire.treeHash = privmx::utils::Hex::from(statement.treeHash);
+    wire.policyHash = privmx::utils::Hex::from(statement.policyHash);
     wire.committer = statement.committer;
     wire.committerPubKey = statement.committerPubKey;
     wire.committerSeat = statement.committerSeat;
@@ -346,6 +379,7 @@ server::GroupTreeCommit TreeCommits::toWire(const CommitStatement& statement) {
     wire.addedManagers = statement.addedManagers;
     wire.removed = statement.removed;
     wire.signature = privmx::utils::Base64::from(statement.signature);
+    wire.policy = statement.policy;
     return wire;
 }
 
@@ -357,8 +391,8 @@ CommitStatement TreeCommits::fromWire(const server::GroupTreeCommit& wire) {
         throw std::invalid_argument("a genesis statement follows no other");
     }
     bool knownOp = false;
-    for (const CommitOp op :
-         {CommitOp::Create, CommitOp::Add, CommitOp::Remove, CommitOp::SelfUpdate, CommitOp::Rotate}) {
+    for (const CommitOp op : {CommitOp::Create, CommitOp::Add, CommitOp::Remove, CommitOp::SelfUpdate, CommitOp::Rotate,
+                              CommitOp::Policy}) {
         if (wire.op == opName(op)) {
             statement.op = op;
             knownOp = true;
@@ -370,11 +404,17 @@ CommitStatement TreeCommits::fromWire(const server::GroupTreeCommit& wire) {
     statement.groupId = wire.groupId;
     statement.treeVersion = inRange<std::uint32_t>(wire.treeVersion, "treeVersion");
     statement.date = inRange<std::uint64_t>(wire.date, "date");
-    statement.keyVersion = inRange<std::uint64_t>(wire.keyVersion, "keyVersion");
+    // Epochs are 32-bit everywhere past the signature, and a chain and its epochs start at 1: refused here, at the
+    // one parse every statement goes through, rather than wrapped or truncated into some real epoch later.
+    statement.keyVersion = inRange<std::uint32_t>(wire.keyVersion, "keyVersion");
+    if (statement.seq == 0 || statement.keyVersion == 0) {
+        throw std::invalid_argument("commit statement seq or keyVersion is 0");
+    }
     statement.groupPubKey = wire.groupPubKey;
     statement.rosterVersion = inRange<std::uint64_t>(wire.rosterVersion, "rosterVersion");
     statement.rosterHash = fromHex32(wire.rosterHash);
     statement.treeHash = fromHex32(wire.treeHash);
+    statement.policyHash = fromHex32(wire.policyHash);
     statement.committer = wire.committer;
     statement.committerPubKey = wire.committerPubKey;
     statement.committerSeat = inRange<std::uint32_t>(wire.committerSeat, "committerSeat");
@@ -396,5 +436,138 @@ CommitStatement TreeCommits::fromWire(const server::GroupTreeCommit& wire) {
     if (statement.signature.size() != 65) {
         throw std::invalid_argument("commit statement signature is not 65 bytes");
     }
+    statement.policy = wire.policy;
     return statement;
+}
+
+GroupRules TreeCommits::rules(const Poco::Dynamic::Var& policy, const std::string& creator) {
+    Poco::JSON::Object::Ptr object;
+    if (!policy.isEmpty()) {
+        if (policy.type() != typeid(Poco::JSON::Object::Ptr)) {
+            throw std::invalid_argument("a policy is not an object");
+        }
+        object = policy.extract<Poco::JSON::Object::Ptr>();
+    }
+    GroupRules result{
+        .creator = creator,
+        .update = grammatical("update", resolved(object, "update", "manager")),
+        .rotateKeys = grammatical("rotateKeys", resolved(object, "rotateKeys", "manager")),
+        .updatePolicy = grammatical("updatePolicy", resolved(object, "updatePolicy", "manager")),
+        .ownerCanBeRemovedFromManagers = resolved(object, "ownerCanBeRemovedFromManagers", "yes"),
+        .hash = {}
+    };
+    if (result.ownerCanBeRemovedFromManagers != "yes" && result.ownerCanBeRemovedFromManagers != "no") {
+        throw std::invalid_argument("policy rule ownerCanBeRemovedFromManagers is neither yes nor no");
+    }
+    std::string preimage = tag("pmx-group-policy");
+    for (const std::string* value :
+         {&result.creator, &result.update, &result.rotateKeys, &result.updatePolicy,
+          &result.ownerCanBeRemovedFromManagers}) {
+        be::putLp(preimage, *value);
+    }
+    result.hash = privmx::crypto::Crypto::sha256(preimage);
+    return result;
+}
+
+bool TreeCommits::allows(const std::string& rule, bool member, bool manager, bool owner) {
+    for (const std::string& alternative : privmx::utils::Utils::split(rule, ",")) {
+        const std::vector<std::string> atoms = privmx::utils::Utils::split(alternative, "&");
+        bool all = !atoms.empty(); // fails closed: an empty alternative admits nobody
+        for (const std::string& atom : atoms) {
+            all = all && (atom == "all" || (atom == "user" && member) || (atom == "manager" && manager) ||
+                          (atom == "owner" && owner));
+        }
+        if (all) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool TreeCommits::permits(
+    const GroupRules& rules,
+    const CommitStatement& statement,
+    const std::set<std::string>& users,
+    const std::set<std::string>& managers
+) {
+    const std::string& committer = statement.committer;
+    const bool manager = managers.count(committer) != 0;
+    const bool member = manager || users.count(committer) != 0;
+    const bool owner = committer == rules.creator;
+    switch (statement.op) {
+    case CommitOp::Create:
+        return true;
+    case CommitOp::Add:
+        return allows(rules.update, member, manager, owner);
+    case CommitOp::Remove: {
+        const bool ownerLeavesManagers = managers.count(rules.creator) != 0 &&
+            std::find(statement.removed.begin(), statement.removed.end(), rules.creator) != statement.removed.end();
+        return allows(rules.update, member, manager, owner) &&
+            (!ownerLeavesManagers || rules.ownerCanBeRemovedFromManagers == "yes");
+    }
+    case CommitOp::Rotate:
+        return allows(rules.rotateKeys, member, manager, owner);
+    case CommitOp::SelfUpdate:
+        return member;
+    case CommitOp::Policy:
+        return allows(rules.updatePolicy, member, manager, owner);
+    }
+    return false;
+}
+
+std::optional<std::string> TreeCommits::deltasProblem(
+    const CommitStatement& statement,
+    const std::set<std::string>& users,
+    const std::set<std::string>& managers
+) {
+    const auto onRoster = [&](const std::string& userId) {
+        return users.count(userId) != 0 || managers.count(userId) != 0;
+    };
+    const bool added = !statement.addedUsers.empty() || !statement.addedManagers.empty();
+    switch (statement.op) {
+    case CommitOp::Add: {
+        if (!added || !statement.removed.empty()) {
+            return "an addition adds members and removes none";
+        }
+        std::set<std::string> newcomers;
+        for (const auto* list : {&statement.addedUsers, &statement.addedManagers}) {
+            for (const std::string& userId : *list) {
+                if (onRoster(userId)) {
+                    return "user '" + userId + "' is already a member";
+                }
+                if (!newcomers.insert(userId).second) {
+                    return "user '" + userId + "' is added twice";
+                }
+            }
+        }
+        return std::nullopt;
+    }
+    case CommitOp::Remove: {
+        if (statement.removed.empty() || added) {
+            return "a removal removes members and adds none";
+        }
+        std::set<std::string> leaving;
+        for (const std::string& userId : statement.removed) {
+            if (!onRoster(userId)) {
+                return "user '" + userId + "' is not a member";
+            }
+            if (userId == statement.committer) {
+                return "cannot remove yourself";
+            }
+            if (!leaving.insert(userId).second) {
+                return "user '" + userId + "' is removed twice";
+            }
+        }
+        return std::nullopt;
+    }
+    case CommitOp::Create:
+    case CommitOp::Rotate:
+    case CommitOp::SelfUpdate:
+    case CommitOp::Policy:
+        if (added || !statement.removed.empty()) {
+            return std::string("a ") + opName(statement.op) + " statement moves no member";
+        }
+        return std::nullopt;
+    }
+    return "an op without a row";
 }

@@ -56,6 +56,10 @@ void ServerApi::groupSelfUpdate(server::GroupSelfUpdateModel model) {
     request("groupSelfUpdate", model.toJSON());
 }
 
+void ServerApi::groupGenerateNewKey(server::GroupGenerateNewKeyModel model) {
+    request("groupGenerateNewKey", model.toJSON());
+}
+
 server::GroupGetTreeCommitsResult ServerApi::groupGetTreeCommits(server::GroupGetTreeCommitsModel model) {
     return request<server::GroupGetTreeCommitsResult>("groupGetTreeCommits", model.toJSON());
 }
@@ -70,6 +74,10 @@ void ServerApi::groupPruneArchive(server::GroupPruneArchiveModel model) {
 
 server::GroupGetKeyArchiveResult ServerApi::groupGetKeyArchive(server::GroupGetKeyArchiveModel model) {
     return request<server::GroupGetKeyArchiveResult>("groupGetKeyArchive", model.toJSON());
+}
+
+void ServerApi::groupRepairRung(server::GroupRepairRungModel model) {
+    request("groupRepairRung", model.toJSON());
 }
 
 void ServerApi::groupSendCustomEvent(server::GroupSendCustomEventModel model) {

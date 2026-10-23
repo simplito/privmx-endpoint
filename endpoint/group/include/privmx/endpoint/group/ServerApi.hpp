@@ -28,11 +28,14 @@ public:
     void groupAddMembers(server::GroupAddMembersModel model);
     void groupRemoveMembers(server::GroupRemoveMembersModel model);
     void groupSelfUpdate(server::GroupSelfUpdateModel model);
+    void groupGenerateNewKey(server::GroupGenerateNewKeyModel model);
     server::GroupGetTreeCommitsResult groupGetTreeCommits(server::GroupGetTreeCommitsModel model);
     void groupCutEra(server::GroupCutEraModel model);
     void groupPruneArchive(server::GroupPruneArchiveModel model);
     // The Epoch Ladder, fetched only when a client is actually reaching for an older epoch.
     server::GroupGetKeyArchiveResult groupGetKeyArchive(server::GroupGetKeyArchiveModel model);
+    // Appends a repair rung: any seated member holding both keys of the span.
+    void groupRepairRung(server::GroupRepairRungModel model);
 
     void groupSendCustomEvent(server::GroupSendCustomEventModel model);
 

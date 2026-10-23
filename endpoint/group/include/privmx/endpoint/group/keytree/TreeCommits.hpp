@@ -14,8 +14,12 @@ limitations under the License.
 
 #include <cstdint>
 #include <map>
+#include <optional>
+#include <set>
 #include <string>
 #include <vector>
+
+#include <Poco/Dynamic/Var.h>
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
@@ -34,6 +38,7 @@ enum class CommitOp : std::uint8_t {
     Remove = 3,
     SelfUpdate = 4,
     Rotate = 5, // the bridge-side `generateNewGroupKey`
+    Policy = 6, // a policy change: only `policyHash` moves
 };
 
 struct StatementNode {
@@ -63,6 +68,9 @@ struct CommitStatement {
     std::uint64_t rosterVersion = 0;
     std::string rosterHash;
     std::string treeHash;
+    // `TreeCommits::rules(policy, creator).hash` of the group's policy after the commit: the rules that govern commits
+    // and the creator the `owner` atom names, signed into every statement. Raw bytes.
+    std::string policyHash;
     std::string committer;
     // The committer's Context public key (base58 DER) at signing time; the signature verifies against it, and the
     // UserVerifier vouches for the pair.
@@ -74,6 +82,16 @@ struct CommitStatement {
     std::vector<std::string> addedManagers;
     std::vector<std::string> removed;
     std::string signature;
+    // Wire only, on `Create` and `Policy`: the group's whole policy after the commit. Not signed itself; it counts only
+    // once it hashes to `policyHash`, and only its four commit rules do.
+    std::optional<Poco::Dynamic::Var> policy;
+};
+
+// The part of a group's policy its statements sign: who may commit what, and who the owner is. Absent, "inherit"
+// and "default" resolve to the frozen v3 defaults, never to the context policy, which only the bridge holds.
+struct GroupRules {
+    std::string creator, update, rotateKeys, updatePolicy, ownerCanBeRemovedFromManagers;
+    std::string hash; // policyHash, raw
 };
 
 // The hashes and signed bytes both sides compute byte for byte (SHA-256, big-endian integers, length-prefixed
@@ -83,15 +101,14 @@ class TreeCommits {
 public:
     // Clock skew a statement's `date` may show against the checker's clock, both ways: the bridge's
     // `CommitStatement.DATE_TOLERANCE_MS`. A reader allows a latest statement twice that ahead of its own clock, its
-    // own skew on top (N-1: every later commit is dated no earlier, so that is how long a forward-dated statement can
-    // freeze the group).
+    // own skew on top. That bounds how far a member and a misbehaving bridge can push the chain's dates ahead of real
+    // time, which matters because the UserVerifier is asked at each statement's date. It does not bound a freeze:
+    // the bridge takes a commit dated exactly as the statement it extends, however far ahead that one is.
     static constexpr std::uint64_t DATE_TOLERANCE_MS = 10 * 60 * 1000;
 
-    // The encoders of every preimage and sealed label in the key tree. A domain tag ends in a NUL byte, so no tag is a
-    // prefix of another's preimage; integers are big-endian; `putLp` prefixes a string with its u32 length.
+    // The domain tag of every preimage and sealed label in the key tree; the fields after it use core/BigEndian.hpp.
+    // A tag ends in a NUL byte, so no tag is a prefix of another's preimage.
     static std::string tag(const char* name);
-    static void putU32(std::string& out, std::uint32_t value);
-    static void putLp(std::string& out, const std::string& value);
 
     // `H("pmx-tree-leaf\0" || u32(p) || lp(userId))`, "" for a blank seat.
     static std::string leafHash(std::uint32_t position, const std::string& userId);
@@ -145,6 +162,10 @@ public:
 
     // Identity of a statement as signed, for caching and for comparing two copies.
     static std::string digest(const CommitStatement& statement);
+    // Injective key of an operation a caller asked for (what a resend after an unknown outcome is matched by):
+    // lp(kind) || lp(part)*, lp = u32 big-endian length || bytes, so no separator a user id could hold makes two
+    // different operations equal.
+    static std::string opKey(const std::string& kind, const std::vector<std::string>& parts = {});
 
     // A statement over the post state a plan describes. The roster lists are the post-commit roster; the deltas
     // are sorted and deduplicated here (at seq 1 empty: `rosterHash` binds the genesis roster). Unsigned.
@@ -161,7 +182,43 @@ public:
         const std::string& committer,
         std::vector<std::string> addedUsers,
         std::vector<std::string> addedManagers,
-        std::vector<std::string> removed
+        std::vector<std::string> removed,
+        const std::string& policyHash
+    );
+
+    // `GroupRules` of a policy object (empty = `{}`) and its creator, with `hash` =
+    // `H("pmx-group-policy\0" || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy)
+    // || lp(ownerCanBeRemovedFromManagers))`, each resolved against the frozen v3 defaults (manager, manager, manager,
+    // yes) and hashed verbatim. Throws std::invalid_argument on a non-object policy, a non-string rule, or a rule outside
+    // the bridge's group grammar (`none`, `all`, or unique alternatives of unique user/manager/owner atoms, no part
+    // empty; `ownerCanBeRemovedFromManagers` yes/no): such a policy is never signed and, served, is an integrity error.
+    static GroupRules rules(const Poco::Dynamic::Var& policy, const std::string& creator);
+
+    // A policy rule for a member, exactly as the bridge's `PolicyService.userMeetsPolicy`: `,` separates
+    // alternatives, `&` joins atoms that must all hold; `none` is false, `all` true, `user` a roster member, `manager`
+    // a manager, `owner` the creator; `itemOwner` and any unknown atom false. Fails closed: an empty alternative or atom
+    // admits nobody (the bridge sees atom "" and denies too).
+    static bool allows(const std::string& rule, bool member, bool manager, bool owner);
+
+    // The role column of the op-effect table, on the rules and roster before `statement`: create none (the
+    // committer is the creator), add `update`, remove `update` (and, removing the creator from the managers,
+    // `ownerCanBeRemovedFromManagers` "yes"), rotate `rotateKeys`, selfUpdate a seat, policy `updatePolicy`. False for
+    // an op without a row.
+    static bool permits(
+        const GroupRules& rules,
+        const CommitStatement& statement,
+        const std::set<std::string>& users,
+        const std::set<std::string>& managers
+    );
+
+    // The roster-delta column of the op-effect table on the roster before `statement`: nullopt when the deltas fit the
+    // op, else what is wrong. Only add and remove carry deltas; an addition names newcomers only (an existing member
+    // cannot be promoted), once each; a removal names members, never its committer. Shared by `TreeVerifier`'s replay
+    // and the check before this client signs.
+    static std::optional<std::string> deltasProblem(
+        const CommitStatement& statement,
+        const std::set<std::string>& users,
+        const std::set<std::string>& managers
     );
 
     static server::GroupTreeCommit toWire(const CommitStatement& statement);

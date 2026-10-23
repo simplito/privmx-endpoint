@@ -13,6 +13,7 @@ limitations under the License.
 #include <Poco/UUID.h>
 #include <Poco/UUIDGenerator.h>
 #include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint::core;
@@ -83,6 +84,12 @@ std::vector<std::string> EndpointUtils::usersWithPubKeyToIds(const std::vector<c
 
 std::string EndpointUtils::generateId() {
     return Poco::UUIDGenerator().createRandom().toString();
+}
+
+void EndpointUtils::assertServedId(const std::string& asked, const std::string& served) {
+    if (served != asked) {
+        throw ContainerMismatchException("asked=" + asked + " served=" + served);
+    }
 }
 
 std::string EndpointUtils::generateDIORandomId() {

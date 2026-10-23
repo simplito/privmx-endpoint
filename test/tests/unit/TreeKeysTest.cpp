@@ -15,7 +15,7 @@ limitations under the License.
  * No server, no docker, no network, but no crypto stubs either — every wrap is a genuine ECIES encryption and
  * every climb a genuine decryption, because the properties under test are cryptographic ones: that a removed
  * member cannot reach a refreshed key, and that a corrupted edge is detected rather than silently producing the
- * wrong key. States are carried from one commit to the next by `TreeWire::afterCommit`, the bridge's storage rule.
+ * wrong key. States are carried from one commit to the next by `treetest::afterCommit`, the bridge's storage rule.
  *
  * Groups above 32 seats appear throughout: below that the root is the only keyed node, and the interesting cases —
  * blank nodes, edges skipping a blank, a commit wrapping through a blank to a whole bucket — need a second one.
@@ -41,6 +41,8 @@ limitations under the License.
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
+
+#include "TreeTestOps.hpp"
 
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
@@ -95,7 +97,7 @@ protected:
     // The state the bridge stores once it accepts the commit.
     static TreeGroupState applied(const TreeGroupState& before, const CommitPlan& plan) {
         TreeGroupState after =
-            TreeWire::toRuntime(TreeWire::afterCommit(wireOf(before), plan), plan.epoch, plan.grantKey.getPublicKey());
+            TreeWire::toRuntime(treetest::afterCommit(wireOf(before), plan), plan.epoch, plan.grantKey.getPublicKey());
         after.commitSeq = plan.seq;
         after.setters = before.setters;
         after.setters[plan.seq] = plan.shape.leafAssignment.at(plan.shape.committerSeat).value();
@@ -129,7 +131,7 @@ protected:
         if (keys.climbToGrantKey(group.state, who.userId, who.priv, false).failure != ClimbFailure::None) {
             throw std::runtime_error(who.userId + " cannot climb");
         }
-        keys.setMemberKeys(publicOf(group.members));
+        treetest::setMemberKeys(keys, publicOf(group.members));
         return plan(keys, who);
     }
 
@@ -151,7 +153,7 @@ protected:
             makeMembers(count, "new" + std::to_string(group.members.size()) + "-");
         const CommitPlan plan = planBy(group, adder, [&](TreeKeys& keys, const TestMember& who) {
             return keys.planAddition(
-                group.state, publicOf(newcomers), TreeKeys::choosePositions(group.state, count), who.userId, who.priv
+                group.state, publicOf(newcomers), treetest::choosePositions(group.state, count), who.userId, who.priv
             );
         });
         group.members.insert(group.members.end(), newcomers.begin(), newcomers.end());
@@ -508,6 +510,43 @@ TEST_F(TreeKeysClimb, ReportsAMissingEdgeDistinctlyFromTampering) {
     EXPECT_EQ(climb(group.state, group.members[0]).failure, ClimbFailure::MissingEdge);
 }
 
+// A member whose identity key changed holds a key its leaf edge was never wrapped to. That is reported at the leaf,
+// not as a garbled edge somewhere in the tree, and still names the node whose setter wrote the edge.
+TEST_F(TreeKeysClimb, SECURITY_ALeafEdgeThatDoesNotOpenIsReportedAtTheLeaf) {
+    const Group group = create(40);
+    const TestMember renamed{group.members[0].userId, PrivateKey::generateRandom()};
+    const ClimbResult result = climb(group.state, renamed);
+    EXPECT_EQ(result.failure, ClimbFailure::LeafDidNotOpen);
+    EXPECT_FALSE(result.grantKey.has_value());
+    EXPECT_EQ(result.tamperedNode, std::optional<std::uint32_t>(31u)) << "the leaf's first keyed ancestor";
+}
+
+TEST_F(TreeKeysClimb, SECURITY_AOneLeafGrantEdgeThatDoesNotOpenIsReportedAtTheLeaf) {
+    const Group group = create(1);
+    const TestMember renamed{group.members[0].userId, PrivateKey::generateRandom()};
+    const ClimbResult result = climb(group.state, renamed);
+    EXPECT_EQ(result.failure, ClimbFailure::LeafDidNotOpen);
+    EXPECT_FALSE(result.tamperedNode.has_value()) << "the grant edge has no node above it";
+}
+
+// Below 33 seats the root is the only keyed node, so a node->node edge needs a bigger tree.
+TEST_F(TreeKeysClimb, AGarbledInnerEdgeIsStillDecryptFailed) {
+    Group group = create(40);
+    std::size_t garbled = 0;
+    for (TreeEdge& edge : group.state.edges) {
+        if (!edge.isGrantEdge && edge.childKind == EdgeChildKind::Node && edge.childIndex == 31u) {
+            edge.blob = TreeKeys::wrapKey(
+                PrivateKey::generateRandom(), PrivateKey::generateRandom().getPublicKey(), group.members[0].priv
+            );
+            ++garbled;
+        }
+    }
+    ASSERT_EQ(garbled, 1u);
+    const ClimbResult result = climb(group.state, group.members[0]);
+    EXPECT_EQ(result.failure, ClimbFailure::DecryptFailed);
+    EXPECT_EQ(result.tamperedNode, std::optional<std::uint32_t>(TreeMath::root(40)));
+}
+
 // The same authorship boundary inside a whole state: an edge re-issued by somebody else is followed as readily
 // as the original — the climb verifies keys against the published node keys and asks nothing about who wrote them.
 TEST_F(TreeKeysClimb, AnEdgeReissuedByAStrangerIsStillFollowed) {
@@ -736,9 +775,9 @@ TEST_F(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedDoNot) {
     }
 }
 
-// The C1 finding, as it was found: the creator mints every node key, and a removal that re-keyed only the leaver's
-// own path left the copath keys the leaver had minted opening the refreshed root. Now the removal blanks every node
-// the leaver set (V2: seat 40 removes the creator of 64 and re-keys 63 and 95; node 31 is off its path).
+// The creator mints every node key, so a removal that re-keyed only the leaver's own path would leave the copath keys
+// the leaver had minted opening the refreshed root. The removal blanks every node the leaver set (seat 40 removes the
+// creator of 64 and re-keys 63 and 95; node 31 is off its path).
 TEST_F(TreeKeysRemoval, SECURITY_ARemovedCreatorReachesNothingWithEverythingItEverHeld) {
     CommitPlan created;
     Group group = create(64, 0, &created);
@@ -765,7 +804,7 @@ TEST_F(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing)
     expectEveryoneSeatedClimbs(group);
 }
 
-// V5: node 63 was re-keyed by seat 40, but it wraps to node 31, which the creator set — so the creator opens it, and
+// Node 63 was re-keyed by seat 40, but it wraps to node 31, which the creator set — so the creator opens it, and
 // the removal has to blank the ancestors of what it set too, not only what it set.
 TEST_F(TreeKeysRemoval, SECURITY_ARemovalBlanksTheAncestorsOfWhatTheLeaverSet) {
     CommitPlan created;
@@ -782,7 +821,7 @@ TEST_F(TreeKeysRemoval, SECURITY_ARemovalBlanksTheAncestorsOfWhatTheLeaverSet) {
     expectEveryoneSeatedClimbs(group);
 }
 
-// V8: the adder of seat 5 keeps node 31, which it minted off its own path; removing the adder blanks what is left
+// The adder of seat 5 keeps node 31, which it minted off its own path; removing the adder blanks what is left
 // of that (node 95), while the remover's path re-keys 31 and 63.
 TEST_F(TreeKeysRemoval, SECURITY_ARemovedAdderReachesNothingItMintedForOthers) {
     Group group = create(64, 0);
@@ -825,7 +864,7 @@ TEST_F(TreeKeysRemoval, SECURITY_PlansWithoutAClimbWhenEveryWrapIsGarbled) {
 
     TreeKeyCache cold;
     TreeKeys keys(cold);
-    keys.setMemberKeys(publicOf(group.members));
+    treetest::setMemberKeys(keys, publicOf(group.members));
     const CommitPlan plan = keys.planRemoval(
         group.state, {group.members[0].userId}, group.members[35].userId, group.members[35].priv
     );
@@ -966,7 +1005,7 @@ TEST_F(TreeKeysAddition, RequiresTheGrantKeyAndSaysSo) {
     const Group group = create(4);
     TreeKeyCache empty;
     TreeKeys keys(empty);
-    keys.setMemberKeys(publicOf(group.members));
+    treetest::setMemberKeys(keys, publicOf(group.members));
     const std::vector<TestMember> newcomer = makeMembers(1, "new");
     EXPECT_THROW(
         keys.planAddition(group.state, publicOf(newcomer), {4}, group.members[0].userId, group.members[0].priv),
@@ -993,10 +1032,10 @@ TEST_F(TreeKeysAddition, ChoosesTheLowestBlankThenAppends) {
     TreeGroupState state;
     state.numLeaves = 4;
     state.leafAssignment = {std::string("a"), std::nullopt, std::string("c"), std::nullopt};
-    EXPECT_EQ(TreeKeys::choosePositions(state, 1), Nodes({1}));
-    EXPECT_EQ(TreeKeys::choosePositions(state, 3), Nodes({1, 3, 4}));
+    EXPECT_EQ(treetest::choosePositions(state, 1), Nodes({1}));
+    EXPECT_EQ(treetest::choosePositions(state, 3), Nodes({1, 3, 4}));
     state.leafAssignment = {std::string("a"), std::string("b"), std::string("c"), std::string("d")};
-    EXPECT_EQ(TreeKeys::choosePositions(state, 1), Nodes({4})) << "no blanks: append";
+    EXPECT_EQ(treetest::choosePositions(state, 1), Nodes({4})) << "no blanks: append";
 }
 
 // self-update
@@ -1023,14 +1062,17 @@ TEST_F(TreeKeysSelfUpdate, RefillsTheBlanksOnItsOwnPathAndNothingElse) {
     EXPECT_NE(climb(group.state, group.members[5]).failure, ClimbFailure::None);
 }
 
-TEST_F(TreeKeysSelfUpdate, RefusesWhatItCannotCommit) {
+TEST_F(TreeKeysSelfUpdate, RefusesAStrangerAndPlansAOneLeafTree) {
     const Group alone = create(1);
-    EXPECT_THROW(
-        planBy(alone, 0, [&](TreeKeys& keys, const TestMember& who) {
-            return keys.planSelfUpdate(alone.state, who.userId, who.priv);
-        }),
-        std::invalid_argument
-    ) << "a one-leaf tree has nothing to refresh";
+    const CommitPlan solo = planBy(alone, 0, [&](TreeKeys& keys, const TestMember& who) {
+        return keys.planSelfUpdate(alone.state, who.userId, who.priv);
+    });
+    EXPECT_TRUE(solo.refreshed.empty()) << "a one-leaf tree has no node to refresh";
+    ASSERT_EQ(solo.edges.size(), 1u) << "only the grant edge is re-wrapped";
+    EXPECT_TRUE(solo.edges[0].isGrantEdge);
+    EXPECT_EQ(solo.edges[0].childKind, EdgeChildKind::User);
+    EXPECT_EQ(solo.edges[0].childUserId, alone.members[0].userId);
+    EXPECT_EQ(solo.epoch, alone.state.epoch);
     const Group group = create(4);
     EXPECT_THROW(
         planBy(group, 0, [&](TreeKeys& keys, const TestMember& who) {
@@ -1040,10 +1082,61 @@ TEST_F(TreeKeysSelfUpdate, RefusesWhatItCannotCommit) {
     );
     TreeKeyCache empty;
     TreeKeys keys(empty);
-    keys.setMemberKeys(publicOf(group.members));
+    treetest::setMemberKeys(keys, publicOf(group.members));
     EXPECT_THROW(keys.planSelfUpdate(group.state, group.members[0].userId, group.members[0].priv),
                  std::invalid_argument)
         << "re-linking the grant edge needs the grant key, climbed for first";
+}
+
+// Leaf renewal: climb with the key the leaf was wrapped to, plan with the new one as the member's own key.
+static CommitPlan renew(
+    const TreeGroupState& state,
+    const std::vector<TreeMember>& roster,
+    const std::string& userId,
+    const PrivateKey& previous,
+    const PrivateKey& current
+) {
+    TreeKeyCache cache;
+    TreeKeys keys(cache);
+    if (keys.climbToGrantKey(state, userId, previous, false).failure != ClimbFailure::None) {
+        throw std::runtime_error(userId + " cannot climb with the previous key");
+    }
+    std::vector<TreeMember> withNewKey = roster;
+    for (TreeMember& member : withNewKey) {
+        if (member.userId == userId) {
+            member.publicKey = current.getPublicKey();
+        }
+    }
+    treetest::setMemberKeys(keys, withNewKey);
+    return keys.planSelfUpdate(state, userId, current);
+}
+
+TEST_F(TreeKeysSelfUpdate, ARenewalMovesTheLeafToTheNewKeyAndOffThePreviousOne) {
+    Group group = create(40, 3);
+    const TestMember previous = group.members[0];
+    const PrivateKey current = PrivateKey::generateRandom();
+    const auto grant = group.state.grantPublicKey;
+    const CommitPlan plan = renew(group.state, publicOf(group.members), previous.userId, previous.priv, current);
+    group.state = applied(group.state, plan);
+    group.members[0].priv = current;
+
+    EXPECT_EQ(group.state.grantPublicKey, grant) << "a renewal is not a rotation";
+    expectEveryoneSeatedClimbs(group);
+    EXPECT_EQ(climb(group.state, previous).failure, ClimbFailure::LeafDidNotOpen);
+    for (const TreeEdge& edge : plan.edges) {
+        EXPECT_FALSE(TreeKeys::unwrapKey(edge.blob, previous.priv).has_value())
+            << "an edge of the renewal opens with the previous key";
+    }
+}
+
+TEST_F(TreeKeysSelfUpdate, AOneLeafTreeRenewsItsGrantEdgeToTheNewKey) {
+    Group group = create(1);
+    const TestMember previous = group.members[0];
+    const PrivateKey current = PrivateKey::generateRandom();
+    const CommitPlan plan = renew(group.state, publicOf(group.members), previous.userId, previous.priv, current);
+    group.state = applied(group.state, plan);
+    EXPECT_EQ(climb(group.state, TestMember{previous.userId, current}).failure, ClimbFailure::None);
+    EXPECT_EQ(climb(group.state, previous).failure, ClimbFailure::LeafDidNotOpen);
 }
 
 // every commit

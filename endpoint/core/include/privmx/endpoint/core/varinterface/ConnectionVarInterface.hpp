@@ -36,6 +36,8 @@ public:
         UnsubscribeFrom = 8,
         BuildSubscriptionQuery = 9,
         ListContextUsers = 10,
+        SetPinStore = 11,
+        AdoptPreviousIdentity = 12,
     };
 
     ConnectionVarInterface(const core::VarSerializer& serializer) : _serializer(serializer) {}
@@ -49,6 +51,12 @@ public:
     Poco::Dynamic::Var setUserVerifier(
         const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& verifierCallback
     );
+    // Not in `exec`: it takes two callbacks (privmx_endpoint_setPinStore).
+    Poco::Dynamic::Var setPinStore(
+        const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& loadCallback,
+        const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& saveCallback
+    );
+    Poco::Dynamic::Var adoptPreviousIdentity(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);

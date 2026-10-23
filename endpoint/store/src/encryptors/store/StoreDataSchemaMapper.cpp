@@ -86,7 +86,8 @@ std::pair<uint32_t, std::optional<core::DataIntegrityObject>> StoreDataSchemaMap
 std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
     const std::vector<server::Store>& stores,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
-    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
+    const std::optional<std::string>& expectedContextId
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Store>(
         stores, keyProvider, _connection, [&](const server::Store& s) { return validateDataIntegrity(s); },
@@ -98,7 +99,7 @@ std::vector<Store> StoreDataSchemaMapper::validateDecryptAndConvertStores(
         [](const server::Store& s, uint32_t code) {
             return toLibStore(s, {}, {}, code, StoreDataSchema::Version::UNKNOWN);
         },
-        groupPrivKeyResolver
+        groupPrivKeyResolver, expectedContextId
     );
 }
 
@@ -107,7 +108,7 @@ Store StoreDataSchemaMapper::validateDecryptAndConvertStore(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertStores({store}, keyProvider, groupPrivKeyResolver)[0];
+    return validateDecryptAndConvertStores({store}, keyProvider, groupPrivKeyResolver, std::nullopt)[0];
 }
 
 Store StoreDataSchemaMapper::toLibStore(

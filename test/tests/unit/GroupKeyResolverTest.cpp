@@ -28,9 +28,13 @@ limitations under the License.
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
+#include <privmx/endpoint/group/GroupApiImpl.hpp>
+#include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/keytree/GroupKeyResolver.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
+
+#include "GroupApiImplTestAccess.hpp"
 
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
@@ -150,7 +154,7 @@ protected:
                 wireRungs.push_back(server::GroupArchiveRung{
                     static_cast<std::int64_t>(rung.span.at),
                     static_cast<std::int64_t>(rung.span.target),
-                    std::nullopt, std::nullopt, rung.blob, rung.author,
+                    rung.blob, rung.author,
                 });
             }
             epochKeys.push_back(next);
@@ -217,7 +221,7 @@ TEST_F(ResolverDetection, AFullyPopulatedTreeIsRecognised) {
 TEST_F(ResolverDetection, SECURITY_ATreeOfAnotherVersionIsRefusedNotClimbed) {
     // An older tree climbs just as well and means something else: nothing in it says who set a node. The bridge
     // serves version 1 for groups made before the field existed.
-    // Version 2 statements and rungs carry neither the genesis roster nor the rung spans (T3-26).
+    // Version 2 statements and rungs carry neither the genesis roster nor the rung spans.
     for (const std::optional<std::int64_t> version : {std::optional<std::int64_t>(), std::optional<std::int64_t>(1),
                                                       std::optional<std::int64_t>(2), std::optional<std::int64_t>(4)}) {
         Fixture fixture = buildFixture(4);
@@ -399,9 +403,9 @@ TEST_F(ResolverConversion, RegistryFromAnArchiveTakesTheCurrentEpochFromTheGroup
 TEST_F(ResolverConversion, SECURITY_DropsUpwardRungsDuringConversion) {
     server::GroupGetKeyArchiveResult archive = emptyArchive(8);
     archive.rungs = std::vector<server::GroupArchiveRung>{
-        server::GroupArchiveRung{8, 7, std::nullopt, std::nullopt, "ok", std::nullopt},
-        server::GroupArchiveRung{8, 8, std::nullopt, std::nullopt, "self", std::nullopt},
-        server::GroupArchiveRung{8, 9, std::nullopt, std::nullopt, "upward", std::nullopt},
+        server::GroupArchiveRung{8, 7, "ok", std::nullopt},
+        server::GroupArchiveRung{8, 8, "self", std::nullopt},
+        server::GroupArchiveRung{8, 9, "upward", std::nullopt},
     };
     const std::vector<ArchiveRung> rungs = GroupKeyResolver::toDownwardRungs(archive);
     ASSERT_EQ(rungs.size(), 1u) << "only the downward rung may survive conversion";
@@ -440,8 +444,8 @@ TEST_F(ResolverCurrentEpoch, EpochZeroAndTheCurrentEpochAreEquivalent) {
 }
 
 TEST_F(ResolverCurrentEpoch, SECURITY_AnEpochPastTheCurrentOneHasNoKey) {
-    // C3: asking for epoch 2 of a group at epoch 1 used to return epoch 1's key under epoch 2's name — something a
-    // caller would then use to open or seal content it believes belongs to an epoch that does not exist yet.
+    // Asking for epoch 2 of a group at epoch 1 must not return epoch 1's key under epoch 2's name — something a
+    // caller would use to open or seal content it believes belongs to an epoch that does not exist yet.
     Fixture fixture = buildFixture(4);
     setOwnLeafPosition(fixture.group, 1);
     TreeKeyCache store;
@@ -547,7 +551,7 @@ TEST_F(ResolverCurrentEpoch, BlamesTheCommitterWhoseStatementSetTheTamperedNode)
 }
 
 TEST_F(ResolverCurrentEpoch, SECURITY_BlamesTheSetterOfTheNodeWhoseEdgeDoesNotOpen) {
-    // T3-16: a garbled edge (sealed to somebody else) fails to decrypt rather than to verify; whoever set the node
+    // A garbled edge (sealed to somebody else) fails to decrypt rather than to verify; whoever set the node
     // above it wrote that edge all the same.
     Fixture fixture = buildFixture(4);
     setOwnLeafPosition(fixture.group, 0);
@@ -570,8 +574,76 @@ TEST_F(ResolverCurrentEpoch, SECURITY_BlamesTheSetterOfTheNodeWhoseEdgeDoesNotOp
     TreeKeyCache store;
     GroupKeyResolver resolver(store);
     const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
+    // The garbled edge is the member's own leaf edge, which a changed identity key cannot be told apart from.
+    EXPECT_EQ(result.climb, ClimbFailure::LeafDidNotOpen);
+    EXPECT_EQ(result.blame, std::optional<std::string>("creator"));
+}
+
+TEST_F(ResolverCurrentEpoch, SECURITY_BlamesTheSetterOfAGarbledInnerEdge) {
+    // Below 33 seats the root is the only keyed node; here the edge from node 31 to the root is garbled.
+    Fixture fixture = buildFixture(33);
+    setOwnLeafPosition(fixture.group, 0);
+    server::GroupTreeCommit creation;
+    creation.seq = 1;
+    creation.committer = "creator";
+    server::GroupTreeCommit latest;
+    latest.seq = 2;
+    latest.committer = "latest";
+    fixture.group.treeCommits = std::vector<server::GroupTreeCommit>{creation};
+    fixture.group.treeCommit = latest;
+    auto edges = fixture.group.treeEdges.value();
+    std::size_t garbled = 0;
+    for (server::GroupTreeEdge& edge : edges) {
+        if (edge.childKind == "node" && edge.childIndex.value_or(0) == 31) {
+            const PrivateKey somebodyElse = PrivateKey::generateRandom();
+            edge.data = TreeKeys::wrapKey(somebodyElse, somebodyElse.getPublicKey(), fixture.members[0].priv);
+            ++garbled;
+        }
+    }
+    ASSERT_EQ(garbled, 1u);
+    fixture.group.treeEdges = edges;
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult result = resolver.resolve(fixture.group, 0, fixture.members[0].priv, fixture.archive);
     EXPECT_EQ(result.climb, ClimbFailure::DecryptFailed);
     EXPECT_EQ(result.blame, std::optional<std::string>("creator"));
+}
+
+TEST_F(ResolverCurrentEpoch, SECURITY_ALeafThatDoesNotOpenNamesTheKeyChangeRemedy) {
+    const auto withCommits = [](Fixture& fixture) {
+        fixture.group.ownLeafPosition = 0;
+        server::GroupTreeCommit creation;
+        creation.seq = 1;
+        creation.committer = "creator";
+        server::GroupTreeCommit latest;
+        latest.seq = 2;
+        latest.committer = "latest";
+        fixture.group.treeCommits = std::vector<server::GroupTreeCommit>{creation};
+        fixture.group.treeCommit = latest;
+    };
+    const PrivateKey changed = PrivateKey::generateRandom();
+    {
+        Fixture fixture = buildFixture(4);
+        withCommits(fixture);
+        TreeKeyCache store;
+        GroupKeyResolver resolver(store);
+        const ResolveResult result = resolver.resolve(fixture.group, 0, changed, fixture.archive);
+        ASSERT_EQ(result.climb, ClimbFailure::LeafDidNotOpen);
+        const std::string message = GroupApiImplTestAccess::describeResolveFailure(result);
+        EXPECT_NE(message.find("renewLeaf"), std::string::npos) << message;
+        EXPECT_NE(message.find("wrapped by creator"), std::string::npos) << message;
+    }
+    {
+        Fixture fixture = buildFixture(1);
+        withCommits(fixture);
+        TreeKeyCache store;
+        GroupKeyResolver resolver(store);
+        const ResolveResult result = resolver.resolve(fixture.group, 0, changed, fixture.archive);
+        ASSERT_EQ(result.climb, ClimbFailure::LeafDidNotOpen);
+        const std::string message = GroupApiImplTestAccess::describeResolveFailure(result);
+        EXPECT_NE(message.find("renewLeaf"), std::string::npos) << message;
+        EXPECT_NE(message.find("wrapped by latest"), std::string::npos) << "a one-leaf grant edge is the latest's";
+    }
 }
 
 // resolving an older epoch — tree then ladder
@@ -641,9 +713,9 @@ TEST_F(ResolverOldEpoch, ANewcomerReachesTheOldestEpochWithNothingWrappedToThem)
     ASSERT_EQ(result.failure, ResolveFailure::None);
     EXPECT_EQ(result.key->toWIF(), epochKeys[0].toWIF()) << "the newcomer reads epoch 1";
 
-    // Nothing in the archive is addressed to an individual — every rung targets an epoch.
-    for (const server::GroupArchiveRung& rung : fixture.archive.rungs) {
-        EXPECT_FALSE(rung.recipient.has_value() && !rung.recipient.value().empty());
+    // Nothing in the archive is addressed to an individual — every rung opens with an epoch's grant key.
+    for (const ArchiveRung& rung : GroupKeyResolver::toDownwardRungs(fixture.archive)) {
+        EXPECT_TRUE(LadderKeys::openRung(rung, epochKeys[rung.span.at - 1]).has_value());
     }
 }
 
@@ -675,6 +747,35 @@ TEST_F(ResolverOldEpoch, ReportsPruningDistinctlyFromAnEraBoundary) {
         << "retention and entitlement must read differently to the user";
 }
 
+TEST_F(ResolverOldEpoch, SECURITY_AFloorPast32BitsIsRefusedNotWrapped) {
+    // Narrowed unchecked, 2^32 + 8 would read as era floor 8 and 2^32 - 1 as something else again; 0 and below
+    // mean no floor, as for `ladderFloorOf`, rather than an invalid_argument out of the ladder.
+    Fixture fixture = buildFixture(4);
+    advanceEpochs(fixture, 12);
+    setOwnLeafPosition(fixture.group, 1);
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    server::GroupGetKeyArchiveResult archive = fixture.archive;
+    archive.eraFloor = (std::int64_t(1) << 32) + 8;
+    EXPECT_THROW(resolver.resolve(fixture.group, 3, fixture.members[1].priv, archive), GroupDataIntegrityException);
+    archive.eraFloor = 1;
+    archive.archivePrunedBelow = (std::int64_t(1) << 32) + 9;
+    EXPECT_THROW(resolver.resolve(fixture.group, 3, fixture.members[1].priv, archive), GroupDataIntegrityException);
+    archive.eraFloor = 0;
+    archive.archivePrunedBelow = -5;
+    EXPECT_TRUE(resolver.resolve(fixture.group, 3, fixture.members[1].priv, archive).key.has_value());
+}
+
+TEST_F(ResolverOldEpoch, SECURITY_AKeyVersionPast32BitsIsRefusedNotWrapped) {
+    Fixture fixture = buildFixture(4);
+    setOwnLeafPosition(fixture.group, 1);
+    fixture.group.keyVersion = (std::int64_t(1) << 32) + 1; // epoch 1, unchecked
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    EXPECT_THROW(resolver.resolve(fixture.group, 0, fixture.members[1].priv, fixture.archive), GroupDataIntegrityException);
+    EXPECT_THROW(GroupKeyResolver::registryFromGroupHistory(fixture.group), GroupDataIntegrityException);
+}
+
 TEST_F(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
     Fixture fixture = buildFixture(4);
     const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);
@@ -701,7 +802,7 @@ TEST_F(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
 }
 
 TEST_F(ResolverOldEpoch, SECURITY_TheLadderIsTakenOnlyAsTheStatementsVouchForIt) {
-    // T3-09: the bridge seals a key of its own into the rung down to epoch 7 and lists that key as epoch 7's. Off its
+    // The bridge seals a key of its own into the rung down to epoch 7 and lists that key as epoch 7's. Off its
     // `keyHistory` the descent takes it; off the statements, neither the rung nor the key stands.
     Fixture fixture = buildFixture(4);
     const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);
@@ -738,6 +839,8 @@ TEST_F(ResolverOldEpoch, SECURITY_TheLadderIsTakenOnlyAsTheStatementsVouchForIt)
     ASSERT_TRUE(taken.key.has_value());
     EXPECT_EQ(taken.key->toWIF(), planted.toWIF()) << "the attack, against the archive as served";
 
+    // The planted rung is kept (any member may append a repair rung), but unattributed, and it fails the registry
+    // check: the statement names epoch 7's real key, so the planted one is never taken.
     EXPECT_FALSE(resolve7(GroupKeyResolver::authenticated(forged, openers)).key.has_value());
 
     const server::GroupGetKeyArchiveResult honest = GroupKeyResolver::authenticated(fixture.archive, openers);
@@ -748,6 +851,89 @@ TEST_F(ResolverOldEpoch, SECURITY_TheLadderIsTakenOnlyAsTheStatementsVouchForIt)
     const ResolveResult reached = resolve7(honest);
     ASSERT_TRUE(reached.key.has_value());
     EXPECT_EQ(reached.key->toWIF(), epochKeys[6].toWIF());
+}
+
+// Openers of epochs 1..upTo, each naming `committer` (sealing with `sealer`) and the epoch's real grant key.
+static std::map<std::uint64_t, CommitStatement> openersOf(
+    const std::vector<PrivateKey>& epochKeys, const std::string& committer, const PrivateKey& sealer
+) {
+    std::map<std::uint64_t, CommitStatement> openers;
+    for (std::uint64_t epoch = 1; epoch <= epochKeys.size(); ++epoch) {
+        CommitStatement statement;
+        statement.keyVersion = epoch;
+        statement.groupPubKey = epochKeys[epoch - 1].getPublicKey().toBase58DER();
+        statement.committer = committer;
+        statement.committerPubKey = sealer.getPublicKey().toBase58DER();
+        openers.emplace(epoch, statement);
+    }
+    return openers;
+}
+
+TEST_F(ResolverOldEpoch, SECURITY_ARungSealedByAnotherMemberIsKeptButAttributedToNobody) {
+    // A repair rung appended by another member is what lets a reader cross a broken rung. It is kept, so the
+    // descent can use it, but it names nobody: blame comes from the signed statement, never from the bridge.
+    Fixture fixture = buildFixture(4);
+    const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);
+    setOwnLeafPosition(fixture.group, 1);
+    const auto openers = openersOf(epochKeys, "remover", fixture.members[0].priv);
+    server::GroupGetKeyArchiveResult archive = fixture.archive;
+    for (server::GroupArchiveRung& rung : archive.rungs) {
+        if (rung.atKeyVersion == 8 && rung.targetKeyVersion == 7) {
+            rung.data = LadderKeys::sealRung(PrivateKey::generateRandom(), RungSpan{8, 7}, epochKeys[7].getPublicKey(),
+                                             fixture.members[0].priv); // the opener's rung is garbage
+        }
+    }
+    server::GroupArchiveRung repair{8, 7, LadderKeys::sealRung(epochKeys[6], RungSpan{8, 7}, epochKeys[7].getPublicKey(),
+                                                              fixture.members[2].priv), std::string("bridge-says-carol")};
+    archive.rungs.push_back(repair);
+
+    const server::GroupGetKeyArchiveResult authenticated = GroupKeyResolver::authenticated(archive, openers);
+    ASSERT_EQ(authenticated.rungs.size(), archive.rungs.size()) << "nothing dropped by sealer";
+    EXPECT_FALSE(authenticated.rungs.back().author.has_value()) << "another member's rung names nobody";
+
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult result = resolver.resolve(fixture.group, 7, fixture.members[1].priv, authenticated);
+    ASSERT_TRUE(result.key.has_value());
+    EXPECT_EQ(result.key->toWIF(), epochKeys[6].toWIF()) << "crossed on the repair";
+}
+
+TEST_F(ResolverOldEpoch, SECURITY_AtMostEightRungsPerSpanAreKeptOpenerSealedFirst) {
+    // A lying bridge serving a span many times over can cost a reader at most eight attempts per span, and the
+    // opener's own rung is never pushed out by others.
+    Fixture fixture = buildFixture(4);
+    const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);
+    const auto openers = openersOf(epochKeys, "remover", fixture.members[0].priv);
+    server::GroupGetKeyArchiveResult archive = fixture.archive;
+    server::GroupArchiveRung opener;
+    std::vector<server::GroupArchiveRung> rest;
+    for (const server::GroupArchiveRung& rung : archive.rungs) {
+        if (rung.atKeyVersion == 8 && rung.targetKeyVersion == 7) {
+            opener = rung;
+        } else {
+            rest.push_back(rung);
+        }
+    }
+    // Twenty unattributed copies served before the opener's, and twenty more opener-sealed ones after it.
+    archive.rungs = rest;
+    for (int i = 0; i < 20; ++i) {
+        archive.rungs.push_back(server::GroupArchiveRung{8, 7, LadderKeys::sealRung(PrivateKey::generateRandom(),
+            RungSpan{8, 7}, epochKeys[7].getPublicKey(), PrivateKey::generateRandom()), std::nullopt});
+    }
+    archive.rungs.push_back(opener);
+    for (int i = 0; i < 20; ++i) {
+        archive.rungs.push_back(opener);
+    }
+    const server::GroupGetKeyArchiveResult authenticated = GroupKeyResolver::authenticated(archive, openers);
+    std::vector<server::GroupArchiveRung> span;
+    for (const server::GroupArchiveRung& rung : authenticated.rungs) {
+        if (rung.atKeyVersion == 8 && rung.targetKeyVersion == 7) {
+            span.push_back(rung);
+        }
+    }
+    ASSERT_EQ(span.size(), GroupKeyResolver::MAX_SERVED_RUNGS_PER_SPAN);
+    EXPECT_EQ(span.front().data, opener.data) << "the opener's rung comes first";
+    EXPECT_EQ(span.front().author, std::optional<std::string>("remover"));
 }
 
 // caching — the seam GroupApiImpl::resolveGroupPrivKey actually calls on every read

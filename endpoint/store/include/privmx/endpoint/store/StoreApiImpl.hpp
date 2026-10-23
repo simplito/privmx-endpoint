@@ -146,6 +146,7 @@ private:
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
 
     core::ModuleKeys getFileDecryptionKeys(server::File file);
+    core::DecryptedEncKey currentWriteKey(const server::StoreFileGetResult& file_raw, const core::DecryptedEncKey& fileKey);
     core::DecryptedEncKey getCurrentFileEncKey(const std::string& fileId);
     std::string storeFileFinalizeWrite(const std::shared_ptr<FileWriteHandle>& handle);
     FileEncryptionParams getFileEncryptionParams(server::File file, const core::DecryptedEncKey& encKey);

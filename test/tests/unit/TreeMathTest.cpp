@@ -452,4 +452,6 @@ TEST_F(TreeMathGrowth, SeatingPastTheEndGrowsTheTree) {
     EXPECT_EQ(TreeMath::numLeavesToSeat(4, 4), 5u);
     EXPECT_EQ(TreeMath::numLeavesToSeat(1, 4), 4u);
     EXPECT_EQ(TreeMath::numLeavesToSeatAll({4, 5}, 4), 6u);
+    // H2: the last seat number would wrap the leaf count to 0.
+    EXPECT_THROW(TreeMath::numLeavesToSeat(UINT32_MAX, 4), std::invalid_argument);
 }
