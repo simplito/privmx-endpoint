@@ -3011,6 +3011,24 @@ TEST_F(GroupApiLyingBridge, AMetadataVersionSeenByAReadIsSavedBeforeItReturns) {
     EXPECT_EQ(pins->planes.at(groupId)[1], 2);
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_AMetadataVersionSeenByAContainerKeyLookupIsSavedBeforeItReturns) {
+    // The same on the container path: the version pin the roster attestation raises after the tree is verified.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob"});
+    client("alice").getGroup(groupId);
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("alice")));
+    kill("alice"); // a fresh session that loads the version pins and has no module keys cached
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("v2"), 1);
+    client("alice").encrypt(groupId, core::Buffer::from("x")); // the group's module keys, read for the envelope
+    const PrivateKey& key = bridge.users.at("alice");
+    const std::string slot = store->keyWith("group-pins/", "/" + key.getPublicKey().toBase58DER());
+    const auto body = core::openLocal(key, PinBlob::LABEL, PinBlob::VERSION, slot, store->get(slot));
+    const auto pins = body.has_value() ? PinBlob::decode(body.value()) : std::nullopt;
+    ASSERT_TRUE(pins.has_value() && pins->planes.count(groupId) > 0);
+    EXPECT_EQ(pins->planes.at(groupId)[1], 2) << "saved before the lookup returned";
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_AMajorMoveSeenByAContainerKeyLookupIsSavedBeforeItReturns) {
     // A client that only uses containers resolves group keys and never calls GroupApi: a removal it verified there
     // must be in the store at once, so a session killed right after still refuses the pre-removal state.

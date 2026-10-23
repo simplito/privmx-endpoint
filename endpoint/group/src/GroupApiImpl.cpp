@@ -2043,6 +2043,8 @@ std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromSe
 }
 
 group::server::GroupInfo GroupApiImpl::readGroupForKeys(const std::string& groupId) {
+    // On return, after the roster attestation below has moved the version pins too, not only the tree's.
+    const SaveDuePins saveAfter{*this};
     const server::GroupGetModel params = pathRead(groupId);
     auto group = _serverApi.groupGet(params).group;
     // The tree pins `keyVersion` (never below what this client verified or committed itself); the head entry's
