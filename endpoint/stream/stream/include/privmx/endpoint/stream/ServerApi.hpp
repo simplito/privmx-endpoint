@@ -39,7 +39,8 @@ public:
     server::StreamPublishResult streamUpdate(server::StreamUpdateModel model);
 
     void streamAcceptOffer(server::StreamAcceptOfferModel model);
-    void streamSetNewOffer(server::StreamSetNewOfferModel model);
+    server::StreamSetNewOfferResult streamSetNewOffer(server::StreamSetNewOfferModel model);
+    server::StreamRestartSubscriberIceResult streamRestartSubscriberIce(server::StreamRestartSubscriberIceModel model);
 
     void streamUnpublish(server::StreamUnpublishModel model);
 

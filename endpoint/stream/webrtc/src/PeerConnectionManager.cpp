@@ -45,6 +45,7 @@ void PeerConnectionManager::initialize(
         _connections.set(streamRoomId, std::make_shared<PeerConnectionManager::RoomConnections>());
     }
     auto pc = _createPeerConnection(streamRoomId);
+    pc->observer->setConnectionType(connectionType == ConnectionType::Publisher ? "publisher" : "subscriber");
     pc->observer->setOnIceCandidate(
         [&, streamRoomId, connectionType](libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate> rtcIceCandidate) {
             auto roomConnections = _connections.get(streamRoomId).value();

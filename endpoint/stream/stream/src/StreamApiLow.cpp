@@ -318,6 +318,17 @@ void StreamApiLow::setNewOfferOnReconfigure(const int64_t sessionId, const SdpWi
     }
 }
 
+void StreamApiLow::restartSubscriberIce(const std::string& streamRoomId) {
+    auto impl = getImpl();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return impl->restartSubscriberIce(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 core::Buffer StreamApiLow::encryptDataChannelMessage(
     const std::string& streamRoomId,
     const DataChannelMessage& plainMessage

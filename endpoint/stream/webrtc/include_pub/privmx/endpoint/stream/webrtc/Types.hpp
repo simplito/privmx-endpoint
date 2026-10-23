@@ -141,6 +141,83 @@ struct MediaTrack {
     std::function<void(bool)> setEnabled;
 };
 
+/**
+ * States of a single PeerConnection of a Stream Room.
+ *
+ * These mirror the states of the WebRTC PeerConnection itself. 'StreamApi' turns them into the Stream
+ * Room's 'StreamConnectionState', which is what the application receives.
+ */
+enum PeerConnectionState : int64_t {
+    /**
+     * the connection has been created and is not connecting yet
+     */
+    PeerConnectionNew = 0,
+
+    /**
+     * the connection is being established
+     */
+    PeerConnectionConnecting = 1,
+
+    /**
+     * the connection is established and its media flows
+     */
+    PeerConnectionConnected = 2,
+
+    /**
+     * the connection lost its transport and may still recover on its own
+     */
+    PeerConnectionDisconnected = 3,
+
+    /**
+     * the connection lost its transport and will not recover without a renegotiation
+     */
+    PeerConnectionFailed = 4,
+
+    /**
+     * the connection has been closed
+     */
+    PeerConnectionClosed = 5,
+};
+
+/**
+ * State of the media connections of a Stream Room, as the application receives it.
+ *
+ * It covers the Stream Room as a whole: both the Stream you publish and the Streams you subscribe to. A
+ * participant who only watches gets it too.
+ */
+enum StreamConnectionState : int64_t {
+    /**
+     * the media of the Stream Room flow
+     */
+    StreamConnected = 0,
+
+    /**
+     * the media stopped flowing and 'StreamApi' is trying to bring them back
+     */
+    StreamReconnecting = 1,
+
+    /**
+     * the media stopped flowing and 'StreamApi' gave up on bringing them back, so the Stream Room has to
+     * be left and joined again
+     */
+    StreamLost = 2,
+};
+
+/**
+ * Holds data of an event informing about the state of the media connections of a Stream Room.
+ */
+struct StreamConnectionStateChangedEventData {
+    /**
+     * ID of the Stream Room the state concerns
+     */
+    std::string streamRoomId;
+
+    /**
+     * current state of the Stream Room's media connections
+     */
+    StreamConnectionState state;
+};
+
 } // namespace stream
 } // namespace endpoint
 } // namespace privmx

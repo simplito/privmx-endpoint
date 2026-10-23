@@ -12,12 +12,15 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPIIMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPIIMPL_HPP_
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "privmx/endpoint/stream/ConnectionStateTracker.hpp"
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
@@ -83,6 +86,12 @@ public:
         EventSelectorType selectorType,
         const std::string& selectorId
     );
+    static std::string buildConnectionStateSubscriptionQuery(const std::string& streamRoomId);
+    void setConnectionState(
+        const std::string& streamRoomId,
+        const std::string& connectionType,
+        PeerConnectionState state
+    );
 
     // Stream
     std::vector<StreamInfo> listStreams(const std::string& streamRoomId);
@@ -120,6 +129,11 @@ public:
         std::shared_ptr<OnTrackInterface> onTrack
     );
     void sendData(const StreamHandle& streamHandle, core::Buffer data);
+
+    // test-only: drops the PeerConnection of the Stream Room the way a lost network connection would
+    void simulateConnectionLossForTest(const std::string& streamRoomId, const std::string& connectionType);
+    // test-only: reports the connection as failed while leaving it in place, so the library runs a real
+    void reportConnectionFailedForTest(const std::string& streamRoomId, const std::string& connectionType);
 
 private:
     void processDisconnectedEvent();
@@ -261,6 +275,19 @@ private:
     std::shared_ptr<core::EventMiddleware> _eventMiddleware;
     std::shared_ptr<StreamApiLow> _api;
     std::shared_ptr<WebRTCImpl> _webRTC;
+    // subscriptions for the events this API raises itself, which the Bridge knows nothing about
+    privmx::utils::ThreadSaveMap<std::string, std::string> _localSubscriptions;
+    std::atomic_int64_t _nextLocalSubscriptionId{1};
+    // reset first in the destructor, so its worker thread is joined before anything it reaches is gone
+    std::shared_ptr<ConnectionStateTracker> _connectionStateTracker;
+
+    static constexpr std::string_view CONNECTION_STATE_CHANNEL = "streamroom/connectionState";
+
+    static bool isConnectionStateSubscriptionQuery(const std::string& subscriptionQuery);
+    void emitConnectionStateChangedEvent(const std::string& streamRoomId, StreamConnectionState state);
+    // runs on the tracker's thread, so it is kept short; returns whether a recovery was started
+    bool recoverConnection(const std::string& streamRoomId, const std::string& connectionType);
+    void recoverPublisherConnection(const std::string& streamRoomId);
 };
 
 } // namespace stream

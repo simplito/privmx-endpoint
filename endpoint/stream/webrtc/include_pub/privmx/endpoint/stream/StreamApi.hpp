@@ -167,6 +167,19 @@ public:
      *
      * @return subscription query string
      */
+    /**
+     * Builds the subscription query for the state of a Stream Room's media connections.
+     *
+     * Pass the result to `subscribeFor` to start receiving `StreamConnectionStateChangedEvent` for that
+     * Stream Room. Without the subscription the state is tracked and acted on, but no event is delivered.
+     * Unlike the other queries this one is handled locally, because the state never reaches the Bridge.
+     *
+     * @param streamRoomId ID of the Stream Room to listen for the state of
+     *
+     * @return subscription query string
+     */
+    std::string buildConnectionStateSubscriptionQuery(const std::string& streamRoomId);
+
     std::string buildSubscriptionQuery(
         EventType eventType,
         EventSelectorType selectorType,

@@ -82,7 +82,9 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointStreamException, "Unknown endpoint stre
     X(InvalidDataChannelSeqException, "Invalid data channel sequence number", 0x002E)                                 \
     X(StreamHandleNotPublishedException, "StreamHandle not published", 0x002F)                                        \
     X(SubscriberStreamAlreadyCreatedException, "Subscriber stream is already created", 0x0030)                        \
-    X(SubscriberStreamHandleNotInitialized, "SubscriberStreamHandle not initialized", 0x0031)
+    X(SubscriberStreamHandleNotInitialized, "SubscriberStreamHandle not initialized", 0x0031)                        \
+    X(CannotExtractStreamConnectionStateChangedEventException,                                                       \
+      "Cannot extract StreamConnectionStateChangedEvent", 0x0032)
 
 #define PRIVMX_STREAM_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NAME, MSG, CODE)
 STREAM_EXCEPTIONS(PRIVMX_STREAM_DECLARE)

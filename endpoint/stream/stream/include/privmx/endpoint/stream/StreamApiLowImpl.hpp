@@ -114,6 +114,7 @@ public:
 
     void trickle(const int64_t sessionId, const std::string& candidateAsJson);
     void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
+    void restartSubscriberIce(const std::string& streamRoomId);
 
     core::Buffer encryptDataChannelMessage(const std::string& streamRoomId, const DataChannelMessage& plainMessage);
     DecryptedDataChannelMessage decryptDataChannelMessage(
@@ -183,6 +184,9 @@ private:
     core::ModuleKeys streamRoomToModuleKeys(server::StreamRoomInfo streamRoom);
     void assertTurnServerUri(const std::string& uri);
     void acceptOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
+    // resolves a media server session to the Stream Room and the connection type ("publisher" or
+    // "subscriber") which hold it
+    std::optional<std::pair<std::string, std::string>> findConnectionBySessionId(const int64_t sessionId);
 
     static int32_t nextIdCounter;
     static int32_t nextId() { return nextIdCounter++; }

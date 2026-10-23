@@ -59,8 +59,14 @@ void ServerApi::streamAcceptOffer(server::StreamAcceptOfferModel model) {
     requestWS("streamAcceptOffer", model.toJSON());
 }
 
-void ServerApi::streamSetNewOffer(server::StreamSetNewOfferModel model) {
-    requestWS("streamSetNewOffer", model.toJSON());
+server::StreamSetNewOfferResult ServerApi::streamSetNewOffer(server::StreamSetNewOfferModel model) {
+    return requestWS<server::StreamSetNewOfferResult>("streamSetNewOffer", model.toJSON());
+}
+
+server::StreamRestartSubscriberIceResult ServerApi::streamRestartSubscriberIce(
+    server::StreamRestartSubscriberIceModel model
+) {
+    return requestWS<server::StreamRestartSubscriberIceResult>("streamRestartSubscriberIce", model.toJSON());
 }
 
 void ServerApi::streamUnpublish(server::StreamUnpublishModel model) {

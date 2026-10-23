@@ -155,6 +155,19 @@ JSON_STRUCT(StreamUpdatedEventData, STREAM_UPDATED_EVENT_DATA_FIELDS);
     F(sessionId, int64_t)
 JSON_STRUCT(StreamSetNewOfferModel, STREAM_SET_NEW_OFFER_MODEL_FIELDS);
 
+#define STREAM_SET_NEW_OFFER_RESULT_FIELDS(F)                                                                          \
+    F(answer, std::optional<SessionDescription>)                                                                       \
+    F(sessionId, int64_t)
+JSON_STRUCT(StreamSetNewOfferResult, STREAM_SET_NEW_OFFER_RESULT_FIELDS);
+
+#define STREAM_RESTART_SUBSCRIBER_ICE_MODEL_FIELDS(F) F(streamRoomId, std::string)
+JSON_STRUCT(StreamRestartSubscriberIceModel, STREAM_RESTART_SUBSCRIBER_ICE_MODEL_FIELDS);
+
+#define STREAM_RESTART_SUBSCRIBER_ICE_RESULT_FIELDS(F)                                                                 \
+    F(offer, std::optional<SessionDescription>)                                                                        \
+    F(sessionId, int64_t)
+JSON_STRUCT(StreamRestartSubscriberIceResult, STREAM_RESTART_SUBSCRIBER_ICE_RESULT_FIELDS);
+
 #define STREAM_ACCEPT_OFFER_MODEL_FIELDS(F)                                                                            \
     F(answer, SessionDescription)                                                                                      \
     F(sessionId, int64_t)
