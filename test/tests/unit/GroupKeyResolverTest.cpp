@@ -366,6 +366,28 @@ TEST_F(ResolverCurrentEpoch, EpochZeroAndTheCurrentEpochAreEquivalent) {
     EXPECT_EQ(byZero.key->toWIF(), byOne.key->toWIF());
 }
 
+// A key version the group has not reached yet names no key at all. Handing back the current one under that
+// number would let a caller believe it read epoch 2 content while holding epoch 1's key.
+TEST_F(ResolverCurrentEpoch, AnEpochNewerThanTheGroupsIsRejected) {
+    Fixture fixture = buildFixture(4);
+    setOwnLeafPosition(fixture.group, 1);
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult result = resolver.resolve(fixture.group, 2, fixture.members[1].priv, fixture.archive);
+    EXPECT_EQ(result.failure, ResolveFailure::NoSuchEpoch);
+    EXPECT_FALSE(result.key.has_value()) << "a future epoch must not yield the current key";
+}
+
+TEST_F(ResolverCurrentEpoch, ANegativeEpochIsRejectedInsteadOfMeaningCurrent) {
+    Fixture fixture = buildFixture(4);
+    setOwnLeafPosition(fixture.group, 1);
+    TreeKeyCache store;
+    GroupKeyResolver resolver(store);
+    const ResolveResult result = resolver.resolve(fixture.group, -1, fixture.members[1].priv, fixture.archive);
+    EXPECT_EQ(result.failure, ResolveFailure::NoSuchEpoch);
+    EXPECT_FALSE(result.key.has_value());
+}
+
 TEST_F(ResolverCurrentEpoch, WithoutOwnLeafPositionTheCallerIsNotAMember) {
     const Fixture fixture = buildFixture(4);
     // ownLeafPosition deliberately unset: the bridge did not point at a leaf for this caller.
