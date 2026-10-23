@@ -49,6 +49,7 @@ limitations under the License.
 
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
+#include <privmx/crypto/utils/Base58.hpp>
 #include <privmx/endpoint/core/BigEndian.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -1597,7 +1598,8 @@ TEST_F(TreeVerification, SECURITY_AChainIsCheckedPageByPageBeforeTheNextPageIsFe
 
 TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused) {
     // T4-24: a member republishing the grant key of an epoch before a removal reopens the new epoch to the leaver.
-    const auto opensUnder = [&](const std::function<PublicKey()>& grantKey) {
+    // `uncompressed`: the key signed in its other base58 spelling, a different string for the same point.
+    const auto opensUnder = [&](const std::function<PublicKey()>& grantKey, bool uncompressed = false) {
         reset();
         create(40, 0);
         remove(id(35), {id(5)});
@@ -1607,6 +1609,13 @@ TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused
             state.epoch += 1;
             state.grantPublicKey = key;
         }, {.rosterBump = 1, .op = CommitOp::Rotate});
+        if (uncompressed) {
+            CommitStatement spelled = TreeCommits::fromWire(bridge.commits.back());
+            spelled.groupPubKey = privmx::utils::Base58::encodeWithChecksum(key.getEcc().getPublicKey(false));
+            EXPECT_NE(spelled.groupPubKey, key.toBase58DER());
+            TreeCommits::sign(spelled, member(id(9)).priv);
+            bridge.commits.back() = TreeCommits::toWire(spelled);
+        }
         TreeVerifier own;
         own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), bridge.users(), managersOf(), bridge.rules());
         try {
@@ -1621,6 +1630,9 @@ TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused
     EXPECT_EQ(opensUnder([&] {
         return PublicKey::fromBase58DER(TreeCommits::fromWire(bridge.commits.front()).groupPubKey);
     }), "a new epoch's grant key is an earlier epoch's|") << "epoch 1's key at epoch 3, refused by the grant-key rule";
+    EXPECT_EQ(opensUnder([&] {
+        return PublicKey::fromBase58DER(TreeCommits::fromWire(bridge.commits.front()).groupPubKey);
+    }, true), "a new epoch's grant key is an earlier epoch's|") << "and in its uncompressed spelling too";
 }
 
 // signed policy (T4-10)

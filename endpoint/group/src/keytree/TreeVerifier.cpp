@@ -41,6 +41,13 @@ CommitStatement parse(const server::GroupTreeCommit& wire) {
     } catch (const std::invalid_argument& e) { reject(e.what()); }
 }
 
+// One spelling per key: the same point base58'd uncompressed is another string but the same grant key (T4-24).
+std::string canonicalKey(const std::string& base58) {
+    try {
+        return privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(base58).toBase58DER();
+    } catch (...) { reject("a grant key that does not parse"); }
+}
+
 std::uint64_t nowMs() {
     return static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp());
 }
@@ -330,7 +337,7 @@ TreeVerifier::Step TreeVerifier::step(
         reject("counters the op does not move that way");
     }
     // One grant key per epoch, and a new epoch's never an earlier epoch's (T4-24).
-    if (newEpoch && !grantKeys.insert(statement.groupPubKey).second) {
+    if (newEpoch && !grantKeys.insert(canonicalKey(statement.groupPubKey)).second) {
         reject("a new epoch's grant key is an earlier epoch's");
     }
     if (!newEpoch && statement.groupPubKey != head.groupPubKey) {
@@ -392,7 +399,7 @@ void TreeVerifier::verifyChain(
     std::set<std::string> grantKeys;
     if (pin.hasRoster) {
         head = pin;
-        grantKeys = {pin.groupPubKey};
+        grantKeys = {canonicalKey(pin.groupPubKey)};
     } else {
         // 01: a pin loaded without its roster. The roster to continue from is replayed from genesis and must end at
         // exactly the pinned statement (so it reproduces the pinned rosterHash); the head keeps the pinned tree hash,
