@@ -23,8 +23,12 @@ class GroupApiImpl;
  * A membership, key or policy change that failed may still take effect: the Bridge may have applied it and lost or
  * refused the answer. For a bounded time, or until the Group changes in some other way, this client resends that
  * change before it makes any other change to the Group: a retry of the same call resends it (and returns once it is
- * found applied), and a different call completes it first. Key refreshes this client runs in the background never
- * hold anything back.
+ * found applied), and a different call completes it first. Key refreshes never hold anything back.
+ *
+ * This client runs no thread of its own. Upkeep it finds due (key refreshes of its own path, repairs of the epoch
+ * ladder, saving pins) runs at the end of a later call on the same Group that succeeded (addGroupMembers,
+ * removeGroupMembers, rotateGroupKey, renewLeaf, update*, getGroup); it adds latency to that call but never changes
+ * its result or throws. A client that makes no such call does none of it.
  */
 class GroupApi : public privmx::endpoint::core::BaseApiClass<GroupApiImpl> {
 public:

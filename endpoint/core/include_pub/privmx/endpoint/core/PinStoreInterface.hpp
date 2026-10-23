@@ -34,7 +34,7 @@ namespace core {
  * `blob` only if the stored value still equals `expected` (empty = nothing stored) and returns whether it did. In a
  * browser an IndexedDB readwrite transaction does this; a file store compares and renames under a lock.
  *
- * Threading: both callbacks may run on any library thread, including the background worker, while a library lock (a
+ * Threading: both callbacks may run on any library thread (usually the caller's own), while a library lock (a
  * per-group commit lock, the pin-save lock) is held. They must be synchronous and must not call back into the
  * endpoint. A store with a small quota (localStorage, ~5 MiB) is unsupported: a failed save is logged and retried, and
  * until one succeeds the pins live in memory only, as without a store.
