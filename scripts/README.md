@@ -32,7 +32,7 @@ Unit tests need only a build; e2e tests additionally need Docker, and start a Br
 | `--filter PATTERN` | GTest filter, e.g. `ThreadTest.*` (alias: `--test`) |
 | `--build-dir DIR` | Where to look for test binaries (default: `build`) |
 | `--e2e-workers N` | e2e tests to run in parallel (default: 4) |
-| `--dataset-dir DIR` | Dataset used to seed the Bridge |
+| `--dataset-dir DIR` | Dataset used to seed the Bridge (the default `test/env/datasets/Dataset` is generated with `dataset.sh` when missing) |
 | `--bridge-image IMAGE` | Bridge docker image for e2e tests |
 | `--keep-bridge` | Leave the Bridge containers up after the run |
 
@@ -54,10 +54,11 @@ Starts a single Bridge loaded with a dataset and leaves it running until `Ctrl+C
 
 ## Datasets
 
-Datasets live in `test/env/datasets/`; each holds a `ServerData.ini` with the solution, context and user keys to connect with.
+Datasets live in `test/env/datasets/`, which is git-ignored: they are generated, not committed. Each holds a `ServerData.ini` with the solution, context and user keys to connect with. Generating one needs Docker and a build (`build/test/test_env_DockerSetupData`).
 
 ```bash
-./scripts/dataset.sh <name>     # create a new dataset, or refresh <name> in place
+./scripts/dataset.sh <name>                                             # create a new dataset, or refresh <name> in place
+./scripts/dataset.sh Dataset -i privmx-bridge -v my-tag                 # against a specific Bridge image
 ```
 
 ## Shell completion

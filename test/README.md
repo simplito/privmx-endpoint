@@ -13,7 +13,7 @@
 | `runner/e2e_bridge.py`, `e2e_tests.py`, `e2e_common.py` | Runner internals |
 | `runner/logs/` | One log file per runner invocation |
 | `env/compose.yaml` | Backend containers: MongoDB (replica set), Janus, Coturn, and the shared docker network |
-| `env/datasets/` | The Bridge snapshots tests are seeded from |
+| `env/datasets/` | The Bridge snapshots tests are seeded from (generated, git-ignored) |
 | `env/create_dataset/` | The tool that produces those snapshots |
 | `tools/` | Key tree dump utilities (see [tools/README.md](tools/README.md)) |
 
@@ -148,9 +148,10 @@ A dataset is a snapshot of a seeded Bridge. The runner recreates that state for 
 | `storage/` | Files copied into the Bridge container |
 | `migration.json` | Pins the Bridge to the migration the dataset was created at |
 
-This repository ships a working dataset in `env/datasets/Dataset`. Create new ones with [`scripts/dataset.sh`](../scripts/README.md#datasets), which wraps the tool in `env/create_dataset/`:
+Datasets are generated, not stored in the repository (`env/datasets/` is git-ignored). `run_tests.sh` creates the default `env/datasets/Dataset` on its first e2e run, from the build's `test_env_DockerSetupData` and the `--bridge-image` it runs against. Create or refresh one yourself with [`scripts/dataset.sh`](../scripts/README.md#datasets), which wraps the tool in `env/create_dataset/` (it needs a build with `test_env_DockerSetupData` in `build/test`, or in `$DATASET_TESTS_DIR`, and uses ports 12345/12346):
 
 ```bash
+./scripts/dataset.sh Dataset -i hub.simplito.com/privmx/privmx-bridge -v dev
 ./env/create_dataset/main.sh --help     # advanced options
 ```
 

@@ -54,8 +54,7 @@ solutionId     = a37a4e8f-8034-441e-8da8-d0d1744a228e
 instanceUrl    = http://localhost/
 ```
 
-The repo ships a ready-made dataset you can point at:
-`test/env/datasets/Dataset/ServerData.ini` (used by the E2E tests; start the Bridge with `cd test/env && docker compose up -d`).
+The E2E dataset has one you can point at: `test/env/datasets/Dataset/ServerData.ini`. It is not stored in the repository; generate it with `./scripts/dataset.sh Dataset` (or let `./scripts/run_tests.sh --e2e-only` do it), then start a Bridge on it with `./scripts/bridge.sh`.
 
 ### Environment variables
 
