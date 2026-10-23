@@ -148,7 +148,7 @@ A dataset is a snapshot of a seeded Bridge. The runner recreates that state for 
 | `storage/` | Files copied into the Bridge container |
 | `migration.json` | Pins the Bridge to the migration the dataset was created at |
 
-Datasets are generated, not stored in the repository (`env/datasets/` is git-ignored). `run_tests.sh` creates the default `env/datasets/Dataset` on its first e2e run, from the build's `test_env_DockerSetupData` and the `--bridge-image` it runs against. Create or refresh one yourself with [`scripts/dataset.sh`](../scripts/README.md#datasets), which wraps the tool in `env/create_dataset/` (it needs a build with `test_env_DockerSetupData` in `build/test`, or in `$DATASET_TESTS_DIR`, and uses ports 12345/12346):
+Datasets are generated, not stored in the repository (`env/datasets/` is git-ignored). Create the default `env/datasets/Dataset` before the e2e tests with [`scripts/generate_test_dataset.sh`](../scripts/README.md#datasets) (CI runs it as a separate step), using the same build and Bridge image as the tests. Create or refresh one yourself with [`scripts/dataset.sh`](../scripts/README.md#datasets), which wraps the tool in `env/create_dataset/` (it needs a build with `test_env_DockerSetupData` in `build/test`, or in `$DATASET_TESTS_DIR`, and uses ports 12345/12346):
 
 ```bash
 ./scripts/dataset.sh Dataset -i hub.simplito.com/privmx/privmx-bridge -v dev

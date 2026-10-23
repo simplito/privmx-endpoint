@@ -261,8 +261,8 @@ def resolve_dataset_ini_path(dataset_dir_path: str) -> str:
     if not ini_path.exists():
         raise SystemExit(
             f"ServerData.ini not found in dataset directory: {dataset_dir_path}\n"
-            "Datasets are not stored in the repository; generate one with ./scripts/dataset.sh <name>\n"
-            "(e.g. ./scripts/dataset.sh Dataset), or let ./scripts/run_tests.sh create the default one."
+            "Datasets are not stored in the repository; generate the default one with\n"
+            "./scripts/generate_test_dataset.sh, or another with ./scripts/dataset.sh <name>."
         )
     return str(ini_path)
 
