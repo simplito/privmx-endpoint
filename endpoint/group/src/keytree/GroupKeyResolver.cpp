@@ -17,6 +17,7 @@ limitations under the License.
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
 
+#include "privmx/endpoint/group/GroupException.hpp"
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
 #include "privmx/endpoint/group/keytree/TreeWire.hpp"
 
@@ -38,6 +39,18 @@ bool GroupKeyResolver::hasSupportedTree(const server::GroupInfo& group) {
 
 namespace {
 
+// An epoch from the bridge, narrowed only when it fits: a wrapped value would name some other, real epoch. A floor
+// (`eraFloor`, `archivePrunedBelow`) of 0 or below means none and is clamped to 1, as `ladderFloorOf` does.
+std::uint32_t epochOf(std::int64_t value, bool floor = false) {
+    if (floor) {
+        value = std::max<std::int64_t>(value, 1);
+    }
+    if (value < 1 || value > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+        throw privmx::endpoint::group::GroupDataIntegrityException("an epoch out of range");
+    }
+    return static_cast<std::uint32_t>(value);
+}
+
 // The statements served with the group: the ones its filled nodes cite, and the latest.
 std::vector<privmx::endpoint::group::server::GroupTreeCommit> statements(
     const privmx::endpoint::group::server::GroupInfo& group
@@ -53,7 +66,7 @@ std::vector<privmx::endpoint::group::server::GroupTreeCommit> statements(
 
 TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
     TreeGroupState state = TreeWire::toRuntime(
-        TreeWire::fromGroupInfo(group), static_cast<std::uint32_t>(group.keyVersion),
+        TreeWire::fromGroupInfo(group), epochOf(group.keyVersion),
         privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey)
     );
     if (group.treeCommit.has_value() && group.treeCommit->seq > 0) {
@@ -70,7 +83,8 @@ namespace {
 // Drops a rung that does not point downwards. The bridge enforces this too, but taking its word for it would trust
 // the one party the threat model assumes may be hostile — an upward rung hands a removed member a later key.
 std::optional<ArchiveRung> convertRung(const privmx::endpoint::group::server::GroupArchiveRung& rung) {
-    if (rung.targetKeyVersion >= rung.atKeyVersion) {
+    if (rung.targetKeyVersion >= rung.atKeyVersion || rung.targetKeyVersion < 1 ||
+        rung.atKeyVersion > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
         return std::nullopt;
     }
     ArchiveRung converted;
@@ -104,14 +118,14 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromArchive(
     for (const server::GroupKeyHistoryEntry& entry : archive.keyHistory) {
         registry.push_back(
             EpochRegistryEntry{
-                static_cast<std::uint32_t>(entry.keyVersion),
+                epochOf(entry.keyVersion),
                 privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(entry.groupPubKey),
             }
         );
     }
     registry.push_back(
         EpochRegistryEntry{
-            static_cast<std::uint32_t>(group.keyVersion),
+            epochOf(group.keyVersion),
             privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey),
         }
     );
@@ -161,7 +175,7 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromGroupHistory(const
         for (const server::GroupKeyHistoryEntry& entry : group.keyHistory.value()) {
             registry.push_back(
                 EpochRegistryEntry{
-                    static_cast<std::uint32_t>(entry.keyVersion),
+                    epochOf(entry.keyVersion),
                     privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(entry.groupPubKey),
                 }
             );
@@ -169,7 +183,7 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromGroupHistory(const
     }
     registry.push_back(
         EpochRegistryEntry{
-            static_cast<std::uint32_t>(group.keyVersion),
+            epochOf(group.keyVersion),
             privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey),
         }
     );
@@ -334,10 +348,10 @@ ResolveResult GroupKeyResolver::resolve(
     const server::GroupGetKeyArchiveResult& archive
 ) {
     const std::optional<std::uint32_t> prunedBelow = archive.archivePrunedBelow.has_value() ?
-        std::optional<std::uint32_t>(static_cast<std::uint32_t>(archive.archivePrunedBelow.value())) :
+        std::optional<std::uint32_t>(epochOf(archive.archivePrunedBelow.value(), true)) :
         std::nullopt;
     return resolveWith(
         group, epoch, ownUserKey, toDownwardRungs(archive), registryFromArchive(group, archive),
-        static_cast<std::uint32_t>(archive.eraFloor), prunedBelow
+        epochOf(archive.eraFloor, true), prunedBelow
     );
 }
