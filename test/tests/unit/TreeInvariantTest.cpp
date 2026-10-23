@@ -1986,17 +1986,43 @@ TEST_F(TreeVerification, ARotationInTheMiddleOfANonAdjacentWalkChecksOnlyThePath
     EXPECT_THROW(TreeVerifier::step(adjacent, rotation, TreeCommits::digest(rotation), keys, false, true), GroupDataIntegrityException);
 }
 
-TEST(TreeVerifierCaches, SECURITY_ABoundedCacheKeepsAtMostItsCap) {
-    // The bridge chooses how many distinct statements it serves; what the verifier caches of them is capped.
-    TreeVerifier::Bounded<int> cache(2);
-    cache.add("a", 1);
-    cache.add("b", 2);
-    ASSERT_FALSE(cache.get("a").isNull()) << "\"a\" is now the most recently used";
-    cache.add("c", 3); // full: the least recently used, "b", goes
-    EXPECT_TRUE(cache.get("b").isNull());
-    EXPECT_EQ(cache.size(), 2u);
-    ASSERT_FALSE(cache.get("a").isNull());
-    EXPECT_EQ(*cache.get("a"), 1);
+TEST_F(TreeVerification, SECURITY_TheVerifiersCachesStayBoundedHoweverManyGroupsTheBridgeServes) {
+    // The bridge chooses how many distinct groups, statements and committers it serves. Each round: a group's genesis
+    // replayed under a pin (an openers entry, a verified statement) and a listing past that pin by a committer not
+    // seen before (a verified statement, a "now" answer). Enough rounds overfill every cap.
+    create(4, 0);
+    selfUpdate(id(1));
+    const CommitStatement genesis = TreeCommits::fromWire(bridge.commits[0]);
+    const CommitStatement next = TreeCommits::fromWire(bridge.commits[1]);
+    TreeVerifier verifier;
+    TreeVerifier::Environment env = environment();
+    env.verifyUsers = [](const std::vector<privmx::endpoint::core::VerificationRequest>& requests) {
+        return std::vector<bool>(requests.size(), true);
+    };
+    for (int i = 0; i < 2100; ++i) {
+        const std::string resource = "r" + std::to_string(i);
+        const std::string groupId = TreeCommits::groupId("ctx", resource);
+        CommitStatement first = genesis;
+        first.groupId = resource;
+        TreeCommits::sign(first, member(id(0)).priv);
+        verifier.pinCommitted(groupId, "ctx", first, bridge.users(), managersOf(), bridge.rules());
+        env.commitsBetween = [&](std::uint64_t, std::uint64_t) {
+            server::GroupGetTreeCommitsResult answer = bridge.commitsBetween(0, 1);
+            answer.commits = {TreeCommits::toWire(first)};
+            return answer;
+        };
+        ASSERT_EQ(verifier.epochOpeners(groupId, "ctx", env).size(), 1u);
+        CommitStatement listed = next;
+        listed.groupId = groupId;
+        listed.committer = "committer" + std::to_string(i);
+        TreeCommits::sign(listed, member(id(1)).priv);
+        server::GroupInfo summary;
+        summary.id = groupId;
+        summary.contextId = "ctx";
+        summary.treeCommit = TreeCommits::toWire(listed);
+        verifier.preverifyListed({summary}, env);
+    }
+    EXPECT_EQ(verifier.cacheSizes(), (std::array<std::size_t, 3>{16, 4096, 1024}));
 }
 
 // 01: pins loaded from the store

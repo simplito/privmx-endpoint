@@ -782,6 +782,11 @@ bool TreeVerifier::agreesWithPin(
     return pinnedSeq(groupId) == 0 || pinnedAt(groupId, contextId, keyVersion, groupPubKey);
 }
 
+std::array<std::size_t, 3> TreeVerifier::cacheSizes() {
+    std::lock_guard lock(_mutex);
+    return {_openers.size(), _verifiedStatements.size(), _acceptedNow.size()};
+}
+
 std::uint64_t TreeVerifier::pinnedSeq(const std::string& groupId) const {
     return pinned(groupId, &Head::seq);
 }

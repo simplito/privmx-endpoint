@@ -142,6 +142,8 @@ public:
     // `TreeCommits::digest` of the pinned statement, empty if none.
     std::string pinnedDigest(const std::string& groupId) const;
     std::uint64_t pinnedKeyVersion(const std::string& groupId) const;
+    // For tests: the entries held by each cache the bridge can feed (openers, verified statements, "now" answers).
+    std::array<std::size_t, 3> cacheSizes();
 
     // The statement that opened each epoch (the first at its `keyVersion`), off the whole chain up to the pin: a
     // statement for every seq from 1, each genuine as `verifyStatements` checks it and chained to the one before by
