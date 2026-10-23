@@ -80,6 +80,8 @@ struct GroupApiImplTestAccess {
     ) {
         return GroupApiImpl::wrappedByEpochOpener(routes, wrappedBy, openers);
     }
+    // The group key resolver the key provider is handed (containers, envelopes, the group's own metadata).
+    static core::KeyProvider::GroupPrivKeyResolver groupKeyResolver(GroupApiImpl& api) { return api._groupPrivKeyResolver; }
     static std::string describeResolveFailure(const keytree::ResolveResult& resolved) {
         return GroupApiImpl::describeResolveFailure(resolved);
     }

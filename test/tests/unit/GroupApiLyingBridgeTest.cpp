@@ -109,6 +109,7 @@ struct Bridge {
     std::function<void(const std::string&, server::GroupInfo&)> onRead = [](const std::string&, server::GroupInfo&) {};
     std::function<void()> onMetaWrite = [] {}; // before a metadata write is stored; throws to refuse
     std::shared_ptr<std::atomic<int>> verifierCalls = std::make_shared<std::atomic<int>>(0);
+    std::function<void()> onVerify = [] {}; // runs inside every UserVerifier call, on the caller's thread
     struct Call {
         std::string caller;
         std::string method;
@@ -451,6 +452,7 @@ public:
     explicit Verifier(const Bridge& bridge) : _bridge(bridge) {}
     std::vector<bool> verify(const std::vector<core::VerificationRequest>& requests) override {
         ++*_bridge.verifierCalls;
+        _bridge.onVerify();
         const std::int64_t now = privmx::utils::Utils::getNowTimestamp();
         std::vector<bool> verified;
         for (const auto& request : requests) {
@@ -3022,4 +3024,80 @@ TEST_F(GroupApiLyingBridge, AFirstContactAboveThePreviousKeysRecordStaysUsable) 
     EXPECT_EQ(client("bob").getGroup(groupId).statusCode, 0);
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
     EXPECT_EQ(storedPin(groupId, bridge.users.at("bob"))->seq, 3u);
+}
+
+// ── SECURITY-NOTES rows that had no test ─────────────────────────────────────────────────────────────────────────
+
+TEST_F(GroupApiLyingBridge, SECURITY_T3_19_ARemovalDoesNotSealACachedGrantKeyThatIsNotTheEpochs) {
+    // alice's leaf edge is garbled, so her removal plans without a climb, and her cache holds a key that is not
+    // epoch 1's (a client bug). Sealed into the unit rung it would cut history off; the removal abandons it instead.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    selfUpdateBy("bob");
+    garbleLeafEdgeOf(bridge, "alice", "bob");
+    GroupApiImplTestAccess::keyCacheOf(client("alice"), groupId)->putGrantKey(1, PrivateKey::generateRandom());
+    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    expectRemoved(bridge, "carol");
+    const auto removal = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const Bridge::Call& call) {
+        return call.method == "context.groupRemoveMembers";
+    });
+    ASSERT_NE(removal, bridge.calls.rend());
+    EXPECT_TRUE(removal->params->optValue<bool>("abandonHistory", false));
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_N4_AnEpochTheHistoryMislabelsIsNotRemembered) {
+    // `keyHistory` is the bridge's word. Labelling epoch 1's grant key as epoch 2 must not make alice remember
+    // epoch 2 for it: every later anonymous envelope to that key would then fail, with the bridge honest again.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const std::string epoch1 = bridge.tree.state.grantPublicKey.toBase58DER();
+    const Envelope sealed = client("bob").encryptAnonymously(groupId, epoch1, core::Buffer::from("to epoch 1"));
+    client("alice").rotateGroupKey(groupId);
+    // The fake serves no `keyHistory`; the past epoch as an honest bridge lists it, and then mislabelled.
+    std::int64_t labelled = 2;
+    bridge.onRead = [&](const std::string&, server::GroupInfo& info) {
+        info.keyHistory = std::vector<server::GroupKeyHistoryEntry>{{.keyVersion = labelled, .groupPubKey = epoch1}};
+    };
+    EXPECT_ANY_THROW(client("alice").decrypt(sealed));
+    labelled = 1;
+    EXPECT_EQ(client("alice").decrypt(sealed).data.stdString(), "to epoch 1");
+    bridge.onRead = [](const std::string&, server::GroupInfo&) {};
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_T4_25_TheGroupKeyResolverPassesAForkThrough) {
+    // A rollback is not "no key": the resolver the key provider calls must not turn it into a skipped entry.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"});
+    const Bridge atSeq1 = bridge;
+    selfUpdateBy("bob");
+    client("alice").resolveGroupPrivKey(groupId); // pins seq 2
+    bridge.tree = atSeq1.tree;
+    const auto resolver = GroupApiImplTestAccess::groupKeyResolver(client("alice"));
+    EXPECT_THROW(resolver(groupId, 0), GroupHistoryForkException);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_12B_APinMergedInDuringTheVerifierCallStillNeedsTheKeyValidNow) {
+    // carol's session reads the group for the first time (no "now" question), and while the UserVerifier answers, a
+    // sibling's save brings in a pin at seq 1. bob's statement at seq 2 then moves that pin, so bob's key must be
+    // valid now, and it was replaced since.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    GroupApiImpl& carol = client("carol"); // its slot is empty: no pin
+    ASSERT_EQ(sibling("carol").getGroup(groupId).statusCode, 0);
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(*siblings.back()->api)); // the slot holds seq 1
+    selfUpdateBy("bob");
+    bridge.changeUserKey("bob", PrivateKey::generateRandom());
+    bool merged = false;
+    bridge.onVerify = [&] {
+        if (!std::exchange(merged, true)) {
+            GroupApiImplTestAccess::savePins(carol); // merges the slot's seq 1 into carol's pins
+        }
+    };
+    try {
+        EXPECT_NE(carol.getGroup(groupId).statusCode, 0);
+    } catch (const core::Exception&) {}
+    bridge.onVerify = [] {};
+    EXPECT_TRUE(merged);
+    EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(carol, groupId), 1u) << "moved by a key not valid now";
 }
