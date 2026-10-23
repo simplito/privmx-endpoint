@@ -37,7 +37,8 @@ public:
         const std::string& streamRoomId,
         std::shared_ptr<privmx::webrtc::KeyStore> keys,
         const privmx::webrtc::FrameCryptorOptions& options,
-        std::shared_ptr<StreamApiLow> apiLow
+        std::shared_ptr<StreamApiLow> apiLow,
+        std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState
     );
     void OnSignalingState(libwebrtc::RTCSignalingState state) override;
     void OnPeerConnectionState(libwebrtc::RTCPeerConnectionState state) override;
@@ -62,6 +63,8 @@ public:
         _onIceCandidate = callback;
     }
 
+    inline void setConnectionType(const std::string& connectionType) { _connectionType = connectionType; }
+
     void setOnTrackInterface(std::shared_ptr<OnTrackInterface> roomOnTrackInterface);
     void addOnTrackInterfaceForSingleStream(
         const std::string& streamId,
@@ -71,12 +74,15 @@ public:
 
 private:
     void detachVideoRenderer(libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> track);
+    static PeerConnectionState mapPeerConnectionState(libwebrtc::RTCPeerConnectionState state);
 
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     std::string _streamRoomId;
+    std::string _connectionType;
     std::shared_ptr<privmx::webrtc::KeyStore> _currentKeys;
     privmx::webrtc::FrameCryptorOptions _options;
     std::shared_ptr<StreamApiLow> _apiLow;
+    std::function<void(const std::string&, const std::string&, PeerConnectionState)> _onConnectionState;
 
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RTCVideoRendererImpl>> _RTCVideoRenderers;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<AudioTrackSinkImpl>> _audioTrackSinks;

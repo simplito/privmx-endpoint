@@ -224,12 +224,29 @@ public:
      * Sends a new offer to the media server to reconfigure an existing Stream.
      *
      * This method can be used to start the renegotiation process when the WebRTC layer signals that renegotiation
-     * is needed on the PeerConnection observer.
+     * is needed on the PeerConnection observer. The answer which the media server returns is applied to the
+     * PeerConnection the session belongs to before this method returns, so the renegotiation completes without
+     * any further call.
      *
      * @param sessionId ID of the media server session to reconfigure
      * @param sdp offer created by the WebRTC layer
      */
     void setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp);
+
+    /**
+     * Asks the media server to restart ICE on the Subscriber Stream of the given Stream Room.
+     *
+     * A subscriber cannot renegotiate by itself, because the media server is the one which offers. This
+     * method asks it to restart ICE and completes the renegotiation which follows, so the WebRTC layer only
+     * has to answer the offer it is given. It is meant to be used after the subscriber connection lost its
+     * transport, which commonly happens when the device changes network.
+     *
+     * A Publisher Stream is restarted the other way round: create an offer which restarts ICE and send it
+     * with 'setNewOfferOnReconfigure'.
+     *
+     * @param streamRoomId ID of the Stream Room whose Subscriber Stream is restarted
+     */
+    void restartSubscriberIce(const std::string& streamRoomId);
 
     /**
      * Joins a Stream Room using the given WebRTC layer implementation.

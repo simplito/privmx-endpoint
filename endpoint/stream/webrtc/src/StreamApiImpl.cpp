@@ -17,9 +17,12 @@ limitations under the License.
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
+#include <privmx/endpoint/core/EventBuilder.hpp>
+
 #include "privmx/endpoint/stream/StreamApiImpl.hpp"
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
+#include "privmx/endpoint/stream/webrtc/Events.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
 
 #include <base/portable.h>
@@ -34,6 +37,15 @@ using namespace privmx::endpoint::stream;
 StreamApiImpl::StreamApiImpl(core::Connection& connection) {
     std::shared_ptr<StreamApiLow> apiLow = std::make_shared<StreamApiLow>(StreamApiLow::create(connection));
     _api = apiLow;
+    _eventMiddleware = connection.getImpl()->getEventMiddleware();
+    _connectionStateTracker = std::make_shared<ConnectionStateTracker>(
+        [this](const std::string& streamRoomId, StreamConnectionState state) {
+            emitConnectionStateChangedEvent(streamRoomId, state);
+        },
+        [this](const std::string& streamRoomId, const std::string& connectionType) {
+            return recoverConnection(streamRoomId, connectionType);
+        }
+    );
     auto credentials = _api->getTurnCredentials();
     libwebrtc::LibWebRTC::Initialize();
     _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
@@ -49,10 +61,16 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection) {
     }
     _constraints = libwebrtc::RTCMediaConstraints::Create();
     _frameCryptorOptions = privmx::webrtc::FrameCryptorOptions{.dropFrameIfCryptionFailed = false};
+    std::weak_ptr<ConnectionStateTracker> tracker = _connectionStateTracker;
     _webRTC = std::make_shared<WebRTCImpl>(
         _peerConnectionFactory, _constraints, _configuration,
         [apiLow](const int64_t sessionId, const std::string& candidateAsJson) {
             apiLow->trickle(sessionId, candidateAsJson);
+        },
+        [tracker](const std::string& streamRoomId, const std::string& connectionType, PeerConnectionState state) {
+            if (auto alive = tracker.lock()) {
+                alive->setConnectionState(streamRoomId, connectionType, state);
+            }
         },
         _frameCryptorOptions, _api
     );
@@ -64,6 +82,8 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection) {
 
 StreamApiImpl::~StreamApiImpl() {
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
+    // joins the tracker's thread first, so no recovery runs while the layers it reaches are torn down
+    _connectionStateTracker.reset();
     _streamDataMap.clear();
     _webRTC.reset();
     _api.reset();
@@ -671,12 +691,107 @@ void StreamApiImpl::deleteStreamRoom(const std::string& streamRoomId) {
     _api->deleteStreamRoom(streamRoomId);
 }
 
+std::string StreamApiImpl::buildConnectionStateSubscriptionQuery(const std::string& streamRoomId) {
+    return std::string(CONNECTION_STATE_CHANNEL) + "|containerId=" + streamRoomId;
+}
+
+bool StreamApiImpl::isConnectionStateSubscriptionQuery(const std::string& subscriptionQuery) {
+    const std::string channel{CONNECTION_STATE_CHANNEL};
+    return subscriptionQuery.rfind(channel, 0) == 0 &&
+        (subscriptionQuery.size() == channel.size() || subscriptionQuery[channel.size()] == '|');
+}
+
 std::vector<std::string> StreamApiImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
-    return _api->subscribeFor(subscriptionQueries);
+    // the state of the media connections never reaches the Bridge, so its subscriptions are kept here
+    // instead of being registered on a channel the server would never publish on
+    std::vector<std::string> remoteQueries;
+    for (const auto& subscriptionQuery : subscriptionQueries) {
+        if (!isConnectionStateSubscriptionQuery(subscriptionQuery)) {
+            remoteQueries.push_back(subscriptionQuery);
+        }
+    }
+    std::vector<std::string> remoteIds = remoteQueries.empty() ? std::vector<std::string>() :
+                                                                 _api->subscribeFor(remoteQueries);
+    std::vector<std::string> result;
+    size_t nextRemoteId = 0;
+    for (const auto& subscriptionQuery : subscriptionQueries) {
+        if (isConnectionStateSubscriptionQuery(subscriptionQuery)) {
+            std::string subscriptionId = "local-" + std::to_string(_nextLocalSubscriptionId++);
+            _localSubscriptions.set(subscriptionId, subscriptionQuery);
+            result.push_back(subscriptionId);
+        } else {
+            result.push_back(nextRemoteId < remoteIds.size() ? remoteIds[nextRemoteId] : std::string());
+            nextRemoteId++;
+        }
+    }
+    return result;
 }
 
 void StreamApiImpl::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
-    return _api->unsubscribeFrom(subscriptionIds);
+    std::vector<std::string> remoteIds;
+    for (const auto& subscriptionId : subscriptionIds) {
+        if (_localSubscriptions.has(subscriptionId)) {
+            _localSubscriptions.erase(subscriptionId);
+            continue;
+        }
+        remoteIds.push_back(subscriptionId);
+    }
+    if (remoteIds.empty()) {
+        return;
+    }
+    return _api->unsubscribeFrom(remoteIds);
+}
+
+void StreamApiImpl::setConnectionState(
+    const std::string& streamRoomId,
+    const std::string& connectionType,
+    PeerConnectionState state
+) {
+    _connectionStateTracker->setConnectionState(streamRoomId, connectionType, state);
+}
+
+void StreamApiImpl::emitConnectionStateChangedEvent(const std::string& streamRoomId, StreamConnectionState state) {
+    const auto query = buildConnectionStateSubscriptionQuery(streamRoomId);
+    std::vector<std::string> subscriptionIds;
+    _localSubscriptions.forAll([&](const std::string& subscriptionId, const std::string& subscriptionQuery) {
+        if (subscriptionQuery == query) {
+            subscriptionIds.push_back(subscriptionId);
+        }
+    });
+    if (subscriptionIds.empty()) {
+        return;
+    }
+    auto event = core::EventBuilder::buildLibEvent<StreamConnectionStateChangedEvent>();
+    event->channel = "stream";
+    event->data = StreamConnectionStateChangedEventData{.streamRoomId = streamRoomId, .state = state};
+    event->subscriptions = subscriptionIds;
+    _eventMiddleware->emitApiEvent(event);
+}
+
+bool StreamApiImpl::recoverConnection(const std::string& streamRoomId, const std::string& connectionType) {
+    if (!_webRTC->getSessionId(streamRoomId, connectionType).has_value()) {
+        return false;
+    }
+    try {
+        if (connectionType == "publisher") {
+            recoverPublisherConnection(streamRoomId);
+        } else {
+            // the media server owns the subscriber's offer, so the restart is asked for rather than
+            // offered, and the answer to that offer carries new ICE credentials on its own
+            _api->restartSubscriberIce(streamRoomId);
+        }
+    } catch (...) {
+        // one failed attempt does not mean the connection cannot be recovered, so it is left to be retried
+        LOG_ERROR("StreamApiImpl::recoverConnection", "ICE restart of the ", connectionType, " connection failed")
+    }
+    return true;
+}
+
+void StreamApiImpl::recoverPublisherConnection(const std::string& streamRoomId) {
+    auto sessionId = _webRTC->getSessionId(streamRoomId, "publisher");
+    _webRTC->restartIce(streamRoomId, "publisher");
+    std::string sdp = _webRTC->createOfferAndSetLocalDescription(streamRoomId, "publisher");
+    _api->setNewOfferOnReconfigure(sessionId.value(), SdpWithTypeModel{.sdp = sdp, .type = "offer"});
 }
 
 std::string StreamApiImpl::buildSubscriptionQuery(
@@ -739,4 +854,13 @@ void StreamApiImpl::processDisconnectedEvent() {
         });
         streamData->status = StreamStatus::Offline;
     });
+}
+
+void StreamApiImpl::simulateConnectionLossForTest(const std::string& streamRoomId, const std::string& connectionType) {
+    _webRTC->close(streamRoomId, connectionType);
+    setConnectionState(streamRoomId, connectionType, PeerConnectionState::PeerConnectionFailed);
+}
+
+void StreamApiImpl::reportConnectionFailedForTest(const std::string& streamRoomId, const std::string& connectionType) {
+    setConnectionState(streamRoomId, connectionType, PeerConnectionState::PeerConnectionFailed);
 }

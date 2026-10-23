@@ -730,6 +730,27 @@ void StreamApiLowImpl::acceptOfferOnReconfigure(const int64_t sessionId, const S
     _serverApi->streamAcceptOffer(model);
 }
 
+void StreamApiLowImpl::restartSubscriberIce(const std::string& streamRoomId) {
+    auto room = getStreamRoomData(streamRoomId);
+    if (!room->subscriberStream) {
+        throw SubscriberStreamHandleNotInitialized();
+    }
+    // the media server owns the subscriber's offer, so the restart is asked for rather than offered
+    server::StreamRestartSubscriberIceModel model;
+    model.streamRoomId = streamRoomId;
+    auto result = _serverApi->streamRestartSubscriberIce(model);
+    room->subscriberStream->sessionId = result.sessionId;
+    room->webRtc->updateSessionId(streamRoomId, result.sessionId, "subscriber");
+    if (!result.offer.has_value()) {
+        // the offer did not come with the answer, so it arrives as a reoffer event and is handled there
+        return;
+    }
+    std::string sdp = room->webRtc->createAnswerAndSetDescriptions(
+        streamRoomId, result.offer.value().sdp, result.offer.value().type, "subscriber"
+    );
+    acceptOfferOnReconfigure(result.sessionId, SdpWithTypeModel{.sdp = sdp, .type = "answer"});
+}
+
 void StreamApiLowImpl::setNewOfferOnReconfigure(const int64_t sessionId, const SdpWithTypeModel& sdp) {
     server::SessionDescription sessionDescription;
     sessionDescription.sdp = sdp.sdp;
@@ -737,7 +758,36 @@ void StreamApiLowImpl::setNewOfferOnReconfigure(const int64_t sessionId, const S
     server::StreamSetNewOfferModel model;
     model.sessionId = sessionId;
     model.offer = sessionDescription;
-    _serverApi->streamSetNewOffer(model);
+    auto result = _serverApi->streamSetNewOffer(model);
+    if (!result.answer.has_value()) {
+        return;
+    }
+    auto connection = findConnectionBySessionId(sessionId);
+    if (!connection.has_value()) {
+        LOG_ERROR("StreamApiLowImpl::setNewOfferOnReconfigure", "no connection holds session ", sessionId)
+        return;
+    }
+    auto room = getStreamRoomData(connection.value().first);
+    room->webRtc->setAnswerAndSetRemoteDescription(
+        room->streamRoomId, result.answer.value().sdp, result.answer.value().type, connection.value().second
+    );
+}
+
+std::optional<std::pair<std::string, std::string>> StreamApiLowImpl::findConnectionBySessionId(
+    const int64_t sessionId
+) {
+    std::optional<std::pair<std::string, std::string>> found;
+    _streamRoomMap.forAll([&](const std::string& streamRoomId, const std::shared_ptr<StreamRoomData>& room) {
+        if (found.has_value()) {
+            return;
+        }
+        if (room->publisherStream && room->publisherStream->sessionId == sessionId) {
+            found = std::make_pair(streamRoomId, std::string("publisher"));
+        } else if (room->subscriberStream && room->subscriberStream->sessionId == sessionId) {
+            found = std::make_pair(streamRoomId, std::string("subscriber"));
+        }
+    });
+    return found;
 }
 
 std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(

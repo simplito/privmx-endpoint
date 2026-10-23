@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <atomic>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -42,6 +43,7 @@ public:
         libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints,
         libwebrtc::RTCConfiguration configuration,
         std::function<void(const int64_t, const std::string&)> onTrickle,
+        std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState,
         privmx::webrtc::FrameCryptorOptions _frameCryptorOptions,
         std::shared_ptr<StreamApiLow> apiLow
     );
@@ -67,7 +69,8 @@ public:
         const int64_t sessionId,
         const std::string& connectionType
     ) override;
-
+    void restartIce(const std::string& streamRoomId, const std::string& connectionType);
+    std::optional<int64_t> getSessionId(const std::string& streamRoomId, const std::string& connectionType);
     void closeAll(const std::string& streamRoomId) override;
     void close(const std::string& streamRoomId, const std::string& connectionType) override;
     void updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) override;
@@ -107,6 +110,7 @@ public:
     void closeSingleConnection(const std::string& streamRoomId, ConnectionType connectionType);
 
 private:
+    void reportConnectionClosed(const std::string& streamRoomId, const std::string& connectionType);
     void AddAudioTrack(
         std::shared_ptr<privmx::endpoint::stream::JanusConnection> jc,
         libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack> audioTrack,
@@ -135,6 +139,7 @@ private:
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> _constraints;
     libwebrtc::RTCConfiguration _configuration;
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
+    std::function<void(const std::string&, const std::string&, PeerConnectionState)> _onConnectionState;
     std::shared_ptr<StreamApiLow> _apiLow;
     std::shared_ptr<PeerConnectionManager> _peerConnectionManager;
     libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> _bootstrapDataChannel;

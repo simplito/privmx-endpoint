@@ -20,10 +20,11 @@ PmxPeerConnectionObserver::PmxPeerConnectionObserver(
     const std::string& streamRoomId,
     std::shared_ptr<privmx::webrtc::KeyStore> keys,
     const privmx::webrtc::FrameCryptorOptions& options,
-    std::shared_ptr<StreamApiLow> apiLow
+    std::shared_ptr<StreamApiLow> apiLow,
+    std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState
 )
     : _peerConnectionFactory(peerConnectionFactory), _streamRoomId(streamRoomId), _currentKeys(keys), _options(options),
-      _apiLow(apiLow), _roomOnTrackInterface(nullptr),
+      _apiLow(apiLow), _onConnectionState(onConnectionState), _roomOnTrackInterface(nullptr),
       _streamOnTrackInterfacesMap(
           std::make_shared<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>>()
       ) {}
@@ -39,7 +40,7 @@ void PmxPeerConnectionObserver::OnSignalingState([[maybe_unused]] libwebrtc::RTC
     };
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON SIGNALING STATE " + map[state])
 }
-void PmxPeerConnectionObserver::OnPeerConnectionState([[maybe_unused]] libwebrtc::RTCPeerConnectionState state) {
+void PmxPeerConnectionObserver::OnPeerConnectionState(libwebrtc::RTCPeerConnectionState state) {
     std::map<libwebrtc::RTCPeerConnectionState, std::string> map = {
         {libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateNew, "RTCPeerConnectionStateNew"},
         {libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateConnecting, "RTCPeerConnectionStateConnecting"},
@@ -49,6 +50,31 @@ void PmxPeerConnectionObserver::OnPeerConnectionState([[maybe_unused]] libwebrtc
         {libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateClosed, "RTCPeerConnectionStateClosed"}
     };
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON PEER CONNECTION STATE " + map[state])
+    if (!_onConnectionState || _connectionType.empty()) {
+        return;
+    }
+    try {
+        _onConnectionState(_streamRoomId, _connectionType, mapPeerConnectionState(state));
+    } catch (...) {
+        LOG_ERROR("PmxPeerConnectionObserver::OnPeerConnectionState", "reporting the connection state failed")
+    }
+}
+
+PeerConnectionState PmxPeerConnectionObserver::mapPeerConnectionState(libwebrtc::RTCPeerConnectionState state) {
+    switch (state) {
+    case libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateConnecting:
+        return PeerConnectionState::PeerConnectionConnecting;
+    case libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateConnected:
+        return PeerConnectionState::PeerConnectionConnected;
+    case libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateDisconnected:
+        return PeerConnectionState::PeerConnectionDisconnected;
+    case libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateFailed:
+        return PeerConnectionState::PeerConnectionFailed;
+    case libwebrtc::RTCPeerConnectionState::RTCPeerConnectionStateClosed:
+        return PeerConnectionState::PeerConnectionClosed;
+    default:
+        return PeerConnectionState::PeerConnectionNew;
+    }
 }
 void PmxPeerConnectionObserver::OnIceGatheringState([[maybe_unused]] libwebrtc::RTCIceGatheringState state) {
     std::map<libwebrtc::RTCIceGatheringState, std::string> map = {

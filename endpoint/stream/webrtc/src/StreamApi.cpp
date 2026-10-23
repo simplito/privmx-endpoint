@@ -314,6 +314,17 @@ void StreamApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds)
     }
 }
 
+std::string StreamApi::buildConnectionStateSubscriptionQuery(const std::string& streamRoomId) {
+    validateEndpoint();
+    core::Validator::validateId(streamRoomId, "field:streamRoomId ");
+    try {
+        return _impl->buildConnectionStateSubscriptionQuery(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 std::string StreamApi::buildSubscriptionQuery(
     EventType eventType,
     EventSelectorType selectorType,

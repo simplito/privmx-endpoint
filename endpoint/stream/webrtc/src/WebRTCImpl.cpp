@@ -13,11 +13,12 @@ WebRTCImpl::WebRTCImpl(
     libwebrtc::scoped_refptr<libwebrtc::RTCMediaConstraints> constraints,
     libwebrtc::RTCConfiguration configuration,
     std::function<void(const int64_t, const std::string&)> onTrickle,
+    std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState,
     privmx::webrtc::FrameCryptorOptions frameCryptorOptions,
     std::shared_ptr<StreamApiLow> apiLow
 )
     : _peerConnectionFactory(peerConnectionFactory), _constraints(constraints), _configuration(configuration),
-      _frameCryptorOptions(frameCryptorOptions), _apiLow(apiLow) {
+      _frameCryptorOptions(frameCryptorOptions), _onConnectionState(onConnectionState), _apiLow(apiLow) {
     _peerConnectionManager = std::make_shared<PeerConnectionManager>(
         std::bind(&WebRTCImpl::createPeerConnection, this, std::placeholders::_1), onTrickle
     );
@@ -133,10 +134,28 @@ void WebRTCImpl::setAnswerAndSetRemoteDescription(
     );
 }
 
+void WebRTCImpl::restartIce(const std::string& streamRoomId, const std::string& connectionType) {
+    LOG_DEBUG("WebRTCImpl::restartIce()", connectionType);
+    ConnectionType ct = (connectionType == "publisher") ? ConnectionType::Publisher : ConnectionType::Subscriber;
+    // getConnectionWithSession would build a fresh, empty connection for a closed one, which is never
+    // what a restart means
+    if (!_peerConnectionManager->hasConnection(streamRoomId, ct)) {
+        throw stream::WebRTCException("RestartIceOnClosedConnection");
+    }
+    auto peerConnection = _peerConnectionManager->getConnectionWithSession(streamRoomId, ct)->peerConnection;
+    if (!peerConnection->pc) {
+        throw stream::WebRTCException("RestartIceOnClosedConnection");
+    }
+    // the offer which carries the new ICE credentials is created by the caller right after this
+    peerConnection->pc->RestartIce();
+}
+
 void WebRTCImpl::closeAll(const std::string& streamRoomId) {
     LOG_DEBUG("WebRTCImpl::closeAll()");
     _peerConnectionManager->closeConnection(streamRoomId, ConnectionType::Publisher);
+    reportConnectionClosed(streamRoomId, "publisher");
     _peerConnectionManager->closeConnection(streamRoomId, ConnectionType::Subscriber);
+    reportConnectionClosed(streamRoomId, "subscriber");
     _peerConnectionManager->closeSession(streamRoomId);
 }
 
@@ -144,11 +163,35 @@ void WebRTCImpl::close(const std::string& streamRoomId, const std::string& conne
     LOG_DEBUG("WebRTCImpl::close()");
     ConnectionType ct = (connectionType == "publisher") ? ConnectionType::Publisher : ConnectionType::Subscriber;
     _peerConnectionManager->closeConnection(streamRoomId, ct);
+    reportConnectionClosed(streamRoomId, connectionType);
 }
 
 void WebRTCImpl::closeSingleConnection(const std::string& streamRoomId, ConnectionType connectionType) {
     LOG_DEBUG("WebRTCImpl::closeSingleConnection()");
     _peerConnectionManager->closeConnection(streamRoomId, connectionType);
+    reportConnectionClosed(streamRoomId, connectionType == ConnectionType::Publisher ? "publisher" : "subscriber");
+}
+
+void WebRTCImpl::reportConnectionClosed(const std::string& streamRoomId, const std::string& connectionType) {
+    // the observer is deregistered before the connection closes, so this state never arrives on its own
+    if (!_onConnectionState) {
+        return;
+    }
+    try {
+        _onConnectionState(streamRoomId, connectionType, PeerConnectionState::PeerConnectionClosed);
+    } catch (...) { LOG_ERROR("WebRTCImpl::reportConnectionClosed", "reporting the closed connection failed") }
+}
+
+std::optional<int64_t> WebRTCImpl::getSessionId(const std::string& streamRoomId, const std::string& connectionType) {
+    ConnectionType ct = (connectionType == "publisher") ? ConnectionType::Publisher : ConnectionType::Subscriber;
+    if (!_peerConnectionManager->hasConnection(streamRoomId, ct)) {
+        return std::nullopt;
+    }
+    auto sessionId = _peerConnectionManager->getConnectionWithSession(streamRoomId, ct)->sessionId;
+    if (sessionId < 0) {
+        return std::nullopt;
+    }
+    return sessionId;
 }
 
 void WebRTCImpl::updateKeys(const std::string& streamRoomId, const std::vector<Key>& keys) {
@@ -224,7 +267,7 @@ std::shared_ptr<PeerConnection> WebRTCImpl::createPeerConnection(const std::stri
     peerConnection->pc->CreateLocalMediaStream(streamId);
     peerConnection->observer = std::make_shared<PmxPeerConnectionObserver>(
         _peerConnectionFactory, streamRoomId, privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>()),
-        _frameCryptorOptions, _apiLow
+        _frameCryptorOptions, _apiLow, _onConnectionState
     );
     peerConnection->pc->RegisterRTCPeerConnectionObserver(peerConnection->observer.get());
     return peerConnection;
