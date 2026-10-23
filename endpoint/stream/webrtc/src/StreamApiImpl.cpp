@@ -56,9 +56,14 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection) {
         },
         _frameCryptorOptions, _api
     );
+    _eventMiddleware = connection.getImpl()->getEventMiddleware();
+    _disconnectedListenerId = _eventMiddleware->addDisconnectedEventListener(
+        std::bind(&StreamApiImpl::processDisconnectedEvent, this)
+    );
 }
 
 StreamApiImpl::~StreamApiImpl() {
+    _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     _streamDataMap.clear();
     _webRTC.reset();
     _api.reset();
@@ -635,4 +640,26 @@ void StreamApiImpl::sendData(const StreamHandle& streamHandle, core::Buffer data
         _api->encryptDataChannelMessage(streamData->streamRoomId, {data, streamData->dataTrack->seq.fetch_add(1)})
             .stdString()
     );
+}
+
+void StreamApiImpl::processDisconnectedEvent() {
+    LOG_TRACE("StreamApiImpl recived DisconnectedEvent");
+    // Closure of all remaining capturers
+    _streamDataMap.forAllLockSave([]([[maybe_unused]] const StreamHandle& streamHandle,
+                                     const std::shared_ptr<StreamData>& streamData) {
+        std::lock_guard<std::mutex> lock(streamData->streamMutex);
+        streamData->videoTracks.forAll([]([[maybe_unused]] const std::string& id,
+                                          const std::shared_ptr<StreamVideoTrackInfo>& video) {
+            if (video->capturer.get() != NULL && video->capturer->CaptureStarted()) {
+                video->capturer->StopCapture();
+            }
+        });
+        streamData->desktopTracks.forAll([]([[maybe_unused]] const std::string& id,
+                                            const std::shared_ptr<StreamDesktopTrackInfo>& desktop) {
+            if (desktop->capturer->IsRunning()) {
+                desktop->capturer->Stop();
+            }
+        });
+        streamData->status = StreamStatus::Offline;
+    });
 }
