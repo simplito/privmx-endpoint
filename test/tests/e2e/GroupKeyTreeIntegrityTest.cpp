@@ -1536,7 +1536,7 @@ TEST_F(GroupKeyTreeIntegrityTest, an_honestly_refused_commit_does_not_hold_back_
 
 TEST_F(GroupKeyTreeIntegrityTest, ladder_a_removal_leaves_a_ladder_that_needs_no_repair) {
     // user_2 stays online across three removals and reads after each, so it holds both keys of every new epoch and
-    // checks its rungs in the background. An honest remover's rungs open: nothing gets repaired, and every stored
+    // records a check of its rungs, run at its next GroupApi call on the group. An honest remover's rungs open: nothing gets repaired, and every stored
     // rung is the remover's.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
@@ -1551,8 +1551,9 @@ TEST_F(GroupKeyTreeIntegrityTest, ladder_a_removal_leaves_a_ladder_that_needs_no
         ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); });
         ASSERT_NO_THROW({ onlineGroups.getImpl()->resolveGroupPrivKey(groupId); });
     }
-    // Two background windows of a small group (1 s each), so every check has run.
-    std::this_thread::sleep_for(std::chrono::milliseconds(2500));
+    // One window of a small group (1 s): every recorded check is due, and the call's flush point runs them.
+    std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+    ASSERT_NO_THROW({ onlineGroups.getGroup(groupId); });
     group::server::GroupGetKeyArchiveModel model;
     model.id = groupId;
     const auto rungs = group::ServerApi(connection->getImpl()->getGateway()).groupGetKeyArchive(model).rungs;
@@ -1630,8 +1631,7 @@ TEST_F(GroupKeyTreeIntegrityTest, two_live_sessions_of_one_user_converge_on_one_
         group::GroupApi::create(*remover).removeGroupMembers(groupId, {user(3).userId});
         remover->disconnect();
     }
-    ASSERT_EQ(first.getGroup(groupId).keyVersion, 2); // the removal is a major move: saved within a second
-    std::this_thread::sleep_for(std::chrono::milliseconds(2500));
+    ASSERT_EQ(first.getGroup(groupId).keyVersion, 2); // the removal is a major move: saved before the call returns
     const group::Group read = second.getGroup(groupId);
     EXPECT_EQ(read.statusCode, 0);
     EXPECT_EQ(read.keyVersion, 2);
