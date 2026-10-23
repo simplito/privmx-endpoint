@@ -240,6 +240,8 @@ MediaTrack StreamApiImpl::addTrack(
         if (!id.has_value()) {
             throw IncorrectTrackIdException();
         }
+        // the device is captured again below, so the capturer holding it is released first
+        stopCapturerOfReplacedTrack(streamData, mediaDevice.name + "-" + mediaDevice.id);
         videoCapturer = videoDevice->Create(
             "video_capturer", id.value(), mediaTrackConstrains.idealWidth, mediaTrackConstrains.idealHeight,
             mediaTrackConstrains.idealFps
@@ -279,6 +281,8 @@ MediaTrack StreamApiImpl::addTrack(
         if (id >= desktopMediaList->GetSourceCount()) {
             throw IncorrectTrackIdException();
         }
+        // the source is captured again below, so the capturer holding it is released first
+        stopCapturerOfReplacedTrack(streamData, mediaDevice.name + "-" + mediaDevice.id);
         libwebrtc::scoped_refptr<libwebrtc::RTCDesktopCapturer> desktopCapturer = desktopDevice->CreateDesktopCapturer(
             desktopMediaList->GetSource(id)
         );
@@ -306,8 +310,13 @@ MediaTrack StreamApiImpl::addTrack(
         }
         auto streamData = streamDataOpt.value();
         std::lock_guard<std::mutex> lock(streamData->streamMutex);
-        if (streamData->dataTrack && streamData->dataTrack->status == TrackStatus::ToRemove) {
+        if (streamData->dataTrack && streamData->dataTrack->status != TrackStatus::ToRemove) {
             throw ThereCanBeOnlyOneDataTrackException();
+        }
+        if (streamData->dataTrack) {
+            // the data track staged for removal is still in the connection, so adding it again cancels that
+            streamData->dataTrack->status = TrackStatus::Published;
+            return MediaTrack{[]([[maybe_unused]] bool enabled) { return; }};
         }
         auto streamDataTrackInfo = std::make_shared<StreamDataTrackInfo>(
             TrackStatus::ToAdd, []([[maybe_unused]] std::string data) { return; }
@@ -393,134 +402,202 @@ void StreamApiImpl::removeTrack(const StreamHandle& streamHandle, const MediaDev
 }
 
 StreamPublishResult StreamApiImpl::publishStream(const StreamHandle& streamHandle) {
-    auto streamDataOpt = _streamDataMap.get(streamHandle);
-    if (!streamDataOpt.has_value()) {
-        throw IncorrectStreamHandleException();
-    }
-    auto streamData = streamDataOpt.value();
+    auto streamData = getStreamData(streamHandle);
     if (streamData->status == Online) {
         throw StreamAlreadyPublishedException();
     }
     std::lock_guard<std::mutex> lock(streamData->streamMutex);
-    // Add tracks to the peer connection
-    std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>> audioTracksToAdd;
-    std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>> videoTracksToAdd;
-    std::optional<std::pair<std::string, std::function<void(std::string)>*>> dataChannel = std::nullopt;
-    streamData->audioTracks.forAll([&](const std::string& id, const std::shared_ptr<StreamAudioTrackInfo>& audio) {
-        if (audio->status == TrackStatus::ToAdd) {
-            audio->status = TrackStatus::Published;
-            audioTracksToAdd.push_back({id, audio->track});
-        }
-    });
-    streamData->videoTracks.forAll([&](const std::string& id, const std::shared_ptr<StreamVideoTrackInfo>& video) {
-        if (video->status == TrackStatus::ToAdd) {
-            video->status = TrackStatus::Published;
-            if (video->capturer.get() != NULL && !video->capturer->CaptureStarted()) {
-                video->capturer->StartCapture();
-            }
-            videoTracksToAdd.push_back({id, video->track});
-        }
-    });
-    streamData->desktopTracks.forAll([&](const std::string& id,
-                                         const std::shared_ptr<StreamDesktopTrackInfo>& desktop) {
-        if (desktop->status == TrackStatus::ToAdd) {
-            desktop->status = TrackStatus::Published;
-            if (!desktop->capturer->IsRunning()) {
-                desktop->capturer->Start(desktop->fps);
-            }
-            videoTracksToAdd.push_back({id, desktop->track});
-        }
-    });
-    if (streamData->dataTrack) {
-        auto track = streamData->dataTrack;
-        if (track->status == TrackStatus::ToAdd) {
-            track->status = TrackStatus::Published;
-            dataChannel = std::make_pair(track->label, &track->sendData);
-        }
-    }
-
-    streamData->status = Online;
+    StreamTracksUpdate update = collectTracksUpdate(streamData);
     _webRTC->createPeerConnectionWithLocalStream(
-        streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd, dataChannel
+        streamData->streamRoomId, update.audioTracksToAdd,
+        joinVideoTracks(update.videoTracksToAdd, update.desktopTracksToAdd), update.dataChannel
     );
-    return _api->publishStream(streamHandle);
+    StreamPublishResult result{};
+    try {
+        result = _api->publishStream(streamHandle);
+    } catch (...) {
+        // nothing was published, so the connection built for it is dropped and the tracks stay staged for a retry
+        try {
+            _webRTC->close(streamData->streamRoomId, "publisher");
+        } catch (...) {
+            LOG_ERROR("StreamApiImpl::publishStream", "closing the connection of a failed publication failed")
+        }
+        throw;
+    }
+    applyTracksUpdate(streamData, update);
+    streamData->status = Online;
+    return result;
 }
 
 StreamPublishResult StreamApiImpl::updateStream(const StreamHandle& streamHandle) {
+    auto streamData = getStreamData(streamHandle);
+    if (streamData->status != Online) {
+        throw StreamHandleNotPublishedException();
+    }
+    std::lock_guard<std::mutex> lock(streamData->streamMutex);
+    StreamTracksUpdate update = collectTracksUpdate(streamData);
+    sendTracksUpdateToPeerConnection(streamData->streamRoomId, update);
+    StreamPublishResult result{};
+    try {
+        result = _api->updateStream(streamHandle);
+    } catch (...) {
+        // the other participants never learned about the staged tracks, so they must not reach them with
+        // the next update either - the connection goes back to what the Stream was published with
+        try {
+            revertTracksUpdateOnPeerConnection(streamData->streamRoomId, update);
+        } catch (...) {
+            LOG_ERROR("StreamApiImpl::updateStream", "reverting the connection after a failed update failed")
+        }
+        throw;
+    }
+    applyTracksUpdate(streamData, update);
+    return result;
+}
+
+void StreamApiImpl::stopCapturerOfReplacedTrack(
+    const std::shared_ptr<StreamData>& streamData,
+    const std::string& trackId
+) {
+    auto videoTrack = streamData->videoTracks.get(trackId);
+    if (videoTrack.has_value() &&
+        videoTrack.value()->capturer.get() != NULL &&
+        videoTrack.value()->capturer->CaptureStarted()) {
+        videoTrack.value()->capturer->StopCapture();
+    }
+    auto desktopTrack = streamData->desktopTracks.get(trackId);
+    if (desktopTrack.has_value() && desktopTrack.value()->capturer->IsRunning()) {
+        desktopTrack.value()->capturer->Stop();
+    }
+}
+
+std::shared_ptr<StreamApiImpl::StreamData> StreamApiImpl::getStreamData(const StreamHandle& streamHandle) {
     auto streamDataOpt = _streamDataMap.get(streamHandle);
     if (!streamDataOpt.has_value()) {
         throw IncorrectStreamHandleException();
     }
-    auto streamData = streamDataOpt.value();
+    return streamDataOpt.value();
+}
 
-    // Add tracks to the peer connection
-    // UPDATE audio tracks
-    std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>> audioTracksToAdd;
-    std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>> audioTracksToRemove;
+StreamApiImpl::StreamTracksUpdate StreamApiImpl::collectTracksUpdate(const std::shared_ptr<StreamData>& streamData) {
+    StreamTracksUpdate update;
     streamData->audioTracks.forAll([&](const std::string& id, const std::shared_ptr<StreamAudioTrackInfo>& audio) {
         if (audio->status == TrackStatus::ToAdd) {
-            audio->status = TrackStatus::Published;
-            audioTracksToAdd.push_back({id, audio->track});
+            update.audioTracksToAdd.push_back({id, audio->track});
         } else if (audio->status == TrackStatus::ToRemove) {
-            audioTracksToRemove.push_back({id, audio->track});
+            update.audioTracksToRemove.push_back({id, audio->track});
         }
     });
-    for (const auto& toRemove : audioTracksToRemove) {
-        streamData->audioTracks.erase(toRemove.first);
-    }
-    // UPDATE video tracks
-    std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>> videoTracksToAdd;
-    std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>> videoTracksToRemove;
     streamData->videoTracks.forAll([&](const std::string& id, const std::shared_ptr<StreamVideoTrackInfo>& video) {
         if (video->status == TrackStatus::ToAdd) {
-            if (video->capturer.get() != NULL && !video->capturer->CaptureStarted())
-                video->capturer->StartCapture();
-            video->status = TrackStatus::Published;
-            videoTracksToAdd.push_back({id, video->track});
+            update.videoTracksToAdd.push_back({id, video->track});
         } else if (video->status == TrackStatus::ToRemove) {
-            if (video->capturer.get() != NULL && video->capturer->CaptureStarted())
-                video->capturer->StopCapture();
-            videoTracksToRemove.push_back({id, video->track});
+            update.videoTracksToRemove.push_back({id, video->track});
         }
     });
-    for (const auto& toRemove : videoTracksToRemove) {
-        streamData->videoTracks.erase(toRemove.first);
-    }
-    std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>> desktopTracksToRemove;
     streamData->desktopTracks.forAll([&](const std::string& id,
                                          const std::shared_ptr<StreamDesktopTrackInfo>& desktop) {
         if (desktop->status == TrackStatus::ToAdd) {
-            if (!desktop->capturer->IsRunning())
-                desktop->capturer->Start(15);
-            desktop->status = TrackStatus::Published;
-            videoTracksToAdd.push_back({id, desktop->track});
+            update.desktopTracksToAdd.push_back({id, desktop->track});
         } else if (desktop->status == TrackStatus::ToRemove) {
-            if (desktop->capturer->IsRunning())
-                desktop->capturer->Stop();
-            desktopTracksToRemove.push_back({id, desktop->track});
+            update.desktopTracksToRemove.push_back({id, desktop->track});
         }
     });
-    for (const auto& toRemove : desktopTracksToRemove) {
-        streamData->desktopTracks.erase(toRemove.first);
-        videoTracksToRemove.push_back(toRemove);
-    }
-    // UPDATE dataChannel
-    std::optional<std::pair<std::string, std::function<void(std::string)>*>> dataChannel = std::nullopt;
     if (streamData->dataTrack) {
-        auto track = streamData->dataTrack;
-        if (track->status == TrackStatus::ToAdd) {
-            track->status = TrackStatus::Published;
-            dataChannel = std::make_pair(track->label, &track->sendData);
-        } else if (track->status == TrackStatus::Published) {
-            dataChannel = std::make_pair(track->label, &track->sendData);
+        auto dataTrack = streamData->dataTrack;
+        if (dataTrack->status != TrackStatus::ToRemove) {
+            update.dataChannel = std::make_pair(dataTrack->label, &dataTrack->sendData);
+        }
+        if (dataTrack->status != TrackStatus::ToAdd) {
+            update.dataChannelBeforeUpdate = std::make_pair(dataTrack->label, &dataTrack->sendData);
         }
     }
-    streamData->status = Online;
+    return update;
+}
+
+void StreamApiImpl::sendTracksUpdateToPeerConnection(
+    const std::string& streamRoomId,
+    const StreamTracksUpdate& update
+) {
     _webRTC->updatePeerConnectionWithLocalStream(
-        streamData->streamRoomId, audioTracksToAdd, videoTracksToAdd, audioTracksToRemove, videoTracksToRemove,
-        dataChannel
+        streamRoomId, update.audioTracksToAdd, joinVideoTracks(update.videoTracksToAdd, update.desktopTracksToAdd),
+        update.audioTracksToRemove, joinVideoTracks(update.videoTracksToRemove, update.desktopTracksToRemove),
+        update.dataChannel
     );
-    return _api->updateStream(streamHandle);
+}
+
+void StreamApiImpl::revertTracksUpdateOnPeerConnection(
+    const std::string& streamRoomId,
+    const StreamTracksUpdate& update
+) {
+    _webRTC->updatePeerConnectionWithLocalStream(
+        streamRoomId, update.audioTracksToRemove,
+        joinVideoTracks(update.videoTracksToRemove, update.desktopTracksToRemove), update.audioTracksToAdd,
+        joinVideoTracks(update.videoTracksToAdd, update.desktopTracksToAdd), update.dataChannelBeforeUpdate
+    );
+}
+
+void StreamApiImpl::applyTracksUpdate(const std::shared_ptr<StreamData>& streamData, const StreamTracksUpdate& update) {
+    for (const auto& audio : update.audioTracksToAdd) {
+        auto trackInfo = streamData->audioTracks.get(audio.first);
+        if (trackInfo.has_value()) {
+            trackInfo.value()->status = TrackStatus::Published;
+        }
+    }
+    for (const auto& audio : update.audioTracksToRemove) {
+        streamData->audioTracks.erase(audio.first);
+    }
+    for (const auto& video : update.videoTracksToAdd) {
+        auto trackInfo = streamData->videoTracks.get(video.first);
+        if (!trackInfo.has_value()) {
+            continue;
+        }
+        if (trackInfo.value()->capturer.get() != NULL && !trackInfo.value()->capturer->CaptureStarted()) {
+            trackInfo.value()->capturer->StartCapture();
+        }
+        trackInfo.value()->status = TrackStatus::Published;
+    }
+    for (const auto& video : update.videoTracksToRemove) {
+        auto trackInfo = streamData->videoTracks.get(video.first);
+        if (trackInfo.has_value() &&
+            trackInfo.value()->capturer.get() != NULL &&
+            trackInfo.value()->capturer->CaptureStarted()) {
+            trackInfo.value()->capturer->StopCapture();
+        }
+        streamData->videoTracks.erase(video.first);
+    }
+    for (const auto& desktop : update.desktopTracksToAdd) {
+        auto trackInfo = streamData->desktopTracks.get(desktop.first);
+        if (!trackInfo.has_value()) {
+            continue;
+        }
+        if (!trackInfo.value()->capturer->IsRunning()) {
+            trackInfo.value()->capturer->Start(trackInfo.value()->fps);
+        }
+        trackInfo.value()->status = TrackStatus::Published;
+    }
+    for (const auto& desktop : update.desktopTracksToRemove) {
+        auto trackInfo = streamData->desktopTracks.get(desktop.first);
+        if (trackInfo.has_value() && trackInfo.value()->capturer->IsRunning()) {
+            trackInfo.value()->capturer->Stop();
+        }
+        streamData->desktopTracks.erase(desktop.first);
+    }
+    if (streamData->dataTrack) {
+        if (streamData->dataTrack->status == TrackStatus::ToAdd) {
+            streamData->dataTrack->status = TrackStatus::Published;
+        } else if (streamData->dataTrack->status == TrackStatus::ToRemove) {
+            streamData->dataTrack = nullptr;
+        }
+    }
+}
+
+StreamApiImpl::VideoTrackList StreamApiImpl::joinVideoTracks(
+    const VideoTrackList& videoTracks,
+    const VideoTrackList& desktopTracks
+) {
+    VideoTrackList result{videoTracks};
+    result.insert(result.end(), desktopTracks.begin(), desktopTracks.end());
+    return result;
 }
 
 void StreamApiImpl::removeStream(const StreamHandle& streamHandle) {

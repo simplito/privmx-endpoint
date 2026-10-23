@@ -1353,6 +1353,103 @@ TEST_F(StreamTest, updateStream_after_unpublishing) {
     });
 }
 
+TEST_F(StreamTest, publishStream_afterFailedPublish_canBeRetried) {
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId_1);
+    });
+    stream::StreamHandle handle;
+    EXPECT_NO_THROW({
+        handle = streamApi->createStream(streamRoomId_1);
+    });
+    // the server rejects a Stream without tracks, so the Stream stays unpublished
+    EXPECT_THROW({
+        streamApi->publishStream(handle);
+    }, core::Exception);
+
+    EXPECT_NO_THROW({
+        streamApi->getImpl()->addFakeVideoTrack(handle);
+        streamApi->publishStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    auto streamList = streamApi->listStreams(streamRoomId_1);
+    ASSERT_EQ(streamList.size(), 1);
+    EXPECT_EQ(streamList[0].tracks.size(), 1);
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
+}
+
+TEST_F(StreamTest, updateStream_addingSameTrackAgain_doesNotDuplicateIt) {
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId_1);
+    });
+    stream::StreamHandle handle;
+    EXPECT_NO_THROW({
+        handle = streamApi->createStream(streamRoomId_1);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
+        streamApi->publishStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    auto streamListBeforeUpdate = streamApi->listStreams(streamRoomId_1);
+    ASSERT_EQ(streamListBeforeUpdate.size(), 1);
+    ASSERT_EQ(streamListBeforeUpdate[0].tracks.size(), 1);
+
+    // the same device added again replaces its track instead of being published a second time
+    EXPECT_NO_THROW({
+        streamApi->getImpl()->addFakeVideoTrack(handle);
+        streamApi->updateStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    auto streamListAfterUpdate = streamApi->listStreams(streamRoomId_1);
+    ASSERT_EQ(streamListAfterUpdate.size(), 1);
+    EXPECT_EQ(streamListAfterUpdate[0].tracks.size(), 1);
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
+}
+
+TEST_F(StreamTest, updateStream_afterRemovingDataTrack_allowsAddingItAgain) {
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId_1);
+    });
+    stream::StreamHandle handle;
+    EXPECT_NO_THROW({
+        handle = streamApi->createStream(streamRoomId_1);
+        streamApi->getImpl()->addFakeVideoTrack(handle);
+        streamApi->addTrack(handle, {"", "", stream::DeviceType::Plain}, stream::MediaTrackConstrains{});
+        streamApi->publishStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    EXPECT_NO_THROW({
+        streamApi->sendData(handle, core::Buffer::from("before_removal"));
+    });
+
+    EXPECT_NO_THROW({
+        streamApi->removeTrack(handle, {"", "", stream::DeviceType::Plain});
+        streamApi->updateStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    // the removed data track is gone from the Stream, so sending data needs a new one
+    EXPECT_THROW({
+        streamApi->sendData(handle, core::Buffer::from("after_removal"));
+    }, core::Exception);
+
+    EXPECT_NO_THROW({
+        streamApi->addTrack(handle, {"", "", stream::DeviceType::Plain}, stream::MediaTrackConstrains{});
+        streamApi->updateStream(handle);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    EXPECT_NO_THROW({
+        streamApi->sendData(handle, core::Buffer::from("after_adding_again"));
+    });
+    EXPECT_NO_THROW({
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
+}
+
 TEST_F(StreamTest, updateSubscription_invalid_data) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({

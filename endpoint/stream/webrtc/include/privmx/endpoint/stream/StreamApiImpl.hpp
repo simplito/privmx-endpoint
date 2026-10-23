@@ -205,6 +205,23 @@ private:
         std::atomic<uint32_t> seq{1};
     };
 
+    using AudioTrackList = std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCAudioTrack>>>;
+    using VideoTrackList = std::vector<std::pair<std::string, libwebrtc::scoped_refptr<libwebrtc::RTCVideoTrack>>>;
+    using DataChannelUpdate = std::optional<std::pair<std::string, std::function<void(std::string)>*>>;
+
+    // The tracks staged by addTrack and removeTrack, as sent to the WebRTC layer. It is applied to the local
+    // Stream state by applyTracksUpdate only after the server accepts the publication.
+    struct StreamTracksUpdate {
+        AudioTrackList audioTracksToAdd;
+        AudioTrackList audioTracksToRemove;
+        VideoTrackList videoTracksToAdd;
+        VideoTrackList videoTracksToRemove;
+        VideoTrackList desktopTracksToAdd;
+        VideoTrackList desktopTracksToRemove;
+        DataChannelUpdate dataChannel;
+        DataChannelUpdate dataChannelBeforeUpdate;
+    };
+
     struct StreamData {
         StreamData(
             utils::ThreadSaveMap<std::string, std::shared_ptr<StreamAudioTrackInfo>> _audioTracks,
@@ -225,6 +242,14 @@ private:
         s.erase(std::find(s.begin(), s.end(), '\0'), s.end());
         return s;
     }
+
+    std::shared_ptr<StreamData> getStreamData(const StreamHandle& streamHandle);
+    void stopCapturerOfReplacedTrack(const std::shared_ptr<StreamData>& streamData, const std::string& trackId);
+    StreamTracksUpdate collectTracksUpdate(const std::shared_ptr<StreamData>& streamData);
+    void sendTracksUpdateToPeerConnection(const std::string& streamRoomId, const StreamTracksUpdate& update);
+    void revertTracksUpdateOnPeerConnection(const std::string& streamRoomId, const StreamTracksUpdate& update);
+    void applyTracksUpdate(const std::shared_ptr<StreamData>& streamData, const StreamTracksUpdate& update);
+    static VideoTrackList joinVideoTracks(const VideoTrackList& videoTracks, const VideoTrackList& desktopTracks);
 
     // v3 webrtc
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
