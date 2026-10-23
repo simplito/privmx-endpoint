@@ -214,7 +214,7 @@ public:
 
     // A previous identity's record adopted by `mergeStored(..., true)`: seq, digest, context and tree hash only, no
     // grant key. Never exported, never wins a `PinBlob::higher`; the next read that reaches its seq replays the chain
-    // from genesis to it and keeps it as a pin, or drops it if it is not on the chain.
+    // from genesis to it and keeps it as a pin, or refuses as a fork if it is not on the chain.
     static bool isHint(const Pin& pin) { return pin.seq > 0 && pin.groupPubKey.empty(); }
 
     // Pins and version-pin counters as the PinBlob holds them.
@@ -314,7 +314,7 @@ private:
     // The pin for the group, or an empty one (seq 0) if none.
     Pin pinOf(const std::string& groupId) const;
     // `pin` as the next check runs against it. A hint at or below `latestSeq` is replayed from genesis
-    // (`openersAt`): on the chain, it becomes the pin there; off it, it is dropped and the read is a first contact.
+    // (`openersAt`): on the chain, it becomes the pin there; off it, GroupHistoryForkException, and the hint stays.
     // A hint above `latestSeq` stays (refused below like any pin). Returns the group's pin as it now stands.
     Pin checkedHint(
         const std::string& groupId,

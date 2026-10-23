@@ -3093,36 +3093,34 @@ TEST_F(GroupApiLyingBridge, SECURITY_AHintIsCompletedOnlyOffTheChainFromGenesis)
     EXPECT_EQ(stored->groupPubKey, bridge.tree.state.grantPublicKey.toBase58DER());
 }
 
-TEST_F(GroupApiLyingBridge, SECURITY_AHintOffTheChainIsDroppedNotRefusedForever) {
-    // A digest the genuine chain never had, planted at the served seq and below it: the hint fails its replay and is
-    // dropped, so the read is a first contact instead of a fork refused in every session; nothing of it is saved.
+TEST_F(GroupApiLyingBridge, SECURITY_AHintOffTheServedChainFailsTheRead) {
+    // A digest the served chain never had, at the served seq and below it: the read is refused as a fork, never taken
+    // as a first contact (which would hand a forking bridge the trust the hint is there to deny), and the hint is
+    // neither dropped nor saved.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob"});
     const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
     client("bob").getGroup(groupId);
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
+    TreeVerifier::PinSet planted;
+    TreeVerifier::Pin hint;
+    hint.contextId = CONTEXT;
+    hint.seq = 1;
+    hint.digest = std::string(32, 'p');
+    planted.tree[groupId] = hint;
+    plantSlot(*store, previous, bridge.users.at("bob"), planted);
+    GroupApiImpl& alice = clientAdopting("alice", previous);
     for (const std::uint64_t seq : {1u, 2u}) {
         if (seq == 2u) {
             selfUpdateBy("bob");
-            clients.erase("alice"); // and what it saved: no pin under the current key again
-            store->put(store->keyWith("group-pins/", "/" + bridge.users.at("alice").getPublicKey().toBase58DER()), "");
         }
-        TreeVerifier::PinSet planted;
-        TreeVerifier::Pin hint;
-        hint.contextId = CONTEXT;
-        hint.seq = 1;
-        hint.digest = std::string(32, 'p');
-        planted.tree[groupId] = hint;
-        plantSlot(*store, previous, bridge.users.at("bob"), planted);
-        GroupApiImpl& alice = clientAdopting("alice", previous);
-        ASSERT_EQ(GroupApiImplTestAccess::pinnedSeq(alice, groupId), 1u);
+        EXPECT_THROW(alice.getGroup(groupId), GroupHistoryForkException) << "at seq " << seq;
+        EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(alice, groupId), 1u);
+        EXPECT_EQ(alice.pinnedKeyVersion(groupId), 0u);
         ASSERT_TRUE(GroupApiImplTestAccess::savePins(alice));
-        const auto before = storedPin(groupId, bridge.users.at("alice"));
-        EXPECT_TRUE(!before.has_value() || before->seq == 0u) << "a hint is not saved before it is verified";
-        EXPECT_NO_THROW(alice.getGroup(groupId)) << "at seq " << seq;
-        EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(alice, groupId), seq);
-        EXPECT_EQ(alice.pinnedKeyVersion(groupId), 1u);
+        const auto stored = storedPin(groupId, bridge.users.at("alice"));
+        EXPECT_TRUE(!stored.has_value() || stored->seq == 0u) << "a hint is not saved before it is verified";
     }
 }
 

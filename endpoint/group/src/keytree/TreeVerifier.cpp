@@ -658,23 +658,27 @@ TreeVerifier::Pin TreeVerifier::checkedHint(
     if (!isHint(pin) || latestSeq < pin.seq) {
         return pin;
     }
-    Pin checked;
-    checked.refusedSeq = pin.refusedSeq;
-    checked.seenAt = pin.seenAt;
+    // A hint the served chain does not reach is a fork, as for any pin: dropping it would hand the bridge a first
+    // contact across the key change. The hint stays (in memory only), so every read refuses until the app clears it.
+    Openers known;
     try {
         if (pin.contextId != contextId) {
-            reject("a hint in another context than the group");
+            throw GroupHistoryForkException();
         }
-        const Openers known = openersAt(groupId, contextId, pin.seq, pin.digest, environment);
-        static_cast<Head&>(checked) = known.head;
-        checked.contextId = contextId;
-        checked.hasRoster = true;
-        checked.seenAt = nowMs();
+        known = openersAt(groupId, contextId, pin.seq, pin.digest, environment);
     } catch (const GroupDataIntegrityException& e) {
-        LOG_WARN("[pins] an adopted record is not on the group's chain; dropped: ", e.what())
+        LOG_WARN("[pins] an adopted record is not on the served chain: ", e.what())
+        throw GroupHistoryForkException();
     } catch (const GroupUnauthorizedSignerException&) {
-        LOG_WARN("[pins] an adopted record is not on a chain its members could sign; dropped")
+        LOG_WARN("[pins] an adopted record is not on a chain its members could sign")
+        throw GroupHistoryForkException();
     }
+    Pin checked;
+    static_cast<Head&>(checked) = known.head;
+    checked.contextId = contextId;
+    checked.hasRoster = true;
+    checked.refusedSeq = pin.refusedSeq;
+    checked.seenAt = nowMs();
     std::optional<bool> moved;
     Pin now;
     {
@@ -685,12 +689,8 @@ TreeVerifier::Pin TreeVerifier::checkedHint(
         }
         const Snapshot before = snapshotOf(it->second);
         checked.refusedSeq = std::max(checked.refusedSeq, it->second.refusedSeq);
-        if (checked.seq == 0 && checked.refusedSeq == 0) {
-            _pins.erase(it);
-        } else {
-            it->second = checked;
-            moved = movedLocked(groupId, before, it->second, false);
-        }
+        it->second = checked;
+        moved = movedLocked(groupId, before, it->second, false);
         now = checked;
     }
     notify(moved);
