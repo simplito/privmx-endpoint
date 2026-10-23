@@ -70,6 +70,8 @@ public:
     void removeOnTrackInterfaceFormSingleStream(const std::string& streamId);
 
 private:
+    void detachVideoRenderer(libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> track);
+
     libwebrtc::scoped_refptr<libwebrtc::RTCPeerConnectionFactory> _peerConnectionFactory;
     std::string _streamRoomId;
     std::shared_ptr<privmx::webrtc::KeyStore> _currentKeys;

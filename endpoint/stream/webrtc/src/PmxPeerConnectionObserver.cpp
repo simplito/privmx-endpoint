@@ -119,13 +119,19 @@ void PmxPeerConnectionObserver::OnAddTrack(
     [[maybe_unused]] libwebrtc::scoped_refptr<libwebrtc::RTCRtpReceiver> receiver
 ) {
     LOG_DEBUG("STREAMS ", "API ", _streamRoomId + ": ON ADD TRACK")
-    // set frame crypto to decrypt track
-    _frameCryptors.set(
-        receiver->track()->id().std_string(),
-        privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(
-            _peerConnectionFactory, receiver, _currentKeys, _options
-        )
-    );
+    std::string receiverId = receiver->id().std_string();
+    auto installedFrameCryptor = _frameCryptors.get(receiverId);
+    if (installedFrameCryptor.has_value()) {
+        installedFrameCryptor.value()->setKeyStore(_currentKeys);
+        installedFrameCryptor.value()->setOptions(_options);
+    } else {
+        _frameCryptors.set(
+            receiverId,
+            privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(
+                _peerConnectionFactory, receiver, _currentKeys, _options
+            )
+        );
+    }
 
     DataType dataType = receiver->track()->kind().std_string() == "video" ? DataType::VIDEO : DataType::AUDIO;
     auto track = receiver->track();
@@ -167,6 +173,8 @@ void PmxPeerConnectionObserver::OnAddTrack(
     // callback on data
     if (dataType == DataType::VIDEO) {
         auto videoTrack = static_cast<libwebrtc::RTCVideoTrack*>(track.get());
+        // a recycled track still renders into the renderer of the Stream it carried before
+        detachVideoRenderer(track);
         std::shared_ptr<RTCVideoRendererImpl> renderer = std::make_shared<RTCVideoRendererImpl>(
             roomOnTrackInterface, _streamOnTrackInterfacesMap, streamIds, track
         );
@@ -222,11 +230,20 @@ void PmxPeerConnectionObserver::OnRemoveTrack(
             TrackAction::REMOVED
         );
     }
-    _frameCryptors.erase(receiver->track()->id().std_string());
     if (dataType == DataType::AUDIO)
-        _audioTrackSinks.erase(receiver->track()->id().std_string());
+        _audioTrackSinks.erase(track->id().std_string());
     if (dataType == DataType::VIDEO)
-        _RTCVideoRenderers.erase(receiver->track()->id().std_string());
+        detachVideoRenderer(track);
+}
+
+void PmxPeerConnectionObserver::detachVideoRenderer(libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> track) {
+    std::string trackId = track->id().std_string();
+    auto renderer = _RTCVideoRenderers.get(trackId);
+    if (!renderer.has_value()) {
+        return;
+    }
+    static_cast<libwebrtc::RTCVideoTrack*>(track.get())->RemoveRenderer(renderer.value().get());
+    _RTCVideoRenderers.erase(trackId);
 }
 
 void PmxPeerConnectionObserver::UpdateCurrentKeys(std::shared_ptr<privmx::webrtc::KeyStore> newKeys) {
