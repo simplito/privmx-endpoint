@@ -1464,6 +1464,23 @@ std::vector<std::string> crowd() {
 const std::vector<std::string> CROWD = crowd();
 } // namespace
 
+TEST_F(GroupApiLyingBridge, ADeferredSelfUpdateRunsAtTheEndOfAPublicCallOnTheGroup) {
+    // Not quiet: the member's own getGroup records the self-update its path needs and, once its random delay (within
+    // two background windows, 1 s each here) has passed, a later getGroup sends exactly one.
+    addUsers({CROWD.begin() + 3, CROWD.end()});
+    const std::string groupId = createGroup(CROWD);
+    const std::string member = memberNeedingSelfUpdate(CROWD);
+    ASSERT_FALSE(member.empty()) << "no member with a self-update need";
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (count(member, "context.groupSelfUpdate") == 0 && std::chrono::steady_clock::now() < deadline) {
+        client(member).getGroup(groupId);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    client(member).getGroup(groupId);
+    EXPECT_EQ(count(member, "context.groupSelfUpdate"), 1u);
+    EXPECT_FALSE(GroupKeyResolver::nodeNeedingSelfUpdate(bridge.serve(member, false)).has_value());
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_ASelfUpdateNeverCompletesAnotherOpsUnresolvedCommit) {
     quiet = true;
     addUsers({CROWD.begin() + 3, CROWD.end()});
@@ -1566,6 +1583,23 @@ TEST_F(GroupApiLyingBridge, SECURITY_AMemberHoldingThePreviousKeyRepairsABrokenU
     ASSERT_EQ(count("bob", "context.groupRepairRung"), 1u);
     const PrivateKey epoch1 = client("carol").resolveGroupPrivKey(groupId, 1);
     EXPECT_EQ(epoch1.getPublicKey().toBase58DER(), bridge.rest.history.at(0).groupPubKey);
+}
+
+TEST_F(GroupApiLyingBridge, ARepairRunsAtTheEndOfAPublicCallOnTheGroup) {
+    // Liveness: no test hook makes the check due; bob's ordinary getGroup calls run it once its random delay (within
+    // the group's background window, 1 s here) has passed.
+    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();
+    corrupt(2, 1);
+    client("bob").resolveGroupPrivKey(groupId); // records the check
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (count("bob", "context.groupRepairRung") == 0 && std::chrono::steady_clock::now() < deadline) {
+        client("bob").getGroup(groupId);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    ASSERT_EQ(count("bob", "context.groupRepairRung"), 1u);
+    EXPECT_EQ(
+        client("carol").resolveGroupPrivKey(groupId, 1).getPublicKey().toBase58DER(), bridge.rest.history.at(0).groupPubKey
+    );
 }
 
 TEST_F(GroupApiLyingBridge, ARepairIsNotSentWhenTheLadderIsIntact) {
