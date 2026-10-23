@@ -12,6 +12,7 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/stream/StreamApiLow.hpp>
+#include <privmx/endpoint/stream/StreamException.hpp>
 #include <privmx/endpoint/stream/StreamVarSerializer.hpp>
 #include <privmx/endpoint/stream/WebRTCInterface.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
@@ -868,6 +869,8 @@ TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_stops_when_its_rek
     };
     EXPECT_TRUE(privmx::test::waitUntil(publisherClosed)) << "the publication goes on under a key user_3 holds";
     EXPECT_EQ(streamApi->getStreamRoom(streamRoomId).staleGroups.size(), 1u) << "user_2 was not refused";
-    EXPECT_ANY_THROW({ streams2.publishStream(handle); }) << "the stopped publication's handle still works";
+    // The handle itself is gone, not merely refused for the stale key (a live handle would throw that too).
+    EXPECT_THROW({ streams2.publishStream(handle); }, stream::IncorrectStreamHandleException)
+        << "the stopped publication's handle still works";
     EXPECT_NO_THROW({ streams2.leaveStreamRoom(streamRoomId); });
 }
