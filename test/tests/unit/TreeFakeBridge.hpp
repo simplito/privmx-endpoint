@@ -30,6 +30,7 @@ limitations under the License.
 #include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/Utils.hpp>
 
+#include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 
@@ -594,6 +595,18 @@ private:
         return climbing;
     }
 };
+
+// Fails unless `call` is refused as GroupDataIntegrityException with `reason` in its description: the type alone
+// also passes when some later check refuses in place of the one under test.
+template<class F>
+void expectRefusal(F call, const std::string& reason) {
+    try {
+        call();
+        ADD_FAILURE() << "not refused; expected: " << reason;
+    } catch (const GroupDataIntegrityException& e) {
+        EXPECT_NE(e.getDescription().find(reason), std::string::npos) << "refused for: " << e.getDescription();
+    }
+}
 
 } // namespace
 
