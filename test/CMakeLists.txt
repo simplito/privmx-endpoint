@@ -188,7 +188,7 @@ add_executable(test_unit_TreeWireTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/Tre
 target_link_libraries(test_unit_TreeWireTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 # 07A: context listings and context custom events bound to the context asked for; event keys only to vouched keys
 add_executable(test_unit_ContextBindingTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/ContextBindingTest.cpp)
-target_link_libraries(test_unit_ContextBindingTest privmx privmxendpointcore privmxendpointevent Poco::Foundation GTest::GTest GTest::Main)
+target_link_libraries(test_unit_ContextBindingTest privmx privmxendpointcore privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointkvdb privmxendpointinbox privmxendpointstream privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 # F-05g: stopping a live publication runs every step whatever the others do (fake gateway and WebRTC)
 add_executable(test_unit_StreamPublicationStopTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/StreamPublicationStopTest.cpp)
 target_link_libraries(test_unit_StreamPublicationStopTest privmx privmxendpointcore privmxendpointstream privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)

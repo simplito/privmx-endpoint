@@ -205,12 +205,10 @@ core::PagingList<Thread> ThreadApiImpl::listThreads(
     }
     core::ListQueryMapper::map(model, pagingQuery);
     auto threadsList = _serverApi.threadList(model);
-    for (const auto& thread : threadsList.threads) {
-        setNewModuleKeysInCache(thread.id, containerToModuleKeys(thread), thread.version);
-    }
     std::vector<Thread> threads = _threadDataSchemaMapper->validateDecryptAndConvertThreads(
         threadsList.threads, _keyProvider, _groupPrivKeyResolver, contextId
     );
+    cacheKeysOfValid(threadsList.threads, threads);
     return core::PagingList<Thread>({.totalAvailable = threadsList.count, .readItems = threads});
 }
 

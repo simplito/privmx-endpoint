@@ -230,12 +230,10 @@ core::PagingList<Store> StoreApiImpl::listStores(
     }
     core::ListQueryMapper::map(storeListModel, query);
     auto storesList = _serverApi->storeList(storeListModel);
-    for (auto store : storesList.stores) {
-        setNewModuleKeysInCache(store.id, containerToModuleKeys(store), store.version);
-    }
     auto stores = _storeDataSchemaMapper->validateDecryptAndConvertStores(
         storesList.stores, _keyProvider, _groupPrivKeyResolver, contextId
     );
+    cacheKeysOfValid(storesList.stores, stores);
     return core::PagingList<Store>({.totalAvailable = storesList.count, .readItems = stores});
 }
 

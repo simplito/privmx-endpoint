@@ -197,12 +197,10 @@ core::PagingList<Kvdb> KvdbApiImpl::listKvdbs(
     model.type = type;
     core::ListQueryMapper::map(model, pagingQuery);
     auto kvdbsList = _serverApi.kvdbList(model);
-    for (auto kvdb : kvdbsList.kvdbs) {
-        setNewModuleKeysInCache(kvdb.id, containerToModuleKeys(kvdb), kvdb.version);
-    }
     std::vector<Kvdb> kvdbs = _kvdbDataSchemaMapper->validateDecryptAndConvertKvdbs(
         kvdbsList.kvdbs, _keyProvider, _groupPrivKeyResolver, contextId
     );
+    cacheKeysOfValid(kvdbsList.kvdbs, kvdbs);
     return core::PagingList<Kvdb>({.totalAvailable = kvdbsList.count, .readItems = kvdbs});
 }
 

@@ -37,6 +37,12 @@ limitations under the License.
 #include <privmx/endpoint/event/ServerTypes.hpp>
 #include <privmx/endpoint/event/encryptors/event/EventDataEncryptorV5.hpp>
 #include <privmx/endpoint/event/encryptors/event/EventDataSchemaMapper.hpp>
+#include <privmx/endpoint/inbox/ServerApi.hpp>
+#include <privmx/endpoint/kvdb/ServerApi.hpp>
+#include <privmx/endpoint/store/ServerApi.hpp>
+#include <privmx/endpoint/stream/ServerApi.hpp>
+#include <privmx/endpoint/thread/ServerApi.hpp>
+#include <privmx/endpoint/thread/ThreadApiImpl.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -44,6 +50,11 @@ limitations under the License.
 
 namespace core = privmx::endpoint::core;
 namespace event = privmx::endpoint::event;
+namespace thread = privmx::endpoint::thread;
+namespace store = privmx::endpoint::store;
+namespace kvdb = privmx::endpoint::kvdb;
+namespace inbox = privmx::endpoint::inbox;
+namespace stream = privmx::endpoint::stream;
 using privmx::crypto::PrivateKey;
 
 namespace {
@@ -335,6 +346,198 @@ TEST(ConnectionState, AdoptPreviousIdentityNeedsAConnection) {
     // Never connected: no Bridge to name the slot after, no current key to compare against.
     ConnectionOf connection(std::make_shared<core::ConnectionImpl>());
     EXPECT_THROW(connection.adoptPreviousIdentity(PrivateKey::generateRandom().toWIF()), core::NotConnectedException);
+}
+
+// --- container identity (M1) --------------------------------------------------------------------------------------
+
+// Answers each method with what the test put in `answers`; records what was asked.
+class Answering : public privmx::privfs::RpcGateway {
+public:
+    std::map<std::string, Poco::Dynamic::Var> answers;
+    std::vector<std::string> asked;
+    Answering() : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr(), std::nullopt) {}
+    Poco::Dynamic::Var request(
+        const std::string& method,
+        Poco::JSON::Object::Ptr,
+        privmx::rpc::MessageSendOptionsEx,
+        privmx::utils::CancellationToken::Ptr
+    ) override {
+        asked.push_back(method);
+        const auto it = answers.find(method);
+        if (it == answers.end()) {
+            throw std::runtime_error("the fake bridge has no " + method);
+        }
+        return overTheWire(it->second);
+    }
+    bool isConnected() override { return true; }
+};
+
+TEST(ContextBinding, SECURITY_AContainerServedUnderAnotherIdThanAskedIsRefused) {
+    // The Bridge answers a read of container "a" with container "b" the user also belongs to: whatever the caller
+    // then writes would go under b's key, read by b's members. Every read naming its container checks the answer.
+    auto* answering = new Answering();
+    const privmx::privfs::RpcGateway::Ptr gateway = answering;
+    auto& bridge = *answering;
+    thread::ServerApi threads(gateway);
+    store::ServerApi stores(gateway);
+    kvdb::ServerApi kvdbs(gateway);
+    inbox::ServerApi inboxes(gateway);
+    stream::ServerApi streams(gateway);
+    struct Case {
+        std::string method;
+        std::function<Poco::Dynamic::Var(const std::string& servedId)> answer;
+        std::function<void()> ask; // asks for container "a"
+    };
+    const std::vector<Case> cases{
+        {"thread.threadGet",
+         [](const std::string& id) {
+             thread::server::ThreadGetResult r;
+             r.thread.id = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] { threads.threadGet({.threadId = "a", .type = std::nullopt}); }},
+        {"thread.threadMessagesGet",
+         [](const std::string& id) {
+             thread::server::ThreadMessagesGetResult r;
+             r.thread.id = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] {
+             thread::server::ThreadMessagesGetModel m;
+             m.threadId = "a";
+             threads.threadMessagesGet(m);
+         }},
+        {"store.storeGet",
+         [](const std::string& id) {
+             store::server::StoreGetResult r;
+             r.store.id = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] { stores.storeGet({.storeId = "a", .type = std::nullopt}); }},
+        {"store.storeFileList",
+         [](const std::string& id) {
+             store::server::StoreFileListResult r;
+             r.store.id = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] {
+             store::server::StoreFileListModel m;
+             m.storeId = "a";
+             stores.storeFileList(m);
+         }},
+        {"store.storeFileGetMany",
+         [](const std::string& id) {
+             store::server::StoreFileGetManyResult r;
+             r.store.id = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] { stores.storeFileGetMany({.storeId = "a", .fileIds = {}, .failOnError = false}); }},
+        {"store.storeFileGet", // a file of store "a", served with store `id`'s keys
+         [](const std::string& id) {
+             store::server::StoreFileGetResult r;
+             r.file.id = "f";
+             r.file.storeId = "a";
+             r.store.id = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] { stores.storeFileGet({.fileId = "f"}); }},
+        {"kvdb.kvdbGet",
+         [](const std::string& id) {
+             kvdb::server::KvdbGetResult r;
+             r.kvdb.id = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] { kvdbs.kvdbGet({.kvdbId = "a", .type = std::nullopt}); }},
+        {"kvdb.kvdbListEntries",
+         [](const std::string& id) {
+             kvdb::server::KvdbListEntriesResult r;
+             r.kvdb.id = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] {
+             kvdb::server::KvdbListEntriesModel m;
+             m.kvdbId = "a";
+             kvdbs.kvdbListEntries(m);
+         }},
+        {"kvdb.kvdbListKeys",
+         [](const std::string& id) {
+             kvdb::server::KvdbListKeysResult r;
+             r.kvdb.id = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] {
+             kvdb::server::KvdbListKeysModel m;
+             m.kvdbId = "a";
+             kvdbs.kvdbListKeys(m);
+         }},
+        {"kvdb.kvdbEntryGet",
+         [](const std::string& id) {
+             kvdb::server::KvdbEntryGetResult r;
+             r.kvdbEntry.kvdbId = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] { kvdbs.kvdbEntryGet({.kvdbId = "a", .kvdbEntryKey = "k"}); }},
+        {"inbox.inboxGet",
+         [](const std::string& id) {
+             inbox::server::InboxGetResult r;
+             r.inbox.id = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] { inboxes.inboxGet({.id = "a", .type = std::nullopt}); }},
+        {"inbox.inboxGetPublicView",
+         [](const std::string& id) {
+             inbox::server::InboxGetPublicViewResult r;
+             r.inboxId = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] { inboxes.inboxGetPublicView({.id = "a", .type = std::nullopt}); }},
+        {"stream.streamRoomGet",
+         [](const std::string& id) {
+             stream::server::StreamRoomGetResult r;
+             r.streamRoom.id = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] { streams.streamRoomGet({.id = "a", .type = std::nullopt}); }},
+    };
+    for (const auto& c : cases) {
+        bridge.answers[c.method] = c.answer("b");
+        EXPECT_THROW(c.ask(), core::ContainerMismatchException) << c.method << " served another container";
+        bridge.answers[c.method] = c.answer("a");
+        EXPECT_NO_THROW(c.ask()) << c.method << " refused the container it asked for";
+    }
+}
+
+TEST(ContextBinding, SECURITY_AListedContainerRefusedForItsContextLeavesNoKeysInTheCache) {
+    // Cached first and checked after, a container of another context listed under ctx-a had its keys used by the
+    // next write to it without a fresh read. Only items that pass validation and the context check are cached.
+    auto* answering = new Answering();
+    const privmx::privfs::RpcGateway::Ptr gateway = answering;
+    auto& bridge = *answering;
+    thread::server::ThreadInfo listed;
+    listed.id = "t";
+    listed.contextId = "ctx-b";
+    listed.keyId = "k";
+    thread::server::Thread2DataEntry entry;
+    entry.keyId = "k";
+    entry.data = std::string("x");
+    listed.data = {entry};
+    thread::server::ThreadListResult page;
+    page.threads = {listed};
+    page.count = 1;
+    bridge.answers["thread.threadList"] = page.toJSON();
+
+    const PrivateKey key = PrivateKey::generateRandom();
+    auto impl = std::make_shared<core::ConnectionImpl>();
+    impl->connectOver(gateway, key);
+    const ConnectionOf connection(impl);
+    thread::ThreadApiImpl api(gateway, key, impl->getKeyProvider(), "", impl->getEventMiddleware(), connection);
+    const auto threads = api.listThreads("ctx-a", {.skip = 0, .limit = 10, .sortOrder = "desc"});
+    ASSERT_EQ(threads.readItems.size(), 1u);
+    EXPECT_EQ(threads.readItems[0].statusCode, REFUSED);
+    bridge.asked.clear();
+    EXPECT_ANY_THROW(api.sendMessage("t", core::Buffer::from(""), core::Buffer::from(""), core::Buffer::from("")));
+    EXPECT_NE(std::find(bridge.asked.begin(), bridge.asked.end(), "thread.threadGet"), bridge.asked.end())
+        << "the refused container's keys were taken from the cache";
 }
 
 } // namespace

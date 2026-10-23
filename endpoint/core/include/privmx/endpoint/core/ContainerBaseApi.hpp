@@ -206,6 +206,16 @@ protected:
         return getModuleKeys(moduleId, std::set<std::string>{keyId}, minimumSchemaVersion);
     }
     virtual std::pair<ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) = 0;
+    // A listing's keys go to the cache only for the containers that passed validation and the context check:
+    // `raw[i]` is the served item `validated[i]` was made from.
+    template<typename TServer, typename TLib>
+    void cacheKeysOfValid(const std::vector<TServer>& raw, const std::vector<TLib>& validated) {
+        for (size_t i = 0; i < raw.size() && i < validated.size(); ++i) {
+            if (validated[i].statusCode == 0) {
+                setNewModuleKeysInCache(raw[i].id, containerToModuleKeys(raw[i]), raw[i].version);
+            }
+        }
+    }
     ModuleKeys getNewModuleKeysAndUpdateCache(const std::string& moduleId);
     void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys, int64_t moduleVersion);
     void invalidateModuleKeysInCache(const std::optional<std::string>& moduleId = std::nullopt);

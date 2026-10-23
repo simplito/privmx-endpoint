@@ -304,12 +304,10 @@ core::PagingList<inbox::Inbox> InboxApiImpl::listInboxes(const std::string& cont
     model.contextId = contextId;
     core::ListQueryMapper::map(model, query);
     auto inboxesListResult = _serverApi->inboxList(model);
-    for (auto inbox : inboxesListResult.inboxes) {
-        setNewModuleKeysInCache(inbox.id, containerToModuleKeys(inbox), inbox.version);
-    }
     std::vector<Inbox> inboxes = _inboxDataSchemaMapper->validateDecryptAndConvertInboxes(
         inboxesListResult.inboxes, _keyProvider, _groupPrivKeyResolver, contextId
     );
+    cacheKeysOfValid(inboxesListResult.inboxes, inboxes);
     return core::PagingList<inbox::Inbox>({.totalAvailable = inboxesListResult.count, .readItems = inboxes});
 }
 

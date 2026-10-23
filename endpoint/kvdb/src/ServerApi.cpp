@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/kvdb/ServerApi.hpp"
+#include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/utils/JsonHelper.hpp>
 
 using namespace privmx::endpoint::kvdb;
@@ -38,7 +39,9 @@ server::KvdbDeleteManyResult ServerApi::kvdbDeleteMany(server::KvdbDeleteManyMod
 }
 
 server::KvdbGetResult ServerApi::kvdbGet(server::KvdbGetModel model) {
-    return request<server::KvdbGetResult>("kvdbGet", model.toJSON());
+    auto result = request<server::KvdbGetResult>("kvdbGet", model.toJSON());
+    core::EndpointUtils::assertServedId(model.kvdbId, result.kvdb.id);
+    return result;
 }
 
 server::KvdbListResult ServerApi::kvdbList(server::KvdbListModel model) {
@@ -46,11 +49,17 @@ server::KvdbListResult ServerApi::kvdbList(server::KvdbListModel model) {
 }
 
 server::KvdbEntryGetResult ServerApi::kvdbEntryGet(server::KvdbEntryGetModel model) {
-    return request<server::KvdbEntryGetResult>("kvdbEntryGet", model.toJSON());
+    auto result = request<server::KvdbEntryGetResult>("kvdbEntryGet", model.toJSON());
+    core::EndpointUtils::assertServedId(model.kvdbId, result.kvdbEntry.kvdbId);
+    return result;
 }
 
 server::KvdbEntryFindResult ServerApi::kvdbEntryFind(server::KvdbEntryGetModel model) {
-    return request<server::KvdbEntryFindResult>("kvdbEntryFind", model.toJSON());
+    auto result = request<server::KvdbEntryFindResult>("kvdbEntryFind", model.toJSON());
+    if (result.kvdbEntry.has_value()) {
+        core::EndpointUtils::assertServedId(model.kvdbId, result.kvdbEntry->kvdbId);
+    }
+    return result;
 }
 
 void ServerApi::kvdbEntrySet(server::KvdbEntrySetModel model) {
@@ -62,11 +71,15 @@ void ServerApi::kvdbEntryDelete(server::KvdbEntryDeleteModel model) {
 }
 
 server::KvdbListKeysResult ServerApi::kvdbListKeys(server::KvdbListKeysModel model) {
-    return request<server::KvdbListKeysResult>("kvdbListKeys", model.toJSON());
+    auto result = request<server::KvdbListKeysResult>("kvdbListKeys", model.toJSON());
+    core::EndpointUtils::assertServedId(model.kvdbId, result.kvdb.id);
+    return result;
 }
 
 server::KvdbListEntriesResult ServerApi::kvdbListEntries(server::KvdbListEntriesModel model) {
-    return request<server::KvdbListEntriesResult>("kvdbListEntries", model.toJSON());
+    auto result = request<server::KvdbListEntriesResult>("kvdbListEntries", model.toJSON());
+    core::EndpointUtils::assertServedId(model.kvdbId, result.kvdb.id);
+    return result;
 }
 
 server::KvdbEntryDeleteManyResult ServerApi::kvdbEntryDeleteMany(server::KvdbEntryDeleteManyModel model) {
