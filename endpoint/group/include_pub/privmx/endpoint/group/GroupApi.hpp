@@ -26,9 +26,10 @@ class GroupApiImpl;
  * found applied), and a different call completes it first. Key refreshes never hold anything back.
  *
  * This client runs no thread of its own. Upkeep it finds due (key refreshes of its own path, repairs of the epoch
- * ladder, saving pins) runs at the end of a later call on the same Group that succeeded (addGroupMembers,
- * removeGroupMembers, rotateGroupKey, renewLeaf, update*, getGroup); it adds latency to that call but never changes
- * its result or throws. A client that makes no such call does none of it.
+ * ladder) runs at the end of a later call on the same Group that succeeded (addGroupMembers, removeGroupMembers,
+ * rotateGroupKey, renewLeaf, update*, getGroup); it adds latency to that call but never changes its result or throws.
+ * A client that makes no such call does none of it. Verified group state is saved to the PinStore by the call that
+ * verified it, container key lookups included.
  */
 class GroupApi : public privmx::endpoint::core::BaseApiClass<GroupApiImpl> {
 public:

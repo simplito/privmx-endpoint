@@ -1194,7 +1194,6 @@ void GroupApiImpl::runDueWork(const std::string& groupId) {
     const auto now = std::chrono::steady_clock::now();
     std::vector<PendingLadderCheck> checks;
     std::optional<PendingSelfUpdate> update;
-    bool savePinsNow = false;
     {
         std::unique_lock<std::mutex> lock(_dueMutex);
         for (auto it = _ladderChecks.begin(); it != _ladderChecks.end();) {
@@ -1209,7 +1208,6 @@ void GroupApiImpl::runDueWork(const std::string& groupId) {
             update = it->second;
             _selfUpdatePending.erase(it);
         }
-        savePinsNow = _pinsMovedMajor || (_pinsMoved && now - _lastPinSave >= PIN_SAVE_IDLE_INTERVAL);
     }
     for (const PendingLadderCheck& check : checks) {
         try {
@@ -1244,9 +1242,22 @@ void GroupApiImpl::runDueWork(const std::string& groupId) {
             LOG_WARN("[selfUpdate] group key tree self-update dropped after repeated concurrent commits")
         }
     }
-    if (savePinsNow) {
+    savePinsIfDue();
+}
+
+void GroupApiImpl::savePinsIfDue() noexcept {
+    try {
+        {
+            std::unique_lock<std::mutex> lock(_dueMutex);
+            if (!_pinsMovedMajor &&
+                !(_pinsMoved && std::chrono::steady_clock::now() - _lastPinSave >= PIN_SAVE_IDLE_INTERVAL)) {
+                return;
+            }
+        }
         savePins();
-    }
+    } catch (const std::exception& e) {
+        LOG_WARN("[pins] save dropped: ", e.what())
+    } catch (...) { LOG_WARN("[pins] save dropped") }
 }
 
 void GroupApiImpl::selfUpdate(const std::string& groupId) {
@@ -1767,6 +1778,7 @@ core::PagingList<GroupSummary> GroupApiImpl::listGroups(
 }
 
 bool GroupApiImpl::hasVerifiedGrantKey(const server::GroupInfo& group) {
+    const SaveDuePins saveAfter{*this};
     try {
         _treeVerifier.verifyListed(group, treeEnvironment(group.id));
     } catch (const std::exception& e) {
@@ -1780,6 +1792,7 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
     const std::string& contextId,
     const std::vector<std::string>& groupIds
 ) {
+    const SaveDuePins saveAfter{*this};
     std::unordered_map<std::string, core::GroupEpochInfo> epochs;
     // A container key is about to be wrapped to these grant keys, so each comes off the group's latest statement.
     // A writer outside the group trusts that the signer, vouched by the UserVerifier, is a member (TOFU on membership).
@@ -2202,6 +2215,7 @@ bool GroupApiImpl::verifyTree(
     const server::GroupGetModel& model,
     keytree::TreeVerifier::Scope scope
 ) {
+    const SaveDuePins saveAfter{*this}; // whatever this verification moved, refusals included
     if (!keytree::GroupKeyResolver::hasTree(group) ||
         !keytree::GroupKeyResolver::hasSupportedTree(group) ||
         !keytree::GroupKeyResolver::ownUserId(group).has_value()) {

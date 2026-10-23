@@ -454,9 +454,17 @@ private:
     void scheduleSelfUpdateIfNeeded(const std::string& groupId, const server::GroupInfo& group);
     void scheduleSelfUpdate(const std::string& groupId, std::int64_t windowMs, bool healsFirst, int attempts = 0);
     // The flush point, at the end of a public call on `groupId` that succeeded: runs the group's due ladder checks
-    // and self-update, then saves the pins if they are due. Best-effort: failures are logged, never thrown. Key
+    // and self-update, then `savePinsIfDue`. Best-effort: failures are logged, never thrown. Key
     // resolution for containers only records work; nothing commits there.
     void runDueWork(const std::string& groupId);
+    // Saves the pins when a major move is marked, or a minor one and PIN_SAVE_IDLE_INTERVAL has passed since the last
+    // save. Never throws. Runs at the end of every verifying path (`SaveDuePins`), container key lookups included, so
+    // persisting rollback protection never waits for a GroupApi call.
+    void savePinsIfDue() noexcept;
+    struct SaveDuePins {
+        GroupApiImpl& api;
+        ~SaveDuePins() { api.savePinsIfDue(); }
+    };
 
     // The new epoch's rungs, each checked to open with `newGrantKey` to the key the chain (never the cache) names for
     // its target before anything is submitted. On failure the offending target is forgotten, so the next attempt
@@ -573,7 +581,8 @@ private:
     // `loadPins` merges the slot into memory once, at construction; `savePins` merges memory into the slot
     // (compare-and-swap, `PinBlob::higher`) and the result back into memory. `pinsMoved` only marks them; saves run
     // after every own commit but a self-update before the call returns, in `runDueWork` (a major move at once, minor
-    // ones once PIN_SAVE_IDLE_INTERVAL has passed since the last save), on disconnect and in the destructor. A failed
+    // ones once PIN_SAVE_IDLE_INTERVAL has passed since the last save) and at the end of every verification
+    // (`SaveDuePins`), on disconnect and in the destructor. A failed
     // save is logged and retried in full at the next flush; the pins in memory keep protecting this instance meanwhile.
     void loadPins();
     void pinsMoved(bool major);

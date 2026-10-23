@@ -2406,7 +2406,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnOwnRemovalOverASiblingsFirstContactIsSave
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     const Bridge beforeRemoval = bridge;
     GroupApiImpl& bob2 = sibling("bob");
-    bob2.getGroup(groupId); // first contact, unsaved (no flush in a quiet fixture)
+    bob2.getGroup(groupId); // first contact
     client("bob").getGroup(groupId);
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
     bob2.removeGroupMembers(groupId, {"carol"});
@@ -2630,14 +2630,19 @@ TEST_F(GroupApiLyingBridge, ASelfUpdateStormIsSavedAtTheIdleInterval) {
     EXPECT_EQ(store->savesOf(slot), before) << "no save before PIN_SAVE_IDLE_INTERVAL";
 }
 
-TEST_F(GroupApiLyingBridge, AMajorMoveIsSavedAtTheEndOfTheNextCallOnTheGroup) {
+TEST_F(GroupApiLyingBridge, SECURITY_AMajorMoveSeenByAContainerKeyLookupIsSavedBeforeItReturns) {
+    // A client that only uses containers resolves group keys and never calls GroupApi: a removal it verified there
+    // must be in the store at once, so a session killed right after still refuses the pre-removal state.
+    quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Bridge beforeRemoval = bridge;
     removalBy("bob", {"carol"});
-    client("alice").resolveGroupPrivKey(groupId); // a new epoch: major, only marked
-    EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 1u) << "a key lookup saves nothing";
-    client("alice").getGroup(groupId);
-    EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u) << "saved at the flush point";
+    client("alice").resolveGroupPrivKey(groupId); // the container path (`_groupPrivKeyResolver`); a new epoch: major
+    EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u) << "saved before the lookup returned";
+    kill("alice");
+    rollBackTo(beforeRemoval);
+    EXPECT_THROW(client("alice").resolveGroupPrivKey(groupId), GroupHistoryForkException);
 }
 
 TEST_F(GroupApiLyingBridge, AdoptPreviousIdentityCarriesThePinsToTheNewKey) {
