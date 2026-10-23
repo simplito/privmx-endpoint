@@ -344,8 +344,11 @@ TEST_F(LadderValidate, AcceptsUnitRungOnlyBecauseSkipsAreOptional) {
     EXPECT_TRUE(LadderMath::validateRungSet({RungSpan{8, 7}}, 8, 1).ok);
 }
 
-TEST_F(LadderValidate, AcceptsANonAlignedSkipBecauseAlignmentIsAdvisory) {
-    EXPECT_TRUE(LadderMath::validateRungSet({RungSpan{8, 7}, RungSpan{8, 5}}, 8, 1).ok);
+TEST_F(LadderValidate, RejectsASpanTheEpochDoesNotOwe) {
+    const auto result = LadderMath::validateRungSet({RungSpan{8, 7}, RungSpan{8, 5}}, 8, 1);
+    EXPECT_FALSE(result.ok);
+    EXPECT_EQ(result.problem, LadderProblemKind::NotCanonical);
+    EXPECT_TRUE(LadderMath::validateRungSet({RungSpan{8, 7}, RungSpan{8, 6}}, 8, 1).ok);
 }
 
 // SECURITY — the single check that stops a removed member reading forward.

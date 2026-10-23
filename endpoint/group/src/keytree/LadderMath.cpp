@@ -201,6 +201,8 @@ LadderValidation LadderMath::validateRungSet(
     assertEpoch(newEpoch, "newEpoch");
     assertEpoch(eraFloor, "eraFloor");
 
+    // Only the spans the epoch owes, as the bridge requires: what bounds an epoch to ~33 spans.
+    const std::vector<RungSpan> canonical = rungSpansFor(newEpoch, std::max(eraFloor, prunedBelow.value_or(1)));
     std::set<std::pair<std::uint32_t, std::uint32_t>> seen;
     for (const RungSpan& rung : submitted) {
         if (rung.target >= rung.at) {
@@ -214,6 +216,9 @@ LadderValidation LadderMath::validateRungSet(
         }
         if (prunedBelow.has_value() && rung.target < prunedBelow.value()) {
             return LadderValidation{false, LadderProblemKind::BelowPruneWatermark, rung};
+        }
+        if (std::find(canonical.begin(), canonical.end(), rung) == canonical.end()) {
+            return LadderValidation{false, LadderProblemKind::NotCanonical, rung};
         }
         const auto key = std::make_pair(rung.at, rung.target);
         if (seen.count(key) > 0) {

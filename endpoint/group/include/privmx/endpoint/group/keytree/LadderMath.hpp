@@ -40,6 +40,7 @@ enum class LadderProblemKind {
     BelowPruneWatermark, // targets a pruned epoch
     Duplicate,           // same span submitted twice
     UnitRungMissing,     // the mandatory rung to the previous epoch is absent
+    NotCanonical,        // a span the epoch does not owe (`rungSpansFor` above the floor)
 };
 
 struct LadderValidation {
