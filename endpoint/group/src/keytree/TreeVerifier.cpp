@@ -897,6 +897,46 @@ bool TreeVerifier::movesPin(const std::string& groupId, const CommitStatement& l
     return pinned != 0 && latest.seq > pinned;
 }
 
+bool TreeVerifier::chainedToPin(
+    const std::string& groupId,
+    std::uint64_t seq,
+    const std::string& digest,
+    const Environment& environment
+) const {
+    std::uint64_t pinSeq = 0;
+    std::string pinDigest;
+    {
+        std::lock_guard lock(_mutex);
+        const auto it = _pins.find(groupId);
+        if (it == _pins.end()) {
+            return false;
+        }
+        pinSeq = it->second.seq;
+        pinDigest = it->second.digest;
+    }
+    if (seq == 0 || seq > pinSeq) {
+        return false;
+    }
+    std::string linked = digest;
+    for (std::uint64_t at = seq; at < pinSeq;) {
+        const server::GroupGetTreeCommitsResult answer = environment.commitsBetween(at, pinSeq);
+        if (answer.commits.empty() || answer.commits.size() > pinSeq - at) {
+            return false;
+        }
+        for (const server::GroupTreeCommit& wire : answer.commits) {
+            CommitStatement statement;
+            try {
+                statement = TreeCommits::fromWire(wire);
+            } catch (const std::invalid_argument&) { return false; }
+            if (statement.seq != ++at || statement.prevDigest != linked) {
+                return false;
+            }
+            linked = TreeCommits::digest(statement);
+        }
+    }
+    return linked == pinDigest;
+}
+
 void TreeVerifier::refusedAsLostRace(const std::string& groupId, std::uint64_t seq) {
     std::optional<bool> moved;
     {

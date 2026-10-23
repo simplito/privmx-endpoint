@@ -1400,6 +1400,25 @@ TEST_F(GroupApiLyingBridge, ARotationWhoseAnswerWasLostIsFoundLandedAndItsMetada
     EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2) << "the metadata stayed under the replaced key";
 }
 
+TEST_F(GroupApiLyingBridge, ARemovalWhoseAnswerWasLostAndThatWasBuiltUponIsFoundLanded) {
+    // Applied, answer lost, then bob's self-update extends it and alice's read pins past it. The retry is not an
+    // error ("not a member"): the removal is on the verified chain, so it is done and its metadata carried up.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    int removals = 0;
+    bridge.afterRemoval = [&] {
+        if (removals++ == 0) {
+            throw std::runtime_error("connection dropped");
+        }
+    };
+    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    selfUpdateBy("bob");
+    client("alice").getGroup(groupId); // pins seq 3, past the removal
+    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    EXPECT_EQ(bridge.received.size(), 1u);
+    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2) << "the metadata stayed under the key carol holds";
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_ALandedRotationWhoseAnswerWasLostStandsInForALaterCallOnlyInsideTheWindow) {
     // Applied, answer lost, pinned by a read, and nobody commits after it. Past the window a call is a new request
     // (the key it replaced may have leaked since): it rotates again instead of returning on the old rotation.

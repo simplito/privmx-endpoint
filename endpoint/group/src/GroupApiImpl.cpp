@@ -2395,6 +2395,9 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
             return Settled::Proceed; // not resent to unvouched keys; this op plans afresh
         }
     }
+    // Landed and built upon since: on the verified chain below the pin. A read, so before the lock.
+    const bool landedBelowPin = _treeVerifier.pinnedSeq(groupId) > first->seq &&
+        _treeVerifier.chainedToPin(groupId, first->seq, first->digest, treeEnvironment(groupId));
     const auto mutex = commitLock(groupId);
     std::unique_lock<std::mutex> lock(*mutex);
     UnresolvedCommit pending;
@@ -2421,10 +2424,10 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
         return pending.namesEndState || commitDate() < pending.date + RELEASE_WINDOW_MS ? Settled::Done
                                                                                           : Settled::Reread;
     };
-    // Landed only when a verified read pinned exactly it, never on what the bridge serves as the head: a served head
-    // is unverified, and `landed` cannot refuse it (its `pinCommitted` passes over a statement below the pin). Before
-    // the gate, which lets go of the entry once the pin reaches its seq.
-    if (_treeVerifier.pinnedDigest(groupId) == pending.digest) {
+    // Landed only when a verified read pinned it, or a statement chained above it, never on what the bridge serves as
+    // the head: a served head is unverified, and `landed` cannot refuse it (its `pinCommitted` passes over a statement
+    // below the pin). Before the gate, which lets go of the entry once the pin reaches its seq.
+    if (_treeVerifier.pinnedDigest(groupId) == pending.digest || landedBelowPin) {
         return finish(Settled::Proceed); // it landed; only the answer was lost
     }
     // Superseded (the pin passed its seq), or past its window (an honest bridge refuses it by its date by now).

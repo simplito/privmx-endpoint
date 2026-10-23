@@ -158,6 +158,16 @@ public:
         const Environment& environment
     );
 
+    // Whether the statement with `digest` is the one at `seq` on the chain to the pin: the statements served above it
+    // hash-link it to the pinned one (each digest binds the one before; the pin is verified, so no signature is needed).
+    // Fetches the statements between; false for anything that does not link.
+    bool chainedToPin(
+        const std::string& groupId,
+        std::uint64_t seq,
+        const std::string& digest,
+        const Environment& environment
+    ) const;
+
     // T4-17: the bridge refused this client's statement at `seq` as a lost race. It may have applied it all the same,
     // so no second statement is signed at that seq (`assertMaySignAt`) until a read shows the seq taken.
     void refusedAsLostRace(const std::string& groupId, std::uint64_t seq);
