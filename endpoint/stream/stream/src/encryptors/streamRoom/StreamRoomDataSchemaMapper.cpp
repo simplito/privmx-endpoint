@@ -120,7 +120,7 @@ StreamRoom StreamRoomDataSchemaMapper::validateDecryptAndConvertStreamRoom(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertStreamRooms({streamRoom}, keyProvider, groupPrivKeyResolver)[0];
+    return validateDecryptAndConvertStreamRooms({streamRoom}, keyProvider, groupPrivKeyResolver, std::nullopt)[0];
 }
 
 StreamRoom StreamRoomDataSchemaMapper::toLibStreamRoom(

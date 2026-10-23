@@ -144,10 +144,10 @@ public:
             const std::optional<DataIntegrityObject>&
         )> decrypt,
         std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError,
-        const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
+        const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
         // A context listing: an item the server files under another context is refused, and the verifier is asked
         // under this one. Empty for a by-id read, which has no context of its own to compare with.
-        const std::optional<std::string>& expectedContextId = std::nullopt
+        const std::optional<std::string>& expectedContextId
     ) {
         if (items.empty()) {
             return std::vector<TLib>{};

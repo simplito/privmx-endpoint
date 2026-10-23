@@ -58,8 +58,8 @@ public:
     std::vector<Store> validateDecryptAndConvertStores(
         const std::vector<server::Store>& stores,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
-        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
-        const std::optional<std::string>& expectedContextId = std::nullopt
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
+        const std::optional<std::string>& expectedContextId
     );
 
     Store validateDecryptAndConvertStore(

@@ -142,5 +142,5 @@ Thread ThreadDataSchemaMapper::validateDecryptAndConvertThread(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertThreads({thread}, keyProvider, groupPrivKeyResolver)[0];
+    return validateDecryptAndConvertThreads({thread}, keyProvider, groupPrivKeyResolver, std::nullopt)[0];
 }

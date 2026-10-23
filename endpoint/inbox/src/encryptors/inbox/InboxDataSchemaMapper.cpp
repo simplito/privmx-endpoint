@@ -151,7 +151,7 @@ Inbox InboxDataSchemaMapper::validateDecryptAndConvertInbox(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertInboxes({inbox}, keyProvider, groupPrivKeyResolver)[0];
+    return validateDecryptAndConvertInboxes({inbox}, keyProvider, groupPrivKeyResolver, std::nullopt)[0];
 }
 
 Inbox InboxDataSchemaMapper::toLibInbox(

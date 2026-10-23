@@ -108,7 +108,7 @@ Store StoreDataSchemaMapper::validateDecryptAndConvertStore(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertStores({store}, keyProvider, groupPrivKeyResolver)[0];
+    return validateDecryptAndConvertStores({store}, keyProvider, groupPrivKeyResolver, std::nullopt)[0];
 }
 
 Store StoreDataSchemaMapper::toLibStore(
