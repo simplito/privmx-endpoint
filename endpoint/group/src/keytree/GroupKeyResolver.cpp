@@ -196,6 +196,10 @@ std::optional<std::uint32_t> GroupKeyResolver::nodeNeedingSelfUpdate(const serve
     }
     const auto& records = group.treeNodes.value();
     const auto vouchers = statements(group);
+    if (group.numLeaves.value() < 1 ||
+        group.numLeaves.value() > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+        throw privmx::endpoint::group::GroupDataIntegrityException("a tree field out of range");
+    }
     const auto numLeaves = static_cast<std::uint32_t>(group.numLeaves.value());
     for (const std::uint32_t node :
          TreeMath::keyedPath(static_cast<std::uint32_t>(group.ownLeafPosition.value()), numLeaves)) {

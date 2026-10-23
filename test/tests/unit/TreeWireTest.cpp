@@ -29,6 +29,8 @@ limitations under the License.
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
+#include <privmx/endpoint/group/GroupException.hpp>
+#include <privmx/endpoint/group/keytree/GroupKeyResolver.hpp>
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
@@ -305,4 +307,59 @@ TEST_F(TreeWireTest, AServedBlankReadsAsBlankWhetherAbsentOrEmpty) {
     EXPECT_EQ(state.nodes[0].generation, 2u);
     EXPECT_FALSE(state.nodes[1].publicKey.has_value());
     EXPECT_FALSE(TreeWire::toWire(state.nodes[0]).toJSON()->has("publicKey"));
+}
+
+TEST_F(TreeWireTest, SECURITY_AServedFieldOutOfRangeIsRefusedNotWrapped) {
+    // 2^32 + 3 narrowed to 32 bits is 3: a record the bridge serves out of range must not pass for another one.
+    const std::int64_t wraps = (std::int64_t{1} << 32) + 3;
+    const auto base = [] {
+        server::GroupTreeState tree;
+        tree.numLeaves = 4;
+        tree.leafAssignment.assign(4, "u");
+        tree.nodes = {server::GroupTreeNode{3, 0, std::nullopt}};
+        tree.edges = {server::GroupTreeEdge{false, 3, 0, "node", 1, 0, std::nullopt, ""}};
+        return tree;
+    };
+    const auto refused = [](const server::GroupTreeState& tree) {
+        try {
+            TreeWire::toRuntime(tree, 1, PrivateKey::generateRandom().getPublicKey());
+            return false;
+        } catch (const GroupDataIntegrityException&) { return true; }
+    };
+    ASSERT_FALSE(refused(base()));
+    std::vector<std::function<void(server::GroupTreeState&)>> lies = {
+        [&](auto& t) { t.numLeaves = wraps + 1; },
+        [&](auto& t) { t.nodes[0].nodeIndex = wraps; },
+        [&](auto& t) { t.nodes[0].nodeIndex = -1; },
+        [&](auto& t) { t.nodes[0].generation = wraps; },
+        [&](auto& t) { t.edges[0].parentIndex = wraps; },
+        [&](auto& t) { t.edges[0].parentGeneration = -1; },
+        [&](auto& t) { t.edges[0].childIndex = wraps; },
+        [&](auto& t) { t.edges[0].childGeneration = wraps; },
+    };
+    for (std::size_t i = 0; i < lies.size(); ++i) {
+        server::GroupTreeState tree = base();
+        lies[i](tree);
+        EXPECT_TRUE(refused(tree)) << "lie " << i;
+    }
+    server::GroupInfo group;
+    group.numLeaves = wraps + 1;
+    group.leafAssignment = std::vector<std::string>{"u", "", "", ""};
+    group.ownLeafPosition = 0;
+    group.treeNodes = std::vector<server::GroupTreeNode>{};
+    group.treeEdges = std::vector<server::GroupTreeEdge>{};
+    EXPECT_THROW(GroupKeyResolver::nodeNeedingSelfUpdate(group), GroupDataIntegrityException);
+}
+
+TEST_F(TreeWireTest, SECURITY_ARungOutOfRangeIsDroppedNotWrapped) {
+    // A target of 0 names no epoch; an `at` of 2^32 + 1 narrowed to 32 bits would be epoch 1's.
+    server::GroupGetKeyArchiveResult archive;
+    archive.rungs = {
+        server::GroupArchiveRung{3, 2, "kept", std::nullopt},
+        server::GroupArchiveRung{2, 0, "target 0", std::nullopt},
+        server::GroupArchiveRung{(std::int64_t{1} << 32) + 1, 2, "wraps", std::nullopt},
+    };
+    const auto rungs = GroupKeyResolver::toDownwardRungs(archive);
+    ASSERT_EQ(rungs.size(), 1u);
+    EXPECT_EQ(rungs[0].blob, "kept");
 }

@@ -13,6 +13,10 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
 
+#include <limits>
+
+#include "privmx/endpoint/group/GroupException.hpp"
+
 using namespace privmx::endpoint::group::keytree;
 namespace server = privmx::endpoint::group::server;
 
@@ -68,6 +72,14 @@ std::vector<server::GroupArchiveRung> TreeWire::toWire(const std::vector<Archive
 }
 
 namespace {
+
+// A served counter or index as the runtime holds it: one out of range is the bridge's, never wrapped into another.
+std::uint32_t served32(std::int64_t value) {
+    if (value < 0 || value > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+        throw privmx::endpoint::group::GroupDataIntegrityException("a tree field out of range");
+    }
+    return static_cast<std::uint32_t>(value);
+}
 
 std::vector<std::string> leafAssignmentToWire(const std::vector<std::optional<std::string>>& seats) {
     // A blank is spelled as an empty string: that is how the wire format says "nobody here" without a nullable
@@ -135,7 +147,7 @@ TreeGroupState TreeWire::toRuntime(
     const privmx::crypto::PublicKey& grantPublicKey
 ) {
     TreeGroupState state;
-    state.numLeaves = static_cast<std::uint32_t>(tree.numLeaves);
+    state.numLeaves = served32(tree.numLeaves);
     state.epoch = epoch;
     state.grantPublicKey = grantPublicKey;
     for (const std::string& userId : tree.leafAssignment) {
@@ -147,8 +159,7 @@ TreeGroupState TreeWire::toRuntime(
     }
     for (const server::GroupTreeNode& node : tree.nodes) {
         TreeNodeState converted{
-            static_cast<std::uint32_t>(node.nodeIndex), static_cast<std::uint32_t>(node.generation), std::nullopt,
-            std::nullopt
+            served32(node.nodeIndex), served32(node.generation), std::nullopt, std::nullopt
         };
         if (!node.publicKey.value_or("").empty()) {
             converted.publicKey = NodePublicKey::fromBase58DER(node.publicKey.value());
@@ -161,15 +172,15 @@ TreeGroupState TreeWire::toRuntime(
     for (const server::GroupTreeEdge& edge : tree.edges) {
         TreeEdge converted;
         converted.isGrantEdge = edge.isGrantEdge.value_or(false);
-        converted.parentIndex = static_cast<std::uint32_t>(edge.parentIndex.value_or(0));
-        converted.parentGeneration = static_cast<std::uint32_t>(edge.parentGeneration);
+        converted.parentIndex = served32(edge.parentIndex.value_or(0));
+        converted.parentGeneration = served32(edge.parentGeneration);
         if (edge.childKind == "user") {
             converted.childKind = EdgeChildKind::User;
             converted.childUserId = edge.childUserId.value_or("");
         } else {
             converted.childKind = EdgeChildKind::Node;
-            converted.childIndex = static_cast<std::uint32_t>(edge.childIndex.value_or(0));
-            converted.childGeneration = static_cast<std::uint32_t>(edge.childGeneration.value_or(0));
+            converted.childIndex = served32(edge.childIndex.value_or(0));
+            converted.childGeneration = served32(edge.childGeneration.value_or(0));
         }
         converted.blob = edge.data;
         state.edges.push_back(converted);
