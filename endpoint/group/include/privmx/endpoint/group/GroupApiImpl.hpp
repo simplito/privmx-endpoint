@@ -583,7 +583,7 @@ private:
     // after every own commit but a self-update before the call returns, in `runDueWork` (a major move at once, minor
     // ones once PIN_SAVE_IDLE_INTERVAL has passed since the last save) and at the end of every verification
     // (`SaveDuePins`), on disconnect and in the destructor. A failed
-    // save is logged and retried in full at the next flush; the pins in memory keep protecting this instance meanwhile.
+    // save is logged and retried in full like a minor move; the pins in memory keep protecting this instance meanwhile.
     void loadPins();
     void pinsMoved(bool major);
     bool savePins(bool all = false);
@@ -598,7 +598,7 @@ private:
     std::mutex _pinSaveMutex; // serialises saves; guards the two below
     bool _pinSaveFull = false;
     std::set<std::string> _adoptedIdentities;
-    // Under `_dueMutex`: moved since the last save (a major move among them), and when the last save succeeded.
+    // Under `_dueMutex`: moved since the last save (a major move among them), and when the last save was tried.
     bool _pinsMoved = false;
     bool _pinsMovedMajor = false;
     std::chrono::steady_clock::time_point _lastPinSave;

@@ -2590,6 +2590,28 @@ TEST_F(GroupApiLyingBridge, ABrokenStoreDoesNotStopTheClientAndIsRetried) {
     EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u);
 }
 
+TEST_F(GroupApiLyingBridge, ARefusingStoreIsNotRetriedAtEveryVerification) {
+    // A failed save is retried like a minor move (after the idle interval), not by every read that follows; an own
+    // commit or a disconnect still saves at once.
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    store->failSaves = true;
+    ASSERT_FALSE(GroupApiImplTestAccess::savePins(client("alice")));
+    int attempts = 0;
+    store->afterLoad = [&](const std::string&) { ++attempts; };
+    for (int i = 0; i < 4; ++i) {
+        selfUpdateBy(i % 2 == 0 ? "bob" : "carol");
+        client("alice").getGroup(groupId);
+    }
+    store->afterLoad = [](const std::string&) {};
+    EXPECT_EQ(attempts, 0) << "the refusing store was written at every verification";
+    store->failSaves = false;
+    clients.at("alice")->connectionImpl->getEventMiddleware()->emitDisconnectedEvent();
+    const auto stored = storedPin(groupId, bridge.users.at("alice"));
+    ASSERT_TRUE(stored.has_value());
+    EXPECT_EQ(stored->seq, 5u);
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_AnEnvelopeNamingAGroupWithoutTheCallersSeatPinsNothing) {
     // The envelope's group id is unauthenticated. Served with somebody else's seat, the group is refused before the
     // verifier stores anything (base: pinned first, refused after).

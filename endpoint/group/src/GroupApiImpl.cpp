@@ -3043,11 +3043,10 @@ bool GroupApiImpl::savePins(bool all) {
         }
     }
     std::unique_lock<std::mutex> lock(_dueMutex);
-    if (saved) {
-        _lastPinSave = std::chrono::steady_clock::now();
-    } else {
-        _pinsMoved = _pinsMovedMajor = true; // retried at the next flush
-    }
+    // A failure is retried as a minor move: once PIN_SAVE_IDLE_INTERVAL has passed, or at the next major move, own
+    // commit, disconnect or destruction; not at every verification against a store that keeps refusing.
+    _lastPinSave = std::chrono::steady_clock::now();
+    _pinsMoved = _pinsMoved || !saved;
     return saved;
 }
 
