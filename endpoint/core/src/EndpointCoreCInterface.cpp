@@ -68,13 +68,17 @@ int privmx_endpoint_freeConnection(Connection* ptr) {
 
 namespace {
 
-// One call out to an application callback: args and res are freed whatever it does.
-template<typename Callback>
+// One call out to an application callback: args and res are freed whatever it does. With `checked`, a non-zero
+// return code is a failure, never a result: a pin store whose load failed must not read as "nothing stored". The
+// user verifier's code stays unread — bindings written before it was defined return whatever they return, and a
+// failed verifier that leaves no result is refused when its answer is parsed.
+template<bool checked, typename Callback>
 Poco::Dynamic::Var callOut(void* ctx, Callback callback, const Poco::Dynamic::Var& request) {
     pson_value* res = nullptr;
     pson_value* args = (pson_value*)(new Poco::Dynamic::Var(request));
+    int rc = 0;
     try {
-        callback(ctx, args, &res);
+        rc = callback(ctx, args, &res);
     } catch (...) {
         delete (Poco::Dynamic::Var*)args;
         if (res != nullptr) {
@@ -83,6 +87,12 @@ Poco::Dynamic::Var callOut(void* ctx, Callback callback, const Poco::Dynamic::Va
         throw;
     }
     delete (Poco::Dynamic::Var*)args;
+    if (checked && rc != 0) {
+        if (res != nullptr) {
+            pson_free_value(res);
+        }
+        throw core::EndpointCoreException("application callback failed, rc=" + std::to_string(rc));
+    }
     if (res == nullptr) {
         return Poco::Dynamic::Var();
     }
@@ -97,7 +107,7 @@ int privmx_endpoint_setUserVerifier(Connection* ptr, void* ctx, privmx_user_veri
     return CApiExecutor::execFunc(res, [&] {
         core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;
         return _ptr->setUserVerifier([ctx, verifier](const Poco::Dynamic::Var& request) {
-            return callOut(ctx, verifier, request);
+            return callOut<false>(ctx, verifier, request);
         });
     });
 }
@@ -112,8 +122,8 @@ int privmx_endpoint_setPinStore(
     return CApiExecutor::execFunc(res, [&] {
         core::ConnectionVarInterface* _ptr = (core::ConnectionVarInterface*)ptr;
         return _ptr->setPinStore(
-            [ctx, load](const Poco::Dynamic::Var& request) { return callOut(ctx, load, request); },
-            [ctx, save](const Poco::Dynamic::Var& request) { return callOut(ctx, save, request); }
+            [ctx, load](const Poco::Dynamic::Var& request) { return callOut<true>(ctx, load, request); },
+            [ctx, save](const Poco::Dynamic::Var& request) { return callOut<true>(ctx, save, request); }
         );
     });
 }

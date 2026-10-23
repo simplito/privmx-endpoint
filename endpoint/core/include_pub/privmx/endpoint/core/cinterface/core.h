@@ -15,6 +15,7 @@ int privmx_endpoint_execEventQueue(EventQueue* ptr, int method, const pson_value
 
 typedef struct Connection Connection;
 typedef int (*privmx_user_verifier)(void* ctx, const pson_value* args, pson_value** res);
+// The pin store callbacks return 0 on success; any other code is a failure, whatever `res` holds.
 typedef int (*privmx_pin_store_load)(void* ctx, const pson_value* args, pson_value** res); // [key] -> binary|null
 typedef int (*privmx_pin_store_save)(void* ctx, const pson_value* args, pson_value** res); // [key, blob, expected] -> bool
 
