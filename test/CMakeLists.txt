@@ -75,6 +75,9 @@ if(PRIVMX_BUILD_WITH_WEBRTC)
     target_link_libraries(test_e2e_StreamTest privmx privmxendpointcore privmxendpointstream privmxendpointstream_webrtc libwebrtc Poco::Foundation Poco::Util GTest::GTest GTest::Main)
     add_executable(test_e2e_StreamEventsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/StreamEventsTest.cpp)
     target_link_libraries(test_e2e_StreamEventsTest privmx privmxendpointcore privmxendpointstream privmxendpointstream_webrtc libwebrtc Poco::Foundation Poco::Util GTest::GTest GTest::Main)
+    # Stream connection state aggregation, grace period and recovery policy (offline, no Bridge required)
+    add_executable(test_ConnectionStateTrackerTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/ConnectionStateTrackerTest.cpp)
+    target_link_libraries(test_ConnectionStateTrackerTest privmx privmxendpointcore privmxendpointstream privmxendpointstream_webrtc libwebrtc Poco::Foundation Poco::Util GTest::GTest GTest::Main)
     # Live E2E DataChannel interop client driven
     # RTCDataChannel interop over a real connection.
     add_executable(datachannel_interop_client ${CMAKE_CURRENT_SOURCE_DIR}/tools/datachannel_interop_client.cpp)
