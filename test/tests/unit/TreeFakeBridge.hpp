@@ -154,7 +154,7 @@ public:
     std::int64_t rosterVersion = 0;
     // The managers among the seated; everybody else seated is a user.
     std::set<std::string> managers;
-    // The group's policy and creator, which every statement's `policyHash` signs (T4-10).
+    // The group's policy and creator, which every statement's `policyHash` signs.
     Poco::Dynamic::Var policy;
     std::string creator;
     // The Context user list: whose key a statement must be signed with.
@@ -179,7 +179,7 @@ public:
     // The rules the stored policy and creator sign.
     GroupRules rules() const { return TreeCommits::rules(policy, creator); }
 
-    // The shared lost-race check (03): a statement not extending the stored latest is answered ROTATED_ALREADY.
+    // The shared lost-race check: a statement not extending the stored latest is answered ROTATED_ALREADY.
     void assertExtendsHead(const server::GroupTreeCommit& wire) const {
         const CommitStatement statement = TreeCommits::fromWire(wire);
         if (statement.seq != commits.size() + 1 ||
@@ -452,7 +452,7 @@ public:
     }
 
     // What `generateNewGroupKey` stores: the tree untouched, the grant edge replaced, the epoch and roster version up.
-    // Shared with the 09 and 11 tests, which extend `checkStatement`, not this.
+    // Shared with the tests that extend `checkStatement`, not this.
     void rotate(
         const std::string& committer,
         const server::GroupTreeEdge& grantEdge,

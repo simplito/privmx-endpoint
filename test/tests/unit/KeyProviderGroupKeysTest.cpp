@@ -130,8 +130,8 @@ protected:
 } // namespace
 
 TEST_F(KeyProviderGroupKeysTest, a_dead_route_does_not_block_a_key_a_later_route_opens) {
-    // 13 (D8): group_a's epoch is not reachable, group_b yields the key: the key is usable. The old mark was
-    // order-dependent (a dead later route was never seen) and blocked group_b for an epoch of group_a.
+    // group_a's epoch is not reachable, group_b yields the key: the key is usable, whatever the order of the routes;
+    // an epoch of group_a must not block group_b.
     const auto groupA = privmx::crypto::PrivateKey::generateRandom();
     const auto groupB = privmx::crypto::PrivateKey::generateRandom();
 

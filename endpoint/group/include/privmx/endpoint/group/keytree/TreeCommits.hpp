@@ -38,7 +38,7 @@ enum class CommitOp : std::uint8_t {
     Remove = 3,
     SelfUpdate = 4,
     Rotate = 5, // the bridge-side `generateNewGroupKey`
-    Policy = 6, // a policy change: only `policyHash` moves (T4-10)
+    Policy = 6, // a policy change: only `policyHash` moves
 };
 
 struct StatementNode {
@@ -102,8 +102,8 @@ public:
     // Clock skew a statement's `date` may show against the checker's clock, both ways: the bridge's
     // `CommitStatement.DATE_TOLERANCE_MS`. A reader allows a latest statement twice that ahead of its own clock, its
     // own skew on top. That bounds how far a member and a misbehaving bridge can push the chain's dates ahead of real
-    // time, which matters because the UserVerifier is asked at each statement's date. It no longer bounds a freeze:
-    // the bridge takes a commit dated exactly as the statement it extends, however far ahead that one is (N-1).
+    // time, which matters because the UserVerifier is asked at each statement's date. It does not bound a freeze:
+    // the bridge takes a commit dated exactly as the statement it extends, however far ahead that one is.
     static constexpr std::uint64_t DATE_TOLERANCE_MS = 10 * 60 * 1000;
 
     // The domain tag of every preimage and sealed label in the key tree; the fields after it use core/BigEndian.hpp.
@@ -200,7 +200,7 @@ public:
     // admits nobody (the bridge sees atom "" and denies too).
     static bool allows(const std::string& rule, bool member, bool manager, bool owner);
 
-    // The role column of the op-effect table (T4-10), on the rules and roster before `statement`: create none (the
+    // The role column of the op-effect table, on the rules and roster before `statement`: create none (the
     // committer is the creator), add `update`, remove `update` (and, removing the creator from the managers,
     // `ownerCanBeRemovedFromManagers` "yes"), rotate `rotateKeys`, selfUpdate a seat, policy `updatePolicy`. False for
     // an op without a row.

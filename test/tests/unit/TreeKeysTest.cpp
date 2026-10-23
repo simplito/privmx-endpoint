@@ -775,9 +775,9 @@ TEST_F(TreeKeysRemoval, SECURITY_SurvivorsReachTheNewKeyAndTheRemovedDoNot) {
     }
 }
 
-// The C1 finding, as it was found: the creator mints every node key, and a removal that re-keyed only the leaver's
-// own path left the copath keys the leaver had minted opening the refreshed root. Now the removal blanks every node
-// the leaver set (V2: seat 40 removes the creator of 64 and re-keys 63 and 95; node 31 is off its path).
+// The creator mints every node key, so a removal that re-keyed only the leaver's own path would leave the copath keys
+// the leaver had minted opening the refreshed root. The removal blanks every node the leaver set (seat 40 removes the
+// creator of 64 and re-keys 63 and 95; node 31 is off its path).
 TEST_F(TreeKeysRemoval, SECURITY_ARemovedCreatorReachesNothingWithEverythingItEverHeld) {
     CommitPlan created;
     Group group = create(64, 0, &created);
@@ -804,7 +804,7 @@ TEST_F(TreeKeysRemoval, SECURITY_CollusionBetweenTwoRemovedMembersYieldsNothing)
     expectEveryoneSeatedClimbs(group);
 }
 
-// V5: node 63 was re-keyed by seat 40, but it wraps to node 31, which the creator set — so the creator opens it, and
+// Node 63 was re-keyed by seat 40, but it wraps to node 31, which the creator set — so the creator opens it, and
 // the removal has to blank the ancestors of what it set too, not only what it set.
 TEST_F(TreeKeysRemoval, SECURITY_ARemovalBlanksTheAncestorsOfWhatTheLeaverSet) {
     CommitPlan created;
@@ -821,7 +821,7 @@ TEST_F(TreeKeysRemoval, SECURITY_ARemovalBlanksTheAncestorsOfWhatTheLeaverSet) {
     expectEveryoneSeatedClimbs(group);
 }
 
-// V8: the adder of seat 5 keeps node 31, which it minted off its own path; removing the adder blanks what is left
+// The adder of seat 5 keeps node 31, which it minted off its own path; removing the adder blanks what is left
 // of that (node 95), while the remover's path re-keys 31 and 63.
 TEST_F(TreeKeysRemoval, SECURITY_ARemovedAdderReachesNothingItMintedForOthers) {
     Group group = create(64, 0);

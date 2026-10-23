@@ -29,13 +29,13 @@ limitations under the License.
  * storage rule, `treetest::afterCommit`), the nodes it refreshed, the signed commit statement (`commit`, signature
  * in full), the post state's `treeHash` and roster (`users`, `managers`, `rosterVersion`). Removals also carry
  * `setters` (the committer of each statement `before`'s filled nodes cite) and `blanked` (what the removal blanks
- * besides the remover's path, ascending); additions carry `blanked: []`. Cases from the A-prime test vectors carry
+ * besides the remover's path, ascending); additions carry `blanked: []`. Named test vectors carry
  * their `id` ("V2" ...). Trees are version 3
  * (`treeVersion` at the top): buckets of 16 seats, blank nodes without a `publicKey`, filled ones with `setBy`.
  * Every user who signs is in the top-level `userPubKeys`; ids are global, so a user's key is the same in every case.
  * A group is "grp", except at seq 1 where its statement names the resourceId "res". Every case also carries the
  * group's policy and creator after its commit (`groupPolicy`, `groupCreator`), which the statement's `policyHash`
- * signs; `policy` cases are policy commits (T4-10), whose `before` and `after` are the same tree.
+ * signs; `policy` cases are policy commits, whose `before` and `after` are the same tree.
  *
  * Usage: keytree_state_dump > src/test/fixtures/keytree-states.json   (paths relative to the bridge repo)
  * See test/tools/README.md.

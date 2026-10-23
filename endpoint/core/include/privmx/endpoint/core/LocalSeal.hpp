@@ -24,7 +24,7 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
-// The slots of the local state (01): `<kind>/<scope>/<identity public key>`, scope = the Bridge
+// The slots of the local state: `<kind>/<scope>/<identity public key>`, scope = the Bridge
 // (`ConnectionImpl::localStateScope`). Labels select the MAC key per kind.
 namespace localstate {
 constexpr const char* GROUP_PINS = "group-pins";

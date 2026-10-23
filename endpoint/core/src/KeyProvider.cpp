@@ -390,9 +390,8 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
             continue;
         }
         if (firstFailure.has_value()) {
-            // 13 (D8): a dead route no longer marks a key another route opened. The check stopped at the first route
-            // that opened, so it never saw a later dead one, while one unreachable epoch of group A blocked the key
-            // group B opens fine.
+            // A dead route does not mark a key another route opened: one unreachable epoch of group A must not block
+            // the key group B opens fine.
             LOG_WARN(
                 "KeyProvider::decryptAndVerifyGroupKeys: a group key route failed; keyId: ", entry.first,
                 ", group: ", firstFailureGroupId, ", statusCode: ", firstFailure->statusCode,

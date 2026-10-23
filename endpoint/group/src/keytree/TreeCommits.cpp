@@ -121,7 +121,7 @@ std::string resolved(const Poco::JSON::Object::Ptr& policy, const std::string& f
 
 // The bridge's group-rule grammar (`PolicyService.isValidPolicyEntry` with the values `validateGroupPolicy` allows),
 // after `resolved`: "none", "all", or `,`-separated alternatives of `&`-joined atoms from user/manager/owner, no part
-// empty, atoms unique within an alternative, alternatives unique (R-POL-1). Throws std::invalid_argument otherwise.
+// empty, atoms unique within an alternative, alternatives unique. Throws std::invalid_argument otherwise.
 std::string grammatical(const std::string& field, std::string rule) {
     if (rule == "none" || rule == "all") {
         return rule;
@@ -472,7 +472,7 @@ GroupRules TreeCommits::rules(const Poco::Dynamic::Var& policy, const std::strin
 bool TreeCommits::allows(const std::string& rule, bool member, bool manager, bool owner) {
     for (const std::string& alternative : privmx::utils::Utils::split(rule, ",")) {
         const std::vector<std::string> atoms = privmx::utils::Utils::split(alternative, "&");
-        bool all = !atoms.empty(); // fails closed: an empty alternative admits nobody (R-POL-1)
+        bool all = !atoms.empty(); // fails closed: an empty alternative admits nobody
         for (const std::string& atom : atoms) {
             all = all && (atom == "all" || (atom == "user" && member) || (atom == "manager" && manager) ||
                           (atom == "owner" && owner));

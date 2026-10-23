@@ -803,7 +803,7 @@ TEST_F(StoreUsingGroupsTest, uploading_a_file_auto_rotates_a_stale_store_key) {
 }
 
 TEST_F(StoreUsingGroupsTest, SECURITY_file_meta_updated_after_a_rekey_goes_under_the_new_key) {
-    // F-05b, honest Bridge. updateFileMeta took the key of the Store's newest data entry, which a re-key leaves
+    // Honest Bridge. updateFileMeta took the key of the Store's newest data entry, which a re-key leaves
     // under K1, the key user_3 held before its removal from G. The Bridge refuses meta under any but the current
     // key, so the update failed outright; with the current key it succeeds and the meta is under K2.
     std::string groupId;

@@ -10,7 +10,7 @@ limitations under the License.
 */
 
 /**
- * 07A: what reaches the application is bound to the context it asked for, and the UserVerifier is asked about the
+ * What reaches the application is bound to the context it asked for, and the UserVerifier is asked about the
  * identity the application is told. A context listing refuses items filed under another context, a context custom
  * event refuses a DIO naming another author or context than its envelope, and an event delivered on a subscription
  * for another context is refused. Emitting an event wraps its key only to keys the verifier vouches for.

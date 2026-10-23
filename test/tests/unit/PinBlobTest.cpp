@@ -10,7 +10,7 @@ limitations under the License.
 */
 
 /**
- * 01: the body of the `group-pins` slot and the merge rule two instances of one device save by. The codec must keep
+ * The body of the `group-pins` slot and the merge rule two instances of one device save by. The codec must keep
  * every field a pin is checked by, refuse anything malformed, and never drop a record to fit its budget; the merge
  * must never let one instance's record silently replace a different history another instance verified.
  */

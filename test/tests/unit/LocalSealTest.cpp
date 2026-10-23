@@ -10,7 +10,7 @@ limitations under the License.
 */
 
 /**
- * 01: the core of the local state. What the application's store holds is sealed under the identity key and bound to
+ * The core of the local state. What the application's store holds is sealed under the identity key and bound to
  * its slot, read back only if it opens, and written by compare-and-swap so that two instances of one device never
  * overwrite each other's state.
  */

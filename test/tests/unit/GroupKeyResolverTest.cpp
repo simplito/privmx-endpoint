@@ -221,7 +221,7 @@ TEST_F(ResolverDetection, AFullyPopulatedTreeIsRecognised) {
 TEST_F(ResolverDetection, SECURITY_ATreeOfAnotherVersionIsRefusedNotClimbed) {
     // An older tree climbs just as well and means something else: nothing in it says who set a node. The bridge
     // serves version 1 for groups made before the field existed.
-    // Version 2 statements and rungs carry neither the genesis roster nor the rung spans (T3-26).
+    // Version 2 statements and rungs carry neither the genesis roster nor the rung spans.
     for (const std::optional<std::int64_t> version : {std::optional<std::int64_t>(), std::optional<std::int64_t>(1),
                                                       std::optional<std::int64_t>(2), std::optional<std::int64_t>(4)}) {
         Fixture fixture = buildFixture(4);
@@ -444,8 +444,8 @@ TEST_F(ResolverCurrentEpoch, EpochZeroAndTheCurrentEpochAreEquivalent) {
 }
 
 TEST_F(ResolverCurrentEpoch, SECURITY_AnEpochPastTheCurrentOneHasNoKey) {
-    // C3: asking for epoch 2 of a group at epoch 1 used to return epoch 1's key under epoch 2's name — something a
-    // caller would then use to open or seal content it believes belongs to an epoch that does not exist yet.
+    // Asking for epoch 2 of a group at epoch 1 must not return epoch 1's key under epoch 2's name — something a
+    // caller would use to open or seal content it believes belongs to an epoch that does not exist yet.
     Fixture fixture = buildFixture(4);
     setOwnLeafPosition(fixture.group, 1);
     TreeKeyCache store;
@@ -551,7 +551,7 @@ TEST_F(ResolverCurrentEpoch, BlamesTheCommitterWhoseStatementSetTheTamperedNode)
 }
 
 TEST_F(ResolverCurrentEpoch, SECURITY_BlamesTheSetterOfTheNodeWhoseEdgeDoesNotOpen) {
-    // T3-16: a garbled edge (sealed to somebody else) fails to decrypt rather than to verify; whoever set the node
+    // A garbled edge (sealed to somebody else) fails to decrypt rather than to verify; whoever set the node
     // above it wrote that edge all the same.
     Fixture fixture = buildFixture(4);
     setOwnLeafPosition(fixture.group, 0);
@@ -802,7 +802,7 @@ TEST_F(ResolverOldEpoch, SECURITY_DetectsASubstitutedRung) {
 }
 
 TEST_F(ResolverOldEpoch, SECURITY_TheLadderIsTakenOnlyAsTheStatementsVouchForIt) {
-    // T3-09: the bridge seals a key of its own into the rung down to epoch 7 and lists that key as epoch 7's. Off its
+    // The bridge seals a key of its own into the rung down to epoch 7 and lists that key as epoch 7's. Off its
     // `keyHistory` the descent takes it; off the statements, neither the rung nor the key stands.
     Fixture fixture = buildFixture(4);
     const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);
@@ -870,7 +870,7 @@ static std::map<std::uint64_t, CommitStatement> openersOf(
 }
 
 TEST_F(ResolverOldEpoch, SECURITY_ARungSealedByAnotherMemberIsKeptButAttributedToNobody) {
-    // L-1: a repair rung appended by another member is what lets a reader cross a broken rung. It is kept, so the
+    // A repair rung appended by another member is what lets a reader cross a broken rung. It is kept, so the
     // descent can use it, but it names nobody: blame comes from the signed statement, never from the bridge.
     Fixture fixture = buildFixture(4);
     const std::vector<PrivateKey> epochKeys = advanceEpochs(fixture, 8);

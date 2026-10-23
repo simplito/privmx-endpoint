@@ -247,7 +247,7 @@ void InboxApiImpl::rotateInboxKeys(
     auto currentInbox = getServerInbox(inboxId);
     auto currentInboxData = getInboxCurrentDataEntry(currentInbox).data;
     // Senders seal entries to the public key in the Inbox data, so it moves to the new key: left as it was, new
-    // entries would stay sealed to the replaced key, which a removed member holds (F-05d).
+    // entries would stay sealed to the replaced key, which a removed member holds.
     rotateContainerKeys<server::InboxRotateKeysModel>(
         inboxId, currentInbox, users, managers, version, force, knownGroupKeys,
         [&](const server::InboxRotateKeysModel& model) { _serverApi->inboxRotateKeys(model); },

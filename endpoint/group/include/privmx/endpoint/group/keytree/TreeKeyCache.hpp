@@ -25,7 +25,7 @@ namespace group {
 namespace keytree {
 
 // Cache of per-epoch grant keys for one group — never shared between groups, since nothing here is keyed by group and
-// two of them would collide on their first entries. Node keys are not kept: nothing reads them back (T4-22), and a
+// two of them would collide on their first entries. Node keys are not kept: nothing reads them back, and a
 // private key held for nothing is one more to leak. The mutex is not recursive: never nest.
 class TreeKeyCache {
 public:

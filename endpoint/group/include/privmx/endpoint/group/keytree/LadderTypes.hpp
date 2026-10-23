@@ -29,7 +29,7 @@ namespace keytree {
 
 // A published rung: `wrap(sk_{span.target} -> pk_{span.at})`, sealed to the group's own grant key at `span.at`,
 // which is what makes the ladder cost size-independent: one ciphertext serves every member, present and future.
-// There is no other kind of recipient (L-2): a rung sealed to anything else would satisfy the unit-rung rule while
+// There is no other kind of recipient: a rung sealed to anything else would satisfy the unit-rung rule while
 // leaving the epoch unreachable from below.
 struct ArchiveRung {
     RungSpan span{0, 0};

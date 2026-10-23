@@ -91,13 +91,13 @@ public:
         std::shared_lock lock(_mutex);
         return _userVerifier;
     }
-    // 01: where the library keeps state between sessions; nullptr (the default, and always for `connectPublic`,
+    // Where the library keeps state between sessions; nullptr (the default, and always for `connectPublic`,
     // whose key is random) keeps it in memory only. A GroupApi reads it once, when created.
     void setPinStore(std::shared_ptr<PinStoreInterface> store);
     std::shared_ptr<PinStoreInterface> getPinStore();
     // `<kind>/<scope>/<public key of identity>`, scope = `localStateScope()`.
     std::string localStateSlot(const std::string& kind, const crypto::PublicKey& identity);
-    // 01: the group pins the store holds for `previous` (an identity key this user had before), opened with it and
+    // The group pins the store holds for `previous` (an identity key this user had before), opened with it and
     // kept for every GroupApi created afterwards to adopt. Nothing stored: nothing to adopt. Throws
     // LocalStateIntegrityException when the stored blob does not open (nothing is staged).
     void adoptPreviousIdentity(const crypto::PrivateKey& previous);

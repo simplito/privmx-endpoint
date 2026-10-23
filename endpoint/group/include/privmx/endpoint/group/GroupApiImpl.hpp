@@ -72,7 +72,7 @@ public:
     void rotateGroupKey(const std::string& groupId);
     bool renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey);
 
-    // 01: the pins the PinStore holds for `previous` (an earlier identity key of this user), taken only for groups
+    // The pins the PinStore holds for `previous` (an earlier identity key of this user), taken only for groups
     // with no pin under the current key (never replacing or raising one) and saved under the current key. No store,
     // the current key, or adopted already: nothing. Throws core::LocalStateIntegrityException when the previous
     // key's stored pins do not open (nothing adopted), and what the store throws.
@@ -170,7 +170,7 @@ public:
     );
 
 private:
-    // m2: how long a released statement with no known outcome holds back a different one at its prevDigest. An honest
+    // How long a released statement with no known outcome holds back a different one at its prevDigest. An honest
     // bridge refuses a statement dated more than DATE_TOLERANCE_MS behind its clock; twice that covers both clocks.
     static constexpr std::uint64_t RELEASE_WINDOW_MS = 2 * keytree::TreeCommits::DATE_TOLERANCE_MS;
 
@@ -180,8 +180,8 @@ private:
     enum class CarryScope { NewEpoch, Policy };
 
     // Called after a removal, rotation or narrowing commits, never as part of it: best-effort, re-signing under the
-    // committer's name only an entry identical to the one it read before its own commit (N-2) whose author held
-    // `update` under that read's rules and roster (`prior`, T4-03). Returns whether nothing is left to carry.
+    // committer's name only an entry identical to the one it read before its own commit whose author held
+    // `update` under that read's rules and roster (`prior`). Returns whether nothing is left to carry.
     bool carryMetadataForward(
         const std::string& groupId,
         CarryScope scope,
@@ -305,20 +305,20 @@ private:
 
     // Chains an unsigned statement to `group`'s latest (verified) one: its digest as `prevDigest`, and a date no
     // earlier than its, which readers require of the chain. Refused at a seq a statement of ours was refused at as a
-    // lost race (T4-17): that one may have been applied, and a second one there would be a fork.
+    // lost race: that one may have been applied, and a second one there would be a fork.
     void chainTo(keytree::CommitStatement& statement, const server::GroupInfo& group);
     // The served group's signed rules, which a verified read bound to its latest statement (`describes`).
     static keytree::GroupRules rulesOf(const server::GroupInfo& group);
-    // `carry` is set when the change narrows `update` under a plane's author (commit B).
+    // `carry` is set when the change narrows `update` under a plane's author.
     void updateGroupPolicyOnce(
         const std::string& groupId,
         const core::ContainerPolicy& policies,
         std::optional<PendingCarry>& carry
     );
 
-    // m2: a commit released to the bridge with no known outcome. A retry of the same operation resends exactly this
-    // (no second statement, no wasted epoch); any other operation drops it after one resend and plans afresh (13: the
-    // hold that refused other operations is gone, the fork it closed is one a bridge can reach by withholding).
+    // A commit released to the bridge with no known outcome. A retry of the same operation resends exactly this
+    // (no second statement, no wasted epoch); any other operation drops it after one resend and plans afresh (a fork
+    // that leaves open is one a bridge can reach by withholding anyway).
     struct UnresolvedCommit {
         std::string digest; // of the released statement (set by `submit`)
         std::uint64_t seq = 0;  // its seq (set by `submit`)
@@ -353,7 +353,7 @@ private:
     // whether a different op may resend it (every app op; not the deferred self-update).
     Settled settle(const std::string& groupId, const std::string& op, bool mayCompleteOther);
     // Sends a signed statement and keeps `commit` until its outcome is known. Throws StalePlan for a plan
-    // behind the pin. A refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo` (T4-17).
+    // behind the pin. A refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo`.
     void submit(const std::string& groupId, const keytree::CommitStatement& statement, UnresolvedCommit commit);
     void forgetUnresolved(const std::string& groupId, const std::string& digest);
     // The commit's outcome is known and it landed: forgotten, `landed`, and the pins saved (but a self-update's).
@@ -478,7 +478,7 @@ private:
         keytree::TreeKeyCache& cache
     );
 
-    // ── Ladder repair (L-1). Recorded under _dueMutex, run by `runDueWork`. ──
+    // ── Ladder repair. Recorded under _dueMutex, run by `runDueWork`. ──
 
     // `clamp(numLeaves·8 ms, 1 s, 120 s)`: how far a group's members spread their deferred work.
     static std::int64_t backgroundWindowMs(const server::GroupInfo& group);
@@ -568,16 +568,16 @@ private:
     std::map<std::string /* groupId */, std::uint32_t> _ladderCheckedAt; // highest `at` already queued or checked
     bool _dueWorkOff = false; // tests: `runDueWork` does nothing
 
-    // m2 (A5-F3): one released statement per prevDigest. The bodies survive reconnects on purpose: a dropped
+    // One released statement per prevDigest. The bodies survive reconnects on purpose: a dropped
     // connection is the commonest unknown outcome, and the same call retried after it must resend, not be held back.
     std::mutex _unresolvedMutex;                                     // guards both maps
     std::map<std::string, std::shared_ptr<std::mutex>> _commitLocks; // never pruned: one per group committed to
     std::map<std::string, UnresolvedCommit> _unresolved;
-    // ponytail: in memory only. A crash before the retry leaves the planes refused until a member holding `update`
-    // writes metadata (documented on updateGroupPolicy); persist it next to 01's pins if that ever matters.
+    // Limit: in memory only. A crash before the retry leaves the planes refused until a member holding `update`
+    // writes metadata (documented on updateGroupPolicy); persist it next to the pins if that ever matters.
     std::mutex _pendingCarryMutex;
     std::map<std::string, PendingCarry> _pendingCarry;
-    // 01: pins kept in the connection's PinStore, shared by every GroupApi of this identity on this Bridge.
+    // Pins kept in the connection's PinStore, shared by every GroupApi of this identity on this Bridge.
     // `loadPins` merges the slot into memory once, at construction; `savePins` merges memory into the slot
     // (compare-and-swap, `PinBlob::higher`) and the result back into memory. `pinsMoved` only marks them; saves run
     // after every own commit but a self-update before the call returns, in `runDueWork` (a major move at once, minor
@@ -590,7 +590,7 @@ private:
     // The adoption itself (`adoptPreviousIdentity`, and the bodies `ConnectionImpl::adoptPreviousIdentity` staged).
     void adoptBody(const keytree::TreeVerifier::PinSet& adopted);
 
-    // ponytail constant: 30 s for self-update-only moves.
+    // 30 s for self-update-only moves.
     static constexpr std::chrono::milliseconds PIN_SAVE_IDLE_INTERVAL{30000};
 
     std::shared_ptr<core::PinStoreInterface> _pinStore; // set once, in the constructor

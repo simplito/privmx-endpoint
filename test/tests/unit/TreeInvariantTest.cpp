@@ -642,7 +642,7 @@ protected:
         bridge.commits.push_back(TreeCommits::toWire(statement));
     }
 
-    // 01: `userId`'s pins as the next session loads them: exported, through the blob codec, into a fresh verifier.
+    // `userId`'s pins as the next session loads them: exported, through the blob codec, into a fresh verifier.
     // `compact`: without rosters and generations (what the blob keeps once its budget is spent).
     std::unique_ptr<TreeVerifier> imported(const std::string& userId, bool compact = false) {
         TreeVerifier::PinSet pins;
@@ -679,14 +679,14 @@ protected:
 
 } // namespace
 
-TEST_F(TreeInvariant, TheC1Scenario) {
-    // A creates {A, B, C, D}; B removes A. See the header for how the old design fails exactly here.
+TEST_F(TreeInvariant, ARemovedCreatorOfAFourSeatGroupLosesTheGrantKey) {
+    // A creates {A, B, C, D}; B removes A. See the header for why a removal must blank what the leaver set.
     create(4, 0);
     remove(everyone[1].userId, {everyone[0].userId});
     EXPECT_EQ(knows[everyone[0].userId].count(bridge.state.grantPublicKey.toBase58DER()), 0u);
 }
 
-TEST_F(TreeInvariant, TheC1ScenarioAboveTheBuckets) {
+TEST_F(TreeInvariant, ARemovedCreatorLosesTheGrantKeyAboveTheBuckets) {
     // The same with two keyed levels: the creator held node 31 and the root; the remover sits outside node 31.
     create(40, 0);
     remove(everyone[35].userId, {everyone[0].userId});
@@ -703,7 +703,7 @@ TEST_F(TreeInvariant, ARemovedCreatorLosesEveryNodeItSet) {
 }
 
 TEST_F(TreeInvariant, ARemovedAdderLosesWhatItMintedForTheNewcomers) {
-    // V8: seat 40 adds a member at seat 5 and so mints node 31; removing seat 40 blanks node 95, the rest of what it
+    // Seat 40 adds a member at seat 5 and so mints node 31; removing seat 40 blanks node 95, the rest of what it
     // could know, while the remover re-keys 31 and 63.
     create(64, 0);
     const std::string adder = everyone[40].userId; // a copy: adding grows `everyone`
@@ -716,7 +716,7 @@ TEST_F(TreeInvariant, ARemovedAdderLosesWhatItMintedForTheNewcomers) {
 
 TEST_F(TreeInvariant, ASelfUpdateHealsNodesSetFromOutside) {
     // Seat 40 sits under node 95, which the creator set: it self-updates over it, after which removing the creator
-    // costs no blank at all (V3).
+    // costs no blank at all.
     create(64, 0);
     EXPECT_TRUE(GroupKeyResolver::nodeNeedingSelfUpdate(bridge.serve(everyone[40].userId, true)).has_value());
     EXPECT_FALSE(GroupKeyResolver::nodeNeedingSelfUpdate(bridge.serve(everyone[0].userId, true)).has_value());
@@ -736,7 +736,7 @@ TEST_F(TreeInvariant, RandomSequencesKeepEveryInvariant) {
     }
 }
 
-// rotation (T3-27)
+// rotation
 
 TEST_F(TreeInvariant, AOneMemberGroupClimbsToTheGrantKeyOfARotatedEpoch) {
     // The one-leaf root is the member's leaf: the new grant key is wrapped straight to the member's own key.
@@ -917,7 +917,7 @@ TEST_F(TreeVerification, SECURITY_RefusesAStaleGenerationToAClientThatSawTheNewe
 }
 
 TEST_F(TreeVerification, SECURITY_RefusesARolledBackAncestorOverAHealedChild) {
-    // AM-1: seat 100 self-updates, so node 191 (generation 1, its setter) wraps to node 159, which the creator
+    // Seat 100 self-updates, so node 191 (generation 1, its setter) wraps to node 159, which the creator
     // set: the creator learns 191. Seat 70 heals 159 and 191. The creator and the bridge serve 191 at generation 1
     // again under seat 100's genuine statement, and the creator re-keys the root over it in a commit of its own; seat
     // 100 is on the roster, so the creator's removal would not blank 191 and its fresh root would wrap to it. No
@@ -1157,7 +1157,7 @@ TEST_F(TreeVerification, SECURITY_RefusesEveryLieInTheLatestStatement) {
 }
 
 TEST_F(TreeVerification, SECURITY_AGenesisStatementIsRefusedUnderAnotherGroupsId) {
-    // T3-04: a group nobody has committed to since its creation, served as a group this client has never seen. Its
+    // A group nobody has committed to since its creation, served as a group this client has never seen. Its
     // only statement is genuine and names its own resourceId, which the bridge serves alongside; the id it is served
     // under does not follow from that resourceId.
     create(40, 0);
@@ -1170,7 +1170,7 @@ TEST_F(TreeVerification, SECURITY_AGenesisStatementIsRefusedUnderAnotherGroupsId
 }
 
 TEST_F(TreeVerification, SECURITY_AGroupIsVerifiedOnlyInTheContextItsIdFollowsFrom) {
-    // T4-01: past seq 1 the statements name the id alone, so the served context counts only through the id. Served
+    // Past seq 1 the statements name the id alone, so the served context counts only through the id. Served
     // in another context, a UserVerifier would vouch for that context's namesakes of the members.
     create(40, 0);
     remove(id(35), {id(5)});
@@ -1185,7 +1185,7 @@ TEST_F(TreeVerification, SECURITY_AGroupIsVerifiedOnlyInTheContextItsIdFollowsFr
 }
 
 TEST_F(TreeVerification, SECURITY_AChainLinkMustExtendTheStatementBeforeIt) {
-    // T4-02/T4-17: a member's genuine statement that does not follow the pinned one is a fork, not a continuation.
+    // A member's genuine statement that does not follow the pinned one is a fork, not a continuation.
     create(40, 0);
     remove(id(35), {id(5)});
     verify(id(9), false);
@@ -1198,7 +1198,7 @@ TEST_F(TreeVerification, SECURITY_AChainLinkMustExtendTheStatementBeforeIt) {
 }
 
 TEST_F(TreeVerification, SECURITY_AChainLinkIsNeverDatedBeforeTheOneItExtends) {
-    // T4-04: a key its owner has rotated away from is still vouched for at a date before the rotation.
+    // A key its owner has rotated away from is still vouched for at a date before the rotation.
     create(40, 0);
     remove(id(35), {id(5)});
     verify(id(9), false);
@@ -1211,7 +1211,7 @@ TEST_F(TreeVerification, SECURITY_AChainLinkIsNeverDatedBeforeTheOneItExtends) {
 }
 
 TEST_F(TreeVerification, SECURITY_AStatementDatedAheadOfTheClockIsRefused) {
-    // N-1: bounds how far ahead a chain's dates can be pushed; the bridge no longer freezes on it (it takes a
+    // Bounds how far ahead a chain's dates can be pushed; the bridge does not freeze on it (it takes a
     // commit dated as the statement it extends), so this cap keeps the dates a UserVerifier is asked at near now.
     create(40, 0);
     remove(id(35), {id(5)});
@@ -1236,7 +1236,7 @@ TEST_F(TreeVerification, SECURITY_AStatementDatedAheadOfTheClockIsRefused) {
 }
 
 TEST_F(TreeVerification, SECURITY_APinMovedOntoAnotherBranchMeanwhileIsNotOverwritten) {
-    // N-4: a verification checks the chain from the pin it started at; a concurrent one moving the pin meanwhile, to a
+    // A verification checks the chain from the pin it started at; a concurrent one moving the pin meanwhile, to a
     // statement this chain does not pass through, is a fork the store must not overwrite unseen.
     create(40, 0);
     verify(id(9), false); // seq 1
@@ -1260,7 +1260,7 @@ TEST_F(TreeVerification, SECURITY_APinMovedOntoAnotherBranchMeanwhileIsNotOverwr
 }
 
 TEST_F(TreeVerification, SECURITY_EpochOpenersRefuseAStatementByANonMemberBelowThePin) {
-    // T4-02: mallory seats herself; a pin taken past her statement without walking the chain (first contact, an own
+    // Mallory seats herself; a pin taken past her statement without walking the chain (first contact, an own
     // commit) must not make her the opener of anything.
     create(40, 0);
     remove(id(35), {id(5)});
@@ -1272,7 +1272,7 @@ TEST_F(TreeVerification, SECURITY_EpochOpenersRefuseAStatementByANonMemberBelowT
 }
 
 TEST_F(TreeVerification, SECURITY_AnotherStatementAtThePinnedSeqIsAFork) {
-    // T3-22: the same tree re-signed at the pinned seq (another date) is another statement: a fork, not the pin.
+    // The same tree re-signed at the pinned seq (another date) is another statement: a fork, not the pin.
     create(40, 0);
     remove(id(35), {id(5)});
     verify(id(9), false);
@@ -1285,7 +1285,7 @@ TEST_F(TreeVerification, SECURITY_AnotherStatementAtThePinnedSeqIsAFork) {
 }
 
 TEST_F(TreeVerification, SECURITY_AListedStatementAtThePinnedSeqOtherThanThePinnedOneIsAFork) {
-    // T4-18: a listing continues the pin at its own seq only as the pinned statement itself, never a re-signed one.
+    // A listing continues the pin at its own seq only as the pinned statement itself, never a re-signed one.
     create(40, 0);
     remove(id(35), {id(5)});
     verify(id(9), false);
@@ -1298,7 +1298,7 @@ TEST_F(TreeVerification, SECURITY_AListedStatementAtThePinnedSeqOtherThanThePinn
 }
 
 TEST_F(TreeVerification, SECURITY_EpochOpenersComeOnlyOffTheChainThatEndsAtThePin) {
-    // T3-09: past grant keys and the authors of rungs are read off the statements, so only off the pinned chain.
+    // Past grant keys and the authors of rungs are read off the statements, so only off the pinned chain.
     create(40, 0);
     remove(id(35), {id(5)});
     selfUpdate(id(9));
@@ -1403,7 +1403,7 @@ TEST_F(TreeVerification, AsksTheUserVerifierOncePerStatementForTheKeyAndDateItWa
 }
 
 TEST_F(TreeVerification, SECURITY_AKeyRevokedNowCannotMoveThePin) {
-    // N-3: the committer signs any date it likes, and the UserVerifier truthfully vouches for its key at a date before
+    // The committer signs any date it likes, and the UserVerifier truthfully vouches for its key at a date before
     // the revocation; only the key's standing now keeps it from extending the chain.
     create(40, 0);
     verify(id(9), false);
@@ -1488,7 +1488,7 @@ TEST_F(TreeVerification, SECURITY_AListedGroupContinuesThePinOfAClientThatVerifi
 }
 
 TEST_F(TreeVerification, SECURITY_AnOwnCommitIsPinnedSoTheStateItReplacedIsRefused) {
-    // T3-03: the remover reads, removes, and is then served the state from before its own removal — every statement
+    // The remover reads, removes, and is then served the state from before its own removal — every statement
     // in it genuine. Without the commit pinned that state equals the pin and passes, leaver and all.
     create(40, 0);
     TreeVerifier own;
@@ -1504,7 +1504,7 @@ TEST_F(TreeVerification, SECURITY_AnOwnCommitIsPinnedSoTheStateItReplacedIsRefus
 }
 
 TEST_F(TreeVerification, SECURITY_AListedGroupIsPinnedOnFirstUse) {
-    // T3-06: a writer outside the group is on trust on first use once, not on every listing: after seeing the
+    // A writer outside the group is on trust on first use once, not on every listing: after seeing the
     // removal it takes the listing from before it only as "behind", and a later one only as a chain from its pin.
     create(40, 0);
     const server::GroupInfo beforeRemoval = bridge.serve(id(9), false);
@@ -1543,7 +1543,7 @@ TEST_F(TreeVerification, SECURITY_AListingsGrantKeyIsTakenOnlyAtThePinnedState) 
 }
 
 TEST_F(TreeVerification, SECURITY_ACallersGrantKeyBehindThePinIsNotTaken) {
-    // T4-09: a `GroupGrantWithKey` the application kept from before a removal names the epoch the removed member
+    // A `GroupGrantWithKey` the application kept from before a removal names the epoch the removed member
     // still holds. Unpinned it is the caller's word; pinned, only the pinned epoch and key are.
     create(40, 0);
     TreeVerifier writer;
@@ -1584,7 +1584,7 @@ TEST_F(TreeVerification, AListingIsPutToTheUserVerifierInOneCall) {
 }
 
 TEST_F(TreeVerification, SECURITY_RefusesARecordOffThePathView) {
-    // T3-14: a blank record off the served path is covered by no hash. Taken, its generation would reach the pins,
+    // A blank record off the served path is covered by no hash. Taken, its generation would reach the pins,
     // and the next plan read of the honest tree would look like a rollback for as long as the process lives.
     create(64, 0); // node 95 is keyed and off seat 9's path
     const std::uint32_t seat = seatOf(bridge.state, id(9)).value();
@@ -1606,7 +1606,7 @@ TEST_F(TreeVerification, SECURITY_RefusesARecordOffThePathView) {
 }
 
 TEST_F(TreeVerification, SECURITY_EpochOpenersReplayTheRosterFromGenesis) {
-    // I-1: below a pin no read walked (first contact, an own commit), a member's statement whose roster hash its
+    // Below a pin no read walked (first contact, an own commit), a member's statement whose roster hash its
     // deltas do not explain passed a replay back from the pin, which cannot tell a removed user from a manager.
     create(40, 0);
     forge(id(9), [](TreeGroupState&) {});
@@ -1645,7 +1645,7 @@ TEST_F(TreeVerification, SECURITY_AnOwnCommitIsPinnedOnlyWithTheRosterItSigned) 
 }
 
 TEST_F(TreeVerification, SECURITY_NoSecondStatementIsSignedAtASeqRefusedAsALostRace) {
-    // T4-17: "a concurrent commit took that seq" is the bridge's word, and it may have applied the statement all the
+    // "a concurrent commit took that seq" is the bridge's word, and it may have applied the statement all the
     // same. A second statement at that seq would be a fork of the bridge's choosing.
     TreeVerifier own;
     own.refusedAsLostRace(GROUP_ID, 5);
@@ -1657,7 +1657,7 @@ TEST_F(TreeVerification, SECURITY_NoSecondStatementIsSignedAtASeqRefusedAsALostR
 }
 
 TEST_F(TreeVerification, SECURITY_AChainIsCheckedPageByPageBeforeTheNextPageIsFetched) {
-    // T4-15: a page nobody on the roster signed is refused before the next one is fetched, so a client never holds
+    // A page nobody on the roster signed is refused before the next one is fetched, so a client never holds
     // more than a page of a chain however long the bridge makes it.
     create(40, 0);
     remove(id(35), {id(5)});
@@ -1684,14 +1684,14 @@ TEST_F(TreeVerification, SECURITY_AChainIsCheckedPageByPageBeforeTheNextPageIsFe
 }
 
 TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused) {
-    // T4-24: a member republishing the grant key of an epoch before a removal reopens the new epoch to the leaver.
+    // A member republishing the grant key of an epoch before a removal reopens the new epoch to the leaver.
     // `uncompressed`: the key signed in its other base58 spelling, a different string for the same point.
     const auto opensUnder = [&](const std::function<PublicKey()>& grantKey, bool uncompressed = false) {
         reset();
         create(40, 0);
         remove(id(35), {id(5)});
         const PublicKey key = grantKey();
-        // A rotation as its row has it (03): the epoch and roster version one on, no path, the tree unchanged.
+        // A rotation as its row has it: the epoch and roster version one on, no path, the tree unchanged.
         forge(id(9), [&](TreeGroupState& state) {
             state.epoch += 1;
             state.grantPublicKey = key;
@@ -1722,7 +1722,7 @@ TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused
     }, true), "a new epoch's grant key is an earlier epoch's|") << "and in its uncompressed spelling too";
 }
 
-// signed policy (T4-10)
+// signed policy
 
 namespace {
 
@@ -1773,7 +1773,7 @@ TEST_F(TreeVerification, SECURITY_APolicyChangeByAMemberWithoutUpdatePolicyIsRef
 }
 
 TEST_F(TreeVerification, SECURITY_ARuleWithAnEmptyAlternativeAdmitsNobody) {
-    // R-POL-1: a malicious bridge stores rotateKeys ",manager", signed by a manager it colludes with; evaluated
+    // A malicious bridge stores rotateKeys ",manager", signed by a manager it colludes with; evaluated
     // fail-open, its empty alternative would admit any member. Hashed by hand: `rules` refuses to build it.
     createPolicy = Poco::Dynamic::Var();
     create(40, 0);
@@ -1965,7 +1965,7 @@ TEST_F(TreeVerification, ARoleFailureOnAForgedStatementIsReportedAsIntegrity) {
 }
 
 TEST_F(TreeVerification, ARotationInTheMiddleOfANonAdjacentWalkChecksOnlyThePath) {
-    // 09's milestone walk skips the self-updates between: `head.treeHash` is then an older statement's.
+    // The milestone walk skips the self-updates between: `head.treeHash` is then an older statement's.
     create(40, 0);
     TreeVerifier::Head head;
     std::set<std::string> grantKeys;
@@ -2025,7 +2025,7 @@ TEST_F(TreeVerification, SECURITY_TheVerifiersCachesStayBoundedHoweverManyGroups
     EXPECT_EQ(verifier.cacheSizes(), (std::array<std::size_t, 3>{16, 4096, 1024}));
 }
 
-// 01: pins loaded from the store
+// Pins loaded from the store
 
 TEST_F(TreeVerification, SECURITY_AnImportedPinRefusesAStateRolledBackBelowIt) {
     // R5: the next session of a member that verified seq 2 is served seq 1 again. Without the import it is a first
@@ -2044,7 +2044,7 @@ TEST_F(TreeVerification, SECURITY_AnImportedPinRefusesAStateRolledBackBelowIt) {
 }
 
 TEST_F(TreeVerification, SECURITY_AnImportedPinRefusesAnotherStatementAtItsSeq) {
-    // T3-22 across sessions: a genuinely signed second statement at the pinned seq.
+    // Across sessions: a genuinely signed second statement at the pinned seq.
     create(40, 0);
     const FakeBridge before = bridge;
     selfUpdate(id(1));
@@ -2112,7 +2112,7 @@ TEST_F(TreeVerification, SECURITY_ARosterlessPinIsReplayedFromGenesisBeforeItIsE
 }
 
 TEST_F(TreeVerification, SECURITY_ALoadedPinMovesOnlyUnderTheNowQuestion) {
-    // N-3 on an imported pin: a key revoked now cannot move it on the first move of the new session.
+    // On an imported pin: a key revoked now cannot move it on the first move of the new session.
     create(40, 0);
     verify(id(9), false);
     const auto next = imported(id(9));

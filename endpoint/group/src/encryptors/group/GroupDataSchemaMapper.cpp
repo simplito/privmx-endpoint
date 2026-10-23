@@ -27,7 +27,7 @@ bool onRoster(const std::vector<std::string>& users, const std::vector<std::stri
 }
 
 // A plane's key opened, the plane and its key written by somebody on the roster, and the plane's author holding
-// `update` under the signed rules (T4-03). Anybody in the context can wrap a key to the group's public grant key and
+// `update` under the signed rules. Anybody in the context can wrap a key to the group's public grant key and
 // tag a plane under it; the roster says who belongs to the group and its signed policy who writes its metadata. The
 // key's wrapper needs no role: a rotator with `rotateKeys` alone legitimately authors the epoch's key entry. With
 // `prior` (carry-forward only), an entry identical to the one read before the commit is judged by that read.

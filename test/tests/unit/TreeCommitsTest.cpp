@@ -320,7 +320,7 @@ TEST(TreeCommitsPolicy, RulesAreEvaluatedAsTheBridgeEvaluatesThem) {
              {"none", true, true, true, false},        {"all", false, false, false, true},
              {"itemOwner", true, true, true, false},   {"admin", true, true, true, false},
              {"", true, true, true, false},            {"user,", true, false, false, true},
-             // Fail closed (R-POL-1): an empty alternative or atom admits nobody.
+             // Fail closed: an empty alternative or atom admits nobody.
              {",manager", true, false, false, false},  {"manager,,user", false, false, false, false},
              {"manager,", true, false, false, false},  {"&manager", true, true, false, false},
              {"manager&", true, true, false, false},   {" manager", true, true, false, false},
@@ -331,7 +331,7 @@ TEST(TreeCommitsPolicy, RulesAreEvaluatedAsTheBridgeEvaluatesThem) {
 }
 
 TEST(TreeCommitsPolicy, SECURITY_ARuleOutsideTheGroupGrammarIsRefused) {
-    // R-POL-1: the bridge's validator grammar; a rule outside it is never signed and, served, never evaluated.
+    // The bridge's validator grammar; a rule outside it is never signed and, served, never evaluated.
     for (const std::string field : {"update", "rotateKeys", "updatePolicy"}) {
         for (const std::string rule : {",manager", "manager,,user", "manager,", "&manager", "manager&", " manager",
                                        "admin", "itemOwner", "manager&manager", "user&manager,manager&user",

@@ -151,7 +151,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         );
         auto subscriptions = notification.subscriptions;
         // The LOCAL key is chosen again from the updated room: one kept from join time would leave this client's
-        // media and data channel under a key a re-key replaced, which a removed member holds (F-05c).
+        // media and data channel under a key a re-key replaced, which a removed member holds.
         if (streamRoomData.has_value()) {
             applyRoomUpdate(*streamRoomData.value(), raw);
             for (const auto& internalSubscription : streamRoomData.value()->subscriptionsIds) {

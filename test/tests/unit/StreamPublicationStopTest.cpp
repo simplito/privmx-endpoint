@@ -10,7 +10,7 @@ limitations under the License.
 */
 
 /**
- * F-05g: a live publication whose automatic re-key failed is stopped. Each step of the stop runs whatever the
+ * A live publication whose automatic re-key failed is stopped. Each step of the stop runs whatever the
  * others do: the unpublish goes first (an honest Bridge stops forwarding even if the local teardown fails), then the
  * local publisher connection is closed, then the handle and the publisher state are dropped.
  */
@@ -197,7 +197,7 @@ const std::vector<std::string> UNPUBLISH_THEN_CLOSE{"stream.streamUnpublish 42",
 } // namespace
 
 TEST(StreamPublicationStop, SECURITY_AFailedLocalCloseStillUnpublishesAndClearsThePublication) {
-    // Commit review of 315acd70: a throwing close skipped the handle, the state and the unpublish.
+    // A throwing close must not skip the handle, the state or the unpublish.
     EXPECT_EQ(stopWith(true, false), UNPUBLISH_THEN_CLOSE);
 }
 
@@ -362,7 +362,7 @@ TEST(StreamPublicationStop, SECURITY_AnUpdateTheVerifierCannotJudgeStopsTheLiveP
 }
 
 TEST(StreamPublicationStop, SECURITY_ARoomUpdateWithNoUsableCurrentKeyStopsTheLivePublication) {
-    // 13 (D4 gap): the room's current key does not open (here: not among the served keys at all). The live
+    // The room's current key does not open (here: not among the served keys at all). The live
     // publication is stopped instead of going on under the previous key, and the update does not throw, so the
     // notification handler still emits StreamRoomUpdatedEvent.
     Joined c;

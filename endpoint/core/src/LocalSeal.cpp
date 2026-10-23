@@ -19,7 +19,7 @@ using namespace privmx::endpoint::core;
 namespace {
 
 constexpr std::size_t TAG_SIZE = 32;
-// ponytail: 8 compare-and-swap attempts; a store contended harder than that fails the save (logged, retried later).
+// Limit: 8 compare-and-swap attempts; a store contended harder than that fails the save (logged, retried later).
 constexpr int CAS_ATTEMPTS = 8;
 
 std::string tagOf(

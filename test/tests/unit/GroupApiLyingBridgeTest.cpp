@@ -478,7 +478,7 @@ struct Client {
     GroupApi groupApi;
     std::shared_ptr<GroupApiImpl> api;
 
-    // 01: `store` set as the app sets it, right after connect; `identity` names the Bridge; `previous` is adopted
+    // `store` set as the app sets it, right after connect; `identity` names the Bridge; `previous` is adopted
     // (Connection::adoptPreviousIdentity) before the GroupApi is created.
     Client(
         Bridge& bridge,
@@ -576,7 +576,7 @@ protected:
     Bridge bridge;
     std::map<std::string, std::unique_ptr<Client>> clients;
     bool quiet = false; // every client's flush point (`runDueWork`) turned off as it is created
-    // 01: the device's store every client of this fixture gets (none by default), and the Bridge it names.
+    // The device's store every client of this fixture gets (none by default), and the Bridge it names.
     std::shared_ptr<MemoryPinStore> store;
     std::optional<core::BridgeIdentity> bridgeIdentity;
     std::vector<std::unique_ptr<Client>> siblings; // further live clients of a user, on the same store
@@ -593,7 +593,7 @@ protected:
         clients.clear();
     }
 
-    // 01: another live instance (a tab, a process) of `userId` on the fixture's store.
+    // Another live instance (a tab, a process) of `userId` on the fixture's store.
     GroupApiImpl& sibling(const std::string& userId) {
         siblings.push_back(std::make_unique<Client>(bridge, userId, store, bridgeIdentity));
         if (quiet) {
@@ -663,7 +663,7 @@ protected:
         return *client->api;
     }
 
-    // 08a: a session of `userId` (whose identity key changed) that adopted `previous` right after connect
+    // A session of `userId` (whose identity key changed) that adopted `previous` right after connect
     // (Connection::adoptPreviousIdentity), replacing any session it had.
     GroupApiImpl& clientAdopting(const std::string& userId, const PrivateKey& previous) {
         auto& client = clients[userId];
@@ -702,7 +702,7 @@ protected:
     }
 
     // Created by alice, a manager; the others users. Under the open policy unless a test says otherwise, so every
-    // member may commit (03).
+    // member may commit.
     std::string createGroup(
         const std::vector<std::string>& members,
         const std::optional<core::ContainerPolicy>& policy = OPEN,
@@ -842,7 +842,7 @@ protected:
 } // namespace
 
 TEST_F(GroupApiLyingBridge, SECURITY_EveryKeyReadRefusesAStateRolledBackBelowThePin) {
-    // T3-02 wiring: `getGroup` and `readGroupForKeys` (under `encrypt`) verify the tree on the answer they use.
+    // `getGroup` and `readGroupForKeys` (under `encrypt`) verify the tree on the answer they use.
     const std::string groupId = createGroup({"alice", "bob"});
     const Bridge atSeq1 = bridge;
     selfUpdateBy("bob");
@@ -864,7 +864,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AKeyCachedBehindTheVerifiedEpochIsReadAgain
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ADeletionEventLeavesThePinsInPlace) {
-    // T3-08: `groupDeleted` is the bridge's word alone; after it, the state from before the pin is still a rollback.
+    // `groupDeleted` is the bridge's word alone; after it, the state from before the pin is still a rollback.
     const std::string groupId = createGroup({"alice", "bob"});
     const Bridge atSeq1 = bridge;
     selfUpdateBy("bob");
@@ -880,7 +880,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ADeletionEventLeavesThePinsInPlace) {
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ADeletedGroupsKeysAreNotServedToAGroupRecreatedUnderItsId) {
-    // T4-14: a former member who knows the resourceId re-creates the id; alice's memoized epoch 1 key is not its key.
+    // A former member who knows the resourceId re-creates the id; alice's memoized epoch 1 key is not its key.
     const std::string groupId = createGroup({"alice", "bob"});
     client("alice").resolveGroupPrivKey(groupId, 1);
     client("alice").deleteGroup(groupId);
@@ -907,7 +907,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ADeletedGroupsKeysAreNotServedToAGroupRecre
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsTakenOnlyFromTheUserWhoseKeySignedIt) {
-    // T3-12: the bridge names the sender; the UserVerifier must vouch for that name with the key that signed.
+    // The bridge names the sender; the UserVerifier must vouch for that name with the key that signed.
     const std::string groupId = createGroup({"alice", "bob"});
     client("bob").sendCustomEvent(groupId, "chat", core::Buffer::from("hi"), {});
     const GroupCustomEventData honest = deliver(groupId, "chat", 0, "bob");
@@ -917,14 +917,14 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsTakenOnlyFromTheUserWhoseKeySigned
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsTakenOnlyOnTheChannelItWasSealedFor) {
-    // T4-07: the channel name is in the signed payload; the bridge moving an event to another channel is refused.
+    // The channel name is in the signed payload; the bridge moving an event to another channel is refused.
     const std::string groupId = createGroup({"alice", "bob"});
     client("bob").sendCustomEvent(groupId, "admin", core::Buffer::from("promote me"), {});
     EXPECT_NE(deliver(groupId, "chat", 0, "bob").statusCode, 0);
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsTakenOnlyUnderTheCurrentEpochsKey) {
-    // T4-07: a removed member still holds the epoch it was removed from, and seals events with it.
+    // A removed member still holds the epoch it was removed from, and seals events with it.
     const std::string groupId = createGroup({"alice", "bob"});
     client("bob").encrypt(groupId, core::Buffer::from("warm")); // bob's client caches the epoch 1 key
     client("alice").removeGroupMembers(groupId, {"bob"});
@@ -945,7 +945,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsNotTakenUnderAKeyCachedBehindThePi
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ACallersGrantKeyOtherThanThePinnedOneIsNotWrappedTo) {
-    // T4-09: a module granting a container to a group takes the caller's grant key only exactly at the pin.
+    // A module granting a container to a group takes the caller's grant key only exactly at the pin.
     const std::string groupId = createGroup({"alice", "bob"});
     Client& alice = *clients.at("alice");
     GrantingModule module(
@@ -964,7 +964,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ACallersGrantKeyOtherThanThePinnedOneIsNotW
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotReSignAPlaneTheRemovedMemberTaggedSince) {
-    // N-2: bob's entry v2 is what alice reads before removing him; v3, tagged by bob under the epoch 1 key he keeps,
+    // Bob's entry v2 is what alice reads before removing him; v3, tagged by bob under the epoch 1 key he keeps,
     // is what the bridge serves her refresh. Re-signing it would launder bob's write into the new epoch.
     const std::string groupId = createGroup({"alice", "bob"});
     client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("bob, a member"), 1);
@@ -983,7 +983,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotReSignAPlaneTheRemovedMember
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_NoSecondStatementIsSignedAtASeqTheBridgeCalledALostRace) {
-    // T4-17 wiring: the bridge takes alice's removal at seq 2, calls it a lost race and serves seq 1 again. A retry
+    // The bridge takes alice's removal at seq 2, calls it a lost race and serves seq 1 again. A retry
     // planned there would sign a second statement at seq 2, a fork of the bridge's choosing.
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     const Bridge atSeq1 = bridge;
@@ -999,7 +999,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_NoSecondStatementIsSignedAtASeqTheBridgeCal
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ACommitAfterAStatementDatedAheadOfTheClockIsDatedAsIt) {
-    // N-1, the client half: the bridge takes a date past its tolerance only when it equals the extended statement's,
+    // The client half: the bridge takes a date past its tolerance only when it equals the extended statement's,
     // so alice must sign exactly bob's forward date (chainTo's max), not her own clock and not anything later.
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     const auto ahead = static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp()) + 15 * 60 * 1000;
@@ -1010,7 +1010,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ACommitAfterAStatementDatedAheadOfTheClockI
     EXPECT_EQ(removal.date, ahead);
 }
 
-// T3-29. Without the handle's lock these race on one EnvelopeFileState: heap corruption, lost `written` updates,
+// Without the handle's lock these race on one EnvelopeFileState: heap corruption, lost `written` updates,
 // duplicate or skipped chunk indices, two envelopes from one handle. A plain build shows it in most runs; under
 // ThreadSanitizer every run (configure a separate build dir with -DCMAKE_CXX_FLAGS="-fsanitize=thread -g -O1", as the
 // commented-out lines at the top of CMakeLists.txt, and run --gtest_filter='*ConcurrentChunks*:*ConcurrentFinishes*').
@@ -1103,7 +1103,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ConcurrentChunksOnOneFileHandleSealOneWhole
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ConcurrentFinishesCloseAFileHandleOnce) {
-    // T3-29: the first finish closes the handle under its lock; the other is refused, never a second envelope.
+    // The first finish closes the handle under its lock; the other is refused, never a second envelope.
     const std::string groupId = createGroup({"alice", "bob"});
     GroupApi& api = clients.at("alice")->groupApi;
     for (int iteration = 0; iteration < 2000; ++iteration) {
@@ -1125,7 +1125,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ConcurrentFinishesCloseAFileHandleOnce) {
 }
 
 TEST_F(GroupApiLyingBridge, AOneMemberGroupRotatesOntoItsMembersOwnKeyAndReadsBack) {
-    // T3-27: the one-leaf root is alice's own leaf, so the new grant key is wrapped to her own key; her metadata is
+    // The one-leaf root is alice's own leaf, so the new grant key is wrapped to her own key; her metadata is
     // carried up to the new epoch, and a fresh client of hers, with nothing cached, reads the group.
     const std::string groupId = createGroup({"alice"});
     const std::string before = bridge.tree.state.grantPublicKey.toBase58DER();
@@ -1185,7 +1185,7 @@ TEST_F(GroupApiLyingBridge, ARotationOvertakenByASelfUpdateIsPlannedAgain) {
     }
 }
 
-// m2 (A5-F3): the client releases at most one statement per prevDigest while the first could still be applied. Each
+// The client releases at most one statement per prevDigest while the first could still be applied. Each
 // test turns the deferred self-updates off (`quiet`), so `received` holds only what the test's own calls sent.
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnErrorThatIsNotALostRaceMakesTheRetryResendTheSameStatement) {
@@ -1241,7 +1241,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ADifferentCommitCompletesTheUnresolvedOneFi
 }
 
 TEST_F(GroupApiLyingBridge, ADifferentCommitResendsTheUnresolvedOneOnceThenPlansAfresh) {
-    // 13 (D2 removed): carol's removal has no known outcome and the bridge keeps refusing it. bob's removal resends it
+    // Carol's removal has no known outcome and the bridge keeps refusing it. bob's removal resends it
     // once, byte for byte, then drops it and plans its own statement at the same head. Two statements at one prevDigest
     // are then possible: the fork boundary (a bridge able to do this can as well withhold the removal).
     quiet = true;
@@ -1362,7 +1362,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnUnverifiedHeadShowingTheUnresolvedRemoval
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARotationCompletesAnUnresolvedRemovalFirst) {
     // The bridge takes the removal, then answers ACCESS_DENIED and serves the state before it. A rotation planned there
-    // would be a second statement at the removal's prevDigest: the fork A5-F3 is about, through rotateGroupKey.
+    // would be a second statement at the removal's prevDigest: a fork, through rotateGroupKey.
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     const Bridge atP = bridge;
@@ -1538,7 +1538,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ASecondSelfUpdateIsNeverReleasedAtOnePrevDi
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARefusedSelfUpdateNeverHoldsBackARemoval) {
-    // T4-06 guard: a member draining the shared self-update budget must not hold back the remover's removal.
+    // A member draining the shared self-update budget must not hold back the remover's removal.
     quiet = true;
     addUsers({CROWD.begin() + 3, CROWD.end()});
     const std::string groupId = createGroup(CROWD);
@@ -1571,7 +1571,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnAddIsResentOnlyToKeysTheVerifierStillVouc
     EXPECT_EQ(adds, 1) << "the add was resent to a key the verifier no longer vouches for";
 }
 
-// ── repair rungs (L-1) ───────────────────────────────────────────────────────────────────────────────────────────
+// ── repair rungs ───────────────────────────────────────────────────────────────────────────────────────────
 
 TEST_F(GroupApiLyingBridge, SECURITY_AMemberHoldingThePreviousKeyRepairsABrokenUnitRung) {
     // A broken unit rung (2,1) cuts epoch 1 off for everybody not holding it in session memory. Bob holds it, and
@@ -1690,7 +1690,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARepairNeverSealsAKeyTheChainDoesNotName) {
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARepairIsNotSentBelowAFloorThisSessionHasSeen) {
-    // The floor is the bridge's word (T3-30). Lowering it after bob saw it must not make him seal a crossing rung.
+    // The floor is the bridge's word. Lowering it after bob saw it must not make him seal a crossing rung.
     bridge.users.emplace("dave", PrivateKey::generateRandom());
     const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
     client("alice").removeGroupMembers(groupId, {"dave"});
@@ -1722,7 +1722,7 @@ TEST_F(GroupApiLyingBridge, ARotatorDoesNotCheckTheLadderOfItsOwnEpoch) {
     EXPECT_EQ(count("alice", "context.groupGetKeyArchive"), 0u);
 }
 
-// ── the signed group policy (T4-10) ──────────────────────────────────────────────────────────────────────────
+// ── the signed group policy ──────────────────────────────────────────────────────────────────────────
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARemovalTheBridgeTookFromAMemberWithoutTheRoleIsRefused) {
     // Default policy: only managers update. bob, a plain user, colludes with the bridge and signs carol's removal;
@@ -1825,7 +1825,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AMemberWithoutTheRoleSignsNothing) {
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_APolicyOutsideTheGroupGrammarIsNeverSigned) {
-    // R-POL-1: ",manager" would admit anybody under a fail-open reader; the client refuses to sign it.
+    // ",manager" would admit anybody under a fail-open reader; the client refuses to sign it.
     EXPECT_THROW(createGroup({"alice", "bob"}, policyWith({{"update", ",manager"}})), core::InvalidParamsException);
     EXPECT_EQ(count("alice", "context.groupCreate"), 0u);
     const std::string groupId = createGroup({"alice", "bob"});
@@ -1919,7 +1919,7 @@ TEST_F(GroupApiLyingBridge, AnAdditionOfAnExistingMemberIsRefusedBeforeSigning) 
     EXPECT_EQ(count("alice", "context.groupAddMembers"), 0u);
 }
 
-// ── commit B: the update role for metadata plane authors (T4-03) ─────────────────────────────────────────────
+// ── the update role for metadata plane authors ─────────────────────────────────────────────
 
 TEST_F(GroupApiLyingBridge, ANarrowingPolicyCarriesUpThePlanesOfAuthorsWhoLostTheRole) {
     // bob writes under the open policy; alice narrows `update` to managers and carries bob's plane in her name.
@@ -1934,7 +1934,7 @@ TEST_F(GroupApiLyingBridge, ANarrowingPolicyCarriesUpThePlanesOfAuthorsWhoLostTh
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ANarrowingDoesNotReSignAPlaneWrittenAfterItWasRead) {
-    // N-2's analogue: bob still holds the current key after the narrowing (no epoch moves). The bridge serves alice's
+    // As for a removal's carry: bob still holds the current key after the narrowing (no epoch moves). The bridge serves alice's
     // carry a v3 bob tagged after she read v2; re-signing it would launder it into a plane bob may no longer write.
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("v2"), 1);
@@ -2095,7 +2095,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnUnattestedReadMovesNoVersionPin) {
 }
 
 
-// ── leaf renewal after an identity key change (08a) ────────────────────────────────────────────────────────────
+// ── leaf renewal after an identity key change ────────────────────────────────────────────────────────────
 
 namespace {
 
@@ -2210,9 +2210,9 @@ void expectRefusedUntilRenewal(
 
 } // namespace
 
-// Final audit 05a rounds 2-3 and the coordinator rule: nothing the Bridge serves (the blame, the statements) decides
-// whether a removal whose own leaf does not open goes through; only an own key change this client was told about
-// (adoptPreviousIdentity) refuses it. 315acd70 refused the next four.
+// Nothing the Bridge serves (the blame, the statements) decides whether a removal whose own leaf does not open goes
+// through; only an own key change this client was told about (adoptPreviousIdentity) refuses it. The next four tests
+// hold that line.
 TEST_F(GroupApiLyingBridge, SECURITY_AMemberWhoGarblesAManagersLeafEdgeCannotBlockItsOwnRemoval) {
     // Three seats: only the root is keyed, bob's self-update rewrote it, and no statement of alice stays served.
     quiet = true;
@@ -2248,9 +2248,9 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARemovalWithAGarbledOwnLeafEdgeGoesThroughW
 }
 
 TEST_F(GroupApiLyingBridge, AManagerWhoChangedKeyWithoutAdoptingGetsTheBaseRemoval) {
-    // Documented boundary (SECURITY-NOTES 08-A2): an app that changes the key without Connection::adoptPreviousIdentity
-    // gives this client no way to tell its key change from a garbled edge, so the removal goes through as in the
-    // base and abandons history: nobody can open epoch 1 afterwards.
+    // Documented boundary: an app that changes the key without Connection::adoptPreviousIdentity gives this client
+    // no way to tell its key change from a garbled edge, so the removal goes through and abandons history: nobody
+    // can open epoch 1 afterwards.
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     changeKeyOf(bridge, clients, "alice");
@@ -2260,7 +2260,7 @@ TEST_F(GroupApiLyingBridge, AManagerWhoChangedKeyWithoutAdoptingGetsTheBaseRemov
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AManagerWhoChangedKeyAndAdoptedCannotRemoveTheSiblingWhoHealedItsLeafEdge) {
-    // Final audit 05a round 3 (08-A4): after a key change the node over alice's leaf was last set by an honest member
+    // After a key change the node over alice's leaf was last set by an honest member
     // (the creator, an adder, here a healing sibling). Removing it must not abandon every member's history.
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
@@ -2286,10 +2286,9 @@ TEST_F(GroupApiLyingBridge, SECURITY_AManagerWhoChangedKeyAndAdoptedCannotRemove
     expectRefusedUntilRenewal(clientAdopting("alice", previous), bridge, groupId, "bob");
 }
 
-// Final audit 05a round 5: an adopted key change refuses a removal only while renewLeaf can fix the leaf, i.e. while
-// the previous key climbs it. A member that garbles the edge above the manager's leaf breaks it for both keys, so the
-// removal goes through as in the base, in the session that adopted and after a renewal alike. 1d66831e refused both
-// (a session-wide flag), and renewLeaf could not clear it.
+// An adopted key change refuses a removal only while renewLeaf can fix the leaf, i.e. while the previous key climbs
+// it. A member that garbles the edge above the manager's leaf breaks it for both keys, so the removal goes through
+// (abandoning history), in the session that adopted and after a renewal alike.
 TEST_F(GroupApiLyingBridge, SECURITY_AGarblerCannotBlockItsRemovalByAManagerThatAdoptedAndHasNotRenewed) {
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
@@ -2313,10 +2312,10 @@ TEST_F(GroupApiLyingBridge, SECURITY_AGarblerCannotBlockItsRemovalByAManagerThat
     expectRemoved(bridge, "bob");
 }
 
-// Final audit 05a round 6: the edges name no recipient key, so the garbler need not garble. After alice's renewal it
-// wraps the genuine root to alice's PREVIOUS public key: the session key fails at the leaf, the previous key climbs,
-// and ea7395ec refused the removal again ("call renewLeaf"), as often as bob re-wrapped after each renewal. A landed
-// renewal now leaves the epoch's grant key in the group's cache, so the removal goes on with history kept.
+// The edges name no recipient key, so the garbler need not garble. After alice's renewal it wraps the genuine root to
+// alice's PREVIOUS public key: the session key fails at the leaf and the previous key climbs. A landed renewal leaves
+// the epoch's grant key in the group's cache, so the removal goes on with history kept rather than asking for
+// another renewal.
 TEST_F(GroupApiLyingBridge, SECURITY_AMemberCannotBlockItsRemovalByWrappingARenewedManagersLeafToThePreviousKey) {
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
@@ -2438,7 +2437,7 @@ TEST_F(GroupApiLyingBridge, AOneMemberGroupRenews) {
     EXPECT_FALSE(client("bob").renewLeaf(groupId, previous.toWIF())) << "renewed already";
 }
 
-// 01: pins that outlive a GroupApi, through the application's PinStore
+// Pins that outlive a GroupApi, through the application's PinStore
 
 namespace {
 
@@ -2516,7 +2515,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ALiveSiblingTakesTheRemovalAtItsNextSave) {
 TEST_F(GroupApiLyingBridge, ALongerBranchShownToASiblingWinsTheSlot_ForkBoundary) {
     // The fork boundary, stated: the bridge shows alice1 bob's removal (seq 2) and alice2 two self-updates of carol on
     // the state before it (seq 3). The higher record wins the slot; the instances are not reconciled. A bridge able to
-    // do this can as well withhold the removal from every instance (SECURITY-NOTES, fork boundary).
+    // do this can as well withhold the removal from every instance.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
@@ -2690,7 +2689,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AVersionPinSavedByOneSessionRefusesAnOlderM
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARecreatedGroupIsAForkInTheNextSession) {
-    // T4-14 across sessions: a former member who knows the resourceId re-creates the id.
+    // Across sessions: a former member who knows the resourceId re-creates the id.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob"});
@@ -2717,7 +2716,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARecreatedGroupIsAForkInTheNextSession) {
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ADeletionEventLeavesThePersistedPinsInPlace) {
-    // T3-08: after `groupDeleted` (the bridge's word alone) and a restart, the state before the pin is a rollback.
+    // After `groupDeleted` (the bridge's word alone) and a restart, the state before the pin is a rollback.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob"});
@@ -2736,7 +2735,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ADeletionEventLeavesThePersistedPinsInPlace
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AListingKeyIsHandedOutAcrossSessionsOnlyAtThePersistedState) {
-    // T3-10: base hands out no listing key after a restart (no pin); with the store it does exactly at the pin.
+    // Base hands out no listing key after a restart (no pin); with the store it does exactly at the pin.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
@@ -2967,8 +2966,8 @@ TEST_F(GroupApiLyingBridge, SECURITY_ACorruptedPreviousIdentityBlobAbortsTheAdop
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARenewalAdoptsThePreviousKeysPinsFirst) {
-    // 08a + 01: an app that skipped Connection::adoptPreviousIdentity still renews on the previous key's pins, so the
-    // renewal is never planned on a state rolled back below what the previous key verified (base: it is).
+    // An app that skipped Connection::adoptPreviousIdentity still renews on the previous key's pins, so the renewal
+    // is never planned on a state rolled back below what the previous key verified.
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
@@ -3026,9 +3025,9 @@ TEST_F(GroupApiLyingBridge, AFirstContactAboveThePreviousKeysRecordStaysUsable) 
     EXPECT_EQ(storedPin(groupId, bridge.users.at("bob"))->seq, 3u);
 }
 
-// ── SECURITY-NOTES rows that had no test ─────────────────────────────────────────────────────────────────────────
+// ── misc bridge lies ─────────────────────────────────────────────────────────────────────────
 
-TEST_F(GroupApiLyingBridge, SECURITY_T3_19_ARemovalDoesNotSealACachedGrantKeyThatIsNotTheEpochs) {
+TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotSealACachedGrantKeyThatIsNotTheEpochs) {
     // alice's leaf edge is garbled, so her removal plans without a climb, and her cache holds a key that is not
     // epoch 1's (a client bug). Sealed into the unit rung it would cut history off; the removal abandons it instead.
     quiet = true;
@@ -3045,7 +3044,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_T3_19_ARemovalDoesNotSealACachedGrantKeyTha
     EXPECT_TRUE(removal->params->optValue<bool>("abandonHistory", false));
 }
 
-TEST_F(GroupApiLyingBridge, SECURITY_N4_AnEpochTheHistoryMislabelsIsNotRemembered) {
+TEST_F(GroupApiLyingBridge, SECURITY_AnEpochTheHistoryMislabelsIsNotRemembered) {
     // `keyHistory` is the bridge's word. Labelling epoch 1's grant key as epoch 2 must not make alice remember
     // epoch 2 for it: every later anonymous envelope to that key would then fail, with the bridge honest again.
     quiet = true;
@@ -3064,7 +3063,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_N4_AnEpochTheHistoryMislabelsIsNotRemembere
     bridge.onRead = [](const std::string&, server::GroupInfo&) {};
 }
 
-TEST_F(GroupApiLyingBridge, SECURITY_T4_25_TheGroupKeyResolverPassesAForkThrough) {
+TEST_F(GroupApiLyingBridge, SECURITY_TheGroupKeyResolverPassesAForkThrough) {
     // A rollback is not "no key": the resolver the key provider calls must not turn it into a skipped entry.
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob"});

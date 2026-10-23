@@ -150,7 +150,7 @@ protected:
         api.groupGenerateNewKey(model);
     }
 
-    // The latest served statement, extended by one (03: anything else is a lost race, answered before the key is
+    // The latest served statement, extended by one (anything else is a lost race, answered before the key is
     // looked at) and re-signed by this session: shape-valid; only its seq, link and key differ.
     group::server::GroupTreeCommit nextStatement(
         group::ServerApi& api,
@@ -648,7 +648,7 @@ TEST_F(GroupKeyTreeTest, removeGroupMembers_leaves_the_same_session_able_to_read
 TEST_F(GroupKeyTreeTest, a_resolved_epoch_key_is_not_fetched_again_in_the_same_connection) {
     // Every container key read resolves its grant's group epoch; once known, that epoch must cost no `groupGet` and
     // climb again. Shown by deleting the group first, after which any read of it fails. The delete goes straight to
-    // the server: `deleteGroup` itself drops the group's cached keys (T4-14), which is not what is measured here.
+    // the server: `deleteGroup` itself drops the group's cached keys, which is not what is measured here.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
     const auto impl = groupApi->getImpl();
@@ -846,7 +846,7 @@ TEST_F(GroupKeyTreeTest, several_removals_in_a_row_keep_the_whole_history_reacha
     EXPECT_EQ(message.data.stdString(), "oldest");
 }
 
-// -- rotation without a membership change (T3-27) --
+// -- rotation without a membership change --
 
 TEST_F(GroupKeyTreeTest, a_one_member_group_rotates_and_still_reads_its_history) {
     // The one-leaf tree's root is the member's own leaf: the new grant key goes straight to the member's key. Its
@@ -1040,7 +1040,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_remove_anybody) {
 }
 
 
-// -- grant key reuse (T4-24) --
+// -- grant key reuse --
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_from_below_the_era_floor_is_refused) {
     // Every member of an old epoch holds its grant key's private half, the ones removed since included. A cut drops
@@ -1099,7 +1099,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_group_key_re_encoded_uncompressed_is_refused
     EXPECT_EQ(after.keyVersion, 1);
 }
 
-// -- repair rungs (L-1): any seated member holding both keys may add one more rung to a span --
+// -- repair rungs: any seated member holding both keys may add one more rung to a span --
 
 TEST_F(GroupKeyTreeTest, repairRung_from_another_member_is_served_beside_the_original) {
     std::string groupId;
@@ -1180,7 +1180,7 @@ TEST_F(GroupKeyTreeTest, repairRung_budget_is_enforced) {
 }
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_rung_naming_a_recipientKind_is_refused) {
-    // L-2: an era link sealed to somebody's own key used to pass as an epoch's unit rung. The rung validator, the
+    // An era link sealed to somebody's own key must not pass as an epoch's unit rung. The rung validator, the
     // same for commits and repairs, refuses the kind fields as unknown keys.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = groupAtEpoch(2); });
@@ -1229,7 +1229,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_repairRung_below_a_cut_floor_is_refused) {
     EXPECT_NE(refused->second.find("BELOW_ERA_FLOOR"), std::string::npos) << refused->second;
 }
 
-// ── the signed group policy (T4-10) ──
+// ── the signed group policy ──
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_policy_change_is_a_signed_commit_every_member_follows) {
     // The manager lets every member update; a plain member then removes the manager; a third session, pinned before

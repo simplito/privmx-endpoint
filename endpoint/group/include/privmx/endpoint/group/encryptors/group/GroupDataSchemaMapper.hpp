@@ -33,7 +33,7 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
-// The verified read a committer made before its own commit (T4-03, commit B): the signed rules, the roster and both
+// The verified read a committer made before its own commit: the signed rules, the roster and both
 // metadata planes as they stood then. A carry-forward judges an entry identical to the one it read by these, so a
 // plane honestly written before a narrowing or by a member just removed is carried, and nothing else.
 struct PriorRole {
@@ -64,7 +64,7 @@ public:
     // again under the lock, so a concurrent verification that got further makes this one a fork.
     void storeVersionPins(const server::GroupInfo& groupInfo);
 
-    // 01: the version pins per group (rosterVersion, publicMetaVersion, privateMetaVersion) for the pin blob, and
+    // The version pins per group (rosterVersion, publicMetaVersion, privateMetaVersion) for the pin blob, and
     // stored ones merged back per counter by max. `onPinsMoved` runs (outside the lock) when a counter rose: major
     // unless the group had no version pin yet.
     std::map<std::string, std::array<std::int64_t, 3>> exportVersionPins();
@@ -74,7 +74,7 @@ public:
     void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKeyV2& rosterKey);
 
     // A plane's author and whoever wrapped its key must be on the attested roster, and the author must hold `update`
-    // under the group's signed rules (T4-03). With `prior` (a carry-forward only), an entry identical to the one the
+    // under the group's signed rules. With `prior` (a carry-forward only), an entry identical to the one the
     // committer read before its own commit is judged by that read's rules and roster instead; any other by the
     // current ones.
     void assertPublicMetaIsAttested(
@@ -89,7 +89,7 @@ public:
         const std::optional<PriorRole>& prior = std::nullopt
     );
 
-    // The same entry as one read before: version, author, key and data. The N-2 guard of every carry-forward.
+    // The same entry as one read before: version, author, key and data. The guard of every carry-forward.
     static bool sameEntry(const server::GroupMetaEntry& now, const server::GroupMetaEntry& then);
 
     // `HMAC(subkey, epoch | rosterVersion | roster)`. Lists are sorted and length-prefixed so one roster's tag

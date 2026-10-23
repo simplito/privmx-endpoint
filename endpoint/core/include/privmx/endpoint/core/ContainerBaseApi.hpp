@@ -348,7 +348,7 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     )};
     // `entry` is the newest data entry, which a re-key leaves under the key it replaced: it is opened with that
     // key, but the key kept on is the container's current one, or the update hands the replaced key, which a
-    // removed member holds, back the role of the current key (F-05a). A group has no `keyId` of its own.
+    // removed member holds, back the role of the current key. A group has no `keyId` of its own.
     auto currentKey{findEncKeyByKeyId(containerKeys, entry.keyId)};
     auto keptKey{currentKey};
     if constexpr (std::is_base_of_v<server::ContainerInfoBase, TContainer>) {

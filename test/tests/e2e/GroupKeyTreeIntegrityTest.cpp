@@ -166,7 +166,7 @@ protected:
         auto freshConnection = connectWith(privKey);
         privmx::test::ScopeExit closeIt([&] { freshConnection->disconnect(); });
         if (previousKey.has_value()) {
-            freshConnection->adoptPreviousIdentity(previousKey.value()); // 08a: right after connect
+            freshConnection->adoptPreviousIdentity(previousKey.value()); // right after connect
         }
         auto groups = group::GroupApi::create(*freshConnection);
         auto threads = thread::ThreadApi::create(*freshConnection, groups);
@@ -618,7 +618,7 @@ TEST_F(GroupKeyTreeIntegrityTest, rotating_the_epoch_does_not_take_back_a_compro
         );
     });
 
-    // The finding: user_2's leaf was never re-wrapped, so their key opens the epoch the rotation minted - and
+    // The limit: user_2's leaf was never re-wrapped, so their key opens the epoch the rotation minted - and
     // with it content written afterwards, which needs that epoch's key and no earlier one.
     EXPECT_TRUE(canReadMessage(2, afterRotation)) <<
         "expected the compromised key to keep reading - a rotation is not post-compromise security; " <<
@@ -714,7 +714,7 @@ TEST_F(GroupKeyTreeIntegrityTest, changing_a_members_public_key_locks_them_out_w
         "re-seating did not hand back the pre-rotation history; " << lastReadError;
 }
 
-// -- renewing a leaf after a key change (08a) --
+// -- renewing a leaf after a key change --
 
 TEST_F(GroupKeyTreeIntegrityTest, a_member_who_changed_key_renews_their_leaf_with_the_previous_key) {
     if (!hasManagementApi()) {
@@ -834,9 +834,9 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_manager_who_changed_key_cannot_remo
     if (!hasManagementApi()) {
         GTEST_SKIP() << MANAGEMENT_API_MISSING;
     }
-    // Audit 05a final-1 (tolerant removal climb, older than 08a). The removal tolerated a leaf that did not open
-    // and, with no grant key cached, went out with abandonHistory: every member lost every earlier epoch because
-    // one manager ran the documented key change. It must fail closed like rotate and add, pointing at renewLeaf.
+    // A removal by a manager whose leaf does not open (after the documented key change, with no grant key cached)
+    // must fail closed like rotate and add, pointing at renewLeaf, rather than go out with abandonHistory and cost
+    // every member every earlier epoch.
     const Identity firstKey = newIdentity("rekeyed_manager");
     ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
     std::string groupId;
@@ -858,10 +858,9 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_manager_who_changed_key_cannot_remo
 
     const Identity secondKey = newIdentity(firstKey.userId);
     ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey));
-    // Round 3: also user_1, the creator, who set the node above the manager's leaf. The garbler tolerance blamed
-    // that setter and let the removal out with abandonHistory. The session follows the documented key change
-    // (adoptPreviousIdentity right after connect), which is how it knows the leaf is its own key change; without it
-    // the removal goes through as in the base (SECURITY-NOTES 08-A2).
+    // Also user_1, the creator, who set the node above the manager's leaf: that setter must not be blamed as a
+    // garbler. The session follows the documented key change (adoptPreviousIdentity right after connect), which is
+    // how it knows the leaf is its own key change; without it the removal goes through and abandons history.
     for (const std::string& leaving : {user(3).userId, user(1).userId}) {
         std::string refusal;
         ASSERT_NO_THROW(onFreshSessionWith(secondKey.privKey, [&](group::GroupApi& groups, thread::ThreadApi&) {
@@ -1289,7 +1288,7 @@ TEST_F(GroupKeyTreeIntegrityTest, two_concurrent_public_meta_writes_still_serial
 }
 
 TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_up_the_metadata_the_removed_member_wrote) {
-    // T4-03: the planes' author is the member removed; it wrote them while a member, so the remover carries them up
+    // The planes' author is the member removed; it wrote them while a member, so the remover carries them up
     // under its own name rather than leaving them unattested.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(2)}); });
@@ -1466,7 +1465,7 @@ bool failsUserVerification(Call call) {
 } // namespace
 
 TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_key_the_application_does_not_vouch_for_gets_no_seat) {
-    // T3-11: a seat is filled to the key given for it, and that key comes off the Bridge's user listing. One the
+    // A seat is filled to the key given for it, and that key comes off the Bridge's user listing. One the
     // application does not vouch for may be the Bridge's own, which would then climb to the grant key.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
@@ -1479,7 +1478,7 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_key_the_application_does_not_vouch_
 }
 
 TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_listed_group_key_is_handed_out_only_as_a_vouched_statement_names_it) {
-    // T3-10: an outsider seals anonymous envelopes to the listed key. Unless the latest statement naming it is by
+    // An outsider seals anonymous envelopes to the listed key. Unless the latest statement naming it is by
     // somebody the application vouches for, the key may be the Bridge's. A listing carries no statement, so the key
     // is handed out only once a read in this session has verified one naming it (the creator's own commit counts,
     // hence another member's session).
@@ -1512,7 +1511,7 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_listed_group_key_is_handed_out_only
 }
 
 TEST_F(GroupKeyTreeIntegrityTest, an_honestly_refused_commit_does_not_hold_back_the_next_one) {
-    // m2, simplified in 13: the Bridge refuses user_1's add only after the statement left the client (an id the context
+    // The Bridge refuses user_1's add only after the statement left the client (an id the context
     // does not know), so as far as user_1 can tell it may have been applied. The next operation resends it once, finds
     // it refused again, drops it and goes on.
     if (!hasManagementApi()) {
@@ -1567,7 +1566,7 @@ TEST_F(GroupKeyTreeIntegrityTest, ladder_a_removal_leaves_a_ladder_that_needs_no
     }
 }
 
-// -- 01: pins kept between sessions --
+// -- pins kept between sessions --
 
 TEST_F(GroupKeyTreeIntegrityTest, a_session_without_a_pin_store_still_reads_its_groups) {
     const std::string groupId = createTreeGroup({user(1), user(2)});

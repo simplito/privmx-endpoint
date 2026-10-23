@@ -710,7 +710,7 @@ std::set<std::string> remoteKeyIds(const std::vector<stream::Key>& keys) {
 } // namespace
 
 TEST_F(StreamRoomUsingGroupsTest, SECURITY_the_local_media_key_follows_a_rekey) {
-    // F-05c, honest Bridge. The LOCAL key, which this client's media is encrypted under, was chosen once at join
+    // Honest Bridge. The LOCAL key, which this client's media is encrypted under, was chosen once at join
     // from the newest data entry and kept through every streamRoomUpdated. After user_3's removal from G and a
     // re-key, media stayed under K1, which user_3 holds.
     std::string groupId;
@@ -760,9 +760,9 @@ TEST_F(StreamRoomUsingGroupsTest, SECURITY_the_local_media_key_follows_a_rekey) 
 }
 
 TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_removal_from_a_granted_group) {
-    // Audit 05a final-1, honest Bridge. The only staleness check ran at publishStream/updateStream, so a stream
-    // already being published stayed under K1 after user_3 left G, and user_3, still subscribed, kept decrypting
-    // it. The Bridge now tells the room about the removal and the publishing client re-keys.
+    // Honest Bridge. A stream already being published must not stay under K1 after user_3 leaves G, or user_3,
+    // still subscribed, keeps decrypting it. The Bridge tells the room about the removal and the publishing client
+    // re-keys.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(
@@ -795,8 +795,8 @@ TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_rem
 }
 
 TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_rotation_of_a_granted_group) {
-    // Audit 05a final-2: as after a removal, a rotation (after a suspected compromise) must move a live publication
-    // off the pre-rotation room key. The Bridge now tells the room about the rotation too.
+    // As after a removal, a rotation (after a suspected compromise) must move a live publication off the
+    // pre-rotation room key. The Bridge tells the room about the rotation too.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(
@@ -829,8 +829,8 @@ TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_rot
 }
 
 TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_stops_when_its_rekey_is_refused) {
-    // Audit 05a final-3, honest Bridge. The room lets only managers re-key, so user_2's automatic re-key after the
-    // removal is refused. It was only logged: user_2's publication went on under the key user_3 holds.
+    // Honest Bridge. The room lets only managers re-key, so user_2's automatic re-key after the removal is refused.
+    // Logging it is not enough: user_2's publication must not go on under the key user_3 holds.
     std::string groupId;
     ASSERT_NO_THROW({
         groupId = groupApi->createGroup(

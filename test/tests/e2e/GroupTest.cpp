@@ -404,7 +404,7 @@ TEST_F(GroupTest, updateGroupPolicy_correct_data) {
     EXPECT_EQ(after.publicMeta.stdString(), before.publicMeta.stdString());
     EXPECT_EQ(after.privateMeta.stdString(), before.privateMeta.stdString());
 
-    // Each call is a signed commit planned on a fresh read (T4-10), so a second one in a row extends the first.
+    // Each call is a signed commit planned on a fresh read, so a second one in a row extends the first.
     policy.get = "user";
     EXPECT_NO_THROW({ groupApi->updateGroupPolicy(groupId, policy); });
     EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });

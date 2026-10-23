@@ -492,7 +492,7 @@ TEST_F(LadderKeysDescend, SECURITY_RoutesAroundACorruptedUnitRungViaASkip) {
 }
 
 TEST_F(LadderKeysDescend, SECURITY_AForgedSkipRungIsPassedOverForTheNextRoute) {
-    // T4-08: anyone holding epoch 8's key can seal a rung at 8 under any span and any sealer, so a rung that does not
+    // Anyone holding epoch 8's key can seal a rung at 8 under any span and any sealer, so a rung that does not
     // open to its target's registered key costs the walk that rung, not the descent.
     EpochHistory history = simulateEpochHistory(8, 1);
     for (ArchiveRung& rung : history.rungs) {
@@ -512,7 +512,7 @@ TEST_F(LadderKeysDescend, SECURITY_AForgedSkipRungIsPassedOverForTheNextRoute) {
 }
 
 TEST_F(LadderKeysDescend, SECURITY_AnHonestRungRelabelledByTheBridgeBlamesNobody) {
-    // T4-08: the span is sealed inside the blob, so the bridge serving the honest rung 8->4 as 8->7 gets a rung that
+    // The span is sealed inside the blob, so the bridge serving the honest rung 8->4 as 8->7 gets a rung that
     // does not open, not one that opens to the wrong epoch's key and names its honest sealer as the tamperer.
     EpochHistory history = simulateEpochHistory(8, 1);
     std::vector<ArchiveRung> served;
@@ -599,7 +599,7 @@ TEST_F(LadderKeysDescend, ANewcomerReachesOldEpochsWithNothingWrappedToThem) {
     }
 }
 
-// repair rungs (L-1): a span may hold more than one rung; only the registry decides which one is right
+// repair rungs: a span may hold more than one rung; only the registry decides which one is right
 
 namespace {
 ArchiveRung sealed(const RungSpan& span, const PrivateKey& carried, const PrivateKey& at, const std::string& author) {

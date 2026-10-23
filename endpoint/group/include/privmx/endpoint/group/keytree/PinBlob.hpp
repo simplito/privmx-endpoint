@@ -25,7 +25,7 @@ namespace endpoint {
 namespace group {
 namespace keytree {
 
-// 01: the body of the `group-pins` slot (sealed by core `sealLocal`), and the rule two instances of one device merge
+// The body of the `group-pins` slot (sealed by core `sealLocal`), and the rule two instances of one device merge
 // their pins by (`higher`). Integers big-endian, lp = u32 length || bytes:
 //
 //   body   = u32 count || record*count                                   (sorted by groupId, no duplicates)
@@ -44,7 +44,7 @@ class PinBlob {
 public:
     static constexpr std::uint8_t VERSION = core::localstate::GROUP_PINS_VERSION;
     static constexpr const char* LABEL = core::localstate::GROUP_PINS_LABEL;
-    // ponytail: full rosters up to 1 MiB, the rest compact (one genesis replay each); per-group slots if it bites.
+    // Limit: full rosters up to 1 MiB, the rest compact (one genesis replay each); per-group slots if it bites.
     static constexpr std::size_t BUDGET = 1 << 20;
 
     // Two passes, no record ever dropped: every group compact, then by seenAt descending upgraded to full while the
@@ -56,7 +56,7 @@ public:
     // Two records of one group, both verified on this device: the higher seq wins; at one seq `mine` stays (with
     // `other`'s roster and generations folded in at the same digest). A seq-0 side counts as absent. `refusedSeq` and
     // `seenAt` by max; generations by max when `other` wins. Two branches at one seq are not reconciled: the device
-    // keeps whichever it holds, as a bridge able to fork could as well withhold (SECURITY-NOTES, fork boundary).
+    // keeps whichever it holds, as a bridge able to fork could as well withhold.
     static TreeVerifier::Pin higher(const TreeVerifier::Pin* mine, const TreeVerifier::Pin* other);
     // `higher` for every group, planes by max: what a save writes.
     static TreeVerifier::PinSet mergeForSave(const TreeVerifier::PinSet& mine, const TreeVerifier::PinSet& stored);

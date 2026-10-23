@@ -97,7 +97,7 @@ std::uint32_t ladderFloorOf(std::int64_t eraFloor, const std::optional<std::int6
     return static_cast<std::uint32_t>(floor);
 }
 
-// The rules of a policy the caller asks to sign: one outside the group grammar is the caller's error (R-POL-1).
+// The rules of a policy the caller asks to sign: one outside the group grammar is the caller's error.
 keytree::GroupRules requestedRules(const Poco::Dynamic::Var& policy, const std::string& creator) {
     try {
         return keytree::TreeCommits::rules(policy, creator);
@@ -122,7 +122,7 @@ GroupApiImpl::GroupApiImpl(
     initGroupPrivKeyResolver(resolverOver(nullptr));
     initModuleDataSchemaMapper(_groupDataSchemaMapper);
     _pinnedGroupEpoch = [this](const std::string& groupId) { return pinnedKeyVersion(groupId); };
-    // 01: the pins this identity saved on this Bridge (any instance, any session) before anything reads a group.
+    // The pins this identity saved on this Bridge (any instance, any session) before anything reads a group.
     // Loaded once; instances running side by side meet again in the slot at each save (`PinBlob::higher`).
     const auto connectionImpl = connection.getImpl();
     _pinStore = connectionImpl->getPinStore();
@@ -447,7 +447,7 @@ std::string GroupApiImpl::createGroup(
         .keyId = selfAddressed.at(0).keyId, .groupEpoch = 1, .data = selfAddressed.at(0).data
     };
     model.tree = keytree::TreeWire::toCreateTree(plan);
-    // The policy is signed into the chain (T4-10): the statement carries it, and every later one its hash.
+    // The policy is signed into the chain: the statement carries it, and every later one its hash.
     const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies.value_or(core::ContainerPolicy{}));
     const keytree::GroupRules rules = requestedRules(policy, creatorId);
     // Commit B: a creator who could not write its own metadata would leave every member's read of the new group
@@ -461,7 +461,7 @@ std::string GroupApiImpl::createGroup(
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
         plan, keytree::CommitOp::Create, ctx.resourceId, commitDate(), 1, groupPubKeyStr, 1,
         core::EndpointUtils::usersWithPubKeyToIds(users), core::EndpointUtils::usersWithPubKeyToIds(managers),
-        creatorId, {}, {}, {}, // the genesis roster is bound by rosterHash; the bridge serves it beside the chain (I-1)
+        creatorId, {}, {}, {}, // the genesis roster is bound by rosterHash; the bridge serves it beside the chain
         rules.hash
     );
     statement.policy = policy;
@@ -484,7 +484,7 @@ std::string GroupApiImpl::createGroup(
 }
 
 void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
-    // The op-effect table's add row names each newcomer once (03): refused here, before anything is read or signed.
+    // The op-effect table's add row names each newcomer once: refused here, before anything is read or signed.
     std::set<std::string> named;
     for (const GroupMemberToAdd& newMember : newMembers) {
         if (!named.insert(newMember.user.userId).second) {
@@ -532,7 +532,7 @@ void GroupApiImpl::addGroupMembersOnce(const std::string& groupId, const std::ve
         currentGroup, _keyProvider, _groupPrivKeyResolver
     );
     keytree::TreeVerifier::assertSeatsMatchRoster(currentGroup, attestedUsers, attestedManagers);
-    // And never anybody already on it: an addition cannot promote a member (03), and a seat cannot be planned twice.
+    // And never anybody already on it: an addition cannot promote a member, and a seat cannot be planned twice.
     for (const GroupMemberToAdd& newMember : newMembers) {
         for (const auto* list : {&attestedUsers, &attestedManagers}) {
             if (std::find(list->begin(), list->end(), newMember.user.userId) != list->end()) {
@@ -1068,7 +1068,7 @@ void GroupApiImpl::scheduleSelfUpdateIfNeeded(const std::string& groupId, const 
 }
 
 std::int64_t GroupApiImpl::backgroundWindowMs(const server::GroupInfo& group) {
-    // ponytail: 8 ms per seat, 1-120 s. One window holds the first healers of a fresh 16k group (~n/32 commits) at
+    // Limit: 8 ms per seat, 1-120 s. One window holds the first healers of a fresh 16k group (~n/32 commits) at
     // the bridge's ~5-10 commits/s only with retries; a per-group rate limit on the bridge is the upgrade path.
     return std::clamp<std::int64_t>(
         group.numLeaves.value_or(1) * BACKGROUND_MS_PER_SEAT, BACKGROUND_WINDOW_MIN_MS, BACKGROUND_WINDOW_MAX_MS
@@ -1284,7 +1284,7 @@ bool GroupApiImpl::renewLeaf(const std::string& groupId, const std::string& prev
     if (previous->getPublicKey() == _userPrivKey.getPublicKey()) {
         throw core::InvalidParamsException("the previous key is the current key");
     }
-    // 01: the previous key's pins first, so the read the renewal plans on continues them (the app is meant to have
+    // The previous key's pins first, so the read the renewal plans on continues them (the app is meant to have
     // done this at connect with Connection::adoptPreviousIdentity; a second adoption is a no-op).
     adoptPreviousIdentity(previous.value());
     bool renewed = false;
@@ -1407,7 +1407,7 @@ bool GroupApiImpl::selfUpdateWith(
                     // The epoch's own grant key (a self-update keeps the epoch; the climb checked it against the
                     // verified state), now landed. A renewal planned on a scratch cache, so without this the next
                     // removal would ask the leaf again, and the edges name no recipient: a member wrapping it back to
-                    // the previous public key would get the removal refused after every renewal (08-A5).
+                    // the previous public key would get the removal refused after every renewal.
                     _treeKeyCaches.get(groupId)->putGrantKey(static_cast<std::uint32_t>(statement.keyVersion), grantKey);
                 }
         }
@@ -1452,14 +1452,14 @@ bool GroupApiImpl::carryMetadataForward(
             carryPublic = lost(group.publicMeta.author);
             carryPrivate = lost(group.privateMeta.author);
         }
-        // N-2, on every carried plane: only the very entry read before the commit. One tagged since (by a member
+        // On every carried plane: only the very entry read before the commit. One tagged since (by a member
         // removed meanwhile, or by a loser of a narrowing, which still holds the current key) is never re-signed.
         carryPublic = carryPublic && GroupDataSchemaMapper::sameEntry(group.publicMeta, prior.publicMeta);
         carryPrivate = carryPrivate && GroupDataSchemaMapper::sameEntry(group.privateMeta, prior.privateMeta);
         if (!carryPublic && !carryPrivate) {
             return true; // already current, or written over since: nothing of the read is left to carry
         }
-        // The entries as read are judged by the read's rules and roster (T4-03): a plane whose author lacked `update`
+        // The entries as read are judged by the read's rules and roster: a plane whose author lacked `update`
         // then is refused here too, so neither a removal nor a narrowing launders it.
         const Group verified =
             _groupDataSchemaMapper->validateDecryptAndConvertGroup(group, _keyProvider, resolverOver(&group), prior);
@@ -1615,7 +1615,7 @@ void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::Con
         carry.reset();
         updateGroupPolicyOnce(groupId, policies, carry);
     });
-    // A plane whose author lost `update` is refused from now on; carry it under the caller's name (commit B).
+    // A plane whose author lost `update` is refused from now on; carry it under the caller's name.
     if (carry.has_value()) {
         runPolicyCarry(groupId, carry.value());
     }
@@ -1627,7 +1627,7 @@ void GroupApiImpl::updateGroupPolicyOnce(
     const core::ContainerPolicy& policies,
     std::optional<PendingCarry>& carry
 ) {
-    // A signed commit like any other (T4-10): the chain, the CAS and the role check. It moves no node, no epoch and
+    // A signed commit like any other: the chain, the CAS and the role check. It moves no node, no epoch and
     // no roster, so the path view is enough to sign the tree hash as it stands.
     const server::GroupGetModel getModel = pathRead(groupId);
     auto group = _serverApi.groupGet(getModel).group;
@@ -1829,7 +1829,7 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
                     core::GroupEpochInfo{.keyVersion = summary.keyVersion, .groupPubKey = summary.groupPubKey};
                 continue;
             }
-            // ponytail: one `groupGet` per unpinned group, the whole tree for a caller without a seat; a statement-and-
+            // Limit: one `groupGet` per unpinned group, the whole tree for a caller without a seat; a statement-and-
             // roster read would do if non-member writes to new or rotated groups get hot.
             try {
                 read.push_back(_serverApi.groupGet(pathRead(summary.id)).group);
@@ -1966,7 +1966,7 @@ void GroupApiImpl::processConnectedEvent() {
     invalidateModuleKeysInCache();
 }
 
-// `_unresolved` (m2) is kept on purpose: a dropped connection is the commonest unknown outcome of a commit, and the
+// `_unresolved` is kept on purpose: a dropped connection is the commonest unknown outcome of a commit, and the
 // same call retried on the next connection must resend that statement, not be held back by it. So is `_pendingCarry`:
 // the next mutating call retries it, and dropping it would leave the planes refused to readers.
 void GroupApiImpl::processDisconnectedEvent() {
@@ -2159,7 +2159,7 @@ privmx::crypto::PrivateKey GroupApiImpl::resolveGroupPrivKey(
         }
         throw core::EncryptionKeyValidationException(describeResolveFailure(resolved));
     }
-    // A descent that routed around, or stopped at, a broken rung: a holder of both keys can repair it (L-1).
+    // A descent that routed around, or stopped at, a broken rung: a holder of both keys can repair it.
     for (const keytree::RungSpan& span : resolved.brokenSpans) {
         scheduleLadderCheck(groupId, group.contextId, span.at, backgroundWindowMs(group));
     }
@@ -2281,14 +2281,14 @@ std::uint64_t GroupApiImpl::commitDate() {
 }
 
 void GroupApiImpl::chainTo(keytree::CommitStatement& statement, const server::GroupInfo& group) {
-    // 01: nothing is signed on pins this device cannot keep, or behind what a sibling instance saved meanwhile.
+    // Nothing is signed on pins this device cannot keep, or behind what a sibling instance saved meanwhile.
     _treeVerifier.assertMaySignAt(group.id, statement.seq);
     const keytree::CommitStatement previous = keytree::TreeCommits::fromWire(group.treeCommit.value());
     statement.prevDigest = keytree::TreeCommits::digest(previous);
     // A clock behind the last committer's signs its date. The bridge takes a date equal to the previous one even
-    // past its tolerance, so this never freezes (N-1); keep the max: the exception is equality, not "anything later".
+    // past its tolerance, so this never freezes; keep the max: the exception is equality, not "anything later".
     statement.date = std::max(statement.date, previous.date);
-    // 03: what every reader will check, checked before this member signs it, on the verified read it was planned on
+    // What every reader will check, checked before this member signs it, on the verified read it was planned on
     // (`describes` bound group.policy, group.creator and the roster to the latest statement). Without it, a mistaken
     // app call by an honest member gives a malicious bridge a genuinely signed out-of-role statement to land.
     const std::set<std::string> users(group.users.begin(), group.users.end());
@@ -2341,11 +2341,11 @@ void GroupApiImpl::submit(
     if (statement.seq <= _treeVerifier.pinnedSeq(groupId)) {
         throw StalePlan{}; // planned behind a state this client verified (or committed) since
     }
-    // T4-17 under the lock: a concurrent commit of ours may have been refused as a lost race since this was planned.
+    // Under the lock: a concurrent commit of ours may have been refused as a lost race since this was planned.
     _treeVerifier.assertMaySignAt(groupId, statement.seq);
     {
         std::lock_guard<std::mutex> guard(_unresolvedMutex);
-        // m2: another commit of ours, released with no known outcome since this was planned, may land at this seq.
+        // Another commit of ours, released with no known outcome since this was planned, may land at this seq.
         // `settle` completes it on the re-plan. A deferred self-update yields instead.
         const auto it = _unresolved.find(groupId);
         if (it != _unresolved.end() && it->second.digest != commit.digest && it->second.seq >= statement.seq &&
@@ -2446,7 +2446,7 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
     if (pending.op != op && !mayCompleteOther) {
         return Settled::Deferred;
     }
-    _treeVerifier.assertMaySignAt(groupId, pending.seq); // T4-17
+    _treeVerifier.assertMaySignAt(groupId, pending.seq);
     try {
         pending.send();
     } catch (const std::exception& e) {
@@ -2458,7 +2458,7 @@ GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std
         if (pending.op == op) {
             throw;
         }
-        // Another op: one resend was tried; the earlier commit is dropped and this op plans afresh (13).
+        // Another op: one resend was tried; the earlier commit is dropped and this op plans afresh.
         LOG_WARN("[settle] an earlier ", pending.kind, " to group ", groupId, " is dropped unresolved: ", e.what())
         forgetUnresolved(groupId, pending.digest);
         return Settled::Proceed;

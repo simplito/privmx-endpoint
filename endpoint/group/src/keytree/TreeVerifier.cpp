@@ -41,7 +41,7 @@ CommitStatement parse(const server::GroupTreeCommit& wire) {
     } catch (const std::invalid_argument& e) { reject(e.what()); }
 }
 
-// One spelling per key: the same point base58'd uncompressed is another string but the same grant key (T4-24).
+// One spelling per key: the same point base58'd uncompressed is another string but the same grant key.
 std::string canonicalKey(const std::string& base58) {
     try {
         return privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(base58).toBase58DER();
@@ -55,7 +55,7 @@ std::uint64_t nowMs() {
 // The latest statement, read ahead of this clock. The chain's dates never go back, so the latest one bounds them all,
 // and with it how far ahead of real time a member and a misbehaving bridge can push the dates the UserVerifier is
 // asked at (the bridge takes a commit dated as the statement it extends past its tolerance, so this bounds date
-// creep, not a freeze: N-1). Twice the bridge's own tolerance: an honest commit is dated within it of the bridge's
+// creep, not a freeze). Twice the bridge's own tolerance: an honest commit is dated within it of the bridge's
 // clock, and this clock may be as far behind the bridge's.
 CommitStatement parseLatest(const server::GroupTreeCommit& wire) {
     CommitStatement latest = parse(wire);
@@ -65,7 +65,7 @@ CommitStatement parseLatest(const server::GroupTreeCommit& wire) {
     return latest;
 }
 
-// ponytail: a "still accepted now" answer is reused for a minute, long enough for one listing's `preverifyListed` and
+// Limit: a "still accepted now" answer is reused for a minute, long enough for one listing's `preverifyListed` and
 // its `verifyListed`s. A key revoked within that minute can still move a pin; shorten it if that matters.
 constexpr std::uint64_t NOW_ANSWER_REUSE_MS = 60 * 1000;
 
@@ -90,7 +90,7 @@ GroupRules servedRules(const server::GroupInfo& group) {
 }
 
 // The latest statement describes exactly what is served: grant key, counters, roster, and the creator and the four
-// commit rules of the policy (T4-10; the rest of the policy is the bridge's and is not attested).
+// commit rules of the policy (the rest of the policy is the bridge's and is not attested).
 bool describes(const CommitStatement& latest, const server::GroupInfo& group) {
     return latest.keyVersion == static_cast<std::uint64_t>(group.keyVersion) &&
         latest.groupPubKey == group.groupPubKey &&
@@ -139,7 +139,7 @@ bool TreeVerifier::checkStatements(const std::vector<Claim>& claims, const Envir
     const auto keyNow = [](const Claim& claim) {
         return *claim.contextId + '\0' + claim.statement->committer + '\0' + claim.statement->committerPubKey;
     };
-    // Per claim, the requests its answer waits on: at the statement's date (unless cached) and now (N-3).
+    // Per claim, the requests its answer waits on: at the statement's date (unless cached) and now.
     struct Pending {
         const Claim* claim;
         std::optional<std::size_t> atDate;
@@ -319,7 +319,7 @@ TreeVerifier::Step TreeVerifier::step(
     bool checkHash,
     bool adjacent
 ) {
-    // The op's row of the effect table (T4-10). Its role is chosen by the op, so the effects must be the op's too, or a
+    // The op's row of the effect table. Its role is chosen by the op, so the effects must be the op's too, or a
     // removal relabelled as a self-update would need no role at all.
     const CommitOp op = statement.op;
     const bool create = op == CommitOp::Create;
@@ -336,7 +336,7 @@ TreeVerifier::Step TreeVerifier::step(
                      statement.rosterVersion != head.rosterVersion + (rosterMoves ? 1 : 0)) {
         reject("counters the op does not move that way");
     }
-    // One grant key per epoch, and a new epoch's never an earlier epoch's (T4-24).
+    // One grant key per epoch, and a new epoch's never an earlier epoch's.
     if (newEpoch && !grantKeys.insert(canonicalKey(statement.groupPubKey)).second) {
         reject("a new epoch's grant key is an earlier epoch's");
     }
@@ -401,7 +401,7 @@ void TreeVerifier::verifyChain(
         head = pin;
         grantKeys = {canonicalKey(pin.groupPubKey)};
     } else {
-        // 01: a pin loaded without its roster. The roster to continue from is replayed from genesis and must end at
+        // A pin loaded without its roster. The roster to continue from is replayed from genesis and must end at
         // exactly the pinned statement (so it reproduces the pinned rosterHash); the head keeps the pinned tree hash,
         // so a rotation or policy statement next is held to the pinned tree.
         Openers known = openersAt(groupId, contextId, pin.seq, pin.digest, environment);
@@ -563,7 +563,7 @@ void TreeVerifier::assertValidNow(
     const Environment& environment,
     bool& checkedNow
 ) {
-    // N-3 for a pin that appeared or moved after `movesPin` looked (a concurrent read, or stored records merged in):
+    // For a pin that appeared or moved after `movesPin` looked (a concurrent read, or stored records merged in):
     // the latest statement moves it, so its committer's key must be accepted now too.
     if (!checkedNow) {
         verifyStatements(groupId, contextId, {latest}, environment, true);
@@ -859,7 +859,7 @@ void TreeVerifier::chainFromGenesis(
 ) {
     // Only the statements since the last answer: the same checks a fetch from seq 1 makes, the earlier ones having
     // passed them already. Replayed forward from the genesis roster, so each committer was a member when it signed and
-    // the pinned roster hash is the replayed roster's (I-1).
+    // the pinned roster hash is the replayed roster's.
     followChain(groupId, contextId, known.head, known.grantKeys, pinSeq, environment, [&](const CommitStatement& s) {
         known.byEpoch.emplace(s.keyVersion, s);
     });

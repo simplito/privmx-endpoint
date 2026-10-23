@@ -1696,7 +1696,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_still_reports_a_stale_key_when_the_re_
 }
 
 TEST_F(ThreadUsingGroupsTest, SECURITY_a_metadata_update_after_a_rekey_keeps_the_new_key) {
-    // F-05a, honest Bridge. A re-key installs K2 but leaves the newest data entry under K1. An update that kept
+    // Honest Bridge. A re-key installs K2 but leaves the newest data entry under K1. An update that kept
     // "the key of the newest entry" put K1 back as the Thread's key and re-wrapped it to G, so everything sent
     // afterwards was under a key user_3, removed from G before the re-key, had read with.
     std::string groupId;

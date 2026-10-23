@@ -106,7 +106,7 @@ TEST(GroupEnvelopeKeyFilter, DropsEntriesLeftEmpty) {
 }
 
 TEST(GroupEnvelopeKeyFilter, SECURITY_KeepsOnlyTheGroupsOwnRoutes) {
-    // T4-07: a group's key is wrapped to the group itself. A route through another group is a key somebody else
+    // A group's key is wrapped to the group itself. A route through another group is a key somebody else
     // chose, served under the same keyId.
     auto all = std::vector<core::server::GroupKeysEntry>{route("grp", {key("k", 1)}), route("other", {key("k", 1)})};
     auto filtered = GroupApiImplTestAccess::filterToKeyId(all, "grp", "k");
@@ -115,7 +115,7 @@ TEST(GroupEnvelopeKeyFilter, SECURITY_KeepsOnlyTheGroupsOwnRoutes) {
 }
 
 TEST(GroupEnvelopeKeyFilter, SECURITY_AnEarlierEpochsKeyCountsOnlyAsItsOpenerWrappedIt) {
-    // T4-07: anybody in the context can wrap a key of their own to epoch 2's public grant key and seal a member
+    // Anybody in the context can wrap a key of their own to epoch 2's public grant key and seal a member
     // envelope under it. Only the member who opened epoch 2 wraps that epoch's content key.
     std::map<std::uint64_t, keytree::CommitStatement> openers;
     openers[1].committer = "alice";
@@ -135,7 +135,7 @@ TEST(GroupEnvelopeKeyFilter, UnknownKeyYieldsNothing) {
 }
 
 TEST(GroupEnvelopeKeyFilter, SECURITY_AHeadKeyFromAnEarlierEpochIsRefused) {
-    // T3-02: the bridge serves the verified current epoch over the head entry from before a removal. The
+    // The bridge serves the verified current epoch over the head entry from before a removal. The
     // pre-removal key is the one the removed member still holds; nothing may be written or cached under it.
     group::server::GroupInfo group;
     group.id = "grp";
@@ -151,7 +151,7 @@ TEST(GroupEnvelopeKeyFilter, SECURITY_AHeadKeyFromAnEarlierEpochIsRefused) {
 }
 
 TEST(GroupEnvelopeKeyFilter, SECURITY_AGrantBehindThePinnedEpochIsStale) {
-    // T3-05: the bridge reports no stale group, but the container's current key is still wrapped to the epoch a
+    // The bridge reports no stale group, but the container's current key is still wrapped to the epoch a
     // removal ended. Only the route to the current key counts; older keys keep their old epochs by design.
     const auto pinned = [](const std::string& groupId) -> int64_t { return groupId == "grpA" ? 4 : 5; };
     const auto groupKeys = std::vector<core::server::GroupKeysEntry>{

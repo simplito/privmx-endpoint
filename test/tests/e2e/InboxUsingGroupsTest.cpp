@@ -726,7 +726,7 @@ TEST_F(InboxUsingGroupsTest, rotateInboxKeys_clears_staleGroups_after_the_group_
 }
 
 TEST_F(InboxUsingGroupsTest, SECURITY_entries_sent_after_a_rekey_are_sealed_to_the_new_key) {
-    // F-05d, honest Bridge. Senders seal an entry to the public key in the Inbox data, derived from the key the
+    // Honest Bridge. Senders seal an entry to the public key in the Inbox data, derived from the key the
     // data was written under. A re-key wrote no data, so entries sent after user_3's removal from G and the re-key
     // were still sealed to K1's key pair, which user_3 holds.
     std::string groupId;

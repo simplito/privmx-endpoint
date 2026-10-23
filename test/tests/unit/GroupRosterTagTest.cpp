@@ -297,7 +297,7 @@ TEST_F(GroupRosterTag, SECURITY_AnOlderCorrectlyTaggedRosterIsRejected) {
     EXPECT_THROW(verifier.assertDataIntegrity(rolledBack), GroupHistoryForkException);
 }
 
-// The audit scenario behind C2: counter 5 served beside a validly signed version-4 entry. The roster check refuses
+// Counter 5 served beside a validly signed version-4 entry. The roster check refuses
 // it — and must refuse it without having moved the pin to 5 first, or the honest version-4 response that follows
 // reads as a rollback and the group is bricked for the session.
 TEST_F(GroupRosterTag, SECURITY_ARejectedResponseDoesNotMoveThePin) {
@@ -476,7 +476,7 @@ TEST_F(GroupRosterTag, SECURITY_AMissingMetadataKeyIsAFailureNotAPass) {
 }
 
 TEST_F(GroupRosterTag, SECURITY_AMetadataEntryWrittenOffTheRosterIsRefused) {
-    // T4-03: anybody in the context can wrap a key of their own to the group's public grant key and tag a plane
+    // Anybody in the context can wrap a key of their own to the group's public grant key and tag a plane
     // under it. A former member's entry is accepted only by the remover's carry-forward, and only as it was read
     // before the removal, under the role the author held then.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
@@ -506,7 +506,7 @@ TEST_F(GroupRosterTag, SECURITY_AMetadataEntryWrittenOffTheRosterIsRefused) {
 }
 
 TEST_F(GroupRosterTag, SECURITY_AMetadataPlaneWrittenWithoutTheUpdateRoleIsRefused) {
-    // T4-03, the role half: bob is on the roster but the group's signed policy gives `update` to managers only.
+    // The role half: bob is on the roster but the group's signed policy gives `update` to managers only.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
     group.creator = "alice";
     group.publicMeta.author = "bob";

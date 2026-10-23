@@ -118,7 +118,7 @@ public:
     );
 
     // A rung's blob carries its span inside the ciphertext, `"pmx-rung\0" || u32(at) || u32(target) || WIF(key)`, so
-    // a rung relabelled by the bridge does not open (T4-08) and its sealer is not blamed for the relabelling.
+    // a rung relabelled by the bridge does not open and its sealer is not blamed for the relabelling.
     static std::string sealRung(
         const privmx::crypto::PrivateKey& key,
         const RungSpan& span,
