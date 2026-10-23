@@ -35,8 +35,9 @@ struct ArchiveRung {
     RungSpan span{0, 0};
     std::string blob;   // ECIES ciphertext, base64. Opaque to the server.
     // Who to blame for detected tampering. `GroupKeyResolver::authenticated` sets it to the opener of `span.at` (from
-    // the signed statement) for a rung that opener sealed and clears it for any other sealer, so blame never rests
-    // on the bridge's word.
+    // the signed statement) for a rung sealed under that opener's key and clears it for any other sealer, so the
+    // bridge alone cannot name a culprit. It is no proof of authorship: the seal is static ECDH, and anyone holding
+    // `sk_{span.at}` (every member of that epoch) can seal a rung under the opener's key and have it blamed on them.
     std::string author;
 };
 
