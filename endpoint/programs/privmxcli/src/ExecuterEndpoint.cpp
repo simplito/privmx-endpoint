@@ -85,16 +85,6 @@ bool ExecuterEndpoint::execute(const func_enum& fun_code, const Tokens &st) {
                 output = privmx::utils::Utils::stringifyVar(value, true);
             }
             _console_writer->print_result(Status::Success, time, output, this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
-        } catch (const privmx::utils::PrivmxException& e) {
-            std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
-            std::ostringstream ss;
-            ss << "0x" << std::setfill('0') << std::setw(8) << std::hex << e.getCode();
-            result->set("Error", e.what());
-            result->set("ErrorCodeHex", ss.str());
-            result->set("ErrorCode", e.getCode());
-            result->set("ErrorData", e.getData());
-            result->set("ErrorType", "privmx::utils::PrivmxException");
-            _console_writer->print_result(Status::Error, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         } catch (const core::Exception& e) {
             std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             std::ostringstream ss;
@@ -104,6 +94,7 @@ bool ExecuterEndpoint::execute(const func_enum& fun_code, const Tokens &st) {
             result->set("ErrorScope", e.getScope());
             result->set("ErrorCodeHex", ss.str());
             result->set("ErrorCode", e.getCode());
+            result->set("ErrorData", e.getData());
             result->set("ErrorDescription", e.getDescription());
             result->set("ErrorType", "core::Exception");
             _console_writer->print_result(Status::Error, time, privmx::utils::Utils::stringify(result, true), this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());

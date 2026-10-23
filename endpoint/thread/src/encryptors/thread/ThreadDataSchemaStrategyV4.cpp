@@ -14,7 +14,6 @@ limitations under the License.
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/DynamicTypes.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/thread/Constants.hpp"
 
@@ -35,7 +34,7 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaStrategyV4::conver
 ) const {
     return {
         ThreadDataSchemaMapper::toLibThread(
-            thread, raw.publicMeta, raw.privateMeta, raw.statusCode, ThreadDataSchema::Version::VERSION_4
+            thread, raw.publicMeta, raw.privateMeta, raw.statusCode(), ThreadDataSchema::Version::VERSION_4
         ),
         core::DataIntegrityObject{
             .creatorUserId = thread.lastModifier,

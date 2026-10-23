@@ -17,7 +17,6 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreConstants.hpp"
 #include "privmx/endpoint/core/EndpointUtils.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
 
 #include "privmx/endpoint/core/KeyProvider.hpp"
@@ -179,7 +178,7 @@ std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncK
         std::unordered_map<std::string, std::vector<GroupKeyCandidate>> unresolved;
         for (const auto& kv : groupLocEntry.second) {
             auto it = locationResult.find(kv.first);
-            if (it == locationResult.end() || it->second.statusCode != 0) {
+            if (it == locationResult.end() || it->second.statusCode() != 0) {
                 unresolved.insert(kv);
             }
         }
@@ -189,7 +188,7 @@ std::unordered_map<EncKeyLocation, std::unordered_map<std::string, DecryptedEncK
         auto groupResult = decryptAndVerifyGroupKeys(unresolved, location, groupPrivKeyResolver);
         for (auto& kv : groupResult) {
             auto it = locationResult.find(kv.first);
-            if (it == locationResult.end() || it->second.statusCode != 0) {
+            if (it == locationResult.end() || it->second.statusCode() != 0) {
                 locationResult[kv.first] = kv.second;
             }
         }
@@ -228,7 +227,7 @@ std::vector<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUsers(
         } else {
             missingKeyDIO.randomId = t.second.dio.randomId;
         }
-        if (key.statusCode != 0)
+        if (key.statusCode() != 0)
             continue;
         for (auto user : users) {
             result.push_back(createKeyEntrySet(user, key, missingKeyDIO, location, containerSecret));
@@ -271,7 +270,7 @@ bool KeyProvider::verifyKeysSecret(
         auto keySecretHash = privmx::crypto::Crypto::hmacSha256(
             containerSecret, key.second.keySecret + location.contextId + location.resourceId
         );
-        if (key.second.statusCode != 0 ||
+        if (key.second.statusCode() != 0 ||
             (key.second.dataStructureVersion == EncryptionKeyDataSchema::Version::VERSION_2 &&
              key.second.secretHash != keySecretHash)) {
             return false;
@@ -285,25 +284,21 @@ DecryptedEncKeyV2 KeyProvider::decryptKeyEntry(
     const privmx::crypto::PrivateKey& privKey
 ) {
     DecryptedEncKeyV2 decryptedEncKey;
-    decryptedEncKey.statusCode = 0;
     if (keyEntry.data.type() == typeid(Poco::JSON::Object::Ptr)) {
         dynamic::VersionedData versioned;
         try {
             versioned = dynamic::VersionedData::fromJSON(keyEntry.data);
         } catch (const privmx::endpoint::core::Exception& e) {
-            decryptedEncKey.statusCode = e.getCode();
-            return decryptedEncKey;
-        } catch (const privmx::utils::PrivmxException& e) {
-            decryptedEncKey.statusCode = core::ExceptionConverter::convert(e).getCode();
+            decryptedEncKey.error = asError(e);
             return decryptedEncKey;
         } catch (...) {
-            decryptedEncKey.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+            decryptedEncKey.error = unknownError("decoding the key entry's version header");
             return decryptedEncKey;
         }
         if (versioned.version == EncryptionKeyDataSchema::Version::VERSION_2) {
             return _encKeyEncryptorV2.decrypt(server::EncryptedKeyEntryDataV2::fromJSON(keyEntry.data), privKey);
         } else {
-            decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
+            decryptedEncKey.error = asError(UnknownEncryptionKeyVersionException());
             return decryptedEncKey;
         }
     } else if (keyEntry.data.isString()) {
@@ -313,7 +308,7 @@ DecryptedEncKeyV2 KeyProvider::decryptKeyEntry(
         decryptedEncKey.secretHash = "";
         return decryptedEncKey;
     } else {
-        decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
+        decryptedEncKey.error = asError(UnknownEncryptionKeyVersionException());
         return decryptedEncKey;
     }
 }
@@ -342,7 +337,7 @@ DecryptedEncKeyV2 KeyProvider::decryptGroupKeyCandidate(
                                                std::nullopt;
     if (!groupPrivKey.has_value()) {
         DecryptedEncKeyV2 failed;
-        failed.statusCode = UnknownEncryptionKeyVersionException().getCode();
+        failed.error = asError(UnknownEncryptionKeyVersionException());
         return failed;
     }
     DecryptedEncKeyV2 decrypted = decryptKeyEntry(candidate.keyEntry, groupPrivKey.value());
@@ -362,7 +357,7 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
         std::optional<DecryptedEncKeyV2> chosen;
         for (const auto& candidate : entry.second) {
             DecryptedEncKeyV2 decrypted = decryptGroupKeyCandidate(candidate, location, groupPrivKeyResolver);
-            if (decrypted.statusCode == 0) {
+            if (decrypted.statusCode() == 0) {
                 chosen = decrypted;
                 break;
             }
@@ -380,11 +375,11 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
         if (firstFailure.has_value()) {
             LOG_ERROR(
                 "Error on KeyProvider::decryptAndVerifyGroupKeys, group key route failed", "\nkeyId: ", entry.first,
-                "\ngroup: ", firstFailureGroupId, "\nstatusCode: ", firstFailure->statusCode,
-                "\nOpened by another route: ", (chosen->statusCode == 0 ? "yes" : "no"),
+                "\ngroup: ", firstFailureGroupId, "\nerror: ", firstFailure->error->getFull(),
+                "\nOpened by another route: ", (chosen->statusCode() == 0 ? "yes" : "no"),
                 "\nContainer key marked unusable: yes"
             )
-            chosen->statusCode = firstFailure->statusCode;
+            chosen->error = firstFailure->error;
         }
         result.insert(std::make_pair(entry.first, chosen.value()));
     }
@@ -396,11 +391,11 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
 }
 
 void KeyProvider::verifyKeyLocation(DecryptedEncKeyV2& key, const EncKeyLocation& location) {
-    if (key.statusCode != 0 || key.dataStructureVersion != EncryptionKeyDataSchema::Version::VERSION_2) {
+    if (key.statusCode() != 0 || key.dataStructureVersion != EncryptionKeyDataSchema::Version::VERSION_2) {
         return;
     }
     if (key.dio.contextId != location.contextId || key.dio.resourceId != location.resourceId) {
-        key.statusCode = EncryptionKeyContainerValidationException().getCode();
+        key.error = asError(EncryptionKeyContainerValidationException());
     }
 }
 
@@ -417,7 +412,7 @@ void KeyProvider::verifyData(
 void KeyProvider::verifyForDuplication(std::unordered_map<std::string, DecryptedEncKeyV2>& keys) {
     std::map<std::pair<std::string, int64_t>, std::string> duplicateMap;
     for (auto it = keys.begin(); it != keys.end(); ++it) {
-        if (it->second.statusCode != 0 || it->second.dio.creatorPubKey == "")
+        if (it->second.statusCode() != 0 || it->second.dio.creatorPubKey == "")
             continue;
         auto keyNonce = it->second.dio.randomId;
         auto keyTimestamp = it->second.dio.timestamp;
@@ -426,9 +421,9 @@ void KeyProvider::verifyForDuplication(std::unordered_map<std::string, Decrypted
         );
         auto ret = duplicateMap.insert(val);
         if (ret.second == false) {
-            auto e = DataIntegrityObjectDuplicatedException();
-            it->second.statusCode = e.getCode();
-            keys[ret.first->second].statusCode = e.getCode();
+            auto error = asError(DataIntegrityObjectDuplicatedException());
+            it->second.error = error;
+            keys[ret.first->second].error = error;
         }
     }
 }
@@ -440,7 +435,7 @@ void KeyProvider::verifyUserData(
     std::vector<VerificationRequest> verificationRequest;
     for (auto loc = decryptedKeys.begin(); loc != decryptedKeys.end(); ++loc) {
         for (auto it = loc->second.begin(); it != loc->second.end(); ++it) {
-            if (it->second.statusCode == 0 &&
+            if (it->second.statusCode() == 0 &&
                 it->second.dataStructureVersion == EncryptionKeyDataSchema::Version::VERSION_2) {
                 tmp.push_back(std::make_pair(loc->first, it->first));
                 verificationRequest.push_back(
@@ -458,7 +453,7 @@ void KeyProvider::verifyUserData(
     auto verificationResult = _getUserVerifier()->verify(verificationRequest);
     for (size_t i = 0; i < verificationResult.size(); i++) {
         if (verificationResult[i] == false) {
-            decryptedKeys[tmp[i].first][tmp[i].second].statusCode = UserVerificationFailureException().getCode();
+            decryptedKeys[tmp[i].first][tmp[i].second].error = asError(UserVerificationFailureException());
         }
     }
 }

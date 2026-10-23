@@ -20,7 +20,9 @@ std::vector<bool> UserVerifier::verify(const std::vector<VerificationRequest>& r
     std::vector<bool> result;
     try {
         result = _userVerifier->verify(request);
-    } catch (...) { throw core::UserVerificationMethodUnhandledException(); }
+    } catch (const Exception& e) { throw core::UserVerificationMethodUnhandledException(e); } catch (...) {
+        throw core::UserVerificationMethodUnhandledException();
+    }
     if (result.size() != request.size()) {
         throw MalformedVerifierResponseException(
             "VerificationResult size is " +

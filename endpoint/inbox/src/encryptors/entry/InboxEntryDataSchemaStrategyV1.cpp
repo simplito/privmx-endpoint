@@ -13,7 +13,6 @@ limitations under the License.
 #include "privmx/endpoint/inbox/InboxException.hpp"
 #include <privmx/crypto/ecc/ECC.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/store/StoreApiImpl.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
@@ -55,12 +54,13 @@ InboxEntryResult InboxEntryDataSchemaStrategyV1::decryptEntry(
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) const {
     InboxEntryResult result;
-    result.statusCode = 0;
     try {
         inbox::server::InboxMessageServer inboxMessageServer;
         try {
             inboxMessageServer = inbox::server::InboxMessageServer::deserialize(utils::Base64::toString(message.data));
-        } catch (...) { throw FailedToExtractMessagePublicMetaException(); }
+        } catch (const core::Exception& e) { throw FailedToExtractMessagePublicMetaException(e); } catch (...) {
+            throw FailedToExtractMessagePublicMetaException();
+        }
         auto msgData = inboxMessageServer.message;
 
         auto msgPublicData = decryptPublicOnly(msgData);
@@ -74,17 +74,15 @@ InboxEntryResult InboxEntryDataSchemaStrategyV1::decryptEntry(
         auto eccKey = privmx::crypto::ECC::fromPrivateKey(encKey.key);
         auto privKeyECC = privmx::crypto::PrivateKey(eccKey);
         auto decrypted = decrypt(msgData, privKeyECC);
-        result.statusCode = encKey.statusCode;
+        result.error = encKey.error;
         result.publicData = decrypted.publicData;
         result.privateData = decrypted.privateData;
         result.storeId = inboxMessageServer.store;
         result.filesIds = inboxMessageServer.files;
         return result;
-    } catch (const core::Exception& e) {
-        return makeEmptyResultWithStatusCode(e.getCode());
-    } catch (const privmx::utils::PrivmxException& e) {
-        return makeEmptyResultWithStatusCode(core::ExceptionConverter::convert(e).getCode());
-    } catch (...) { return makeEmptyResultWithStatusCode(ENDPOINT_CORE_EXCEPTION_CODE); }
+    } catch (const core::Exception& e) { return makeEmptyResult(core::asError(e)); } catch (...) {
+        return makeEmptyResult(core::unknownError("decrypting the inbox entry"));
+    }
 }
 
 inbox::InboxEntry InboxEntryDataSchemaStrategyV1::convertToFinal(
@@ -98,12 +96,12 @@ inbox::InboxEntry InboxEntryDataSchemaStrategyV1::convertToFinal(
     result.createDate = message.createDate;
     result.data = core::Buffer::from(raw.privateData.text);
     result.authorPubKey = raw.publicData.userPubKey;
-    result.statusCode = raw.statusCode;
-    if (raw.statusCode == 0) {
+    result.statusCode = raw.statusCode();
+    if (!raw.error) {
         try {
             core::DecryptedEncKey fileMetaEncKey{
                 core::EncKey{.id = "", .key = raw.privateData.filesMetaKey},
-                core::DecryptedVersionedData{.dataStructureVersion = 0, .statusCode = 0}
+                core::DecryptedVersionedData{.dataStructureVersion = 0, .error = nullptr}
             };
             store::server::StoreFileGetManyModel filesGetModel;
             filesGetModel.storeId = raw.storeId;
@@ -122,18 +120,16 @@ inbox::InboxEntry InboxEntryDataSchemaStrategyV1::convertToFinal(
                     result.files.push_back(error);
                 }
             }
-        } catch (const core::Exception& e) {
-            result.statusCode = e.getCode();
-        } catch (const privmx::utils::PrivmxException& e) {
-            result.statusCode = core::ExceptionConverter::convert(e).getCode();
-        } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        } catch (const core::Exception& e) { result.statusCode = e.getCode(); } catch (...) {
+            result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        }
     }
     result.schemaVersion = EntryDataSchema::Version::VERSION_1;
     return result;
 }
 
-InboxEntryResult InboxEntryDataSchemaStrategyV1::makeEmptyResultWithStatusCode(int64_t statusCode) {
+InboxEntryResult InboxEntryDataSchemaStrategyV1::makeEmptyResult(std::shared_ptr<const core::Exception> error) {
     InboxEntryResult result;
-    result.statusCode = statusCode;
+    result.error = std::move(error);
     return result;
 }

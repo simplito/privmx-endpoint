@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
 #include "privmx/endpoint/thread/Events.hpp"
@@ -93,16 +92,11 @@ bool Events::isThreadCreatedEvent(const core::EventHolder& handler) {
 }
 
 ThreadCreatedEvent Events::extractThreadCreatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<ThreadCreatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractThreadCreatedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<ThreadCreatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractThreadCreatedEventException();
     }
+    return *event;
 }
 
 bool Events::isThreadUpdatedEvent(const core::EventHolder& handler) {
@@ -110,16 +104,11 @@ bool Events::isThreadUpdatedEvent(const core::EventHolder& handler) {
 }
 
 ThreadUpdatedEvent Events::extractThreadUpdatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<ThreadUpdatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractThreadUpdatedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<ThreadUpdatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractThreadUpdatedEventException();
     }
+    return *event;
 }
 
 bool Events::isThreadDeletedEvent(const core::EventHolder& handler) {
@@ -127,16 +116,11 @@ bool Events::isThreadDeletedEvent(const core::EventHolder& handler) {
 }
 
 ThreadDeletedEvent Events::extractThreadDeletedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<ThreadDeletedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractThreadDeletedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<ThreadDeletedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractThreadDeletedEventException();
     }
+    return *event;
 }
 
 bool Events::isThreadStatsEvent(const core::EventHolder& eventHolder) {
@@ -144,16 +128,11 @@ bool Events::isThreadStatsEvent(const core::EventHolder& eventHolder) {
 }
 
 ThreadStatsChangedEvent Events::extractThreadStatsEvent(const core::EventHolder& eventHolder) {
-    try {
-        auto event = std::dynamic_pointer_cast<ThreadStatsChangedEvent>(eventHolder.get());
-        if (!event) {
-            throw CannotExtractThreadStatsEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<ThreadStatsChangedEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractThreadStatsEventException();
     }
+    return *event;
 }
 
 bool Events::isThreadNewMessageEvent(const core::EventHolder& handler) {
@@ -161,16 +140,11 @@ bool Events::isThreadNewMessageEvent(const core::EventHolder& handler) {
 }
 
 ThreadNewMessageEvent Events::extractThreadNewMessageEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<ThreadNewMessageEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractThreadNewMessageEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<ThreadNewMessageEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractThreadNewMessageEventException();
     }
+    return *event;
 }
 
 bool Events::isThreadMessageUpdatedEvent(const core::EventHolder& handler) {
@@ -178,16 +152,11 @@ bool Events::isThreadMessageUpdatedEvent(const core::EventHolder& handler) {
 }
 
 ThreadMessageUpdatedEvent Events::extractThreadMessageUpdatedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<ThreadMessageUpdatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractThreadMessageUpdatedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<ThreadMessageUpdatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractThreadMessageUpdatedEventException();
     }
+    return *event;
 }
 
 bool Events::isThreadDeletedMessageEvent(const core::EventHolder& handler) {
@@ -199,14 +168,9 @@ bool Events::isThreadMessageDeletedEvent(const core::EventHolder& handler) {
 }
 
 ThreadMessageDeletedEvent Events::extractThreadMessageDeletedEvent(const core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<ThreadMessageDeletedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractThreadDeletedMessageEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<ThreadMessageDeletedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractThreadDeletedMessageEventException();
     }
+    return *event;
 }

@@ -1,4 +1,5 @@
 set(INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_BINARY_DIR}/include)
+set(INCLUDE_PUB_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include_pub)
 
 option(PRIVMX_BUILD_LOGGER "Enable privmx logger" OFF)
 if(PRIVMX_BUILD_LOGGER)
@@ -42,14 +43,15 @@ message(STATUS "Privmx executor async thread poll - PRIVMX_EXECUTOR_THREAD_POOL_
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/privmx/utils/ExecutorConfig.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/utils/ExecutorConfig.hpp)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/utils/ExecutorConfig.hpp DESTINATION include/privmx/utils)
 
-file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp)
+file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp ${CMAKE_CURRENT_SOURCE_DIR}/include_pub/*.hpp)
 add_library(privmxutils OBJECT ${SOURCES})
-target_include_directories(privmxutils PUBLIC ${INCLUDE_DIRS})
+target_include_directories(privmxutils PUBLIC ${INCLUDE_DIRS} PUBLIC ${INCLUDE_PUB_DIRS})
 target_compile_options(privmxutils PRIVATE -fPIC -Wall -Wextra -Wno-narrowing)
 target_link_libraries(privmxutils PUBLIC Poco::Foundation Poco::JSON Pson)
 if(BUILD_SHARED_LIBS)
     set_target_properties(privmxutils PROPERTIES POSITION_INDEPENDENT_CODE True)
 endif()
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include_pub/privmx DESTINATION include)
 if(PRIVMX_INSTALL_PRIVATE_HEADERS)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/privmx DESTINATION include)
 endif()

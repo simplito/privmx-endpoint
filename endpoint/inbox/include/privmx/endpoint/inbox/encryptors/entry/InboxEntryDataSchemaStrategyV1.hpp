@@ -55,7 +55,7 @@ public:
     ) const;
 
 private:
-    static InboxEntryResult makeEmptyResultWithStatusCode(int64_t statusCode);
+    static InboxEntryResult makeEmptyResult(std::shared_ptr<const core::Exception> error);
     std::shared_ptr<ServerApi> _serverApi;
     store::StoreApi _storeApi;
     mutable InboxEntryDataEncryptorV1 _encryptor;

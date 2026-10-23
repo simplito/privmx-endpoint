@@ -41,10 +41,6 @@ inline int CApiExecutor::execFunc(pson_value** result, const std::function<Poco:
         res->set("result", Poco::Dynamic::Var());
         res->set("error", ExceptionHandler::make_error(e));
         res->set("status", false);
-    } catch (const utils::PrivmxException& e) {
-        res->set("result", Poco::Dynamic::Var());
-        res->set("error", ExceptionHandler::make_error(e));
-        res->set("status", false);
     } catch (const Poco::Exception& e) {
         res->set("result", Poco::Dynamic::Var());
         res->set("error", ExceptionHandler::make_error(e));

@@ -14,7 +14,6 @@ limitations under the License.
 #include <Poco/ByteOrder.h>
 #include <cstring>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/Logger.hpp>
 
 using namespace privmx::endpoint;
@@ -52,9 +51,6 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
         return result;
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-        return result;
     } catch (...) {
         result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
         return result;
@@ -71,11 +67,9 @@ DecryptedDataChannelMessage DataChannelMessageEncryptorV1::decryptMessage(
             )
         );
         updateSeq(remoteStreamId, parsedEncryptedMessage.header.seq);
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.statusCode = e.getCode(); } catch (...) {
+        result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+    }
     return result;
 }
 

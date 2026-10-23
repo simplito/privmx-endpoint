@@ -15,7 +15,6 @@ limitations under the License.
 #include <optional>
 
 #include "privmx/endpoint/core/CoreTypes.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/encryptors/DIO/DIOEncryptorV1.hpp"

@@ -27,19 +27,19 @@ class EventDataEncryptorV5 {
 public:
     server::EncryptedContextEventDataV5 encrypt(
         const ContextEventDataToEncryptV5& eventData,
-        const crypto::PrivateKey& authorPrivateKey,
+        const privmx::crypto::PrivateKey& authorPrivateKey,
         const std::string& encryptionKey
     );
     DecryptedEventDataV5 decrypt(
         const server::EncryptedContextEventDataV5& encryptedEventData,
-        const crypto::PublicKey& authorPublicKey,
+        const privmx::crypto::PublicKey& authorPublicKey,
         const std::string& encryptionKey
     );
 
 private:
     core::DataIntegrityObject getDIOAndAssertIntegrity(
         const server::EncryptedContextEventDataV5& encryptedEventData,
-        const crypto::PublicKey& authorPublicKey
+        const privmx::crypto::PublicKey& authorPublicKey
     );
     void assertDataFormat(const server::EncryptedContextEventDataV5& encryptedEventData);
     core::DataEncryptorV4 _dataEncryptor;
