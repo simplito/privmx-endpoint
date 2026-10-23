@@ -693,10 +693,14 @@ void TreeVerifier::verifyListed(const server::GroupInfo& summary, const Environm
                 if (TreeCommits::digest(latest) != pin.digest) {
                     throw GroupHistoryForkException(); // at the pinned seq, only the pinned statement
                 }
-                return;
+                if (!pin.groupPubKey.empty()) {
+                    return;
+                }
+                // An adopted hint (`mergeStored`): completed from this genuine statement below.
+            } else {
+                assertValidNow(summary.id, summary.contextId, latest, environment, checkedNow);
+                verifyChain(summary.id, summary.contextId, pin, latest.seq, TreeCommits::digest(latest), environment);
             }
-            assertValidNow(summary.id, summary.contextId, latest, environment, checkedNow);
-            verifyChain(summary.id, summary.contextId, pin, latest.seq, TreeCommits::digest(latest), environment);
         }
         // Pinned like a member's read, so the next listing cannot go back to a state from before a removal. No tree
         // was checked, so no generations: those stay whatever a member's read pinned.
@@ -943,7 +947,22 @@ void TreeVerifier::mergeStored(const std::map<std::string, Pin>& stored, bool on
     std::lock_guard lock(_mutex);
     for (const auto& [groupId, record] : stored) {
         const auto it = _pins.find(groupId);
-        if (onlyUnpinned && it != _pins.end() && it->second.seq > 0) {
+        if (onlyUnpinned) {
+            if ((it != _pins.end() && it->second.seq > 0) || record.seq == 0) {
+                continue;
+            }
+            // M4: whoever holds the previous key can write its slot, so its record is a hint, never a verified state:
+            // seq, digest, context and tree hash only. Without grant key and epoch it satisfies no `pinnedAt` and
+            // moves no `pinnedKeyVersion`; without roster the next read that passes it replays the chain from genesis
+            // to it (`verifyChain`), one at its seq takes it only as the genuine latest statement. Never `refusedSeq`.
+            Pin hint;
+            hint.contextId = record.contextId;
+            hint.seq = record.seq;
+            hint.digest = record.digest;
+            hint.treeHash = record.treeHash;
+            hint.hasRoster = false;
+            hint.refusedSeq = it == _pins.end() ? 0 : it->second.refusedSeq;
+            _pins[groupId] = std::move(hint);
             continue;
         }
         Pin kept = PinBlob::higher(it == _pins.end() ? nullptr : &it->second, &record);

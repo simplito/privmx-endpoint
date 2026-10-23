@@ -2774,6 +2774,42 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnAdoptedRecordNeverRaisesAnExistingPin) {
     EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_AnAdoptedRecordIsAHintNotAVerifiedState) {
+    // M4: the thief of alice's previous key writes its slot: her real record for the group, but with a grant key of
+    // its own and a lost-race seq that would block every commit. Adopted for a group with no pin, it must hand out no
+    // grant key and keep no lost-race seq: only seq and digest, which the next read checks.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob"});
+    const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
+    const std::string thiefKey = PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    TreeVerifier::PinSet planted;
+    TreeVerifier::Pin pin = storedPin(groupId, previous).value();
+    pin.keyVersion = 7;
+    pin.groupPubKey = thiefKey;
+    pin.refusedSeq = 1000;
+    planted.tree[groupId] = pin;
+    const std::string slot = store->keyWith("group-pins/", "/" + previous.getPublicKey().toBase58DER());
+    store->put(slot, core::sealLocal(previous, PinBlob::LABEL, PinBlob::VERSION, slot, PinBlob::encode(planted)));
+    GroupApiImpl& alice = clientAdopting("alice", previous);
+    EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(alice, groupId), 1u) << "the hint still refuses what lies below it";
+    EXPECT_EQ(alice.pinnedKeyVersion(groupId), 0u);
+    EXPECT_FALSE(alice.agreesWithPin(groupId, CONTEXT, 7, thiefKey));
+    EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->refusedSeq, 0u) << "the lost-race seq was adopted";
+    Client& session = *clients.at("alice");
+    GrantingModule module(
+        session.connectionImpl->getUserPrivKey(), session.connectionImpl->getKeyProvider(), "",
+        session.connectionImpl->getEventMiddleware(), session.connection, session.groupApi
+    );
+    std::vector<core::GroupGrantWithKey> grants{{.groupId = groupId, .role = "user", .groupPubKey = thiefKey, .groupEpoch = 7}};
+    std::unordered_map<std::string, core::GroupEpochInfo> cache;
+    module.resolveGroupEpochs(CONTEXT, grants, cache);
+    EXPECT_EQ(grants.at(0).groupPubKey, bridge.tree.state.grantPublicKey.toBase58DER()) << "wrapped to the thief's key";
+    EXPECT_EQ(grants.at(0).groupEpoch, 1);
+    EXPECT_TRUE(alice.agreesWithPin(groupId, CONTEXT, 1, bridge.tree.state.grantPublicKey.toBase58DER()))
+        << "the read that checked the hint pins the group";
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_ACorruptedPreviousIdentityBlobAbortsTheAdoption) {
     quiet = true;
     store = std::make_shared<MemoryPinStore>();
@@ -2790,6 +2826,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ACorruptedPreviousIdentityBlobAbortsTheAdop
     changeKeyOf(bridge, clients, "alice");
     EXPECT_THROW(client("alice").adoptPreviousIdentity(previous), core::LocalStateIntegrityException);
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 0u) << "nothing adopted";
+    EXPECT_TRUE(clients.at("alice")->connectionImpl->previousIdentities().empty()) << "the key recorded all the same";
     EXPECT_THROW(
         Client(bridge, "alice", store, bridgeIdentity, previous), core::LocalStateIntegrityException
     ) << "nor through the connection";

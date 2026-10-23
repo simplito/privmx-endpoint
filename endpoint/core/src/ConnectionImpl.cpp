@@ -285,29 +285,28 @@ void ConnectionImpl::adoptPreviousIdentity(const crypto::PrivateKey& previous) {
     if (previousPub == _userPrivKey.getPublicKey().toBase58DER()) {
         return;
     }
-    {
-        std::unique_lock lock(_mutex);
-        if (std::none_of(_previousIdentities.begin(), _previousIdentities.end(), [&](const crypto::PrivateKey& k) {
-                return k.getPublicKey().toBase58DER() == previousPub;
-            })) {
-            _previousIdentities.push_back(previous);
+    std::optional<std::string> body;
+    if (store) {
+        const std::string slot = localStateSlot(localstate::GROUP_PINS, previous.getPublicKey());
+        const std::string blob = store->load(slot).stdString();
+        if (!blob.empty()) {
+            body = openLocal(previous, localstate::GROUP_PINS_LABEL, localstate::GROUP_PINS_VERSION, slot, blob);
+            if (!body.has_value()) {
+                // Never ignored: a store the Bridge can write must not be able to turn adoption off by corrupting it.
+                throw LocalStateIntegrityException("the previous identity's group pins do not open");
+            }
         }
     }
-    if (!store) {
-        return;
-    }
-    const std::string slot = localStateSlot(localstate::GROUP_PINS, previous.getPublicKey());
-    const std::string blob = store->load(slot).stdString();
-    if (blob.empty()) {
-        return;
-    }
-    const auto body = openLocal(previous, localstate::GROUP_PINS_LABEL, localstate::GROUP_PINS_VERSION, slot, blob);
-    if (!body.has_value()) {
-        // Never ignored: a store the Bridge can write must not be able to turn adoption off by corrupting the slot.
-        throw LocalStateIntegrityException("the previous identity's group pins do not open");
-    }
+    // Recorded only once the slot opened (or there is none): a failed adoption leaves nothing behind.
     std::unique_lock lock(_mutex);
-    _stagedPinBodies[previousPub] = body.value();
+    if (std::none_of(_previousIdentities.begin(), _previousIdentities.end(), [&](const crypto::PrivateKey& k) {
+            return k.getPublicKey().toBase58DER() == previousPub;
+        })) {
+        _previousIdentities.push_back(previous);
+    }
+    if (body.has_value()) {
+        _stagedPinBodies[previousPub] = body.value();
+    }
 }
 
 std::map<std::string, std::string> ConnectionImpl::getStagedPinBodies() {

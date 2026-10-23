@@ -214,7 +214,8 @@ public:
     // max when the record wins. A stored record is this device's own verified state, so it is taken without a read.
     // Two instances that verified different branches simply converge on the higher one (a fork is a boundary, not
     // detected here: a bridge able to fork can withhold just as well). `onlyUnpinned`: records only for groups with no
-    // pin yet (a previous identity's slot, which whoever holds that key can write: it must never raise a pin).
+    // pin yet (a previous identity's slot, which whoever holds that key can write: it must never raise a pin), and
+    // only as a hint (seq, digest, context, tree hash) that the next read checks; never `refusedSeq` (M4).
     void mergeStored(const std::map<std::string, Pin>& stored, bool onlyUnpinned = false);
     // Set once, before use: called after `_mutex` is released whenever something persistent moved. `major`: the
     // context, epoch, roster or rules changed, or `refusedSeq` rose; tree-only moves (self-updates) are minor.
