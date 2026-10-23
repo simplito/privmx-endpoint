@@ -2765,6 +2765,22 @@ TEST_F(GroupApiLyingBridge, ASelfUpdateStormIsSavedAtTheIdleInterval) {
     EXPECT_EQ(store->savesOf(slot), before) << "no save before PIN_SAVE_IDLE_INTERVAL";
 }
 
+TEST_F(GroupApiLyingBridge, AMetadataVersionSeenByAReadIsSavedBeforeItReturns) {
+    // A metadata write is rare: the version pin it raises is in the store when the read that saw it returns, not
+    // PIN_SAVE_IDLE_INTERVAL later.
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob"});
+    client("alice").getGroup(groupId);
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("v2"), 1);
+    client("alice").getGroup(groupId);
+    const PrivateKey& key = bridge.users.at("alice");
+    const std::string slot = store->keyWith("group-pins/", "/" + key.getPublicKey().toBase58DER());
+    const auto body = core::openLocal(key, PinBlob::LABEL, PinBlob::VERSION, slot, store->get(slot));
+    const auto pins = body.has_value() ? PinBlob::decode(body.value()) : std::nullopt;
+    ASSERT_TRUE(pins.has_value() && pins->planes.count(groupId) > 0);
+    EXPECT_EQ(pins->planes.at(groupId)[1], 2);
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_AMajorMoveSeenByAContainerKeyLookupIsSavedBeforeItReturns) {
     // A client that only uses containers resolves group keys and never calls GroupApi: a removal it verified there
     // must be in the store at once, so a session killed right after still refuses the pre-removal state.

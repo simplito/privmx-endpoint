@@ -65,7 +65,8 @@ public:
     void storeVersionPins(const server::GroupInfo& groupInfo);
 
     // 01: the version pins per group (rosterVersion, publicMetaVersion, privateMetaVersion) for the pin blob, and
-    // stored ones merged back per counter by max. `onPinsMoved(false)` runs (outside the lock) when a counter rose.
+    // stored ones merged back per counter by max. `onPinsMoved` runs (outside the lock) when a counter rose: major
+    // unless the group had no version pin yet.
     std::map<std::string, std::array<std::int64_t, 3>> exportVersionPins();
     void importVersionPins(const std::map<std::string, std::array<std::int64_t, 3>>& stored);
     void onPinsMoved(std::function<void(bool major)> callback) { _onPinsMoved = std::move(callback); }
