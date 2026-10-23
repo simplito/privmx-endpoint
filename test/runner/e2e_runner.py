@@ -259,7 +259,11 @@ def validate_input_paths(test_dir_path: str, init_file_path: str, dataset_dir_pa
 def resolve_dataset_ini_path(dataset_dir_path: str) -> str:
     ini_path = Path(dataset_dir_path) / "ServerData.ini"
     if not ini_path.exists():
-        raise SystemExit(f"ServerData.ini not found in dataset directory: {dataset_dir_path}")
+        raise SystemExit(
+            f"ServerData.ini not found in dataset directory: {dataset_dir_path}\n"
+            "Datasets are not stored in the repository; generate the default one with\n"
+            "./scripts/generate_test_dataset.sh, or another with ./scripts/dataset.sh <name>."
+        )
     return str(ini_path)
 
 
