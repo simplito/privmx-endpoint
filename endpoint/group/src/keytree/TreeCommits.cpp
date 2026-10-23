@@ -404,7 +404,12 @@ CommitStatement TreeCommits::fromWire(const server::GroupTreeCommit& wire) {
     statement.groupId = wire.groupId;
     statement.treeVersion = inRange<std::uint32_t>(wire.treeVersion, "treeVersion");
     statement.date = inRange<std::uint64_t>(wire.date, "date");
-    statement.keyVersion = inRange<std::uint64_t>(wire.keyVersion, "keyVersion");
+    // Epochs are 32-bit everywhere past the signature, and a chain and its epochs start at 1: refused here, at the
+    // one parse every statement goes through, rather than wrapped or truncated into some real epoch later.
+    statement.keyVersion = inRange<std::uint32_t>(wire.keyVersion, "keyVersion");
+    if (statement.seq == 0 || statement.keyVersion == 0) {
+        throw std::invalid_argument("commit statement seq or keyVersion is 0");
+    }
     statement.groupPubKey = wire.groupPubKey;
     statement.rosterVersion = inRange<std::uint64_t>(wire.rosterVersion, "rosterVersion");
     statement.rosterHash = fromHex32(wire.rosterHash);

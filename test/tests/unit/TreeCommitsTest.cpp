@@ -492,6 +492,9 @@ TEST(TreeCommitsStatement, RefusesWhatDoesNotDecode) {
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.policyHash = ""; })) << "missing";
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.policyHash = w.policyHash.substr(2); })) << "short";
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.seq = -1; }));
+    EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.seq = 0; }));
+    EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.keyVersion = 0; }));
+    EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.keyVersion = std::int64_t(1) << 32; })) << "past 32 bits";
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.committerSeat = std::int64_t(1) << 33; }));
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.treeHash = w.treeHash.substr(2); }));
     EXPECT_TRUE(refused([](server::GroupTreeCommit& w) { w.rosterHash[0] = 'A'; }));
