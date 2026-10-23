@@ -155,6 +155,9 @@ public:
      * @param groupId ID of the Group
      * @param previousUserPrivKey the caller's previous identity private key, in WIF
      * @return true if a commit was made, false if the leaf already opens with the current key
+     * @throws LocalStateIntegrityException when the previous key's pin slot in the PinStore fails its integrity check.
+     * The app may deliberately delete that slot from its PinStore and retry, accepting that groups without a pin
+     * under the current key are then read on trust once, as on first contact.
      */
     bool renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey);
 

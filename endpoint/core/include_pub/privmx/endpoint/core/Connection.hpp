@@ -154,7 +154,9 @@ public:
      * GroupApi::removeGroupMembers whose own leaf does not open but opens with the previous key is then refused until
      * GroupApi::renewLeaf, instead of abandoning the group's history.
      * @param previousUserPrivKey the previous identity private key in WIF
-     * @throws LocalStateIntegrityException when the previous key's stored pins fail their integrity check
+     * @throws LocalStateIntegrityException when the previous key's stored pins fail their integrity check. The app
+     * may deliberately delete that slot (the previous key's) from its PinStore and call again, accepting that groups
+     * without a pin under the current key are then read on trust once, as on first contact.
      */
     void adoptPreviousIdentity(const std::string& previousUserPrivKey);
 
