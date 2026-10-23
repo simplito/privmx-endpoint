@@ -2168,6 +2168,14 @@ PrivateKey changeKeyOf(Bridge& bridge, std::map<std::string, std::unique_ptr<Cli
     return previous;
 }
 
+// `pins` sealed into `key`'s group-pins slot on `store`, next to `like` (a slot already saved there), as `key`'s own
+// save would write them.
+void plantSlot(MemoryPinStore& store, const PrivateKey& key, const PrivateKey& like, const TreeVerifier::PinSet& pins) {
+    const std::string other = store.keyWith("group-pins/", "/" + like.getPublicKey().toBase58DER());
+    const std::string slot = other.substr(0, other.rfind('/') + 1) + key.getPublicKey().toBase58DER();
+    store.put(slot, core::sealLocal(key, PinBlob::LABEL, PinBlob::VERSION, slot, PinBlob::encode(pins)));
+}
+
 std::size_t sent(const Bridge& bridge) {
     return bridge.received.size();
 }
@@ -2919,7 +2927,8 @@ TEST_F(GroupApiLyingBridge, AdoptPreviousIdentityCarriesThePinsToTheNewKey) {
     GroupApiImplTestAccess::stopDueWork(*clients.at("alice")->api);
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 2u);
     EXPECT_THROW(client("alice").getGroup(groupId), GroupHistoryForkException);
-    EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u) << "carried to the new key's slot";
+    const auto stored = storedPin(groupId, bridge.users.at("alice"));
+    EXPECT_TRUE(!stored.has_value() || stored->seq == 0u) << "a hint is saved only once a read verified it";
 }
 
 TEST_F(GroupApiLyingBridge, AnAdoptedRecordNeverReplacesAFirstContactPin) {
@@ -2986,7 +2995,8 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnAdoptedRecordIsAHintNotAVerifiedState) {
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(alice, groupId), 1u) << "the hint still refuses what lies below it";
     EXPECT_EQ(alice.pinnedKeyVersion(groupId), 0u);
     EXPECT_FALSE(alice.agreesWithPin(groupId, CONTEXT, 7, thiefKey));
-    EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->refusedSeq, 0u) << "the lost-race seq was adopted";
+    const auto stored = storedPin(groupId, bridge.users.at("alice"));
+    EXPECT_TRUE(!stored.has_value() || stored->refusedSeq == 0u) << "the lost-race seq was adopted";
     Client& session = *clients.at("alice");
     GrantingModule module(
         session.connectionImpl->getUserPrivKey(), session.connectionImpl->getKeyProvider(), "",
@@ -2999,6 +3009,104 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnAdoptedRecordIsAHintNotAVerifiedState) {
     EXPECT_EQ(grants.at(0).groupEpoch, 1);
     EXPECT_TRUE(alice.agreesWithPin(groupId, CONTEXT, 1, bridge.tree.state.grantPublicKey.toBase58DER()))
         << "the read that checked the hint pins the group";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AHintIsCompletedOnlyOffTheChainFromGenesis) {
+    // A hint at the served seq is not taken from the latest statement alone: the chain from genesis to it is
+    // replayed first, and only then does it hold a grant key.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob"});
+    selfUpdateBy("bob");
+    client("alice").resolveGroupPrivKey(groupId); // seq 2 under the previous key
+    const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
+    GroupApiImpl& alice = clientAdopting("alice", previous);
+    ASSERT_EQ(GroupApiImplTestAccess::pinnedSeq(alice, groupId), 2u);
+    ASSERT_EQ(alice.pinnedKeyVersion(groupId), 0u);
+    const std::size_t fetched = count("alice", "context.groupGetTreeCommits");
+    EXPECT_NO_THROW(alice.getGroup(groupId));
+    EXPECT_GT(count("alice", "context.groupGetTreeCommits"), fetched) << "the chain to the hint was replayed";
+    EXPECT_EQ(alice.pinnedKeyVersion(groupId), 1u);
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(alice));
+    const auto stored = storedPin(groupId, bridge.users.at("alice"));
+    ASSERT_TRUE(stored.has_value());
+    EXPECT_EQ(stored->seq, 2u) << "verified, it is saved";
+    EXPECT_EQ(stored->groupPubKey, bridge.tree.state.grantPublicKey.toBase58DER());
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AHintOffTheChainIsDroppedNotRefusedForever) {
+    // A digest the genuine chain never had, planted at the served seq and below it: the hint fails its replay and is
+    // dropped, so the read is a first contact instead of a fork refused in every session; nothing of it is saved.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob"});
+    const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
+    client("bob").getGroup(groupId);
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
+    for (const std::uint64_t seq : {1u, 2u}) {
+        if (seq == 2u) {
+            selfUpdateBy("bob");
+            clients.erase("alice"); // and what it saved: no pin under the current key again
+            store->put(store->keyWith("group-pins/", "/" + bridge.users.at("alice").getPublicKey().toBase58DER()), "");
+        }
+        TreeVerifier::PinSet planted;
+        TreeVerifier::Pin hint;
+        hint.contextId = CONTEXT;
+        hint.seq = 1;
+        hint.digest = std::string(32, 'p');
+        planted.tree[groupId] = hint;
+        plantSlot(*store, previous, bridge.users.at("bob"), planted);
+        GroupApiImpl& alice = clientAdopting("alice", previous);
+        ASSERT_EQ(GroupApiImplTestAccess::pinnedSeq(alice, groupId), 1u);
+        ASSERT_TRUE(GroupApiImplTestAccess::savePins(alice));
+        const auto before = storedPin(groupId, bridge.users.at("alice"));
+        EXPECT_TRUE(!before.has_value() || before->seq == 0u) << "a hint is not saved before it is verified";
+        EXPECT_NO_THROW(alice.getGroup(groupId)) << "at seq " << seq;
+        EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(alice, groupId), seq);
+        EXPECT_EQ(alice.pinnedKeyVersion(groupId), 1u);
+    }
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AnAdoptedRecordsVersionPinsAreNotTaken) {
+    // The previous key's version pins for a group with none under the current key: raised by whoever holds that key,
+    // they would refuse every honest answer as a rollback.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob"});
+    const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
+    client("bob").getGroup(groupId);
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
+    TreeVerifier::PinSet planted;
+    planted.planes[groupId] = {99, 99, 99};
+    plantSlot(*store, previous, bridge.users.at("bob"), planted);
+    GroupApiImpl& alice = clientAdopting("alice", previous);
+    EXPECT_EQ(GroupApiImplTestAccess::versionPins(alice, groupId), (std::array<std::int64_t, 3>{0, 0, 0}));
+    EXPECT_NO_THROW(alice.getGroup(groupId));
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ACompactPinContinuesFromTheReplayedTreeHash) {
+    // A compact record (no roster) is continued from its replay from genesis, tree hash included: a rotation next is
+    // held to the tree the chain signed, not to whatever the record says.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob"});
+    client("alice").getGroup(groupId);
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("alice")));
+    TreeVerifier::Pin compact = storedPin(groupId, bridge.users.at("alice")).value();
+    clients.erase("alice");
+    compact.roster.users.clear();
+    compact.roster.managers.clear();
+    compact.generations.clear();
+    compact.hasRoster = false;
+    compact.treeHash = std::string(32, 't');
+    TreeVerifier::PinSet pins;
+    pins.tree[groupId] = compact;
+    plantSlot(*store, bridge.users.at("alice"), bridge.users.at("alice"), pins);
+    client("bob").rotateGroupKey(groupId);
+    ASSERT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 1u);
+    ASSERT_EQ(storedPin(groupId, bridge.users.at("alice"))->treeHash, std::string(32, 't'));
+    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
+    EXPECT_EQ(client("alice").pinnedKeyVersion(groupId), 2u);
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ACorruptedPreviousIdentityBlobAbortsTheAdoption) {

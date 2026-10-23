@@ -3198,17 +3198,8 @@ void GroupApiImpl::adoptPreviousIdentity(const privmx::crypto::PrivateKey& previ
 }
 
 void GroupApiImpl::adoptBody(const keytree::TreeVerifier::PinSet& adopted) {
-    // Only for groups with no pin under the current key: whoever holds the previous key can write its slot, so its
-    // records never replace or raise a pin. Written under the current key at once.
+    // Only for groups with no pin under the current key, and only as hints: whoever holds the previous key can write
+    // its slot, so its records never replace or raise a pin, and are saved only once a read has verified them. Its
+    // version pins are not taken at all: raised by such a record, they would refuse honest answers as rollbacks.
     _treeVerifier.mergeStored(adopted.tree, true);
-    // The same for the version pins: raised by such a record, they would refuse honest answers as rollbacks.
-    const auto current = _groupDataSchemaMapper->exportVersionPins();
-    std::map<std::string, std::array<std::int64_t, 3>> unpinned;
-    for (const auto& [groupId, counters] : adopted.planes) {
-        if (current.count(groupId) == 0) {
-            unpinned.emplace(groupId, counters);
-        }
-    }
-    _groupDataSchemaMapper->importVersionPins(unpinned);
-    savePins(true);
 }
