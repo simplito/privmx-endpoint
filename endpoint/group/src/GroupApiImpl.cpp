@@ -2552,6 +2552,23 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKey
     const server::GroupGetKeyArchiveModel& params
 ) {
     server::GroupGetKeyArchiveResult archive = _serverApi.groupGetKeyArchive(params);
+    // A window comes a page of rungs at a time: read on from the last page's top epoch while pages come full. That
+    // epoch's rungs come again whole on the next page, so they are dropped from this one first.
+    server::GroupGetKeyArchiveModel next = params;
+    for (std::size_t served = archive.rungs.size(); !params.spans.has_value() && served >= ARCHIVE_RUNGS_PER_PAGE;) {
+        const std::int64_t top = archive.rungs.back().atKeyVersion;
+        if (top <= next.fromKeyVersion.value_or(0)) {
+            break; // a page that does not move on: what was served is all there is to try
+        }
+        next.fromKeyVersion = top;
+        archive.rungs.erase(
+            std::remove_if(archive.rungs.begin(), archive.rungs.end(), [&](const auto& rung) { return rung.atKeyVersion == top; }),
+            archive.rungs.end()
+        );
+        const server::GroupGetKeyArchiveResult page = _serverApi.groupGetKeyArchive(next);
+        archive.rungs.insert(archive.rungs.end(), page.rungs.begin(), page.rungs.end());
+        served = page.rungs.size();
+    }
     _treeKeyCaches.get(group.id)->raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow));
     // `keyHistory` and a rung's `author` are the bridge's word; the statements are the members'.
     return keytree::GroupKeyResolver::authenticated(

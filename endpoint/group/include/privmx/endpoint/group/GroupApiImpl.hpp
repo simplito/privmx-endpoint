@@ -245,6 +245,8 @@ private:
 
     // Spans per `groupGetKeyArchive` call the bridge serves.
     static constexpr std::size_t MAX_ARCHIVE_SPANS = 128;
+    // Rungs per page of a windowed `groupGetKeyArchive`.
+    static constexpr std::size_t ARCHIVE_RUNGS_PER_PAGE = 256;
 
     // The group's session key cache. Internal, for tests that need to plant a wrong key (a client bug) in it.
     std::shared_ptr<keytree::TreeKeyCache> keyCacheOf(const std::string& groupId);

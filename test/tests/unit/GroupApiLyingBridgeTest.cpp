@@ -411,9 +411,14 @@ struct Bridge {
                 }
                 return result.toJSON();
             }
-            for (const server::GroupArchiveRung& rung : rungs) {
+            std::vector<server::GroupArchiveRung> ascending = rungs;
+            std::stable_sort(ascending.begin(), ascending.end(), [](const auto& a, const auto& b) {
+                return a.atKeyVersion < b.atKeyVersion;
+            });
+            for (const server::GroupArchiveRung& rung : ascending) {
                 if (rung.atKeyVersion >= model.fromKeyVersion.value_or(1) &&
-                    rung.atKeyVersion <= model.toKeyVersion.value_or(INT64_MAX) && rung.targetKeyVersion >= eraFloor) {
+                    rung.atKeyVersion <= model.toKeyVersion.value_or(INT64_MAX) && rung.targetKeyVersion >= eraFloor &&
+                    result.rungs.size() < 256) { // a page, ascending, as the bridge serves a window
                     result.rungs.push_back(rung);
                 }
             }
@@ -3208,13 +3213,13 @@ protected:
         groupId = createGroup({"alice", "bob", "carol"});
         sealed = client("alice").encrypt(groupId, core::Buffer::from("at epoch 1"));
         rotate();
+        ASSERT_EQ(bridge.tree.state.epoch, ROTATIONS + 1);
     }
 
-    void rotate() {
-        for (std::uint32_t i = 0; i < ROTATIONS; ++i) {
+    void rotate(std::uint32_t times = ROTATIONS) {
+        for (std::uint32_t i = 0; i < times; ++i) {
             client("alice").rotateGroupKey(groupId);
         }
-        ASSERT_EQ(bridge.tree.state.epoch, ROTATIONS + 1);
         const server::GroupInfo read = bridge.serve("bob", false);
         for (const auto& key : read.groupKeys->at(0).keys) {
             ASSERT_GT(key.groupEpoch.value_or(0), 1) << "epoch 1 must not come with groupGet";
@@ -3266,17 +3271,27 @@ TEST_F(GroupApiLyingBridgeOldEpochs, AGarbageRungOnThePathIsRoutedRoundByADetour
     EXPECT_LE(detour.size(), GroupApiImplTestAccess::maxArchiveSpans());
 }
 
-TEST_F(GroupApiLyingBridgeOldEpochs, ABridgeServingNoSpanFallsBackToTheClosedWindow) {
+TEST_F(GroupApiLyingBridgeOldEpochs, ABridgeServingNoSpanFallsBackToTheClosedWindowReadAPageAtATime) {
+    rotate(3 * ROTATIONS); // more rungs than one page of 256
+    ASSERT_GT(bridge.rungs.size(), 256u);
+    const std::int64_t current = bridge.tree.state.epoch;
     bridge.servesSpans = false; // as if it ignored them
     EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1");
     const auto asks = archiveAsks(bridge, "bob");
-    // The path; no detour, the only span at the odd current epoch being the unit rung already asked for; the window.
-    ASSERT_TRUE(LadderMath::detourSpans(ROTATIONS + 1, 1, 1, LadderMath::canonicalDescent(ROTATIONS + 1, 1, 1)).empty());
-    ASSERT_EQ(asks.size(), 2u);
-    EXPECT_TRUE(asks[0].spans.has_value());
-    EXPECT_FALSE(asks[1].spans.has_value());
-    EXPECT_EQ(asks[1].fromKeyVersion, std::optional<std::int64_t>(1));
-    EXPECT_EQ(asks[1].toKeyVersion, std::optional<std::int64_t>(ROTATIONS + 1));
+    // The path, the detour (if the current epoch has any), then the window [1, current] page after page, each from
+    // the top epoch of the one before.
+    ASSERT_TRUE(asks.at(0).spans.has_value());
+    const auto window = std::find_if(asks.begin(), asks.end(), [](const auto& ask) { return !ask.spans.has_value(); });
+    ASSERT_NE(window, asks.end());
+    EXPECT_EQ(window->fromKeyVersion, std::optional<std::int64_t>(1));
+    ASSERT_GE(asks.end() - window, 2) << "more than one page";
+    for (auto page = window; page != asks.end(); ++page) {
+        EXPECT_FALSE(page->spans.has_value());
+        EXPECT_EQ(page->toKeyVersion, std::optional<std::int64_t>(current));
+        if (page != window) {
+            EXPECT_GT(page->fromKeyVersion.value(), (page - 1)->fromKeyVersion.value()) << "every page moves on";
+        }
+    }
 }
 
 TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_AnEntryOfAnotherEpochServedForTheKeyIdIsRefused) {
