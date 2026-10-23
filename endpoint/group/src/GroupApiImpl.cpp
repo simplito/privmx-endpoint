@@ -90,7 +90,11 @@ std::chrono::milliseconds jitter(std::int64_t windowMs) {
 
 // The floor nothing below may be reached or repaired: the higher of the era floor and the prune watermark.
 std::uint32_t ladderFloorOf(std::int64_t eraFloor, const std::optional<std::int64_t>& prunedBelow) {
-    return static_cast<std::uint32_t>(std::max<std::int64_t>({1, eraFloor, prunedBelow.value_or(1)}));
+    const std::int64_t floor = std::max<std::int64_t>({1, eraFloor, prunedBelow.value_or(1)});
+    if (floor > static_cast<std::int64_t>(UINT32_MAX)) {
+        throw GroupDataIntegrityException("a ladder floor past the last epoch");
+    }
+    return static_cast<std::uint32_t>(floor);
 }
 
 // The rules of a policy the caller asks to sign: one outside the group grammar is the caller's error (R-POL-1).

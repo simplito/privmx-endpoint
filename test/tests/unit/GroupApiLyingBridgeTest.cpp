@@ -1602,6 +1602,16 @@ TEST_F(GroupApiLyingBridge, ARepairRunsAtTheEndOfAPublicCallOnTheGroup) {
     );
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_AnEraFloorPastTheLastEpochIsRefusedNotWrapped) {
+    // 2^32 + 1 cast to uint32 is 1: a floor the bridge raised past every epoch would read as no floor at all.
+    quiet = true;
+    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();
+    bridge.eraFloor = (std::int64_t{1} << 32) + 1;
+    expectRefusal<GroupDataIntegrityException>(
+        [&] { client("carol").resolveGroupPrivKey(groupId, 1); }, "a ladder floor past the last epoch"
+    );
+}
+
 TEST_F(GroupApiLyingBridge, ARepairIsNotSentWhenTheLadderIsIntact) {
     // The honest path costs one archive fetch per observed rotation: no statements read, no UserVerifier call.
     const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();
