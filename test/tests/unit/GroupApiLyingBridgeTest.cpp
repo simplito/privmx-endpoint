@@ -1777,6 +1777,20 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEraFloorPastTheLastEpochIsRefusedNotWrapp
     );
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_AnEraFloorAboveTheCurrentEpochIsRefusedBeforeARotationIsSigned) {
+    // A floor above the verified epoch leaves the rotation no rung to build, not even the unit rung: signed, it
+    // would cut every earlier epoch off.
+    quiet = true;
+    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();
+    bridge.onRead = [](const std::string&, server::GroupInfo& info) { info.eraFloor = 3; };
+    const std::size_t before = bridge.received.size();
+    expectRefusal<GroupDataIntegrityException>(
+        [&] { client("alice").rotateGroupKey(groupId); }, "a ladder floor past the last epoch"
+    );
+    EXPECT_EQ(bridge.received.size(), before) << "nothing signed";
+    EXPECT_EQ(bridge.tree.state.epoch, 2u);
+}
+
 TEST_F(GroupApiLyingBridge, ARepairIsNotSentWhenTheLadderIsIntact) {
     // The honest path costs one archive fetch per observed rotation: no statements read, no UserVerifier call.
     const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();

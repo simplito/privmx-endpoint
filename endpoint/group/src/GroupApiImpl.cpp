@@ -88,10 +88,16 @@ std::chrono::milliseconds jitter(std::int64_t windowMs) {
     return std::chrono::milliseconds(std::uniform_int_distribution<std::int64_t>(0, windowMs)(random));
 }
 
-// The floor nothing below may be reached or repaired: the higher of the era floor and the prune watermark.
-std::uint32_t ladderFloorOf(std::int64_t eraFloor, const std::optional<std::int64_t>& prunedBelow) {
+// The floor nothing below may be reached or repaired: the higher of the era floor and the prune watermark. Never
+// above `currentEpoch`, the verified epoch: a rotation would then build no rung at all, not even the unit rung, and
+// cut every earlier epoch off.
+std::uint32_t ladderFloorOf(
+    std::int64_t eraFloor,
+    const std::optional<std::int64_t>& prunedBelow,
+    std::int64_t currentEpoch
+) {
     const std::int64_t floor = std::max<std::int64_t>({1, eraFloor, prunedBelow.value_or(1)});
-    if (floor > static_cast<std::int64_t>(UINT32_MAX)) {
+    if (floor > currentEpoch || floor > static_cast<std::int64_t>(UINT32_MAX)) {
         throw GroupDataIntegrityException("a ladder floor past the last epoch");
     }
     return static_cast<std::uint32_t>(floor);
@@ -662,7 +668,7 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
 ) {
     keytree::LadderKeys ladder(cache);
     // Never a floor lower than one this session has seen: a bridge under-reporting it gets no rung below it.
-    std::uint32_t floor = cache.raiseFloor(ladderFloorOf(group.eraFloor.value_or(1), group.archivePrunedBelow));
+    std::uint32_t floor = cache.raiseFloor(ladderFloorOf(group.eraFloor.value_or(1), group.archivePrunedBelow, group.keyVersion));
     // What the rungs are checked against before submitting: the chain, never the cache. Without skip targets that is
     // the verified group's own key (the unit rung's target); with them, the openers' keys (`fetchKeyArchive`).
     std::vector<keytree::EpochRegistryEntry> registry{
@@ -682,14 +688,14 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
             from = target;
         }
         server::GroupGetKeyArchiveResult archive = fetchKeyArchive(group, path);
-        floor = cache.raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow));
+        floor = cache.raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow, group.keyVersion));
         registry = keytree::GroupKeyResolver::registryFromArchive(group, archive);
         keytree::RungKeyGathering gathered = ladder.gatherRungKeys(
             newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive), registry, floor
         );
         if (!gathered.complete) {
             archive = fetchKeyArchive(group, static_cast<int64_t>(targets.back()), static_cast<int64_t>(newEpoch - 1));
-            floor = cache.raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow));
+            floor = cache.raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow, group.keyVersion));
             registry = keytree::GroupKeyResolver::registryFromArchive(group, archive);
             gathered = ladder.gatherRungKeys(newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive), registry, floor);
         }
@@ -1160,7 +1166,9 @@ void GroupApiImpl::checkLadderAt(const std::string& groupId, const std::string& 
         params.fromKeyVersion = at;
         params.toKeyVersion = at;
         raw = _serverApi.groupGetKeyArchive(params);
-        const std::uint32_t floor = cache->raiseFloor(ladderFloorOf(raw.eraFloor, raw.archivePrunedBelow));
+        const std::uint32_t floor = cache->raiseFloor(
+            ladderFloorOf(raw.eraFloor, raw.archivePrunedBelow, static_cast<std::int64_t>(pinnedKeyVersion(groupId)))
+        );
         return keytree::LadderKeys::unopenedSpans(at, keytree::GroupKeyResolver::toDownwardRungs(raw), *cache, floor);
     };
     // Cheap stage, the honest path: one fetch, one open per span, no statements read and no UserVerifier call.
@@ -2528,7 +2536,7 @@ keytree::ResolveResult GroupApiImpl::resolveDescending(
     };
     const auto current = static_cast<std::uint32_t>(group.keyVersion);
     const std::uint32_t floor =
-        _treeKeyCaches.get(group.id)->raiseFloor(ladderFloorOf(group.eraFloor.value_or(1), group.archivePrunedBelow));
+        _treeKeyCaches.get(group.id)->raiseFloor(ladderFloorOf(group.eraFloor.value_or(1), group.archivePrunedBelow, group.keyVersion));
     // Below the floor the descent ends at the floor whatever was fetched, so the path goes no lower.
     const std::uint32_t goal = std::max(static_cast<std::uint32_t>(epoch), floor);
     const std::vector<keytree::RungSpan> path = keytree::LadderMath::canonicalDescent(current, goal, floor);
@@ -2577,7 +2585,7 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKey
         archive.rungs.insert(archive.rungs.end(), page.rungs.begin(), page.rungs.end());
         served = page.rungs.size();
     }
-    _treeKeyCaches.get(group.id)->raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow));
+    _treeKeyCaches.get(group.id)->raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow, group.keyVersion));
     // `keyHistory` and a rung's `author` are the bridge's word; the statements are the members'.
     return keytree::GroupKeyResolver::authenticated(
         std::move(archive), _treeVerifier.epochOpeners(group.id, group.contextId, treeEnvironment(group.id))
