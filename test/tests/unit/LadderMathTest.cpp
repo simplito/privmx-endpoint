@@ -23,6 +23,7 @@ limitations under the License.
 
 #include <algorithm>
 #include <cstdint>
+#include <tuple>
 #include <vector>
 
 #include <privmx/endpoint/group/keytree/LadderMath.hpp>
@@ -208,6 +209,40 @@ TEST_F(LadderDescent, StaysInsideTheLogarithmicBound) {
         const std::uint32_t bound = LadderMath::descentBound(from, to);
         EXPECT_LE(plan->size(), bound) << "from=" << from << " to=" << to << " steps=" << plan->size();
     }
+}
+
+TEST_F(LadderDescent, TheCanonicalDescentIsThePlanOverEveryCanonicalRung) {
+    // What a client asks the bridge for has to be exactly the path `planDescent` (and so `descend`) walks over a
+    // complete ladder, or the descent would stop at a span it did not fetch.
+    for (const auto& [from, to, floor] : std::vector<std::tuple<std::uint32_t, std::uint32_t, std::uint32_t>>{
+             {12, 5, 1}, {30, 3, 1}, {64, 40, 1}, {1024, 1, 1}, {10000, 1, 1}, {1000, 500, 1}, {100, 37, 33}, {9, 9, 1}
+         }) {
+        const auto plan = LadderMath::planDescent(from, to, spansThrough(from, floor));
+        ASSERT_TRUE(plan.has_value());
+        EXPECT_EQ(LadderMath::canonicalDescent(from, to, floor), plan.value()) << from << "->" << to << " floor " << floor;
+        EXPECT_LE(plan->size(), LadderMath::descentBound(from, to));
+    }
+}
+
+TEST_F(LadderDescent, ADetourLeavesTheStopEpochByEveryOtherSpanAndContinuesToTheGoal) {
+    const std::vector<RungSpan> known = LadderMath::canonicalDescent(64, 3, 1);
+    ASSERT_EQ(known.front(), (RungSpan{64, 32}));
+    const std::vector<RungSpan> detour = LadderMath::detourSpans(64, 3, 1, known);
+    for (const RungSpan& span : detour) {
+        EXPECT_EQ(std::count(known.begin(), known.end(), span), 0) << "already fetched";
+        EXPECT_EQ(std::count(detour.begin(), detour.end(), span), 1) << "asked twice";
+        EXPECT_GE(span.target, 3u);
+    }
+    for (const RungSpan& span : LadderMath::rungSpansFor(64, 1)) {
+        if (span.target >= 3 && !(span == known.front())) {
+            EXPECT_EQ(std::count(detour.begin(), detour.end(), span), 1) << "the way round over " << span.target;
+        }
+    }
+    // The walk over what was fetched, without the broken (64, 32), still reaches the goal.
+    std::vector<RungSpan> without = detour;
+    without.insert(without.end(), known.begin() + 1, known.end());
+    EXPECT_TRUE(LadderMath::planDescent(64, 3, without).has_value());
+    EXPECT_TRUE(LadderMath::detourSpans(3, 3, 1, {}).empty());
 }
 
 TEST_F(LadderDescent, LongDescentCostsLogarithmicallyManySteps) {

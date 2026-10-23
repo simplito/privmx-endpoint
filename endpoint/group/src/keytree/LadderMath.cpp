@@ -124,6 +124,51 @@ std::optional<std::vector<RungSpan>> LadderMath::planDescent(
     return plan;
 }
 
+std::vector<RungSpan> LadderMath::canonicalDescent(std::uint32_t from, std::uint32_t to, std::uint32_t eraFloor) {
+    assertEpoch(to, "to");
+    std::vector<RungSpan> path;
+    for (std::uint32_t current = from; current > to;) {
+        // The unit rung is always canonical above the floor, so a target not below `to` always exists.
+        std::uint32_t best = current - 1;
+        for (const RungSpan& span : rungSpansFor(current, eraFloor)) {
+            if (span.target >= to && span.target < best) {
+                best = span.target;
+            }
+        }
+        path.push_back(RungSpan{current, best});
+        current = best;
+    }
+    return path;
+}
+
+std::vector<RungSpan> LadderMath::detourSpans(
+    std::uint32_t at,
+    std::uint32_t to,
+    std::uint32_t eraFloor,
+    const std::vector<RungSpan>& known
+) {
+    std::vector<RungSpan> detour;
+    const auto add = [&](const RungSpan& span) {
+        if (std::find(known.begin(), known.end(), span) == known.end() &&
+            std::find(detour.begin(), detour.end(), span) == detour.end()) {
+            detour.push_back(span);
+        }
+    };
+    if (at <= to) {
+        return detour;
+    }
+    for (const RungSpan& span : rungSpansFor(at, eraFloor)) {
+        if (span.target < to) {
+            continue;
+        }
+        add(span);
+        for (const RungSpan& onward : canonicalDescent(span.target, to, eraFloor)) {
+            add(onward);
+        }
+    }
+    return detour;
+}
+
 std::uint32_t LadderMath::descentBound(std::uint32_t from, std::uint32_t to) {
     assertEpoch(from, "from");
     assertEpoch(to, "to");
