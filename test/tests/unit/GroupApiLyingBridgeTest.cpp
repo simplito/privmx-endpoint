@@ -1976,6 +1976,22 @@ TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedByTheNextCall) {
     EXPECT_EQ(client("carol").getGroup(groupId).statusCode, 0);
 }
 
+TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedAfterADisconnect) {
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("bob's"), 1);
+    bool refuse = true;
+    bridge.onMetaWrite = [&] {
+        if (std::exchange(refuse, false)) {
+            throw privmx::utils::PrivmxException("GROUP_VERSION_MISMATCH", privmx::utils::PrivmxException::RPC, 0x6211);
+        }
+    };
+    EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})));
+    clients.at("alice")->connectionImpl->getEventMiddleware()->emitDisconnectedEvent();
+    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
+    EXPECT_EQ(bridge.rest.publicMeta.author, "alice") << "the carry was dropped with the connection";
+    EXPECT_EQ(client("carol").getGroup(groupId).statusCode, 0);
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_ASeatStrippedReadServingAWiderPolicyDoesNotAcceptANoRolePlane) {
     // R2-S2: an unseated answer is verified (verifyListed) before the mapper reads its policy and roster.
     const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"update", "manager"}}));

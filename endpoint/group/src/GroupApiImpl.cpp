@@ -1963,7 +1963,8 @@ void GroupApiImpl::processConnectedEvent() {
 }
 
 // `_unresolved` (m2) is kept on purpose: a dropped connection is the commonest unknown outcome of a commit, and the
-// same call retried on the next connection must resend that statement, not be held back by it.
+// same call retried on the next connection must resend that statement, not be held back by it. So is `_pendingCarry`:
+// the next mutating call retries it, and dropping it would leave the planes refused to readers.
 void GroupApiImpl::processDisconnectedEvent() {
     {
         std::unique_lock<std::mutex> lock(_dueMutex);
@@ -1976,10 +1977,6 @@ void GroupApiImpl::processDisconnectedEvent() {
     _treeKeyCaches.dropAll();
     dropEnvelopeState();
     invalidateModuleKeysInCache();
-    {
-        std::lock_guard<std::mutex> lock(_pendingCarryMutex);
-        _pendingCarry.clear();
-    }
 }
 
 void GroupApiImpl::dropEnvelopeState() {
