@@ -442,6 +442,11 @@ void TreeVerifier::verify(const server::GroupInfo& group, Scope scope, const Env
     if (state.numLeaves == 0 || state.leafAssignment.size() != state.numLeaves) {
         reject("a tree whose seats do not match its leaf count");
     }
+    // Before the hash, whose record lookups cost O(nodes x records): one record per keyed node at most, so padding
+    // is refused for the price of a count.
+    if (state.nodes.size() > TreeMath::keyedNodes(state.numLeaves).size()) {
+        reject("more node records than the tree has keyed nodes");
+    }
 
     // The latest statement describes exactly what is served, the committer's seat included.
     if (!describes(latest, group) || !seatedAt(state, latest.committerSeat, latest.committer)) {

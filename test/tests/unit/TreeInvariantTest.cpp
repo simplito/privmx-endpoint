@@ -958,24 +958,45 @@ TEST_F(TreeVerification, SECURITY_RefusesARolledBackAncestorOverAHealedChild) {
 
 TEST_F(TreeVerification, SECURITY_RefusesASecondRecordForOneNode) {
     // Node 31 is blank after the removal. Behind its genuine (hashed) blank record the bridge serves a second one,
-    // filled with the key the creator set, vouched by the creator's own genuine statement.
-    create(40, 0);
+    // filled with the key the creator set, vouched by the creator's own genuine statement. A plan view with it holds
+    // more records than keyed nodes; a path view, which holds only its path's (3 of 7), gets as far as the duplicate.
+    create(128, 0);
     remove(id(35), {id(5)});
+    const auto& minted = bridge.commits[0].path;
+    const auto original = *std::find_if(minted.begin(), minted.end(), [](const auto& e) { return e.nodeIndex == 31; });
+    ASSERT_FALSE(recordOf(bridge.state, 31)->publicKey.has_value());
+    for (const bool plan : {true, false}) {
+        server::GroupInfo info = bridge.serve(id(9), plan);
+        auto nodes = info.treeNodes.value();
+        nodes.push_back(
+            server::GroupTreeNode{
+                .nodeIndex = 31, .generation = original.generation, .publicKey = original.publicKey, .setBy = 1
+            }
+        );
+        info.treeNodes = nodes;
+        auto cited = info.treeCommits.value_or(std::vector<server::GroupTreeCommit>{});
+        cited.push_back(bridge.commits[0]);
+        info.treeCommits = cited;
+        TreeVerifier fresh;
+        expectRefusal(
+            [&] { fresh.verify(info, plan ? TreeVerifier::Scope::Plan : TreeVerifier::Scope::Path, environment()); },
+            plan ? "more node records than the tree has" : "a second record for one node"
+        );
+    }
+}
+
+TEST_F(TreeVerification, SECURITY_RefusesPaddedNodeRecordsBeforeHashingThem) {
+    // The hash looks every node up among the records: padding them would cost O(nodes x records) before any refusal.
+    create(40, 0);
     server::GroupInfo info = bridge.serve(id(9), true);
-    const server::GroupTreeCommitPathEntry original = bridge.commits[0].path[0];
-    ASSERT_EQ(original.nodeIndex, 31);
     auto nodes = info.treeNodes.value();
-    nodes.push_back(
-        server::GroupTreeNode{
-            .nodeIndex = 31, .generation = original.generation, .publicKey = original.publicKey, .setBy = 1
-        }
-    );
+    ASSERT_EQ(nodes.size(), TreeMath::keyedNodes(40).size()) << "the plan view serves every keyed node";
+    nodes.push_back(nodes.front());
     info.treeNodes = nodes;
-    auto cited = info.treeCommits.value_or(std::vector<server::GroupTreeCommit>{});
-    cited.push_back(bridge.commits[0]);
-    info.treeCommits = cited;
     TreeVerifier fresh;
-    EXPECT_THROW(fresh.verify(info, TreeVerifier::Scope::Plan, environment()), GroupDataIntegrityException);
+    expectRefusal(
+        [&] { fresh.verify(info, TreeVerifier::Scope::Plan, environment()); }, "more node records than the tree has"
+    );
 }
 
 TEST_F(TreeVerification, SECURITY_RefusesARollbackBelowThePin) {
