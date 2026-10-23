@@ -1008,6 +1008,49 @@ TEST_F(TreeVerification, SECURITY_RefusesARollbackBelowThePin) {
     EXPECT_THROW(verify(id(9), false), GroupHistoryForkException);
 }
 
+TEST_F(TreeVerification, SECURITY_RefusesARollbackAcrossARotationOrAPolicyCommit) {
+    // Neither moves the tree, so no node generation tells the earlier state from the pinned one: only the seq does.
+    for (const bool rotation : {true, false}) {
+        reset();
+        create(40, 0);
+        const FakeBridge before = bridge;
+        if (rotation) {
+            rotate(id(1));
+        } else {
+            forge(id(0), [](TreeGroupState&) {}, {
+                .op = CommitOp::Policy,
+                .policy = std::optional<Poco::Dynamic::Var>(std::in_place, policyOf({{"update", "user"}}))
+            });
+        }
+        ASSERT_NO_THROW(verify(id(9), false));
+        bridge = before;
+        EXPECT_THROW(verify(id(9), false), GroupHistoryForkException) << (rotation ? "rotation" : "policy");
+        EXPECT_EQ(verifierOf(id(9)).pinnedSeq(GROUP_ID), 2u) << "the pin stays";
+    }
+}
+
+TEST_F(TreeVerification, SECURITY_RefusesANodeServedBelowAGenerationAlreadySeen) {
+    // A colluding member re-keys node 31 under a fresh key of its own but at the generation before the one this
+    // client saw, and the root over it. Its statement vouches for both over the current subtree and extends the
+    // chain, so every other check passes (a fresh client takes it): only the pinned generations tell it from new.
+    create(40, 0);
+    selfUpdate(id(1));
+    ASSERT_NO_THROW(verify(id(2), false));
+    const std::uint32_t seen = recordOf(bridge.state, 31)->generation;
+    ASSERT_GT(seen, 0u);
+    const std::uint32_t root = TreeMath::root(bridge.state.numLeaves);
+    const std::uint32_t rootGeneration = recordOf(bridge.state, root)->generation + 1;
+    const std::string node = PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    const std::string rootKey = PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    const std::uint64_t seq = bridge.commits.size() + 1;
+    forge(id(3), [&](TreeGroupState& state) {
+        setRecord(state, TreeNodeState{31, seen - 1, NodePublicKey::fromBase58DER(node), seq});
+        setRecord(state, TreeNodeState{root, rootGeneration, NodePublicKey::fromBase58DER(rootKey), seq});
+    }, {.path = {StatementNode{31, seen - 1, node, ""}, StatementNode{root, rootGeneration, rootKey, ""}}});
+    EXPECT_NO_THROW(TreeVerifier().verify(bridge.serve(id(4), false), TreeVerifier::Scope::Path, environment()));
+    EXPECT_THROW(verify(id(2), false), GroupHistoryForkException);
+}
+
 TEST_F(TreeVerification, AnAnswerBehindThePinIsTellableFromAForkAtThePin) {
     // A served seq below the pin (a concurrent read may have got further) is a fork until the read helper's re-read.
     create(40, 0);
@@ -1033,6 +1076,29 @@ TEST_F(TreeVerification, SECURITY_RefusesAChainLinkSignedByANonMember) {
     // First contact trusts the latest genuine statement by somebody on its roster, but seat 5 changed under the
     // root without the root being re-keyed: the root's voucher signed another subtree.
     EXPECT_THROW(verify(id(10), false), GroupDataIntegrityException);
+
+    // With her path re-keyed the tree is vouched for, so only the chain gives her away.
+    reset();
+    create(40, 0);
+    remove(id(35), {id(5)});
+    ASSERT_NO_THROW(verify(id(9), false));
+    const std::string intruder = newMember().userId;
+    const std::uint64_t seq = bridge.commits.size() + 1;
+    std::vector<StatementNode> rekeyed;
+    for (const std::uint32_t node : TreeMath::keyedPath(5, bridge.state.numLeaves)) {
+        const auto* record = recordOf(bridge.state, node);
+        rekeyed.push_back(StatementNode{
+            node, record != nullptr ? record->generation + 1 : 0,
+            PrivateKey::generateRandom().getPublicKey().toBase58DER(), ""
+        });
+    }
+    forge(intruder, [&](TreeGroupState& state) {
+        state.leafAssignment[5] = intruder;
+        for (const StatementNode& node : rekeyed) {
+            setRecord(state, TreeNodeState{node.nodeIndex, node.generation, NodePublicKey::fromBase58DER(node.publicKey), seq});
+        }
+    }, {.path = rekeyed, .added = {intruder}, .rosterBump = 1});
+    expectRefusal([&] { verify(id(9), false); }, "a statement by a non-member");
 }
 
 TEST_F(TreeVerification, FollowsAChainOfHonestCommits) {
