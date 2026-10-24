@@ -415,10 +415,13 @@ void StoreApiImpl::syncFile(const int64_t handle) {
     std::shared_ptr<FileHandle> fileHandle = _fileHandleManager.getFileHandle(handle);
     server::StoreFileGetModel storeFileGetModel;
     storeFileGetModel.fileId = fileHandle->getFileId();
-    // The file the handle was opened on, in its store: never another store's key and metadata under its id.
+    // The file the handle was opened on, in its store: never another store's key and metadata under its id. A read
+    // handle records no store (it only reads, and the file id is checked with every answer); a writing one does.
     const auto read = [&] {
         auto raw = _serverApi->storeFileGet(storeFileGetModel);
-        core::EndpointUtils::assertServedId(fileHandle->getStoreId(), raw.file.storeId);
+        if (!fileHandle->getStoreId().empty()) {
+            core::EndpointUtils::assertServedId(fileHandle->getStoreId(), raw.file.storeId);
+        }
         return raw;
     };
     auto file_raw = read();
