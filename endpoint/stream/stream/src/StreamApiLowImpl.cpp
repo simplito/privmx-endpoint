@@ -63,21 +63,23 @@ StreamApiLowImpl::StreamApiLowImpl(
 
 StreamApiLowImpl::~StreamApiLowImpl() {
     LOG_TRACE("~StreamApiLowImpl() Start");
+    // First no new notification, and the running ones finished (the executor waits for them): only then is the room
+    // state torn down, under each room's lock.
+    _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
+    _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
+    _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
+    _guardedExecutor.reset();
     _streamRoomMap.forAll([&]([[maybe_unused]] std::string key,
                               std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> roomValue) {
-        if (roomValue->publisherStream) {
+        {
+            std::lock_guard<std::recursive_mutex> lock(roomValue->mutex);
+            roomValue->left = true;
             roomValue->publisherStream.reset();
-        }
-        if (roomValue->subscriberStream) {
             roomValue->subscriberStream.reset();
         }
         roomValue->webRtc->closeAll(roomValue->streamRoomId);
     });
     _streamRoomMap.clear();
-    _eventMiddleware->removeNotificationEventListener(_notificationListenerId);
-    _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
-    _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
-    _guardedExecutor.reset();
     LOG_TRACE("~StreamApiLowImpl Done");
 }
 
@@ -258,6 +260,13 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
         throw AlreadyJoinedStreamRoomException();
     }
     auto streamRoom = getRawStreamRoom(streamRoomId);
+    if (isRekeyNeeded(streamRoom)) {
+        // The data channel sends under the LOCAL key from the join on: never one a removed member holds.
+        autoRotateStreamRoomKeys(streamRoomId);
+        invalidateModuleKeysInCache(streamRoomId);
+        streamRoom = getRawStreamRoom(streamRoomId);
+        assertRekeyNotNeeded(streamRoom);
+    }
     std::shared_ptr<DataChannelMessageEncryptorV1> dataChannelMessageEncryptorV1;
     std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom);
     dataChannelMessageEncryptorV1 = std::make_shared<DataChannelMessageEncryptorV1>(keys);
@@ -319,15 +328,18 @@ void StreamApiLowImpl::leaveStreamRoom(const std::string& streamRoomId) {
 
     LOG_DEBUG("StreamApiLowImpl:leaveStreamRoom", "gently close of streams");
     std::unique_lock<std::recursive_mutex> lock(room->mutex);
+    room->left = true;
     if (room->publisherStream) {
         if (room->publisherStream->streamHandle.has_value()) {
             _handleToRoomId.erase(room->publisherStream->streamHandle.value());
         }
+        room->publisherStream.reset();
     }
     if (room->subscriberStream) {
         if (room->subscriberStream->streamHandle.has_value()) {
             _handleToRoomId.erase(room->subscriberStream->streamHandle.value());
         }
+        room->subscriberStream.reset();
     }
     lock.unlock();
     room->webRtc->closeAll(room->streamRoomId);
@@ -365,7 +377,7 @@ StreamPublishResult StreamApiLowImpl::publishStream(const StreamHandle& streamHa
     //
     // No `withKeyRefresh` here: the Bridge does not epoch-check stream writes, so the client's own view of
     // `staleGroups` is the whole trigger, and the re-key has to happen before the room key is used.
-    ensureRoomKeyIsFresh(room->streamRoomId);
+    ensureRoomKeyIsFresh(*room);
     auto streamData = room->publisherStream;
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId, "publisher");
     server::SessionDescription sessionDescription;
@@ -401,7 +413,7 @@ StreamPublishResult StreamApiLowImpl::updateStream(const StreamHandle& streamHan
     if (!room->publisherStream->sessionId.has_value()) {
         throw StreamHandleNotPublishedException();
     }
-    ensureRoomKeyIsFresh(room->streamRoomId);
+    ensureRoomKeyIsFresh(*room);
     auto streamData = room->publisherStream;
     std::string sdp = room->webRtc->createOfferAndSetLocalDescription(room->streamRoomId, "publisher");
     server::SessionDescription sessionDescription;
@@ -682,17 +694,20 @@ void StreamApiLowImpl::rotateStreamRoomKeys(
     );
 }
 
-void StreamApiLowImpl::ensureRoomKeyIsFresh(const std::string& streamRoomId) {
-    auto keys = getModuleKeys(streamRoomId);
+void StreamApiLowImpl::ensureRoomKeyIsFresh(StreamRoomData& room) {
+    auto keys = getModuleKeys(room.streamRoomId);
     if (isRekeyNeeded(keys)) {
-        autoRotateStreamRoomKeys(streamRoomId);
-        keys = getNewModuleKeysAndUpdateCache(streamRoomId);
-        // The sender moves now: our own streamRoomUpdated would move it only when it arrives, or never if lost.
-        applyRoomKeys(*getStreamRoomData(streamRoomId), getRawStreamRoom(streamRoomId));
+        autoRotateStreamRoomKeys(room.streamRoomId);
+        keys = getNewModuleKeysAndUpdateCache(room.streamRoomId);
     }
     // Backstop: a re-key that did not happen — a caller the room's `rotateKeys` policy refuses — has already
     // thrown by now, so reaching here still stale would mean the rotation silently did nothing.
     assertRekeyNotNeeded(keys);
+    // The sender moves now: a streamRoomUpdated (ours, or another member's re-key) moves it only when it arrives, or
+    // never if it is lost.
+    if (room.localKeyId != keys.currentKeyId) {
+        applyRoomKeys(room, getRawStreamRoom(room.streamRoomId));
+    }
 }
 
 void StreamApiLowImpl::autoRotateStreamRoomKeys(const std::string& streamRoomId) {
@@ -826,6 +841,9 @@ void StreamApiLowImpl::setNewOfferOnReconfigure(const int64_t sessionId, const S
 
 void StreamApiLowImpl::applyRoomUpdate(StreamRoomData& room, const server::StreamRoomInfo& raw) {
     std::lock_guard<std::recursive_mutex> lock(room.mutex);
+    if (room.left) {
+        return; // left (perhaps joined again under the same id since): nothing of this room object is live
+    }
     try {
         if (raw.keyId == room.localKeyId && !isRekeyNeeded(raw)) {
             applyRoomKeys(room, raw); // the key in use, at most with more keys to receive under
@@ -835,7 +853,7 @@ void StreamApiLowImpl::applyRoomUpdate(StreamRoomData& room, const server::Strea
         // The Bridge sends this on a removal from a granted group too. A live publication writes nothing more,
         // so without a re-key here it would stay under the key the removed member holds.
         if (room.publisherStream) {
-            ensureRoomKeyIsFresh(room.streamRoomId);
+            ensureRoomKeyIsFresh(room);
         }
         applyRoomKeys(room, getRawStreamRoom(room.streamRoomId));
     } catch (const std::exception& e) {
@@ -855,6 +873,7 @@ void StreamApiLowImpl::applyRoomKeys(StreamRoomData& room, const server::StreamR
         streamRoomInfo.contextId != room.contextId) {
         throw core::ContainerMismatchException("not the joined room " + room.streamRoomId);
     }
+    assertRekeyNotNeeded(streamRoomInfo); // its current key is one a removed member may hold
     std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoomInfo);
     std::lock_guard<std::recursive_mutex> lock(room.mutex);
     room.webRtc->updateKeys(room.streamRoomId, keys);

@@ -166,8 +166,13 @@ private:
         std::string contextId;
         // The LOCAL key last handed to the media layer.
         std::string localKeyId;
-        // Guards `publisherStream` and `localKeyId`, which the API thread (create/publish/update/remove) and the
-        // notification thread (applyRoomUpdate) both read and reset. Recursive: an update stops a publication under it.
+        // Set by `leaveStreamRoom`: an update still pending for this room object neither re-keys nor stops anything,
+        // so it cannot touch a room joined again under the same id.
+        bool left = false;
+        // Guards `publisherStream`, `localKeyId` and `left`, which the API thread (create/publish/update/remove/leave)
+        // and the notification thread (applyRoomUpdate) both read and reset. Recursive: an update stops a publication
+        // under it. Limit: held across the Bridge calls of a publish, an update and a re-key, so a slow Bridge holds
+        // this room's updates back meanwhile; releasing it would mean re-checking the handle and key after each call.
         std::recursive_mutex mutex;
     };
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
@@ -185,8 +190,11 @@ private:
         std::shared_ptr<WebRTCInterface> webRtc
     );
 
-    /** Re-keys the room if its key has gone stale, then refuses to go on if it somehow still is. */
-    void ensureRoomKeyIsFresh(const std::string& streamRoomId);
+    /**
+     * Re-keys the room if its key has gone stale, then refuses to go on if it somehow still is. The sender then
+     * follows the room's current key, also when the update announcing it was lost.
+     */
+    void ensureRoomKeyIsFresh(StreamRoomData& room);
     // Unpublishes, closes the outgoing peer connection and drops the handle, each step whatever the others do (a
     // failure is logged); the publisher state is cleared afterwards.
     void stopPublication(StreamRoomData& room);
@@ -207,7 +215,8 @@ private:
     // A snapshot naming another key than the one in use, or a stale one, is not applied: the keys come from a fresh
     // read, so a delayed or replayed pre-rotation update cannot bring the old key back (M2).
     void applyRoomUpdate(StreamRoomData& room, const server::StreamRoomInfo& raw);
-    // Hands the room's key set to the media layer and the data channel encryptor; refuses a state of another room.
+    // Hands the room's key set to the media layer and the data channel encryptor; refuses a state of another room,
+    // and one whose current key needs a re-key.
     void applyRoomKeys(StreamRoomData& room, const server::StreamRoomInfo& streamRoomInfo);
     // LOCAL: the room's current key (`keyId`), what this client encrypts under. REMOTE: every key that opens.
     std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo);

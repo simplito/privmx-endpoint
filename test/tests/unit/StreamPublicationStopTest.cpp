@@ -85,6 +85,13 @@ struct StreamApiLowImplTestAccess {
     static void applyRoomUpdate(StreamApiLowImpl& api, const std::string& roomId, const server::StreamRoomInfo& raw) {
         api.applyRoomUpdate(*api._streamRoomMap.get(roomId).value(), raw);
     }
+    // The joined room object itself, as a notification task holds it.
+    static std::shared_ptr<void> roomOf(StreamApiLowImpl& api, const std::string& roomId) {
+        return api._streamRoomMap.get(roomId).value();
+    }
+    static void applyRoomUpdateTo(StreamApiLowImpl& api, const std::shared_ptr<void>& room, const server::StreamRoomInfo& raw) {
+        api.applyRoomUpdate(*std::static_pointer_cast<StreamApiLowImpl::StreamRoomData>(room), raw);
+    }
 };
 
 } // namespace privmx::endpoint::stream
@@ -240,11 +247,11 @@ struct Joined {
         impl->connectOver(gateway, key);
         return impl;
     }
-    core::DataIntegrityObject dio(const std::string& resourceId) {
+    core::DataIntegrityObject dio(const std::string& resourceId, const std::string& contextId = "ctx") {
         return {
             .creatorUserId = "me",
             .creatorPubKey = key.getPublicKey().toBase58DER(),
-            .contextId = "ctx",
+            .contextId = contextId,
             .resourceId = resourceId,
             .timestamp = privmx::utils::Utils::getNowTimestamp(),
             .randomId = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8)),
@@ -259,22 +266,23 @@ struct Joined {
         const std::vector<std::string>& keyIds,
         const std::string& current,
         const std::string& dataKeyId,
-        const std::string& resourceId = "res"
+        const std::string& resourceId = "res",
+        const std::string& contextId = "ctx"
     ) {
         stream::server::StreamRoomInfo room;
         room.id = "room";
         room.resourceId = resourceId;
-        room.contextId = "ctx";
+        room.contextId = contextId;
         room.keyId = current;
         for (const auto& keyId : keyIds) {
             for (const auto& entry : impl->getKeyProvider()->prepareKeysList(
-                     {{.userId = "me", .pubKey = key.getPublicKey().toBase58DER()}}, keyOf(keyId), dio(resourceId),
-                     {.contextId = "ctx", .resourceId = resourceId}, SECRET
+                     {{.userId = "me", .pubKey = key.getPublicKey().toBase58DER()}}, keyOf(keyId),
+                     dio(resourceId, contextId), {.contextId = contextId, .resourceId = resourceId}, SECRET
                  )) {
                 room.keys.push_back({.keyId = entry.keyId, .data = entry.data});
             }
         }
-        const auto written = dio(resourceId);
+        const auto written = dio(resourceId, contextId);
         stream::StreamRoomDataSchemaMapper mapper(key, connection);
         stream::server::StreamRoomDataEntry entry;
         entry.keyId = dataKeyId;
@@ -377,4 +385,69 @@ TEST(StreamPublicationStop, SECURITY_ARoomUpdateWithNoUsableCurrentKeyStopsTheLi
     ASSERT_GE(steps.size(), 2u);
     EXPECT_EQ(std::vector<std::string>(steps.end() - 2, steps.end()), UNPUBLISH_THEN_CLOSE);
     EXPECT_NO_THROW(nextEvent("streamRoomUpdated")) << "the app was not told about the update";
+}
+
+TEST(StreamPublicationStop, SECURITY_AnUpdateOfTheSameRoomInAnotherContextStopsTheLivePublication) {
+    // Only the context differs (same id and resource): still not the joined room.
+    Joined c;
+    c.bridge->served = c.state({"k1"}, "k1", "k1");
+    Access::publishing(c.api, c.bridge->served.value(), c.webRtc, 42, 7);
+    const auto other = c.state({"k2"}, "k2", "k2", "res", "another-ctx");
+    c.bridge->served = other;
+    EXPECT_NO_THROW(Access::applyRoomUpdate(c.api, "room", other));
+    EXPECT_FALSE(Access::isPublishing(c.api, "room"));
+    EXPECT_FALSE(c.saw("LOCAL k2")) << "another context's key was handed to the media layer";
+}
+
+TEST(StreamPublicationStop, SECURITY_AnUpdateNamingTheKeyInUseButStaleIsNotAppliedAsIs) {
+    // The update names the LOCAL key, but it needs a re-key (a granted group moved past it). Taken as "the key in use",
+    // the publication went on under a key a removed member holds. It is re-keyed or stopped instead.
+    Joined c;
+    c.bridge->served = c.state({"k1"}, "k1", "k1");
+    Access::publishing(c.api, c.bridge->served.value(), c.webRtc, 42, 7);
+    auto stale = c.state({"k1"}, "k1", "k1");
+    stale.staleGroups = {"g"};
+    c.bridge->served = stale; // and no re-key this fake Bridge can take
+    EXPECT_NO_THROW(Access::applyRoomUpdate(c.api, "room", stale));
+    EXPECT_FALSE(Access::isPublishing(c.api, "room")) << "the publication went on under a stale key";
+    EXPECT_FALSE(c.saw("LOCAL k1")) << "the stale key was handed to the media layer again";
+}
+
+TEST(StreamPublicationStop, SECURITY_APublicationUpdateFollowsARoomKeyWhoseUpdateWasLost) {
+    // The room moved k1 -> k2 and its streamRoomUpdated never arrived: the next update of the publication moves the
+    // sender to k2 before it goes out.
+    Joined c;
+    c.bridge->served = c.state({"k1"}, "k1", "k1");
+    Access::publishing(c.api, c.bridge->served.value(), c.webRtc, 42, 7);
+    c.bridge->served = c.state({"k1", "k2"}, "k2", "k2");
+    try {
+        c.api.updateStream(7);
+    } catch (...) {} // this fake Bridge answers the update itself with nothing
+    const auto steps = c.steps();
+    const auto local = std::find(steps.begin(), steps.end(), "LOCAL k2");
+    const auto update = std::find(steps.begin(), steps.end(), "stream.streamUpdate");
+    ASSERT_NE(local, steps.end()) << "the sender stayed on k1";
+    EXPECT_LT(local, update) << "the update went out under k1";
+}
+
+TEST(StreamPublicationStop, SECURITY_AnUpdatePendingForALeftRoomTouchesNothingOfTheRoomJoinedAgain) {
+    // An update still pending for the room object of a session that was left: the room is joined and published in
+    // again under the same id meanwhile. Stopping "its" publication would close the new one's publisher connection.
+    Joined c;
+    c.bridge->served = c.state({"k1"}, "k1", "k1");
+    Access::publishing(c.api, c.bridge->served.value(), c.webRtc, 42, 7);
+    const auto old = Access::roomOf(c.api, "room");
+    c.api.leaveStreamRoom("room");
+    Access::publishing(c.api, c.bridge->served.value(), c.webRtc, 43, 8);
+    const auto unusable = c.state({"k1"}, "not-served", "k1");
+    c.bridge->served = unusable;
+    EXPECT_NO_THROW(Access::applyRoomUpdateTo(c.api, old, unusable));
+    EXPECT_FALSE(c.saw("close publisher")) << "the new room's publisher connection was closed";
+    EXPECT_FALSE(c.saw("stream.streamUnpublish 42"));
+    EXPECT_TRUE(Access::isPublishing(c.api, "room"));
+    // Nor are its keys handed to the media layer, which the new room shares.
+    const auto moved = c.state({"k1", "k2"}, "k2", "k2");
+    c.bridge->served = moved;
+    EXPECT_NO_THROW(Access::applyRoomUpdateTo(c.api, old, moved));
+    EXPECT_FALSE(c.saw("LOCAL k2")) << "a left room's update moved the new room's sender";
 }
