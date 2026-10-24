@@ -2726,6 +2726,11 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
     if (candidates.empty()) {
         throw core::EncryptionKeyValidationException("Group " + groupId + " publishes no key " + keyId);
     }
+    // The key provider opens one route per group, the first; the opener check below must judge that route and no
+    // other. With every served route checked, a key a former member sealed to an old epoch's grant key passed as soon
+    // as the bridge listed beside it any epoch that member had opened.
+    candidates.erase(candidates.begin() + 1, candidates.end());
+    candidates.front().keys.erase(candidates.front().keys.begin() + 1, candidates.front().keys.end());
 
     core::KeyDecryptionAndVerificationRequest request;
     const auto location = core::EncKeyLocation{

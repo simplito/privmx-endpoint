@@ -26,12 +26,15 @@ limitations under the License.
 #include <set>
 #include <thread>
 
+#include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/utils/Base58.hpp>
+#include <privmx/utils/Utils.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
+#include <privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp>
 #include <privmx/endpoint/group/Events.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/GroupApiImpl.hpp>
@@ -3413,6 +3416,67 @@ TEST_F(GroupApiLyingBridge, AnEnvelopeUnderThePinnedEpochIsLookedUpWithoutReadin
     EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 2");
     ASSERT_EQ(count("bob", "context.groupGetEpochKeys"), lookups + 1) << "the key came off the cache: no case here";
     EXPECT_EQ(count("bob", "context.groupGet"), reads);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AKeyIsCheckedAgainstTheOpenerOfTheRouteThatOpenedIt) {
+    // carol opened epoch 2 and was removed at 3. She seals a key of her own, under epoch 1's keyId, to epoch 1's grant
+    // key, which she still holds; the bridge serves it as epoch 1 with a dummy epoch 2 route beside it. The key opens
+    // through epoch 1, whose opener is alice: refused, even though carol opened another listed epoch. Nothing is
+    // remembered, so the honest key opens afterwards.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Envelope honest = client("alice").encrypt(groupId, core::Buffer::from("honest"));
+    const auto epochEntry = [&](std::int64_t epoch) {
+        for (const auto& key : bridge.rest.groupKeys->at(0).keys) {
+            if (key.groupEpoch.value_or(0) == epoch) {
+                return key;
+            }
+        }
+        throw std::logic_error("no entry");
+    };
+    const std::string keyId = epochEntry(1).keyId;
+    const std::string epoch1 = bridge.rest.history.at(0).groupPubKey;
+    client("carol").rotateGroupKey(groupId);
+    client("alice").removeGroupMembers(groupId, {"carol"});
+    ASSERT_EQ(bridge.tree.state.epoch, 3u);
+
+    const PrivateKey& carol = bridge.users.at("carol");
+    const core::EncKey forgedKey{.id = keyId, .key = privmx::crypto::Crypto::randomBytes(32)};
+    const core::DataIntegrityObject dio{
+        .creatorUserId = "carol",
+        .creatorPubKey = carol.getPublicKey().toBase58DER(),
+        .contextId = CONTEXT,
+        .resourceId = bridge.tree.resourceId,
+        .timestamp = privmx::utils::Utils::getNowTimestamp(),
+        .randomId = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8)),
+        .containerId = std::nullopt,
+        .containerResourceId = std::nullopt,
+        .bridgeIdentity = std::nullopt
+    };
+    const std::string keySecret = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32));
+    const Poco::Dynamic::Var forgedEntry = core::EncKeyEncryptorV2()
+        .encrypt(
+            core::EncKeyV2ToEncrypt{
+                forgedKey, .dio = dio, .location = {.contextId = CONTEXT, .resourceId = bridge.tree.resourceId},
+                .keySecret = keySecret, .secretHash = privmx::crypto::Crypto::hmacSha256("", keySecret)
+            },
+            PublicKey::fromBase58DER(epoch1), carol
+        )
+        .toJSON();
+    const Envelope forged = GroupEnvelopeEncryptor().packGroupKeyEnvelope(
+        groupId, keyId, core::Buffer::from("forged"), carol, forgedKey.key
+    );
+    const auto dummy = epochEntry(2).data;
+    bridge.onEpochKeys = [&](server::GroupGetEpochKeysResult& result) {
+        result.groupKeys = {{.group = groupId,
+                             .keys = {{.keyId = keyId, .data = forgedEntry, .groupEpoch = 1},
+                                      {.keyId = keyId, .data = dummy, .groupEpoch = 2}}}};
+    };
+    expectRefusal<core::EncryptionKeyValidationException>(
+        [&] { client("bob").decrypt(forged); }, "was not wrapped by its epoch's opener"
+    );
+    bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
+    EXPECT_EQ(client("bob").decrypt(honest).data.stdString(), "honest") << "the refused key was remembered";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_TheGroupKeyResolverPassesAForkThrough) {
