@@ -2708,16 +2708,19 @@ core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, con
         lookup.id = groupId;
         lookup.keyIds = std::vector<std::string>{keyId};
         candidates = filterToKeyId(_serverApi.groupGetEpochKeys(lookup).groupKeys, groupId, keyId);
-        // An epoch past the verified pin (a rotation this session has not read yet) has no opener to check its
-        // wrapper against: read the group as before, which makes it the head key.
         const bool pastThePin = std::any_of(candidates.begin(), candidates.end(), [&](const auto& entry) {
             return std::any_of(entry.keys.begin(), entry.keys.end(), [&](const auto& key) {
                 return key.groupEpoch.value_or(0) > static_cast<std::int64_t>(_treeVerifier.pinnedKeyVersion(groupId));
             });
         });
+        // An epoch past the verified pin (a rotation this session has not read yet) has no opener to check its
+        // wrapper against: the group is read again, which moves the pin. The entry is still the one looked up:
+        // `groupGet` serves only the current epochs, and the lookup's epoch may be one already behind them.
         if (candidates.empty() || pastThePin) {
             moduleKeys = getNewModuleKeysAndUpdateCache(groupId);
-            candidates = filterToKeyId(moduleKeys.groupKeys, groupId, keyId);
+            if (auto current = filterToKeyId(moduleKeys.groupKeys, groupId, keyId); !current.empty() || candidates.empty()) {
+                candidates = std::move(current);
+            }
         }
     }
     if (candidates.empty()) {

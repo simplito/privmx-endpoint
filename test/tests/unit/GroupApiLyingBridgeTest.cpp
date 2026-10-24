@@ -3381,6 +3381,40 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEpochTheHistoryMislabelsIsNotRemembered) 
     bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
 }
 
+TEST_F(GroupApiLyingBridge, AnEnvelopeUnderAnEpochPastThePinButBehindTheCurrentOneOpensOnTheFirstCall) {
+    // bob pinned epoch 1; two rotations later the envelope's key is epoch 2's, which groupGet no longer serves. The
+    // lookup's entry is past bob's pin: the group read moves the pin to epoch 3, and the entry opened is still the one
+    // looked up.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").getGroup(groupId);
+    client("alice").rotateGroupKey(groupId);
+    const Envelope sealed = client("alice").encrypt(groupId, core::Buffer::from("at epoch 2"));
+    client("alice").rotateGroupKey(groupId);
+    for (const auto& key : bridge.serve("bob", false).groupKeys->at(0).keys) {
+        ASSERT_NE(key.groupEpoch.value_or(0), 2) << "epoch 2 must not come with groupGet";
+    }
+    ASSERT_EQ(client("bob").pinnedKeyVersion(groupId), 1u);
+    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 2");
+    EXPECT_EQ(client("bob").pinnedKeyVersion(groupId), 3u);
+}
+
+TEST_F(GroupApiLyingBridge, AnEnvelopeUnderThePinnedEpochIsLookedUpWithoutReadingTheGroupAgain) {
+    // The pinned epoch has its opener already: only an epoch past the pin is worth a group read.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").getGroup(groupId);
+    client("alice").rotateGroupKey(groupId);
+    const Envelope sealed = client("alice").encrypt(groupId, core::Buffer::from("at epoch 2"));
+    client("bob").resolveGroupPrivKey(groupId);
+    ASSERT_EQ(client("bob").pinnedKeyVersion(groupId), 2u);
+    const std::size_t reads = count("bob", "context.groupGet");
+    const std::size_t lookups = count("bob", "context.groupGetEpochKeys");
+    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 2");
+    ASSERT_EQ(count("bob", "context.groupGetEpochKeys"), lookups + 1) << "the key came off the cache: no case here";
+    EXPECT_EQ(count("bob", "context.groupGet"), reads);
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_TheGroupKeyResolverPassesAForkThrough) {
     // A rollback is not "no key": the resolver the key provider calls must not turn it into a skipped entry.
     quiet = true;
