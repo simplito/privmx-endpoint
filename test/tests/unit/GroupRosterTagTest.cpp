@@ -57,6 +57,9 @@ limitations under the License.
 #include "AcceptAllVerifier.hpp"
 
 using privmx::crypto::PrivateKey;
+
+// The group's grant key as served: a real point, since the membership block's copy is compared as one.
+const std::string PUB0 = PrivateKey::generateRandom().getPublicKey().toBase58DER();
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
@@ -111,7 +114,7 @@ protected:
         group.id = keytree::TreeCommits::groupId("ctx1", "res1");
         group.contextId = "ctx1";
         group.resourceId = "res1";
-        group.groupPubKey = "pub0";
+        group.groupPubKey = PUB0;
         group.users = users;
         group.managers = managers;
         group.rosterVersion = rosterVersion;
@@ -129,7 +132,7 @@ protected:
                 dynamic::MembershipBlock{
                     .rosterTag =
                         GroupDataSchemaMapper::rosterTag(tagKey, keyVersion, rosterVersion, users, managers),
-                    .groupPubKey = "pub0",
+                    .groupPubKey = PUB0,
                     .keyId = "key1",
                     .keyVersion = keyVersion,
                     .rosterVersion = rosterVersion
@@ -182,7 +185,7 @@ protected:
 
         server::GroupHistoryEntryInfo hist;
         hist.keyId = "key1";
-        hist.groupPubKey = "pub0";
+        hist.groupPubKey = PUB0;
         hist.created = 1000;
         hist.author = "alice";
         group.history.push_back(hist);
@@ -575,7 +578,7 @@ TEST_F(GroupRosterTag, TheInternalMetaViewReadsTheRosterPlane) {
             .membership =
                 dynamic::MembershipBlock{
                     .rosterTag = "tag",
-                    .groupPubKey = "pub0",
+                    .groupPubKey = PUB0,
                     .keyId = "key1",
                     .keyVersion = 1,
                     .rosterVersion = 1
