@@ -39,7 +39,10 @@ limitations under the License.
 #include <privmx/endpoint/event/encryptors/event/EventDataSchemaMapper.hpp>
 #include <privmx/endpoint/inbox/ServerApi.hpp>
 #include <privmx/endpoint/kvdb/ServerApi.hpp>
+#include <privmx/endpoint/store/FileDataProvider.hpp>
+#include <privmx/endpoint/store/RequestApi.hpp>
 #include <privmx/endpoint/store/ServerApi.hpp>
+#include <privmx/endpoint/store/StoreApiImpl.hpp>
 #include <privmx/endpoint/stream/ServerApi.hpp>
 #include <privmx/endpoint/thread/ServerApi.hpp>
 #include <privmx/endpoint/thread/ThreadApiImpl.hpp>
@@ -504,6 +507,42 @@ TEST(ContextBinding, SECURITY_AContainerServedUnderAnotherIdThanAskedIsRefused) 
         EXPECT_THROW(c.ask(), core::ContainerMismatchException) << c.method << " served another container";
         bridge.answers[c.method] = c.answer("a");
         EXPECT_NO_THROW(c.ask()) << c.method << " refused the container it asked for";
+    }
+}
+
+TEST(ContextBinding, SECURITY_ASyncedFileServedInAnotherStoreIsRefused) {
+    // A handle opened on store "a"; the re-read at sync serves the file in store "b" (with b's keys, consistently):
+    // nothing of it may reach the handle.
+    auto* answering = new Answering();
+    const privmx::privfs::RpcGateway::Ptr gateway = answering;
+    auto& bridge = *answering;
+    store::server::StoreGetResult got;
+    got.store.id = "a";
+    bridge.answers["store.storeGet"] = got.toJSON();
+    store::server::StoreFileGetResult file;
+    file.file.id = ""; // the id the handle asks for (a new file's handle has none yet)
+    file.file.storeId = "b";
+    file.store.id = "b";
+    bridge.answers["store.storeFileGet"] = file.toJSON();
+    store::server::CreateRequestResult request;
+    request.id = "r";
+    bridge.answers["request.createRequest"] = request.toJSON();
+    const PrivateKey key = PrivateKey::generateRandom();
+    auto impl = std::make_shared<core::ConnectionImpl>();
+    impl->connectOver(gateway, key);
+    const ConnectionOf connection(impl);
+    const auto serverApi = std::make_shared<store::ServerApi>(gateway);
+    store::StoreApiImpl api(
+        impl->getKeyProvider(), serverApi, "", key, std::make_shared<store::RequestApi>(gateway),
+        std::make_shared<store::FileDataProvider>(serverApi), impl->getEventMiddleware(), impl->getHandleManager(),
+        connection, 1024
+    );
+    const std::int64_t handle = api.createFile("a", core::Buffer::from(""), core::Buffer::from(""), 0, false);
+    try {
+        api.syncFile(handle);
+        ADD_FAILURE() << "synced";
+    } catch (const core::ContainerMismatchException& e) {
+        EXPECT_NE(std::string(e.what()).find("asked=a served=b"), std::string::npos) << e.what();
     }
 }
 

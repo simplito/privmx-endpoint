@@ -415,7 +415,13 @@ void StoreApiImpl::syncFile(const int64_t handle) {
     std::shared_ptr<FileHandle> fileHandle = _fileHandleManager.getFileHandle(handle);
     server::StoreFileGetModel storeFileGetModel;
     storeFileGetModel.fileId = fileHandle->getFileId();
-    auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
+    // The file the handle was opened on, in its store: never another store's key and metadata under its id.
+    const auto read = [&] {
+        auto raw = _serverApi->storeFileGet(storeFileGetModel);
+        core::EndpointUtils::assertServedId(fileHandle->getStoreId(), raw.file.storeId);
+        return raw;
+    };
+    auto file_raw = read();
     auto encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
 
     std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
@@ -424,7 +430,7 @@ void StoreApiImpl::syncFile(const int64_t handle) {
         // member holds it. Only when stale, so the sqlite lock escalations that call this pay nothing otherwise.
         if (isRekeyNeeded(file_raw.store)) {
             autoRotateStoreKeys(file_raw.store.id);
-            file_raw = _serverApi->storeFileGet(storeFileGetModel);
+            file_raw = read();
             encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
         }
         const auto writeKey = currentWriteKey(file_raw, encryptionParams.encKey);
