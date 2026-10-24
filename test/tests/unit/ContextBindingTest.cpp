@@ -37,7 +37,9 @@ limitations under the License.
 #include <privmx/endpoint/event/ServerTypes.hpp>
 #include <privmx/endpoint/event/encryptors/event/EventDataEncryptorV5.hpp>
 #include <privmx/endpoint/event/encryptors/event/EventDataSchemaMapper.hpp>
+#include <privmx/endpoint/inbox/InboxApiImpl.hpp>
 #include <privmx/endpoint/inbox/ServerApi.hpp>
+#include <privmx/endpoint/kvdb/KvdbApiImpl.hpp>
 #include <privmx/endpoint/kvdb/ServerApi.hpp>
 #include <privmx/endpoint/store/FileDataProvider.hpp>
 #include <privmx/endpoint/store/RequestApi.hpp>
@@ -45,6 +47,8 @@ limitations under the License.
 #include <privmx/endpoint/store/StoreApiImpl.hpp>
 #include <privmx/endpoint/stream/ServerApi.hpp>
 #include <privmx/endpoint/thread/ServerApi.hpp>
+#include <privmx/endpoint/thread/ThreadApi.hpp>
+#include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/thread/ThreadApiImpl.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -444,6 +448,15 @@ TEST(ContextBinding, SECURITY_AContainerServedUnderAnotherIdThanAskedIsRefused) 
              return Poco::Dynamic::Var(r.toJSON());
          },
          [&] { stores.storeFileGet({.fileId = "f"}); }},
+        {"store.storeFileGet", // another file than "f" (`id` "a" names the file asked for here)
+         [](const std::string& id) {
+             store::server::StoreFileGetResult r;
+             r.file.id = id == "a" ? "f" : "g";
+             r.file.storeId = "s";
+             r.store.id = "s";
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] { stores.storeFileGet({.fileId = "f"}); }},
         {"kvdb.kvdbGet",
          [](const std::string& id) {
              kvdb::server::KvdbGetResult r;
@@ -480,6 +493,14 @@ TEST(ContextBinding, SECURITY_AContainerServedUnderAnotherIdThanAskedIsRefused) 
              return Poco::Dynamic::Var(r.toJSON());
          },
          [&] { kvdbs.kvdbEntryGet({.kvdbId = "a", .kvdbEntryKey = "k"}); }},
+        {"kvdb.kvdbEntryFind",
+         [](const std::string& id) {
+             kvdb::server::KvdbEntryFindResult r;
+             r.kvdbEntry = kvdb::server::KvdbEntryInfo{};
+             r.kvdbEntry->kvdbId = id;
+             return Poco::Dynamic::Var(r.toJSON());
+         },
+         [&] { kvdbs.kvdbEntryFind({.kvdbId = "a", .kvdbEntryKey = "k"}); }},
         {"inbox.inboxGet",
          [](const std::string& id) {
              inbox::server::InboxGetResult r;
@@ -577,6 +598,106 @@ TEST(ContextBinding, SECURITY_AListedContainerRefusedForItsContextLeavesNoKeysIn
     EXPECT_ANY_THROW(api.sendMessage("t", core::Buffer::from(""), core::Buffer::from(""), core::Buffer::from("")));
     EXPECT_NE(std::find(bridge.asked.begin(), bridge.asked.end(), "thread.threadGet"), bridge.asked.end())
         << "the refused container's keys were taken from the cache";
+}
+
+// A module API that also says whether the keys of a container come from its cache (nothing asked) or a read.
+template<typename Api>
+struct Probe : Api {
+    using Api::Api;
+    void keysOf(const std::string& id) {
+        try {
+            this->getModuleKeys(id);
+        } catch (...) {} // the fake bridge answers no read: only whether it was asked counts
+    }
+};
+
+// A container of ctx-b listed under ctx-a: refused, and its keys must not reach the cache.
+template<typename Info>
+Info listedInAnotherContext() {
+    Info listed;
+    listed.id = "t";
+    listed.contextId = "ctx-b";
+    listed.keyId = "k";
+    return listed;
+}
+
+TEST(ContextBinding, SECURITY_AListedStoreKvdbOrInboxRefusedForItsContextLeavesNoKeysInTheCache) {
+    // The thread case above, for every other module that caches a listing's keys.
+    auto* answering = new Answering();
+    const privmx::privfs::RpcGateway::Ptr gateway = answering;
+    auto& bridge = *answering;
+    const PrivateKey key = PrivateKey::generateRandom();
+    auto impl = std::make_shared<core::ConnectionImpl>();
+    impl->connectOver(gateway, key);
+    ConnectionOf connection(impl);
+    const core::PagingQuery page{.skip = 0, .limit = 10, .sortOrder = "desc"};
+    const auto asked = [&](const std::string& method) {
+        return std::find(bridge.asked.begin(), bridge.asked.end(), method) != bridge.asked.end();
+    };
+    {
+        auto listed = listedInAnotherContext<store::server::Store>();
+        store::server::StoreDataEntry entry;
+        entry.keyId = "k";
+        entry.data = std::string("x");
+        listed.data = {entry};
+        store::server::StoreListResult result;
+        result.stores = {listed};
+        result.count = 1;
+        bridge.answers["store.storeList"] = result.toJSON();
+        const auto serverApi = std::make_shared<store::ServerApi>(gateway);
+        Probe<store::StoreApiImpl> api(
+            impl->getKeyProvider(), serverApi, "", key, std::make_shared<store::RequestApi>(gateway),
+            std::make_shared<store::FileDataProvider>(serverApi), impl->getEventMiddleware(), impl->getHandleManager(),
+            connection, 1024
+        );
+        const auto stores = api.listStores("ctx-a", page);
+        ASSERT_EQ(stores.readItems.size(), 1u);
+        EXPECT_EQ(stores.readItems[0].statusCode, REFUSED);
+        bridge.asked.clear();
+        api.keysOf("t");
+        EXPECT_TRUE(asked("store.storeGet")) << "the refused store's keys were taken from the cache";
+    }
+    {
+        auto listed = listedInAnotherContext<kvdb::server::KvdbInfo>();
+        kvdb::server::KvdbDataEntry entry;
+        entry.keyId = "k";
+        entry.data = std::string("x");
+        listed.data = {entry};
+        kvdb::server::KvdbListResult result;
+        result.kvdbs = {listed};
+        result.count = 1;
+        bridge.answers["kvdb.kvdbList"] = result.toJSON();
+        Probe<kvdb::KvdbApiImpl> api(gateway, key, impl->getKeyProvider(), "", impl->getEventMiddleware(), connection);
+        const auto kvdbs = api.listKvdbs("ctx-a", page);
+        ASSERT_EQ(kvdbs.readItems.size(), 1u);
+        EXPECT_EQ(kvdbs.readItems[0].statusCode, REFUSED);
+        bridge.asked.clear();
+        api.keysOf("t");
+        EXPECT_TRUE(asked("kvdb.kvdbGet")) << "the refused kvdb's keys were taken from the cache";
+    }
+    {
+        auto listed = listedInAnotherContext<inbox::server::InboxInfo>();
+        inbox::server::InboxDataEntry entry;
+        entry.keyId = "k";
+        listed.data = {entry};
+        inbox::server::InboxListResult result;
+        result.inboxes = {listed};
+        result.count = 1;
+        bridge.answers["inbox.inboxList"] = result.toJSON();
+        auto threads = thread::ThreadApi::create(connection);
+        auto stores = store::StoreApi::create(connection);
+        Probe<inbox::InboxApiImpl> api(
+            connection, threads, stores, impl->getKeyProvider(), std::make_shared<inbox::ServerApi>(gateway),
+            std::make_shared<store::RequestApi>(gateway), "", key, impl->getEventMiddleware(), impl->getHandleManager(),
+            1024
+        );
+        const auto inboxes = api.listInboxes("ctx-a", page);
+        ASSERT_EQ(inboxes.readItems.size(), 1u);
+        EXPECT_EQ(inboxes.readItems[0].statusCode, REFUSED);
+        bridge.asked.clear();
+        api.keysOf("t");
+        EXPECT_TRUE(asked("inbox.inboxGet")) << "the refused inbox's keys were taken from the cache";
+    }
 }
 
 } // namespace
