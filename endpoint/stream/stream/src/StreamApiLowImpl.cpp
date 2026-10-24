@@ -246,7 +246,9 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
     }
 }
 
-void StreamApiLowImpl::processConnectedEvent() {}
+void StreamApiLowImpl::processConnectedEvent() {
+    invalidateModuleKeysInCache(); // whatever changed while disconnected came with no event
+}
 
 void StreamApiLowImpl::processDisconnectedEvent() {
     LOG_TRACE("StreamApiLowImpl recived DisconnectedEvent");
@@ -695,7 +697,9 @@ void StreamApiLowImpl::rotateStreamRoomKeys(
 }
 
 void StreamApiLowImpl::ensureRoomKeyIsFresh(StreamRoomData& room) {
-    auto keys = getModuleKeys(room.streamRoomId);
+    // Read, never cached: the module key cache has no expiry, so a lost re-key (or one missed while disconnected)
+    // would leave the sender on the key it replaced for as long as the cache lives.
+    auto keys = getNewModuleKeysAndUpdateCache(room.streamRoomId);
     if (isRekeyNeeded(keys)) {
         autoRotateStreamRoomKeys(room.streamRoomId);
         keys = getNewModuleKeysAndUpdateCache(room.streamRoomId);

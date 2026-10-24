@@ -451,3 +451,25 @@ TEST(StreamPublicationStop, SECURITY_AnUpdatePendingForALeftRoomTouchesNothingOf
     EXPECT_NO_THROW(Access::applyRoomUpdateTo(c.api, old, moved));
     EXPECT_FALSE(c.saw("LOCAL k2")) << "a left room's update moved the new room's sender";
 }
+
+TEST(StreamPublicationStop, SECURITY_APublishFollowsARoomKeyWhoseUpdateWasLostWhateverItCached) {
+    // Joined for real, published once (which reads the room's keys), then the room moved k1 -> k2 and the update never
+    // arrived. The next publish moves the sender to k2 first: a cached read of the keys still said k1.
+    Joined c;
+    c.bridge->served = c.state({"k1"}, "k1", "k1");
+    c.api.joinStreamRoom("room", c.webRtc);
+    const auto handle = c.api.createStream("room");
+    try {
+        c.api.publishStream(handle);
+    } catch (...) {} // this fake Bridge answers the publish itself with nothing
+    ASSERT_TRUE(c.saw("stream.streamPublish"));
+    c.bridge->served = c.state({"k1", "k2"}, "k2", "k2");
+    try {
+        c.api.publishStream(handle);
+    } catch (...) {}
+    const auto steps = c.steps();
+    const auto local = std::find(steps.begin(), steps.end(), "LOCAL k2");
+    const auto publish = std::find(std::next(std::find(steps.begin(), steps.end(), "stream.streamPublish")), steps.end(), "stream.streamPublish");
+    ASSERT_NE(local, steps.end()) << "the sender stayed on k1";
+    EXPECT_LT(local, publish) << "the publish went out under k1";
+}
