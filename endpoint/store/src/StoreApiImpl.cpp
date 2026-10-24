@@ -328,6 +328,9 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
             encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
         }
         encryptionParams.encKey = currentWriteKey(file_raw, encryptionParams.encKey);
+        if (file_raw.file.storeId.empty()) {
+            throw core::ContainerMismatchException("a file served in no store"); // `syncFile` checks the handle's store
+        }
         std::shared_ptr<FileReadWriteHandle> handle = _fileHandleManager.createFileReadWriteHandle(
             privmx::endpoint::store::FileInfo{
                 .contextId = file_raw.file.contextId,
@@ -415,11 +418,12 @@ void StoreApiImpl::syncFile(const int64_t handle) {
     std::shared_ptr<FileHandle> fileHandle = _fileHandleManager.getFileHandle(handle);
     server::StoreFileGetModel storeFileGetModel;
     storeFileGetModel.fileId = fileHandle->getFileId();
-    // The file the handle was opened on, in its store: never another store's key and metadata under its id. A read
-    // handle records no store (it only reads, and the file id is checked with every answer); a writing one does.
+    // The file the handle was opened on, in its store: never another store's key and metadata under its id. Decided
+    // by the handle's kind, never by its value: a read handle records no store (it only reads, and the file id is
+    // checked with every answer); every writing one does.
     const auto read = [&] {
         auto raw = _serverApi->storeFileGet(storeFileGetModel);
-        if (!fileHandle->getStoreId().empty()) {
+        if (!fileHandle->isReadHandle()) {
             core::EndpointUtils::assertServedId(fileHandle->getStoreId(), raw.file.storeId);
         }
         return raw;

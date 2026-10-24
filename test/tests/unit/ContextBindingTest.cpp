@@ -27,6 +27,7 @@ limitations under the License.
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
@@ -63,6 +64,26 @@ namespace kvdb = privmx::endpoint::kvdb;
 namespace inbox = privmx::endpoint::inbox;
 namespace stream = privmx::endpoint::stream;
 using privmx::crypto::PrivateKey;
+
+namespace privmx::endpoint::store {
+// A read-write handle on `fileId` in store `storeId`, over an empty file, without opening a real one.
+struct StoreApiImplTestAccess {
+    static std::int64_t readWriteHandle(StoreApiImpl& api, const std::string& storeId, const std::string& fileId) {
+        const std::string key(32, 'k');
+        FileEncryptionParams params;
+        params.fileDecryptionParams = FileDecryptionParams{
+            .fileId = fileId, .resourceId = "r", .sizeOnServer = 0, .originalSize = 0, .cipherType = 1,
+            .chunkSize = 1024, .key = key, .hmac = privmx::crypto::Crypto::hmacSha256(key, ""), .version = 1
+        };
+        return api._fileHandleManager
+            .createFileReadWriteHandle(
+                FileInfo{.contextId = "ctx", .storeId = storeId, .storeResourceId = "", .fileId = fileId, .resourceId = "r"},
+                params, 1024, api._userPrivKey, api._connection, api._serverApi, api._chunksCache
+            )
+            ->getId();
+    }
+};
+} // namespace privmx::endpoint::store
 
 namespace {
 
@@ -532,39 +553,45 @@ TEST(ContextBinding, SECURITY_AContainerServedUnderAnotherIdThanAskedIsRefused) 
 }
 
 TEST(ContextBinding, SECURITY_ASyncedFileServedInAnotherStoreIsRefused) {
-    // A handle opened on store "a"; the re-read at sync serves the file in store "b" (with b's keys, consistently):
-    // nothing of it may reach the handle.
-    auto* answering = new Answering();
-    const privmx::privfs::RpcGateway::Ptr gateway = answering;
-    auto& bridge = *answering;
-    store::server::StoreGetResult got;
-    got.store.id = "a";
-    bridge.answers["store.storeGet"] = got.toJSON();
-    store::server::StoreFileGetResult file;
-    file.file.id = ""; // the id the handle asks for (a new file's handle has none yet)
-    file.file.storeId = "b";
-    file.store.id = "b";
-    bridge.answers["store.storeFileGet"] = file.toJSON();
-    store::server::CreateRequestResult request;
-    request.id = "r";
-    bridge.answers["request.createRequest"] = request.toJSON();
-    const PrivateKey key = PrivateKey::generateRandom();
-    auto impl = std::make_shared<core::ConnectionImpl>();
-    impl->connectOver(gateway, key);
-    const ConnectionOf connection(impl);
-    const auto serverApi = std::make_shared<store::ServerApi>(gateway);
-    store::StoreApiImpl api(
-        impl->getKeyProvider(), serverApi, "", key, std::make_shared<store::RequestApi>(gateway),
-        std::make_shared<store::FileDataProvider>(serverApi), impl->getEventMiddleware(), impl->getHandleManager(),
-        connection, 1024
-    );
-    const std::int64_t handle = api.createFile("a", core::Buffer::from(""), core::Buffer::from(""), 0, false);
-    try {
-        api.syncFile(handle);
-        ADD_FAILURE() << "synced";
-    } catch (const core::ContainerMismatchException& e) {
-        EXPECT_NE(std::string(e.what()).find("asked=a served=b"), std::string::npos) << e.what();
+    // A read-write handle on file "f" of store `opened`; the re-read at sync serves "f" in store "b" (with b's keys,
+    // consistently): nothing of it may reach the handle. A handle with no store recorded is refused too, never let
+    // through for want of a value to compare.
+    for (const std::string opened : {"a", ""}) {
+        auto* answering = new Answering();
+        const privmx::privfs::RpcGateway::Ptr gateway = answering;
+        auto& bridge = *answering;
+        store::server::StoreFileGetResult file;
+        file.file.id = "f";
+        file.file.storeId = "b";
+        file.store.id = "b";
+        bridge.answers["store.storeFileGet"] = file.toJSON();
+        store::server::StoreFileReadResult checksums; // an empty file: no chunk checksums
+        bridge.answers["store.storeFileRead"] = checksums.toJSON();
+        const PrivateKey key = PrivateKey::generateRandom();
+        auto impl = std::make_shared<core::ConnectionImpl>();
+        impl->connectOver(gateway, key);
+        const ConnectionOf connection(impl);
+        const auto serverApi = std::make_shared<store::ServerApi>(gateway);
+        store::StoreApiImpl api(
+            impl->getKeyProvider(), serverApi, "", key, std::make_shared<store::RequestApi>(gateway),
+            std::make_shared<store::FileDataProvider>(serverApi), impl->getEventMiddleware(), impl->getHandleManager(),
+            connection, 1024
+        );
+        const std::int64_t handle = store::StoreApiImplTestAccess::readWriteHandle(api, opened, "f");
+        try {
+            api.syncFile(handle);
+            ADD_FAILURE() << "synced, opened on store \"" << opened << "\"";
+        } catch (const core::ContainerMismatchException& e) {
+            EXPECT_NE(std::string(e.what()).find("asked=" + opened + " served=b"), std::string::npos) << e.what();
+        }
     }
+}
+
+TEST(ContextBinding, SECURITY_AnEmptyIdNamesNoContainer) {
+    EXPECT_THROW(core::EndpointUtils::assertServedId("", ""), core::ContainerMismatchException);
+    EXPECT_THROW(core::EndpointUtils::assertServedId("a", ""), core::ContainerMismatchException);
+    EXPECT_THROW(core::EndpointUtils::assertServedId("", "a"), core::ContainerMismatchException);
+    EXPECT_NO_THROW(core::EndpointUtils::assertServedId("a", "a"));
 }
 
 TEST(ContextBinding, SECURITY_AListedContainerRefusedForItsContextLeavesNoKeysInTheCache) {

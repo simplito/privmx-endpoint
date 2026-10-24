@@ -87,7 +87,7 @@ std::string EndpointUtils::generateId() {
 }
 
 void EndpointUtils::assertServedId(const std::string& asked, const std::string& served) {
-    if (served != asked) {
+    if (asked.empty() || served.empty() || served != asked) { // an empty id names no container at all
         throw ContainerMismatchException("asked=" + asked + " served=" + served);
     }
 }

@@ -172,6 +172,7 @@ private:
 
     std::shared_ptr<CacheInterface> _chunksCache;
     FileHandleManager _fileHandleManager;
+    friend struct StoreApiImplTestAccess; // tests open a read-write handle without a real file
     SubscriberImpl _subscriber;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
     std::string _fileDecryptorId, _fileOpenerId, _fileSeekerId, _fileReaderId, _fileCloserId;
