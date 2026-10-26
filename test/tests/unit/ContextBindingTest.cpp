@@ -46,6 +46,7 @@ limitations under the License.
 #include <privmx/endpoint/store/RequestApi.hpp>
 #include <privmx/endpoint/store/ServerApi.hpp>
 #include <privmx/endpoint/store/StoreApiImpl.hpp>
+#include <privmx/endpoint/store/encryptors/file/FileMetaDataSchemaMapper.hpp>
 #include <privmx/endpoint/stream/ServerApi.hpp>
 #include <privmx/endpoint/thread/ServerApi.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
@@ -728,3 +729,160 @@ TEST(ContextBinding, SECURITY_AListedStoreKvdbOrInboxRefusedForItsContextLeavesN
 }
 
 } // namespace
+
+// --- a synced or opened file's store, over real keys and metadata -------------------------------------------------
+
+namespace {
+
+// One user's store "a" (current key k1, wrapped to the user) holding file "f" with real metadata, as the Bridge
+// would serve it; each `storeFileGet` answer is taken from `files` in turn (the last one repeats).
+struct OneFileStore {
+    const PrivateKey key = PrivateKey::generateRandom();
+    std::vector<store::server::StoreFileGetResult> files;
+    std::size_t fileGets = 0;
+    std::optional<store::server::Store> storeGet; // what `storeGet` answers
+    class Gateway : public privmx::privfs::RpcGateway {
+    public:
+        explicit Gateway(OneFileStore& owner)
+            : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr(), std::nullopt), _owner(owner) {}
+        Poco::Dynamic::Var request(
+            const std::string& method,
+            Poco::JSON::Object::Ptr,
+            privmx::rpc::MessageSendOptionsEx,
+            privmx::utils::CancellationToken::Ptr
+        ) override {
+            if (method == "store.storeFileGet") {
+                const auto& answer = _owner.files.at(std::min(_owner.fileGets++, _owner.files.size() - 1));
+                return overTheWire(answer.toJSON());
+            }
+            if (method == "store.storeGet" && _owner.storeGet.has_value()) {
+                store::server::StoreGetResult result;
+                result.store = _owner.storeGet.value();
+                return overTheWire(result.toJSON());
+            }
+            if (method == "context.contextGet") {
+                return overTheWire(core::server::ContextGetResult{.context = {.userId = "me", .contextId = "ctx"}}.toJSON());
+            }
+            if (method == "store.storeFileRead") {
+                return overTheWire(store::server::StoreFileReadResult().toJSON()); // an empty file
+            }
+            throw std::runtime_error("the fake bridge has no " + method);
+        }
+        bool isConnected() override { return true; }
+
+    private:
+        OneFileStore& _owner;
+    };
+    std::shared_ptr<core::ConnectionImpl> impl = std::make_shared<core::ConnectionImpl>();
+    privmx::privfs::RpcGateway::Ptr gateway = new Gateway(*this);
+    ConnectionOf connection{connect()};
+    std::shared_ptr<store::ServerApi> serverApi = std::make_shared<store::ServerApi>(gateway);
+    store::StoreApiImpl api{
+        impl->getKeyProvider(), serverApi, "", key, std::make_shared<store::RequestApi>(gateway),
+        std::make_shared<store::FileDataProvider>(serverApi), impl->getEventMiddleware(), impl->getHandleManager(),
+        connection, 1024
+    };
+
+    std::shared_ptr<core::ConnectionImpl> connect() {
+        class Everyone : public core::UserVerifierInterface {
+        public:
+            std::vector<bool> verify(const std::vector<core::VerificationRequest>& requests) override {
+                return std::vector<bool>(requests.size(), true);
+            }
+        };
+        impl->setUserVerifier(std::make_shared<Everyone>());
+        impl->connectOver(gateway, key);
+        return impl;
+    }
+    core::DataIntegrityObject dio(const std::string& resourceId) {
+        return {
+            .creatorUserId = "me",
+            .creatorPubKey = key.getPublicKey().toBase58DER(),
+            .contextId = "ctx",
+            .resourceId = resourceId,
+            .timestamp = privmx::utils::Utils::getNowTimestamp(),
+            .randomId = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(8)),
+            .containerId = std::nullopt,
+            .containerResourceId = std::nullopt,
+            .bridgeIdentity = std::nullopt
+        };
+    }
+    // Store `storeId` (resource "sres") and file "f" in it under k1, the file's chunks random-write or not.
+    store::server::StoreFileGetResult served(const std::string& storeId, bool randomWrite) {
+        const core::EncKey k1{.id = "k1", .key = privmx::crypto::Crypto::sha256("k1")};
+        const core::EncKeyLocation location{.contextId = "ctx", .resourceId = "sres"};
+        store::server::StoreFileGetResult result;
+        result.store.id = storeId;
+        result.store.contextId = "ctx";
+        result.store.resourceId = "sres";
+        result.store.keyId = "k1";
+        for (const auto& entry : impl->getKeyProvider()->prepareKeysList(
+                 {{.userId = "me", .pubKey = key.getPublicKey().toBase58DER()}}, k1, dio("sres"), location, "secret"
+             )) {
+            result.store.keys.push_back({.keyId = entry.keyId, .data = entry.data});
+        }
+        core::KeyDecryptionAndVerificationRequest request;
+        request.addAll(result.store.keys, location);
+        const auto decrypted = impl->getKeyProvider()->getKeysAndVerify(request, nullptr).at(location).at("k1");
+        store::dynamic::InternalStoreFileMeta internal;
+        internal.version = 4;
+        internal.size = 0;
+        internal.cipherType = 1;
+        internal.chunkSize = 1024;
+        internal.key = privmx::utils::Base64::from(std::string(32, 'c'));
+        internal.hmac = privmx::utils::Base64::from(privmx::crypto::Crypto::hmacSha256(std::string(32, 'c'), ""));
+        internal.randomWrite = randomWrite;
+        result.file.id = "f";
+        result.file.resourceId = "fres";
+        result.file.contextId = "ctx";
+        result.file.storeId = storeId;
+        result.file.keyId = "k1";
+        result.file.size = 0;
+        result.file.version = 1;
+        result.file.creator = result.file.lastModifier = "me";
+        result.file.created = result.file.lastModificationDate = privmx::utils::Utils::getNowTimestamp();
+        result.file.meta = store::FileMetaDataSchemaMapper(key, connection).encrypt(
+            storeId, "fres", "ctx", "sres", core::Buffer::from("pub"), core::Buffer::from("priv"),
+            core::Buffer::from(internal.serialize()), decrypted
+        );
+        return result;
+    }
+};
+
+} // namespace
+
+TEST(ContextBinding, ARandomWriteFileServedInNoStoreIsNotOpened) {
+    // A random-write handle records the file's store for every later sync to check: one served in no store gets no
+    // handle at all. (The store read refuses it already, the file's store id naming no store; openFile checks again.)
+    OneFileStore c;
+    c.files = {c.served("", true)};
+    EXPECT_THROW(c.api.openFile("f"), core::ContainerMismatchException);
+    c.files = {c.served("a", true)};
+    c.fileGets = 0;
+    EXPECT_NO_THROW(c.api.openFile("f")) << "the honest answer is refused";
+}
+
+TEST(ContextBinding, AReadHandleSyncsWhateverStoreTheFileIsServedIn) {
+    // A read handle records no store: it only reads, and the file id is checked with every answer.
+    OneFileStore c;
+    c.files = {c.served("a", false)};
+    const auto handle = c.api.openFile("f");
+    c.files = {c.served("b", false)};
+    c.fileGets = 0;
+    EXPECT_NO_THROW(c.api.syncFile(handle));
+}
+
+TEST(ContextBinding, SECURITY_AFileReReadAfterAReKeyInAnotherStoreIsRefused) {
+    // The sync of a random-write handle on store a finds the store stale and re-reads the file after the re-key:
+    // that answer is checked against the handle's store as the first one was.
+    OneFileStore c;
+    c.files = {c.served("a", true)};
+    const auto handle = c.api.openFile("f");
+    auto stale = c.served("a", true);
+    stale.store.staleGroups = {"g"};
+    c.storeGet = c.served("a", true).store; // the re-key finds nothing left to do
+    c.files = {stale, c.served("b", true)};
+    c.fileGets = 0;
+    EXPECT_THROW(c.api.syncFile(handle), core::ContainerMismatchException);
+    EXPECT_EQ(c.fileGets, 2u) << "no re-read after the re-key: no case here";
+}
