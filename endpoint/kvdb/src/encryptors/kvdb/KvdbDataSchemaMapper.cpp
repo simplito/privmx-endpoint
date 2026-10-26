@@ -81,7 +81,8 @@ std::pair<uint32_t, std::optional<core::DataIntegrityObject>> KvdbDataSchemaMapp
 std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
     const std::vector<server::KvdbInfo>& kvdbs,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
-    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
+    const std::optional<std::string>& expectedContextId
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Kvdb>(
         kvdbs, keyProvider, _connection, [&](const server::KvdbInfo& k) { return validateDataIntegrity(k); },
@@ -93,7 +94,7 @@ std::vector<Kvdb> KvdbDataSchemaMapper::validateDecryptAndConvertKvdbs(
         [](const server::KvdbInfo& k, uint32_t code) {
             return toLibKvdb(k, {}, {}, code, KvdbDataSchema::Version::UNKNOWN);
         },
-        groupPrivKeyResolver
+        groupPrivKeyResolver, expectedContextId
     );
 }
 
@@ -102,7 +103,7 @@ Kvdb KvdbDataSchemaMapper::validateDecryptAndConvertKvdb(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertKvdbs({kvdb}, keyProvider, groupPrivKeyResolver)[0];
+    return validateDecryptAndConvertKvdbs({kvdb}, keyProvider, groupPrivKeyResolver, std::nullopt)[0];
 }
 
 Kvdb KvdbDataSchemaMapper::toLibKvdb(

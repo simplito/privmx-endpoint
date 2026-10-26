@@ -74,7 +74,8 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointCoreException, "Unknown endpoint core e
     X(UnresolvedGroupGranteeException, "Cannot resolve current key of a container's grantee group", 0x0029)           \
     X(StaleKeyRekeyRequiredException, "Container's key is stale, re-key it before modifying its items", 0x002A)       \
     X(UnresolvedContainerMemberException, "Cannot resolve the public key of a container's member", 0x002B)            \
-    X(LocalStateIntegrityException, "A stored local-state blob that must be used failed its integrity check", 0x002E)
+    X(LocalStateIntegrityException, "A stored local-state blob that must be used failed its integrity check", 0x002E) \
+    X(ContainerMismatchException, "The server answered with another container than the one asked for", 0x0030)
 
 #define PRIVMX_CORE_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointCoreException, NAME, MSG, CODE)
 CORE_EXCEPTIONS(PRIVMX_CORE_DECLARE)

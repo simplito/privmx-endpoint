@@ -7,6 +7,8 @@
 #include <privmx/utils/Utils.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/thread/ServerApi.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/endpoint/thread/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
@@ -1691,4 +1693,96 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_still_reports_a_stale_key_when_the_re_
     ASSERT_NO_THROW({ untouched = threadApi->getThread(threadId); });
     EXPECT_EQ(untouched.version, stale.version);
     EXPECT_EQ(untouched.staleGroups.size(), 1);
+}
+
+TEST_F(ThreadUsingGroupsTest, SECURITY_a_metadata_update_after_a_rekey_keeps_the_new_key) {
+    // Honest Bridge. A re-key installs K2 but leaves the newest data entry under K1. An update that kept
+    // "the key of the newest entry" put K1 back as the Thread's key and re-wrapped it to G, so everything sent
+    // afterwards was under a key user_3, removed from G before the re-key, had read with.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("f05a_pub"), core::Buffer::from("f05a_priv")
+        );
+    });
+    group::Group sharedGroup = groupApi->getGroup(groupId);
+    std::string threadId;
+    ASSERT_NO_THROW({
+        threadId = createThreadWithGroups(
+            contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<group::Group>{sharedGroup}
+        );
+    });
+    thread::ServerApi raw(connection->getImpl()->getGateway());
+    const auto keyIdOfThread = [&] {
+        thread::server::ThreadGetModel get;
+        get.threadId = threadId;
+        return raw.threadGet(get).thread.keyId;
+    };
+    const auto keyIdOfMessage = [&](const std::string& messageId) {
+        thread::server::ThreadMessageGetModel get;
+        get.messageId = messageId;
+        return raw.threadMessageGet(get).message.keyId;
+    };
+    const std::string removedMembersKey = keyIdOfThread();
+
+    // user_3 reads through G at K1: it holds K1.
+    std::string before;
+    ASSERT_NO_THROW({
+        before = threadApi->sendMessage(
+            threadId, core::Buffer::from("pub"), core::Buffer::from("priv"), core::Buffer::from("before_removal")
+        );
+    });
+    {
+        auto conn3 = connect(3);
+        auto groups3 = group::GroupApi::create(*conn3);
+        auto threads3 = thread::ThreadApi::create(*conn3, groups3);
+        thread::Message read;
+        ASSERT_NO_THROW({ read = threads3.getMessage(before); });
+        ASSERT_EQ(read.statusCode, 0);
+        conn3->disconnect();
+    }
+
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {userId(3)}); });
+    thread::Thread stale = threadApi->getThread(threadId);
+    ASSERT_NO_THROW({
+        threadApi->rotateThreadKeys(
+            threadId, std::vector<core::UserWithPubKey>{user(1)}, std::vector<core::UserWithPubKey>{user(1)},
+            stale.version, false
+        );
+    });
+    const std::string newKey = keyIdOfThread();
+    ASSERT_NE(newKey, removedMembersKey);
+
+    // A metadata-only update: same members, same grant.
+    thread::Thread rekeyed = threadApi->getThread(threadId);
+    const group::Group current = groupApi->getGroup(groupId);
+    ASSERT_NO_THROW({
+        threadApi->updateThread(
+            threadId, std::vector<core::UserWithPubKey>{user(1)}, std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("renamed_public"), core::Buffer::from("renamed_private"), rekeyed.version, false, false,
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{
+                {.groupId = groupId, .role = "user", .groupPubKey = current.groupPubKey}
+            }
+        );
+    });
+    EXPECT_EQ(keyIdOfThread(), newKey) << "the update put back the key the re-key replaced";
+
+    std::string after;
+    ASSERT_NO_THROW({
+        after = threadApi->sendMessage(
+            threadId, core::Buffer::from("pub"), core::Buffer::from("priv"), core::Buffer::from("after_update")
+        );
+    });
+    EXPECT_NE(keyIdOfMessage(after), removedMembersKey) << "new content went under a key user_3 holds";
+
+    // The members who stay still read it through G at its new epoch.
+    disconnect();
+    connectAs(2);
+    thread::Message read;
+    EXPECT_NO_THROW({ read = threadApi->getMessage(after); });
+    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_EQ(read.data.stdString(), "after_update");
+    EXPECT_EQ(threadApi->getThread(threadId).publicMeta.stdString(), "renamed_public");
 }
