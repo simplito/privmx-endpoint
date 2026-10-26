@@ -13,6 +13,7 @@ limitations under the License.
 
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/varinterface/VarInterfaceUtil.hpp"
+#include "privmx/endpoint/core/varinterface/VarPinStoreInterface.hpp"
 #include "privmx/endpoint/core/varinterface/VarUserVerifierInterface.hpp"
 using namespace privmx::endpoint::core;
 
@@ -88,6 +89,16 @@ Poco::Dynamic::Var ConnectionVarInterface::setUserVerifier(
         verifierCallback, _deserializer, _serializer
     );
     _connection.setUserVerifier(verifier);
+    return {};
+}
+
+Poco::Dynamic::Var ConnectionVarInterface::setPinStore(
+    const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& loadCallback,
+    const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& saveCallback
+) {
+    _connection.setPinStore(
+        std::make_shared<VarPinStoreInterface>(loadCallback, saveCallback, _deserializer, _serializer)
+    );
     return {};
 }
 

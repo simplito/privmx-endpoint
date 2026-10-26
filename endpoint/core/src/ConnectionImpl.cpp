@@ -16,6 +16,7 @@ limitations under the License.
 #include "privmx/endpoint/core/EndpointUtils.hpp"
 #include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
+#include "privmx/endpoint/core/BigEndian.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
@@ -23,6 +24,7 @@ limitations under the License.
 #include <privmx/endpoint/core/SingletonsHolder.hpp>
 #include <privmx/rpc/Types.hpp>
 #include <privmx/utils/Logger.hpp>
+#include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint::core;
 
@@ -154,6 +156,7 @@ void ConnectionImpl::connectPublic(
         .instanceId = verificationOptions.bridgeInstanceId
     };
     auto key = privmx::crypto::PrivateKey::generateRandom();
+    _public = true;
     _userPrivKey = key;
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
@@ -250,6 +253,28 @@ PagingList<UserInfo> ConnectionImpl::listContextUsers(const std::string& context
 void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
     std::unique_lock lock(_mutex);
     _userVerifier = std::make_shared<UserVerifier>(verifier);
+}
+
+void ConnectionImpl::setPinStore(std::shared_ptr<PinStoreInterface> store) {
+    std::unique_lock lock(_mutex);
+    _pinStore = store;
+}
+
+std::shared_ptr<PinStoreInterface> ConnectionImpl::getPinStore() {
+    std::shared_lock lock(_mutex);
+    return _public ? nullptr : _pinStore;
+}
+
+std::string ConnectionImpl::localStateScope() {
+    std::string preimage;
+    bigendian::putLp(preimage, _bridgeIdentity.url);
+    bigendian::putLp(preimage, _bridgeIdentity.pubKey.value_or(""));
+    bigendian::putLp(preimage, _bridgeIdentity.instanceId.value_or(""));
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(preimage));
+}
+
+std::string ConnectionImpl::localStateSlot(const std::string& kind, const crypto::PublicKey& identity) {
+    return kind + "/" + localStateScope() + "/" + identity.toBase58DER();
 }
 
 std::vector<std::string> ConnectionImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

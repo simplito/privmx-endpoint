@@ -64,6 +64,13 @@ public:
     // again under the lock, so a concurrent verification that got further makes this one a fork.
     void storeVersionPins(const server::GroupInfo& groupInfo);
 
+    // The version pins per group (rosterVersion, publicMetaVersion, privateMetaVersion) for the pin blob, and
+    // stored ones merged back per counter by max. `onPinsMoved` runs (outside the lock) when a counter rose: major
+    // unless the group had no version pin yet.
+    std::map<std::string, std::array<std::int64_t, 3>> exportVersionPins();
+    void importVersionPins(const std::map<std::string, std::array<std::int64_t, 3>>& stored);
+    void onPinsMoved(std::function<void(bool major)> callback) { _onPinsMoved = std::move(callback); }
+
     void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKeyV2& rosterKey);
 
     // A plane's author and whoever wrapped its key must be on the attested roster, and the author must hold `update`
@@ -190,7 +197,7 @@ private:
     using VersionPin = std::array<std::int64_t, 3>;
     std::mutex _pinMutex;
     std::map<std::string, VersionPin> _versionPins;
-    friend struct GroupApiImplTestAccess; // tests read the version pins
+    std::function<void(bool)> _onPinsMoved;
 };
 
 } // namespace group

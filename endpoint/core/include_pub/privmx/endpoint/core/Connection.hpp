@@ -6,6 +6,7 @@
 #include <string>
 
 #include "privmx/endpoint/core/BaseApiClass.hpp"
+#include "privmx/endpoint/core/PinStoreInterface.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/UserVerifierInterface.hpp"
 
@@ -129,6 +130,24 @@ public:
      * 
      */
     void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
+
+    /**
+     * Sets where the library keeps state between sessions (key-tree pins of the groups this device verified). Without
+     * a store every new GroupApi reads each group on trust once (TOFU); with one, only the first contact of this device
+     * with a group does.
+     *
+     * Call it right after `connect`, before creating any module API: a GroupApi reads the store once, when it is
+     * created. Slots are per identity key and per Bridge (URL, public key and instance id of `connect`). The store
+     * must be local to the device: one the Bridge can write lets the Bridge delete the saved state (protection back to
+     * first contact) or roll it back to an older saved one (it can never plant a state). Ignored on a `connectPublic`
+     * connection. See PinStoreInterface for the atomicity and threading contract.
+     *
+     * A slot that does not load (the store throws) or fails its integrity check is logged as a warning and ignored:
+     * that GroupApi starts as a first contact for every group, as without a store, and the next save overwrites the
+     * slot. Nothing is thrown, so a corrupted store never locks the app out of its groups.
+     * @param store an implementation of the PinStoreInterface, or nullptr to keep state in memory only
+     */
+    void setPinStore(std::shared_ptr<PinStoreInterface> store);
 
 private:
     void assertGateway(const std::shared_ptr<ConnectionImpl>& impl);

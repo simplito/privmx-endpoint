@@ -126,6 +126,11 @@ void Connection::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier
     impl->setUserVerifier(verifier);
 }
 
+void Connection::setPinStore(std::shared_ptr<PinStoreInterface> store) {
+    auto impl = getImpl();
+    impl->setPinStore(store);
+}
+
 std::vector<std::string> Connection::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto impl = getImpl();
     assertConnection(impl);
