@@ -3490,6 +3490,22 @@ TEST_F(GroupApiLyingBridge, SECURITY_AKeyIsCheckedAgainstTheOpenerOfTheRouteThat
     EXPECT_EQ(client("bob").decrypt(honest).data.stdString(), "honest") << "the refused key was remembered";
 }
 
+TEST_F(GroupApiLyingBridge, SECURITY_AGrantKeyLabelledEpochZeroIsNotRemembered) {
+    // Epoch 0 resolves to the current epoch. Remembered for the current grant key, it would hand every later envelope
+    // to that key the key of whatever epoch is current then.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const std::string epoch1 = bridge.tree.state.grantPublicKey.toBase58DER();
+    const Envelope sealed = client("bob").encryptAnonymously(groupId, epoch1, core::Buffer::from("to epoch 1"));
+    bridge.onEpochKeys = [&](server::GroupGetEpochKeysResult& result) {
+        result.keyHistory = {{.keyVersion = 0, .groupPubKey = epoch1}};
+    };
+    EXPECT_ANY_THROW(client("alice").decrypt(sealed));
+    bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
+    client("alice").rotateGroupKey(groupId);
+    EXPECT_EQ(client("alice").decrypt(sealed).data.stdString(), "to epoch 1");
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_TheGroupKeyResolverPassesAForkThrough) {
     // A rollback is not "no key": the resolver the key provider calls must not turn it into a skipped entry.
     quiet = true;

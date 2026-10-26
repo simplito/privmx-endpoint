@@ -2869,7 +2869,8 @@ privmx::crypto::PrivateKey GroupApiImpl::grantKeyForPubKey(
     lookup.groupPubKeys = std::vector<std::string>{target.toBase58DER()}; // as stored: compressed
     // `keyHistory` is the bridge's word: only an epoch whose own key turns out to be the target is remembered.
     for (const auto& entry : _serverApi.groupGetEpochKeys(lookup).keyHistory) {
-        if (privmx::crypto::PublicKey::fromBase58DER(entry.groupPubKey) == target) {
+        // Epoch 0 is no epoch: `resolveGroupPrivKey` reads it as "the current one", which a later rotation moves.
+        if (entry.keyVersion >= 1 && privmx::crypto::PublicKey::fromBase58DER(entry.groupPubKey) == target) {
             const privmx::crypto::PrivateKey key = resolveGroupPrivKey(groupId, entry.keyVersion);
             if (key.getPublicKey() == target) {
                 _envelopeGrantEpochs.set(memoKey, entry.keyVersion);
