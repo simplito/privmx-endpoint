@@ -370,6 +370,12 @@ JSON_STRUCT(GroupCutEraModel, GROUP_CUT_ERA_MODEL_FIELDS);
     F(expectedKeyVersion, int64_t)
 JSON_STRUCT(GroupPruneArchiveModel, GROUP_PRUNE_ARCHIVE_MODEL_FIELDS);
 
+// One more rung for a span an epoch already published; the bridge records the caller as its author.
+#define GROUP_REPAIR_RUNG_MODEL_FIELDS(F)                                                                              \
+    F(id, std::string)                                                                                                 \
+    F(rung, GroupArchiveRung)
+JSON_STRUCT(GroupRepairRungModel, GROUP_REPAIR_RUNG_MODEL_FIELDS);
+
 // One span of the Epoch Ladder: the rungs sealing epoch `target`'s grant key to epoch `at`'s.
 #define GROUP_ARCHIVE_SPAN_FIELDS(F)                                                                                   \
     F(at, int64_t)                                                                                                     \

@@ -80,6 +80,9 @@ server::GroupGetEpochKeysResult ServerApi::groupGetEpochKeys(server::GroupGetEpo
     return request<server::GroupGetEpochKeysResult>("groupGetEpochKeys", model.toJSON());
 }
 
+void ServerApi::groupRepairRung(server::GroupRepairRungModel model) {
+    request("groupRepairRung", model.toJSON());
+}
 
 void ServerApi::groupSendCustomEvent(server::GroupSendCustomEventModel model) {
     request("groupSendCustomEvent", model.toJSON());
