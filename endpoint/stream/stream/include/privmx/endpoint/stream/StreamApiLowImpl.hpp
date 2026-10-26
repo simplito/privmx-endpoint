@@ -215,11 +215,13 @@ private:
     // A snapshot naming another key than the one in use, or a stale one, is not applied: the keys come from a fresh
     // read, so a delayed or replayed pre-rotation update cannot bring the old key back (M2).
     void applyRoomUpdate(StreamRoomData& room, const server::StreamRoomInfo& raw);
-    // Hands the room's key set to the media layer and the data channel encryptor; refuses a state of another room,
-    // and one whose current key needs a re-key.
+    // Hands the room's key set to the media layer and the data channel encryptor; refuses a state of another room.
+    // One whose current key needs a re-key gets its REMOTE keys only (receiving goes on, sending has no key), then is
+    // refused.
     void applyRoomKeys(StreamRoomData& room, const server::StreamRoomInfo& streamRoomInfo);
-    // LOCAL: the room's current key (`keyId`), what this client encrypts under. REMOTE: every key that opens.
-    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo);
+    // LOCAL (with `withLocal`): the room's current key (`keyId`), what this client encrypts under. REMOTE: every key
+    // that opens.
+    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo, bool withLocal = true);
     std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> extractStreamRoomKeys(
         server::StreamRoomInfo streamRoomInfo
     );

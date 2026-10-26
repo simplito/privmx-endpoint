@@ -28,8 +28,10 @@ limitations under the License.
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/endpoint/core/UserVerifierInterface.hpp>
 #include <privmx/endpoint/stream/StreamApiLowImpl.hpp>
+#include <privmx/endpoint/stream/StreamException.hpp>
 #include <privmx/endpoint/stream/encryptors/streamRoom/StreamRoomDataSchemaMapper.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
+#include <privmx/utils/PrivmxException.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include "TestHelpers.hpp"
@@ -82,6 +84,12 @@ struct StreamApiLowImplTestAccess {
         return api._streamRoomMap.get(roomId).value()->publisherStream != nullptr;
     }
     static bool hasHandle(StreamApiLowImpl& api, StreamHandle handle) { return api._handleToRoomId.has(handle); }
+    static void applyRoomKeys(StreamApiLowImpl& api, const std::string& roomId, const server::StreamRoomInfo& raw) {
+        api.applyRoomKeys(*api._streamRoomMap.get(roomId).value(), raw);
+    }
+    static std::string localKeyId(StreamApiLowImpl& api, const std::string& roomId) {
+        return api._streamRoomMap.get(roomId).value()->localKeyId;
+    }
     static void applyRoomUpdate(StreamApiLowImpl& api, const std::string& roomId, const server::StreamRoomInfo& raw) {
         api.applyRoomUpdate(*api._streamRoomMap.get(roomId).value(), raw);
     }
@@ -115,6 +123,8 @@ public:
     Gateway(Log& log, bool failUnpublish)
         : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr(), std::nullopt), _log(log), _failUnpublish(failUnpublish) {}
     std::optional<stream::server::StreamRoomInfo> served; // what stream.streamRoomGet answers, when set
+    // Answers a method instead of the defaults below.
+    std::map<std::string, std::function<Poco::Dynamic::Var(Poco::JSON::Object::Ptr)>> handlers;
     Poco::Dynamic::Var request(
         const std::string& method,
         Poco::JSON::Object::Ptr params,
@@ -122,6 +132,10 @@ public:
         privmx::utils::CancellationToken::Ptr
     ) override {
         _log.add(method + (method == "stream.streamUnpublish" ? " " + params->getValue<std::string>("sessionId") : ""));
+        if (const auto handler = handlers.find(method); handler != handlers.end()) {
+            const Poco::Dynamic::Var result = handler->second(overTheWire(params));
+            return result.isEmpty() ? result : Poco::Dynamic::Var(overTheWire(result));
+        }
         if (_failUnpublish && method == "stream.streamUnpublish") {
             throw std::runtime_error("the bridge is unreachable");
         }
@@ -166,7 +180,9 @@ public:
             throw std::runtime_error("the peer connection is gone");
         }
     }
+    std::vector<stream::Key> lastKeys; // the key set last handed over
     void updateKeys(const std::string&, const std::vector<stream::Key>& keys) override {
+        lastKeys = keys;
         for (const auto& key : keys) {
             if (key.type == stream::KeyType::LOCAL) {
                 _log.add("LOCAL " + key.keyId);
@@ -315,6 +331,51 @@ struct Joined {
     bool saw(const std::string& step) {
         const auto all = steps();
         return std::find(all.begin(), all.end(), step) != all.end();
+    }
+    // The Bridge's answer to a re-key: taken (the room moves to the new key, wrapped to "me", stale no more) or
+    // refused as the room's policy refuses a caller without the role.
+    int rekeys = 0;
+    void answerRekeys(bool take) {
+        bridge->handlers["context.contextListUsers"] = [this](Poco::JSON::Object::Ptr) {
+            core::server::UserIdentityWithStatusAndAction user;
+            user.id = "me";
+            user.pub = key.getPublicKey().toBase58DER();
+            user.status = "inactive";
+            core::server::ContextListUsersResult result;
+            result.users = {user};
+            result.count = 1;
+            return Poco::Dynamic::Var(result.toJSON());
+        };
+        bridge->handlers["context.contextGet"] = [](Poco::JSON::Object::Ptr) {
+            return Poco::Dynamic::Var(core::server::ContextGetResult{.context = {.userId = "me", .contextId = "ctx"}}.toJSON());
+        };
+        bridge->handlers["stream.streamRoomRotateKeys"] = [this, take](Poco::JSON::Object::Ptr params) {
+            ++rekeys;
+            if (!take) {
+                throw privmx::utils::PrivmxException("ACCESS_DENIED", privmx::utils::PrivmxException::RPC, 0x0030);
+            }
+            const auto model = stream::server::StreamRoomRotateKeysModel::fromJSON(params);
+            auto room = bridge->served.value();
+            room.keyId = model.keyId;
+            for (const auto& entry : model.keys) {
+                room.keys.push_back({.keyId = entry.keyId, .data = entry.data});
+            }
+            room.staleGroups = {};
+            bridge->served = room;
+            return Poco::Dynamic::Var();
+        };
+    }
+    // `state`, gone stale: a granted group moved past its current key. "me" is its one user, so a re-key wraps to it.
+    stream::server::StreamRoomInfo stale(const std::vector<std::string>& keyIds, const std::string& current) {
+        auto room = state(keyIds, current, current);
+        room.users = {"me"};
+        room.staleGroups = {"g"};
+        return room;
+    }
+    bool handedLocal() {
+        return std::any_of(webRtc->lastKeys.begin(), webRtc->lastKeys.end(), [](const stream::Key& key) {
+            return key.type == stream::KeyType::LOCAL;
+        });
     }
     inline static const std::string SECRET = "room-secret";
 };
@@ -472,4 +533,62 @@ TEST(StreamPublicationStop, SECURITY_APublishFollowsARoomKeyWhoseUpdateWasLostWh
     const auto publish = std::find(std::next(std::find(steps.begin(), steps.end(), "stream.streamPublish")), steps.end(), "stream.streamPublish");
     ASSERT_NE(local, steps.end()) << "the sender stayed on k1";
     EXPECT_LT(local, publish) << "the publish went out under k1";
+}
+
+TEST(StreamPublicationStop, SECURITY_AJoinToAStaleRoomTheCallerMayNotReKeyReceivesOnly) {
+    // The room's key is stale and its policy refuses this caller a re-key. The join goes on to receive: every key
+    // that opens is handed over as REMOTE, none as LOCAL, so nothing is sent under the key a removed member holds.
+    Joined c;
+    c.bridge->served = c.stale({"k1"}, "k1");
+    c.answerRekeys(false);
+    EXPECT_NO_THROW(c.api.joinStreamRoom("room", c.webRtc));
+    EXPECT_EQ(c.rekeys, 1) << "the re-key was not tried";
+    EXPECT_TRUE(c.saw("stream.streamRoomJoin"));
+    ASSERT_FALSE(c.webRtc->lastKeys.empty()) << "nothing to receive under";
+    EXPECT_FALSE(c.handedLocal()) << "a key to send under";
+    EXPECT_THROW(
+        c.api.encryptDataChannelMessage("room", {.data = core::Buffer::from("x"), .seq = 1}),
+        stream::NoStreamEncryptionKeyException
+    );
+    const auto handle = c.api.createStream("room");
+    EXPECT_ANY_THROW(c.api.publishStream(handle));
+    EXPECT_EQ(c.rekeys, 2) << "the publish did not try the re-key again";
+    EXPECT_FALSE(c.saw("stream.streamPublish")) << "published under a stale key";
+}
+
+TEST(StreamPublicationStop, AJoinToAStaleRoomReKeysItWhenTheCallerMay) {
+    Joined c;
+    c.bridge->served = c.stale({"k1"}, "k1");
+    c.answerRekeys(true);
+    EXPECT_NO_THROW(c.api.joinStreamRoom("room", c.webRtc));
+    ASSERT_EQ(c.rekeys, 1);
+    const std::string fresh = c.bridge->served->keyId;
+    ASSERT_NE(fresh, "k1");
+    EXPECT_TRUE(c.saw("LOCAL " + fresh)) << "the sender is not on the new key";
+    EXPECT_FALSE(c.saw("LOCAL k1"));
+}
+
+TEST(StreamPublicationStop, SECURITY_AStaleRoomStateGivesTheSenderNoKeyAndKeepsReceiving) {
+    // applyRoomKeys itself: a state needing a re-key hands its keys over to receive under, takes the sender's key
+    // away, and is refused, so a caller with a live publication stops it.
+    Joined c;
+    c.bridge->served = c.state({"k1"}, "k1", "k1");
+    Access::publishing(c.api, c.bridge->served.value(), c.webRtc, 42, 7);
+    EXPECT_ANY_THROW(Access::applyRoomKeys(c.api, "room", c.stale({"k1", "k2"}, "k2")));
+    EXPECT_FALSE(c.handedLocal()) << "the stale key went to the sender";
+    EXPECT_EQ(c.webRtc->lastKeys.size(), 2u) << "the keys to receive under were not handed over";
+    EXPECT_EQ(Access::localKeyId(c.api, "room"), "");
+}
+
+TEST(StreamPublicationStop, AnUpdateNamingTheKeyInUseButStaleIsReKeyedWhenTheCallerMay) {
+    // The live publication's room goes stale under the key in use: re-keyed, it goes on under the new key.
+    Joined c;
+    c.bridge->served = c.state({"k1"}, "k1", "k1");
+    Access::publishing(c.api, c.bridge->served.value(), c.webRtc, 42, 7);
+    c.bridge->served = c.stale({"k1"}, "k1");
+    c.answerRekeys(true);
+    EXPECT_NO_THROW(Access::applyRoomUpdate(c.api, "room", c.bridge->served.value()));
+    EXPECT_EQ(c.rekeys, 1);
+    EXPECT_TRUE(Access::isPublishing(c.api, "room")) << "stopped although the re-key went through";
+    EXPECT_TRUE(c.saw("LOCAL " + c.bridge->served->keyId));
 }

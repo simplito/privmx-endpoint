@@ -263,14 +263,20 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     }
     auto streamRoom = getRawStreamRoom(streamRoomId);
     if (isRekeyNeeded(streamRoom)) {
-        // The data channel sends under the LOCAL key from the join on: never one a removed member holds.
-        autoRotateStreamRoomKeys(streamRoomId);
-        invalidateModuleKeysInCache(streamRoomId);
-        streamRoom = getRawStreamRoom(streamRoomId);
-        assertRekeyNotNeeded(streamRoom);
+        // The data channel and the media send under the LOCAL key from the join on: never one a removed member
+        // holds. A member the room does not let re-key (or a re-key that did nothing) joins to receive only: no
+        // LOCAL key, so sending fails closed, and `publishStream` re-keys or is refused.
+        try {
+            autoRotateStreamRoomKeys(streamRoomId);
+            invalidateModuleKeysInCache(streamRoomId);
+            streamRoom = getRawStreamRoom(streamRoomId);
+        } catch (const core::StaleKeyRekeyRequiredException& e) {
+            LOG_WARN("joinStreamRoom: the room's key is stale and could not be re-keyed, joining to receive only: ", e.what())
+        }
     }
+    const bool sending = !isRekeyNeeded(streamRoom);
     std::shared_ptr<DataChannelMessageEncryptorV1> dataChannelMessageEncryptorV1;
-    std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom);
+    std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom, sending);
     dataChannelMessageEncryptorV1 = std::make_shared<DataChannelMessageEncryptorV1>(keys);
     webRtc->updateKeys(streamRoomId, keys);
     // setup event listener
@@ -287,7 +293,7 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     );
     streamRoomData->resourceId = streamRoom.resourceId.value_or("");
     streamRoomData->contextId = streamRoom.contextId;
-    streamRoomData->localKeyId = streamRoom.keyId;
+    streamRoomData->localKeyId = sending ? streamRoom.keyId : std::string();
     _streamRoomMap.set(streamRoomId, streamRoomData);
     return streamRoomData;
 }
@@ -864,10 +870,13 @@ void StreamApiLowImpl::applyRoomUpdate(StreamRoomData& room, const server::Strea
         // Fail closed: no usable current key (V1 or unopenable), a failed re-key, or a state of another room. Left
         // running, the publication would keep sending media and data channel frames under the old key. Not
         // rethrown, so the app still gets its StreamRoomUpdatedEvent; the Bridge's streamUnpublished tells it.
-        LOG_ERROR("streamRoomUpdated: no usable fresh key for the room, stopping the publication: ", e.what());
+        LOG_ERROR(
+            "streamRoomUpdated: no usable fresh key to send under",
+            room.publisherStream ? ", stopping the publication: " : ", receiving only: ", e.what()
+        );
         stopPublication(room);
     } catch (...) {
-        LOG_ERROR("streamRoomUpdated: no usable fresh key for the room, stopping the publication");
+        LOG_ERROR("streamRoomUpdated: no usable fresh key to send under", room.publisherStream ? ", stopping the publication" : "");
         stopPublication(room);
     }
 }
@@ -877,31 +886,25 @@ void StreamApiLowImpl::applyRoomKeys(StreamRoomData& room, const server::StreamR
         streamRoomInfo.contextId != room.contextId) {
         throw core::ContainerMismatchException("not the joined room " + room.streamRoomId);
     }
-    assertRekeyNotNeeded(streamRoomInfo); // its current key is one a removed member may hold
-    std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoomInfo);
-    std::lock_guard<std::recursive_mutex> lock(room.mutex);
-    room.webRtc->updateKeys(room.streamRoomId, keys);
-    room.messageEncryptor->updateKey(keys);
-    room.localKeyId = streamRoomInfo.keyId;
+    // A stale room's current key is one a removed member may hold: nothing is sent under it (no LOCAL key), while
+    // receiving goes on under every key that opens. Refused afterwards, so a live publication stops.
+    const bool sending = !isRekeyNeeded(streamRoomInfo);
+    std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoomInfo, sending);
+    {
+        std::lock_guard<std::recursive_mutex> lock(room.mutex);
+        room.webRtc->updateKeys(room.streamRoomId, keys);
+        room.messageEncryptor->updateKey(keys);
+        room.localKeyId = sending ? streamRoomInfo.keyId : std::string();
+    }
+    assertRekeyNotNeeded(streamRoomInfo);
 }
 
-std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo) {
+std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
+    server::StreamRoomInfo streamRoomInfo,
+    bool withLocal
+) {
     auto keys = extractStreamRoomKeys(streamRoomInfo);
-    // The room's current key, not the newest data entry's: a re-key leaves that one under the key it replaced.
-    auto currentStreamRoomKey = keys.at(streamRoomInfo.keyId);
-
     std::vector<stream::Key> webRTCKeys;
-    if (currentStreamRoomKey.statusCode != 0) {
-        throw core::MalformedEncryptionKeyException(
-            "Encryption Key status code = " + std::to_string(currentStreamRoomKey.statusCode)
-        );
-    }
-    assertWriteKey(currentStreamRoomKey); // the LOCAL key: what this client's media is encrypted under
-    webRTCKeys.push_back(
-        stream::Key{
-            currentStreamRoomKey.id, core::Buffer::from(deriveStreamEncryptionKey(currentStreamRoomKey)), KeyType::LOCAL
-        }
-    );
     for (const auto& key : keys) {
         if (key.second.statusCode == 0) {
             webRTCKeys.push_back(
@@ -909,6 +912,23 @@ std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
             );
         }
     }
+    if (!withLocal) {
+        return webRTCKeys;
+    }
+    // The room's current key, not the newest data entry's: a re-key leaves that one under the key it replaced.
+    auto currentStreamRoomKey = keys.at(streamRoomInfo.keyId);
+    if (currentStreamRoomKey.statusCode != 0) {
+        throw core::MalformedEncryptionKeyException(
+            "Encryption Key status code = " + std::to_string(currentStreamRoomKey.statusCode)
+        );
+    }
+    assertWriteKey(currentStreamRoomKey); // the LOCAL key: what this client's media is encrypted under
+    webRTCKeys.insert(
+        webRTCKeys.begin(),
+        stream::Key{
+            currentStreamRoomKey.id, core::Buffer::from(deriveStreamEncryptionKey(currentStreamRoomKey)), KeyType::LOCAL
+        }
+    );
     return webRTCKeys;
 }
 
