@@ -156,7 +156,10 @@ public:
      * key only once a read has replayed the group's chain to it. A group whose served chain does not reach the hint is
      * refused as a fork (GroupHistoryForkException) in every session that adopts it; the app recovers by deleting the
      * previous key's slot from its PinStore, after which the group is read on trust once, as on first contact.
-     * Call it right after `connect` and `setPinStore`, before creating any module API. Without a store, or nothing
+     * Call it right after `connect` and `setPinStore`, before creating any module API, and again on every later start
+     * (every new connection) for as long as the previous key's slot is kept: the hints and the key-change knowledge
+     * live in this connection's memory only, so a start that skips the call reads a group whose hint no read has
+     * verified yet as a first contact, and lets a removal abandon history again. Without a store, or nothing
      * stored for the previous key, nothing is carried over. Either way it tells this client its key changed: a
      * GroupApi::removeGroupMembers whose own leaf does not open but opens with the previous key is then refused until
      * GroupApi::renewLeaf, instead of abandoning the group's history.
