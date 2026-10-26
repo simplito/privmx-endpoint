@@ -131,6 +131,8 @@ struct Bridge {
     bool servesSpans = true;
     // Edits what `groupGetEpochKeys` serves.
     std::function<void(server::GroupGetEpochKeysResult&)> onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
+    // Edits what `groupList` serves.
+    std::function<void(server::GroupSummary&)> onList = [](server::GroupSummary&) {};
     // Edits what `groupGetKeyArchive` serves for an ask.
     std::function<void(const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&)> onArchive =
         [](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&) {};
@@ -314,6 +316,7 @@ struct Bridge {
             summary.rosterVersion = info.rosterVersion;
             summary.keyVersion = info.keyVersion;
             summary.policy = info.policy;
+            onList(summary);
             return server::GroupListResult{.groups = {summary}, .count = 1}.toJSON();
         }
         if (group == "groupAddMembers") {
@@ -3504,6 +3507,59 @@ TEST_F(GroupApiLyingBridge, SECURITY_AGrantKeyLabelledEpochZeroIsNotRemembered) 
     bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
     client("alice").rotateGroupKey(groupId);
     EXPECT_EQ(client("alice").decrypt(sealed).data.stdString(), "to epoch 1");
+}
+
+TEST_F(GroupApiLyingBridge, AListedGrantKeyIsHandedOutInItsOneSpelling) {
+    // bob's rotation signs the new grant key uncompressed, and the bridge serves and lists it so: the same point,
+    // another string. What listGroups and the grantee lookup hand out (pinned, or read and verified) is the key in its
+    // one spelling.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    std::string spelled;
+    bridge.onRotationCommit = [&](server::GroupTreeCommit& commit) {
+        CommitStatement statement = TreeCommits::fromWire(commit);
+        spelled = privmx::utils::Base58::encodeWithChecksum(
+            PublicKey::fromBase58DER(statement.groupPubKey).getEcc().getPublicKey(false)
+        );
+        statement.groupPubKey = spelled;
+        TreeCommits::sign(statement, bridge.users.at("bob"));
+        commit = TreeCommits::toWire(statement);
+    };
+    bridge.onRead = [&](const std::string&, server::GroupInfo& info) {
+        if (info.keyVersion == 2 && !spelled.empty()) {
+            info.groupPubKey = spelled;
+        }
+    };
+    bridge.onList = [&](server::GroupSummary& summary) {
+        if (summary.keyVersion == 2 && !spelled.empty()) {
+            summary.groupPubKey = spelled;
+        }
+    };
+    try {
+        client("bob").rotateGroupKey(groupId);
+    } catch (...) {} // bob's own pin holds the statement as he signed it
+    bridge.onRotationCommit = [](server::GroupTreeCommit&) {};
+    ASSERT_EQ(bridge.tree.state.epoch, 2u);
+    const std::string canonical = bridge.tree.state.grantPublicKey.toBase58DER();
+    ASSERT_NE(spelled, canonical);
+    client("alice").getGroup(groupId); // pins epoch 2
+    const auto listed = client("alice").listGroups(CONTEXT, {.skip = 0, .limit = 10, .sortOrder = "desc"});
+    ASSERT_EQ(listed.readItems.size(), 1u);
+    EXPECT_EQ(listed.readItems[0].groupPubKey, canonical);
+    for (const std::string id : {"alice", "carol"}) { // pinned, and read for the first time
+        client(id);
+        Client& session = *clients.at(id);
+        GrantingModule module(
+            session.connectionImpl->getUserPrivKey(), session.connectionImpl->getKeyProvider(), "",
+            session.connectionImpl->getEventMiddleware(), session.connection, session.groupApi
+        );
+        std::vector<core::GroupGrantWithKey> grants{{.groupId = groupId, .role = "user", .groupPubKey = "", .groupEpoch = 0}};
+        std::unordered_map<std::string, core::GroupEpochInfo> cache;
+        try {
+            module.resolveGroupEpochs(CONTEXT, grants, cache);
+        } catch (const std::exception& e) { ADD_FAILURE() << id << ": " << e.what(); }
+        EXPECT_EQ(grants.at(0).groupPubKey, canonical) << id;
+    }
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_TheGroupKeyResolverPassesAForkThrough) {

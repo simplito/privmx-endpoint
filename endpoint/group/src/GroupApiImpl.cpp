@@ -1834,9 +1834,10 @@ core::PagingList<GroupSummary> GroupApiImpl::listGroups(
         groups.push_back(GroupDataSchemaMapper::toLibGroupSummary(group));
         // What an outsider would seal anonymous envelopes to. A listing carries no statement to vouch for it, so only
         // the key of a state this process has verified is handed out; `getGroup` verifies the rest.
-        if (!_treeVerifier.pinnedAt(group.id, contextId, group.keyVersion, group.groupPubKey)) {
-            groups.back().groupPubKey.clear();
-        }
+        // The point the pin holds, in its one spelling: the bridge's may be another string for it.
+        groups.back().groupPubKey = _treeVerifier.pinnedAt(group.id, contextId, group.keyVersion, group.groupPubKey) ?
+            keytree::TreeVerifier::canonicalKey(group.groupPubKey) :
+            std::string();
     }
     return core::PagingList<GroupSummary>({.totalAvailable = groupsList.count, .readItems = groups});
 }
@@ -1879,8 +1880,10 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
                 continue;
             }
             if (_treeVerifier.pinnedAt(summary.id, contextId, summary.keyVersion, summary.groupPubKey)) {
-                epochs[summary.id] =
-                    core::GroupEpochInfo{.keyVersion = summary.keyVersion, .groupPubKey = summary.groupPubKey};
+                epochs[summary.id] = core::GroupEpochInfo{
+                    .keyVersion = summary.keyVersion,
+                    .groupPubKey = keytree::TreeVerifier::canonicalKey(summary.groupPubKey)
+                };
                 continue;
             }
             // Limit: one `groupGet` per unpinned group, the whole tree for a caller without a seat; a statement-and-
@@ -1907,7 +1910,9 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
                 behind.push_back(group.id);
                 continue;
             }
-            epochs[group.id] = core::GroupEpochInfo{.keyVersion = group.keyVersion, .groupPubKey = group.groupPubKey};
+            epochs[group.id] = core::GroupEpochInfo{
+                .keyVersion = group.keyVersion, .groupPubKey = keytree::TreeVerifier::canonicalKey(group.groupPubKey)
+            };
         }
         return behind;
     };
