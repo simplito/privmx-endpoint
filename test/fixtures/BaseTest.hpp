@@ -3,12 +3,14 @@
 
 #include "./Main.hpp"
 
+#include <chrono>
 #include <exception>
 #include <functional>
 #include <gtest/gtest.h>
 #include <iostream>
 #include <random>
 #include <string>
+#include <thread>
 #include <utility>
 #include <Poco/URI.h>
 #include <privmx/endpoint/core/Exception.hpp>
@@ -26,6 +28,18 @@ public:
 private:
     std::function<void()> _callback;
 };
+
+// Polls `done` every 100 ms until it holds or `timeout` passes; whether it held.
+inline bool waitUntil(const std::function<bool()>& done, std::chrono::milliseconds timeout = std::chrono::seconds(10)) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!done()) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    return true;
+}
 
 enum BaseTestMode {
     online,

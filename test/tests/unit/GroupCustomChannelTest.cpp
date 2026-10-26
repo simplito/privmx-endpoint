@@ -116,7 +116,7 @@ TEST(GroupCustomChannelTest, both_selector_types_are_available_to_a_custom_chann
 }
 
 TEST(GroupCustomChannelTest, SECURITY_an_event_opens_only_on_the_channel_it_was_sealed_for) {
-    // T4-07: the bridge delivers an event on whichever channel it likes; the channel inside the sealed payload is the
+    // The bridge delivers an event on whichever channel it likes; the channel inside the sealed payload is the
     // sender's. A name that is a prefix of another must not pass for it either.
     const std::string sealed = group::SubscriberImpl::sealOnChannel("typing", "hello");
     EXPECT_EQ(group::SubscriberImpl::openOnChannel("typing", sealed), std::optional<std::string>("hello"));

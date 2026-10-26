@@ -51,28 +51,13 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
     wanted.insert(managerIds.begin(), managerIds.end());
 
     std::unordered_map<std::string, std::string> pubKeyByUserId;
-    constexpr size_t BRIDGE_MAX_BATCH_SIZE = 100; // The bridge listing caps at 100
     auto it = wanted.begin();
     while (it != wanted.end()) {
-        Poco::JSON::Array::Ptr ids = new Poco::JSON::Array();
+        std::vector<std::string> ids;
         for (size_t i = 0; i < BRIDGE_MAX_BATCH_SIZE && it != wanted.end(); ++i, ++it) {
-            ids->add(*it);
+            ids.push_back(*it);
         }
-        Poco::JSON::Object::Ptr in = new Poco::JSON::Object();
-        in->set("$in", ids);
-        Poco::JSON::Object::Ptr query = new Poco::JSON::Object();
-        query->set("#userId", in);
-        auto page = _connection.listContextUsers(
-            contextId,
-            PagingQuery{
-                .skip = 0,
-                .limit = static_cast<int64_t>(ids->size()),
-                .sortOrder = "asc",
-                .lastId = std::nullopt,
-                .sortBy = std::nullopt,
-                .queryAsJson = privmx::utils::Utils::stringify(query)
-            }
-        );
+        auto page = _connection.listContextUsers(contextId, pageOfIds("#userId", ids));
         for (const auto& userInfo : page.readItems) {
             pubKeyByUserId.emplace(userInfo.user.userId, userInfo.user.pubKey);
         }
@@ -90,34 +75,12 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
         }
         return resolved;
     };
-    ContainerRoster roster{.users = resolve(userIds), .managers = resolve(managerIds)};
-    // The listing is only the bridge's word for these keys.
-    std::vector<UserWithPubKey> all;
-    for (const auto& userId : wanted) {
-        all.push_back(UserWithPubKey{.userId = userId, .pubKey = pubKeyByUserId.at(userId)});
-    }
-    assertUserKeysVerified(contextId, all);
-    return roster;
+    return ContainerRoster{.users = resolve(userIds), .managers = resolve(managerIds)};
 }
 
 void ContainerBaseApi::assertUserKeysVerified(const std::string& contextId, const std::vector<UserWithPubKey>& users) {
     // As for the author of anything this client reads: the application vouches for each pair.
-    std::vector<VerificationRequest> requests;
-    const int64_t now = privmx::utils::Utils::getNowTimestamp();
-    for (const auto& user : users) {
-        requests.push_back(
-            {.contextId = contextId,
-             .senderId = user.userId,
-             .senderPubKey = user.pubKey,
-             .date = now,
-             .bridgeIdentity = std::nullopt}
-        );
-    }
-    const auto verified = requests.empty() ? std::vector<bool>{} :
-                                             _connection.getImpl()->getUserVerifier()->verify(requests);
-    if (verified.size() != requests.size() || std::find(verified.begin(), verified.end(), false) != verified.end()) {
-        throw UserVerificationFailureException();
-    }
+    _connection.getImpl()->getUserVerifier()->assertKeysVerified(contextId, users);
 }
 
 ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
@@ -130,6 +93,7 @@ ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
     auto dio = _connection.getImpl()->createDIO(contextId, resourceId);
     auto secret = _keyProvider->generateSecret();
     auto allUsers = EndpointUtils::uniqueListUserWithPubKey(users, managers);
+    assertUserKeysVerified(contextId, allUsers);
     auto keyEntries = _keyProvider->prepareKeysList(
         allUsers, key, dio, {.contextId = contextId, .resourceId = resourceId}, secret
     );
@@ -137,6 +101,10 @@ ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
 }
 
 std::vector<server::KeyEntrySet> ContainerBaseApi::buildRosterKeyEntries(const ContainerUpdatePlan& plan) {
+    // A new key goes to the whole new roster; otherwise only the added users get the current one.
+    assertUserKeysVerified(
+        plan.ctx.location.contextId, plan.needNewKey ? plan.roster->getNewUsers() : plan.roster->getUsersToAddKey()
+    );
     std::vector<server::KeyEntrySet> keyEntries;
     if (plan.needNewKey) {
         keyEntries = _keyProvider->prepareKeysList(
@@ -153,14 +121,16 @@ std::vector<server::KeyEntrySet> ContainerBaseApi::buildRosterKeyEntries(const C
     return keyEntries;
 }
 
-void ContainerBaseApi::assertRekeyNotNeeded(const server::ContainerInfoBase& container) {
-    assertNoStaleGroups(staleGroupsOf(container.groupKeys, container.keyId, container.staleGroups));
-    assertSignedEntry(container.keys, container.keyId);
+void ContainerBaseApi::assertRekeyNotNeeded(const server::ContainerInfoBase& c) const {
+    if (auto reason = rekeyReason(c.keys, c.groupKeys, c.keyId, c.staleGroups); !reason.empty()) {
+        throw StaleKeyRekeyRequiredException(reason);
+    }
 }
 
-void ContainerBaseApi::assertRekeyNotNeeded(const ModuleKeys& moduleKeys) {
-    assertNoStaleGroups(staleGroupsOf(moduleKeys.groupKeys, moduleKeys.currentKeyId, moduleKeys.staleGroups));
-    assertSignedEntry(moduleKeys.keys, moduleKeys.currentKeyId);
+void ContainerBaseApi::assertRekeyNotNeeded(const ModuleKeys& k) const {
+    if (auto reason = rekeyReason(k.keys, k.groupKeys, k.currentKeyId, k.staleGroups); !reason.empty()) {
+        throw StaleKeyRekeyRequiredException(reason);
+    }
 }
 
 bool ContainerBaseApi::hasUnsignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId) {
@@ -169,20 +139,22 @@ bool ContainerBaseApi::hasUnsignedEntry(const std::vector<server::KeyEntry>& key
     });
 }
 
-void ContainerBaseApi::assertSignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId) {
-    if (hasUnsignedEntry(keys, keyId)) {
-        throw StaleKeyRekeyRequiredException("the current key is an unsigned (V1) entry");
-    }
-}
-
-std::vector<std::string> ContainerBaseApi::staleGroupsOf(
+std::string ContainerBaseApi::rekeyReason(
+    const std::vector<server::KeyEntry>& keys,
     const std::vector<server::GroupKeysEntry>& groupKeys,
     const std::string& keyId,
     const std::vector<std::string>& staleGroups
-) {
+) const {
     std::vector<std::string> stale = groupsBehindPins(groupKeys, keyId, _pinnedGroupEpoch);
     stale.insert(stale.end(), staleGroups.begin(), staleGroups.end());
-    return stale;
+    if (!stale.empty()) {
+        std::string names = "staleGroups=";
+        for (size_t i = 0; i < stale.size(); ++i) {
+            names += (i == 0 ? "" : ",") + stale[i];
+        }
+        return names;
+    }
+    return hasUnsignedEntry(keys, keyId) ? "the current key is an unsigned (V1) entry" : "";
 }
 
 // A route's epoch is the server's label, but a key opened through it opens only under that epoch's grant key, so a
@@ -205,17 +177,6 @@ std::vector<std::string> ContainerBaseApi::groupsBehindPins(
         }
     }
     return behind;
-}
-
-void ContainerBaseApi::assertNoStaleGroups(const std::vector<std::string>& staleGroups) {
-    if (staleGroups.empty()) {
-        return;
-    }
-    std::string names;
-    for (const auto& groupId : staleGroups) {
-        names += names.empty() ? groupId : "," + groupId;
-    }
-    throw StaleKeyRekeyRequiredException("staleGroups=" + names);
 }
 
 DecryptedEncKeyV2 ContainerBaseApi::findEncKeyByKeyId(
@@ -343,4 +304,23 @@ std::vector<server::GroupKeyEntrySet> ContainerBaseApi::buildGroupKeyEntries(
         );
     }
     return result;
+}
+
+PagingQuery ContainerBaseApi::pageOfIds(const std::string& field, const std::vector<std::string>& ids) {
+    Poco::JSON::Array::Ptr idArray = new Poco::JSON::Array();
+    for (const std::string& id : ids) {
+        idArray->add(id);
+    }
+    Poco::JSON::Object::Ptr in = new Poco::JSON::Object();
+    in->set("$in", idArray);
+    Poco::JSON::Object::Ptr query = new Poco::JSON::Object();
+    query->set(field, in);
+    return PagingQuery{
+        .skip = 0,
+        .limit = static_cast<int64_t>(ids.size()),
+        .sortOrder = "asc",
+        .lastId = std::nullopt,
+        .sortBy = std::nullopt,
+        .queryAsJson = privmx::utils::Utils::stringify(query)
+    };
 }

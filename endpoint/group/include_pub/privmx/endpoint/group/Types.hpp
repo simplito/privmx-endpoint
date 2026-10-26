@@ -114,7 +114,10 @@ struct Group {
     core::Buffer privateMeta;
 
     /**
-     * Group's policies
+     * Group's policies. Only `update`, `rotateKeys`, `updatePolicy` and `ownerCanBeRemovedFromManagers` (and the
+     * creator) are signed into the Group's state; there `inherit`/`default` mean the built-in defaults (manager,
+     * manager, manager, yes), not the Context's; the Context can only deny further. Every other field is the
+     * Bridge's word.
      */
     core::ContainerPolicy policy;
 
@@ -145,8 +148,8 @@ struct Group {
  * Holds the information about a Group that a listing serves: identity, epoch, counters and policies.
  *
  * Every field is of constant size, so a page does not grow with the Groups' membership or age. A listing
- * deliberately carries no roster and no per-Group state — no `users`/`managers` (removed from this struct:
- * they grow with membership), no encrypted data, key entries, history, tree or signed statement. So there is
+ * deliberately carries no roster and no per-Group state — no `users`/`managers` (they grow with membership),
+ * no encrypted data, key entries, history, tree or signed statement. So there is
  * no `publicMeta`/`privateMeta` here (nothing to decrypt from), no `schemaVersion` (it is recorded inside the
  * encrypted data), and no `statusCode` (nothing was decrypted or verified, so there is no status to report).
  * Call `getGroup` for any of those.

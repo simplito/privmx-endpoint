@@ -1,4 +1,9 @@
 #include <gtest/gtest.h>
+#include <algorithm>
+#include <chrono>
+#include <mutex>
+#include <set>
+#include <thread>
 #include "BaseGroupTest.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
@@ -7,7 +12,9 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/stream/StreamApiLow.hpp>
+#include <privmx/endpoint/stream/StreamException.hpp>
 #include <privmx/endpoint/stream/StreamVarSerializer.hpp>
+#include <privmx/endpoint/stream/WebRTCInterface.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
@@ -644,4 +651,226 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_clears_staleGroups_after_
     EXPECT_NO_THROW({ afterRekey = streamApi->getStreamRoom(streamRoomId); });
     EXPECT_EQ(afterRekey.statusCode, 0);
     EXPECT_EQ(afterRekey.privateMeta.stdString(), "group_room_private");
+}
+
+namespace {
+
+// No media: keeps the key sets the room hands the WebRTC layer, the only place the LOCAL key is visible.
+class KeyRecordingWebRTC : public stream::WebRTCInterface {
+public:
+    std::string createOfferAndSetLocalDescription(const std::string&, const std::string&) override { return ""; }
+    std::string createAnswerAndSetDescriptions(
+        const std::string&, const std::string&, const std::string&, const std::string&
+    ) override {
+        return "";
+    }
+    void setAnswerAndSetRemoteDescription(
+        const std::string&, const std::string&, const std::string&, const std::string&
+    ) override {}
+    void updateSessionId(const std::string&, const int64_t, const std::string&) override {}
+    void closeAll(const std::string&) override {}
+    void close(const std::string&, const std::string& connectionType) override {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _closed.push_back(connectionType);
+    }
+    std::vector<std::string> closed() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _closed;
+    }
+    void updateKeys(const std::string&, const std::vector<stream::Key>& keys) override {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _updates.push_back(keys);
+    }
+    std::vector<std::vector<stream::Key>> updates() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _updates;
+    }
+
+private:
+    std::mutex _mutex;
+    std::vector<std::vector<stream::Key>> _updates;
+    std::vector<std::string> _closed;
+};
+
+std::string localKeyId(const std::vector<stream::Key>& keys) {
+    for (const auto& key : keys) {
+        if (key.type == stream::KeyType::LOCAL) return key.keyId;
+    }
+    return "";
+}
+
+std::set<std::string> remoteKeyIds(const std::vector<stream::Key>& keys) {
+    std::set<std::string> ids;
+    for (const auto& key : keys) {
+        if (key.type == stream::KeyType::REMOTE) ids.insert(key.keyId);
+    }
+    return ids;
+}
+
+} // namespace
+
+TEST_F(StreamRoomUsingGroupsTest, SECURITY_the_local_media_key_follows_a_rekey) {
+    // Honest Bridge. The LOCAL key, which this client's media is encrypted under, was chosen once at join
+    // from the newest data entry and kept through every streamRoomUpdated. After user_3's removal from G and a
+    // re-key, media stayed under K1, which user_3 holds.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("f05c_pub"), core::Buffer::from("f05c_priv")
+        );
+    });
+    group::Group sharedGroup = groupApi->getGroup(groupId);
+    std::string streamRoomId;
+    ASSERT_NO_THROW({
+        streamRoomId = createStreamRoomWithGroups(
+            contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<group::Group>{sharedGroup}
+        );
+    });
+    auto webRtc = std::make_shared<KeyRecordingWebRTC>();
+    ASSERT_NO_THROW({ streamApi->joinStreamRoom(streamRoomId, webRtc); });
+    ASSERT_FALSE(webRtc->updates().empty());
+    const auto atJoin = webRtc->updates().front();
+    const std::string removedMembersKey = localKeyId(atJoin);
+    ASSERT_FALSE(removedMembersKey.empty());
+
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {userId(3)}); });
+    stream::StreamRoom stale = streamApi->getStreamRoom(streamRoomId);
+    ASSERT_NO_THROW({
+        streamApi->rotateStreamRoomKeys(
+            streamRoomId, std::vector<core::UserWithPubKey>{user(1)}, std::vector<core::UserWithPubKey>{user(1)},
+            stale.version, false
+        );
+    });
+
+    // The rotation reaches the joined room as a streamRoomUpdated event carrying both keys.
+    std::optional<std::vector<stream::Key>> afterRekey;
+    privmx::test::waitUntil([&] {
+        for (const auto& keys : webRtc->updates()) {
+            if (remoteKeyIds(keys).size() == 2) afterRekey = keys;
+        }
+        return afterRekey.has_value();
+    });
+    ASSERT_TRUE(afterRekey.has_value()) << "no key update after the re-key";
+    std::set<std::string> added = remoteKeyIds(afterRekey.value());
+    added.erase(removedMembersKey);
+    ASSERT_EQ(added.size(), 1u);
+    EXPECT_EQ(localKeyId(afterRekey.value()), *added.begin()) << "media stays under a key user_3 holds";
+    EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
+}
+
+TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_removal_from_a_granted_group) {
+    // Honest Bridge. A stream already being published must not stay under K1 after user_3 leaves G, or user_3,
+    // still subscribed, keeps decrypting it. The Bridge tells the room about the removal and the publishing client
+    // re-keys.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("live_pub"), core::Buffer::from("live_priv")
+        );
+    });
+    group::Group sharedGroup = groupApi->getGroup(groupId);
+    std::string streamRoomId;
+    ASSERT_NO_THROW({
+        streamRoomId = createStreamRoomWithGroups(
+            contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<group::Group>{sharedGroup}
+        );
+    });
+    auto webRtc = std::make_shared<KeyRecordingWebRTC>();
+    ASSERT_NO_THROW({ streamApi->joinStreamRoom(streamRoomId, webRtc); });
+    ASSERT_NO_THROW({ streamApi->createStream(streamRoomId); }); // this client encrypts outgoing media
+    const std::string removedMembersKey = localKeyId(webRtc->updates().front());
+    ASSERT_FALSE(removedMembersKey.empty());
+
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {userId(3)}); });
+
+    // No publishStream or updateStream from here on: only the removal itself can move the sender.
+    std::string local;
+    privmx::test::waitUntil([&] { return (local = localKeyId(webRtc->updates().back())) != removedMembersKey; });
+    EXPECT_NE(local, removedMembersKey) << "the publication stays under a key user_3 holds";
+    stream::StreamRoom room = streamApi->getStreamRoom(streamRoomId);
+    EXPECT_TRUE(room.staleGroups.empty()) << "the room was not re-keyed";
+    EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
+}
+
+TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_rekeys_after_a_rotation_of_a_granted_group) {
+    // As after a removal, a rotation (after a suspected compromise) must move a live publication off the
+    // pre-rotation room key. The Bridge tells the room about the rotation too.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("live_pub"), core::Buffer::from("live_priv")
+        );
+    });
+    group::Group sharedGroup = groupApi->getGroup(groupId);
+    std::string streamRoomId;
+    ASSERT_NO_THROW({
+        streamRoomId = createStreamRoomWithGroups(
+            contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<group::Group>{sharedGroup}
+        );
+    });
+    auto webRtc = std::make_shared<KeyRecordingWebRTC>();
+    ASSERT_NO_THROW({ streamApi->joinStreamRoom(streamRoomId, webRtc); });
+    ASSERT_NO_THROW({ streamApi->createStream(streamRoomId); }); // this client encrypts outgoing media
+    const std::string preRotationKey = localKeyId(webRtc->updates().front());
+    ASSERT_FALSE(preRotationKey.empty());
+
+    ASSERT_NO_THROW({ groupApi->rotateGroupKey(groupId); });
+
+    // No publishStream or updateStream from here on: only the rotation itself can move the sender.
+    std::string local;
+    privmx::test::waitUntil([&] { return (local = localKeyId(webRtc->updates().back())) != preRotationKey; });
+    EXPECT_NE(local, preRotationKey) << "the publication stays under the pre-rotation key";
+    stream::StreamRoom room = streamApi->getStreamRoom(streamRoomId);
+    EXPECT_TRUE(room.staleGroups.empty()) << "the room was not re-keyed";
+    EXPECT_NO_THROW({ streamApi->leaveStreamRoom(streamRoomId); });
+}
+
+TEST_F(StreamRoomUsingGroupsTest, SECURITY_a_live_publication_stops_when_its_rekey_is_refused) {
+    // Honest Bridge. The room lets only managers re-key, so user_2's automatic re-key after the removal is refused.
+    // Logging it is not enough: user_2's publication must not go on under the key user_3 holds.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("live_pub"), core::Buffer::from("live_priv")
+        );
+    });
+    group::Group sharedGroup = groupApi->getGroup(groupId);
+    core::ContainerPolicyWithoutItem policy;
+    policy.rotateKeys = "manager";
+    std::string streamRoomId;
+    ASSERT_NO_THROW({
+        streamRoomId = streamApi->createStreamRoom(
+            contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("group_room_public"), core::Buffer::from("group_room_private"), policy, std::nullopt,
+            std::vector<core::GroupGrantWithKey>{
+                {.groupId = groupId, .role = "user", .groupPubKey = sharedGroup.groupPubKey}
+            }
+        );
+    });
+
+    auto conn2 = connect(2);
+    privmx::test::ScopeExit closeIt([&] { conn2->disconnect(); });
+    auto groups2 = group::GroupApi::create(*conn2);
+    auto streams2 = stream::StreamApiLow::create(*conn2, groups2);
+    auto webRtc = std::make_shared<KeyRecordingWebRTC>();
+    ASSERT_NO_THROW({ streams2.joinStreamRoom(streamRoomId, webRtc); });
+    stream::StreamHandle handle = 0;
+    ASSERT_NO_THROW({ handle = streams2.createStream(streamRoomId); }); // user_2 encrypts outgoing media
+
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {userId(3)}); });
+
+    auto publisherClosed = [&] {
+        const auto closed = webRtc->closed();
+        return std::find(closed.begin(), closed.end(), "publisher") != closed.end();
+    };
+    EXPECT_TRUE(privmx::test::waitUntil(publisherClosed)) << "the publication goes on under a key user_3 holds";
+    EXPECT_EQ(streamApi->getStreamRoom(streamRoomId).staleGroups.size(), 1u) << "user_2 was not refused";
+    // The handle itself is gone, not merely refused for the stale key (a live handle would throw that too).
+    EXPECT_THROW({ streams2.publishStream(handle); }, stream::IncorrectStreamHandleException)
+        << "the stopped publication's handle still works";
+    EXPECT_NO_THROW({ streams2.leaveStreamRoom(streamRoomId); });
 }

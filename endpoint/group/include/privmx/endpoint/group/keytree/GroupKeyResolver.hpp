@@ -53,6 +53,10 @@ struct ResolveResult {
     DescentFailure descent = DescentFailure::None;
     // Publisher of an offending rung or edge, when tampering was detected.
     std::optional<std::string> blame;
+    // Spans the descent found broken (`DescentResult::brokenSpans`), on success and on failure alike.
+    std::vector<RungSpan> brokenSpans;
+    // Where a failed descent stopped (`DescentResult::reachedEpoch`): the epoch a way round has to leave from.
+    std::uint32_t reachedEpoch = 0;
 };
 
 // Resolves a group's grant private key for an epoch: climb the tree to the current one, then descend the ladder
@@ -102,9 +106,6 @@ public:
     // The bridge rejects upward rungs too, but trusting it on that would trust the one party assumed hostile.
     static std::vector<ArchiveRung> toDownwardRungs(const server::GroupGetKeyArchiveResult& archive);
 
-    // `groupPubKey` is the current epoch, `keyHistory` the past ones.
-    static std::vector<EpochRegistryEntry> registryFromGroupHistory(const server::GroupInfo& group);
-
     // The current epoch still comes from the group, not the archive, because an epoch this client cannot
     // verify is one it refuses to accept a key for.
     static std::vector<EpochRegistryEntry> registryFromArchive(
@@ -112,10 +113,16 @@ public:
         const server::GroupGetKeyArchiveResult& archive
     );
 
+    // Rungs kept per span: twice the bridge's cap (four), so an honest bridge never loses one and a lying one can
+    // force at most this many attempts per span.
+    static constexpr std::size_t MAX_SERVED_RUNGS_PER_SPAN = 8;
+
     // The archive as the group's statements vouch for it, `openers` being the statement that opened each epoch
-    // (TreeVerifier::epochOpeners): each past grant key off its statement rather than the bridge's `keyHistory`, and
-    // only the rungs sealed by the committer that opened the epoch they hang from, named as their author. A rung the
-    // bridge sealed itself is dropped.
+    // (TreeVerifier::epochOpeners): each past grant key off its statement rather than the bridge's `keyHistory`.
+    // A rung sealed by the committer that opened the epoch it hangs from is named with that committer as author;
+    // any other (a repair by another member, or anything the bridge made up) is kept unattributed — whether its key
+    // is right is decided by the registry check in `descend`, never by its sealer. Per span, opener-sealed rungs come
+    // first, and at most MAX_SERVED_RUNGS_PER_SPAN are kept.
     static server::GroupGetKeyArchiveResult authenticated(
         server::GroupGetKeyArchiveResult archive,
         const std::map<std::uint64_t, CommitStatement>& openers

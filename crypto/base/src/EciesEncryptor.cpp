@@ -59,6 +59,16 @@ string EciesEncryptor::encryptToBase64(const PublicKey& pub, const string& data,
     return Base64::from(encrypt(pub, data, privForSignature));
 }
 
+std::optional<PublicKey> EciesEncryptor::senderOf(const string& cipher_base64) {
+    try {
+        const string cipher = Base64::toString(cipher_base64);
+        if (cipher.size() < 67 || cipher.front() != 101) {
+            return std::nullopt;
+        }
+        return PublicKey::fromDER(cipher.substr(1, 33));
+    } catch (...) { return std::nullopt; }
+}
+
 string EciesEncryptor::encrypt(const PublicKey& pub, const string& data, const PrivateKey& privForSignature) {
     ECIES ecies(privForSignature, pub);
     auto cipher = ecies.encrypt(data);

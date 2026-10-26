@@ -26,14 +26,16 @@ limitations under the License.
  * string on all 33 edges of a tree.
  *
  * Every case is one commit by a named member: its `before` and `after` states (the after state by the bridge's
- * storage rule, `TreeWire::afterCommit`), the nodes it refreshed, the signed commit statement (`commit`, signature
+ * storage rule, `treetest::afterCommit`), the nodes it refreshed, the signed commit statement (`commit`, signature
  * in full), the post state's `treeHash` and roster (`users`, `managers`, `rosterVersion`). Removals also carry
  * `setters` (the committer of each statement `before`'s filled nodes cite) and `blanked` (what the removal blanks
- * besides the remover's path, ascending); additions carry `blanked: []`. Cases from the A-prime test vectors carry
+ * besides the remover's path, ascending); additions carry `blanked: []`. Named test vectors carry
  * their `id` ("V2" ...). Trees are version 3
  * (`treeVersion` at the top): buckets of 16 seats, blank nodes without a `publicKey`, filled ones with `setBy`.
  * Every user who signs is in the top-level `userPubKeys`; ids are global, so a user's key is the same in every case.
- * A group is "grp", except at seq 1 where its statement names the resourceId "res".
+ * A group is "grp", except at seq 1 where its statement names the resourceId "res". Every case also carries the
+ * group's policy and creator after its commit (`groupPolicy`, `groupCreator`), which the statement's `policyHash`
+ * signs; `policy` cases are policy commits, whose `before` and `after` are the same tree.
  *
  * Usage: keytree_state_dump > src/test/fixtures/keytree-states.json   (paths relative to the bridge repo)
  * See test/tools/README.md.
@@ -47,6 +49,8 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include <Poco/JSON/Object.h>
+
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -56,6 +60,8 @@ limitations under the License.
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
+
+#include "TreeTestOps.hpp"
 
 using privmx::crypto::PrivateKey;
 using namespace privmx::endpoint::group;
@@ -196,6 +202,8 @@ struct Group {
     std::int64_t rosterVersion = 0;
     TreeKeyCache grantKeys; // every epoch's grant key, for the rungs a removal publishes
     std::string lastDigest; // of the latest statement, which the next one chains to
+    std::string creator;
+    Poco::Dynamic::Var policy = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
 
     std::vector<std::string> seated() const {
         std::vector<std::string> ids;
@@ -217,22 +225,14 @@ struct Group {
     }
 };
 
-// The statement for a commit already applied to `group`, as the endpoint signs it, plus what it describes.
-std::string statementJson(
-    Group& group,
-    const CommitPlan& plan,
-    CommitOp op,
-    const std::string& committer,
-    std::vector<std::string> added,
-    std::vector<std::string> removed
-) {
-    CommitStatement statement = TreeCommits::statementFor(
-        plan, op, plan.seq == 1 ? "res" : "grp", 1760000000000 + plan.seq, group.epoch,
-        group.grantKey.getPublicKey().toBase58DER(), static_cast<std::uint64_t>(group.rosterVersion), group.seated(),
-        {}, committer, std::move(added), {}, std::move(removed)
-    );
-    statement.prevDigest = plan.seq == 1 ? "" : group.lastDigest;
-    TreeCommits::sign(statement, userKeys().at(committer));
+// `statement` signed by its committer and chained to the group's latest, plus what it describes.
+std::string signedJson(Group& group, CommitStatement statement) {
+    statement.policyHash = TreeCommits::rules(group.policy, group.creator).hash;
+    if (statement.op == CommitOp::Create || statement.op == CommitOp::Policy) {
+        statement.policy = group.policy;
+    }
+    statement.prevDigest = statement.seq == 1 ? "" : group.lastDigest;
+    TreeCommits::sign(statement, userKeys().at(statement.committer));
     group.lastDigest = TreeCommits::digest(statement);
     const TreeGroupState post = TreeWire::toRuntime(group.tree, group.epoch, group.grantKey.getPublicKey());
     const std::string treeHash = privmx::utils::Hex::from(TreeCommits::treeHash(post));
@@ -242,7 +242,27 @@ std::string statementJson(
     return ",\"commit\":" + privmx::utils::Utils::stringify(TreeCommits::toWire(statement).toJSON())
         + ",\"digest\":" + quote(privmx::utils::Hex::from(group.lastDigest))
         + ",\"treeHash\":" + quote(treeHash) + ",\"rosterVersion\":" + std::to_string(group.rosterVersion)
-        + ",\"users\":" + idsToJson(group.seated()) + ",\"managers\":[]";
+        + ",\"users\":" + idsToJson(group.seated()) + ",\"managers\":[]"
+        + ",\"groupPolicy\":" + privmx::utils::Utils::stringifyVar(group.policy)
+        + ",\"groupCreator\":" + quote(group.creator);
+}
+
+// The statement for a commit already applied to `group`, as the endpoint signs it, plus what it describes.
+std::string statementJson(
+    Group& group,
+    const CommitPlan& plan,
+    CommitOp op,
+    const std::string& committer,
+    std::vector<std::string> added,
+    std::vector<std::string> removed
+) {
+    return signedJson(
+        group, TreeCommits::statementFor(
+                   plan, op, plan.seq == 1 ? "res" : "grp", 1760000000000 + plan.seq, group.epoch,
+                   group.grantKey.getPublicKey().toBase58DER(), static_cast<std::uint64_t>(group.rosterVersion),
+                   group.seated(), {}, committer, std::move(added), {}, std::move(removed), std::string()
+               )
+    );
 }
 
 std::string groupCreate(Group& group, std::uint32_t count, std::uint32_t creator) {
@@ -259,6 +279,7 @@ std::string groupCreate(Group& group, std::uint32_t count, std::uint32_t creator
     group.commitSeq = 1;
     group.setters[1] = group.members[creator].userId;
     group.rosterVersion = 1;
+    group.creator = group.members[creator].userId;
     return "{\"kind\":\"create\",\"epoch\":1,\"creator\":" + quote(group.members[creator].userId)
         + ",\"members\":" + idsToJson(group.seated()) + ",\"refreshed\":" + refreshedToJson(plan)
         + statementJson(group, plan, CommitOp::Create, group.members[creator].userId, {}, {})
@@ -280,9 +301,9 @@ CommitPlan commitBy(
     if (keys.climbToGrantKey(state, who.userId, who.priv, false).failure != ClimbFailure::None) {
         throw std::runtime_error(committer + " cannot climb");
     }
-    keys.setMemberKeys(publicOf(group.members));
+    treetest::setMemberKeys(keys, publicOf(group.members));
     const CommitPlan result = plan(keys, state, who);
-    group.tree = TreeWire::afterCommit(group.tree, result);
+    group.tree = treetest::afterCommit(group.tree, result);
     group.epoch = result.epoch;
     group.grantKey = result.grantKey;
     group.grantKeys.putGrantKey(result.epoch, result.grantKey);
@@ -347,7 +368,7 @@ std::string groupAdd(Group& group, const std::string& adder, std::uint32_t count
     }
     const CommitPlan plan = commitBy(group, adder, [&](TreeKeys& keys, const TreeGroupState& state, const Member& who) {
         return keys.planAddition(
-            state, publicOf(newcomers), TreeKeys::choosePositions(state, count), who.userId, who.priv
+            state, publicOf(newcomers), treetest::choosePositions(state, count), who.userId, who.priv
         );
     });
     group.rosterVersion += 1;
@@ -369,6 +390,43 @@ std::string groupSelfUpdate(Group& group, const std::string& memberId) {
         + ",\"members\":" + idsToJson(group.seated()) + ",\"refreshed\":" + refreshedToJson(plan)
         + statementJson(group, plan, CommitOp::SelfUpdate, memberId, {}, {}) + ",\"before\":" + treeToJson(before)
         + ",\"after\":" + treeToJson(group.tree) + "}";
+}
+
+// A policy commit by `memberId`, as `GroupApiImpl::updateGroupPolicy` signs it: everything as the latest statement
+// says but the policy.
+std::string groupPolicyChange(Group& group, const std::string& memberId, const Poco::Dynamic::Var& policy) {
+    group.policy = policy;
+    const TreeGroupState post = TreeWire::toRuntime(group.tree, group.epoch, group.grantKey.getPublicKey());
+    CommitStatement statement;
+    statement.seq = ++group.commitSeq;
+    statement.op = CommitOp::Policy;
+    statement.groupId = "grp";
+    statement.treeVersion = TreeMath::TREE_VERSION;
+    statement.date = 1760000000000 + statement.seq;
+    statement.keyVersion = group.epoch;
+    statement.groupPubKey = group.grantKey.getPublicKey().toBase58DER();
+    statement.rosterVersion = static_cast<std::uint64_t>(group.rosterVersion);
+    statement.rosterHash = TreeCommits::rosterHash(group.seated(), {});
+    statement.treeHash = TreeCommits::treeHash(post);
+    statement.committer = memberId;
+    for (std::size_t i = 0; i < group.tree.leafAssignment.size(); ++i) {
+        if (group.tree.leafAssignment[i] == memberId) {
+            statement.committerSeat = static_cast<std::uint32_t>(i);
+        }
+    }
+    group.setters[statement.seq] = memberId;
+    return "{\"kind\":\"policy\",\"epoch\":" + std::to_string(group.epoch) + ",\"member\":" + quote(memberId)
+        + ",\"members\":" + idsToJson(group.seated()) + ",\"policy\":" + privmx::utils::Utils::stringifyVar(policy)
+        + ",\"refreshed\":[]" + signedJson(group, statement) + ",\"before\":" + treeToJson(group.tree)
+        + ",\"after\":" + treeToJson(group.tree) + "}";
+}
+
+Poco::Dynamic::Var policyOf(const std::map<std::string, std::string>& rules) {
+    Poco::JSON::Object::Ptr policy = new Poco::JSON::Object();
+    for (const auto& [field, rule] : rules) {
+        policy->set(field, rule);
+    }
+    return policy;
 }
 
 std::string u(std::uint32_t i) {
@@ -524,6 +582,16 @@ int main() {
             Group group;
             groupCreate(group, 2, 0);
             cases.push_back(groupSelfUpdate(group, u(1)));
+        }
+
+        // ── policy commits: a change, a commit under the new rules, and back to the defaults ──
+        {
+            Group group;
+            groupCreate(group, 5, 0);
+            cases.push_back(groupPolicyChange(group, u(0), policyOf({{"update", "user"}, {"get", "all"}})));
+            cases.push_back(groupRemove(group, u(3), {u(4)}));
+            cases.push_back(groupPolicyChange(group, u(1), policyOf({})));
+            cases.push_back(groupSelfUpdate(group, u(2)));
         }
     } catch (const std::exception& e) {
         std::cerr << "keytree_state_dump: " << e.what() << "\n";

@@ -11,10 +11,11 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/TreeWire.hpp"
 
-#include <map>
-#include <set>
-
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
+
+#include <limits>
+
+#include "privmx/endpoint/group/GroupException.hpp"
 
 using namespace privmx::endpoint::group::keytree;
 namespace server = privmx::endpoint::group::server;
@@ -53,27 +54,11 @@ server::GroupTreeEdge TreeWire::toWire(const TreeEdge& edge) {
 }
 
 server::GroupArchiveRung TreeWire::toWire(const ArchiveRung& rung) {
+    // A submission carries no author: the bridge records whoever made the call.
     server::GroupArchiveRung wire;
     wire.atKeyVersion = static_cast<std::int64_t>(rung.span.at);
     wire.targetKeyVersion = static_cast<std::int64_t>(rung.span.target);
-    switch (rung.recipientKind) {
-    case RungRecipientKind::User:
-        wire.recipientKind = "user";
-        break;
-    case RungRecipientKind::Group:
-        wire.recipientKind = "group";
-        break;
-    default:
-        wire.recipientKind = "epoch";
-        break;
-    }
-    if (!rung.recipientId.empty()) {
-        wire.recipient = rung.recipientId;
-    }
     wire.data = rung.blob;
-    if (!rung.author.empty()) {
-        wire.author = rung.author;
-    }
     return wire;
 }
 
@@ -87,6 +72,14 @@ std::vector<server::GroupArchiveRung> TreeWire::toWire(const std::vector<Archive
 }
 
 namespace {
+
+// A served counter or index as the runtime holds it: one out of range is the bridge's, never wrapped into another.
+std::uint32_t served32(std::int64_t value) {
+    if (value < 0 || value > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+        throw privmx::endpoint::group::GroupDataIntegrityException("a tree field out of range");
+    }
+    return static_cast<std::uint32_t>(value);
+}
 
 std::vector<std::string> leafAssignmentToWire(const std::vector<std::optional<std::string>>& seats) {
     // A blank is spelled as an empty string: that is how the wire format says "nobody here" without a nullable
@@ -154,7 +147,7 @@ TreeGroupState TreeWire::toRuntime(
     const privmx::crypto::PublicKey& grantPublicKey
 ) {
     TreeGroupState state;
-    state.numLeaves = static_cast<std::uint32_t>(tree.numLeaves);
+    state.numLeaves = served32(tree.numLeaves);
     state.epoch = epoch;
     state.grantPublicKey = grantPublicKey;
     for (const std::string& userId : tree.leafAssignment) {
@@ -166,8 +159,7 @@ TreeGroupState TreeWire::toRuntime(
     }
     for (const server::GroupTreeNode& node : tree.nodes) {
         TreeNodeState converted{
-            static_cast<std::uint32_t>(node.nodeIndex), static_cast<std::uint32_t>(node.generation), std::nullopt,
-            std::nullopt
+            served32(node.nodeIndex), served32(node.generation), std::nullopt, std::nullopt
         };
         if (!node.publicKey.value_or("").empty()) {
             converted.publicKey = NodePublicKey::fromBase58DER(node.publicKey.value());
@@ -180,15 +172,15 @@ TreeGroupState TreeWire::toRuntime(
     for (const server::GroupTreeEdge& edge : tree.edges) {
         TreeEdge converted;
         converted.isGrantEdge = edge.isGrantEdge.value_or(false);
-        converted.parentIndex = static_cast<std::uint32_t>(edge.parentIndex.value_or(0));
-        converted.parentGeneration = static_cast<std::uint32_t>(edge.parentGeneration);
+        converted.parentIndex = served32(edge.parentIndex.value_or(0));
+        converted.parentGeneration = served32(edge.parentGeneration);
         if (edge.childKind == "user") {
             converted.childKind = EdgeChildKind::User;
             converted.childUserId = edge.childUserId.value_or("");
         } else {
             converted.childKind = EdgeChildKind::Node;
-            converted.childIndex = static_cast<std::uint32_t>(edge.childIndex.value_or(0));
-            converted.childGeneration = static_cast<std::uint32_t>(edge.childGeneration.value_or(0));
+            converted.childIndex = served32(edge.childIndex.value_or(0));
+            converted.childGeneration = served32(edge.childGeneration.value_or(0));
         }
         converted.blob = edge.data;
         state.edges.push_back(converted);
@@ -230,47 +222,4 @@ server::GroupTreeSelfUpdateTransition TreeWire::toSelfUpdateTransition(
     transition.refreshedNodes = refreshedToWire<server::GroupTreeRefreshedNode>(plan);
     transition.edges = edgesToWire(plan);
     return transition;
-}
-
-server::GroupTreeState TreeWire::afterCommit(const server::GroupTreeState& before, const CommitPlan& plan) {
-    server::GroupTreeState after;
-    after.numLeaves = static_cast<std::int64_t>(plan.shape.numLeaves);
-    after.leafAssignment = leafAssignmentToWire(plan.shape.leafAssignment);
-
-    // Every node whose outgoing edges the commit invalidates: refreshed, blanked, or no longer keyed at all.
-    std::set<std::uint32_t> replaced(plan.shape.blanked.begin(), plan.shape.blanked.end());
-    std::map<std::uint32_t, server::GroupTreeNode> nodes;
-    for (const server::GroupTreeNode& node : before.nodes) {
-        const auto index = static_cast<std::uint32_t>(node.nodeIndex);
-        if (!TreeMath::isKeyed(index, plan.shape.numLeaves)) {
-            replaced.insert(index);
-            continue;
-        }
-        nodes[index] = node;
-        if (plan.shape.blanked.count(index) > 0) {
-            nodes[index].publicKey = std::nullopt;
-            nodes[index].setBy = std::nullopt;
-        }
-    }
-    for (const RefreshedNode& refreshed : plan.refreshed) {
-        replaced.insert(refreshed.nodeIndex);
-        nodes[refreshed.nodeIndex] = toWire(
-            TreeNodeState{refreshed.nodeIndex, refreshed.generation, refreshed.key.getPublicKey(), plan.seq}
-        );
-    }
-    for (const auto& [index, node] : nodes) {
-        after.nodes.push_back(node);
-    }
-
-    for (const server::GroupTreeEdge& edge : before.edges) {
-        if (edge.isGrantEdge.value_or(false) ||
-            replaced.count(static_cast<std::uint32_t>(edge.parentIndex.value_or(0))) > 0) {
-            continue;
-        }
-        after.edges.push_back(edge);
-    }
-    for (const server::GroupTreeEdge& edge : edgesToWire(plan)) {
-        after.edges.push_back(edge);
-    }
-    return after;
 }

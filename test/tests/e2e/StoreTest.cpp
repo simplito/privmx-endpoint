@@ -1445,3 +1445,24 @@ TEST_F(StoreTest, userValidator_false) {
     EXPECT_THROW({ storeApi->openFile(fileId(1)); }, core::Exception);
     EXPECT_NO_THROW({ storeApi->deleteFile(fileId(2)); });
 }
+
+TEST_F(StoreTest, SECURITY_a_key_the_verifier_refuses_is_never_wrapped_to) {
+    // user_2's listed key is one the application's verifier refuses (a substituted key, as far as the client can
+    // tell). Create, update (an added user and a new key) and rotate all refuse before the key is wrapped to it.
+    const std::string withBoth = storeApi->createStore(contextId(), users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"));
+    const std::string withOne = storeApi->createStore(contextId(), users({1}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"));
+    const auto listed = [&] { return storeApi->listStores(contextId(), {.skip=0, .limit=1, .sortOrder="desc"}).totalAvailable; };
+    const auto before = listed();
+    connection->setUserVerifier(
+        std::make_shared<core::RefusingKeyVerifier>(std::set<std::string>{user(2).pubKey})
+    );
+    core::expectVerificationFailure([&] { storeApi->createStore(contextId(), users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private")); });
+    core::expectVerificationFailure([&] { storeApi->updateStore(withOne, users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, false); });
+    core::expectVerificationFailure([&] { storeApi->updateStore(withBoth, users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, true); });
+    core::expectVerificationFailure([&] { storeApi->rotateStoreKeys(withBoth, users({1, 2}), users({1}), 1, false); });
+    EXPECT_EQ(listed(), before);
+    EXPECT_EQ(storeApi->getStore(withBoth).version, 1);
+    EXPECT_EQ(storeApi->getStore(withOne).version, 1);
+    // Without user_2 nothing is refused.
+    EXPECT_NO_THROW({ storeApi->updateStore(withBoth, users({1}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, true); });
+}
