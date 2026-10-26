@@ -3745,3 +3745,42 @@ TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_WindowPagesThatNeverEndStopAtTheWi
         EXPECT_LE(asks[i].fromKeyVersion.value(), static_cast<std::int64_t>(ROTATIONS + 1)) << "asked past the window";
     }
 }
+
+TEST_F(GroupApiLyingBridgeOldEpochs, AFloorRaisedByARotationSinceTheGroupWasReadIsNoIntegrityFailure) {
+    // Between bob's read of the group and of the archive another member cut the era and rotated: the archive's floor
+    // is past the epoch bob read, not past the archive's own. Epoch 1 is then out of reach, which is all it means.
+    const std::int64_t next = bridge.tree.state.epoch + 1;
+    bridge.onArchive = [&](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult& result) {
+        result.eraFloor = next;
+        result.keyVersion = next;
+    };
+    try {
+        client("bob").resolveGroupPrivKey(groupId, 1);
+        ADD_FAILURE() << "epoch 1 opened below the era floor";
+    } catch (const std::exception& e) {
+        EXPECT_EQ(std::string(e.what()).find("a ladder floor past the last epoch"), std::string::npos) << e.what();
+    }
+}
+
+TEST_F(GroupApiLyingBridge, ARotationWhoseArchiveReadSawALaterEraCutIsPlannedAgain) {
+    // The same race in a rotation's gather: planned again on a fresh read, not refused as an integrity failure, and
+    // never signed with a floor that leaves it no rung.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    for (int i = 0; i < 2; ++i) { // epoch 3: the rotation to 4 needs a skip rung to 2
+        client("alice").rotateGroupKey(groupId);
+    }
+    bool raced = false;
+    bridge.onArchive = [&](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult& result) {
+        if (!std::exchange(raced, true)) {
+            result.eraFloor = result.keyVersion + 1;
+            result.keyVersion = result.keyVersion + 1;
+        }
+    };
+    EXPECT_NO_THROW(client("bob").rotateGroupKey(groupId)); // bob holds no earlier epoch: his gather reads the archive
+    EXPECT_TRUE(raced) << "the rotation read no archive: no case here";
+    EXPECT_EQ(bridge.tree.state.epoch, 4u);
+    EXPECT_TRUE(std::any_of(bridge.rungs.begin(), bridge.rungs.end(), [](const server::GroupArchiveRung& rung) {
+        return rung.atKeyVersion == 4 && rung.targetKeyVersion == 3;
+    })) << "signed without the unit rung";
+}

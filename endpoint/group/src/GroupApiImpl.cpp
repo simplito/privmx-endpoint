@@ -103,6 +103,28 @@ std::uint32_t ladderFloorOf(
     return static_cast<std::uint32_t>(floor);
 }
 
+// The newest epoch an archive answer may speak of: the verified group's, or a later one the archive was read at (a
+// rotation since the group was read). A floor above both is a lie; one above the group's only is a race.
+std::int64_t newestEpoch(
+    const privmx::endpoint::group::server::GroupInfo& group,
+    const privmx::endpoint::group::server::GroupGetKeyArchiveResult& archive
+) {
+    return std::max(group.keyVersion, archive.keyVersion);
+}
+
+// A rotation's floor off an archive read after the group's. Past the group's epoch, another member's prune or era cut
+// and rotation came in between: planned again on a fresh read, never signed with no rung at all, and not remembered.
+std::uint32_t rotationFloorOf(
+    const privmx::endpoint::group::server::GroupInfo& group,
+    const privmx::endpoint::group::server::GroupGetKeyArchiveResult& archive
+) {
+    const std::uint32_t floor = ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow, newestEpoch(group, archive));
+    if (floor > group.keyVersion) {
+        throw privmx::endpoint::group::StalePlan{};
+    }
+    return floor;
+}
+
 // The rules of a policy the caller asks to sign: one outside the group grammar is the caller's error.
 keytree::GroupRules requestedRules(const Poco::Dynamic::Var& policy, const std::string& creator) {
     try {
@@ -688,14 +710,14 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
             from = target;
         }
         server::GroupGetKeyArchiveResult archive = fetchKeyArchive(group, path);
-        floor = cache.raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow, group.keyVersion));
+        floor = cache.raiseFloor(rotationFloorOf(group, archive));
         registry = keytree::GroupKeyResolver::registryFromArchive(group, archive);
         keytree::RungKeyGathering gathered = ladder.gatherRungKeys(
             newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive), registry, floor
         );
         if (!gathered.complete) {
             archive = fetchKeyArchive(group, static_cast<int64_t>(targets.back()), static_cast<int64_t>(newEpoch - 1));
-            floor = cache.raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow, group.keyVersion));
+            floor = cache.raiseFloor(rotationFloorOf(group, archive));
             registry = keytree::GroupKeyResolver::registryFromArchive(group, archive);
             gathered = ladder.gatherRungKeys(newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive), registry, floor);
         }
@@ -711,6 +733,9 @@ std::vector<keytree::ArchiveRung> GroupApiImpl::buildRotationRungs(
         if (!gathered.complete) {
             throw IncompleteEpochLadderException();
         }
+    }
+    if (floor > group.keyVersion) {
+        throw StalePlan{}; // a floor seen since by another read of this session: the same race
     }
     const std::vector<keytree::ArchiveRung> rungs = planOrThrow<std::vector<keytree::ArchiveRung>>([&] {
         return ladder.buildRungs(newEpoch, newGrantKey.getPublicKey(), previousEpochKey, floor, author, _userPrivKey);
@@ -1167,7 +1192,10 @@ void GroupApiImpl::checkLadderAt(const std::string& groupId, const std::string& 
         params.toKeyVersion = at;
         raw = _serverApi.groupGetKeyArchive(params);
         const std::uint32_t floor = cache->raiseFloor(
-            ladderFloorOf(raw.eraFloor, raw.archivePrunedBelow, static_cast<std::int64_t>(pinnedKeyVersion(groupId)))
+            ladderFloorOf(
+                raw.eraFloor, raw.archivePrunedBelow,
+                std::max(static_cast<std::int64_t>(pinnedKeyVersion(groupId)), raw.keyVersion)
+            )
         );
         return keytree::LadderKeys::unopenedSpans(at, keytree::GroupKeyResolver::toDownwardRungs(raw), *cache, floor);
     };
@@ -2590,7 +2618,11 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKey
         archive.rungs.insert(archive.rungs.end(), page.rungs.begin(), page.rungs.end());
         served = page.rungs.size();
     }
-    _treeKeyCaches.get(group.id)->raiseFloor(ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow, group.keyVersion));
+    // Remembered no higher than the verified epoch: an epoch the archive names past it is only the bridge's word.
+    _treeKeyCaches.get(group.id)->raiseFloor(std::min(
+        ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow, newestEpoch(group, archive)),
+        static_cast<std::uint32_t>(group.keyVersion)
+    ));
     // `keyHistory` and a rung's `author` are the bridge's word; the statements are the members'.
     return keytree::GroupKeyResolver::authenticated(
         std::move(archive), _treeVerifier.epochOpeners(group.id, group.contextId, treeEnvironment(group.id))
