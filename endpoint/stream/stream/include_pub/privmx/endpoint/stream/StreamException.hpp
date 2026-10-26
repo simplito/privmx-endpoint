@@ -84,7 +84,9 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointStreamException, "Unknown endpoint stre
     X(SubscriberStreamAlreadyCreatedException, "Subscriber stream is already created", 0x0030)                        \
     X(SubscriberStreamHandleNotInitialized, "SubscriberStreamHandle not initialized", 0x0031)                        \
     X(CannotExtractStreamConnectionStateChangedEventException,                                                       \
-      "Cannot extract StreamConnectionStateChangedEvent", 0x0032)
+      "Cannot extract StreamConnectionStateChangedEvent", 0x0032)                                                   \
+    X(StreamRequiresResubscriptionException,                                                                        \
+      "Stream was published again and its subscriptions have to be made anew", 0x0033)
 
 #define PRIVMX_STREAM_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointStreamException, NAME, MSG, CODE)
 STREAM_EXCEPTIONS(PRIVMX_STREAM_DECLARE)

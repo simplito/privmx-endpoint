@@ -94,6 +94,8 @@ private:
     mutable std::mutex _mutex;
     std::condition_variable _wakeUp;
     bool _stopping;
+    // a state reported before the worker reaches its wait would otherwise be slept through
+    bool _workPending;
     std::map<std::string, RoomState> _rooms;
     std::thread _worker;
 };

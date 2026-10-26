@@ -22,7 +22,7 @@ ConnectionStateTracker::ConnectionStateTracker(
     int maxRecoveryAttempts
 )
     : _onStateChanged(std::move(onStateChanged)), _onRecoveryNeeded(std::move(onRecoveryNeeded)),
-      _gracePeriod(gracePeriod), _maxRecoveryAttempts(maxRecoveryAttempts), _stopping(false) {
+      _gracePeriod(gracePeriod), _maxRecoveryAttempts(maxRecoveryAttempts), _stopping(false), _workPending(false) {
     _worker = std::thread(&ConnectionStateTracker::run, this);
 }
 
@@ -46,7 +46,6 @@ void ConnectionStateTracker::setConnectionState(
     const std::string& connectionType,
     PeerConnectionState state
 ) {
-    std::vector<Recovery> due;
     {
         std::lock_guard<std::mutex> lock(_mutex);
         auto& room = _rooms[streamRoomId];
@@ -66,31 +65,22 @@ void ConnectionStateTracker::setConnectionState(
                     (state == PeerConnectionFailed ? std::chrono::milliseconds(0) : _gracePeriod);
             }
         }
-        collectDueRecoveries(streamRoomId, room, due);
         if (room.connections.empty()) {
             _rooms.erase(streamRoomId);
         }
+        _workPending = true;
     }
-    // a recovery which is refused settles the connection, so it runs before the Stream Room is reported
-    runRecoveries(due);
-    std::optional<StreamConnectionState> toEmit;
-    {
-        std::lock_guard<std::mutex> lock(_mutex);
-        auto room = _rooms.find(streamRoomId);
-        if (room != _rooms.end()) {
-            toEmit = evaluate(room->second);
-        }
-    }
+    // Reporting a state only records it. Deciding and recovering happen on the worker, so a recovery
+    // never runs on the thread which reported the state - that thread is usually the WebRTC layer's own,
+    // and a recovery calls straight back into it.
     _wakeUp.notify_all();
-    if (toEmit.has_value()) {
-        _onStateChanged(streamRoomId, toEmit.value());
-    }
 }
 
 void ConnectionStateTracker::forgetRoom(const std::string& streamRoomId) {
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _rooms.erase(streamRoomId);
+        _workPending = true;
     }
     _wakeUp.notify_all();
 }
@@ -214,14 +204,16 @@ void ConnectionStateTracker::run() {
     std::unique_lock<std::mutex> lock(_mutex);
     while (!_stopping) {
         auto deadline = earliestDeadline();
+        auto hasWork = [this]() { return _stopping || _workPending; };
         if (deadline.has_value()) {
-            _wakeUp.wait_until(lock, deadline.value());
+            _wakeUp.wait_until(lock, deadline.value(), hasWork);
         } else {
-            _wakeUp.wait(lock);
+            _wakeUp.wait(lock, hasWork);
         }
         if (_stopping) {
             return;
         }
+        _workPending = false;
         std::vector<Recovery> due;
         for (auto& room : _rooms) {
             collectDueRecoveries(room.first, room.second, due);

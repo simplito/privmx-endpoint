@@ -72,6 +72,9 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection) {
                 alive->setConnectionState(streamRoomId, connectionType, state);
             }
         },
+        [this](const std::string& streamRoomId, const std::vector<std::string>& streamIds) {
+            markStreamsAsStale(streamRoomId, streamIds);
+        },
         _frameCryptorOptions, _api
     );
     _eventMiddleware = connection.getImpl()->getEventMiddleware();
@@ -629,11 +632,78 @@ void StreamApiImpl::removeStream(const StreamHandle& streamHandle) {
     _api->removeStream(streamHandle);
 }
 
+void StreamApiImpl::expectStreamRemovals(
+    const std::string& streamRoomId,
+    const std::vector<StreamSubscription>& subscriptionsToRemove
+) {
+    std::lock_guard<std::mutex> lock(_staleStreamsMutex);
+    auto expected = _expectedRemovals.get(streamRoomId).value_or(std::multiset<int64_t>());
+    for (const auto& removed : subscriptionsToRemove) {
+        expected.insert(removed.streamId);
+    }
+    _expectedRemovals.set(streamRoomId, expected);
+}
+
+void StreamApiImpl::markStreamsAsStale(const std::string& streamRoomId, const std::vector<std::string>& streamIds) {
+    std::lock_guard<std::mutex> lock(_staleStreamsMutex);
+    auto expected = _expectedRemovals.get(streamRoomId).value_or(std::multiset<int64_t>());
+    auto stale = _staleStreams.get(streamRoomId).value_or(std::set<int64_t>());
+    for (const auto& streamId : streamIds) {
+        int64_t id;
+        try {
+            id = std::stoll(streamId);
+        } catch (...) {
+            LOG_ERROR("StreamApiImpl::markStreamsAsStale", "unexpected Stream id '", streamId, "'")
+            continue;
+        }
+        auto awaited = expected.find(id);
+        if (awaited != expected.end()) {
+            // the track went away because the application unsubscribed, not because the Stream was republished
+            expected.erase(awaited);
+            continue;
+        }
+        stale.insert(id);
+    }
+    _expectedRemovals.set(streamRoomId, expected);
+    _staleStreams.set(streamRoomId, stale);
+}
+
+void StreamApiImpl::assertStaleStreamsAreRedone(
+    const std::string& streamRoomId,
+    const std::vector<StreamSubscription>& subscriptionsToAdd,
+    const std::vector<StreamSubscription>& subscriptionsToRemove
+) {
+    auto staleOpt = _staleStreams.get(streamRoomId);
+    if (!staleOpt.has_value()) {
+        return;
+    }
+    const auto& stale = staleOpt.value();
+    for (const auto& added : subscriptionsToAdd) {
+        if (stale.find(added.streamId) == stale.end()) {
+            continue;
+        }
+        bool isRedone = std::any_of(
+            subscriptionsToRemove.begin(), subscriptionsToRemove.end(),
+            [&](const StreamSubscription& removed) { return removed.streamId == added.streamId; }
+        );
+        if (!isRedone) {
+            throw StreamRequiresResubscriptionException();
+        }
+    }
+}
+
 SubscriberStreamHandle StreamApiImpl::createSubscriberStream(
     const std::string& streamRoomId,
     const std::vector<StreamSubscription>& subscriptions
 ) {
-    return _api->createSubscriberStream(streamRoomId, subscriptions);
+    auto handle = _api->createSubscriberStream(streamRoomId, subscriptions);
+    {
+        std::lock_guard<std::mutex> lock(_staleStreamsMutex);
+        _staleStreams.erase(streamRoomId);
+        _expectedRemovals.erase(streamRoomId);
+    }
+    _subscriberHandleToRoomId.set(handle, streamRoomId);
+    return handle;
 }
 
 void StreamApiImpl::updateSubscriberStream(
@@ -641,11 +711,36 @@ void StreamApiImpl::updateSubscriberStream(
     const std::vector<StreamSubscription>& subscriptionsToAdd,
     const std::vector<StreamSubscription>& subscriptionsToRemove
 ) {
+    auto streamRoomId = _subscriberHandleToRoomId.get(subscriptionHandle);
+    if (streamRoomId.has_value()) {
+        assertStaleStreamsAreRedone(streamRoomId.value(), subscriptionsToAdd, subscriptionsToRemove);
+        // announced before the call below, because the renegotiation can land before it returns
+        expectStreamRemovals(streamRoomId.value(), subscriptionsToRemove);
+    }
     _api->updateSubscriberStream(subscriptionHandle, subscriptionsToAdd, subscriptionsToRemove);
+    if (!streamRoomId.has_value()) {
+        return;
+    }
+    // a Stream which was subscribed anew or dropped is no longer one the application has to be warned about
+    std::lock_guard<std::mutex> lock(_staleStreamsMutex);
+    auto staleOpt = _staleStreams.get(streamRoomId.value());
+    if (!staleOpt.has_value()) {
+        return;
+    }
+    auto stale = staleOpt.value();
+    for (const auto& removed : subscriptionsToRemove) {
+        stale.erase(removed.streamId);
+    }
+    _staleStreams.set(streamRoomId.value(), stale);
 }
 
 void StreamApiImpl::removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle) {
     _api->removeSubscriberStream(subscriptionHandle);
+    auto streamRoomId = _subscriberHandleToRoomId.get(subscriptionHandle);
+    if (streamRoomId.has_value()) {
+        _staleStreams.erase(streamRoomId.value());
+    }
+    _subscriberHandleToRoomId.erase(subscriptionHandle);
 }
 
 std::string StreamApiImpl::createStreamRoom(
