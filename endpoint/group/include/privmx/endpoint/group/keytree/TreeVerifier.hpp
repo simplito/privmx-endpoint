@@ -212,6 +212,11 @@ public:
         std::uint64_t seenAt = 0;
     };
 
+    // A previous identity's record adopted by `mergeStored(..., true)`: seq, digest, context and tree hash only, no
+    // grant key. Never exported, never wins a `PinBlob::higher`; the next read that reaches its seq replays the chain
+    // from genesis to it and keeps it as a pin, or refuses as a fork if it is not on the chain.
+    static bool isHint(const Pin& pin) { return pin.seq > 0 && pin.groupPubKey.empty(); }
+
     // One spelling per key (the same point base58'd uncompressed is another string but the same grant key): what
     // grant keys are compared by. Throws GroupDataIntegrityException on one that does not parse.
     static std::string canonicalKey(const std::string& base58);
@@ -225,12 +230,15 @@ public:
     // Copies of the pins for a save: moved since the last export (or all, with `all`) whole, the rest compact (no
     // roster, no generations). Clears the moved set.
     std::map<std::string, Pin> exportPins(bool all);
-    // Records this device verified (its slot) merged into memory by `PinBlob::higher`:
+    // Records this device verified (the slot, or a previous identity's slot) merged into memory by `PinBlob::higher`:
     // per group the higher seq wins, a tie keeps the pin in memory; `refusedSeq` and `seenAt` by max, generations by
     // max when the record wins. A stored record is this device's own verified state, so it is taken without a read.
     // Two instances that verified different branches simply converge on the higher one (a fork is a boundary, not
-    // detected here: a bridge able to fork can withhold just as well).
-    void mergeStored(const std::map<std::string, Pin>& stored);
+    // detected here: a bridge able to fork can withhold just as well). `onlyUnpinned`: records only for groups with no
+    // pin yet (a previous identity's slot, which whoever holds that key can write: it must never raise a pin), and
+    // only as a hint (`isHint`: seq, digest, context, tree hash) that the next read checks, kept in memory only;
+    // never `refusedSeq`.
+    void mergeStored(const std::map<std::string, Pin>& stored, bool onlyUnpinned = false);
     // Set once, before use: called after `_mutex` is released whenever something persistent moved. `major`: the
     // context, epoch, roster or rules changed, or `refusedSeq` rose; tree-only moves (self-updates) are minor.
     void onPinsMoved(std::function<void(bool major)> callback);
@@ -309,6 +317,16 @@ private:
 
     // The pin for the group, or an empty one (seq 0) if none.
     Pin pinOf(const std::string& groupId) const;
+    // `pin` as the next check runs against it. A hint at or below `latestSeq` is replayed from genesis
+    // (`openersAt`): on the chain, it becomes the pin there; off it, GroupHistoryForkException, and the hint stays.
+    // A hint above `latestSeq` stays (refused below like any pin). Returns the group's pin as it now stands.
+    Pin checkedHint(
+        const std::string& groupId,
+        const std::string& contextId,
+        const Pin& pin,
+        std::uint64_t latestSeq,
+        const Environment& environment
+    );
     // One field of the group's pin, empty if none.
     template<typename T>
     T pinned(const std::string& groupId, T Head::*field) const {

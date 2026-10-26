@@ -17,9 +17,11 @@ limitations under the License.
 #include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 #include "privmx/endpoint/core/BigEndian.hpp"
+#include "privmx/endpoint/core/LocalSeal.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include <algorithm>
 #include <cstdint>
 #include <privmx/endpoint/core/SingletonsHolder.hpp>
 #include <privmx/rpc/Types.hpp>
@@ -275,6 +277,46 @@ std::string ConnectionImpl::localStateScope() {
 
 std::string ConnectionImpl::localStateSlot(const std::string& kind, const crypto::PublicKey& identity) {
     return kind + "/" + localStateScope() + "/" + identity.toBase58DER();
+}
+
+void ConnectionImpl::adoptPreviousIdentity(const crypto::PrivateKey& previous) {
+    const std::shared_ptr<PinStoreInterface> store = getPinStore();
+    const std::string previousPub = previous.getPublicKey().toBase58DER();
+    if (previousPub == _userPrivKey.getPublicKey().toBase58DER()) {
+        return;
+    }
+    std::optional<std::string> body;
+    if (store) {
+        const std::string slot = localStateSlot(localstate::GROUP_PINS, previous.getPublicKey());
+        const std::string blob = store->load(slot).stdString();
+        if (!blob.empty()) {
+            body = openLocal(previous, localstate::GROUP_PINS_LABEL, localstate::GROUP_PINS_VERSION, slot, blob);
+            if (!body.has_value()) {
+                // Never ignored: a store the Bridge can write must not be able to turn adoption off by corrupting it.
+                throw LocalStateIntegrityException("the previous identity's group pins do not open");
+            }
+        }
+    }
+    // Recorded only once the slot opened (or there is none): a failed adoption leaves nothing behind.
+    std::unique_lock lock(_mutex);
+    if (std::none_of(_previousIdentities.begin(), _previousIdentities.end(), [&](const crypto::PrivateKey& k) {
+            return k.getPublicKey().toBase58DER() == previousPub;
+        })) {
+        _previousIdentities.push_back(previous);
+    }
+    if (body.has_value()) {
+        _stagedPinBodies[previousPub] = body.value();
+    }
+}
+
+std::map<std::string, std::string> ConnectionImpl::getStagedPinBodies() {
+    std::shared_lock lock(_mutex);
+    return _stagedPinBodies;
+}
+
+std::vector<privmx::crypto::PrivateKey> ConnectionImpl::previousIdentities() {
+    std::shared_lock lock(_mutex);
+    return _previousIdentities;
 }
 
 std::vector<std::string> ConnectionImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

@@ -242,8 +242,10 @@ std::optional<PinSet> PinBlob::decode(const std::string& body) {
 }
 
 Pin PinBlob::higher(const Pin* mine, const Pin* other) {
-    const Pin* m = mine != nullptr && mine->seq > 0 ? mine : nullptr;
-    const Pin* r = other != nullptr && other->seq > 0 ? other : nullptr;
+    // A hint (no grant key) is no verified state: it never wins, and is never written.
+    const auto verified = [](const Pin* pin) { return pin != nullptr && pin->seq > 0 && !TreeVerifier::isHint(*pin); };
+    const Pin* m = verified(mine) ? mine : nullptr;
+    const Pin* r = verified(other) ? other : nullptr;
     Pin kept;
     if (r != nullptr && (m == nullptr || r->seq > m->seq)) {
         kept = *r;

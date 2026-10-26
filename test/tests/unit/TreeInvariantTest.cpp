@@ -2249,3 +2249,28 @@ TEST_F(TreeVerification, ExportOfACleanPinIsCompactAndOfADirtyPinIsFull) {
     verify(id(9), false);
     EXPECT_EQ(moves, 1) << "the same state again moves nothing";
 }
+
+TEST(TreeVerifierHint, AHintKeepsItsSeqAndOnlyItsLostRaceSeqIsSaved) {
+    // An adopted hint (seq 5) later refused a commit at seq 3 as a lost race. Saved, the hint itself (unverified)
+    // goes nowhere but its lost-race seq does, as a bare record; merged back from the store, that bare record leaves
+    // the hint in place.
+    TreeVerifier verifier;
+    TreeVerifier::Pin record;
+    record.contextId = "ctx";
+    record.seq = 5;
+    record.digest = std::string(32, 'd');
+    record.groupPubKey = "taken-only-as-a-hint";
+    verifier.mergeStored({{"g", record}}, true);
+    ASSERT_EQ(verifier.pinnedSeq("g"), 5u);
+    verifier.refusedAsLostRace("g", 3);
+    const auto exported = verifier.exportPins(true);
+    ASSERT_EQ(exported.count("g"), 1u) << "the lost-race seq was not saved";
+    EXPECT_EQ(exported.at("g").seq, 0u) << "the unverified hint was saved";
+    EXPECT_EQ(exported.at("g").refusedSeq, 3u);
+    TreeVerifier::Pin bare;
+    bare.refusedSeq = 4;
+    verifier.mergeStored({{"g", bare}});
+    EXPECT_EQ(verifier.pinnedSeq("g"), 5u) << "a bare record replaced the hint";
+    EXPECT_FALSE(verifier.maySignAt("g", 4));
+    EXPECT_TRUE(verifier.maySignAt("g", 5));
+}

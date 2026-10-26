@@ -34,7 +34,8 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {UpdateGroupPublicMeta, &GroupApiVarInterface::updateGroupPublicMeta},
         {UpdateGroupPrivateMeta, &GroupApiVarInterface::updateGroupPrivateMeta},
         {UpdateGroupPolicy, &GroupApiVarInterface::updateGroupPolicy},
-        {RotateGroupKey, &GroupApiVarInterface::rotateGroupKey}
+        {RotateGroupKey, &GroupApiVarInterface::rotateGroupKey},
+        {RenewLeaf, &GroupApiVarInterface::renewLeaf}
 };
 
 Poco::Dynamic::Var GroupApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -76,6 +77,13 @@ Poco::Dynamic::Var GroupApiVarInterface::rotateGroupKey(const Poco::Dynamic::Var
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     _groupApi.rotateGroupKey(groupId);
     return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::renewLeaf(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto previousUserPrivKey = _deserializer.deserialize<std::string>(argsArr->get(1), "previousUserPrivKey");
+    return _serializer.serialize(_groupApi.renewLeaf(groupId, previousUserPrivKey));
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::updateGroupPublicMeta(const Poco::Dynamic::Var& args) {
