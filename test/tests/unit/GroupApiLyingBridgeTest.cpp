@@ -131,6 +131,11 @@ struct Bridge {
     bool servesSpans = true;
     // Edits what `groupGetEpochKeys` serves.
     std::function<void(server::GroupGetEpochKeysResult&)> onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
+    // Edits what `groupGetKeyArchive` serves for an ask.
+    std::function<void(const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&)> onArchive =
+        [](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&) {};
+    // Requests a test may make before a client is taken to loop on the bridge: failed, not hung.
+    static constexpr std::size_t MAX_CALLS = 20000;
 
     std::size_t count(const std::string& caller, const std::string& method) const {
         return static_cast<std::size_t>(std::count_if(calls.begin(), calls.end(), [&](const Call& call) {
@@ -205,6 +210,10 @@ struct Bridge {
     ) {
         std::unique_lock<std::mutex> lock(sync->m);
         calls.push_back({caller, method, params});
+        if (calls.size() > MAX_CALLS) {
+            ADD_FAILURE() << "a client keeps asking the bridge: " << method;
+            throw std::runtime_error("the fake bridge stops answering a client that loops");
+        }
         if (users.count(caller) == 0 || users.at(caller).getPublicKey().toBase58DER() != sessionPub) {
             throw privmx::utils::PrivmxException("ACCESS_DENIED", privmx::utils::PrivmxException::RPC, 0x0030);
         }
@@ -418,6 +427,7 @@ struct Bridge {
                         result.rungs.push_back(rung);
                     }
                 }
+                onArchive(model, result);
                 return result.toJSON();
             }
             std::vector<server::GroupArchiveRung> ascending = rungs;
@@ -431,6 +441,7 @@ struct Bridge {
                     result.rungs.push_back(rung);
                 }
             }
+            onArchive(model, result);
             return result.toJSON();
         }
         if (group == "groupGetEpochKeys") {
@@ -3679,4 +3690,58 @@ TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_AnEntryOfAnotherEpochServedForTheK
     }
     bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
     EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1") << "the honest answer still opens it";
+}
+
+namespace {
+
+// The window asks (no spans) `caller` made.
+std::vector<server::GroupGetKeyArchiveModel> windowAsks(const Bridge& bridge, const std::string& caller) {
+    std::vector<server::GroupGetKeyArchiveModel> asks = archiveAsks(bridge, caller);
+    asks.erase(std::remove_if(asks.begin(), asks.end(), [](const auto& ask) { return ask.spans.has_value(); }), asks.end());
+    return asks;
+}
+
+// A full page of copies of one stored rung, each at epoch `at`.
+std::vector<server::GroupArchiveRung> fullPageAt(const Bridge& bridge, std::int64_t at) {
+    std::vector<server::GroupArchiveRung> page(256, bridge.rungs.at(0));
+    for (auto& rung : page) {
+        rung.atKeyVersion = at;
+    }
+    return page;
+}
+
+} // namespace
+
+TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_AWindowPageThatDoesNotMoveOnEndsTheReading) {
+    // Every window page full, and all at one epoch: read once more from that epoch (the page's top), then given up.
+    bridge.servesSpans = false;
+    bridge.onArchive = [&](const server::GroupGetKeyArchiveModel& ask, server::GroupGetKeyArchiveResult& result) {
+        if (!ask.spans.has_value()) {
+            result.rungs = fullPageAt(bridge, 5);
+        }
+    };
+    EXPECT_ANY_THROW(client("bob").decrypt(sealed));
+    const auto asks = windowAsks(bridge, "bob");
+    ASSERT_EQ(asks.size(), 2u) << "the stuck page was asked for again";
+    EXPECT_EQ(asks[0].fromKeyVersion, std::optional<std::int64_t>(1));
+    EXPECT_EQ(asks[1].fromKeyVersion, std::optional<std::int64_t>(5)) << "the next page starts at the last one's top";
+}
+
+TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_WindowPagesThatNeverEndStopAtTheWindowsTop) {
+    // Every page full and one epoch higher than asked, past the window's top too: at most one page per epoch of the
+    // window, never a loop.
+    bridge.servesSpans = false;
+    bridge.onArchive = [&](const server::GroupGetKeyArchiveModel& ask, server::GroupGetKeyArchiveResult& result) {
+        if (!ask.spans.has_value()) {
+            result.rungs = fullPageAt(bridge, ask.fromKeyVersion.value_or(1) + 1);
+        }
+    };
+    EXPECT_ANY_THROW(client("bob").decrypt(sealed));
+    const auto asks = windowAsks(bridge, "bob");
+    ASSERT_FALSE(asks.empty());
+    EXPECT_LE(asks.size(), static_cast<std::size_t>(ROTATIONS + 1));
+    for (std::size_t i = 1; i < asks.size(); ++i) {
+        EXPECT_EQ(asks[i].fromKeyVersion.value(), asks[i - 1].fromKeyVersion.value() + 1) << "page " << i;
+        EXPECT_LE(asks[i].fromKeyVersion.value(), static_cast<std::int64_t>(ROTATIONS + 1)) << "asked past the window";
+    }
 }

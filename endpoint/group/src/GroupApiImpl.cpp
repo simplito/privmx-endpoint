@@ -2572,11 +2572,14 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupApiImpl::fetchKey
     server::GroupGetKeyArchiveResult archive = _serverApi.groupGetKeyArchive(params);
     // A window comes a page of rungs at a time: read on from the last page's top epoch while pages come full. That
     // epoch's rungs come again whole on the next page, so they are dropped from this one first.
+    // Every further page starts higher, at most at the window's top epoch, so a window takes at most one page per
+    // epoch: a bridge serving tops past the window, or pages that never end, gets no more requests than that.
     server::GroupGetKeyArchiveModel next = params;
+    const std::int64_t to = params.toKeyVersion.value_or(INT64_MAX);
     for (std::size_t served = archive.rungs.size(); !params.spans.has_value() && served >= ARCHIVE_RUNGS_PER_PAGE;) {
         const std::int64_t top = archive.rungs.back().atKeyVersion;
-        if (top <= next.fromKeyVersion.value_or(0)) {
-            break; // a page that does not move on: what was served is all there is to try
+        if (top <= next.fromKeyVersion.value_or(0) || top > to) {
+            break; // a page that does not move on, or not within the window: what was served is all there is to try
         }
         next.fromKeyVersion = top;
         archive.rungs.erase(
