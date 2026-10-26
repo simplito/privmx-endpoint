@@ -78,16 +78,6 @@ public:
         std::optional<std::uint32_t> prunedBelow = std::nullopt
     );
 
-    // Era-crossing links: the closing era's top key delivered to each entitled principal, one delivery per era.
-    // Addressing a group rather than individuals costs `O(1)` and covers anyone added to that group later.
-    std::vector<ArchiveRung> buildEraLinks(
-        std::uint32_t closingEpoch,
-        const privmx::crypto::PrivateKey& closingEpochKey,
-        const std::vector<EraLinkRecipient>& entitled,
-        const std::string& author,
-        const privmx::crypto::PrivateKey& signer
-    );
-
     // ── Descending ──────────────────────────────────────────────────────────
 
     // Descends from an epoch the caller holds to an older one, greedily taking the largest jump that does not
@@ -102,13 +92,13 @@ public:
         std::uint32_t maxWalk = 256
     );
 
-    // Crosses an era boundary on a link addressed to the caller or one of their groups; on success the closing
-    // era's top key is cached and an ordinary `descend` continues from it.
-    DescentResult crossEraBoundary(
-        const std::vector<ArchiveRung>& available,
-        const std::string& ownUserId,
-        const privmx::crypto::PrivateKey& ownUserKey,
-        const std::vector<std::pair<std::string, privmx::crypto::PrivateKey>>& ownGroupKeys,
+    // ── Checking ────────────────────────────────────────────────────────────
+
+    // The commit self-check: the first of `rungs` that does not open with `atKey`, carry its own span label and
+    // recover the key `registry` (the chain, never the cache) names for its target; nullopt when every rung does.
+    static std::optional<RungSpan> firstRungNotOpeningToTheChain(
+        const std::vector<ArchiveRung>& rungs,
+        const privmx::crypto::PrivateKey& atKey,
         const std::vector<EpochRegistryEntry>& registry
     );
 
@@ -117,13 +107,28 @@ public:
         const std::vector<EpochRegistryEntry>& registry
     );
 
+    // A rung's blob carries its span inside the ciphertext, `"pmx-rung\0" || u32(at) || u32(target) || WIF(key)`, so
+    // a rung relabelled by the bridge does not open and its sealer is not blamed for the relabelling.
+    static std::string sealRung(
+        const privmx::crypto::PrivateKey& key,
+        const RungSpan& span,
+        const privmx::crypto::PublicKey& to,
+        const privmx::crypto::PrivateKey& signer
+    );
+
+    // The key `rung` carries, if its blob opens with `with` and names the rung's own span.
+    static std::optional<privmx::crypto::PrivateKey> openRung(
+        const ArchiveRung& rung,
+        const privmx::crypto::PrivateKey& with
+    );
+
 private:
     // Invariant B: a recovered key really is the epoch's grant key.
-    bool verifyAgainstRegistry(
+    static bool verifyAgainstRegistry(
         const privmx::crypto::PrivateKey& recovered,
         std::uint32_t epoch,
         const std::vector<EpochRegistryEntry>& registry
-    ) const;
+    );
 
     TreeKeyCache& _cache;
 };

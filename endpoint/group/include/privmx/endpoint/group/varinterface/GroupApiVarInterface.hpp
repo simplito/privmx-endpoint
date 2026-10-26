@@ -44,6 +44,7 @@ public:
         UpdateGroupPublicMeta = 24,
         UpdateGroupPrivateMeta = 25,
         UpdateGroupPolicy = 26,
+        RotateGroupKey = 27,
     };
 
     GroupApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -53,6 +54,7 @@ public:
     Poco::Dynamic::Var createGroup(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var addGroupMembers(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var removeGroupMembers(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var rotateGroupKey(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateGroupPublicMeta(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateGroupPrivateMeta(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateGroupPolicy(const Poco::Dynamic::Var& args);

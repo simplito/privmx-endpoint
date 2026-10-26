@@ -11,18 +11,14 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
 
-#include <set>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
 using namespace privmx::endpoint::group::keytree;
 
 std::uint32_t TreeMath::pow2(std::uint32_t exponent) {
-    std::uint32_t value = 1;
-    for (std::uint32_t i = 0; i < exponent; ++i) {
-        value *= 2;
-    }
-    return value;
+    return exponent < 32 ? 1u << exponent : 0u;
 }
 
 void TreeMath::assertNumLeaves(std::uint32_t numLeaves) {
@@ -70,12 +66,7 @@ std::uint32_t TreeMath::level(std::uint32_t nodeIndex) {
 }
 
 std::uint32_t TreeMath::root(std::uint32_t numLeaves) {
-    assertNumLeaves(numLeaves);
-    std::uint32_t w = 1;
-    while (w < numLeaves) {
-        w *= 2;
-    }
-    return w - 1;
+    return pow2(depth(numLeaves)) - 1;
 }
 
 std::uint32_t TreeMath::depth(std::uint32_t numLeaves) {
@@ -110,14 +101,9 @@ std::uint32_t TreeMath::rightStep(std::uint32_t nodeIndex) {
 }
 
 std::uint32_t TreeMath::parentStep(std::uint32_t nodeIndex) {
-    // Bitwise form is `(x | 2^k) & ~(2^(k+1))`. A node of level k has exactly k trailing 1-bits, so its bit k
-    // is 0 and the OR is an addition; the AND then clears bit k+1 if it is set.
-    const std::uint32_t k = level(nodeIndex);
-    const std::uint32_t bit = pow2(k);
-    const std::uint32_t withBitSet = nodeIndex + bit;
-    const std::uint32_t nextBit = bit * 2;
-    const bool nextBitIsSet = (withBitSet / nextBit) % 2 == 1;
-    return nextBitIsSet ? withBitSet - nextBit : withBitSet;
+    // A node of level k has exactly k trailing 1-bits: set bit k, clear bit k+1.
+    const std::uint32_t bit = pow2(level(nodeIndex));
+    return (nodeIndex | bit) & ~(bit << 1);
 }
 
 std::uint32_t TreeMath::left(std::uint32_t nodeIndex, std::uint32_t numLeaves) {
@@ -200,21 +186,40 @@ std::vector<std::uint32_t> TreeMath::leavesUnder(std::uint32_t nodeIndex, std::u
     return result;
 }
 
+bool TreeMath::isKeyed(std::uint32_t nodeIndex, std::uint32_t numLeaves) {
+    return exists(nodeIndex, numLeaves) &&
+        !isLeaf(nodeIndex) &&
+        (level(nodeIndex) > BUCKET_LEVEL || nodeIndex == root(numLeaves));
+}
+
+std::vector<std::uint32_t> TreeMath::keyedPath(std::uint32_t position, std::uint32_t numLeaves) {
+    std::vector<std::uint32_t> keyed;
+    for (const std::uint32_t node : directPath(position, numLeaves)) {
+        if (isKeyed(node, numLeaves)) {
+            keyed.push_back(node);
+        }
+    }
+    return keyed;
+}
+
+std::vector<std::uint32_t> TreeMath::keyedNodes(std::uint32_t numLeaves) {
+    std::vector<std::uint32_t> keyed;
+    for (std::uint32_t node = 1; node < nodeCount(numLeaves); node += 2) {
+        if (isKeyed(node, numLeaves)) {
+            keyed.push_back(node);
+        }
+    }
+    return keyed;
+}
+
 std::uint32_t TreeMath::numLeavesToSeat(std::uint32_t position, std::uint32_t currentNumLeaves) {
     if (position < currentNumLeaves) {
         return currentNumLeaves;
     }
-    return position + 1;
-}
-
-std::vector<std::uint32_t> TreeMath::frontier(const std::vector<std::uint32_t>& positions, std::uint32_t numLeaves) {
-    std::set<std::uint32_t> nodes;
-    for (const std::uint32_t position : positions) {
-        for (const std::uint32_t node : directPath(position, numLeaves)) {
-            nodes.insert(node);
-        }
+    if (position == std::numeric_limits<std::uint32_t>::max()) {
+        throw std::invalid_argument("seat " + std::to_string(position) + " is out of range");
     }
-    return std::vector<std::uint32_t>(nodes.begin(), nodes.end());
+    return position + 1;
 }
 
 std::uint32_t TreeMath::numLeavesToSeatAll(
@@ -226,9 +231,4 @@ std::uint32_t TreeMath::numLeavesToSeatAll(
         numLeaves = numLeavesToSeat(position, numLeaves);
     }
     return numLeaves;
-}
-
-bool TreeMath::growthChangesRoot(std::uint32_t position, std::uint32_t currentNumLeaves) {
-    const std::uint32_t next = numLeavesToSeat(position, currentNumLeaves);
-    return root(next) != root(currentNumLeaves);
 }

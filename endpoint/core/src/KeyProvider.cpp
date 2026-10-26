@@ -105,22 +105,27 @@ void KeyDecryptionAndVerificationRequest::addAll(
 }
 void KeyDecryptionAndVerificationRequest::addGroupKeys(
     const std::optional<std::vector<server::GroupKeysEntry>>& groupKeys,
-    const EncKeyLocation& location
+    const EncKeyLocation& location,
+    const std::optional<std::string>& onlyKeyId
 ) {
     if (groupKeys.has_value()) {
-        addGroupKeys(groupKeys.value(), location);
+        addGroupKeys(groupKeys.value(), location, onlyKeyId);
     }
 }
 
 void KeyDecryptionAndVerificationRequest::addGroupKeys(
     const std::vector<server::GroupKeysEntry>& groupKeys,
-    const EncKeyLocation& location
+    const EncKeyLocation& location,
+    const std::optional<std::string>& onlyKeyId
 ) {
     if (_completed) {
         throw KeyProviderRequestCompletedException();
     }
     for (const auto& groupEntry : groupKeys) {
         for (const auto& keyEntry : groupEntry.keys) {
+            if (onlyKeyId.has_value() && keyEntry.keyId != onlyKeyId.value()) {
+                continue;
+            }
             auto& candidates = groupRequestData[location][keyEntry.keyId];
             bool known = false;
             for (const auto& candidate : candidates) {
@@ -378,13 +383,13 @@ std::unordered_map<std::string, DecryptedEncKeyV2> KeyProvider::decryptAndVerify
             continue;
         }
         if (firstFailure.has_value()) {
-            LOG_ERROR(
-                "Error on KeyProvider::decryptAndVerifyGroupKeys, group key route failed", "\nkeyId: ", entry.first,
-                "\ngroup: ", firstFailureGroupId, "\nstatusCode: ", firstFailure->statusCode,
-                "\nOpened by another route: ", (chosen->statusCode == 0 ? "yes" : "no"),
-                "\nContainer key marked unusable: yes"
+            // A dead route does not mark a key another route opened: one unreachable epoch of group A must not block
+            // the key group B opens fine.
+            LOG_WARN(
+                "KeyProvider::decryptAndVerifyGroupKeys: a group key route failed; keyId: ", entry.first,
+                ", group: ", firstFailureGroupId, ", statusCode: ", firstFailure->statusCode,
+                ", opened by another route: ", (chosen->statusCode == 0 ? "yes" : "no")
             )
-            chosen->statusCode = firstFailure->statusCode;
         }
         result.insert(std::make_pair(entry.first, chosen.value()));
     }

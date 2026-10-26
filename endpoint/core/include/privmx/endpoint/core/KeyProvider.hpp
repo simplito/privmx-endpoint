@@ -46,10 +46,16 @@ public:
         const EncKeyLocation& location
     );
     void addAll(const std::vector<server::KeyEntry>& keys, const EncKeyLocation& location);
-    void addGroupKeys(const std::vector<server::GroupKeysEntry>& groupKeys, const EncKeyLocation& location);
+    // `onlyKeyId` keeps just the routes to that key: every other one would cost a grant-key resolution for nothing.
+    void addGroupKeys(
+        const std::vector<server::GroupKeysEntry>& groupKeys,
+        const EncKeyLocation& location,
+        const std::optional<std::string>& onlyKeyId = std::nullopt
+    );
     void addGroupKeys(
         const std::optional<std::vector<server::GroupKeysEntry>>& groupKeys,
-        const EncKeyLocation& location
+        const EncKeyLocation& location,
+        const std::optional<std::string>& onlyKeyId = std::nullopt
     );
     void markAsCompleted();
     std::unordered_map<EncKeyLocation, std::unordered_map<std::string, server::KeyEntry>> requestData;
