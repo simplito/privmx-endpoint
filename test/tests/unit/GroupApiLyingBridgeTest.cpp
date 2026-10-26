@@ -3856,3 +3856,30 @@ TEST_F(GroupApiLyingBridge, ARotationWhoseArchiveReadSawALaterEraCutIsPlannedAga
         return rung.atKeyVersion == 4 && rung.targetKeyVersion == 3;
     })) << "signed without the unit rung";
 }
+
+TEST_F(GroupApiLyingBridge, SECURITY_AFloorAboveTheVerifiedEpochIsNotRememberedBeyondIt) {
+    // Every archive answer names an epoch and a floor far above the one verified (2). Excused as a race where it is
+    // read (bob's ladder check, carol's descent to epoch 1), it must not stay in the session: each one's next
+    // rotation still carries its unit rung.
+    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1(); // not quiet: bob's ladder check runs
+    bridge.onArchive = [](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult& result) {
+        result.eraFloor = 10;
+        result.keyVersion = 10;
+    };
+    client("bob").resolveGroupPrivKey(groupId); // records the ladder check
+    GroupApiImplTestAccess::runDueWorkNow(client("bob"), groupId);
+    try {
+        client("carol").resolveGroupPrivKey(groupId, 1);
+    } catch (...) {} // below that floor epoch 1 is out of reach, whatever the reason
+    ASSERT_GT(count("bob", "context.groupGetKeyArchive"), 0u) << "no case here";
+    ASSERT_GT(count("carol", "context.groupGetKeyArchive"), 0u) << "no case here";
+    bridge.onArchive = [](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&) {};
+    for (const std::string id : {"bob", "carol"}) {
+        EXPECT_LE(GroupApiImplTestAccess::keyCacheOf(client(id), groupId)->raiseFloor(0), 2u) << id;
+        const std::int64_t at = bridge.tree.state.epoch + 1;
+        EXPECT_NO_THROW(client(id).rotateGroupKey(groupId)) << id;
+        EXPECT_TRUE(std::any_of(bridge.rungs.begin(), bridge.rungs.end(), [&](const server::GroupArchiveRung& rung) {
+            return rung.atKeyVersion == at && rung.targetKeyVersion == at - 1;
+        })) << id << " signed without the unit rung";
+    }
+}

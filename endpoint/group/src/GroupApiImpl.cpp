@@ -1191,12 +1191,13 @@ void GroupApiImpl::checkLadderAt(const std::string& groupId, const std::string& 
         params.fromKeyVersion = at;
         params.toKeyVersion = at;
         raw = _serverApi.groupGetKeyArchive(params);
-        const std::uint32_t floor = cache->raiseFloor(
-            ladderFloorOf(
-                raw.eraFloor, raw.archivePrunedBelow,
-                std::max(static_cast<std::int64_t>(pinnedKeyVersion(groupId)), raw.keyVersion)
-            )
+        // A later epoch the archive names (a rotation since the pin) excuses a higher floor here, but only the
+        // verified epoch bounds what the session remembers: the archive's epoch is the bridge's word.
+        const auto verified = static_cast<std::uint32_t>(pinnedKeyVersion(groupId));
+        const std::uint32_t served = ladderFloorOf(
+            raw.eraFloor, raw.archivePrunedBelow, std::max(static_cast<std::int64_t>(verified), raw.keyVersion)
         );
+        const std::uint32_t floor = std::max(cache->raiseFloor(std::min(served, verified)), served);
         return keytree::LadderKeys::unopenedSpans(at, keytree::GroupKeyResolver::toDownwardRungs(raw), *cache, floor);
     };
     // Cheap stage, the honest path: one fetch, one open per span, no statements read and no UserVerifier call.
