@@ -242,7 +242,7 @@ private:
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
     // Held across a join, from the "already joined" check to the room's insertion: two joins of one room otherwise both
     // subscribed, and the one stored second dropped the other's subscriptions with no way to remove them.
-    // ponytail: one join at a time per API (Bridge calls included); a per-room reservation if joins get hot.
+    // Limit: one join at a time per API, Bridge calls included; a per-room reservation would lift it if joins get hot.
     std::mutex _joinMutex;
     privmx::utils::ThreadSaveMap<Handle, std::string> _handleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
