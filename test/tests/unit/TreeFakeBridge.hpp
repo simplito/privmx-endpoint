@@ -31,6 +31,7 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/group/GroupException.hpp>
+#include <privmx/endpoint/group/keytree/TreeVerifier.hpp>
 #include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 
@@ -215,7 +216,7 @@ public:
         EXPECT_EQ(statement.groupId, statement.seq == 1 ? resourceId : groupId);
         EXPECT_EQ(statement.treeVersion, TreeMath::TREE_VERSION);
         EXPECT_EQ(statement.keyVersion, post.epoch);
-        EXPECT_EQ(statement.groupPubKey, post.grantPublicKey.toBase58DER());
+        EXPECT_EQ(TreeVerifier::canonicalKey(statement.groupPubKey), post.grantPublicKey.toBase58DER()); // any spelling
         EXPECT_EQ(statement.rosterVersion, static_cast<std::uint64_t>(postRosterVersion));
         EXPECT_EQ(statement.rosterHash, TreeCommits::rosterHash(usersOf(post, postManagers), {postManagers.begin(), postManagers.end()}));
         EXPECT_EQ(statement.committer, committer);

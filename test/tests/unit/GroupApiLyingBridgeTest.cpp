@@ -131,6 +131,9 @@ struct Bridge {
     bool servesSpans = true;
     // Edits what `groupGetEpochKeys` serves.
     std::function<void(server::GroupGetEpochKeysResult&)> onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
+    // Edits what `groupGetTreeCommits` serves for (fromSeq, toSeq].
+    std::function<void(std::uint64_t, std::uint64_t, server::GroupGetTreeCommitsResult&)> onCommits =
+        [](std::uint64_t, std::uint64_t, server::GroupGetTreeCommitsResult&) {};
     // Edits what `groupList` serves.
     std::function<void(server::GroupSummary&)> onList = [](server::GroupSummary&) {};
     // Edits what `groupGetKeyArchive` serves for an ask.
@@ -293,12 +296,11 @@ struct Bridge {
         }
         if (group == "groupGetTreeCommits") {
             const auto model = server::GroupGetTreeCommitsModel::fromJSON(params);
-            return tree
-                .commitsBetween(
-                    static_cast<std::uint64_t>(model.fromSeq),
-                    static_cast<std::uint64_t>(model.toSeq.value_or(INT64_MAX))
-                )
-                .toJSON();
+            const auto from = static_cast<std::uint64_t>(model.fromSeq);
+            const auto to = static_cast<std::uint64_t>(model.toSeq.value_or(INT64_MAX));
+            server::GroupGetTreeCommitsResult result = tree.commitsBetween(from, to);
+            onCommits(from, to, result);
+            return result.toJSON();
         }
         if (group == "groupList") {
             const server::GroupInfo info = serve(tree.state.leafAssignment.at(0).value_or(caller), false);
@@ -3882,4 +3884,167 @@ TEST_F(GroupApiLyingBridge, SECURITY_AFloorAboveTheVerifiedEpochIsNotRememberedB
             return rung.atKeyVersion == at && rung.targetKeyVersion == at - 1;
         })) << id << " signed without the unit rung";
     }
+}
+
+TEST_F(GroupApiLyingBridge, TheArchiveSpanLimitIsTheBridges) {
+    EXPECT_EQ(GroupApiImplTestAccess::maxArchiveSpans(), 128u) << "MAX_ARCHIVE_SPANS in the Bridge's GroupLimits";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AHintOnAChainItsMembersCouldNotSignFailsTheReadAsAFork) {
+    // The hint's digest is that of a policy change bob (a user; the policy is the managers') genuinely signed, and
+    // the bridge serves it on the chain, below the head. The replay from genesis to the hint meets a signer out of
+    // its role: a fork, as for any hint the honest chain does not reach, not a refused signer.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId =
+        createGroup({"alice", "bob"}, policyWith({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "manager"}}));
+    const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
+    client("bob").getGroup(groupId);
+    ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
+    policyBy("bob", bridge.tree.policy); // the same rules again, signed by bob: nothing but his role is off
+    const CommitStatement forged = TreeCommits::fromWire(bridge.tree.commits.back());
+    selfUpdateBy("bob"); // the head the bridge serves, chained from the out-of-role statement
+    TreeVerifier::PinSet planted;
+    TreeVerifier::Pin hint;
+    hint.contextId = CONTEXT;
+    hint.seq = forged.seq;
+    hint.digest = TreeCommits::digest(forged);
+    planted.tree[groupId] = hint;
+    plantSlot(*store, previous, bridge.users.at("bob"), planted);
+    EXPECT_THROW(clientAdopting("alice", previous).getGroup(groupId), GroupHistoryForkException);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AChainFromTheUnresolvedRemovalThatEndsAtAnotherDigestIsNotItsLanding) {
+    // As below, but asked whether the unresolved removal is on the chain to the pin, the bridge serves a seq-3
+    // statement chained from the removal's digest. Its own digest is not the pin's: the removal did not land, and is
+    // sent again.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Bridge atP = bridge;
+    int removals = 0;
+    bridge.afterRemoval = [&] {
+        if (removals++ == 0) {
+            rollBackTo(atP);
+            refuse();
+        }
+    };
+    EXPECT_ANY_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    ASSERT_EQ(bridge.received.size(), 1u);
+    selfUpdateBy("carol");
+    selfUpdateBy("carol");
+    client("alice").getGroup(groupId);
+    const std::string removal = digestOf(bridge.received[0]);
+    bool asked = false;
+    bridge.onCommits = [&](std::uint64_t from, std::uint64_t to, server::GroupGetTreeCommitsResult& result) {
+        if (from == 2 && to == 3 && result.commits.size() == 1) {
+            CommitStatement lie = TreeCommits::fromWire(result.commits[0]);
+            lie.prevDigest = removal;
+            TreeCommits::sign(lie, bridge.users.at("carol"));
+            result.commits[0] = TreeCommits::toWire(lie);
+            asked = true;
+        }
+    };
+    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
+    bridge.onCommits = [](std::uint64_t, std::uint64_t, server::GroupGetTreeCommitsResult&) {};
+    EXPECT_TRUE(asked) << "the chain to the pin was not asked for: no case here";
+    EXPECT_EQ(bridge.received.size(), 2u) << "the removal was taken as landed and not sent again";
+}
+
+TEST_F(GroupApiLyingBridge, ARotatorHoldingEveryTargetAsksForNoSpanToThem) {
+    // alice rotated the group to epoch 3 herself and holds every earlier grant key: her rotation to 4 needs the
+    // key of epoch 2 (its skip rung) and asks the bridge for no rung to reach it.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("alice").rotateGroupKey(groupId);
+    client("alice").rotateGroupKey(groupId);
+    const std::size_t before = archiveAsks(bridge, "alice").size();
+    client("alice").rotateGroupKey(groupId);
+    ASSERT_EQ(bridge.tree.state.epoch, 4u);
+    const auto asks = archiveAsks(bridge, "alice");
+    for (std::size_t i = before; i < asks.size(); ++i) {
+        EXPECT_TRUE(spansOf(asks[i]).empty()) << "a span asked for, ask " << i;
+    }
+}
+
+TEST_F(GroupApiLyingBridge, ARotationWhoseGatherPathIsBrokenReadsTheWindow) {
+    // bob rotates the group to 8 and needs the keys of 6 and 4 (its skip rungs). The canonical (6, 4) is garbage: the
+    // gather reads the window [4, 7] and goes round it by (6, 5), (5, 4).
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    for (int i = 0; i < 6; ++i) {
+        client("alice").rotateGroupKey(groupId);
+    }
+    ASSERT_EQ(bridge.tree.state.epoch, 7u);
+    corrupt(6, 4);
+    EXPECT_NO_THROW(client("bob").rotateGroupKey(groupId));
+    EXPECT_EQ(bridge.tree.state.epoch, 8u);
+    const auto asks = archiveAsks(bridge, "bob");
+    EXPECT_TRUE(std::any_of(asks.begin(), asks.end(), [](const auto& ask) { return !ask.spans.has_value(); }))
+        << "no window read";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AManagerHoldingTheGrantKeyRemovesWhateverTheSpellingOfTheServedKey) {
+    // The garbler case below with epoch 2 opened by a rotation signed with the grant key spelled uncompressed, and
+    // the latest statement (bob's) spelling it so too, as the bridge serves it: alice's cached key is the same point,
+    // so history is still reachable and the removal goes on.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    std::string spelled;
+    const auto respell = [&](server::GroupTreeCommit& commit, const std::string& signer) {
+        CommitStatement statement = TreeCommits::fromWire(commit);
+        spelled = privmx::utils::Base58::encodeWithChecksum(
+            PublicKey::fromBase58DER(statement.groupPubKey).getEcc().getPublicKey(false)
+        );
+        statement.groupPubKey = spelled;
+        TreeCommits::sign(statement, bridge.users.at(signer));
+        commit = TreeCommits::toWire(statement);
+    };
+    bridge.onRotationCommit = [&](server::GroupTreeCommit& commit) { respell(commit, "carol"); };
+    bridge.onRead = [&](const std::string&, server::GroupInfo& info) {
+        info.groupPubKey = TreeCommits::fromWire(bridge.tree.commits.back()).groupPubKey; // as its statement spells it
+    };
+    try {
+        client("carol").rotateGroupKey(groupId);
+    } catch (...) {} // carol's own pin holds the statement as she signed it
+    bridge.onRotationCommit = [](server::GroupTreeCommit&) {};
+    ASSERT_EQ(bridge.tree.state.epoch, 2u);
+    const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
+    GroupApiImpl& alice = clientAdopting("alice", previous);
+    ASSERT_TRUE(alice.renewLeaf(groupId, previous.toWIF()));
+    selfUpdateBy("bob");
+    respell(bridge.tree.commits.back(), "bob");
+    rewrapLeafEdgeOf(bridge, "alice", "bob", previous.getPublicKey());
+    EXPECT_NO_THROW(alice.removeGroupMembers(groupId, {"bob"}));
+    EXPECT_EQ(bridge.tree.state.epoch, 3u) << "the removal did not land";
+}
+
+TEST_F(GroupApiLyingBridge, AMemberRepairsARungUnderAnEpochWhoseKeyIsSpelledUncompressed) {
+    // carol's rotation signs epoch 2's grant key uncompressed; the unit rung (2, 1) is broken. bob, holding epoch 1,
+    // checks his cached key against the opener's statement as a point and repairs the rung.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").resolveGroupPrivKey(groupId);
+    std::string spelled;
+    bridge.onRotationCommit = [&](server::GroupTreeCommit& commit) {
+        CommitStatement statement = TreeCommits::fromWire(commit);
+        spelled = privmx::utils::Base58::encodeWithChecksum(
+            PublicKey::fromBase58DER(statement.groupPubKey).getEcc().getPublicKey(false)
+        );
+        statement.groupPubKey = spelled;
+        TreeCommits::sign(statement, bridge.users.at("carol"));
+        commit = TreeCommits::toWire(statement);
+    };
+    bridge.onRead = [&](const std::string&, server::GroupInfo& info) {
+        if (info.keyVersion == 2 && !spelled.empty()) {
+            info.groupPubKey = spelled;
+        }
+    };
+    try {
+        client("carol").rotateGroupKey(groupId);
+    } catch (...) {}
+    bridge.onRotationCommit = [](server::GroupTreeCommit&) {};
+    ASSERT_EQ(bridge.tree.state.epoch, 2u);
+    corrupt(2, 1);
+    client("bob").resolveGroupPrivKey(groupId);
+    GroupApiImplTestAccess::runDueWorkNow(client("bob"), groupId);
+    EXPECT_EQ(count("bob", "context.groupRepairRung"), 1u);
 }

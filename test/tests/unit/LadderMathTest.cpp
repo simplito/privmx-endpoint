@@ -408,3 +408,12 @@ TEST_F(LadderValidate, AcceptsGeneratedSetsUnderAnEraFloor) {
             << "epoch " << epoch;
     }
 }
+
+TEST_F(LadderDescent, ADetourTakesNoSpanThatLandsBelowTheGoal) {
+    // From 64 to 40, with the canonical (64, 48), (48, 40) fetched: every other way off 64 that stays at or above
+    // 40, and on from each, but never (64, 32), which lands below the goal and leads nowhere.
+    const std::vector<RungSpan> known = LadderMath::canonicalDescent(64, 40, 1);
+    ASSERT_EQ(known, (std::vector<RungSpan>{{64, 48}, {48, 40}}));
+    const std::vector<RungSpan> expected{{64, 63}, {63, 62}, {62, 60}, {60, 56}, {56, 48}, {64, 56}, {64, 60}, {64, 62}};
+    EXPECT_EQ(LadderMath::detourSpans(64, 40, 1, known), expected);
+}
