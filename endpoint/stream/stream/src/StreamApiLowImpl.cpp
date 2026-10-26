@@ -258,6 +258,7 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     const std::string& streamRoomId,
     std::shared_ptr<WebRTCInterface> webRtc
 ) {
+    std::lock_guard<std::mutex> joining(_joinMutex);
     if (_streamRoomMap.has(streamRoomId)) {
         throw AlreadyJoinedStreamRoomException();
     }

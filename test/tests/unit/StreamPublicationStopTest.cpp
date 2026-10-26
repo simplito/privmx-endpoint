@@ -17,7 +17,10 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <atomic>
+#include <chrono>
 #include <mutex>
+#include <thread>
 #include <stdexcept>
 
 #include <privmx/crypto/Crypto.hpp>
@@ -591,4 +594,37 @@ TEST(StreamPublicationStop, AnUpdateNamingTheKeyInUseButStaleIsReKeyedWhenTheCal
     EXPECT_EQ(c.rekeys, 1);
     EXPECT_TRUE(Access::isPublishing(c.api, "room")) << "stopped although the re-key went through";
     EXPECT_TRUE(c.saw("LOCAL " + c.bridge->served->keyId));
+}
+
+TEST(StreamPublicationStop, TwoConcurrentJoinsOfOneRoomSubscribeOnce) {
+    // Both joins passed the "already joined" check before either stored the room: both subscribed, and the room
+    // stored second dropped the first's subscriptions for good. One join goes through, the other is refused first.
+    Joined c;
+    c.bridge->served = c.state({"k1"}, "k1", "k1");
+    std::atomic<int> reading{0};
+    c.bridge->handlers["stream.streamRoomGet"] = [&](Poco::JSON::Object::Ptr) {
+        ++reading; // both joins read the room at once, unless the first holds the second back
+        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
+        while (reading.load() < 2 && std::chrono::steady_clock::now() < until) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        stream::server::StreamRoomGetResult result;
+        result.streamRoom = c.bridge->served.value();
+        return Poco::Dynamic::Var(result.toJSON());
+    };
+    std::atomic<int> refused{0};
+    std::vector<std::thread> joins;
+    for (int i = 0; i < 2; ++i) {
+        joins.emplace_back([&] {
+            try {
+                c.api.joinStreamRoom("room", c.webRtc);
+            } catch (const stream::AlreadyJoinedStreamRoomException&) { ++refused; }
+        });
+    }
+    for (auto& join : joins) {
+        join.join();
+    }
+    const auto steps = c.steps();
+    EXPECT_EQ(refused.load(), 1);
+    EXPECT_EQ(std::count(steps.begin(), steps.end(), "subscribeToChannels"), 1) << "a subscription was leaked";
 }
