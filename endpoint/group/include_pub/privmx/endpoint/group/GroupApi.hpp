@@ -26,8 +26,8 @@ class GroupApiImpl;
  * found applied), and a different call completes it first. Key refreshes never hold anything back.
  *
  * This client runs no thread of its own. Upkeep it finds due (key refreshes of its own path) runs at the end of a
- * later call on the same Group that succeeded (addGroupMembers, removeGroupMembers, rotateGroupKey, update*,
- * getGroup); it adds latency to that call but never changes its result or throws.
+ * later call on the same Group that succeeded (addGroupMembers, removeGroupMembers, rotateGroupKey, renewLeaf,
+ * update*, getGroup); it adds latency to that call but never changes its result or throws.
  * A client that makes no such call does none of it. Verified group state is saved to the PinStore by the call that
  * verified it, container key lookups included.
  */
@@ -109,7 +109,8 @@ public:
      *
      * When the caller's own leaf does not open, the removal still goes through (a member that garbled it cannot
      * block its own removal) and, unless this session holds the current Group key, abandons the Group's history for
-     * every member.
+     * every member. After the caller's identity key changed and Connection::adoptPreviousIdentity was called, it is
+     * refused instead while the previous key still opens the leaf: call renewLeaf first.
      *
      * @param groupId ID of the Group
      * @param userIds IDs of the members to remove
@@ -135,6 +136,30 @@ public:
      * @param groupId ID of the Group
      */
     void rotateGroupKey(const std::string& groupId);
+
+    /**
+     * Re-wraps the caller's own leaf to its current identity key after that key changed in the Context.
+     *
+     * Call from a session connected with the NEW key, after the Context lists it, and after
+     * Connection::adoptPreviousIdentity(previousUserPrivKey) (also without a pin store: it is how this client learns
+     * its key changed, so a removal made before renewing is refused rather than abandoning history). Before the
+     * directory change, settle every group commit of the old session (retry each call that failed with an unknown
+     * outcome until it returns or fails for good) and disconnect it.
+     * `previousUserPrivKey` (WIF) is the key the leaf was last wrapped to. One commit per group (a self-update: same
+     * epoch, nothing to re-key in containers). Keep the previous key until every renewal returned, then discard it.
+     *
+     * This restores access; it is not compromise recovery. If the previous key may be compromised, also ask a
+     * manager to rotate the group key. Rotation does not help a member the server keeps on an old branch of the
+     * group history.
+     *
+     * @param groupId ID of the Group
+     * @param previousUserPrivKey the caller's previous identity private key, in WIF
+     * @return true if a commit was made, false if the leaf already opens with the current key
+     * @throws LocalStateIntegrityException when the previous key's pin slot in the PinStore fails its integrity check.
+     * The app may deliberately delete that slot from its PinStore and retry, accepting that groups without a pin
+     * under the current key are then read on trust once, as on first contact.
+     */
+    bool renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey);
 
     /**
      * Updates a Group's public (unencrypted) metadata, and nothing else.

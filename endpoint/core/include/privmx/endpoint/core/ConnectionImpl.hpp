@@ -17,6 +17,7 @@ limitations under the License.
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <map>
 #include <shared_mutex>
 #include <string>
 #include <vector>
@@ -96,6 +97,15 @@ public:
     std::shared_ptr<PinStoreInterface> getPinStore();
     // `<kind>/<scope>/<public key of identity>`, scope = `localStateScope()`.
     std::string localStateSlot(const std::string& kind, const crypto::PublicKey& identity);
+    // The group pins the store holds for `previous` (an identity key this user had before), opened with it and
+    // kept for every GroupApi created afterwards to adopt. Nothing stored: nothing to adopt. Throws
+    // LocalStateIntegrityException when the stored blob does not open (nothing is staged).
+    void adoptPreviousIdentity(const crypto::PrivateKey& previous);
+    // The bodies `adoptPreviousIdentity` staged, by previous public key.
+    std::map<std::string, std::string> getStagedPinBodies();
+    // The keys `adoptPreviousIdentity` was called with, other than the current one (stored pins or not): the only
+    // knowledge of an identity key change this client has that the Bridge did not supply.
+    std::vector<crypto::PrivateKey> previousIdentities();
     std::string getMyUserId(const std::string& contextId);
     DataIntegrityObject createDIO(
         const std::string& contextId,
@@ -142,6 +152,8 @@ private:
     std::shared_ptr<HandleManager> _handleManager;
     std::shared_ptr<UserVerifier> _userVerifier;
     std::shared_ptr<PinStoreInterface> _pinStore; // under _mutex
+    std::map<std::string, std::string> _stagedPinBodies; // under _mutex
+    std::vector<crypto::PrivateKey> _previousIdentities; // under _mutex
     bool _public = false;                                // set once, in connectPublic, before the impl is shared
     std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
