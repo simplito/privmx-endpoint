@@ -52,7 +52,8 @@ std::map<StreamApiLowVarInterface::METHOD, Poco::Dynamic::Var (StreamApiLowVarIn
         {DecryptDataChannelMessage, &StreamApiLowVarInterface::decryptDataChannelMessage},
 
         {SetNewOfferOnReconfigure, &StreamApiLowVarInterface::setNewOfferOnReconfigure},
-        {RestartSubscriberIce, &StreamApiLowVarInterface::restartSubscriberIce}
+        {RestartSubscriberIce, &StreamApiLowVarInterface::restartSubscriberIce},
+        {RefreshStreamRoomKeys, &StreamApiLowVarInterface::refreshStreamRoomKeys}
 };
 Poco::Dynamic::Var StreamApiLowVarInterface::create(const Poco::Dynamic::Var& args) {
     core::VarInterfaceUtil::validateAndExtractArray(args, 0);
@@ -246,6 +247,13 @@ Poco::Dynamic::Var StreamApiLowVarInterface::restartSubscriberIce(const Poco::Dy
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
     _streamApi.restartSubscriberIce(streamRoomId);
+    return {};
+}
+
+Poco::Dynamic::Var StreamApiLowVarInterface::refreshStreamRoomKeys(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto streamRoomId = _deserializer.deserialize<std::string>(argsArr->get(0), "streamRoomId");
+    _streamApi.refreshStreamRoomKeys(streamRoomId);
     return {};
 }
 

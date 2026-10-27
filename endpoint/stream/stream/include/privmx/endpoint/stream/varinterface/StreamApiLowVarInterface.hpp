@@ -58,7 +58,8 @@ public:
         DecryptDataChannelMessage = 24,
 
         SetNewOfferOnReconfigure = 25,
-        RestartSubscriberIce = 26
+        RestartSubscriberIce = 26,
+        RefreshStreamRoomKeys = 27
     };
 
     StreamApiLowVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -94,6 +95,7 @@ public:
     Poco::Dynamic::Var trickle(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var setNewOfferOnReconfigure(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var restartSubscriberIce(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var refreshStreamRoomKeys(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var encryptDataChannelMessage(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var decryptDataChannelMessage(const Poco::Dynamic::Var& args);

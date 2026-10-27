@@ -1892,6 +1892,140 @@ TEST_F(StreamTest, dataChannel_send_and_get) {
     });
 }
 
+TEST_F(StreamTest, dataChannel_isStillDecryptedAfterAKeyRotation) {
+    auto client2 = createClient(
+        reader->getString("Login.user_2_id"),
+        reader->getString("Login.user_2_pubKey"),
+        reader->getString("Login.user_2_privKey")
+    );
+    ScopeExit cleanup([&client2]() { client2.disconnect(); });
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+    stream::StreamHandle handle_USER_1;
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId_1);
+        handle_USER_1 = streamApi->createStream(streamRoomId_1);
+        streamApi->getImpl()->addTrack(handle_USER_1, {"","",stream::DeviceType::Plain}, stream::MediaTrackConstrains{});
+        streamApi->publishStream(handle_USER_1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    });
+
+    std::vector<stream::StreamSubscription> streamsId;
+    EXPECT_NO_THROW({
+        auto streamlist = client2.streamApi->listStreams(streamRoomId_1);
+        for(auto stream : streamlist) {
+            for(auto track : stream.tracks) {
+                streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
+            }
+        }
+    });
+    auto collector = std::make_shared<PlainDataCollector>();
+    EXPECT_NO_THROW({
+        client2.streamApi->joinStreamRoom(streamRoomId_1);
+        client2.streamApi->addRemoteStreamListener(streamRoomId_1, std::nullopt, collector);
+        client2.streamApi->createSubscriberStream(streamRoomId_1, streamsId);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    });
+    EXPECT_NO_THROW({
+        streamApi->sendData(handle_USER_1, core::Buffer::from("before_rotation"));
+    });
+    ASSERT_TRUE(collector->waitForMessages(1, std::chrono::seconds(10)));
+    ASSERT_EQ(collector->messages()[0].statusCode, 0);
+
+    // the new key reaches both sides as a Stream Room update, which has to refresh the data channel
+    // encryptor as well as the frame cryptors
+    std::vector<core::UserWithPubKey> roomUsers{
+        core::UserWithPubKey{
+            .userId=reader->getString("Login.user_1_id"), .pubKey=reader->getString("Login.user_1_pubKey")
+        },
+        core::UserWithPubKey{
+            .userId=reader->getString("Login.user_2_id"), .pubKey=reader->getString("Login.user_2_pubKey")
+        }
+    };
+    EXPECT_NO_THROW({
+        auto streamRoom = streamApi->getStreamRoom(streamRoomId_1);
+        streamApi->updateStreamRoom(
+            streamRoomId_1, roomUsers, roomUsers, streamRoom.publicMeta, streamRoom.privateMeta,
+            streamRoom.version, false, true, std::nullopt
+        );
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    });
+
+    EXPECT_NO_THROW({
+        streamApi->sendData(handle_USER_1, core::Buffer::from("after_rotation"));
+    });
+    ASSERT_TRUE(collector->waitForMessages(2, std::chrono::seconds(10)))
+        << "nothing arrived after the key rotation";
+    auto messages = collector->messages();
+    EXPECT_EQ(messages[1].payload, "after_rotation");
+    EXPECT_EQ(messages[1].statusCode, 0)
+        << "the data channel encryptor was left with the keys it had when the Stream Room was joined";
+
+    EXPECT_NO_THROW({
+        client2.streamApi->leaveStreamRoom(streamRoomId_1);
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
+}
+
+TEST_F(StreamTest, refreshStreamRoomKeys_onAJoinedStreamRoom_keepsTheDataChannelWorking) {
+    auto client2 = createClient(
+        reader->getString("Login.user_2_id"),
+        reader->getString("Login.user_2_pubKey"),
+        reader->getString("Login.user_2_privKey")
+    );
+    ScopeExit cleanup([&client2]() { client2.disconnect(); });
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+    stream::StreamHandle handle_USER_1;
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId_1);
+        handle_USER_1 = streamApi->createStream(streamRoomId_1);
+        streamApi->getImpl()->addTrack(handle_USER_1, {"","",stream::DeviceType::Plain}, stream::MediaTrackConstrains{});
+        streamApi->publishStream(handle_USER_1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    });
+
+    std::vector<stream::StreamSubscription> streamsId;
+    EXPECT_NO_THROW({
+        auto streamlist = client2.streamApi->listStreams(streamRoomId_1);
+        for(auto stream : streamlist) {
+            for(auto track : stream.tracks) {
+                streamsId.push_back(stream::StreamSubscription{stream.id, track.mid});
+            }
+        }
+    });
+    auto collector = std::make_shared<PlainDataCollector>();
+    EXPECT_NO_THROW({
+        client2.streamApi->joinStreamRoom(streamRoomId_1);
+        client2.streamApi->addRemoteStreamListener(streamRoomId_1, std::nullopt, collector);
+        client2.streamApi->createSubscriberStream(streamRoomId_1, streamsId);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    });
+
+    // refreshing is meant to be harmless on a Stream Room whose keys are already current
+    EXPECT_NO_THROW({
+        client2.streamApi->refreshStreamRoomKeys(streamRoomId_1);
+        streamApi->refreshStreamRoomKeys(streamRoomId_1);
+    });
+    EXPECT_NO_THROW({
+        streamApi->sendData(handle_USER_1, core::Buffer::from("after_refresh"));
+    });
+    ASSERT_TRUE(collector->waitForMessages(1, std::chrono::seconds(10)));
+    auto messages = collector->messages();
+    EXPECT_EQ(messages[0].payload, "after_refresh");
+    EXPECT_EQ(messages[0].statusCode, 0);
+
+    EXPECT_NO_THROW({
+        client2.streamApi->leaveStreamRoom(streamRoomId_1);
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
+}
+
+TEST_F(StreamTest, refreshStreamRoomKeys_onAStreamRoomWhichWasNotJoined_throws) {
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+    EXPECT_THROW({
+        streamApi->refreshStreamRoomKeys(streamRoomId_1);
+    }, core::Exception);
+}
+
 TEST_F(StreamTest, republishedStream_isStillDecryptedBySubscriber) {
     auto client2 = createClient(
         reader->getString("Login.user_2_id"),
