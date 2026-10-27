@@ -275,6 +275,12 @@ struct Bridge {
             return server::GroupCreateResult{.groupId = tree.groupId}.toJSON();
         }
         if (group == "groupGet") {
+            if (tree.commits.empty()) {
+                // No group created yet: refused as a bridge refuses an id it does not know.
+                throw privmx::utils::PrivmxException(
+                    "GROUP_DOES_NOT_EXIST", privmx::utils::PrivmxException::RPC, 0x0061
+                );
+            }
             const auto model = server::GroupGetModel::fromJSON(params);
             const bool plan = model.scope == std::optional<std::string>("plan");
             server::GroupInfo info = serve(caller, plan);
@@ -3379,6 +3385,26 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotSealACachedGrantKeyThatIsNot
     });
     ASSERT_NE(removal, bridge.calls.rend());
     EXPECT_TRUE(removal->params->optValue<bool>("abandonHistory", false));
+}
+
+TEST_F(GroupApiLyingBridge, AnEnvelopeNamingAGroupWithNoKeysLeavesNoSessionBehind) {
+    // The group id comes off the envelope: a key lookup that finds nothing must not grow the per-group state.
+    GroupApiImpl& alice = client("alice");
+    ASSERT_EQ(GroupApiImplTestAccess::sessionCount(alice), 0u);
+    const PrivateKey stranger = PrivateKey::generateRandom();
+    const std::string key(32, 'k');
+    for (int i = 0; i < 3; ++i) {
+        const std::string groupId = "unknown-" + std::to_string(i);
+        EXPECT_ANY_THROW(alice.decrypt(
+            GroupEnvelopeEncryptor().packGroupKeyEnvelope(
+                groupId, "no-such-key", core::Buffer::from("x"), stranger, key
+            )
+        ));
+        EXPECT_ANY_THROW(alice.decrypt(
+            alice.encryptAnonymously(groupId, stranger.getPublicKey().toBase58DER(), core::Buffer::from("x"))
+        ));
+    }
+    EXPECT_EQ(GroupApiImplTestAccess::sessionCount(alice), 0u);
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnEpochTheHistoryMislabelsIsNotRemembered) {

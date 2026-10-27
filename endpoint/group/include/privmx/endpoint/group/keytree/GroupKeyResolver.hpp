@@ -77,6 +77,11 @@ public:
 
     static std::optional<std::string> ownUserId(const server::GroupInfo& group);
 
+    // An epoch from the bridge, narrowed only when it fits: a wrapped value would name some other, real epoch.
+    // Throws GroupDataIntegrityException. A floor (`eraFloor`, `archivePrunedBelow`) of 0 or below means none and is
+    // clamped to 1, as `ladderFloorOf` does.
+    static std::uint32_t epochOf(std::int64_t value, bool floor = false);
+
     // The lowest node of the caller's keyed path it should self-update over, if any: one blank in the served state
     // (left so by a removal), or set by somebody not seated under it (the creator or an adder), who keeps that key.
     static std::optional<std::uint32_t> nodeNeedingSelfUpdate(const server::GroupInfo& group);

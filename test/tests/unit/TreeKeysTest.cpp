@@ -37,7 +37,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
 #include <privmx/endpoint/group/keytree/TreeKeyCache.hpp>
-#include <privmx/endpoint/group/keytree/TreeKeyCacheRegistry.hpp>
+#include <privmx/endpoint/group/GroupSession.hpp>
 #include <privmx/endpoint/group/keytree/TreeKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeMath.hpp>
 #include <privmx/endpoint/group/keytree/TreeWire.hpp>
@@ -1222,77 +1222,84 @@ TEST_F(TreeKeyCacheBasics, ConcurrentReadersAndWritersDoNotRace) {
     EXPECT_EQ(store.getGrantKey(99)->toWIF(), anchor.toWIF());
 }
 
-// TreeKeyCacheRegistry — one store per group
+// GroupSessions — one tree key cache per group
 
-class TreeKeyCacheRegistryTest : public testing::Test {};
+class GroupSessionsTest : public testing::Test {
+protected:
+    static std::size_t countOf(GroupSessions& sessions) {
+        std::size_t count = 0;
+        sessions.forEach([&count](GroupSession&) { ++count; });
+        return count;
+    }
+};
 
-TEST_F(TreeKeyCacheRegistryTest, SECURITY_GivesEachGroupItsOwnStore) {
+TEST_F(GroupSessionsTest, SECURITY_GivesEachGroupItsOwnStore) {
     // The whole bug in one assertion: two groups both at epoch 1, sharing one registry, must not see each
     // other's grant key. Node indices and epochs are small integers that every group reuses from 1.
     const PrivateKey keyA = PrivateKey::generateRandom();
     const PrivateKey keyB = PrivateKey::generateRandom();
 
-    TreeKeyCacheRegistry registry;
-    registry.get("groupA")->putGrantKey(1, keyA);
-    registry.get("groupB")->putGrantKey(1, keyB);
+    GroupSessions sessions;
+    sessions.of("groupA")->treeKeys()->putGrantKey(1, keyA);
+    sessions.of("groupB")->treeKeys()->putGrantKey(1, keyB);
 
-    EXPECT_EQ(registry.get("groupA")->getGrantKey(1)->toWIF(), keyA.toWIF());
-    EXPECT_EQ(registry.get("groupB")->getGrantKey(1)->toWIF(), keyB.toWIF());
-    EXPECT_NE(registry.get("groupA")->getGrantKey(1)->toWIF(), keyB.toWIF());
-
+    EXPECT_EQ(sessions.of("groupA")->treeKeys()->getGrantKey(1)->toWIF(), keyA.toWIF());
+    EXPECT_EQ(sessions.of("groupB")->treeKeys()->getGrantKey(1)->toWIF(), keyB.toWIF());
+    EXPECT_NE(sessions.of("groupA")->treeKeys()->getGrantKey(1)->toWIF(), keyB.toWIF());
 }
 
-TEST_F(TreeKeyCacheRegistryTest, ReturnsTheSameStoreForTheSameGroup) {
-    TreeKeyCacheRegistry registry;
-    EXPECT_EQ(registry.get("g").get(), registry.get("g").get());
-    EXPECT_EQ(registry.groupCount(), 1u);
+TEST_F(GroupSessionsTest, ReturnsTheSameStoreForTheSameGroup) {
+    GroupSessions sessions;
+    EXPECT_EQ(sessions.of("g").get(), sessions.of("g").get());
+    EXPECT_EQ(sessions.of("g")->treeKeys().get(), sessions.of("g")->treeKeys().get());
 }
 
-TEST_F(TreeKeyCacheRegistryTest, DropDetachesWithoutInvalidatingAHeldHandle) {
-    TreeKeyCacheRegistry registry;
-    const auto held = registry.get("g");
+TEST_F(GroupSessionsTest, ForgetDetachesWithoutInvalidatingAHeldHandle) {
+    GroupSessions sessions;
+    const auto held = sessions.of("g")->treeKeys();
     held->putGrantKey(1, PrivateKey::generateRandom());
 
-    registry.drop("g");
+    sessions.forget("g");
     // The handle a mid-flight climb is holding stays alive and writable — it is simply nobody else's any more.
     EXPECT_NO_THROW(held->putGrantKey(2, PrivateKey::generateRandom()));
     EXPECT_TRUE(held->getGrantKey(1).has_value());
 
-    const auto fresh = registry.get("g");
+    const auto fresh = sessions.of("g")->treeKeys();
     EXPECT_NE(fresh.get(), held.get()) << "the group starts over with an empty store";
     EXPECT_FALSE(fresh->getGrantKey(1).has_value());
 }
 
-TEST_F(TreeKeyCacheRegistryTest, DropIsScopedToOneGroup) {
-    TreeKeyCacheRegistry registry;
-    const auto storeB = registry.get("groupB");
+TEST_F(GroupSessionsTest, ForgetIsScopedToOneGroup) {
+    GroupSessions sessions;
+    const auto storeB = sessions.of("groupB")->treeKeys();
     storeB->putGrantKey(1, PrivateKey::generateRandom());
-    registry.get("groupA")->putGrantKey(1, PrivateKey::generateRandom());
+    sessions.of("groupA")->treeKeys()->putGrantKey(1, PrivateKey::generateRandom());
 
-    registry.drop("groupA");
-    EXPECT_EQ(registry.get("groupB").get(), storeB.get()) << "same store, untouched";
-    EXPECT_TRUE(registry.get("groupB")->getGrantKey(1).has_value());
+    sessions.forget("groupA");
+    EXPECT_EQ(sessions.of("groupB")->treeKeys().get(), storeB.get()) << "same store, untouched";
+    EXPECT_TRUE(sessions.of("groupB")->treeKeys()->getGrantKey(1).has_value());
 }
 
-TEST_F(TreeKeyCacheRegistryTest, DropAllClearsEveryGroup) {
-    TreeKeyCacheRegistry registry;
-    registry.get("a")->putGrantKey(1, PrivateKey::generateRandom());
-    registry.get("b")->putGrantKey(1, PrivateKey::generateRandom());
-    ASSERT_EQ(registry.groupCount(), 2u);
+TEST_F(GroupSessionsTest, DropKeysClearsEveryGroup) {
+    GroupSessions sessions;
+    sessions.of("a")->treeKeys()->putGrantKey(1, PrivateKey::generateRandom());
+    sessions.of("b")->treeKeys()->putGrantKey(1, PrivateKey::generateRandom());
+    ASSERT_EQ(countOf(sessions), 2u);
 
-    registry.dropAll();
-    EXPECT_EQ(registry.groupCount(), 0u);
-    EXPECT_FALSE(registry.get("a")->getGrantKey(1).has_value());
+    sessions.dropKeys();
+    EXPECT_EQ(countOf(sessions), 0u) << "nothing left in them, so the sessions go with their keys";
+    EXPECT_FALSE(sessions.of("a")->treeKeys()->getGrantKey(1).has_value());
+    EXPECT_FALSE(sessions.of("b")->treeKeys()->getGrantKey(1).has_value());
 }
 
-TEST_F(TreeKeyCacheRegistryTest, ConcurrentGetOfTheSameGroupYieldsOneStore) {
+TEST_F(GroupSessionsTest, ConcurrentGetOfTheSameGroupYieldsOneStore) {
     // Get-or-create has to be atomic: two stores for one group means one of them silently absorbs climbs
     // nobody ever reads back.
-    TreeKeyCacheRegistry registry;
+    GroupSessions sessions;
     std::vector<std::thread> threads;
     std::vector<TreeKeyCache*> seen(8, nullptr);
     for (std::size_t t = 0; t < seen.size(); ++t) {
-        threads.emplace_back([&registry, &seen, t]() { seen[t] = registry.get("g").get(); });
+        threads.emplace_back([&sessions, &seen, t]() { seen[t] = sessions.of("g")->treeKeys().get(); });
     }
     for (std::thread& thread : threads) {
         thread.join();
@@ -1300,6 +1307,31 @@ TEST_F(TreeKeyCacheRegistryTest, ConcurrentGetOfTheSameGroupYieldsOneStore) {
     for (const TreeKeyCache* store : seen) {
         EXPECT_EQ(store, seen.front());
     }
-    EXPECT_EQ(registry.groupCount(), 1u);
+}
+
+TEST_F(GroupSessionsTest, ForgetAndDropKeysKeepTheCommitStateAndEpochKeysStayOnConnect) {
+    // Lifetimes: keys go on connect (the epoch keys excepted), on disconnect and with a deleted group; an unresolved
+    // commit and a pending carry survive all three.
+    GroupSessions sessions;
+    const auto session = sessions.of("g");
+    const PrivateKey key = PrivateKey::generateRandom();
+    session->epochKeys.set(1, key);
+    session->envelopeGrantEpochs.set("pub", 1);
+    session->unresolved = UnresolvedCommit{.digest = "d"};
+    session->pendingCarry = PendingCarry{};
+
+    sessions.dropKeys(true);
+    EXPECT_TRUE(session->epochKeys.get(1).has_value()) << "kept for the connection";
+    EXPECT_FALSE(session->envelopeGrantEpochs.get("pub").has_value());
+
+    sessions.dropKeys();
+    EXPECT_FALSE(session->epochKeys.get(1).has_value());
+
+    session->epochKeys.set(1, key);
+    sessions.forget("g");
+    EXPECT_FALSE(session->epochKeys.get(1).has_value());
+    EXPECT_EQ(sessions.of("g").get(), session.get());
+    EXPECT_TRUE(session->unresolved.has_value());
+    EXPECT_TRUE(session->pendingCarry.has_value());
 }
 

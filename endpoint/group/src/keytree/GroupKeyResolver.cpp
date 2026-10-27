@@ -39,18 +39,6 @@ bool GroupKeyResolver::hasSupportedTree(const server::GroupInfo& group) {
 
 namespace {
 
-// An epoch from the bridge, narrowed only when it fits: a wrapped value would name some other, real epoch. A floor
-// (`eraFloor`, `archivePrunedBelow`) of 0 or below means none and is clamped to 1, as `ladderFloorOf` does.
-std::uint32_t epochOf(std::int64_t value, bool floor = false) {
-    if (floor) {
-        value = std::max<std::int64_t>(value, 1);
-    }
-    if (value < 1 || value > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
-        throw privmx::endpoint::group::GroupDataIntegrityException("an epoch out of range");
-    }
-    return static_cast<std::uint32_t>(value);
-}
-
 // The statements served with the group: the ones its filled nodes cite, and the latest.
 std::vector<privmx::endpoint::group::server::GroupTreeCommit> statements(
     const privmx::endpoint::group::server::GroupInfo& group
@@ -63,6 +51,16 @@ std::vector<privmx::endpoint::group::server::GroupTreeCommit> statements(
 }
 
 } // namespace
+
+std::uint32_t GroupKeyResolver::epochOf(std::int64_t value, bool floor) {
+    if (floor) {
+        value = std::max<std::int64_t>(value, 1);
+    }
+    if (value < 1 || value > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+        throw privmx::endpoint::group::GroupDataIntegrityException("an epoch out of range");
+    }
+    return static_cast<std::uint32_t>(value);
+}
 
 TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
     TreeGroupState state = TreeWire::toRuntime(
