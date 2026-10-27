@@ -272,6 +272,9 @@ public:
      * Joining passes the Stream Room's current encryption keys to the given WebRTC layer and keeps them up to date
      * for as long as the Stream Room is joined, so the same instance has to stay alive until leaveStreamRoom.
      * A Stream Room can be joined only once at a time.
+     * A Stream Room whose key is stale (a granted group moved on) is re-keyed first. If the caller may not re-key it,
+     * the room is joined to receive only: no key to send under is passed on, so publishing and the data channel fail
+     * until the room is re-keyed, which publishStream tries again.
      *
      * @param streamRoomId ID of the Stream Room to join
      * @param webRtc implementation of 'WebRTCInterface' handling the Stream Room's connections
