@@ -38,7 +38,8 @@ public:
         std::shared_ptr<privmx::webrtc::KeyStore> keys,
         const privmx::webrtc::FrameCryptorOptions& options,
         std::shared_ptr<StreamApiLow> apiLow,
-        std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState
+        std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState,
+        std::function<void(const std::string&, const std::vector<std::string>&)> onRemoteStreamsGone
     );
     void OnSignalingState(libwebrtc::RTCSignalingState state) override;
     void OnPeerConnectionState(libwebrtc::RTCPeerConnectionState state) override;
@@ -83,11 +84,15 @@ private:
     privmx::webrtc::FrameCryptorOptions _options;
     std::shared_ptr<StreamApiLow> _apiLow;
     std::function<void(const std::string&, const std::string&, PeerConnectionState)> _onConnectionState;
+    std::function<void(const std::string&, const std::vector<std::string>&)> _onRemoteStreamsGone;
 
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RTCVideoRendererImpl>> _RTCVideoRenderers;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<AudioTrackSinkImpl>> _audioTrackSinks;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<DataChannelImpl>> _dataChannels;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<privmx::webrtc::FrameCryptor>> _frameCryptors;
+    // a receiver no longer reports the Streams its track belonged to once the track is being removed,
+    // so the association is kept from the moment the track arrived
+    privmx::utils::ThreadSaveMap<std::string, std::vector<std::string>> _trackToStreamIds;
 
     std::optional<std::function<void(libwebrtc::scoped_refptr<libwebrtc::RTCIceCandidate>)>> _onIceCandidate;
     // onTrackInterfaces

@@ -21,10 +21,12 @@ PmxPeerConnectionObserver::PmxPeerConnectionObserver(
     std::shared_ptr<privmx::webrtc::KeyStore> keys,
     const privmx::webrtc::FrameCryptorOptions& options,
     std::shared_ptr<StreamApiLow> apiLow,
-    std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState
+    std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState,
+    std::function<void(const std::string&, const std::vector<std::string>&)> onRemoteStreamsGone
 )
     : _peerConnectionFactory(peerConnectionFactory), _streamRoomId(streamRoomId), _currentKeys(keys), _options(options),
-      _apiLow(apiLow), _onConnectionState(onConnectionState), _roomOnTrackInterface(nullptr),
+      _apiLow(apiLow), _onConnectionState(onConnectionState), _onRemoteStreamsGone(onRemoteStreamsGone),
+      _roomOnTrackInterface(nullptr),
       _streamOnTrackInterfacesMap(
           std::make_shared<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>>()
       ) {}
@@ -167,6 +169,7 @@ void PmxPeerConnectionObserver::OnAddTrack(
         LOG_TRACE("PmxPeerConnectionObserver::OnAddTrack streamId: ", streamId.std_string())
         streamIds.push_back(streamId.std_string());
     }
+    _trackToStreamIds.set(track->id().std_string(), streamIds);
     // Room interface
     std::shared_ptr<privmx::endpoint::stream::OnTrackInterface> roomOnTrackInterface = nullptr;
     {
@@ -260,6 +263,16 @@ void PmxPeerConnectionObserver::OnRemoveTrack(
         _audioTrackSinks.erase(track->id().std_string());
     if (dataType == DataType::VIDEO)
         detachVideoRenderer(track);
+    auto goneStreamIds = _trackToStreamIds.get(track->id().std_string()).value_or(streamIds);
+    _trackToStreamIds.erase(track->id().std_string());
+    LOG_TRACE("PmxPeerConnectionObserver::OnRemoveTrack streamIds.size(): ", goneStreamIds.size())
+    // the media server stops feeding a subscribed Stream by taking its track away, which is the only
+    // local sign that the subscriptions held for that Stream went stale
+    if (_onRemoteStreamsGone && _connectionType == "subscriber" && !goneStreamIds.empty()) {
+        try {
+            _onRemoteStreamsGone(_streamRoomId, goneStreamIds);
+        } catch (...) { LOG_ERROR("PmxPeerConnectionObserver::OnRemoveTrack", "reporting the removed Streams failed") }
+    }
 }
 
 void PmxPeerConnectionObserver::detachVideoRenderer(libwebrtc::scoped_refptr<libwebrtc::RTCMediaTrack> track) {

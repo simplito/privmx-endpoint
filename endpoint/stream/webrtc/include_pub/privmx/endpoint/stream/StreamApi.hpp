@@ -362,9 +362,28 @@ public:
      * The resulting set of subscriptions is the current one without `subscriptionsToRemove` plus
      * `subscriptionsToAdd`.
      *
+     * ### Streams which were published again
+     *
+     * A Stream keeps its ID when its publisher unpublishes it and publishes it again, and the media
+     * server stops feeding the subscriptions which were made against the earlier publication. Nothing
+     * in `listStreams` tells the two apart, so this method refuses to work on such a Stream rather than
+     * leave you with a subscription which looks alive and delivers nothing. It throws
+     * `StreamRequiresResubscriptionException`.
+     *
+     * You get there after a `StreamUnpublishedEvent` followed by a `StreamPublishedEvent` for the same
+     * Stream ID, so a reaction to those events is what keeps you out of this exception.
+     *
+     * To subscribe to such a Stream again, pass it in **both** lists in one call. Passing the same
+     * subscription as removed and added is how you say "make this subscription anew", and it is the
+     * only way to do it - removing the Subscriber Stream and creating it again does not bring the media
+     * back. Dropping the Stream by passing it in `subscriptionsToRemove` alone is allowed too.
+     *
      * @param subscriptionHandle handle returned by createSubscriberStream
      * @param subscriptionsToAdd list of subscriptions to add
      * @param subscriptionsToRemove list of subscriptions to remove
+     *
+     * @throw StreamRequiresResubscriptionException when `subscriptionsToAdd` holds a Stream which was
+     * published again and `subscriptionsToRemove` does not hold it as well
      */
     void updateSubscriberStream(
         const SubscriberStreamHandle& subscriptionHandle,

@@ -1355,6 +1355,215 @@ TEST_F(StreamTest, updateStream_after_unpublishing) {
     });
 }
 
+TEST_F(StreamTest, republish_makesUpdateSubscriberStreamRefuseAStaleStream) {
+    auto client2 = createClient(
+        reader->getString("Login.user_2_id"),
+        reader->getString("Login.user_2_pubKey"),
+        reader->getString("Login.user_2_privKey")
+    );
+    ScopeExit cleanup([&client2]() { client2.disconnect(); });
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+
+    auto subscriptionsOf = [&](const std::string& streamRoomId) {
+        std::vector<stream::StreamSubscription> subscriptions;
+        auto streamlist = client2.streamApi->listStreams(streamRoomId);
+        for(auto stream : streamlist) {
+            for(auto track : stream.tracks) {
+                subscriptions.push_back(stream::StreamSubscription{stream.id, track.mid});
+            }
+        }
+        return subscriptions;
+    };
+
+    stream::StreamHandle handle_USER_1;
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId_1);
+        handle_USER_1 = streamApi->createStream(streamRoomId_1);
+        streamApi->getImpl()->addFakeVideoTrack(handle_USER_1);
+        streamApi->publishStream(handle_USER_1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    });
+
+    auto subscriptionsBefore = subscriptionsOf(streamRoomId_1);
+    ASSERT_FALSE(subscriptionsBefore.empty());
+    const int64_t firstStreamId = subscriptionsBefore[0].streamId;
+
+    auto collector = std::make_shared<VideoFrameCollector>();
+    stream::SubscriberStreamHandle subHandle;
+    EXPECT_NO_THROW({
+        client2.streamApi->joinStreamRoom(streamRoomId_1);
+        // the library repairs the subscription while handling this event, so it has to be subscribed for
+        client2.streamApi->subscribeFor({
+            client2.streamApi->buildSubscriptionQuery(
+                stream::EventType::STREAM_PUBLISH, stream::EventSelectorType::STREAMROOM_ID, streamRoomId_1
+            )
+        });
+        client2.streamApi->addRemoteStreamListener(streamRoomId_1, std::nullopt, collector);
+        subHandle = client2.streamApi->createSubscriberStream(streamRoomId_1, subscriptionsBefore);
+    });
+    ASSERT_TRUE(collector->waitForFrames(5, std::chrono::seconds(15)))
+        << "the subscription never started delivering, so the rest of the test proves nothing";
+
+    // the publisher republishes into the same Stream Room, which the subscriber has no reason to react to
+    EXPECT_NO_THROW({
+        streamApi->removeStream(handle_USER_1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        auto republished = streamApi->createStream(streamRoomId_1);
+        streamApi->getImpl()->addFakeVideoTrack(republished);
+        streamApi->publishStream(republished);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    });
+
+    auto subscriptionsAfter = subscriptionsOf(streamRoomId_1);
+    ASSERT_FALSE(subscriptionsAfter.empty());
+    EXPECT_EQ(subscriptionsAfter[0].streamId, firstStreamId)
+        << "the media server gave the republished Stream a new id, which the subscriber could react to";
+
+    // the media are gone and nothing in listStreams says so, so the library has to be the one to say it
+    collector->reset();
+    EXPECT_FALSE(collector->waitForFrames(5, std::chrono::seconds(10)))
+        << "the subscription was expected to be dead after the publisher republished";
+    EXPECT_THROW({
+        client2.streamApi->updateSubscriberStream(subHandle, subscriptionsAfter, {});
+    }, core::Exception);
+
+    EXPECT_NO_THROW({
+        client2.streamApi->leaveStreamRoom(streamRoomId_1);
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
+}
+
+TEST_F(StreamTest, republish_subscriptionRecoversWhenTheStreamIsRedoneInOneCall) {
+    auto client2 = createClient(
+        reader->getString("Login.user_2_id"),
+        reader->getString("Login.user_2_pubKey"),
+        reader->getString("Login.user_2_privKey")
+    );
+    ScopeExit cleanup([&client2]() { client2.disconnect(); });
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+
+    auto subscriptionsOf = [&](const std::string& streamRoomId) {
+        std::vector<stream::StreamSubscription> subscriptions;
+        auto streamlist = client2.streamApi->listStreams(streamRoomId);
+        for(auto stream : streamlist) {
+            for(auto track : stream.tracks) {
+                subscriptions.push_back(stream::StreamSubscription{stream.id, track.mid});
+            }
+        }
+        return subscriptions;
+    };
+
+    stream::StreamHandle handle_USER_1;
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId_1);
+        handle_USER_1 = streamApi->createStream(streamRoomId_1);
+        streamApi->getImpl()->addFakeVideoTrack(handle_USER_1);
+        streamApi->publishStream(handle_USER_1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    });
+
+    auto collector = std::make_shared<VideoFrameCollector>();
+    stream::SubscriberStreamHandle subHandle;
+    EXPECT_NO_THROW({
+        client2.streamApi->joinStreamRoom(streamRoomId_1);
+        client2.streamApi->addRemoteStreamListener(streamRoomId_1, std::nullopt, collector);
+        subHandle = client2.streamApi->createSubscriberStream(streamRoomId_1, subscriptionsOf(streamRoomId_1));
+    });
+    ASSERT_TRUE(collector->waitForFrames(5, std::chrono::seconds(15)));
+
+    EXPECT_NO_THROW({
+        streamApi->removeStream(handle_USER_1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        auto republished = streamApi->createStream(streamRoomId_1);
+        streamApi->getImpl()->addFakeVideoTrack(republished);
+        streamApi->publishStream(republished);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    });
+
+    // passing the Stream as both removed and added is how the application says "make this anew", and
+    // it is the way out of StreamRequiresResubscriptionException
+    auto subscriptionsAfter = subscriptionsOf(streamRoomId_1);
+    ASSERT_FALSE(subscriptionsAfter.empty());
+    collector->reset();
+    EXPECT_NO_THROW({
+        client2.streamApi->updateSubscriberStream(subHandle, subscriptionsAfter, subscriptionsAfter);
+    });
+
+    EXPECT_TRUE(collector->waitForFrames(5, std::chrono::seconds(15)))
+        << "redoing the subscriptions did not bring the media back";
+
+    // the Stream is no longer stale, so an ordinary update on it works again
+    EXPECT_NO_THROW({
+        client2.streamApi->updateSubscriberStream(subHandle, subscriptionsAfter, {});
+    });
+
+    EXPECT_NO_THROW({
+        client2.streamApi->leaveStreamRoom(streamRoomId_1);
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
+}
+
+TEST_F(StreamTest, updateSubscriberStream_resubscribingAfterOwnUnsubscribeIsAllowed) {
+    auto client2 = createClient(
+        reader->getString("Login.user_2_id"),
+        reader->getString("Login.user_2_pubKey"),
+        reader->getString("Login.user_2_privKey")
+    );
+    ScopeExit cleanup([&client2]() { client2.disconnect(); });
+    auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
+
+    auto subscriptionsOf = [&](const std::string& streamRoomId) {
+        std::vector<stream::StreamSubscription> subscriptions;
+        auto streamlist = client2.streamApi->listStreams(streamRoomId);
+        for(auto stream : streamlist) {
+            for(auto track : stream.tracks) {
+                subscriptions.push_back(stream::StreamSubscription{stream.id, track.mid});
+            }
+        }
+        return subscriptions;
+    };
+
+    stream::StreamHandle handle_USER_1;
+    EXPECT_NO_THROW({
+        streamApi->joinStreamRoom(streamRoomId_1);
+        handle_USER_1 = streamApi->createStream(streamRoomId_1);
+        streamApi->getImpl()->addFakeVideoTrack(handle_USER_1);
+        streamApi->publishStream(handle_USER_1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    });
+
+    auto subscriptions = subscriptionsOf(streamRoomId_1);
+    ASSERT_FALSE(subscriptions.empty());
+
+    auto collector = std::make_shared<VideoFrameCollector>();
+    stream::SubscriberStreamHandle subHandle;
+    EXPECT_NO_THROW({
+        client2.streamApi->joinStreamRoom(streamRoomId_1);
+        client2.streamApi->addRemoteStreamListener(streamRoomId_1, std::nullopt, collector);
+        subHandle = client2.streamApi->createSubscriberStream(streamRoomId_1, subscriptions);
+    });
+    ASSERT_TRUE(collector->waitForFrames(5, std::chrono::seconds(15)));
+
+    // the Stream was not republished, so taking the subscription back must not be read as one
+    EXPECT_NO_THROW({
+        client2.streamApi->updateSubscriberStream(subHandle, {}, subscriptions);
+    });
+    // the track removal reaches the WebRTC layer after the call above returns
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+
+    collector->reset();
+    EXPECT_NO_THROW({
+        client2.streamApi->updateSubscriberStream(subHandle, subscriptions, {});
+    });
+    EXPECT_TRUE(collector->waitForFrames(5, std::chrono::seconds(15)))
+        << "taking the subscription back did not bring the media with it";
+
+    EXPECT_NO_THROW({
+        client2.streamApi->leaveStreamRoom(streamRoomId_1);
+        streamApi->leaveStreamRoom(streamRoomId_1);
+    });
+}
+
 TEST_F(StreamTest, publishStream_afterFailedPublish_canBeRetried) {
     auto streamRoomId_1 = fastStreamRoom(reader->getString("Context_1.contextId"));
     EXPECT_NO_THROW({
@@ -1987,21 +2196,29 @@ TEST_F(StreamTest, subscriberConnectionFailure_triggersIceRestartAndKeepsTheSubs
     // the connection stays in place, so the library asks the media server to restart ICE on it
     client2.streamApi->getImpl()->reportConnectionFailedForTest(streamRoomId_1, "subscriber");
 
-    std::optional<stream::StreamConnectionStateChangedEvent> stateEvent;
+    // A recovery which completes before the Stream Room is evaluated leaves its state at connected the
+    // whole time, so reaching StreamReconnecting is not something the test can rely on seeing. What it
+    // can rely on is that the Stream Room is never given up on, which is what a failing restart ends in.
+    bool givenUp = false;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-    while(!stateEvent.has_value() && std::chrono::steady_clock::now() < deadline) {
+    while(std::chrono::steady_clock::now() < deadline) {
         auto eventHolder = eventQueue.getEvent();
         if(!eventHolder.has_value()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
         }
         if(stream::StreamConnectionEvents::isStreamConnectionStateChangedEvent(eventHolder.value())) {
-            stateEvent = stream::StreamConnectionEvents::extractStreamConnectionStateChangedEvent(eventHolder.value());
+            auto stateEvent = stream::StreamConnectionEvents::extractStreamConnectionStateChangedEvent(
+                eventHolder.value()
+            );
+            EXPECT_EQ(stateEvent.data.streamRoomId, streamRoomId_1);
+            if(stateEvent.data.state == stream::StreamConnectionState::StreamLost) {
+                givenUp = true;
+                break;
+            }
         }
     }
-    ASSERT_TRUE(stateEvent.has_value()) << "the library never reported that it is recovering the Stream Room";
-    EXPECT_EQ(stateEvent.value().data.streamRoomId, streamRoomId_1);
-    EXPECT_EQ(stateEvent.value().data.state, stream::StreamConnectionState::StreamReconnecting);
+    EXPECT_FALSE(givenUp) << "the library ran out of attempts, so the ICE restart of the subscriber failed";
 
     // the renegotiation the media server drives must not tear down a subscription which still works
     EXPECT_NO_THROW({

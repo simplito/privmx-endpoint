@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOWIMPL_HPP_
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>

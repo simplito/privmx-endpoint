@@ -14,7 +14,9 @@ limitations under the License.
 
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -277,6 +279,16 @@ private:
     std::shared_ptr<WebRTCImpl> _webRTC;
     // subscriptions for the events this API raises itself, which the Bridge knows nothing about
     privmx::utils::ThreadSaveMap<std::string, std::string> _localSubscriptions;
+    // Stream Rooms mapped to the IDs of the Streams whose remote tracks the media server took away while
+    // they were still subscribed, which is what a republication looks like from here
+    privmx::utils::ThreadSaveMap<std::string, std::set<int64_t>> _staleStreams;
+    // Streams whose tracks the media server is about to take away because the application unsubscribed
+    // from them; a Stream appears once per track, so the same ID can be awaited several times
+    privmx::utils::ThreadSaveMap<std::string, std::multiset<int64_t>> _expectedRemovals;
+    // guards the read-modify-write on _staleStreams and _expectedRemovals: markStreamsAsStale runs on the
+    // signalling thread, updateSubscriberStream on the caller's
+    std::mutex _staleStreamsMutex;
+    privmx::utils::ThreadSaveMap<SubscriberStreamHandle, std::string> _subscriberHandleToRoomId;
     std::atomic_int64_t _nextLocalSubscriptionId{1};
     // reset first in the destructor, so its worker thread is joined before anything it reaches is gone
     std::shared_ptr<ConnectionStateTracker> _connectionStateTracker;
@@ -284,6 +296,18 @@ private:
     static constexpr std::string_view CONNECTION_STATE_CHANNEL = "streamroom/connectionState";
 
     static bool isConnectionStateSubscriptionQuery(const std::string& subscriptionQuery);
+    void markStreamsAsStale(const std::string& streamRoomId, const std::vector<std::string>& streamIds);
+    void expectStreamRemovals(
+        const std::string& streamRoomId,
+        const std::vector<StreamSubscription>& subscriptionsToRemove
+    );
+    // throws unless every stale Stream the call touches is being redone, which means appearing in both
+    // the added and the removed subscriptions
+    void assertStaleStreamsAreRedone(
+        const std::string& streamRoomId,
+        const std::vector<StreamSubscription>& subscriptionsToAdd,
+        const std::vector<StreamSubscription>& subscriptionsToRemove
+    );
     void emitConnectionStateChangedEvent(const std::string& streamRoomId, StreamConnectionState state);
     // runs on the tracker's thread, so it is kept short; returns whether a recovery was started
     bool recoverConnection(const std::string& streamRoomId, const std::string& connectionType);
