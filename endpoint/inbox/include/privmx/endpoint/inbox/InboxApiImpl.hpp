@@ -147,6 +147,15 @@ private:
     );
     inbox::FilesConfig getFilesConfigOptOrDefault(const std::optional<inbox::FilesConfig>& fileConfig);
     InboxPublicViewData getInboxPublicViewData(const std::string& inboxId);
+    // The Inbox data under `ctx.key`, its entries public key derived from that key.
+    server::InboxData encryptInboxData(
+        const server::InboxData& current,
+        const inbox::FilesConfig& filesConfig,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const core::ContainerUpdateContext& ctx,
+        const std::string& resourceId
+    );
     inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::InboxInfo inbox);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
 
