@@ -349,6 +349,16 @@ void StreamApi::dropBrokenFrames(const std::string& streamRoomId, bool enable) {
     }
 }
 
+void StreamApi::refreshStreamRoomKeys(const std::string& streamRoomId) {
+    validateEndpoint();
+    try {
+        return _impl->refreshStreamRoomKeys(streamRoomId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 void StreamApi::addRemoteStreamListener(
     const std::string& streamRoomId,
     std::optional<int64_t> streamId,

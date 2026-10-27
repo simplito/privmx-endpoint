@@ -78,6 +78,9 @@ if(PRIVMX_BUILD_WITH_WEBRTC)
     # Stream connection state aggregation, grace period and recovery policy (offline, no Bridge required)
     add_executable(test_ConnectionStateTrackerTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/ConnectionStateTrackerTest.cpp)
     target_link_libraries(test_ConnectionStateTrackerTest privmx privmxendpointcore privmxendpointstream privmxendpointstream_webrtc libwebrtc Poco::Foundation Poco::Util GTest::GTest GTest::Main)
+    # Key refresh in-flight guard and cooldown (offline, no Bridge required)
+    add_executable(test_KeyRefreshSchedulerTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/KeyRefreshSchedulerTest.cpp)
+    target_link_libraries(test_KeyRefreshSchedulerTest privmx privmxendpointcore privmxendpointstream privmxendpointstream_webrtc libwebrtc Poco::Foundation Poco::Util GTest::GTest GTest::Main)
     # Live E2E DataChannel interop client driven
     # RTCDataChannel interop over a real connection.
     add_executable(datachannel_interop_client ${CMAKE_CURRENT_SOURCE_DIR}/tools/datachannel_interop_client.cpp)

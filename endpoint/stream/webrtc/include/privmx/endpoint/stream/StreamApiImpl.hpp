@@ -23,6 +23,7 @@ limitations under the License.
 #include <vector>
 
 #include "privmx/endpoint/stream/ConnectionStateTracker.hpp"
+#include "privmx/endpoint/stream/KeyRefreshScheduler.hpp"
 #include "privmx/endpoint/stream/PeerConnectionManager.hpp"
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
@@ -125,6 +126,7 @@ public:
     );
     void removeSubscriberStream(const SubscriberStreamHandle& subscriptionHandle);
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
+    void refreshStreamRoomKeys(const std::string& streamRoomId);
     void addRemoteStreamListener(
         const std::string& streamRoomId,
         std::optional<int64_t> streamId,
@@ -290,8 +292,9 @@ private:
     std::mutex _staleStreamsMutex;
     privmx::utils::ThreadSaveMap<SubscriberStreamHandle, std::string> _subscriberHandleToRoomId;
     std::atomic_int64_t _nextLocalSubscriptionId{1};
-    // reset first in the destructor, so its worker thread is joined before anything it reaches is gone
+    // both reset first in the destructor, so the threads they use are joined before anything they reach is gone
     std::shared_ptr<ConnectionStateTracker> _connectionStateTracker;
+    std::shared_ptr<KeyRefreshScheduler> _keyRefreshScheduler;
 
     static constexpr std::string_view CONNECTION_STATE_CHANNEL = "streamroom/connectionState";
 

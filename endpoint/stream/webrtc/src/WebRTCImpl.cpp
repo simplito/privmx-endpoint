@@ -15,12 +15,13 @@ WebRTCImpl::WebRTCImpl(
     std::function<void(const int64_t, const std::string&)> onTrickle,
     std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState,
     std::function<void(const std::string&, const std::vector<std::string>&)> onRemoteStreamsGone,
+    std::function<void(const std::string&)> onKeysOutdated,
     privmx::webrtc::FrameCryptorOptions frameCryptorOptions,
     std::shared_ptr<StreamApiLow> apiLow
 )
     : _peerConnectionFactory(peerConnectionFactory), _constraints(constraints), _configuration(configuration),
       _frameCryptorOptions(frameCryptorOptions), _onConnectionState(onConnectionState),
-      _onRemoteStreamsGone(onRemoteStreamsGone), _apiLow(apiLow) {
+      _onRemoteStreamsGone(onRemoteStreamsGone), _onKeysOutdated(onKeysOutdated), _apiLow(apiLow) {
     _peerConnectionManager = std::make_shared<PeerConnectionManager>(
         std::bind(&WebRTCImpl::createPeerConnection, this, std::placeholders::_1), onTrickle
     );
@@ -269,7 +270,7 @@ std::shared_ptr<PeerConnection> WebRTCImpl::createPeerConnection(const std::stri
     peerConnection->pc->CreateLocalMediaStream(streamId);
     peerConnection->observer = std::make_shared<PmxPeerConnectionObserver>(
         _peerConnectionFactory, streamRoomId, privmx::webrtc::KeyStore::Create(std::vector<privmx::webrtc::Key>()),
-        _frameCryptorOptions, _apiLow, _onConnectionState, _onRemoteStreamsGone
+        _frameCryptorOptions, _apiLow, _onConnectionState, _onRemoteStreamsGone, _onKeysOutdated
     );
     peerConnection->pc->RegisterRTCPeerConnectionObserver(peerConnection->observer.get());
     return peerConnection;
@@ -454,7 +455,9 @@ void WebRTCImpl::AddDataChannel(
     std::shared_ptr<libwebrtc::RTCDataChannelInit> rtcDataChannelInit = std::make_shared<libwebrtc::RTCDataChannelInit>(
     );
     auto dataChannel = jc->peerConnection->pc->CreateDataChannel(dataChannelInfo.first, rtcDataChannelInit.get());
-    auto observer = std::make_shared<PmxDataChannelObserver>(nullptr, _apiLow, dataChannelInfo.first, streamRoomId);
+    auto observer = std::make_shared<PmxDataChannelObserver>(
+        nullptr, _apiLow, dataChannelInfo.first, streamRoomId, _onKeysOutdated
+    );
     dataChannel->RegisterObserver(observer.get());
     jc->peerConnection->dataChannel = DataChannelInfo{rtcDataChannelInit, dataChannel, observer};
     dataChannelInfo.second->operator=([jc](std::string data) { jc->peerConnection->sendData(data); });

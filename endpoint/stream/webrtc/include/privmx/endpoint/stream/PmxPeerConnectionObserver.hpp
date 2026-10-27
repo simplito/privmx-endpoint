@@ -39,7 +39,8 @@ public:
         const privmx::webrtc::FrameCryptorOptions& options,
         std::shared_ptr<StreamApiLow> apiLow,
         std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState,
-        std::function<void(const std::string&, const std::vector<std::string>&)> onRemoteStreamsGone
+        std::function<void(const std::string&, const std::vector<std::string>&)> onRemoteStreamsGone,
+        std::function<void(const std::string&)> onKeysOutdated
     );
     void OnSignalingState(libwebrtc::RTCSignalingState state) override;
     void OnPeerConnectionState(libwebrtc::RTCPeerConnectionState state) override;
@@ -85,6 +86,7 @@ private:
     std::shared_ptr<StreamApiLow> _apiLow;
     std::function<void(const std::string&, const std::string&, PeerConnectionState)> _onConnectionState;
     std::function<void(const std::string&, const std::vector<std::string>&)> _onRemoteStreamsGone;
+    std::function<void(const std::string&)> _onKeysOutdated;
 
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<RTCVideoRendererImpl>> _RTCVideoRenderers;
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<AudioTrackSinkImpl>> _audioTrackSinks;

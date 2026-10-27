@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/stream/PmxDataChannelObserver.hpp"
+#include "privmx/endpoint/stream/StreamException.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/utils/Logger.hpp>
 
@@ -19,10 +20,11 @@ PmxDataChannelObserver::PmxDataChannelObserver(
     std::shared_ptr<OnTrackInterface> onTrackInterface,
     std::shared_ptr<StreamApiLow> apiLow,
     const std::string& remoteStreamId,
-    const std::string& streamRoomId
+    const std::string& streamRoomId,
+    std::function<void(const std::string&)> onKeysOutdated
 )
     : _onTrackInterface(onTrackInterface), _apiLow(apiLow), _remoteStreamId(remoteStreamId),
-      _streamRoomId(streamRoomId) {
+      _streamRoomId(streamRoomId), _onKeysOutdated(onKeysOutdated) {
     LOG_TRACE("PmxDataChannelObserver created")
 }
 void PmxDataChannelObserver::OnStateChange(libwebrtc::RTCDataChannelState state) {
@@ -61,6 +63,12 @@ void PmxDataChannelObserver::OnMessage(const char* buffer, int length, bool bina
             auto decryptedData = _apiLow->decryptDataChannelMessage(
                 _streamRoomId, _remoteStreamId, core::Buffer::from(std::string(buffer, length))
             );
+            // only a key which is not held can be mended by fetching the keys again; every other failure
+            // means the key was found and something else went wrong
+            if (decryptedData.statusCode == static_cast<int64_t>(NoStreamDecryptionKeyException::FULL_CODE) &&
+                _onKeysOutdated) {
+                _onKeysOutdated(_streamRoomId);
+            }
             std::shared_ptr<PlainData> data = std::make_shared<PlainData>(
                 std::vector<std::string>{}, _remoteStreamId, decryptedData.data, decryptedData.seq, binary,
                 decryptedData.statusCode
