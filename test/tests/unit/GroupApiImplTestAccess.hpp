@@ -36,6 +36,9 @@ struct GroupApiImplTestAccess {
     static void runDueWorkNow(GroupApiImpl& api, const std::string& groupId) {
         {
             std::lock_guard<std::mutex> lock(api._dueMutex);
+            for (auto& [key, check] : api._ladderChecks) {
+                check.due = {};
+            }
             for (auto& [id, pending] : api._selfUpdatePending) {
                 pending.due = {};
             }
@@ -55,6 +58,10 @@ struct GroupApiImplTestAccess {
     }
     static std::uint64_t pinnedSeq(GroupApiImpl& api, const std::string& groupId) {
         return api._treeVerifier.pinnedSeq(groupId);
+    }
+    static std::size_t queuedLadderChecks(GroupApiImpl& api) {
+        std::lock_guard<std::mutex> lock(api._dueMutex);
+        return api._ladderChecks.size();
     }
     // As if the call that released the group's unresolved commit ran `ms` earlier: no clock to move in a unit test.
     static void ageUnresolved(GroupApiImpl& api, const std::string& groupId, std::uint64_t ms) {

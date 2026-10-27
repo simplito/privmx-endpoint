@@ -36,6 +36,8 @@ public:
     server::GroupGetKeyArchiveResult groupGetKeyArchive(server::GroupGetKeyArchiveModel model);
     // Past epochs' key entries and grant keys, looked up by keyId or grant key.
     server::GroupGetEpochKeysResult groupGetEpochKeys(server::GroupGetEpochKeysModel model);
+    // Appends a repair rung: any seated member holding both keys of the span.
+    void groupRepairRung(server::GroupRepairRungModel model);
 
     void groupSendCustomEvent(server::GroupSendCustomEventModel model);
 
