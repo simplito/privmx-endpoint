@@ -16,6 +16,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/encryptors/dataChannel/DataChannelMessageEncryptorV1.hpp"
 #include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
+#include <functional>
 #include <libwebrtc.h>
 #include <privmx/utils/Logger.hpp>
 #include <privmx/utils/ThreadSaveMap.hpp>
@@ -32,7 +33,8 @@ public:
         std::shared_ptr<OnTrackInterface> onTrackInterface,
         std::shared_ptr<StreamApiLow> apiLow,
         const std::string& remoteStreamId,
-        const std::string& streamRoomId
+        const std::string& streamRoomId,
+        std::function<void(const std::string&)> onKeysOutdated
     );
     virtual void OnStateChange(libwebrtc::RTCDataChannelState state) override;
     virtual void OnMessage(const char* buffer, int length, bool binary) override;
@@ -44,6 +46,7 @@ private:
     std::shared_ptr<StreamApiLow> _apiLow;
     std::string _remoteStreamId;
     std::string _streamRoomId;
+    std::function<void(const std::string&)> _onKeysOutdated;
 };
 
 } // namespace stream

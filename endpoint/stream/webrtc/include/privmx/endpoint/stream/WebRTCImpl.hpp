@@ -45,6 +45,7 @@ public:
         std::function<void(const int64_t, const std::string&)> onTrickle,
         std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState,
         std::function<void(const std::string&, const std::vector<std::string>&)> onRemoteStreamsGone,
+        std::function<void(const std::string&)> onKeysOutdated,
         privmx::webrtc::FrameCryptorOptions _frameCryptorOptions,
         std::shared_ptr<StreamApiLow> apiLow
     );
@@ -142,6 +143,7 @@ private:
     privmx::webrtc::FrameCryptorOptions _frameCryptorOptions;
     std::function<void(const std::string&, const std::string&, PeerConnectionState)> _onConnectionState;
     std::function<void(const std::string&, const std::vector<std::string>&)> _onRemoteStreamsGone;
+    std::function<void(const std::string&)> _onKeysOutdated;
     std::shared_ptr<StreamApiLow> _apiLow;
     std::shared_ptr<PeerConnectionManager> _peerConnectionManager;
     libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> _bootstrapDataChannel;

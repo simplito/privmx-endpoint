@@ -249,6 +249,27 @@ public:
     void restartSubscriberIce(const std::string& streamRoomId);
 
     /**
+     * Fetches the Stream Room's encryption keys again and hands them to the WebRTC layer.
+     *
+     * Keys are normally kept current by the Stream Room update notification, so this is a recovery path
+     * rather than something to call routinely. It is meant for the case where that notification was
+     * missed - most commonly across a connection outage - which leaves the WebRTC layer unable to decrypt
+     * frames and data channel messages encrypted with a key added in the meantime.
+     *
+     * Call it only when decryption actually fails for want of a key: a frame cryptor reporting a missing
+     * key, or a data channel message whose status code is 'NoStreamDecryptionKeyException'. Any other
+     * decryption failure means the key was found and something else went wrong, which new keys will not
+     * mend. Rate-limit the calls, because a key the user will never be granted would otherwise make this
+     * repeat for as long as the Stream Room is open.
+     *
+     * The key the Stream Room encrypts with is left as it was; only the set of keys available for
+     * decryption is refreshed.
+     *
+     * @param streamRoomId ID of the Stream Room whose keys are refreshed
+     */
+    void refreshStreamRoomKeys(const std::string& streamRoomId);
+
+    /**
      * Joins a Stream Room using the given WebRTC layer implementation.
      *
      * This is required to work with the Streams, the Stream events and the data channels inside a Stream Room.

@@ -409,6 +409,21 @@ public:
     void dropBrokenFrames(const std::string& streamRoomId, bool enable);
 
     /**
+     * Fetches the Stream Room's encryption keys again and hands them to the WebRTC layer.
+     *
+     * Keys are normally kept current by the Stream Room update notification, and a key which went missing
+     * in spite of that is already fetched again by this API on its own, so calling this is not needed in
+     * the ordinary course of things. It is here for an application which knows it has been out of touch
+     * and would rather not wait for the first frame to fail.
+     *
+     * The key the Stream Room encrypts with is left as it was; only the set of keys available for
+     * decryption is refreshed.
+     *
+     * @param streamRoomId ID of the Stream Room whose keys are refreshed
+     */
+    void refreshStreamRoomKeys(const std::string& streamRoomId);
+
+    /**
      * Registers a listener for the remote tracks in the Stream Room.
      *
      * The listener receives the tracks which the Subscriber Stream subscribes to.

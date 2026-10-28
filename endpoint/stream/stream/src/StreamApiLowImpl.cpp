@@ -127,10 +127,7 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         auto subscriptions = notification.subscriptions;
         //update keys
         if (streamRoomData.has_value()) {
-            std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(
-                raw, streamRoomData.value()->encryptionKeyId
-            );
-            streamRoomData.value()->webRtc->updateKeys(eventData.streamRoomId, keys);
+            applyStreamRoomKeys(streamRoomData.value(), raw);
             for (const auto& internalSubscription : streamRoomData.value()->subscriptionsIds) {
                 subscriptions.erase(
                     remove(subscriptions.begin(), subscriptions.end(), internalSubscription), subscriptions.end()
@@ -816,6 +813,23 @@ std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
         }
     }
     return webRTCKeys;
+}
+
+void StreamApiLowImpl::applyStreamRoomKeys(
+    const std::shared_ptr<StreamRoomData>& room,
+    const server::StreamRoomInfo& streamRoomInfo
+) {
+    // the key the Stream Room encrypts with is left as it was: this refreshes what can be decrypted
+    std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoomInfo, room->encryptionKeyId);
+    room->messageEncryptor->updateKey(keys);
+    room->webRtc->updateKeys(room->streamRoomId, keys);
+}
+
+void StreamApiLowImpl::refreshStreamRoomKeys(const std::string& streamRoomId) {
+    auto room = getStreamRoomData(streamRoomId);
+    server::StreamRoomGetModel model;
+    model.id = streamRoomId;
+    applyStreamRoomKeys(room, _serverApi->streamRoomGet(model).streamRoom);
 }
 
 std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> StreamApiLowImpl::extractStreamRoomKeys(

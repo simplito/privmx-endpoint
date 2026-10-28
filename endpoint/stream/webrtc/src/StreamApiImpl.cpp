@@ -46,6 +46,9 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection) {
             return recoverConnection(streamRoomId, connectionType);
         }
     );
+    _keyRefreshScheduler = std::make_shared<KeyRefreshScheduler>([apiLow](const std::string& streamRoomId) {
+        apiLow->refreshStreamRoomKeys(streamRoomId);
+    });
     auto credentials = _api->getTurnCredentials();
     libwebrtc::LibWebRTC::Initialize();
     _peerConnectionFactory = libwebrtc::LibWebRTC::CreateRTCPeerConnectionFactory();
@@ -75,6 +78,11 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection) {
         [this](const std::string& streamRoomId, const std::vector<std::string>& streamIds) {
             markStreamsAsStale(streamRoomId, streamIds);
         },
+        [scheduler = std::weak_ptr<KeyRefreshScheduler>(_keyRefreshScheduler)](const std::string& streamRoomId) {
+            if (auto alive = scheduler.lock()) {
+                alive->requestRefresh(streamRoomId);
+            }
+        },
         _frameCryptorOptions, _api
     );
     _eventMiddleware = connection.getImpl()->getEventMiddleware();
@@ -85,8 +93,9 @@ StreamApiImpl::StreamApiImpl(core::Connection& connection) {
 
 StreamApiImpl::~StreamApiImpl() {
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
-    // joins the tracker's thread first, so no recovery runs while the layers it reaches are torn down
+    // joined first, so neither a recovery nor a key refresh runs while the layers they reach are torn down
     _connectionStateTracker.reset();
+    _keyRefreshScheduler.reset();
     _streamDataMap.clear();
     _webRTC.reset();
     _api.reset();
@@ -107,6 +116,11 @@ void StreamApiImpl::joinStreamRoom(const std::string& streamRoomId) {
 
 void StreamApiImpl::leaveStreamRoom(const std::string& streamRoomId) {
     _api->leaveStreamRoom(streamRoomId);
+    _keyRefreshScheduler->forgetRoom(streamRoomId);
+}
+
+void StreamApiImpl::refreshStreamRoomKeys(const std::string& streamRoomId) {
+    _api->refreshStreamRoomKeys(streamRoomId);
 }
 
 StreamHandle StreamApiImpl::createStream(const std::string& streamRoomId) {

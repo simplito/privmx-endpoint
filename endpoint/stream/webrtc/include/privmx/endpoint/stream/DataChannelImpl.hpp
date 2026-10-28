@@ -5,6 +5,7 @@
 #include "privmx/endpoint/stream/StreamApiLow.hpp"
 #include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
+#include <functional>
 #include <libwebrtc.h>
 #include <privmx/utils/Logger.hpp>
 #include <rtc_peerconnection.h>
@@ -20,14 +21,16 @@ public:
         std::shared_ptr<OnTrackInterface> onTrackInterface,
         std::shared_ptr<StreamApiLow> apiLow,
         libwebrtc::scoped_refptr<libwebrtc::RTCDataChannel> dataChannel,
-        const std::string& streamRoomId
+        const std::string& streamRoomId,
+        std::function<void(const std::string&)> onKeysOutdated
     )
         : _onTrackInterface(onTrackInterface), _dataChannel(dataChannel), _dataChannelObserver(
                                                                               std::make_shared<PmxDataChannelObserver>(
                                                                                   onTrackInterface,
                                                                                   apiLow,
                                                                                   dataChannel->label().std_string(),
-                                                                                  streamRoomId
+                                                                                  streamRoomId,
+                                                                                  onKeysOutdated
                                                                               )
                                                                           ) {
         _dataChannel->RegisterObserver(_dataChannelObserver.get());

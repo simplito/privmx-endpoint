@@ -9,6 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 #include "privmx/endpoint/stream/PmxPeerConnectionObserver.hpp"
+#include "privmx/endpoint/stream/FrameCryptionStateObserver.hpp"
 #include <iostream>
 #include <privmx/utils/Logger.hpp>
 #include <rtc_video_frame.h>
@@ -22,11 +23,12 @@ PmxPeerConnectionObserver::PmxPeerConnectionObserver(
     const privmx::webrtc::FrameCryptorOptions& options,
     std::shared_ptr<StreamApiLow> apiLow,
     std::function<void(const std::string&, const std::string&, PeerConnectionState)> onConnectionState,
-    std::function<void(const std::string&, const std::vector<std::string>&)> onRemoteStreamsGone
+    std::function<void(const std::string&, const std::vector<std::string>&)> onRemoteStreamsGone,
+    std::function<void(const std::string&)> onKeysOutdated
 )
     : _peerConnectionFactory(peerConnectionFactory), _streamRoomId(streamRoomId), _currentKeys(keys), _options(options),
       _apiLow(apiLow), _onConnectionState(onConnectionState), _onRemoteStreamsGone(onRemoteStreamsGone),
-      _roomOnTrackInterface(nullptr),
+      _onKeysOutdated(onKeysOutdated), _roomOnTrackInterface(nullptr),
       _streamOnTrackInterfacesMap(
           std::make_shared<privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<OnTrackInterface>>>()
       ) {}
@@ -128,7 +130,7 @@ void PmxPeerConnectionObserver::OnDataChannel(libwebrtc::scoped_refptr<libwebrtc
             roomOnTrackInterface = _roomOnTrackInterface;
     }
     std::shared_ptr<DataChannelImpl> dataChannelImpl = std::make_shared<DataChannelImpl>(
-        roomOnTrackInterface, _apiLow, data_channel, _streamRoomId
+        roomOnTrackInterface, _apiLow, data_channel, _streamRoomId, _onKeysOutdated
     );
     _dataChannels.set(data_channel->label().std_string(), dataChannelImpl);
 }
@@ -153,12 +155,19 @@ void PmxPeerConnectionObserver::OnAddTrack(
         installedFrameCryptor.value()->setKeyStore(_currentKeys);
         installedFrameCryptor.value()->setOptions(_options);
     } else {
-        _frameCryptors.set(
-            receiverId,
-            privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(
-                _peerConnectionFactory, receiver, _currentKeys, _options
-            )
+        auto frameCryptor = privmx::webrtc::FrameCryptorFactory::frameCryptorFromRtpReceiver(
+            _peerConnectionFactory, receiver, _currentKeys, _options
         );
+        // the frame cryptor keeps the observer alive, so it is not held here as well
+        frameCryptor->registerFrameCryptorObserver(
+            std::make_shared<FrameCryptionStateObserver>([streamRoomId = _streamRoomId,
+                                                          onKeysOutdated = _onKeysOutdated]() {
+                if (onKeysOutdated) {
+                    onKeysOutdated(streamRoomId);
+                }
+            })
+        );
+        _frameCryptors.set(receiverId, frameCryptor);
     }
 
     DataType dataType = receiver->track()->kind().std_string() == "video" ? DataType::VIDEO : DataType::AUDIO;
