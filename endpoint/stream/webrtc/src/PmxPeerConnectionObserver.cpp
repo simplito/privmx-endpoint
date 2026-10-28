@@ -160,13 +160,12 @@ void PmxPeerConnectionObserver::OnAddTrack(
         );
         // the frame cryptor keeps the observer alive, so it is not held here as well
         frameCryptor->registerFrameCryptorObserver(
-            std::make_shared<FrameCryptionStateObserver>(
-                [streamRoomId = _streamRoomId, onKeysOutdated = _onKeysOutdated]() {
-                    if (onKeysOutdated) {
-                        onKeysOutdated(streamRoomId);
-                    }
+            std::make_shared<FrameCryptionStateObserver>([streamRoomId = _streamRoomId,
+                                                          onKeysOutdated = _onKeysOutdated]() {
+                if (onKeysOutdated) {
+                    onKeysOutdated(streamRoomId);
                 }
-            )
+            })
         );
         _frameCryptors.set(receiverId, frameCryptor);
     }

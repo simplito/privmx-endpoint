@@ -177,10 +177,7 @@ private:
         server::StreamRoomInfo streamRoomInfo,
         const std::string& encryptionKeyId
     );
-    void applyStreamRoomKeys(
-        const std::shared_ptr<StreamRoomData>& room,
-        const server::StreamRoomInfo& streamRoomInfo
-    );
+    void applyStreamRoomKeys(const std::shared_ptr<StreamRoomData>& room, const server::StreamRoomInfo& streamRoomInfo);
     std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> extractStreamRoomKeys(
         server::StreamRoomInfo streamRoomInfo
     );

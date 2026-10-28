@@ -31,10 +31,7 @@ class KeyRefreshScheduler {
 public:
     using RefreshHandler = std::function<void(const std::string& streamRoomId)>;
 
-    KeyRefreshScheduler(
-        RefreshHandler onRefreshNeeded,
-        std::chrono::milliseconds cooldown = std::chrono::seconds(10)
-    );
+    KeyRefreshScheduler(RefreshHandler onRefreshNeeded, std::chrono::milliseconds cooldown = std::chrono::seconds(10));
     ~KeyRefreshScheduler();
 
     // safe to call from a WebRTC thread: it never blocks and never calls the handler inline
