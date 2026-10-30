@@ -11,38 +11,17 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/TreeKeyCache.hpp"
 
+#include <algorithm>
 #include <mutex>
 #include <shared_mutex>
 
 using namespace privmx::endpoint::group::keytree;
 
-void TreeKeyCache::putNodeKey(
-    std::uint32_t nodeIndex,
-    std::uint32_t generation,
-    const privmx::crypto::PrivateKey& key
-) {
-    std::unique_lock lock(_mutex);
-    // `insert_or_assign`, not `operator[]`: subscripting default-constructs the value, and a default-constructed
-    // EC key generates a fresh keypair (`ECC::ECC()` calls `genPair()`) — ~225 us thrown away per insertion.
-    _nodeKeys.insert_or_assign(std::make_pair(nodeIndex, generation), key);
-}
-
-std::optional<privmx::crypto::PrivateKey> TreeKeyCache::getNodeKey(
-    std::uint32_t nodeIndex,
-    std::uint32_t generation
-) const {
-    std::shared_lock lock(_mutex);
-    const auto it = _nodeKeys.find(std::make_pair(nodeIndex, generation));
-    if (it == _nodeKeys.end()) {
-        return std::nullopt;
-    }
-    // By value, deliberately: a reference would outlive the lock.
-    return it->second;
-}
-
 void TreeKeyCache::putGrantKey(std::uint32_t epoch, const privmx::crypto::PrivateKey& key) {
     std::unique_lock lock(_mutex);
-    _grantKeys.insert_or_assign(epoch, key); // see putNodeKey: subscripting would mint a throwaway keypair
+    // `insert_or_assign`, not `operator[]`: subscripting default-constructs the value, and a default-constructed EC key
+    // generates a fresh keypair (`ECC::ECC()` calls `genPair()`).
+    _grantKeys.insert_or_assign(epoch, key);
 }
 
 std::optional<privmx::crypto::PrivateKey> TreeKeyCache::getGrantKey(std::uint32_t epoch) const {
@@ -59,27 +38,13 @@ void TreeKeyCache::forgetGrantKey(std::uint32_t epoch) {
     _grantKeys.erase(epoch);
 }
 
-void TreeKeyCache::clearNodeKeys() {
-    std::unique_lock lock(_mutex);
-    _nodeKeys.clear();
-}
-
-std::optional<std::uint32_t> TreeKeyCache::highestGrantEpoch() const {
-    std::shared_lock lock(_mutex);
-    if (_grantKeys.empty()) {
-        return std::nullopt;
-    }
-    return _grantKeys.rbegin()->first;
-}
-
-std::size_t TreeKeyCache::nodeKeyCount() const {
-    std::shared_lock lock(_mutex);
-    return _nodeKeys.size();
-}
-
 void TreeKeyCache::clear() {
     std::unique_lock lock(_mutex);
-    // Both containers cleared here rather than by calling clearNodeKeys(): the mutex is not recursive.
-    _nodeKeys.clear();
     _grantKeys.clear();
+}
+
+std::uint32_t TreeKeyCache::raiseFloor(std::uint32_t seen) {
+    std::unique_lock lock(_mutex);
+    _floor = std::max(_floor, seen);
+    return _floor;
 }

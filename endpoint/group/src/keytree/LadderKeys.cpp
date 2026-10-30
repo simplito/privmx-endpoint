@@ -13,16 +13,46 @@ limitations under the License.
 
 #include <algorithm>
 #include <cstddef>
-#include <functional>
 #include <set>
 #include <stdexcept>
 #include <string>
 
-#include "privmx/endpoint/group/keytree/TreeKeys.hpp" // for the wrap/unwrap primitives
+#include <privmx/endpoint/core/BigEndian.hpp>
+
+#include "privmx/endpoint/group/keytree/TreeCommits.hpp"
+#include "privmx/endpoint/group/keytree/TreeKeys.hpp"
 
 using namespace privmx::endpoint::group::keytree;
 
+namespace {
+
+std::string rungLabel(const RungSpan& span) {
+    std::string label = TreeCommits::tag("pmx-rung");
+    privmx::endpoint::core::bigendian::putU32(label, span.at);
+    privmx::endpoint::core::bigendian::putU32(label, span.target);
+    return label;
+}
+
+} // namespace
+
 LadderKeys::LadderKeys(TreeKeyCache& cache) : _cache(cache) {}
+
+std::string LadderKeys::sealRung(
+    const privmx::crypto::PrivateKey& key,
+    const RungSpan& span,
+    const privmx::crypto::PublicKey& to,
+    const privmx::crypto::PrivateKey& signer
+) {
+    return TreeKeys::wrapKey(key, to, signer, rungLabel(span));
+}
+
+std::optional<privmx::crypto::PrivateKey> LadderKeys::openRung(
+    const ArchiveRung& rung,
+    const privmx::crypto::PrivateKey& with
+) {
+    // A rung sealed for another span does not open: relabelled, so not this rung's sealer's doing.
+    return TreeKeys::unwrapKey(rung.blob, with, rungLabel(rung.span));
+}
 
 std::optional<privmx::crypto::PublicKey> LadderKeys::publicKeyOfEpoch(
     std::uint32_t epoch,
@@ -40,7 +70,7 @@ bool LadderKeys::verifyAgainstRegistry(
     const privmx::crypto::PrivateKey& recovered,
     std::uint32_t epoch,
     const std::vector<EpochRegistryEntry>& registry
-) const {
+) {
     const auto published = publicKeyOfEpoch(epoch, registry);
     if (!published.has_value()) {
         // No anchor for this epoch means we cannot vouch for the key. Refusing is the safe answer: accepting an
@@ -48,6 +78,20 @@ bool LadderKeys::verifyAgainstRegistry(
         return false;
     }
     return published.value() == recovered.getPublicKey();
+}
+
+std::optional<RungSpan> LadderKeys::firstRungNotOpeningToTheChain(
+    const std::vector<ArchiveRung>& rungs,
+    const privmx::crypto::PrivateKey& atKey,
+    const std::vector<EpochRegistryEntry>& registry
+) {
+    for (const ArchiveRung& rung : rungs) {
+        const auto recovered = openRung(rung, atKey);
+        if (!recovered.has_value() || !verifyAgainstRegistry(recovered.value(), rung.span.target, registry)) {
+            return rung.span;
+        }
+    }
+    return std::nullopt;
 }
 
 std::vector<std::uint32_t> LadderKeys::requiredSkipTargets(
@@ -147,8 +191,7 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
     }
     ArchiveRung unitRung;
     unitRung.span = RungSpan{newEpoch, newEpoch - 1};
-    unitRung.recipientKind = RungRecipientKind::Epoch;
-    unitRung.blob = TreeKeys::wrapKey(previousEpochKey.value(), newGrantPublicKey, signer);
+    unitRung.blob = sealRung(previousEpochKey.value(), unitRung.span, newGrantPublicKey, signer);
     unitRung.author = author;
     rungs.push_back(unitRung);
 
@@ -175,42 +218,11 @@ std::vector<ArchiveRung> LadderKeys::buildRungs(
         }
         ArchiveRung rung;
         rung.span = RungSpan{newEpoch, *target};
-        rung.recipientKind = RungRecipientKind::Epoch;
-        rung.blob = TreeKeys::wrapKey(targetKey.value(), newGrantPublicKey, signer);
+        rung.blob = sealRung(targetKey.value(), rung.span, newGrantPublicKey, signer);
         rung.author = author;
         rungs.push_back(rung);
     }
     return rungs;
-}
-
-std::vector<ArchiveRung> LadderKeys::buildEraLinks(
-    std::uint32_t closingEpoch,
-    const privmx::crypto::PrivateKey& closingEpochKey,
-    const std::vector<EraLinkRecipient>& entitled,
-    const std::string& author,
-    const privmx::crypto::PrivateKey& signer
-) {
-    std::vector<ArchiveRung> links;
-    for (const EraLinkRecipient& recipient : entitled) {
-        if (recipient.kind == RungRecipientKind::Epoch) {
-            throw std::invalid_argument("an era link must be addressed to a user or a group, not to an epoch");
-        }
-        if (recipient.id.empty()) {
-            // The bridge pairs `recipientKind` with `recipient`, both going into the rung's stored identity.
-            // Caught here so the caller gets the reason instead of GROUP_ARCHIVE_INVALID from the server.
-            throw std::invalid_argument("an era link addressed to a user or a group has to name it");
-        }
-        ArchiveRung link;
-        // Not a descent step — the recipient's own key opens it — but the server validates every rung uniformly,
-        // so it still has to satisfy `target < at`: addressed at the new era's floor, carrying the closing top key.
-        link.span = RungSpan{closingEpoch + 1, closingEpoch};
-        link.recipientKind = recipient.kind;
-        link.recipientId = recipient.id;
-        link.blob = TreeKeys::wrapKey(closingEpochKey, recipient.publicKey, signer);
-        link.author = author;
-        links.push_back(link);
-    }
-    return links;
 }
 
 DescentResult LadderKeys::descend(
@@ -254,7 +266,6 @@ DescentResult LadderKeys::descend(
 
     std::uint32_t current = from;
     privmx::crypto::PrivateKey currentKey = startKey.value();
-    std::set<std::uint32_t> visited{from};
 
     while (current > goal) {
         if (result.hops >= maxWalk) {
@@ -263,41 +274,47 @@ DescentResult LadderKeys::descend(
             return result;
         }
 
-        // Greedy: the smallest target not below the goal is the largest jump that does not overshoot.
-        const ArchiveRung* best = nullptr;
+        // Greedy: the smallest target not below the goal is the largest jump that does not overshoot. The span is
+        // sealed inside the blob, but the sealer is not authenticated (any holder of the epoch key can seal one), so
+        // one that does not open to its target's registered key is skipped for the next; blame only when none does.
+        std::vector<const ArchiveRung*> candidates;
         for (const ArchiveRung& rung : available) {
-            if (rung.recipientKind != RungRecipientKind::Epoch) {
-                continue; // era links are crossed explicitly, not walked over
-            }
             // Direction invariant. Never traverse an upward rung, even if it somehow got stored: it is exactly
-            // the shape that would hand a removed member a later key.
-            if (rung.span.target >= rung.span.at) {
-                continue;
-            }
-            if (rung.span.at != current || rung.span.target < goal) {
-                continue;
-            }
-            if (best == nullptr || rung.span.target < best->span.target) {
-                best = &rung;
+            // the shape that would hand a removed member a later key. It also makes every hop strictly descend.
+            if (rung.span.target < rung.span.at && rung.span.at == current && rung.span.target >= goal) {
+                candidates.push_back(&rung);
             }
         }
-        if (best == nullptr) {
+        if (candidates.empty()) {
             result.failure = floorFailure != DescentFailure::None ? floorFailure : DescentFailure::MissingRung;
             result.reachedEpoch = current;
             return result;
         }
-
-        const auto recovered = TreeKeys::unwrapKey(best->blob, currentKey);
-        if (!recovered.has_value()) {
-            result.failure = DescentFailure::DecryptFailed;
-            result.reachedEpoch = current;
-            return result;
+        std::stable_sort(candidates.begin(), candidates.end(), [](const ArchiveRung* a, const ArchiveRung* b) {
+            return a->span.target < b->span.target;
+        });
+        const ArchiveRung* best = nullptr;
+        std::optional<privmx::crypto::PrivateKey> recovered;
+        DescentResult refused = result;
+        for (const ArchiveRung* candidate : candidates) {
+            recovered = openRung(*candidate, currentKey);
+            if (recovered.has_value() && verifyAgainstRegistry(recovered.value(), candidate->span.target, registry)) {
+                best = candidate;
+                break;
+            }
+            if (refused.failure == DescentFailure::None) {
+                refused.failure = recovered.has_value() ? DescentFailure::Tampered : DescentFailure::DecryptFailed;
+                refused.reachedEpoch = current;
+            }
+            // Blame only a rung its epoch's opener sealed (an author), and the first such one whatever failed
+            // first: an unattributed rung tried earlier (a lower span, sorted first) must not hide the opener's.
+            if (recovered.has_value() && !candidate->author.empty() && !refused.blame.has_value()) {
+                refused.failure = DescentFailure::Tampered;
+                refused.blame = candidate->author;
+            }
         }
-        if (!verifyAgainstRegistry(recovered.value(), best->span.target, registry)) {
-            result.failure = DescentFailure::Tampered;
-            result.reachedEpoch = current;
-            result.blame = best->author;
-            return result;
+        if (best == nullptr) {
+            return refused;
         }
 
         current = best->span.target;
@@ -305,13 +322,6 @@ DescentResult LadderKeys::descend(
         _cache.putGrantKey(current, currentKey);
         result.reachedEpoch = current;
         ++result.hops;
-
-        if (visited.count(current) > 0) {
-            // Defensive: a malformed rung set must not spin forever.
-            result.failure = DescentFailure::MissingRung;
-            return result;
-        }
-        visited.insert(current);
     }
 
     if (current > to) {
@@ -321,51 +331,5 @@ DescentResult LadderKeys::descend(
         return result;
     }
     result.key = currentKey;
-    return result;
-}
-
-DescentResult LadderKeys::crossEraBoundary(
-    const std::vector<ArchiveRung>& available,
-    const std::string& ownUserId,
-    const privmx::crypto::PrivateKey& ownUserKey,
-    const std::vector<std::pair<std::string, privmx::crypto::PrivateKey>>& ownGroupKeys,
-    const std::vector<EpochRegistryEntry>& registry
-) {
-    DescentResult result;
-    for (const ArchiveRung& link : available) {
-        std::optional<privmx::crypto::PrivateKey> opener;
-        if (link.recipientKind == RungRecipientKind::User && link.recipientId == ownUserId) {
-            opener = ownUserKey;
-        } else if (link.recipientKind == RungRecipientKind::Group) {
-            for (const auto& [groupId, groupKey] : ownGroupKeys) {
-                if (groupId == link.recipientId) {
-                    opener = groupKey;
-                    break;
-                }
-            }
-        }
-        if (!opener.has_value()) {
-            continue;
-        }
-
-        const auto recovered = TreeKeys::unwrapKey(link.blob, opener.value());
-        if (!recovered.has_value()) {
-            result.failure = DescentFailure::DecryptFailed;
-            continue; // another link may still open
-        }
-        if (!verifyAgainstRegistry(recovered.value(), link.span.target, registry)) {
-            result.failure = DescentFailure::Tampered;
-            result.blame = link.author;
-            return result;
-        }
-        _cache.putGrantKey(link.span.target, recovered.value());
-        result.key = recovered.value();
-        result.reachedEpoch = link.span.target;
-        result.failure = DescentFailure::None;
-        return result;
-    }
-    if (result.failure == DescentFailure::None) {
-        result.failure = DescentFailure::EraBoundary;
-    }
     return result;
 }

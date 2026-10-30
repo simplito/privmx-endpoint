@@ -1,0 +1,130 @@
+{
+  "signedBytes": [
+    {
+      "statement": {
+        "groupId": "grp-1",
+        "treeVersion": 2,
+        "seq": 7,
+        "prevDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "op": "remove",
+        "date": 1760000000000,
+        "keyVersion": 4,
+        "groupPubKey": "GPK",
+        "rosterVersion": 9,
+        "rosterHash": "d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9d",
+        "treeHash": "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d",
+        "policyHash": "d444fab7a2429a6663d10e8ec022569d1fcbd498d5fa3089a017f320a0dcde4b",
+        "committer": "alice",
+        "committerPubKey": "APK",
+        "committerSeat": 0,
+        "path": [
+          {
+            "nodeIndex": 3,
+            "generation": 2,
+            "publicKey": "pk3",
+            "subtreeHash": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ],
+        "addedUsers": [],
+        "addedManagers": [],
+        "removed": [
+          "bob"
+        ]
+      },
+      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d310000000200000000000000070000002022222222222222222222222222222222222222222222222222222222222222220300000199c82cc00000000000000000040000000347504b0000000000000009d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598dd444fab7a2429a6663d10e8ec022569d1fcbd498d5fa3089a017f320a0dcde4b00000005616c6963650000000341504b0000000000000001000000030000000200000003706b33111111111111111111111111111111111111111111111111111111111111111100000000000000000000000100000003626f62"
+    },
+    {
+      "statement": {
+        "groupId": "grp-1",
+        "treeVersion": 2,
+        "seq": 8,
+        "prevDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+        "op": "policy",
+        "date": 1760000000001,
+        "keyVersion": 4,
+        "groupPubKey": "GPK",
+        "rosterVersion": 9,
+        "rosterHash": "d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9d",
+        "treeHash": "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d",
+        "policyHash": "271dde78b4cce7b4ebe3738ebefb9d7ad379a35e3b49b1191277b1363de6f296",
+        "committer": "alice",
+        "committerPubKey": "APK",
+        "committerSeat": 0,
+        "path": [],
+        "addedUsers": [],
+        "addedManagers": [],
+        "removed": [],
+        "policy": {
+          "update": "user",
+          "rotateKeys": "manager,owner",
+          "updatePolicy": "owner",
+          "ownerCanBeRemovedFromManagers": "no"
+        }
+      },
+      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d310000000200000000000000080000002033333333333333333333333333333333333333333333333333333333333333330600000199c82cc00100000000000000040000000347504b0000000000000009d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d271dde78b4cce7b4ebe3738ebefb9d7ad379a35e3b49b1191277b1363de6f29600000005616c6963650000000341504b0000000000000000000000000000000000000000"
+    }
+  ],
+  "policyHash": [
+    {
+      "policy": {},
+      "creator": "alice",
+      "expectedHex": "d444fab7a2429a6663d10e8ec022569d1fcbd498d5fa3089a017f320a0dcde4b"
+    },
+    {
+      "policy": {
+        "update": "inherit",
+        "rotateKeys": "inherit",
+        "updatePolicy": "inherit",
+        "ownerCanBeRemovedFromManagers": "inherit"
+      },
+      "creator": "alice",
+      "expectedHex": "d444fab7a2429a6663d10e8ec022569d1fcbd498d5fa3089a017f320a0dcde4b"
+    },
+    {
+      "policy": {
+        "update": "default",
+        "rotateKeys": "default",
+        "updatePolicy": "default",
+        "ownerCanBeRemovedFromManagers": "default"
+      },
+      "creator": "alice",
+      "expectedHex": "d444fab7a2429a6663d10e8ec022569d1fcbd498d5fa3089a017f320a0dcde4b"
+    },
+    {
+      "policy": {
+        "update": "user",
+        "rotateKeys": "manager,owner",
+        "updatePolicy": "owner",
+        "ownerCanBeRemovedFromManagers": "no"
+      },
+      "creator": "alice",
+      "expectedHex": "271dde78b4cce7b4ebe3738ebefb9d7ad379a35e3b49b1191277b1363de6f296"
+    },
+    {
+      "policy": {
+        "update": "user",
+        "rotateKeys": "manager,owner",
+        "updatePolicy": "owner",
+        "ownerCanBeRemovedFromManagers": "no",
+        "get": "all",
+        "delete": "none",
+        "sendCustomNotification": "user",
+        "item": {
+          "get": "user"
+        }
+      },
+      "creator": "alice",
+      "expectedHex": "271dde78b4cce7b4ebe3738ebefb9d7ad379a35e3b49b1191277b1363de6f296"
+    },
+    {
+      "policy": {
+        "update": "user",
+        "rotateKeys": "manager,owner",
+        "updatePolicy": "owner",
+        "ownerCanBeRemovedFromManagers": "no"
+      },
+      "creator": "bob",
+      "expectedHex": "1437efb08ac5780ea78d15ae2daa97b9f5b0f0bfdd8b5a3a6803c5be9023eac9"
+    }
+  ]
+}

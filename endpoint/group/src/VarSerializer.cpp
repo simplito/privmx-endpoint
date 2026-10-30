@@ -75,8 +75,6 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupSummary>(const group::Gr
     obj->set("creator", serialize(val.creator));
     obj->set("lastModificationDate", serialize(val.lastModificationDate));
     obj->set("lastModifier", serialize(val.lastModifier));
-    obj->set("users", serialize(val.users));
-    obj->set("managers", serialize(val.managers));
     obj->set("publicMetaVersion", serialize(val.publicMetaVersion));
     obj->set("privateMetaVersion", serialize(val.privateMetaVersion));
     obj->set("rosterVersion", serialize(val.rosterVersion));

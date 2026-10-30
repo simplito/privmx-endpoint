@@ -219,7 +219,7 @@ TEST_F(TreeMathSibling, IsSymmetric) {
     }
 }
 
-// directPath — the set a removal must refresh
+// directPath
 
 class TreeMathDirectPath : public testing::Test {};
 
@@ -276,7 +276,7 @@ TEST_F(TreeMathDirectPath, RejectsPositionOutsideTree) {
     EXPECT_THROW(TreeMath::directPath(4, 4), std::invalid_argument);
 }
 
-// copath — the set a refresh wraps to
+// copath
 
 class TreeMathCopath : public testing::Test {};
 
@@ -355,38 +355,103 @@ TEST_F(TreeMathLeavesUnder, ChildrenPartitionTheirParent) {
     }
 }
 
-// cost properties claimed by the whitepaper
+// keyed nodes — the expectations the bridge's own tests share
 
-class TreeMathCost : public testing::Test {};
+class TreeMathKeyed : public testing::Test {};
 
-TEST_F(TreeMathCost, BalancedRemovalCostsTwoTimesDepthMinusOneWraps) {
-    // A removal refreshes directPath and wraps to two children per node, minus the blanked leaf.
-    const std::vector<std::pair<std::uint32_t, std::uint32_t>> table = {
-        {8, 5},
-        {16, 7},
-        {1024, 19},
-        {32768, 29},
+TEST_F(TreeMathKeyed, KeyedPathMatchesReferenceTable) {
+    struct Row {
+        std::uint32_t numLeaves;
+        std::uint32_t position;
+        Nodes expected;
     };
-    for (const auto& [numLeaves, expectedWraps] : table) {
-        const Nodes path = TreeMath::directPath(0, numLeaves);
-        EXPECT_EQ(path.size(), TreeMath::depth(numLeaves)) << "N=" << numLeaves;
-        std::uint32_t wraps = 0;
-        for (std::size_t i = 0; i < path.size(); ++i) {
-            const std::uint32_t kids = static_cast<std::uint32_t>(TreeMath::children(path[i], numLeaves).size());
-            wraps += (i == 0) ? kids - 1 : 2;
-        }
-        EXPECT_EQ(wraps, expectedWraps) << "N=" << numLeaves;
+    const std::vector<Row> table = {
+        {1, 0, {}},
+        {2, 0, {1}},
+        {2, 1, {1}},
+        {3, 2, {3}},
+        {16, 0, {15}},
+        {16, 15, {15}},
+        {17, 0, {31}},
+        {17, 16, {31}},
+        {31, 30, {31}},
+        {32, 31, {31}},
+        {33, 0, {31, 63}},
+        {33, 16, {31, 63}},
+        {33, 32, {63}},
+        {100, 0, {31, 63, 127}},
+        {100, 50, {95, 63, 127}},
+        {100, 99, {191, 127}},
+        {1000, 0, {31, 63, 127, 255, 511, 1023}},
+        {1000, 500, {991, 959, 895, 767, 511, 1023}},
+        {1000, 999, {1983, 1919, 1791, 1535, 1023}},
+        {16384, 0, {31, 63, 127, 255, 511, 1023, 2047, 4095, 8191, 16383}},
+        {16384, 8192, {16415, 16447, 16511, 16639, 16895, 17407, 18431, 20479, 24575, 16383}},
+        {16384, 16383, {32735, 32703, 32639, 32511, 32255, 31743, 30719, 28671, 24575, 16383}},
+    };
+    for (const Row& row : table) {
+        EXPECT_EQ(TreeMath::keyedPath(row.position, row.numLeaves), row.expected)
+            << "N=" << row.numLeaves << " p=" << row.position;
     }
 }
 
-TEST_F(TreeMathCost, LargeGroupRemovalTouchesLogarithmicallyManyNodes) {
-    EXPECT_EQ(TreeMath::directPath(0, 32768).size(), 15u);
+TEST_F(TreeMathKeyed, CountsMatchReferenceTable) {
+    // Buckets of 16 seats: about one keyed node per 16 members, plus the root.
+    const std::vector<std::pair<std::uint32_t, std::uint32_t>> table = {
+        {1, 0}, {2, 1}, {3, 1}, {16, 1}, {17, 1}, {31, 1}, {32, 1}, {33, 2}, {100, 6}, {1000, 62}, {16384, 1023},
+    };
+    for (const auto& [numLeaves, expected] : table) {
+        std::uint32_t keyed = 0;
+        for (std::uint32_t node = 0; node < TreeMath::nodeCount(numLeaves); ++node) {
+            keyed += TreeMath::isKeyed(node, numLeaves) ? 1 : 0;
+        }
+        EXPECT_EQ(keyed, expected) << "N=" << numLeaves;
+    }
 }
 
-TEST_F(TreeMathCost, GrowthChangesRootOnlyAtPowersOfTwo) {
-    EXPECT_TRUE(TreeMath::growthChangesRoot(4, 4)) << "seating a 5th member grows the tree";
-    EXPECT_FALSE(TreeMath::growthChangesRoot(2, 4)) << "filling a blank does not";
-    EXPECT_FALSE(TreeMath::growthChangesRoot(4, 8)) << "room already exists";
+TEST_F(TreeMathKeyed, LeavesAndMissingNodesNeverAreTheRootAlwaysIs) {
+    for (std::uint32_t numLeaves = 1; numLeaves <= 80; ++numLeaves) {
+        const std::uint32_t root = TreeMath::root(numLeaves);
+        EXPECT_EQ(TreeMath::isKeyed(root, numLeaves), numLeaves > 1) << "N=" << numLeaves;
+        for (std::uint32_t position = 0; position < numLeaves; ++position) {
+            EXPECT_FALSE(TreeMath::isKeyed(TreeMath::leafNode(position), numLeaves));
+        }
+        EXPECT_FALSE(TreeMath::isKeyed(TreeMath::nodeCount(numLeaves), numLeaves)) << "outside the tree";
+    }
+    // Growth past a power of two pushes a low old root into a bucket: it stops being keyed.
+    EXPECT_TRUE(TreeMath::isKeyed(15, 16));
+    EXPECT_FALSE(TreeMath::isKeyed(15, 17));
+    EXPECT_TRUE(TreeMath::isKeyed(31, 32));
+    EXPECT_TRUE(TreeMath::isKeyed(31, 33)) << "level 5 stays keyed below a new root";
+}
+
+TEST_F(TreeMathKeyed, KeyedPathIsTheDirectPathFilteredAndEndsAtTheRoot) {
+    for (std::uint32_t numLeaves = 2; numLeaves <= 80; ++numLeaves) {
+        for (std::uint32_t position = 0; position < numLeaves; ++position) {
+            const Nodes path = TreeMath::directPath(position, numLeaves);
+            Nodes filtered;
+            for (const std::uint32_t node : path) {
+                if (TreeMath::level(node) > TreeMath::BUCKET_LEVEL || node == TreeMath::root(numLeaves)) {
+                    filtered.push_back(node);
+                }
+            }
+            const Nodes keyed = TreeMath::keyedPath(position, numLeaves);
+            EXPECT_EQ(keyed, filtered) << "N=" << numLeaves << " p=" << position;
+            ASSERT_FALSE(keyed.empty());
+            EXPECT_EQ(keyed.back(), TreeMath::root(numLeaves));
+        }
+    }
+}
+
+// growth
+
+class TreeMathGrowth : public testing::Test {};
+
+TEST_F(TreeMathGrowth, SeatingPastTheEndGrowsTheTree) {
+    EXPECT_EQ(TreeMath::directPath(0, 32768).size(), 15u);
     EXPECT_EQ(TreeMath::numLeavesToSeat(4, 4), 5u);
     EXPECT_EQ(TreeMath::numLeavesToSeat(1, 4), 4u);
+    EXPECT_EQ(TreeMath::numLeavesToSeatAll({4, 5}, 4), 6u);
+    // H2: the last seat number would wrap the leaf count to 0.
+    EXPECT_THROW(TreeMath::numLeavesToSeat(UINT32_MAX, 4), std::invalid_argument);
 }

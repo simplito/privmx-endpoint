@@ -11,7 +11,15 @@ limitations under the License.
 
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
 
+#include <algorithm>
+#include <limits>
+
+#include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
+
+#include "privmx/endpoint/group/GroupException.hpp"
+#include "privmx/endpoint/group/keytree/TreeMath.hpp"
+#include "privmx/endpoint/group/keytree/TreeWire.hpp"
 
 using namespace privmx::endpoint::group::keytree;
 
@@ -25,52 +33,47 @@ bool GroupKeyResolver::hasTree(const server::GroupInfo& group) {
         group.leafAssignment.has_value();
 }
 
+bool GroupKeyResolver::hasSupportedTree(const server::GroupInfo& group) {
+    return group.treeVersion.value_or(0) == static_cast<std::int64_t>(TreeMath::TREE_VERSION);
+}
+
+namespace {
+
+// An epoch from the bridge, narrowed only when it fits: a wrapped value would name some other, real epoch. A floor
+// (`eraFloor`, `archivePrunedBelow`) of 0 or below means none and is clamped to 1, as `ladderFloorOf` does.
+std::uint32_t epochOf(std::int64_t value, bool floor = false) {
+    if (floor) {
+        value = std::max<std::int64_t>(value, 1);
+    }
+    if (value < 1 || value > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+        throw privmx::endpoint::group::GroupDataIntegrityException("an epoch out of range");
+    }
+    return static_cast<std::uint32_t>(value);
+}
+
+// The statements served with the group: the ones its filled nodes cite, and the latest.
+std::vector<privmx::endpoint::group::server::GroupTreeCommit> statements(
+    const privmx::endpoint::group::server::GroupInfo& group
+) {
+    auto all = group.treeCommits.value_or(std::vector<privmx::endpoint::group::server::GroupTreeCommit>{});
+    if (group.treeCommit.has_value()) {
+        all.push_back(group.treeCommit.value());
+    }
+    return all;
+}
+
+} // namespace
+
 TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
-    TreeGroupState state;
-    state.numLeaves = static_cast<std::uint32_t>(group.numLeaves.value_or(0));
-    state.epoch = static_cast<std::uint32_t>(group.keyVersion);
-    state.grantPublicKey = privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey);
-
-    if (group.leafAssignment.has_value()) {
-        for (const std::string& userId : group.leafAssignment.value()) {
-            // The wire format uses an empty string for a blank leaf.
-            if (userId.empty()) {
-                state.leafAssignment.push_back(std::nullopt);
-            } else {
-                state.leafAssignment.push_back(userId);
-            }
-        }
+    TreeGroupState state = TreeWire::toRuntime(
+        TreeWire::fromGroupInfo(group), epochOf(group.keyVersion),
+        privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey)
+    );
+    if (group.treeCommit.has_value() && group.treeCommit->seq > 0) {
+        state.commitSeq = static_cast<std::uint64_t>(group.treeCommit->seq);
     }
-
-    if (group.treeNodes.has_value()) {
-        for (const server::GroupTreeNode& node : group.treeNodes.value()) {
-            state.nodes.push_back(
-                TreeNodeState{
-                    static_cast<std::uint32_t>(node.nodeIndex),
-                    static_cast<std::uint32_t>(node.generation),
-                    NodePublicKey::fromBase58DER(node.publicKey),
-                }
-            );
-        }
-    }
-
-    if (group.treeEdges.has_value()) {
-        for (const server::GroupTreeEdge& edge : group.treeEdges.value()) {
-            TreeEdge converted;
-            converted.isGrantEdge = edge.isGrantEdge.value_or(false);
-            converted.parentIndex = static_cast<std::uint32_t>(edge.parentIndex.value_or(0));
-            converted.parentGeneration = static_cast<std::uint32_t>(edge.parentGeneration);
-            if (edge.childKind == "user") {
-                converted.childKind = EdgeChildKind::User;
-                converted.childUserId = edge.childUserId.value_or("");
-            } else {
-                converted.childKind = EdgeChildKind::Node;
-                converted.childIndex = static_cast<std::uint32_t>(edge.childIndex.value_or(0));
-                converted.childGeneration = static_cast<std::uint32_t>(edge.childGeneration.value_or(0));
-            }
-            converted.blob = edge.data;
-            state.edges.push_back(converted);
-        }
+    for (const server::GroupTreeCommit& statement : statements(group)) {
+        state.setters[static_cast<std::uint64_t>(statement.seq)] = statement.committer;
     }
     return state;
 }
@@ -80,7 +83,8 @@ namespace {
 // Drops a rung that does not point downwards. The bridge enforces this too, but taking its word for it would trust
 // the one party the threat model assumes may be hostile — an upward rung hands a removed member a later key.
 std::optional<ArchiveRung> convertRung(const privmx::endpoint::group::server::GroupArchiveRung& rung) {
-    if (rung.targetKeyVersion >= rung.atKeyVersion) {
+    if (rung.targetKeyVersion >= rung.atKeyVersion || rung.targetKeyVersion < 1 ||
+        rung.atKeyVersion > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
         return std::nullopt;
     }
     ArchiveRung converted;
@@ -88,15 +92,6 @@ std::optional<ArchiveRung> convertRung(const privmx::endpoint::group::server::Gr
         static_cast<std::uint32_t>(rung.atKeyVersion),
         static_cast<std::uint32_t>(rung.targetKeyVersion),
     };
-    const std::string kind = rung.recipientKind.value_or("epoch");
-    if (kind == "user") {
-        converted.recipientKind = RungRecipientKind::User;
-    } else if (kind == "group") {
-        converted.recipientKind = RungRecipientKind::Group;
-    } else {
-        converted.recipientKind = RungRecipientKind::Epoch;
-    }
-    converted.recipientId = rung.recipient.value_or("");
     converted.blob = rung.data;
     converted.author = rung.author.value_or("");
     return converted;
@@ -123,41 +118,53 @@ std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromArchive(
     for (const server::GroupKeyHistoryEntry& entry : archive.keyHistory) {
         registry.push_back(
             EpochRegistryEntry{
-                static_cast<std::uint32_t>(entry.keyVersion),
+                epochOf(entry.keyVersion),
                 privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(entry.groupPubKey),
             }
         );
     }
     registry.push_back(
         EpochRegistryEntry{
-            static_cast<std::uint32_t>(group.keyVersion),
+            epochOf(group.keyVersion),
             privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey),
         }
     );
     return registry;
 }
 
-std::vector<EpochRegistryEntry> GroupKeyResolver::registryFromGroupHistory(const server::GroupInfo& group) {
-    std::vector<EpochRegistryEntry> registry;
-    // `keyHistory` holds the PAST epochs only; the current one lives in `groupPubKey`. Missing that distinction
-    // would leave the newest epoch unverifiable, and an unverifiable key is one this client refuses to accept.
-    if (group.keyHistory.has_value()) {
-        for (const server::GroupKeyHistoryEntry& entry : group.keyHistory.value()) {
-            registry.push_back(
-                EpochRegistryEntry{
-                    static_cast<std::uint32_t>(entry.keyVersion),
-                    privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(entry.groupPubKey),
-                }
-            );
+privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupKeyResolver::authenticated(
+    server::GroupGetKeyArchiveResult archive,
+    const std::map<std::uint64_t, CommitStatement>& openers
+) {
+    archive.keyHistory.clear();
+    for (const auto& [epoch, statement] : openers) {
+        archive.keyHistory.push_back(server::GroupKeyHistoryEntry{
+            .keyVersion = static_cast<std::int64_t>(epoch), .groupPubKey = statement.groupPubKey
+        });
+    }
+    for (server::GroupArchiveRung& rung : archive.rungs) {
+        const auto opener = openers.find(static_cast<std::uint64_t>(rung.atKeyVersion));
+        const auto sealer = privmx::crypto::EciesEncryptor::senderOf(rung.data);
+        if (opener != openers.end() && sealer.has_value() && sealer->toBase58DER() == opener->second.committerPubKey) {
+            rung.author = opener->second.committer;
+        } else {
+            rung.author.reset(); // the bridge's word is no attribution
         }
     }
-    registry.push_back(
-        EpochRegistryEntry{
-            static_cast<std::uint32_t>(group.keyVersion),
-            privmx::crypto::PublicKeyCache::getInstance()->fromBase58DER(group.groupPubKey),
-        }
+    // Opener-sealed rungs first, so the cap per span never drops one of them for one the bridge added.
+    auto& rungs = archive.rungs;
+    std::stable_partition(rungs.begin(), rungs.end(), [](const auto& rung) { return rung.author.has_value(); });
+    std::map<std::pair<std::int64_t, std::int64_t>, std::size_t> perSpan;
+    rungs.erase(
+        std::remove_if(
+            rungs.begin(), rungs.end(),
+            [&](const auto& rung) {
+                return ++perSpan[{rung.atKeyVersion, rung.targetKeyVersion}] > MAX_SERVED_RUNGS_PER_SPAN;
+            }
+        ),
+        rungs.end()
     );
-    return registry;
+    return archive;
 }
 
 std::optional<std::string> GroupKeyResolver::ownUserId(const server::GroupInfo& group) {
@@ -173,6 +180,70 @@ std::optional<std::string> GroupKeyResolver::ownUserId(const server::GroupInfo& 
         return std::nullopt;
     }
     return userId;
+}
+
+bool GroupKeyResolver::healsFirst(const server::GroupInfo& group, std::uint32_t node) {
+    // A node's left subtree is complete, so its lowest leaf is `2^level - 1` indices to the left of it.
+    const std::uint32_t lowest = TreeMath::leafPosition(node - ((1u << TreeMath::level(node)) - 1));
+    const auto& seats = group.leafAssignment.value();
+    const auto own = static_cast<std::size_t>(group.ownLeafPosition.value());
+    return std::all_of(seats.begin() + lowest, seats.begin() + own, [](const std::string& s) { return s.empty(); });
+}
+
+std::optional<std::uint32_t> GroupKeyResolver::nodeNeedingSelfUpdate(const server::GroupInfo& group) {
+    if (!hasTree(group) || !ownUserId(group).has_value()) {
+        return std::nullopt;
+    }
+    const auto& records = group.treeNodes.value();
+    const auto vouchers = statements(group);
+    if (group.numLeaves.value() < 1 ||
+        group.numLeaves.value() > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+        throw privmx::endpoint::group::GroupDataIntegrityException("a tree field out of range");
+    }
+    const auto numLeaves = static_cast<std::uint32_t>(group.numLeaves.value());
+    for (const std::uint32_t node :
+         TreeMath::keyedPath(static_cast<std::uint32_t>(group.ownLeafPosition.value()), numLeaves)) {
+        const auto record = std::find_if(records.begin(), records.end(), [&](const server::GroupTreeNode& served) {
+            return served.nodeIndex == static_cast<std::int64_t>(node);
+        });
+        if (record == records.end() || record->publicKey.value_or("").empty()) {
+            return node;
+        }
+        // Set from outside its subtree (by the creator or an adder): whoever set it keeps it, so heal it.
+        const auto voucher = std::find_if(vouchers.begin(), vouchers.end(), [&](const server::GroupTreeCommit& s) {
+            return record->setBy.has_value() && s.seq == record->setBy.value();
+        });
+        if (voucher == vouchers.end() || voucher->committerSeat < 0 ||
+            voucher->committerSeat >= static_cast<std::int64_t>(numLeaves)) {
+            return node;
+        }
+        const auto path = TreeMath::directPath(static_cast<std::uint32_t>(voucher->committerSeat), numLeaves);
+        if (std::find(path.begin(), path.end(), node) == path.end()) {
+            return node;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> GroupKeyResolver::tamperedBy(
+    const server::GroupInfo& group,
+    const std::optional<std::uint32_t>& tamperedNode
+) {
+    std::optional<std::int64_t> seq;
+    if (!tamperedNode.has_value() && group.treeCommit.has_value()) {
+        seq = group.treeCommit->seq;
+    }
+    for (const server::GroupTreeNode& node : group.treeNodes.value_or(std::vector<server::GroupTreeNode>{})) {
+        if (tamperedNode.has_value() && node.nodeIndex == static_cast<std::int64_t>(tamperedNode.value())) {
+            seq = node.setBy;
+        }
+    }
+    for (const server::GroupTreeCommit& statement : statements(group)) {
+        if (seq.has_value() && statement.seq == seq.value()) {
+            return statement.committer;
+        }
+    }
+    return std::nullopt;
 }
 
 // `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group, which no longer
@@ -191,6 +262,12 @@ ResolveResult GroupKeyResolver::resolveWith(
         result.failure = ResolveFailure::NoTree;
         return result;
     }
+    if (!hasSupportedTree(group)) {
+        // Read as the current layout, an older tree would climb fine and mean something else: nothing in it says who
+        // set a node, which is what a removal needs to blank everything the leaver could know.
+        result.failure = ResolveFailure::UnsupportedTreeVersion;
+        return result;
+    }
     const auto identity = ownUserId(group);
     if (!identity.has_value()) {
         result.failure = ResolveFailure::ClimbFailed;
@@ -198,9 +275,20 @@ ResolveResult GroupKeyResolver::resolveWith(
         return result;
     }
 
+    // 0 asks for the current epoch. Anything else is checked before it is narrowed: a negative or oversized value
+    // must not wrap round into some real epoch, and an epoch past the current one has no key yet — answering it
+    // with the current key would hand out a key under a name it does not have.
+    if (epoch < 0 || epoch > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+        result.failure = ResolveFailure::InvalidEpoch;
+        return result;
+    }
     const TreeGroupState state = toTreeState(group);
     const std::uint32_t currentEpoch = state.epoch;
-    const std::uint32_t wanted = epoch <= 0 ? currentEpoch : static_cast<std::uint32_t>(epoch);
+    const std::uint32_t wanted = epoch == 0 ? currentEpoch : static_cast<std::uint32_t>(epoch);
+    if (wanted > currentEpoch) {
+        result.failure = ResolveFailure::FutureEpoch;
+        return result;
+    }
 
     // Step 1: climb to the current epoch's grant key. Every recovered node key is verified against the public
     // key the server published for that node, so a corrupted edge fails loudly instead of yielding a wrong key.
@@ -209,9 +297,13 @@ ResolveResult GroupKeyResolver::resolveWith(
     if (climb.failure != ClimbFailure::None || !climb.grantKey.has_value()) {
         result.failure = ResolveFailure::ClimbFailed;
         result.climb = climb.failure;
+        if (climb.failure == ClimbFailure::Tampered || climb.failure == ClimbFailure::DecryptFailed ||
+            climb.failure == ClimbFailure::LeafDidNotOpen) {
+            result.blame = tamperedBy(group, climb.tamperedNode);
+        }
         return result;
     }
-    if (wanted >= currentEpoch) {
+    if (wanted == currentEpoch) {
         result.key = climb.grantKey;
         return result;
     }
@@ -219,6 +311,7 @@ ResolveResult GroupKeyResolver::resolveWith(
     // Step 2: descend the ladder. Verification against the epoch registry happens at every hop.
     LadderKeys ladder(_cache);
     const DescentResult descent = ladder.descend(currentEpoch, wanted, rungs, registry, eraFloor, prunedBelow);
+    result.reachedEpoch = descent.reachedEpoch;
     if (descent.failure != DescentFailure::None || !descent.key.has_value()) {
         result.failure = ResolveFailure::DescentFailed;
         result.descent = descent.failure;
@@ -236,10 +329,10 @@ ResolveResult GroupKeyResolver::resolve(
     const server::GroupGetKeyArchiveResult& archive
 ) {
     const std::optional<std::uint32_t> prunedBelow = archive.archivePrunedBelow.has_value() ?
-        std::optional<std::uint32_t>(static_cast<std::uint32_t>(archive.archivePrunedBelow.value())) :
+        std::optional<std::uint32_t>(epochOf(archive.archivePrunedBelow.value(), true)) :
         std::nullopt;
     return resolveWith(
         group, epoch, ownUserKey, toDownwardRungs(archive), registryFromArchive(group, archive),
-        static_cast<std::uint32_t>(archive.eraFloor), prunedBelow
+        epochOf(archive.eraFloor, true), prunedBelow
     );
 }

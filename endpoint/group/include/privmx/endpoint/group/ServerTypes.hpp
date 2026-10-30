@@ -39,10 +39,13 @@ JSON_STRUCT(GroupMetaEntry, GROUP_META_ENTRY_FIELDS);
     F(groupPubKey, std::string)
 JSON_STRUCT(GroupKeyHistoryEntry, GROUP_KEY_HISTORY_ENTRY_FIELDS);
 
+// A keyed node's record. No `publicKey` is a blank node: it keeps its generation and waits for a self-update.
+// `setBy` names the commit statement that set a filled node's key.
 #define GROUP_TREE_NODE_FIELDS(F)                                                                                      \
     F(nodeIndex, int64_t)                                                                                              \
     F(generation, int64_t)                                                                                             \
-    F(publicKey, std::string)
+    F(publicKey, std::optional<std::string>)                                                                           \
+    F(setBy, std::optional<int64_t>)
 JSON_STRUCT(GroupTreeNode, GROUP_TREE_NODE_FIELDS);
 
 #define GROUP_TREE_EDGE_FIELDS(F)                                                                                      \
@@ -56,6 +59,38 @@ JSON_STRUCT(GroupTreeNode, GROUP_TREE_NODE_FIELDS);
     F(data, std::string)
 JSON_STRUCT(GroupTreeEdge, GROUP_TREE_EDGE_FIELDS);
 
+#define GROUP_TREE_COMMIT_PATH_ENTRY_FIELDS(F)                                                                         \
+    F(nodeIndex, int64_t)                                                                                              \
+    F(generation, int64_t)                                                                                             \
+    F(publicKey, std::string)                                                                                          \
+    F(subtreeHash, std::string)
+JSON_STRUCT(GroupTreeCommitPathEntry, GROUP_TREE_COMMIT_PATH_ENTRY_FIELDS);
+
+// A commit statement as signed (keytree/TreeCommits.hpp). Hashes are lowercase hex, the signature base64.
+#define GROUP_TREE_COMMIT_FIELDS(F)                                                                                    \
+    F(seq, int64_t)                                                                                                    \
+    F(prevDigest, std::string)                                                                                         \
+    F(op, std::string)                                                                                                 \
+    F(groupId, std::string)                                                                                            \
+    F(treeVersion, int64_t)                                                                                            \
+    F(date, int64_t)                                                                                                   \
+    F(keyVersion, int64_t)                                                                                             \
+    F(groupPubKey, std::string)                                                                                        \
+    F(rosterVersion, int64_t)                                                                                          \
+    F(rosterHash, std::string)                                                                                         \
+    F(treeHash, std::string)                                                                                           \
+    F(policyHash, std::string)                                                                                         \
+    F(committer, std::string)                                                                                          \
+    F(committerPubKey, std::string)                                                                                    \
+    F(committerSeat, int64_t)                                                                                          \
+    F(path, std::vector<GroupTreeCommitPathEntry>)                                                                     \
+    F(addedUsers, std::vector<std::string>)                                                                            \
+    F(addedManagers, std::vector<std::string>)                                                                         \
+    F(removed, std::vector<std::string>)                                                                               \
+    F(signature, std::string)                                                                                          \
+    F(policy, std::optional<Poco::Dynamic::Var>)
+JSON_STRUCT(GroupTreeCommit, GROUP_TREE_COMMIT_FIELDS);
+
 #define GROUP_TREE_STATE_FIELDS(F)                                                                                     \
     F(numLeaves, int64_t)                                                                                              \
     F(leafAssignment, std::vector<std::string>)                                                                        \
@@ -63,9 +98,10 @@ JSON_STRUCT(GroupTreeEdge, GROUP_TREE_EDGE_FIELDS);
     F(edges, std::vector<GroupTreeEdge>)
 JSON_STRUCT(GroupTreeState, GROUP_TREE_STATE_FIELDS);
 
+// `fromGeneration` is the generation the node was read at, absent when it had no record.
 #define GROUP_TREE_REFRESHED_NODE_FIELDS(F)                                                                            \
     F(nodeIndex, int64_t)                                                                                              \
-    F(fromGeneration, int64_t)                                                                                         \
+    F(fromGeneration, std::optional<int64_t>)                                                                          \
     F(generation, int64_t)                                                                                             \
     F(publicKey, std::string)
 JSON_STRUCT(GroupTreeRefreshedNode, GROUP_TREE_REFRESHED_NODE_FIELDS);
@@ -91,11 +127,15 @@ JSON_STRUCT(GroupTreeSeatedNode, GROUP_TREE_SEATED_NODE_FIELDS);
     F(edges, std::vector<GroupTreeEdge>)
 JSON_STRUCT(GroupTreeAdditionTransition, GROUP_TREE_ADDITION_TRANSITION_FIELDS);
 
+#define GROUP_TREE_SELF_UPDATE_TRANSITION_FIELDS(F)                                                                    \
+    F(baseKeyVersion, int64_t)                                                                                         \
+    F(refreshedNodes, std::vector<GroupTreeRefreshedNode>)                                                             \
+    F(edges, std::vector<GroupTreeEdge>)
+JSON_STRUCT(GroupTreeSelfUpdateTransition, GROUP_TREE_SELF_UPDATE_TRANSITION_FIELDS);
+
 #define GROUP_ARCHIVE_RUNG_FIELDS(F)                                                                                   \
     F(atKeyVersion, int64_t)                                                                                           \
     F(targetKeyVersion, int64_t)                                                                                       \
-    F(recipientKind, std::optional<std::string>)                                                                       \
-    F(recipient, std::optional<std::string>)                                                                           \
     F(data, std::string)                                                                                               \
     F(author, std::optional<std::string>)
 JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
@@ -121,6 +161,7 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(rosterVersion, int64_t)                                                                                          \
     F(keyVersion, int64_t)                                                                                             \
     F(keyHistory, std::optional<std::vector<GroupKeyHistoryEntry>>)                                                    \
+    F(treeVersion, std::optional<int64_t>)                                                                             \
     F(numLeaves, std::optional<int64_t>)                                                                               \
     F(leafAssignment, std::optional<std::vector<std::string>>)                                                         \
     F(ownLeafPosition, std::optional<int64_t>)                                                                         \
@@ -128,6 +169,9 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(nextFreeSeats, std::optional<std::vector<int64_t>>)                                                              \
     F(treeNodes, std::optional<std::vector<GroupTreeNode>>)                                                            \
     F(treeEdges, std::optional<std::vector<GroupTreeEdge>>)                                                            \
+    F(treeCommit, std::optional<GroupTreeCommit>)                                                                      \
+    F(treeCommits, std::optional<std::vector<GroupTreeCommit>>)                                                        \
+    F(copathHashes, std::optional<std::vector<std::string>>)                                                           \
     F(eraFloor, std::optional<int64_t>)                                                                                \
     F(archivePrunedBelow, std::optional<int64_t>)                                                                      \
     F(policy, Poco::Dynamic::Var)                                                                                      \
@@ -144,13 +188,12 @@ JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
     F(creator, std::string)                                                                                            \
     F(lastModificationDate, int64_t)                                                                                   \
     F(lastModifier, std::string)                                                                                       \
-    F(users, std::vector<std::string>)                                                                                 \
-    F(managers, std::vector<std::string>)                                                                              \
     F(publicMetaVersion, int64_t)                                                                                      \
     F(privateMetaVersion, int64_t)                                                                                     \
     F(rosterVersion, int64_t)                                                                                          \
     F(keyVersion, int64_t)                                                                                             \
     F(policy, Poco::Dynamic::Var)
+// Constant size: no roster and no statement, so `groupPubKey` is unvouched (TreeVerifier::pinnedAt).
 JSON_STRUCT(GroupSummary, GROUP_SUMMARY_FIELDS);
 
 #define GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELDS(F)                                                                    \
@@ -169,10 +212,10 @@ JSON_STRUCT(GroupKeyEntrySetForNewGroup, GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELD
     F(privateMeta, Poco::Dynamic::Var)                                                                                 \
     F(keyId, std::string)                                                                                              \
     F(type, std::string)                                                                                               \
-    F(policy, std::optional<Poco::Dynamic::Var>)                                                                       \
     F(groupPubKey, std::string)                                                                                        \
     F(groupKeys, std::optional<GroupKeyEntrySetForNewGroup>)                                                           \
-    F(tree, GroupTreeState)
+    F(tree, GroupTreeState)                                                                                            \
+    F(commit, GroupTreeCommit)
 JSON_STRUCT(GroupCreateModel, GROUP_CREATE_MODEL_FIELDS);
 
 // The public metadata plane's write. CAS-guarded on `publicMetaVersion` and nothing else, so a concurrent
@@ -194,11 +237,13 @@ JSON_STRUCT(GroupUpdatePublicMetaModel, GROUP_UPDATE_PUBLIC_META_MODEL_FIELDS);
     F(version, int64_t)
 JSON_STRUCT(GroupUpdatePrivateMetaModel, GROUP_UPDATE_PRIVATE_META_MODEL_FIELDS);
 
-// No version and no CAS: the policy touches neither metadata counter, appends no entry, and is covered by no
-// tag — as it never was. A dedicated RPC does not make it authenticated.
+// A policy change is a signed commit: the policy travels as `commit.policy`, bound by its `policyHash`, and
+// lands under the same CAS as any commit. It touches neither metadata counter and appends no entry.
 #define GROUP_UPDATE_POLICY_MODEL_FIELDS(F)                                                                            \
     F(id, std::string)                                                                                                 \
-    F(policy, Poco::Dynamic::Var)
+    F(commit, GroupTreeCommit)                                                                                         \
+    F(expectedKeyVersion, int64_t)                                                                                     \
+    F(expectedRosterVersion, int64_t)
 JSON_STRUCT(GroupUpdatePolicyModel, GROUP_UPDATE_POLICY_MODEL_FIELDS);
 
 #define GROUP_CREATE_RESULT_FIELDS(F) F(groupId, std::string)
@@ -255,7 +300,8 @@ JSON_STRUCT(GroupAddMemberEntry, GROUP_ADD_MEMBER_ENTRY_FIELDS);
     F(data, Poco::Dynamic::Var)                                                                                        \
     F(transition, GroupTreeAdditionTransition)                                                                         \
     F(expectedKeyVersion, int64_t)                                                                                     \
-    F(expectedRosterVersion, int64_t)
+    F(expectedRosterVersion, int64_t)                                                                                  \
+    F(commit, GroupTreeCommit)
 JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
 
 // Removing several at once is not a convenience: done one at a time each removal advances the epoch on its own,
@@ -271,8 +317,46 @@ JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
     F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
     F(expectedKeyVersion, int64_t)                                                                                     \
     F(expectedRosterVersion, int64_t)                                                                                  \
-    F(confirmationTag, std::optional<std::string>)
+    F(commit, GroupTreeCommit)                                                                                         \
+    F(abandonHistory, std::optional<bool>)
 JSON_STRUCT(GroupRemoveMembersModel, GROUP_REMOVE_MEMBERS_MODEL_FIELDS);
+
+// Advances the epoch without removing anybody: a fresh grant key on the one grant edge (to the unchanged root, or
+// to the sole member of a one-leaf tree), the rungs down to the old epochs, and the roster republished under it.
+#define GROUP_GENERATE_NEW_KEY_MODEL_FIELDS(F)                                                                         \
+    F(id, std::string)                                                                                                 \
+    F(groupPubKey, std::string)                                                                                        \
+    F(data, Poco::Dynamic::Var)                                                                                        \
+    F(keyId, std::string)                                                                                              \
+    F(grantEdge, GroupTreeEdge)                                                                                        \
+    F(commit, GroupTreeCommit)                                                                                         \
+    F(rungs, std::vector<GroupArchiveRung>)                                                                            \
+    F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
+    F(expectedKeyVersion, int64_t)                                                                                     \
+    F(expectedRosterVersion, int64_t)
+JSON_STRUCT(GroupGenerateNewKeyModel, GROUP_GENERATE_NEW_KEY_MODEL_FIELDS);
+
+// Refills the caller's own keyed path: no epoch change, no roster change, nothing for anybody else to notice.
+#define GROUP_SELF_UPDATE_MODEL_FIELDS(F)                                                                              \
+    F(id, std::string)                                                                                                 \
+    F(expectedKeyVersion, int64_t)                                                                                     \
+    F(transition, GroupTreeSelfUpdateTransition)                                                                       \
+    F(commit, GroupTreeCommit)
+JSON_STRUCT(GroupSelfUpdateModel, GROUP_SELF_UPDATE_MODEL_FIELDS);
+
+// The statements with `fromSeq < seq <= toSeq` (default: the latest), ascending, at most 256 per call.
+#define GROUP_GET_TREE_COMMITS_MODEL_FIELDS(F)                                                                         \
+    F(groupId, std::string)                                                                                            \
+    F(fromSeq, int64_t)                                                                                                \
+    F(toSeq, std::optional<int64_t>)
+JSON_STRUCT(GroupGetTreeCommitsModel, GROUP_GET_TREE_COMMITS_MODEL_FIELDS);
+
+// From seq 0, the roster seq 1 seats: unsigned, bound by seq 1's `rosterHash`.
+#define GROUP_GET_TREE_COMMITS_RESULT_FIELDS(F)                                                                        \
+    F(commits, std::vector<GroupTreeCommit>)                                                                           \
+    F(genesisUsers, std::optional<std::vector<std::string>>)                                                           \
+    F(genesisManagers, std::optional<std::vector<std::string>>)
+JSON_STRUCT(GroupGetTreeCommitsResult, GROUP_GET_TREE_COMMITS_RESULT_FIELDS);
 
 #define GROUP_CUT_ERA_MODEL_FIELDS(F)                                                                                  \
     F(id, std::string)                                                                                                 \
@@ -286,11 +370,35 @@ JSON_STRUCT(GroupCutEraModel, GROUP_CUT_ERA_MODEL_FIELDS);
     F(expectedKeyVersion, int64_t)
 JSON_STRUCT(GroupPruneArchiveModel, GROUP_PRUNE_ARCHIVE_MODEL_FIELDS);
 
+// One span of the Epoch Ladder: the rungs sealing epoch `target`'s grant key to epoch `at`'s.
+#define GROUP_ARCHIVE_SPAN_FIELDS(F)                                                                                   \
+    F(at, int64_t)                                                                                                     \
+    F(target, int64_t)
+JSON_STRUCT(GroupArchiveSpan, GROUP_ARCHIVE_SPAN_FIELDS);
+
+// A closed window `[fromKeyVersion, toKeyVersion]`, or instead only the rungs of `spans` (at most 128): the one path a
+// descent walks, O(log distance) spans rather than every rung in between.
 #define GROUP_GET_KEY_ARCHIVE_MODEL_FIELDS(F)                                                                          \
     F(id, std::string)                                                                                                 \
     F(fromKeyVersion, std::optional<int64_t>)                                                                          \
-    F(toKeyVersion, std::optional<int64_t>)
+    F(toKeyVersion, std::optional<int64_t>)                                                                            \
+    F(spans, std::optional<std::vector<GroupArchiveSpan>>)
 JSON_STRUCT(GroupGetKeyArchiveModel, GROUP_GET_KEY_ARCHIVE_MODEL_FIELDS);
+
+// Past epochs by what an envelope names (at most 32 of each): `groupGet` serves only the current epoch and the ones
+// the metadata heads sit at.
+#define GROUP_GET_EPOCH_KEYS_MODEL_FIELDS(F)                                                                           \
+    F(id, std::string)                                                                                                 \
+    F(keyIds, std::optional<std::vector<std::string>>)                                                                 \
+    F(groupPubKeys, std::optional<std::vector<std::string>>)
+JSON_STRUCT(GroupGetEpochKeysModel, GROUP_GET_EPOCH_KEYS_MODEL_FIELDS);
+
+// The epochs found, in `groupGet`'s shapes; `keyHistory` lists the current epoch too when it was asked for.
+#define GROUP_GET_EPOCH_KEYS_RESULT_FIELDS(F)                                                                          \
+    F(keyVersion, int64_t)                                                                                             \
+    F(groupKeys, std::vector<core::server::GroupKeysEntry>)                                                            \
+    F(keyHistory, std::vector<GroupKeyHistoryEntry>)
+JSON_STRUCT(GroupGetEpochKeysResult, GROUP_GET_EPOCH_KEYS_RESULT_FIELDS);
 
 #define GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS(F)                                                                         \
     F(keyVersion, int64_t)                                                                                             \
@@ -299,15 +407,6 @@ JSON_STRUCT(GroupGetKeyArchiveModel, GROUP_GET_KEY_ARCHIVE_MODEL_FIELDS);
     F(keyHistory, std::vector<GroupKeyHistoryEntry>)                                                                   \
     F(rungs, std::vector<GroupArchiveRung>)
 JSON_STRUCT(GroupGetKeyArchiveResult, GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS);
-
-// `confirmationTag` is optional because the winner may have been a client that sent none. A missing tag is a
-// state the loser refuses to adopt, not a parse error that would swallow the ROTATED_ALREADY being recovered.
-#define ROTATED_ALREADY_PAYLOAD_FIELDS(F)                                                                              \
-    F(keyVersion, int64_t)                                                                                             \
-    F(groupPubKey, std::string)                                                                                        \
-    F(winnerKeyEntry, core::server::KeyEntry)                                                                          \
-    F(confirmationTag, std::optional<std::string>)
-JSON_STRUCT(RotatedAlreadyPayload, ROTATED_ALREADY_PAYLOAD_FIELDS);
 
 // `data` is a base64 group envelope carrying its own keyId, so no `keyId` field and no key list: that keeps
 // the request a fixed size, where `contextSendCustomEvent` grows a wrapped key per recipient.

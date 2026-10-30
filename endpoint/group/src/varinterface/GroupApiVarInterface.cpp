@@ -33,7 +33,8 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {BuildCustomEventSubscriptionQuery, &GroupApiVarInterface::buildCustomEventSubscriptionQuery},
         {UpdateGroupPublicMeta, &GroupApiVarInterface::updateGroupPublicMeta},
         {UpdateGroupPrivateMeta, &GroupApiVarInterface::updateGroupPrivateMeta},
-        {UpdateGroupPolicy, &GroupApiVarInterface::updateGroupPolicy}
+        {UpdateGroupPolicy, &GroupApiVarInterface::updateGroupPolicy},
+        {RotateGroupKey, &GroupApiVarInterface::rotateGroupKey}
 };
 
 Poco::Dynamic::Var GroupApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -67,6 +68,13 @@ Poco::Dynamic::Var GroupApiVarInterface::removeGroupMembers(const Poco::Dynamic:
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     auto userIds = _deserializer.deserializeVector<std::string>(argsArr->get(1), "userIds");
     _groupApi.removeGroupMembers(groupId, userIds);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::rotateGroupKey(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    _groupApi.rotateGroupKey(groupId);
     return {};
 }
 
