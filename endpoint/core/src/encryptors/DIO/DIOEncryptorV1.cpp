@@ -73,7 +73,14 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
     if (!signatureStatus) {
         throw DataIntegrityObjectInvalidSignatureException();
     }
-
+    std::optional<BridgeIdentity> bridgeIdentity;
+    if (dioJSON.bridgeIdentity.has_value()) {
+        bridgeIdentity = BridgeIdentity{
+            .url = dioJSON.bridgeIdentity->url,
+            .pubKey = dioJSON.bridgeIdentity->pubKey,
+            .instanceId = dioJSON.bridgeIdentity->instanceId
+        };
+    }
     return ExpandedDataIntegrityObject{
         DataIntegrityObject{
             .creatorUserId = dioJSON.creatorUserId,
@@ -84,12 +91,7 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
             .randomId = dioJSON.randomId,
             .containerId = dioJSON.containerId,
             .containerResourceId = dioJSON.containerResourceId,
-            .bridgeIdentity =
-                BridgeIdentity{
-                    .url = dioJSON.bridgeIdentity->url,
-                    .pubKey = dioJSON.bridgeIdentity->pubKey,
-                    .instanceId = dioJSON.bridgeIdentity->instanceId
-                }
+            .bridgeIdentity = bridgeIdentity
         },
         .structureVersion = dioJSON.structureVersion, .fieldChecksums = fieldChecksums
     };
