@@ -4,6 +4,7 @@
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/LocalSeal.hpp>
 #include <privmx/utils/JsonHelper.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -25,6 +26,7 @@
 #include "privmx/endpoint/group/Mapper.hpp"
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include "privmx/endpoint/group/keytree/LadderKeys.hpp"
+#include "privmx/endpoint/group/keytree/PinBlob.hpp"
 #include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
 #include "privmx/endpoint/group/keytree/TreeWire.hpp"
@@ -148,6 +150,17 @@ GroupApiImpl::GroupApiImpl(
     initGroupPrivKeyResolver(resolverOver(nullptr));
     initModuleDataSchemaMapper(_groupDataSchemaMapper);
     _pinnedGroupEpoch = [this](const std::string& groupId) { return pinnedKeyVersion(groupId); };
+    // The pins this identity saved on this Bridge (any instance, any session) before anything reads a group.
+    // Loaded once; instances running side by side meet again in the slot at each save (`PinBlob::higher`).
+    const auto connectionImpl = connection.getImpl();
+    _pinStore = connectionImpl->getPinStore();
+    if (_pinStore) {
+        _pinStoreKey = connectionImpl->localStateSlot(core::localstate::GROUP_PINS, userPrivKey.getPublicKey());
+        // Unreadable, corrupted or deleted: this instance starts as a first contact for every group (as without a store).
+        loadPins();
+    }
+    _treeVerifier.onPinsMoved([this](bool major) { pinsMoved(major); });
+    _groupDataSchemaMapper->onPinsMoved([this](bool major) { pinsMoved(major); });
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&GroupApiImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -164,6 +177,10 @@ GroupApiImpl::~GroupApiImpl() {
     _eventMiddleware->removeConnectedEventListener(_connectedListenerId);
     _eventMiddleware->removeDisconnectedEventListener(_disconnectedListenerId);
     _guardedExecutor.reset();
+    // Last: notification tasks may move pins until the executor is gone.
+    if (_pinStore) {
+        savePins();
+    }
 }
 
 dynamic::MembershipBlock GroupApiImpl::buildMembershipBlock(
@@ -438,6 +455,7 @@ std::string GroupApiImpl::createGroup(
         result.groupId, contextId, statement, core::EndpointUtils::usersWithPubKeyToIds(users),
         core::EndpointUtils::usersWithPubKeyToIds(managers), rules
     );
+    savePins(); // an own commit is in the store before the call returns
     const auto cache = _treeKeyCaches.get(result.groupId);
     cache->putGrantKey(1, plan.grantKey);
     return result.groupId;
@@ -1108,6 +1126,22 @@ void GroupApiImpl::runDueWork(const std::string& groupId) {
             LOG_WARN("[selfUpdate] group key tree self-update dropped after repeated concurrent commits")
         }
     }
+    savePinsIfDue();
+}
+
+void GroupApiImpl::savePinsIfDue() noexcept {
+    try {
+        {
+            std::unique_lock<std::mutex> lock(_dueMutex);
+            if (!_pinsMovedMajor &&
+                !(_pinsMoved && std::chrono::steady_clock::now() - _lastPinSave >= PIN_SAVE_IDLE_INTERVAL)) {
+                return;
+            }
+        }
+        savePins();
+    } catch (const std::exception& e) {
+        LOG_WARN("[pins] save dropped: ", e.what())
+    } catch (...) { LOG_WARN("[pins] save dropped") }
 }
 
 void GroupApiImpl::selfUpdate(const std::string& groupId) {
@@ -1562,6 +1596,7 @@ core::PagingList<GroupSummary> GroupApiImpl::listGroups(
 }
 
 bool GroupApiImpl::hasVerifiedGrantKey(const server::GroupInfo& group) {
+    const SaveDuePins saveAfter{*this};
     try {
         _treeVerifier.verifyListed(group, treeEnvironment(group.id));
     } catch (const std::exception& e) {
@@ -1575,6 +1610,7 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
     const std::string& contextId,
     const std::vector<std::string>& groupIds
 ) {
+    const SaveDuePins saveAfter{*this};
     std::unordered_map<std::string, core::GroupEpochInfo> epochs;
     // A container key is about to be wrapped to these grant keys, so each comes off the group's latest statement.
     // A writer outside the group trusts that the signer, vouched by the UserVerifier, is a member (TOFU on membership).
@@ -1745,6 +1781,7 @@ void GroupApiImpl::processDisconnectedEvent() {
         std::unique_lock<std::mutex> lock(_dueMutex);
         _selfUpdatePending.clear();
     }
+    savePins();
     _epochKeys.clear();
     _treeKeyCaches.dropAll();
     dropEnvelopeState();
@@ -1785,6 +1822,8 @@ std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromSe
 }
 
 group::server::GroupInfo GroupApiImpl::readGroupForKeys(const std::string& groupId) {
+    // On return, after the roster attestation below has moved the version pins too, not only the tree's.
+    const SaveDuePins saveAfter{*this};
     const server::GroupGetModel params = pathRead(groupId);
     auto group = _serverApi.groupGet(params).group;
     // The tree pins `keyVersion` (never below what this client verified or committed itself); the head entry's
@@ -1968,6 +2007,7 @@ bool GroupApiImpl::verifyTree(
     const server::GroupGetModel& model,
     keytree::TreeVerifier::Scope scope
 ) {
+    const SaveDuePins saveAfter{*this}; // whatever this verification moved, refusals included
     if (!keytree::GroupKeyResolver::hasTree(group) ||
         !keytree::GroupKeyResolver::hasSupportedTree(group) ||
         !keytree::GroupKeyResolver::ownUserId(group).has_value()) {
@@ -2115,6 +2155,9 @@ void GroupApiImpl::submit(
 void GroupApiImpl::complete(const std::string& groupId, const UnresolvedCommit& commit) {
     forgetUnresolved(groupId, commit.digest);
     commit.landed();
+    if (commit.op != SELF_UPDATE_OP) {
+        savePins(); // an own commit is in the store before the call returns
+    }
 }
 
 GroupApiImpl::Settled GroupApiImpl::settle(const std::string& groupId, const std::string& op, bool mayCompleteOther) {
@@ -2818,4 +2861,96 @@ DecryptedFileInfo GroupApiImpl::finishFileDecryption(FileHandle fileHandle) {
         .type = state.type,
         .complete = !state.seeked,
     };
+}
+
+void GroupApiImpl::loadPins() {
+    std::string blob;
+    try {
+        blob = _pinStore->load(_pinStoreKey).stdString();
+    } catch (const std::exception& e) {
+        LOG_WARN("[pins] the pin store does not load: ", e.what())
+        return;
+    } catch (...) {
+        LOG_WARN("[pins] the pin store does not load")
+        return;
+    }
+    if (blob.empty()) {
+        return;
+    }
+    const auto body =
+        core::openLocal(_userPrivKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION, _pinStoreKey, blob);
+    const auto stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
+    if (!stored.has_value()) {
+        // The same as a deleted blob: first contact for what it held (it is overwritten by the next save).
+        LOG_WARN("[pins] the stored pins fail their integrity check; ignored")
+        return;
+    }
+    _treeVerifier.mergeStored(stored->tree);
+    _groupDataSchemaMapper->importVersionPins(stored->planes);
+}
+
+void GroupApiImpl::pinsMoved(bool major) {
+    if (!_pinStore) {
+        return;
+    }
+    std::unique_lock<std::mutex> lock(_dueMutex);
+    _pinsMoved = true;
+    _pinsMovedMajor = _pinsMovedMajor || major;
+}
+
+bool GroupApiImpl::savePins(bool all) {
+    if (!_pinStore) {
+        return true;
+    }
+    bool saved = false;
+    {
+        std::lock_guard<std::mutex> lock(_pinSaveMutex);
+        {
+            // Before the export: a move after it marks the pins again.
+            std::unique_lock<std::mutex> dueLock(_dueMutex);
+            _pinsMoved = _pinsMovedMajor = false;
+        }
+        keytree::TreeVerifier::PinSet mine;
+        mine.tree = _treeVerifier.exportPins(all || _pinSaveFull);
+        mine.planes = _groupDataSchemaMapper->exportVersionPins();
+        std::optional<keytree::TreeVerifier::PinSet> stored;
+        try {
+            saved = core::updateSealed(
+                *_pinStore, _userPrivKey, _pinStoreKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION,
+                [&](const std::optional<std::string>& body) {
+                    stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
+                    if (stored.has_value()) {
+                        return keytree::PinBlob::encode(keytree::PinBlob::mergeForSave(mine, stored.value()));
+                    }
+                    // Nothing stored, another version or a bad tag: overwritten with every pin in full.
+                    if (body.has_value()) {
+                        LOG_WARN("[pins] the stored pins do not parse; overwritten")
+                    }
+                    return keytree::PinBlob::encode(
+                        all || _pinSaveFull ? mine
+                                            : keytree::TreeVerifier::PinSet{_treeVerifier.exportPins(true), mine.planes}
+                    );
+                }
+            );
+        } catch (const std::exception& e) {
+            LOG_WARN("[pins] the pin store does not save: ", e.what())
+        } catch (...) { LOG_WARN("[pins] the pin store does not save") }
+        if (saved) {
+            // What another instance of this device saved meanwhile comes in too (`PinBlob::higher`).
+            if (stored.has_value()) {
+                _treeVerifier.mergeStored(stored->tree);
+                _groupDataSchemaMapper->importVersionPins(stored->planes);
+            }
+            _pinSaveFull = false;
+        } else {
+            // Not fail-closed: the pins in memory still protect this instance; the slot is retried in full.
+            _pinSaveFull = true;
+        }
+    }
+    std::unique_lock<std::mutex> lock(_dueMutex);
+    // A failure is retried as a minor move: once PIN_SAVE_IDLE_INTERVAL has passed, or at the next major move, own
+    // commit, disconnect or destruction; not at every verification against a store that keeps refusing.
+    _lastPinSave = std::chrono::steady_clock::now();
+    _pinsMoved = _pinsMoved || !saved;
+    return saved;
 }

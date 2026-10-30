@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 #include "BaseGroupTest.hpp"
+#include "MemoryPinStore.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
@@ -15,6 +16,7 @@
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/endpoint/core/PinStoreInterface.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
@@ -1288,4 +1290,99 @@ TEST_F(GroupKeyTreeIntegrityTest, an_honestly_refused_commit_does_not_hold_back_
     EXPECT_EQ(after.keyVersion, 2);
     EXPECT_FALSE(contains(after.users, user(2).userId));
     EXPECT_FALSE(contains(after.users, stranger.userId));
+}
+
+// -- pins kept between sessions --
+
+TEST_F(GroupKeyTreeIntegrityTest, a_session_without_a_pin_store_still_reads_its_groups) {
+    const std::string groupId = createTreeGroup({user(1), user(2)});
+    EXPECT_TRUE(canReadGroup(1, groupId)) << lastReadError;
+    EXPECT_TRUE(canReadGroup(2, groupId)) << lastReadError;
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, pins_saved_by_one_session_carry_the_next_across_a_removal) {
+    // Session A saves its pins; user_2 removes user_3; session B loads A's pins and verifies the chain from them
+    // (a real Bridge serves the honest chain: B reads and seals as before, and its save moves the slot on).
+    const std::string groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(2)});
+    const auto store = std::make_shared<MemoryPinStore>();
+    disconnect();
+    privmx::test::ScopeExit restore([&] { connectAs(1); });
+    const std::string key = reader->getString("Login.user_1_privKey");
+    {
+        auto session = connectWith(key);
+        session->setPinStore(store);
+        {
+            auto groups = group::GroupApi::create(*session);
+            ASSERT_EQ(groups.getGroup(groupId).statusCode, 0);
+        } // the GroupApi saves as it goes
+        session->disconnect();
+    }
+    const auto first = store->slots();
+    ASSERT_FALSE(first.empty());
+    {
+        auto remover = connect(2);
+        group::GroupApi::create(*remover).removeGroupMembers(groupId, {user(3).userId});
+        remover->disconnect();
+    }
+    auto session = connectWith(key);
+    privmx::test::ScopeExit closeIt([&] { session->disconnect(); });
+    session->setPinStore(store);
+    {
+        auto groups = group::GroupApi::create(*session);
+        const group::Group read = groups.getGroup(groupId);
+        EXPECT_EQ(read.statusCode, 0);
+        EXPECT_EQ(read.keyVersion, 2);
+        EXPECT_NO_THROW(groups.encrypt(groupId, core::Buffer::from("after the removal")));
+    }
+    EXPECT_NE(store->slots(), first);
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, two_live_sessions_of_one_user_converge_on_one_store) {
+    // Two GroupApis of one connection are two instances on one store: each verifies on its own and both save into
+    // the one slot (the higher record wins), so neither falls back after the other saw the removal.
+    const std::string groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(2)});
+    const auto store = std::make_shared<MemoryPinStore>();
+    disconnect();
+    privmx::test::ScopeExit restore([&] { connectAs(1); });
+    auto session = connectWith(reader->getString("Login.user_1_privKey"));
+    privmx::test::ScopeExit closeIt([&] { session->disconnect(); });
+    session->setPinStore(store);
+    auto first = group::GroupApi::create(*session);
+    auto second = group::GroupApi::create(*session);
+    ASSERT_EQ(first.getGroup(groupId).statusCode, 0);
+    ASSERT_EQ(second.getGroup(groupId).statusCode, 0);
+    {
+        auto remover = connect(2);
+        group::GroupApi::create(*remover).removeGroupMembers(groupId, {user(3).userId});
+        remover->disconnect();
+    }
+    ASSERT_EQ(first.getGroup(groupId).keyVersion, 2); // the removal is a major move: saved before the call returns
+    const group::Group read = second.getGroup(groupId);
+    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_EQ(read.keyVersion, 2);
+    EXPECT_NO_THROW(second.encrypt(groupId, core::Buffer::from("converged")));
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, a_corrupted_pin_blob_is_ignored_and_the_session_reads_as_before) {
+    const std::string groupId = createTreeGroup({user(1), user(2)});
+    const auto store = std::make_shared<MemoryPinStore>();
+    disconnect();
+    privmx::test::ScopeExit restore([&] { connectAs(1); });
+    const std::string key = reader->getString("Login.user_1_privKey");
+    {
+        auto session = connectWith(key);
+        session->setPinStore(store);
+        {
+            auto groups = group::GroupApi::create(*session);
+            ASSERT_EQ(groups.getGroup(groupId).statusCode, 0);
+        }
+        session->disconnect();
+    }
+    store->corruptEverySlot();
+    auto session = connectWith(key);
+    privmx::test::ScopeExit closeIt([&] { session->disconnect(); });
+    session->setPinStore(store);
+    auto groups = group::GroupApi::create(*session);
+    EXPECT_EQ(groups.getGroup(groupId).statusCode, 0);
+    EXPECT_NO_THROW(groups.encrypt(groupId, core::Buffer::from("as before")));
 }
