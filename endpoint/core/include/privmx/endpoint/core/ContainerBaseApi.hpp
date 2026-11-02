@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_CORE_CONTAINERBASEAPI_HPP_
 
 #include <Poco/Dynamic/Var.h>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <set>
@@ -73,6 +74,15 @@ public:
 
     virtual ~ContainerBaseApi() = default;
 
+    // The groups whose route to `keyId` was wrapped at an epoch below the one `pinnedEpoch` says this client has
+    // verified for the group: content written under that key stays readable to whoever that epoch's removal locked
+    // out. An empty `pinnedEpoch` (no group module) finds none.
+    static std::vector<std::string> groupsBehindPins(
+        const std::vector<server::GroupKeysEntry>& groupKeys,
+        const std::string& keyId,
+        const std::function<int64_t(const std::string&)>& pinnedEpoch
+    );
+
 protected:
     void initModuleDataSchemaMapper(std::shared_ptr<core::BaseModuleDataSchemaMapper> mapper) {
         _moduleDataSchemaMapper = std::move(mapper);
@@ -87,13 +97,21 @@ protected:
         -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.resourceId, core::DecryptedEncKeyV2());
     core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys);
 
+    // The bridge's list calls answer at most this many items a page.
+    static constexpr std::size_t BRIDGE_MAX_BATCH_SIZE = 100;
+    // One page of the items whose `field` is one of `ids` (at most BRIDGE_MAX_BATCH_SIZE of them).
+    static PagingQuery pageOfIds(const std::string& field, const std::vector<std::string>& ids);
+
     template<typename ModuleStruct>
     auto getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceId = std::nullopt)
         -> decltype(moduleObj.contextId, core::EncKeyLocation());
 
     template<typename ModuleStruct>
-    auto getAndValidateModuleKeys(ModuleStruct moduleObj, const std::string& resourceId)
-        -> decltype(moduleObj.contextId, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
+    auto getAndValidateModuleKeys(
+        ModuleStruct moduleObj,
+        const std::string& resourceId,
+        const std::optional<std::string>& onlyKeyId = std::nullopt
+    ) -> decltype(moduleObj.contextId, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
 
     struct ContainerRoster {
         std::vector<UserWithPubKey> users;
@@ -107,6 +125,10 @@ protected:
         const std::vector<std::string>& userIds,
         const std::vector<std::string>& managerIds
     );
+
+    // The application's UserVerifier vouches for every (userId, pubKey) pair, each one a key something is about to be
+    // wrapped to. Throws UserVerificationFailureException.
+    void assertUserKeysVerified(const std::string& contextId, const std::vector<UserWithPubKey>& users);
 
     // Empty rosters build no per-user key entries — for a module that hands its key over some other way.
     ContainerCreateContext prepareContainerCreate(
@@ -130,7 +152,8 @@ protected:
     }
 
     // The same preparation for a container whose key never reaches members as a per-member entry: a group wraps
-    // its metadata key once to its own grant public key and members open it by climbing the key tree.
+    // its metadata key once to its own grant public key and members open it by climbing the key tree. Nothing old is
+    // re-wrapped, so only the head's key is opened: the others would cost a grant-key resolution per epoch.
     template<typename TContainer, typename TEntry>
     ContainerUpdateContext prepareContainerUpdateWithoutKeyEntries(
         const TContainer& container,
@@ -140,7 +163,7 @@ protected:
         const std::vector<core::UserWithPubKey>& managers,
         bool forceGenerateNewKey
     ) {
-        return planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey).ctx;
+        return planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey, true).ctx;
     }
 
     // The served container struct reduced to what the key cache and the decryptors need. Identical for every
@@ -194,16 +217,24 @@ protected:
         const std::string& containerSecret
     );
 
-    static bool isRekeyNeeded(const server::ContainerInfoBase& container) { return !container.staleGroups.empty(); }
-    static bool isRekeyNeeded(const ModuleKeys& moduleKeys) { return !moduleKeys.staleGroups.empty(); }
+    // Stale: a group the server lists in `staleGroups`, or one `groupsBehindPins` finds — the server's list alone
+    // would let it keep a removed member reading new content.
+    bool isRekeyNeeded(const server::ContainerInfoBase& c) const {
+        return !rekeyReason(c.groupKeys, c.keyId, c.staleGroups).empty();
+    }
+    bool isRekeyNeeded(const ModuleKeys& k) const {
+        return !rekeyReason(k.groupKeys, k.currentKeyId, k.staleGroups).empty();
+    }
 
-    // Refuses a key that is stale — see `ModuleKeys::staleGroups`. Called where the answer decides whether to
-    // encrypt; the container update and re-key calls are deliberately not guarded, a re-key being the way out.
-    static void assertRekeyNotNeeded(const server::ContainerInfoBase& container);
-    static void assertRekeyNotNeeded(const ModuleKeys& moduleKeys);
+    // Refuses a key that is stale — see `isRekeyNeeded`. Called where the answer decides whether to encrypt; the
+    // container update and re-key calls are deliberately not guarded, a re-key being the way out.
+    void assertRekeyNotNeeded(const server::ContainerInfoBase& container) const;
+    void assertRekeyNotNeeded(const ModuleKeys& moduleKeys) const;
 
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
     core::KeyProvider::GroupPrivKeyResolver _groupPrivKeyResolver;
+    // The grant epoch this client has verified as a group's current one, 0 if none; set where groups are known.
+    std::function<int64_t(const std::string& groupId)> _pinnedGroupEpoch;
 
     // The connection's constants, held here so every module reads one copy rather than keeping its own.
     privmx::crypto::PrivateKey _userPrivKey;
@@ -229,12 +260,18 @@ private:
         const std::string& resourceId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
-        bool forceGenerateNewKey
+        bool forceGenerateNewKey,
+        bool onlyCurrentKey = false
     );
 
     std::vector<server::KeyEntrySet> buildRosterKeyEntries(const ContainerUpdatePlan& plan);
 
-    static void assertNoStaleGroups(const std::vector<std::string>& staleGroups);
+    // Why `keyId` needs a re-key (see `isRekeyNeeded`), or "" when it does not.
+    std::string rekeyReason(
+        const std::vector<server::GroupKeysEntry>& groupKeys,
+        const std::string& keyId,
+        const std::vector<std::string>& staleGroups
+    ) const;
 
     static core::ContainerKeyCache::CachedModuleKeys convertModuleKeysToContainerKeyCacheFormat(
         const ModuleKeys& moduleKeys,
@@ -258,7 +295,7 @@ auto ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
         keyProviderRequest.addOne(moduleObj.keys, data_entry.keyId, location);
     }
     if constexpr (module_has_group_keys<ModuleStruct>::value) {
-        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
+        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location, data_entry.keyId);
     }
     auto keysMap = _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver);
     core::DecryptedEncKeyV2 ret = keysMap.at(location).at(data_entry.keyId);
@@ -273,15 +310,22 @@ auto ContainerBaseApi::getModuleEncKeyLocation(ModuleStruct moduleObj, const std
 }
 
 template<typename ModuleStruct>
-auto ContainerBaseApi::getAndValidateModuleKeys(ModuleStruct moduleObj, const std::string& resourceId)
-    -> decltype(moduleObj.contextId, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>()) {
+auto ContainerBaseApi::getAndValidateModuleKeys(
+    ModuleStruct moduleObj,
+    const std::string& resourceId,
+    const std::optional<std::string>& onlyKeyId
+) -> decltype(moduleObj.contextId, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>()) {
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location{getModuleEncKeyLocation(moduleObj, resourceId)};
     if constexpr (module_has_keys<ModuleStruct>::value) {
-        keyProviderRequest.addAll(moduleObj.keys, location);
+        if (onlyKeyId.has_value()) {
+            keyProviderRequest.addOne(moduleObj.keys, onlyKeyId.value(), location);
+        } else {
+            keyProviderRequest.addAll(moduleObj.keys, location);
+        }
     }
     if constexpr (module_has_group_keys<ModuleStruct>::value) {
-        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
+        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location, onlyKeyId);
     }
     auto moduleKeys{_keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver).at(location)};
     return moduleKeys;
@@ -294,10 +338,13 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     const std::string& resourceId,
     const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers,
-    bool forceGenerateNewKey
+    bool forceGenerateNewKey,
+    bool onlyCurrentKey
 ) {
     auto location{getModuleEncKeyLocation(container, resourceId)};
-    auto containerKeys{getAndValidateModuleKeys(container, resourceId)};
+    auto containerKeys{getAndValidateModuleKeys(
+        container, resourceId, onlyCurrentKey ? std::optional<std::string>(entry.keyId) : std::nullopt
+    )};
     auto currentKey{findEncKeyByKeyId(containerKeys, entry.keyId)};
     std::string secret;
     if constexpr (std::is_same_v<std::decay_t<decltype(entry.data)>, Poco::Dynamic::Var>) {

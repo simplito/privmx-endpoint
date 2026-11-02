@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <chrono>
+#include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -8,12 +11,14 @@
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 
@@ -604,7 +609,7 @@ TEST_F(GroupKeyTreeIntegrityTest, rotating_the_epoch_does_not_take_back_a_compro
         );
     });
 
-    // The finding: user_2's leaf was never re-wrapped, so their key opens the epoch the rotation minted - and
+    // The limit: user_2's leaf was never re-wrapped, so their key opens the epoch the rotation minted - and
     // with it content written afterwards, which needs that epoch's key and no earlier one.
     EXPECT_TRUE(canReadMessage(2, afterRotation)) <<
         "expected the compromised key to keep reading - a rotation is not post-compromise security; " <<
@@ -679,12 +684,12 @@ TEST_F(GroupKeyTreeIntegrityTest, changing_a_members_public_key_locks_them_out_w
     EXPECT_TRUE(contains(afterRotation.users, firstKey.userId)) <<
         "the locked-out member is still on the roster - that is the mismatch this test is about";
 
-    // The retired key gets no route either: it belongs to no context user, so the endpoint has nothing to serve
-    // it. The ciphertext is another matter - the leaf edge is unchanged, which the public API cannot probe.
+    // Bridge-auth regression check: the retired key belongs to no context user, so the Bridge refuses its
+    // session. This says nothing about edges - the leaf edge is unchanged, which the public API cannot probe.
     EXPECT_FALSE(canReadGroupWithRetiredKey(firstKey, groupId)) <<
-        "a key the Bridge no longer knows still got served the group";
+        "the Bridge still authenticated a session of a key the Context no longer lists";
 
-    // Only re-seating repairs it, and it repairs it completely: the removal refreshes the leaf's path and mints
+    // Only re-seating repairs it, and it repairs it completely: the removal blanks the leaf's path and mints
     // epoch 2, the addition wraps the new leaf to the new key, and the ladder hands back the epoch-1 history.
     ASSERT_NO_THROW({
         groupApi->removeGroupMembers(groupId, {firstKey.userId});
@@ -1102,6 +1107,26 @@ TEST_F(GroupKeyTreeIntegrityTest, two_concurrent_public_meta_writes_still_serial
     EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion) << "the other plane is untouched";
 }
 
+TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_up_the_metadata_the_removed_member_wrote) {
+    // The planes' author is the member removed; it wrote them while a member, so the remover carries them up
+    // under its own name rather than leaving them unattested.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(2)}); });
+    onFreshSession(2, [&](group::GroupApi& groups, thread::ThreadApi&) {
+        ASSERT_NO_THROW({
+            const group::Group current = groups.getGroup(groupId);
+            groups.updateGroupPublicMeta(groupId, core::Buffer::from("public_by_2"), current.publicMetaVersion);
+            groups.updateGroupPrivateMeta(groupId, core::Buffer::from("private_by_2"), current.privateMetaVersion);
+        });
+    });
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(2).userId}); });
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(after.publicMeta.stdString(), "public_by_2");
+    EXPECT_EQ(after.privateMeta.stdString(), "private_by_2");
+}
+
 TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_both_metadata_planes_up_to_the_new_epoch) {
     // An entry left at the epoch it was written under stays openable, and forgeable, by whoever held that
     // epoch's key - the member just removed included - so a removal carries both planes up to the new epoch.
@@ -1162,4 +1187,105 @@ TEST_F(GroupKeyTreeIntegrityTest, a_removal_carries_both_metadata_planes_up_to_t
     EXPECT_TRUE(canReadGroup(2, groupId)) << "a member seated after the write cannot read the metadata; " <<
         lastReadError;
     EXPECT_TRUE(canReadGroup(1, groupId)) << "the manager lost access to their own group; " << lastReadError;
+}
+
+// -- keys the application does not vouch for --
+
+namespace {
+
+// Vouches for every key but the one user's, as an application would for a key it knows is not theirs.
+class DistrustingVerifier : public core::UserVerifierInterface {
+public:
+    explicit DistrustingVerifier(std::string distrusted) : _distrusted(std::move(distrusted)) {}
+    std::vector<bool> verify(const std::vector<core::VerificationRequest>& requests) override {
+        std::vector<bool> result;
+        for (const auto& request : requests) {
+            result.push_back(request.senderId != _distrusted);
+        }
+        return result;
+    }
+
+private:
+    std::string _distrusted;
+};
+
+template <typename Call>
+bool failsUserVerification(Call call) {
+    try {
+        call();
+    } catch (const core::Exception& e) {
+        return e.getCode() == core::UserVerificationFailureException().getCode();
+    }
+    return false;
+}
+
+} // namespace
+
+TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_key_the_application_does_not_vouch_for_gets_no_seat) {
+    // A seat is filled to the key given for it, and that key comes off the Bridge's user listing. One the
+    // application does not vouch for may be the Bridge's own, which would then climb to the grant key.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
+    connection->setUserVerifier(std::make_shared<DistrustingVerifier>(user(3).userId));
+    EXPECT_TRUE(failsUserVerification([&] { createTreeGroup({user(1), user(3)}); })) << "seated at creation";
+    EXPECT_TRUE(failsUserVerification([&] {
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
+    })) << "seated by an addition";
+    EXPECT_FALSE(contains(groupApi->getGroup(groupId).users, user(3).userId));
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, SECURITY_a_listed_group_key_is_handed_out_only_as_a_vouched_statement_names_it) {
+    // An outsider seals anonymous envelopes to the listed key. Unless the latest statement naming it is by
+    // somebody the application vouches for, the key may be the Bridge's. A listing carries no statement, so the key
+    // is handed out only once a read in this session has verified one naming it (the creator's own commit counts,
+    // hence another member's session).
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2)}); });
+    auto other = connect(2);
+    privmx::test::ScopeExit closeIt([&] { other->disconnect(); });
+    auto groups = group::GroupApi::create(*other);
+    const auto listedKey = [&] {
+        const auto page =
+            groups.listGroups(contextId(), core::PagingQuery{.skip = 0, .limit = 100, .sortOrder = "desc"});
+        for (const auto& listed : page.readItems) {
+            if (listed.groupId == groupId) {
+                return listed.groupPubKey;
+            }
+        }
+        return std::string("not listed");
+    };
+    EXPECT_EQ(listedKey(), "") << "nothing verified in this session yet";
+    // Distrusted first: a statement once vouched for is not asked about again in this session.
+    other->setUserVerifier(std::make_shared<DistrustingVerifier>(user(1).userId));
+    try {
+        groups.getGroup(groupId);
+    } catch (const std::exception&) {}
+    EXPECT_EQ(listedKey(), "") << "the key of a statement nobody vouches for";
+    other->setUserVerifier(std::make_shared<DistrustingVerifier>("nobody"));
+    const std::string verified = groups.getGroup(groupId).groupPubKey;
+    EXPECT_FALSE(verified.empty());
+    EXPECT_EQ(listedKey(), verified);
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, an_honestly_refused_commit_does_not_hold_back_the_next_one) {
+    // The Bridge refuses user_1's add only after the statement left the client (an id the context
+    // does not know), so as far as user_1 can tell it may have been applied. The next operation resends it once, finds
+    // it refused again, drops it and goes on.
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}, {user(1), user(3)}); });
+    const Identity stranger = newIdentity("m2_not_in_context");
+    EXPECT_ANY_THROW(
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = asMember(stranger), .role = "user"}})
+    );
+    EXPECT_NO_THROW(groupApi->removeGroupMembers(groupId, {user(2).userId}));
+
+    group::Group after;
+    ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
+    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(after.keyVersion, 2);
+    EXPECT_FALSE(contains(after.users, user(2).userId));
+    EXPECT_FALSE(contains(after.users, stranger.userId));
 }

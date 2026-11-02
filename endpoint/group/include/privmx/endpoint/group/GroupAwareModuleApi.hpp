@@ -126,7 +126,7 @@ protected:
         }
     }
 
-    static bool doesGroupStateForceNewKey(
+    bool doesGroupStateForceNewKey(
         const core::server::ContainerInfoBase& container,
         const std::vector<core::GroupGrantWithKey>& groups
     );

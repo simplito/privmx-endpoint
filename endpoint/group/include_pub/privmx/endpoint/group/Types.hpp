@@ -53,7 +53,8 @@ struct Group {
     std::string groupId;
 
     /**
-     * Group identity public key (base58-DER encoded)
+     * Group identity public key (base58-DER encoded); empty when the Group's latest signed commit statement
+     * could not be verified to vouch for it
      */
     std::string groupPubKey;
 
@@ -113,7 +114,10 @@ struct Group {
     core::Buffer privateMeta;
 
     /**
-     * Group's policies
+     * Group's policies. Only `update`, `rotateKeys`, `updatePolicy` and `ownerCanBeRemovedFromManagers` (and the
+     * creator) are signed into the Group's state; there `inherit`/`default` mean the built-in defaults (manager,
+     * manager, manager, yes), not the Context's; the Context can only deny further. Every other field is the
+     * Bridge's word.
      */
     core::ContainerPolicy policy;
 
@@ -141,13 +145,14 @@ struct Group {
 };
 
 /**
- * Holds the information about a Group that a listing serves: identity, roster, epoch and policies.
+ * Holds the information about a Group that a listing serves: identity, epoch, counters and policies.
  *
- * A listing deliberately carries no per-Group state — the Bridge does not send the encrypted data, the
- * key entries or the history for a page of Groups, because those grow with membership and with every
- * change. So there is no `publicMeta`/`privateMeta` here (nothing to decrypt from), no `schemaVersion`
- * (it is recorded inside the encrypted data), and no `statusCode` (nothing was decrypted or verified,
- * so there is no status to report). Call `getGroup` for any of those.
+ * Every field is of constant size, so a page does not grow with the Groups' membership or age. A listing
+ * deliberately carries no roster and no per-Group state — no `users`/`managers` (they grow with membership),
+ * no encrypted data, key entries, history, tree or signed statement. So there is
+ * no `publicMeta`/`privateMeta` here (nothing to decrypt from), no `schemaVersion` (it is recorded inside the
+ * encrypted data), and no `statusCode` (nothing was decrypted or verified, so there is no status to report).
+ * Call `getGroup` for any of those.
  */
 struct GroupSummary {
     /**
@@ -161,7 +166,11 @@ struct GroupSummary {
     std::string groupId;
 
     /**
-     * Group identity public key (base58-DER encoded)
+     * Group identity public key (base58-DER encoded). Non-empty only when it is exactly the grant key, at the
+     * listed `keyVersion`, of a state this process has already verified for the Group (its latest signed commit
+     * statement, vouched for by the UserVerifier, and pinned) — through `getGroup`, an own commit or a write to a
+     * container granted to the Group. Empty otherwise, including on the first listing in a process: call
+     * `getGroup` to verify the Group and get its key.
      */
     std::string groupPubKey;
 
@@ -184,16 +193,6 @@ struct GroupSummary {
      * ID of the user who last modified the Group
      */
     std::string lastModifier;
-
-    /**
-     * list of users (their IDs) with access to the Group
-     */
-    std::vector<std::string> users;
-
-    /**
-     * list of users (their IDs) with management rights
-     */
-    std::vector<std::string> managers;
 
     /**
      * Public-metadata version. Changes only on `updateGroupPublicMeta`.

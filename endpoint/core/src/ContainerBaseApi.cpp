@@ -49,28 +49,13 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
     wanted.insert(managerIds.begin(), managerIds.end());
 
     std::unordered_map<std::string, std::string> pubKeyByUserId;
-    constexpr size_t BRIDGE_MAX_BATCH_SIZE = 100; // The bridge listing caps at 100
     auto it = wanted.begin();
     while (it != wanted.end()) {
-        Poco::JSON::Array::Ptr ids = new Poco::JSON::Array();
+        std::vector<std::string> ids;
         for (size_t i = 0; i < BRIDGE_MAX_BATCH_SIZE && it != wanted.end(); ++i, ++it) {
-            ids->add(*it);
+            ids.push_back(*it);
         }
-        Poco::JSON::Object::Ptr in = new Poco::JSON::Object();
-        in->set("$in", ids);
-        Poco::JSON::Object::Ptr query = new Poco::JSON::Object();
-        query->set("#userId", in);
-        auto page = _connection.listContextUsers(
-            contextId,
-            PagingQuery{
-                .skip = 0,
-                .limit = static_cast<int64_t>(ids->size()),
-                .sortOrder = "asc",
-                .lastId = std::nullopt,
-                .sortBy = std::nullopt,
-                .queryAsJson = privmx::utils::Utils::stringify(query)
-            }
-        );
+        auto page = _connection.listContextUsers(contextId, pageOfIds("#userId", ids));
         for (const auto& userInfo : page.readItems) {
             pubKeyByUserId.emplace(userInfo.user.userId, userInfo.user.pubKey);
         }
@@ -88,7 +73,12 @@ ContainerBaseApi::ContainerRoster ContainerBaseApi::resolveRosterPubKeys(
         }
         return resolved;
     };
-    return {.users = resolve(userIds), .managers = resolve(managerIds)};
+    return ContainerRoster{.users = resolve(userIds), .managers = resolve(managerIds)};
+}
+
+void ContainerBaseApi::assertUserKeysVerified(const std::string& contextId, const std::vector<UserWithPubKey>& users) {
+    // As for the author of anything this client reads: the application vouches for each pair.
+    _connection.getImpl()->getUserVerifier()->assertKeysVerified(contextId, users);
 }
 
 ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
@@ -124,23 +114,52 @@ std::vector<server::KeyEntrySet> ContainerBaseApi::buildRosterKeyEntries(const C
     return keyEntries;
 }
 
-void ContainerBaseApi::assertRekeyNotNeeded(const server::ContainerInfoBase& container) {
-    assertNoStaleGroups(container.staleGroups);
-}
-
-void ContainerBaseApi::assertRekeyNotNeeded(const ModuleKeys& moduleKeys) {
-    assertNoStaleGroups(moduleKeys.staleGroups);
-}
-
-void ContainerBaseApi::assertNoStaleGroups(const std::vector<std::string>& staleGroups) {
-    if (staleGroups.empty()) {
-        return;
+void ContainerBaseApi::assertRekeyNotNeeded(const server::ContainerInfoBase& c) const {
+    if (auto reason = rekeyReason(c.groupKeys, c.keyId, c.staleGroups); !reason.empty()) {
+        throw StaleKeyRekeyRequiredException(reason);
     }
+}
+
+void ContainerBaseApi::assertRekeyNotNeeded(const ModuleKeys& k) const {
+    if (auto reason = rekeyReason(k.groupKeys, k.currentKeyId, k.staleGroups); !reason.empty()) {
+        throw StaleKeyRekeyRequiredException(reason);
+    }
+}
+
+std::string ContainerBaseApi::rekeyReason(
+    const std::vector<server::GroupKeysEntry>& groupKeys,
+    const std::string& keyId,
+    const std::vector<std::string>& staleGroups
+) const {
+    std::vector<std::string> stale = groupsBehindPins(groupKeys, keyId, _pinnedGroupEpoch);
+    stale.insert(stale.end(), staleGroups.begin(), staleGroups.end());
     std::string names;
-    for (const auto& groupId : staleGroups) {
+    for (const auto& groupId : stale) {
         names += names.empty() ? groupId : "," + groupId;
     }
-    throw StaleKeyRekeyRequiredException("staleGroups=" + names);
+    return names.empty() ? "" : "staleGroups=" + names;
+}
+
+// A route's epoch is the server's label, but a key opened through it opens only under that epoch's grant key, so a
+// lie either fails the open or names the real epoch.
+std::vector<std::string> ContainerBaseApi::groupsBehindPins(
+    const std::vector<server::GroupKeysEntry>& groupKeys,
+    const std::string& keyId,
+    const std::function<int64_t(const std::string&)>& pinnedEpoch
+) {
+    std::vector<std::string> behind;
+    if (!pinnedEpoch) {
+        return behind;
+    }
+    for (const auto& entry : groupKeys) {
+        for (const auto& key : entry.keys) {
+            if (key.keyId == keyId && key.groupEpoch.value_or(0) < pinnedEpoch(entry.group)) {
+                behind.push_back(entry.group);
+                break;
+            }
+        }
+    }
+    return behind;
 }
 
 DecryptedEncKeyV2 ContainerBaseApi::findEncKeyByKeyId(
@@ -160,7 +179,7 @@ DecryptedEncKeyV2 ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleKeys
     KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location = EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
-    keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location);
+    keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location, moduleKeys.currentKeyId);
     return _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver)
         .at(location)
         .at(moduleKeys.currentKeyId);
@@ -257,4 +276,23 @@ std::vector<server::GroupKeyEntrySet> ContainerBaseApi::buildGroupKeyEntries(
         );
     }
     return result;
+}
+
+PagingQuery ContainerBaseApi::pageOfIds(const std::string& field, const std::vector<std::string>& ids) {
+    Poco::JSON::Array::Ptr idArray = new Poco::JSON::Array();
+    for (const std::string& id : ids) {
+        idArray->add(id);
+    }
+    Poco::JSON::Object::Ptr in = new Poco::JSON::Object();
+    in->set("$in", idArray);
+    Poco::JSON::Object::Ptr query = new Poco::JSON::Object();
+    query->set(field, in);
+    return PagingQuery{
+        .skip = 0,
+        .limit = static_cast<int64_t>(ids.size()),
+        .sortOrder = "asc",
+        .lastId = std::nullopt,
+        .sortBy = std::nullopt,
+        .queryAsJson = privmx::utils::Utils::stringify(query)
+    };
 }

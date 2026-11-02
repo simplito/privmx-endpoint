@@ -1,10 +1,13 @@
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_ENCRYPTORS_GROUP_GROUPDATASCHEMAMAPPER_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_ENCRYPTORS_GROUP_GROUPDATASCHEMAMAPPER_HPP_
 
+#include <array>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -24,10 +27,22 @@
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include "privmx/endpoint/group/Types.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataEncryptorV5.hpp"
+#include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace group {
+
+// The verified read a committer made before its own commit: the signed rules, the roster and both
+// metadata planes as they stood then. A carry-forward judges an entry identical to the one it read by these, so a
+// plane honestly written before a narrowing or by a member just removed is carried, and nothing else.
+struct PriorRole {
+    keytree::GroupRules rules;
+    std::vector<std::string> users;
+    std::vector<std::string> managers;
+    server::GroupMetaEntry publicMeta;
+    server::GroupMetaEntry privateMeta;
+};
 
 class GroupDataSchemaMapper : public core::BaseModuleDataSchemaMapper {
 public:
@@ -42,13 +57,33 @@ public:
     Poco::Dynamic::Var encryptRoster(const GroupRosterToEncryptV5& data, const std::string& key);
 
     // Returns the roster head's DIO it had to decode anyway, so a caller that needs it does not verify twice.
+    // Compares the counters against the version pins but does not move them; see `storeVersionPins`.
     core::DataIntegrityObject assertDataIntegrity(const server::GroupInfo& groupInfo);
 
-    void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& rosterKey);
+    // Moves the pins to this response's counters. Call only once every check of the read has passed; compares
+    // again under the lock, so a concurrent verification that got further makes this one a fork.
+    void storeVersionPins(const server::GroupInfo& groupInfo);
 
-    void assertPublicMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& publicMetaKey);
+    void assertRosterIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKeyV2& rosterKey);
 
-    void assertPrivateMetaIsAttested(const server::GroupInfo& groupInfo, const core::DecryptedEncKey& privateMetaKey);
+    // A plane's author and whoever wrapped its key must be on the attested roster, and the author must hold `update`
+    // under the group's signed rules. With `prior` (a carry-forward only), an entry identical to the one the
+    // committer read before its own commit is judged by that read's rules and roster instead; any other by the
+    // current ones.
+    void assertPublicMetaIsAttested(
+        const server::GroupInfo& groupInfo,
+        const core::DecryptedEncKeyV2& publicMetaKey,
+        const std::optional<PriorRole>& prior = std::nullopt
+    );
+
+    void assertPrivateMetaIsAttested(
+        const server::GroupInfo& groupInfo,
+        const core::DecryptedEncKeyV2& privateMetaKey,
+        const std::optional<PriorRole>& prior = std::nullopt
+    );
+
+    // The same entry as one read before: version, author, key and data. The guard of every carry-forward.
+    static bool sameEntry(const server::GroupMetaEntry& now, const server::GroupMetaEntry& then);
 
     // `HMAC(subkey, epoch | rosterVersion | roster)`. Lists are sorted and length-prefixed so one roster's tag
     // cannot match another's under a different split; `rosterVersion` binds the counter the monotone pin checks.
@@ -75,22 +110,29 @@ public:
     // The status code, plus the roster head's DIO when that code is 0.
     std::pair<uint32_t, core::DataIntegrityObject> validateDataIntegrity(const server::GroupInfo& groupInfo);
 
-    // Call when the group is gone or the session was reset.
-    void dropVersionPin(const std::string& groupId);
-
-    // Call on connect/disconnect, mirroring the tree-key cache.
-    void dropAllVersionPins();
+    // The routes to the head, publicMeta and privateMeta keys only: every other epoch's key would cost a grant-key
+    // resolution (a read and a ladder descent) for nothing, so a read stays O(1) in the group's epochs. `g` has
+    // passed `validateDataIntegrity`, so it has a head.
+    static void addReadKeys(
+        core::KeyDecryptionAndVerificationRequest& request, const server::GroupInfo& g, const core::EncKeyLocation& location
+    );
 
     std::vector<Group> validateDecryptAndConvertGroups(
         const std::vector<server::GroupInfo>& groups,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
-        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
+        const std::optional<PriorRole>& prior = std::nullopt,
+        // false: compare with the version pins but never move them (an answer the caller may still refuse).
+        bool storePins = true
     );
 
     Group validateDecryptAndConvertGroup(
         const server::GroupInfo& groupInfo,
         const std::shared_ptr<core::KeyProvider>& keyProvider,
-        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr,
+        const std::optional<PriorRole>& prior = std::nullopt,
+        // false: compare with the version pins but never move them (an answer the caller may still refuse).
+        bool storePins = true
     );
 
     // Deliberately does not open the metadata entry: that plane may sit at an older epoch, and waiting on its
@@ -136,16 +178,19 @@ private:
         const core::DecryptedEncKey& privateMetaKey
     );
 
+    // Throws GroupHistoryForkException when a counter is below its pin. Call with `_pinMutex` held.
+    void assertNotBelowPins(const server::GroupInfo& groupInfo);
+
     core::DataEncryptorV4 _dataEncryptor;
     // Own DIO encryptor, for the one envelope `GroupDataEncryptorV5` has no method for: the internal-meta view.
     core::DIOEncryptorV1 _DIOEncryptor;
     GroupDataEncryptorV5 _groupEncryptor;
-    // Monotone pins, one per plane: a tag stays valid forever, so only a pin refuses a genuinely tagged
-    // rollback. The counters move independently, so one pin over all three would reject legitimate states.
+    // Monotone pins per group: roster, publicMeta and privateMeta version. A tag stays valid forever, so only a pin
+    // refuses a genuinely tagged rollback. The counters move independently, so each is compared on its own.
+    using VersionPin = std::array<std::int64_t, 3>;
     std::mutex _pinMutex;
-    std::map<std::string, int64_t> _verifiedRosterVersions;
-    std::map<std::string, int64_t> _verifiedPublicMetaVersions;
-    std::map<std::string, int64_t> _verifiedPrivateMetaVersions;
+    std::map<std::string, VersionPin> _versionPins;
+    friend struct GroupApiImplTestAccess; // tests read the version pins
 };
 
 } // namespace group

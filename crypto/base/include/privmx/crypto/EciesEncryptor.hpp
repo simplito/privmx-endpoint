@@ -34,6 +34,9 @@ public:
     static std::string encryptObjectToBase64(const PublicKey& pub, Poco::JSON::Object::Ptr data, const PrivateKey& privForSignature);
     static std::string encryptToBase64(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature);
     static std::string encrypt(const PublicKey& pub, const std::string& data, const PrivateKey& privForSignature);
+    // The sender key a base64 cipher carries (`privForSignature`'s). It opens only through the ECDH with that key, so
+    // whoever sealed it holds the sender's private key or the recipient's. Nullopt for a cipher that does not parse.
+    static std::optional<PublicKey> senderOf(const std::string& cipher_base64);
 };
 
 } // crypto

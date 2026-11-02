@@ -86,6 +86,17 @@ void GroupApi::removeGroupMembers(const std::string& groupId, const std::vector<
     }
 }
 
+void GroupApi::rotateGroupKey(const std::string& groupId) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    try {
+        impl->rotateGroupKey(groupId);
+    } catch (const privmx::utils::PrivmxException& e) {
+        core::ExceptionConverter::rethrowAsCoreException(e);
+        throw core::Exception("ExceptionConverter rethrow error");
+    }
+}
+
 void GroupApi::updateGroupPublicMeta(
     const std::string& groupId,
     const core::Buffer& publicMeta,

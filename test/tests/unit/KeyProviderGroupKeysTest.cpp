@@ -9,6 +9,7 @@
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
+#include <privmx/endpoint/core/ContainerBaseApi.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
@@ -16,7 +17,8 @@
 #include <privmx/endpoint/core/UserVerifier.hpp>
 #include <privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp>
 
-using namespace privmx::endpoint;
+#include "AcceptAllVerifier.hpp"
+
 using namespace privmx::endpoint::core;
 
 /**
@@ -35,13 +37,6 @@ constexpr const char* KEY_ID = "key_shared_by_every_group";
 constexpr const char* GROUP_A = "group_a";
 constexpr const char* GROUP_B = "group_b";
 
-class AcceptAllVerifier : public UserVerifierInterface {
-public:
-    std::vector<bool> verify(const std::vector<VerificationRequest>& request) override {
-        return std::vector<bool>(request.size(), true);
-    }
-};
-
 // Records which groups the resolver was asked about, so a test can assert on attempts not made.
 struct ResolverLog {
     std::vector<std::string> attempted;
@@ -51,7 +46,7 @@ class KeyProviderGroupKeysTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // By pointer: `KeyProvider` has no default constructor, and this assumes nothing about copy/move.
-        _keyProvider = std::make_unique<KeyProvider>(privmx::crypto::PrivateKey::generateRandom(), [] {
+        _keyProvider = std::make_unique<KeyProvider>(_userKey, [] {
             return std::make_shared<UserVerifier>(std::make_shared<AcceptAllVerifier>());
         });
     }
@@ -112,6 +107,7 @@ protected:
         };
     }
 
+    privmx::crypto::PrivateKey _userKey = privmx::crypto::PrivateKey::generateRandom();
     std::unique_ptr<KeyProvider> _keyProvider;
     privmx::crypto::PrivateKey _author = privmx::crypto::PrivateKey::generateRandom();
     EncKey _containerKey{.id = KEY_ID, .key = std::string(32, '\x2b')};
@@ -121,9 +117,9 @@ protected:
 
 } // namespace
 
-TEST_F(KeyProviderGroupKeysTest, dead_route_marks_the_key_even_though_a_later_route_opens_it) {
-    // Fail closed: group_b yields the right key, but group_a's failure still marks it. The same shape covers
-    // "this epoch is not mine to reach" and "the server served a DIO that does not verify".
+TEST_F(KeyProviderGroupKeysTest, a_dead_route_does_not_block_a_key_a_later_route_opens) {
+    // group_a's epoch is not reachable, group_b yields the key: the key is usable, whatever the order of the routes;
+    // an epoch of group_a must not block group_b.
     const auto groupA = privmx::crypto::PrivateKey::generateRandom();
     const auto groupB = privmx::crypto::PrivateKey::generateRandom();
 
@@ -135,17 +131,15 @@ TEST_F(KeyProviderGroupKeysTest, dead_route_marks_the_key_even_though_a_later_ro
     const auto keys = _keyProvider->getKeysAndVerify(request, resolverOver(openable, log));
 
     const auto& key = keys.at(_location).at(KEY_ID);
-    EXPECT_EQ(key.statusCode, UnknownEncryptionKeyVersionException().getCode());
-    // `statusCode` withholds the key without erasing what was found.
+    EXPECT_EQ(key.statusCode, 0);
     EXPECT_EQ(key.id, KEY_ID);
     EXPECT_EQ(key.key, _containerKey.key);
-    // Both tried: nothing can tell a route is dead without attempting it.
+    // Both tried, in order.
     EXPECT_EQ(log.attempted, (std::vector<std::string>{GROUP_A, GROUP_B}));
 }
 
-TEST_F(KeyProviderGroupKeysTest, opening_on_the_first_route_leaves_no_mark) {
-    // The honest limit of the mark: the search stops on success, so a dead group_b is never attempted and never
-    // reported. Detection stays order-dependent until the key-free DIO checks run over every route first.
+TEST_F(KeyProviderGroupKeysTest, opening_on_the_first_route_stops_the_search) {
+    // The search stops on success, so group_b is never attempted.
     const auto groupA = privmx::crypto::PrivateKey::generateRandom();
     const auto groupB = privmx::crypto::PrivateKey::generateRandom();
 
@@ -193,4 +187,52 @@ TEST_F(KeyProviderGroupKeysTest, adding_the_same_location_twice_does_not_duplica
     request.addGroupKeys(served, _location);
 
     EXPECT_EQ(request.groupRequestData.at(_location).at(KEY_ID).size(), 2u);
+}
+
+namespace {
+
+// Just enough of a module to call the `ModuleKeys` current-key read, the one Thread, Kvdb and most Store calls use.
+class CurrentKeyReader : public ContainerBaseApi {
+public:
+    CurrentKeyReader(const std::shared_ptr<KeyProvider>& keyProvider, const KeyProvider::GroupPrivKeyResolver& resolver)
+        : ContainerBaseApi(privmx::crypto::PrivateKey::generateRandom(), keyProvider, "", nullptr, Connection()) {
+        initGroupPrivKeyResolver(resolver);
+    }
+    using ContainerBaseApi::getAndValidateModuleCurrentEncKey;
+    using ContainerBaseApi::isRekeyNeeded;
+
+private:
+    std::pair<ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string) override { return {}; }
+};
+
+} // namespace
+
+TEST_F(KeyProviderGroupKeysTest, reading_the_current_key_resolves_only_its_own_epoch) {
+    // A container re-keyed with every group epoch carries a grant per old key too. Reading the current key must not
+    // resolve the group key of each of them: at epoch 30 that was 30 `groupGet`s and climbs per read.
+    const auto group = privmx::crypto::PrivateKey::generateRandom();
+    server::GroupKeysEntry grants{.group = GROUP_A, .keys = {}};
+    for (int64_t epoch = 1; epoch < 30; ++epoch) {
+        auto old = wrapFor(group.getPublicKey(), epoch);
+        old.keyId = "old-key-" + std::to_string(epoch);
+        grants.keys.push_back(old);
+    }
+    grants.keys.push_back(wrapFor(group.getPublicKey(), 30));
+
+    std::vector<int64_t> resolvedEpochs;
+    CurrentKeyReader reader(
+        std::shared_ptr<KeyProvider>(std::move(_keyProvider)),
+        [&](const std::string&, int64_t epoch) -> std::optional<privmx::crypto::PrivateKey> {
+            resolvedEpochs.push_back(epoch);
+            return group;
+        }
+    );
+    const auto key = reader.getAndValidateModuleCurrentEncKey(ModuleKeys{
+        .keys = {}, .groupKeys = {grants}, .staleGroups = {}, .currentKeyId = KEY_ID, .moduleSchemaVersion = 0,
+        .moduleResourceId = _location.resourceId, .contextId = _location.contextId
+    });
+
+    EXPECT_EQ(key.statusCode, 0);
+    EXPECT_EQ(key.key, _containerKey.key);
+    EXPECT_EQ(resolvedEpochs, (std::vector<int64_t>{30}));
 }
