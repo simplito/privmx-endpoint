@@ -28,7 +28,8 @@ Usage: $0 [options]
   --filter PATTERN       Run only tests matching the GTest pattern (also: --test)
   --build-dir DIR        Build directory to look for test binaries in (default: build)
   --bridge-image IMAGE   Bridge image used for e2e tests (default: $BRIDGE_IMAGE)
-  --dataset-dir DIR      Dataset used to seed the Bridge for e2e tests (default: $DATASET_DIR)
+  --dataset-dir DIR      Dataset used to seed the Bridge for e2e tests (default: $DATASET_DIR;
+                         create it first with scripts/generate_test_dataset.sh)
   --e2e-workers N        Number Workers running e2e tests (default: $E2E_WORKERS)
   -h, --help          Show this help
 
@@ -94,8 +95,12 @@ fi
 if [[ "$RUN_E2E" -eq 1 ]]; then
     echo "=== E2E tests ==="
     E2E_START=$SECONDS
-    echo "Starting Bridge backend via docker compose..."
-    if (cd test/env && docker compose up -d); then
+    # Datasets are not stored in the repository: scripts/generate_test_dataset.sh creates one before the e2e run.
+    if [[ ! -f "$DATASET_DIR/ServerData.ini" ]]; then
+        echo "No dataset with a ServerData.ini at '$DATASET_DIR'. Create it first:" >&2
+        echo "  ./scripts/generate_test_dataset.sh --build-dir \"$BUILD_DIR\" --bridge-image \"$BRIDGE_IMAGE\"" >&2
+        E2E_FAILED=1
+    elif echo "Starting Bridge backend via docker compose..." && (cd test/env && docker compose up -d); then
         echo "Waiting for the backend to come up..."
         sleep 15
 

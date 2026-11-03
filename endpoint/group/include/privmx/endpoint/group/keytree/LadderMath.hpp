@@ -40,6 +40,7 @@ enum class LadderProblemKind {
     BelowPruneWatermark, // targets a pruned epoch
     Duplicate,           // same span submitted twice
     UnitRungMissing,     // the mandatory rung to the previous epoch is absent
+    NotCanonical,        // a span the epoch does not owe (`rungSpansFor` above the floor)
 };
 
 struct LadderValidation {
@@ -84,6 +85,21 @@ public:
         std::uint32_t from,
         std::uint32_t to,
         const std::vector<RungSpan>& available
+    );
+
+    // The spans a descent from `from` to `to` walks when every canonical rung (`rungSpansFor`) is stored: at each epoch
+    // the one with the smallest target not below `to`, the pick `planDescent` and `LadderKeys::descend` make. What a
+    // client asks the bridge for instead of every rung in between. `to` at or above `eraFloor` (the ladder floor);
+    // empty when `to >= from`.
+    static std::vector<RungSpan> canonicalDescent(std::uint32_t from, std::uint32_t to, std::uint32_t eraFloor);
+
+    // The ways round a descent that stopped at `at`: every other canonical span at `at` reaching no lower than `to`,
+    // each followed by its canonical descent to `to`, minus the spans in `known`. Deduplicated, in walk order.
+    static std::vector<RungSpan> detourSpans(
+        std::uint32_t at,
+        std::uint32_t to,
+        std::uint32_t eraFloor,
+        const std::vector<RungSpan>& known
     );
 
     // Upper bound on descent length with aligned skip rungs: `2*log2(delta) + 2`.

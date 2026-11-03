@@ -19,6 +19,16 @@ class GroupApiImpl;
 
 /**
  * 'GroupApi' is a class representing Endpoint's API for Groups.
+ *
+ * A membership, key or policy change that failed may still take effect: the Bridge may have applied it and lost or
+ * refused the answer. For a bounded time, or until the Group changes in some other way, this client resends that
+ * change before it makes any other change to the Group: a retry of the same call resends it (and returns once it is
+ * found applied), and a different call completes it first. Key refreshes never hold anything back.
+ *
+ * This client runs no thread of its own. Upkeep it finds due (key refreshes of its own path) runs at the end of a
+ * later call on the same Group that succeeded (addGroupMembers, removeGroupMembers, rotateGroupKey, update*,
+ * getGroup); it adds latency to that call but never changes its result or throws.
+ * A client that makes no such call does none of it.
  */
 class GroupApi : public privmx::endpoint::core::BaseApiClass<GroupApiImpl> {
 public:
@@ -50,7 +60,10 @@ public:
      * rights) to the created Group
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
-     * @param policies Group's policies
+     * @param policies Group's policies. Who may add, remove, rotate and change the policy (`update`, `rotateKeys`,
+     * `updatePolicy`, `ownerCanBeRemovedFromManagers`) is signed into the Group's state with the creator;
+     * `inherit`/`default` (or absent) mean the built-in defaults (manager, manager, manager, yes), not the
+     * Context's; the Context can only deny further. The creator must hold `update` under them, or it could not write the Group's metadata.
      * @return ID of the created Group
      */
     std::string createGroup(
@@ -73,6 +86,9 @@ public:
      * history, and its metadata carries through untouched — seating a member is not a metadata edit, and
      * `updateGroupPublicMeta`/`updateGroupPrivateMeta` are where that happens.
      *
+     * A failed call may still take effect (see the class note); it is resent only while the UserVerifier still
+     * vouches for the newcomers' keys.
+     *
      * @param groupId ID of the Group
      * @param newMembers the members to add, each with their public key and the role they take
      */
@@ -88,10 +104,36 @@ public:
      * Incremental: only the leavers are named, and the roster that remains is derived from the Group's own
      * verified history. Metadata carries through untouched.
      *
+     * A failed call may still take effect (see the class note).
+     *
+     * When the caller's own leaf does not open, the removal still goes through (a member that garbled it cannot
+     * block its own removal) and, unless this session holds the current Group key, abandons the Group's history for
+     * every member.
+     *
      * @param groupId ID of the Group
      * @param userIds IDs of the members to remove
      */
     void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
+
+    /**
+     * Replaces the Group's key without changing who is in it: the key epoch advances, and a fresh Group key is
+     * wrapped to the same members, the caller included — also when the caller is the Group's only member.
+     *
+     * For when a Group key may have leaked without anybody's own identity key: every container granted to the
+     * Group goes stale, as after a removal, so their owners can re-key them onto the new epoch. Do that only from a
+     * session that has read the Group after this call (the caller's own session does): one that has not may still
+     * take the old key for the current one. Content sealed before stays readable to the members.
+     *
+     * Not a remedy for a lost device: a device holding the identity key opens the new epoch as well. Change the
+     * identity key first, then rotate. Charged to the Group's rotation budget; allowed by the `rotateKeys` policy
+     * (managers, by default).
+     *
+     * A failed call may still take effect (see the class note). A call made after it was found applied is a new
+     * rotation.
+     *
+     * @param groupId ID of the Group
+     */
+    void rotateGroupKey(const std::string& groupId);
 
     /**
      * Updates a Group's public (unencrypted) metadata, and nothing else.
@@ -129,15 +171,19 @@ public:
     void updateGroupPrivateMeta(const std::string& groupId, const core::Buffer& privateMeta, const int64_t version);
 
     /**
-     * Sets a Group's policies, and nothing else.
+     * Sets a Group's policies, as a signed commit by a member the current policy allows `updatePolicy`.
      *
-     * Takes no version and performs no version check, unlike the two metadata calls. The policies live outside
-     * the Group's encrypted, signed metadata — they always have — so there is no counter for a caller to know
-     * and nothing for a reader to re-verify. Neither metadata version moves, and two callers racing here means
-     * the later write wins.
+     * The rules that govern commits (`update`, `rotateKeys`, `updatePolicy`, `ownerCanBeRemovedFromManagers`) and
+     * the creator are part of the Group's signed state; every member follows the change along the commit chain. The
+     * call is refused for non-members and, before anything is signed, for a member without `updatePolicy`. It may be
+     * retried internally when another commit lands concurrently. No key, epoch or roster moves, and neither metadata
+     * version moves.
      *
-     * That the policies now have a call of their own does **not** make them authenticated. They are held and
-     * enforced by the Bridge, covered by no signature and no tag, exactly as before this call existed.
+     * A narrowing of `update` refuses metadata written by an author who loses it: this call carries such a plane
+     * forward under the caller's name, and is refused before signing when the caller itself would lose `update`
+     * while such a plane exists. Until that carry-forward completes (it is retried by this client's next call on the
+     * Group if it fails), `getGroup` returns a non-zero `statusCode` for such a plane, also to concurrent readers;
+     * any metadata write by a member holding `update` repairs it.
      *
      * @param groupId ID of the Group to update
      * @param policies Group's policies
@@ -162,8 +208,10 @@ public:
     /**
      * Gets a list of Groups in given Context.
      *
-     * The listing carries no per-Group metadata: a page holds identity, roster, epoch and policies only.
-     * Call `getGroup` for a Group's `publicMeta`/`privateMeta` and for its verified status.
+     * The listing carries only fields of constant size: identity, epoch, counters and policies. No roster
+     * (`users`/`managers`) and no per-Group metadata. Call `getGroup` for the roster, `publicMeta`/`privateMeta`
+     * and the verified status. A listed `groupPubKey` is empty unless it matches a state this process has
+     * already verified for the Group (see `GroupSummary::groupPubKey`).
      *
      * @param contextId ID of the Context to get the Groups from
      * @param pagingQuery struct with list query parameters
@@ -255,7 +303,9 @@ public:
      * The size is declared up front, as it is for a Store file, and enforced at `finishFileEncryption`:
      * supplying less than you promised is an error, because it cannot be told apart from a file cut short.
      *
-     * A handle must not be driven from two threads at once.
+     * Calls on one handle may come from several threads; they are applied one at a time, in no guaranteed
+     * order, and a call after the handle is finished is refused. Push chunks in order, from one caller, to get
+     * the file you meant.
      *
      * @param groupId ID of the Group to seal for
      * @param size total size of the plaintext file, in bytes

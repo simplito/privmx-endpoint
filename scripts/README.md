@@ -9,6 +9,7 @@ Building, testing and tooling scripts. They all operate on the repository root, 
 | `./scripts/build-with-streams.sh` | Same as `build.sh`, plus `PRIVMX_BUILD_WITH_WEBRTC=ON` (needs `libwebrtc`) |
 | `./scripts/doc-gen.sh` | Generate Doxygen documentation into `doc/` |
 | `./scripts/run_tests.sh` | Run the unit and e2e test suites |
+| `./scripts/generate_test_dataset.sh` | Generate the e2e dataset `run_tests.sh` needs (run it once before the e2e tests) |
 | `./scripts/bridge.sh` | Start one Bridge seeded with a dataset, for manual testing |
 | `./scripts/dataset.sh` | Create or refresh a Bridge test dataset |
 | `./scripts/clang-format.sh` | Format the `endpoint/` sources |
@@ -32,7 +33,7 @@ Unit tests need only a build; e2e tests additionally need Docker, and start a Br
 | `--filter PATTERN` | GTest filter, e.g. `ThreadTest.*` (alias: `--test`) |
 | `--build-dir DIR` | Where to look for test binaries (default: `build`) |
 | `--e2e-workers N` | e2e tests to run in parallel (default: 4) |
-| `--dataset-dir DIR` | Dataset used to seed the Bridge |
+| `--dataset-dir DIR` | Dataset used to seed the Bridge (create the default `test/env/datasets/Dataset` first with `generate_test_dataset.sh`) |
 | `--bridge-image IMAGE` | Bridge docker image for e2e tests |
 | `--keep-bridge` | Leave the Bridge containers up after the run |
 
@@ -54,10 +55,12 @@ Starts a single Bridge loaded with a dataset and leaves it running until `Ctrl+C
 
 ## Datasets
 
-Datasets live in `test/env/datasets/`; each holds a `ServerData.ini` with the solution, context and user keys to connect with.
+Datasets live in `test/env/datasets/`, which is git-ignored: they are generated, not committed. Each holds a `ServerData.ini` with the solution, context and user keys to connect with. Generating one needs Docker and a build (`build/test/test_env_DockerSetupData`).
 
 ```bash
-./scripts/dataset.sh <name>     # create a new dataset, or refresh <name> in place
+./scripts/generate_test_dataset.sh                                   # the default Dataset, as CI does before the e2e tests
+./scripts/dataset.sh <name>                                             # create a new dataset, or refresh <name> in place
+./scripts/dataset.sh Dataset -i privmx-bridge -v my-tag                 # against a specific Bridge image
 ```
 
 ## Shell completion

@@ -23,6 +23,7 @@ limitations under the License.
 
 #include <algorithm>
 #include <cstdint>
+#include <tuple>
 #include <vector>
 
 #include <privmx/endpoint/group/keytree/LadderMath.hpp>
@@ -92,6 +93,14 @@ TEST_F(LadderSkipTargets, HandlesLargeEpochs) {
         EXPECT_GE(target, 1u);
         EXPECT_LT(target, large);
     }
+}
+
+TEST_F(LadderSkipTargets, HandlesEpochsPastTwoToTheThirtyFirst) {
+    // A 32-bit span wraps to 0 there, and the next `%` divides by it.
+    const Targets targets = LadderMath::skipRungTargets(0x80000000u, 1);
+    EXPECT_EQ(targets.size(), 30u) << "2^31 - 2^j for j = 1..30; j = 31 lands on 0, below the floor";
+    EXPECT_EQ(targets.back(), 0x80000000u - 2);
+    EXPECT_EQ(LadderMath::skipRungTargets(0xFFFFFFFFu, 1), Targets({}));
 }
 
 // rungSpansFor
@@ -202,6 +211,40 @@ TEST_F(LadderDescent, StaysInsideTheLogarithmicBound) {
     }
 }
 
+TEST_F(LadderDescent, TheCanonicalDescentIsThePlanOverEveryCanonicalRung) {
+    // What a client asks the bridge for has to be exactly the path `planDescent` (and so `descend`) walks over a
+    // complete ladder, or the descent would stop at a span it did not fetch.
+    for (const auto& [from, to, floor] : std::vector<std::tuple<std::uint32_t, std::uint32_t, std::uint32_t>>{
+             {12, 5, 1}, {30, 3, 1}, {64, 40, 1}, {1024, 1, 1}, {10000, 1, 1}, {1000, 500, 1}, {100, 37, 33}, {9, 9, 1}
+         }) {
+        const auto plan = LadderMath::planDescent(from, to, spansThrough(from, floor));
+        ASSERT_TRUE(plan.has_value());
+        EXPECT_EQ(LadderMath::canonicalDescent(from, to, floor), plan.value()) << from << "->" << to << " floor " << floor;
+        EXPECT_LE(plan->size(), LadderMath::descentBound(from, to));
+    }
+}
+
+TEST_F(LadderDescent, ADetourLeavesTheStopEpochByEveryOtherSpanAndContinuesToTheGoal) {
+    const std::vector<RungSpan> known = LadderMath::canonicalDescent(64, 3, 1);
+    ASSERT_EQ(known.front(), (RungSpan{64, 32}));
+    const std::vector<RungSpan> detour = LadderMath::detourSpans(64, 3, 1, known);
+    for (const RungSpan& span : detour) {
+        EXPECT_EQ(std::count(known.begin(), known.end(), span), 0) << "already fetched";
+        EXPECT_EQ(std::count(detour.begin(), detour.end(), span), 1) << "asked twice";
+        EXPECT_GE(span.target, 3u);
+    }
+    for (const RungSpan& span : LadderMath::rungSpansFor(64, 1)) {
+        if (span.target >= 3 && !(span == known.front())) {
+            EXPECT_EQ(std::count(detour.begin(), detour.end(), span), 1) << "the way round over " << span.target;
+        }
+    }
+    // The walk over what was fetched, without the broken (64, 32), still reaches the goal.
+    std::vector<RungSpan> without = detour;
+    without.insert(without.end(), known.begin() + 1, known.end());
+    EXPECT_TRUE(LadderMath::planDescent(64, 3, without).has_value());
+    EXPECT_TRUE(LadderMath::detourSpans(3, 3, 1, {}).empty());
+}
+
 TEST_F(LadderDescent, LongDescentCostsLogarithmicallyManySteps) {
     const auto plan = LadderMath::planDescent(10000, 1, spansThrough(10000));
     ASSERT_TRUE(plan.has_value());
@@ -301,8 +344,11 @@ TEST_F(LadderValidate, AcceptsUnitRungOnlyBecauseSkipsAreOptional) {
     EXPECT_TRUE(LadderMath::validateRungSet({RungSpan{8, 7}}, 8, 1).ok);
 }
 
-TEST_F(LadderValidate, AcceptsANonAlignedSkipBecauseAlignmentIsAdvisory) {
-    EXPECT_TRUE(LadderMath::validateRungSet({RungSpan{8, 7}, RungSpan{8, 5}}, 8, 1).ok);
+TEST_F(LadderValidate, RejectsASpanTheEpochDoesNotOwe) {
+    const auto result = LadderMath::validateRungSet({RungSpan{8, 7}, RungSpan{8, 5}}, 8, 1);
+    EXPECT_FALSE(result.ok);
+    EXPECT_EQ(result.problem, LadderProblemKind::NotCanonical);
+    EXPECT_TRUE(LadderMath::validateRungSet({RungSpan{8, 7}, RungSpan{8, 6}}, 8, 1).ok);
 }
 
 // SECURITY — the single check that stops a removed member reading forward.
@@ -361,4 +407,13 @@ TEST_F(LadderValidate, AcceptsGeneratedSetsUnderAnEraFloor) {
         EXPECT_TRUE(LadderMath::validateRungSet(LadderMath::rungSpansFor(epoch, floor), epoch, floor).ok)
             << "epoch " << epoch;
     }
+}
+
+TEST_F(LadderDescent, ADetourTakesNoSpanThatLandsBelowTheGoal) {
+    // From 64 to 40, with the canonical (64, 48), (48, 40) fetched: every other way off 64 that stays at or above
+    // 40, and on from each, but never (64, 32), which lands below the goal and leads nowhere.
+    const std::vector<RungSpan> known = LadderMath::canonicalDescent(64, 40, 1);
+    ASSERT_EQ(known, (std::vector<RungSpan>{{64, 48}, {48, 40}}));
+    const std::vector<RungSpan> expected{{64, 63}, {63, 62}, {62, 60}, {60, 56}, {56, 48}, {64, 56}, {64, 60}, {64, 62}};
+    EXPECT_EQ(LadderMath::detourSpans(64, 40, 1, known), expected);
 }

@@ -2,6 +2,8 @@
 #include "privmx/endpoint/group/GroupException.hpp"
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/group/Types.hpp>
+#include <privmx/endpoint/core/BigEndian.hpp>
+#include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
@@ -71,6 +73,26 @@ std::string SubscriberImpl::channelNameFromQuery(const std::string& subscription
         return "";
     }
     return path.at(CHANNEL_NAME_IN_QUERY_PATH);
+}
+
+namespace {
+std::string channelPrefix(const std::string& channelName) {
+    std::string prefix = keytree::TreeCommits::tag("pmx-event");
+    core::bigendian::putLp(prefix, channelName);
+    return prefix;
+}
+} // namespace
+
+std::string SubscriberImpl::sealOnChannel(const std::string& channelName, const std::string& data) {
+    return channelPrefix(channelName) + data;
+}
+
+std::optional<std::string> SubscriberImpl::openOnChannel(const std::string& channelName, const std::string& sealed) {
+    const std::string prefix = channelPrefix(channelName);
+    if (sealed.compare(0, prefix.size(), prefix) != 0) {
+        return std::nullopt;
+    }
+    return sealed.substr(prefix.size());
 }
 
 std::vector<core::SubscriptionQueryObj::QuerySelector> SubscriberImpl::getSelectors(

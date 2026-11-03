@@ -21,6 +21,7 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -77,8 +78,9 @@ protected:
 class LadderKeysBuild : public LadderKeysTestBase {};
 class LadderKeysGather : public LadderKeysTestBase {};
 class LadderKeysDescend : public LadderKeysTestBase {};
-class LadderKeysEras : public LadderKeysTestBase {};
 class LadderKeysRegistry : public LadderKeysTestBase {};
+class LadderKeysFloor : public LadderKeysTestBase {};
+class LadderKeysSelfCheck : public LadderKeysTestBase {};
 
 // building rungs
 
@@ -295,7 +297,7 @@ TEST_F(LadderKeysGather, SECURITY_DetectsASubstitutedRungAndRefusesToCacheIt) {
     for (ArchiveRung& rung : tampered) {
         if (rung.span.at == 7 && rung.span.target == 6) {
             // A key that decrypts fine but is not epoch 6's, published under a name the blame can land on.
-            rung.blob = TreeKeys::wrapKey(attacker, keyOf(history, 7, 1).getPublicKey(), attacker);
+            rung.blob = LadderKeys::sealRung(attacker, rung.span, keyOf(history, 7, 1).getPublicKey(), attacker);
             rung.author = "mallory";
         }
     }
@@ -456,7 +458,7 @@ TEST_F(LadderKeysDescend, SECURITY_DetectsASubstitutedRung) {
     // Replace the rung 8->7 with a correctly-encrypted wrap of an unrelated key, authored by someone else.
     for (ArchiveRung& rung : history.rungs) {
         if (rung.span.at == 8 && rung.span.target == 7) {
-            rung.blob = TreeKeys::wrapKey(impostor, keyOf(history, 8, 1).getPublicKey(), signer);
+            rung.blob = LadderKeys::sealRung(impostor, rung.span, keyOf(history, 8, 1).getPublicKey(), signer);
             rung.author = "mallory";
         }
     }
@@ -489,6 +491,48 @@ TEST_F(LadderKeysDescend, SECURITY_RoutesAroundACorruptedUnitRungViaASkip) {
     EXPECT_EQ(result.key->toWIF(), keyOf(history, 4, 1).toWIF());
 }
 
+TEST_F(LadderKeysDescend, SECURITY_AForgedSkipRungIsPassedOverForTheNextRoute) {
+    // Anyone holding epoch 8's key can seal a rung at 8 under any span and any sealer, so a rung that does not
+    // open to its target's registered key costs the walk that rung, not the descent.
+    EpochHistory history = simulateEpochHistory(8, 1);
+    for (ArchiveRung& rung : history.rungs) {
+        if (rung.span.at == 8 && rung.span.target == 4) {
+            rung.blob = LadderKeys::sealRung(
+                PrivateKey::generateRandom(), rung.span, keyOf(history, 8, 1).getPublicKey(),
+                PrivateKey::generateRandom()
+            );
+        }
+    }
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    store.putGrantKey(8, keyOf(history, 8, 1));
+    const DescentResult result = ladder.descend(8, 4, history.rungs, history.registry);
+    ASSERT_EQ(result.failure, DescentFailure::None);
+    EXPECT_EQ(result.key->toWIF(), keyOf(history, 4, 1).toWIF());
+}
+
+TEST_F(LadderKeysDescend, SECURITY_AnHonestRungRelabelledByTheBridgeBlamesNobody) {
+    // The span is sealed inside the blob, so the bridge serving the honest rung 8->4 as 8->7 gets a rung that
+    // does not open, not one that opens to the wrong epoch's key and names its honest sealer as the tamperer.
+    EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> served;
+    for (const ArchiveRung& rung : history.rungs) {
+        if (rung.span.at == 8 && rung.span.target == 4) {
+            ArchiveRung relabelled = rung;
+            relabelled.span.target = 7;
+            served.push_back(relabelled);
+        } else if (rung.span.at != 8) {
+            served.push_back(rung);
+        }
+    }
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    store.putGrantKey(8, keyOf(history, 8, 1));
+    const DescentResult result = ladder.descend(8, 7, served, history.registry);
+    EXPECT_EQ(result.failure, DescentFailure::DecryptFailed);
+    EXPECT_FALSE(result.blame.has_value());
+}
+
 // The rung is placed in storage directly, because a client that validates on write would never emit one.
 TEST_F(LadderKeysDescend, SECURITY_IgnoresAnUpwardRung) {
     EpochHistory history = simulateEpochHistory(8, 1);
@@ -498,8 +542,7 @@ TEST_F(LadderKeysDescend, SECURITY_IgnoresAnUpwardRung) {
     const PrivateKey future = PrivateKey::generateRandom();
     ArchiveRung upward;
     upward.span = RungSpan{5, 9};
-    upward.recipientKind = RungRecipientKind::Epoch;
-    upward.blob = TreeKeys::wrapKey(future, keyOf(history, 5, 1).getPublicKey(), signer);
+    upward.blob = LadderKeys::sealRung(future, upward.span, keyOf(history, 5, 1).getPublicKey(), signer);
     upward.author = "mallory";
     history.rungs.push_back(upward);
     history.registry.push_back(EpochRegistryEntry{9, future.getPublicKey()});
@@ -522,7 +565,7 @@ TEST_F(LadderKeysDescend, SECURITY_RemovedMemberCannotWalkForward) {
             continue;
         }
         for (std::uint32_t held = 1; held <= removedAfter; ++held) {
-            EXPECT_FALSE(TreeKeys::unwrapKey(rung.blob, keyOf(history, held, 1)).has_value())
+            EXPECT_FALSE(LadderKeys::openRung(rung, keyOf(history, held, 1)).has_value())
                 << "epoch " << held << " key opened a rung published at epoch " << rung.span.at;
         }
     }
@@ -550,127 +593,130 @@ TEST_F(LadderKeysDescend, ANewcomerReachesOldEpochsWithNothingWrappedToThem) {
     ASSERT_EQ(result.failure, DescentFailure::None);
     EXPECT_EQ(result.key->toWIF(), keyOf(history, 5, 1).toWIF());
 
-    // Nothing in the archive is addressed to an individual: every rung targets an epoch.
+    // Nothing in the archive is addressed to an individual: every rung opens with an epoch's grant key.
     for (const ArchiveRung& rung : history.rungs) {
-        EXPECT_EQ(rung.recipientKind, RungRecipientKind::Epoch);
-        EXPECT_TRUE(rung.recipientId.empty());
+        EXPECT_TRUE(LadderKeys::openRung(rung, keyOf(history, rung.span.at, 1)).has_value());
     }
 }
 
-// eras
+// several rungs for one span (a lying bridge): only the registry decides which one is right
 
-TEST_F(LadderKeysEras, ALinkAddressedToAUserUnlocksTheClosedEra) {
-    const EpochHistory closed = simulateEpochHistory(10, 1);
-    const PrivateKey member = PrivateKey::generateRandom();
-    const PrivateKey signer = PrivateKey::generateRandom();
-
-    TreeKeyCache store;
-    LadderKeys ladder(store);
-    const std::vector<ArchiveRung> links = ladder.buildEraLinks(
-        10, keyOf(closed, 10, 1), {EraLinkRecipient{RungRecipientKind::User, "bob", member.getPublicKey()}}, AUTHOR,
-        signer
-    );
-    ASSERT_EQ(links.size(), 1u);
-    // The link satisfies the direction invariant the server enforces on every rung.
-    EXPECT_LT(links[0].span.target, links[0].span.at);
-    EXPECT_EQ(links[0].span.target, 10u) << "it carries the closing era's top key";
-
-    const DescentResult crossed = ladder.crossEraBoundary(links, "bob", member, {}, closed.registry);
-    ASSERT_EQ(crossed.failure, DescentFailure::None);
-    EXPECT_EQ(crossed.key->toWIF(), keyOf(closed, 10, 1).toWIF());
-
-    // From there an ordinary descent continues into the closed era.
-    const DescentResult deeper = ladder.descend(10, 1, closed.rungs, closed.registry);
-    ASSERT_EQ(deeper.failure, DescentFailure::None);
-    EXPECT_EQ(deeper.key->toWIF(), keyOf(closed, 1, 1).toWIF());
+namespace {
+ArchiveRung sealed(const RungSpan& span, const PrivateKey& carried, const PrivateKey& at, const std::string& author) {
+    ArchiveRung rung;
+    rung.span = span;
+    rung.blob = LadderKeys::sealRung(carried, span, at.getPublicKey(), PrivateKey::generateRandom());
+    rung.author = author;
+    return rung;
 }
 
-TEST_F(LadderKeysEras, ALinkAddressedToAGroupCostsOneCiphertextForEveryone) {
-    const EpochHistory closed = simulateEpochHistory(6, 1);
-    const PrivateKey entitlementGroupKey = PrivateKey::generateRandom();
-    const PrivateKey signer = PrivateKey::generateRandom();
+std::vector<ArchiveRung> without(std::vector<ArchiveRung> rungs, const RungSpan& span) {
+    rungs.erase(std::remove_if(rungs.begin(), rungs.end(), [&](const ArchiveRung& rung) {
+        return rung.span.at == span.at && rung.span.target == span.target;
+    }), rungs.end());
+    return rungs;
+}
+} // namespace
 
+TEST_F(LadderKeysDescend, SECURITY_AnUnattributedRungThatOpensToTheWrongKeyBlamesNobody) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> served = without(history.rungs, RungSpan{8, 7});
+    served.push_back(sealed(RungSpan{8, 7}, PrivateKey::generateRandom(), keyOf(history, 8, 1), ""));
     TreeKeyCache store;
     LadderKeys ladder(store);
-    const std::vector<ArchiveRung> links = ladder.buildEraLinks(
-        6, keyOf(closed, 6, 1),
-        {EraLinkRecipient{RungRecipientKind::Group, "oldtimers", entitlementGroupKey.getPublicKey()}}, AUTHOR, signer
-    );
-    ASSERT_EQ(links.size(), 1u) << "one wrap regardless of how many people are entitled";
-
-    // Any member of that group opens it with the group's key.
-    const DescentResult crossed = ladder.crossEraBoundary(
-        links, "anyone", PrivateKey::generateRandom(), {{"oldtimers", entitlementGroupKey}}, closed.registry
-    );
-    ASSERT_EQ(crossed.failure, DescentFailure::None);
-    EXPECT_EQ(crossed.key->toWIF(), keyOf(closed, 6, 1).toWIF());
+    store.putGrantKey(8, keyOf(history, 8, 1));
+    const DescentResult result = ladder.descend(8, 7, served, history.registry);
+    EXPECT_EQ(result.failure, DescentFailure::Tampered);
+    EXPECT_FALSE(result.blame.has_value()) << "whoever sealed it, the statements do not name them";
 }
 
-TEST_F(LadderKeysEras, WithoutALinkTheBoundaryHolds) {
-    const EpochHistory closed = simulateEpochHistory(6, 1);
-    const PrivateKey signer = PrivateKey::generateRandom();
-    const PrivateKey entitled = PrivateKey::generateRandom();
-
+TEST_F(LadderKeysDescend, SECURITY_AnUnattributedRungDoesNotHideTheOpenersBadRung) {
+    // The unattributed (8,4) is tried first (lowest target) and fails first; the opener's bad (8,7) is still blamed.
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> served = without(without(without(history.rungs, RungSpan{8, 7}), RungSpan{8, 6}), RungSpan{8, 4});
+    served.push_back(sealed(RungSpan{8, 4}, PrivateKey::generateRandom(), keyOf(history, 8, 1), ""));
+    served.push_back(sealed(RungSpan{8, 7}, PrivateKey::generateRandom(), keyOf(history, 8, 1), "opener"));
     TreeKeyCache store;
     LadderKeys ladder(store);
-    const std::vector<ArchiveRung> links = ladder.buildEraLinks(
-        6, keyOf(closed, 6, 1), {EraLinkRecipient{RungRecipientKind::User, "bob", entitled.getPublicKey()}}, AUTHOR,
-        signer
-    );
-
-    // Carol is not entitled: the link exists but is not addressed to her.
-    const DescentResult result = ladder.crossEraBoundary(
-        links, "carol", PrivateKey::generateRandom(), {}, closed.registry
-    );
-    EXPECT_EQ(result.failure, DescentFailure::EraBoundary);
-    EXPECT_FALSE(result.key.has_value());
-}
-
-TEST_F(LadderKeysEras, RejectsAnEraLinkAddressedToAnEpoch) {
-    TreeKeyCache store;
-    LadderKeys ladder(store);
-    const PrivateKey key = PrivateKey::generateRandom();
-    EXPECT_THROW(
-        ladder.buildEraLinks(6, key, {EraLinkRecipient{RungRecipientKind::Epoch, "", key.getPublicKey()}}, AUTHOR, key),
-        std::invalid_argument
-    );
-}
-
-TEST_F(LadderKeysEras, RejectsAnEraLinkThatNamesNoRecipient) {
-    // The bridge pairs the two fields: an `epoch` rung names nobody, an era-crossing kind must name who it is
-    // for. A link built without an id would be refused there, so it is refused here with an actionable reason.
-    TreeKeyCache store;
-    LadderKeys ladder(store);
-    const PrivateKey key = PrivateKey::generateRandom();
-    EXPECT_THROW(
-        ladder.buildEraLinks(6, key, {EraLinkRecipient{RungRecipientKind::User, "", key.getPublicKey()}}, AUTHOR, key),
-        std::invalid_argument
-    );
-    EXPECT_THROW(
-        ladder.buildEraLinks(6, key, {EraLinkRecipient{RungRecipientKind::Group, "", key.getPublicKey()}}, AUTHOR, key),
-        std::invalid_argument
-    );
-}
-
-TEST_F(LadderKeysEras, SECURITY_DetectsATamperedEraLink) {
-    const EpochHistory closed = simulateEpochHistory(6, 1);
-    const PrivateKey member = PrivateKey::generateRandom();
-    const PrivateKey impostor = PrivateKey::generateRandom();
-    const PrivateKey signer = PrivateKey::generateRandom();
-
-    ArchiveRung forged;
-    forged.span = RungSpan{7, 6};
-    forged.recipientKind = RungRecipientKind::User;
-    forged.recipientId = "bob";
-    forged.blob = TreeKeys::wrapKey(impostor, member.getPublicKey(), signer);
-    forged.author = "mallory";
-
-    TreeKeyCache store;
-    LadderKeys ladder(store);
-    const DescentResult result = ladder.crossEraBoundary({forged}, "bob", member, {}, closed.registry);
+    store.putGrantKey(8, keyOf(history, 8, 1));
+    const DescentResult result = ladder.descend(8, 4, served, history.registry);
     EXPECT_EQ(result.failure, DescentFailure::Tampered);
     ASSERT_TRUE(result.blame.has_value());
-    EXPECT_EQ(result.blame.value(), "mallory");
+    EXPECT_EQ(result.blame.value(), "opener");
+}
+
+TEST_F(LadderKeysDescend, GarbageDuplicatesCostAttemptsNotHops) {
+    const EpochHistory history = simulateEpochHistory(32, 1);
+    std::vector<ArchiveRung> served;
+    for (const ArchiveRung& rung : history.rungs) {
+        for (int i = 0; i < 3; ++i) {
+            served.push_back(sealed(rung.span, PrivateKey::generateRandom(), keyOf(history, rung.span.at, 1), ""));
+        }
+        served.push_back(rung);
+    }
+    TreeKeyCache clean;
+    LadderKeys cleanLadder(clean);
+    clean.putGrantKey(32, keyOf(history, 32, 1));
+    const DescentResult expected = cleanLadder.descend(32, 3, history.rungs, history.registry);
+    TreeKeyCache store;
+    LadderKeys ladder(store);
+    store.putGrantKey(32, keyOf(history, 32, 1));
+    const DescentResult result = ladder.descend(32, 3, served, history.registry);
+    ASSERT_EQ(result.failure, DescentFailure::None);
+    EXPECT_EQ(result.key->toWIF(), keyOf(history, 3, 1).toWIF());
+    EXPECT_EQ(result.hops, expected.hops);
+}
+
+// the in-session ladder floor
+
+TEST_F(LadderKeysFloor, TheRememberedFloorNeverGoesDown) {
+    TreeKeyCache cache;
+    EXPECT_EQ(cache.raiseFloor(1), 1u);
+    EXPECT_EQ(cache.raiseFloor(5), 5u);
+    EXPECT_EQ(cache.raiseFloor(2), 5u) << "a lower floor served later is ignored";
+    cache.clear();
+    EXPECT_EQ(cache.raiseFloor(1), 5u) << "forgetting keys does not forget the floor";
+}
+
+// the commit self-check
+
+TEST_F(LadderKeysSelfCheck, AnHonestSetPasses) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    std::vector<ArchiveRung> atEight;
+    for (const ArchiveRung& rung : history.rungs) {
+        if (rung.span.at == 8) {
+            atEight.push_back(rung);
+        }
+    }
+    ASSERT_EQ(atEight.size(), 3u);
+    EXPECT_FALSE(LadderKeys::firstRungNotOpeningToTheChain(atEight, keyOf(history, 8, 1), history.registry).has_value());
+}
+
+TEST_F(LadderKeysSelfCheck, SECURITY_ARungSealingAKeyTheRegistryDoesNotNameIsRefused) {
+    // A wrong key in the committer's cache (a client bug) would otherwise become a permanent broken skip rung.
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    const std::vector<ArchiveRung> rungs{
+        sealed(RungSpan{8, 7}, keyOf(history, 7, 1), keyOf(history, 8, 1), AUTHOR),
+        sealed(RungSpan{8, 6}, PrivateKey::generateRandom(), keyOf(history, 8, 1), AUTHOR),
+    };
+    const auto bad = LadderKeys::firstRungNotOpeningToTheChain(rungs, keyOf(history, 8, 1), history.registry);
+    ASSERT_TRUE(bad.has_value());
+    EXPECT_EQ(bad->target, 6u);
+}
+
+TEST_F(LadderKeysSelfCheck, SECURITY_AWrongLabelIsRefused) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    ArchiveRung relabelled = sealed(RungSpan{8, 6}, keyOf(history, 7, 1), keyOf(history, 8, 1), AUTHOR);
+    relabelled.span = RungSpan{8, 7}; // the right key, sealed under another span's label
+    const auto bad = LadderKeys::firstRungNotOpeningToTheChain({relabelled}, keyOf(history, 8, 1), history.registry);
+    ASSERT_TRUE(bad.has_value());
+    EXPECT_EQ(bad->target, 7u);
+}
+
+TEST_F(LadderKeysSelfCheck, SECURITY_ARungToAnotherRecipientIsRefused) {
+    const EpochHistory history = simulateEpochHistory(8, 1);
+    const ArchiveRung elsewhere = sealed(RungSpan{8, 7}, keyOf(history, 7, 1), PrivateKey::generateRandom(), AUTHOR);
+    EXPECT_TRUE(LadderKeys::firstRungNotOpeningToTheChain({elsewhere}, keyOf(history, 8, 1), history.registry).has_value());
 }
 
 // registry

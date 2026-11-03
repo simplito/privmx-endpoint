@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_GROUP_GROUPTYPES_HPP_
 
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -64,6 +65,14 @@ struct EnvelopeFileState {
     ByteCount skipInChunk = 0; // read side: bytes to drop off the next chunk after a seek
     bool seeked = false;       // read side: completeness is no longer checkable
     std::string buffer{};      // bytes not yet forming a whole chunk
+    bool closed = false;       // set by the finish, under the handle's lock; later calls are refused
+};
+
+// One open file handle. Every call on the handle holds `mutex` for its whole duration, so calls on one
+// handle never interleave; their order is still the caller's to choose.
+struct EnvelopeFile {
+    std::mutex mutex;
+    EnvelopeFileState state; // guarded by mutex
 };
 
 // A roster split the way `prepareContainerUpdate` wants it.

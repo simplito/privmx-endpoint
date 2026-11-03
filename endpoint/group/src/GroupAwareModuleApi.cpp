@@ -42,15 +42,23 @@ GroupAwareModuleApi::GroupAwareModuleApi(
             }
         }
     );
+    _pinnedGroupEpoch = [impl = _groupApi](const std::string& groupId) { return impl->pinnedKeyVersion(groupId); };
 }
 
 GroupAwareModuleApi::~GroupAwareModuleApi() = default;
 
-void GroupAwareModuleApi::absorbAutoRekeyFailure(const std::string& moduleId, const privmx::utils::PrivmxException& e) {
+void GroupAwareModuleApi::absorbAutoRekeyFailure(
+    const std::string& moduleId,
+    const privmx::utils::PrivmxException& e,
+    bool forwardSecrecyEnforced
+) {
     auto code = core::ExceptionConverter::convert(e).getCode();
     if (code == privmx::endpoint::server::ContainerRotatedAlreadyException().getCode()) {
         invalidateModuleKeysInCache(moduleId);
         return;
+    }
+    if (!forwardSecrecyEnforced) {
+        return; // the container stays on the old epoch, and the write that follows is allowed to use it
     }
     if (code == privmx::endpoint::server::AccessDeniedException().getCode()) {
         throw core::StaleKeyRekeyRequiredException("automatic re-key of moduleId=" + moduleId + " was denied");
@@ -216,7 +224,11 @@ void GroupAwareModuleApi::resolveGroupEpochs(
     std::vector<core::GroupGrantWithKey>& grants,
     std::unordered_map<std::string, core::GroupEpochInfo>& groupCache
 ) {
-    auto isComplete = [](const core::GroupGrantWithKey& g) { return g.groupEpoch > 0 && !g.groupPubKey.empty(); };
+    // A caller's key that contradicts the state this process verified is read again, never wrapped to.
+    auto isComplete = [&](const core::GroupGrantWithKey& g) {
+        return g.groupEpoch > 0 && !g.groupPubKey.empty() &&
+            (!_groupApi || _groupApi->agreesWithPin(g.groupId, contextId, g.groupEpoch, g.groupPubKey));
+    };
     std::vector<std::string> toFetch;
     for (const auto& g : grants) {
         if (isComplete(g) || groupCache.find(g.groupId) != groupCache.end())

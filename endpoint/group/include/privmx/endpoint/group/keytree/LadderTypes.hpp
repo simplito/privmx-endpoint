@@ -27,23 +27,18 @@ namespace endpoint {
 namespace group {
 namespace keytree {
 
-enum class RungRecipientKind {
-    // The group's own grant public key at `span.at` — an ordinary chain or skip rung.
-    Epoch,
-    // A single member — used only to cross an era boundary.
-    User,
-    // An entitlement group — the O(1) way to cross an era boundary.
-    Group,
-};
-
-// A published rung: `wrap(sk_{span.target} -> pk_recipient)`. For `Epoch` the recipient is the group's own grant
-// key, which is what makes the ladder cost size-independent: one ciphertext serves every member, present and future.
+// A published rung: `wrap(sk_{span.target} -> pk_{span.at})`, sealed to the group's own grant key at `span.at`,
+// which is what makes the ladder cost size-independent: one ciphertext serves every member, present and future.
+// There is no other kind of recipient: a rung sealed to anything else would satisfy the unit-rung rule while
+// leaving the epoch unreachable from below.
 struct ArchiveRung {
     RungSpan span{0, 0};
-    RungRecipientKind recipientKind = RungRecipientKind::Epoch;
-    std::string recipientId; // userId or groupId, for the two era-crossing kinds
-    std::string blob;        // ECIES ciphertext, base64. Opaque to the server.
-    std::string author;      // who published it — the handle for attributing detected tampering
+    std::string blob;   // ECIES ciphertext, base64. Opaque to the server.
+    // Who to blame for detected tampering. `GroupKeyResolver::authenticated` sets it to the opener of `span.at` (from
+    // the signed statement) for a rung sealed under that opener's key and clears it for any other sealer, so the
+    // bridge alone cannot name a culprit. It is no proof of authorship: the seal is static ECDH, and anyone holding
+    // `sk_{span.at}` (every member of that epoch) can seal a rung under the opener's key and have it blamed on them.
+    std::string author;
 };
 
 // The anchor of verification: a party derives the public key from whatever it recovers and compares against this,
@@ -77,18 +72,13 @@ struct DescentResult {
     DescentFailure failure = DescentFailure::None;
     // Oldest epoch actually recovered. Partial progress is cached and worth reporting.
     std::uint32_t reachedEpoch = 0;
-    // Publisher of the offending rung, when `failure == Tampered`.
+    // Publisher of the offending rung, when `failure == Tampered`: the first rung at the failing hop that carries an
+    // author (opener-sealed) and opens to a wrong key, whichever candidate failed first. An unattributed rung never
+    // sets it, and cannot mask the opener's bad rung either.
     std::optional<std::string> blame;
     // Rungs actually traversed, reported rather than inferred: a ladder carrying its skip rungs walks
     // `O(log delta)`, one that lost them walks `delta`.
     std::uint32_t hops = 0;
-};
-
-// An entitlement target for an era-crossing link: a member or a group, with the key to wrap to.
-struct EraLinkRecipient {
-    RungRecipientKind kind = RungRecipientKind::User;
-    std::string id;
-    privmx::crypto::PublicKey publicKey;
 };
 
 } // namespace keytree

@@ -15,7 +15,7 @@ CMakeUserPresets.json
 test/env/create_dataset/api_key.ini
 test/env/create_dataset/ServerData.json
 test/env/create_dataset/ServerData.ini
-test/env/datasets/Dataset_*
+test/env/datasets/
 test/runner/.venv/
 test/env/create_dataset/volumes/bridge/*
 test/env/create_dataset/volumes/mongo/*

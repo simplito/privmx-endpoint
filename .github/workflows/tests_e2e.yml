@@ -41,6 +41,11 @@ jobs:
     - name: Upload binaries
       run: conan upload "*" --remote=privmx --confirm
 
+    - name: Generate e2e dataset
+      run: |
+        source build/build/Debug/generators/conanrun.sh
+        ./scripts/generate_test_dataset.sh --build-dir "build"
+
     - name: Run e2e tests
       run: |
         source build/build/Debug/generators/conanrun.sh
