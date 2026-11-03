@@ -62,6 +62,25 @@ std::uint32_t GroupKeyResolver::epochOf(std::int64_t value, bool floor) {
     return static_cast<std::uint32_t>(value);
 }
 
+std::uint32_t GroupKeyResolver::ladderFloor(
+    std::int64_t eraFloor,
+    const std::optional<std::int64_t>& prunedBelow,
+    std::int64_t currentEpoch
+) {
+    const std::int64_t floor = std::max<std::int64_t>({1, eraFloor, prunedBelow.value_or(1)});
+    if (floor > currentEpoch || floor > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+        throw privmx::endpoint::group::GroupDataIntegrityException("a ladder floor past the last epoch");
+    }
+    return static_cast<std::uint32_t>(floor);
+}
+
+std::int64_t GroupKeyResolver::newestEpoch(
+    const server::GroupInfo& group,
+    const server::GroupGetKeyArchiveResult& archive
+) {
+    return std::max(group.keyVersion, archive.keyVersion);
+}
+
 TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
     TreeGroupState state = TreeWire::toRuntime(
         TreeWire::fromGroupInfo(group), epochOf(group.keyVersion),

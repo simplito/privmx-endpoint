@@ -25,7 +25,7 @@ limitations under the License.
 namespace privmx::endpoint::group {
 // What the unit tests reach inside GroupApiImpl (a friend of it).
 struct GroupApiImplTestAccess {
-    static constexpr std::uint64_t RELEASE_WINDOW_MS = ::privmx::endpoint::group::RELEASE_WINDOW_MS;
+    static constexpr std::uint64_t RELEASE_WINDOW_MS = CommitEngine::RELEASE_WINDOW_MS;
 
     static void selfUpdate(GroupApiImpl& api, const std::string& groupId) { api.selfUpdate(groupId); }
     // The flush point does nothing from here on, so what a test counts never depends on the random due times.
@@ -81,24 +81,7 @@ struct GroupApiImplTestAccess {
         api._sessions.forEach([&count](GroupSession&) { ++count; });
         return count;
     }
-    static std::vector<core::server::GroupKeysEntry> filterToKeyId(
-        const std::vector<core::server::GroupKeysEntry>& all,
-        const std::string& groupId,
-        const std::string& keyId
-    ) {
-        return ::privmx::endpoint::group::filterToKeyId(all, groupId, keyId);
-    }
-    static bool wrappedByEpochOpener(
-        const std::vector<core::server::GroupKeysEntry>& routes,
-        const std::string& wrappedBy,
-        const std::map<std::uint64_t, keytree::CommitStatement>& openers
-    ) {
-        return ::privmx::endpoint::group::wrappedByEpochOpener(routes, wrappedBy, openers);
-    }
     // The group key resolver the key provider is handed (containers, envelopes, the group's own metadata).
     static core::KeyProvider::GroupPrivKeyResolver groupKeyResolver(GroupApiImpl& api) { return api._groupPrivKeyResolver; }
-    static std::string describeResolveFailure(const keytree::ResolveResult& resolved) {
-        return ::privmx::endpoint::group::describeResolveFailure(resolved);
-    }
 };
 } // namespace privmx::endpoint::group

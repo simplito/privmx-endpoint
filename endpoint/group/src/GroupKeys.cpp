@@ -23,24 +23,8 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace group;
 
-std::string group::blameSuffix(const std::optional<std::string>& who, const std::string& as) {
+std::string GroupKeys::blameSuffix(const std::optional<std::string>& who, const std::string& as) {
     return who.has_value() ? " (" + as + " " + who.value() + ")" : "";
-}
-
-std::uint32_t group::ladderFloorOf(
-    std::int64_t eraFloor,
-    const std::optional<std::int64_t>& prunedBelow,
-    std::int64_t currentEpoch
-) {
-    const std::int64_t floor = std::max<std::int64_t>({1, eraFloor, prunedBelow.value_or(1)});
-    if (floor > currentEpoch || floor > static_cast<std::int64_t>(UINT32_MAX)) {
-        throw GroupDataIntegrityException("a ladder floor past the last epoch");
-    }
-    return static_cast<std::uint32_t>(floor);
-}
-
-std::int64_t group::newestEpoch(const server::GroupInfo& group, const server::GroupGetKeyArchiveResult& archive) {
-    return std::max(group.keyVersion, archive.keyVersion);
 }
 
 privmx::crypto::PrivateKey GroupKeys::resolveGroupPrivKey(
@@ -62,7 +46,7 @@ privmx::crypto::PrivateKey GroupKeys::resolveGroupPrivKey(
     // supported tree, or a caller without a seat, is left to the resolver, which refuses both without a key.
     std::optional<GroupRead> fresh;
     if (!reuse) {
-        fresh = deps.facade.read(pathRead(groupId), keytree::TreeVerifier::Scope::Path);
+        fresh = deps.facade.read(VerifiedGroup::pathRead(groupId), keytree::TreeVerifier::Scope::Path);
     }
     const VerifiedGroup* verified = reuse ? seatedRead : (fresh->verified.has_value() ? &fresh->verified.value() : nullptr);
     const server::GroupInfo& group = reuse ? **seatedRead : fresh->group();
@@ -153,7 +137,7 @@ keytree::ResolveResult GroupKeys::resolveDescending(
     };
     const std::uint32_t current = keytree::GroupKeyResolver::epochOf(group->keyVersion);
     const std::uint32_t floor = deps.sessions.of(group->id)->treeKeys()->raiseFloor(
-        ladderFloorOf(group->eraFloor.value_or(1), group->archivePrunedBelow, group->keyVersion)
+        keytree::GroupKeyResolver::ladderFloor(group->eraFloor.value_or(1), group->archivePrunedBelow, group->keyVersion)
     );
     // Below the floor the descent ends at the floor whatever was fetched, so the path goes no lower.
     const std::uint32_t goal = std::max(static_cast<std::uint32_t>(epoch), floor);
@@ -209,7 +193,9 @@ server::GroupGetKeyArchiveResult GroupKeys::fetchKeyArchive(
     // Remembered no higher than the verified epoch: an epoch the archive names past it is only the bridge's word.
     deps.sessions.of(group->id)->treeKeys()->raiseFloor(
         std::min(
-            ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow, newestEpoch(group, archive)),
+            keytree::GroupKeyResolver::ladderFloor(
+                archive.eraFloor, archive.archivePrunedBelow, keytree::GroupKeyResolver::newestEpoch(group, archive)
+            ),
             keytree::GroupKeyResolver::epochOf(group->keyVersion)
         )
     );
@@ -217,12 +203,12 @@ server::GroupGetKeyArchiveResult GroupKeys::fetchKeyArchive(
     return keytree::GroupKeyResolver::authenticated(
         std::move(archive),
         deps.treeVerifier.epochOpeners(
-            group->id, group->contextId, treeEnvironment(deps.serverApi, deps.connection, group->id)
+            group->id, group->contextId, VerifiedGroup::treeEnvironment(deps.serverApi, deps.connection, group->id)
         )
     );
 }
 
-std::string group::describeResolveFailure(const keytree::ResolveResult& resolved) {
+std::string GroupKeys::describeResolveFailure(const keytree::ResolveResult& resolved) {
     switch (resolved.failure) {
     case keytree::ResolveFailure::NoTree:
         return "Group key unavailable: group has no key tree";
@@ -267,7 +253,7 @@ std::string group::describeResolveFailure(const keytree::ResolveResult& resolved
     }
 }
 
-std::vector<core::server::GroupKeysEntry> group::filterToKeyId(
+std::vector<core::server::GroupKeysEntry> GroupKeys::filterToKeyId(
     const std::vector<core::server::GroupKeysEntry>& all,
     const std::string& groupId,
     const std::string& keyId
@@ -291,7 +277,7 @@ std::vector<core::server::GroupKeysEntry> group::filterToKeyId(
     return filtered;
 }
 
-bool group::wrappedByEpochOpener(
+bool GroupKeys::wrappedByEpochOpener(
     const std::vector<core::server::GroupKeysEntry>& routes,
     const std::string& wrappedBy,
     const std::map<std::uint64_t, keytree::CommitStatement>& openers
@@ -386,7 +372,7 @@ core::DecryptedEncKeyV2 GroupKeys::encKeyById(
         !wrappedByEpochOpener(
             candidates, found.dio.creatorUserId,
             deps.treeVerifier.epochOpeners(
-                groupId, moduleKeys.contextId, treeEnvironment(deps.serverApi, deps.connection, groupId)
+                groupId, moduleKeys.contextId, VerifiedGroup::treeEnvironment(deps.serverApi, deps.connection, groupId)
             )
         )) {
         throw core::EncryptionKeyValidationException("Group key " + keyId + " was not wrapped by its epoch's opener");

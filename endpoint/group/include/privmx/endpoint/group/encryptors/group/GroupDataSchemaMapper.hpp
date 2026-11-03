@@ -26,6 +26,7 @@
 
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include "privmx/endpoint/group/Types.hpp"
+#include "privmx/endpoint/group/encryptors/group/DynamicTypes.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataEncryptorV5.hpp"
 #include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 
@@ -101,6 +102,24 @@ public:
         const std::vector<std::string>& users,
         const std::vector<std::string>& managers
     );
+
+    // `rosterTag` has to be computed over exactly the fields the block declares. One builder for all three
+    // roster writers, so the tag inputs and the declared values cannot drift apart.
+    static dynamic::MembershipBlock buildMembershipBlock(
+        const core::EncKey& key,
+        const std::string& groupPubKey,
+        int64_t keyVersion,
+        int64_t rosterVersion,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers
+    );
+
+    // The served group's rules: signed only on a verified read, which bound them to its latest statement
+    // (`describes`). A plan parses them off the read before it refuses an unseated one, as it always has.
+    static keytree::GroupRules rulesOf(const server::GroupInfo& group);
+
+    // The read's rules, roster and planes (a verified read's, but in a plan's prologue, see `rulesOf`).
+    static PriorRole priorOf(const server::GroupInfo& group);
 
     // `HMAC(subkey, "publicMeta" | epoch | publicMetaVersion)`. Key-bound rather than merely signed: nothing in
     // this plane is encrypted, so a bridge with a keypair of its own could otherwise re-author the envelope.

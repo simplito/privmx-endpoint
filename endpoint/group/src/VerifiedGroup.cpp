@@ -19,13 +19,13 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace group;
 
-server::GroupGetModel group::pathRead(const std::string& groupId) {
+server::GroupGetModel VerifiedGroup::pathRead(const std::string& groupId) {
     return server::GroupGetModel{
         .groupId = groupId, .type = {}, .scope = {}, .forUserIds = {}, .forNewMembers = {}, .fromRosterVersion = {}
     };
 }
 
-server::GroupGetModel group::planRead(
+server::GroupGetModel VerifiedGroup::planRead(
     const std::string& groupId,
     std::optional<std::vector<std::string>> forUserIds,
     std::optional<std::int64_t> forNewMembers
@@ -40,7 +40,7 @@ server::GroupGetModel group::planRead(
     };
 }
 
-keytree::TreeVerifier::Environment group::treeEnvironment(
+keytree::TreeVerifier::Environment VerifiedGroup::treeEnvironment(
     ServerApi& serverApi,
     const core::Connection& connection,
     const std::string& groupId
@@ -60,7 +60,7 @@ keytree::TreeVerifier::Environment group::treeEnvironment(
     return environment;
 }
 
-GroupRead group::readGroup(
+GroupRead VerifiedGroup::read(
     ServerApi& serverApi,
     keytree::TreeVerifier& treeVerifier,
     const core::Connection& connection,

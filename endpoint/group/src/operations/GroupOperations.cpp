@@ -40,7 +40,9 @@ std::uint32_t rotationFloorOf(
     const privmx::endpoint::group::server::GroupInfo& group,
     const privmx::endpoint::group::server::GroupGetKeyArchiveResult& archive
 ) {
-    const std::uint32_t floor = ladderFloorOf(archive.eraFloor, archive.archivePrunedBelow, newestEpoch(group, archive));
+    const std::uint32_t floor = keytree::GroupKeyResolver::ladderFloor(
+        archive.eraFloor, archive.archivePrunedBelow, keytree::GroupKeyResolver::newestEpoch(group, archive)
+    );
     if (floor > group.keyVersion) {
         throw privmx::endpoint::group::StalePlan{};
     }
@@ -68,7 +70,7 @@ const VerifiedGroup& planOn(const GroupRead& read) {
     if (!keytree::GroupKeyResolver::hasSupportedTree(read.unseated)) {
         keytree::ResolveResult asResolve;
         asResolve.failure = keytree::ResolveFailure::UnsupportedTreeVersion;
-        throw core::EncryptionKeyValidationException(describeResolveFailure(asResolve));
+        throw core::EncryptionKeyValidationException(GroupKeys::describeResolveFailure(asResolve));
     }
     throw core::EncryptionKeyValidationException("caller holds no leaf in this group's key tree");
 }
@@ -166,7 +168,7 @@ keytree::TreeGroupState GroupOperations::climbForPlanning(
             throw core::EncryptionKeyValidationException(
                 "Group key unavailable: the edge to your own leaf opens neither with your current key nor with the "
                 "previous one; ask a manager to remove and re-add you, or remove the member that wrote it" +
-                blameSuffix(asResolve.blame)
+                GroupKeys::blameSuffix(asResolve.blame)
             );
         }
         // Garbled wraps must not let whoever garbled them block their own removal: the state is verified, and a
@@ -186,11 +188,11 @@ keytree::TreeGroupState GroupOperations::climbForPlanning(
             const bool ownKeyChange = climb.failure == keytree::ClimbFailure::LeafDidNotOpen &&
                 !historyStillReachable && climbsWithPreviousIdentity(state, identity.value());
             if (!ownKeyChange) {
-                LOG_WARN("[climbForPlanning] planning without the climb: ", describeResolveFailure(asResolve))
+                LOG_WARN("[climbForPlanning] planning without the climb: ", GroupKeys::describeResolveFailure(asResolve))
                 return state;
             }
         }
-        throw core::EncryptionKeyValidationException(describeResolveFailure(asResolve));
+        throw core::EncryptionKeyValidationException(GroupKeys::describeResolveFailure(asResolve));
     }
     if (climbKey == nullptr) {
         deferred.scheduleSelfUpdateIfNeeded(group->id, group);
@@ -245,7 +247,7 @@ std::string GroupOperations::create(
     GroupRosterToEncryptV5 rosterToEncrypt{
         .internalMeta = internalMeta,
         .dio = ctx.dio,
-        .membership = buildMembershipBlock(ctx.key, groupPubKeyStr, 1, 1, users, managers)
+        .membership = GroupDataSchemaMapper::buildMembershipBlock(ctx.key, groupPubKeyStr, 1, 1, users, managers)
     };
     GroupPublicMetaToEncryptV5 publicMetaToEncrypt{
         .publicMeta = publicMeta,
@@ -304,7 +306,7 @@ std::string GroupOperations::create(
     }
     // The group has no id until the bridge stores it, so the first statement names the resourceId instead.
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
-        plan, keytree::CommitOp::Create, ctx.resourceId, commitDate(), 1, groupPubKeyStr, 1,
+        plan, keytree::CommitOp::Create, ctx.resourceId, CommitEngine::commitDate(), 1, groupPubKeyStr, 1,
         core::EndpointUtils::usersWithPubKeyToIds(users), core::EndpointUtils::usersWithPubKeyToIds(managers),
         creatorId, {}, {}, {}, // the genesis roster is bound by rosterHash; the bridge serves it beside the chain
         rules.hash
@@ -345,7 +347,7 @@ void GroupOperations::add(const std::string& groupId, const std::vector<GroupMem
     // One read, not two: the bridge holds the roster, so it allocates the seats and serves every node record the
     // plan resolves through in the same answer.
     const std::optional<GroupRead> settled = engine.readForCommit(
-        planRead(groupId, std::nullopt, static_cast<std::int64_t>(newMembers.size())),
+        VerifiedGroup::planRead(groupId, std::nullopt, static_cast<std::int64_t>(newMembers.size())),
         keytree::TreeVerifier::Scope::Plan, op
     );
     if (!settled.has_value()) {
@@ -396,7 +398,7 @@ void GroupOperations::add(const std::string& groupId, const std::vector<GroupMem
 
     // The roster after the change, derived rather than restated. Bare ids: nothing here wraps a key to them,
     // so the public keys the caller used to supply were never read.
-    RosterAfterChange roster = rosterFromUserIds(attestedUsers, attestedManagers);
+    RosterAfterChange roster = RosterAfterChange::bare(attestedUsers, attestedManagers);
     server::GroupAddMembersModel model;
     std::vector<core::UserWithPubKey> newcomerKeys;
     std::vector<keytree::TreeMember> treeNewcomers;
@@ -438,7 +440,7 @@ void GroupOperations::add(const std::string& groupId, const std::vector<GroupMem
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
-        .membership = buildMembershipBlock(
+        .membership = GroupDataSchemaMapper::buildMembershipBlock(
             ctx.key, currentGroup.groupPubKey, currentEpoch, newRosterVersion, roster.users, roster.managers
         )
     };
@@ -449,11 +451,11 @@ void GroupOperations::add(const std::string& groupId, const std::vector<GroupMem
     model.transition = keytree::TreeWire::toAdditionTransition(plan, currentEpoch);
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
-    const keytree::GroupRules rules = rulesOf(verified);
+    const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(verified);
     const std::vector<std::string> users = core::EndpointUtils::usersWithPubKeyToIds(roster.users);
     const std::vector<std::string> managers = core::EndpointUtils::usersWithPubKeyToIds(roster.managers);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
-        plan, keytree::CommitOp::Add, groupId, commitDate(), static_cast<std::uint64_t>(currentEpoch),
+        plan, keytree::CommitOp::Add, groupId, CommitEngine::commitDate(), static_cast<std::uint64_t>(currentEpoch),
         currentGroup.groupPubKey, static_cast<std::uint64_t>(newRosterVersion), users, managers, adderId, addedUsers,
         addedManagers, {}, rules.hash
     );
@@ -490,7 +492,9 @@ std::vector<keytree::ArchiveRung> GroupOperations::buildRotationRungs(
 ) const {
     keytree::LadderKeys ladder(cache);
     // Never a floor lower than one this session has seen: a bridge under-reporting it gets no rung below it.
-    std::uint32_t floor = cache.raiseFloor(ladderFloorOf(group->eraFloor.value_or(1), group->archivePrunedBelow, group->keyVersion));
+    std::uint32_t floor = cache.raiseFloor(
+        keytree::GroupKeyResolver::ladderFloor(group->eraFloor.value_or(1), group->archivePrunedBelow, group->keyVersion)
+    );
     // What the rungs are checked against before submitting: the chain, never the cache. Without skip targets that is
     // the verified group's own key (the unit rung's target); with them, the openers' keys (`fetchKeyArchive`).
     std::vector<keytree::EpochRegistryEntry> registry{
@@ -566,7 +570,7 @@ std::optional<bool> GroupOperations::remove(
     leavingIds.erase(std::unique(leavingIds.begin(), leavingIds.end()), leavingIds.end());
     const std::string op = keytree::TreeCommits::opKey("remove", leavingIds);
     const std::optional<GroupRead> settled = engine.readForCommit(
-        planRead(groupId, userIds), keytree::TreeVerifier::Scope::Plan, op
+        VerifiedGroup::planRead(groupId, userIds), keytree::TreeVerifier::Scope::Plan, op
     );
     if (!settled.has_value()) {
         return std::nullopt;
@@ -574,7 +578,7 @@ std::optional<bool> GroupOperations::remove(
     const GroupRead& read = settled.value();
     const server::GroupInfo& currentGroup = read.group();
     // The verified read's rules and roster judge the planes the removal carries (the removed with the role they had).
-    prior = priorOf(currentGroup);
+    prior = GroupDataSchemaMapper::priorOf(currentGroup);
     // Refused before anything is planned: the remover mints the next epoch's grant key, so a member removing itself
     // would walk out holding the key meant to lock it out. The bridge refuses it too.
     const std::string self = deps.connection.getImpl()->getMyUserId(currentGroup.contextId);
@@ -625,7 +629,7 @@ std::optional<bool> GroupOperations::remove(
         );
     // The roster that remains, derived from the verified head rather than restated by the caller.
     const std::set<std::string> leaving(userIds.begin(), userIds.end());
-    RosterAfterChange roster = rosterFromUserIds(attestedUsers, attestedManagers);
+    RosterAfterChange roster = RosterAfterChange::bare(attestedUsers, attestedManagers);
     const auto drop = [&](std::vector<core::UserWithPubKey>& list) {
         list.erase(
             std::remove_if(
@@ -658,9 +662,9 @@ std::optional<bool> GroupOperations::remove(
     model.groupKeys = sealed.groupKeys;
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
-    const keytree::GroupRules rules = rulesOf(verified);
+    const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(verified);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
-        plan, keytree::CommitOp::Remove, groupId, commitDate(), static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr,
+        plan, keytree::CommitOp::Remove, groupId, CommitEngine::commitDate(), static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr,
         static_cast<std::uint64_t>(newRosterVersion), core::EndpointUtils::usersWithPubKeyToIds(roster.users),
         core::EndpointUtils::usersWithPubKeyToIds(roster.managers), removerId, {}, {}, userIds, rules.hash
     );
@@ -718,14 +722,14 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior) const
     // Every record, because the statement signs the tree hash, which a rotation leaves as it is.
     const std::string op = keytree::TreeCommits::opKey("rotate");
     const std::optional<GroupRead> settled = engine.readForCommit(
-        planRead(groupId), keytree::TreeVerifier::Scope::Plan, op
+        VerifiedGroup::planRead(groupId), keytree::TreeVerifier::Scope::Plan, op
     );
     if (!settled.has_value()) {
         return false;
     }
     const GroupRead& read = settled.value();
     const server::GroupInfo& currentGroup = read.group();
-    prior = priorOf(currentGroup);
+    prior = GroupDataSchemaMapper::priorOf(currentGroup);
     const int64_t currentEpoch = currentGroup.keyVersion;
     const int64_t newEpoch = currentEpoch + 1;
     const int64_t newRosterVersion = currentGroup.rosterVersion + 1;
@@ -752,7 +756,7 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior) const
     const std::vector<keytree::ArchiveRung> rungs = buildRotationRungs(
         verified, keytree::GroupKeyResolver::epochOf(newEpoch), plan.grantKey, currentGrantKey, rotatorId, *cache
     );
-    const RosterAfterChange roster = rosterFromUserIds(attestedUsers, attestedManagers);
+    const RosterAfterChange roster = RosterAfterChange::bare(attestedUsers, attestedManagers);
     const std::string newGroupPubKeyStr = plan.grantKey.getPublicKey().toBase58DER();
     const NewEpochRoster sealed = metadata.sealRosterForNewEpoch(
         currentGroup, roster, newGroupPubKeyStr, newEpoch, newRosterVersion, false
@@ -768,9 +772,9 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior) const
     model.groupKeys = sealed.groupKeys;
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
-    const keytree::GroupRules rules = rulesOf(verified);
+    const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(verified);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
-        plan, keytree::CommitOp::Rotate, groupId, commitDate(), static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr,
+        plan, keytree::CommitOp::Rotate, groupId, CommitEngine::commitDate(), static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr,
         static_cast<std::uint64_t>(newRosterVersion), attestedUsers, attestedManagers, rotatorId, {}, {}, {}, rules.hash
     );
     engine.chainTo(statement, verified);
@@ -799,7 +803,7 @@ bool GroupOperations::selfUpdate(
     const std::string& op,
     bool mayCompleteOther
 ) const {
-    const server::GroupGetModel getModel = planRead(groupId);
+    const server::GroupGetModel getModel = VerifiedGroup::planRead(groupId);
     std::optional<VerifiedGroup> read;
     keytree::TreeGroupState state;
     std::pair<std::vector<std::string>, std::vector<std::string>> roster;
@@ -809,7 +813,7 @@ bool GroupOperations::selfUpdate(
     if (previousKey == nullptr) {
         // The need first, on the small path view: by now the node's healer, or anybody's commit through it, has most
         // likely refilled it, and the plan view carries every node record of the tree.
-        const GroupRead pathView = deps.facade.read(pathRead(groupId), keytree::TreeVerifier::Scope::Path);
+        const GroupRead pathView = deps.facade.read(VerifiedGroup::pathRead(groupId), keytree::TreeVerifier::Scope::Path);
         if (!pathView.verified.has_value()) {
             return false;
         }
@@ -886,9 +890,9 @@ bool GroupOperations::selfUpdate(
     model.id = groupId;
     model.expectedKeyVersion = group.keyVersion;
     model.transition = keytree::TreeWire::toSelfUpdateTransition(plan, group.keyVersion);
-    const keytree::GroupRules rules = rulesOf(verified);
+    const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(verified);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
-        plan, keytree::CommitOp::SelfUpdate, groupId, commitDate(), static_cast<std::uint64_t>(group.keyVersion),
+        plan, keytree::CommitOp::SelfUpdate, groupId, CommitEngine::commitDate(), static_cast<std::uint64_t>(group.keyVersion),
         group.groupPubKey, static_cast<std::uint64_t>(group.rosterVersion), attestedUsers, attestedManagers, memberId,
         {}, {}, {}, rules.hash
     );
@@ -929,7 +933,7 @@ void GroupOperations::updatePolicy(
 ) const {
     // A signed commit like any other: the chain, the CAS and the role check. It moves no node, no epoch and
     // no roster, so the path view is enough to sign the tree hash as it stands.
-    const server::GroupGetModel getModel = pathRead(groupId);
+    const server::GroupGetModel getModel = VerifiedGroup::pathRead(groupId);
     GroupRead read = deps.facade.read(getModel, keytree::TreeVerifier::Scope::Path);
     if (!read.verified.has_value()) {
         throw core::InvalidParamsException("only a member of a group can change its policy");
@@ -952,7 +956,7 @@ void GroupOperations::updatePolicy(
     const server::GroupInfo& group = *verified;
     // Commit B: the planes as read, attested under the rules in force, and whose authors the new rules leave without
     // `update`. Those planes would be refused once this lands; somebody who keeps `update` must carry them.
-    const PriorRole prior = priorOf(verified);
+    const PriorRole prior = GroupDataSchemaMapper::priorOf(verified);
     std::vector<std::string> losers;
     const Group mapped = mapper.validateDecryptAndConvertGroup(group, keyProvider, keys.resolverOver(&verified), prior);
     const auto keepsUpdate = [&](const std::string& userId) {
@@ -978,7 +982,7 @@ void GroupOperations::updatePolicy(
     statement.op = keytree::CommitOp::Policy;
     statement.groupId = groupId;
     statement.treeVersion = keytree::TreeMath::TREE_VERSION;
-    statement.date = commitDate();
+    statement.date = CommitEngine::commitDate();
     statement.keyVersion = latest.keyVersion;
     statement.groupPubKey = latest.groupPubKey;
     statement.rosterVersion = latest.rosterVersion;

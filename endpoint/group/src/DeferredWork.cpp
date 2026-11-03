@@ -146,7 +146,7 @@ void DeferredWork::checkLadderAt(const std::string& groupId, const std::string& 
         // A later epoch the archive names (a rotation since the pin) excuses a higher floor here, but only the
         // verified epoch bounds what the session remembers: the archive's epoch is the bridge's word.
         const auto verified = static_cast<std::uint32_t>(_deps.treeVerifier.pinnedKeyVersion(groupId));
-        const std::uint32_t served = ladderFloorOf(
+        const std::uint32_t served = keytree::GroupKeyResolver::ladderFloor(
             raw.eraFloor, raw.archivePrunedBelow, std::max(static_cast<std::int64_t>(verified), raw.keyVersion)
         );
         const std::uint32_t floor = std::max(cache->raiseFloor(std::min(served, verified)), served);
@@ -160,7 +160,7 @@ void DeferredWork::checkLadderAt(const std::string& groupId, const std::string& 
     // Something looks broken. The cache decided that, and the cache is not the chain: every key about to be sealed,
     // and the key it is sealed to, is checked against the epoch's opener first. A mismatch is forgotten, never sealed.
     const auto openers = _deps.treeVerifier.epochOpeners(
-        groupId, contextId, treeEnvironment(_deps.serverApi, _deps.connection, groupId)
+        groupId, contextId, VerifiedGroup::treeEnvironment(_deps.serverApi, _deps.connection, groupId)
     );
     const auto matchesChain = [&](std::uint32_t epoch) {
         const auto key = cache->getGrantKey(epoch);
@@ -245,7 +245,7 @@ void DeferredWork::run(const std::string& groupId, const std::function<void()>& 
         } catch (const StalePlan&) {
             lostRace = true; // planned behind a commit of this client's own; re-plan like a lost race
         } catch (const privmx::utils::PrivmxException& e) {
-            lostRace = isRetryableCommitRejection(e);
+            lostRace = CommitEngine::isRetryableCommitRejection(e);
             if (!lostRace) {
                 LOG_WARN("[selfUpdate] group key tree self-update dropped: ", e.what())
             }

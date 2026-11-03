@@ -130,7 +130,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
             throw core::InvalidParamsException("user '" + newMember.user.userId + "' is listed twice");
         }
     }
-    commitWithRetry([&] { _ops.add(groupId, newMembers); });
+    CommitEngine::commitWithRetry([&] { _ops.add(groupId, newMembers); });
     runDueWork(groupId);
 }
 
@@ -139,7 +139,7 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
     _metadata.retryPendingCarry(groupId);
     std::optional<bool> historyAbandoned;
     PriorRole prior;
-    commitWithRetry([&] { historyAbandoned = _ops.remove(groupId, userIds, prior); });
+    CommitEngine::commitWithRetry([&] { historyAbandoned = _ops.remove(groupId, userIds, prior); });
     // The removal is committed; the metadata entry is now one epoch behind, under a key the departed member
     // still holds. Move it up. Outside the write above on purpose — see the header. Already done when an earlier
     // call's removal turned out to have landed (`settle`).
@@ -153,7 +153,7 @@ void GroupApiImpl::rotateGroupKey(const std::string& groupId) {
     _metadata.retryPendingCarry(groupId);
     bool committedHere = true;
     PriorRole prior;
-    commitWithRetry([&] { committedHere = _ops.rotate(groupId, prior); });
+    CommitEngine::commitWithRetry([&] { committedHere = _ops.rotate(groupId, prior); });
     // As after a removal: the metadata planes sit one epoch behind, under the key the rotation replaces. Nobody left,
     // so nobody is accepted as an author beyond the members. Already done when an earlier call's rotation turned out
     // to have landed (`settle`).
@@ -187,7 +187,7 @@ void GroupApiImpl::savePinsIfDue() noexcept {
 }
 
 void GroupApiImpl::selfUpdate(const std::string& groupId) {
-    _ops.selfUpdate(groupId, nullptr, SELF_UPDATE_OP, false);
+    _ops.selfUpdate(groupId, nullptr, CommitEngine::SELF_UPDATE_OP, false);
 }
 
 bool GroupApiImpl::renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey) {
@@ -204,7 +204,7 @@ bool GroupApiImpl::renewLeaf(const std::string& groupId, const std::string& prev
     // done this at connect with Connection::adoptPreviousIdentity; a second adoption is a no-op).
     adoptPreviousIdentity(previous.value());
     bool renewed = false;
-    commitWithRetry([&] { renewed = _ops.selfUpdate(groupId, &previous.value(), RENEW_LEAF_OP, true); });
+    CommitEngine::commitWithRetry([&] { renewed = _ops.selfUpdate(groupId, &previous.value(), RENEW_LEAF_OP, true); });
     runDueWork(groupId);
     return renewed;
 }
@@ -235,7 +235,7 @@ void GroupApiImpl::updateGroupPrivateMeta(
 void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies) {
     _metadata.retryPendingCarry(groupId);
     std::optional<PendingCarry> carry;
-    commitWithRetry([&] {
+    CommitEngine::commitWithRetry([&] {
         carry.reset();
         _ops.updatePolicy(groupId, policies, carry);
     });
@@ -255,7 +255,7 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
 
 Group GroupApiImpl::getGroup(const std::string& groupId) {
     _metadata.retryPendingCarry(groupId);
-    const server::GroupGetModel params = pathRead(groupId);
+    const server::GroupGetModel params = VerifiedGroup::pathRead(groupId);
     // The head roster entry and the current metadata entry — two entries, whatever the group's age. The cache is
     // keyed on the roster version, because that is the plane key material moves with.
     // The tree first, on this same answer: only the verified latest statement says which epoch is current. A caller
@@ -317,7 +317,7 @@ core::PagingList<GroupSummary> GroupApiImpl::listGroups(
 bool GroupApiImpl::hasVerifiedGrantKey(const server::GroupInfo& group) {
     const SaveDuePins saveAfter{*this};
     try {
-        _treeVerifier.verifyListed(group, treeEnvironment(_serverApi, _connection, group.id));
+        _treeVerifier.verifyListed(group, VerifiedGroup::treeEnvironment(_serverApi, _connection, group.id));
     } catch (const std::exception& e) {
         LOG_WARN("[hasVerifiedGrantKey] group ", group.id, " failed verification: ", e.what())
         return false;
@@ -361,19 +361,19 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
             // Limit: one `groupGet` per unpinned group, the whole tree for a caller without a seat; a statement-and-
             // roster read would do if non-member writes to new or rotated groups get hot.
             try {
-                read.push_back(_serverApi.groupGet(pathRead(summary.id)).group);
+                read.push_back(_serverApi.groupGet(VerifiedGroup::pathRead(summary.id)).group);
             } catch (const std::exception& e) {
                 LOG_WARN("[fetchGroupEpochs] group ", summary.id, " unreadable: ", e.what())
             }
         }
-        _treeVerifier.preverifyListed(read, treeEnvironment(_serverApi, _connection, std::string()));
+        _treeVerifier.preverifyListed(read, VerifiedGroup::treeEnvironment(_serverApi, _connection, std::string()));
         for (const auto& group : read) {
             // A group that fails verification gets no key at all, never the unverified one.
             if (group.contextId != contextId) {
                 continue;
             }
             try {
-                _treeVerifier.verifyListed(group, treeEnvironment(_serverApi, _connection, group.id));
+                _treeVerifier.verifyListed(group, VerifiedGroup::treeEnvironment(_serverApi, _connection, group.id));
             } catch (const std::exception& e) {
                 LOG_WARN("[fetchGroupEpochs] group ", group.id, " failed verification: ", e.what())
                 continue;
@@ -518,7 +518,7 @@ VerifiedGroup GroupApiImpl::readGroupForKeys(const std::string& groupId) {
     const SaveDuePins saveAfter{*this};
     // The tree pins `keyVersion` (never below what this client verified or committed itself); the head entry's
     // grant must be at exactly that epoch; the roster attestation binds the head to it and moves the version pins.
-    GroupRead read = _hooks.read(pathRead(groupId), keytree::TreeVerifier::Scope::Path);
+    GroupRead read = _hooks.read(VerifiedGroup::pathRead(groupId), keytree::TreeVerifier::Scope::Path);
     if (!read.verified.has_value()) {
         throw core::EncryptionKeyValidationException("caller holds no verifiable seat in this group's key tree");
     }
@@ -614,7 +614,9 @@ GroupApiHooks GroupApiImpl::bindHooks() {
     return GroupApiHooks{
         .read =
             [this](const server::GroupGetModel& model, keytree::TreeVerifier::Scope scope) {
-                return readGroup(_serverApi, _treeVerifier, _connection, model, scope, [this] { savePinsIfDue(); });
+                return VerifiedGroup::read(
+                    _serverApi, _treeVerifier, _connection, model, scope, [this] { savePinsIfDue(); }
+                );
             },
         .readForKeys = [this](const std::string& groupId) { return readGroupForKeys(groupId); },
         .savePins = [this] { savePins(); },

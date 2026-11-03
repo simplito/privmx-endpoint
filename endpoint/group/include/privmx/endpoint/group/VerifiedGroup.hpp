@@ -31,40 +31,8 @@ namespace group {
 
 struct GroupRead;
 
-// `groupGet` in the default "path" scope, with nothing for anybody else.
-server::GroupGetModel pathRead(const std::string& groupId);
-
-// `groupGet` in the "plan" scope: every node record a plan resolves through, plus the departing members' paths
-// (`forUserIds`) or seats for the newcomers (`forNewMembers`).
-server::GroupGetModel planRead(
-    const std::string& groupId,
-    std::optional<std::vector<std::string>> forUserIds = std::nullopt,
-    std::optional<std::int64_t> forNewMembers = std::nullopt
-);
-
-// The connection's UserVerifier and the group's statements, as TreeVerifier reads them.
-keytree::TreeVerifier::Environment treeEnvironment(
-    ServerApi& serverApi,
-    const core::Connection& connection,
-    const std::string& groupId
-);
-
-// The one reader of VerifiedGroup: reads the group (`model`) and checks the served tree against the commit
-// statements before any key from it is used (TreeVerifier). Checks nothing for a group without a supported tree or a
-// caller without a seat: there is nothing it could climb, and the callers refuse both. Any failure is re-read once
-// and checked again: a torn read, or a concurrent read having pinned a newer state, passes the second time.
-// `afterVerify` runs once the answer is in, whatever the check then does (it saves the pins the check moved).
-GroupRead readGroup(
-    ServerApi& serverApi,
-    keytree::TreeVerifier& treeVerifier,
-    const core::Connection& connection,
-    const server::GroupGetModel& model,
-    keytree::TreeVerifier::Scope scope,
-    const std::function<void()>& afterVerify
-);
-
-// A `groupGet` answer that holds a seat of the caller's and whose tree passed `readGroup`'s check against the commit
-// statements, as it left it. Only `readGroup` constructs one; it never changes after that.
+// A `groupGet` answer that holds a seat of the caller's and whose tree passed `read`'s check against the commit
+// statements, as it left it. Only `read` constructs one; it never changes after that.
 class VerifiedGroup {
 public:
     const server::GroupInfo& operator*() const { return _group; }
@@ -72,18 +40,43 @@ public:
     // Read-only views of the answer pass where a plain one is taken.
     operator const server::GroupInfo&() const { return _group; }
 
+    // `groupGet` in the default "path" scope, with nothing for anybody else.
+    static server::GroupGetModel pathRead(const std::string& groupId);
+
+    // `groupGet` in the "plan" scope: every node record a plan resolves through, plus the departing members' paths
+    // (`forUserIds`) or seats for the newcomers (`forNewMembers`).
+    static server::GroupGetModel planRead(
+        const std::string& groupId,
+        std::optional<std::vector<std::string>> forUserIds = std::nullopt,
+        std::optional<std::int64_t> forNewMembers = std::nullopt
+    );
+
+    // The connection's UserVerifier and the group's statements, as TreeVerifier reads them.
+    static keytree::TreeVerifier::Environment treeEnvironment(
+        ServerApi& serverApi,
+        const core::Connection& connection,
+        const std::string& groupId
+    );
+
+    // The one reader of VerifiedGroup: reads the group (`model`) and checks the served tree against the commit
+    // statements before any key from it is used (TreeVerifier). Checks nothing for a group without a supported tree
+    // or a caller without a seat: there is nothing it could climb, and the callers refuse both. Any failure is
+    // re-read once and checked again: a torn read, or a concurrent read having pinned a newer state, passes the
+    // second time. `afterVerify` runs once the answer is in, whatever the check then does (it saves the pins the
+    // check moved).
+    static GroupRead read(
+        ServerApi& serverApi,
+        keytree::TreeVerifier& treeVerifier,
+        const core::Connection& connection,
+        const server::GroupGetModel& model,
+        keytree::TreeVerifier::Scope scope,
+        const std::function<void()>& afterVerify
+    );
+
 private:
     explicit VerifiedGroup(server::GroupInfo group) : _group(std::move(group)) {}
 
     server::GroupInfo _group;
-    friend GroupRead readGroup(
-        ServerApi&,
-        keytree::TreeVerifier&,
-        const core::Connection&,
-        const server::GroupGetModel&,
-        keytree::TreeVerifier::Scope,
-        const std::function<void()>&
-    );
 };
 
 // What `readGroup` saw: `verified`, or, for a group without a supported tree or a caller without a seat, the answer

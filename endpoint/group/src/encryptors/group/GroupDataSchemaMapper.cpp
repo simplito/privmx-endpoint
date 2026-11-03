@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <set>
+#include <stdexcept>
 
 #include <Poco/JSON/Object.h>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
@@ -256,6 +258,44 @@ void GroupDataSchemaMapper::assertPrivateMetaIsAttested(
     if (meta.metaVersion != groupInfo.privateMetaVersion) {
         throw GroupMembershipMismatchException();
     }
+}
+
+dynamic::MembershipBlock GroupDataSchemaMapper::buildMembershipBlock(
+    const core::EncKey& key,
+    const std::string& groupPubKey,
+    int64_t keyVersion,
+    int64_t rosterVersion,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers
+) {
+    return dynamic::MembershipBlock{
+        .rosterTag = rosterTag(
+            key.key, keyVersion, rosterVersion, core::EndpointUtils::usersWithPubKeyToIds(users),
+            core::EndpointUtils::usersWithPubKeyToIds(managers)
+        ),
+        .groupPubKey = groupPubKey,
+        .keyId = key.id,
+        .keyVersion = keyVersion,
+        .rosterVersion = rosterVersion
+    };
+}
+
+keytree::GroupRules GroupDataSchemaMapper::rulesOf(const server::GroupInfo& group) {
+    try {
+        return keytree::TreeCommits::rules(group.policy, group.creator);
+    } catch (const std::invalid_argument&) {
+        throw GroupDataIntegrityException("the group's policy does not parse");
+    }
+}
+
+PriorRole GroupDataSchemaMapper::priorOf(const server::GroupInfo& group) {
+    return PriorRole{
+        .rules = rulesOf(group),
+        .users = group.users,
+        .managers = group.managers,
+        .publicMeta = group.publicMeta,
+        .privateMeta = group.privateMeta
+    };
 }
 
 std::string GroupDataSchemaMapper::rosterTag(

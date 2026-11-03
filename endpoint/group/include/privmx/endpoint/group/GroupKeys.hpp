@@ -28,6 +28,7 @@ limitations under the License.
 
 #include "privmx/endpoint/group/GroupApiHooks.hpp"
 #include "privmx/endpoint/group/GroupSession.hpp"
+#include "privmx/endpoint/group/GroupTypes.hpp"
 #include "privmx/endpoint/group/ServerApi.hpp"
 #include "privmx/endpoint/group/VerifiedGroup.hpp"
 #include "privmx/endpoint/group/keytree/GroupKeyResolver.hpp"
@@ -38,60 +39,40 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
-// " (wrapped by <who>)", or nothing without a culprit.
-std::string blameSuffix(const std::optional<std::string>& who, const std::string& as = "wrapped by");
-
-std::string describeResolveFailure(const keytree::ResolveResult& resolved);
-
-// The floor nothing below may be reached or repaired: the higher of the era floor and the prune watermark. Never
-// above `currentEpoch`, the verified epoch: a rotation would then build no rung at all, not even the unit rung, and
-// cut every earlier epoch off.
-std::uint32_t ladderFloorOf(
-    std::int64_t eraFloor,
-    const std::optional<std::int64_t>& prunedBelow,
-    std::int64_t currentEpoch
-);
-
-// The newest epoch an archive answer may speak of: the verified group's, or a later one the archive was read at (a
-// rotation since the group was read). A floor above both is a lie; one above the group's only is a race.
-std::int64_t newestEpoch(const server::GroupInfo& group, const server::GroupGetKeyArchiveResult& archive);
-
-// Narrowing the archive first keeps the key provider to one grant-key resolution per envelope opened,
-// rather than one per key the group has ever held. Only the group's own routes: its key is wrapped to itself.
-std::vector<core::server::GroupKeysEntry> filterToKeyId(
-    const std::vector<core::server::GroupKeysEntry>& all,
-    const std::string& groupId,
-    const std::string& keyId
-);
-
-// Whether `wrappedBy` opened the epoch one of `routes` labels the key with (the group's creator or a remover,
-// the only members who wrap an epoch's content key). Anybody in the context can wrap a key of their own to an
-// epoch's public grant key; the opener, after `epochOpeners`, is a member's signed word.
-bool wrappedByEpochOpener(
-    const std::vector<core::server::GroupKeysEntry>& routes,
-    const std::string& wrappedBy,
-    const std::map<std::uint64_t, keytree::CommitStatement>& openers
-);
-
 class DeferredWork;
-
-// A climb with another key over another cache (leaf renewal); nothing then reaches the epoch keys, the group's
-// shared cache or the due-work records.
-struct ClimbWith {
-    std::shared_ptr<keytree::TreeKeyCache> cache;
-    const privmx::crypto::PrivateKey* key;
-};
 
 // Resolution of the group keys of one GroupApiImpl: epoch grant keys by climb and ladder, envelope keys by id. The
 // deferred work found on the way is recorded in the GroupApiImpl's, for its lifetime.
-struct GroupKeys {
-    const GroupDeps& deps;
-    DeferredWork& deferred;
+class GroupKeys {
+public:
+    GroupKeys(const GroupDeps& deps, DeferredWork& deferred) : deps(deps), deferred(deferred) {}
 
     // Spans per `groupGetKeyArchive` call the bridge serves.
     static constexpr std::size_t MAX_ARCHIVE_SPANS = 128;
     // Rungs per page of a windowed `groupGetKeyArchive`.
     static constexpr std::size_t ARCHIVE_RUNGS_PER_PAGE = 256;
+
+    // " (wrapped by <who>)", or nothing without a culprit.
+    static std::string blameSuffix(const std::optional<std::string>& who, const std::string& as = "wrapped by");
+
+    static std::string describeResolveFailure(const keytree::ResolveResult& resolved);
+
+    // Narrowing the archive first keeps the key provider to one grant-key resolution per envelope opened,
+    // rather than one per key the group has ever held. Only the group's own routes: its key is wrapped to itself.
+    static std::vector<core::server::GroupKeysEntry> filterToKeyId(
+        const std::vector<core::server::GroupKeysEntry>& all,
+        const std::string& groupId,
+        const std::string& keyId
+    );
+
+    // Whether `wrappedBy` opened the epoch one of `routes` labels the key with (the group's creator or a remover,
+    // the only members who wrap an epoch's content key). Anybody in the context can wrap a key of their own to an
+    // epoch's public grant key; the opener, after `epochOpeners`, is a member's signed word.
+    static bool wrappedByEpochOpener(
+        const std::vector<core::server::GroupKeysEntry>& routes,
+        const std::string& wrappedBy,
+        const std::map<std::uint64_t, keytree::CommitStatement>& openers
+    );
 
     // The grant key of `epoch` (0: the current one). `seatedRead`: a read of this group the caller has already
     // verified; its own current epoch then resolves off it rather than off a second read that would verify the same
@@ -154,6 +135,10 @@ struct GroupKeys {
         const std::string& groupId,
         const std::string& groupPubKeyBase58
     ) const;
+
+private:
+    const GroupDeps& deps;
+    DeferredWork& deferred;
 };
 
 } // namespace group

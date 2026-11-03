@@ -64,7 +64,7 @@ TEST(GroupEnvelopeKeyFilter, KeepsOnlyTheKeyAskedFor) {
     auto all = std::vector<core::server::GroupKeysEntry>{
         route("grp", {key("aaa", 1), key("bbb", 2), key("ccc", 3)})
     };
-    auto filtered = GroupApiImplTestAccess::filterToKeyId(all, "grp", "bbb");
+    auto filtered = GroupKeys::filterToKeyId(all, "grp", "bbb");
 
     ASSERT_EQ(filtered.size(), 1u);
     ASSERT_EQ(filtered[0].keys.size(), 1u);
@@ -81,7 +81,7 @@ TEST(GroupEnvelopeKeyFilter, KeepsEveryRouteToTheSameKey) {
         route("grp", {key("shared", 2)}),
         route("grp", {key("unrelated", 2)}),
     };
-    auto filtered = GroupApiImplTestAccess::filterToKeyId(all, "grp", "shared");
+    auto filtered = GroupKeys::filterToKeyId(all, "grp", "shared");
 
     EXPECT_EQ(filtered.size(), 2u);
     EXPECT_EQ(totalKeys(filtered), 2u);
@@ -99,7 +99,7 @@ TEST(GroupEnvelopeKeyFilter, DropsEntriesLeftEmpty) {
         route("grp", {key("aaa", 1)}),
         route("grp", {key("bbb", 1)}),
     };
-    auto filtered = GroupApiImplTestAccess::filterToKeyId(all, "grp", "aaa");
+    auto filtered = GroupKeys::filterToKeyId(all, "grp", "aaa");
 
     ASSERT_EQ(filtered.size(), 1u);
     EXPECT_EQ(filtered[0].keys[0].keyId, "aaa");
@@ -109,7 +109,7 @@ TEST(GroupEnvelopeKeyFilter, SECURITY_KeepsOnlyTheGroupsOwnRoutes) {
     // A group's key is wrapped to the group itself. A route through another group is a key somebody else
     // chose, served under the same keyId.
     auto all = std::vector<core::server::GroupKeysEntry>{route("grp", {key("k", 1)}), route("other", {key("k", 1)})};
-    auto filtered = GroupApiImplTestAccess::filterToKeyId(all, "grp", "k");
+    auto filtered = GroupKeys::filterToKeyId(all, "grp", "k");
     ASSERT_EQ(filtered.size(), 1u);
     EXPECT_EQ(filtered[0].group, "grp");
 }
@@ -121,17 +121,17 @@ TEST(GroupEnvelopeKeyFilter, SECURITY_AnEarlierEpochsKeyCountsOnlyAsItsOpenerWra
     openers[1].committer = "alice";
     openers[2].committer = "bob";
     const auto routes = std::vector<core::server::GroupKeysEntry>{route("grp", {key("k2", 2)})};
-    EXPECT_TRUE(GroupApiImplTestAccess::wrappedByEpochOpener(routes, "bob", openers));
-    EXPECT_FALSE(GroupApiImplTestAccess::wrappedByEpochOpener(routes, "mallory", openers));
-    EXPECT_FALSE(GroupApiImplTestAccess::wrappedByEpochOpener(routes, "alice", openers)) << "another epoch's opener";
+    EXPECT_TRUE(GroupKeys::wrappedByEpochOpener(routes, "bob", openers));
+    EXPECT_FALSE(GroupKeys::wrappedByEpochOpener(routes, "mallory", openers));
+    EXPECT_FALSE(GroupKeys::wrappedByEpochOpener(routes, "alice", openers)) << "another epoch's opener";
 }
 
 TEST(GroupEnvelopeKeyFilter, UnknownKeyYieldsNothing) {
     // The caller reads this as "this group publishes no such key" and reports it, rather than fetching and
     // resolving its way through the whole archive to discover the same thing.
     auto all = std::vector<core::server::GroupKeysEntry>{route("grp", {key("aaa", 1), key("bbb", 2)})};
-    EXPECT_TRUE(GroupApiImplTestAccess::filterToKeyId(all, "grp", "missing").empty());
-    EXPECT_TRUE(GroupApiImplTestAccess::filterToKeyId({}, "grp", "aaa").empty());
+    EXPECT_TRUE(GroupKeys::filterToKeyId(all, "grp", "missing").empty());
+    EXPECT_TRUE(GroupKeys::filterToKeyId({}, "grp", "aaa").empty());
 }
 
 TEST(GroupEnvelopeKeyFilter, SECURITY_AHeadKeyFromAnEarlierEpochIsRefused) {

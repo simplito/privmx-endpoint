@@ -14,13 +14,13 @@ limitations under the License.
 #include <algorithm>
 #include <mutex>
 #include <set>
-#include <stdexcept>
 
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
+#include "privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp"
 #include "privmx/utils/Logger.hpp"
 
 using namespace privmx::endpoint;
@@ -40,19 +40,11 @@ constexpr int MAX_COMMIT_ATTEMPTS = 3;
 
 } // namespace
 
-std::uint64_t group::commitDate() {
+std::uint64_t CommitEngine::commitDate() {
     return static_cast<std::uint64_t>(privmx::utils::Utils::getNowTimestamp());
 }
 
-keytree::GroupRules group::rulesOf(const server::GroupInfo& group) {
-    try {
-        return keytree::TreeCommits::rules(group.policy, group.creator);
-    } catch (const std::invalid_argument&) {
-        throw GroupDataIntegrityException("the group's policy does not parse");
-    }
-}
-
-void group::commitWithRetry(const std::function<void()>& attempt) {
+void CommitEngine::commitWithRetry(const std::function<void()>& attempt) {
     for (int attemptNo = 1;; ++attemptNo) {
         try {
             attempt();
@@ -78,7 +70,7 @@ void group::commitWithRetry(const std::function<void()>& attempt) {
 // A concurrent commit — most often a self-update, which every member under a blanked node runs on its own — moved
 // the generations or versions this one was planned against. Nothing about the request was wrong, so a fresh read
 // and a fresh plan are all it takes; anything else the bridge refuses is reported as it is.
-bool group::isRetryableCommitRejection(const privmx::utils::PrivmxException& e) {
+bool CommitEngine::isRetryableCommitRejection(const privmx::utils::PrivmxException& e) {
     const unsigned int code = e.getCode();
     if ((code & 0xFFFF0000) != 0) {
         return false; // not a bridge application error
@@ -147,7 +139,7 @@ void CommitEngine::chainTo(keytree::CommitStatement& statement, const VerifiedGr
     if (const auto problem = keytree::TreeCommits::deltasProblem(statement, users, managers)) {
         throw core::InvalidParamsException(problem.value());
     }
-    if (!keytree::TreeCommits::permits(rulesOf(group), statement, users, managers)) {
+    if (!keytree::TreeCommits::permits(GroupDataSchemaMapper::rulesOf(group), statement, users, managers)) {
         throw GroupUnauthorizedSignerException(
             "the group's signed policy does not give this member the role this commit needs"
         );
@@ -228,7 +220,7 @@ Settled CommitEngine::settle(const std::string& groupId, const std::string& op, 
     // add is no failure, whatever the UserVerifier says of its newcomers now.
     const bool landedBelowPin = deps.treeVerifier.pinnedSeq(groupId) > first->seq &&
         deps.treeVerifier.chainedToPin(
-            groupId, first->seq, first->digest, treeEnvironment(deps.serverApi, deps.connection, groupId)
+            groupId, first->seq, first->digest, VerifiedGroup::treeEnvironment(deps.serverApi, deps.connection, groupId)
         );
     // A resent add wraps to its newcomers' keys again: only while the UserVerifier still vouches for them. Outside
     // every lock of ours, like any verifier call.

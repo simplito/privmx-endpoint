@@ -34,44 +34,17 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 
-// Which planes a carry-forward moves: after a removal or rotation, the planes behind the new epoch (or, with
-// history abandoned, starts them over empty); after a narrowing policy commit, the planes whose author lost
-// `update` (`losers`).
-enum class CarryScope { NewEpoch, Policy };
-
-// What a commit opening a new epoch publishes beside the tree, shared by removal and rotation: the roster under a
-// fresh metadata key (a key never used before once history is abandoned), and that key wrapped once to the new
-// grant key.
-struct NewEpochRoster {
-    std::string keyId;
-    Poco::Dynamic::Var data;
-    core::server::GroupKeyEntrySet groupKeys;
-};
-
-// `rosterTag` has to be computed over exactly the fields the block declares. One builder for all three
-// roster writers, so the tag inputs and the declared values cannot drift apart.
-dynamic::MembershipBlock buildMembershipBlock(
-    const core::EncKey& key,
-    const std::string& groupPubKey,
-    int64_t keyVersion,
-    int64_t rosterVersion,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers
-);
-
-// The attested roster, as bare ids — the update preparation diffs names, it does not wrap to them.
-RosterAfterChange rosterFromUserIds(const std::vector<std::string>& users, const std::vector<std::string>& managers);
-
-// The read's rules, roster and planes (a verified read's, but in a plan's prologue, see `rulesOf`).
-PriorRole priorOf(const server::GroupInfo& group);
-
 // The metadata writes of one GroupApiImpl, the roster a new epoch publishes, and the carry-forward of the planes
 // after a commit. References into the GroupApiImpl, for its lifetime; no state but the sessions' pending carries.
-struct GroupMetadata {
-    const GroupDeps& deps;
-    GroupDataSchemaMapper& mapper;
-    const std::shared_ptr<core::KeyProvider>& keyProvider;
-    const GroupKeys& keys;
+class GroupMetadata {
+public:
+    GroupMetadata(
+        const GroupDeps& deps,
+        GroupDataSchemaMapper& mapper,
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const GroupKeys& keys
+    )
+        : deps(deps), mapper(mapper), keyProvider(keyProvider), keys(keys) {}
 
     // The entire shared prologue of both metadata writes; neither plane reads the other's envelope.
     // Kept in one place so the epoch guard cannot drift between the two callers.
@@ -102,6 +75,12 @@ struct GroupMetadata {
         int64_t newRosterVersion,
         bool abandonHistory
     ) const;
+
+private:
+    const GroupDeps& deps;
+    GroupDataSchemaMapper& mapper;
+    const std::shared_ptr<core::KeyProvider>& keyProvider;
+    const GroupKeys& keys;
 };
 
 } // namespace group

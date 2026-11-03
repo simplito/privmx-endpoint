@@ -17,56 +17,11 @@ limitations under the License.
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 
-#include "privmx/endpoint/group/CommitEngine.hpp"
 #include "privmx/endpoint/group/GroupException.hpp"
 #include "privmx/utils/Logger.hpp"
 
 using namespace privmx::endpoint;
 using namespace group;
-
-dynamic::MembershipBlock group::buildMembershipBlock(
-    const core::EncKey& key,
-    const std::string& groupPubKey,
-    int64_t keyVersion,
-    int64_t rosterVersion,
-    const std::vector<core::UserWithPubKey>& users,
-    const std::vector<core::UserWithPubKey>& managers
-) {
-    return dynamic::MembershipBlock{
-        .rosterTag = GroupDataSchemaMapper::rosterTag(
-            key.key, keyVersion, rosterVersion, core::EndpointUtils::usersWithPubKeyToIds(users),
-            core::EndpointUtils::usersWithPubKeyToIds(managers)
-        ),
-        .groupPubKey = groupPubKey,
-        .keyId = key.id,
-        .keyVersion = keyVersion,
-        .rosterVersion = rosterVersion
-    };
-}
-
-RosterAfterChange group::rosterFromUserIds(
-    const std::vector<std::string>& users,
-    const std::vector<std::string>& managers
-) {
-    const auto toBare = [](const std::vector<std::string>& ids) {
-        std::vector<core::UserWithPubKey> bare;
-        for (const std::string& id : ids) {
-            bare.push_back(core::UserWithPubKey{.userId = id, .pubKey = std::string()});
-        }
-        return bare;
-    };
-    return RosterAfterChange{.users = toBare(users), .managers = toBare(managers)};
-}
-
-PriorRole group::priorOf(const server::GroupInfo& group) {
-    return PriorRole{
-        .rules = rulesOf(group),
-        .users = group.users,
-        .managers = group.managers,
-        .publicMeta = group.publicMeta,
-        .privateMeta = group.privateMeta
-    };
-}
 
 NewEpochRoster GroupMetadata::sealRosterForNewEpoch(
     const server::GroupInfo& currentGroup,
@@ -105,7 +60,7 @@ NewEpochRoster GroupMetadata::sealRosterForNewEpoch(
         .internalMeta = core::
             ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
         .dio = ctx.dio,
-        .membership = buildMembershipBlock(
+        .membership = GroupDataSchemaMapper::buildMembershipBlock(
             ctx.key, newGroupPubKeyStr, newEpoch, newRosterVersion, roster.users, roster.managers
         )
     };
@@ -225,7 +180,7 @@ MetaWriteContext GroupMetadata::prepareMetaWrite(const VerifiedGroup& verified) 
 
     // Names no diff, so `UsersKeysResolver` sees no reason to mint a key: the pub keys are deliberately empty
     // because nothing here is wrapped to anybody.
-    const auto roster = rosterFromUserIds(currentGroup.users, currentGroup.managers);
+    const auto roster = RosterAfterChange::bare(currentGroup.users, currentGroup.managers);
     auto ctx = deps.facade.prepareUpdate(currentGroup, resourceId, roster, false);
 
     // The roster head always sits at the current epoch, so the key selected off it is the current epoch's.

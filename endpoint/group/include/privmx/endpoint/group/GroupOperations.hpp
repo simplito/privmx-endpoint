@@ -46,16 +46,20 @@ namespace group {
 // read): read and settle (CommitEngine), plan on the verified read (in the order its checks refuse; an unseated read is
 // refused where the climb would be), then chain, sign and submit. References into the GroupApiImpl, for its lifetime;
 // the closures an operation hands the engine capture copies and the units they use.
-struct GroupOperations {
-    const GroupDeps& deps;
-    GroupDataSchemaMapper& mapper;
-    const std::shared_ptr<core::KeyProvider>& keyProvider;
-    // Resolves the group's grant keys for the key provider (the roster and metadata keys).
-    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver;
-    const GroupKeys& keys;
-    DeferredWork& deferred;
-    const GroupMetadata& metadata;
-    const CommitEngine& engine;
+class GroupOperations {
+public:
+    GroupOperations(
+        const GroupDeps& deps,
+        GroupDataSchemaMapper& mapper,
+        const std::shared_ptr<core::KeyProvider>& keyProvider,
+        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
+        const GroupKeys& keys,
+        DeferredWork& deferred,
+        const GroupMetadata& metadata,
+        const CommitEngine& engine
+    )
+        : deps(deps), mapper(mapper), keyProvider(keyProvider), groupPrivKeyResolver(groupPrivKeyResolver), keys(keys),
+          deferred(deferred), metadata(metadata), engine(engine) {}
 
     // The whole create: the group has no chain to settle or retry against yet. Returns the new group's id.
     std::string create(
@@ -139,6 +143,17 @@ struct GroupOperations {
         const std::string& ownUserId,
         const std::set<std::string>& newcomers = {}
     ) const;
+
+private:
+    const GroupDeps& deps;
+    GroupDataSchemaMapper& mapper;
+    const std::shared_ptr<core::KeyProvider>& keyProvider;
+    // Resolves the group's grant keys for the key provider (the roster and metadata keys).
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver;
+    const GroupKeys& keys;
+    DeferredWork& deferred;
+    const GroupMetadata& metadata;
+    const CommitEngine& engine;
 };
 
 } // namespace group
