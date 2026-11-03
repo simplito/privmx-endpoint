@@ -352,10 +352,38 @@ void GroupDataSchemaMapper::assertNotBelowPins(const server::GroupInfo& groupInf
 void GroupDataSchemaMapper::storeVersionPins(const server::GroupInfo& groupInfo) {
     // Compare again and store under one lock: two concurrent verifications must not both pass against the same
     // stale pin, or the later one could accept a version older than the one already verified.
+    bool rose = false;
+    bool first = false;
+    {
+        std::lock_guard lock(_pinMutex);
+        assertNotBelowPins(groupInfo);
+        first = _versionPins.count(groupInfo.id) == 0;
+        VersionPin& pinned = _versionPins[groupInfo.id];
+        const VersionPin now{groupInfo.rosterVersion, groupInfo.publicMetaVersion, groupInfo.privateMetaVersion};
+        for (std::size_t i = 0; i < now.size(); ++i) {
+            rose = rose || now[i] > pinned[i];
+        }
+        pinned = now;
+    }
+    if (rose && _onPinsMoved) {
+        // A rise is a metadata or roster write, which is rare: saved at once, not after the idle interval.
+        _onPinsMoved(!first);
+    }
+}
+
+std::map<std::string, std::array<std::int64_t, 3>> GroupDataSchemaMapper::exportVersionPins() {
     std::lock_guard lock(_pinMutex);
-    assertNotBelowPins(groupInfo);
-    _versionPins[groupInfo.id] =
-        VersionPin{groupInfo.rosterVersion, groupInfo.publicMetaVersion, groupInfo.privateMetaVersion};
+    return _versionPins;
+}
+
+void GroupDataSchemaMapper::importVersionPins(const std::map<std::string, std::array<std::int64_t, 3>>& stored) {
+    std::lock_guard lock(_pinMutex);
+    for (const auto& [groupId, counters] : stored) {
+        VersionPin& pinned = _versionPins[groupId];
+        for (std::size_t i = 0; i < pinned.size(); ++i) {
+            pinned[i] = std::max(pinned[i], counters[i]);
+        }
+    }
 }
 
 std::pair<uint32_t, core::DataIntegrityObject> GroupDataSchemaMapper::validateDataIntegrity(

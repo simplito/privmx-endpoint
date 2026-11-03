@@ -19,6 +19,7 @@
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 
 #include "privmx/endpoint/core/ContainerBaseApi.hpp"
+#include "privmx/endpoint/core/PinStoreInterface.hpp"
 #include "privmx/endpoint/group/GroupApi.hpp"
 #include "privmx/endpoint/group/GroupTypes.hpp"
 #include "privmx/endpoint/group/ServerApi.hpp"
@@ -363,7 +364,7 @@ private:
     // behind the pin. A refusal as a lost race (`isRetryableCommitRejection`) is remembered for `chainTo`.
     void submit(const std::string& groupId, const keytree::CommitStatement& statement, UnresolvedCommit commit);
     void forgetUnresolved(const std::string& groupId, const std::string& digest);
-    // The commit's outcome is known and it landed: forgotten and `landed`.
+    // The commit's outcome is known and it landed: forgotten, `landed`, and the pins saved (but a self-update's).
     void complete(const std::string& groupId, const UnresolvedCommit& commit);
     // A read to plan a commit for `op` on: verified, with this client's unresolved commit to the group settled first.
     // nullopt: `op` itself landed (Settled::Done). An unverified read is returned to be refused by the plan.
@@ -442,9 +443,17 @@ private:
     void scheduleSelfUpdateIfNeeded(const std::string& groupId, const server::GroupInfo& group);
     void scheduleSelfUpdate(const std::string& groupId, std::int64_t windowMs, bool healsFirst, int attempts = 0);
     // The flush point, at the end of a public call on `groupId` that succeeded: runs the group's due ladder checks
-    // and self-update. Best-effort: failures are logged, never thrown. Key
+    // and self-update, then `savePinsIfDue`. Best-effort: failures are logged, never thrown. Key
     // resolution for containers only records work; nothing commits there.
     void runDueWork(const std::string& groupId);
+    // Saves the pins when a major move is marked, or a minor one and PIN_SAVE_IDLE_INTERVAL has passed since the last
+    // save. Never throws. Runs at the end of every verifying path (`SaveDuePins`), container key lookups included, so
+    // persisting rollback protection never waits for a GroupApi call.
+    void savePinsIfDue() noexcept;
+    struct SaveDuePins {
+        GroupApiImpl& api;
+        ~SaveDuePins() { api.savePinsIfDue(); }
+    };
 
     // The new epoch's rungs, each checked to open with `newGrantKey` to the key the chain (never the cache) names for
     // its target before anything is submitted. On failure the offending target is forgotten, so the next attempt
@@ -505,10 +514,10 @@ private:
     // a hot session keeps the ones it already held — as it would by keeping the keys themselves.
     privmx::utils::ThreadSaveMap<std::string, privmx::crypto::PrivateKey> _epochKeys;
 
-    // Lock order: commitLock(groupId) -> _dueMutex. _dueMutex, _unresolvedMutex and
+    // Lock order: commitLock(groupId) -> _pinSaveMutex -> _dueMutex. _dueMutex, _unresolvedMutex and
     // _pendingCarryMutex are leaves; `runDueWork` holds none of them while running a task.
     //
-    // No thread of its own: deferred work (self-updates) is recorded and runs at the end
+    // No thread of its own: deferred work (self-updates, pin saves) is recorded and runs at the end
     // of the next public call on the group, after `due` (a "not before"). Records are dropped on disconnect.
     std::mutex _dueMutex;
     struct PendingSelfUpdate {
@@ -526,9 +535,31 @@ private:
     std::map<std::string, std::shared_ptr<std::mutex>> _commitLocks; // never pruned: one per group committed to
     std::map<std::string, UnresolvedCommit> _unresolved;
     // Limit: in memory only. A crash before the retry leaves the planes refused until a member holding `update`
-    // writes metadata (documented on updateGroupPolicy).
+    // writes metadata (documented on updateGroupPolicy); persist it next to the pins if that ever matters.
     std::mutex _pendingCarryMutex;
     std::map<std::string, PendingCarry> _pendingCarry;
+    // Pins kept in the connection's PinStore, shared by every GroupApi of this identity on this Bridge.
+    // `loadPins` merges the slot into memory once, at construction; `savePins` merges memory into the slot
+    // (compare-and-swap, `PinBlob::higher`) and the result back into memory. `pinsMoved` only marks them; saves run
+    // after every own commit but a self-update before the call returns, in `runDueWork` (a major move at once, minor
+    // ones once PIN_SAVE_IDLE_INTERVAL has passed since the last save) and at the end of every verification
+    // (`SaveDuePins`), on disconnect and in the destructor. A failed
+    // save is logged and retried in full like a minor move; the pins in memory keep protecting this instance meanwhile.
+    void loadPins();
+    void pinsMoved(bool major);
+    bool savePins(bool all = false);
+
+    // 30 s for self-update-only moves.
+    static constexpr std::chrono::milliseconds PIN_SAVE_IDLE_INTERVAL{30000};
+
+    std::shared_ptr<core::PinStoreInterface> _pinStore; // set once, in the constructor
+    std::string _pinStoreKey;
+    std::mutex _pinSaveMutex; // serialises saves; guards the one below
+    bool _pinSaveFull = false;
+    // Under `_dueMutex`: moved since the last save (a major move among them), and when the last save was tried.
+    bool _pinsMoved = false;
+    bool _pinsMovedMajor = false;
+    std::chrono::steady_clock::time_point _lastPinSave;
     friend struct GroupApiImplTestAccess; // tests reach selfUpdate() and turn `runDueWork` off
 };
 

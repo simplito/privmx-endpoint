@@ -45,7 +45,8 @@ namespace keytree {
 // since-blanked child.
 //
 // What it cannot close, by design:
-//   - First contact (no pin for the group, per GroupApi) trusts the latest validly signed state: trust
+//   - First contact (no pin for the group: per GroupApi without a PinStore, per device, Bridge and identity with one,
+//     whose pins every GroupApi of that identity loads and saves) trusts the latest validly signed state: trust
 //     on first use, as for any delivery service. That state may be any seq, so a first contact is not bound to genesis;
 //     `epochOpeners`, which reads the chain from seq 1, replays it from the genesis roster.
 //   - The bridge may withhold or delay commits.
@@ -87,7 +88,7 @@ public:
     // roster nor a statement, so it is never verified itself): its latest statement is genuine and describes the
     // served grant key, counters and roster, and its committer is on that roster. A pinned group must also continue
     // its pin (the pinned statement at its seq, a member-signed chain above it). No tree is checked; the pin is
-    // stored or moved up to the statement, so the writer is on first use only once per GroupApi. A statement below
+    // stored or moved up to the statement, so the writer is on first use only once per GroupApi (per device with a PinStore). A statement below
     // the pin passes, and `pinnedSeq` tells it apart. Throws GroupDataIntegrityException.
     void verifyListed(const server::GroupInfo& summary, const Environment& environment);
 
@@ -205,11 +206,34 @@ public:
         // Highest generation seen per node index. A blank keeps its generation, so blanking never lowers it.
         std::map<std::uint32_t, std::uint32_t> generations;
         std::uint64_t refusedSeq = 0; // `refusedAsLostRace`
+        // Persisted. A pin loaded without its roster (a compact record) replays it from genesis before it is
+        // extended (`chainFromGenesis`); `seenAt` orders which rosters the blob keeps.
+        bool hasRoster = true;
+        std::uint64_t seenAt = 0;
     };
 
     // One spelling per key (the same point base58'd uncompressed is another string but the same grant key): what
     // grant keys are compared by. Throws GroupDataIntegrityException on one that does not parse.
     static std::string canonicalKey(const std::string& base58);
+
+    // Pins and version-pin counters as the PinBlob holds them.
+    struct PinSet {
+        std::map<std::string, Pin> tree;
+        std::map<std::string, std::array<std::int64_t, 3>> planes; // rosterVersion, publicMetaVersion, privateMetaVersion
+    };
+
+    // Copies of the pins for a save: moved since the last export (or all, with `all`) whole, the rest compact (no
+    // roster, no generations). Clears the moved set.
+    std::map<std::string, Pin> exportPins(bool all);
+    // Records this device verified (its slot) merged into memory by `PinBlob::higher`:
+    // per group the higher seq wins, a tie keeps the pin in memory; `refusedSeq` and `seenAt` by max, generations by
+    // max when the record wins. A stored record is this device's own verified state, so it is taken without a read.
+    // Two instances that verified different branches simply converge on the higher one (a fork is a boundary, not
+    // detected here: a bridge able to fork can withhold just as well).
+    void mergeStored(const std::map<std::string, Pin>& stored);
+    // Set once, before use: called after `_mutex` is released whenever something persistent moved. `major`: the
+    // context, epoch, roster or rules changed, or `refusedSeq` rose; tree-only moves (self-updates) are minor.
+    void onPinsMoved(std::function<void(bool major)> callback);
 
     enum class Step { Ok, Unauthorized };
 
@@ -314,7 +338,8 @@ private:
     );
 
     // `latest` stored as the group's pin, with `nodes`' generations, if the pin is still `seen`; otherwise `seen` is
-    // refreshed to the pin as it now stands and nothing is stored (another verification moved it meanwhile).
+    // refreshed to the pin as it now stands and nothing is stored (another verification, or a merge of stored
+    // records, moved it meanwhile).
     bool storeIfPinned(
         const std::string& groupId,
         Pin& seen,
@@ -325,6 +350,28 @@ private:
         const GroupRules& rules,
         const std::vector<TreeNodeState>& nodes
     );
+    // What `movedLocked` compares: a pin's persisted scalars, without its roster (a 16k roster is not copied per read).
+    struct Snapshot {
+        std::string contextId;
+        std::uint64_t seq = 0;
+        std::string digest;
+        std::uint64_t keyVersion = 0;
+        std::string rosterHash;
+        std::string rulesHash;
+        std::uint64_t refusedSeq = 0;
+        bool hasRoster = true;
+    };
+    static Snapshot snapshotOf(const Pin& pin);
+    // Whether `after` differs from `before` in what is persisted: nullopt if not, else whether the move is major.
+    // Marks the group moved. Under `_mutex`.
+    std::optional<bool> movedLocked(
+        const std::string& groupId,
+        const Snapshot& before,
+        const Pin& after,
+        bool generationsRaised
+    );
+    // Calls the `onPinsMoved` callback; never under `_mutex`.
+    void notify(std::optional<bool> major);
 
     // `stored` moved to `latest` and the roster and rules it signed; under `_mutex`. Generations are the caller's.
     static void storeLocked(
@@ -366,6 +413,8 @@ private:
     mutable std::mutex _mutex;
     // Never evicted: a dropped pin turns the next read into a first contact the bridge may answer with any old state.
     std::map<std::string, Pin> _pins;
+    std::set<std::string> _dirty; // groups moved since the last `exportPins`
+    std::function<void(bool)> _onPinsMoved;
     // Limit: 16 groups' rosters (a 16k roster is ~2 MB); an evicted group refetches from seq 1.
     Bounded<Openers> _openers{16};
     Bounded<bool> _verifiedStatements{4096};

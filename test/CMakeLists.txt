@@ -158,6 +158,13 @@ target_link_libraries(test_unit_GroupKeyResolverTest privmx privmxendpointcore p
 add_executable(test_unit_GroupApiLyingBridgeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupApiLyingBridgeTest.cpp)
 target_link_libraries(test_unit_GroupApiLyingBridgeTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
+# Local state sealing, the compare-and-swap update and the Var store (core alone)
+add_executable(test_unit_LocalSealTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/LocalSealTest.cpp)
+target_link_libraries(test_unit_LocalSealTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
+# The pin blob codec and the merge of two instances' pins
+add_executable(test_unit_PinBlobTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/PinBlobTest.cpp)
+target_link_libraries(test_unit_PinBlobTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+
 # Roster attestation and the monotone version pin (builds signed server::GroupInfo by hand via GroupDataSchemaMapper::encrypt, no live bridge)
 add_executable(test_unit_GroupRosterTagTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupRosterTagTest.cpp)
 target_link_libraries(test_unit_GroupRosterTagTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)

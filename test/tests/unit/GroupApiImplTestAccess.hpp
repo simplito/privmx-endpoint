@@ -29,7 +29,7 @@ struct GroupApiImplTestAccess {
 
     static void selfUpdate(GroupApiImpl& api, const std::string& groupId) { api.selfUpdate(groupId); }
     // The flush point does nothing from here on, so what a test counts never depends on the random due times.
-    // Self-updates are then only the explicit `selfUpdate` above.
+    // Self-updates are then only the explicit `selfUpdate` above, pin saves only the synchronous ones.
     static void stopDueWork(GroupApiImpl& api) { api._dueWorkOff = true; }
     static std::size_t maxArchiveSpans() { return GroupApiImpl::MAX_ARCHIVE_SPANS; }
     // Whatever is recorded for the group made due now, then the flush point run (as at the end of a public call).
@@ -42,11 +42,16 @@ struct GroupApiImplTestAccess {
         }
         api.runDueWork(groupId);
     }
+    static bool savePins(GroupApiImpl& api) { return api.savePins(); }
+    // As if the last pin save (or failed attempt) were PIN_SAVE_IDLE_INTERVAL ago: no clock to move in a unit test.
+    static void agePinSave(GroupApiImpl& api) {
+        std::lock_guard<std::mutex> lock(api._dueMutex);
+        api._lastPinSave -= GroupApiImpl::PIN_SAVE_IDLE_INTERVAL;
+    }
     static std::array<std::int64_t, 3> versionPins(GroupApiImpl& api, const std::string& groupId) {
-        GroupDataSchemaMapper& mapper = *api._groupDataSchemaMapper;
-        std::lock_guard<std::mutex> lock(mapper._pinMutex);
-        const auto it = mapper._versionPins.find(groupId);
-        return it == mapper._versionPins.end() ? std::array<std::int64_t, 3>{0, 0, 0} : it->second;
+        const auto all = api._groupDataSchemaMapper->exportVersionPins();
+        const auto it = all.find(groupId);
+        return it == all.end() ? std::array<std::int64_t, 3>{0, 0, 0} : it->second;
     }
     static std::uint64_t pinnedSeq(GroupApiImpl& api, const std::string& groupId) {
         return api._treeVerifier.pinnedSeq(groupId);

@@ -19,6 +19,7 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
+#include "privmx/endpoint/group/keytree/PinBlob.hpp"
 #include "privmx/endpoint/group/keytree/TreeMath.hpp"
 #include "privmx/endpoint/group/keytree/TreeWire.hpp"
 
@@ -393,8 +394,19 @@ void TreeVerifier::verifyChain(
     if (pin.contextId != contextId) {
         reject("a group served in another context than its pin");
     }
-    Head head = pin;
-    std::set<std::string> grantKeys = {canonicalKey(pin.groupPubKey)};
+    Head head;
+    std::set<std::string> grantKeys;
+    if (pin.hasRoster) {
+        head = pin;
+        grantKeys = {canonicalKey(pin.groupPubKey)};
+    } else {
+        // A pin loaded without its roster. The roster to continue from is replayed from genesis and must end at
+        // exactly the pinned statement (so it reproduces the pinned rosterHash); the head, tree hash included, is the
+        // replayed one.
+        Openers known = openersAt(groupId, contextId, pin.seq, pin.digest, environment);
+        head = known.head;
+        grantKeys = std::move(known.grantKeys);
+    }
     followChain(groupId, contextId, head, grantKeys, toSeq, environment, [](const CommitStatement&) {});
     if (head.digest != toDigest) {
         reject("a chain that does not end at the latest statement");
@@ -567,17 +579,65 @@ bool TreeVerifier::storeIfPinned(
     const GroupRules& rules,
     const std::vector<TreeNodeState>& nodes
 ) {
-    std::lock_guard lock(_mutex);
-    Pin& stored = _pins[groupId];
-    if (stored.seq != seen.seq || stored.digest != seen.digest) {
-        seen = stored;
-        return false;
+    std::optional<bool> moved;
+    {
+        std::lock_guard lock(_mutex);
+        Pin& stored = _pins[groupId];
+        if (stored.seq != seen.seq || stored.digest != seen.digest) {
+            seen = stored;
+            return false;
+        }
+        const Snapshot before = snapshotOf(stored);
+        storeLocked(stored, contextId, latest, users, managers, rules);
+        bool raised = false;
+        for (const TreeNodeState& node : nodes) {
+            raised = raiseGeneration(stored.generations, node.nodeIndex, node.generation) || raised;
+        }
+        moved = movedLocked(groupId, before, stored, raised);
     }
-    storeLocked(stored, contextId, latest, users, managers, rules);
-    for (const TreeNodeState& node : nodes) {
-        raiseGeneration(stored.generations, node.nodeIndex, node.generation);
-    }
+    notify(moved);
     return true;
+}
+
+TreeVerifier::Snapshot TreeVerifier::snapshotOf(const Pin& pin) {
+    return Snapshot{
+        .contextId = pin.contextId,
+        .seq = pin.seq,
+        .digest = pin.digest,
+        .keyVersion = pin.keyVersion,
+        .rosterHash = pin.roster.hash,
+        .rulesHash = pin.rules.hash,
+        .refusedSeq = pin.refusedSeq,
+        .hasRoster = pin.hasRoster
+    };
+}
+
+std::optional<bool> TreeVerifier::movedLocked(
+    const std::string& groupId,
+    const Snapshot& before,
+    const Pin& after,
+    bool generationsRaised
+) {
+    const bool major = before.contextId != after.contextId || before.keyVersion != after.keyVersion ||
+        before.rosterHash != after.roster.hash || before.rulesHash != after.rules.hash ||
+        after.refusedSeq > before.refusedSeq;
+    const bool minor = before.seq != after.seq || before.digest != after.digest || before.hasRoster != after.hasRoster ||
+        generationsRaised;
+    if (!major && !minor) {
+        return std::nullopt;
+    }
+    _dirty.insert(groupId);
+    return major;
+}
+
+void TreeVerifier::notify(std::optional<bool> major) {
+    if (major.has_value() && _onPinsMoved) {
+        _onPinsMoved(major.value());
+    }
+}
+
+void TreeVerifier::onPinsMoved(std::function<void(bool)> callback) {
+    _onPinsMoved = std::move(callback);
 }
 
 TreeVerifier::Pin TreeVerifier::pinOf(const std::string& groupId) const {
@@ -604,6 +664,8 @@ void TreeVerifier::storeLocked(
     stored.rosterVersion = latest.rosterVersion;
     stored.rules = rules;
     stored.treeHash = latest.treeHash;
+    stored.hasRoster = true;
+    stored.seenAt = nowMs();
 }
 
 void TreeVerifier::verifyListed(const server::GroupInfo& summary, const Environment& environment) {
@@ -657,18 +719,25 @@ void TreeVerifier::pinCommitted(
     if (TreeCommits::rosterHash(users, managers) != statement.rosterHash) {
         throw GroupDataIntegrityException("the roster pinned with a commit is not the one it signed");
     }
-    std::lock_guard lock(_mutex);
-    Pin& stored = _pins[groupId];
-    if (stored.seq > statement.seq) {
-        return; // a read has verified a later state already
+    std::optional<bool> moved;
+    {
+        std::lock_guard lock(_mutex);
+        Pin& stored = _pins[groupId];
+        if (stored.seq > statement.seq) {
+            return; // a read has verified a later state already
+        }
+        if (stored.seq == statement.seq && stored.digest != TreeCommits::digest(statement)) {
+            throw GroupHistoryForkException(); // the bridge took this commit at a seq it has served another one at
+        }
+        const Snapshot before = snapshotOf(stored);
+        storeLocked(stored, contextId, statement, users, managers, rules);
+        bool raised = false;
+        for (const StatementNode& node : statement.path) {
+            raised = raiseGeneration(stored.generations, node.nodeIndex, node.generation) || raised;
+        }
+        moved = movedLocked(groupId, before, stored, raised);
     }
-    if (stored.seq == statement.seq && stored.digest != TreeCommits::digest(statement)) {
-        throw GroupHistoryForkException(); // the bridge took this commit at a seq it has served another one at
-    }
-    storeLocked(stored, contextId, statement, users, managers, rules);
-    for (const StatementNode& node : statement.path) {
-        raiseGeneration(stored.generations, node.nodeIndex, node.generation);
-    }
+    notify(moved);
 }
 
 void TreeVerifier::assertSeatsMatchRoster(
@@ -873,9 +942,15 @@ bool TreeVerifier::chainedToPin(
 }
 
 void TreeVerifier::refusedAsLostRace(const std::string& groupId, std::uint64_t seq) {
-    std::lock_guard lock(_mutex);
-    Pin& stored = _pins[groupId];
-    stored.refusedSeq = std::max(stored.refusedSeq, seq);
+    std::optional<bool> moved;
+    {
+        std::lock_guard lock(_mutex);
+        Pin& stored = _pins[groupId];
+        const Snapshot before = snapshotOf(stored);
+        stored.refusedSeq = std::max(stored.refusedSeq, seq);
+        moved = movedLocked(groupId, before, stored, false);
+    }
+    notify(moved);
 }
 
 void TreeVerifier::assertMaySignAt(const std::string& groupId, std::uint64_t seq) {
@@ -888,4 +963,38 @@ bool TreeVerifier::maySignAt(const std::string& groupId, std::uint64_t seq) cons
     std::lock_guard lock(_mutex);
     const auto it = _pins.find(groupId);
     return it == _pins.end() || seq > it->second.refusedSeq;
+}
+
+namespace {
+
+// The pin without what a compact record drops: roster members and generations.
+TreeVerifier::Pin compactOf(TreeVerifier::Pin pin) {
+    pin.roster.users.clear();
+    pin.roster.managers.clear();
+    pin.generations.clear();
+    pin.hasRoster = false;
+    return pin;
+}
+
+} // namespace
+
+std::map<std::string, TreeVerifier::Pin> TreeVerifier::exportPins(bool all) {
+    std::lock_guard lock(_mutex);
+    std::map<std::string, Pin> exported;
+    for (const auto& [groupId, pin] : _pins) {
+        exported.emplace_hint(exported.end(), groupId, all || _dirty.count(groupId) > 0 ? pin : compactOf(pin));
+    }
+    _dirty.clear();
+    return exported;
+}
+
+void TreeVerifier::mergeStored(const std::map<std::string, Pin>& stored) {
+    std::lock_guard lock(_mutex);
+    for (const auto& [groupId, record] : stored) {
+        const auto it = _pins.find(groupId);
+        Pin kept = PinBlob::higher(it == _pins.end() ? nullptr : &it->second, &record);
+        if (kept.seq > 0 || kept.refusedSeq > 0) {
+            _pins[groupId] = std::move(kept);
+        }
+    }
 }
