@@ -37,20 +37,15 @@ bool GroupKeyResolver::hasSupportedTree(const server::GroupInfo& group) {
     return group.treeVersion.value_or(0) == static_cast<std::int64_t>(TreeMath::TREE_VERSION);
 }
 
-namespace {
-
-// The statements served with the group: the ones its filled nodes cite, and the latest.
-std::vector<privmx::endpoint::group::server::GroupTreeCommit> statements(
-    const privmx::endpoint::group::server::GroupInfo& group
+std::vector<privmx::endpoint::group::server::GroupTreeCommit> GroupKeyResolver::statements(
+    const server::GroupInfo& group
 ) {
-    auto all = group.treeCommits.value_or(std::vector<privmx::endpoint::group::server::GroupTreeCommit>{});
+    auto all = group.treeCommits.value_or(std::vector<server::GroupTreeCommit>{});
     if (group.treeCommit.has_value()) {
         all.push_back(group.treeCommit.value());
     }
     return all;
 }
-
-} // namespace
 
 std::uint32_t GroupKeyResolver::epochOf(std::int64_t value, bool floor) {
     if (floor) {
@@ -95,11 +90,7 @@ TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
     return state;
 }
 
-namespace {
-
-// Drops a rung that does not point downwards. The bridge enforces this too, but taking its word for it would trust
-// the one party the threat model assumes may be hostile — an upward rung hands a removed member a later key.
-std::optional<ArchiveRung> convertRung(const privmx::endpoint::group::server::GroupArchiveRung& rung) {
+std::optional<ArchiveRung> GroupKeyResolver::convertRung(const server::GroupArchiveRung& rung) {
     if (rung.targetKeyVersion >= rung.atKeyVersion || rung.targetKeyVersion < 1 ||
         rung.atKeyVersion > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
         return std::nullopt;
@@ -113,8 +104,6 @@ std::optional<ArchiveRung> convertRung(const privmx::endpoint::group::server::Gr
     converted.author = rung.author.value_or("");
     return converted;
 }
-
-} // namespace
 
 std::vector<ArchiveRung> GroupKeyResolver::toDownwardRungs(const server::GroupGetKeyArchiveResult& archive) {
     std::vector<ArchiveRung> rungs;

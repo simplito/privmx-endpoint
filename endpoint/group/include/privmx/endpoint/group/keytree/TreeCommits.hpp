@@ -13,13 +13,16 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREECOMMITS_HPP_
 
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include <Poco/Dynamic/Var.h>
+#include <Poco/JSON/Object.h>
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
@@ -31,68 +34,6 @@ namespace privmx {
 namespace endpoint {
 namespace group {
 namespace keytree {
-
-enum class CommitOp : std::uint8_t {
-    Create = 1,
-    Add = 2,
-    Remove = 3,
-    SelfUpdate = 4,
-    Rotate = 5, // the bridge-side `generateNewGroupKey`
-    Policy = 6, // a policy change: only `policyHash` moves
-};
-
-struct StatementNode {
-    std::uint32_t nodeIndex = 0;
-    std::uint32_t generation = 0;
-    std::string publicKey; // base58 DER
-    // `CH` of the node in the post state: pins the subtree the key was minted over, so a served node whose subtree
-    // has changed since (a child re-keyed under a rolled-back parent) no longer matches its voucher. Raw bytes.
-    std::string subtreeHash;
-};
-
-// What the tree, the roster and the grant key look like after one commit, signed by the committer. The bridge
-// stores the statements and serves them; it cannot forge one, so a state it serves is only as good as the
-// statement whose `treeHash` it matches. Hashes and the signature are raw bytes here, hex/base64 on the wire.
-struct CommitStatement {
-    std::uint64_t seq = 0;
-    // `digest` of the statement at `seq - 1`, empty at seq 1: chains every statement to the history it extends, so
-    // nothing below a verified statement can be swapped or forked. Raw bytes.
-    std::string prevDigest;
-    CommitOp op = CommitOp::Create;
-    // The group's id — except at seq 1, where the group has none yet and this is the creator's resourceId.
-    std::string groupId;
-    std::uint32_t treeVersion = 0;
-    std::uint64_t date = 0;
-    std::uint64_t keyVersion = 0;
-    std::string groupPubKey;
-    std::uint64_t rosterVersion = 0;
-    std::string rosterHash;
-    std::string treeHash;
-    // `TreeCommits::rules(policy, creator).hash` of the group's policy after the commit: the rules that govern commits
-    // and the creator the `owner` atom names, signed into every statement. Raw bytes.
-    std::string policyHash;
-    std::string committer;
-    // The committer's Context public key (base58 DER) at signing time; the signature verifies against it, and the
-    // UserVerifier vouches for the pair.
-    std::string committerPubKey;
-    std::uint32_t committerSeat = 0;
-    // The refreshed nodes, bottom-up, as the transition submitted them.
-    std::vector<StatementNode> path;
-    std::vector<std::string> addedUsers;
-    std::vector<std::string> addedManagers;
-    std::vector<std::string> removed;
-    std::string signature;
-    // Wire only, on `Create` and `Policy`: the group's whole policy after the commit. Not signed itself; it counts only
-    // once it hashes to `policyHash`, and only its four commit rules do.
-    std::optional<Poco::Dynamic::Var> policy;
-};
-
-// The part of a group's policy its statements sign: who may commit what, and who the owner is. Absent, "inherit"
-// and "default" resolve to the frozen v3 defaults, never to the context policy, which only the bridge holds.
-struct GroupRules {
-    std::string creator, update, rotateKeys, updatePolicy, ownerCanBeRemovedFromManagers;
-    std::string hash; // policyHash, raw
-};
 
 // The hashes and signed bytes both sides compute byte for byte (SHA-256, big-endian integers, length-prefixed
 // strings). A node's hash covers its record — generation, key and the statement that set it — and its children's
@@ -200,6 +141,13 @@ public:
     // admits nobody (the bridge sees atom "" and denies too).
     static bool allows(const std::string& rule, bool member, bool manager, bool owner);
 
+    // Whether `userId` is on either list of a served roster.
+    static bool onRoster(
+        const std::vector<std::string>& users,
+        const std::vector<std::string>& managers,
+        const std::string& userId
+    );
+
     // The role column of the op-effect table, on the rules and roster before `statement`: create none (the
     // committer is the creator), add `update`, remove `update` (and, removing the creator from the managers,
     // `ownerCanBeRemovedFromManagers` "yes"), rotate `rotateKeys`, selfUpdate a seat, policy `updatePolicy`. False for
@@ -226,6 +174,47 @@ public:
     // Throws std::invalid_argument on anything that does not decode: unknown op, bad hex or base64, a number out
     // of range.
     static CommitStatement fromWire(const server::GroupTreeCommit& wire);
+
+private:
+    // u32 count, then each value length-prefixed.
+    static void putList(std::string& out, const std::vector<std::string>& values);
+
+    static std::vector<std::string> sortedUnique(std::vector<std::string> values);
+
+    // Throws std::invalid_argument on anything but 64 lowercase hex digits.
+    static std::string fromHex32(const std::string& hex);
+
+    // The leaf hash of a seat, blank when the state does not reach it.
+    static std::string seatHash(const TreeGroupState& state, std::uint32_t position);
+
+    // `CH(nodeIndex)` over the subtree under it; every inner node's hash goes into `memo` when given.
+    static std::string childHash(
+        const TreeGroupState& state,
+        std::uint32_t nodeIndex,
+        std::map<std::uint32_t, std::string>* memo = nullptr
+    );
+
+    static std::string treeHashOver(std::uint32_t numLeaves, const std::string& rootHash);
+
+    // The wire spelling of an op, "" for one outside the enum.
+    static const char* opName(CommitOp op);
+
+    // The v3 rule a statement signs for an absent, "inherit" or "default" value: frozen with the format, NOT the
+    // bridge's context defaults (the context only vetoes). Throws std::invalid_argument on a non-string rule.
+    static std::string resolved(const Poco::JSON::Object::Ptr& policy, const std::string& field, const char* fallback);
+
+    // `rule` checked against the bridge's group-rule grammar (`PolicyService.isValidPolicyEntry` with the values
+    // `validateGroupPolicy` allows), after `resolved`. Throws std::invalid_argument on anything outside it.
+    static std::string grammatical(const std::string& field, std::string rule);
+
+    // Throws std::invalid_argument when a wire number does not fit `T`, naming `field`.
+    template<typename T>
+    static T inRange(std::int64_t value, const char* field) {
+        if (value < 0 || static_cast<std::uint64_t>(value) > std::numeric_limits<T>::max()) {
+            throw std::invalid_argument(std::string("commit statement field out of range: ") + field);
+        }
+        return static_cast<T>(value);
+    }
 };
 
 } // namespace keytree

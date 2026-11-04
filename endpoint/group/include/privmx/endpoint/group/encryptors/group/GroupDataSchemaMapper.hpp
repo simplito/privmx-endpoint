@@ -188,6 +188,19 @@ public:
     ) override;
 
 private:
+    // A plane's key opened, the plane and its key written by somebody on the roster, and the plane's author holding
+    // `update` under the signed rules. Anybody in the context can wrap a key to the group's public grant key and
+    // tag a plane under it; the roster says who belongs to the group and its signed policy who writes its metadata. The
+    // key's wrapper needs no role: a rotator with `rotateKeys` alone legitimately authors the epoch's key entry. With
+    // `prior` (carry-forward only), an entry identical to `readBefore` is judged by that read.
+    static void assertWrittenByMember(
+        const server::GroupInfo& groupInfo,
+        const server::GroupMetaEntry& entry,
+        const server::GroupMetaEntry* readBefore,
+        const core::DecryptedEncKeyV2& key,
+        const std::optional<PriorRole>& prior
+    );
+
     // One preimage builder for both metadata planes, so the canonical form cannot drift between them. `domain`
     // names the plane in both the subkey label and the payload.
     static std::string metaPlaneTag(

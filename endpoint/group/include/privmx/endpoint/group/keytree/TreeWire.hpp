@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREEWIRE_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREEWIRE_HPP_
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -56,6 +57,36 @@ public:
         const CommitPlan& plan,
         std::int64_t baseKeyVersion
     );
+
+private:
+    // A served counter or index as the runtime holds it: one out of range is the bridge's, never wrapped into
+    // another. Throws GroupDataIntegrityException.
+    static std::uint32_t served32(std::int64_t value);
+
+    // A blank is spelled as an empty string: that is how the wire format says "nobody here" without a nullable
+    // element.
+    static std::vector<std::string> leafAssignmentToWire(const std::vector<std::optional<std::string>>& seats);
+
+    // The plan's refreshed nodes, as whichever wire node the transition carries.
+    template<typename TWireNode>
+    static std::vector<TWireNode> refreshedToWire(const CommitPlan& plan) {
+        std::vector<TWireNode> wire;
+        for (const RefreshedNode& refreshed : plan.refreshed) {
+            TWireNode node;
+            node.nodeIndex = static_cast<std::int64_t>(refreshed.nodeIndex);
+            // The generation the node was read at travels with the refresh: the server refuses the commit if the node
+            // has moved since, rather than applying it to a base the client never saw.
+            if (refreshed.fromGeneration.has_value()) {
+                node.fromGeneration = static_cast<std::int64_t>(refreshed.fromGeneration.value());
+            }
+            node.generation = static_cast<std::int64_t>(refreshed.generation);
+            node.publicKey = refreshed.key.getPublicKey().toBase58DER();
+            wire.push_back(node);
+        }
+        return wire;
+    }
+
+    static std::vector<server::GroupTreeEdge> edgesToWire(const CommitPlan& plan);
 };
 
 } // namespace keytree

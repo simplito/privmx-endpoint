@@ -24,16 +24,12 @@ limitations under the License.
 
 using namespace privmx::endpoint::group::keytree;
 
-namespace {
-
-std::string rungLabel(const RungSpan& span) {
+std::string LadderKeys::rungLabel(const RungSpan& span) {
     std::string label = TreeCommits::tag("pmx-rung");
     privmx::endpoint::core::bigendian::putU32(label, span.at);
     privmx::endpoint::core::bigendian::putU32(label, span.target);
     return label;
 }
-
-} // namespace
 
 LadderKeys::LadderKeys(TreeKeyCache& cache) : _cache(cache) {}
 

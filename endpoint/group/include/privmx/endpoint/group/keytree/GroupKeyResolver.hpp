@@ -150,6 +150,14 @@ public:
     );
 
 private:
+    // The statements served with the group: the ones its filled nodes cite, and the latest.
+    static std::vector<server::GroupTreeCommit> statements(const server::GroupInfo& group);
+
+    // A served rung, or nullopt for one that does not point downwards. The bridge drops those too, but taking its
+    // word for it would trust the one party the threat model assumes may be hostile — an upward rung hands a
+    // removed member a later key.
+    static std::optional<ArchiveRung> convertRung(const server::GroupArchiveRung& rung);
+
     ResolveResult resolveWith(
         const server::GroupInfo& group,
         std::int64_t epoch,

@@ -12,7 +12,6 @@ limitations under the License.
 #include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 
 #include <algorithm>
-#include <limits>
 #include <set>
 #include <stdexcept>
 
@@ -32,22 +31,20 @@ std::string TreeCommits::tag(const char* name) {
     return std::string(name) + std::string(1, '\0');
 }
 
-namespace {
-
-void putList(std::string& out, const std::vector<std::string>& values) {
+void TreeCommits::putList(std::string& out, const std::vector<std::string>& values) {
     be::putU32(out, static_cast<std::uint32_t>(values.size()));
     for (const std::string& value : values) {
         be::putLp(out, value);
     }
 }
 
-std::vector<std::string> sortedUnique(std::vector<std::string> values) {
+std::vector<std::string> TreeCommits::sortedUnique(std::vector<std::string> values) {
     std::sort(values.begin(), values.end());
     values.erase(std::unique(values.begin(), values.end()), values.end());
     return values;
 }
 
-std::string fromHex32(const std::string& hex) {
+std::string TreeCommits::fromHex32(const std::string& hex) {
     if (hex.size() != 64 ||
         !std::all_of(hex.begin(), hex.end(), [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); })) {
         throw std::invalid_argument("not a lowercase hex SHA-256");
@@ -55,22 +52,21 @@ std::string fromHex32(const std::string& hex) {
     return privmx::utils::Hex::toString(hex);
 }
 
-// The leaf hash of a seat, blank when the state does not reach it.
-std::string seatHash(const TreeGroupState& state, std::uint32_t position) {
+std::string TreeCommits::seatHash(const TreeGroupState& state, std::uint32_t position) {
     const bool known = position < state.leafAssignment.size();
-    return TreeCommits::leafHash(position, known ? state.leafAssignment[position].value_or("") : "");
+    return leafHash(position, known ? state.leafAssignment[position].value_or("") : "");
 }
 
-std::string childHash(
+std::string TreeCommits::childHash(
     const TreeGroupState& state,
     std::uint32_t nodeIndex,
-    std::map<std::uint32_t, std::string>* memo = nullptr
+    std::map<std::uint32_t, std::string>* memo
 ) {
     if (TreeMath::isLeaf(nodeIndex)) {
         return seatHash(state, TreeMath::leafPosition(nodeIndex));
     }
-    std::string hash = TreeCommits::nodeHash(
-        nodeIndex, state.numLeaves, findRecord(state, nodeIndex),
+    std::string hash = nodeHash(
+        nodeIndex, state.numLeaves, state.record(nodeIndex),
         childHash(state, TreeMath::left(nodeIndex, state.numLeaves), memo),
         childHash(state, TreeMath::right(nodeIndex, state.numLeaves), memo)
     );
@@ -80,14 +76,14 @@ std::string childHash(
     return hash;
 }
 
-std::string treeHashOver(std::uint32_t numLeaves, const std::string& rootHash) {
-    std::string preimage = TreeCommits::tag("pmx-tree");
+std::string TreeCommits::treeHashOver(std::uint32_t numLeaves, const std::string& rootHash) {
+    std::string preimage = tag("pmx-tree");
     be::putU32(preimage, numLeaves);
     preimage += rootHash;
     return privmx::crypto::Crypto::sha256(preimage);
 }
 
-const char* opName(CommitOp op) {
+const char* TreeCommits::opName(CommitOp op) {
     switch (op) {
     case CommitOp::Create:
         return "create";
@@ -105,9 +101,11 @@ const char* opName(CommitOp op) {
     return "";
 }
 
-// The v3 rules a statement signs for an absent, "inherit" or "default" value: frozen with the format, NOT the
-// bridge's context defaults (the context only vetoes).
-std::string resolved(const Poco::JSON::Object::Ptr& policy, const std::string& field, const char* fallback) {
+std::string TreeCommits::resolved(
+    const Poco::JSON::Object::Ptr& policy,
+    const std::string& field,
+    const char* fallback
+) {
     const Poco::Dynamic::Var value = policy.isNull() ? Poco::Dynamic::Var() : policy->get(field);
     if (value.isEmpty()) {
         return fallback;
@@ -119,10 +117,7 @@ std::string resolved(const Poco::JSON::Object::Ptr& policy, const std::string& f
     return rule == "inherit" || rule == "default" ? fallback : rule;
 }
 
-// The bridge's group-rule grammar (`PolicyService.isValidPolicyEntry` with the values `validateGroupPolicy` allows),
-// after `resolved`: "none", "all", or `,`-separated alternatives of `&`-joined atoms from user/manager/owner, no part
-// empty, atoms unique within an alternative, alternatives unique. Throws std::invalid_argument otherwise.
-std::string grammatical(const std::string& field, std::string rule) {
+std::string TreeCommits::grammatical(const std::string& field, std::string rule) {
     if (rule == "none" || rule == "all") {
         return rule;
     }
@@ -145,15 +140,14 @@ std::string grammatical(const std::string& field, std::string rule) {
     return rule;
 }
 
-template<typename T>
-T inRange(std::int64_t value, const char* field) {
-    if (value < 0 || static_cast<std::uint64_t>(value) > std::numeric_limits<T>::max()) {
-        throw std::invalid_argument(std::string("commit statement field out of range: ") + field);
-    }
-    return static_cast<T>(value);
+bool TreeCommits::onRoster(
+    const std::vector<std::string>& users,
+    const std::vector<std::string>& managers,
+    const std::string& userId
+) {
+    return std::find(users.begin(), users.end(), userId) != users.end() ||
+        std::find(managers.begin(), managers.end(), userId) != managers.end();
 }
-
-} // namespace
 
 std::string TreeCommits::leafHash(std::uint32_t position, const std::string& userId) {
     std::string preimage = tag("pmx-tree-leaf");
@@ -221,7 +215,7 @@ std::string TreeCommits::treeHashAlongPath(
         const std::string sibling = fromHex32(copathHashes[i]);
         const bool currentIsLeft = current < path[i];
         hash = nodeHash(
-            path[i], state.numLeaves, findRecord(state, path[i]), currentIsLeft ? hash : sibling,
+            path[i], state.numLeaves, state.record(path[i]), currentIsLeft ? hash : sibling,
             currentIsLeft ? sibling : hash
         );
         if (subtreeHashes != nullptr) {

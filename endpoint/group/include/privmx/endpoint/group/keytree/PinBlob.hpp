@@ -11,11 +11,15 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_PINBLOB_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_PINBLOB_HPP_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
+#include <set>
 #include <string>
 
+#include <privmx/endpoint/core/BigEndian.hpp>
 #include <privmx/endpoint/core/LocalSeal.hpp>
 
 #include "privmx/endpoint/group/keytree/TreeVerifier.hpp"
@@ -60,6 +64,42 @@ public:
     static TreeVerifier::Pin higher(const TreeVerifier::Pin* mine, const TreeVerifier::Pin* other);
     // `higher` for every group, planes by max: what a save writes.
     static TreeVerifier::PinSet mergeForSave(const TreeVerifier::PinSet& mine, const TreeVerifier::PinSet& stored);
+
+    // One group's three version-pin counters, as `TreeVerifier::PinSet::planes` holds them.
+    using Planes = std::array<std::int64_t, 3>;
+
+private:
+    // The bits of a record's `flags` byte.
+    static constexpr std::uint8_t ROSTER = 1;
+    static constexpr std::uint8_t NODES = 2;
+
+    // A counter below zero (no pin yet) written as 0.
+    static std::uint64_t counter(std::int64_t value);
+    // Throws std::out_of_range on a counter the wire holds but an std::int64_t cannot.
+    static std::int64_t signedCounter(std::uint64_t value);
+
+    static void putSet(std::string& out, const std::set<std::string>& values);
+    static std::set<std::string> readSet(core::bigendian::Reader& in);
+
+    // One `record` of the format above. `full` sets both flag bits and appends the roster and the generations.
+    static std::string record(
+        const std::string& groupId,
+        const TreeVerifier::Pin& pin,
+        const Planes& planes,
+        bool full
+    );
+
+    // The group's pin, or null when the map holds none.
+    static const TreeVerifier::Pin* find(
+        const std::map<std::string, TreeVerifier::Pin>& pins,
+        const std::string& groupId
+    );
+
+    // Every group id either half of `pins` names.
+    static void addGroupIds(std::set<std::string>& groups, const TreeVerifier::PinSet& pins);
+
+    // The group's plane counters, zeros when it has none.
+    static Planes planesOf(const TreeVerifier::PinSet& pins, const std::string& groupId);
 };
 
 } // namespace keytree

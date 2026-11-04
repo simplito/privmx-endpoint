@@ -133,6 +133,10 @@ public:
     );
 
 private:
+    // The sealed label a rung is wrapped under: `"pmx-rung\0" || u32(at) || u32(target)`, so a rung cannot open
+    // under any span but its own.
+    static std::string rungLabel(const RungSpan& span);
+
     // Invariant B: a recovered key really is the epoch's grant key.
     static bool verifyAgainstRegistry(
         const privmx::crypto::PrivateKey& recovered,

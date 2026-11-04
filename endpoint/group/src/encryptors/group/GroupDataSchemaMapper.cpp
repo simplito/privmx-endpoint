@@ -21,26 +21,14 @@
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
-namespace {
-
-bool onRoster(const std::vector<std::string>& users, const std::vector<std::string>& managers, const std::string& userId) {
-    return std::find(users.begin(), users.end(), userId) != users.end() ||
-        std::find(managers.begin(), managers.end(), userId) != managers.end();
-}
-
-// A plane's key opened, the plane and its key written by somebody on the roster, and the plane's author holding
-// `update` under the signed rules. Anybody in the context can wrap a key to the group's public grant key and
-// tag a plane under it; the roster says who belongs to the group and its signed policy who writes its metadata. The
-// key's wrapper needs no role: a rotator with `rotateKeys` alone legitimately authors the epoch's key entry. With
-// `prior` (carry-forward only), an entry identical to the one read before the commit is judged by that read.
-void assertWrittenByMember(
+void GroupDataSchemaMapper::assertWrittenByMember(
     const server::GroupInfo& groupInfo,
     const server::GroupMetaEntry& entry,
     const server::GroupMetaEntry* readBefore,
     const core::DecryptedEncKeyV2& key,
     const std::optional<PriorRole>& prior
 ) {
-    const bool asRead = prior.has_value() && readBefore != nullptr && GroupDataSchemaMapper::sameEntry(entry, *readBefore);
+    const bool asRead = prior.has_value() && readBefore != nullptr && sameEntry(entry, *readBefore);
     keytree::GroupRules rules;
     try {
         rules = asRead ? prior->rules : keytree::TreeCommits::rules(groupInfo.policy, groupInfo.creator);
@@ -50,13 +38,12 @@ void assertWrittenByMember(
     const std::string& author = entry.author;
     const bool manager = std::find(managers.begin(), managers.end(), author) != managers.end();
     const bool member = manager || std::find(users.begin(), users.end(), author) != users.end();
-    if (key.statusCode != 0 || !member || !onRoster(users, managers, key.dio.creatorUserId) ||
+    if (key.statusCode != 0 || !member ||
+        !keytree::TreeCommits::onRoster(users, managers, key.dio.creatorUserId) ||
         !keytree::TreeCommits::allows(rules.update, true, manager, author == rules.creator)) {
         throw GroupMembershipMismatchException();
     }
 }
-
-} // namespace
 
 GroupDataSchemaMapper::GroupDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
@@ -125,7 +112,7 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
     }
     // The head key is wrapped by whoever opened the epoch, a member until a removal opens the next one. Anybody
     // else's entry (a removed member's, the UserVerifier vouching only that it is theirs) is a key they chose.
-    if (!onRoster(groupInfo.users, groupInfo.managers, rosterKey.dio.creatorUserId)) {
+    if (!keytree::TreeCommits::onRoster(groupInfo.users, groupInfo.managers, rosterKey.dio.creatorUserId)) {
         throw GroupMembershipMismatchException();
     }
     auto encData = dynamic::EncryptedGroupRosterV5::fromJSON(groupInfo.data.back().data);
