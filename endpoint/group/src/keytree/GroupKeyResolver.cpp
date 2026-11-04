@@ -311,6 +311,7 @@ ResolveResult GroupKeyResolver::resolveWith(
     // Step 2: descend the ladder. Verification against the epoch registry happens at every hop.
     LadderKeys ladder(_cache);
     const DescentResult descent = ladder.descend(currentEpoch, wanted, rungs, registry, eraFloor, prunedBelow);
+    result.brokenSpans = descent.brokenSpans;
     result.reachedEpoch = descent.reachedEpoch;
     if (descent.failure != DescentFailure::None || !descent.key.has_value()) {
         result.failure = ResolveFailure::DescentFailed;

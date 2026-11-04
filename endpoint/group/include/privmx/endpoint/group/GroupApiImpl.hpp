@@ -503,8 +503,29 @@ private:
         keytree::TreeKeyCache& cache
     );
 
+    // ── Ladder repair. Recorded under _dueMutex, run by `runDueWork`. ──
+
     // `clamp(numLeaves·8 ms, 1 s, 120 s)`: how far a group's members spread their deferred work.
     static std::int64_t backgroundWindowMs(const server::GroupInfo& group);
+    // Records one check of the rungs at `at`, once per (group, epoch), due not before a random delay within `windowMs`.
+    void scheduleLadderCheck(
+        const std::string& groupId,
+        const std::string& contextId,
+        std::uint32_t at,
+        std::int64_t windowMs
+    );
+    // A rotation to `cur` this session observed while holding `cur - 1`: check `cur`'s rungs, once.
+    void scheduleObservedRotation(
+        const std::string& groupId,
+        const std::string& contextId,
+        std::uint32_t cur,
+        std::int64_t windowMs
+    );
+    // The epoch's rungs are known good (this client just checked and committed them).
+    void markLadderChecked(const std::string& groupId, std::uint32_t epoch);
+    // From `runDueWork`, no lock held: finds spans at `at` no rung opens and repairs those it holds both keys of,
+    // after checking those keys against the chain.
+    void checkLadderAt(const std::string& groupId, const std::string& contextId, std::uint32_t at);
 
     // Includes open file handles, not just the key caches.
     void dropEnvelopeState();
@@ -553,7 +574,7 @@ private:
     // Lock order: commitLock(groupId) -> _pinSaveMutex -> _dueMutex. _dueMutex, _unresolvedMutex and
     // _pendingCarryMutex are leaves; `runDueWork` holds none of them while running a task.
     //
-    // No thread of its own: deferred work (self-updates, pin saves) is recorded and runs at the end
+    // No thread of its own: deferred work (self-updates, ladder checks, pin saves) is recorded and runs at the end
     // of the next public call on the group, after `due` (a "not before"). Records are dropped on disconnect.
     std::mutex _dueMutex;
     struct PendingSelfUpdate {
@@ -563,6 +584,14 @@ private:
     };
     std::map<std::string, PendingSelfUpdate> _selfUpdatePending;
     static constexpr int MAX_SELF_UPDATE_ATTEMPTS = 3;
+    struct PendingLadderCheck {
+        std::string groupId;
+        std::string contextId;
+        std::uint32_t at;
+        std::chrono::steady_clock::time_point due;
+    };
+    std::map<std::string /* groupId|at */, PendingLadderCheck> _ladderChecks;
+    std::map<std::string /* groupId */, std::uint32_t> _ladderCheckedAt; // highest `at` already queued or checked
     bool _dueWorkOff = false; // tests: `runDueWork` does nothing
 
     // One released statement per prevDigest. The bodies survive reconnects on purpose: a dropped

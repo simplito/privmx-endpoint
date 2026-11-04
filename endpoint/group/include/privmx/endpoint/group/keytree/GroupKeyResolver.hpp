@@ -53,6 +53,8 @@ struct ResolveResult {
     DescentFailure descent = DescentFailure::None;
     // Publisher of an offending rung or edge, when tampering was detected.
     std::optional<std::string> blame;
+    // Spans the descent found broken (`DescentResult::brokenSpans`), on success and on failure alike.
+    std::vector<RungSpan> brokenSpans;
     // Where a failed descent stopped (`DescentResult::reachedEpoch`): the epoch a way round has to leave from.
     std::uint32_t reachedEpoch = 0;
 };

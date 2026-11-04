@@ -80,6 +80,36 @@ bool LadderKeys::verifyAgainstRegistry(
     return published.value() == recovered.getPublicKey();
 }
 
+std::vector<RungSpan> LadderKeys::unopenedSpans(
+    std::uint32_t at,
+    const std::vector<ArchiveRung>& served,
+    const TreeKeyCache& cache,
+    std::uint32_t floor
+) {
+    std::vector<RungSpan> unopened;
+    const auto atKey = cache.getGrantKey(at);
+    if (!atKey.has_value() || at < 1 || floor < 1) {
+        return unopened;
+    }
+    for (const RungSpan& span : LadderMath::rungSpansFor(at, floor)) {
+        const auto targetKey = cache.getGrantKey(span.target);
+        if (!targetKey.has_value()) {
+            continue; // nothing this client could seal anyway
+        }
+        const bool opens = std::any_of(served.begin(), served.end(), [&](const ArchiveRung& rung) {
+            if (rung.span.at != span.at || rung.span.target != span.target) {
+                return false;
+            }
+            const auto recovered = openRung(rung, atKey.value());
+            return recovered.has_value() && recovered->getPublicKey() == targetKey->getPublicKey();
+        });
+        if (!opens) {
+            unopened.push_back(span);
+        }
+    }
+    return unopened;
+}
+
 std::optional<RungSpan> LadderKeys::firstRungNotOpeningToTheChain(
     const std::vector<ArchiveRung>& rungs,
     const privmx::crypto::PrivateKey& atKey,
@@ -296,12 +326,14 @@ DescentResult LadderKeys::descend(
         const ArchiveRung* best = nullptr;
         std::optional<privmx::crypto::PrivateKey> recovered;
         DescentResult refused = result;
+        std::set<std::uint32_t> failedTargets;
         for (const ArchiveRung* candidate : candidates) {
             recovered = openRung(*candidate, currentKey);
             if (recovered.has_value() && verifyAgainstRegistry(recovered.value(), candidate->span.target, registry)) {
                 best = candidate;
                 break;
             }
+            failedTargets.insert(candidate->span.target);
             if (refused.failure == DescentFailure::None) {
                 refused.failure = recovered.has_value() ? DescentFailure::Tampered : DescentFailure::DecryptFailed;
                 refused.reachedEpoch = current;
@@ -314,7 +346,15 @@ DescentResult LadderKeys::descend(
             }
         }
         if (best == nullptr) {
+            for (const std::uint32_t target : failedTargets) {
+                refused.brokenSpans.push_back(RungSpan{current, target});
+            }
             return refused;
+        }
+        for (const std::uint32_t target : failedTargets) {
+            if (target < best->span.target) {
+                result.brokenSpans.push_back(RungSpan{current, target}); // routed around: worth a repair
+            }
         }
 
         current = best->span.target;

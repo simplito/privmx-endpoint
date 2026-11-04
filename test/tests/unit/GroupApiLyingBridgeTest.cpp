@@ -473,6 +473,34 @@ struct Bridge {
             onEpochKeys(result);
             return result.toJSON();
         }
+        if (group == "groupRepairRung") {
+            // The bridge's rules: a seated caller, a downward span at an existing epoch above the floor, one rung per
+            // span per author, at most four per span.
+            const auto model = server::GroupRepairRungModel::fromJSON(params);
+            server::GroupArchiveRung rung = model.rung;
+            if (!seatOf(tree.state, caller).has_value()) {
+                throw privmx::utils::PrivmxException("ACCESS_DENIED", privmx::utils::PrivmxException::RPC, 0x0001);
+            }
+            if (rung.author.has_value() || rung.targetKeyVersion >= rung.atKeyVersion ||
+                rung.atKeyVersion > static_cast<std::int64_t>(tree.state.epoch) || rung.targetKeyVersion < eraFloor) {
+                throw archiveInvalid();
+            }
+            std::size_t inSpan = 0;
+            for (const server::GroupArchiveRung& stored : rungs) {
+                if (stored.atKeyVersion == rung.atKeyVersion && stored.targetKeyVersion == rung.targetKeyVersion) {
+                    ++inSpan;
+                    if (stored.author == std::optional<std::string>(caller)) {
+                        throw archiveInvalid();
+                    }
+                }
+            }
+            if (inSpan >= 4) {
+                throw archiveInvalid();
+            }
+            rung.author = caller;
+            rungs.push_back(rung);
+            return Poco::Dynamic::Var();
+        }
         if (group == "groupDelete") {
             return Poco::Dynamic::Var();
         }
@@ -701,7 +729,7 @@ protected:
         }
     }
 
-    // A group of four, with bob holding epoch 1 and alice having removed dave since.
+    // The group of four the repair tests start from, with bob holding epoch 1 and alice having removed dave since.
     std::string groupAtEpoch2WithBobHoldingEpoch1() {
         bridge.users.emplace("dave", PrivateKey::generateRandom());
         const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
@@ -1725,7 +1753,38 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnAddIsResentOnlyToKeysTheVerifierStillVouc
     EXPECT_EQ(adds, 1) << "the add was resent to a key the verifier no longer vouches for";
 }
 
-// ── ladder floors and the commit self-check ───────────────────────────────────────────────────────────────────────────────────────────
+// ── repair rungs ───────────────────────────────────────────────────────────────────────────────────────────
+
+TEST_F(GroupApiLyingBridge, SECURITY_AMemberHoldingThePreviousKeyRepairsABrokenUnitRung) {
+    // A broken unit rung (2,1) cuts epoch 1 off for everybody not holding it in session memory. Bob holds it, and
+    // repairs the rung at his next call on the group once he has seen the rotation; a fresh session of carol's then
+    // reads epoch 1.
+    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();
+    corrupt(2, 1);
+    client("bob").resolveGroupPrivKey(groupId);
+    EXPECT_EQ(count("bob", "context.groupRepairRung"), 0u) << "a key lookup only records the check";
+    GroupApiImplTestAccess::runDueWorkNow(client("bob"), groupId);
+    ASSERT_EQ(count("bob", "context.groupRepairRung"), 1u);
+    const PrivateKey epoch1 = client("carol").resolveGroupPrivKey(groupId, 1);
+    EXPECT_EQ(epoch1.getPublicKey().toBase58DER(), bridge.rest.history.at(0).groupPubKey);
+}
+
+TEST_F(GroupApiLyingBridge, ARepairRunsAtTheEndOfAPublicCallOnTheGroup) {
+    // Liveness: no test hook makes the check due; bob's ordinary getGroup calls run it once its random delay (within
+    // the group's background window, 1 s here) has passed.
+    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();
+    corrupt(2, 1);
+    client("bob").resolveGroupPrivKey(groupId); // records the check
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (count("bob", "context.groupRepairRung") == 0 && std::chrono::steady_clock::now() < deadline) {
+        client("bob").getGroup(groupId);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    ASSERT_EQ(count("bob", "context.groupRepairRung"), 1u);
+    EXPECT_EQ(
+        client("carol").resolveGroupPrivKey(groupId, 1).getPublicKey().toBase58DER(), bridge.rest.history.at(0).groupPubKey
+    );
+}
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnEraFloorPastTheLastEpochIsRefusedNotWrapped) {
     // 2^32 + 1 cast to uint32 is 1: a floor the bridge raised past every epoch would read as no floor at all.
@@ -1749,6 +1808,20 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEraFloorAboveTheCurrentEpochIsRefusedBefo
     );
     EXPECT_EQ(bridge.received.size(), before) << "nothing signed";
     EXPECT_EQ(bridge.tree.state.epoch, 2u);
+}
+
+TEST_F(GroupApiLyingBridge, ARepairIsNotSentWhenTheLadderIsIntact) {
+    // The honest path costs one archive fetch per observed rotation: no statements read, no UserVerifier call.
+    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();
+    client("bob").resolveGroupPrivKey(groupId);
+    const int verified = bridge.verifierCalls->load();
+    const std::size_t commitReads = count("bob", "context.groupGetTreeCommits");
+    GroupApiImplTestAccess::runDueWorkNow(client("bob"), groupId);
+    EXPECT_EQ(GroupApiImplTestAccess::queuedLadderChecks(client("bob")), 0u);
+    EXPECT_EQ(count("bob", "context.groupGetKeyArchive"), 1u);
+    EXPECT_EQ(count("bob", "context.groupRepairRung"), 0u);
+    EXPECT_EQ(count("bob", "context.groupGetTreeCommits"), commitReads);
+    EXPECT_EQ(bridge.verifierCalls->load(), verified);
 }
 
 // A commit opening an epoch and the bridge call that submits it.
@@ -1797,6 +1870,53 @@ INSTANTIATE_TEST_SUITE_P(
     ),
     [](const testing::TestParamInfo<EpochCommit>& info) { return info.param.name; }
 );
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARepairNeverSealsAKeyTheChainDoesNotName) {
+    bridge.users.emplace("dave", PrivateKey::generateRandom());
+    const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
+    client("bob").resolveGroupPrivKey(groupId);
+    const auto cache = GroupApiImplTestAccess::keyCacheOf(client("bob"), groupId);
+    cache->putGrantKey(1, PrivateKey::generateRandom()); // a client bug: not epoch 1's key
+    client("alice").removeGroupMembers(groupId, {"dave"});
+    corrupt(2, 1);
+    client("bob").resolveGroupPrivKey(groupId);
+    GroupApiImplTestAccess::runDueWorkNow(client("bob"), groupId);
+    ASSERT_FALSE(cache->getGrantKey(1).has_value()) << "checked against the chain, forgotten";
+    EXPECT_EQ(count("bob", "context.groupRepairRung"), 0u);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARepairIsNotSentBelowAFloorThisSessionHasSeen) {
+    // The floor is the bridge's word. Lowering it after bob saw it must not make him seal a crossing rung.
+    bridge.users.emplace("dave", PrivateKey::generateRandom());
+    const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
+    client("alice").removeGroupMembers(groupId, {"dave"});
+    {
+        std::unique_lock<std::mutex> guard(bridge.sync->m);
+        bridge.eraFloor = 2;
+    }
+    EXPECT_ANY_THROW(client("bob").resolveGroupPrivKey(groupId, 1)) << "behind the era floor bob now remembers";
+    {
+        std::unique_lock<std::mutex> guard(bridge.sync->m);
+        bridge.eraFloor = 1;
+    }
+    corrupt(2, 1);
+    const PrivateKey epoch1 = GroupApiImplTestAccess::keyCacheOf(client("alice"), groupId)->getGrantKey(1).value();
+    GroupApiImplTestAccess::keyCacheOf(client("bob"), groupId)->putGrantKey(1, epoch1);
+    EXPECT_ANY_THROW(client("bob").resolveGroupPrivKey(groupId, 1)); // finds (2,1) broken, records a check
+    GroupApiImplTestAccess::runDueWorkNow(client("bob"), groupId);
+    ASSERT_GE(count("bob", "context.groupGetKeyArchive"), 3u) << "the check ran";
+    EXPECT_EQ(count("bob", "context.groupRepairRung"), 0u);
+}
+
+TEST_F(GroupApiLyingBridge, ARotatorDoesNotCheckTheLadderOfItsOwnEpoch) {
+    // Its rungs passed the self-check before submitting, as a remover's do: nothing for the observed-rotation check.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("alice").resolveGroupPrivKey(groupId);
+    client("alice").rotateGroupKey(groupId);
+    client("alice").resolveGroupPrivKey(groupId);
+    EXPECT_EQ(GroupApiImplTestAccess::queuedLadderChecks(client("alice")), 0u);
+    EXPECT_EQ(count("alice", "context.groupGetKeyArchive"), 0u);
+}
 
 // ── the signed group policy ──────────────────────────────────────────────────────────────────────────
 
@@ -3741,19 +3861,22 @@ TEST_F(GroupApiLyingBridge, ARotationWhoseArchiveReadSawALaterEraCutIsPlannedAga
 
 TEST_F(GroupApiLyingBridge, SECURITY_AFloorAboveTheVerifiedEpochIsNotRememberedBeyondIt) {
     // Every archive answer names an epoch and a floor far above the one verified (2). Excused as a race where it is
-    // read (carol's descent to epoch 1), it must not stay in the session: her next rotation still carries its unit
-    // rung.
-    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1();
+    // read (bob's ladder check, carol's descent to epoch 1), it must not stay in the session: each one's next
+    // rotation still carries its unit rung.
+    const std::string groupId = groupAtEpoch2WithBobHoldingEpoch1(); // not quiet: bob's ladder check runs
     bridge.onArchive = [](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult& result) {
         result.eraFloor = 10;
         result.keyVersion = 10;
     };
+    client("bob").resolveGroupPrivKey(groupId); // records the ladder check
+    GroupApiImplTestAccess::runDueWorkNow(client("bob"), groupId);
     try {
         client("carol").resolveGroupPrivKey(groupId, 1);
     } catch (...) {} // below that floor epoch 1 is out of reach, whatever the reason
+    ASSERT_GT(count("bob", "context.groupGetKeyArchive"), 0u) << "no case here";
     ASSERT_GT(count("carol", "context.groupGetKeyArchive"), 0u) << "no case here";
     bridge.onArchive = [](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&) {};
-    for (const std::string id : {"carol"}) {
+    for (const std::string id : {"bob", "carol"}) {
         EXPECT_LE(GroupApiImplTestAccess::keyCacheOf(client(id), groupId)->raiseFloor(0), 2u) << id;
         const std::int64_t at = bridge.tree.state.epoch + 1;
         EXPECT_NO_THROW(client(id).rotateGroupKey(groupId)) << id;
@@ -3893,4 +4016,35 @@ TEST_F(GroupApiLyingBridge, SECURITY_AManagerHoldingTheGrantKeyRemovesWhateverTh
     rewrapLeafEdgeOf(bridge, "alice", "bob", previous.getPublicKey());
     EXPECT_NO_THROW(alice.removeGroupMembers(groupId, {"bob"}));
     EXPECT_EQ(bridge.tree.state.epoch, 3u) << "the removal did not land";
+}
+
+TEST_F(GroupApiLyingBridge, AMemberRepairsARungUnderAnEpochWhoseKeyIsSpelledUncompressed) {
+    // carol's rotation signs epoch 2's grant key uncompressed; the unit rung (2, 1) is broken. bob, holding epoch 1,
+    // checks his cached key against the opener's statement as a point and repairs the rung.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("bob").resolveGroupPrivKey(groupId);
+    std::string spelled;
+    bridge.onRotationCommit = [&](server::GroupTreeCommit& commit) {
+        CommitStatement statement = TreeCommits::fromWire(commit);
+        spelled = privmx::utils::Base58::encodeWithChecksum(
+            PublicKey::fromBase58DER(statement.groupPubKey).getEcc().getPublicKey(false)
+        );
+        statement.groupPubKey = spelled;
+        TreeCommits::sign(statement, bridge.users.at("carol"));
+        commit = TreeCommits::toWire(statement);
+    };
+    bridge.onRead = [&](const std::string&, server::GroupInfo& info) {
+        if (info.keyVersion == 2 && !spelled.empty()) {
+            info.groupPubKey = spelled;
+        }
+    };
+    try {
+        client("carol").rotateGroupKey(groupId);
+    } catch (...) {}
+    bridge.onRotationCommit = [](server::GroupTreeCommit&) {};
+    ASSERT_EQ(bridge.tree.state.epoch, 2u);
+    corrupt(2, 1);
+    client("bob").resolveGroupPrivKey(groupId);
+    GroupApiImplTestAccess::runDueWorkNow(client("bob"), groupId);
+    EXPECT_EQ(count("bob", "context.groupRepairRung"), 1u);
 }
