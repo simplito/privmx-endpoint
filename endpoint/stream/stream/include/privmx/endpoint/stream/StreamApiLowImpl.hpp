@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPILOWIMPL_HPP_
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
@@ -160,6 +161,19 @@ private:
         std::string streamRoomId;
         std::shared_ptr<WebRTCInterface> webRtc;
         std::vector<std::string> subscriptionsIds;
+        // Bound at join: a later room state naming another resource or context is not this room's.
+        std::string resourceId;
+        std::string contextId;
+        // The LOCAL key last handed to the media layer.
+        std::string localKeyId;
+        // Set by `leaveStreamRoom`: an update still pending for this room object neither re-keys nor stops anything,
+        // so it cannot touch a room joined again under the same id.
+        bool left = false;
+        // Guards `publisherStream`, `localKeyId` and `left`, which the API thread (create/publish/update/remove/leave)
+        // and the notification thread (applyRoomUpdate) both read and reset. Recursive: an update stops a publication
+        // under it. Limit: held across the Bridge calls of a publish, an update and a re-key, so a slow Bridge holds
+        // this room's updates back meanwhile; releasing it would mean re-checking the handle and key after each call.
+        std::recursive_mutex mutex;
     };
     // if streamMap is empty after leave, unpublish StreamRoomData should, be removed.
 
@@ -176,8 +190,14 @@ private:
         std::shared_ptr<WebRTCInterface> webRtc
     );
 
-    /** Re-keys the room if its key has gone stale, then refuses to go on if it somehow still is. */
-    void ensureRoomKeyIsFresh(const std::string& streamRoomId);
+    /**
+     * Re-keys the room if its key has gone stale, then refuses to go on if it somehow still is. The sender then
+     * follows the room's current key, also when the update announcing it was lost.
+     */
+    void ensureRoomKeyIsFresh(StreamRoomData& room);
+    // Unpublishes, closes the outgoing peer connection and drops the handle, each step whatever the others do (a
+    // failure is logged); the publisher state is cleared afterwards.
+    void stopPublication(StreamRoomData& room);
 
     /**
      * Re-keys a StreamRoom whose key has gone stale, without being asked to.
@@ -190,8 +210,18 @@ private:
     std::shared_ptr<StreamRoomData> getStreamRoomData(const std::string& streamRoomId);
     std::shared_ptr<StreamRoomData> getStreamRoomData(const StreamHandle& streamHandle);
     server::StreamRoomInfo getRawStreamRoom(const std::string& streamRoomId);
-    // LOCAL: the room's current key (`keyId`), what this client encrypts under. REMOTE: every key that opens.
-    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo);
+    // `streamRoomUpdated` for a joined room: the LOCAL key follows the room's current key; a live publication
+    // in a room gone stale re-keys it, and stops when the re-key fails or the current key is unusable.
+    // A snapshot naming another key than the one in use, or a stale one, is not applied: the keys come from a fresh
+    // read, so a delayed or replayed pre-rotation update cannot bring the old key back (M2).
+    void applyRoomUpdate(StreamRoomData& room, const server::StreamRoomInfo& raw);
+    // Hands the room's key set to the media layer and the data channel encryptor; refuses a state of another room.
+    // One whose current key needs a re-key gets its REMOTE keys only (receiving goes on, sending has no key), then is
+    // refused.
+    void applyRoomKeys(StreamRoomData& room, const server::StreamRoomInfo& streamRoomInfo);
+    // LOCAL (with `withLocal`): the room's current key (`keyId`), what this client encrypts under. REMOTE: every key
+    // that opens.
+    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo, bool withLocal = true);
     std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> extractStreamRoomKeys(
         server::StreamRoomInfo streamRoomInfo
     );
@@ -210,8 +240,13 @@ private:
 
     // v3 webrtc
     privmx::utils::ThreadSaveMap<std::string, std::shared_ptr<StreamRoomData>> _streamRoomMap;
+    // Held across a join, from the "already joined" check to the room's insertion: two joins of one room otherwise both
+    // subscribed, and the one stored second dropped the other's subscriptions with no way to remove them.
+    // Limit: one join at a time per API, Bridge calls included; a per-room reservation would lift it if joins get hot.
+    std::mutex _joinMutex;
     privmx::utils::ThreadSaveMap<Handle, std::string> _handleToRoomId;
     int _notificationListenerId, _connectedListenerId, _disconnectedListenerId;
+    friend struct StreamApiLowImplTestAccess; // tests drive stopPublication over a fake WebRTC and gateway
 };
 
 } // namespace stream
