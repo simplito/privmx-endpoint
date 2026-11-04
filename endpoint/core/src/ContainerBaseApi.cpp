@@ -11,6 +11,7 @@ limitations under the License.
 
 #include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
+#include <algorithm>
 #include <privmx/utils/Utils.hpp>
 #include <set>
 
@@ -18,6 +19,7 @@ limitations under the License.
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
 
 #include "privmx/endpoint/core/ContainerBaseApi.hpp"
+#include "privmx/endpoint/core/CoreConstants.hpp"
 #include "privmx/endpoint/core/encryptors/EncKey/EncKeyEncryptorV2.hpp"
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
@@ -91,6 +93,7 @@ ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
     auto dio = _connection.getImpl()->createDIO(contextId, resourceId);
     auto secret = _keyProvider->generateSecret();
     auto allUsers = EndpointUtils::uniqueListUserWithPubKey(users, managers);
+    assertUserKeysVerified(contextId, allUsers);
     auto keyEntries = _keyProvider->prepareKeysList(
         allUsers, key, dio, {.contextId = contextId, .resourceId = resourceId}, secret
     );
@@ -98,6 +101,10 @@ ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
 }
 
 std::vector<server::KeyEntrySet> ContainerBaseApi::buildRosterKeyEntries(const ContainerUpdatePlan& plan) {
+    // A new key goes to the whole new roster; otherwise only the added users get the current one.
+    assertUserKeysVerified(
+        plan.ctx.location.contextId, plan.needNewKey ? plan.roster->getNewUsers() : plan.roster->getUsersToAddKey()
+    );
     std::vector<server::KeyEntrySet> keyEntries;
     if (plan.needNewKey) {
         keyEntries = _keyProvider->prepareKeysList(
@@ -115,29 +122,39 @@ std::vector<server::KeyEntrySet> ContainerBaseApi::buildRosterKeyEntries(const C
 }
 
 void ContainerBaseApi::assertRekeyNotNeeded(const server::ContainerInfoBase& c) const {
-    if (auto reason = rekeyReason(c.groupKeys, c.keyId, c.staleGroups); !reason.empty()) {
+    if (auto reason = rekeyReason(c.keys, c.groupKeys, c.keyId, c.staleGroups); !reason.empty()) {
         throw StaleKeyRekeyRequiredException(reason);
     }
 }
 
 void ContainerBaseApi::assertRekeyNotNeeded(const ModuleKeys& k) const {
-    if (auto reason = rekeyReason(k.groupKeys, k.currentKeyId, k.staleGroups); !reason.empty()) {
+    if (auto reason = rekeyReason(k.keys, k.groupKeys, k.currentKeyId, k.staleGroups); !reason.empty()) {
         throw StaleKeyRekeyRequiredException(reason);
     }
 }
 
+bool ContainerBaseApi::hasUnsignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId) {
+    return std::any_of(keys.begin(), keys.end(), [&](const server::KeyEntry& key) {
+        return key.keyId == keyId && key.data.isString();
+    });
+}
+
 std::string ContainerBaseApi::rekeyReason(
+    const std::vector<server::KeyEntry>& keys,
     const std::vector<server::GroupKeysEntry>& groupKeys,
     const std::string& keyId,
     const std::vector<std::string>& staleGroups
 ) const {
     std::vector<std::string> stale = groupsBehindPins(groupKeys, keyId, _pinnedGroupEpoch);
     stale.insert(stale.end(), staleGroups.begin(), staleGroups.end());
-    std::string names;
-    for (const auto& groupId : stale) {
-        names += names.empty() ? groupId : "," + groupId;
+    if (!stale.empty()) {
+        std::string names = "staleGroups=";
+        for (size_t i = 0; i < stale.size(); ++i) {
+            names += (i == 0 ? "" : ",") + stale[i];
+        }
+        return names;
     }
-    return names.empty() ? "" : "staleGroups=" + names;
+    return hasUnsignedEntry(keys, keyId) ? "the current key is an unsigned (V1) entry" : "";
 }
 
 // A route's epoch is the server's label, but a key opened through it opens only under that epoch's grant key, so a
@@ -180,9 +197,20 @@ DecryptedEncKeyV2 ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleKeys
     auto location = EncKeyLocation{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
     keyProviderRequest.addOne(moduleKeys.keys, moduleKeys.currentKeyId, location);
     keyProviderRequest.addGroupKeys(moduleKeys.groupKeys, location, moduleKeys.currentKeyId);
-    return _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver)
-        .at(location)
-        .at(moduleKeys.currentKeyId);
+    auto key = _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver)
+                   .at(location)
+                   .at(moduleKeys.currentKeyId);
+    assertWriteKey(key);
+    return key;
+}
+
+void ContainerBaseApi::assertWriteKey(const DecryptedEncKey& key) {
+    if (key.statusCode != 0) {
+        throw EncryptionKeyValidationException("Current encryption key statusCode: " + std::to_string(key.statusCode));
+    }
+    if (key.dataStructureVersion != EncryptionKeyDataSchema::Version::VERSION_2) {
+        throw EncryptionKeyValidationException("Current encryption key is not a signed (V2) key entry");
+    }
 }
 
 ModuleKeys ContainerBaseApi::getModuleKeys(

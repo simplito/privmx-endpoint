@@ -10,6 +10,7 @@ limitations under the License.
 */
 
 #include "privmx/endpoint/thread/ServerApi.hpp"
+#include <privmx/endpoint/core/EndpointUtils.hpp>
 #include "privmx/utils/Logger.hpp"
 #include "privmx/utils/Utils.hpp"
 #include <privmx/utils/JsonHelper.hpp>
@@ -36,7 +37,9 @@ void ServerApi::threadDelete(server::ThreadDeleteModel model) {
 }
 
 server::ThreadGetResult ServerApi::threadGet(server::ThreadGetModel model) {
-    return request<server::ThreadGetResult>("threadGet", model.toJSON());
+    auto result = request<server::ThreadGetResult>("threadGet", model.toJSON());
+    core::EndpointUtils::assertServedId(model.threadId, result.thread.id);
+    return result;
 }
 
 server::ThreadListResult ServerApi::threadList(server::ThreadListModel model) {
@@ -56,7 +59,9 @@ server::ThreadMessageGetResult ServerApi::threadMessageGet(server::ThreadMessage
 }
 
 server::ThreadMessagesGetResult ServerApi::threadMessagesGet(server::ThreadMessagesGetModel model) {
-    return request<server::ThreadMessagesGetResult>("threadMessagesGet", model.toJSON());
+    auto result = request<server::ThreadMessagesGetResult>("threadMessagesGet", model.toJSON());
+    core::EndpointUtils::assertServedId(model.threadId, result.thread.id);
+    return result;
 }
 
 void ServerApi::threadMessageUpdate(server::ThreadMessageUpdateModel model) {

@@ -7,9 +7,11 @@
 #include <vector>
 
 #include <privmx/crypto/Crypto.hpp>
+#include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/endpoint/core/ContainerBaseApi.hpp>
+#include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/KeyProvider.hpp>
@@ -104,6 +106,16 @@ protected:
             const auto found = openable.find(groupId);
             return found == openable.end() ? std::nullopt :
                                              std::optional<privmx::crypto::PrivateKey>(found->second);
+        };
+    }
+
+    // An unsigned V1 entry, as old clients wrote it and as anyone holding the recipient's public key can forge it.
+    server::KeyEntry v1For(const privmx::crypto::PublicKey& recipient, const std::string& key) {
+        return server::KeyEntry{
+            .keyId = _containerKey.id,
+            .data = privmx::crypto::EciesEncryptor::encryptToBase64(
+                recipient, key, privmx::crypto::PrivateKey::generateRandom()
+            )
         };
     }
 
@@ -235,4 +247,69 @@ TEST_F(KeyProviderGroupKeysTest, reading_the_current_key_resolves_only_its_own_e
     EXPECT_EQ(key.statusCode, 0);
     EXPECT_EQ(key.key, _containerKey.key);
     EXPECT_EQ(resolvedEpochs, (std::vector<int64_t>{30}));
+}
+
+TEST_F(KeyProviderGroupKeysTest, v1_entry_on_a_group_route_is_rejected) {
+    // Grants are written as V2 only, so a V1 grant is the server's own key, sealed to the public group key.
+    const auto group = privmx::crypto::PrivateKey::generateRandom();
+    const std::string serverKey(32, '\x5a');
+    auto forged = v1For(group.getPublicKey(), serverKey);
+    std::vector<server::GroupKeysEntry> served{
+        {.group = GROUP_A, .keys = {server::GroupKeyEntry{.keyId = forged.keyId, .data = forged.data, .groupEpoch = 1}}}
+    };
+    KeyDecryptionAndVerificationRequest request;
+    request.addGroupKeys(served, _location);
+
+    ResolverLog log;
+    const std::map<std::string, privmx::crypto::PrivateKey> openable{{GROUP_A, group}};
+    const auto key = _keyProvider->getKeysAndVerify(request, resolverOver(openable, log)).at(_location).at(KEY_ID);
+    EXPECT_NE(key.statusCode, 0);
+}
+
+TEST_F(KeyProviderGroupKeysTest, v1_entry_stays_readable_but_is_refused_as_the_write_key) {
+    const std::string serverKey(32, '\x5a');
+    const auto forged = v1For(_userKey.getPublicKey(), serverKey);
+    auto keyProvider = std::shared_ptr<KeyProvider>(std::move(_keyProvider));
+
+    // Reading old data under a legacy V1 key keeps working.
+    KeyDecryptionAndVerificationRequest request;
+    request.addOne({forged}, KEY_ID, _location);
+    const auto read = keyProvider->getKeysAndVerify(request).at(_location).at(KEY_ID);
+    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_EQ(read.key, serverKey);
+
+    // Encrypting under it does not: the key id and the entry are both the server's choice. It reads as a key to
+    // re-key away, so a write that may re-key rotates it first and any other is told it has to be.
+    CurrentKeyReader reader(keyProvider, nullptr);
+    const ModuleKeys current{
+        .keys = {forged}, .groupKeys = {}, .staleGroups = {}, .currentKeyId = KEY_ID, .moduleSchemaVersion = 0,
+        .moduleResourceId = _location.resourceId, .contextId = _location.contextId
+    };
+    EXPECT_TRUE(reader.isRekeyNeeded(current));
+    EXPECT_THROW(reader.getAndValidateModuleCurrentEncKey(current), StaleKeyRekeyRequiredException);
+}
+
+TEST_F(KeyProviderGroupKeysTest, malformed_v1_entry_fails_alone) {
+    server::KeyEntry malformed{.keyId = "malformed", .data = std::string("not-ecies")};
+    auto good = wrapFor(_userKey.getPublicKey(), 1);
+    KeyDecryptionAndVerificationRequest request;
+    request.addAll({malformed, server::KeyEntry{.keyId = good.keyId, .data = good.data}}, _location);
+
+    const auto keys = _keyProvider->getKeysAndVerify(request).at(_location);
+    EXPECT_NE(keys.at("malformed").statusCode, 0);
+    EXPECT_EQ(keys.at(KEY_ID).statusCode, 0);
+}
+
+TEST_F(KeyProviderGroupKeysTest, v1_key_is_never_rewrapped_as_signed_v2) {
+    // Re-wrapping would sign a key the server may have chosen, laundering it into a V2 entry a new member trusts.
+    DecryptedEncKeyV2 v1;
+    v1.id = KEY_ID;
+    v1.key = std::string(32, '\x5a');
+    v1.statusCode = 0;
+    v1.dataStructureVersion = EncryptionKeyDataSchema::Version::VERSION_1;
+    const UserWithPubKey newcomer{.userId = "user_2", .pubKey = _author.getPublicKey().toBase58DER()};
+    const auto entries = _keyProvider->prepareMissingKeysForNewUsers(
+        {{KEY_ID, v1}}, {newcomer}, DataIntegrityObject{}, _location, _containerSecret
+    );
+    EXPECT_TRUE(entries.empty());
 }

@@ -129,7 +129,8 @@ core::ModuleInternalMetaV5 InboxDataSchemaMapper::decryptInternalMeta(
 std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
     const std::vector<server::InboxInfo>& inboxes,
     const std::shared_ptr<core::KeyProvider>& keyProvider,
-    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
+    const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
+    const std::optional<std::string>& expectedContextId
 ) {
     return core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Inbox>(
         inboxes, keyProvider, _connection, [&](const server::InboxInfo& inbox) { return validateDataIntegrity(inbox); },
@@ -141,7 +142,7 @@ std::vector<Inbox> InboxDataSchemaMapper::validateDecryptAndConvertInboxes(
         [](const server::InboxInfo& inbox, uint32_t code) {
             return toLibInbox(inbox, {}, {}, {}, code, InboxDataSchema::Version::UNKNOWN);
         },
-        groupPrivKeyResolver
+        groupPrivKeyResolver, expectedContextId
     );
 }
 
@@ -150,7 +151,7 @@ Inbox InboxDataSchemaMapper::validateDecryptAndConvertInbox(
     const std::shared_ptr<core::KeyProvider>& keyProvider,
     const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver
 ) {
-    return validateDecryptAndConvertInboxes({inbox}, keyProvider, groupPrivKeyResolver)[0];
+    return validateDecryptAndConvertInboxes({inbox}, keyProvider, groupPrivKeyResolver, std::nullopt)[0];
 }
 
 Inbox InboxDataSchemaMapper::toLibInbox(

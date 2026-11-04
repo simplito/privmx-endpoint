@@ -139,12 +139,12 @@ void StreamApiLowImpl::processNotificationEvent(const core::NotificationEvent& n
         );
         auto streamRoomData = _streamRoomMap.get(eventData.streamRoomId);
         auto subscriptions = notification.subscriptions;
-        //update keys
+        // The LOCAL key is chosen again from the updated room: one kept from join time would leave this client's
+        // media and data channel under a key a re-key replaced, which a removed member holds.
         if (streamRoomData.has_value()) {
-            std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(
-                raw, streamRoomData.value()->encryptionKeyId
-            );
+            std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(raw);
             streamRoomData.value()->webRtc->updateKeys(eventData.streamRoomId, keys);
+            streamRoomData.value()->messageEncryptor->updateKey(keys);
             for (const auto& internalSubscription : streamRoomData.value()->subscriptionsIds) {
                 subscriptions.erase(
                     remove(subscriptions.begin(), subscriptions.end(), internalSubscription), subscriptions.end()
@@ -248,11 +248,9 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     if (_streamRoomMap.has(streamRoomId)) {
         throw AlreadyJoinedStreamRoomException();
     }
-    server::StreamRoomGetModel model;
-    model.id = streamRoomId;
-    auto streamRoom = _serverApi->streamRoomGet(model).streamRoom;
+    auto streamRoom = getRawStreamRoom(streamRoomId);
     std::shared_ptr<DataChannelMessageEncryptorV1> dataChannelMessageEncryptorV1;
-    std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom, streamRoom.data.back().keyId);
+    std::vector<stream::Key> keys = generateWebRTCKeysFromStreamRoomInfo(streamRoom);
     dataChannelMessageEncryptorV1 = std::make_shared<DataChannelMessageEncryptorV1>(keys);
     webRtc->updateKeys(streamRoomId, keys);
     // setup event listener
@@ -265,7 +263,7 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
     );
     _eventMiddleware->notificationEventListenerAddSubscriptionIds(_notificationListenerId, subscriptionsIds);
     std::shared_ptr<StreamRoomData> streamRoomData = std::make_shared<StreamRoomData>(
-        dataChannelMessageEncryptorV1, streamRoomId, webRtc, subscriptionsIds, streamRoom.data.back().keyId
+        dataChannelMessageEncryptorV1, streamRoomId, webRtc, subscriptionsIds
     );
     _streamRoomMap.set(streamRoomId, streamRoomData);
     return streamRoomData;
@@ -588,9 +586,7 @@ void StreamApiLowImpl::updateStreamRoom(
     const std::vector<core::GroupGrantWithKey>& groups
 ) {
 
-    server::StreamRoomGetModel getModel;
-    getModel.id = streamRoomId;
-    auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
+    auto currentStreamRoom = getRawStreamRoom(streamRoomId);
     auto currentStreamRoomEntry = currentStreamRoom.data.back();
     auto currentStreamRoomResourceId = currentStreamRoom.resourceId.value_or(core::EndpointUtils::generateId());
     auto ctx = prepareContainerUpdate(
@@ -628,9 +624,7 @@ void StreamApiLowImpl::rotateStreamRoomKeys(
     const bool force,
     const std::vector<core::GroupGrantWithKey>& knownGroupKeys
 ) {
-    server::StreamRoomGetModel getModel;
-    getModel.id = streamRoomId;
-    auto currentStreamRoom = _serverApi->streamRoomGet(getModel).streamRoom;
+    auto currentStreamRoom = getRawStreamRoom(streamRoomId);
     rotateContainerKeys<server::StreamRoomRotateKeysModel>(
         streamRoomId, currentStreamRoom, users, managers, version, force, knownGroupKeys,
         [&](const server::StreamRoomRotateKeysModel& model) { _serverApi->streamRoomRotateKeys(model); }
@@ -650,12 +644,7 @@ void StreamApiLowImpl::ensureRoomKeyIsFresh(const std::string& streamRoomId) {
 
 void StreamApiLowImpl::autoRotateStreamRoomKeys(const std::string& streamRoomId) {
     autoRotateContainerKeys<server::StreamRoomRotateKeysModel, server::StreamRoomInfo>(
-        streamRoomId,
-        [&] {
-            server::StreamRoomGetModel getModel;
-            getModel.id = streamRoomId;
-            return _serverApi->streamRoomGet(getModel).streamRoom;
-        },
+        streamRoomId, [&] { return getRawStreamRoom(streamRoomId); },
         [&](const server::StreamRoomRotateKeysModel& model) { _serverApi->streamRoomRotateKeys(model); }
     );
 }
@@ -671,7 +660,7 @@ core::PagingList<StreamRoom> StreamApiLowImpl::listStreamRooms(
     core::ListQueryMapper::map(model, query);
     auto streamRoomsList = _serverApi->streamRoomList(model);
     auto streamRooms = _streamRoomDataSchemaMapper->validateDecryptAndConvertStreamRooms(
-        streamRoomsList.list, _keyProvider, _groupPrivKeyResolver
+        streamRoomsList.list, _keyProvider, _groupPrivKeyResolver, contextId
     );
     return core::PagingList<StreamRoom>({.totalAvailable = streamRoomsList.count, .readItems = streamRooms});
 }
@@ -691,6 +680,12 @@ void StreamApiLowImpl::deleteStreamRoom(const std::string& streamRoomId) {
     server::StreamRoomDeleteModel model;
     model.id = streamRoomId;
     _serverApi->streamRoomDelete(model);
+}
+
+stream::server::StreamRoomInfo StreamApiLowImpl::getRawStreamRoom(const std::string& streamRoomId) {
+    server::StreamRoomGetModel model;
+    model.id = streamRoomId;
+    return _serverApi->streamRoomGet(model).streamRoom;
 }
 
 std::shared_ptr<StreamApiLowImpl::StreamRoomData> StreamApiLowImpl::getStreamRoomData(const std::string& streamRoomId) {
@@ -731,9 +726,7 @@ std::string StreamApiLowImpl::buildSubscriptionQuery(
 }
 
 std::pair<core::ModuleKeys, int64_t> StreamApiLowImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
-    server::StreamRoomGetModel params;
-    params.id = moduleId;
-    auto stream = _serverApi->streamRoomGet(params).streamRoom;
+    auto stream = getRawStreamRoom(moduleId);
     // validate stream Data before returning data
     _streamRoomDataSchemaMapper->assertDataIntegrity(stream);
     return std::make_pair(containerToModuleKeys(stream), stream.version);
@@ -778,12 +771,10 @@ void StreamApiLowImpl::setNewOfferOnReconfigure(const int64_t sessionId, const S
     _serverApi->streamSetNewOffer(model);
 }
 
-std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
-    server::StreamRoomInfo streamRoomInfo,
-    const std::string& encryptionKeyId
-) {
+std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo) {
     auto keys = extractStreamRoomKeys(streamRoomInfo);
-    auto currentStreamRoomKey = keys.at(encryptionKeyId);
+    // The room's current key, not the newest data entry's: a re-key leaves that one under the key it replaced.
+    auto currentStreamRoomKey = keys.at(streamRoomInfo.keyId);
 
     std::vector<stream::Key> webRTCKeys;
     if (currentStreamRoomKey.statusCode != 0) {
@@ -791,6 +782,7 @@ std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
             "Encryption Key status code = " + std::to_string(currentStreamRoomKey.statusCode)
         );
     }
+    assertWriteKey(currentStreamRoomKey); // the LOCAL key: what this client's media is encrypted under
     webRTCKeys.push_back(
         stream::Key{
             currentStreamRoomKey.id, core::Buffer::from(deriveStreamEncryptionKey(currentStreamRoomKey)), KeyType::LOCAL

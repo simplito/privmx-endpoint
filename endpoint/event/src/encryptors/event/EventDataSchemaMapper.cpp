@@ -57,7 +57,7 @@ ContextCustomEventData EventDataSchemaMapper::decrypt(const server::ContextCusto
     encKey.statusCode = 0;
     try {
         auto raw = _strategyV5->decrypt(rawEvent, encKey);
-        if (raw.statusCode == 0 && !verifyDecryptedEventData(raw)) {
+        if (raw.statusCode == 0 && !verifyDecryptedEventData(rawEvent, raw)) {
             raw.statusCode = privmx::endpoint::core::UserVerificationFailureException().getCode();
         }
         return _strategyV5->convert(rawEvent, raw);
@@ -90,7 +90,7 @@ DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
         result.statusCode = raw.statusCode;
         result.data = raw.data;
         result.type = raw.type.has_value() ? raw.type.value() : "";
-        if (result.statusCode == 0 && !verifyDecryptedEventData(raw)) {
+        if (result.statusCode == 0 && !verifyDecryptedEventData(rawEvent, raw)) {
             result.statusCode = privmx::endpoint::core::UserVerificationFailureException().getCode();
         }
     } catch (const core::Exception& e) {
@@ -101,12 +101,20 @@ DecryptedInternalContextEventDataV1 EventDataSchemaMapper::decryptInternal(
     return result;
 }
 
-bool EventDataSchemaMapper::verifyDecryptedEventData(const DecryptedEventDataV5& data) {
+// The verifier is asked about exactly the (context, user) the application is told, so a DIO of another author or
+// context cannot be delivered under the envelope's names.
+bool EventDataSchemaMapper::verifyDecryptedEventData(
+    const server::ContextCustomEventData& rawEvent,
+    const DecryptedEventDataV5& data
+) {
+    if (data.dio.creatorUserId != rawEvent.author.id || data.dio.contextId != rawEvent.id) {
+        return false;
+    }
     std::vector<core::VerificationRequest> verifierInput{};
     verifierInput.push_back(
         core::VerificationRequest{
-            .contextId = data.dio.contextId,
-            .senderId = data.dio.creatorUserId,
+            .contextId = rawEvent.id,
+            .senderId = rawEvent.author.id,
             .senderPubKey = data.dio.creatorPubKey,
             .date = data.dio.timestamp,
             .bridgeIdentity = data.dio.bridgeIdentity

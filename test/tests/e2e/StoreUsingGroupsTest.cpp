@@ -7,6 +7,8 @@
 #include <privmx/utils/Utils.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/store/ServerApi.hpp>
 #include <privmx/endpoint/store/StoreApi.hpp>
 #include <privmx/endpoint/store/VarSerializer.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
@@ -798,4 +800,59 @@ TEST_F(StoreUsingGroupsTest, uploading_a_file_auto_rotates_a_stale_store_key) {
     EXPECT_NO_THROW({ file = storeApi->getFile(fileId); });
     EXPECT_EQ(file.statusCode, 0);
     EXPECT_EQ(downloadFile(fileId, (int64_t)std::string("auto_data").size()), "auto_data");
+}
+
+TEST_F(StoreUsingGroupsTest, SECURITY_file_meta_updated_after_a_rekey_goes_under_the_new_key) {
+    // Honest Bridge. updateFileMeta took the key of the Store's newest data entry, which a re-key leaves
+    // under K1, the key user_3 held before its removal from G. The Bridge refuses meta under any but the current
+    // key, so the update failed outright; with the current key it succeeds and the meta is under K2.
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), std::vector<core::UserWithPubKey>{user(1), user(2), user(3)},
+            std::vector<core::UserWithPubKey>{user(1)}, core::Buffer::from("f05b_pub"), core::Buffer::from("f05b_priv")
+        );
+    });
+    group::Group sharedGroup = groupApi->getGroup(groupId);
+    std::string storeId;
+    ASSERT_NO_THROW({
+        storeId = createStoreWithGroups(
+            contextId(), std::vector<core::UserWithPubKey>{user(1)}, std::vector<group::Group>{sharedGroup}
+        );
+    });
+    std::string fileId;
+    ASSERT_NO_THROW({ fileId = uploadFile(storeId, "file_pub", "file_priv", "file_data"); });
+    store::ServerApi raw(connection->getImpl()->getGateway());
+    const auto rawFile = [&] {
+        store::server::StoreFileGetModel get;
+        get.fileId = fileId;
+        return raw.storeFileGet(get);
+    };
+    const std::string removedMembersKey = rawFile().store.keyId;
+
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {userId(3)}); });
+    store::Store stale = storeApi->getStore(storeId);
+    ASSERT_NO_THROW({
+        storeApi->rotateStoreKeys(
+            storeId, std::vector<core::UserWithPubKey>{user(1)}, std::vector<core::UserWithPubKey>{user(1)},
+            stale.version, false
+        );
+    });
+
+    ASSERT_NO_THROW({
+        storeApi->updateFileMeta(fileId, core::Buffer::from("file_pub_2"), core::Buffer::from("file_priv_2"));
+    });
+    const auto after = rawFile();
+    EXPECT_NE(after.store.keyId, removedMembersKey);
+    EXPECT_EQ(after.file.keyId, after.store.keyId);
+    EXPECT_NE(after.file.keyId, removedMembersKey) << "the new meta went under a key user_3 holds";
+
+    // user_2 stays in G and reads the new meta through it.
+    disconnect();
+    connectAs(2);
+    store::File file;
+    EXPECT_NO_THROW({ file = storeApi->getFile(fileId); });
+    EXPECT_EQ(file.statusCode, 0);
+    EXPECT_EQ(file.publicMeta.stdString(), "file_pub_2");
+    EXPECT_EQ(file.privateMeta.stdString(), "file_priv_2");
 }

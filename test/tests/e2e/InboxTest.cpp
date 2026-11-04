@@ -12,6 +12,7 @@
  */
 #include <gtest/gtest.h>
 #include "BaseTest.hpp"
+#include "FalseUserVerifierInterface.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/crypto/Crypto.hpp>
@@ -937,4 +938,25 @@ TEST_F(InboxTest, falseUserVerifierInterface) {
     });
     ASSERT_EQ(inboxEntriesListResult.readItems.size(), 1);
     EXPECT_EQ(inboxEntriesListResult.readItems[0].statusCode, failureCode);
+}
+
+TEST_F(InboxTest, SECURITY_a_key_the_verifier_refuses_is_never_wrapped_to) {
+    // user_2's listed key is one the application's verifier refuses (a substituted key, as far as the client can
+    // tell). Create, update (an added user and a new key) and rotate all refuse before the key is wrapped to it.
+    const std::string withBoth = inboxApi->createInbox(contextId(), users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), std::nullopt);
+    const std::string withOne = inboxApi->createInbox(contextId(), users({1}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), std::nullopt);
+    const auto listed = [&] { return inboxApi->listInboxes(contextId(), {.skip=0, .limit=1, .sortOrder="desc"}).totalAvailable; };
+    const auto before = listed();
+    connection->setUserVerifier(
+        std::make_shared<core::RefusingKeyVerifier>(std::set<std::string>{user(2).pubKey})
+    );
+    core::expectVerificationFailure([&] { inboxApi->createInbox(contextId(), users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), std::nullopt); });
+    core::expectVerificationFailure([&] { inboxApi->updateInbox(withOne, users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), std::nullopt, 1, false, false); });
+    core::expectVerificationFailure([&] { inboxApi->updateInbox(withBoth, users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), std::nullopt, 1, false, true); });
+    core::expectVerificationFailure([&] { inboxApi->rotateInboxKeys(withBoth, users({1, 2}), users({1}), 1, false); });
+    EXPECT_EQ(listed(), before);
+    EXPECT_EQ(inboxApi->getInbox(withBoth).version, 1);
+    EXPECT_EQ(inboxApi->getInbox(withOne).version, 1);
+    // Without user_2 nothing is refused.
+    EXPECT_NO_THROW({ inboxApi->updateInbox(withBoth, users({1}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), std::nullopt, 1, false, true); });
 }

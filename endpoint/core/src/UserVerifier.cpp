@@ -18,6 +18,9 @@ using namespace privmx::endpoint::core;
 UserVerifier::UserVerifier(std::shared_ptr<UserVerifierInterface> userVerifier) : _userVerifier(userVerifier) {}
 
 std::vector<bool> UserVerifier::verify(const std::vector<VerificationRequest>& request) {
+    if (request.empty()) {
+        return {};
+    }
     std::vector<bool> result;
     try {
         result = _userVerifier->verify(request);
@@ -34,9 +37,6 @@ std::vector<bool> UserVerifier::verify(const std::vector<VerificationRequest>& r
 };
 
 void UserVerifier::assertKeysVerified(const std::string& contextId, const std::vector<UserWithPubKey>& users) {
-    if (users.empty()) {
-        return;
-    }
     std::vector<VerificationRequest> requests;
     const int64_t now = privmx::utils::Utils::getNowTimestamp();
     for (const auto& user : users) {
