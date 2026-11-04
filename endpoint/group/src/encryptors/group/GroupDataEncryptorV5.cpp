@@ -12,12 +12,7 @@
 using namespace privmx::endpoint::group;
 using namespace privmx::endpoint;
 
-namespace {
-
-// Only the roster envelope carries `internalMeta` — the module's own identity is read from nowhere else — but
-// the round trip stays factored out, since encrypt and decrypt must agree on the encoding.
-std::string encodeInternalMeta(
-    core::DataEncryptorV4& dataEncryptor,
+std::string GroupDataEncryptorV5::encodeInternalMeta(
     const core::ModuleInternalMetaV5& internalMeta,
     const privmx::crypto::PrivateKey& authorPrivateKey,
     const std::string& encryptionKey
@@ -25,25 +20,22 @@ std::string encodeInternalMeta(
     core::dynamic::ModuleInternalMetaV5 internalMetaObj{
         .secret = internalMeta.secret, .resourceId = internalMeta.resourceId, .randomId = internalMeta.randomId
     };
-    return dataEncryptor.signAndEncryptAndEncode(
+    return _dataEncryptor.signAndEncryptAndEncode(
         core::Buffer::from(internalMetaObj.serialize()), authorPrivateKey, encryptionKey
     );
 }
 
-core::ModuleInternalMetaV5 decodeInternalMeta(
-    core::DataEncryptorV4& dataEncryptor,
+core::ModuleInternalMetaV5 GroupDataEncryptorV5::decodeInternalMeta(
     const std::string& encoded,
     const privmx::crypto::PublicKey& authorPublicKey,
     const std::string& encryptionKey
 ) {
-    auto raw = dataEncryptor.decodeAndDecryptAndVerify(encoded, authorPublicKey, encryptionKey);
+    auto raw = _dataEncryptor.decodeAndDecryptAndVerify(encoded, authorPublicKey, encryptionKey);
     auto parsed = core::dynamic::ModuleInternalMetaV5::fromJSON(privmx::utils::Utils::parseJsonObject(raw.stdString()));
     return core::ModuleInternalMetaV5{
         .secret = parsed.secret, .resourceId = parsed.resourceId, .randomId = parsed.randomId
     };
 }
-
-} // namespace
 
 dynamic::EncryptedGroupRosterV5 GroupDataEncryptorV5::encryptRoster(
     const GroupRosterToEncryptV5& data,
@@ -54,7 +46,7 @@ dynamic::EncryptedGroupRosterV5 GroupDataEncryptorV5::encryptRoster(
     result.version = core::ModuleDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
 
-    result.internalMeta = encodeInternalMeta(_dataEncryptor, data.internalMeta, authorPrivateKey, encryptionKey);
+    result.internalMeta = encodeInternalMeta(data.internalMeta, authorPrivateKey, encryptionKey);
     fieldChecksums.insert(std::make_pair("internalMeta", privmx::crypto::Crypto::sha256(result.internalMeta)));
 
     result.membership = _dataEncryptor.signAndEncode(
@@ -80,9 +72,7 @@ DecryptedGroupRosterV5 GroupDataEncryptorV5::decryptRoster(
         auto authorPublicKey = crypto::PublicKeyCache::getInstance()->fromBase58DER(encryptedData.authorPubKey);
         result.authorPubKey = encryptedData.authorPubKey;
 
-        result.internalMeta = decodeInternalMeta(
-            _dataEncryptor, encryptedData.internalMeta, authorPublicKey, encryptionKey
-        );
+        result.internalMeta = decodeInternalMeta(encryptedData.internalMeta, authorPublicKey, encryptionKey);
 
         auto membershipRaw = _dataEncryptor.decodeAndVerify(encryptedData.membership, authorPublicKey);
         result.membership = dynamic::MembershipBlock::fromJSON(

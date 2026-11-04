@@ -46,6 +46,11 @@ public:
     void clear();
 
 private:
+    static constexpr const char* NOT_AN_OPEN_FILE_HANDLE = "field:fileHandle is not an open encrypted-file handle";
+
+    // For a call holding the handle's lock: a finish that won the lock first has closed it.
+    static EnvelopeFileState& openState(EnvelopeFile& file);
+
     std::shared_ptr<EnvelopeFile> get(FileHandle fileHandle, bool wantReading);
     void release(FileHandle fileHandle);
     // The caller holds the handle's lock.

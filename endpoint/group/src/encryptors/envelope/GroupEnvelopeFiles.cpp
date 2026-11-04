@@ -22,17 +22,12 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
-namespace {
-constexpr const char* NOT_AN_OPEN_FILE_HANDLE = "field:fileHandle is not an open encrypted-file handle";
-
-// For a call holding the handle's lock: a finish that won the lock first has closed it.
-EnvelopeFileState& openState(EnvelopeFile& file) {
+EnvelopeFileState& GroupEnvelopeFiles::openState(EnvelopeFile& file) {
     if (file.state.closed) {
         throw core::InvalidParamsException(NOT_AN_OPEN_FILE_HANDLE);
     }
     return file.state;
 }
-} // namespace
 
 GroupEnvelopeFiles::GroupEnvelopeFiles(GroupEnvelopeEncryptor& encryptor, const core::Connection& connection)
     : _encryptor(encryptor), _connection(connection) {}
