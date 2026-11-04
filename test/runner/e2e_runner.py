@@ -326,45 +326,65 @@ def main(
         return 1
 
     failed: list[str] = []
-    scheduled_tests = 0
     list_passthrough_args = build_list_passthrough_args(selected_filter)
 
+    # One flat queue across all binaries, so workers never idle waiting for a binary to finish.
+    scheduled: list[tuple[Path, str]] = []
     for test_file in test_files:
         tests = list_tests(str(test_file), list_passthrough_args)
         if not tests:
             continue
 
-        scheduled_tests += len(tests)
         print(f"Found {len(tests)} tests in {test_file}")
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [
-                executor.submit(
-                    run_single_test,
-                    idx,
-                    str(test_file),
-                    test_name,
-                    init_file_path,
-                    dataset_dir_path,
-                    run_passthrough_args,
-                )
-                for idx, test_name in enumerate(tests)
-            ]
+        scheduled.extend((test_file, test_name) for test_name in tests)
 
-            for future in as_completed(futures):
-                test_name, success, rc, out, err = future.result()
-                print_result(test_name, success, rc, out, err)
-                if not success:
-                    failed.append(test_name)
-
-    if scheduled_tests == 0:
+    if not scheduled:
         filter_suffix = f" for filter '{selected_filter}'" if selected_filter else ""
         print(f"No tests matched{filter_suffix}.")
         return 1
 
-    print("\n=========================")
-    print(f"log file    : {e2e_common.LOG_FILE}")
-    print(f"failed tests: {failed}")
-    print("=========================")
+    run_started_at = time.time()
+    started_clock = e2e_common.clock_now()
+    e2e_common.log(f"[RUN-START] {len(scheduled)} tests on {max_workers} workers at {started_clock}")
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(
+                run_single_test,
+                idx,
+                str(test_file),
+                test_name,
+                init_file_path,
+                dataset_dir_path,
+                run_passthrough_args,
+            )
+            for idx, (test_file, test_name) in enumerate(scheduled)
+        ]
+
+        for future in as_completed(futures):
+            test_name, success, rc, out, err = future.result()
+            print_result(test_name, success, rc, out, err)
+            if not success:
+                failed.append(test_name)
+
+    total_elapsed = e2e_common.format_elapsed(time.time() - run_started_at)
+    e2e_common.log(
+        f"[RUN-STOP] start={started_clock} stop={e2e_common.clock_now()} "
+        f"total={total_elapsed} failed={len(failed)}/{len(scheduled)}"
+    )
+
+    summary_lines = [
+        "",
+        "=========================",
+        f"log file    : {e2e_common.LOG_FILE}",
+        f"tests run   : {len(scheduled)}",
+        f"total time  : {total_elapsed}",
+        f"failed tests: {failed}",
+        "=========================",
+    ]
+    for line in summary_lines:
+        print(line)
+    e2e_common.log("\n".join(["[E2E-SUMMARY]", *summary_lines[1:]]))
     return len(failed)
 
 
