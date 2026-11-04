@@ -38,7 +38,8 @@ void GroupDataSchemaMapper::assertWrittenByMember(
     const std::string& author = entry.author;
     const bool manager = std::find(managers.begin(), managers.end(), author) != managers.end();
     const bool member = manager || std::find(users.begin(), users.end(), author) != users.end();
-    if (key.statusCode != 0 || !member ||
+    if (key.statusCode != 0 ||
+        !member ||
         !keytree::TreeCommits::onRoster(users, managers, key.dio.creatorUserId) ||
         !keytree::TreeCommits::allows(rules.update, true, manager, author == rules.creator)) {
         throw GroupMembershipMismatchException();
@@ -156,7 +157,9 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
 }
 
 bool GroupDataSchemaMapper::sameEntry(const server::GroupMetaEntry& now, const server::GroupMetaEntry& then) {
-    return now.version == then.version && now.author == then.author && now.keyId == then.keyId &&
+    return now.version == then.version &&
+        now.author == then.author &&
+        now.keyId == then.keyId &&
         privmx::utils::Utils::stringifyVar(now.data) == privmx::utils::Utils::stringifyVar(then.data);
 }
 
@@ -270,9 +273,7 @@ dynamic::MembershipBlock GroupDataSchemaMapper::buildMembershipBlock(
 keytree::GroupRules GroupDataSchemaMapper::rulesOf(const server::GroupInfo& group) {
     try {
         return keytree::TreeCommits::rules(group.policy, group.creator);
-    } catch (const std::invalid_argument&) {
-        throw GroupDataIntegrityException("the group's policy does not parse");
-    }
+    } catch (const std::invalid_argument&) { throw GroupDataIntegrityException("the group's policy does not parse"); }
 }
 
 PriorRole GroupDataSchemaMapper::priorOf(const server::GroupInfo& group) {
@@ -353,7 +354,8 @@ core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const serve
         dio = _groupEncryptor.getRosterDIOAndAssertIntegrity(encData);
     } catch (...) { throw GroupDataIntegrityException(); }
     // The served context and resourceId only count as what the id was derived from.
-    if (dio.contextId != groupInfo.contextId || dio.resourceId != groupInfo.resourceId.value_or("") ||
+    if (dio.contextId != groupInfo.contextId ||
+        dio.resourceId != groupInfo.resourceId.value_or("") ||
         keytree::TreeCommits::groupId(dio.contextId, dio.resourceId) != groupInfo.id) {
         throw GroupDataIntegrityException();
     }
@@ -368,7 +370,8 @@ void GroupDataSchemaMapper::assertNotBelowPins(const server::GroupInfo& groupInf
         return;
     }
     const VersionPin& pinned = it->second;
-    if (groupInfo.rosterVersion < pinned[0] || groupInfo.publicMetaVersion < pinned[1] ||
+    if (groupInfo.rosterVersion < pinned[0] ||
+        groupInfo.publicMetaVersion < pinned[1] ||
         groupInfo.privateMetaVersion < pinned[2]) {
         // A shorter answer than one already seen is a validly tagged *past* state — a rollback, not an error the
         // tag itself can catch, because that older tag was genuine when it was made.
@@ -472,9 +475,12 @@ GroupSummary GroupDataSchemaMapper::toLibGroupSummary(const server::GroupSummary
 }
 
 void GroupDataSchemaMapper::addReadKeys(
-    core::KeyDecryptionAndVerificationRequest& request, const server::GroupInfo& g, const core::EncKeyLocation& location
+    core::KeyDecryptionAndVerificationRequest& request,
+    const server::GroupInfo& g,
+    const core::EncKeyLocation& location
 ) {
-    for (const std::string& keyId : std::set<std::string>{g.data.back().keyId, g.publicMeta.keyId, g.privateMeta.keyId}) {
+    for (const std::string& keyId :
+         std::set<std::string>{g.data.back().keyId, g.publicMeta.keyId, g.privateMeta.keyId}) {
         request.addGroupKeys(g.groupKeys, location, keyId);
     }
 }

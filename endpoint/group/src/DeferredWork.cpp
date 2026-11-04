@@ -169,13 +169,17 @@ void DeferredWork::checkLadderAt(const std::string& groupId, const std::string& 
         return;
     }
     spans.erase(
-        std::remove_if(spans.begin(), spans.end(), [&](const keytree::RungSpan& span) { return !matchesChain(span.target); }),
+        std::remove_if(
+            spans.begin(), spans.end(), [&](const keytree::RungSpan& span) { return !matchesChain(span.target); }
+        ),
         spans.end()
     );
     for (const keytree::RungSpan& span : spans) {
         // Somebody may have repaired it meanwhile: re-checked right before, so the members who lost the race stop.
         const std::vector<keytree::RungSpan> still = unopened();
-        if (std::none_of(still.begin(), still.end(), [&](const keytree::RungSpan& s) { return s.target == span.target; })) {
+        if (std::none_of(still.begin(), still.end(), [&](const keytree::RungSpan& s) {
+                return s.target == span.target;
+            })) {
             continue;
         }
         const auto atKey = cache->getGrantKey(at);
@@ -224,9 +228,9 @@ void DeferredWork::run(const std::string& groupId, const std::function<void()>& 
     for (const PendingLadderCheck& check : checks) {
         try {
             checkLadderAt(check.groupId, check.contextId, check.at);
-        } catch (const std::exception& e) {
-            LOG_WARN("[ladder] check dropped: ", e.what())
-        } catch (...) { LOG_WARN("[ladder] check dropped") }
+        } catch (const std::exception& e) { LOG_WARN("[ladder] check dropped: ", e.what()) } catch (...) {
+            LOG_WARN("[ladder] check dropped")
+        }
     }
     if (update.has_value()) {
         bool lostRace = false;

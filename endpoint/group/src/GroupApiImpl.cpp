@@ -181,9 +181,9 @@ void GroupApiImpl::savePinsIfDue() noexcept {
             }
         }
         savePins();
-    } catch (const std::exception& e) {
-        LOG_WARN("[pins] save dropped: ", e.what())
-    } catch (...) { LOG_WARN("[pins] save dropped") }
+    } catch (const std::exception& e) { LOG_WARN("[pins] save dropped: ", e.what()) } catch (...) {
+        LOG_WARN("[pins] save dropped")
+    }
 }
 
 void GroupApiImpl::selfUpdate(const std::string& groupId) {
@@ -194,9 +194,7 @@ bool GroupApiImpl::renewLeaf(const std::string& groupId, const std::string& prev
     std::optional<privmx::crypto::PrivateKey> previous;
     try {
         previous = privmx::crypto::PrivateKey::fromWIF(previousUserPrivKey);
-    } catch (...) {
-        throw core::InvalidParamsException("the previous key is not a private key in WIF");
-    }
+    } catch (...) { throw core::InvalidParamsException("the previous key is not a private key in WIF"); }
     if (previous->getPublicKey() == _userPrivKey.getPublicKey()) {
         throw core::InvalidParamsException("the previous key is the current key");
     }
@@ -389,9 +387,11 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
         return behind;
     };
     for (size_t offset = 0; offset < groupIds.size(); offset += BRIDGE_MAX_BATCH_SIZE) {
-        const std::vector<std::string> behind = take(std::vector<std::string>(
-            groupIds.begin() + offset, groupIds.begin() + std::min(offset + BRIDGE_MAX_BATCH_SIZE, groupIds.size())
-        ));
+        const std::vector<std::string> behind = take(
+            std::vector<std::string>(
+                groupIds.begin() + offset, groupIds.begin() + std::min(offset + BRIDGE_MAX_BATCH_SIZE, groupIds.size())
+            )
+        );
         // Behind may be a read that lagged a concurrent one; read once more, and still behind gets no key.
         if (!behind.empty()) {
             take(behind);
@@ -433,9 +433,12 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 if (routing.keyId != keys.currentKeyId || isRekeyNeeded(keys)) {
                     keys = getNewModuleKeysAndUpdateCache(raw.id);
                 }
-                if (routing.type != ENVELOPE_FROM_MEMBER || routing.groupId != raw.id ||
+                if (routing.type != ENVELOPE_FROM_MEMBER ||
+                    routing.groupId != raw.id ||
                     routing.keyId != keys.currentKeyId) {
-                    throw InvalidEnvelopeFormatException("a custom event must be sealed by a member under the current key");
+                    throw InvalidEnvelopeFormatException(
+                        "a custom event must be sealed by a member under the current key"
+                    );
                 }
                 auto decrypted = decrypt(envelope);
                 // The bridge names the sender; the application vouches that the key which signed is that user's.
@@ -614,9 +617,9 @@ GroupApiHooks GroupApiImpl::bindHooks() {
     return GroupApiHooks{
         .read =
             [this](const server::GroupGetModel& model, keytree::TreeVerifier::Scope scope) {
-                return VerifiedGroup::read(
-                    _serverApi, _treeVerifier, _connection, model, scope, [this] { savePinsIfDue(); }
-                );
+                return VerifiedGroup::read(_serverApi, _treeVerifier, _connection, model, scope, [this] {
+                    savePinsIfDue();
+                });
             },
         .readForKeys = [this](const std::string& groupId) { return readGroupForKeys(groupId); },
         .savePins = [this] { savePins(); },
@@ -809,8 +812,7 @@ Envelope GroupApiImpl::finishFileEncryption(FileHandle fileHandle) {
     auto state = _envelopeFiles.finish(fileHandle, false);
     if (state.type == ENVELOPE_ANONYMOUS) {
         return _envelopeEncryptor.packAnonymousFileEnvelope(
-            state.groupId, privmx::crypto::PublicKey::fromBase58DER(state.groupPubKey), state.plainSize,
-            state.fileKey
+            state.groupId, privmx::crypto::PublicKey::fromBase58DER(state.groupPubKey), state.plainSize, state.fileKey
         );
     }
     return _envelopeEncryptor.packFileEnvelope(
@@ -883,26 +885,23 @@ bool GroupApiImpl::savePins(bool all) {
         mine.planes = _groupDataSchemaMapper->exportVersionPins();
         std::optional<keytree::TreeVerifier::PinSet> stored;
         try {
-            saved = pinSeal().update(
-                *_pinStore,
-                [&](const std::optional<std::string>& body) {
-                    stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
-                    if (stored.has_value()) {
-                        return keytree::PinBlob::encode(keytree::PinBlob::mergeForSave(mine, stored.value()));
-                    }
-                    // Nothing stored, another version or a bad tag: overwritten with every pin in full.
-                    if (body.has_value()) {
-                        LOG_WARN("[pins] the stored pins do not parse; overwritten")
-                    }
-                    return keytree::PinBlob::encode(
-                        all || _pinSaveFull ? mine
-                                            : keytree::TreeVerifier::PinSet{_treeVerifier.exportPins(true), mine.planes}
-                    );
+            saved = pinSeal().update(*_pinStore, [&](const std::optional<std::string>& body) {
+                stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
+                if (stored.has_value()) {
+                    return keytree::PinBlob::encode(keytree::PinBlob::mergeForSave(mine, stored.value()));
                 }
-            );
-        } catch (const std::exception& e) {
-            LOG_WARN("[pins] the pin store does not save: ", e.what())
-        } catch (...) { LOG_WARN("[pins] the pin store does not save") }
+                // Nothing stored, another version or a bad tag: overwritten with every pin in full.
+                if (body.has_value()) {
+                    LOG_WARN("[pins] the stored pins do not parse; overwritten")
+                }
+                return keytree::PinBlob::encode(
+                    all || _pinSaveFull ? mine :
+                                          keytree::TreeVerifier::PinSet{_treeVerifier.exportPins(true), mine.planes}
+                );
+            });
+        } catch (const std::exception& e) { LOG_WARN("[pins] the pin store does not save: ", e.what()) } catch (...) {
+            LOG_WARN("[pins] the pin store does not save")
+        }
         if (saved) {
             // What another instance of this device saved meanwhile comes in too (`PinBlob::higher`).
             if (stored.has_value()) {

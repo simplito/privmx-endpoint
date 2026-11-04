@@ -93,10 +93,7 @@ public:
 
     // The newest epoch an archive answer may speak of: the verified group's, or a later one the archive was read at
     // (a rotation since the group was read). A floor above both is a lie; one above the group's only is a race.
-    static std::int64_t newestEpoch(
-        const server::GroupInfo& group,
-        const server::GroupGetKeyArchiveResult& archive
-    );
+    static std::int64_t newestEpoch(const server::GroupInfo& group, const server::GroupGetKeyArchiveResult& archive);
 
     // The lowest node of the caller's keyed path it should self-update over, if any: one blank in the served state
     // (left so by a removal), or set by somebody not seated under it (the creator or an adder), who keeps that key.

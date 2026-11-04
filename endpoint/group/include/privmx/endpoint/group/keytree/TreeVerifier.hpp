@@ -231,7 +231,8 @@ public:
     // Pins and version-pin counters as the PinBlob holds them.
     struct PinSet {
         std::map<std::string, Pin> tree;
-        std::map<std::string, std::array<std::int64_t, 3>> planes; // rosterVersion, publicMetaVersion, privateMetaVersion
+        std::map<std::string, std::array<std::int64_t, 3>>
+            planes; // rosterVersion, publicMetaVersion, privateMetaVersion
     };
 
     // Copies of the pins for a save: moved since the last export (or all, with `all`) whole, the rest compact (no
@@ -250,7 +251,10 @@ public:
     // context, epoch, roster or rules changed, or `refusedSeq` rose; tree-only moves (self-updates) are minor.
     void onPinsMoved(std::function<void(bool major)> callback);
 
-    enum class Step { Ok, Unauthorized };
+    enum class Step {
+        Ok,
+        Unauthorized
+    };
 
     // One statement on top of `head`: the op-effect table (seq/op pairing, roster deltas, epoch and grant key,
     // `rosterVersion`, `policyHash`, an empty path for rotate/policy and, when `adjacent`, their tree hash unchanged),
@@ -376,7 +380,7 @@ private:
     );
     // One field of the group's pin, empty if none.
     template<typename T>
-    T pinned(const std::string& groupId, T Head::*field) const {
+    T pinned(const std::string& groupId, T Head::* field) const {
         std::lock_guard lock(_mutex);
         const auto it = _pins.find(groupId);
         return it == _pins.end() ? T{} : it->second.*field;

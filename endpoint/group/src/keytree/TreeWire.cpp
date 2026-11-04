@@ -133,9 +133,7 @@ TreeGroupState TreeWire::toRuntime(
         }
     }
     for (const server::GroupTreeNode& node : tree.nodes) {
-        TreeNodeState converted{
-            served32(node.nodeIndex), served32(node.generation), std::nullopt, std::nullopt
-        };
+        TreeNodeState converted{served32(node.nodeIndex), served32(node.generation), std::nullopt, std::nullopt};
         if (!node.publicKey.value_or("").empty()) {
             converted.publicKey = NodePublicKey::fromBase58DER(node.publicKey.value());
             if (node.setBy.has_value() && node.setBy.value() >= 0) {

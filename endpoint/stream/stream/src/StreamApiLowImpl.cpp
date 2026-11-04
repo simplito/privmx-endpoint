@@ -272,7 +272,9 @@ std::shared_ptr<privmx::endpoint::stream::StreamApiLowImpl::StreamRoomData> Stre
             invalidateModuleKeysInCache(streamRoomId);
             streamRoom = getRawStreamRoom(streamRoomId);
         } catch (const core::StaleKeyRekeyRequiredException& e) {
-            LOG_WARN("joinStreamRoom: the room's key is stale and could not be re-keyed, joining to receive only: ", e.what())
+            LOG_WARN(
+                "joinStreamRoom: the room's key is stale and could not be re-keyed, joining to receive only: ", e.what()
+            )
         }
     }
     const bool sending = !isRekeyNeeded(streamRoom);
@@ -460,9 +462,7 @@ void StreamApiLowImpl::stopPublication(StreamRoomData& room) {
     const auto attempt = []([[maybe_unused]] const char* step, const auto& run) {
         try {
             run();
-        } catch (const std::exception& e) {
-            LOG_ERROR("stopPublication: ", step, " failed: ", e.what());
-        } catch (...) {
+        } catch (const std::exception& e) { LOG_ERROR("stopPublication: ", step, " failed: ", e.what()); } catch (...) {
             LOG_ERROR("stopPublication: ", step, " failed");
         }
     };
@@ -877,13 +877,17 @@ void StreamApiLowImpl::applyRoomUpdate(StreamRoomData& room, const server::Strea
         );
         stopPublication(room);
     } catch (...) {
-        LOG_ERROR("streamRoomUpdated: no usable fresh key to send under", room.publisherStream ? ", stopping the publication" : "");
+        LOG_ERROR(
+            "streamRoomUpdated: no usable fresh key to send under",
+            room.publisherStream ? ", stopping the publication" : ""
+        );
         stopPublication(room);
     }
 }
 
 void StreamApiLowImpl::applyRoomKeys(StreamRoomData& room, const server::StreamRoomInfo& streamRoomInfo) {
-    if (streamRoomInfo.id != room.streamRoomId || streamRoomInfo.resourceId.value_or("") != room.resourceId ||
+    if (streamRoomInfo.id != room.streamRoomId ||
+        streamRoomInfo.resourceId.value_or("") != room.resourceId ||
         streamRoomInfo.contextId != room.contextId) {
         throw core::ContainerMismatchException("not the joined room " + room.streamRoomId);
     }

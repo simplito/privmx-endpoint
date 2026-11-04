@@ -2,8 +2,8 @@
 #define _PRIVMXLIB_ENDPOINT_GROUP_SUBSCRIBERIMPL_HPP_
 
 #include "privmx/endpoint/group/Types.hpp"
-#include <privmx/endpoint/core/Subscriber.hpp>
 #include <optional>
+#include <privmx/endpoint/core/Subscriber.hpp>
 
 namespace privmx {
 namespace endpoint {

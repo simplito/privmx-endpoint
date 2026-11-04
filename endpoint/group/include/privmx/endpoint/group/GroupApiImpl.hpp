@@ -71,16 +71,8 @@ public:
     // key's stored pins do not open (nothing adopted), and what the store throws.
     void adoptPreviousIdentity(const privmx::crypto::PrivateKey& previous);
 
-    void updateGroupPublicMeta(
-        const std::string& groupId,
-        const core::Buffer& publicMeta,
-        const int64_t version
-    );
-    void updateGroupPrivateMeta(
-        const std::string& groupId,
-        const core::Buffer& privateMeta,
-        const int64_t version
-    );
+    void updateGroupPublicMeta(const std::string& groupId, const core::Buffer& publicMeta, const int64_t version);
+    void updateGroupPrivateMeta(const std::string& groupId, const core::Buffer& privateMeta, const int64_t version);
     void updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies);
     void deleteGroup(const std::string& groupId);
 

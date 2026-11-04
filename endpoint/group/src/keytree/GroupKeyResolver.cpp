@@ -91,7 +91,8 @@ TreeGroupState GroupKeyResolver::toTreeState(const server::GroupInfo& group) {
 }
 
 std::optional<ArchiveRung> GroupKeyResolver::convertRung(const server::GroupArchiveRung& rung) {
-    if (rung.targetKeyVersion >= rung.atKeyVersion || rung.targetKeyVersion < 1 ||
+    if (rung.targetKeyVersion >= rung.atKeyVersion ||
+        rung.targetKeyVersion < 1 ||
         rung.atKeyVersion > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
         return std::nullopt;
     }
@@ -144,9 +145,11 @@ privmx::endpoint::group::server::GroupGetKeyArchiveResult GroupKeyResolver::auth
 ) {
     archive.keyHistory.clear();
     for (const auto& [epoch, statement] : openers) {
-        archive.keyHistory.push_back(server::GroupKeyHistoryEntry{
-            .keyVersion = static_cast<std::int64_t>(epoch), .groupPubKey = statement.groupPubKey
-        });
+        archive.keyHistory.push_back(
+            server::GroupKeyHistoryEntry{
+                .keyVersion = static_cast<std::int64_t>(epoch), .groupPubKey = statement.groupPubKey
+            }
+        );
     }
     for (server::GroupArchiveRung& rung : archive.rungs) {
         const auto opener = openers.find(static_cast<std::uint64_t>(rung.atKeyVersion));
@@ -219,7 +222,8 @@ std::optional<std::uint32_t> GroupKeyResolver::nodeNeedingSelfUpdate(const serve
         const auto voucher = std::find_if(vouchers.begin(), vouchers.end(), [&](const server::GroupTreeCommit& s) {
             return record->setBy.has_value() && s.seq == record->setBy.value();
         });
-        if (voucher == vouchers.end() || voucher->committerSeat < 0 ||
+        if (voucher == vouchers.end() ||
+            voucher->committerSeat < 0 ||
             voucher->committerSeat >= static_cast<std::int64_t>(numLeaves)) {
             return node;
         }
@@ -303,7 +307,8 @@ ResolveResult GroupKeyResolver::resolveWith(
     if (climb.failure != ClimbFailure::None || !climb.grantKey.has_value()) {
         result.failure = ResolveFailure::ClimbFailed;
         result.climb = climb.failure;
-        if (climb.failure == ClimbFailure::Tampered || climb.failure == ClimbFailure::DecryptFailed ||
+        if (climb.failure == ClimbFailure::Tampered ||
+            climb.failure == ClimbFailure::DecryptFailed ||
             climb.failure == ClimbFailure::LeafDidNotOpen) {
             result.blame = tamperedBy(group, climb.tamperedNode);
         }

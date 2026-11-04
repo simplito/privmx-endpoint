@@ -140,7 +140,9 @@ public:
     // resolution (a read and a ladder descent) for nothing, so a read stays O(1) in the group's epochs. `g` has
     // passed `validateDataIntegrity`, so it has a head.
     static void addReadKeys(
-        core::KeyDecryptionAndVerificationRequest& request, const server::GroupInfo& g, const core::EncKeyLocation& location
+        core::KeyDecryptionAndVerificationRequest& request,
+        const server::GroupInfo& g,
+        const core::EncKeyLocation& location
     );
 
     std::vector<Group> validateDecryptAndConvertGroups(

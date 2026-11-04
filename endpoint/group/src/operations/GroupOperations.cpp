@@ -48,9 +48,7 @@ std::uint32_t GroupOperations::rotationFloorOf(
 keytree::GroupRules GroupOperations::requestedRules(const Poco::Dynamic::Var& policy, const std::string& creator) {
     try {
         return keytree::TreeCommits::rules(policy, creator);
-    } catch (const std::invalid_argument& e) {
-        throw core::InvalidParamsException(e.what());
-    }
+    } catch (const std::invalid_argument& e) { throw core::InvalidParamsException(e.what()); }
 }
 
 const VerifiedGroup& GroupOperations::planOn(const GroupRead& read) {
@@ -85,7 +83,9 @@ std::vector<keytree::TreeMember> GroupOperations::toTreeMembers(
         const auto inserted = seen.emplace(user.userId, user.pubKey);
         if (!inserted.second) {
             if (inserted.first->second != user.pubKey) {
-                throw core::InvalidParamsException("user '" + user.userId + "' is listed with two different public keys");
+                throw core::InvalidParamsException(
+                    "user '" + user.userId + "' is listed with two different public keys"
+                );
             }
             continue; // a manager listed as a user too gets one leaf, not two
         }
@@ -111,7 +111,10 @@ std::map<std::string, std::string> GroupOperations::commitRecipientKeys(
     return recipientKeys;
 }
 
-bool GroupOperations::climbsWithPreviousIdentity(const keytree::TreeGroupState& state, const std::string& memberId) const {
+bool GroupOperations::climbsWithPreviousIdentity(
+    const keytree::TreeGroupState& state,
+    const std::string& memberId
+) const {
     const std::vector<privmx::crypto::PrivateKey> previous = deps.connection.getImpl()->previousIdentities();
     return std::any_of(previous.begin(), previous.end(), [&](const privmx::crypto::PrivateKey& key) {
         keytree::TreeKeyCache scratch;
@@ -139,7 +142,8 @@ keytree::TreeGroupState GroupOperations::climbForPlanning(
         keytree::ResolveResult asResolve;
         asResolve.failure = keytree::ResolveFailure::ClimbFailed;
         asResolve.climb = climb.failure;
-        if (climb.failure == keytree::ClimbFailure::Tampered || climb.failure == keytree::ClimbFailure::DecryptFailed ||
+        if (climb.failure == keytree::ClimbFailure::Tampered ||
+            climb.failure == keytree::ClimbFailure::DecryptFailed ||
             climb.failure == keytree::ClimbFailure::LeafDidNotOpen) {
             asResolve.blame = keytree::GroupKeyResolver::tamperedBy(group, climb.tamperedNode);
         }
@@ -162,13 +166,15 @@ keytree::TreeGroupState GroupOperations::climbForPlanning(
         // behaviour: the removal abandons history).
         if (removing != nullptr && climb.failure != keytree::ClimbFailure::NotAMember) {
             const auto cachedGrantKey = cache->getGrantKey(keytree::GroupKeyResolver::epochOf(group->keyVersion));
-            const bool historyStillReachable =
-                cachedGrantKey.has_value() &&
+            const bool historyStillReachable = cachedGrantKey.has_value() &&
                 cachedGrantKey->getPublicKey().toBase58DER() == keytree::TreeVerifier::canonicalKey(group->groupPubKey);
             const bool ownKeyChange = climb.failure == keytree::ClimbFailure::LeafDidNotOpen &&
-                !historyStillReachable && climbsWithPreviousIdentity(state, identity.value());
+                !historyStillReachable &&
+                climbsWithPreviousIdentity(state, identity.value());
             if (!ownKeyChange) {
-                LOG_WARN("[climbForPlanning] planning without the climb: ", GroupKeys::describeResolveFailure(asResolve))
+                LOG_WARN(
+                    "[climbForPlanning] planning without the climb: ", GroupKeys::describeResolveFailure(asResolve)
+                )
                 return state;
             }
         }
@@ -275,14 +281,17 @@ std::string GroupOperations::create(
     };
     model.tree = keytree::TreeWire::toCreateTree(plan);
     // The policy is signed into the chain: the statement carries it, and every later one its hash.
-    const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies.value_or(core::ContainerPolicy{}));
+    const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies.value_or(core::ContainerPolicy{})
+    );
     const keytree::GroupRules rules = requestedRules(policy, creatorId);
     // Commit B: a creator who could not write its own metadata would leave every member's read of the new group
     // refused. Refused before anything is signed.
     const std::vector<std::string> managerIds = core::EndpointUtils::usersWithPubKeyToIds(managers);
     const bool creatorManages = std::find(managerIds.begin(), managerIds.end(), creatorId) != managerIds.end();
     if (!keytree::TreeCommits::allows(rules.update, true, creatorManages, true)) {
-        throw core::InvalidParamsException("the creator must hold update under the group's policy to write its metadata");
+        throw core::InvalidParamsException(
+            "the creator must hold update under the group's policy to write its metadata"
+        );
     }
     // The group has no id until the bridge stores it, so the first statement names the resourceId instead.
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
@@ -343,8 +352,9 @@ void GroupOperations::add(const std::string& groupId, const std::vector<GroupMem
 
     // The roster this call signs has to be the one the head attests to, not one the caller restated or the bridge
     // asserted. Roster plane only — seating a member is not a metadata edit, so it does not open that entry.
-    const auto [attestedUsers, attestedManagers] =
-        mapper.validateAndGetAttestedRoster(currentGroup, keyProvider, groupPrivKeyResolver);
+    const auto [attestedUsers, attestedManagers] = mapper.validateAndGetAttestedRoster(
+        currentGroup, keyProvider, groupPrivKeyResolver
+    );
     keytree::TreeVerifier::assertSeatsMatchRoster(currentGroup, attestedUsers, attestedManagers);
     // And never anybody already on it: an addition cannot promote a member, and a seat cannot be planned twice.
     for (const GroupMemberToAdd& newMember : newMembers) {
@@ -368,7 +378,8 @@ void GroupOperations::add(const std::string& groupId, const std::vector<GroupMem
     const auto seatLimit = static_cast<std::int64_t>(state.numLeaves) + static_cast<std::int64_t>(newMembers.size());
     std::vector<std::uint32_t> positions;
     for (const std::int64_t seat : allocated.value()) {
-        if (seat < 0 || seat >= seatLimit ||
+        if (seat < 0 ||
+            seat >= seatLimit ||
             (seat < static_cast<std::int64_t>(state.numLeaves) && state.leafAssignment.at(seat).has_value())) {
             throw GroupDataIntegrityException("the bridge allocated a seat that is taken or out of range");
         }
@@ -389,9 +400,12 @@ void GroupOperations::add(const std::string& groupId, const std::vector<GroupMem
         const std::string& id = newMember.user.userId;
         const bool manager = newMember.role == "manager";
         newcomerKeys.push_back(newMember.user);
-        treeNewcomers.push_back(keytree::TreeMember{id, privmx::crypto::PublicKey::fromBase58DER(newMember.user.pubKey)});
+        treeNewcomers.push_back(
+            keytree::TreeMember{id, privmx::crypto::PublicKey::fromBase58DER(newMember.user.pubKey)}
+        );
         newcomerIds.push_back(id);
-        (manager ? roster.managers : roster.users).push_back(core::UserWithPubKey{.userId = id, .pubKey = std::string()});
+        (manager ? roster.managers : roster.users)
+            .push_back(core::UserWithPubKey{.userId = id, .pubKey = std::string()});
         (manager ? addedManagers : addedUsers).push_back(id);
         model.members.push_back(server::GroupAddMemberEntry{.userId = id, .role = newMember.role});
     }
@@ -473,12 +487,15 @@ std::vector<keytree::ArchiveRung> GroupOperations::buildRotationRungs(
     keytree::LadderKeys ladder(cache);
     // Never a floor lower than one this session has seen: a bridge under-reporting it gets no rung below it.
     std::uint32_t floor = cache.raiseFloor(
-        keytree::GroupKeyResolver::ladderFloor(group->eraFloor.value_or(1), group->archivePrunedBelow, group->keyVersion)
+        keytree::GroupKeyResolver::ladderFloor(
+            group->eraFloor.value_or(1), group->archivePrunedBelow, group->keyVersion
+        )
     );
     // What the rungs are checked against before submitting: the chain, never the cache. Without skip targets that is
     // the verified group's own key (the unit rung's target); with them, the openers' keys (`fetchKeyArchive`).
     std::vector<keytree::EpochRegistryEntry> registry{
-        {keytree::GroupKeyResolver::epochOf(group->keyVersion), privmx::crypto::PublicKey::fromBase58DER(group->groupPubKey)}
+        {keytree::GroupKeyResolver::epochOf(group->keyVersion),
+         privmx::crypto::PublicKey::fromBase58DER(group->groupPubKey)}
     };
     const std::vector<std::uint32_t> targets = keytree::LadderKeys::requiredSkipTargets(newEpoch, floor);
     if (!targets.empty()) {
@@ -500,10 +517,14 @@ std::vector<keytree::ArchiveRung> GroupOperations::buildRotationRungs(
             newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive), registry, floor
         );
         if (!gathered.complete) {
-            archive = keys.fetchKeyArchive(group, static_cast<int64_t>(targets.back()), static_cast<int64_t>(newEpoch - 1));
+            archive = keys.fetchKeyArchive(
+                group, static_cast<int64_t>(targets.back()), static_cast<int64_t>(newEpoch - 1)
+            );
             floor = cache.raiseFloor(rotationFloorOf(group, archive));
             registry = keytree::GroupKeyResolver::registryFromArchive(group, archive);
-            gathered = ladder.gatherRungKeys(newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive), registry, floor);
+            gathered = ladder.gatherRungKeys(
+                newEpoch, keytree::GroupKeyResolver::toDownwardRungs(archive), registry, floor
+            );
         }
         LOG_DEBUG(
             "ladder gather for epoch ",
@@ -532,7 +553,9 @@ std::vector<keytree::ArchiveRung> GroupOperations::buildRotationRungs(
         cache.forgetGrantKey(bad->target);
         throw GroupDataIntegrityException(
             "a rung of this commit does not open to its target's key: " +
-            std::to_string(bad->at) + "->" + std::to_string(bad->target)
+            std::to_string(bad->at) +
+            "->" +
+            std::to_string(bad->target)
         );
     }
     return rungs;
@@ -577,7 +600,8 @@ std::optional<bool> GroupOperations::remove(
     // the tree hash) — it could destroy history anyway.
     auto currentGrantKey = cache->getGrantKey(keytree::GroupKeyResolver::epochOf(currentEpoch));
     if (currentGrantKey.has_value() &&
-        currentGrantKey->getPublicKey().toBase58DER() != keytree::TreeVerifier::canonicalKey(currentGroup.groupPubKey)) {
+        currentGrantKey->getPublicKey().toBase58DER() !=
+            keytree::TreeVerifier::canonicalKey(currentGroup.groupPubKey)) {
         currentGrantKey.reset(); // not the epoch's key: wrapped into the unit rung it would cut history off anyway
     }
     const bool abandonHistory = !currentGrantKey.has_value();
@@ -644,8 +668,9 @@ std::optional<bool> GroupOperations::remove(
     model.expectedRosterVersion = currentGroup.rosterVersion;
     const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(verified);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
-        plan, keytree::CommitOp::Remove, groupId, CommitEngine::commitDate(), static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr,
-        static_cast<std::uint64_t>(newRosterVersion), core::EndpointUtils::usersWithPubKeyToIds(roster.users),
+        plan, keytree::CommitOp::Remove, groupId, CommitEngine::commitDate(), static_cast<std::uint64_t>(newEpoch),
+        newGroupPubKeyStr, static_cast<std::uint64_t>(newRosterVersion),
+        core::EndpointUtils::usersWithPubKeyToIds(roster.users),
         core::EndpointUtils::usersWithPubKeyToIds(roster.managers), removerId, {}, {}, userIds, rules.hash
     );
     engine.chainTo(statement, verified);
@@ -721,11 +746,13 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior) const
     const keytree::TreeGroupState state = climbForPlanning(verified, cache);
     const auto currentGrantKey = cache->getGrantKey(keytree::GroupKeyResolver::epochOf(currentEpoch));
     if (!currentGrantKey.has_value() ||
-        currentGrantKey->getPublicKey().toBase58DER() != keytree::TreeVerifier::canonicalKey(currentGroup.groupPubKey)) {
+        currentGrantKey->getPublicKey().toBase58DER() !=
+            keytree::TreeVerifier::canonicalKey(currentGroup.groupPubKey)) {
         throw core::EncryptionKeyValidationException("rotating the group key needs the current grant key");
     }
-    const auto [attestedUsers, attestedManagers] =
-        mapper.validateAndGetAttestedRoster(currentGroup, keyProvider, groupPrivKeyResolver);
+    const auto [attestedUsers, attestedManagers] = mapper.validateAndGetAttestedRoster(
+        currentGroup, keyProvider, groupPrivKeyResolver
+    );
     keytree::TreeVerifier::assertSeatsMatchRoster(currentGroup, attestedUsers, attestedManagers);
     const std::string rotatorId = keytree::GroupKeyResolver::ownUserId(currentGroup).value();
 
@@ -754,8 +781,9 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior) const
     model.expectedRosterVersion = currentGroup.rosterVersion;
     const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(verified);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
-        plan, keytree::CommitOp::Rotate, groupId, CommitEngine::commitDate(), static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr,
-        static_cast<std::uint64_t>(newRosterVersion), attestedUsers, attestedManagers, rotatorId, {}, {}, {}, rules.hash
+        plan, keytree::CommitOp::Rotate, groupId, CommitEngine::commitDate(), static_cast<std::uint64_t>(newEpoch),
+        newGroupPubKeyStr, static_cast<std::uint64_t>(newRosterVersion), attestedUsers, attestedManagers, rotatorId, {},
+        {}, {}, rules.hash
     );
     engine.chainTo(statement, verified);
     keytree::TreeCommits::sign(statement, deps.userPrivKey);
@@ -793,7 +821,9 @@ bool GroupOperations::selfUpdate(
     if (previousKey == nullptr) {
         // The need first, on the small path view: by now the node's healer, or anybody's commit through it, has most
         // likely refilled it, and the plan view carries every node record of the tree.
-        const GroupRead pathView = deps.facade.read(VerifiedGroup::pathRead(groupId), keytree::TreeVerifier::Scope::Path);
+        const GroupRead pathView = deps.facade.read(
+            VerifiedGroup::pathRead(groupId), keytree::TreeVerifier::Scope::Path
+        );
         if (!pathView.verified.has_value()) {
             return false;
         }
@@ -825,10 +855,10 @@ bool GroupOperations::selfUpdate(
         read = std::move(planView.verified);
     } else {
         // Leaf renewal. No need gate: the need is the leaf not opening with the session's key, checked below.
-        std::optional<GroupRead> renewalView =
-            engine.readForCommit(getModel, keytree::TreeVerifier::Scope::Plan, op, mayCompleteOther, [] {
-                throw core::EncryptionKeyValidationException("caller holds no leaf in this group's key tree");
-            });
+        std::optional<GroupRead> renewalView = engine.readForCommit(
+            getModel, keytree::TreeVerifier::Scope::Plan, op, mayCompleteOther,
+            [] { throw core::EncryptionKeyValidationException("caller holds no leaf in this group's key tree"); }
+        );
         if (!renewalView.has_value()) {
             return true;
         }
@@ -872,9 +902,10 @@ bool GroupOperations::selfUpdate(
     model.transition = keytree::TreeWire::toSelfUpdateTransition(plan, group.keyVersion);
     const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(verified);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
-        plan, keytree::CommitOp::SelfUpdate, groupId, CommitEngine::commitDate(), static_cast<std::uint64_t>(group.keyVersion),
-        group.groupPubKey, static_cast<std::uint64_t>(group.rosterVersion), attestedUsers, attestedManagers, memberId,
-        {}, {}, {}, rules.hash
+        plan, keytree::CommitOp::SelfUpdate, groupId, CommitEngine::commitDate(),
+        static_cast<std::uint64_t>(group.keyVersion), group.groupPubKey,
+        static_cast<std::uint64_t>(group.rosterVersion), attestedUsers, attestedManagers, memberId, {}, {}, {},
+        rules.hash
     );
     engine.chainTo(statement, verified);
     keytree::TreeCommits::sign(statement, deps.userPrivKey);

@@ -83,13 +83,16 @@ bool CommitEngine::isRetryableCommitRejection(const privmx::utils::PrivmxExcepti
         // A rotation moves no node, so a self-update under it shows as its grant edge's stale child generation
         // (the root's); every other commit sees it as a stale base generation.
         return e.getData().find("\"STALE_BASE_GENERATION\"") != std::string::npos ||
-               e.getData().find("\"STALE_CHILD_GENERATION\"") != std::string::npos;
+            e.getData().find("\"STALE_CHILD_GENERATION\"") != std::string::npos;
     default:
         return false;
     }
 }
 
-VerifiedGroup CommitEngine::rereadVerified(const server::GroupGetModel& model, keytree::TreeVerifier::Scope scope) const {
+VerifiedGroup CommitEngine::rereadVerified(
+    const server::GroupGetModel& model,
+    keytree::TreeVerifier::Scope scope
+) const {
     GroupRead read = deps.facade.read(model, scope);
     if (!read.verified.has_value()) {
         throw GroupDataIntegrityException("the read after an earlier commit landed carries no tree this client checks");
@@ -178,7 +181,9 @@ void CommitEngine::submit(
         // Another commit of ours, released with no known outcome since this was planned, may land at this seq.
         // `settle` completes it on the re-plan. A deferred self-update yields instead.
         const auto& other = session->unresolved;
-        if (other.has_value() && other->digest != commit.digest && other->seq >= statement.seq &&
+        if (other.has_value() &&
+            other->digest != commit.digest &&
+            other->seq >= statement.seq &&
             other->op != SELF_UPDATE_OP) {
             throw StalePlan{};
         }
@@ -259,8 +264,8 @@ Settled CommitEngine::settle(const std::string& groupId, const std::string& op, 
         // An event op (a rotation) found landed past its window is an earlier call's: this call is a new request,
         // planned on a fresh read (`after` changed the group). Never Done then, or the key the caller wants replaced
         // stays current with the call returning success.
-        return pending.namesEndState || commitDate() < pending.date + RELEASE_WINDOW_MS ? Settled::Done
-                                                                                          : Settled::Reread;
+        return pending.namesEndState || commitDate() < pending.date + RELEASE_WINDOW_MS ? Settled::Done :
+                                                                                          Settled::Reread;
     };
     // Landed only when a verified read pinned it, or a statement chained above it, never on what the bridge serves as
     // the head: a served head is unverified, and `landed` cannot refuse it (its `pinCommitted` passes over a statement

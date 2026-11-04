@@ -48,7 +48,8 @@ privmx::crypto::PrivateKey GroupKeys::resolveGroupPrivKey(
     if (!reuse) {
         fresh = deps.facade.read(VerifiedGroup::pathRead(groupId), keytree::TreeVerifier::Scope::Path);
     }
-    const VerifiedGroup* verified = reuse ? seatedRead : (fresh->verified.has_value() ? &fresh->verified.value() : nullptr);
+    const VerifiedGroup* verified = reuse ? seatedRead :
+                                            (fresh->verified.has_value() ? &fresh->verified.value() : nullptr);
     const server::GroupInfo& group = reuse ? **seatedRead : fresh->group();
     const auto session = deps.sessions.of(groupId); // after the read: the bridge serves the group
 
@@ -137,7 +138,9 @@ keytree::ResolveResult GroupKeys::resolveDescending(
     };
     const std::uint32_t current = keytree::GroupKeyResolver::epochOf(group->keyVersion);
     const std::uint32_t floor = deps.sessions.of(group->id)->treeKeys()->raiseFloor(
-        keytree::GroupKeyResolver::ladderFloor(group->eraFloor.value_or(1), group->archivePrunedBelow, group->keyVersion)
+        keytree::GroupKeyResolver::ladderFloor(
+            group->eraFloor.value_or(1), group->archivePrunedBelow, group->keyVersion
+        )
     );
     // Below the floor the descent ends at the floor whatever was fetched, so the path goes no lower.
     const std::uint32_t goal = std::max(static_cast<std::uint32_t>(epoch), floor);
@@ -147,21 +150,27 @@ keytree::ResolveResult GroupKeys::resolveDescending(
     if (settled(resolved)) {
         return resolved;
     }
-    const std::vector<keytree::RungSpan> detour =
-        keytree::LadderMath::detourSpans(std::max(resolved.reachedEpoch, goal), goal, floor, path);
+    const std::vector<keytree::RungSpan> detour = keytree::LadderMath::detourSpans(
+        std::max(resolved.reachedEpoch, goal), goal, floor, path
+    );
     if (!detour.empty() && detour.size() <= MAX_ARCHIVE_SPANS) {
         const server::GroupGetKeyArchiveResult around = fetchKeyArchive(group, detour);
         archive.rungs.insert(archive.rungs.end(), around.rungs.begin(), around.rungs.end());
         archive.eraFloor = std::max(archive.eraFloor, around.eraFloor);
         if (around.archivePrunedBelow.has_value()) {
-            archive.archivePrunedBelow = std::max(archive.archivePrunedBelow.value_or(1), around.archivePrunedBelow.value());
+            archive.archivePrunedBelow = std::max(
+                archive.archivePrunedBelow.value_or(1), around.archivePrunedBelow.value()
+            );
         }
         resolved = resolver.resolve(group, epoch, ownKey, archive);
         if (settled(resolved)) {
             return resolved;
         }
     }
-    LOG_WARN("[ladder] the descent path to epoch ", std::to_string(epoch), " of ", group->id, " is broken; reading the whole window")
+    LOG_WARN(
+        "[ladder] the descent path to epoch ", std::to_string(epoch), " of ", group->id,
+        " is broken; reading the whole window"
+    )
     return resolver.resolve(group, epoch, ownKey, fetchKeyArchive(group, epoch, group->keyVersion));
 }
 
@@ -183,7 +192,9 @@ server::GroupGetKeyArchiveResult GroupKeys::fetchKeyArchive(
         }
         next.fromKeyVersion = top;
         archive.rungs.erase(
-            std::remove_if(archive.rungs.begin(), archive.rungs.end(), [&](const auto& rung) { return rung.atKeyVersion == top; }),
+            std::remove_if(
+                archive.rungs.begin(), archive.rungs.end(), [&](const auto& rung) { return rung.atKeyVersion == top; }
+            ),
             archive.rungs.end()
         );
         const server::GroupGetKeyArchiveResult page = deps.serverApi.groupGetKeyArchive(next);
@@ -328,7 +339,8 @@ core::DecryptedEncKeyV2 GroupKeys::encKeyById(
         // `groupGet` serves only the current epochs, and the lookup's epoch may be one already behind them.
         if (candidates.empty() || pastThePin) {
             moduleKeys = moduleKeysOf(true);
-            if (auto current = filterToKeyId(moduleKeys.groupKeys, groupId, keyId); !current.empty() || candidates.empty()) {
+            if (auto current = filterToKeyId(moduleKeys.groupKeys, groupId, keyId);
+                !current.empty() || candidates.empty()) {
                 candidates = std::move(current);
             }
         }

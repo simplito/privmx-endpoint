@@ -51,7 +51,12 @@ public:
     // `currentGroup` comes from `readForKeys`.
     MetaWriteContext prepareMetaWrite(const VerifiedGroup& currentGroup) const;
     // One metadata plane (public or private) at `version + 1`, under the current epoch's key.
-    void writeMeta(const VerifiedGroup& currentGroup, bool publicPlane, const core::Buffer& meta, int64_t version) const;
+    void writeMeta(
+        const VerifiedGroup& currentGroup,
+        bool publicPlane,
+        const core::Buffer& meta,
+        int64_t version
+    ) const;
 
     // Called after a removal, rotation or narrowing commits, never as part of it: best-effort, re-signing under the
     // committer's name only an entry identical to the one it read before its own commit whose author held

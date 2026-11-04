@@ -9,9 +9,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 #include "privmx/endpoint/stream/ServerApi.hpp"
-#include <privmx/endpoint/core/EndpointUtils.hpp>
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/utils/Logger.hpp"
+#include <privmx/endpoint/core/EndpointUtils.hpp>
 
 using namespace privmx::endpoint::stream;
 using namespace privmx::endpoint;

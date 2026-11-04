@@ -11,14 +11,14 @@ limitations under the License.
 
 #include "privmx/endpoint/core/ConnectionImpl.hpp"
 
+#include "privmx/endpoint/core/BigEndian.hpp"
 #include "privmx/endpoint/core/Constants.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/EndpointUtils.hpp"
 #include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
-#include "privmx/endpoint/core/BigEndian.hpp"
-#include "privmx/endpoint/core/LocalSeal.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
+#include "privmx/endpoint/core/LocalSeal.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include <algorithm>

@@ -163,8 +163,7 @@ bool TreeVerifier::checkStatements(const std::vector<Claim>& claims, const Envir
             const bool namesGroup = statement.seq == 1 ?
                 TreeCommits::groupId(*claim.contextId, statement.groupId) == *claim.groupId :
                 statement.groupId == *claim.groupId;
-            bool genuine =
-                namesGroup && !statement.groupId.empty() && statement.treeVersion == TreeMath::TREE_VERSION;
+            bool genuine = namesGroup && !statement.groupId.empty() && statement.treeVersion == TreeMath::TREE_VERSION;
             try {
                 genuine = genuine &&
                     TreeCommits::verifySignature(
@@ -226,12 +225,14 @@ void TreeVerifier::preverifyListed(const std::vector<server::GroupInfo>& summari
         try {
             latest.push_back(TreeCommits::fromWire(summary.treeCommit.value()));
         } catch (const std::invalid_argument&) { continue; }
-        claims.push_back(Claim{
-            .groupId = &summary.id,
-            .contextId = &summary.contextId,
-            .statement = &latest.back(),
-            .now = movesPin(summary.id, latest.back())
-        });
+        claims.push_back(
+            Claim{
+                .groupId = &summary.id,
+                .contextId = &summary.contextId,
+                .statement = &latest.back(),
+                .now = movesPin(summary.id, latest.back())
+            }
+        );
     }
     checkStatements(claims, environment); // what fails is `verifyListed`'s to refuse, group by group
 }
@@ -268,7 +269,8 @@ void TreeVerifier::followChain(
                 throw GroupDataIntegrityException("a statement that does not extend the one before");
             }
             const bool checkHash = statement.seq == 1 || statement.seq == toSeq;
-            if (step(head, statement, TreeCommits::digest(statement), grantKeys, checkHash, true) == Step::Unauthorized) {
+            if (step(head, statement, TreeCommits::digest(statement), grantKeys, checkHash, true) ==
+                Step::Unauthorized) {
                 unauthorized = true;
             }
         }
@@ -306,7 +308,7 @@ TreeVerifier::Step TreeVerifier::step(
     const bool rosterMoves = newEpoch || op == CommitOp::Add;
     if (create ? statement.keyVersion != 1 || statement.rosterVersion != 1 :
                  statement.keyVersion != head.keyVersion + (newEpoch ? 1 : 0) ||
-                     statement.rosterVersion != head.rosterVersion + (rosterMoves ? 1 : 0)) {
+                statement.rosterVersion != head.rosterVersion + (rosterMoves ? 1 : 0)) {
         throw GroupDataIntegrityException("counters the op does not move that way");
     }
     // One grant key per epoch, and a new epoch's never an earlier epoch's.
@@ -337,9 +339,9 @@ TreeVerifier::Step TreeVerifier::step(
     }
     // The role, under the rules and roster before the statement: a policy granting its own signer a role is judged
     // under the rules it replaces.
-    const Step result = TreeCommits::permits(head.rules, statement, head.roster.users, head.roster.managers)
-        ? Step::Ok
-        : Step::Unauthorized;
+    const Step result = TreeCommits::permits(head.rules, statement, head.roster.users, head.roster.managers) ?
+        Step::Ok :
+        Step::Unauthorized;
     // Signed by somebody who was a member when it was made: a non-member's statement is the bridge's.
     if (!extend(head.roster, statement, checkHash)) {
         throw GroupDataIntegrityException("a statement by a non-member, or a roster other than the one signed");
@@ -598,10 +600,14 @@ std::optional<bool> TreeVerifier::movedLocked(
     const Pin& after,
     bool generationsRaised
 ) {
-    const bool major = before.contextId != after.contextId || before.keyVersion != after.keyVersion ||
-        before.rosterHash != after.roster.hash || before.rulesHash != after.rules.hash ||
+    const bool major = before.contextId != after.contextId ||
+        before.keyVersion != after.keyVersion ||
+        before.rosterHash != after.roster.hash ||
+        before.rulesHash != after.rules.hash ||
         after.refusedSeq > before.refusedSeq;
-    const bool minor = before.seq != after.seq || before.digest != after.digest || before.hasRoster != after.hasRoster ||
+    const bool minor = before.seq != after.seq ||
+        before.digest != after.digest ||
+        before.hasRoster != after.hasRoster ||
         generationsRaised;
     if (!major && !minor) {
         return std::nullopt;
@@ -800,7 +806,9 @@ bool TreeVerifier::pinnedAt(
     {
         std::lock_guard lock(_mutex);
         const auto it = _pins.find(groupId);
-        if (it == _pins.end() || it->second.contextId != contextId || it->second.groupPubKey.empty() ||
+        if (it == _pins.end() ||
+            it->second.contextId != contextId ||
+            it->second.groupPubKey.empty() ||
             static_cast<std::int64_t>(it->second.keyVersion) != keyVersion) {
             return false;
         }

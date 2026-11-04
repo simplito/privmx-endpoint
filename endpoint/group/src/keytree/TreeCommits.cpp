@@ -20,8 +20,8 @@ limitations under the License.
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/utils/Utils.hpp>
 
-#include "privmx/endpoint/group/keytree/TreeMath.hpp"
 #include "privmx/endpoint/core/BigEndian.hpp"
+#include "privmx/endpoint/group/keytree/TreeMath.hpp"
 
 using namespace privmx::endpoint::group::keytree;
 namespace server = privmx::endpoint::group::server;
@@ -132,7 +132,8 @@ std::string TreeCommits::grammatical(const std::string& field, std::string rule)
         for (const std::string& atom : atoms) {
             canonical += atom + "&";
         }
-        if (!known || std::adjacent_find(atoms.begin(), atoms.end()) != atoms.end() ||
+        if (!known ||
+            std::adjacent_find(atoms.begin(), atoms.end()) != atoms.end() ||
             !alternatives.insert(canonical).second) {
             throw std::invalid_argument("policy rule " + field + " is not a group rule: '" + rule + "'");
         }
@@ -241,7 +242,9 @@ std::string TreeCommits::groupId(const std::string& contextId, const std::string
 }
 
 std::string TreeCommits::signedBytes(const CommitStatement& statement) {
-    if (statement.rosterHash.size() != 32 || statement.treeHash.size() != 32 || statement.policyHash.size() != 32 ||
+    if (statement.rosterHash.size() != 32 ||
+        statement.treeHash.size() != 32 ||
+        statement.policyHash.size() != 32 ||
         statement.prevDigest.size() != (statement.seq == 1 ? 0 : 32)) {
         throw std::invalid_argument("commit statement hashes must be 32 bytes");
     }
@@ -385,8 +388,9 @@ CommitStatement TreeCommits::fromWire(const server::GroupTreeCommit& wire) {
         throw std::invalid_argument("a genesis statement follows no other");
     }
     bool knownOp = false;
-    for (const CommitOp op : {CommitOp::Create, CommitOp::Add, CommitOp::Remove, CommitOp::SelfUpdate, CommitOp::Rotate,
-                              CommitOp::Policy}) {
+    for (const CommitOp op :
+         {CommitOp::Create, CommitOp::Add, CommitOp::Remove, CommitOp::SelfUpdate, CommitOp::Rotate,
+          CommitOp::Policy}) {
         if (wire.op == opName(op)) {
             statement.op = op;
             knownOp = true;
@@ -416,8 +420,7 @@ CommitStatement TreeCommits::fromWire(const server::GroupTreeCommit& wire) {
         statement.path.push_back(
             StatementNode{
                 inRange<std::uint32_t>(node.nodeIndex, "path.nodeIndex"),
-                inRange<std::uint32_t>(node.generation, "path.generation"), node.publicKey,
-                fromHex32(node.subtreeHash)
+                inRange<std::uint32_t>(node.generation, "path.generation"), node.publicKey, fromHex32(node.subtreeHash)
             }
         );
     }
@@ -468,8 +471,11 @@ bool TreeCommits::allows(const std::string& rule, bool member, bool manager, boo
         const std::vector<std::string> atoms = privmx::utils::Utils::split(alternative, "&");
         bool all = !atoms.empty(); // fails closed: an empty alternative admits nobody
         for (const std::string& atom : atoms) {
-            all = all && (atom == "all" || (atom == "user" && member) || (atom == "manager" && manager) ||
-                          (atom == "owner" && owner));
+            all = all &&
+                (atom == "all" ||
+                 (atom == "user" && member) ||
+                 (atom == "manager" && manager) ||
+                 (atom == "owner" && owner));
         }
         if (all) {
             return true;

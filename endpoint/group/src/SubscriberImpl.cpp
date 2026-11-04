@@ -1,8 +1,8 @@
 #include "privmx/endpoint/group/SubscriberImpl.hpp"
 #include "privmx/endpoint/group/GroupException.hpp"
+#include <privmx/endpoint/core/BigEndian.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/group/Types.hpp>
-#include <privmx/endpoint/core/BigEndian.hpp>
 #include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 
 using namespace privmx::endpoint;

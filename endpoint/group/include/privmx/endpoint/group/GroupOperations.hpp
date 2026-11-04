@@ -75,8 +75,11 @@ public:
     // Returns whether the removal abandoned history (the caller held no current grant key); nullopt when an
     // earlier attempt of the same removal turned out to have landed (`settle` ran its metadata refresh then).
     // `prior` is what the attempt read, for `carryMetadataForward`.
-    std::optional<bool> remove(const std::string& groupId, const std::vector<std::string>& userIds, PriorRole& prior)
-        const;
+    std::optional<bool> remove(
+        const std::string& groupId,
+        const std::vector<std::string>& userIds,
+        PriorRole& prior
+    ) const;
     // `prior` is what the attempt read, for `carryMetadataForward`. False when an earlier attempt of a rotation turned
     // out to have landed (`settle` ran its metadata refresh then).
     bool rotate(const std::string& groupId, PriorRole& prior) const;

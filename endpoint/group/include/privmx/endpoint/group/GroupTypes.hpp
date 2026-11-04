@@ -87,10 +87,7 @@ struct RosterAfterChange {
     std::vector<core::UserWithPubKey> managers;
 
     // The attested roster, as bare ids — the update preparation diffs names, it does not wrap to them.
-    static RosterAfterChange bare(
-        const std::vector<std::string>& users,
-        const std::vector<std::string>& managers
-    ) {
+    static RosterAfterChange bare(const std::vector<std::string>& users, const std::vector<std::string>& managers) {
         const auto toBare = [](const std::vector<std::string>& ids) {
             std::vector<core::UserWithPubKey> out;
             out.reserve(ids.size());
@@ -123,7 +120,10 @@ enum class Settled {
 // Which planes a carry-forward moves: after a removal or rotation, the planes behind the new epoch (or, with
 // history abandoned, starts them over empty); after a narrowing policy commit, the planes whose author lost
 // `update` (`losers`).
-enum class CarryScope { NewEpoch, Policy };
+enum class CarryScope {
+    NewEpoch,
+    Policy
+};
 
 // What a commit opening a new epoch publishes beside the tree, shared by removal and rotation: the roster under a
 // fresh metadata key (a key never used before once history is abandoned), and that key wrapped once to the new

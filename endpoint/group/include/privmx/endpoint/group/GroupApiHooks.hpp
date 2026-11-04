@@ -67,7 +67,8 @@ struct GroupApiHooks {
     std::function<void(const std::string& contextId, const std::vector<core::UserWithPubKey>& users)>
         assertUserKeysVerified;
     // Public keys for exactly these members, from the Context user list, vouched for as above.
-    std::function<std::map<std::string, std::string>(const std::string& contextId, const std::vector<std::string>& userIds)>
+    std::function<
+        std::map<std::string, std::string>(const std::string& contextId, const std::vector<std::string>& userIds)>
         resolveMemberKeys;
     std::function<void(const std::string& groupId)> invalidateModuleKeys;
 };

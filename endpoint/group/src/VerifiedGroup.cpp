@@ -53,7 +53,9 @@ keytree::TreeVerifier::Environment VerifiedGroup::treeEnvironment(
     environment.commitsBetween = [&serverApi, groupId](std::uint64_t fromSeq, std::uint64_t toSeq) {
         return serverApi.groupGetTreeCommits(
             server::GroupGetTreeCommitsModel{
-                .groupId = groupId, .fromSeq = static_cast<std::int64_t>(fromSeq), .toSeq = static_cast<std::int64_t>(toSeq)
+                .groupId = groupId,
+                .fromSeq = static_cast<std::int64_t>(fromSeq),
+                .toSeq = static_cast<std::int64_t>(toSeq)
             }
         );
     };

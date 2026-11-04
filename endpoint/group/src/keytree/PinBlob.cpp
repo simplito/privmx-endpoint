@@ -229,9 +229,7 @@ std::optional<PinSet> PinBlob::decode(const std::string& body) {
             return std::nullopt;
         }
         return pins;
-    } catch (const std::out_of_range&) {
-        return std::nullopt;
-    }
+    } catch (const std::out_of_range&) { return std::nullopt; }
 }
 
 Pin PinBlob::higher(const Pin* mine, const Pin* other) {
