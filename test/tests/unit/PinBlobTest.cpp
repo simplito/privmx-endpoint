@@ -274,9 +274,10 @@ TEST(PinBlob, EncodeTiming) {
         const auto start = std::chrono::steady_clock::now();
         const std::string body = PinBlob::encode(pins);
         const auto encoded = std::chrono::steady_clock::now();
-        const std::string blob = core::sealLocal(identity, PinBlob::LABEL, PinBlob::VERSION, "slot", body);
+        const core::LocalSeal seal(identity, PinBlob::LABEL, PinBlob::VERSION, "slot");
+        const std::string blob = seal.seal(body);
         const auto sealed = std::chrono::steady_clock::now();
-        const auto opened = core::openLocal(identity, PinBlob::LABEL, PinBlob::VERSION, "slot", blob);
+        const auto opened = seal.open(blob);
         ASSERT_TRUE(opened.has_value());
         ASSERT_TRUE(PinBlob::decode(opened.value()).has_value());
         const auto decoded = std::chrono::steady_clock::now();

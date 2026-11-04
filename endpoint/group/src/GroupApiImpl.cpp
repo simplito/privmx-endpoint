@@ -51,7 +51,7 @@ GroupApiImpl::GroupApiImpl(
     const auto connectionImpl = connection.getImpl();
     _pinStore = connectionImpl->getPinStore();
     if (_pinStore) {
-        _pinStoreKey = connectionImpl->localStateSlot(core::localstate::GROUP_PINS, userPrivKey.getPublicKey());
+        _pinStoreKey = connectionImpl->localStateSlot(core::LocalSeal::GROUP_PINS, userPrivKey.getPublicKey());
         // Unreadable, corrupted or deleted: this instance starts as a first contact for every group (as without a store).
         loadPins();
         for (const auto& [previousPub, body] : connectionImpl->getStagedPinBodies()) {
@@ -828,6 +828,10 @@ DecryptedFileInfo GroupApiImpl::finishFileDecryption(FileHandle fileHandle) {
     };
 }
 
+core::LocalSeal GroupApiImpl::pinSeal() const {
+    return core::LocalSeal(_userPrivKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION, _pinStoreKey);
+}
+
 void GroupApiImpl::loadPins() {
     std::string blob;
     try {
@@ -842,8 +846,7 @@ void GroupApiImpl::loadPins() {
     if (blob.empty()) {
         return;
     }
-    const auto body =
-        core::openLocal(_userPrivKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION, _pinStoreKey, blob);
+    const auto body = pinSeal().open(blob);
     const auto stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
     if (!stored.has_value()) {
         // The same as a deleted blob: first contact for what it held (it is overwritten by the next save).
@@ -880,8 +883,8 @@ bool GroupApiImpl::savePins(bool all) {
         mine.planes = _groupDataSchemaMapper->exportVersionPins();
         std::optional<keytree::TreeVerifier::PinSet> stored;
         try {
-            saved = core::updateSealed(
-                *_pinStore, _userPrivKey, _pinStoreKey, keytree::PinBlob::LABEL, keytree::PinBlob::VERSION,
+            saved = pinSeal().update(
+                *_pinStore,
                 [&](const std::optional<std::string>& body) {
                     stored = body.has_value() ? keytree::PinBlob::decode(body.value()) : std::nullopt;
                     if (stored.has_value()) {

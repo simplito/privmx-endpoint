@@ -287,10 +287,10 @@ void ConnectionImpl::adoptPreviousIdentity(const crypto::PrivateKey& previous) {
     }
     std::optional<std::string> body;
     if (store) {
-        const std::string slot = localStateSlot(localstate::GROUP_PINS, previous.getPublicKey());
+        const std::string slot = localStateSlot(LocalSeal::GROUP_PINS, previous.getPublicKey());
         const std::string blob = store->load(slot).stdString();
         if (!blob.empty()) {
-            body = openLocal(previous, localstate::GROUP_PINS_LABEL, localstate::GROUP_PINS_VERSION, slot, blob);
+            body = LocalSeal(previous, LocalSeal::GROUP_PINS_LABEL, LocalSeal::GROUP_PINS_VERSION, slot).open(blob);
             if (!body.has_value()) {
                 // Never ignored: a store the Bridge can write must not be able to turn adoption off by corrupting it.
                 throw LocalStateIntegrityException("the previous identity's group pins do not open");

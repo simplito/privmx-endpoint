@@ -16,6 +16,7 @@
 #include <privmx/endpoint/core/EventMiddleware.hpp>
 
 #include "privmx/endpoint/core/ContainerBaseApi.hpp"
+#include "privmx/endpoint/core/LocalSeal.hpp"
 #include "privmx/endpoint/core/PinStoreInterface.hpp"
 #include "privmx/endpoint/group/CommitEngine.hpp"
 #include "privmx/endpoint/group/DeferredWork.hpp"
@@ -233,6 +234,8 @@ private:
     void loadPins();
     void pinsMoved(bool major);
     bool savePins(bool all = false);
+    // The one place this instance's slot, identity, label and version are named together.
+    core::LocalSeal pinSeal() const;
     // The adoption itself (`adoptPreviousIdentity`, and the bodies `ConnectionImpl::adoptPreviousIdentity` staged).
     void adoptBody(const keytree::TreeVerifier::PinSet& adopted);
 

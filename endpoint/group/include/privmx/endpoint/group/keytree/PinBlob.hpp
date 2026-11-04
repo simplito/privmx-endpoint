@@ -29,7 +29,7 @@ namespace endpoint {
 namespace group {
 namespace keytree {
 
-// The body of the `group-pins` slot (sealed by core `sealLocal`), and the rule two instances of one device merge
+// The body of the `group-pins` slot (sealed by core `LocalSeal`), and the rule two instances of one device merge
 // their pins by (`higher`). Integers big-endian, lp = u32 length || bytes:
 //
 //   body   = u32 count || record*count                                   (sorted by groupId, no duplicates)
@@ -46,8 +46,8 @@ namespace keytree {
 // only refusedSeq and the plane counters.
 class PinBlob {
 public:
-    static constexpr std::uint8_t VERSION = core::localstate::GROUP_PINS_VERSION;
-    static constexpr const char* LABEL = core::localstate::GROUP_PINS_LABEL;
+    static constexpr std::uint8_t VERSION = core::LocalSeal::GROUP_PINS_VERSION;
+    static constexpr const char* LABEL = core::LocalSeal::GROUP_PINS_LABEL;
     // Limit: full rosters up to 1 MiB, the rest compact (one genesis replay each); per-group slots if it bites.
     static constexpr std::size_t BUDGET = 1 << 20;
 
