@@ -52,10 +52,7 @@ std::shared_ptr<GroupSession> GroupSessions::find(const std::string& groupId) {
     return it == _sessions.end() ? nullptr : it->second;
 }
 
-namespace {
-// Under the map's lock. Held by the map alone, no call is reading or committing through the session, and none can
-// reach it again without that lock; its own lock makes what the last holder wrote visible.
-bool idle(const std::shared_ptr<GroupSession>& session) {
+bool GroupSessions::idle(const std::shared_ptr<GroupSession>& session) {
     if (session.use_count() != 1) {
         return false;
     }
@@ -65,7 +62,6 @@ bool idle(const std::shared_ptr<GroupSession>& session) {
         !session->selfUpdate.has_value() &&
         session->epochKeys.size() == 0;
 }
-} // namespace
 
 void GroupSessions::forget(const std::string& groupId) {
     if (const auto session = find(groupId)) {

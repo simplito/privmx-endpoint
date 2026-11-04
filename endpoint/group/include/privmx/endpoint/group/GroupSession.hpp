@@ -128,6 +128,10 @@ public:
     void forEach(const std::function<void(GroupSession&)>& visit);
 
 private:
+    // Under `_mutex`. Held by the map alone, no call is reading or committing through the session, and none can
+    // reach it again without that lock; its own lock makes what the last holder wrote visible.
+    static bool idle(const std::shared_ptr<GroupSession>& session);
+
     // Taken before a GroupSession's `mutex` only by the erase, for a session nobody else holds; otherwise a leaf.
     std::mutex _mutex;
     std::map<std::string, std::shared_ptr<GroupSession>> _sessions;

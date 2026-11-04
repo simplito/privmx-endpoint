@@ -145,6 +145,42 @@ public:
     ) const;
 
 private:
+    // A rotation's floor off an archive read after the group's. Past the group's epoch, another member's prune or era
+    // cut and rotation came in between: planned again on a fresh read, never signed with no rung at all, and not
+    // remembered. Throws StalePlan.
+    static std::uint32_t rotationFloorOf(
+        const server::GroupInfo& group,
+        const server::GroupGetKeyArchiveResult& archive
+    );
+
+    // The rules of a policy the caller asks to sign: one outside the group grammar is the caller's error.
+    static keytree::GroupRules requestedRules(const Poco::Dynamic::Var& policy, const std::string& creator);
+
+    // The verified read a plan climbs. An unseated one is refused, at the point of the plan where the climb would be:
+    // a group without a key tree, one with a tree this client does not support, or a caller without a seat.
+    static const VerifiedGroup& planOn(const GroupRead& read);
+
+    // One leaf per user id, sorted by it; a manager listed as a user too gets one leaf, not two. Throws
+    // InvalidParamsException when one id is listed with two different keys.
+    static std::vector<keytree::TreeMember> toTreeMembers(
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers
+    );
+
+    // The keytree module reports impossible requests as `std::invalid_argument`, having no dependency on the
+    // endpoint's exception hierarchy. Letting one escape the SDK boundary would `std::terminate` a caller catching
+    // core::Exception.
+    template<typename TPlan>
+    static TPlan planOrThrow(const std::function<TPlan()>& build) {
+        try {
+            return build();
+        } catch (const std::invalid_argument& e) {
+            throw core::EncryptionKeyValidationException(
+                std::string("key tree operation is not possible: ") + e.what()
+            );
+        }
+    }
+
     const GroupDeps& deps;
     GroupDataSchemaMapper& mapper;
     const std::shared_ptr<core::KeyProvider>& keyProvider;

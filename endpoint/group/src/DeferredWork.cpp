@@ -27,20 +27,10 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace group;
 
-namespace {
-
-// How far a group's members spread their deferred work: this much per seat, within the bounds.
-constexpr std::int64_t BACKGROUND_MS_PER_SEAT = 8;
-constexpr std::int64_t BACKGROUND_WINDOW_MIN_MS = 1000;
-constexpr std::int64_t BACKGROUND_WINDOW_MAX_MS = 120000;
-
-// A uniform delay in `[0, windowMs]`, so a group's members do not all hit the bridge at once.
-std::chrono::milliseconds jitter(std::int64_t windowMs) {
+std::chrono::milliseconds DeferredWork::jitter(std::int64_t windowMs) {
     static thread_local std::mt19937_64 random{std::random_device{}()};
     return std::chrono::milliseconds(std::uniform_int_distribution<std::int64_t>(0, windowMs)(random));
 }
-
-} // namespace
 
 void DeferredWork::scheduleSelfUpdateIfNeeded(const std::string& groupId, const VerifiedGroup& group) {
     const auto node = keytree::GroupKeyResolver::nodeNeedingSelfUpdate(group);

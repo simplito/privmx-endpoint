@@ -32,13 +32,9 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace group;
 
-namespace {
-
-// A rotation's floor off an archive read after the group's. Past the group's epoch, another member's prune or era cut
-// and rotation came in between: planned again on a fresh read, never signed with no rung at all, and not remembered.
-std::uint32_t rotationFloorOf(
-    const privmx::endpoint::group::server::GroupInfo& group,
-    const privmx::endpoint::group::server::GroupGetKeyArchiveResult& archive
+std::uint32_t GroupOperations::rotationFloorOf(
+    const server::GroupInfo& group,
+    const server::GroupGetKeyArchiveResult& archive
 ) {
     const std::uint32_t floor = keytree::GroupKeyResolver::ladderFloor(
         archive.eraFloor, archive.archivePrunedBelow, keytree::GroupKeyResolver::newestEpoch(group, archive)
@@ -49,8 +45,7 @@ std::uint32_t rotationFloorOf(
     return floor;
 }
 
-// The rules of a policy the caller asks to sign: one outside the group grammar is the caller's error.
-keytree::GroupRules requestedRules(const Poco::Dynamic::Var& policy, const std::string& creator) {
+keytree::GroupRules GroupOperations::requestedRules(const Poco::Dynamic::Var& policy, const std::string& creator) {
     try {
         return keytree::TreeCommits::rules(policy, creator);
     } catch (const std::invalid_argument& e) {
@@ -58,9 +53,7 @@ keytree::GroupRules requestedRules(const Poco::Dynamic::Var& policy, const std::
     }
 }
 
-// The verified read a plan climbs. An unseated one is refused, at the point of the plan where the climb would be: a
-// group without a key tree, one with a tree this client does not support, or a caller without a seat.
-const VerifiedGroup& planOn(const GroupRead& read) {
+const VerifiedGroup& GroupOperations::planOn(const GroupRead& read) {
     if (read.verified.has_value()) {
         return read.verified.value();
     }
@@ -75,18 +68,7 @@ const VerifiedGroup& planOn(const GroupRead& read) {
     throw core::EncryptionKeyValidationException("caller holds no leaf in this group's key tree");
 }
 
-// The keytree module reports impossible requests as `std::invalid_argument`, having no dependency on the endpoint's
-// exception hierarchy. Letting one escape the SDK boundary would `std::terminate` a caller catching core::Exception.
-template<typename TPlan>
-TPlan planOrThrow(const std::function<TPlan()>& build) {
-    try {
-        return build();
-    } catch (const std::invalid_argument& e) {
-        throw core::EncryptionKeyValidationException(std::string("key tree operation is not possible: ") + e.what());
-    }
-}
-
-std::vector<keytree::TreeMember> toTreeMembers(
+std::vector<keytree::TreeMember> GroupOperations::toTreeMembers(
     const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers
 ) {
@@ -111,8 +93,6 @@ std::vector<keytree::TreeMember> toTreeMembers(
     }
     return members;
 }
-
-} // namespace
 
 std::map<std::string, std::string> GroupOperations::commitRecipientKeys(
     const server::GroupInfo& group,

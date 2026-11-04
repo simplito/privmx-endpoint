@@ -83,6 +83,14 @@ public:
     void dropAll();
 
 private:
+    // How far a group's members spread their deferred work: this much per seat, within the bounds.
+    static constexpr std::int64_t BACKGROUND_MS_PER_SEAT = 8;
+    static constexpr std::int64_t BACKGROUND_WINDOW_MIN_MS = 1000;
+    static constexpr std::int64_t BACKGROUND_WINDOW_MAX_MS = 120000;
+
+    // A uniform delay in `[0, windowMs]`, so a group's members do not all hit the bridge at once.
+    static std::chrono::milliseconds jitter(std::int64_t windowMs);
+
     struct PendingLadderCheck {
         std::string groupId;
         std::string contextId;
