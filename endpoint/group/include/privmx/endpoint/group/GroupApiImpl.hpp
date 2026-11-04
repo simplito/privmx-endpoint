@@ -70,6 +70,13 @@ public:
     void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     void rotateGroupKey(const std::string& groupId);
+    bool renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey);
+
+    // The pins the PinStore holds for `previous` (an earlier identity key of this user), taken only for groups
+    // with no pin under the current key (never replacing or raising one) and saved under the current key. No store,
+    // the current key, or adopted already: nothing. Throws core::LocalStateIntegrityException when the previous
+    // key's stored pins do not open (nothing adopted), and what the store throws.
+    void adoptPreviousIdentity(const privmx::crypto::PrivateKey& previous);
 
     void updateGroupPublicMeta(
         const std::string& groupId,
@@ -106,10 +113,17 @@ public:
     );
     // `seatedRead`: a read of this group the caller has already verified (`verifyTree`, seated). Its own current
     // epoch then resolves off it rather than off a second read that would verify the same thing again.
+    // `with`: climb with another key over another cache (leaf renewal); nothing then reaches `_epochKeys`, the
+    // group's shared cache or the due-work records.
+    struct ClimbWith {
+        std::shared_ptr<keytree::TreeKeyCache> cache;
+        const privmx::crypto::PrivateKey* key;
+    };
     privmx::crypto::PrivateKey resolveGroupPrivKey(
         const std::string& groupId,
         int64_t epoch = 0,
-        const server::GroupInfo* seatedRead = nullptr
+        const server::GroupInfo* seatedRead = nullptr,
+        const ClimbWith* with = nullptr
     );
 
     void sendCustomEvent(
@@ -245,7 +259,10 @@ private:
     // attestation, all on this one answer. Throws for a caller without a verifiable seat.
     server::GroupInfo readGroupForKeys(const std::string& groupId);
     // The group key resolver; with `seatedRead`, serving its current epoch off it (see `resolveGroupPrivKey`).
-    core::KeyProvider::GroupPrivKeyResolver resolverOver(const server::GroupInfo* seatedRead);
+    core::KeyProvider::GroupPrivKeyResolver resolverOver(
+        const server::GroupInfo* seatedRead,
+        const ClimbWith* with = nullptr
+    );
     // The key new envelopes are sealed under, re-read once if the cached head is behind the pinned epoch.
     core::DecryptedEncKeyV2 currentEncKey(const std::string& groupId);
     core::ModuleKeys groupToModuleKeys(const server::GroupInfo& group);
@@ -367,20 +384,30 @@ private:
     // The commit's outcome is known and it landed: forgotten, `landed`, and the pins saved (but a self-update's).
     void complete(const std::string& groupId, const UnresolvedCommit& commit);
     // A read to plan a commit for `op` on: verified, with this client's unresolved commit to the group settled first.
-    // nullopt: `op` itself landed (Settled::Done). An unverified read is returned to be refused by the plan.
+    // nullopt: `op` itself landed (Settled::Done). An unverified read is returned to be refused by the plan, unless
+    // `refuseUnverified` (which throws) is given.
     std::optional<server::GroupInfo> readForCommit(
         const server::GroupGetModel& model,
         keytree::TreeVerifier::Scope scope,
         const std::string& op,
-        bool mayCompleteOther = true
+        bool mayCompleteOther = true,
+        const std::function<void()>& refuseUnverified = {}
     );
 
-    // `group` must have passed `verifyTree` at plan scope. `tolerateBrokenClimb`: a climb that fails on the served
-    // edges (not on membership) is logged and the state returned anyway — a removal plans from public state alone.
+    // Whether one of the previous identity keys (ConnectionImpl::previousIdentities) climbs `state` to its grant
+    // key. Climbs on a scratch cache, so nothing derived from a previous key reaches a reader.
+    bool climbsWithPreviousIdentity(const keytree::TreeGroupState& state, const std::string& memberId);
+    // `group` must have passed `verifyTree` at plan scope. `removing` (a removal of these users): a climb that fails on
+    // the served edges (not on membership) is logged and the state returned anyway — a removal plans from public state
+    // alone; but a leaf that does not open with the session's key and climbs with a previous identity key this
+    // client was given (`climbsWithPreviousIdentity`) is refused, pointing at renewLeaf, unless history stays
+    // reachable: renewLeaf fixes exactly that case, and nothing else.
+    // `climbKey`: climb with it instead of the session's key, and schedule no self-update off the climb.
     keytree::TreeGroupState climbForPlanning(
         const server::GroupInfo& group,
         const std::shared_ptr<keytree::TreeKeyCache>& cache,
-        bool tolerateBrokenClimb = false
+        const std::vector<std::string>* removing = nullptr,
+        const privmx::crypto::PrivateKey* climbKey = nullptr
     );
 
     // One attempt each; `commitWithRetry` re-runs them, from a fresh read, when a concurrent commit moved the base.
@@ -437,6 +464,15 @@ private:
     // Refills the blank nodes of the caller's own keyed path. A failure leaves the tree as it was; one lost to a
     // concurrent commit (`isRetryableCommitRejection`) is rescheduled, up to MAX_SELF_UPDATE_ATTEMPTS in all.
     void selfUpdate(const std::string& groupId);
+    // A self-update; with `previousKey`, the leaf renewal: no need gates, a climb with the previous key over a
+    // call-local cache, signed with the session's (new) key. False when the leaf already opens with the session's key.
+    bool selfUpdateWith(
+        const std::string& groupId,
+        const privmx::crypto::PrivateKey* previousKey,
+        const std::string& op,
+        bool mayCompleteOther
+    );
+    inline static const std::string RENEW_LEAF_OP = keytree::TreeCommits::opKey("renewLeaf");
     // Records one when `group` (a seated, verified read) shows the caller's path needs it, due not before a random
     // point within a window that grows with the group for the seat that heals first, one window later for any other
     // (`healsFirst`), so a group's members do not all commit at once. At most one recorded per group.
@@ -548,14 +584,17 @@ private:
     void loadPins();
     void pinsMoved(bool major);
     bool savePins(bool all = false);
+    // The adoption itself (`adoptPreviousIdentity`, and the bodies `ConnectionImpl::adoptPreviousIdentity` staged).
+    void adoptBody(const keytree::TreeVerifier::PinSet& adopted);
 
     // 30 s for self-update-only moves.
     static constexpr std::chrono::milliseconds PIN_SAVE_IDLE_INTERVAL{30000};
 
     std::shared_ptr<core::PinStoreInterface> _pinStore; // set once, in the constructor
     std::string _pinStoreKey;
-    std::mutex _pinSaveMutex; // serialises saves; guards the one below
+    std::mutex _pinSaveMutex; // serialises saves; guards the two below
     bool _pinSaveFull = false;
+    std::set<std::string> _adoptedIdentities;
     // Under `_dueMutex`: moved since the last save (a major move among them), and when the last save was tried.
     bool _pinsMoved = false;
     bool _pinsMovedMajor = false;

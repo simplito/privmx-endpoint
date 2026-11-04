@@ -149,6 +149,27 @@ public:
      */
     void setPinStore(std::shared_ptr<PinStoreInterface> store);
 
+    /**
+     * After the user's identity key changed: carries the pins the store holds for the previous key over to the
+     * current one, for every GroupApi created afterwards. A pin of the previous key is taken only for a group with no
+     * pin under the current key, and only as a hint: it never replaces or raises one, and is saved under the current
+     * key only once a read has replayed the group's chain to it. A group whose served chain does not reach the hint is
+     * refused as a fork (GroupHistoryForkException) in every session that adopts it; the app recovers by deleting the
+     * previous key's slot from its PinStore, after which the group is read on trust once, as on first contact.
+     * Call it right after `connect` and `setPinStore`, before creating any module API, and again on every later start
+     * (every new connection) for as long as the previous key's slot is kept: the hints and the key-change knowledge
+     * live in this connection's memory only, so a start that skips the call reads a group whose hint no read has
+     * verified yet as a first contact, and lets a removal abandon history again. Without a store, or nothing
+     * stored for the previous key, nothing is carried over. Either way it tells this client its key changed: a
+     * GroupApi::removeGroupMembers whose own leaf does not open but opens with the previous key is then refused until
+     * GroupApi::renewLeaf, instead of abandoning the group's history.
+     * @param previousUserPrivKey the previous identity private key in WIF
+     * @throws LocalStateIntegrityException when the previous key's stored pins fail their integrity check. The app
+     * may deliberately delete that slot (the previous key's) from its PinStore and call again, accepting that groups
+     * without a pin under the current key are then read on trust once, as on first contact.
+     */
+    void adoptPreviousIdentity(const std::string& previousUserPrivKey);
+
 private:
     void assertGateway(const std::shared_ptr<ConnectionImpl>& impl);
     void assertConnection(const std::shared_ptr<ConnectionImpl>& impl);

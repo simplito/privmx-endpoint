@@ -27,7 +27,8 @@ std::map<ConnectionVarInterface::METHOD, Poco::Dynamic::Var (ConnectionVarInterf
         {SubscribeFor, &ConnectionVarInterface::subscribeFor},
         {UnsubscribeFrom, &ConnectionVarInterface::unsubscribeFrom},
         {BuildSubscriptionQuery, &ConnectionVarInterface::buildSubscriptionQuery},
-        {ListContextUsers, &ConnectionVarInterface::listContextUsers}
+        {ListContextUsers, &ConnectionVarInterface::listContextUsers},
+        {AdoptPreviousIdentity, &ConnectionVarInterface::adoptPreviousIdentity}
 };
 
 Poco::Dynamic::Var ConnectionVarInterface::connect(const Poco::Dynamic::Var& args) {
@@ -99,6 +100,13 @@ Poco::Dynamic::Var ConnectionVarInterface::setPinStore(
     _connection.setPinStore(
         std::make_shared<VarPinStoreInterface>(loadCallback, saveCallback, _deserializer, _serializer)
     );
+    return {};
+}
+
+Poco::Dynamic::Var ConnectionVarInterface::adoptPreviousIdentity(const Poco::Dynamic::Var& args) {
+    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto previousUserPrivKey = _deserializer.deserialize<std::string>(argsArr->get(0), "previousUserPrivKey");
+    _connection.adoptPreviousIdentity(previousUserPrivKey);
     return {};
 }
 

@@ -54,9 +54,9 @@ public:
     // duplicate group ids.
     static std::optional<TreeVerifier::PinSet> decode(const std::string& body);
     // Two records of one group, both verified on this device: the higher seq wins; at one seq `mine` stays (with
-    // `other`'s roster and generations folded in at the same digest). A seq-0 side counts as absent. `refusedSeq` and
-    // `seenAt` by max; generations by max when `other` wins. Two branches at one seq are not reconciled: the device
-    // keeps whichever it holds, as a bridge able to fork could as well withhold.
+    // `other`'s roster and generations folded in at the same digest). A seq-0 side or a hint (`TreeVerifier::isHint`)
+    // counts as absent. `refusedSeq` and `seenAt` by max; generations by max when `other` wins. Two branches at one
+    // seq are not reconciled: the device keeps whichever it holds, as a bridge able to fork could as well withhold.
     static TreeVerifier::Pin higher(const TreeVerifier::Pin* mine, const TreeVerifier::Pin* other);
     // `higher` for every group, planes by max: what a save writes.
     static TreeVerifier::PinSet mergeForSave(const TreeVerifier::PinSet& mine, const TreeVerifier::PinSet& stored);

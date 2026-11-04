@@ -37,6 +37,7 @@ public:
         BuildSubscriptionQuery = 9,
         ListContextUsers = 10,
         SetPinStore = 11,
+        AdoptPreviousIdentity = 12,
     };
 
     ConnectionVarInterface(const core::VarSerializer& serializer) : _serializer(serializer) {}
@@ -55,6 +56,7 @@ public:
         const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& loadCallback,
         const std::function<Poco::Dynamic::Var(const Poco::Dynamic::Var&)>& saveCallback
     );
+    Poco::Dynamic::Var adoptPreviousIdentity(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);

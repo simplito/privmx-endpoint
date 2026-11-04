@@ -16,6 +16,7 @@ limitations under the License.
 #include <stdexcept>
 
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
+#include <privmx/utils/Logger.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
@@ -527,6 +528,15 @@ void TreeVerifier::verify(const server::GroupInfo& group, Scope scope, const Env
     // another branch, is checked against afresh rather than overwritten.
     Pin pin = pinOf(group.id);
     for (;;) {
+        // A hint is no verified state: the first-contact checks run as well.
+        const bool hint = isHint(pin);
+        if (hint) {
+            pin = checkedHint(group.id, group.contextId, pin, latest.seq, environment);
+        }
+        if ((pin.seq == 0 || hint) && !onRoster(group.users, group.managers, latest.committer)) {
+            // Trust on first use: the latest genuine statement, by somebody on the roster it attests.
+            reject("the latest statement's committer is not on the roster");
+        }
         if (pin.seq != 0) {
             if (latest.seq < pin.seq || (latest.seq == pin.seq && TreeCommits::digest(latest) != pin.digest)) {
                 throw GroupHistoryForkException();
@@ -535,9 +545,6 @@ void TreeVerifier::verify(const server::GroupInfo& group, Scope scope, const Env
                 assertValidNow(group.id, group.contextId, latest, environment, checkedNow);
                 verifyChain(group.id, group.contextId, pin, latest.seq, TreeCommits::digest(latest), environment);
             }
-        } else if (!onRoster(group.users, group.managers, latest.committer)) {
-            // Trust on first use: the latest genuine statement, by somebody on the roster it attests.
-            reject("the latest statement's committer is not on the roster");
         }
         for (const TreeNodeState& node : state.nodes) {
             const auto seen = pin.generations.find(node.nodeIndex);
@@ -640,6 +647,55 @@ void TreeVerifier::onPinsMoved(std::function<void(bool)> callback) {
     _onPinsMoved = std::move(callback);
 }
 
+TreeVerifier::Pin TreeVerifier::checkedHint(
+    const std::string& groupId,
+    const std::string& contextId,
+    const Pin& pin,
+    std::uint64_t latestSeq,
+    const Environment& environment
+) {
+    if (!isHint(pin) || latestSeq < pin.seq) {
+        return pin;
+    }
+    // A hint the served chain does not reach is a fork, as for any pin: dropping it would hand the bridge a first
+    // contact across the key change. The hint stays (in memory only), so every read refuses until the app clears it.
+    Openers known;
+    try {
+        if (pin.contextId != contextId) {
+            throw GroupHistoryForkException();
+        }
+        known = openersAt(groupId, contextId, pin.seq, pin.digest, environment);
+    } catch (const GroupDataIntegrityException& e) {
+        LOG_WARN("[pins] an adopted record is not on the served chain: ", e.what())
+        throw GroupHistoryForkException();
+    } catch (const GroupUnauthorizedSignerException&) {
+        LOG_WARN("[pins] an adopted record is not on a chain its members could sign")
+        throw GroupHistoryForkException();
+    }
+    Pin checked;
+    static_cast<Head&>(checked) = known.head;
+    checked.contextId = contextId;
+    checked.hasRoster = true;
+    checked.refusedSeq = pin.refusedSeq;
+    checked.seenAt = nowMs();
+    std::optional<bool> moved;
+    Pin now;
+    {
+        std::lock_guard lock(_mutex);
+        const auto it = _pins.find(groupId);
+        if (it == _pins.end() || !isHint(it->second) || it->second.seq != pin.seq || it->second.digest != pin.digest) {
+            return it == _pins.end() ? Pin{} : it->second; // moved meanwhile
+        }
+        const Snapshot before = snapshotOf(it->second);
+        checked.refusedSeq = std::max(checked.refusedSeq, it->second.refusedSeq);
+        it->second = checked;
+        moved = movedLocked(groupId, before, it->second, false);
+        now = checked;
+    }
+    notify(moved);
+    return now;
+}
+
 TreeVerifier::Pin TreeVerifier::pinOf(const std::string& groupId) const {
     std::lock_guard lock(_mutex);
     const auto it = _pins.find(groupId);
@@ -683,6 +739,9 @@ void TreeVerifier::verifyListed(const server::GroupInfo& summary, const Environm
     // Against the pin as it stands when this one is stored, as in `verify`.
     Pin pin = pinOf(summary.id);
     for (;;) {
+        if (isHint(pin)) {
+            pin = checkedHint(summary.id, summary.contextId, pin, latest.seq, environment);
+        }
         if (pin.seq != 0) {
             if (latest.seq < pin.seq) {
                 return; // `pinnedSeq` tells the caller
@@ -982,17 +1041,50 @@ std::map<std::string, TreeVerifier::Pin> TreeVerifier::exportPins(bool all) {
     std::lock_guard lock(_mutex);
     std::map<std::string, Pin> exported;
     for (const auto& [groupId, pin] : _pins) {
+        if (isHint(pin)) {
+            // Not verified: only what this device itself recorded for the group.
+            if (pin.refusedSeq > 0) {
+                Pin bare;
+                bare.refusedSeq = pin.refusedSeq;
+                bare.seenAt = pin.seenAt;
+                exported.emplace_hint(exported.end(), groupId, bare);
+            }
+            continue;
+        }
         exported.emplace_hint(exported.end(), groupId, all || _dirty.count(groupId) > 0 ? pin : compactOf(pin));
     }
     _dirty.clear();
     return exported;
 }
 
-void TreeVerifier::mergeStored(const std::map<std::string, Pin>& stored) {
+void TreeVerifier::mergeStored(const std::map<std::string, Pin>& stored, bool onlyUnpinned) {
     std::lock_guard lock(_mutex);
     for (const auto& [groupId, record] : stored) {
         const auto it = _pins.find(groupId);
+        if (onlyUnpinned) {
+            if ((it != _pins.end() && it->second.seq > 0) || record.seq == 0) {
+                continue;
+            }
+            // M4: whoever holds the previous key can write its slot, so its record is a hint, never a verified state:
+            // seq, digest, context and tree hash only. Without grant key and epoch it satisfies no `pinnedAt` and
+            // moves no `pinnedKeyVersion`; without roster the next read that passes it replays the chain from genesis
+            // to it (`verifyChain`), one at its seq takes it only as the genuine latest statement. Never `refusedSeq`.
+            Pin hint;
+            hint.contextId = record.contextId;
+            hint.seq = record.seq;
+            hint.digest = record.digest;
+            hint.treeHash = record.treeHash;
+            hint.hasRoster = false;
+            hint.refusedSeq = it == _pins.end() ? 0 : it->second.refusedSeq;
+            _pins[groupId] = std::move(hint);
+            continue;
+        }
         Pin kept = PinBlob::higher(it == _pins.end() ? nullptr : &it->second, &record);
+        if (kept.seq == 0 && it != _pins.end() && isHint(it->second)) {
+            // Nothing verified on either side: the hint stays, waiting for its read.
+            it->second.refusedSeq = kept.refusedSeq;
+            continue;
+        }
         if (kept.seq > 0 || kept.refusedSeq > 0) {
             _pins[groupId] = std::move(kept);
         }

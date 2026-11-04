@@ -301,3 +301,30 @@ TEST(PinBlob, EncodeTiming) {
     }
     time("3 groups of 16k members", large);
 }
+
+TEST(PinBlob, SECURITY_AHintNeverWinsOverAVerifiedRecord) {
+    // A hint (a previous identity's record: seq and digest, no grant key) loses to a verified record at the same
+    // seq and digest and at any seq, on either side, and is never written on its own.
+    Pin full;
+    full.contextId = "ctx";
+    full.seq = 3;
+    full.digest = "d3";
+    full.keyVersion = 2;
+    full.groupPubKey = "key";
+    full.roster.users = {"alice"};
+    full.hasRoster = true;
+    Pin hint;
+    hint.contextId = "ctx";
+    hint.seq = 3;
+    hint.digest = "d3";
+    hint.hasRoster = false;
+    ASSERT_TRUE(TreeVerifier::isHint(hint));
+    EXPECT_EQ(PinBlob::higher(&hint, &full).groupPubKey, "key");
+    EXPECT_EQ(PinBlob::higher(&full, &hint).groupPubKey, "key");
+    hint.seq = 9;
+    EXPECT_EQ(PinBlob::higher(&hint, &full).seq, 3u);
+    EXPECT_EQ(PinBlob::higher(&full, &hint).seq, 3u);
+    TreeVerifier::PinSet stored;
+    stored.tree["g"] = hint;
+    EXPECT_EQ(PinBlob::mergeForSave(TreeVerifier::PinSet{}, stored).tree.count("g"), 0u);
+}
