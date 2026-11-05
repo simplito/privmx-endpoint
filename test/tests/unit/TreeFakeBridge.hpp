@@ -51,16 +51,20 @@ const std::string GROUP_ID = TreeCommits::groupId("ctx", "res");
 // whose removers and adders are plain users, keep their meaning.
 const Poco::Dynamic::Var OPEN_POLICY = policyOf({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}});
 
-// A bridge error as the RPC layer surfaces one: the name as the description, the code, the payload unparsed.
-[[noreturn]] void bridgeError(const std::string& name, unsigned int code, const std::string& data = std::string()) {
-    privmx::endpoint::server::EndpointServerException e(name, code);
+// The Bridge's own error scope; `bridge` is taken by the fake instances the tests hold.
+namespace srv = privmx::endpoint::server;
+
+// A bridge error as the RPC layer surfaces one: the exception declared for the code, its payload unparsed.
+template<typename E>
+[[noreturn]] void bridgeError(const std::string& data = std::string()) {
+    E e;
     e.setData(data);
     throw e;
 }
 
 // A bridge refusal answering a statement that does not extend the stored latest: a lost race, retryable.
 [[noreturn]] void rotatedAlready() {
-    bridgeError("ROTATED_ALREADY", 0x621C);
+    bridgeError<srv::GroupRotatedAlreadyException>();
 }
 
 struct Member {
@@ -475,10 +479,9 @@ public:
         const TreeNodeState* rootRecord = recordOf(state, root);
         if (!TreeMath::isLeaf(root) && rootRecord != nullptr && grantEdge.childGeneration.has_value() &&
             grantEdge.childGeneration.value() != static_cast<std::int64_t>(rootRecord->generation)) {
-            bridgeError(
-                "GROUP_TREE_INVALID", 0x621E,
+            bridgeError<srv::GroupTreeInvalidException>(
                 "[{\"kind\":\"STALE_CHILD_GENERATION\",\"expected\":" + std::to_string(rootRecord->generation) +
-                    ",\"got\":" + std::to_string(grantEdge.childGeneration.value()) + "}]"
+                ",\"got\":" + std::to_string(grantEdge.childGeneration.value()) + "}]"
             );
         }
         TreeGroupState post = state;

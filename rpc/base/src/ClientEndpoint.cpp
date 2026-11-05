@@ -37,39 +37,23 @@ template<typename E>
     unsigned int family = (code & 0xFFFF0000) >> 16;
     unsigned int error = (code & 0x0000FFFF);
 
+// one case per row of the Bridge's error table, so a code is never retyped here
+#define PRIVMX_THROW_SERVER_ERROR(NAME, MSG, CODE) case CODE: throwServerError<server::NAME>(msg, data);
+
     if (family == 0xFFFF) {
         switch (error) {
-        case 0x8043: throwServerError<server::ParseErrorException>(msg, data);
-        case 0x80A8: throwServerError<server::InvalidRequestAException>(msg, data);
-        case 0x80A7: throwServerError<server::MethodNotFoundException>(msg, data);
-        case 0x80A6: throwServerError<server::InvalidParamsException>(msg, data);
-        case 0x80A5: throwServerError<server::InternalErrorException>(msg, data);
-        case 0x80A4: throwServerError<server::InvalidRequestBException>(msg, data);
-        case 0x80A3: throwServerError<server::InvalidRequestCException>(msg, data);
+        SERVER_REQUEST_EXCEPTIONS(PRIVMX_THROW_SERVER_ERROR)
         default: throwServerError<server::EndpointServerRequestException>(msg, data);
         }
     }
 
     if (family == 0x0000) {
         switch (error) {
-        case 0x0030: throwServerError<server::AccessDeniedException>(msg, data);
-        case 0x0070: throwServerError<server::InvalidKeyException>(msg, data);
-        case 0x6001: throwServerError<server::ThreadDoesNotExistException>(msg, data);
-        case 0x6002: throwServerError<server::InvalidThreadKeyException>(msg, data);
-        case 0x600D: throwServerError<server::ThreadMessageDoesNotExistException>(msg, data);
-        case 0x600E: throwServerError<server::ContainerGroupEpochOutdatedException>(msg, data);
-        case 0x600F: throwServerError<server::ContainerRotatedAlreadyException>(msg, data);
-        case 0x6015: throwServerError<server::InvalidKeyIdException>(msg, data);
-        case 0x6116: throwServerError<server::ContextDoesNotExistException>(msg, data);
-        case 0x6117: throwServerError<server::StoreDoesNotExistException>(msg, data);
-        case 0x6118: throwServerError<server::StoreFileDoesNotExistException>(msg, data);
-        case 0x611E: throwServerError<server::InboxDoesNotExistException>(msg, data);
-        case 0x6128: throwServerError<server::StoreFileVersionMismatchException>(msg, data);
-        case 0x613C: throwServerError<server::KvdbDoesNotExistException>(msg, data);
-        case 0x613D: throwServerError<server::KvdbEntryDoesNotExistException>(msg, data);
-        case 0x621C: throwServerError<server::GroupRotatedAlreadyException>(msg, data);
+        SERVER_EXCEPTIONS(PRIVMX_THROW_SERVER_ERROR)
         }
     }
+
+#undef PRIVMX_THROW_SERVER_ERROR
 
     server::EndpointServerException e(msg + " | " + data, code);
     e.setData(data);

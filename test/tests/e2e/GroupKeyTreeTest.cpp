@@ -19,7 +19,7 @@
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/crypto/utils/Base58.hpp>
-#include <privmx/endpoint/core/Exception.hpp>
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint;
@@ -223,7 +223,7 @@ protected:
             return std::nullopt;
         } catch (const core::Exception& e) {
             // A bridge refusal carries its payload in `data`; anything raised here carries none.
-            return std::make_pair(e.getCode() & 0xFFFF, e.getData().empty() ? e.getFull() : e.getData());
+            return std::make_pair(e.getCode(), e.getData().empty() ? e.getFull() : e.getData());
         }
     }
 
@@ -255,9 +255,10 @@ protected:
     std::shared_ptr<thread::ThreadApi> threadApi;
 };
 
-static constexpr unsigned int ACCESS_DENIED = 0x0030;
-static constexpr unsigned int GROUP_ROTATION_RATE_LIMIT = 0x621D;
-static constexpr unsigned int GROUP_ARCHIVE_INVALID = 0x621F;
+static const unsigned int ACCESS_DENIED = privmx::endpoint::server::AccessDeniedException().getCode();
+static const unsigned int GROUP_ROTATION_RATE_LIMIT =
+    privmx::endpoint::server::GroupRotationRateLimitException().getCode();
+static const unsigned int GROUP_ARCHIVE_INVALID = privmx::endpoint::server::GroupArchiveInvalidException().getCode();
 
 // -- creation --
 

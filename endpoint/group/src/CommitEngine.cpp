@@ -28,13 +28,6 @@ using namespace group;
 
 namespace {
 
-// Bridge application error codes a commit can be refused with as a lost race.
-enum BridgeError : unsigned int {
-    ROTATED_ALREADY = 0x621C,
-    GROUP_TREE_INVALID = 0x621E, // its data lists the problems found
-    GROUP_ROSTER_VERSION_MISMATCH = 0x6224,
-};
-
 // Attempts of one app commit against a base that moved (`commitWithRetry`).
 constexpr int MAX_COMMIT_ATTEMPTS = 3;
 
@@ -71,21 +64,17 @@ void CommitEngine::commitWithRetry(const std::function<void()>& attempt) {
 // and a fresh plan are all it takes; anything else the bridge refuses is reported as it is.
 bool CommitEngine::isRetryableCommitRejection(const privmx::endpoint::core::Exception& e) {
     const unsigned int code = e.getCode();
-    if ((code >> 16) != privmx::endpoint::server::EndpointServerException::SCOPE_CODE) {
-        return false; // not a bridge application error
-    }
-    switch (code & 0x0000FFFF) {
-    case ROTATED_ALREADY:
-    case GROUP_ROSTER_VERSION_MISMATCH:
+    if (code == privmx::endpoint::server::GroupRotatedAlreadyException().getCode() ||
+        code == privmx::endpoint::server::GroupRosterVersionMismatchException().getCode()) {
         return true;
-    case GROUP_TREE_INVALID:
+    }
+    if (code == privmx::endpoint::server::GroupTreeInvalidException().getCode()) {
         // A rotation moves no node, so a self-update under it shows as its grant edge's stale child generation
         // (the root's); every other commit sees it as a stale base generation.
         return e.getData().find("\"STALE_BASE_GENERATION\"") != std::string::npos ||
             e.getData().find("\"STALE_CHILD_GENERATION\"") != std::string::npos;
-    default:
-        return false;
     }
+    return false;
 }
 
 VerifiedGroup CommitEngine::rereadVerified(
