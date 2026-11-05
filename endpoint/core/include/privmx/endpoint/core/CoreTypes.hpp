@@ -63,6 +63,25 @@ inline std::shared_ptr<const Exception> unknownError(std::string description = s
     );
 }
 
+// narrows a retained exception to the Error the public API structs carry; the cause chain stops here
+inline Error toPublicError(const Exception& e) {
+    return Error{
+        .name = e.getName(),
+        .scope = e.getScope(),
+        .code = e.getCode(),
+        .message = e.getMessage(),
+        .description = e.getDescription(),
+        ._what = e.what()
+    };
+}
+
+inline std::optional<Error> toPublicError(const std::shared_ptr<const Exception>& e) {
+    if (!e) {
+        return std::nullopt;
+    }
+    return toPublicError(*e);
+}
+
 struct DecryptedEncKey : public EncKey, public DecryptedVersionedData {};
 
 struct ExpandedDataIntegrityObject : public DataIntegrityObject {

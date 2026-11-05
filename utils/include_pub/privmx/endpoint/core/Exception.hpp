@@ -54,6 +54,7 @@ public:
     std::string getName() const noexcept;
     std::string getScope() const noexcept;
     unsigned int getCode() const noexcept;
+    std::string getMessage() const noexcept;
     std::string getDescription() const noexcept;
     std::string getFull(bool JSON = false) const noexcept;
     std::shared_ptr<const Exception> getCause() const noexcept { return _cause; }
@@ -83,6 +84,10 @@ inline std::string Exception::getScope() const noexcept {
 
 inline unsigned int Exception::getCode() const noexcept {
     return _code;
+}
+
+inline std::string Exception::getMessage() const noexcept {
+    return _msg;
 }
 
 inline std::string Exception::getDescription() const noexcept {

@@ -243,12 +243,11 @@ File StoreApiImpl::getFile(const std::string& fileId) {
     auto store = serverFileResult.store;
     _storeDataSchemaMapper->assertDataIntegrity(store);
     setNewModuleKeysInCache(store.id, containerToModuleKeys(store), store.version);
-    auto statusCode = _fileMetaDataSchemaMapper
-                          .validateDataIntegrity(serverFileResult.file, store.resourceId.value_or(""))
-                          .first;
-    if (statusCode != 0) {
+    auto error = _fileMetaDataSchemaMapper.validateDataIntegrity(serverFileResult.file, store.resourceId.value_or(""))
+                     .first;
+    if (error.has_value()) {
         File result;
-        result.statusCode = statusCode;
+        result.error = error;
         return result;
     }
     auto ret{_fileMetaDataSchemaMapper.validateDecryptAndConvertFile(
@@ -752,9 +751,9 @@ void StoreApiImpl::updateFileMeta(
     auto storeKey = containerToModuleKeys(store);
     setNewModuleKeysInCache(store.id, storeKey, store.version);
     server::File file = storeFileGetResult.file;
-    auto statusCode = _fileMetaDataSchemaMapper.validateDataIntegrity(file, store.resourceId.value_or("")).first;
-    if (statusCode != 0) {
-        throw FileDataIntegrityException("statusCode=" + std::to_string(statusCode));
+    auto error = _fileMetaDataSchemaMapper.validateDataIntegrity(file, store.resourceId.value_or("")).first;
+    if (error.has_value()) {
+        throw FileDataIntegrityException(error->_what);
     }
     // The Store's current key, not the newest data entry's: a re-key leaves that one under the key it replaced.
     // Still guarded, the re-key above not being guaranteed to have happened.

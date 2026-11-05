@@ -41,7 +41,7 @@ public:
         const server::KvdbEntryInfo& entry,
         const DecryptedKvdbEntryDataV5& raw
     ) const override;
-    KvdbEntry toLibError(const server::KvdbEntryInfo& entry, int64_t errorCode) const override;
+    KvdbEntry toLibError(const server::KvdbEntryInfo& entry, const std::optional<core::Error>& error) const override;
 
 protected:
     server::EncryptedKvdbEntryDataV5 getEncryptedData(const server::KvdbEntryInfo& model) const override;

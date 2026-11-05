@@ -63,7 +63,7 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaMapper::decrypt(
         [&]() -> std::tuple<Message, core::DataIntegrityObject> {
             return {
                 toLibMessage(
-                    message, {}, {}, {}, {}, UnknowMessageFormatException().getCode(),
+                    message, {}, {}, {}, {}, core::toPublicError(UnknowMessageFormatException()),
                     MessageDataSchema::Version::UNKNOWN
                 ),
                 {}
@@ -89,12 +89,10 @@ MessageDataSchema::Version MessageDataSchemaMapper::getMessagesDataStructureVers
     );
 }
 
-std::pair<uint32_t, std::optional<core::DataIntegrityObject>> MessageDataSchemaMapper::validateMessageDataIntegrity(
-    const server::Message& message,
-    const std::string& threadResourceId
-) {
+std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> MessageDataSchemaMapper::
+    validateMessageDataIntegrity(const server::Message& message, const std::string& threadResourceId) {
     std::optional<core::DataIntegrityObject> verifiedDio;
-    const uint32_t statusCode = core::DataSchemaMapperUtils::toStatusCode([&] {
+    const auto error = core::DataSchemaMapperUtils::toError([&] {
         switch (getMessagesDataStructureVersion(message)) {
         case MessageDataSchema::Version::VERSION_4:
             return;
@@ -114,7 +112,7 @@ std::pair<uint32_t, std::optional<core::DataIntegrityObject>> MessageDataSchemaM
             throw UnknowMessageFormatException();
         }
     });
-    return {statusCode, verifiedDio};
+    return {error, verifiedDio};
 }
 
 ThreadDataSchema::Version MessageDataSchemaMapper::getMinimumContainerSchemaVersionForMessage(
@@ -136,7 +134,7 @@ Message MessageDataSchemaMapper::toLibMessage(
     const core::Buffer& privateMeta,
     const core::Buffer& data,
     const std::string& authorPubKey,
-    int64_t statusCode,
+    const std::optional<core::Error>& error,
     int64_t schemaVersion
 ) {
     return Message{
@@ -149,7 +147,7 @@ Message MessageDataSchemaMapper::toLibMessage(
         .privateMeta = privateMeta,
         .data = data,
         .authorPubKey = authorPubKey,
-        .statusCode = statusCode,
+        .error = error,
         .schemaVersion = schemaVersion
     };
 }
@@ -164,14 +162,14 @@ std::vector<Message> MessageDataSchemaMapper::validateDecryptAndConvertMessages(
         messages, threadKeys, keyProvider, _connection,
         [&](const server::Message& msg) { return validateMessageDataIntegrity(msg, threadKeys.moduleResourceId); },
         [&](const server::Message& msg) {
-            return core::DataSchemaMapperUtils::toStatusCode([&] {
+            return core::DataSchemaMapperUtils::toError([&] {
                 _messageKeyIdFormatValidator.assertKeyIdFormat(msg.keyId);
             });
         },
         [&](const server::Message& msg, const core::DecryptedEncKey& key,
             const std::optional<core::DataIntegrityObject>& verifiedDio) { return decrypt(msg, key, verifiedDio); },
-        [](const server::Message& msg, uint32_t code) {
-            return toLibMessage(msg, {}, {}, {}, {}, code, MessageDataSchema::Version::UNKNOWN);
+        [](const server::Message& msg, const std::optional<core::Error>& error) {
+            return toLibMessage(msg, {}, {}, {}, {}, error, MessageDataSchema::Version::UNKNOWN);
         },
         groupPrivKeyResolver
     );

@@ -69,8 +69,8 @@ TEST_F(StreamRoomUsingGroupsTest, createStreamRoom_with_group_grants) {
     group::Group group_1, group_2;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
+    ASSERT_EQ(errCode(group_2), 0);
     ASSERT_FALSE(group_1.groupPubKey.empty());
 
     // no grants
@@ -88,7 +88,7 @@ TEST_F(StreamRoomUsingGroupsTest, createStreamRoom_with_group_grants) {
     });
     ASSERT_FALSE(streamRoomId.empty());
     EXPECT_NO_THROW({ r = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(errCode(r), 0);
     EXPECT_EQ(r.groups.size(), 0);
 
     // one grant
@@ -110,7 +110,7 @@ TEST_F(StreamRoomUsingGroupsTest, createStreamRoom_with_group_grants) {
     });
     ASSERT_FALSE(streamRoomId.empty());
     EXPECT_NO_THROW({ r = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(errCode(r), 0);
     EXPECT_EQ(r.publicMeta.stdString(), "public_meta");
     ASSERT_EQ(r.groups.size(), 1);
     EXPECT_EQ(r.groups[0].groupId, group_1.groupId);
@@ -138,7 +138,7 @@ TEST_F(StreamRoomUsingGroupsTest, createStreamRoom_with_group_grants) {
     });
     ASSERT_FALSE(streamRoomId.empty());
     EXPECT_NO_THROW({ r = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(errCode(r), 0);
     EXPECT_EQ(r.groups.size(), 2);
     bool found1 = false, found2 = false;
     for (const auto& g : r.groups) {
@@ -187,7 +187,7 @@ TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_add_and_promote_group) {
 
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     EXPECT_NO_THROW({
         streamApi->updateStreamRoom(
@@ -208,7 +208,7 @@ TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_add_and_promote_group) {
 
     stream::StreamRoom updated;
     EXPECT_NO_THROW({ updated = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.publicMeta.stdString(), "after_group");
     ASSERT_EQ(updated.groups.size(), 1);
     EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
@@ -240,10 +240,10 @@ TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_add_and_promote_group) {
 TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_remove_group) {
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     // policy.get="all" so user_2 can always call getStreamRoom without throwing; after group removal it
-    // receives statusCode!=0 and empty privateMeta because it no longer holds the decryption key.
+    // receives a set `error` and empty privateMeta because it no longer holds the decryption key.
     core::ContainerPolicyWithoutItem policy;
     policy.get = "all";
 
@@ -272,7 +272,7 @@ TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_remove_group) {
     connectAs(2);
     stream::StreamRoom beforeRemoval;
     EXPECT_NO_THROW({ beforeRemoval = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(beforeRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(beforeRemoval), 0);
     EXPECT_FALSE(beforeRemoval.privateMeta.stdString().empty());
 
     disconnect();
@@ -294,21 +294,21 @@ TEST_F(StreamRoomUsingGroupsTest, updateStreamRoom_remove_group) {
 
     stream::StreamRoom updated;
     EXPECT_NO_THROW({ updated = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.groups.size(), 0);
 
     disconnect();
     connectAs(2);
     stream::StreamRoom afterRemoval;
     EXPECT_NO_THROW({ afterRemoval = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_NE(afterRemoval.statusCode, 0);
+    EXPECT_NE(errCode(afterRemoval), 0);
     EXPECT_TRUE(afterRemoval.privateMeta.stdString().empty());
 }
 
 TEST_F(StreamRoomUsingGroupsTest, listStreamRooms_includes_groups_field) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string streamRoomId;
     ASSERT_NO_THROW({
@@ -330,7 +330,7 @@ TEST_F(StreamRoomUsingGroupsTest, listStreamRooms_includes_groups_field) {
     bool found = false;
     for (const auto& r : list.readItems) {
         if (r.streamRoomId == streamRoomId) {
-            EXPECT_EQ(r.statusCode, 0);
+            EXPECT_EQ(errCode(r), 0);
             EXPECT_EQ(r.groups.size(), 1);
             if (r.groups.size() == 1) {
                 EXPECT_EQ(r.groups[0].groupId, group_1.groupId);
@@ -351,8 +351,8 @@ TEST_F(StreamRoomUsingGroupsTest, reads_through_a_group_grant) {
     group::Group group_2, group_3;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
-    ASSERT_EQ(group_3.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
+    ASSERT_EQ(errCode(group_3), 0);
 
     std::string oneGrantRoomId, twoGrantRoomId, allMembersRoomId;
     ASSERT_NO_THROW({
@@ -380,20 +380,20 @@ TEST_F(StreamRoomUsingGroupsTest, reads_through_a_group_grant) {
     connectAs(2);
     stream::StreamRoom r;
     EXPECT_NO_THROW({ r = streamApi->getStreamRoom(oneGrantRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(errCode(r), 0);
     EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
     EXPECT_NO_THROW({ r = streamApi->getStreamRoom(twoGrantRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(errCode(r), 0);
     EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
     EXPECT_NO_THROW({ r = streamApi->getStreamRoom(allMembersRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(errCode(r), 0);
     EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
 
     // user_3 is in Group_3 only
     disconnect();
     connectAs(3);
     EXPECT_NO_THROW({ r = streamApi->getStreamRoom(allMembersRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(errCode(r), 0);
     EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
 }
 
@@ -401,7 +401,7 @@ TEST_F(StreamRoomUsingGroupsTest, user_added_to_group_gains_access_to_room) {
     // Group_2 has user_1 + user_2; user_3 is not yet a member.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     core::ContainerPolicyWithoutItem policy;
     policy.get = "all";
@@ -427,7 +427,7 @@ TEST_F(StreamRoomUsingGroupsTest, user_added_to_group_gains_access_to_room) {
     connectAs(3);
     stream::StreamRoom rBefore;
     EXPECT_NO_THROW({ rBefore = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_NE(rBefore.statusCode, 0);
+    EXPECT_NE(errCode(rBefore), 0);
 
     // Seat user_3's leaf in the key tree - a metadata write would only re-wrap the group's metadata key.
     disconnect();
@@ -443,7 +443,7 @@ TEST_F(StreamRoomUsingGroupsTest, user_added_to_group_gains_access_to_room) {
     connectAs(3);
     stream::StreamRoom rAfter;
     EXPECT_NO_THROW({ rAfter = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(rAfter.statusCode, 0);
+    EXPECT_EQ(errCode(rAfter), 0);
     EXPECT_EQ(rAfter.privateMeta.stdString(), "room_private");
 }
 
@@ -452,7 +452,7 @@ TEST_F(StreamRoomUsingGroupsTest, direct_member_of_granted_group_reads_and_updat
     // `verifyKeysSecret` fails on any non-zero status, so an unresolved group entry throws instead of updating.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string streamRoomId;
     ASSERT_NO_THROW({
@@ -466,7 +466,7 @@ TEST_F(StreamRoomUsingGroupsTest, direct_member_of_granted_group_reads_and_updat
 
     stream::StreamRoom r;
     EXPECT_NO_THROW({ r = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(errCode(r), 0);
     EXPECT_EQ(r.groups.size(), 1);
 
     EXPECT_NO_THROW({
@@ -488,7 +488,7 @@ TEST_F(StreamRoomUsingGroupsTest, direct_member_of_granted_group_reads_and_updat
 
     stream::StreamRoom updated;
     EXPECT_NO_THROW({ updated = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.privateMeta.stdString(), "direct_updated_private");
 }
 
@@ -497,7 +497,7 @@ TEST_F(StreamRoomUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_ke
     // and the read has to come entirely from its own key wrap.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string streamRoomId;
     ASSERT_NO_THROW({
@@ -516,7 +516,7 @@ TEST_F(StreamRoomUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_ke
 
     stream::StreamRoom r;
     EXPECT_NO_THROW({ r = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(r.statusCode, 0);
+    EXPECT_EQ(errCode(r), 0);
     EXPECT_EQ(r.privateMeta.stdString(), "group_room_private");
     // `groups` stays unnarrowed, so user_2 still sees the grant it is not part of.
     EXPECT_EQ(r.groups.size(), 1);
@@ -527,7 +527,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_th
     // group: the default group policy hands a group's epoch and public key to members only.
     group::Group granteeGroup;
     ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(granteeGroup.statusCode, 0);
+    ASSERT_EQ(errCode(granteeGroup), 0);
 
     std::string streamRoomId;
     ASSERT_NO_THROW({
@@ -543,7 +543,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_th
 
     stream::StreamRoom before;
     ASSERT_NO_THROW({ before = streamApi->getStreamRoom(streamRoomId); });
-    ASSERT_EQ(before.statusCode, 0);
+    ASSERT_EQ(errCode(before), 0);
 
     disconnect();
     connectAs(2);
@@ -567,7 +567,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_covers_a_grantee_group_th
     connectAs(1);
     stream::StreamRoom after;
     EXPECT_NO_THROW({ after = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(errCode(after), 0);
     EXPECT_EQ(after.privateMeta.stdString(), "group_room_private");
     EXPECT_EQ(after.groups.size(), 1);
     if (after.groups.size() == 1) {
@@ -596,7 +596,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_clears_staleGroups_after_
 
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
     ASSERT_EQ(group.keyVersion, 1);
 
     std::string streamRoomId;
@@ -615,12 +615,12 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_clears_staleGroups_after_
 
     group::Group rotatedGroup;
     ASSERT_NO_THROW({ rotatedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(rotatedGroup.statusCode, 0);
+    ASSERT_EQ(errCode(rotatedGroup), 0);
     ASSERT_EQ(rotatedGroup.keyVersion, 2);
 
     stream::StreamRoom stale;
     ASSERT_NO_THROW({ stale = streamApi->getStreamRoom(streamRoomId); });
-    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(errCode(stale), 0);
     EXPECT_EQ(stale.staleGroups.size(), 1);
     if (stale.staleGroups.size() == 1) {
         EXPECT_EQ(stale.staleGroups[0], groupId);
@@ -639,7 +639,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_clears_staleGroups_after_
 
     stream::StreamRoom fresh;
     EXPECT_NO_THROW({ fresh = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(fresh.statusCode, 0);
+    EXPECT_EQ(errCode(fresh), 0);
     EXPECT_EQ(fresh.staleGroups.size(), 0);
     EXPECT_EQ(fresh.groups.size(), 1);
 
@@ -649,7 +649,7 @@ TEST_F(StreamRoomUsingGroupsTest, rotateStreamRoomKeys_clears_staleGroups_after_
     connectAs(2);
     stream::StreamRoom afterRekey;
     EXPECT_NO_THROW({ afterRekey = streamApi->getStreamRoom(streamRoomId); });
-    EXPECT_EQ(afterRekey.statusCode, 0);
+    EXPECT_EQ(errCode(afterRekey), 0);
     EXPECT_EQ(afterRekey.privateMeta.stdString(), "group_room_private");
 }
 

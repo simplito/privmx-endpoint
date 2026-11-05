@@ -273,15 +273,15 @@ Group GroupApiImpl::getGroup(const std::string& groupId) {
     if (!attested) {
         // Outsiders seal anonymous envelopes to it: only as the latest statement vouches for it.
         result.groupPubKey.clear();
-        if (result.statusCode == 0) {
+        if (!result.error.has_value()) {
             // Planes opened under keys the resolver found, on a policy and roster nobody signed: not handed out.
-            result.statusCode = GroupDataIntegrityException().getCode();
+            result.error = core::toPublicError(GroupDataIntegrityException());
             result.publicMeta = core::Buffer();
             result.privateMeta = core::Buffer();
         }
     }
     // Writes take their key from this cache, so only an answer that passed everything may fill it.
-    if (seated && result.statusCode == 0) {
+    if (seated && !result.error.has_value()) {
         assertHeadKeyAtEpoch(group);
         setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.rosterVersion);
     }
@@ -418,7 +418,7 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 .userId = raw.author.id,
                 .authorPubKey = {},
                 .payload = {},
-                .statusCode = 0
+                .error = std::nullopt
             };
             // A failure here is reported, never thrown: the event loop has nobody to throw to, and one
             // unreadable notification must not cost the caller the readable ones behind it.
@@ -451,8 +451,8 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 }
                 data.payload = core::Buffer::from(payload.value());
                 data.authorPubKey = decrypted.authorPubKey;
-            } catch (const core::Exception& e) { data.statusCode = e.getCode(); } catch (...) {
-                data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+            } catch (const core::Exception& e) { data.error = core::toPublicError(e); } catch (...) {
+                data.error = core::toPublicError(*core::unknownError("decrypting the group event"));
             }
             auto event = core::EventBuilder::buildEvent<GroupCustomEvent>(
                 "group/" + raw.id + "/" + channelName, data, notification

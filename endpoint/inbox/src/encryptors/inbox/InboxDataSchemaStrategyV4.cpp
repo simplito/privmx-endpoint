@@ -33,8 +33,8 @@ std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaStrategyV4::convert(
 ) const {
     return {
         InboxDataSchemaMapper::toLibInbox(
-            inbox, raw.publicData.publicMeta, raw.privateData.privateMeta, raw.filesConfig, raw.statusCode(),
-            InboxDataSchema::Version::VERSION_4
+            inbox, raw.publicData.publicMeta, raw.privateData.privateMeta, raw.filesConfig,
+            core::toPublicError(raw.error), InboxDataSchema::Version::VERSION_4
         ),
         core::DataIntegrityObject{
             .creatorUserId = inbox.lastModifier,
@@ -80,10 +80,10 @@ InboxInternalMetaV5 InboxDataSchemaStrategyV4::decryptInternalMeta(
 
 std::tuple<Inbox, core::DataIntegrityObject> InboxDataSchemaStrategyV4::makeErrorResult(
     const server::InboxInfo& inbox,
-    int64_t errorCode
+    const std::optional<core::Error>& error
 ) const {
     return {
-        InboxDataSchemaMapper::toLibInbox(inbox, {}, {}, {}, errorCode, InboxDataSchema::Version::VERSION_4),
+        InboxDataSchemaMapper::toLibInbox(inbox, {}, {}, {}, error, InboxDataSchema::Version::VERSION_4),
         core::DataIntegrityObject{}
     };
 }

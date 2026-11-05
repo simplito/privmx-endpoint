@@ -38,7 +38,7 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::Thread>(const thread::Thread
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("policy", serialize(val.policy));
     obj->set("messagesCount", serialize(val.messagesCount));
-    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("error", serialize(val.error));
     obj->set("groups", serialize(val.groups));
     obj->set("staleGroups", serialize(val.staleGroups));
     return obj;
@@ -157,7 +157,7 @@ Poco::Dynamic::Var VarSerializer::serialize<thread::Message>(const thread::Messa
     obj->set("privateMeta", serialize(val.privateMeta));
     obj->set("data", serialize(val.data));
     obj->set("authorPubKey", serialize(val.authorPubKey));
-    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("error", serialize(val.error));
     obj->set("schemaVersion", serialize(val.schemaVersion));
     return obj;
 }

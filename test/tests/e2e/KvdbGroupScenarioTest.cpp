@@ -171,7 +171,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     ASSERT_FALSE(groupId.empty());
     group::Group group1;
     ASSERT_NO_THROW({ group1 = user1.groupApi->getGroup(groupId); });
-    ASSERT_EQ(group1.statusCode, 0);
+    ASSERT_EQ(errCode(group1), 0);
     ASSERT_EQ(group1.keyVersion, 1);
 
     // -- Kvdb1: user_1 manages it, Group1 reads it, anyone may download it --
@@ -196,7 +196,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     // user_3 reads it through the same grant
     kvdb::KvdbEntry entry1AsUser3;
     ASSERT_NO_THROW({ entry1AsUser3 = user3.kvdbApi->getEntry(kvdbId, "entry1"); });
-    EXPECT_EQ(entry1AsUser3.statusCode, 0) << "a group member could not read an entry written by another one";
+    EXPECT_EQ(errCode(entry1AsUser3), 0) << "a group member could not read an entry written by another one";
     EXPECT_EQ(entry1AsUser3.privateMeta.stdString(), "entry1_private");
     EXPECT_EQ(entry1AsUser3.data.stdString(), "entry1_data");
     EXPECT_EQ(entry1AsUser3.version, 1);
@@ -204,7 +204,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     // -- user_1 updates the KVDB, roster untouched --
     kvdb::Kvdb beforeUpdate;
     ASSERT_NO_THROW({ beforeUpdate = user1.kvdbApi->getKvdb(kvdbId); });
-    ASSERT_EQ(beforeUpdate.statusCode, 0);
+    ASSERT_EQ(errCode(beforeUpdate), 0);
     ASSERT_NO_THROW({
         // The grant has to be restated: an omitted `groups` means "no grantees", not "leave them alone".
         user1.kvdbApi->updateKvdb(
@@ -215,7 +215,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     });
     kvdb::Kvdb afterUpdate;
     ASSERT_NO_THROW({ afterUpdate = user1.kvdbApi->getKvdb(kvdbId); });
-    EXPECT_EQ(afterUpdate.statusCode, 0);
+    EXPECT_EQ(errCode(afterUpdate), 0);
     EXPECT_EQ(afterUpdate.publicMeta.stdString(), "kvdb1_public_v2");
     ASSERT_EQ(afterUpdate.groups.size(), 1);
     EXPECT_EQ(afterUpdate.groups[0].groupId, groupId);
@@ -242,7 +242,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     for (int i = 0; i < ENTRY_COUNT; ++i) {
         const auto found = asMember.find(user3EntryKeys[i]);
         ASSERT_NE(found, asMember.end()) << "user_3's own entry " << i << " is missing from the listing";
-        ASSERT_EQ(found->second.statusCode, 0) << "user_3 could not read their own entry " << i << " as a member";
+        ASSERT_EQ(errCode(found->second), 0) << "user_3 could not read their own entry " << i << " as a member";
         ASSERT_EQ(found->second.data.stdString(), "user3_data_" + std::to_string(i));
     }
     pumpEvents();
@@ -273,7 +273,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     // -- user_1 overwrites Entry1 in place, which moves it onto the new key --
     kvdb::KvdbEntry entry1BeforeOverwrite;
     ASSERT_NO_THROW({ entry1BeforeOverwrite = user1.kvdbApi->getEntry(kvdbId, "entry1"); });
-    ASSERT_EQ(entry1BeforeOverwrite.statusCode, 0);
+    ASSERT_EQ(errCode(entry1BeforeOverwrite), 0);
     ASSERT_NO_THROW({
         // The version is the optimistic lock: passing 0 for a key that already exists is rejected.
         user1.kvdbApi->setEntry(
@@ -285,7 +285,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     // -- What user_3 can see now: the re-encrypted entry is closed to them, its public half is not --
     kvdb::KvdbEntry lostEntry;
     ASSERT_NO_THROW({ lostEntry = user3.kvdbApi->getEntry(kvdbId, "entry1"); });
-    EXPECT_NE(lostEntry.statusCode, 0) << "a removed member decrypted content re-encrypted after their removal";
+    EXPECT_NE(errCode(lostEntry), 0) << "a removed member decrypted content re-encrypted after their removal";
     EXPECT_EQ(lostEntry.publicMeta.stdString(), "entry1_public_v2")
         << "public metadata is not encrypted and has to survive the loss of the key";
     EXPECT_TRUE(lostEntry.privateMeta.stdString().empty());
@@ -298,7 +298,7 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     for (int i = 0; i < ENTRY_COUNT; ++i) {
         const auto found = asUser3.find(user3EntryKeys[i]);
         ASSERT_NE(found, asUser3.end()) << "user_3's own entry " << i << " is gone from the listing";
-        if (found->second.statusCode != 0) {
+        if (errCode(found->second) != 0) {
             ++unreadable;
         }
     }
@@ -354,10 +354,10 @@ TEST_F(KvdbGroupScenarioTest, kvdb_granted_to_a_group_across_a_member_removal) {
     auto asUser2 = byEntryKey(remaining);
     ASSERT_NE(asUser2.find("entry1"), asUser2.end());
     ASSERT_NE(asUser2.find("entry2"), asUser2.end());
-    EXPECT_EQ(asUser2.at("entry1").statusCode, 0);
+    EXPECT_EQ(errCode(asUser2.at("entry1")), 0);
     EXPECT_EQ(asUser2.at("entry1").data.stdString(), "entry1_data_v2");
     EXPECT_EQ(asUser2.at("entry1").version, 2);
-    EXPECT_EQ(asUser2.at("entry2").statusCode, 0);
+    EXPECT_EQ(errCode(asUser2.at("entry2")), 0);
     EXPECT_EQ(asUser2.at("entry2").data.stdString(), "entry2_data");
 
     // -- Both watchers were told about all of it --

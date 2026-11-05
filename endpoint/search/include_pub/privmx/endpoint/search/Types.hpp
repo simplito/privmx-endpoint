@@ -27,7 +27,7 @@ namespace search {
  */
 enum IndexMode : int64_t {
     /**
-     * IndexMode is UKNOWN or data is unreadable (check statusCode)
+     * IndexMode is UKNOWN or data is unreadable (check error)
      */
     UNKNOWN = 0,
     /**
@@ -116,9 +116,9 @@ struct SearchIndex {
     IndexMode mode;
 
     /**
-     * status code of retrieval and decryption of the Search Index
+     * Set when retrieval or decryption of the Search Index failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 
     /**
      * Version of the Search Index data structure and how it is encoded/encrypted

@@ -122,7 +122,7 @@ bool GroupMetadata::carryMetadataForward(
         const Group opened = mapper.validateDecryptAndConvertGroup(
             group, keyProvider, keys.resolverOver(&verified), prior
         );
-        if (opened.statusCode != 0) {
+        if (opened.error.has_value()) {
             return false;
         }
         // One write per carried plane, both off the one verified read: a metadata write moves neither the head nor

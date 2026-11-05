@@ -29,12 +29,12 @@ class TypedDataSchemaStrategyDIO
 public:
     std::tuple<TLibObject, DataIntegrityObject> makeErrorResult(
         const TServerModel& model,
-        int64_t errorCode
+        const std::optional<Error>& error
     ) const override final {
-        return {toLibError(model, errorCode), DataIntegrityObject{}};
+        return {toLibError(model, error), DataIntegrityObject{}};
     }
 
-    virtual TLibObject toLibError(const TServerModel& model, int64_t errorCode) const = 0;
+    virtual TLibObject toLibError(const TServerModel& model, const std::optional<Error>& error) const = 0;
 };
 
 } // namespace core
