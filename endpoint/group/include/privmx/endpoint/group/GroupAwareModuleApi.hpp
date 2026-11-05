@@ -43,9 +43,15 @@ public:
     ~GroupAwareModuleApi() override;
 
 protected:
-    // The two outcomes of a self-started re-key that are not failures: a lost race, and a refusal, which becomes
-    // `StaleKeyRekeyRequiredException`. An unresolved grantee group stays a failure — it cannot re-key at all.
-    void absorbAutoRekeyFailure(const std::string& moduleId, const privmx::utils::PrivmxException& e);
+    // The two outcomes of a self-started re-key that are not failures: a lost race, and — where forward secrecy is
+    // enforced — a refusal, which becomes `StaleKeyRekeyRequiredException`. Anything else there stays a failure.
+    // Where it is not enforced nothing is: the write this re-key was clearing the way for is one the bridge takes
+    // on the old key anyway, so the caller hears about it only if the write itself fails.
+    void absorbAutoRekeyFailure(
+        const std::string& moduleId,
+        const privmx::utils::PrivmxException& e,
+        bool forwardSecrecyEnforced
+    );
 
     // For a write that cannot re-key its way out: an Inbox submission seals to the entries public key and its
     // sender may not be named on the container at all, so only a manager can clear a stale epoch.
@@ -200,13 +206,23 @@ protected:
         if (!isRekeyNeeded(container)) {
             return;
         }
-        // Not verified here: `rotateContainerKeys` wraps through `prepareContainerUpdate`, which asks the verifier.
-        auto roster = resolveRosterPubKeys(container.contextId, container.users, container.managers);
+        const bool forwardSecrecyEnforced = isForwardSecrecyEnforced(container.policy);
         try {
+            // Not verified here: `rotateContainerKeys` wraps through `prepareContainerUpdate`, which asks the verifier.
+            auto roster = resolveRosterPubKeys(container.contextId, container.users, container.managers);
             rotateContainerKeys<TRotateModel>(
                 moduleId, container, roster.users, roster.managers, container.version, false, {}, sendRotateRequest
             );
-        } catch (const privmx::utils::PrivmxException& e) { absorbAutoRekeyFailure(moduleId, e); }
+        } catch (const privmx::utils::PrivmxException& e) {
+            absorbAutoRekeyFailure(moduleId, e, forwardSecrecyEnforced);
+        } catch (const core::Exception&) {
+            // Without forward secrecy this re-key is a courtesy, not a precondition: the write it runs ahead of is
+            // one the bridge takes on the old key anyway. So every way it can fail — a refusal, a grantee group
+            // this caller holds no seat in — leaves the container as it was and the write to proceed.
+            if (forwardSecrecyEnforced) {
+                throw;
+            }
+        }
     }
 
 private:

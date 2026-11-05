@@ -95,6 +95,9 @@ struct ModuleKeys {
     int64_t moduleSchemaVersion;
     std::string moduleResourceId;
     std::string contextId;
+    // Whether `staleGroups` blocks an item write. Defaults to enforcing, so a module that builds its own
+    // `ModuleKeys` without reading a policy fails closed.
+    bool forwardSecrecyEnforced = true;
 };
 
 struct GroupEpochInfo {

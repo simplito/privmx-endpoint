@@ -121,13 +121,28 @@ std::vector<server::KeyEntrySet> ContainerBaseApi::buildRosterKeyEntries(const C
     return keyEntries;
 }
 
+bool ContainerBaseApi::isForwardSecrecyEnforced(const Poco::Dynamic::Var& policy) {
+    // Only the container's own policy reaches a client — "default" and "inherit" resolve on the bridge, against
+    // the context. Anything but an explicit opt-out is taken as enforcing, so the stricter answer is the default.
+    return Factory::parsePolicyServerObject(policy).forwardSecrecy.value_or("default") != "no";
+}
+
+// `forwardSecrecy: "no"` is the container's opt-out, and the bridge honours it by accepting an item write under a
+// key wrapped to a superseded group epoch. Refusing it here would strand a writer who cannot re-key the container
+// itself — the write the bridge was willing to take never goes out.
 void ContainerBaseApi::assertRekeyNotNeeded(const server::ContainerInfoBase& c) const {
+    if (!isForwardSecrecyEnforced(c.policy)) {
+        return;
+    }
     if (auto reason = rekeyReason(c.keys, c.groupKeys, c.keyId, c.staleGroups); !reason.empty()) {
         throw StaleKeyRekeyRequiredException(reason);
     }
 }
 
 void ContainerBaseApi::assertRekeyNotNeeded(const ModuleKeys& k) const {
+    if (!k.forwardSecrecyEnforced) {
+        return;
+    }
     if (auto reason = rekeyReason(k.keys, k.groupKeys, k.currentKeyId, k.staleGroups); !reason.empty()) {
         throw StaleKeyRekeyRequiredException(reason);
     }
@@ -258,7 +273,8 @@ ContainerKeyCache::CachedModuleKeys ContainerBaseApi::convertModuleKeysToContain
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,
         .contextId = moduleKeys.contextId,
-        .moduleVersion = moduleVersion
+        .moduleVersion = moduleVersion,
+        .forwardSecrecyEnforced = moduleKeys.forwardSecrecyEnforced
     };
 }
 
@@ -272,7 +288,8 @@ ModuleKeys ContainerBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat
         .currentKeyId = moduleKeys.currentKeyId,
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,
-        .contextId = moduleKeys.contextId
+        .contextId = moduleKeys.contextId,
+        .forwardSecrecyEnforced = moduleKeys.forwardSecrecyEnforced
     };
 }
 

@@ -37,6 +37,7 @@ public:
         std::string moduleResourceId;
         std::string contextId;
         int64_t moduleVersion;
+        bool forwardSecrecyEnforced = true;
     };
     std::optional<CachedModuleKeys> getKeys(
         const std::string& moduleId,
