@@ -99,6 +99,18 @@ void Connection::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier
     impl->setUserVerifier(verifier);
 }
 
+void Connection::setPinStore(std::shared_ptr<PinStoreInterface> store) {
+    auto impl = getImpl();
+    impl->setPinStore(store);
+}
+
+void Connection::adoptPreviousIdentity(const std::string& previousUserPrivKey) {
+    auto impl = getImpl();
+    assertConnection(impl);
+    Validator::validatePrivKeyWIF(previousUserPrivKey, "field:previousUserPrivKey ");
+    impl->adoptPreviousIdentity(privmx::crypto::PrivateKey::fromWIF(previousUserPrivKey));
+}
+
 std::vector<std::string> Connection::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto impl = getImpl();
     assertConnection(impl);

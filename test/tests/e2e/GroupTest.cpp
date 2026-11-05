@@ -100,9 +100,16 @@ TEST_F(GroupTest, listGroups_correct_input_data) {
     for (const auto& g : groupsList.readItems) {
         EXPECT_EQ(g.contextId, reader->getString("Context_1.contextId"));
         EXPECT_FALSE(g.groupId.empty());
-        EXPECT_FALSE(g.groupPubKey.empty());
+        EXPECT_TRUE(g.groupPubKey.empty()) << "nothing verified in this process yet, and a listing vouches for nothing";
         EXPECT_GE(g.keyVersion, 0);
     }
+    // Once `getGroup` has verified a group, the listing hands out that same key.
+    const std::string groupPubKey = groupApi->getGroup(groupsList.readItems[0].groupId).groupPubKey;
+    EXPECT_FALSE(groupPubKey.empty());
+    const auto relisted = groupApi->listGroups(
+        reader->getString("Context_1.contextId"), core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "asc"}
+    );
+    EXPECT_EQ(relisted.readItems[0].groupPubKey, groupPubKey);
     // limit=1
     core::PagingList<group::GroupSummary> groupsPage;
     EXPECT_NO_THROW({
@@ -377,8 +384,8 @@ TEST_F(GroupTest, updateGroupPrivateMeta_correct_data) {
 }
 
 TEST_F(GroupTest, updateGroupPolicy_correct_data) {
-    // The cheapest statement that a policy write appends no metadata entry: neither counter moves and neither
-    // buffer changes, so no reader has anything to re-verify.
+    // A policy write is a commit that appends no metadata entry: neither counter moves and neither buffer changes,
+    // so no reader has anything to re-verify.
     const std::string groupId = reader->getString("Group_1.groupId");
     group::Group before;
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
@@ -397,7 +404,7 @@ TEST_F(GroupTest, updateGroupPolicy_correct_data) {
     EXPECT_EQ(after.publicMeta.stdString(), before.publicMeta.stdString());
     EXPECT_EQ(after.privateMeta.stdString(), before.privateMeta.stdString());
 
-    // No CAS, so a second write in a row is not a lost race — it simply wins.
+    // Each call is a signed commit planned on a fresh read, so a second one in a row extends the first.
     policy.get = "user";
     EXPECT_NO_THROW({ groupApi->updateGroupPolicy(groupId, policy); });
     EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });

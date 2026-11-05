@@ -16,6 +16,9 @@ MongoClient = None
 
 DOCKER_NETWORK = "endpoint_e2e_testing_network"
 BACKEND_READY_TIMEOUT_SECONDS = 5
+READY_POLL_INTERVAL_SECONDS = 0.1
+# Each container check spawns a docker CLI process, so it runs far less often than the HTTP poll.
+CONTAINER_CHECK_INTERVAL_SECONDS = 2.0
 
 
 @dataclass
@@ -107,23 +110,31 @@ def load_bridge_dataset(dataset_path: str, bridge_container_name: str) -> None:
         shutil.rmtree(staging_dir, ignore_errors=True)
 
 
+def stop_container(container_name: str) -> None:
+    e2e_common.run_command(["docker", "stop", "-t", str(e2e_common.STOP_GRACE_SECONDS), container_name])
+
+
+def ensure_container_running(container_name: str) -> None:
+    try:
+        stdout, _ = e2e_common.require_command_success(
+            ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
+            action=f"Checking container state for {container_name}",
+        )
+        is_running = e2e_common.decode_output(stdout).strip() == "true"
+    except Exception as exc:
+        raise RuntimeError(f"Container check failed: {exc}") from exc
+
+    if not is_running:
+        print_container_logs(container_name)
+        raise RuntimeError(f"Container {container_name} stopped unexpectedly.")
+
+
 def wait_for_server_ready(port: int, container_name: str, timeout_seconds: int = 30) -> None:
     url = f"http://localhost:{port}/privmx-configuration.json"
     deadline = time.time() + timeout_seconds
+    next_container_check = 0.0
 
     while time.time() < deadline:
-        try:
-            stdout, _ = e2e_common.require_command_success(
-                ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
-                action=f"Checking container state for {container_name}",
-            )
-            is_running = e2e_common.decode_output(stdout).strip()
-            if is_running != "true":
-                print_container_logs(container_name)
-                raise RuntimeError(f"Container {container_name} stopped unexpectedly.")
-        except Exception as exc:
-            raise RuntimeError(f"Container check failed: {exc}") from exc
-
         try:
             response = requests.get(url, timeout=2)
             if response.ok:
@@ -131,7 +142,12 @@ def wait_for_server_ready(port: int, container_name: str, timeout_seconds: int =
         except Exception:
             pass
 
-        time.sleep(0.2)
+        now = time.time()
+        if now >= next_container_check:
+            next_container_check = now + CONTAINER_CHECK_INTERVAL_SECONDS
+            ensure_container_running(container_name)
+
+        time.sleep(READY_POLL_INTERVAL_SECONDS)
 
     print_container_logs(container_name)
     raise RuntimeError(f"Server failed to start on port {port} within {timeout_seconds}s")
@@ -240,11 +256,8 @@ def prepare_bridge_context(bridge_info: BridgeInfo, dataset_dir_path: str) -> No
     host_port = bridge_info.host_port
 
     try:
-        e2e_common.run_command(["docker", "stop", container_name])
-        e2e_common.require_command_success(["docker", "start", container_name], action=f"Starting {container_name}")
-        wait_for_server_ready(host_port, container_name)
-
-        e2e_common.run_command(["docker", "stop", container_name])
+        # create_bridge_docker already booted the container once, so it only needs stopping to be seeded.
+        stop_container(container_name)
 
         load_mongo_dataset(bridge_info.db, dataset_dir_path)
         load_bridge_dataset(dataset_dir_path, container_name)
@@ -252,5 +265,5 @@ def prepare_bridge_context(bridge_info: BridgeInfo, dataset_dir_path: str) -> No
         e2e_common.require_command_success(["docker", "start", container_name], action=f"Restarting {container_name}")
         wait_for_server_ready(host_port, container_name)
     except Exception:
-        e2e_common.run_command(["docker", "stop", container_name])
+        stop_container(container_name)
         raise

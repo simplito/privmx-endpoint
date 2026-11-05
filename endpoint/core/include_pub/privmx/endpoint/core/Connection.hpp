@@ -6,6 +6,7 @@
 #include <string>
 
 #include "privmx/endpoint/core/BaseApiClass.hpp"
+#include "privmx/endpoint/core/PinStoreInterface.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/UserVerifierInterface.hpp"
 
@@ -129,6 +130,45 @@ public:
      * 
      */
     void setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier);
+
+    /**
+     * Sets where the library keeps state between sessions (key-tree pins of the groups this device verified). Without
+     * a store every new GroupApi reads each group on trust once (TOFU); with one, only the first contact of this device
+     * with a group does.
+     *
+     * Call it right after `connect`, before creating any module API: a GroupApi reads the store once, when it is
+     * created. Slots are per identity key and per Bridge (URL, public key and instance id of `connect`). The store
+     * must be local to the device: one the Bridge can write lets the Bridge delete the saved state (protection back to
+     * first contact) or roll it back to an older saved one (it can never plant a state). Ignored on a `connectPublic`
+     * connection. See PinStoreInterface for the atomicity and threading contract.
+     *
+     * A slot that does not load (the store throws) or fails its integrity check is logged as a warning and ignored:
+     * that GroupApi starts as a first contact for every group, as without a store, and the next save overwrites the
+     * slot. Nothing is thrown, so a corrupted store never locks the app out of its groups.
+     * @param store an implementation of the PinStoreInterface, or nullptr to keep state in memory only
+     */
+    void setPinStore(std::shared_ptr<PinStoreInterface> store);
+
+    /**
+     * After the user's identity key changed: carries the pins the store holds for the previous key over to the
+     * current one, for every GroupApi created afterwards. A pin of the previous key is taken only for a group with no
+     * pin under the current key, and only as a hint: it never replaces or raises one, and is saved under the current
+     * key only once a read has replayed the group's chain to it. A group whose served chain does not reach the hint is
+     * refused as a fork (GroupHistoryForkException) in every session that adopts it; the app recovers by deleting the
+     * previous key's slot from its PinStore, after which the group is read on trust once, as on first contact.
+     * Call it right after `connect` and `setPinStore`, before creating any module API, and again on every later start
+     * (every new connection) for as long as the previous key's slot is kept: the hints and the key-change knowledge
+     * live in this connection's memory only, so a start that skips the call reads a group whose hint no read has
+     * verified yet as a first contact, and lets a removal abandon history again. Without a store, or nothing
+     * stored for the previous key, nothing is carried over. Either way it tells this client its key changed: a
+     * GroupApi::removeGroupMembers whose own leaf does not open but opens with the previous key is then refused until
+     * GroupApi::renewLeaf, instead of abandoning the group's history.
+     * @param previousUserPrivKey the previous identity private key in WIF
+     * @throws LocalStateIntegrityException when the previous key's stored pins fail their integrity check. The app
+     * may deliberately delete that slot (the previous key's) from its PinStore and call again, accepting that groups
+     * without a pin under the current key are then read on trust once, as on first contact.
+     */
+    void adoptPreviousIdentity(const std::string& previousUserPrivKey);
 
 private:
     void assertGateway(const std::shared_ptr<ConnectionImpl>& impl);

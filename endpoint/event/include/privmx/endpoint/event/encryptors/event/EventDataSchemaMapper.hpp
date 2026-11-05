@@ -54,7 +54,7 @@ public:
 
 private:
     static ContextCustomEventData makeErrorResult(const server::ContextCustomEventData& rawEvent, int64_t errorCode);
-    bool verifyDecryptedEventData(const DecryptedEventDataV5& data);
+    bool verifyDecryptedEventData(const server::ContextCustomEventData& rawEvent, const DecryptedEventDataV5& data);
 
     privmx::crypto::PrivateKey _userPrivKey;
     core::Connection _connection;

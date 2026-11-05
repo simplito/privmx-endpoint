@@ -11,18 +11,22 @@ limitations under the License.
 
 #include "privmx/endpoint/core/ConnectionImpl.hpp"
 
+#include "privmx/endpoint/core/BigEndian.hpp"
 #include "privmx/endpoint/core/Constants.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/EndpointUtils.hpp"
 #include "privmx/endpoint/core/EventBuilder.hpp"
 #include "privmx/endpoint/core/EventQueueImpl.hpp"
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
+#include "privmx/endpoint/core/LocalSeal.hpp"
 #include "privmx/endpoint/core/Mapper.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
+#include <algorithm>
 #include <cstdint>
 #include <privmx/endpoint/core/SingletonsHolder.hpp>
 #include <privmx/rpc/Types.hpp>
 #include <privmx/utils/Logger.hpp>
+#include <privmx/utils/Utils.hpp>
 
 using namespace privmx::endpoint::core;
 
@@ -68,9 +72,23 @@ void ConnectionImpl::connect(
     } else {
         _gateway = privfs::RpcGateway::createGatewayFromEcdhexConnection(key, options, solutionId);
     }
-    _serverApi.emplace(_gateway);
     _host = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->host;
     _serverConfig = _gateway->getInfo().cast<rpc::EcdhexConnectionInfo>()->serverConfig;
+    connectOver(_gateway, key);
+    assertServerVersion();
+    LOG_TIME_DEBUG_STOP(Platform platformConnect, "")
+}
+
+void ConnectionImpl::connectOver(
+    const privfs::RpcGateway::Ptr& gateway,
+    const crypto::PrivateKey& key,
+    const std::optional<BridgeIdentity>& bridge
+) {
+    if (bridge.has_value()) {
+        _bridgeIdentity = bridge.value();
+    }
+    _gateway = gateway;
+    _serverApi.emplace(_gateway);
     _userPrivKey = key;
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
@@ -120,8 +138,6 @@ void ConnectionImpl::connect(
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
     _subscriber = std::make_shared<SubscriberImpl>(_gateway);
-    assertServerVersion();
-    LOG_TIME_DEBUG_STOP(Platform platformConnect, "")
 }
 
 void ConnectionImpl::connectPublic(
@@ -142,6 +158,7 @@ void ConnectionImpl::connectPublic(
         .instanceId = verificationOptions.bridgeInstanceId
     };
     auto key = privmx::crypto::PrivateKey::generateRandom();
+    _public = true;
     _userPrivKey = key;
     _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
@@ -238,6 +255,68 @@ PagingList<UserInfo> ConnectionImpl::listContextUsers(const std::string& context
 void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
     std::unique_lock lock(_mutex);
     _userVerifier = std::make_shared<UserVerifier>(verifier);
+}
+
+void ConnectionImpl::setPinStore(std::shared_ptr<PinStoreInterface> store) {
+    std::unique_lock lock(_mutex);
+    _pinStore = store;
+}
+
+std::shared_ptr<PinStoreInterface> ConnectionImpl::getPinStore() {
+    std::shared_lock lock(_mutex);
+    return _public ? nullptr : _pinStore;
+}
+
+std::string ConnectionImpl::localStateScope() {
+    std::string preimage;
+    bigendian::putLp(preimage, _bridgeIdentity.url);
+    bigendian::putLp(preimage, _bridgeIdentity.pubKey.value_or(""));
+    bigendian::putLp(preimage, _bridgeIdentity.instanceId.value_or(""));
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(preimage));
+}
+
+std::string ConnectionImpl::localStateSlot(const std::string& kind, const crypto::PublicKey& identity) {
+    return kind + "/" + localStateScope() + "/" + identity.toBase58DER();
+}
+
+void ConnectionImpl::adoptPreviousIdentity(const crypto::PrivateKey& previous) {
+    const std::shared_ptr<PinStoreInterface> store = getPinStore();
+    const std::string previousPub = previous.getPublicKey().toBase58DER();
+    if (previousPub == _userPrivKey.getPublicKey().toBase58DER()) {
+        return;
+    }
+    std::optional<std::string> body;
+    if (store) {
+        const std::string slot = localStateSlot(LocalSeal::GROUP_PINS, previous.getPublicKey());
+        const std::string blob = store->load(slot).stdString();
+        if (!blob.empty()) {
+            body = LocalSeal(previous, LocalSeal::GROUP_PINS_LABEL, LocalSeal::GROUP_PINS_VERSION, slot).open(blob);
+            if (!body.has_value()) {
+                // Never ignored: a store the Bridge can write must not be able to turn adoption off by corrupting it.
+                throw LocalStateIntegrityException("the previous identity's group pins do not open");
+            }
+        }
+    }
+    // Recorded only once the slot opened (or there is none): a failed adoption leaves nothing behind.
+    std::unique_lock lock(_mutex);
+    if (std::none_of(_previousIdentities.begin(), _previousIdentities.end(), [&](const crypto::PrivateKey& k) {
+            return k.getPublicKey().toBase58DER() == previousPub;
+        })) {
+        _previousIdentities.push_back(previous);
+    }
+    if (body.has_value()) {
+        _stagedPinBodies[previousPub] = body.value();
+    }
+}
+
+std::map<std::string, std::string> ConnectionImpl::getStagedPinBodies() {
+    std::shared_lock lock(_mutex);
+    return _stagedPinBodies;
+}
+
+std::vector<privmx::crypto::PrivateKey> ConnectionImpl::previousIdentities() {
+    std::shared_lock lock(_mutex);
+    return _previousIdentities;
 }
 
 std::vector<std::string> ConnectionImpl::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

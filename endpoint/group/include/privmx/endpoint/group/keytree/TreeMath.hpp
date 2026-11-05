@@ -24,6 +24,15 @@ namespace keytree {
 // nodes odd, topology a pure function of the leaf count. Must agree with the bridge's own computation exactly.
 class TreeMath {
 public:
+    // The tree layout and statement format this client reads and writes. A group carrying any other version is
+    // refused, never migrated. 3: rung blobs bound to their span, the genesis roster served beside the chain, custom
+    // events bound to their channel, no confirmation tag.
+    static constexpr std::uint32_t TREE_VERSION = 3;
+
+    // Internal nodes at or below this level carry no key: a bucket of `2^BUCKET_LEVEL` seats is wrapped to leaf by
+    // leaf. Tied to TREE_VERSION, not configurable per group — the bridge derives the same keyed set.
+    static constexpr std::uint32_t BUCKET_LEVEL = 4;
+
     static std::uint32_t nodeCount(std::uint32_t numLeaves);
 
     static std::uint32_t leafNode(std::uint32_t position);
@@ -73,33 +82,34 @@ public:
 
     // ── Paths ───────────────────────────────────────────────────────────────
 
-    // Leaf's parent up to and including the root, bottom-up — exactly the set a removal must refresh, no less (a
-    // hole in confidentiality) and no more (an unrequested epoch change). The server checks it. Empty for one leaf.
+    // Leaf's parent up to and including the root, bottom-up. Empty for one leaf.
     static std::vector<std::uint32_t> directPath(std::uint32_t position, std::uint32_t numLeaves);
 
-    // The nodes a refresh wraps to, index-aligned with `directPath`. A member never reaches a copath node; that
-    // is where collusion resistance comes from.
+    // Index-aligned with `directPath`.
     static std::vector<std::uint32_t> copath(std::uint32_t position, std::uint32_t numLeaves);
 
-    // Ascending. Used to decide whether a subtree is entirely blank.
+    // Ascending.
     static std::vector<std::uint32_t> leavesUnder(std::uint32_t nodeIndex, std::uint32_t numLeaves);
+
+    // Whether the node may carry a key at all: internal, and above the buckets or the root. Leaves never are — a
+    // leaf is its member's long-term key.
+    static bool isKeyed(std::uint32_t nodeIndex, std::uint32_t numLeaves);
+
+    // `directPath` filtered by `isKeyed`, bottom-up: the nodes every commit by this seat refreshes (a creation and
+    // an addition also fill nodes off it). Ends at the root; empty for one leaf.
+    static std::vector<std::uint32_t> keyedPath(std::uint32_t position, std::uint32_t numLeaves);
+
+    // Every keyed node of the tree, ascending.
+    static std::vector<std::uint32_t> keyedNodes(std::uint32_t numLeaves);
 
     // Grows past the current count when appending at the end.
     static std::uint32_t numLeavesToSeat(std::uint32_t position, std::uint32_t currentNumLeaves);
-
-    // Union of several leaves' direct paths, ascending — the node set a batch operation must refresh. A shared
-    // ancestor appears ONCE; refreshing it per leaf would mint two keys for the same node and generation.
-    static std::vector<std::uint32_t> frontier(const std::vector<std::uint32_t>& positions, std::uint32_t numLeaves);
 
     // Order-independent: seating is only ever an append.
     static std::uint32_t numLeavesToSeatAll(
         const std::vector<std::uint32_t>& positions,
         std::uint32_t currentNumLeaves
     );
-
-    // Whether the grant edge must be re-linked. Growth must not advance the epoch, so keeping the grant keypair
-    // separate from the root costs one re-linked edge instead of invalidating every container.
-    static bool growthChangesRoot(std::uint32_t position, std::uint32_t currentNumLeaves);
 
 private:
     static std::uint32_t pow2(std::uint32_t exponent);

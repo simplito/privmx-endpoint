@@ -65,6 +65,19 @@ void GroupApi::removeGroupMembers(const std::string& groupId, const std::vector<
     impl->removeGroupMembers(groupId, userIds);
 }
 
+void GroupApi::rotateGroupKey(const std::string& groupId) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    impl->rotateGroupKey(groupId);
+}
+
+bool GroupApi::renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    core::Validator::validatePrivKeyWIF(previousUserPrivKey, "field:previousUserPrivKey ");
+    return impl->renewLeaf(groupId, previousUserPrivKey);
+}
+
 void GroupApi::updateGroupPublicMeta(
     const std::string& groupId,
     const core::Buffer& publicMeta,
@@ -134,12 +147,6 @@ Envelope GroupApi::encryptAnonymously(
     core::Validator::validatePubKeyBase58DER(groupPubKey, "field:groupPubKey ");
     return impl->encryptAnonymously(groupId, groupPubKey, content);
 }
-
-namespace {
-// Ceiling on one block handed across the API, so peak memory is a property of the API rather than the
-// caller's discipline — a whole-file call would be a hard failure under WebAssembly's 4 GiB address space.
-constexpr size_t MAX_FILE_BLOCK = 4 * 1024 * 1024;
-} // namespace
 
 FileHandle GroupApi::beginFileEncryption(const std::string& groupId, const FileSize size) {
     auto impl = getImpl();

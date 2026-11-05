@@ -83,6 +83,8 @@ std::string problemName(LadderProblemKind problem) {
         return "DUPLICATE";
     case LadderProblemKind::UnitRungMissing:
         return "UNIT_RUNG_MISSING";
+    case LadderProblemKind::NotCanonical:
+        return "NOT_CANONICAL";
     default:
         return "OK";
     }
