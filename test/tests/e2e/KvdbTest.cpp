@@ -803,12 +803,12 @@ TEST_F(KvdbTest, userValidator_false) {
         ASSERT_EQ(kvdbs.readItems.size(), 1);
         EXPECT_EQ(kvdbs.readItems[0].statusCode, failureCode);
     });
-    EXPECT_NO_THROW({
+    EXPECT_THROW({
         kvdbApi->createKvdb(
             contextId(), users({1}), users({1}),
             core::Buffer::from("public"), core::Buffer::from("private")
         );
-    });
+    }, core::Exception);
     EXPECT_THROW({
         kvdbApi->updateKvdb(
             kvdbId(1), users({1}), users({1}),
@@ -834,4 +834,25 @@ TEST_F(KvdbTest, userValidator_false) {
     EXPECT_NO_THROW({
         kvdbApi->deleteEntry(reader->getString("KvdbEntry_2.info_kvdbId"), entryKey(2));
     });
+}
+
+TEST_F(KvdbTest, SECURITY_a_key_the_verifier_refuses_is_never_wrapped_to) {
+    // user_2's listed key is one the application's verifier refuses (a substituted key, as far as the client can
+    // tell). Create, update (an added user and a new key) and rotate all refuse before the key is wrapped to it.
+    const std::string withBoth = kvdbApi->createKvdb(contextId(), users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"));
+    const std::string withOne = kvdbApi->createKvdb(contextId(), users({1}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"));
+    const auto listed = [&] { return kvdbApi->listKvdbs(contextId(), {.skip=0, .limit=1, .sortOrder="desc"}).totalAvailable; };
+    const auto before = listed();
+    connection->setUserVerifier(
+        std::make_shared<core::RefusingKeyVerifier>(std::set<std::string>{user(2).pubKey})
+    );
+    core::expectVerificationFailure([&] { kvdbApi->createKvdb(contextId(), users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private")); });
+    core::expectVerificationFailure([&] { kvdbApi->updateKvdb(withOne, users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, false); });
+    core::expectVerificationFailure([&] { kvdbApi->updateKvdb(withBoth, users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, true); });
+    core::expectVerificationFailure([&] { kvdbApi->rotateKvdbKeys(withBoth, users({1, 2}), users({1}), 1, false); });
+    EXPECT_EQ(listed(), before);
+    EXPECT_EQ(kvdbApi->getKvdb(withBoth).version, 1);
+    EXPECT_EQ(kvdbApi->getKvdb(withOne).version, 1);
+    // Without user_2 nothing is refused.
+    EXPECT_NO_THROW({ kvdbApi->updateKvdb(withBoth, users({1}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, true); });
 }

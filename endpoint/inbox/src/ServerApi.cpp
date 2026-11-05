@@ -9,6 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/inbox/ServerApi.hpp>
 #include <privmx/utils/JsonHelper.hpp>
 
@@ -30,11 +31,15 @@ void ServerApi::inboxRotateKeys(server::InboxRotateKeysModel model) {
 }
 
 server::InboxGetResult ServerApi::inboxGet(server::InboxGetModel model) {
-    return request<server::InboxGetResult>("inboxGet", model.toJSON());
+    auto result = request<server::InboxGetResult>("inboxGet", model.toJSON());
+    core::EndpointUtils::assertServedId(model.id, result.inbox.id);
+    return result;
 }
 
 server::InboxGetPublicViewResult ServerApi::inboxGetPublicView(server::InboxGetModel model) {
-    return request<server::InboxGetPublicViewResult>("inboxGetPublicView", model.toJSON());
+    auto result = request<server::InboxGetPublicViewResult>("inboxGetPublicView", model.toJSON());
+    core::EndpointUtils::assertServedId(model.id, result.inboxId);
+    return result;
 }
 
 server::InboxListResult ServerApi::inboxList(server::InboxListModel model) {

@@ -59,6 +59,10 @@ public:
     static std::string generateId();
 
     static std::string generateDIORandomId();
+
+    // A read names its container; one served under another id is the server substituting a container the user
+    // also belongs to, whose key the caller would then read or write under. Throws ContainerMismatchException.
+    static void assertServedId(const std::string& asked, const std::string& served);
 };
 
 } // namespace core

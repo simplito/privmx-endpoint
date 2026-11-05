@@ -58,9 +58,7 @@ std::optional<std::uint32_t> TreeKeys::positionOf(const TreeGroupState& state, c
     return static_cast<std::uint32_t>(it - state.leafAssignment.begin());
 }
 
-namespace {
-
-void resolveInto(const TreeGroupState& state, std::uint32_t nodeIndex, std::vector<std::uint32_t>& out) {
+void TreeKeys::resolveInto(const TreeGroupState& state, std::uint32_t nodeIndex, std::vector<std::uint32_t>& out) {
     if (TreeMath::isLeaf(nodeIndex)) {
         const std::uint32_t position = TreeMath::leafPosition(nodeIndex);
         if (position < state.leafAssignment.size() && state.leafAssignment[position].has_value()) {
@@ -69,7 +67,7 @@ void resolveInto(const TreeGroupState& state, std::uint32_t nodeIndex, std::vect
         return;
     }
     if (TreeMath::isKeyed(nodeIndex, state.numLeaves)) {
-        const TreeNodeState* node = findRecord(state, nodeIndex);
+        const TreeNodeState* node = state.record(nodeIndex);
         if (node != nullptr && node->publicKey.has_value()) {
             out.push_back(nodeIndex);
             return;
@@ -80,32 +78,7 @@ void resolveInto(const TreeGroupState& state, std::uint32_t nodeIndex, std::vect
     }
 }
 
-// The edge that carries an ancestor's key down to the node we stand on, as the current state describes it: from a
-// filled node still on our path above us, at that node's current generation. A leftover edge of an older state
-// fails one of those and is passed over rather than followed into a key that no longer verifies.
-template<typename AddressedToUs>
-const TreeEdge* findClimbingEdge(
-    const TreeGroupState& state,
-    const AddressedToUs& addressedToUs,
-    const std::vector<std::uint32_t>& above
-) {
-    for (const TreeEdge& edge : state.edges) {
-        if (edge.isGrantEdge || !addressedToUs(edge)) {
-            continue;
-        }
-        if (std::find(above.begin(), above.end(), edge.parentIndex) == above.end()) {
-            continue;
-        }
-        const TreeNodeState* parent = findRecord(state, edge.parentIndex);
-        if (parent != nullptr && parent->publicKey.has_value() && parent->generation == edge.parentGeneration) {
-            return &edge;
-        }
-    }
-    return nullptr;
-}
-
-// `node` if keyed, and every keyed ancestor of it up to the root: what a holder of `node`'s key can climb to.
-void climbInto(std::uint32_t node, std::uint32_t numLeaves, std::set<std::uint32_t>& out) {
+void TreeKeys::climbInto(std::uint32_t node, std::uint32_t numLeaves, std::set<std::uint32_t>& out) {
     const std::uint32_t root = TreeMath::root(numLeaves);
     for (;; node = TreeMath::parent(node, numLeaves)) {
         if (TreeMath::isKeyed(node, numLeaves)) {
@@ -116,23 +89,6 @@ void climbInto(std::uint32_t node, std::uint32_t numLeaves, std::set<std::uint32
         }
     }
 }
-
-// The grant edge at `epoch` to the sole member of a one-leaf tree, or to the root at `generation`.
-TreeEdge userGrantEdge(std::uint32_t epoch, const std::string& userId, std::string blob) {
-    return TreeEdge{
-        .isGrantEdge = true, .parentGeneration = epoch, .childKind = EdgeChildKind::User, .childUserId = userId,
-        .blob = std::move(blob)
-    };
-}
-
-TreeEdge nodeGrantEdge(std::uint32_t epoch, std::uint32_t root, std::uint32_t generation, std::string blob) {
-    return TreeEdge{
-        .isGrantEdge = true, .parentGeneration = epoch, .childKind = EdgeChildKind::Node, .childIndex = root,
-        .childGeneration = generation, .blob = std::move(blob)
-    };
-}
-
-} // namespace
 
 std::vector<std::uint32_t> TreeKeys::resolution(const TreeGroupState& state, std::uint32_t nodeIndex) {
     std::vector<std::uint32_t> resolved;
@@ -176,7 +132,7 @@ ClimbResult TreeKeys::climbToGrantKey(
     auto stillAbove = path.begin();
     while (currentNode != rootIndex) {
         const std::vector<std::uint32_t> above(stillAbove, path.end());
-        const TreeNodeState* currentState = TreeMath::isLeaf(currentNode) ? nullptr : findRecord(state, currentNode);
+        const TreeNodeState* currentState = TreeMath::isLeaf(currentNode) ? nullptr : state.record(currentNode);
         const TreeEdge* edge = TreeMath::isLeaf(currentNode) ?
             findClimbingEdge(
                 state,
@@ -202,7 +158,7 @@ ClimbResult TreeKeys::climbToGrantKey(
             result.tamperedNode = edge->parentIndex; // the parent's setter wrote its edges, garbled ones included
             return result;
         }
-        const TreeNodeState* parentState = findRecord(state, edge->parentIndex);
+        const TreeNodeState* parentState = state.record(edge->parentIndex);
         if (parentState->publicKey.value() != recovered.value().getPublicKey()) {
             result.failure = ClimbFailure::Tampered;
             result.tamperedNode = edge->parentIndex;
@@ -387,8 +343,8 @@ CommitShape TreeKeys::shapeSelfUpdate(const TreeGroupState& state, const std::st
     if (!seat.has_value()) {
         throw std::invalid_argument("member " + memberId + " holds no leaf in this tree");
     }
-    // A one-leaf tree has no node to refresh, but its grant edge is re-wrapped to the member. The deferred
-    // self-update never selects such a tree.
+    // A one-leaf tree has no node to refresh, but its grant edge is re-wrapped to the member: how a sole member
+    // renews its leaf after an identity key change. The deferred self-update never selects such a tree.
     CommitShape shape;
     shape.numLeaves = state.numLeaves;
     shape.leafAssignment = state.leafAssignment;
@@ -461,7 +417,7 @@ CommitPlan TreeKeys::commit(
         RefreshedNode refreshed;
         refreshed.nodeIndex = node;
         refreshed.key = privmx::crypto::PrivateKey::generateRandom();
-        TreeNodeState* record = findRecord(post, node);
+        TreeNodeState* record = post.record(node);
         if (record == nullptr) {
             post.nodes.push_back(TreeNodeState{node, 0, refreshed.key.getPublicKey(), plan.seq});
         } else {
@@ -493,7 +449,7 @@ CommitPlan TreeKeys::commit(
                     edge.childUserId = userId;
                     edge.blob = wrapKey(refreshed.key, memberPub.value(), signer);
                 } else {
-                    const TreeNodeState* target = findRecord(post, resolved);
+                    const TreeNodeState* target = post.record(resolved);
                     edge.childKind = EdgeChildKind::Node;
                     edge.childIndex = resolved;
                     edge.childGeneration = target->generation;
@@ -514,11 +470,13 @@ CommitPlan TreeKeys::commit(
         if (!memberPub.has_value()) {
             throw std::invalid_argument("the grant edge needs the public key of member " + soleMember);
         }
-        plan.edges.push_back(userGrantEdge(epoch, soleMember, wrapKey(grantKey, memberPub.value(), signer)));
+        plan.edges.push_back(TreeEdge::grantToUser(epoch, soleMember, wrapKey(grantKey, memberPub.value(), signer)));
     } else {
         const RefreshedNode& root = plan.refreshed.back();
         plan.edges.push_back(
-            nodeGrantEdge(epoch, root.nodeIndex, root.generation, wrapKey(grantKey, root.key.getPublicKey(), signer))
+            TreeEdge::grantToNode(
+                epoch, root.nodeIndex, root.generation, wrapKey(grantKey, root.key.getPublicKey(), signer)
+            )
         );
     }
     // What the statement signs: the post state, every record of it — which is why planning reads them all.
@@ -600,15 +558,15 @@ CommitPlan TreeKeys::planRotation(
         // The one seat is the rotator's, so the edge goes to the rotator's own key, which `signer` is: nothing is
         // fetched from the directory.
         plan.edges.push_back(
-            userGrantEdge(plan.epoch, rotatorId, wrapKey(plan.grantKey, signer.getPublicKey(), signer))
+            TreeEdge::grantToUser(plan.epoch, rotatorId, wrapKey(plan.grantKey, signer.getPublicKey(), signer))
         );
     } else {
-        const TreeNodeState* record = findRecord(state, root);
+        const TreeNodeState* record = state.record(root);
         if (record == nullptr || !record->publicKey.has_value()) {
             throw std::invalid_argument("the root holds no key to wrap the new grant key to");
         }
         const std::string blob = wrapKey(plan.grantKey, record->publicKey->parsed(), signer);
-        plan.edges.push_back(nodeGrantEdge(plan.epoch, root, record->generation, blob));
+        plan.edges.push_back(TreeEdge::grantToNode(plan.epoch, root, record->generation, blob));
     }
     plan.treeHash = TreeCommits::treeHash(state, &plan.subtreeHashes);
     return plan;

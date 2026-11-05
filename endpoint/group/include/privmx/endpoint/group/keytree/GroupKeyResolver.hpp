@@ -53,6 +53,8 @@ struct ResolveResult {
     DescentFailure descent = DescentFailure::None;
     // Publisher of an offending rung or edge, when tampering was detected.
     std::optional<std::string> blame;
+    // Spans the descent found broken (`DescentResult::brokenSpans`), on success and on failure alike.
+    std::vector<RungSpan> brokenSpans;
     // Where a failed descent stopped (`DescentResult::reachedEpoch`): the epoch a way round has to leave from.
     std::uint32_t reachedEpoch = 0;
 };
@@ -74,6 +76,24 @@ public:
     );
 
     static std::optional<std::string> ownUserId(const server::GroupInfo& group);
+
+    // An epoch from the bridge, narrowed only when it fits: a wrapped value would name some other, real epoch.
+    // Throws GroupDataIntegrityException. A floor (`eraFloor`, `archivePrunedBelow`) of 0 or below means none and is
+    // clamped to 1, as `ladderFloor` does.
+    static std::uint32_t epochOf(std::int64_t value, bool floor = false);
+
+    // The floor nothing below may be reached or repaired: the higher of the era floor and the prune watermark. Never
+    // above `currentEpoch`, the verified epoch: a rotation would then build no rung at all, not even the unit rung,
+    // and cut every earlier epoch off.
+    static std::uint32_t ladderFloor(
+        std::int64_t eraFloor,
+        const std::optional<std::int64_t>& prunedBelow,
+        std::int64_t currentEpoch
+    );
+
+    // The newest epoch an archive answer may speak of: the verified group's, or a later one the archive was read at
+    // (a rotation since the group was read). A floor above both is a lie; one above the group's only is a race.
+    static std::int64_t newestEpoch(const server::GroupInfo& group, const server::GroupGetKeyArchiveResult& archive);
 
     // The lowest node of the caller's keyed path it should self-update over, if any: one blank in the served state
     // (left so by a removal), or set by somebody not seated under it (the creator or an adder), who keeps that key.
@@ -127,6 +147,14 @@ public:
     );
 
 private:
+    // The statements served with the group: the ones its filled nodes cite, and the latest.
+    static std::vector<server::GroupTreeCommit> statements(const server::GroupInfo& group);
+
+    // A served rung, or nullopt for one that does not point downwards. The bridge drops those too, but taking its
+    // word for it would trust the one party the threat model assumes may be hostile — an upward rung hands a
+    // removed member a later key.
+    static std::optional<ArchiveRung> convertRung(const server::GroupArchiveRung& rung);
+
     ResolveResult resolveWith(
         const server::GroupInfo& group,
         std::int64_t epoch,

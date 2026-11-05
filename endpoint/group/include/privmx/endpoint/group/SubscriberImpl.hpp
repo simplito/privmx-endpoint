@@ -2,8 +2,8 @@
 #define _PRIVMXLIB_ENDPOINT_GROUP_SUBSCRIBERIMPL_HPP_
 
 #include "privmx/endpoint/group/Types.hpp"
-#include <privmx/endpoint/core/Subscriber.hpp>
 #include <optional>
+#include <privmx/endpoint/core/Subscriber.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -30,6 +30,9 @@ public:
 private:
     virtual std::vector<std::string> transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
     virtual void assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
+
+    // What every payload on a channel is sealed behind, so one channel's envelope cannot be replayed on another.
+    static std::string channelPrefix(const std::string& channelName);
 
     static std::vector<std::string> getChannelPath(EventType eventType);
     static std::vector<std::string> getCustomChannelPath(const std::string& channelName);

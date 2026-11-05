@@ -609,8 +609,8 @@ TEST_F(ResolverCurrentEpoch, SECURITY_ALeafThatDoesNotOpenNamesTheKeyChangeRemed
         GroupKeyResolver resolver(store);
         const ResolveResult result = resolver.resolve(fixture.group, 0, changed, fixture.archive);
         ASSERT_EQ(result.climb, ClimbFailure::LeafDidNotOpen);
-        const std::string message = GroupApiImplTestAccess::describeResolveFailure(result);
-        EXPECT_NE(message.find("changed your identity key"), std::string::npos) << message;
+        const std::string message = GroupKeys::describeResolveFailure(result);
+        EXPECT_NE(message.find("renewLeaf"), std::string::npos) << message;
         EXPECT_NE(message.find("wrapped by creator"), std::string::npos) << message;
     }
     {
@@ -620,8 +620,8 @@ TEST_F(ResolverCurrentEpoch, SECURITY_ALeafThatDoesNotOpenNamesTheKeyChangeRemed
         GroupKeyResolver resolver(store);
         const ResolveResult result = resolver.resolve(fixture.group, 0, changed, fixture.archive);
         ASSERT_EQ(result.climb, ClimbFailure::LeafDidNotOpen);
-        const std::string message = GroupApiImplTestAccess::describeResolveFailure(result);
-        EXPECT_NE(message.find("changed your identity key"), std::string::npos) << message;
+        const std::string message = GroupKeys::describeResolveFailure(result);
+        EXPECT_NE(message.find("renewLeaf"), std::string::npos) << message;
         EXPECT_NE(message.find("wrapped by latest"), std::string::npos) << "a one-leaf grant edge is the latest's";
     }
 }
@@ -729,7 +729,7 @@ TEST_F(ResolverOldEpoch, ReportsPruningDistinctlyFromAnEraBoundary) {
 
 TEST_F(ResolverOldEpoch, SECURITY_AFloorPast32BitsIsRefusedNotWrapped) {
     // Narrowed unchecked, 2^32 + 8 would read as era floor 8 and 2^32 - 1 as something else again; 0 and below
-    // mean no floor, as for `ladderFloorOf`, rather than an invalid_argument out of the ladder.
+    // mean no floor, as for `GroupKeyResolver::ladderFloor`, rather than an invalid_argument out of the ladder.
     Fixture fixture = buildFixture(4);
     advanceEpochs(fixture, 12);
     setOwnLeafPosition(fixture.group, 1);

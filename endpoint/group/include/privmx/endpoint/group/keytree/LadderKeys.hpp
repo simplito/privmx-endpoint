@@ -92,7 +92,17 @@ public:
         std::uint32_t maxWalk = 256
     );
 
-    // ── Checking ────────────────────────────────────────────────────────────
+    // ── Repairing ───────────────────────────────────────────────────────────
+
+    // Canonical spans at `at` (LadderMath::rungSpansFor(at, floor)) whose target key `cache` holds and that no rung in
+    // `served` opens, with the cached key of `at`, to that cached target key. Empty when the cache lacks `sk_at`. Only
+    // decides whether to look closer: the cache is not the chain, so nothing may be sealed on this answer alone.
+    static std::vector<RungSpan> unopenedSpans(
+        std::uint32_t at,
+        const std::vector<ArchiveRung>& served,
+        const TreeKeyCache& cache,
+        std::uint32_t floor
+    );
 
     // The commit self-check: the first of `rungs` that does not open with `atKey`, carry its own span label and
     // recover the key `registry` (the chain, never the cache) names for its target; nullopt when every rung does.
@@ -123,6 +133,10 @@ public:
     );
 
 private:
+    // The sealed label a rung is wrapped under: `"pmx-rung\0" || u32(at) || u32(target)`, so a rung cannot open
+    // under any span but its own.
+    static std::string rungLabel(const RungSpan& span);
+
     // Invariant B: a recovered key really is the epoch's grant key.
     static bool verifyAgainstRegistry(
         const privmx::crypto::PrivateKey& recovered,

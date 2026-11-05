@@ -18,7 +18,10 @@ limitations under the License.
 #include <optional>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
+
+#include <Poco/Dynamic/Var.h>
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
@@ -56,6 +59,30 @@ struct TreeEdge {
 
     // ECIES ciphertext, base64. Opaque to the server.
     std::string blob;
+
+    // The grant edge at `epoch` to the sole member of a one-leaf tree. Field by field rather than designated
+    // initializers: the fields these two leave at their defaults would each warn, in every includer.
+    static TreeEdge grantToUser(std::uint32_t epoch, const std::string& userId, std::string blob) {
+        TreeEdge edge;
+        edge.isGrantEdge = true;
+        edge.parentGeneration = epoch;
+        edge.childKind = EdgeChildKind::User;
+        edge.childUserId = userId;
+        edge.blob = std::move(blob);
+        return edge;
+    }
+
+    // The grant edge at `epoch` to the root at `generation`.
+    static TreeEdge grantToNode(std::uint32_t epoch, std::uint32_t root, std::uint32_t generation, std::string blob) {
+        TreeEdge edge;
+        edge.isGrantEdge = true;
+        edge.parentGeneration = epoch;
+        edge.childKind = EdgeChildKind::Node;
+        edge.childIndex = root;
+        edge.childGeneration = generation;
+        edge.blob = std::move(blob);
+        return edge;
+    }
 };
 
 // A node's public key kept as served, turned into a point only where one is needed: parsing runs the subgroup
@@ -121,6 +148,18 @@ struct TreeGroupState {
     // `seq` -> committer of the statements the filled nodes cite (`setBy`): who minted each key, which a removal
     // needs to blank everything the leaver could know.
     std::map<std::uint64_t, std::string> setters;
+
+    // The record of `nodeIndex`, or null when the state holds none.
+    const TreeNodeState* record(std::uint32_t nodeIndex) const {
+        const auto it = std::find_if(nodes.begin(), nodes.end(), [&](const TreeNodeState& node) {
+            return node.nodeIndex == nodeIndex;
+        });
+        return it == nodes.end() ? nullptr : &*it;
+    }
+
+    TreeNodeState* record(std::uint32_t nodeIndex) {
+        return const_cast<TreeNodeState*>(std::as_const(*this).record(nodeIndex));
+    }
 };
 
 enum class ClimbFailure {
@@ -193,26 +232,67 @@ struct TreeMember {
     privmx::crypto::PublicKey publicKey;
 };
 
-// `generations[node]` raised to `generation` if that is higher; whether it rose.
-inline bool raiseGeneration(
-    std::map<std::uint32_t, std::uint32_t>& generations,
-    std::uint32_t node,
-    std::uint32_t generation
-) {
-    std::uint32_t& value = generations[node];
-    const bool rose = generation > value;
-    value = std::max(value, generation);
-    return rose;
-}
+enum class CommitOp : std::uint8_t {
+    Create = 1,
+    Add = 2,
+    Remove = 3,
+    SelfUpdate = 4,
+    Rotate = 5, // the bridge-side `generateNewGroupKey`
+    Policy = 6, // a policy change: only `policyHash` moves
+};
 
-// The record of `nodeIndex`, or null when it has none.
-template<typename State>
-auto* findRecord(State& state, std::uint32_t nodeIndex) {
-    const auto it = std::find_if(state.nodes.begin(), state.nodes.end(), [&](const TreeNodeState& node) {
-        return node.nodeIndex == nodeIndex;
-    });
-    return it == state.nodes.end() ? nullptr : &*it;
-}
+struct StatementNode {
+    std::uint32_t nodeIndex = 0;
+    std::uint32_t generation = 0;
+    std::string publicKey; // base58 DER
+    // `CH` of the node in the post state: pins the subtree the key was minted over, so a served node whose subtree
+    // has changed since (a child re-keyed under a rolled-back parent) no longer matches its voucher. Raw bytes.
+    std::string subtreeHash;
+};
+
+// What the tree, the roster and the grant key look like after one commit, signed by the committer. The bridge
+// stores the statements and serves them; it cannot forge one, so a state it serves is only as good as the
+// statement whose `treeHash` it matches. Hashes and the signature are raw bytes here, hex/base64 on the wire.
+struct CommitStatement {
+    std::uint64_t seq = 0;
+    // `digest` of the statement at `seq - 1`, empty at seq 1: chains every statement to the history it extends, so
+    // nothing below a verified statement can be swapped or forked. Raw bytes.
+    std::string prevDigest;
+    CommitOp op = CommitOp::Create;
+    // The group's id — except at seq 1, where the group has none yet and this is the creator's resourceId.
+    std::string groupId;
+    std::uint32_t treeVersion = 0;
+    std::uint64_t date = 0;
+    std::uint64_t keyVersion = 0;
+    std::string groupPubKey;
+    std::uint64_t rosterVersion = 0;
+    std::string rosterHash;
+    std::string treeHash;
+    // `TreeCommits::rules(policy, creator).hash` of the group's policy after the commit: the rules that govern commits
+    // and the creator the `owner` atom names, signed into every statement. Raw bytes.
+    std::string policyHash;
+    std::string committer;
+    // The committer's Context public key (base58 DER) at signing time; the signature verifies against it, and the
+    // UserVerifier vouches for the pair.
+    std::string committerPubKey;
+    std::uint32_t committerSeat = 0;
+    // The refreshed nodes, bottom-up, as the transition submitted them.
+    std::vector<StatementNode> path;
+    std::vector<std::string> addedUsers;
+    std::vector<std::string> addedManagers;
+    std::vector<std::string> removed;
+    std::string signature;
+    // Wire only, on `Create` and `Policy`: the group's whole policy after the commit. Not signed itself; it counts only
+    // once it hashes to `policyHash`, and only its four commit rules do.
+    std::optional<Poco::Dynamic::Var> policy;
+};
+
+// The part of a group's policy its statements sign: who may commit what, and who the owner is. Absent, "inherit"
+// and "default" resolve to the frozen v3 defaults, never to the context policy, which only the bridge holds.
+struct GroupRules {
+    std::string creator, update, rotateKeys, updatePolicy, ownerCanBeRemovedFromManagers;
+    std::string hash; // policyHash, raw
+};
 
 } // namespace keytree
 } // namespace group

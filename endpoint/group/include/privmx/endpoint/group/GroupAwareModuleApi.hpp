@@ -153,6 +153,7 @@ protected:
 
     // `knownGroupKeys` grants and revokes nothing — the grantee list is the container's own, and these only save
     // a round trip. Contrast `fillContainerUpdateModel`, whose `groups` *is* the new grantee list.
+    // `completeModel` adds what a module derives from the new key itself (an Inbox: its entries public key).
     template<typename TRotateModel, typename TContainer>
     void rotateContainerKeys(
         const std::string& id,
@@ -162,7 +163,8 @@ protected:
         int64_t version,
         bool force,
         const std::vector<core::GroupGrantWithKey>& knownGroupKeys,
-        const std::function<void(const TRotateModel&)>& sendRotateRequest
+        const std::function<void(const TRotateModel&)>& sendRotateRequest,
+        const std::function<void(TRotateModel&, const core::ContainerUpdateContext&)>& completeModel = nullptr
     ) {
         static_assert(
             std::is_base_of_v<core::server::ContainerRotateKeysModelBase, TRotateModel>,
@@ -184,6 +186,9 @@ protected:
         model.force = force;
 
         model.groupKeys = buildRekeyGroupKeyEntries(container, resourceId, ctx, knownGroupKeys);
+        if (completeModel) {
+            completeModel(model, ctx);
+        }
 
         sendRotateRequest(model);
         invalidateModuleKeysInCache(id);
@@ -203,6 +208,7 @@ protected:
         }
         const bool forwardSecrecyEnforced = isForwardSecrecyEnforced(container.policy);
         try {
+            // Not verified here: `rotateContainerKeys` wraps through `prepareContainerUpdate`, which asks the verifier.
             auto roster = resolveRosterPubKeys(container.contextId, container.users, container.managers);
             rotateContainerKeys<TRotateModel>(
                 moduleId, container, roster.users, roster.managers, container.version, false, {}, sendRotateRequest

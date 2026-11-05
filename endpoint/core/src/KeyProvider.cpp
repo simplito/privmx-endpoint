@@ -227,14 +227,12 @@ std::vector<server::KeyEntrySet> KeyProvider::prepareMissingKeysForNewUsers(
     std::vector<server::KeyEntrySet> result;
     for (auto t : missingKeys) {
         auto key = t.second;
-        DataIntegrityObject missingKeyDIO = dio;
-        if (key.dataStructureVersion == EncryptionKeyDataSchema::Version::VERSION_1) {
-            missingKeyDIO.randomId = EndpointUtils::generateDIORandomId();
-        } else {
-            missingKeyDIO.randomId = t.second.dio.randomId;
-        }
-        if (key.statusCode != 0)
+        // A V1 entry is unsigned, so the server may have chosen its key: re-wrapping it as V2 would sign that choice
+        // for every recipient. Its existing holders keep reading through their own V1 entries.
+        if (key.statusCode != 0 || key.dataStructureVersion != EncryptionKeyDataSchema::Version::VERSION_2)
             continue;
+        DataIntegrityObject missingKeyDIO = dio;
+        missingKeyDIO.randomId = t.second.dio.randomId;
         for (auto user : users) {
             result.push_back(createKeyEntrySet(user, key, missingKeyDIO, location, containerSecret));
         }
@@ -313,7 +311,12 @@ DecryptedEncKeyV2 KeyProvider::decryptKeyEntry(
         }
     } else if (keyEntry.data.isString()) {
         decryptedEncKey.id = keyEntry.keyId;
-        decryptedEncKey.key = _encKeyEncryptorV1.decrypt(keyEntry.data, privKey);
+        try {
+            decryptedEncKey.key = _encKeyEncryptorV1.decrypt(keyEntry.data, privKey);
+        } catch (...) {
+            // One malformed entry must not fail the whole request, as a malformed V2 one does not.
+            decryptedEncKey.statusCode = UnknownEncryptionKeyVersionException().getCode();
+        }
         decryptedEncKey.dataStructureVersion = EncryptionKeyDataSchema::Version::VERSION_1;
         decryptedEncKey.secretHash = "";
         return decryptedEncKey;
@@ -351,6 +354,10 @@ DecryptedEncKeyV2 KeyProvider::decryptGroupKeyCandidate(
         return failed;
     }
     DecryptedEncKeyV2 decrypted = decryptKeyEntry(candidate.keyEntry, groupPrivKey.value());
+    // Grants are only ever written as V2 (`buildGroupKeyEntries`): an unsigned entry here is the server's own key.
+    if (decrypted.statusCode == 0 && decrypted.dataStructureVersion != EncryptionKeyDataSchema::Version::VERSION_2) {
+        decrypted.statusCode = UnknownEncryptionKeyVersionException().getCode();
+    }
     verifyKeyLocation(decrypted, location);
     return decrypted;
 }

@@ -1,8 +1,8 @@
 #include "privmx/endpoint/group/SubscriberImpl.hpp"
 #include "privmx/endpoint/group/GroupException.hpp"
+#include <privmx/endpoint/core/BigEndian.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/group/Types.hpp>
-#include <privmx/endpoint/core/BigEndian.hpp>
 #include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 
 using namespace privmx::endpoint;
@@ -75,13 +75,11 @@ std::string SubscriberImpl::channelNameFromQuery(const std::string& subscription
     return path.at(CHANNEL_NAME_IN_QUERY_PATH);
 }
 
-namespace {
-std::string channelPrefix(const std::string& channelName) {
+std::string SubscriberImpl::channelPrefix(const std::string& channelName) {
     std::string prefix = keytree::TreeCommits::tag("pmx-event");
     core::bigendian::putLp(prefix, channelName);
     return prefix;
 }
-} // namespace
 
 std::string SubscriberImpl::sealOnChannel(const std::string& channelName, const std::string& data) {
     return channelPrefix(channelName) + data;

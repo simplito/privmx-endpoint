@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <set>
+#include <stdexcept>
 
 #include <Poco/JSON/Object.h>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
+#include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/encryptors/DataSchemaMapperUtils.hpp>
@@ -19,26 +21,14 @@
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
-namespace {
-
-bool onRoster(const std::vector<std::string>& users, const std::vector<std::string>& managers, const std::string& userId) {
-    return std::find(users.begin(), users.end(), userId) != users.end() ||
-        std::find(managers.begin(), managers.end(), userId) != managers.end();
-}
-
-// A plane's key opened, the plane and its key written by somebody on the roster, and the plane's author holding
-// `update` under the signed rules. Anybody in the context can wrap a key to the group's public grant key and
-// tag a plane under it; the roster says who belongs to the group and its signed policy who writes its metadata. The
-// key's wrapper needs no role: a rotator with `rotateKeys` alone legitimately authors the epoch's key entry. With
-// `prior` (carry-forward only), an entry identical to the one read before the commit is judged by that read.
-void assertWrittenByMember(
+void GroupDataSchemaMapper::assertWrittenByMember(
     const server::GroupInfo& groupInfo,
     const server::GroupMetaEntry& entry,
     const server::GroupMetaEntry* readBefore,
     const core::DecryptedEncKeyV2& key,
     const std::optional<PriorRole>& prior
 ) {
-    const bool asRead = prior.has_value() && readBefore != nullptr && GroupDataSchemaMapper::sameEntry(entry, *readBefore);
+    const bool asRead = prior.has_value() && readBefore != nullptr && sameEntry(entry, *readBefore);
     keytree::GroupRules rules;
     try {
         rules = asRead ? prior->rules : keytree::TreeCommits::rules(groupInfo.policy, groupInfo.creator);
@@ -48,13 +38,13 @@ void assertWrittenByMember(
     const std::string& author = entry.author;
     const bool manager = std::find(managers.begin(), managers.end(), author) != managers.end();
     const bool member = manager || std::find(users.begin(), users.end(), author) != users.end();
-    if (key.statusCode != 0 || !member || !onRoster(users, managers, key.dio.creatorUserId) ||
+    if (key.statusCode != 0 ||
+        !member ||
+        !keytree::TreeCommits::onRoster(users, managers, key.dio.creatorUserId) ||
         !keytree::TreeCommits::allows(rules.update, true, manager, author == rules.creator)) {
         throw GroupMembershipMismatchException();
     }
 }
-
-} // namespace
 
 GroupDataSchemaMapper::GroupDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
@@ -123,7 +113,7 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
     }
     // The head key is wrapped by whoever opened the epoch, a member until a removal opens the next one. Anybody
     // else's entry (a removed member's, the UserVerifier vouching only that it is theirs) is a key they chose.
-    if (!onRoster(groupInfo.users, groupInfo.managers, rosterKey.dio.creatorUserId)) {
+    if (!keytree::TreeCommits::onRoster(groupInfo.users, groupInfo.managers, rosterKey.dio.creatorUserId)) {
         throw GroupMembershipMismatchException();
     }
     auto encData = dynamic::EncryptedGroupRosterV5::fromJSON(groupInfo.data.back().data);
@@ -167,7 +157,9 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
 }
 
 bool GroupDataSchemaMapper::sameEntry(const server::GroupMetaEntry& now, const server::GroupMetaEntry& then) {
-    return now.version == then.version && now.author == then.author && now.keyId == then.keyId &&
+    return now.version == then.version &&
+        now.author == then.author &&
+        now.keyId == then.keyId &&
         privmx::utils::Utils::stringifyVar(now.data) == privmx::utils::Utils::stringifyVar(then.data);
 }
 
@@ -258,6 +250,42 @@ void GroupDataSchemaMapper::assertPrivateMetaIsAttested(
     }
 }
 
+dynamic::MembershipBlock GroupDataSchemaMapper::buildMembershipBlock(
+    const core::EncKey& key,
+    const std::string& groupPubKey,
+    int64_t keyVersion,
+    int64_t rosterVersion,
+    const std::vector<core::UserWithPubKey>& users,
+    const std::vector<core::UserWithPubKey>& managers
+) {
+    return dynamic::MembershipBlock{
+        .rosterTag = rosterTag(
+            key.key, keyVersion, rosterVersion, core::EndpointUtils::usersWithPubKeyToIds(users),
+            core::EndpointUtils::usersWithPubKeyToIds(managers)
+        ),
+        .groupPubKey = groupPubKey,
+        .keyId = key.id,
+        .keyVersion = keyVersion,
+        .rosterVersion = rosterVersion
+    };
+}
+
+keytree::GroupRules GroupDataSchemaMapper::rulesOf(const server::GroupInfo& group) {
+    try {
+        return keytree::TreeCommits::rules(group.policy, group.creator);
+    } catch (const std::invalid_argument&) { throw GroupDataIntegrityException("the group's policy does not parse"); }
+}
+
+PriorRole GroupDataSchemaMapper::priorOf(const server::GroupInfo& group) {
+    return PriorRole{
+        .rules = rulesOf(group),
+        .users = group.users,
+        .managers = group.managers,
+        .publicMeta = group.publicMeta,
+        .privateMeta = group.privateMeta
+    };
+}
+
 std::string GroupDataSchemaMapper::rosterTag(
     const std::string& key,
     int64_t keyVersion,
@@ -326,7 +354,8 @@ core::DataIntegrityObject GroupDataSchemaMapper::assertDataIntegrity(const serve
         dio = _groupEncryptor.getRosterDIOAndAssertIntegrity(encData);
     } catch (...) { throw GroupDataIntegrityException(); }
     // The served context and resourceId only count as what the id was derived from.
-    if (dio.contextId != groupInfo.contextId || dio.resourceId != groupInfo.resourceId.value_or("") ||
+    if (dio.contextId != groupInfo.contextId ||
+        dio.resourceId != groupInfo.resourceId.value_or("") ||
         keytree::TreeCommits::groupId(dio.contextId, dio.resourceId) != groupInfo.id) {
         throw GroupDataIntegrityException();
     }
@@ -341,7 +370,8 @@ void GroupDataSchemaMapper::assertNotBelowPins(const server::GroupInfo& groupInf
         return;
     }
     const VersionPin& pinned = it->second;
-    if (groupInfo.rosterVersion < pinned[0] || groupInfo.publicMetaVersion < pinned[1] ||
+    if (groupInfo.rosterVersion < pinned[0] ||
+        groupInfo.publicMetaVersion < pinned[1] ||
         groupInfo.privateMetaVersion < pinned[2]) {
         // A shorter answer than one already seen is a validly tagged *past* state — a rollback, not an error the
         // tag itself can catch, because that older tag was genuine when it was made.
@@ -352,10 +382,38 @@ void GroupDataSchemaMapper::assertNotBelowPins(const server::GroupInfo& groupInf
 void GroupDataSchemaMapper::storeVersionPins(const server::GroupInfo& groupInfo) {
     // Compare again and store under one lock: two concurrent verifications must not both pass against the same
     // stale pin, or the later one could accept a version older than the one already verified.
+    bool rose = false;
+    bool first = false;
+    {
+        std::lock_guard lock(_pinMutex);
+        assertNotBelowPins(groupInfo);
+        first = _versionPins.count(groupInfo.id) == 0;
+        VersionPin& pinned = _versionPins[groupInfo.id];
+        const VersionPin now{groupInfo.rosterVersion, groupInfo.publicMetaVersion, groupInfo.privateMetaVersion};
+        for (std::size_t i = 0; i < now.size(); ++i) {
+            rose = rose || now[i] > pinned[i];
+        }
+        pinned = now;
+    }
+    if (rose && _onPinsMoved) {
+        // A rise is a metadata or roster write, which is rare: saved at once, not after the idle interval.
+        _onPinsMoved(!first);
+    }
+}
+
+std::map<std::string, std::array<std::int64_t, 3>> GroupDataSchemaMapper::exportVersionPins() {
     std::lock_guard lock(_pinMutex);
-    assertNotBelowPins(groupInfo);
-    _versionPins[groupInfo.id] =
-        VersionPin{groupInfo.rosterVersion, groupInfo.publicMetaVersion, groupInfo.privateMetaVersion};
+    return _versionPins;
+}
+
+void GroupDataSchemaMapper::importVersionPins(const std::map<std::string, std::array<std::int64_t, 3>>& stored) {
+    std::lock_guard lock(_pinMutex);
+    for (const auto& [groupId, counters] : stored) {
+        VersionPin& pinned = _versionPins[groupId];
+        for (std::size_t i = 0; i < pinned.size(); ++i) {
+            pinned[i] = std::max(pinned[i], counters[i]);
+        }
+    }
 }
 
 std::pair<uint32_t, core::DataIntegrityObject> GroupDataSchemaMapper::validateDataIntegrity(
@@ -417,9 +475,12 @@ GroupSummary GroupDataSchemaMapper::toLibGroupSummary(const server::GroupSummary
 }
 
 void GroupDataSchemaMapper::addReadKeys(
-    core::KeyDecryptionAndVerificationRequest& request, const server::GroupInfo& g, const core::EncKeyLocation& location
+    core::KeyDecryptionAndVerificationRequest& request,
+    const server::GroupInfo& g,
+    const core::EncKeyLocation& location
 ) {
-    for (const std::string& keyId : std::set<std::string>{g.data.back().keyId, g.publicMeta.keyId, g.privateMeta.keyId}) {
+    for (const std::string& keyId :
+         std::set<std::string>{g.data.back().keyId, g.publicMeta.keyId, g.privateMeta.keyId}) {
         request.addGroupKeys(g.groupKeys, location, keyId);
     }
 }

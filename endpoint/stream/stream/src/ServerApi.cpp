@@ -11,6 +11,7 @@ limitations under the License.
 #include "privmx/endpoint/stream/ServerApi.hpp"
 #include "privmx/endpoint/stream/StreamException.hpp"
 #include "privmx/utils/Logger.hpp"
+#include <privmx/endpoint/core/EndpointUtils.hpp>
 
 using namespace privmx::endpoint::stream;
 using namespace privmx::endpoint;
@@ -34,7 +35,9 @@ server::StreamRoomListResult ServerApi::streamRoomList(server::StreamRoomListMod
 }
 
 server::StreamRoomGetResult ServerApi::streamRoomGet(server::StreamRoomGetModel model) {
-    return request<server::StreamRoomGetResult>("streamRoomGet", model.toJSON());
+    auto result = request<server::StreamRoomGetResult>("streamRoomGet", model.toJSON());
+    core::EndpointUtils::assertServedId(model.id, result.streamRoom.id);
+    return result;
 }
 
 void ServerApi::streamRoomDelete(server::StreamRoomDeleteModel model) {

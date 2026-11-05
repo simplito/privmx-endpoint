@@ -158,6 +158,13 @@ target_link_libraries(test_unit_GroupKeyResolverTest privmx privmxendpointcore p
 add_executable(test_unit_GroupApiLyingBridgeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupApiLyingBridgeTest.cpp)
 target_link_libraries(test_unit_GroupApiLyingBridgeTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
+# Local state sealing, the compare-and-swap update and the Var store (core alone)
+add_executable(test_unit_LocalSealTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/LocalSealTest.cpp)
+target_link_libraries(test_unit_LocalSealTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
+# The pin blob codec and the merge of two instances' pins
+add_executable(test_unit_PinBlobTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/PinBlobTest.cpp)
+target_link_libraries(test_unit_PinBlobTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+
 # Roster attestation and the monotone version pin (builds signed server::GroupInfo by hand via GroupDataSchemaMapper::encrypt, no live bridge)
 add_executable(test_unit_GroupRosterTagTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupRosterTagTest.cpp)
 target_link_libraries(test_unit_GroupRosterTagTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
@@ -179,6 +186,12 @@ target_link_libraries(test_unit_GroupEnvelopeKeyFilterTest privmx privmxendpoint
 # Commit plans to the wire shapes the bridge receives (real EC keys; each state is climbed to prove members who should still have access do)
 add_executable(test_unit_TreeWireTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeWireTest.cpp)
 target_link_libraries(test_unit_TreeWireTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+# Context listings and context custom events bound to the context asked for; event keys only to vouched keys
+add_executable(test_unit_ContextBindingTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/ContextBindingTest.cpp)
+target_link_libraries(test_unit_ContextBindingTest privmx privmxendpointcore privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointkvdb privmxendpointinbox privmxendpointstream privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+# Stopping a live publication runs every step whatever the others do (fake gateway and WebRTC)
+add_executable(test_unit_StreamPublicationStopTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/StreamPublicationStopTest.cpp)
+target_link_libraries(test_unit_StreamPublicationStopTest privmx privmxendpointcore privmxendpointstream privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 add_executable(test_unit_GroupCustomChannelTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupCustomChannelTest.cpp)
 target_link_libraries(test_unit_GroupCustomChannelTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 

@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREEKEYS_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREEKEYS_HPP_
 
+#include <algorithm>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -149,6 +150,36 @@ public:
     );
 
 private:
+    // `resolution` into `out`: the node itself when it is occupied or keyed, else its children resolved in turn.
+    static void resolveInto(const TreeGroupState& state, std::uint32_t nodeIndex, std::vector<std::uint32_t>& out);
+
+    // `node` if keyed, and every keyed ancestor of it up to the root: what a holder of `node`'s key can climb to.
+    static void climbInto(std::uint32_t node, std::uint32_t numLeaves, std::set<std::uint32_t>& out);
+
+    // The edge that carries an ancestor's key down to the node we stand on, as the current state describes it: from a
+    // filled node still on our path above us, at that node's current generation. A leftover edge of an older state
+    // fails one of those and is passed over rather than followed into a key that no longer verifies.
+    template<typename AddressedToUs>
+    static const TreeEdge* findClimbingEdge(
+        const TreeGroupState& state,
+        const AddressedToUs& addressedToUs,
+        const std::vector<std::uint32_t>& above
+    ) {
+        for (const TreeEdge& edge : state.edges) {
+            if (edge.isGrantEdge || !addressedToUs(edge)) {
+                continue;
+            }
+            if (std::find(above.begin(), above.end(), edge.parentIndex) == above.end()) {
+                continue;
+            }
+            const TreeNodeState* parent = state.record(edge.parentIndex);
+            if (parent != nullptr && parent->publicKey.has_value() && parent->generation == edge.parentGeneration) {
+                return &edge;
+            }
+        }
+        return nullptr;
+    }
+
     // The single planner behind every operation (§6): blank `shape.blanked`, mint fresh keys for
     // `shape.filledOffPath` and the committer's keyed path, and wrap each of them to the resolution of its children
     // on the resulting state.

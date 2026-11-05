@@ -230,12 +230,10 @@ core::PagingList<Store> StoreApiImpl::listStores(
     }
     core::ListQueryMapper::map(storeListModel, query);
     auto storesList = _serverApi->storeList(storeListModel);
-    for (auto store : storesList.stores) {
-        setNewModuleKeysInCache(store.id, containerToModuleKeys(store), store.version);
-    }
     auto stores = _storeDataSchemaMapper->validateDecryptAndConvertStores(
-        storesList.stores, _keyProvider, _groupPrivKeyResolver
+        storesList.stores, _keyProvider, _groupPrivKeyResolver, contextId
     );
+    cacheKeysOfValid(storesList.stores, stores);
     return core::PagingList<Store>({.totalAvailable = storesList.count, .readItems = stores});
 }
 
@@ -329,6 +327,10 @@ int64_t StoreApiImpl::openFile(const std::string& fileId) {
             file_raw = _serverApi->storeFileGet(storeFileGetModel);
             encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
         }
+        encryptionParams.encKey = currentWriteKey(file_raw, encryptionParams.encKey);
+        if (file_raw.file.storeId.empty()) {
+            throw core::ContainerMismatchException("a file served in no store"); // `syncFile` checks the handle's store
+        }
         std::shared_ptr<FileReadWriteHandle> handle = _fileHandleManager.createFileReadWriteHandle(
             privmx::endpoint::store::FileInfo{
                 .contextId = file_raw.file.contextId,
@@ -416,29 +418,29 @@ void StoreApiImpl::syncFile(const int64_t handle) {
     std::shared_ptr<FileHandle> fileHandle = _fileHandleManager.getFileHandle(handle);
     server::StoreFileGetModel storeFileGetModel;
     storeFileGetModel.fileId = fileHandle->getFileId();
-    auto file_raw = _serverApi->storeFileGet(storeFileGetModel);
+    // The file the handle was opened on, in its store: never another store's key and metadata under its id. Decided
+    // by the handle's kind, never by its value: a read handle records no store (it only reads, and the file id is
+    // checked with every answer); every writing one does.
+    const auto read = [&] {
+        auto raw = _serverApi->storeFileGet(storeFileGetModel);
+        if (!fileHandle->isReadHandle()) {
+            core::EndpointUtils::assertServedId(fileHandle->getStoreId(), raw.file.storeId);
+        }
+        return raw;
+    };
+    auto file_raw = read();
     auto encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
 
     std::shared_ptr<FileReadWriteHandle> rw_handle = _fileHandleManager.tryGetFileReadWriteHandle(handle);
     if (rw_handle) {
-        // `encryptionParams.encKey` is the key `file.keyId` points at - right for decrypting what is already
-        // stored, but the handle also uses it to stamp later writes, and the server rejects a superseded keyId.
-        auto writeKey = encryptionParams.encKey;
-        // Equal keyIds mean `encKey` already *is* the current key - skip decrypting the same entry a second
-        // time. `syncFile` runs on every sqlite lock escalation, so the saved ECIES + verify is worth having.
-        if (file_raw.file.keyId != file_raw.store.keyId) {
-            auto storeKey = containerToModuleKeys(file_raw.store);
-            setNewModuleKeysInCache(file_raw.store.id, storeKey, file_raw.store.version);
-            try {
-                auto currentKey = getAndValidateModuleCurrentEncKey(storeKey);
-                if (currentKey.statusCode == 0) {
-                    writeKey = core::DecryptedEncKey(currentKey);
-                }
-            } catch (const core::Exception&) {
-                // A stale Store key throws out of `getAndValidateModuleCurrentEncKey`, and a sync is not the
-                // place to re-key. Keep the old key; `flushFile` re-keys and retries once the write is rejected.
-            }
+        // Re-keyed here as in `openFile`: kept, the stale key would stamp every later write, and a removed
+        // member holds it. Only when stale, so the sqlite lock escalations that call this pay nothing otherwise.
+        if (isRekeyNeeded(file_raw.store)) {
+            autoRotateStoreKeys(file_raw.store.id);
+            file_raw = read();
+            encryptionParams = getFileEncryptionParams(file_raw.file, file_raw.store);
         }
+        const auto writeKey = currentWriteKey(file_raw, encryptionParams.encKey);
         rw_handle->file->sync(encryptionParams.fileMeta, encryptionParams.fileDecryptionParams, writeKey);
         return;
     }
@@ -481,6 +483,24 @@ void StoreApiImpl::flushFile(const int64_t handle) {
         rw_handle->file->discardPending();
         e.rethrow();
     }
+}
+
+core::DecryptedEncKey StoreApiImpl::currentWriteKey(
+    const server::StoreFileGetResult& file_raw,
+    const core::DecryptedEncKey& fileKey
+) {
+    // A random-write handle writes the file's metadata, the chunk key with it, under this key: the Store's current
+    // one, never the file's own when a re-key has replaced it. Equal keyIds mean `fileKey` already *is* the current
+    // key - skip decrypting the same entry a second time (`syncFile` runs on every sqlite lock escalation). A Store
+    // still stale is refused either way.
+    if (file_raw.file.keyId == file_raw.store.keyId) {
+        assertRekeyNotNeeded(file_raw.store);
+        assertWriteKey(fileKey);
+        return fileKey;
+    }
+    auto storeKey = containerToModuleKeys(file_raw.store);
+    setNewModuleKeysInCache(file_raw.store.id, storeKey, file_raw.store.version);
+    return core::DecryptedEncKey(getAndValidateModuleCurrentEncKey(storeKey));
 }
 
 core::DecryptedEncKey StoreApiImpl::getCurrentFileEncKey(const std::string& fileId) {
@@ -753,15 +773,9 @@ void StoreApiImpl::updateFileMeta(
     if (statusCode != 0) {
         throw FileDataIntegrityException("statusCode=" + std::to_string(statusCode));
     }
-    // Still guarded: the server-struct key fetch, unlike the `ModuleKeys` one, does not assert, and the re-key
-    // above is not guaranteed to have happened — a caller who may not re-key never gets here.
-    assertRekeyNotNeeded(store);
-    auto key = getAndValidateModuleCurrentEncKey(store);
-    if (key.statusCode != 0) {
-        throw core::EncryptionKeyValidationException(
-            "Current encryption key statusCode: " + std::to_string(key.statusCode)
-        );
-    }
+    // The Store's current key, not the newest data entry's: a re-key leaves that one under the key it replaced.
+    // Still guarded, the re-key above not being guaranteed to have happened.
+    auto key = getAndValidateModuleCurrentEncKey(storeKey);
     auto fileInternalMeta = _fileMetaDataSchemaMapper.validateDecryptFileInternalMeta(
         file, storeKey, _keyProvider, _groupPrivKeyResolver
     );

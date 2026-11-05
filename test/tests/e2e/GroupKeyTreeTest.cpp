@@ -2,6 +2,7 @@
 #include <algorithm>
 #include "BaseGroupTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
+#include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
@@ -12,6 +13,7 @@
 #include <privmx/endpoint/group/GroupApiImpl.hpp>
 #include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
+#include <privmx/endpoint/group/keytree/LadderKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
@@ -172,6 +174,48 @@ protected:
 
     group::ServerApi raw() { return group::ServerApi(connection->getImpl()->getGateway()); }
 
+    // `(at, target)` carrying the session's own epoch keys, sealed by its user key: what a repair sends.
+    group::server::GroupArchiveRung sealedRung(const std::string& groupId, std::uint32_t at, std::uint32_t target) {
+        const auto impl = groupApi->getImpl();
+        const auto atKey = impl->resolveGroupPrivKey(groupId, at);
+        const auto targetKey = impl->resolveGroupPrivKey(groupId, target);
+        group::server::GroupArchiveRung rung;
+        rung.atKeyVersion = at;
+        rung.targetKeyVersion = target;
+        rung.data = group::keytree::LadderKeys::sealRung(
+            targetKey, {at, target}, atKey.getPublicKey(), connection->getImpl()->getUserPrivKey()
+        );
+        return rung;
+    }
+
+    // One a caller holding neither key can still send.
+    static group::server::GroupArchiveRung garbageRung(std::uint32_t at, std::uint32_t target) {
+        const auto random = privmx::crypto::PrivateKey::generateRandom();
+        group::server::GroupArchiveRung rung;
+        rung.atKeyVersion = at;
+        rung.targetKeyVersion = target;
+        rung.data = group::keytree::LadderKeys::sealRung(random, {at, target}, random.getPublicKey(), random);
+        return rung;
+    }
+
+    void repair(const std::string& groupId, const group::server::GroupArchiveRung& rung) {
+        raw().groupRepairRung(group::server::GroupRepairRungModel{.id = groupId, .rung = rung});
+    }
+
+    std::vector<group::server::GroupArchiveRung> rungsOfSpan(const std::string& groupId, std::int64_t at, std::int64_t target) {
+        group::server::GroupGetKeyArchiveModel model;
+        model.id = groupId;
+        model.fromKeyVersion = at;
+        model.toKeyVersion = at;
+        std::vector<group::server::GroupArchiveRung> span;
+        for (const auto& rung : raw().groupGetKeyArchive(model).rungs) {
+            if (rung.targetKeyVersion == target) {
+                span.push_back(rung);
+            }
+        }
+        return span;
+    }
+
     // The bridge's refusal of a raw call, as (code, data); nullopt when it was accepted.
     static std::optional<std::pair<unsigned int, std::string>> refusalOf(const std::function<void()>& call) {
         try {
@@ -182,6 +226,19 @@ protected:
         } catch (const core::Exception& e) {
             return std::make_pair(e.getCode() & 0xFFFF, e.getFull());
         }
+    }
+
+    // A context user with a fresh key, seated nowhere.
+    privmx::crypto::PrivateKey registerOutsider(const std::string& userId) {
+        const auto key = privmx::crypto::PrivateKey::generateRandom();
+        const std::string params = "{\"contextId\": \"" + contextId() + "\", \"userId\": \"" + userId +
+            "\", \"userPubKey\": \"" + key.getPublicKey().toBase58DER() + "\"}";
+        const std::string response = core::BackendRequester::backendRequest(
+            getPlatformUrl(), reader->getString("Api.apiKeyId"), reader->getString("Api.apiKeySecret"), 0,
+            "context/addUserToContext", params
+        );
+        EXPECT_EQ(response.find("\"error\""), std::string::npos) << response;
+        return key;
     }
 
     // user_1 creates {user_1, user_2, user_3} and moves it to `epoch` by removing user_3 (re-added in between).
@@ -200,6 +257,8 @@ protected:
 };
 
 static constexpr unsigned int ACCESS_DENIED = 0x0030;
+static constexpr unsigned int GROUP_ROTATION_RATE_LIMIT = 0x621D;
+static constexpr unsigned int GROUP_ARCHIVE_INVALID = 0x621F;
 
 // -- creation --
 
@@ -1040,6 +1099,108 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_group_key_re_encoded_uncompressed_is_refused
     EXPECT_EQ(after.keyVersion, 1);
 }
 
+// -- repair rungs: any seated member holding both keys may add one more rung to a span --
+
+TEST_F(GroupKeyTreeTest, repairRung_from_another_member_is_served_beside_the_original) {
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = groupAtEpoch(2); });
+    disconnect();
+    connectAs(2);
+    ASSERT_NO_THROW({ repair(groupId, sealedRung(groupId, 2, 1)); });
+    std::vector<std::string> authors;
+    for (const auto& rung : rungsOfSpan(groupId, 2, 1)) {
+        authors.push_back(rung.author.value_or(""));
+    }
+    std::sort(authors.begin(), authors.end());
+    EXPECT_EQ(authors, (std::vector<std::string>{user(1).userId, user(2).userId}))
+        << "the remover's rung and bob's repair, each under the author the bridge recorded";
+    disconnect();
+    connectAs(1);
+}
+
+TEST_F(GroupKeyTreeTest, SECURITY_repairRung_from_outside_the_group_is_refused) {
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = groupAtEpoch(2); });
+    disconnect();
+    connectAs(3); // removed, still in the context
+    auto refused = refusalOf([&] { repair(groupId, garbageRung(2, 1)); });
+    ASSERT_TRUE(refused.has_value());
+    EXPECT_EQ(refused->first, ACCESS_DENIED) << refused->second;
+    disconnect();
+    const auto outsider = registerOutsider("never_seated_" + privmx::utils::Utils::getNowTimestampStr());
+    connection = connectWith(outsider.toWIF());
+    groupApi = std::make_shared<group::GroupApi>(group::GroupApi::create(*connection));
+    setUpModuleApis();
+    refused = refusalOf([&] { repair(groupId, garbageRung(2, 1)); });
+    ASSERT_TRUE(refused.has_value());
+    EXPECT_EQ(refused->first, ACCESS_DENIED) << refused->second;
+    disconnect();
+    connectAs(1);
+    EXPECT_EQ(rungsOfSpan(groupId, 2, 1).size(), 1u) << "nothing stored";
+}
+
+TEST_F(GroupKeyTreeTest, repairRung_refuses_a_second_rung_from_the_same_member) {
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = groupAtEpoch(2); });
+    // The opener already has its rung for the span.
+    auto refused = refusalOf([&] { repair(groupId, sealedRung(groupId, 2, 1)); });
+    ASSERT_TRUE(refused.has_value());
+    EXPECT_EQ(refused->first, GROUP_ARCHIVE_INVALID);
+    EXPECT_NE(refused->second.find("AUTHOR_HAS_RUNG"), std::string::npos) << refused->second;
+    disconnect();
+    connectAs(2);
+    ASSERT_NO_THROW({ repair(groupId, sealedRung(groupId, 2, 1)); });
+    refused = refusalOf([&] { repair(groupId, sealedRung(groupId, 2, 1)); });
+    ASSERT_TRUE(refused.has_value());
+    EXPECT_NE(refused->second.find("AUTHOR_HAS_RUNG"), std::string::npos) << refused->second;
+    disconnect();
+    connectAs(1);
+    EXPECT_EQ(rungsOfSpan(groupId, 2, 1).size(), 2u);
+}
+
+TEST_F(GroupKeyTreeTest, repairRung_budget_is_enforced) {
+    // Every call is charged, accepted or refused, so probing the rules costs the caller its own budget (60/h).
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = groupAtEpoch(2); });
+    disconnect();
+    connectAs(2);
+    group::server::GroupArchiveRung rung;
+    ASSERT_NO_THROW({ rung = sealedRung(groupId, 2, 1); });
+    ASSERT_NO_THROW({ repair(groupId, rung); });
+    for (int call = 2; call <= 60; ++call) {
+        const auto refused = refusalOf([&] { repair(groupId, rung); });
+        ASSERT_TRUE(refused.has_value()) << "call " << call;
+        ASSERT_EQ(refused->first, GROUP_ARCHIVE_INVALID) << "call " << call << ": " << refused->second;
+    }
+    const auto limited = refusalOf([&] { repair(groupId, rung); });
+    ASSERT_TRUE(limited.has_value());
+    EXPECT_EQ(limited->first, GROUP_ROTATION_RATE_LIMIT) << limited->second;
+    disconnect();
+    connectAs(1);
+}
+
+TEST_F(GroupKeyTreeTest, SECURITY_a_rung_naming_a_recipientKind_is_refused) {
+    // An era link sealed to somebody's own key must not pass as an epoch's unit rung. The rung validator, the
+    // same for commits and repairs, refuses the kind fields as unknown keys.
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = groupAtEpoch(2); });
+    disconnect();
+    connectAs(2);
+    group::server::GroupArchiveRung rung;
+    ASSERT_NO_THROW({ rung = sealedRung(groupId, 2, 1); });
+    Poco::JSON::Object::Ptr wire = rung.toJSON();
+    wire->set("recipientKind", "user");
+    wire->set("recipient", user(2).userId);
+    Poco::JSON::Object::Ptr params = new Poco::JSON::Object();
+    params->set("id", groupId);
+    params->set("rung", wire);
+    privmx::privfs::RpcGateway::Ptr gateway = connection->getImpl()->getGateway();
+    EXPECT_TRUE(refusalOf([&] { gateway->request("context.groupRepairRung", params); }).has_value());
+    disconnect();
+    connectAs(1);
+    EXPECT_EQ(rungsOfSpan(groupId, 2, 1).size(), 1u);
+}
+
 TEST_F(GroupKeyTreeTest, the_key_archive_window_also_windows_keyHistory) {
     std::string groupId;
     ASSERT_NO_THROW({ groupId = groupAtEpoch(4); });
@@ -1056,6 +1217,16 @@ TEST_F(GroupKeyTreeTest, the_key_archive_window_also_windows_keyHistory) {
     };
     EXPECT_EQ(epochsServed(2, 3), (std::vector<std::int64_t>{2, 3}));
     EXPECT_EQ(epochsServed(1, 9), (std::vector<std::int64_t>{1, 2, 3})) << "only the epochs behind the current one";
+}
+
+TEST_F(GroupKeyTreeTest, SECURITY_repairRung_below_a_cut_floor_is_refused) {
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = groupAtEpoch(3); });
+    ASSERT_NO_THROW({ raw().groupCutEra({.id = groupId, .newFloor = 2, .expectedKeyVersion = 3}); });
+    const auto refused = refusalOf([&] { repair(groupId, garbageRung(3, 1)); });
+    ASSERT_TRUE(refused.has_value());
+    EXPECT_EQ(refused->first, GROUP_ARCHIVE_INVALID);
+    EXPECT_NE(refused->second.find("BELOW_ERA_FLOOR"), std::string::npos) << refused->second;
 }
 
 // ── the signed group policy ──

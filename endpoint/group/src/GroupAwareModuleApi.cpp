@@ -226,7 +226,8 @@ void GroupAwareModuleApi::resolveGroupEpochs(
 ) {
     // A caller's key that contradicts the state this process verified is read again, never wrapped to.
     auto isComplete = [&](const core::GroupGrantWithKey& g) {
-        return g.groupEpoch > 0 && !g.groupPubKey.empty() &&
+        return g.groupEpoch > 0 &&
+            !g.groupPubKey.empty() &&
             (!_groupApi || _groupApi->agreesWithPin(g.groupId, contextId, g.groupEpoch, g.groupPubKey));
     };
     std::vector<std::string> toFetch;
