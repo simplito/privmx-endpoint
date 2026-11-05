@@ -57,42 +57,45 @@ std::set<std::string> namesIn(const std::string& body) {
 
 TEST(LocalSeal, ASealedBodyOpensUnderItsKeyLabelAndSlot) {
     const PrivateKey me = PrivateKey::generateRandom();
-    const std::string blob = core::sealLocal(me, LABEL, 1, SLOT, "body");
-    EXPECT_EQ(core::openLocal(me, LABEL, 1, SLOT, blob), std::optional<std::string>("body"));
-    EXPECT_EQ(core::openLocal(me, LABEL, 1, SLOT, core::sealLocal(me, LABEL, 1, SLOT, "")), std::optional<std::string>(""));
+    const core::LocalSeal seal(me, LABEL, 1, SLOT);
+    EXPECT_EQ(seal.open(seal.seal("body")), std::optional<std::string>("body"));
+    EXPECT_EQ(seal.open(seal.seal("")), std::optional<std::string>(""));
 }
 
 TEST(LocalSeal, SECURITY_ABlobWithAnyByteChangedIsIgnored) {
     const PrivateKey me = PrivateKey::generateRandom();
-    const std::string blob = core::sealLocal(me, LABEL, 1, SLOT, "some pins");
+    const core::LocalSeal seal(me, LABEL, 1, SLOT);
+    const std::string blob = seal.seal("some pins");
     for (std::size_t i = 0; i < blob.size(); ++i) {
         std::string changed = blob;
         changed[i] = static_cast<char>(changed[i] ^ 0x01);
-        EXPECT_EQ(core::openLocal(me, LABEL, 1, SLOT, changed), std::nullopt) << "byte " << i;
+        EXPECT_EQ(seal.open(changed), std::nullopt) << "byte " << i;
     }
-    EXPECT_EQ(core::openLocal(me, LABEL, 1, SLOT, blob.substr(0, blob.size() - 1)), std::nullopt);
-    EXPECT_EQ(core::openLocal(me, LABEL, 1, SLOT, blob + "x"), std::nullopt);
-    EXPECT_EQ(core::openLocal(me, LABEL, 1, SLOT, std::string(32, '\0')), std::nullopt) << "shorter than a tag";
+    EXPECT_EQ(seal.open(blob.substr(0, blob.size() - 1)), std::nullopt);
+    EXPECT_EQ(seal.open(blob + "x"), std::nullopt);
+    EXPECT_EQ(seal.open(std::string(32, '\0')), std::nullopt) << "shorter than a tag";
 }
 
 TEST(LocalSeal, SECURITY_ABlobSealedUnderAnotherIdentityOrLabelIsIgnored) {
     const PrivateKey me = PrivateKey::generateRandom();
-    const std::string blob = core::sealLocal(PrivateKey::generateRandom(), LABEL, 1, SLOT, "planted");
-    EXPECT_EQ(core::openLocal(me, LABEL, 1, SLOT, blob), std::nullopt);
-    EXPECT_EQ(core::openLocal(me, "privmx/other", 1, SLOT, core::sealLocal(me, LABEL, 1, SLOT, "x")), std::nullopt);
+    const core::LocalSeal seal(me, LABEL, 1, SLOT);
+    const std::string blob = core::LocalSeal(PrivateKey::generateRandom(), LABEL, 1, SLOT).seal("planted");
+    EXPECT_EQ(seal.open(blob), std::nullopt);
+    EXPECT_EQ(core::LocalSeal(me, "privmx/other", 1, SLOT).open(seal.seal("x")), std::nullopt);
 }
 
 TEST(LocalSeal, SECURITY_ABlobMovedToAnotherSlotIsIgnored) {
     // Another identity's, Bridge's or kind's slot: the slot key is in the MAC.
     const PrivateKey me = PrivateKey::generateRandom();
-    const std::string blob = core::sealLocal(me, LABEL, 1, "group-pins/bridgeA/me", "pins");
-    EXPECT_EQ(core::openLocal(me, LABEL, 1, "group-pins/bridgeB/me", blob), std::nullopt);
-    EXPECT_EQ(core::openLocal(me, LABEL, 1, "commit-released/bridgeA/me", blob), std::nullopt);
+    const std::string blob = core::LocalSeal(me, LABEL, 1, "group-pins/bridgeA/me").seal("pins");
+    EXPECT_EQ(core::LocalSeal(me, LABEL, 1, "group-pins/bridgeB/me").open(blob), std::nullopt);
+    EXPECT_EQ(core::LocalSeal(me, LABEL, 1, "commit-released/bridgeA/me").open(blob), std::nullopt);
 }
 
 TEST(LocalSeal, ABlobOfAnotherVersionIsIgnored) {
     const PrivateKey me = PrivateKey::generateRandom();
-    EXPECT_EQ(core::openLocal(me, LABEL, 1, SLOT, core::sealLocal(me, LABEL, 2, SLOT, "v2")), std::nullopt);
+    const std::string v2 = core::LocalSeal(me, LABEL, 2, SLOT).seal("v2");
+    EXPECT_EQ(core::LocalSeal(me, LABEL, 1, SLOT).open(v2), std::nullopt);
 }
 
 TEST(LocalSeal, BigEndianReaderRefusesOverrun) {
@@ -114,44 +117,47 @@ TEST(LocalSeal, BigEndianReaderRefusesOverrun) {
     EXPECT_TRUE(back.done());
 }
 
-TEST(LocalSeal, UpdateSealedRetriesOnACompareAndSwapMiss) {
+TEST(LocalSeal, UpdateRetriesOnACompareAndSwapMiss) {
     const PrivateKey me = PrivateKey::generateRandom();
+    const core::LocalSeal seal(me, LABEL, 1, SLOT);
     MemoryPinStore store;
     int merges = 0;
     // A sibling writes between this saver's load and save, once.
     bool raced = false;
-    const bool saved = core::updateSealed(store, me, SLOT, LABEL, 1, [&](const std::optional<std::string>& body) {
+    const bool saved = seal.update(store, [&](const std::optional<std::string>& body) {
         ++merges;
         if (!raced) {
             raced = true;
-            store.put(SLOT, core::sealLocal(me, LABEL, 1, SLOT, withName(std::nullopt, "sibling")));
+            store.put(SLOT, seal.seal(withName(std::nullopt, "sibling")));
         }
         return withName(body, "me");
     });
     EXPECT_TRUE(saved);
     EXPECT_EQ(merges, 2);
     EXPECT_EQ(store.casMisses(), 1);
-    const auto body = core::openLocal(me, LABEL, 1, SLOT, store.get(SLOT));
+    const auto body = seal.open(store.get(SLOT));
     ASSERT_TRUE(body.has_value());
     EXPECT_EQ(namesIn(body.value()), (std::set<std::string>{"sibling", "me"}));
 }
 
 TEST(LocalSeal, AnUnopenableStoredBlobReachesTheMergeAsNothing) {
     const PrivateKey me = PrivateKey::generateRandom();
+    const core::LocalSeal seal(me, LABEL, 1, SLOT);
     MemoryPinStore store;
     store.put(SLOT, "garbage");
     std::optional<std::string> seen = std::string("unset");
-    EXPECT_TRUE(core::updateSealed(store, me, SLOT, LABEL, 1, [&](const std::optional<std::string>& body) {
+    EXPECT_TRUE(seal.update(store, [&](const std::optional<std::string>& body) {
         seen = body;
         return std::string("fresh");
     }));
     EXPECT_EQ(seen, std::nullopt);
-    EXPECT_EQ(core::openLocal(me, LABEL, 1, SLOT, store.get(SLOT)), std::optional<std::string>("fresh"));
+    EXPECT_EQ(seal.open(store.get(SLOT)), std::optional<std::string>("fresh"));
 }
 
 TEST(LocalSeal, SECURITY_TwoInterleavedSaversNeverLoseEachOthersEntries) {
     // Both load the empty slot before either saves (a lost update without the CAS); the loser merges again.
     const PrivateKey me = PrivateKey::generateRandom();
+    const core::LocalSeal seal(me, LABEL, 1, SLOT);
     MemoryPinStore store;
     std::mutex m;
     std::condition_variable cv;
@@ -163,25 +169,21 @@ TEST(LocalSeal, SECURITY_TwoInterleavedSaversNeverLoseEachOthersEntries) {
             cv.wait_for(lock, std::chrono::seconds(5), [&] { return loaded >= 2; });
         }
     };
-    std::thread a([&] {
-        core::updateSealed(store, me, SLOT, LABEL, 1, [](const auto& body) { return withName(body, "a"); });
-    });
-    std::thread b([&] {
-        core::updateSealed(store, me, SLOT, LABEL, 1, [](const auto& body) { return withName(body, "b"); });
-    });
+    std::thread a([&] { seal.update(store, [](const auto& body) { return withName(body, "a"); }); });
+    std::thread b([&] { seal.update(store, [](const auto& body) { return withName(body, "b"); }); });
     a.join();
     b.join();
-    const auto body = core::openLocal(me, LABEL, 1, SLOT, store.get(SLOT));
+    const auto body = seal.open(store.get(SLOT));
     ASSERT_TRUE(body.has_value());
     EXPECT_EQ(namesIn(body.value()), (std::set<std::string>{"a", "b"}));
     EXPECT_GE(store.casMisses(), 1);
 }
 
-TEST(LocalSeal, UpdateSealedGivesUpWhenEverySaveMisses) {
+TEST(LocalSeal, UpdateGivesUpWhenEverySaveMisses) {
     const PrivateKey me = PrivateKey::generateRandom();
     MemoryPinStore store;
     int round = 0;
-    EXPECT_FALSE(core::updateSealed(store, me, SLOT, LABEL, 1, [&](const auto& body) {
+    EXPECT_FALSE(core::LocalSeal(me, LABEL, 1, SLOT).update(store, [&](const auto& body) {
         store.put(SLOT, std::to_string(++round)); // always moved under the saver
         return withName(body, "me");
     }));

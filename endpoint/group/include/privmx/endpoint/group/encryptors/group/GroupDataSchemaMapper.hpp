@@ -26,6 +26,7 @@
 
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include "privmx/endpoint/group/Types.hpp"
+#include "privmx/endpoint/group/encryptors/group/DynamicTypes.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataEncryptorV5.hpp"
 #include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 
@@ -102,6 +103,24 @@ public:
         const std::vector<std::string>& managers
     );
 
+    // `rosterTag` has to be computed over exactly the fields the block declares. One builder for all three
+    // roster writers, so the tag inputs and the declared values cannot drift apart.
+    static dynamic::MembershipBlock buildMembershipBlock(
+        const core::EncKey& key,
+        const std::string& groupPubKey,
+        int64_t keyVersion,
+        int64_t rosterVersion,
+        const std::vector<core::UserWithPubKey>& users,
+        const std::vector<core::UserWithPubKey>& managers
+    );
+
+    // The served group's rules: signed only on a verified read, which bound them to its latest statement
+    // (`describes`). A plan parses them off the read before it refuses an unseated one, as it always has.
+    static keytree::GroupRules rulesOf(const server::GroupInfo& group);
+
+    // The read's rules, roster and planes (a verified read's, but in a plan's prologue, see `rulesOf`).
+    static PriorRole priorOf(const server::GroupInfo& group);
+
     // `HMAC(subkey, "publicMeta" | epoch | publicMetaVersion)`. Key-bound rather than merely signed: nothing in
     // this plane is encrypted, so a bridge with a keypair of its own could otherwise re-author the envelope.
     static std::string publicMetaTag(const std::string& key, int64_t keyVersion, int64_t metaVersion);
@@ -121,7 +140,9 @@ public:
     // resolution (a read and a ladder descent) for nothing, so a read stays O(1) in the group's epochs. `g` has
     // passed `validateDataIntegrity`, so it has a head.
     static void addReadKeys(
-        core::KeyDecryptionAndVerificationRequest& request, const server::GroupInfo& g, const core::EncKeyLocation& location
+        core::KeyDecryptionAndVerificationRequest& request,
+        const server::GroupInfo& g,
+        const core::EncKeyLocation& location
     );
 
     std::vector<Group> validateDecryptAndConvertGroups(
@@ -169,6 +190,19 @@ public:
     ) override;
 
 private:
+    // A plane's key opened, the plane and its key written by somebody on the roster, and the plane's author holding
+    // `update` under the signed rules. Anybody in the context can wrap a key to the group's public grant key and
+    // tag a plane under it; the roster says who belongs to the group and its signed policy who writes its metadata. The
+    // key's wrapper needs no role: a rotator with `rotateKeys` alone legitimately authors the epoch's key entry. With
+    // `prior` (carry-forward only), an entry identical to `readBefore` is judged by that read.
+    static void assertWrittenByMember(
+        const server::GroupInfo& groupInfo,
+        const server::GroupMetaEntry& entry,
+        const server::GroupMetaEntry* readBefore,
+        const core::DecryptedEncKeyV2& key,
+        const std::optional<PriorRole>& prior
+    );
+
     // One preimage builder for both metadata planes, so the canonical form cannot drift between them. `domain`
     // names the plane in both the subkey label and the payload.
     static std::string metaPlaneTag(

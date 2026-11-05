@@ -71,19 +71,14 @@ std::vector<server::GroupArchiveRung> TreeWire::toWire(const std::vector<Archive
     return wire;
 }
 
-namespace {
-
-// A served counter or index as the runtime holds it: one out of range is the bridge's, never wrapped into another.
-std::uint32_t served32(std::int64_t value) {
+std::uint32_t TreeWire::served32(std::int64_t value) {
     if (value < 0 || value > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
         throw privmx::endpoint::group::GroupDataIntegrityException("a tree field out of range");
     }
     return static_cast<std::uint32_t>(value);
 }
 
-std::vector<std::string> leafAssignmentToWire(const std::vector<std::optional<std::string>>& seats) {
-    // A blank is spelled as an empty string: that is how the wire format says "nobody here" without a nullable
-    // element.
+std::vector<std::string> TreeWire::leafAssignmentToWire(const std::vector<std::optional<std::string>>& seats) {
     std::vector<std::string> wire;
     for (const auto& seat : seats) {
         wire.push_back(seat.value_or(std::string()));
@@ -91,33 +86,13 @@ std::vector<std::string> leafAssignmentToWire(const std::vector<std::optional<st
     return wire;
 }
 
-template<typename TWireNode>
-std::vector<TWireNode> refreshedToWire(const CommitPlan& plan) {
-    std::vector<TWireNode> wire;
-    for (const RefreshedNode& refreshed : plan.refreshed) {
-        TWireNode node;
-        node.nodeIndex = static_cast<std::int64_t>(refreshed.nodeIndex);
-        // The generation the node was read at travels with the refresh: the server refuses the commit if the node
-        // has moved since, rather than applying it to a base the client never saw.
-        if (refreshed.fromGeneration.has_value()) {
-            node.fromGeneration = static_cast<std::int64_t>(refreshed.fromGeneration.value());
-        }
-        node.generation = static_cast<std::int64_t>(refreshed.generation);
-        node.publicKey = refreshed.key.getPublicKey().toBase58DER();
-        wire.push_back(node);
-    }
-    return wire;
-}
-
-std::vector<server::GroupTreeEdge> edgesToWire(const CommitPlan& plan) {
+std::vector<server::GroupTreeEdge> TreeWire::edgesToWire(const CommitPlan& plan) {
     std::vector<server::GroupTreeEdge> wire;
     for (const TreeEdge& edge : plan.edges) {
-        wire.push_back(TreeWire::toWire(edge));
+        wire.push_back(toWire(edge));
     }
     return wire;
 }
-
-} // namespace
 
 server::GroupTreeState TreeWire::toCreateTree(const CommitPlan& plan) {
     server::GroupTreeState tree;
@@ -158,9 +133,7 @@ TreeGroupState TreeWire::toRuntime(
         }
     }
     for (const server::GroupTreeNode& node : tree.nodes) {
-        TreeNodeState converted{
-            served32(node.nodeIndex), served32(node.generation), std::nullopt, std::nullopt
-        };
+        TreeNodeState converted{served32(node.nodeIndex), served32(node.generation), std::nullopt, std::nullopt};
         if (!node.publicKey.value_or("").empty()) {
             converted.publicKey = NodePublicKey::fromBase58DER(node.publicKey.value());
             if (node.setBy.has_value() && node.setBy.value() >= 0) {

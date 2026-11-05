@@ -16,28 +16,24 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 
-namespace {
-
-constexpr std::size_t TAG_SIZE = 32;
-// Limit: 8 compare-and-swap attempts; a store contended harder than that fails the save (logged, retried later).
-constexpr int CAS_ATTEMPTS = 8;
-
-std::string tagOf(
+LocalSeal::LocalSeal(
     const privmx::crypto::PrivateKey& identity,
     const std::string& label,
     std::uint8_t version,
-    const std::string& storeKey,
-    const std::string& body
-) {
-    const std::string key = privmx::crypto::Crypto::kdf(32, identity.getPrivateEncKey(), label);
+    const std::string& storeKey
+)
+    : _identity(identity), _label(label), _version(version), _storeKey(storeKey) {}
+
+std::string LocalSeal::tagOf(const std::string& body) const {
+    const std::string key = privmx::crypto::Crypto::kdf(32, _identity.getPrivateEncKey(), _label);
     std::string preimage;
-    bigendian::putU8(preimage, version);
-    bigendian::putLp(preimage, storeKey);
+    bigendian::putU8(preimage, _version);
+    bigendian::putLp(preimage, _storeKey);
     preimage += body;
     return privmx::crypto::Crypto::hmacSha256(key, preimage);
 }
 
-bool equalInConstantTime(const std::string& a, const std::string& b) {
+bool LocalSeal::equalInConstantTime(const std::string& a, const std::string& b) {
     if (a.size() != b.size()) {
         return false;
     }
@@ -48,53 +44,34 @@ bool equalInConstantTime(const std::string& a, const std::string& b) {
     return diff == 0;
 }
 
-} // namespace
-
-std::string privmx::endpoint::core::sealLocal(
-    const crypto::PrivateKey& identity,
-    const std::string& label,
-    std::uint8_t version,
-    const std::string& storeKey,
-    const std::string& body
-) {
+std::string LocalSeal::seal(const std::string& body) const {
     std::string blob;
-    bigendian::putU8(blob, version);
+    bigendian::putU8(blob, _version);
     blob += body;
-    blob += tagOf(identity, label, version, storeKey, body);
+    blob += tagOf(body);
     return blob;
 }
 
-std::optional<std::string> privmx::endpoint::core::openLocal(
-    const crypto::PrivateKey& identity,
-    const std::string& label,
-    std::uint8_t version,
-    const std::string& storeKey,
-    const std::string& blob
-) {
-    if (blob.size() < 1 + TAG_SIZE || static_cast<std::uint8_t>(blob[0]) != version) {
+std::optional<std::string> LocalSeal::open(const std::string& blob) const {
+    if (blob.size() < 1 + TAG_SIZE || static_cast<std::uint8_t>(blob[0]) != _version) {
         return std::nullopt;
     }
     std::string body = blob.substr(1, blob.size() - 1 - TAG_SIZE);
-    if (!equalInConstantTime(blob.substr(blob.size() - TAG_SIZE), tagOf(identity, label, version, storeKey, body))) {
+    if (!equalInConstantTime(blob.substr(blob.size() - TAG_SIZE), tagOf(body))) {
         return std::nullopt;
     }
     return body;
 }
 
-bool privmx::endpoint::core::updateSealed(
+bool LocalSeal::update(
     PinStoreInterface& store,
-    const crypto::PrivateKey& identity,
-    const std::string& storeKey,
-    const std::string& label,
-    std::uint8_t version,
     const std::function<std::string(const std::optional<std::string>&)>& merge
-) {
+) const {
     for (int attempt = 0; attempt < CAS_ATTEMPTS; ++attempt) {
-        const std::string loaded = store.load(storeKey).stdString();
-        const std::optional<std::string> body = loaded.empty() ? std::nullopt
-                                                                : openLocal(identity, label, version, storeKey, loaded);
-        const std::string blob = sealLocal(identity, label, version, storeKey, merge(body));
-        if (store.save(storeKey, Buffer::from(blob), Buffer::from(loaded))) {
+        const std::string loaded = store.load(_storeKey).stdString();
+        const std::optional<std::string> body = loaded.empty() ? std::nullopt : open(loaded);
+        const std::string blob = seal(merge(body));
+        if (store.save(_storeKey, Buffer::from(blob), Buffer::from(loaded))) {
             return true;
         }
     }

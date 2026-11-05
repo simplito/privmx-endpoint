@@ -217,6 +217,13 @@ public:
     // from genesis to it and keeps it as a pin, or refuses as a fork if it is not on the chain.
     static bool isHint(const Pin& pin) { return pin.seq > 0 && pin.groupPubKey.empty(); }
 
+    // A pin's `generations[node]` raised to `generation` if that is higher; whether it rose.
+    static bool raiseGeneration(
+        std::map<std::uint32_t, std::uint32_t>& generations,
+        std::uint32_t node,
+        std::uint32_t generation
+    );
+
     // One spelling per key (the same point base58'd uncompressed is another string but the same grant key): what
     // grant keys are compared by. Throws GroupDataIntegrityException on one that does not parse.
     static std::string canonicalKey(const std::string& base58);
@@ -224,7 +231,8 @@ public:
     // Pins and version-pin counters as the PinBlob holds them.
     struct PinSet {
         std::map<std::string, Pin> tree;
-        std::map<std::string, std::array<std::int64_t, 3>> planes; // rosterVersion, publicMetaVersion, privateMetaVersion
+        std::map<std::string, std::array<std::int64_t, 3>>
+            planes; // rosterVersion, publicMetaVersion, privateMetaVersion
     };
 
     // Copies of the pins for a save: moved since the last export (or all, with `all`) whole, the rest compact (no
@@ -243,7 +251,10 @@ public:
     // context, epoch, roster or rules changed, or `refusedSeq` rose; tree-only moves (self-updates) are minor.
     void onPinsMoved(std::function<void(bool major)> callback);
 
-    enum class Step { Ok, Unauthorized };
+    enum class Step {
+        Ok,
+        Unauthorized
+    };
 
     // One statement on top of `head`: the op-effect table (seq/op pairing, roster deltas, epoch and grant key,
     // `rosterVersion`, `policyHash`, an empty path for rotate/policy and, when `adjacent`, their tree hash unchanged),
@@ -261,6 +272,46 @@ public:
     );
 
 private:
+    // How long a "still accepted now" answer is reused: long enough for one listing's `preverifyListed` and its
+    // `verifyListed`s. A key revoked within that minute can still move a pin; shorten it if that matters.
+    static constexpr std::uint64_t NOW_ANSWER_REUSE_MS = 60 * 1000;
+
+    static std::uint64_t nowMs();
+
+    static std::set<std::string> asSet(const std::vector<std::string>& values);
+
+    // Throws GroupDataIntegrityException on a statement that does not decode.
+    static CommitStatement parse(const server::GroupTreeCommit& wire);
+
+    // The latest statement, refused when it is read ahead of this clock. The chain's dates never go back, so the
+    // latest one bounds them all, and with it how far ahead of real time a member and a misbehaving bridge can push
+    // the dates the UserVerifier is asked at (the bridge takes a commit dated as the statement it extends past its
+    // tolerance, so this bounds date creep, not a freeze). Twice the bridge's own tolerance: an honest commit is
+    // dated within it of the bridge's clock, and this clock may be as far behind the bridge's.
+    static CommitStatement parseLatest(const server::GroupTreeCommit& wire);
+
+    // The served policy's rules, which `describes` binds to the latest statement. Throws on one that does not parse.
+    static GroupRules servedRules(const server::GroupInfo& group);
+
+    // The latest statement describes exactly what is served: grant key, counters, roster, and the creator and the
+    // four commit rules of the policy (the rest of the policy is the bridge's and is not attested).
+    static bool describes(const CommitStatement& latest, const server::GroupInfo& group);
+
+    // The id is `TreeCommits::groupId(contextId, resourceId)`: the only thing that authenticates the served context,
+    // which the UserVerifier, the pins and every later check run in.
+    static bool inItsContext(const server::GroupInfo& group);
+
+    // What `_verifiedStatements` is keyed by: one statement as one group's, in one context.
+    static std::string verifiedKey(
+        const std::string& contextId,
+        const std::string& groupId,
+        const CommitStatement& statement
+    );
+
+    static bool seatedAt(const TreeGroupState& state, std::uint32_t seat, const std::string& userId);
+
+    // The pin without what a compact record drops: roster members and generations.
+    static Pin compactOf(Pin pin);
 
     // Signature by `committerPubKey`, that key accepted by the UserVerifier for the committer at the statement's
     // date, and naming this group (at seq 1 through `TreeCommits::groupId`) and tree version. Results are cached per
@@ -329,7 +380,7 @@ private:
     );
     // One field of the group's pin, empty if none.
     template<typename T>
-    T pinned(const std::string& groupId, T Head::*field) const {
+    T pinned(const std::string& groupId, T Head::* field) const {
         std::lock_guard lock(_mutex);
         const auto it = _pins.find(groupId);
         return it == _pins.end() ? T{} : it->second.*field;
@@ -437,7 +488,7 @@ private:
     Bounded<Openers> _openers{16};
     Bounded<bool> _verifiedStatements{4096};
     // `contextId \0 userId \0 pubKey` -> when the UserVerifier last accepted that key "now", reused for
-    // `NOW_ANSWER_REUSE_MS` so that a listing's `preverifyListed` and `verifyListed` share one call (M4).
+    // `NOW_ANSWER_REUSE_MS` so a listing's `preverifyListed` and `verifyListed` share one call (M4).
     Bounded<std::uint64_t> _acceptedNow{1024};
 };
 

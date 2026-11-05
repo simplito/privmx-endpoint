@@ -9,8 +9,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/endpoint/inbox/ServerApi.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
+#include <privmx/endpoint/inbox/ServerApi.hpp>
 #include <privmx/utils/JsonHelper.hpp>
 
 using namespace privmx::endpoint::inbox;

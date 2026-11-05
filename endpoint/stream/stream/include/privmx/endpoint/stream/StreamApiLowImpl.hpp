@@ -221,7 +221,10 @@ private:
     void applyRoomKeys(StreamRoomData& room, const server::StreamRoomInfo& streamRoomInfo);
     // LOCAL (with `withLocal`): the room's current key (`keyId`), what this client encrypts under. REMOTE: every key
     // that opens.
-    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(server::StreamRoomInfo streamRoomInfo, bool withLocal = true);
+    std::vector<stream::Key> generateWebRTCKeysFromStreamRoomInfo(
+        server::StreamRoomInfo streamRoomInfo,
+        bool withLocal = true
+    );
     std::unordered_map<std::string, privmx::endpoint::core::DecryptedEncKeyV2> extractStreamRoomKeys(
         server::StreamRoomInfo streamRoomInfo
     );

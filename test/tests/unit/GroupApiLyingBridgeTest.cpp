@@ -275,6 +275,12 @@ struct Bridge {
             return server::GroupCreateResult{.groupId = tree.groupId}.toJSON();
         }
         if (group == "groupGet") {
+            if (tree.commits.empty()) {
+                // No group created yet: refused as a bridge refuses an id it does not know.
+                throw privmx::utils::PrivmxException(
+                    "GROUP_DOES_NOT_EXIST", privmx::utils::PrivmxException::RPC, 0x0061
+                );
+            }
             const auto model = server::GroupGetModel::fromJSON(params);
             const bool plan = model.scope == std::optional<std::string>("plan");
             server::GroupInfo info = serve(caller, plan);
@@ -701,7 +707,7 @@ protected:
         const std::string& kind = "group-pins/"
     ) {
         const std::string slot = store->keyWith(kind, "/" + key.getPublicKey().toBase58DER());
-        const auto body = core::openLocal(key, PinBlob::LABEL, PinBlob::VERSION, slot, store->get(slot));
+        const auto body = core::LocalSeal(key, PinBlob::LABEL, PinBlob::VERSION, slot).open(store->get(slot));
         const auto pins = body.has_value() ? PinBlob::decode(body.value()) : std::nullopt;
         if (!pins.has_value() || pins->tree.count(groupId) == 0) {
             return std::nullopt;
@@ -2308,7 +2314,7 @@ PrivateKey changeKeyOf(Bridge& bridge, std::map<std::string, std::unique_ptr<Cli
 void plantSlot(MemoryPinStore& store, const PrivateKey& key, const PrivateKey& like, const TreeVerifier::PinSet& pins) {
     const std::string other = store.keyWith("group-pins/", "/" + like.getPublicKey().toBase58DER());
     const std::string slot = other.substr(0, other.rfind('/') + 1) + key.getPublicKey().toBase58DER();
-    store.put(slot, core::sealLocal(key, PinBlob::LABEL, PinBlob::VERSION, slot, PinBlob::encode(pins)));
+    store.put(slot, core::LocalSeal(key, PinBlob::LABEL, PinBlob::VERSION, slot).seal(PinBlob::encode(pins)));
 }
 
 std::size_t sent(const Bridge& bridge) {
@@ -3041,7 +3047,7 @@ TEST_F(GroupApiLyingBridge, AMetadataVersionSeenByAReadIsSavedBeforeItReturns) {
     client("alice").getGroup(groupId);
     const PrivateKey& key = bridge.users.at("alice");
     const std::string slot = store->keyWith("group-pins/", "/" + key.getPublicKey().toBase58DER());
-    const auto body = core::openLocal(key, PinBlob::LABEL, PinBlob::VERSION, slot, store->get(slot));
+    const auto body = core::LocalSeal(key, PinBlob::LABEL, PinBlob::VERSION, slot).open(store->get(slot));
     const auto pins = body.has_value() ? PinBlob::decode(body.value()) : std::nullopt;
     ASSERT_TRUE(pins.has_value() && pins->planes.count(groupId) > 0);
     EXPECT_EQ(pins->planes.at(groupId)[1], 2);
@@ -3059,7 +3065,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AMetadataVersionSeenByAContainerKeyLookupIs
     client("alice").encrypt(groupId, core::Buffer::from("x")); // the group's module keys, read for the envelope
     const PrivateKey& key = bridge.users.at("alice");
     const std::string slot = store->keyWith("group-pins/", "/" + key.getPublicKey().toBase58DER());
-    const auto body = core::openLocal(key, PinBlob::LABEL, PinBlob::VERSION, slot, store->get(slot));
+    const auto body = core::LocalSeal(key, PinBlob::LABEL, PinBlob::VERSION, slot).open(store->get(slot));
     const auto pins = body.has_value() ? PinBlob::decode(body.value()) : std::nullopt;
     ASSERT_TRUE(pins.has_value() && pins->planes.count(groupId) > 0);
     EXPECT_EQ(pins->planes.at(groupId)[1], 2) << "saved before the lookup returned";
@@ -3136,7 +3142,10 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnAdoptedRecordNeverRaisesAnExistingPin) {
     const std::array<std::int64_t, 3> versionsBefore = GroupApiImplTestAccess::versionPins(client("alice"), groupId);
     const std::string current = store->keyWith("group-pins/", "/" + bridge.users.at("alice").getPublicKey().toBase58DER());
     const std::string previousSlot = current.substr(0, current.rfind('/') + 1) + previous.getPublicKey().toBase58DER();
-    store->put(previousSlot, core::sealLocal(previous, PinBlob::LABEL, PinBlob::VERSION, previousSlot, PinBlob::encode(planted)));
+    store->put(
+        previousSlot,
+        core::LocalSeal(previous, PinBlob::LABEL, PinBlob::VERSION, previousSlot).seal(PinBlob::encode(planted))
+    );
     client("alice").adoptPreviousIdentity(previous);
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 2u);
     EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u) << "the current slot is not raised";
@@ -3160,7 +3169,9 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnAdoptedRecordIsAHintNotAVerifiedState) {
     pin.refusedSeq = 1000;
     planted.tree[groupId] = pin;
     const std::string slot = store->keyWith("group-pins/", "/" + previous.getPublicKey().toBase58DER());
-    store->put(slot, core::sealLocal(previous, PinBlob::LABEL, PinBlob::VERSION, slot, PinBlob::encode(planted)));
+    store->put(
+        slot, core::LocalSeal(previous, PinBlob::LABEL, PinBlob::VERSION, slot).seal(PinBlob::encode(planted))
+    );
     GroupApiImpl& alice = clientAdopting("alice", previous);
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(alice, groupId), 1u) << "the hint still refuses what lies below it";
     EXPECT_EQ(alice.pinnedKeyVersion(groupId), 0u);
@@ -3379,6 +3390,26 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotSealACachedGrantKeyThatIsNot
     });
     ASSERT_NE(removal, bridge.calls.rend());
     EXPECT_TRUE(removal->params->optValue<bool>("abandonHistory", false));
+}
+
+TEST_F(GroupApiLyingBridge, AnEnvelopeNamingAGroupWithNoKeysLeavesNoSessionBehind) {
+    // The group id comes off the envelope: a key lookup that finds nothing must not grow the per-group state.
+    GroupApiImpl& alice = client("alice");
+    ASSERT_EQ(GroupApiImplTestAccess::sessionCount(alice), 0u);
+    const PrivateKey stranger = PrivateKey::generateRandom();
+    const std::string key(32, 'k');
+    for (int i = 0; i < 3; ++i) {
+        const std::string groupId = "unknown-" + std::to_string(i);
+        EXPECT_ANY_THROW(alice.decrypt(
+            GroupEnvelopeEncryptor().packGroupKeyEnvelope(
+                groupId, "no-such-key", core::Buffer::from("x"), stranger, key
+            )
+        ));
+        EXPECT_ANY_THROW(alice.decrypt(
+            alice.encryptAnonymously(groupId, stranger.getPublicKey().toBase58DER(), core::Buffer::from("x"))
+        ));
+    }
+    EXPECT_EQ(GroupApiImplTestAccess::sessionCount(alice), 0u);
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnEpochTheHistoryMislabelsIsNotRemembered) {

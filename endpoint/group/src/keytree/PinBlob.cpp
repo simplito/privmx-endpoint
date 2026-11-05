@@ -25,32 +25,27 @@ using namespace privmx::endpoint::group::keytree;
 namespace be = privmx::endpoint::core::bigendian;
 using Pin = TreeVerifier::Pin;
 using PinSet = TreeVerifier::PinSet;
-using Planes = std::array<std::int64_t, 3>;
+using Planes = PinBlob::Planes;
 
-namespace {
-
-constexpr std::uint8_t ROSTER = 1;
-constexpr std::uint8_t NODES = 2;
-
-std::uint64_t counter(std::int64_t value) {
+std::uint64_t PinBlob::counter(std::int64_t value) {
     return value < 0 ? 0 : static_cast<std::uint64_t>(value);
 }
 
-std::int64_t signedCounter(std::uint64_t value) {
+std::int64_t PinBlob::signedCounter(std::uint64_t value) {
     if (value > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
         throw std::out_of_range("counter");
     }
     return static_cast<std::int64_t>(value);
 }
 
-void putSet(std::string& out, const std::set<std::string>& values) {
+void PinBlob::putSet(std::string& out, const std::set<std::string>& values) {
     be::putU32(out, static_cast<std::uint32_t>(values.size()));
     for (const std::string& value : values) {
         be::putLp(out, value);
     }
 }
 
-std::string record(const std::string& groupId, const Pin& pin, const Planes& planes, bool full) {
+std::string PinBlob::record(const std::string& groupId, const Pin& pin, const Planes& planes, bool full) {
     std::string out;
     be::putLp(out, groupId);
     be::putLp(out, pin.contextId);
@@ -86,7 +81,7 @@ std::string record(const std::string& groupId, const Pin& pin, const Planes& pla
     return out;
 }
 
-std::set<std::string> readSet(be::Reader& in) {
+std::set<std::string> PinBlob::readSet(be::Reader& in) {
     std::set<std::string> values;
     const std::uint32_t count = in.u32();
     for (std::uint32_t i = 0; i < count; ++i) {
@@ -95,12 +90,12 @@ std::set<std::string> readSet(be::Reader& in) {
     return values;
 }
 
-const Pin* find(const std::map<std::string, Pin>& pins, const std::string& groupId) {
+const Pin* PinBlob::find(const std::map<std::string, Pin>& pins, const std::string& groupId) {
     const auto it = pins.find(groupId);
     return it == pins.end() ? nullptr : &it->second;
 }
 
-void addGroupIds(std::set<std::string>& groups, const PinSet& pins) {
+void PinBlob::addGroupIds(std::set<std::string>& groups, const PinSet& pins) {
     for (const auto& [groupId, pin] : pins.tree) {
         groups.insert(groupId);
     }
@@ -109,12 +104,10 @@ void addGroupIds(std::set<std::string>& groups, const PinSet& pins) {
     }
 }
 
-Planes planesOf(const PinSet& pins, const std::string& groupId) {
+PinBlob::Planes PinBlob::planesOf(const PinSet& pins, const std::string& groupId) {
     const auto it = pins.planes.find(groupId);
     return it == pins.planes.end() ? Planes{0, 0, 0} : it->second;
 }
-
-} // namespace
 
 std::string PinBlob::encode(const PinSet& pins) {
     std::set<std::string> groups;
@@ -236,9 +229,7 @@ std::optional<PinSet> PinBlob::decode(const std::string& body) {
             return std::nullopt;
         }
         return pins;
-    } catch (const std::out_of_range&) {
-        return std::nullopt;
-    }
+    } catch (const std::out_of_range&) { return std::nullopt; }
 }
 
 Pin PinBlob::higher(const Pin* mine, const Pin* other) {
@@ -251,7 +242,7 @@ Pin PinBlob::higher(const Pin* mine, const Pin* other) {
         kept = *r;
         if (m != nullptr) {
             for (const auto& [node, generation] : m->generations) {
-                raiseGeneration(kept.generations, node, generation);
+                TreeVerifier::raiseGeneration(kept.generations, node, generation);
             }
         }
     } else if (m != nullptr) {
@@ -262,7 +253,7 @@ Pin PinBlob::higher(const Pin* mine, const Pin* other) {
                 kept.hasRoster = true;
             }
             for (const auto& [node, generation] : r->generations) {
-                raiseGeneration(kept.generations, node, generation);
+                TreeVerifier::raiseGeneration(kept.generations, node, generation);
             }
         }
     }

@@ -14,10 +14,10 @@ limitations under the License.
 
 #include <exception>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <map>
 #include <shared_mutex>
 #include <string>
 #include <vector>
@@ -151,7 +151,7 @@ private:
     std::shared_ptr<EventMiddleware> _eventMiddleware;
     std::shared_ptr<HandleManager> _handleManager;
     std::shared_ptr<UserVerifier> _userVerifier;
-    std::shared_ptr<PinStoreInterface> _pinStore; // under _mutex
+    std::shared_ptr<PinStoreInterface> _pinStore;        // under _mutex
     std::map<std::string, std::string> _stagedPinBodies; // under _mutex
     std::vector<crypto::PrivateKey> _previousIdentities; // under _mutex
     bool _public = false;                                // set once, in connectPublic, before the impl is shared

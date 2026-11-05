@@ -33,7 +33,7 @@ namespace keytree {
 // leaving the epoch unreachable from below.
 struct ArchiveRung {
     RungSpan span{0, 0};
-    std::string blob;   // ECIES ciphertext, base64. Opaque to the server.
+    std::string blob; // ECIES ciphertext, base64. Opaque to the server.
     // Who to blame for detected tampering. `GroupKeyResolver::authenticated` sets it to the opener of `span.at` (from
     // the signed statement) for a rung sealed under that opener's key and clears it for any other sealer, so the
     // bridge alone cannot name a culprit. It is no proof of authorship: the seal is static ECDH, and anyone holding
