@@ -65,7 +65,7 @@ protected:
         BaseGroupTest::customTearDown();
     }
     // An Index whose direct member is user_1 alone, granted to `groups` at `role` and at whatever epoch the
-    // Bridge resolves. Opening an Index writes to it, so a group expected to open it must be granted "manager".
+    // Bridge resolves. A "user" grant opens and searches an Index; writing to one needs "manager".
     std::string createIndexWithGroups(
         const std::string& contextId,
         const std::vector<group::Group>& groups,
@@ -597,6 +597,58 @@ TEST_F(SearchUsingGroupsTest, group_member_reads_the_index_and_its_documents) {
     EXPECT_EQ(countMatches(managerGrantedId, "beta"), 2);
     EXPECT_EQ(countMatches(managerGrantedId, "alpha"), 1);
     EXPECT_EQ(countMatches(managerGrantedId, "delta"), 0);
+}
+
+TEST_F(SearchUsingGroupsTest, a_user_grant_is_enough_to_open_and_search_the_index) {
+    // Reading an Index takes a shared lock on its Store file, which the Bridge grants on read access. The
+    // Endpoint only asks for the lock SQLite asked for, so this passing unchanged is what puts the fix there.
+    group::Group group_2;
+    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
+    ASSERT_EQ(group_2.statusCode, 0);
+
+    std::string indexId;
+    ASSERT_NO_THROW({ indexId = createIndexWithGroups(contextId(), {group_2}, "user"); });
+    ASSERT_FALSE(indexId.empty());
+    ASSERT_NO_THROW({ seedDocuments(indexId, {{"doc-1", "alpha beta"}, {"doc-2", "gamma beta"}}); });
+
+    // user_2 is in Group_2, holds no direct membership of the Index, and did not write its database file.
+    disconnect();
+    connectAs(2);
+
+    int64_t handle = -1;
+    ASSERT_NO_THROW({ handle = searchApi->openSearchIndex(indexId); });
+    ASSERT_NO_THROW({ searchApi->closeSearchIndex(handle); });
+
+    EXPECT_EQ(countMatches(indexId, "beta"), 2);
+    EXPECT_EQ(countMatches(indexId, "alpha"), 1);
+    EXPECT_EQ(countMatches(indexId, "delta"), 0);
+}
+
+TEST_F(SearchUsingGroupsTest, a_user_grant_opens_the_index_without_the_right_to_write_to_it) {
+    // The other half of that boundary: writing needs the write lock, which "itemOwner&user,manager" keeps for
+    // the file's author and the Index's managers, so a group meant to index still has to be granted "manager".
+    group::Group group_2;
+    ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
+    ASSERT_EQ(group_2.statusCode, 0);
+
+    std::string indexId;
+    ASSERT_NO_THROW({ indexId = createIndexWithGroups(contextId(), {group_2}, "user"); });
+    ASSERT_FALSE(indexId.empty());
+    ASSERT_NO_THROW({ seedDocuments(indexId, {{"doc-owner", "alpha"}}); });
+
+    disconnect();
+    connectAs(2);
+    int64_t handle = -1;
+    ASSERT_NO_THROW({ handle = searchApi->openSearchIndex(indexId); });
+    EXPECT_THROW({ searchApi->addDocument(handle, "doc-member", "member wrote this"); }, core::Exception);
+    // A refused write can leave the handle unusable, and closing it is not what is under test.
+    tryCall([&] { searchApi->closeSearchIndex(handle); });
+
+    // The refusal stayed a refusal: nothing of it reached the Index.
+    disconnect();
+    connectAs(1);
+    EXPECT_EQ(countMatches(indexId, "alpha"), 1);
+    EXPECT_EQ(countMatches(indexId, "wrote"), 0);
 }
 
 TEST_F(SearchUsingGroupsTest, documents_added_by_group_member_are_visible_to_the_owner) {
