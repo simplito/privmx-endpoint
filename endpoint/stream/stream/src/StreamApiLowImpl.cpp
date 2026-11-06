@@ -20,7 +20,6 @@ limitations under the License.
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/Factory.hpp>
 #include <privmx/endpoint/core/ListQueryMapper.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
@@ -911,7 +910,7 @@ std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
     auto keys = extractStreamRoomKeys(streamRoomInfo);
     std::vector<stream::Key> webRTCKeys;
     for (const auto& key : keys) {
-        if (key.second.statusCode == 0) {
+        if (key.second.statusCode() == 0) {
             webRTCKeys.push_back(
                 stream::Key{key.second.id, core::Buffer::from(deriveStreamEncryptionKey(key.second)), KeyType::REMOTE}
             );
@@ -922,9 +921,9 @@ std::vector<stream::Key> StreamApiLowImpl::generateWebRTCKeysFromStreamRoomInfo(
     }
     // The room's current key, not the newest data entry's: a re-key leaves that one under the key it replaced.
     auto currentStreamRoomKey = keys.at(streamRoomInfo.keyId);
-    if (currentStreamRoomKey.statusCode != 0) {
+    if (currentStreamRoomKey.error) {
         throw core::MalformedEncryptionKeyException(
-            "Encryption Key status code = " + std::to_string(currentStreamRoomKey.statusCode)
+            "current stream room key cannot be used", *currentStreamRoomKey.error
         );
     }
     assertWriteKey(currentStreamRoomKey); // the LOCAL key: what this client's media is encrypted under

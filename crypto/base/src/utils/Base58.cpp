@@ -14,7 +14,7 @@ limitations under the License.
 
 #include <privmx/utils/Base58.hpp>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/utils/PrivmxException.hpp>
+#include <privmx/crypto/CryptoException.hpp>
 
 using namespace privmx;
 using namespace privmx::crypto;
@@ -65,7 +65,7 @@ string Base58::decodeWithChecksum(const string& s) {
     string checksum = data.substr(data.length() - 4);
     string newchecksum = Crypto::sha256(Crypto::sha256(payload)).substr(0, 4);
     if (checksum != newchecksum) {
-        throw PrivmxException("Invalid base58 checksum");
+        throw InvalidChecksumException("Invalid base58 checksum");
     }
     return payload;
 }

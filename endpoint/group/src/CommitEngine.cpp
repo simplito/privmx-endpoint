@@ -15,8 +15,8 @@ limitations under the License.
 #include <mutex>
 #include <set>
 
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/group/GroupException.hpp"
@@ -27,13 +27,6 @@ using namespace privmx::endpoint;
 using namespace group;
 
 namespace {
-
-// Bridge application error codes a commit can be refused with as a lost race.
-enum BridgeError : unsigned int {
-    ROTATED_ALREADY = 0x621C,
-    GROUP_TREE_INVALID = 0x621E, // its data lists the problems found
-    GROUP_ROSTER_VERSION_MISMATCH = 0x6224,
-};
 
 // Attempts of one app commit against a base that moved (`commitWithRetry`).
 constexpr int MAX_COMMIT_ATTEMPTS = 3;
@@ -56,13 +49,12 @@ void CommitEngine::commitWithRetry(const std::function<void()>& attempt) {
                 continue;
             }
             throw RotatedAlreadyException();
-        } catch (const privmx::utils::PrivmxException& e) {
+        } catch (const privmx::endpoint::core::Exception& e) {
             if (attemptNo < MAX_COMMIT_ATTEMPTS && isRetryableCommitRejection(e)) {
                 LOG_DEBUG("group commit planned against a moved base, re-planning: ", e.what())
                 continue;
             }
-            core::ExceptionConverter::rethrowAsCoreException(e);
-            throw core::Exception("ExceptionConverter rethrow error");
+            throw;
         }
     }
 }
@@ -70,23 +62,19 @@ void CommitEngine::commitWithRetry(const std::function<void()>& attempt) {
 // A concurrent commit — most often a self-update, which every member under a blanked node runs on its own — moved
 // the generations or versions this one was planned against. Nothing about the request was wrong, so a fresh read
 // and a fresh plan are all it takes; anything else the bridge refuses is reported as it is.
-bool CommitEngine::isRetryableCommitRejection(const privmx::utils::PrivmxException& e) {
+bool CommitEngine::isRetryableCommitRejection(const privmx::endpoint::core::Exception& e) {
     const unsigned int code = e.getCode();
-    if ((code & 0xFFFF0000) != 0) {
-        return false; // not a bridge application error
-    }
-    switch (code & 0x0000FFFF) {
-    case ROTATED_ALREADY:
-    case GROUP_ROSTER_VERSION_MISMATCH:
+    if (code == privmx::endpoint::server::GroupRotatedAlreadyException().getCode() ||
+        code == privmx::endpoint::server::GroupRosterVersionMismatchException().getCode()) {
         return true;
-    case GROUP_TREE_INVALID:
+    }
+    if (code == privmx::endpoint::server::GroupTreeInvalidException().getCode()) {
         // A rotation moves no node, so a self-update under it shows as its grant edge's stale child generation
         // (the root's); every other commit sees it as a stale base generation.
         return e.getData().find("\"STALE_BASE_GENERATION\"") != std::string::npos ||
             e.getData().find("\"STALE_CHILD_GENERATION\"") != std::string::npos;
-    default:
-        return false;
     }
+    return false;
 }
 
 VerifiedGroup CommitEngine::rereadVerified(
@@ -193,7 +181,7 @@ void CommitEngine::submit(
     }
     try {
         commit.send();
-    } catch (const privmx::utils::PrivmxException& e) {
+    } catch (const privmx::endpoint::core::Exception& e) {
         // The bridge's word that a concurrent commit took this seq; it may have applied ours all the same.
         if (isRetryableCommitRejection(e)) {
             deps.treeVerifier.refusedAsLostRace(groupId, statement.seq);
@@ -288,7 +276,7 @@ Settled CommitEngine::settle(const std::string& groupId, const std::string& op, 
     try {
         pending.send();
     } catch (const std::exception& e) {
-        const auto* rejection = dynamic_cast<const privmx::utils::PrivmxException*>(&e);
+        const auto* rejection = dynamic_cast<const privmx::endpoint::core::Exception*>(&e);
         if (rejection != nullptr && isRetryableCommitRejection(*rejection)) {
             deps.treeVerifier.refusedAsLostRace(groupId, pending.seq);
             throw;

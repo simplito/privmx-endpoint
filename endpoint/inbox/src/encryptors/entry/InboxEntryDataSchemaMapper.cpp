@@ -31,7 +31,9 @@ inbox::server::InboxMessageServer InboxEntryDataSchemaMapper::unpackInboxOrigMes
     try {
         auto json = utils::Base64::toString(serialized);
         return inbox::server::InboxMessageServer::deserialize(json);
-    } catch (...) { throw FailedToExtractMessagePublicMetaException(); }
+    } catch (const core::Exception& e) { throw FailedToExtractMessagePublicMetaException(e); } catch (...) {
+        throw FailedToExtractMessagePublicMetaException();
+    }
 }
 
 std::string InboxEntryDataSchemaMapper::encrypt(

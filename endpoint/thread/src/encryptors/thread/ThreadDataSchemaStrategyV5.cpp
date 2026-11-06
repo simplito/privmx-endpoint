@@ -13,7 +13,6 @@ limitations under the License.
 #include "privmx/endpoint/thread/encryptors/thread/ThreadDataSchemaMapper.hpp"
 
 #include <privmx/endpoint/core/CoreConstants.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/thread/Constants.hpp"
 
@@ -40,7 +39,7 @@ std::tuple<Thread, core::DataIntegrityObject> ThreadDataSchemaStrategyV5::conver
 ) const {
     return {
         ThreadDataSchemaMapper::toLibThread(
-            thread, raw.publicMeta, raw.privateMeta, raw.statusCode, ThreadDataSchema::Version::VERSION_5
+            thread, raw.publicMeta, raw.privateMeta, raw.statusCode(), ThreadDataSchema::Version::VERSION_5
         ),
         raw.dio
     };

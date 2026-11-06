@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/core/EventVarSerializer.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 
 #include "privmx/endpoint/inbox/Events.hpp"
@@ -74,16 +73,11 @@ bool Events::isInboxCreatedEvent(const privmx::endpoint::core::EventHolder& even
 }
 
 InboxCreatedEvent Events::extractInboxCreatedEvent(const privmx::endpoint::core::EventHolder& eventHolder) {
-    try {
-        auto event = std::dynamic_pointer_cast<InboxCreatedEvent>(eventHolder.get());
-        if (!event) {
-            throw CannotExtractInboxCreatedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<InboxCreatedEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractInboxCreatedEventException();
     }
+    return *event;
 }
 
 bool Events::isInboxUpdatedEvent(const privmx::endpoint::core::EventHolder& eventHolder) {
@@ -91,16 +85,11 @@ bool Events::isInboxUpdatedEvent(const privmx::endpoint::core::EventHolder& even
 }
 
 InboxUpdatedEvent Events::extractInboxUpdatedEvent(const privmx::endpoint::core::EventHolder& handler) {
-    try {
-        auto event = std::dynamic_pointer_cast<InboxUpdatedEvent>(handler.get());
-        if (!event) {
-            throw CannotExtractInboxUpdatedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<InboxUpdatedEvent>(handler.get());
+    if (!event) {
+        throw CannotExtractInboxUpdatedEventException();
     }
+    return *event;
 }
 
 bool Events::isInboxDeletedEvent(const privmx::endpoint::core::EventHolder& eventHolder) {
@@ -108,16 +97,11 @@ bool Events::isInboxDeletedEvent(const privmx::endpoint::core::EventHolder& even
 }
 
 InboxDeletedEvent Events::extractInboxDeletedEvent(const privmx::endpoint::core::EventHolder& eventHolder) {
-    try {
-        auto event = std::dynamic_pointer_cast<InboxDeletedEvent>(eventHolder.get());
-        if (!event) {
-            throw CannotExtractInboxDeletedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<InboxDeletedEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractInboxDeletedEventException();
     }
+    return *event;
 }
 
 bool Events::isInboxEntryCreatedEvent(const core::EventHolder& eventHolder) {
@@ -125,16 +109,11 @@ bool Events::isInboxEntryCreatedEvent(const core::EventHolder& eventHolder) {
 }
 
 InboxEntryCreatedEvent Events::extractInboxEntryCreatedEvent(const core::EventHolder& eventHolder) {
-    try {
-        auto event = std::dynamic_pointer_cast<InboxEntryCreatedEvent>(eventHolder.get());
-        if (!event) {
-            throw CannotExtractInboxEntryCreatedEventException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<InboxEntryCreatedEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractInboxEntryCreatedEventException();
     }
+    return *event;
 }
 
 bool Events::isInboxEntryDeletedEvent(const core::EventHolder& eventHolder) {
@@ -142,14 +121,9 @@ bool Events::isInboxEntryDeletedEvent(const core::EventHolder& eventHolder) {
 }
 
 InboxEntryDeletedEvent Events::extractInboxEntryDeletedEvent(const core::EventHolder& eventHolder) {
-    try {
-        auto event = std::dynamic_pointer_cast<InboxEntryDeletedEvent>(eventHolder.get());
-        if (!event) {
-            throw CannotExtractInboxEntryDeletedException();
-        }
-        return *event;
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
+    auto event = std::dynamic_pointer_cast<InboxEntryDeletedEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractInboxEntryDeletedException();
     }
+    return *event;
 }

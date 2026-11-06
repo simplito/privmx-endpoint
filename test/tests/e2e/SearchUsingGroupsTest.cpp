@@ -185,8 +185,6 @@ protected:
             return std::nullopt;
         } catch (const core::Exception& e) {
             return e.getFull();
-        } catch (const privmx::utils::PrivmxException& e) {
-            return std::string(e.what()) + " | " + e.getData();
         } catch (const std::exception& e) {
             return std::string(e.what());
         }

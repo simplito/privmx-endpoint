@@ -15,7 +15,6 @@ limitations under the License.
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/utils/BinaryBufferBE.hpp>
 
 #include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataEncryptorV1.hpp"
@@ -59,7 +58,6 @@ InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(
 ) {
     InboxEntryDataResult result;
     try {
-        result.statusCode = 0;
         utils::BinaryBufferBE wholeBuffer(utils::Base64::toString(serializedBase64));
         std::string publicDataStr;
         wholeBuffer.readOneOctetLengthBuffer(publicDataStr);
@@ -83,18 +81,15 @@ InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(
 
         result.privateData = privateData;
         result.publicData = publicData;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("unpacking the inbox entry");
+    }
     return result;
 }
 
 InboxEntryPublicDataResult InboxEntryDataEncryptorV1::decryptPublicOnly(std::string& serializedBase64) {
     InboxEntryPublicDataResult result;
     try {
-        result.statusCode = 0;
         utils::BinaryBufferBE wholeBuffer(utils::Base64::toString(serializedBase64));
         std::string publicDataStr;
         wholeBuffer.readOneOctetLengthBuffer(publicDataStr);
@@ -104,10 +99,8 @@ InboxEntryPublicDataResult InboxEntryDataEncryptorV1::decryptPublicOnly(std::str
         publicDataBuffer.readBool(result.keyPreset);
         publicDataBuffer.readOneOctetLengthBuffer(result.usedInboxKeyId);
 
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = core::ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = core::asError(e); } catch (...) {
+        result.error = core::unknownError("unpacking the inbox entry");
+    }
     return result;
 }

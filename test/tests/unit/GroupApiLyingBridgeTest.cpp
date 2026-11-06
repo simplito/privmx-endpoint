@@ -76,8 +76,8 @@ core::ContainerPolicy policyWith(const std::map<std::string, std::string>& rules
 // OPEN_POLICY as the API takes it.
 const core::ContainerPolicy OPEN = policyWith({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}});
 
-privmx::utils::PrivmxException archiveInvalid() {
-    return privmx::utils::PrivmxException("GROUP_ARCHIVE_INVALID", privmx::utils::PrivmxException::RPC, 0x621F);
+srv::GroupArchiveInvalidException archiveInvalid() {
+    return srv::GroupArchiveInvalidException();
 }
 
 // One group's bridge, shared by every client. Every request is answered under one lock (`sync`), so the clients'
@@ -220,7 +220,7 @@ struct Bridge {
             throw std::runtime_error("the fake bridge stops answering a client that loops");
         }
         if (users.count(caller) == 0 || users.at(caller).getPublicKey().toBase58DER() != sessionPub) {
-            throw privmx::utils::PrivmxException("ACCESS_DENIED", privmx::utils::PrivmxException::RPC, 0x0030);
+            bridgeError<srv::AccessDeniedException>();
         }
         const std::string group = method.substr(std::string("context.").size());
         if (method == "context.contextGet") {
@@ -277,9 +277,7 @@ struct Bridge {
         if (group == "groupGet") {
             if (tree.commits.empty()) {
                 // No group created yet: refused as a bridge refuses an id it does not know.
-                throw privmx::utils::PrivmxException(
-                    "GROUP_DOES_NOT_EXIST", privmx::utils::PrivmxException::RPC, 0x0061
-                );
+                bridgeError<srv::GroupDoesNotExistException>();
             }
             const auto model = server::GroupGetModel::fromJSON(params);
             const bool plan = model.scope == std::optional<std::string>("plan");
@@ -428,7 +426,7 @@ struct Bridge {
             result.eraFloor = eraFloor;
             if (model.spans.has_value()) {
                 if (model.fromKeyVersion.has_value() || model.toKeyVersion.has_value() || model.spans->size() > 128) {
-                    throw privmx::utils::PrivmxException("INVALID_PARAMS", privmx::utils::PrivmxException::RPC, 0x0002);
+                    bridgeError<srv::InvalidParamsException>();
                 }
                 for (const server::GroupArchiveRung& rung : rungs) {
                     const bool asked = std::any_of(model.spans->begin(), model.spans->end(), [&](const auto& span) {
@@ -485,7 +483,7 @@ struct Bridge {
             const auto model = server::GroupRepairRungModel::fromJSON(params);
             server::GroupArchiveRung rung = model.rung;
             if (!seatOf(tree.state, caller).has_value()) {
-                throw privmx::utils::PrivmxException("ACCESS_DENIED", privmx::utils::PrivmxException::RPC, 0x0001);
+                bridgeError<srv::AccessDeniedException>();
             }
             if (rung.author.has_value() || rung.targetKeyVersion >= rung.atKeyVersion ||
                 rung.atKeyVersion > static_cast<std::int64_t>(tree.state.epoch) || rung.targetKeyVersion < eraFloor) {
@@ -635,8 +633,8 @@ std::string prevOf(const server::GroupTreeCommit& commit) {
 }
 
 // A bridge refusal that is not a lost race (`isRetryableCommitRejection`).
-[[noreturn]] void refuse(const std::string& name = "ACCESS_DENIED", unsigned int code = 0x0030) {
-    throw privmx::utils::PrivmxException(name, privmx::utils::PrivmxException::RPC, code);
+[[noreturn]] void refuse() {
+    bridgeError<srv::AccessDeniedException>();
 }
 
 // `call` refused with `E` for `reason` (a fragment of `what()`): a SECURITY test that only checks the type passes
@@ -1084,7 +1082,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_NoSecondStatementIsSignedAtASeqTheBridgeCal
         ++removals;
         bridge.tree = atSeq1.tree;
         bridge.rest = atSeq1.rest;
-        throw privmx::utils::PrivmxException("ROTATED_ALREADY", privmx::utils::PrivmxException::RPC, 0x621C);
+        bridgeError<srv::GroupRotatedAlreadyException>();
     };
     EXPECT_THROW(client("alice").removeGroupMembers(groupId, {"carol"}), GroupDataIntegrityException);
     EXPECT_EQ(removals, 1);
@@ -1525,7 +1523,7 @@ TEST_F(GroupApiLyingBridge, AnOwnCommitLostToAnotherCommitMakesTheOneQueuedBehin
     const std::string groupId = createGroup({"alice", "bob", "carol", "dave"});
     EXPECT_EQ(removeTwoOnOneHead(groupId, [&] {
         selfUpdateBy("dave");
-        refuse("ROTATED_ALREADY", 0x621C);
+        bridgeError<srv::GroupRotatedAlreadyException>();
     }), 0);
     EXPECT_TRUE(noTwoStatementsShareAPrevDigest(bridge.received));
     EXPECT_EQ(bridge.tree.state.epoch, 3u) << "both removals landed, one after the other";
@@ -1733,7 +1731,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARefusedSelfUpdateNeverHoldsBackARemoval) {
     const std::string member = memberNeedingSelfUpdate(CROWD);
     ASSERT_FALSE(member.empty()) << "no member with a self-update need";
     const std::string atP = digestOf(bridge.tree.commits.back());
-    bridge.onSelfUpdate = [] { refuse("GROUP_ROTATION_RATE_LIMIT", 0x621D); };
+    bridge.onSelfUpdate = [] { bridgeError<srv::GroupRotationRateLimitException>(); };
     EXPECT_ANY_THROW(GroupApiImplTestAccess::selfUpdate(client(member), groupId));
     const std::string leaver = member == "carol" ? "bob" : "carol";
     EXPECT_NO_THROW(client(member).removeGroupMembers(groupId, {leaver}));
@@ -1950,7 +1948,7 @@ TEST_F(GroupApiLyingBridge, APolicyChangeLosingTheRaceToAnAdditionIsPlannedAgain
         lock.unlock();
         client("bob").addGroupMembers(groupId, {GroupMemberToAdd{.user = user("dave"), .role = "user"}});
         lock.lock();
-        throw privmx::utils::PrivmxException("GROUP_ROSTER_VERSION_MISMATCH", privmx::utils::PrivmxException::RPC, 0x6224);
+        bridgeError<srv::GroupRosterVersionMismatchException>();
     };
     client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}}));
     const CommitStatement landed = TreeCommits::fromWire(bridge.tree.commits.back());
@@ -2213,7 +2211,7 @@ TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedByTheNextCall) {
     bool refuse = true;
     bridge.onMetaWrite = [&] {
         if (std::exchange(refuse, false)) {
-            throw privmx::utils::PrivmxException("GROUP_VERSION_MISMATCH", privmx::utils::PrivmxException::RPC, 0x6211);
+            bridgeError<srv::GroupVersionMismatchException>();
         }
     };
     EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})));
@@ -2230,7 +2228,7 @@ TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedAfterADisconnect) {
     bool refuse = true;
     bridge.onMetaWrite = [&] {
         if (std::exchange(refuse, false)) {
-            throw privmx::utils::PrivmxException("GROUP_VERSION_MISMATCH", privmx::utils::PrivmxException::RPC, 0x6211);
+            bridgeError<srv::GroupVersionMismatchException>();
         }
     };
     EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})));

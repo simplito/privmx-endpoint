@@ -34,7 +34,7 @@ limitations under the License.
 #include <privmx/endpoint/stream/StreamException.hpp>
 #include <privmx/endpoint/stream/encryptors/streamRoom/StreamRoomDataSchemaMapper.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
-#include <privmx/utils/PrivmxException.hpp>
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include "TestHelpers.hpp"
@@ -355,7 +355,7 @@ struct Joined {
         bridge->handlers["stream.streamRoomRotateKeys"] = [this, take](Poco::JSON::Object::Ptr params) {
             ++rekeys;
             if (!take) {
-                throw privmx::utils::PrivmxException("ACCESS_DENIED", privmx::utils::PrivmxException::RPC, 0x0030);
+                throw privmx::endpoint::server::AccessDeniedException();
             }
             const auto model = stream::server::StreamRoomRotateKeysModel::fromJSON(params);
             auto room = bridge->served.value();

@@ -133,13 +133,17 @@ struct InboxEntrySendModel {
 };
 
 struct InboxEntryPublicDataResult : public InboxEntryPublicData {
-    int64_t statusCode;
+    std::shared_ptr<const core::Exception> error;
+
+    int64_t statusCode() const noexcept { return error ? (int64_t)error->getCode() : 0; }
 };
 
 struct InboxEntryDataResult {
     InboxEntryPublicData publicData;
     InboxEntryPrivateData privateData;
-    int64_t statusCode;
+    std::shared_ptr<const core::Exception> error;
+
+    int64_t statusCode() const noexcept { return error ? (int64_t)error->getCode() : 0; }
 };
 
 struct InboxEntryResult : public InboxEntryDataResult {

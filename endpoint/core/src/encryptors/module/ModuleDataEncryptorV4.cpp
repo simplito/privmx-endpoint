@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV4.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/encryptors/module/Constants.hpp>
@@ -47,7 +46,6 @@ DecryptedModuleDataV4 ModuleDataEncryptorV4::decrypt(
     const std::string& encryptionKey
 ) {
     DecryptedModuleDataV4 result;
-    result.statusCode = 0;
     result.dataStructureVersion = ModuleDataSchema::Version::VERSION_4;
     try {
         validateVersion(encryptedModuleData);
@@ -57,8 +55,7 @@ DecryptedModuleDataV4 ModuleDataEncryptorV4::decrypt(
             auto tmp_1 = utils::Utils::stringifyVar(utils::Utils::parseJsonObject(result.publicMeta.stdString()));
             auto tmp_2 = utils::Utils::stringifyVar(encryptedModuleData.publicMetaObject);
             if (tmp_1 != tmp_2) {
-                auto e = ModulePublicDataMismatchException();
-                result.statusCode = e.getCode();
+                result.error = asError(ModulePublicDataMismatchException());
             }
         }
         result.privateMeta = _dataEncryptor.decodeAndDecryptAndVerify(
@@ -70,11 +67,9 @@ DecryptedModuleDataV4 ModuleDataEncryptorV4::decrypt(
             )) :
             std::nullopt;
         result.authorPubKey = encryptedModuleData.authorPubKey;
-    } catch (const privmx::endpoint::core::Exception& e) {
-        result.statusCode = e.getCode();
-    } catch (const privmx::utils::PrivmxException& e) {
-        result.statusCode = ExceptionConverter::convert(e).getCode();
-    } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+    } catch (const privmx::endpoint::core::Exception& e) { result.error = asError(e); } catch (...) {
+        result.error = unknownError("decrypting module data");
+    }
     return result;
 }
 

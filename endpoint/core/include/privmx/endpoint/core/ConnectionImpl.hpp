@@ -116,7 +116,7 @@ public:
     DataIntegrityObject createPublicDIO(
         const std::string& contextId,
         const std::string& resourceId,
-        const crypto::PublicKey& pubKey,
+        const privmx::crypto::PublicKey& pubKey,
         const std::optional<std::string>& containerId = std::nullopt,
         const std::optional<std::string>& containerResourceId = std::nullopt
     );
@@ -134,7 +134,7 @@ private:
         const std::optional<std::string>& containerId,
         const std::optional<std::string>& containerResourceId,
         const std::optional<std::string>& creatorUserId = std::nullopt,
-        const std::optional<crypto::PublicKey>& creatorPublicKey = std::nullopt
+        const std::optional<privmx::crypto::PublicKey>& creatorPublicKey = std::nullopt
     );
     int64_t generateConnectionId();
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);

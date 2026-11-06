@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/JsonSerializer.hpp>
 #include <privmx/endpoint/core/Validator.hpp>
 
@@ -23,17 +22,12 @@ using namespace privmx::endpoint;
 using namespace privmx::endpoint::kvdb;
 
 KvdbApi KvdbApi::create(core::Connection& connection, const std::optional<group::GroupApi>& groupApi) {
-    try {
-        std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
-        std::shared_ptr<KvdbApiImpl> impl(new KvdbApiImpl(
-            connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
-            connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection, groupApi
-        ));
-        return KvdbApi(impl);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
+    std::shared_ptr<KvdbApiImpl> impl(new KvdbApiImpl(
+        connectionImpl->getGateway(), connectionImpl->getUserPrivKey(), connectionImpl->getKeyProvider(),
+        connectionImpl->getHost(), connectionImpl->getEventMiddleware(), connection, groupApi
+    ));
+    return KvdbApi(impl);
 }
 
 KvdbApi::KvdbApi(const std::shared_ptr<KvdbApiImpl>& impl) : BaseApiClass(impl) {}
@@ -52,12 +46,7 @@ std::string KvdbApi::createKvdb(
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
-    try {
-        return impl->createKvdb(contextId, users, managers, publicMeta, privateMeta, policies, groups);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->createKvdb(contextId, users, managers, publicMeta, privateMeta, policies, groups);
 }
 
 void KvdbApi::updateKvdb(
@@ -77,14 +66,9 @@ void KvdbApi::updateKvdb(
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
-    try {
-        return impl->updateKvdb(
-            kvdbId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
-        );
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->updateKvdb(
+        kvdbId, users, managers, publicMeta, privateMeta, version, force, forceGenerateNewKey, policies, groups
+    );
 }
 
 void KvdbApi::rotateKvdbKeys(
@@ -100,78 +84,43 @@ void KvdbApi::rotateKvdbKeys(
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(users, "field:users ");
     core::Validator::validateClass<std::vector<core::UserWithPubKey>>(managers, "field:managers ");
     core::Validator::validateClass<std::vector<core::GroupGrantWithKey>>(groups, "field:groups ");
-    try {
-        impl->rotateKvdbKeys(kvdbId, users, managers, version, force, groups);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    impl->rotateKvdbKeys(kvdbId, users, managers, version, force, groups);
 }
 
 void KvdbApi::deleteKvdb(const std::string& kvdbId) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return impl->deleteKvdb(kvdbId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->deleteKvdb(kvdbId);
 }
 
 Kvdb KvdbApi::getKvdb(const std::string& kvdbId) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return impl->getKvdb(kvdbId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->getKvdb(kvdbId);
 }
 core::PagingList<Kvdb> KvdbApi::listKvdbs(const std::string& contextId, const core::PagingQuery& pagingQuery) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validatePagingQuery(pagingQuery, {"createDate"}, "field:pagingQuery ");
-    try {
-        return impl->listKvdbs(contextId, pagingQuery);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->listKvdbs(contextId, pagingQuery);
 }
 
 KvdbEntry KvdbApi::getEntry(const std::string& kvdbId, const std::string& key) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return impl->getEntry(kvdbId, key);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->getEntry(kvdbId, key);
 }
 
 std::optional<KvdbEntry> KvdbApi::findEntry(const std::string& kvdbId, const std::string& key) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return impl->findEntry(kvdbId, key);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->findEntry(kvdbId, key);
 }
 
 bool KvdbApi::hasEntry(const std::string& kvdbId, const std::string& key) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return impl->hasEntry(kvdbId, key);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->hasEntry(kvdbId, key);
 }
 
 core::PagingList<std::string> KvdbApi::listEntriesKeys(
@@ -183,12 +132,7 @@ core::PagingList<std::string> KvdbApi::listEntriesKeys(
     core::Validator::validatePagingQuery(
         pagingQuery, {"createDate", "entryKey", "lastModificationDate"}, "field:pagingQuery "
     );
-    try {
-        return impl->listEntriesKeys(kvdbId, pagingQuery);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->listEntriesKeys(kvdbId, pagingQuery);
 }
 core::PagingList<KvdbEntry> KvdbApi::listEntries(const std::string& kvdbId, const core::PagingQuery& pagingQuery) {
     auto impl = getImpl();
@@ -196,12 +140,7 @@ core::PagingList<KvdbEntry> KvdbApi::listEntries(const std::string& kvdbId, cons
     core::Validator::validatePagingQuery(
         pagingQuery, {"createDate", "entryKey", "lastModificationDate"}, "field:pagingQuery "
     );
-    try {
-        return impl->listEntries(kvdbId, pagingQuery);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->listEntries(kvdbId, pagingQuery);
 }
 
 void KvdbApi::setEntry(
@@ -214,54 +153,29 @@ void KvdbApi::setEntry(
 ) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return impl->setEntry(kvdbId, key, publicMeta, privateMeta, data, version);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->setEntry(kvdbId, key, publicMeta, privateMeta, data, version);
 }
 
 void KvdbApi::deleteEntry(const std::string& kvdbId, const std::string& key) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return impl->deleteEntry(kvdbId, key);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->deleteEntry(kvdbId, key);
 }
 
 std::map<std::string, bool> KvdbApi::deleteEntries(const std::string& kvdbId, const std::vector<std::string>& keys) {
     auto impl = getImpl();
     core::Validator::validateId(kvdbId, "field:kvdbId ");
-    try {
-        return impl->deleteEntries(kvdbId, keys);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->deleteEntries(kvdbId, keys);
 }
 
 std::vector<std::string> KvdbApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto impl = getImpl();
-    try {
-        return impl->subscribeFor(subscriptionQueries);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->subscribeFor(subscriptionQueries);
 }
 
 void KvdbApi::unsubscribeFrom(const std::vector<std::string>& subscriptionIds) {
     auto impl = getImpl();
-    try {
-        return impl->unsubscribeFrom(subscriptionIds);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->unsubscribeFrom(subscriptionIds);
 }
 
 std::string KvdbApi::buildSubscriptionQuery(
@@ -270,12 +184,7 @@ std::string KvdbApi::buildSubscriptionQuery(
     const std::string& selectorId
 ) {
     auto impl = getImpl();
-    try {
-        return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->buildSubscriptionQuery(eventType, selectorType, selectorId);
 }
 
 std::string KvdbApi::buildSubscriptionQueryForSelectedEntry(
@@ -284,10 +193,5 @@ std::string KvdbApi::buildSubscriptionQueryForSelectedEntry(
     const std::string& kvdbEntryKey
 ) {
     auto impl = getImpl();
-    try {
-        return impl->buildSubscriptionQueryForSelectedEntry(eventType, kvdbId, kvdbEntryKey);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return impl->buildSubscriptionQueryForSelectedEntry(eventType, kvdbId, kvdbEntryKey);
 }

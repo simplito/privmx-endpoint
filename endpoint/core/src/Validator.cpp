@@ -238,6 +238,8 @@ void Validator::validatePrivKeyWIF(const string& value, const string& stack_trac
     Validator::validateBase58(value, stack_trace);
     try {
         privmx::crypto::PrivateKey::fromWIF(value);
+    } catch (const Exception& e) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid PrivKeyWIF"), e);
     } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid PrivKeyWIF")); }
 }
 
@@ -245,6 +247,8 @@ void Validator::validatePubKeyBase58DER(const string& value, const string& stack
     Validator::validateBase58(value, stack_trace);
     try {
         privmx::crypto::PublicKey::fromBase58DER(value);
+    } catch (const Exception& e) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER"), e);
     } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER")); }
 }
 
@@ -254,6 +258,8 @@ void Validator::validatePubKeyFormat(const string& value, const string& stack_tr
     std::string der;
     try {
         der = privmx::utils::Base58::decodeWithChecksum(value);
+    } catch (const Exception& e) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER"), e);
     } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER")); }
     if (der.size() != 33 && der.size() != 65) {
         throw InvalidParamsException(stack_trace + " | " + ("Invalid PubKeyBase58DER length"));
@@ -326,6 +332,8 @@ void Validator::validateBufferSize(
 void Validator::validateJSON(const std::string& value, const std::string& stack_trace) {
     try {
         privmx::utils::Utils::parseJson(value);
+    } catch (const Exception& e) {
+        throw InvalidParamsException(stack_trace + " | " + ("Invalid JSON"), e);
     } catch (...) { throw InvalidParamsException(stack_trace + " | " + ("Invalid JSON")); }
 }
 

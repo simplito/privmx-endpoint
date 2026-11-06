@@ -143,7 +143,7 @@ TEST_F(KeyProviderGroupKeysTest, a_dead_route_does_not_block_a_key_a_later_route
     const auto keys = _keyProvider->getKeysAndVerify(request, resolverOver(openable, log));
 
     const auto& key = keys.at(_location).at(KEY_ID);
-    EXPECT_EQ(key.statusCode, 0);
+    EXPECT_EQ(key.statusCode(), 0);
     EXPECT_EQ(key.id, KEY_ID);
     EXPECT_EQ(key.key, _containerKey.key);
     // Both tried, in order.
@@ -163,14 +163,14 @@ TEST_F(KeyProviderGroupKeysTest, opening_on_the_first_route_stops_the_search) {
     const auto keys = _keyProvider->getKeysAndVerify(request, resolverOver(openable, log));
 
     const auto& key = keys.at(_location).at(KEY_ID);
-    EXPECT_EQ(key.statusCode, 0);
+    EXPECT_EQ(key.statusCode(), 0);
     EXPECT_EQ(key.key, _containerKey.key);
     // Stopped on the first success: attempting group_b costs a `groupGet` and a climb for nothing.
     EXPECT_EQ(log.attempted, (std::vector<std::string>{GROUP_A}));
 }
 
 TEST_F(KeyProviderGroupKeysTest, unopenable_routes_leave_a_failed_entry_under_the_keyId) {
-    // Every route dead still yields an entry: callers read `.at(keyId).statusCode`, so a gap throws instead.
+    // Every route dead still yields an entry: callers read `.at(keyId).statusCode()`, so a gap throws instead.
     const auto groupA = privmx::crypto::PrivateKey::generateRandom();
     const auto groupB = privmx::crypto::PrivateKey::generateRandom();
 
@@ -183,7 +183,7 @@ TEST_F(KeyProviderGroupKeysTest, unopenable_routes_leave_a_failed_entry_under_th
 
     const auto locationKeys = keys.at(_location);
     ASSERT_EQ(locationKeys.count(KEY_ID), 1u);
-    EXPECT_EQ(locationKeys.at(KEY_ID).statusCode, UnknownEncryptionKeyVersionException().getCode());
+    EXPECT_EQ(locationKeys.at(KEY_ID).statusCode(), UnknownEncryptionKeyVersionException().getCode());
     EXPECT_EQ(log.attempted, (std::vector<std::string>{GROUP_A, GROUP_B}));
 }
 
@@ -244,7 +244,7 @@ TEST_F(KeyProviderGroupKeysTest, reading_the_current_key_resolves_only_its_own_e
         .moduleResourceId = _location.resourceId, .contextId = _location.contextId
     });
 
-    EXPECT_EQ(key.statusCode, 0);
+    EXPECT_EQ(key.statusCode(), 0);
     EXPECT_EQ(key.key, _containerKey.key);
     EXPECT_EQ(resolvedEpochs, (std::vector<int64_t>{30}));
 }
@@ -263,7 +263,7 @@ TEST_F(KeyProviderGroupKeysTest, v1_entry_on_a_group_route_is_rejected) {
     ResolverLog log;
     const std::map<std::string, privmx::crypto::PrivateKey> openable{{GROUP_A, group}};
     const auto key = _keyProvider->getKeysAndVerify(request, resolverOver(openable, log)).at(_location).at(KEY_ID);
-    EXPECT_NE(key.statusCode, 0);
+    EXPECT_NE(key.statusCode(), 0);
 }
 
 TEST_F(KeyProviderGroupKeysTest, v1_entry_stays_readable_but_is_refused_as_the_write_key) {
@@ -275,7 +275,7 @@ TEST_F(KeyProviderGroupKeysTest, v1_entry_stays_readable_but_is_refused_as_the_w
     KeyDecryptionAndVerificationRequest request;
     request.addOne({forged}, KEY_ID, _location);
     const auto read = keyProvider->getKeysAndVerify(request).at(_location).at(KEY_ID);
-    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_EQ(read.statusCode(), 0);
     EXPECT_EQ(read.key, serverKey);
 
     // Encrypting under it does not: the key id and the entry are both the server's choice. It reads as a key to
@@ -296,8 +296,8 @@ TEST_F(KeyProviderGroupKeysTest, malformed_v1_entry_fails_alone) {
     request.addAll({malformed, server::KeyEntry{.keyId = good.keyId, .data = good.data}}, _location);
 
     const auto keys = _keyProvider->getKeysAndVerify(request).at(_location);
-    EXPECT_NE(keys.at("malformed").statusCode, 0);
-    EXPECT_EQ(keys.at(KEY_ID).statusCode, 0);
+    EXPECT_NE(keys.at("malformed").statusCode(), 0);
+    EXPECT_EQ(keys.at(KEY_ID).statusCode(), 0);
 }
 
 TEST_F(KeyProviderGroupKeysTest, v1_key_is_never_rewrapped_as_signed_v2) {
@@ -305,7 +305,6 @@ TEST_F(KeyProviderGroupKeysTest, v1_key_is_never_rewrapped_as_signed_v2) {
     DecryptedEncKeyV2 v1;
     v1.id = KEY_ID;
     v1.key = std::string(32, '\x5a');
-    v1.statusCode = 0;
     v1.dataStructureVersion = EncryptionKeyDataSchema::Version::VERSION_1;
     const UserWithPubKey newcomer{.userId = "user_2", .pubKey = _author.getPublicKey().toBase58DER()};
     const auto entries = _keyProvider->prepareMissingKeysForNewUsers(

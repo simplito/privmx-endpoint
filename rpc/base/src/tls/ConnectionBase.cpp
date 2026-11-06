@@ -18,6 +18,7 @@ limitations under the License.
 #include <privmx/rpc/tls/ConnectionBase.hpp>
 #include <privmx/utils/BinaryBuffer.hpp>
 #include <privmx/utils/PrivmxExtExceptions.hpp>
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/rpc/RpcException.hpp>
 #include <privmx/utils/Utils.hpp>
 
@@ -159,8 +160,12 @@ void ConnectionBase::process(istream& input) {
                 _next_read_state = RWState();
                 break;
             case ContentType::ALERT:
-                // errors form connection  
-                throw PrivmxException(frame_data, PrivmxException::ALERT);
+                // errors form connection. The alert frame carries only text, so the one alert callers
+                // tell apart by type is named here; everything else stays a plain alert.
+                if (frame_data == "User doesn't exist") {
+                    throw privmx::endpoint::server::UserDoesNotExistException(frame_data);
+                }
+                throw ServerAlertException(frame_data);
                 break;
         }
     }

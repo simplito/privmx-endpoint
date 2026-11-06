@@ -10,7 +10,6 @@
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/EventMiddleware.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/TimestampValidator.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 #include <privmx/endpoint/core/Utils.hpp>
@@ -452,11 +451,9 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                 }
                 data.payload = core::Buffer::from(payload.value());
                 data.authorPubKey = decrypted.authorPubKey;
-            } catch (const core::Exception& e) {
-                data.statusCode = e.getCode();
-            } catch (const privmx::utils::PrivmxException& e) {
-                data.statusCode = core::ExceptionConverter::convert(e).getCode();
-            } catch (...) { data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+            } catch (const core::Exception& e) { data.statusCode = e.getCode(); } catch (...) {
+                data.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+            }
             auto event = core::EventBuilder::buildEvent<GroupCustomEvent>(
                 "group/" + raw.id + "/" + channelName, data, notification
             );

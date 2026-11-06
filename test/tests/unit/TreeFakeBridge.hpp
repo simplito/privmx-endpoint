@@ -27,7 +27,7 @@ limitations under the License.
 #include <Poco/JSON/Object.h>
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/utils/PrivmxException.hpp>
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/group/GroupException.hpp>
@@ -51,9 +51,20 @@ const std::string GROUP_ID = TreeCommits::groupId("ctx", "res");
 // whose removers and adders are plain users, keep their meaning.
 const Poco::Dynamic::Var OPEN_POLICY = policyOf({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}});
 
+// The Bridge's own error scope; `bridge` is taken by the fake instances the tests hold.
+namespace srv = privmx::endpoint::server;
+
+// A bridge error as the RPC layer surfaces one: the exception declared for the code, its payload unparsed.
+template<typename E>
+[[noreturn]] void bridgeError(const std::string& data = std::string()) {
+    E e;
+    e.setData(data);
+    throw e;
+}
+
 // A bridge refusal answering a statement that does not extend the stored latest: a lost race, retryable.
 [[noreturn]] void rotatedAlready() {
-    throw privmx::utils::PrivmxException("ROTATED_ALREADY", privmx::utils::PrivmxException::RPC, 0x621C);
+    bridgeError<srv::GroupRotatedAlreadyException>();
 }
 
 struct Member {
@@ -468,10 +479,9 @@ public:
         const TreeNodeState* rootRecord = recordOf(state, root);
         if (!TreeMath::isLeaf(root) && rootRecord != nullptr && grantEdge.childGeneration.has_value() &&
             grantEdge.childGeneration.value() != static_cast<std::int64_t>(rootRecord->generation)) {
-            throw privmx::utils::PrivmxException(
-                "GROUP_TREE_INVALID", privmx::utils::PrivmxException::RPC, 0x621E,
+            bridgeError<srv::GroupTreeInvalidException>(
                 "[{\"kind\":\"STALE_CHILD_GENERATION\",\"expected\":" + std::to_string(rootRecord->generation) +
-                    ",\"got\":" + std::to_string(grantEdge.childGeneration.value()) + "}]"
+                ",\"got\":" + std::to_string(grantEdge.childGeneration.value()) + "}]"
             );
         }
         TreeGroupState post = state;
