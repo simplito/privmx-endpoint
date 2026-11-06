@@ -42,13 +42,13 @@ public:
     ) const override;
     ContextCustomEventData makeErrorResult(
         const server::ContextCustomEventData& model,
-        int64_t errorCode
+        const std::optional<core::Error>& error
     ) const override;
 
     static ContextCustomEventData toContextCustomEventData(
         const server::ContextCustomEventData& raw,
         const core::Buffer& payload,
-        int64_t statusCode,
+        const std::optional<core::Error>& error,
         int64_t schemaVersion
     );
 

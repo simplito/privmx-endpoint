@@ -107,6 +107,9 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<Context>(const Context& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<Error>(const Error& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<PagingList<Context>>(const PagingList<Context>& val);
 
 template<>

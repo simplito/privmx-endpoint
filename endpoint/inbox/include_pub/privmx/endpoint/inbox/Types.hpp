@@ -123,9 +123,9 @@ struct Inbox {
     core::ContainerPolicyWithoutItem policy;
 
     /**
-     * status code of retrieval and decryption of the Inbox
+     * Set when retrieval or decryption of the Inbox failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 
     /**
      * Version of the Inbox data structure and how it is encoded/encrypted
@@ -180,9 +180,9 @@ struct InboxEntry {
     int64_t createDate;
 
     /**
-     * status code of retrieval and decryption of the Inbox entry
+     * Set when retrieval or decryption of the Inbox entry failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 
     /**
      * Version of the Entry data structure and how it is encoded/encrypted

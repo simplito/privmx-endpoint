@@ -168,7 +168,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     ASSERT_FALSE(groupId.empty());
     group::Group group1;
     ASSERT_NO_THROW({ group1 = user1.groupApi->getGroup(groupId); });
-    ASSERT_EQ(group1.statusCode, 0);
+    ASSERT_EQ(errCode(group1), 0);
     ASSERT_EQ(group1.keyVersion, 1);
 
     // -- Thread1: user_1 manages it, Group1 reads it, anyone may download it --
@@ -194,14 +194,14 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     // user_3 reads it through the same grant
     thread::Message message1AsUser3;
     ASSERT_NO_THROW({ message1AsUser3 = user3.threadApi->getMessage(message1Id); });
-    EXPECT_EQ(message1AsUser3.statusCode, 0) << "a group member could not read a message written by another one";
+    EXPECT_EQ(errCode(message1AsUser3), 0) << "a group member could not read a message written by another one";
     EXPECT_EQ(message1AsUser3.privateMeta.stdString(), "message1_private");
     EXPECT_EQ(message1AsUser3.data.stdString(), "message1_data");
 
     // -- user_1 updates the Thread, roster untouched --
     thread::Thread beforeUpdate;
     ASSERT_NO_THROW({ beforeUpdate = user1.threadApi->getThread(threadId); });
-    ASSERT_EQ(beforeUpdate.statusCode, 0);
+    ASSERT_EQ(errCode(beforeUpdate), 0);
     ASSERT_NO_THROW({
         // The grant has to be restated: an omitted `groups` means "no grantees", not "leave them alone".
         user1.threadApi->updateThread(
@@ -212,7 +212,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     });
     thread::Thread afterUpdate;
     ASSERT_NO_THROW({ afterUpdate = user1.threadApi->getThread(threadId); });
-    EXPECT_EQ(afterUpdate.statusCode, 0);
+    EXPECT_EQ(errCode(afterUpdate), 0);
     EXPECT_EQ(afterUpdate.publicMeta.stdString(), "thread1_public_v2");
     ASSERT_EQ(afterUpdate.groups.size(), 1);
     EXPECT_EQ(afterUpdate.groups[0].groupId, groupId);
@@ -239,7 +239,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     for (int i = 0; i < MESSAGE_COUNT; ++i) {
         const auto found = asMember.find(user3MessageIds[i]);
         ASSERT_NE(found, asMember.end()) << "user_3's own message " << i << " is missing from the listing";
-        ASSERT_EQ(found->second.statusCode, 0) << "user_3 could not read their own message " << i << " as a member";
+        ASSERT_EQ(errCode(found->second), 0) << "user_3 could not read their own message " << i << " as a member";
     }
     pumpEvents();
 
@@ -278,7 +278,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     // -- What user_3 can see now: the re-encrypted message is closed to them, its public half is not --
     thread::Message lostMessage;
     ASSERT_NO_THROW({ lostMessage = user3.threadApi->getMessage(message1Id); });
-    EXPECT_NE(lostMessage.statusCode, 0) << "a removed member decrypted content re-encrypted after their removal";
+    EXPECT_NE(errCode(lostMessage), 0) << "a removed member decrypted content re-encrypted after their removal";
     EXPECT_EQ(lostMessage.publicMeta.stdString(), "message1_public_v2")
         << "public metadata is not encrypted and has to survive the loss of the key";
     EXPECT_TRUE(lostMessage.privateMeta.stdString().empty());
@@ -296,7 +296,7 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     for (int i = 0; i < MESSAGE_COUNT; ++i) {
         const auto found = asUser3.find(user3MessageIds[i]);
         ASSERT_NE(found, asUser3.end()) << "user_3's own message " << i << " is gone from the listing";
-        if (found->second.statusCode != 0) {
+        if (errCode(found->second) != 0) {
             if (firstUnreadableId.empty()) {
                 firstUnreadableId = user3MessageIds[i];
                 firstUnreadablePublicMeta = found->second.publicMeta.stdString();
@@ -348,9 +348,9 @@ TEST_F(ThreadGroupScenarioTest, thread_granted_to_a_group_across_a_member_remova
     auto asUser2 = byMessageId(remaining);
     ASSERT_NE(asUser2.find(message1Id), asUser2.end());
     ASSERT_NE(asUser2.find(message2Id), asUser2.end());
-    EXPECT_EQ(asUser2.at(message1Id).statusCode, 0);
+    EXPECT_EQ(errCode(asUser2.at(message1Id)), 0);
     EXPECT_EQ(asUser2.at(message1Id).data.stdString(), "message1_data_v2");
-    EXPECT_EQ(asUser2.at(message2Id).statusCode, 0);
+    EXPECT_EQ(errCode(asUser2.at(message2Id)), 0);
     EXPECT_EQ(asUser2.at(message2Id).data.stdString(), "message2_data");
 
     // -- Both watchers were told about all of it --

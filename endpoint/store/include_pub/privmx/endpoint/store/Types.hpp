@@ -84,9 +84,9 @@ struct File {
     std::string authorPubKey;
 
     /**
-     * status code of retrieval and decryption of the file
+     * Set when retrieval or decryption of the file failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 
     /**
      * Version of the file data structure and how it is encoded/encrypted
@@ -175,9 +175,9 @@ struct Store {
     int64_t filesCount;
 
     /**
-     * status code of retrieval and decryption of the Store
+     * Set when retrieval or decryption of the Store failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 
     /**
      * Version of the Store data structure and how it is encoded/encrypted

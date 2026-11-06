@@ -90,6 +90,11 @@ namespace {
 
 const int64_t REFUSED = core::UserVerificationFailureException().getCode();
 
+// An optional Error read as a code, 0 for none, so an assertion names the code it expects.
+int64_t codeOf(const std::optional<core::Error>& error) {
+    return error.has_value() ? (int64_t)error->code : 0;
+}
+
 // The application's verifier: vouches for exactly the (user, key) pairs it was given, and records every request.
 class Verifier : public core::UserVerifierInterface {
 public:
@@ -119,7 +124,7 @@ struct Listed {
     std::string contextId;
     std::string lastModifier;
     int64_t lastModificationDate = 0;
-    int64_t statusCode = 0;
+    std::optional<core::Error> error;
 };
 
 TEST(ContextBinding, SECURITY_AListedContainerFromAnotherContextIsRefused) {
@@ -130,19 +135,22 @@ TEST(ContextBinding, SECURITY_AListedContainerFromAnotherContextIsRefused) {
     int integrityChecks = 0;
     const auto result = core::DataSchemaMapperUtils::batchValidateDecryptVerifyContainers<Listed>(
         std::vector<Served>{{.contextId = "ctx-b"}, {.contextId = "ctx-a"}}, nullptr, connection,
-        [&](const Served&) -> std::pair<uint32_t, std::optional<core::DataIntegrityObject>> {
+        [&](const Served&) -> std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> {
             ++integrityChecks;
-            return {7, std::nullopt}; // the item of the asked context stops here, before any key request
+            // The item of the asked context stops here, before any key request.
+            return {core::toPublicError(core::DataIntegrityObjectDuplicatedException()), std::nullopt};
         },
         [](const Served& s) { return core::EncKeyLocation{.contextId = s.contextId, .resourceId = ""}; },
         [](const Served&, const core::DecryptedEncKey&, const std::optional<core::DataIntegrityObject>&)
             -> std::tuple<Listed, core::DataIntegrityObject> { throw std::logic_error("no key to decrypt with"); },
-        [](const Served& s, uint32_t code) { return Listed{.contextId = s.contextId, .statusCode = code}; },
+        [](const Served& s, const std::optional<core::Error>& error) {
+            return Listed{.contextId = s.contextId, .error = error};
+        },
         nullptr, std::string("ctx-a")
     );
     ASSERT_EQ(result.size(), 2u);
-    EXPECT_EQ(result[0].statusCode, REFUSED);
-    EXPECT_EQ(result[1].statusCode, 7);
+    EXPECT_EQ(codeOf(result[0].error), REFUSED);
+    EXPECT_EQ(codeOf(result[1].error), core::DataIntegrityObjectDuplicatedException().getCode());
     EXPECT_EQ(integrityChecks, 1) << "only the item of the asked context is checked";
 }
 
@@ -209,7 +217,7 @@ TEST_F(ContextEventBinding, SECURITY_AnEventIsVerifiedUnderTheAuthorTheApplicati
     const auto relabelled = seal(carol, me, "carol", "ctx-a", "bob", "ctx-a");
     const auto delivered = mapper->decrypt(relabelled);
     EXPECT_EQ(delivered.userId, "bob");
-    EXPECT_EQ(delivered.statusCode, REFUSED);
+    EXPECT_EQ(codeOf(delivered.error), REFUSED);
     EXPECT_EQ(mapper->decryptInternal(relabelled).statusCode(), REFUSED);
     for (const auto& request : verifier->asked) {
         EXPECT_NE(request.senderId, "carol") << "asked about another identity than the one delivered";
@@ -218,7 +226,7 @@ TEST_F(ContextEventBinding, SECURITY_AnEventIsVerifiedUnderTheAuthorTheApplicati
     // Under her own name the same event is carol's, and the verifier is asked about exactly that.
     verifier->asked.clear();
     const auto honest = mapper->decrypt(seal(carol, me, "carol", "ctx-a", "carol", "ctx-a"));
-    EXPECT_EQ(honest.statusCode, 0);
+    EXPECT_FALSE(honest.error.has_value());
     ASSERT_EQ(verifier->asked.size(), 1u);
     EXPECT_EQ(verifier->asked[0].senderId, "carol");
     EXPECT_EQ(verifier->asked[0].contextId, "ctx-a");
@@ -229,7 +237,7 @@ TEST_F(ContextEventBinding, SECURITY_AnEventIsVerifiedUnderTheContextTheApplicat
     const auto relabelled = seal(carol, me, "carol", "ctx-b", "carol", "ctx-a");
     const auto delivered = mapper->decrypt(relabelled);
     EXPECT_EQ(delivered.contextId, "ctx-a");
-    EXPECT_EQ(delivered.statusCode, REFUSED);
+    EXPECT_EQ(codeOf(delivered.error), REFUSED);
     EXPECT_EQ(mapper->decryptInternal(relabelled).statusCode(), REFUSED);
     EXPECT_TRUE(verifier->asked.empty());
 }
@@ -353,8 +361,8 @@ protected:
 
 TEST_F(ContextEventApi, SECURITY_AnEventFromAnotherContextThanSubscribedIsRefused) {
     bob->events.emitEvent("ctx-b", {alice->as("alice")}, "chat", core::Buffer::from("hello"));
-    EXPECT_EQ(deliver("ctx-b", "ctx-a").statusCode, REFUSED) << "a ctx-b event on a ctx-a subscription";
-    EXPECT_EQ(deliver("ctx-b", "ctx-b").statusCode, 0);
+    EXPECT_EQ(codeOf(deliver("ctx-b", "ctx-a").error), REFUSED) << "a ctx-b event on a ctx-a subscription";
+    EXPECT_FALSE(deliver("ctx-b", "ctx-b").error.has_value());
 }
 
 TEST_F(ContextEventApi, SECURITY_AnEventKeyIsNeverWrappedToAKeyTheVerifierRefuses) {
@@ -621,7 +629,7 @@ TEST(ContextBinding, SECURITY_AListedContainerRefusedForItsContextLeavesNoKeysIn
     thread::ThreadApiImpl api(gateway, key, impl->getKeyProvider(), "", impl->getEventMiddleware(), connection);
     const auto threads = api.listThreads("ctx-a", {.skip = 0, .limit = 10, .sortOrder = "desc"});
     ASSERT_EQ(threads.readItems.size(), 1u);
-    EXPECT_EQ(threads.readItems[0].statusCode, REFUSED);
+    EXPECT_EQ(codeOf(threads.readItems[0].error), REFUSED);
     bridge.asked.clear();
     EXPECT_ANY_THROW(api.sendMessage("t", core::Buffer::from(""), core::Buffer::from(""), core::Buffer::from("")));
     EXPECT_NE(std::find(bridge.asked.begin(), bridge.asked.end(), "thread.threadGet"), bridge.asked.end())
@@ -680,7 +688,7 @@ TEST(ContextBinding, SECURITY_AListedStoreKvdbOrInboxRefusedForItsContextLeavesN
         );
         const auto stores = api.listStores("ctx-a", page);
         ASSERT_EQ(stores.readItems.size(), 1u);
-        EXPECT_EQ(stores.readItems[0].statusCode, REFUSED);
+        EXPECT_EQ(codeOf(stores.readItems[0].error), REFUSED);
         bridge.asked.clear();
         api.keysOf("t");
         EXPECT_TRUE(asked("store.storeGet")) << "the refused store's keys were taken from the cache";
@@ -698,7 +706,7 @@ TEST(ContextBinding, SECURITY_AListedStoreKvdbOrInboxRefusedForItsContextLeavesN
         Probe<kvdb::KvdbApiImpl> api(gateway, key, impl->getKeyProvider(), "", impl->getEventMiddleware(), connection);
         const auto kvdbs = api.listKvdbs("ctx-a", page);
         ASSERT_EQ(kvdbs.readItems.size(), 1u);
-        EXPECT_EQ(kvdbs.readItems[0].statusCode, REFUSED);
+        EXPECT_EQ(codeOf(kvdbs.readItems[0].error), REFUSED);
         bridge.asked.clear();
         api.keysOf("t");
         EXPECT_TRUE(asked("kvdb.kvdbGet")) << "the refused kvdb's keys were taken from the cache";
@@ -721,7 +729,7 @@ TEST(ContextBinding, SECURITY_AListedStoreKvdbOrInboxRefusedForItsContextLeavesN
         );
         const auto inboxes = api.listInboxes("ctx-a", page);
         ASSERT_EQ(inboxes.readItems.size(), 1u);
-        EXPECT_EQ(inboxes.readItems[0].statusCode, REFUSED);
+        EXPECT_EQ(codeOf(inboxes.readItems[0].error), REFUSED);
         bridge.asked.clear();
         api.keysOf("t");
         EXPECT_TRUE(asked("inbox.inboxGet")) << "the refused inbox's keys were taken from the cache";

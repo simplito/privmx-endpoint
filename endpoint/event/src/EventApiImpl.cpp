@@ -155,7 +155,7 @@ void EventApiImpl::processNotificationEvent(const std::string& type, const core:
                 .contextId = rawEvent.id,
                 .userId = rawEvent.author.id,
                 .payload = {},
-                .statusCode = core::UserVerificationFailureException().getCode(),
+                .error = core::toPublicError(core::UserVerificationFailureException()),
                 .schemaVersion = EventDataSchema::Version::UNKNOWN
             };
         auto customChannelName = privmx::utils::Utils::split(privmx::utils::Utils::split(channel, "/")[2], "|")[0];

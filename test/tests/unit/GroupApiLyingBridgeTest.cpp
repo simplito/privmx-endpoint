@@ -1001,16 +1001,16 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsTakenOnlyFromTheUserWhoseKeySigned
     const std::string groupId = createGroup({"alice", "bob"});
     client("bob").sendCustomEvent(groupId, "chat", core::Buffer::from("hi"), {});
     const GroupCustomEventData honest = deliver(groupId, "chat", 0, "bob");
-    EXPECT_EQ(honest.statusCode, 0);
+    EXPECT_FALSE(honest.error.has_value());
     EXPECT_EQ(honest.payload.stdString(), "hi");
-    EXPECT_NE(deliver(groupId, "chat", 0, "carol").statusCode, 0) << "bob's event passed off as carol's";
+    EXPECT_TRUE(deliver(groupId, "chat", 0, "carol").error.has_value()) << "bob's event passed off as carol's";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsTakenOnlyOnTheChannelItWasSealedFor) {
     // The channel name is in the signed payload; the bridge moving an event to another channel is refused.
     const std::string groupId = createGroup({"alice", "bob"});
     client("bob").sendCustomEvent(groupId, "admin", core::Buffer::from("promote me"), {});
-    EXPECT_NE(deliver(groupId, "chat", 0, "bob").statusCode, 0);
+    EXPECT_TRUE(deliver(groupId, "chat", 0, "bob").error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsTakenOnlyUnderTheCurrentEpochsKey) {
@@ -1019,7 +1019,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsTakenOnlyUnderTheCurrentEpochsKey)
     client("bob").encrypt(groupId, core::Buffer::from("warm")); // bob's client caches the epoch 1 key
     client("alice").removeGroupMembers(groupId, {"bob"});
     client("bob").sendCustomEvent(groupId, "chat", core::Buffer::from("still here"), {});
-    EXPECT_NE(deliver(groupId, "chat", 0, "bob").statusCode, 0);
+    EXPECT_TRUE(deliver(groupId, "chat", 0, "bob").error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsNotTakenUnderAKeyCachedBehindThePinnedEpoch) {
@@ -1031,7 +1031,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsNotTakenUnderAKeyCachedBehindThePi
     client("carol").removeGroupMembers(groupId, {"bob"});
     client("alice").resolveGroupPrivKey(groupId); // pins epoch 2; the cached head stays
     client("bob").sendCustomEvent(groupId, "chat", core::Buffer::from("still here"), {});
-    EXPECT_NE(deliver(groupId, "chat", 0, "bob").statusCode, 0);
+    EXPECT_TRUE(deliver(groupId, "chat", 0, "bob").error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ACallersGrantKeyOtherThanThePinnedOneIsNotWrappedTo) {
@@ -1227,7 +1227,7 @@ TEST_F(GroupApiLyingBridge, AOneMemberGroupRotatesOntoItsMembersOwnKeyAndReadsBa
     EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2) << "the metadata stayed under the replaced key";
     clients.erase("alice");
     const Group group = client("alice").getGroup(groupId);
-    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_FALSE(group.error.has_value());
     EXPECT_EQ(group.keyVersion, 2);
     EXPECT_EQ(group.privateMeta.stdString(), "private");
 }
@@ -1238,7 +1238,7 @@ TEST_F(GroupApiLyingBridge, ARotationOfALargerGroupIsReadByEveryMember) {
     ASSERT_EQ(bridge.tree.state.epoch, 2u);
     for (const std::string id : {"bob", "carol"}) {
         const Group group = client(id).getGroup(groupId);
-        EXPECT_EQ(group.statusCode, 0) << id;
+        EXPECT_FALSE(group.error.has_value()) << id;
         EXPECT_EQ(group.keyVersion, 2) << id;
     }
 }
@@ -1309,7 +1309,7 @@ TEST_F(GroupApiLyingBridge, ARotationOvertakenByASelfUpdateIsPlannedAgain) {
     ASSERT_EQ(bridge.tree.state.epoch, 2u);
     for (const std::string id : {"bob", "carol"}) {
         const Group group = client(id).getGroup(groupId);
-        EXPECT_EQ(group.statusCode, 0) << id;
+        EXPECT_FALSE(group.error.has_value()) << id;
         EXPECT_EQ(group.keyVersion, 2) << id;
     }
 }
@@ -2129,7 +2129,7 @@ TEST_F(GroupApiLyingBridge, ANarrowingPolicyCarriesUpThePlanesOfAuthorsWhoLostTh
     EXPECT_EQ(bridge.rest.publicMeta.author, "alice");
     EXPECT_EQ(bridge.rest.privateMeta.author, "alice") << "the creator's own plane is not carried";
     const Group read = client("carol").getGroup(groupId);
-    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_FALSE(read.error.has_value());
     EXPECT_EQ(read.publicMeta.stdString(), "bob's");
 }
 
@@ -2150,7 +2150,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ANarrowingDoesNotReSignAPlaneWrittenAfterIt
     client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}}));
     EXPECT_EQ(bridge.rest.publicMeta.author, "bob");
     EXPECT_EQ(bridge.rest.publicMeta.version, 3) << "alice re-signed bob's late entry";
-    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_TRUE(client("carol").getGroup(groupId).error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ANarrowingDoesNotCarryALosersPlaneWrittenAfterTheRead) {
@@ -2169,7 +2169,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ANarrowingDoesNotCarryALosersPlaneWrittenAf
     client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}}));
     EXPECT_EQ(bridge.rest.publicMeta.author, "bob");
     EXPECT_EQ(bridge.rest.publicMeta.version, 3);
-    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0) << "readers refuse it: bob lost update";
+    EXPECT_TRUE(client("carol").getGroup(groupId).error.has_value()) << "readers refuse it: bob lost update";
 }
 
 TEST_F(GroupApiLyingBridge, ANarrowingThatWouldStrandAPlaneIsRefusedBeforeSigning) {
@@ -2199,10 +2199,10 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotCarryAPlaneWrittenWithoutThe
     // bob must not launder it into the new epoch under alice's name.
     const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"update", "manager"}}));
     client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("no role"), 1);
-    ASSERT_NE(client("carol").getGroup(groupId).statusCode, 0) << "refused already before the removal";
+    ASSERT_TRUE(client("carol").getGroup(groupId).error.has_value()) << "refused already before the removal";
     client("alice").removeGroupMembers(groupId, {"bob"});
     EXPECT_EQ(bridge.rest.publicMeta.author, "bob") << "carried under alice's name";
-    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_TRUE(client("carol").getGroup(groupId).error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedByTheNextCall) {
@@ -2216,10 +2216,10 @@ TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedByTheNextCall) {
     };
     EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})));
     EXPECT_EQ(bridge.rest.publicMeta.author, "bob");
-    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0) << "until the carry completes";
-    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0) << "alice's next read retries it first";
+    EXPECT_TRUE(client("carol").getGroup(groupId).error.has_value()) << "until the carry completes";
+    EXPECT_FALSE(client("alice").getGroup(groupId).error.has_value()) << "alice's next read retries it first";
     EXPECT_EQ(bridge.rest.publicMeta.author, "alice");
-    EXPECT_EQ(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_FALSE(client("carol").getGroup(groupId).error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedAfterADisconnect) {
@@ -2233,9 +2233,9 @@ TEST_F(GroupApiLyingBridge, AFailedCarryIsRetriedAfterADisconnect) {
     };
     EXPECT_NO_THROW(client("alice").updateGroupPolicy(groupId, policyWith({{"update", "manager"}})));
     clients.at("alice")->connectionImpl->getEventMiddleware()->emitDisconnectedEvent();
-    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
+    EXPECT_FALSE(client("alice").getGroup(groupId).error.has_value());
     EXPECT_EQ(bridge.rest.publicMeta.author, "alice") << "the carry was dropped with the connection";
-    EXPECT_EQ(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_FALSE(client("carol").getGroup(groupId).error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ASeatStrippedReadServingAWiderPolicyDoesNotAcceptANoRolePlane) {
@@ -2259,11 +2259,11 @@ TEST_F(GroupApiLyingBridge, SECURITY_ASeatStrippedReadServingAWiderPolicyDoesNot
         }
     };
     const Group widened = client("carol").getGroup(groupId);
-    EXPECT_NE(widened.statusCode, 0);
+    EXPECT_TRUE(widened.error.has_value());
     EXPECT_TRUE(widened.publicMeta.stdString().empty() && widened.privateMeta.stdString().empty()) << "no metadata";
     EXPECT_TRUE(widened.groupPubKey.empty());
     bridge.onRead = stripCarol;
-    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0) << "the honest policy refuses bob's plane";
+    EXPECT_TRUE(client("carol").getGroup(groupId).error.has_value()) << "the honest policy refuses bob's plane";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnUnattestedReadMovesNoVersionPin) {
@@ -2274,7 +2274,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnUnattestedReadMovesNoVersionPin) {
     client("carol").getGroup(groupId);
     const server::GroupTreeCommit atSeq1 = bridge.tree.commits.back();
     selfUpdateBy("bob");
-    ASSERT_EQ(client("carol").getGroup(groupId).statusCode, 0); // pinned at seq 2
+    ASSERT_FALSE(client("carol").getGroup(groupId).error.has_value()); // pinned at seq 2
     const std::array<std::int64_t, 3> before = GroupApiImplTestAccess::versionPins(client("carol"), groupId);
     client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("v2"), 1);
     bridge.onRead = [&](const std::string& caller, server::GroupInfo& info) {
@@ -2287,10 +2287,10 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnUnattestedReadMovesNoVersionPin) {
         info.ownLeafPosition.reset();
         info.treeCommit = atSeq1; // genuine, but behind carol's pin
     };
-    EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_TRUE(client("carol").getGroup(groupId).error.has_value());
     EXPECT_EQ(GroupApiImplTestAccess::versionPins(client("carol"), groupId), before);
     bridge.onRead = [](const std::string&, server::GroupInfo&) {};
-    EXPECT_EQ(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_FALSE(client("carol").getGroup(groupId).error.has_value());
     EXPECT_GT(GroupApiImplTestAccess::versionPins(client("carol"), groupId)[1], before[1]);
 }
 
@@ -2343,9 +2343,10 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARenewalIsSignedWithTheNewKeyAndClimbsWithT
 
     clients.erase("bob"); // a fresh session of the new key: nothing cached from the renewal
     EXPECT_EQ(client("bob").resolveGroupPrivKey(groupId).getPublicKey(), grant.getPublicKey());
-    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0) << "alice's pin sits at bob's old-key statement";
+    EXPECT_FALSE(client("alice").getGroup(groupId).error.has_value())
+        << "alice's pin sits at bob's old-key statement";
     EXPECT_EQ(client("alice").resolveGroupPrivKey(groupId).getPublicKey(), grant.getPublicKey());
-    EXPECT_EQ(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_FALSE(client("carol").getGroup(groupId).error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AfterRenewalThePreviousKeyOpensNoCurrentEdge) {
@@ -2682,7 +2683,7 @@ TEST_F(GroupApiLyingBridge, WithoutAStoreEverySessionIsAFirstContact) {
     client("alice").resolveGroupPrivKey(groupId);
     clients.erase("alice");
     rollBackTo(beforeRemoval);
-    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
+    EXPECT_FALSE(client("alice").getGroup(groupId).error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnOwnRemovalIsInTheStoreBeforeTheCallReturns) {
@@ -2760,8 +2761,8 @@ TEST_F(GroupApiLyingBridge, HonestSiblingsAtDifferentSeqsConvergeWithoutAFork) {
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("alice"))); // meets alice2's record
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 4u);
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(alice2, groupId), 4u);
-    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
-    EXPECT_EQ(alice2.getGroup(groupId).statusCode, 0);
+    EXPECT_FALSE(client("alice").getGroup(groupId).error.has_value());
+    EXPECT_FALSE(alice2.getGroup(groupId).error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnOwnRemovalOverASiblingsFirstContactIsSavedBeforeTheCallReturns) {
@@ -2905,12 +2906,13 @@ TEST_F(GroupApiLyingBridge, SECURITY_AVersionPinSavedByOneSessionRefusesAnOlderM
     const std::string groupId = createGroup({"alice", "bob"});
     const server::GroupMetaEntry v1 = bridge.rest.publicMeta;
     client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("v2"), 1);
-    ASSERT_EQ(client("alice").getGroup(groupId).statusCode, 0); // pins publicMetaVersion 2
+    ASSERT_FALSE(client("alice").getGroup(groupId).error.has_value()); // pins publicMetaVersion 2
     clients.erase("alice");
     bridge.rest.publicMeta = v1; // a genuinely tagged older entry
     bridge.rest.publicMetaVersion = 1;
-    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, GroupHistoryForkException().getCode())
-        << "base: a first contact takes v1";
+    const auto forked = client("alice").getGroup(groupId).error;
+    ASSERT_TRUE(forked.has_value()) << "base: a first contact takes v1";
+    EXPECT_EQ(forked->code, GroupHistoryForkException().getCode());
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARecreatedGroupIsAForkInTheNextSession) {
@@ -2989,7 +2991,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_PinsOfAnotherBridgeAreNotLoaded) {
     clients.erase("alice");
     rollBackTo(atSeq1);
     bridgeIdentity = b;
-    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0) << "a first contact through Bridge B";
+    EXPECT_FALSE(client("alice").getGroup(groupId).error.has_value()) << "a first contact through Bridge B";
     clients.erase("alice");
     bridgeIdentity = a;
     EXPECT_THROW(client("alice").getGroup(groupId), GroupHistoryForkException);
@@ -3008,7 +3010,7 @@ TEST_F(GroupApiLyingBridge, ACorruptedStoreStartsTheSessionAsAFirstContact) {
     blob[blob.size() / 2] ^= 0x01;
     store->put(slot, blob);
     rollBackTo(atSeq1);
-    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
+    EXPECT_FALSE(client("alice").getGroup(groupId).error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, ADisconnectFlushesThePins) {
@@ -3148,7 +3150,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnAdoptedRecordNeverRaisesAnExistingPin) {
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 2u);
     EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u) << "the current slot is not raised";
     EXPECT_EQ(GroupApiImplTestAccess::versionPins(client("alice"), groupId), versionsBefore) << "nor the version pins";
-    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
+    EXPECT_FALSE(client("alice").getGroup(groupId).error.has_value());
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnAdoptedRecordIsAHintNotAVerifiedState) {
@@ -3282,7 +3284,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ACompactPinContinuesFromTheReplayedTreeHash
     client("bob").rotateGroupKey(groupId);
     ASSERT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 1u);
     ASSERT_EQ(storedPin(groupId, bridge.users.at("alice"))->treeHash, std::string(32, 't'));
-    EXPECT_EQ(client("alice").getGroup(groupId).statusCode, 0);
+    EXPECT_FALSE(client("alice").getGroup(groupId).error.has_value());
     EXPECT_EQ(client("alice").pinnedKeyVersion(groupId), 2u);
 }
 
@@ -3366,7 +3368,7 @@ TEST_F(GroupApiLyingBridge, AFirstContactAboveThePreviousKeysRecordStaysUsable) 
     client("bob").getGroup(groupId);
     EXPECT_NO_THROW(client("bob").renewLeaf(groupId, previous.toWIF()));
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("bob"), groupId), 3u);
-    EXPECT_EQ(client("bob").getGroup(groupId).statusCode, 0);
+    EXPECT_FALSE(client("bob").getGroup(groupId).error.has_value());
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("bob")));
     EXPECT_EQ(storedPin(groupId, bridge.users.at("bob"))->seq, 3u);
 }
@@ -3613,7 +3615,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_12B_APinMergedInDuringTheVerifierCallStillN
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     GroupApiImpl& carol = client("carol"); // its slot is empty: no pin
-    ASSERT_EQ(sibling("carol").getGroup(groupId).statusCode, 0);
+    ASSERT_FALSE(sibling("carol").getGroup(groupId).error.has_value());
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(*siblings.back()->api)); // the slot holds seq 1
     selfUpdateBy("bob");
     bridge.changeUserKey("bob", PrivateKey::generateRandom());
@@ -3624,7 +3626,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_12B_APinMergedInDuringTheVerifierCallStillN
         }
     };
     try {
-        EXPECT_NE(carol.getGroup(groupId).statusCode, 0);
+        EXPECT_TRUE(carol.getGroup(groupId).error.has_value());
     } catch (const core::Exception&) {}
     bridge.onVerify = [] {};
     EXPECT_TRUE(merged);

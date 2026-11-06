@@ -64,7 +64,7 @@ public:
 
     // Returns the message's DIO for V5, so the decrypt that follows need not verify it again. Empty for V4,
     // which carries no DIO at all.
-    std::pair<uint32_t, std::optional<core::DataIntegrityObject>> validateMessageDataIntegrity(
+    std::pair<std::optional<core::Error>, std::optional<core::DataIntegrityObject>> validateMessageDataIntegrity(
         const server::Message& message,
         const std::string& threadResourceId
     );
@@ -91,7 +91,7 @@ public:
         const core::Buffer& privateMeta,
         const core::Buffer& data,
         const std::string& authorPubKey,
-        int64_t statusCode,
+        const std::optional<core::Error>& error,
         int64_t schemaVersion
     );
 

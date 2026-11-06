@@ -49,7 +49,7 @@ public:
     ) const override;
     std::tuple<Inbox, core::DataIntegrityObject> makeErrorResult(
         const server::InboxInfo& inbox,
-        int64_t errorCode
+        const std::optional<core::Error>& error
     ) const override;
     core::DataIntegrityObject getDIOAndAssertIntegrity(const server::InboxData& data) const;
     InboxPublicDataV5AsResult unpackPublicOnly(const Poco::Dynamic::Var& publicData) const;

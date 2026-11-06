@@ -122,9 +122,9 @@ struct Group {
     core::ContainerPolicy policy;
 
     /**
-     * status code of retrieval and verification of the Group (0 = success)
+     * Set when retrieval or verification of the Group failed, empty otherwise.
      */
-    int64_t statusCode;
+    std::optional<core::Error> error;
 
     /**
      * Version of the Group data structure and how it is encoded/encrypted
@@ -151,7 +151,7 @@ struct Group {
  * deliberately carries no roster and no per-Group state — no `users`/`managers` (they grow with membership),
  * no encrypted data, key entries, history, tree or signed statement. So there is
  * no `publicMeta`/`privateMeta` here (nothing to decrypt from), no `schemaVersion` (it is recorded inside the
- * encrypted data), and no `statusCode` (nothing was decrypted or verified, so there is no status to report).
+ * encrypted data), and no `error` (nothing was decrypted or verified, so there is no status to report).
  * Call `getGroup` for any of those.
  */
 struct GroupSummary {

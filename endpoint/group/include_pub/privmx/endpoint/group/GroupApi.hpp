@@ -208,7 +208,7 @@ public:
      * A narrowing of `update` refuses metadata written by an author who loses it: this call carries such a plane
      * forward under the caller's name, and is refused before signing when the caller itself would lose `update`
      * while such a plane exists. Until that carry-forward completes (it is retried by this client's next call on the
-     * Group if it fails), `getGroup` returns a non-zero `statusCode` for such a plane, also to concurrent readers;
+     * Group if it fails), `getGroup` returns a set `error` for such a plane, also to concurrent readers;
      * any metadata write by a member holding `update` repairs it.
      *
      * @param groupId ID of the Group to update

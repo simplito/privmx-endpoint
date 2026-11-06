@@ -48,7 +48,7 @@ public:
         const privmx::crypto::PrivateKey& userPrivKey,
         const std::string& key
     ) const;
-    File toLibError(const server::File& file, int64_t errorCode) const override;
+    File toLibError(const server::File& file, const std::optional<core::Error>& error) const override;
 
 private:
     mutable FileMetaEncryptorV4 _encryptor;

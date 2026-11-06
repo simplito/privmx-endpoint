@@ -134,7 +134,9 @@ public:
     static std::string tagSubkey(const std::string& contentKey, const std::string& purpose);
 
     // The status code, plus the roster head's DIO when that code is 0.
-    std::pair<uint32_t, core::DataIntegrityObject> validateDataIntegrity(const server::GroupInfo& groupInfo);
+    std::pair<std::optional<core::Error>, core::DataIntegrityObject> validateDataIntegrity(
+        const server::GroupInfo& groupInfo
+    );
 
     // The routes to the head, publicMeta and privateMeta keys only: every other epoch's key would cost a grant-key
     // resolution (a read and a ladder descent) for nothing, so a read stays O(1) in the group's epochs. `g` has
@@ -175,7 +177,7 @@ public:
         const server::GroupInfo& info,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        int64_t statusCode,
+        const std::optional<core::Error>& error,
         int64_t schemaVersion
     );
 

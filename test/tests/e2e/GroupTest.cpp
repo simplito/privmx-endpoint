@@ -58,7 +58,7 @@ TEST_F(GroupTest, getGroup) {
     EXPECT_EQ(group.privateMetaVersion, reader->getInt64("Group_1.privateMetaVersion"));
     EXPECT_EQ(group.publicMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Group_1.publicMeta_inHex")));
     EXPECT_EQ(group.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Group_1.privateMeta_inHex")));
-    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(errCode(group), 0);
     EXPECT_EQ(group.users.size(), 1);
     if (group.users.size() == 1) {
         EXPECT_EQ(group.users[0], reader->getString("Login.user_1_id"));
@@ -210,7 +210,7 @@ TEST_F(GroupTest, createGroup) {
     EXPECT_NO_THROW({
         group = groupApi->getGroup(groupId);
     });
-    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(errCode(group), 0);
     EXPECT_EQ(group.contextId, reader->getString("Context_1.contextId"));
     EXPECT_EQ(group.publicMeta.stdString(), "public");
     EXPECT_EQ(group.privateMeta.stdString(), "private");
@@ -245,7 +245,7 @@ TEST_F(GroupTest, createGroup) {
     EXPECT_NO_THROW({
         group = groupApi->getGroup(groupId);
     });
-    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(errCode(group), 0);
     EXPECT_EQ(group.publicMeta.stdString(), "public2");
     EXPECT_EQ(group.privateMeta.stdString(), "private2");
     EXPECT_EQ(group.publicMetaVersion, 1);
@@ -295,7 +295,7 @@ TEST_F(GroupTest, updateGroupPublicMeta_correct_data) {
     });
     group::Group group;
     EXPECT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(errCode(group), 0);
     EXPECT_EQ(group.publicMetaVersion, before.publicMetaVersion + 1);
     EXPECT_EQ(group.publicMeta.stdString(), "updated_public");
     // The whole point of the split: writing one plane leaves the other's counter and bytes untouched.
@@ -315,7 +315,7 @@ TEST_F(GroupTest, updateGroupPublicMeta_correct_data) {
         groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("updated_public_2"), group.publicMetaVersion);
     });
     EXPECT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(errCode(group), 0);
     EXPECT_EQ(group.publicMetaVersion, before.publicMetaVersion + 2);
     EXPECT_EQ(group.publicMeta.stdString(), "updated_public_2");
     EXPECT_EQ(group.privateMetaVersion, before.privateMetaVersion);
@@ -350,7 +350,7 @@ TEST_F(GroupTest, metadata_written_by_a_different_manager_keeps_the_group_readab
     // user_2 wrote both metadata planes; user_1 is still the roster head's author.
     group::Group asUser2;
     EXPECT_NO_THROW({ asUser2 = groupApi->getGroup(groupId); });
-    EXPECT_EQ(asUser2.statusCode, 0);
+    EXPECT_EQ(errCode(asUser2), 0);
     EXPECT_EQ(asUser2.publicMeta.stdString(), "public2");
 
     // And the member who did not write the metadata reads it just the same.
@@ -358,7 +358,7 @@ TEST_F(GroupTest, metadata_written_by_a_different_manager_keeps_the_group_readab
     connectAs(1);
     group::Group asUser1;
     EXPECT_NO_THROW({ asUser1 = groupApi->getGroup(groupId); });
-    EXPECT_EQ(asUser1.statusCode, 0);
+    EXPECT_EQ(errCode(asUser1), 0);
     EXPECT_EQ(asUser1.privateMeta.stdString(), "private2");
     EXPECT_EQ(asUser1.publicMetaVersion, 2);
     EXPECT_EQ(asUser1.privateMetaVersion, 2);
@@ -375,7 +375,7 @@ TEST_F(GroupTest, updateGroupPrivateMeta_correct_data) {
     });
     group::Group group;
     EXPECT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(errCode(group), 0);
     EXPECT_EQ(group.privateMetaVersion, before.privateMetaVersion + 1);
     EXPECT_EQ(group.privateMeta.stdString(), "updated_private");
     EXPECT_EQ(group.publicMetaVersion, before.publicMetaVersion);
@@ -396,7 +396,7 @@ TEST_F(GroupTest, updateGroupPolicy_correct_data) {
 
     group::Group after;
     EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });
-    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(errCode(after), 0);
     EXPECT_EQ(after.policy.get.value_or(""), "all");
     EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion);
     EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion);
@@ -440,7 +440,7 @@ TEST_F(GroupTest, both_planes_at_version_three_still_verify) {
 
     group::Group group;
     EXPECT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(errCode(group), 0);
     EXPECT_EQ(group.publicMetaVersion, 3);
     EXPECT_EQ(group.privateMetaVersion, 3);
     EXPECT_EQ(group.publicMeta.stdString(), "v3");
@@ -458,7 +458,7 @@ TEST_F(GroupTest, updateGroupPublicMeta_cannot_skip_the_version_check) {
     }, core::Exception);
     group::Group after;
     EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });
-    EXPECT_EQ(after.statusCode, 0) << "a refused update must leave the group readable";
+    EXPECT_EQ(errCode(after), 0) << "a refused update must leave the group readable";
     EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion);
     EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion);
     EXPECT_EQ(after.publicMeta.stdString(), before.publicMeta.stdString());
@@ -474,7 +474,7 @@ TEST_F(GroupTest, updateGroupPrivateMeta_cannot_skip_the_version_check) {
     }, core::Exception);
     group::Group after;
     EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });
-    EXPECT_EQ(after.statusCode, 0) << "a refused update must leave the group readable";
+    EXPECT_EQ(errCode(after), 0) << "a refused update must leave the group readable";
     EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion);
     EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion);
     EXPECT_EQ(after.publicMeta.stdString(), before.publicMeta.stdString());
@@ -528,7 +528,7 @@ TEST_F(GroupTest, group_member_can_read) {
     EXPECT_NO_THROW({
         group = groupApi->getGroup(groupId);
     });
-    EXPECT_EQ(group.statusCode, 0);
+    EXPECT_EQ(errCode(group), 0);
     EXPECT_EQ(group.publicMeta.stdString(), "shared_public");
     EXPECT_EQ(group.privateMeta.stdString(), "shared_private");
     EXPECT_EQ(group.groupId, groupId);

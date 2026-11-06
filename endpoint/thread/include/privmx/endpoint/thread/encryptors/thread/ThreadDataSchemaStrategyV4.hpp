@@ -42,7 +42,7 @@ public:
         const server::ThreadInfo& thread,
         const core::DecryptedModuleDataV4& raw
     ) const override;
-    Thread toLibError(const server::ThreadInfo& thread, int64_t errorCode) const override;
+    Thread toLibError(const server::ThreadInfo& thread, const std::optional<core::Error>& error) const override;
 
 private:
     mutable core::ModuleDataEncryptorV4 _encryptor;

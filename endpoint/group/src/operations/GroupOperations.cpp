@@ -974,7 +974,7 @@ void GroupOperations::updatePolicy(
         const bool manager = std::find(group.managers.begin(), group.managers.end(), userId) != group.managers.end();
         return keytree::TreeCommits::allows(newRules.update, true, manager, userId == group.creator);
     };
-    if (mapped.statusCode == 0) {
+    if (!mapped.error.has_value()) {
         for (const server::GroupMetaEntry* entry : {&group.publicMeta, &group.privateMeta}) {
             if (!keepsUpdate(entry->author) && std::find(losers.begin(), losers.end(), entry->author) == losers.end()) {
                 losers.push_back(entry->author);

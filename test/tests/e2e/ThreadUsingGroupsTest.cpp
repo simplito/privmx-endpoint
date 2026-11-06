@@ -102,8 +102,8 @@ TEST_F(ThreadUsingGroupsTest, createThread_with_group_grants) {
     group::Group group_1, group_2;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
+    ASSERT_EQ(errCode(group_2), 0);
     ASSERT_FALSE(group_1.groupPubKey.empty());
 
     // no grants
@@ -118,7 +118,7 @@ TEST_F(ThreadUsingGroupsTest, createThread_with_group_grants) {
     });
     ASSERT_FALSE(threadId.empty());
     EXPECT_NO_THROW({ t = threadApi->getThread(threadId); });
-    EXPECT_EQ(t.statusCode, 0);
+    EXPECT_EQ(errCode(t), 0);
     EXPECT_EQ(t.groups.size(), 0);
 
     // one grant
@@ -131,7 +131,7 @@ TEST_F(ThreadUsingGroupsTest, createThread_with_group_grants) {
     });
     ASSERT_FALSE(threadId.empty());
     EXPECT_NO_THROW({ t = threadApi->getThread(threadId); });
-    EXPECT_EQ(t.statusCode, 0);
+    EXPECT_EQ(errCode(t), 0);
     EXPECT_EQ(t.publicMeta.stdString(), "group_thread_public");
     ASSERT_EQ(t.groups.size(), 1);
     EXPECT_EQ(t.groups[0].groupId, group_1.groupId);
@@ -162,7 +162,7 @@ TEST_F(ThreadUsingGroupsTest, createThread_with_group_grants) {
     });
     ASSERT_FALSE(threadId.empty());
     EXPECT_NO_THROW({ t = threadApi->getThread(threadId); });
-    EXPECT_EQ(t.statusCode, 0);
+    EXPECT_EQ(errCode(t), 0);
     EXPECT_EQ(t.groups.size(), 2);
     bool found1 = false, found2 = false;
     for (const auto& g : t.groups) {
@@ -193,7 +193,7 @@ TEST_F(ThreadUsingGroupsTest, createThread_with_group_grants) {
 TEST_F(ThreadUsingGroupsTest, updateThread_add_and_promote_group) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     // a thread that starts with no grantee group
     std::string threadId;
@@ -230,7 +230,7 @@ TEST_F(ThreadUsingGroupsTest, updateThread_add_and_promote_group) {
     });
     thread::Thread updated;
     EXPECT_NO_THROW({ updated = threadApi->getThread(threadId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.publicMeta.stdString(), "after_group");
     ASSERT_EQ(updated.groups.size(), 1);
     EXPECT_EQ(updated.groups[0].groupId, group_1.groupId);
@@ -266,10 +266,10 @@ TEST_F(ThreadUsingGroupsTest, updateThread_remove_group) {
     // that user_2 loses access once the group grant is removed.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     // policy.get="all" so user_2 can always call getThread without throwing; after the group removal they get
-    // statusCode!=0 and empty privateMeta instead, holding no decryption key.
+    // an `error` and empty privateMeta instead, holding no decryption key.
     core::ContainerPolicy policy;
     policy.get = "all";
 
@@ -307,7 +307,7 @@ TEST_F(ThreadUsingGroupsTest, updateThread_remove_group) {
     connectAs(2);
     thread::Thread beforeRemoval;
     EXPECT_NO_THROW({ beforeRemoval = threadApi->getThread(threadId); });
-    EXPECT_EQ(beforeRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(beforeRemoval), 0);
     EXPECT_FALSE(beforeRemoval.privateMeta.stdString().empty());
 
     // Switch back to user_1 and remove the group grant
@@ -336,7 +336,7 @@ TEST_F(ThreadUsingGroupsTest, updateThread_remove_group) {
 
     thread::Thread updated;
     EXPECT_NO_THROW({ updated = threadApi->getThread(threadId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.publicMeta.stdString(), "no_group_now");
     EXPECT_EQ(updated.groups.size(), 0);
 
@@ -345,14 +345,14 @@ TEST_F(ThreadUsingGroupsTest, updateThread_remove_group) {
     connectAs(2);
     thread::Thread afterRemoval;
     EXPECT_NO_THROW({ afterRemoval = threadApi->getThread(threadId); });
-    EXPECT_NE(afterRemoval.statusCode, 0);
+    EXPECT_NE(errCode(afterRemoval), 0);
     EXPECT_TRUE(afterRemoval.privateMeta.stdString().empty());
 }
 
 TEST_F(ThreadUsingGroupsTest, listThreads_includes_groups_field) {
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string threadId;
     EXPECT_NO_THROW({
@@ -389,7 +389,7 @@ TEST_F(ThreadUsingGroupsTest, listThreads_includes_groups_field) {
     bool found = false;
     for (const auto& t : list.readItems) {
         if (t.threadId == threadId) {
-            EXPECT_EQ(t.statusCode, 0);
+            EXPECT_EQ(errCode(t), 0);
             EXPECT_EQ(t.groups.size(), 1);
             if (t.groups.size() == 1) {
                 EXPECT_EQ(t.groups[0].groupId, group_1.groupId);
@@ -416,13 +416,13 @@ TEST_F(ThreadUsingGroupsTest, reads_through_a_group_grant) {
         thread::Thread t;
         EXPECT_NO_THROW({ t = threadApi->getThread(reader->getString("Thread_4.threadId")); })
             << "user_" << index << " could not open the thread";
-        EXPECT_EQ(t.statusCode, 0);
+        EXPECT_EQ(errCode(t), 0);
         EXPECT_EQ(t.groups.size(), 2);
 
         thread::Message msg;
         EXPECT_NO_THROW({ msg = threadApi->getMessage(reader->getString("Message_3.info_messageId")); })
             << "user_" << index << " could not read the message";
-        EXPECT_EQ(msg.statusCode, 0);
+        EXPECT_EQ(errCode(msg), 0);
         EXPECT_EQ(msg.privateMeta.stdString(), privateMeta);
         EXPECT_EQ(msg.data.stdString(), data);
 
@@ -436,7 +436,7 @@ TEST_F(ThreadUsingGroupsTest, reads_through_a_group_grant) {
         });
         EXPECT_EQ(list.totalAvailable, 2);
         for (const auto& listed : list.readItems) {
-            EXPECT_EQ(listed.statusCode, 0);
+            EXPECT_EQ(errCode(listed), 0);
             EXPECT_FALSE(listed.privateMeta.stdString().empty());
             EXPECT_FALSE(listed.data.stdString().empty());
         }
@@ -446,7 +446,7 @@ TEST_F(ThreadUsingGroupsTest, reads_through_a_group_grant) {
 TEST_F(ThreadUsingGroupsTest, getMessage_lost_after_group_removal) {
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string threadId;
     ASSERT_NO_THROW({
@@ -475,7 +475,7 @@ TEST_F(ThreadUsingGroupsTest, getMessage_lost_after_group_removal) {
     connectAs(2);
     thread::Message beforeRemoval;
     EXPECT_NO_THROW({ beforeRemoval = threadApi->getMessage(messageId); });
-    EXPECT_EQ(beforeRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(beforeRemoval), 0);
     EXPECT_EQ(beforeRemoval.privateMeta.stdString(), "secret_private");
 
     // user_1 removes the group grant and generates a new key
@@ -511,13 +511,13 @@ TEST_F(ThreadUsingGroupsTest, getMessage_lost_after_group_removal) {
     connectAs(2);
     thread::Message afterRemoval;
     EXPECT_NO_THROW({ afterRemoval = threadApi->getMessage(messageId); });
-    EXPECT_EQ(afterRemoval.statusCode, 0);
+    EXPECT_EQ(errCode(afterRemoval), 0);
     EXPECT_EQ(afterRemoval.privateMeta.stdString(), "secret_private");
 
     // user_2 cannot decrypt the new message either (encrypted with new key they don't have)
     thread::Message newMsg;
     EXPECT_NO_THROW({ newMsg = threadApi->getMessage(newMessageId); });
-    EXPECT_NE(newMsg.statusCode, 0);
+    EXPECT_NE(errCode(newMsg), 0);
     EXPECT_TRUE(newMsg.privateMeta.stdString().empty());
 }
 
@@ -525,7 +525,7 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     // Group_2 has user_1 + user_2; user_3 is not yet a member
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string threadId;
     ASSERT_NO_THROW({
@@ -554,11 +554,11 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     connectAs(3);
     thread::Thread tBefore;
     EXPECT_NO_THROW({ tBefore = threadApi->getThread(threadId); });
-    EXPECT_NE(tBefore.statusCode, 0);
+    EXPECT_NE(errCode(tBefore), 0);
 
     thread::Message mBefore;
     EXPECT_NO_THROW({ mBefore = threadApi->getMessage(messageId); });
-    EXPECT_NE(mBefore.statusCode, 0);
+    EXPECT_NE(errCode(mBefore), 0);
 
     // user_1 adds user_3 to Group_2 via the tree-aware path, seating user_3's leaf in the key tree
     // (a metadata write would only re-wrap the group's own metadata key - it never touches tree leaf state)
@@ -582,11 +582,11 @@ TEST_F(ThreadUsingGroupsTest, user_added_to_group_gains_access_to_thread_and_mes
     connectAs(3);
     thread::Thread tAfter;
     EXPECT_NO_THROW({ tAfter = threadApi->getThread(threadId); });
-    EXPECT_EQ(tAfter.statusCode, 0);
+    EXPECT_EQ(errCode(tAfter), 0);
 
     thread::Message mAfter;
     EXPECT_NO_THROW({ mAfter = threadApi->getMessage(messageId); });
-    EXPECT_EQ(mAfter.statusCode, 0);
+    EXPECT_EQ(errCode(mAfter), 0);
     EXPECT_EQ(mAfter.privateMeta.stdString(), "msg_priv");
     EXPECT_EQ(mAfter.data.stdString(), "msg_data");
 }
@@ -613,7 +613,7 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
 
     group::Group group;
     ASSERT_NO_THROW({ group = groupApi->getGroup(groupId); });
-    ASSERT_EQ(group.statusCode, 0);
+    ASSERT_EQ(errCode(group), 0);
     ASSERT_EQ(group.keyVersion, 1);
 
     // user_1 is T's only direct member, so user_2 reads only through the group grant: a personal key wrap would
@@ -648,7 +648,7 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
 
     group::Group rotatedGroup;
     ASSERT_NO_THROW({ rotatedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(rotatedGroup.statusCode, 0);
+    ASSERT_EQ(errCode(rotatedGroup), 0);
     ASSERT_EQ(rotatedGroup.keyVersion, 2);
 
     // Rotate T's key while re-granting G at epoch 2. T's groupKeys[G] must keep the epoch-1 wrap resolvable
@@ -696,13 +696,13 @@ TEST_F(ThreadUsingGroupsTest, message_from_previous_group_epoch_survives_forced_
 
     thread::Message oldEpochMessage;
     EXPECT_NO_THROW({ oldEpochMessage = threadApi->getMessage(oldEpochMessageId); });
-    EXPECT_EQ(oldEpochMessage.statusCode, 0);
+    EXPECT_EQ(errCode(oldEpochMessage), 0);
     EXPECT_EQ(oldEpochMessage.privateMeta.stdString(), "old_epoch_priv");
     EXPECT_EQ(oldEpochMessage.data.stdString(), "old_epoch_data");
 
     thread::Message newEpochMessage;
     EXPECT_NO_THROW({ newEpochMessage = threadApi->getMessage(newEpochMessageId); });
-    EXPECT_EQ(newEpochMessage.statusCode, 0);
+    EXPECT_EQ(errCode(newEpochMessage), 0);
     EXPECT_EQ(newEpochMessage.privateMeta.stdString(), "new_epoch_priv");
     EXPECT_EQ(newEpochMessage.data.stdString(), "new_epoch_data");
 }
@@ -731,7 +731,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_threa
 
     group::Group dynGroup;
     ASSERT_NO_THROW({ dynGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(dynGroup.statusCode, 0);
+    ASSERT_EQ(errCode(dynGroup), 0);
 
     // Create a thread with user_1=manager, user_2=user, plus group grant.
     // user_2 is a direct thread user so sendMessage is allowed on their connection.
@@ -776,13 +776,13 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_retries_with_refreshed_key_after_threa
     );
     thread::Thread cachedThread;
     ASSERT_NO_THROW({ cachedThread = threadApi2->getThread(threadId); });
-    ASSERT_EQ(cachedThread.statusCode, 0);
+    ASSERT_EQ(errCode(cachedThread), 0);
 
     // user_1 (main connection) rotates the thread key → server advances to keyId K2.
     // user_2's conn2 still holds K1 in its cache.
     thread::Thread threadInfo;
     ASSERT_NO_THROW({ threadInfo = threadApi->getThread(threadId); });
-    ASSERT_EQ(threadInfo.statusCode, 0);
+    ASSERT_EQ(errCode(threadInfo), 0);
     EXPECT_NO_THROW({
         threadApi->rotateThreadKeys(
             threadId,
@@ -824,7 +824,7 @@ TEST_F(ThreadUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) 
     // `verifyKeysSecret` fails on any non-zero status, so an unresolved group entry throws instead of updating.
     group::Group group_1;
     ASSERT_NO_THROW({ group_1 = groupApi->getGroup(reader->getString("Group_1.groupId")); });
-    ASSERT_EQ(group_1.statusCode, 0);
+    ASSERT_EQ(errCode(group_1), 0);
 
     std::string threadId;
     ASSERT_NO_THROW({
@@ -849,12 +849,12 @@ TEST_F(ThreadUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) 
 
     thread::Thread t;
     EXPECT_NO_THROW({ t = threadApi->getThread(threadId); });
-    EXPECT_EQ(t.statusCode, 0);
+    EXPECT_EQ(errCode(t), 0);
     EXPECT_EQ(t.groups.size(), 1);
 
     thread::Message msg;
     EXPECT_NO_THROW({ msg = threadApi->getMessage(messageId); });
-    EXPECT_EQ(msg.statusCode, 0);
+    EXPECT_EQ(errCode(msg), 0);
     EXPECT_EQ(msg.data.stdString(), "direct_data");
 
     core::PagingList<thread::Message> list;
@@ -863,7 +863,7 @@ TEST_F(ThreadUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) 
     });
     EXPECT_EQ(list.totalAvailable, 1);
     ASSERT_EQ(list.readItems.size(), 1);
-    EXPECT_EQ(list.readItems[0].statusCode, 0);
+    EXPECT_EQ(errCode(list.readItems[0]), 0);
 
     EXPECT_NO_THROW({
         threadApi->updateThread(
@@ -884,7 +884,7 @@ TEST_F(ThreadUsingGroupsTest, direct_member_of_granted_group_reads_and_updates) 
 
     thread::Thread updated;
     EXPECT_NO_THROW({ updated = threadApi->getThread(threadId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.privateMeta.stdString(), "direct_updated_private");
 }
 
@@ -896,13 +896,13 @@ TEST_F(ThreadUsingGroupsTest, caller_in_no_granted_group_reads_via_direct_key) {
 
     thread::Thread t;
     EXPECT_NO_THROW({ t = threadApi->getThread(reader->getString("Thread_6.threadId")); });
-    EXPECT_EQ(t.statusCode, 0);
+    EXPECT_EQ(errCode(t), 0);
     // `groups` stays unnarrowed, so user_2 still sees the grant it is not part of.
     EXPECT_EQ(t.groups.size(), 1);
 
     thread::Message msg;
     EXPECT_NO_THROW({ msg = threadApi->getMessage(reader->getString("Message_6.info_messageId")); });
-    EXPECT_EQ(msg.statusCode, 0);
+    EXPECT_EQ(errCode(msg), 0);
     EXPECT_EQ(
         msg.privateMeta.stdString(), privmx::utils::Hex::toString(reader->getString("Message_6.privateMeta_inHex"))
     );
@@ -914,7 +914,7 @@ TEST_F(ThreadUsingGroupsTest, group_only_member_still_reads_after_container_reke
     // the group route. Two keyIds under one grant is where a filter keyed by keyId alone drops the wrong half.
     group::Group group_3;
     ASSERT_NO_THROW({ group_3 = groupApi->getGroup(reader->getString("Group_3.groupId")); });
-    ASSERT_EQ(group_3.statusCode, 0);
+    ASSERT_EQ(errCode(group_3), 0);
 
     std::string threadId;
     ASSERT_NO_THROW({
@@ -939,7 +939,7 @@ TEST_F(ThreadUsingGroupsTest, group_only_member_still_reads_after_container_reke
 
     thread::Thread beforeRekey;
     ASSERT_NO_THROW({ beforeRekey = threadApi->getThread(threadId); });
-    ASSERT_EQ(beforeRekey.statusCode, 0);
+    ASSERT_EQ(errCode(beforeRekey), 0);
 
     ASSERT_NO_THROW({
         threadApi->updateThread(
@@ -974,12 +974,12 @@ TEST_F(ThreadUsingGroupsTest, group_only_member_still_reads_after_container_reke
 
     thread::Message firstKeyMessage;
     EXPECT_NO_THROW({ firstKeyMessage = threadApi->getMessage(firstKeyMessageId); });
-    EXPECT_EQ(firstKeyMessage.statusCode, 0);
+    EXPECT_EQ(errCode(firstKeyMessage), 0);
     EXPECT_EQ(firstKeyMessage.data.stdString(), "first_key_data");
 
     thread::Message secondKeyMessage;
     EXPECT_NO_THROW({ secondKeyMessage = threadApi->getMessage(secondKeyMessageId); });
-    EXPECT_EQ(secondKeyMessage.statusCode, 0);
+    EXPECT_EQ(errCode(secondKeyMessage), 0);
     EXPECT_EQ(secondKeyMessage.data.stdString(), "second_key_data");
 
     core::PagingList<thread::Message> list;
@@ -988,7 +988,7 @@ TEST_F(ThreadUsingGroupsTest, group_only_member_still_reads_after_container_reke
     });
     EXPECT_EQ(list.totalAvailable, 2);
     for (const auto& msg : list.readItems) {
-        EXPECT_EQ(msg.statusCode, 0);
+        EXPECT_EQ(errCode(msg), 0);
         EXPECT_FALSE(msg.data.stdString().empty());
     }
 }
@@ -999,7 +999,7 @@ TEST_F(ThreadUsingGroupsTest, user_role_grantee_permissions) {
     // "manager", which a "user" grant never reaches, and `item.update` is met only by `itemOwner&user`.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string threadId;
     ASSERT_NO_THROW({
@@ -1031,10 +1031,10 @@ TEST_F(ThreadUsingGroupsTest, user_role_grantee_permissions) {
     // and not a failure to open the thread.
     thread::Thread t;
     ASSERT_NO_THROW({ t = threadApi->getThread(threadId); });
-    ASSERT_EQ(t.statusCode, 0);
+    ASSERT_EQ(errCode(t), 0);
     thread::Message readable;
     ASSERT_NO_THROW({ readable = threadApi->getMessage(othersMessageId); });
-    ASSERT_EQ(readable.statusCode, 0);
+    ASSERT_EQ(errCode(readable), 0);
 
     // may write its own item
     std::string messageId;
@@ -1049,7 +1049,7 @@ TEST_F(ThreadUsingGroupsTest, user_role_grantee_permissions) {
     ASSERT_FALSE(messageId.empty());
     thread::Message msg;
     EXPECT_NO_THROW({ msg = threadApi->getMessage(messageId); });
-    EXPECT_EQ(msg.statusCode, 0);
+    EXPECT_EQ(errCode(msg), 0);
     EXPECT_EQ(msg.data.stdString(), "grantee_data");
     EXPECT_EQ(msg.info.author, reader->getString("Login.user_2_id"));
 
@@ -1085,7 +1085,7 @@ TEST_F(ThreadUsingGroupsTest, user_role_grantee_permissions) {
     EXPECT_THROW({ threadApi->deleteThread(threadId); }, server::AccessDeniedException);
     thread::Thread survived;
     EXPECT_NO_THROW({ survived = threadApi->getThread(threadId); });
-    EXPECT_EQ(survived.statusCode, 0);
+    EXPECT_EQ(errCode(survived), 0);
 }
 
 TEST_F(ThreadUsingGroupsTest, manager_role_grantee_permissions) {
@@ -1095,7 +1095,7 @@ TEST_F(ThreadUsingGroupsTest, manager_role_grantee_permissions) {
     // group-aware copy the grant put user_2 into; `delete` is guarded by the policy atom alone.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
-    ASSERT_EQ(group_2.statusCode, 0);
+    ASSERT_EQ(errCode(group_2), 0);
 
     std::string threadId;
     ASSERT_NO_THROW({
@@ -1125,7 +1125,7 @@ TEST_F(ThreadUsingGroupsTest, manager_role_grantee_permissions) {
 
     thread::Thread t;
     ASSERT_NO_THROW({ t = threadApi->getThread(threadId); });
-    ASSERT_EQ(t.statusCode, 0);
+    ASSERT_EQ(errCode(t), 0);
     // user_2 holds no direct membership - everything it can do here, it does through the grant.
     ASSERT_EQ(std::count(t.managers.begin(), t.managers.end(), reader->getString("Login.user_2_id")), 0);
     ASSERT_EQ(std::count(t.users.begin(), t.users.end(), reader->getString("Login.user_2_id")), 0);
@@ -1141,7 +1141,7 @@ TEST_F(ThreadUsingGroupsTest, manager_role_grantee_permissions) {
     });
     thread::Message edited;
     EXPECT_NO_THROW({ edited = threadApi->getMessage(othersMessageId); });
-    EXPECT_EQ(edited.statusCode, 0);
+    EXPECT_EQ(errCode(edited), 0);
     EXPECT_EQ(edited.data.stdString(), "edited_data");
 
     const std::vector<core::GroupGrantWithKey> grant{{
@@ -1184,7 +1184,7 @@ TEST_F(ThreadUsingGroupsTest, manager_role_grantee_permissions) {
 
     thread::Thread updated;
     EXPECT_NO_THROW({ updated = threadApi->getThread(threadId); });
-    EXPECT_EQ(updated.statusCode, 0);
+    EXPECT_EQ(errCode(updated), 0);
     EXPECT_EQ(updated.privateMeta.stdString(), "promoted_private");
     EXPECT_EQ(std::count(updated.managers.begin(), updated.managers.end(), reader->getString("Login.user_2_id")), 1);
 
@@ -1214,7 +1214,7 @@ TEST_F(ThreadUsingGroupsTest, group_manager_role_does_not_grant_container_manage
 
     group::Group managedGroup;
     ASSERT_NO_THROW({ managedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(managedGroup.statusCode, 0);
+    ASSERT_EQ(errCode(managedGroup), 0);
     ASSERT_EQ(std::count(
         managedGroup.managers.begin(), managedGroup.managers.end(), reader->getString("Login.user_2_id")
     ), 1);
@@ -1235,7 +1235,7 @@ TEST_F(ThreadUsingGroupsTest, group_manager_role_does_not_grant_container_manage
 
     thread::Thread t;
     ASSERT_NO_THROW({ t = threadApi->getThread(threadId); });
-    ASSERT_EQ(t.statusCode, 0);
+    ASSERT_EQ(errCode(t), 0);
 
     // Container-user rights: yes.
     EXPECT_NO_THROW({
@@ -1290,7 +1290,7 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller
 
     group::Group granteeGroup;
     ASSERT_NO_THROW({ granteeGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(granteeGroup.statusCode, 0);
+    ASSERT_EQ(errCode(granteeGroup), 0);
 
     // user_1 is a direct member - enough to re-key under the default `rotateKeys: "user"`.
     std::string threadId;
@@ -1327,7 +1327,7 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller
 
     thread::Thread t;
     ASSERT_NO_THROW({ t = threadApi->getThread(threadId); });
-    ASSERT_EQ(t.statusCode, 0);
+    ASSERT_EQ(errCode(t), 0);
     // The grant is there to be read off the thread - which is exactly where the re-key has to get it from.
     ASSERT_EQ(t.groups.size(), 1);
     ASSERT_EQ(t.groups[0].groupId, granteeGroup.groupId);
@@ -1364,12 +1364,12 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_covers_a_grantee_group_the_caller
 
     thread::Message beforeRotation;
     EXPECT_NO_THROW({ beforeRotation = threadApi->getMessage(beforeRotationMessageId); });
-    EXPECT_EQ(beforeRotation.statusCode, 0);
+    EXPECT_EQ(errCode(beforeRotation), 0);
     EXPECT_EQ(beforeRotation.data.stdString(), "before_rotation_data");
 
     thread::Message afterRotation;
     EXPECT_NO_THROW({ afterRotation = threadApi->getMessage(afterRotationMessageId); });
-    EXPECT_EQ(afterRotation.statusCode, 0);
+    EXPECT_EQ(errCode(afterRotation), 0);
     EXPECT_EQ(afterRotation.data.stdString(), "after_rotation_data");
 }
 
@@ -1393,7 +1393,7 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_clears_staleGroups_after_the_grou
 
     group::Group sharedGroup;
     ASSERT_NO_THROW({ sharedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(sharedGroup.statusCode, 0);
+    ASSERT_EQ(errCode(sharedGroup), 0);
     ASSERT_EQ(sharedGroup.keyVersion, 1);
 
     std::string threadId;
@@ -1412,7 +1412,7 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_clears_staleGroups_after_the_grou
 
     thread::Thread stale;
     ASSERT_NO_THROW({ stale = threadApi->getThread(threadId); });
-    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(errCode(stale), 0);
     ASSERT_EQ(stale.staleGroups.size(), 1);
     EXPECT_EQ(stale.staleGroups[0], groupId);
 
@@ -1429,7 +1429,7 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_clears_staleGroups_after_the_grou
 
     thread::Thread rekeyed;
     ASSERT_NO_THROW({ rekeyed = threadApi->getThread(threadId); });
-    EXPECT_EQ(rekeyed.statusCode, 0);
+    EXPECT_EQ(errCode(rekeyed), 0);
     EXPECT_TRUE(rekeyed.staleGroups.empty());
 
     std::string messageId;
@@ -1448,7 +1448,7 @@ TEST_F(ThreadUsingGroupsTest, rotateThreadKeys_clears_staleGroups_after_the_grou
 
     thread::Message message;
     EXPECT_NO_THROW({ message = threadApi->getMessage(messageId); });
-    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(errCode(message), 0);
     EXPECT_EQ(message.data.stdString(), "post_rekey_data");
 }
 
@@ -1472,7 +1472,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_auto_rotates_a_stale_thread_key) {
 
     group::Group sharedGroup;
     ASSERT_NO_THROW({ sharedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(sharedGroup.statusCode, 0);
+    ASSERT_EQ(errCode(sharedGroup), 0);
 
     std::string threadId;
     ASSERT_NO_THROW({
@@ -1490,7 +1490,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_auto_rotates_a_stale_thread_key) {
 
     thread::Thread stale;
     ASSERT_NO_THROW({ stale = threadApi->getThread(threadId); });
-    ASSERT_EQ(stale.statusCode, 0);
+    ASSERT_EQ(errCode(stale), 0);
     ASSERT_EQ(stale.staleGroups.size(), 1);
     ASSERT_EQ(stale.staleGroups[0], groupId);
 
@@ -1506,7 +1506,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_auto_rotates_a_stale_thread_key) {
 
     thread::Thread rekeyed;
     ASSERT_NO_THROW({ rekeyed = threadApi->getThread(threadId); });
-    EXPECT_EQ(rekeyed.statusCode, 0);
+    EXPECT_EQ(errCode(rekeyed), 0);
     EXPECT_TRUE(rekeyed.staleGroups.empty());
     // Exactly one re-key: a rotation appends one history entry and nothing else wrote to T.
     EXPECT_EQ(rekeyed.version, stale.version + 1);
@@ -1521,7 +1521,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_auto_rotates_a_stale_thread_key) {
 
     thread::Message message;
     EXPECT_NO_THROW({ message = threadApi->getMessage(messageId); });
-    EXPECT_EQ(message.statusCode, 0);
+    EXPECT_EQ(errCode(message), 0);
     EXPECT_EQ(message.data.stdString(), "auto_rotated_data");
 }
 
@@ -1545,7 +1545,7 @@ TEST_F(ThreadUsingGroupsTest, auto_rotation_does_not_repeat_a_re_key_another_cli
 
     group::Group sharedGroup;
     ASSERT_NO_THROW({ sharedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(sharedGroup.statusCode, 0);
+    ASSERT_EQ(errCode(sharedGroup), 0);
 
     // Both users are direct members and managers of T, so either of them may send and either may re-key.
     std::string threadId;
@@ -1606,7 +1606,7 @@ TEST_F(ThreadUsingGroupsTest, auto_rotation_does_not_repeat_a_re_key_another_cli
 
     thread::Thread after;
     ASSERT_NO_THROW({ after = threadApi->getThread(threadId); });
-    EXPECT_EQ(after.statusCode, 0);
+    EXPECT_EQ(errCode(after), 0);
     EXPECT_TRUE(after.staleGroups.empty());
     // One re-key, not two.
     EXPECT_EQ(after.version, stale1.version + 1);
@@ -1616,7 +1616,7 @@ TEST_F(ThreadUsingGroupsTest, auto_rotation_does_not_repeat_a_re_key_another_cli
 
     thread::Message loserMessage;
     EXPECT_NO_THROW({ loserMessage = threadApi->getMessage(loserMessageId); });
-    EXPECT_EQ(loserMessage.statusCode, 0);
+    EXPECT_EQ(errCode(loserMessage), 0);
     EXPECT_EQ(loserMessage.data.stdString(), "loser_data");
 
     conn2->disconnect();
@@ -1642,7 +1642,7 @@ TEST_F(ThreadUsingGroupsTest, sendMessage_still_reports_a_stale_key_when_the_re_
 
     group::Group sharedGroup;
     ASSERT_NO_THROW({ sharedGroup = groupApi->getGroup(groupId); });
-    ASSERT_EQ(sharedGroup.statusCode, 0);
+    ASSERT_EQ(errCode(sharedGroup), 0);
 
     // user_2 is a user of T but not a manager, and T only lets managers re-key.
     core::ContainerPolicy policy;
@@ -1739,7 +1739,7 @@ TEST_F(ThreadUsingGroupsTest, SECURITY_a_metadata_update_after_a_rekey_keeps_the
         auto threads3 = thread::ThreadApi::create(*conn3, groups3);
         thread::Message read;
         ASSERT_NO_THROW({ read = threads3.getMessage(before); });
-        ASSERT_EQ(read.statusCode, 0);
+        ASSERT_FALSE(read.error.has_value());
         conn3->disconnect();
     }
 
@@ -1782,7 +1782,7 @@ TEST_F(ThreadUsingGroupsTest, SECURITY_a_metadata_update_after_a_rekey_keeps_the
     connectAs(2);
     thread::Message read;
     EXPECT_NO_THROW({ read = threadApi->getMessage(after); });
-    EXPECT_EQ(read.statusCode, 0);
+    EXPECT_FALSE(read.error.has_value());
     EXPECT_EQ(read.data.stdString(), "after_update");
     EXPECT_EQ(threadApi->getThread(threadId).publicMeta.stdString(), "renamed_public");
 }

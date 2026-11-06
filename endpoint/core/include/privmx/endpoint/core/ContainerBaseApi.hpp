@@ -210,7 +210,7 @@ protected:
     template<typename TServer, typename TLib>
     void cacheKeysOfValid(const std::vector<TServer>& raw, const std::vector<TLib>& validated) {
         for (size_t i = 0; i < raw.size() && i < validated.size(); ++i) {
-            if (validated[i].statusCode == 0) {
+            if (!validated[i].error.has_value()) {
                 setNewModuleKeysInCache(raw[i].id, containerToModuleKeys(raw[i]), raw[i].version);
             }
         }

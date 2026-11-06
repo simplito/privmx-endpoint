@@ -42,7 +42,7 @@ public:
         const server::Store& store,
         const core::DecryptedModuleDataV5& raw
     ) const override;
-    Store toLibError(const server::Store& store, int64_t errorCode) const override;
+    Store toLibError(const server::Store& store, const std::optional<core::Error>& error) const override;
     core::dynamic::EncryptedModuleDataV5 encrypt(
         const core::ModuleDataToEncryptV5& data,
         const privmx::crypto::PrivateKey& userPrivKey,

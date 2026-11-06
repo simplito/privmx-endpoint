@@ -57,12 +57,12 @@ struct has_keys<T, std::void_t<decltype(std::declval<T>().keys)>> : std::true_ty
 
 class DataSchemaMapperUtils {
 public:
-    static uint32_t toStatusCode(std::function<void()> fn) noexcept {
+    static std::optional<Error> toError(std::function<void()> fn) noexcept {
         try {
             fn();
-            return 0;
-        } catch (const Exception& e) { return e.getCode(); } catch (...) {
-            return ENDPOINT_CORE_EXCEPTION_CODE;
+            return std::nullopt;
+        } catch (const Exception& e) { return toPublicError(e); } catch (...) {
+            return toPublicError(*unknownError());
         }
     }
 
@@ -134,7 +134,8 @@ public:
         const std::vector<TServer>& items,
         const std::shared_ptr<KeyProvider>& keyProvider,
         const Connection& connection,
-        std::function<std::pair<uint32_t, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
+        std::function<
+            std::pair<std::optional<Error>, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
             validateIntegrity,
         std::function<EncKeyLocation(const type_identity_t<TServer>&)> getLocation,
         std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
@@ -142,7 +143,7 @@ public:
             const DecryptedEncKey&,
             const std::optional<DataIntegrityObject>&
         )> decrypt,
-        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError,
+        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, const std::optional<Error>&)> toLibError,
         const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
         // A context listing: an item the server files under another context is refused, and the verifier is asked
         // under this one. Empty for a by-id read, which has no context of its own to compare with.
@@ -159,12 +160,12 @@ public:
 
         for (size_t i = 0; i < items.size(); i++) {
             if (expectedContextId.has_value() && items[i].contextId != expectedContextId.value()) {
-                result[i] = toLibError(items[i], UserVerificationFailureException().getCode());
+                result[i] = toLibError(items[i], toPublicError(UserVerificationFailureException()));
                 continue;
             }
-            auto [code, verifiedDio] = validateIntegrity(items[i]);
-            if (code != 0) {
-                result[i] = toLibError(items[i], code);
+            auto [error, verifiedDio] = validateIntegrity(items[i]);
+            if (error.has_value()) {
+                result[i] = toLibError(items[i], error);
                 continue;
             }
             verifiedDios[i] = verifiedDio;
@@ -172,7 +173,7 @@ public:
 
         KeyDecryptionAndVerificationRequest keyRequest;
         for (size_t i = 0; i < items.size(); i++) {
-            if (result[i].statusCode != 0) {
+            if (result[i].error.has_value()) {
                 continue;
             }
             if constexpr (has_keys<TServer>::value) {
@@ -182,14 +183,14 @@ public:
                 keyRequest.addGroupKeys(items[i].groupKeys, getLocation(items[i]));
             }
         }
-        if (std::none_of(result.begin(), result.end(), [](const TLib& r) { return r.statusCode == 0; })) {
+        if (std::none_of(result.begin(), result.end(), [](const TLib& r) { return !r.error.has_value(); })) {
             return result; // all refused already: nothing to open or verify
         }
         const auto allKeys = keyProvider->getKeysAndVerify(keyRequest, groupPrivKeyResolver);
         std::set<std::string> seenRandomIds;
 
         for (size_t i = 0; i < items.size(); i++) {
-            if (result[i].statusCode != 0) {
+            if (result[i].error.has_value()) {
                 continue;
             }
             try {
@@ -198,20 +199,20 @@ public:
                     result[i] = lib;
                     dios[i] = dio;
                     if (!seenRandomIds.insert(dio.randomId + "-" + std::to_string(dio.timestamp)).second) {
-                        result[i].statusCode = DataIntegrityObjectDuplicatedException().getCode();
+                        result[i].error = toPublicError(DataIntegrityObjectDuplicatedException());
                     }
                 } else {
-                    result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE);
+                    result[i] = toLibError(items[i], toPublicError(*unknownError("resolving the item's key")));
                 }
-            } catch (const Exception& e) { result[i] = toLibError(items[i], e.getCode()); } catch (...) {
-                result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE);
+            } catch (const Exception& e) { result[i] = toLibError(items[i], toPublicError(e)); } catch (...) {
+                result[i] = toLibError(items[i], toPublicError(*unknownError("decrypting the item")));
             }
         }
 
         std::vector<VerificationRequest> verifyReqs;
         std::vector<size_t> verifyIdxs;
         for (size_t i = 0; i < result.size(); i++) {
-            if (result[i].statusCode != 0) {
+            if (result[i].error.has_value()) {
                 continue;
             }
             verifyReqs.push_back(
@@ -225,9 +226,9 @@ public:
         }
         auto verified = connection.getImpl()->getUserVerifier()->verify(verifyReqs);
         for (size_t j = 0; j < verifyIdxs.size(); j++) {
-            result[verifyIdxs[j]].statusCode = verified[j] ?
-                0 :
-                privmx::endpoint::core::UserVerificationFailureException().getCode();
+            result[verifyIdxs[j]].error = verified[j] ?
+                std::optional<Error>{} :
+                std::optional<Error>{toPublicError(privmx::endpoint::core::UserVerificationFailureException())};
         }
         return result;
     }
@@ -238,15 +239,16 @@ public:
         const ModuleKeys& moduleKeys,
         const std::shared_ptr<KeyProvider>& keyProvider,
         const Connection& connection,
-        std::function<std::pair<uint32_t, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
+        std::function<
+            std::pair<std::optional<Error>, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
             validateIntegrity,
-        std::function<uint32_t(const type_identity_t<TServer>&)> validateKeyId,
+        std::function<std::optional<Error>(const type_identity_t<TServer>&)> validateKeyId,
         std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
             const type_identity_t<TServer>&,
             const DecryptedEncKey&,
             const std::optional<DataIntegrityObject>&
         )> decrypt,
-        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError,
+        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, const std::optional<Error>&)> toLibError,
         const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) {
         if (items.empty()) {
@@ -259,9 +261,9 @@ public:
         std::vector<std::optional<DataIntegrityObject>> verifiedDios(items.size());
 
         for (size_t i = 0; i < items.size(); i++) {
-            auto [code, verifiedDio] = validateIntegrity(items[i]);
-            if (code != 0) {
-                result[i] = toLibError(items[i], code);
+            auto [error, verifiedDio] = validateIntegrity(items[i]);
+            if (error.has_value()) {
+                result[i] = toLibError(items[i], error);
                 continue;
             }
             verifiedDios[i] = verifiedDio;
@@ -270,11 +272,11 @@ public:
         const EncKeyLocation location{.contextId = moduleKeys.contextId, .resourceId = moduleKeys.moduleResourceId};
         KeyDecryptionAndVerificationRequest keyRequest;
         for (size_t i = 0; i < items.size(); i++) {
-            if (result[i].statusCode != 0) {
+            if (result[i].error.has_value()) {
                 continue;
             }
-            if (auto code = validateKeyId(items[i]); code != 0) {
-                result[i] = toLibError(items[i], code);
+            if (auto error = validateKeyId(items[i]); error.has_value()) {
+                result[i] = toLibError(items[i], error);
                 continue;
             }
             keyRequest.addOne(moduleKeys.keys, items[i].keyId, location);
@@ -286,29 +288,29 @@ public:
         std::set<std::string> seenRandomIds;
 
         for (size_t i = 0; i < items.size(); i++) {
-            if (result[i].statusCode != 0) {
+            if (result[i].error.has_value()) {
                 continue;
             }
             try {
                 if (!keyMap) {
-                    result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE);
+                    result[i] = toLibError(items[i], toPublicError(*unknownError("resolving the module's keys")));
                     continue;
                 }
                 auto [lib, dio] = decrypt(items[i], keyMap->at(items[i].keyId), verifiedDios[i]);
                 result[i] = lib;
                 dios[i] = dio;
                 if (!seenRandomIds.insert(dio.randomId + "-" + std::to_string(dio.timestamp)).second) {
-                    result[i].statusCode = DataIntegrityObjectDuplicatedException().getCode();
+                    result[i].error = toPublicError(DataIntegrityObjectDuplicatedException());
                 }
-            } catch (const Exception& e) { result[i] = toLibError(items[i], e.getCode()); } catch (...) {
-                result[i] = toLibError(items[i], ENDPOINT_CORE_EXCEPTION_CODE);
+            } catch (const Exception& e) { result[i] = toLibError(items[i], toPublicError(e)); } catch (...) {
+                result[i] = toLibError(items[i], toPublicError(*unknownError("decrypting the entry")));
             }
         }
 
         std::vector<VerificationRequest> verifyReqs;
         std::vector<size_t> verifyIdxs;
         for (size_t i = 0; i < result.size(); i++) {
-            if (result[i].statusCode != 0) {
+            if (result[i].error.has_value()) {
                 continue;
             }
             verifyReqs.push_back(
@@ -322,9 +324,9 @@ public:
         }
         auto verified = connection.getImpl()->getUserVerifier()->verify(verifyReqs);
         for (size_t j = 0; j < verifyIdxs.size(); j++) {
-            result[verifyIdxs[j]].statusCode = verified[j] ?
-                0 :
-                privmx::endpoint::core::UserVerificationFailureException().getCode();
+            result[verifyIdxs[j]].error = verified[j] ?
+                std::optional<Error>{} :
+                std::optional<Error>{toPublicError(privmx::endpoint::core::UserVerificationFailureException())};
         }
         return result;
     }
@@ -335,20 +337,21 @@ public:
         const ModuleKeys& moduleKeys,
         const std::shared_ptr<KeyProvider>& keyProvider,
         const Connection& connection,
-        std::function<std::pair<uint32_t, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
+        std::function<
+            std::pair<std::optional<Error>, std::optional<DataIntegrityObject>>(const type_identity_t<TServer>&)>
             validateIntegrity,
         std::function<std::tuple<type_identity_t<TLib>, DataIntegrityObject>(
             const type_identity_t<TServer>&,
             const DecryptedEncKey&,
             const std::optional<DataIntegrityObject>&
         )> decrypt,
-        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, uint32_t)> toLibError,
+        std::function<type_identity_t<TLib>(const type_identity_t<TServer>&, const std::optional<Error>&)> toLibError,
         const KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver = nullptr
     ) {
         return batchValidateDecryptVerifyEntries<TLib, TServer>(
             items, moduleKeys, keyProvider, connection, validateIntegrity,
-            std::function<uint32_t(const TServer&)>([](const TServer&) -> uint32_t { return 0; }), decrypt, toLibError,
-            groupPrivKeyResolver
+            std::function<std::optional<Error>(const TServer&)>([](const TServer&) { return std::optional<Error>{}; }),
+            decrypt, toLibError, groupPrivKeyResolver
         );
     }
 };
