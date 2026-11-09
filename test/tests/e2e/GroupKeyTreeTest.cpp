@@ -16,7 +16,6 @@
 #include <privmx/endpoint/group/keytree/LadderKeys.hpp>
 #include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 #include <privmx/endpoint/thread/ThreadApi.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/utils/Base58.hpp>
 #include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
@@ -1081,21 +1080,25 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_from_below_the_era_flo
     EXPECT_NE(std::find(after.users.begin(), after.users.end(), user(2).userId), after.users.end());
 }
 
-TEST_F(GroupKeyTreeTest, SECURITY_a_group_key_re_encoded_uncompressed_is_refused) {
-    // Keys are compared as strings, so the current key spelled uncompressed would pass for a new one everywhere.
+TEST_F(GroupKeyTreeTest, SECURITY_a_group_key_in_another_spelling_is_refused) {
+    // Keys are compared as strings — `NODE_NOT_NEW`, and the check that a new epoch's key was never one of an
+    // earlier epoch — so the same key under a second spelling would pass for a key nobody had seen.
     std::string groupId;
     ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     std::string k1;
     ASSERT_NO_THROW({ k1 = groupApi->getGroup(groupId).groupPubKey; });
-    // Deliberately the legacy secp256k1 key here, and only here: the point is to re-encode the *same* key
-    // uncompressed, which is a secp256k1 wire concern the tagged `core::PublicKey` does not expose.
-    const auto uncompressed = privmx::utils::Base58::encodeWithChecksum(
-        privmx::crypto::PublicKey::fromBase58DER(k1).getEcc().getPublicKey(false), core::FormatHash::sha256
-    );
-    ASSERT_NE(uncompressed, k1);
 
-    const auto refusal = rawRemovalRefusal(groupId, user(3).userId, uncompressed);
-    EXPECT_NE(refusal.find("compressed"), std::string::npos) << "a re-encoded key was taken for a new one: " << refusal;
+    // The untagged spelling: the same key bytes with the algorithm tag stripped, which is how a key travelled
+    // before 3.0.0. Taken from the encoding rather than from the curve on purpose — re-encoding a point
+    // uncompressed only means anything for secp256k1, while a tag can be stripped from a key of any algorithm,
+    // so this stays a real test on the builds the tagging exists for.
+    const std::string payload = privmx::utils::Base58::decodeWithChecksum(k1, core::FormatHash::sha256);
+    ASSERT_GT(payload.size(), 1u);
+    const auto untagged = privmx::utils::Base58::encodeWithChecksum(payload.substr(1), core::FormatHash::sha256);
+    ASSERT_NE(untagged, k1);
+
+    const auto refusal = rawRemovalRefusal(groupId, user(3).userId, untagged);
+    EXPECT_NE(refusal.find("canonical"), std::string::npos) << "a re-spelled key was taken for a new one: " << refusal;
 
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
