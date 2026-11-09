@@ -26,7 +26,6 @@ limitations under the License.
 #include <set>
 #include <thread>
 
-#include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
 #include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/KeyFormats.hpp>
@@ -66,22 +65,16 @@ namespace {
 
 const std::string CONTEXT = "ctx-lying";
 
-/// Whether a key has two spellings at all. That is a secp256k1 property — one point, compressed or not.
-/// A tagged identity (Ed25519 and up) is `Base58Check(tag || raw)` and has exactly one encoding, so on
-/// such a build there is no second spelling to construct and the tests below describe nothing. They are
-/// skipped rather than quietly passing, and the secp256k1 build still covers the property.
-bool buildSpellsKeysTwoWays() {
-    return core::defaultKeyAlgorithm() == privmx::cryptoservice::AsymAlg::PrivmxSecp256k1;
-}
-
-// The same point spelled uncompressed. Deliberately the legacy secp256k1 key: re-encoding a point is a
-// secp256k1 wire concern that the tagged `core::PublicKey` does not expose, and these tests exist to check
-// that a re-spelled key is refused rather than taken for a new one.
-std::string uncompressedSpelling(const std::string& base58DER) {
-    return privmx::utils::Base58::encodeWithChecksum(
-        privmx::crypto::PublicKey::fromBase58DER(base58DER).getEcc().getPublicKey(false),
-        core::FormatHash::sha256
-    );
+/**
+ * The same key in the spelling it had before 3.0.0: the algorithm tag stripped off.
+ *
+ * Built from the encoding rather than from the curve, so it works for a key of any algorithm. The older
+ * version of this helper re-encoded a secp256k1 point uncompressed, which the tagged `core::PublicKey` cannot
+ * even be asked for — and which means nothing for a composed identity, whose raw form is fixed-length.
+ */
+std::string untaggedSpelling(const std::string& base58DER) {
+    const std::string payload = privmx::utils::Base58::decodeWithChecksum(base58DER, core::FormatHash::sha256);
+    return privmx::utils::Base58::encodeWithChecksum(payload.substr(1), core::FormatHash::sha256);
 }
 
 // A policy as the API takes it.
@@ -1282,16 +1275,26 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARotationIsNotPlannedOnAStateRolledBackBelo
     EXPECT_EQ(bridge.tree.commits.size(), 1u) << "nothing was committed";
 }
 
-TEST_F(GroupApiLyingBridge, AGrantKeySignedInItsUncompressedSpellingIsStillTheEpochsKey) {
-    if (!buildSpellsKeysTwoWays()) GTEST_SKIP() << "a tagged identity has one spelling; nothing to re-spell";
-    // bob's rotation is signed (by bob) with the new grant key spelled uncompressed, and served that way. alice's
-    // cached grant key is the same point: she rotates and removes on, history kept.
+/**
+ * A grant key the bridge serves in any spelling but its canonical one is refused.
+ *
+ * Before keys carried an algorithm tag a key had two spellings — one secp256k1 point, compressed or not — and
+ * the client canonicalised before comparing, so a re-spelled key was still recognised as the epoch's. With a
+ * tag there is exactly one spelling and anything else fails at the decoder. That is the safer contract as much
+ * as the simpler one: the bridge's own validators refuse a non-canonical key at the API boundary, so a client
+ * that still accepted one would be more permissive than the server it is defending itself against.
+ *
+ * This stands in for four tests that asserted the tolerant behaviour. All four were guarded to secp256k1 and
+ * therefore skipped on an ed25519 build — the build the suite is actually run on — so they covered nothing.
+ * This one runs on every build.
+ */
+TEST_F(GroupApiLyingBridge, SECURITY_AGrantKeyServedInAnotherSpellingIsRefused) {
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     std::string spelled;
     bridge.onRotationCommit = [&](server::GroupTreeCommit& commit) {
         CommitStatement statement = TreeCommits::fromWire(commit);
-        spelled = uncompressedSpelling(statement.groupPubKey);
+        spelled = untaggedSpelling(statement.groupPubKey);
         statement.groupPubKey = spelled;
         TreeCommits::sign(statement, bridge.users.at("bob"));
         commit = TreeCommits::toWire(statement);
@@ -1307,17 +1310,10 @@ TEST_F(GroupApiLyingBridge, AGrantKeySignedInItsUncompressedSpellingIsStillTheEp
     bridge.onRotationCommit = [](server::GroupTreeCommit&) {};
     ASSERT_FALSE(spelled.empty());
     ASSERT_EQ(bridge.tree.state.epoch, 2u);
-    const Bridge atEpoch2 = bridge;
-    EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
-    EXPECT_EQ(bridge.tree.state.epoch, 3u);
-    rollBackTo(atEpoch2);
-    bridge.rungs = atEpoch2.rungs;
+    ASSERT_NE(spelled, bridge.tree.state.grantPublicKey.toBase58DER());
     clients.erase("alice");
-    EXPECT_NO_THROW(client("alice").removeGroupMembers(groupId, {"carol"}));
-    EXPECT_EQ(bridge.tree.state.epoch, 3u);
-    EXPECT_TRUE(std::any_of(bridge.rungs.begin(), bridge.rungs.end(), [](const server::GroupArchiveRung& rung) {
-        return rung.atKeyVersion == 3 && rung.targetKeyVersion == 2;
-    })) << "the removal kept history: the unit rung down to epoch 2";
+    EXPECT_THROW(client("alice").removeGroupMembers(groupId, {"carol"}), GroupDataIntegrityException)
+        << "a grant key in another spelling was taken for the epoch's key";
 }
 
 TEST_F(GroupApiLyingBridge, ARotationOvertakenByASelfUpdateIsPlannedAgain) {
@@ -3568,58 +3564,6 @@ TEST_F(GroupApiLyingBridge, SECURITY_AGrantKeyLabelledEpochZeroIsNotRemembered) 
     EXPECT_EQ(client("alice").decrypt(sealed).data.stdString(), "to epoch 1");
 }
 
-TEST_F(GroupApiLyingBridge, AListedGrantKeyIsHandedOutInItsOneSpelling) {
-    if (!buildSpellsKeysTwoWays()) GTEST_SKIP() << "a tagged identity has one spelling; nothing to re-spell";
-    // bob's rotation signs the new grant key uncompressed, and the bridge serves and lists it so: the same point,
-    // another string. What listGroups and the grantee lookup hand out (pinned, or read and verified) is the key in its
-    // one spelling.
-    quiet = true;
-    const std::string groupId = createGroup({"alice", "bob", "carol"});
-    std::string spelled;
-    bridge.onRotationCommit = [&](server::GroupTreeCommit& commit) {
-        CommitStatement statement = TreeCommits::fromWire(commit);
-        spelled = uncompressedSpelling(statement.groupPubKey);
-        statement.groupPubKey = spelled;
-        TreeCommits::sign(statement, bridge.users.at("bob"));
-        commit = TreeCommits::toWire(statement);
-    };
-    bridge.onRead = [&](const std::string&, server::GroupInfo& info) {
-        if (info.keyVersion == 2 && !spelled.empty()) {
-            info.groupPubKey = spelled;
-        }
-    };
-    bridge.onList = [&](server::GroupSummary& summary) {
-        if (summary.keyVersion == 2 && !spelled.empty()) {
-            summary.groupPubKey = spelled;
-        }
-    };
-    try {
-        client("bob").rotateGroupKey(groupId);
-    } catch (...) {} // bob's own pin holds the statement as he signed it
-    bridge.onRotationCommit = [](server::GroupTreeCommit&) {};
-    ASSERT_EQ(bridge.tree.state.epoch, 2u);
-    const std::string canonical = bridge.tree.state.grantPublicKey.toBase58DER();
-    ASSERT_NE(spelled, canonical);
-    client("alice").getGroup(groupId); // pins epoch 2
-    const auto listed = client("alice").listGroups(CONTEXT, {.skip = 0, .limit = 10, .sortOrder = "desc"});
-    ASSERT_EQ(listed.readItems.size(), 1u);
-    EXPECT_EQ(listed.readItems[0].groupPubKey, canonical);
-    for (const std::string id : {"alice", "carol"}) { // pinned, and read for the first time
-        client(id);
-        Client& session = *clients.at(id);
-        GrantingModule module(
-            session.connectionImpl->getUserPrivKey(), session.connectionImpl->getKeyProvider(), "",
-            session.connectionImpl->getEventMiddleware(), session.connection, session.groupApi
-        );
-        std::vector<core::GroupGrantWithKey> grants{{.groupId = groupId, .role = "user", .groupPubKey = "", .groupEpoch = 0}};
-        std::unordered_map<std::string, core::GroupEpochInfo> cache;
-        try {
-            module.resolveGroupEpochs(CONTEXT, grants, cache);
-        } catch (const std::exception& e) { ADD_FAILURE() << id << ": " << e.what(); }
-        EXPECT_EQ(grants.at(0).groupPubKey, canonical) << id;
-    }
-}
-
 TEST_F(GroupApiLyingBridge, SECURITY_TheGroupKeyResolverPassesAForkThrough) {
     // A rollback is not "no key": the resolver the key provider calls must not turn it into a skipped entry.
     quiet = true;
@@ -4039,66 +3983,3 @@ TEST_F(GroupApiLyingBridge, ARotationWhoseGatherPathIsBrokenReadsTheWindow) {
         << "no window read";
 }
 
-TEST_F(GroupApiLyingBridge, SECURITY_AManagerHoldingTheGrantKeyRemovesWhateverTheSpellingOfTheServedKey) {
-    if (!buildSpellsKeysTwoWays()) GTEST_SKIP() << "a tagged identity has one spelling; nothing to re-spell";
-    // The garbler case below with epoch 2 opened by a rotation signed with the grant key spelled uncompressed, and
-    // the latest statement (bob's) spelling it so too, as the bridge serves it: alice's cached key is the same point,
-    // so history is still reachable and the removal goes on.
-    quiet = true;
-    const std::string groupId = createGroup({"alice", "bob", "carol"});
-    std::string spelled;
-    const auto respell = [&](server::GroupTreeCommit& commit, const std::string& signer) {
-        CommitStatement statement = TreeCommits::fromWire(commit);
-        spelled = uncompressedSpelling(statement.groupPubKey);
-        statement.groupPubKey = spelled;
-        TreeCommits::sign(statement, bridge.users.at(signer));
-        commit = TreeCommits::toWire(statement);
-    };
-    bridge.onRotationCommit = [&](server::GroupTreeCommit& commit) { respell(commit, "carol"); };
-    bridge.onRead = [&](const std::string&, server::GroupInfo& info) {
-        info.groupPubKey = TreeCommits::fromWire(bridge.tree.commits.back()).groupPubKey; // as its statement spells it
-    };
-    try {
-        client("carol").rotateGroupKey(groupId);
-    } catch (...) {} // carol's own pin holds the statement as she signed it
-    bridge.onRotationCommit = [](server::GroupTreeCommit&) {};
-    ASSERT_EQ(bridge.tree.state.epoch, 2u);
-    const PrivateKey previous = changeKeyOf(bridge, clients, "alice");
-    GroupApiImpl& alice = clientAdopting("alice", previous);
-    ASSERT_TRUE(alice.renewLeaf(groupId, previous.toWIF()));
-    selfUpdateBy("bob");
-    respell(bridge.tree.commits.back(), "bob");
-    rewrapLeafEdgeOf(bridge, "alice", "bob", previous.getPublicKey());
-    EXPECT_NO_THROW(alice.removeGroupMembers(groupId, {"bob"}));
-    EXPECT_EQ(bridge.tree.state.epoch, 3u) << "the removal did not land";
-}
-
-TEST_F(GroupApiLyingBridge, AMemberRepairsARungUnderAnEpochWhoseKeyIsSpelledUncompressed) {
-    if (!buildSpellsKeysTwoWays()) GTEST_SKIP() << "a tagged identity has one spelling; nothing to re-spell";
-    // carol's rotation signs epoch 2's grant key uncompressed; the unit rung (2, 1) is broken. bob, holding epoch 1,
-    // checks his cached key against the opener's statement as a point and repairs the rung.
-    const std::string groupId = createGroup({"alice", "bob", "carol"});
-    client("bob").resolveGroupPrivKey(groupId);
-    std::string spelled;
-    bridge.onRotationCommit = [&](server::GroupTreeCommit& commit) {
-        CommitStatement statement = TreeCommits::fromWire(commit);
-        spelled = uncompressedSpelling(statement.groupPubKey);
-        statement.groupPubKey = spelled;
-        TreeCommits::sign(statement, bridge.users.at("carol"));
-        commit = TreeCommits::toWire(statement);
-    };
-    bridge.onRead = [&](const std::string&, server::GroupInfo& info) {
-        if (info.keyVersion == 2 && !spelled.empty()) {
-            info.groupPubKey = spelled;
-        }
-    };
-    try {
-        client("carol").rotateGroupKey(groupId);
-    } catch (...) {}
-    bridge.onRotationCommit = [](server::GroupTreeCommit&) {};
-    ASSERT_EQ(bridge.tree.state.epoch, 2u);
-    corrupt(2, 1);
-    client("bob").resolveGroupPrivKey(groupId);
-    GroupApiImplTestAccess::runDueWorkNow(client("bob"), groupId);
-    EXPECT_EQ(count("bob", "context.groupRepairRung"), 1u);
-}

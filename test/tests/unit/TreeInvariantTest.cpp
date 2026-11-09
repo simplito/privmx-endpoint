@@ -47,7 +47,6 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/utils/Base58.hpp>
 #include <privmx/endpoint/core/BigEndian.hpp>
 #include <privmx/endpoint/core/crypto/FormatHash.hpp>
@@ -75,22 +74,18 @@ using namespace privmx::endpoint::group::keytree;
 
 namespace {
 
-/// Whether a key has two spellings at all. That is a secp256k1 property — one point, compressed or not.
-/// A tagged identity (Ed25519 and up) is `Base58Check(tag || raw)` and has exactly one encoding, so on
-/// such a build there is no second spelling to construct and the tests below describe nothing. They are
-/// skipped rather than quietly passing, and the secp256k1 build still covers the property.
-bool buildSpellsKeysTwoWays() {
-    return privmx::endpoint::core::defaultKeyAlgorithm() == privmx::cryptoservice::AsymAlg::PrivmxSecp256k1;
-}
-
-// The same point spelled uncompressed. Deliberately the legacy secp256k1 key: re-encoding a point is a
-// secp256k1 wire concern that the tagged `core::PublicKey` does not expose, and these tests exist to check
-// that a re-spelled key is refused rather than taken for a new one.
-std::string uncompressedSpelling(const PublicKey& key) {
-    return privmx::utils::Base58::encodeWithChecksum(
-        privmx::crypto::PublicKey::fromBase58DER(key.toBase58DER()).getEcc().getPublicKey(false),
-        privmx::endpoint::core::FormatHash::sha256
+/**
+ * The same key in the spelling it had before 3.0.0: the algorithm tag stripped off.
+ *
+ * Built from the encoding rather than from the curve, so it works for a key of any algorithm. The older
+ * version re-encoded a secp256k1 point uncompressed, which the tagged `core::PublicKey` cannot be asked for —
+ * and which means nothing for a composed identity, whose raw form is fixed-length.
+ */
+std::string untaggedSpelling(const PublicKey& key) {
+    const std::string payload = privmx::utils::Base58::decodeWithChecksum(
+        key.toBase58DER(), privmx::endpoint::core::FormatHash::sha256
     );
+    return privmx::utils::Base58::encodeWithChecksum(payload.substr(1), privmx::endpoint::core::FormatHash::sha256);
 }
 
 class TreeInvariant : public testing::Test {
@@ -1705,8 +1700,7 @@ TEST_F(TreeVerification, SECURITY_AChainIsCheckedPageByPageBeforeTheNextPageIsFe
 
 TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused) {
     // A member republishing the grant key of an epoch before a removal reopens the new epoch to the leaver.
-    // `uncompressed`: the key signed in its other base58 spelling, a different string for the same point.
-    const auto opensUnder = [&](const std::function<PublicKey()>& grantKey, bool uncompressed = false) {
+    const auto opensUnder = [&](const std::function<PublicKey()>& grantKey) {
         reset();
         create(40, 0);
         remove(id(35), {id(5)});
@@ -1716,13 +1710,6 @@ TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused
             state.epoch += 1;
             state.grantPublicKey = key;
         }, {.rosterBump = 1, .op = CommitOp::Rotate});
-        if (uncompressed) {
-            CommitStatement spelled = TreeCommits::fromWire(bridge.commits.back());
-            spelled.groupPubKey = uncompressedSpelling(key);
-            EXPECT_NE(spelled.groupPubKey, key.toBase58DER());
-            TreeCommits::sign(spelled, member(id(9)).priv);
-            bridge.commits.back() = TreeCommits::toWire(spelled);
-        }
         TreeVerifier own;
         own.pinCommitted(GROUP_ID, "ctx", TreeCommits::fromWire(bridge.commits.back()), bridge.users(), managersOf(), bridge.rules());
         try {
@@ -1737,50 +1724,34 @@ TEST_F(TreeVerification, SECURITY_ANewEpochUnderAnEarlierEpochsGrantKeyIsRefused
     EXPECT_EQ(opensUnder([&] {
         return PublicKey::fromBase58DER(TreeCommits::fromWire(bridge.commits.front()).groupPubKey);
     }), "a new epoch's grant key is an earlier epoch's|") << "epoch 1's key at epoch 3, refused by the grant-key rule";
-    // Only this last one needs a second spelling of the same point; the two above hold on any build.
-    if (!buildSpellsKeysTwoWays()) {
-        return;
-    }
-    EXPECT_EQ(opensUnder([&] {
-        return PublicKey::fromBase58DER(TreeCommits::fromWire(bridge.commits.front()).groupPubKey);
-    }, true), "a new epoch's grant key is an earlier epoch's|") << "and in its uncompressed spelling too";
+    // The `uncompressed` branch of `opensUnder` used to check that the grant-key rule caught the same point
+    // re-spelled. A key has one spelling now, so there is nothing for the rule to catch that the decoder has
+    // not already refused; that refusal has its own test below.
 }
 
-TEST_F(TreeVerification, SECURITY_APinnedGrantKeyIsComparedInItsCanonicalSpelling) {
-    if (!buildSpellsKeysTwoWays()) GTEST_SKIP() << "a tagged identity has one spelling; nothing to re-spell";
-    // The pin holds its epoch's grant key as signed, here spelled uncompressed. The next epoch republishing that
-    // point (compressed) is an earlier epoch's key all the same: refused when the chain is followed from the pin.
-    create(40, 0);
-    remove(id(35), {id(5)});
-    const PublicKey key = PrivateKey::generateRandom().getPublicKey();
-    forge(id(9), [&](TreeGroupState& state) {
-        state.epoch += 1;
-        state.grantPublicKey = key;
-    }, {.rosterBump = 1, .op = CommitOp::Rotate});
-    CommitStatement spelled = TreeCommits::fromWire(bridge.commits.back());
-    spelled.groupPubKey = uncompressedSpelling(key);
-    ASSERT_NE(spelled.groupPubKey, key.toBase58DER());
-    TreeCommits::sign(spelled, member(id(9)).priv);
-    bridge.commits.back() = TreeCommits::toWire(spelled);
-    TreeVerifier& own = verifierOf(id(9));
-    own.pinCommitted(GROUP_ID, "ctx", spelled, bridge.users(), managersOf(), bridge.rules());
-    forge(id(9), [&](TreeGroupState& state) {
-        state.epoch += 1;
-        state.grantPublicKey = key;
-    }, {.rosterBump = 1, .op = CommitOp::Rotate});
-    expectRefusal([&] { verify(id(9), false); }, "a new epoch's grant key is an earlier epoch's");
-}
-
-TEST_F(TreeVerification, SECURITY_PinnedAtComparesGrantKeysCanonicallyAndFailsClosed) {
-    if (!buildSpellsKeysTwoWays()) GTEST_SKIP() << "a tagged identity has one spelling; nothing to re-spell";
+/**
+ * A grant key offered in any spelling but its canonical one does not match the pin, and nothing throws out.
+ *
+ * This used to assert the opposite — that the same point spelled uncompressed still matched, because the
+ * comparison canonicalised first. With an algorithm tag a key has exactly one spelling, so anything else is a
+ * key the decoder refuses, and a refusal has to read as "does not match" rather than escape as an exception:
+ * `pinnedAt` and `agreesWithPin` are asked about keys an application supplies, so they fail closed by
+ * contract. `SECURITY_APinnedGrantKeyIsComparedInItsCanonicalSpelling` went with the old behaviour — a pin
+ * holding a non-canonical key is no longer reachable, since such a statement is refused before it can be
+ * pinned.
+ */
+TEST_F(TreeVerification, SECURITY_PinnedAtRefusesAGrantKeyInAnotherSpellingAndFailsClosed) {
     create(4, 0);
     const CommitStatement latest = TreeCommits::fromWire(bridge.commits.back());
     TreeVerifier own;
     own.pinCommitted(GROUP_ID, "ctx", latest, bridge.users(), managersOf(), bridge.rules());
     const PublicKey key = PublicKey::fromBase58DER(latest.groupPubKey);
-    const std::string spelled = uncompressedSpelling(key);
-    EXPECT_TRUE(own.pinnedAt(GROUP_ID, "ctx", 1, spelled)) << "the same point in its other spelling";
-    EXPECT_TRUE(own.agreesWithPin(GROUP_ID, "ctx", 1, spelled));
+    EXPECT_TRUE(own.pinnedAt(GROUP_ID, "ctx", 1, key.toBase58DER())) << "the key as the pin holds it";
+    EXPECT_TRUE(own.agreesWithPin(GROUP_ID, "ctx", 1, key.toBase58DER()));
+    const std::string spelled = untaggedSpelling(key);
+    ASSERT_NE(spelled, key.toBase58DER());
+    EXPECT_FALSE(own.pinnedAt(GROUP_ID, "ctx", 1, spelled)) << "an untagged spelling passed for the pinned key";
+    EXPECT_FALSE(own.agreesWithPin(GROUP_ID, "ctx", 1, spelled));
     EXPECT_FALSE(own.pinnedAt(GROUP_ID, "ctx", 1, "not a key"));
     EXPECT_FALSE(own.agreesWithPin(GROUP_ID, "ctx", 1, "not a key"));
 }
