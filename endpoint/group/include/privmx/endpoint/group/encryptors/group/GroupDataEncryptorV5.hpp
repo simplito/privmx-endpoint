@@ -53,6 +53,20 @@ public:
     );
 
 private:
+    // Only the roster envelope carries `internalMeta` — the module's own identity is read from nowhere else — but
+    // the round trip stays factored out, since encrypt and decrypt must agree on the encoding.
+    std::string encodeInternalMeta(
+        const core::ModuleInternalMetaV5& internalMeta,
+        const core::PrivateKey& authorPrivateKey,
+        const core::EncKey& encryptionKey
+    );
+
+    core::ModuleInternalMetaV5 decodeInternalMeta(
+        const std::string& encoded,
+        const core::PublicKey& authorPublicKey,
+        const std::string& encryptionKey
+    );
+
     void assertRosterFormat(const dynamic::EncryptedGroupRosterV5& encryptedData);
     void assertPublicMetaFormat(const dynamic::EncryptedGroupPublicMetaV5& encryptedData);
     void assertPrivateMetaFormat(const dynamic::EncryptedGroupPrivateMetaV5& encryptedData);

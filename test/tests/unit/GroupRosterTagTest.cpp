@@ -25,9 +25,9 @@ limitations under the License.
  * The domain prefixes matter because both metadata planes carry the same block shape: without them an entry
  * could be served in the other plane's position at the same (epoch, version).
  *
- * What they give: a bridge cannot invent a member or forge metadata, because it never holds the key. What they
- * deliberately do not give: who made the change, or whether they were a manager rather than an ordinary member —
- * holding the key is the authority.
+ * What they give: a bridge cannot invent a member or forge metadata, because it never holds the key. Who made the
+ * change is checked against the attested roster separately; whether they were a manager rather than an ordinary
+ * member is not — the bridge's policy says that, and nothing signs it.
  *
  * These tests exist because each verification is one HMAC. Cheap is only good if it still refuses everything it
  * ought to, and each case below is a lie a malicious bridge would tell.
@@ -35,31 +35,45 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
-#include <privmx/crypto/Crypto.hpp>
-#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
+#include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/KeyProvider.hpp>
+#include <privmx/endpoint/core/UserVerifier.hpp>
 #include <privmx/endpoint/group/GroupException.hpp>
+#include <privmx/endpoint/group/VarSerializer.hpp>
 #include <privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp>
+#include <Poco/JSON/Object.h>
+#include <privmx/endpoint/group/keytree/TreeCommits.hpp>
+
+#include "AcceptAllVerifier.hpp"
 
 using privmx::endpoint::core::PrivateKey;
+
+// The group's grant key as served: a real point, since the membership block's copy is compared as one.
+const std::string PUB0 = PrivateKey::generateRandom().getPublicKey().toBase58DER();
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
 class GroupRosterTag : public testing::Test {
 protected:
     PrivateKey author = PrivateKey::generateRandom();
-    std::string encKey = privmx::crypto::Crypto::randomBytes(32);
+    std::string encKey = core::CryptoSuite::randomBytes(32);
 
-    core::DecryptedEncKey key(const std::string& material) {
-        core::DecryptedEncKey k;
+    // The epoch's key as its entry opened: wrapped by `wrappedBy`, who opened the epoch.
+    core::DecryptedEncKeyV2 key(const std::string& material, const std::string& wrappedBy = "alice") {
+        core::DecryptedEncKeyV2 k;
         k.key = material;
         k.statusCode = 0;
+        k.dio.creatorUserId = wrappedBy;
         return k;
     }
 
@@ -97,10 +111,10 @@ protected:
     ) {
         GroupDataSchemaMapper authorMapper(author, core::Connection());
         server::GroupInfo group;
-        group.id = "grp";
+        group.id = keytree::TreeCommits::groupId("ctx1", "res1");
         group.contextId = "ctx1";
         group.resourceId = "res1";
-        group.groupPubKey = "pub0";
+        group.groupPubKey = PUB0;
         group.users = users;
         group.managers = managers;
         group.rosterVersion = rosterVersion;
@@ -118,7 +132,7 @@ protected:
                 dynamic::MembershipBlock{
                     .rosterTag =
                         GroupDataSchemaMapper::rosterTag(tagKey, keyVersion, rosterVersion, users, managers),
-                    .groupPubKey = "pub0",
+                    .groupPubKey = PUB0,
                     .keyId = "key1",
                     .keyVersion = keyVersion,
                     .rosterVersion = rosterVersion
@@ -126,8 +140,9 @@ protected:
         };
         server::GroupDataEntry entry;
         entry.keyId = "key1";
-        entry.data =
-            authorMapper.encryptRoster(rosterToEncrypt, key(privmx::crypto::Crypto::randomBytes(32)));
+        entry.data = authorMapper.encryptRoster(
+            rosterToEncrypt, core::EncKey{.id = "key1", .key = core::CryptoSuite::randomBytes(32)}
+        );
         group.data.push_back(entry);
 
         GroupPublicMetaToEncryptV5 publicMetaToEncrypt{
@@ -166,7 +181,7 @@ protected:
             .keyId = "metaKey1",
             .keyVersion = privateMetaEpoch,
             .data = authorMapper.encryptPrivateMeta(
-                privateMetaToEncrypt, key(privmx::crypto::Crypto::randomBytes(32))
+                privateMetaToEncrypt, core::EncKey{.id = "metaKey1", .key = core::CryptoSuite::randomBytes(32)}
             ),
             .created = 1000,
             .author = "alice"
@@ -174,7 +189,7 @@ protected:
 
         server::GroupHistoryEntryInfo hist;
         hist.keyId = "key1";
-        hist.groupPubKey = "pub0";
+        hist.groupPubKey = PUB0;
         hist.created = 1000;
         hist.author = "alice";
         group.history.push_back(hist);
@@ -189,6 +204,14 @@ TEST_F(GroupRosterTag, AnHonestRosterVerifies) {
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     EXPECT_NO_THROW(verifier.assertDataIntegrity(group));
     EXPECT_NO_THROW(verifier.assertRosterIsAttested(group, key(encKey)));
+}
+
+TEST_F(GroupRosterTag, SECURITY_AGroupServedInAContextItsIdDoesNotFollowFromIsRefused) {
+    // A group's id is `H(contextId, resourceId)`: the context its entries were signed in counts only through it.
+    auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
+    group.id = keytree::TreeCommits::groupId("ctx2", "res1");
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    EXPECT_THROW(verifier.assertDataIntegrity(group), GroupDataIntegrityException);
 }
 
 TEST_F(GroupRosterTag, ARosterServedUnderAnotherVersionIsRefused) {
@@ -237,9 +260,18 @@ TEST_F(GroupRosterTag, SECURITY_ATagFromAnotherGroupIsRejected) {
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     EXPECT_THROW(
-        verifier.assertRosterIsAttested(group, key(privmx::crypto::Crypto::randomBytes(32))),
+        verifier.assertRosterIsAttested(group, key(core::CryptoSuite::randomBytes(32))),
         GroupMembershipMismatchException
     );
+}
+
+TEST_F(GroupRosterTag, SECURITY_AHeadKeyWrappedBySomebodyOffTheRosterIsRejected) {
+    // A removed member is still a context user: the UserVerifier vouches that the entry is theirs, and they can tag
+    // the real roster under a key of their own choosing. Only the roster says they no longer open epochs.
+    auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    EXPECT_THROW(verifier.assertRosterIsAttested(group, key(encKey, "mallory")), GroupMembershipMismatchException);
+    EXPECT_NO_THROW(verifier.assertRosterIsAttested(group, key(encKey, "bob")));
 }
 
 TEST_F(GroupRosterTag, SECURITY_AnEpochEchoedBackDifferentlyIsRejected) {
@@ -266,9 +298,34 @@ TEST_F(GroupRosterTag, SECURITY_AnOlderCorrectlyTaggedRosterIsRejected) {
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     auto current = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
     ASSERT_NO_THROW(verifier.assertDataIntegrity(current));
+    verifier.storeVersionPins(current); // only a read that passed everything moves the pins
 
     auto rolledBack = serve({"bob", "carol", "mallory"}, {"alice"}, 3, 2, encKey);
     EXPECT_THROW(verifier.assertDataIntegrity(rolledBack), GroupHistoryForkException);
+}
+
+// Counter 5 served beside a validly signed version-4 entry. The roster check refuses
+// it — and must refuse it without having moved the pin to 5 first, or the honest version-4 response that follows
+// reads as a rollback and the group is bricked for the session.
+TEST_F(GroupRosterTag, SECURITY_ARejectedResponseDoesNotMoveThePin) {
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    // The roster read of `validateAndGetAttestedRoster`, past the key resolution.
+    const auto read = [&](const server::GroupInfo& group) {
+        verifier.assertDataIntegrity(group);
+        verifier.assertRosterIsAttested(group, key(encKey));
+        verifier.storeVersionPins(group);
+    };
+    auto lying = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
+    lying.rosterVersion = 5;
+    EXPECT_THROW(read(lying), GroupMembershipMismatchException);
+
+    const auto honest = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
+    EXPECT_NO_THROW(read(honest))
+        << "the refused response moved the pin";
+
+    // The pin did move for the response that passed: an older one is now a rollback.
+    const auto older = serve({"bob"}, {"alice"}, 3, 2, encKey);
+    EXPECT_THROW(read(older), GroupHistoryForkException);
 }
 
 TEST_F(GroupRosterTag, SECURITY_AnOlderPublicMetaVersionIsRejectedIndependently) {
@@ -277,6 +334,7 @@ TEST_F(GroupRosterTag, SECURITY_AnOlderPublicMetaVersionIsRejectedIndependently)
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     auto current = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 9, std::nullopt, 3);
     ASSERT_NO_THROW(verifier.assertDataIntegrity(current));
+    verifier.storeVersionPins(current); // only a read that passed everything moves the pins
 
     auto rolledBack = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 8, std::nullopt, 3);
     EXPECT_THROW(verifier.assertDataIntegrity(rolledBack), GroupHistoryForkException);
@@ -286,6 +344,7 @@ TEST_F(GroupRosterTag, SECURITY_AnOlderPrivateMetaVersionIsRejectedIndependently
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     auto current = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 3, std::nullopt, 9);
     ASSERT_NO_THROW(verifier.assertDataIntegrity(current));
+    verifier.storeVersionPins(current); // only a read that passed everything moves the pins
 
     auto rolledBack = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 3, std::nullopt, 8);
     EXPECT_THROW(verifier.assertDataIntegrity(rolledBack), GroupHistoryForkException);
@@ -305,7 +364,7 @@ TEST_F(GroupRosterTag, SECURITY_AMissingRosterKeyIsAFailureNotAPass) {
     // is wrong: a member removed at epoch N still holds that epoch's metadata key but cannot reach the roster one.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey);
     group.users.push_back("mallory");
-    core::DecryptedEncKey noKey;
+    core::DecryptedEncKeyV2 noKey;
     noKey.statusCode = 1;
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     EXPECT_THROW(verifier.assertRosterIsAttested(group, noKey), GroupMembershipMismatchException);
@@ -389,7 +448,7 @@ TEST_F(GroupRosterTag, SECURITY_AReauthoredMetadataEnvelopeIsRejected) {
     // Why the tag is key-bound rather than merely signed: the public plane is not encrypted, so a bridge with
     // its own keypair could re-author the envelope, DIO included. Only the content key it never holds refuses.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
-    const std::string bridgeKey = privmx::crypto::Crypto::randomBytes(32);
+    const std::string bridgeKey = core::CryptoSuite::randomBytes(32);
     auto forged = serve({"bob", "carol"}, {"alice"}, 4, 2, bridgeKey, 7, std::nullopt, 7);
     group.publicMeta = forged.publicMeta;
     group.privateMeta = forged.privateMeta;
@@ -416,51 +475,92 @@ TEST_F(GroupRosterTag, SECURITY_APrivateMetaEnvelopeServedAsThePublicOneIsReject
 
 TEST_F(GroupRosterTag, SECURITY_AMissingMetadataKeyIsAFailureNotAPass) {
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
-    core::DecryptedEncKey noKey;
+    core::DecryptedEncKeyV2 noKey;
     noKey.statusCode = 1;
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, noKey), GroupMembershipMismatchException);
     EXPECT_THROW(verifier.assertPrivateMetaIsAttested(group, noKey), GroupMembershipMismatchException);
 }
 
-TEST_F(GroupRosterTag, AMetadataEntryWrittenByASinceRemovedMemberStillVerifies) {
-    // Pinned deliberately: it rules out the cheap fix for the forgery gap below. A former member is the *expected*
-    // author of an entry written before they left — refusing off-roster authors would make the group unreadable.
+TEST_F(GroupRosterTag, SECURITY_AMetadataEntryWrittenOffTheRosterIsRefused) {
+    // Anybody in the context can wrap a key of their own to the group's public grant key and tag a plane
+    // under it. A former member's entry is accepted only by the remover's carry-forward, and only as it was read
+    // before the removal, under the role the author held then.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
-    group.publicMeta.author = "dave";  // wrote the metadata at epoch 2, removed since
+    group.publicMeta.author = "dave";
     group.privateMeta.author = "dave";
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
+    EXPECT_THROW(verifier.assertPrivateMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
+    PriorRole prior{
+        .rules = keytree::TreeCommits::rules(Poco::Dynamic::Var(), "alice"),
+        .users = {"bob", "carol"},
+        .managers = {"alice", "dave"},
+        .publicMeta = group.publicMeta,
+        .privateMeta = group.privateMeta
+    };
+    EXPECT_NO_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey), prior));
+    EXPECT_NO_THROW(verifier.assertPrivateMetaIsAttested(group, key(encKey), prior));
+    PriorRole plainUser = prior;
+    plainUser.users.push_back("dave");
+    plainUser.managers = {"alice"};
+    EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey), plainUser), GroupMembershipMismatchException)
+        << "dave held no update then";
+    PriorRole otherEntry = prior;
+    otherEntry.publicMeta.version += 1;
+    EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey), otherEntry), GroupMembershipMismatchException)
+        << "not the entry read before";
+}
+
+TEST_F(GroupRosterTag, SECURITY_AMetadataPlaneWrittenWithoutTheUpdateRoleIsRefused) {
+    // The role half: bob is on the roster but the group's signed policy gives `update` to managers only.
+    auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
+    group.creator = "alice";
+    group.publicMeta.author = "bob";
+    group.privateMeta.author = "bob";
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
+    EXPECT_THROW(verifier.assertPrivateMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
+    Poco::JSON::Object::Ptr everyMember = new Poco::JSON::Object();
+    everyMember->set("update", "user");
+    group.policy = everyMember;
     EXPECT_NO_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey)));
     EXPECT_NO_THROW(verifier.assertPrivateMetaIsAttested(group, key(encKey)));
+    // The key's wrapper needs no role: a rotator with `rotateKeys` alone authors the epoch's key entry.
+    group.policy = Poco::Dynamic::Var();
+    group.publicMeta.author = "alice";
+    EXPECT_NO_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey, "bob")));
+}
+
+TEST_F(GroupRosterTag, SECURITY_AMetadataKeyWrappedOffTheRosterIsRefused) {
+    auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
+    GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
+    EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey, "mallory")), GroupMembershipMismatchException);
+    EXPECT_THROW(verifier.assertPrivateMetaIsAttested(group, key(encKey, "mallory")), GroupMembershipMismatchException);
 }
 
 // -- key separation --
 
 TEST_F(GroupRosterTag, SECURITY_EachTagPurposeGetsItsOwnKey) {
-    // The content key is also the AES key for the metadata fields and the HMAC key behind three tags. Disjoint
+    // The content key is also the AES key for the metadata fields and the HMAC key behind the tags. Disjoint
     // preimages are a convention someone must keep re-deriving; the subkeys make the separation structural.
-    const std::string k = privmx::crypto::Crypto::randomBytes(32);
+    const std::string k = core::CryptoSuite::randomBytes(32);
     const std::string roster = GroupDataSchemaMapper::tagSubkey(k, "roster-tag");
     const std::string publicMeta = GroupDataSchemaMapper::tagSubkey(k, "publicMeta-tag");
     const std::string privateMeta = GroupDataSchemaMapper::tagSubkey(k, "privateMeta-tag");
-    const std::string confirm = GroupDataSchemaMapper::tagSubkey(k, "confirm-tag");
     EXPECT_EQ(roster.size(), 32u);
     EXPECT_NE(roster, k);
     EXPECT_NE(publicMeta, k);
     EXPECT_NE(privateMeta, k);
-    EXPECT_NE(confirm, k);
     EXPECT_NE(roster, publicMeta);
     EXPECT_NE(roster, privateMeta);
-    EXPECT_NE(roster, confirm);
     EXPECT_NE(publicMeta, privateMeta);
-    EXPECT_NE(publicMeta, confirm);
-    EXPECT_NE(privateMeta, confirm);
 }
 
 TEST_F(GroupRosterTag, SECURITY_ARosterTagCannotBeReplayedAsAMetadataTag) {
     // Three tags over the same numbers under one content key. Even if a preimage change made the payloads
     // coincide, the subkeys keep them apart — the two metadata planes included, identical in shape otherwise.
-    const std::string k = privmx::crypto::Crypto::randomBytes(32);
+    const std::string k = core::CryptoSuite::randomBytes(32);
     EXPECT_NE(GroupDataSchemaMapper::rosterTag(k, 2, 7, {}, {}), GroupDataSchemaMapper::publicMetaTag(k, 2, 7));
     EXPECT_NE(GroupDataSchemaMapper::rosterTag(k, 2, 7, {}, {}), GroupDataSchemaMapper::privateMetaTag(k, 2, 7));
     EXPECT_NE(GroupDataSchemaMapper::publicMetaTag(k, 2, 7), GroupDataSchemaMapper::privateMetaTag(k, 2, 7));
@@ -482,13 +582,13 @@ TEST_F(GroupRosterTag, TheInternalMetaViewReadsTheRosterPlane) {
             .membership =
                 dynamic::MembershipBlock{
                     .rosterTag = "tag",
-                    .groupPubKey = "pub0",
+                    .groupPubKey = PUB0,
                     .keyId = "key1",
                     .keyVersion = 1,
                     .rosterVersion = 1
                 }
         },
-        key(encKey)
+        core::EncKey{.id = "key1", .key = encKey}
     );
     EXPECT_EQ(mapper.decryptInternalMeta(roster, key(encKey)).secret, "s3cr3t");
 
@@ -502,4 +602,54 @@ TEST_F(GroupRosterTag, TheInternalMetaViewReadsTheRosterPlane) {
         }
     );
     EXPECT_EQ(mapper.decryptInternalMeta(publicMeta, key(encKey)).secret, "");
+}
+
+// A read opens the head and the two metadata keys, never the other epochs': each one costs a grant-key resolution
+// (a read and a ladder descent), which made a cold read of a group at epoch 100 take seconds.
+TEST(GroupReadKeys, ResolvesOnlyTheHeadAndMetadataEpochsWhateverTheGroupsAge) {
+    server::GroupInfo group;
+    group.id = "grp";
+    group.contextId = "ctx1";
+    group.resourceId = "res1";
+    std::vector<core::server::GroupKeyEntry> perEpoch;
+    for (int64_t epoch = 1; epoch <= 100; ++epoch) {
+        perEpoch.push_back({.keyId = "key" + std::to_string(epoch), .data = Poco::Dynamic::Var(), .groupEpoch = epoch});
+    }
+    group.groupKeys = std::vector<core::server::GroupKeysEntry>{{.group = "grp", .keys = perEpoch}};
+    server::GroupDataEntry head;
+    head.keyId = "key100";
+    group.data = {head};
+    group.publicMeta.keyId = "key97";
+    group.privateMeta.keyId = "key100";
+
+    core::KeyDecryptionAndVerificationRequest request;
+    GroupDataSchemaMapper::addReadKeys(
+        request, group, core::EncKeyLocation{.contextId = group.contextId, .resourceId = group.resourceId.value_or("")}
+    );
+    core::KeyProvider provider(PrivateKey::generateRandom(), [] {
+        return std::make_shared<core::UserVerifier>(std::make_shared<AcceptAllVerifier>());
+    });
+    std::vector<int64_t> resolved;
+    provider.getKeysAndVerify(request, [&](const std::string&, int64_t epoch) {
+        resolved.push_back(epoch);
+        return std::optional<PrivateKey>();
+    });
+    std::sort(resolved.begin(), resolved.end());
+    EXPECT_EQ(resolved, (std::vector<int64_t>{97, 100}));
+}
+
+TEST(GroupListing, ASummaryCarriesNoRoster) {
+    // What `groupList` now serves: constant-size fields only. It must parse without a roster or a statement, and
+    // what `listGroups` hands on (also through the var interface) must not carry one either.
+    const server::GroupSummary summary = server::GroupSummary::deserialize(
+        R"({"id":"g","groupPubKey":"k","contextId":"c","createDate":1,"creator":"u","lastModificationDate":2,)"
+        R"("lastModifier":"u","publicMetaVersion":1,"privateMetaVersion":1,"rosterVersion":3,"keyVersion":2,"policy":{}})"
+    );
+    const auto served = core::VarSerializer({})
+                            .serialize(GroupDataSchemaMapper::toLibGroupSummary(summary))
+                            .extract<Poco::JSON::Object::Ptr>();
+    EXPECT_EQ(served->getValue<std::int64_t>("keyVersion"), 2);
+    for (const char* growing : {"users", "managers", "treeCommit", "leafAssignment"}) {
+        EXPECT_FALSE(served->has(growing)) << growing;
+    }
 }

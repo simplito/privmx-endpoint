@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <exception>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -27,15 +28,14 @@ limitations under the License.
 #include "privmx/endpoint/core/EventMiddleware.hpp"
 #include "privmx/endpoint/core/HandleManager.hpp"
 #include "privmx/endpoint/core/KeyProvider.hpp"
+#include "privmx/endpoint/core/PinStoreInterface.hpp"
 #include "privmx/endpoint/core/ServerApi.hpp"
 #include "privmx/endpoint/core/SubscriberImpl.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/core/UserVerifier.hpp"
 #include "privmx/endpoint/core/UserVerifierInterface.hpp"
-#include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/PrivateKey.hpp>
-#include <privmx/crypto/ecc/PublicKey.hpp>
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
+#include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/utils/GuardedExecutor.hpp>
 #include <privmx/utils/NotificationQueue.hpp>
@@ -53,6 +53,13 @@ public:
         const std::string& solutionId,
         const std::string& platformUrl,
         const PKIVerificationOptions& verificationOptions = PKIVerificationOptions()
+    );
+    // `connect` past opening the channel to the bridge: a unit test drives it over a gateway of its own (and names
+    // the Bridge it stands for with `bridge`).
+    void connectOver(
+        const privfs::RpcGateway::Ptr& gateway,
+        const core::PrivateKey& key,
+        const std::optional<BridgeIdentity>& bridge = std::nullopt
     );
     void connectPublic(
         const std::string& solutionId,
@@ -94,6 +101,21 @@ public:
         std::shared_lock lock(_mutex);
         return _userVerifier;
     }
+    // Where the library keeps state between sessions; nullptr (the default, and always for `connectPublic`,
+    // whose key is random) keeps it in memory only. A GroupApi reads it once, when created.
+    void setPinStore(std::shared_ptr<PinStoreInterface> store);
+    std::shared_ptr<PinStoreInterface> getPinStore();
+    // `<kind>/<scope>/<public key of identity>`, scope = `localStateScope()`.
+    std::string localStateSlot(const std::string& kind, const core::PublicKey& identity);
+    // The group pins the store holds for `previous` (an identity key this user had before), opened with it and
+    // kept for every GroupApi created afterwards to adopt. Nothing stored: nothing to adopt. Throws
+    // LocalStateIntegrityException when the stored blob does not open (nothing is staged).
+    void adoptPreviousIdentity(const core::PrivateKey& previous);
+    // The bodies `adoptPreviousIdentity` staged, by previous public key.
+    std::map<std::string, std::string> getStagedPinBodies();
+    // The keys `adoptPreviousIdentity` was called with, other than the current one (stored pins or not): the only
+    // knowledge of an identity key change this client has that the Bridge did not supply.
+    std::vector<core::PrivateKey> previousIdentities();
     std::string getMyUserId(const std::string& contextId);
     DataIntegrityObject createDIO(
         const std::string& contextId,
@@ -111,6 +133,9 @@ public:
     inline bool isConnected() { return _gateway->isConnected(); };
 
 private:
+    // hex(SHA256(lp(url) || lp(pubKey or "") || lp(instanceId or ""))) of the Bridge this connection reached: every
+    // local-state slot is named and sealed under it, so a second Bridge reached with the same key has slots of its own.
+    std::string localStateScope();
     void assertServerVersion();
     std::string generateDIORandomId();
     DataIntegrityObject createDIOExt(
@@ -137,6 +162,10 @@ private:
     std::shared_ptr<EventMiddleware> _eventMiddleware;
     std::shared_ptr<HandleManager> _handleManager;
     std::shared_ptr<UserVerifier> _userVerifier;
+    std::shared_ptr<PinStoreInterface> _pinStore;        // under _mutex
+    std::map<std::string, std::string> _stagedPinBodies; // under _mutex
+    std::vector<core::PrivateKey> _previousIdentities; // under _mutex
+    bool _public = false;                                // set once, in connectPublic, before the impl is shared
     std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
     std::shared_ptr<SubscriberImpl> _subscriber;

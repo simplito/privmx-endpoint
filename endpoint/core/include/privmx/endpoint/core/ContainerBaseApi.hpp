@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_CORE_CONTAINERBASEAPI_HPP_
 
 #include <Poco/Dynamic/Var.h>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <set>
@@ -73,6 +74,15 @@ public:
 
     virtual ~ContainerBaseApi() = default;
 
+    // The groups whose route to `keyId` was wrapped at an epoch below the one `pinnedEpoch` says this client has
+    // verified for the group: content written under that key stays readable to whoever that epoch's removal locked
+    // out. An empty `pinnedEpoch` (no group module) finds none.
+    static std::vector<std::string> groupsBehindPins(
+        const std::vector<server::GroupKeysEntry>& groupKeys,
+        const std::string& keyId,
+        const std::function<int64_t(const std::string&)>& pinnedEpoch
+    );
+
 protected:
     void initModuleDataSchemaMapper(std::shared_ptr<core::BaseModuleDataSchemaMapper> mapper) {
         _moduleDataSchemaMapper = std::move(mapper);
@@ -82,18 +92,29 @@ protected:
     // in: by `GroupAwareModuleApi` for a container, by the group itself for its own tree.
     void initGroupPrivKeyResolver(const core::KeyProvider::GroupPrivKeyResolver& resolver);
 
-    template<typename ModuleStruct>
-    auto getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
-        -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.resourceId, core::DecryptedEncKeyV2());
+    // The key new content is written under: the one at `currentKeyId`. Throws if it is stale or unless
+    // `assertWriteKey` accepts it.
     core::DecryptedEncKeyV2 getAndValidateModuleCurrentEncKey(ModuleKeys moduleKeys);
+
+    // Both the key id and a V1 entry are the server's word alone, so only a verified V2 entry may pick what new
+    // content is encrypted under. V1 keys stay readable for old data.
+    static void assertWriteKey(const core::DecryptedEncKey& key);
+
+    // The bridge's list calls answer at most this many items a page.
+    static constexpr std::size_t BRIDGE_MAX_BATCH_SIZE = 100;
+    // One page of the items whose `field` is one of `ids` (at most BRIDGE_MAX_BATCH_SIZE of them).
+    static PagingQuery pageOfIds(const std::string& field, const std::vector<std::string>& ids);
 
     template<typename ModuleStruct>
     auto getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceId = std::nullopt)
         -> decltype(moduleObj.contextId, core::EncKeyLocation());
 
     template<typename ModuleStruct>
-    auto getAndValidateModuleKeys(ModuleStruct moduleObj, const std::string& resourceId)
-        -> decltype(moduleObj.contextId, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
+    auto getAndValidateModuleKeys(
+        ModuleStruct moduleObj,
+        const std::string& resourceId,
+        const std::optional<std::string>& onlyKeyId = std::nullopt
+    ) -> decltype(moduleObj.contextId, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>());
 
     struct ContainerRoster {
         std::vector<UserWithPubKey> users;
@@ -101,12 +122,17 @@ protected:
     };
 
     // A container carries its members as bare user ids, but re-wrapping its key needs a public key per member,
-    // and the Context user list is where those live. Throws if a member has left it.
+    // and the Context user list is where those live. Throws if a member has left it. The listing is only the
+    // Bridge's word for these keys: wrap to them only after `assertUserKeysVerified`.
     ContainerRoster resolveRosterPubKeys(
         const std::string& contextId,
         const std::vector<std::string>& userIds,
         const std::vector<std::string>& managerIds
     );
+
+    // The application's UserVerifier vouches for every (userId, pubKey) pair, each one a key something is about to be
+    // wrapped to. Throws UserVerificationFailureException.
+    void assertUserKeysVerified(const std::string& contextId, const std::vector<UserWithPubKey>& users);
 
     // Empty rosters build no per-user key entries — for a module that hands its key over some other way.
     /**
@@ -162,7 +188,8 @@ protected:
     }
 
     // The same preparation for a container whose key never reaches members as a per-member entry: a group wraps
-    // its metadata key once to its own grant public key and members open it by climbing the key tree.
+    // its metadata key once to its own grant public key and members open it by climbing the key tree. Nothing old is
+    // re-wrapped, so only the head's key is opened: the others would cost a grant-key resolution per epoch.
     template<typename TContainer, typename TEntry>
     ContainerUpdateContext prepareContainerUpdateWithoutKeyEntries(
         const TContainer& container,
@@ -172,7 +199,7 @@ protected:
         const std::vector<core::UserWithPubKey>& managers,
         bool forceGenerateNewKey
     ) {
-        return planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey).ctx;
+        return planContainerUpdate(container, entry, resourceId, users, managers, forceGenerateNewKey, true).ctx;
     }
 
     // The served container struct reduced to what the key cache and the decryptors need. Identical for every
@@ -216,6 +243,16 @@ protected:
         return getModuleKeys(moduleId, std::set<std::string>{keyId}, minimumSchemaVersion);
     }
     virtual std::pair<ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) = 0;
+    // A listing's keys go to the cache only for the containers that passed validation and the context check:
+    // `raw[i]` is the served item `validated[i]` was made from.
+    template<typename TServer, typename TLib>
+    void cacheKeysOfValid(const std::vector<TServer>& raw, const std::vector<TLib>& validated) {
+        for (size_t i = 0; i < raw.size() && i < validated.size(); ++i) {
+            if (validated[i].statusCode == 0) {
+                setNewModuleKeysInCache(raw[i].id, containerToModuleKeys(raw[i]), raw[i].version);
+            }
+        }
+    }
     ModuleKeys getNewModuleKeysAndUpdateCache(const std::string& moduleId);
     void setNewModuleKeysInCache(const std::string& moduleId, const ModuleKeys& newKeys, int64_t moduleVersion);
     void invalidateModuleKeysInCache(const std::optional<std::string>& moduleId = std::nullopt);
@@ -231,16 +268,25 @@ protected:
         const std::string& containerSecret
     );
 
-    static bool isRekeyNeeded(const server::ContainerInfoBase& container) { return !container.staleGroups.empty(); }
-    static bool isRekeyNeeded(const ModuleKeys& moduleKeys) { return !moduleKeys.staleGroups.empty(); }
+    // Stale: a group the server lists in `staleGroups`, or one `groupsBehindPins` finds — the server's list alone
+    // would let it keep a removed member reading new content. Or a current key behind an unsigned (V1) entry, which
+    // `assertWriteKey` refuses to write under: a re-key is the way out for a legacy container.
+    bool isRekeyNeeded(const server::ContainerInfoBase& c) const {
+        return !rekeyReason(c.keys, c.groupKeys, c.keyId, c.staleGroups).empty();
+    }
+    bool isRekeyNeeded(const ModuleKeys& k) const {
+        return !rekeyReason(k.keys, k.groupKeys, k.currentKeyId, k.staleGroups).empty();
+    }
 
-    // Refuses a key that is stale — see `ModuleKeys::staleGroups`. Called where the answer decides whether to
-    // encrypt; the container update and re-key calls are deliberately not guarded, a re-key being the way out.
-    static void assertRekeyNotNeeded(const server::ContainerInfoBase& container);
-    static void assertRekeyNotNeeded(const ModuleKeys& moduleKeys);
+    // Refuses a key that is stale — see `isRekeyNeeded`. Called where the answer decides whether to encrypt; the
+    // container update and re-key calls are deliberately not guarded, a re-key being the way out.
+    void assertRekeyNotNeeded(const server::ContainerInfoBase& container) const;
+    void assertRekeyNotNeeded(const ModuleKeys& moduleKeys) const;
 
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
     core::KeyProvider::GroupPrivKeyResolver _groupPrivKeyResolver;
+    // The grant epoch this client has verified as a group's current one, 0 if none; set where groups are known.
+    std::function<int64_t(const std::string& groupId)> _pinnedGroupEpoch;
 
     // The connection's constants, held here so every module reads one copy rather than keeping its own.
     core::PrivateKey _userPrivKey;
@@ -266,12 +312,21 @@ private:
         const std::string& resourceId,
         const std::vector<core::UserWithPubKey>& users,
         const std::vector<core::UserWithPubKey>& managers,
-        bool forceGenerateNewKey
+        bool forceGenerateNewKey,
+        bool onlyCurrentKey = false
     );
 
     std::vector<server::KeyEntrySet> buildRosterKeyEntries(const ContainerUpdatePlan& plan);
 
-    static void assertNoStaleGroups(const std::vector<std::string>& staleGroups);
+    // Why `keyId` needs a re-key (see `isRekeyNeeded`), or "" when it does not.
+    std::string rekeyReason(
+        const std::vector<server::KeyEntry>& keys,
+        const std::vector<server::GroupKeysEntry>& groupKeys,
+        const std::string& keyId,
+        const std::vector<std::string>& staleGroups
+    ) const;
+    // Whether this user's entry for `keyId` is a V1 one: told apart without decrypting, a V1 entry being a bare string.
+    static bool hasUnsignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId);
 
     static core::ContainerKeyCache::CachedModuleKeys convertModuleKeysToContainerKeyCacheFormat(
         const ModuleKeys& moduleKeys,
@@ -286,27 +341,6 @@ private:
 };
 
 template<typename ModuleStruct>
-auto ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleStruct moduleObj)
-    -> decltype(moduleObj.data, moduleObj.contextId, moduleObj.resourceId, core::DecryptedEncKeyV2()) {
-    auto data_entry = moduleObj.data.back();
-    core::KeyDecryptionAndVerificationRequest keyProviderRequest;
-    auto location{getModuleEncKeyLocation(moduleObj, moduleObj.resourceId)};
-    if constexpr (module_has_keys<ModuleStruct>::value) {
-        keyProviderRequest.addOne(moduleObj.keys, data_entry.keyId, location);
-    }
-    if constexpr (module_has_group_keys<ModuleStruct>::value) {
-        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
-    }
-    auto keysMap = _keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver);
-    core::DecryptedEncKeyV2 ret = keysMap.at(location).at(data_entry.keyId);
-    // The key comes back from the server without a suite — `EncKey::suite` is set only on
-    // generation. We stamp it here because this is the **write key**: everything written with it
-    // should use the algorithm the container chose, not the build's default.
-    ret.suite = suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(moduleObj.policy));
-    return ret;
-}
-
-template<typename ModuleStruct>
 auto ContainerBaseApi::getModuleEncKeyLocation(ModuleStruct moduleObj, const std::optional<std::string>& resourceId)
     -> decltype(moduleObj.contextId, core::EncKeyLocation()) {
     core::EncKeyLocation location{.contextId = moduleObj.contextId, .resourceId = resourceId.value_or("")};
@@ -314,15 +348,22 @@ auto ContainerBaseApi::getModuleEncKeyLocation(ModuleStruct moduleObj, const std
 }
 
 template<typename ModuleStruct>
-auto ContainerBaseApi::getAndValidateModuleKeys(ModuleStruct moduleObj, const std::string& resourceId)
-    -> decltype(moduleObj.contextId, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>()) {
+auto ContainerBaseApi::getAndValidateModuleKeys(
+    ModuleStruct moduleObj,
+    const std::string& resourceId,
+    const std::optional<std::string>& onlyKeyId
+) -> decltype(moduleObj.contextId, moduleObj.resourceId, std::unordered_map<std::string, DecryptedEncKeyV2>()) {
     core::KeyDecryptionAndVerificationRequest keyProviderRequest;
     auto location{getModuleEncKeyLocation(moduleObj, resourceId)};
     if constexpr (module_has_keys<ModuleStruct>::value) {
-        keyProviderRequest.addAll(moduleObj.keys, location);
+        if (onlyKeyId.has_value()) {
+            keyProviderRequest.addOne(moduleObj.keys, onlyKeyId.value(), location);
+        } else {
+            keyProviderRequest.addAll(moduleObj.keys, location);
+        }
     }
     if constexpr (module_has_group_keys<ModuleStruct>::value) {
-        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location);
+        keyProviderRequest.addGroupKeys(moduleObj.groupKeys, location, onlyKeyId);
     }
     auto moduleKeys{_keyProvider->getKeysAndVerify(keyProviderRequest, _groupPrivKeyResolver).at(location)};
     return moduleKeys;
@@ -350,11 +391,21 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     const std::string& resourceId,
     const std::vector<core::UserWithPubKey>& users,
     const std::vector<core::UserWithPubKey>& managers,
-    bool forceGenerateNewKey
+    bool forceGenerateNewKey,
+    bool onlyCurrentKey
 ) {
     auto location{getModuleEncKeyLocation(container, resourceId)};
-    auto containerKeys{getAndValidateModuleKeys(container, resourceId)};
+    auto containerKeys{getAndValidateModuleKeys(
+        container, resourceId, onlyCurrentKey ? std::optional<std::string>(entry.keyId) : std::nullopt
+    )};
+    // `entry` is the newest data entry, which a re-key leaves under the key it replaced: it is opened with that
+    // key, but the key kept on is the container's current one, or the update hands the replaced key, which a
+    // removed member holds, back the role of the current key. A group has no `keyId` of its own.
     auto currentKey{findEncKeyByKeyId(containerKeys, entry.keyId)};
+    auto keptKey{currentKey};
+    if constexpr (std::is_base_of_v<server::ContainerInfoBase, TContainer>) {
+        keptKey = findEncKeyByKeyId(containerKeys, container.keyId);
+    }
     std::string secret;
     if constexpr (std::is_same_v<std::decay_t<decltype(entry.data)>, Poco::Dynamic::Var>) {
         secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data, currentKey).secret;
@@ -362,7 +413,7 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
         // Inbox special Case
         secret = _moduleDataSchemaMapper->decryptInternalMeta(entry.data.toJSON(), currentKey).secret;
     }
-    auto roster{core::UsersKeysResolver::create(container, users, managers, forceGenerateNewKey, currentKey)};
+    auto roster{core::UsersKeysResolver::create(container, users, managers, forceGenerateNewKey, keptKey)};
     if (!_keyProvider->verifyKeysSecret(containerKeys, location, secret)) {
         throw core::EncryptionKeyValidationException();
     }
@@ -375,7 +426,7 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     // container created with a stronger suite would then have written part of its data weaker.
     const CryptoSuite suite = suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy));
 
-    core::EncKey key = currentKey;
+    core::EncKey key = keptKey;
     core::DataIntegrityObject dio = _connection.getImpl()->createDIO(container.contextId, resourceId);
     bool needNewKey = roster->doNeedNewKey();
     if (needNewKey) {

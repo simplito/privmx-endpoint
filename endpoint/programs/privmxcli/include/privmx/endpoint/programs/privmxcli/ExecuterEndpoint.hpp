@@ -580,6 +580,9 @@ private:
         {group_removeGroupMembers, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->removeGroupMembers(args);
         }},
+        {group_rotateGroupKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
+            return api->group->rotateGroupKey(args);
+        }},
         {group_updateGroupPublicMeta, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->updateGroupPublicMeta(args);
         }},
@@ -1668,6 +1671,12 @@ private:
             "\t\tuserIds [ARRAY] - IDs of the members to remove\n"
             "\tthe roster that remains and the metadata are derived, not passed; advances the Group's key epoch; containers the Group can read must be re-keyed afterwards"
         },
+        {group_rotateGroupKey,
+            "rotateGroupKey JSON_ARRAY\n"
+            "\tjson format - [groupId]\n"
+            "\t\tgroupId [STRING] - ID of the Group\n"
+            "\treplaces the Group's key for the same members (also a one-member Group); advances the Group's key epoch; containers the Group can read must be re-keyed afterwards"
+        },
         {group_updateGroupPublicMeta,
             "updateGroupPublicMeta JSON_ARRAY\n"
             "\tjson format - [groupId, publicMeta, version]\n"
@@ -1937,6 +1946,7 @@ private:
         {group_createGroup, "Creates a new Group whose key distribution is backed by a hidden key tree."},
         {group_addGroupMembers, "Adds one member to a tree-backed Group, without advancing its key epoch."},
         {group_removeGroupMembers, "Removes one member from a tree-backed Group and advances its key epoch."},
+        {group_rotateGroupKey, "Replaces a Group's key without changing its members and advances its key epoch."},
         {group_updateGroupPublicMeta, "Updates a Group's public metadata."},
         {group_updateGroupPrivateMeta, "Updates a Group's private metadata."},
         {group_updateGroupPolicy, "Updates a Group's policies."},
@@ -2090,6 +2100,7 @@ private:
         {group_createGroup, "Creating group"},
         {group_addGroupMembers, "Adding group member"},
         {group_removeGroupMembers, "Removing group member"},
+        {group_rotateGroupKey, "Rotating group key"},
         {group_updateGroupPublicMeta, "Updating group public meta"},
         {group_updateGroupPrivateMeta, "Updating group private meta"},
         {group_updateGroupPolicy, "Updating group policy"},

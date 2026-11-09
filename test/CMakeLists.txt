@@ -153,9 +153,19 @@ target_link_libraries(test_unit_CryptoSuiteTest privmx privmxendpointcore Poco::
 target_compile_definitions(test_unit_CryptoSuiteTest
     PRIVATE PRIVMX_DEFAULT_CRYPTO_SUITE_ID=${PRIVMX_DEFAULT_CRYPTO_SUITE_ID})
 
-# Real EC keys and ECIES (builds, climbs, and removes members from trees entirely in-process; still no server/docker/network)
+# Real EC keys and ECIES (creates, climbs, commits and removes members from trees entirely in-process; still no server/docker/network)
 add_executable(test_unit_TreeKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeKeysTest.cpp)
 target_link_libraries(test_unit_TreeKeysTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+
+# Tree and roster hashes and the signed bytes of a commit statement, against fixed vectors the bridge must reproduce
+add_executable(test_unit_TreeCommitsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeCommitsTest.cpp)
+target_link_libraries(test_unit_TreeCommitsTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+# The shared vectors `fixtures/keytree/reference.py` writes from the spec (the bridge reads a byte-identical copy)
+target_compile_definitions(test_unit_TreeCommitsTest PRIVATE PRIVMX_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+
+# Seeded random commit sequences against an in-test fake bridge: the node-key invariant, removal confidentiality and commit statements after every step; tree verification against a lying bridge
+add_executable(test_unit_TreeInvariantTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeInvariantTest.cpp)
+target_link_libraries(test_unit_TreeInvariantTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
 add_executable(test_unit_LadderKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/LadderKeysTest.cpp)
 target_link_libraries(test_unit_LadderKeysTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
@@ -163,6 +173,16 @@ target_link_libraries(test_unit_LadderKeysTest privmx privmxendpointcore privmxe
 # Goes through the wire types (server::GroupInfo, where tree and ladder meet the server API; needs core for JSON struct machinery)
 add_executable(test_unit_GroupKeyResolverTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupKeyResolverTest.cpp)
 target_link_libraries(test_unit_GroupKeyResolverTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+# GroupApiImpl's wiring against a lying bridge: real clients over an in-memory gateway (ConnectionImpl::connectOver)
+add_executable(test_unit_GroupApiLyingBridgeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupApiLyingBridgeTest.cpp)
+target_link_libraries(test_unit_GroupApiLyingBridgeTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+
+# Local state sealing, the compare-and-swap update and the Var store (core alone)
+add_executable(test_unit_LocalSealTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/LocalSealTest.cpp)
+target_link_libraries(test_unit_LocalSealTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
+# The pin blob codec and the merge of two instances' pins
+add_executable(test_unit_PinBlobTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/PinBlobTest.cpp)
+target_link_libraries(test_unit_PinBlobTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
 # Roster attestation and the monotone version pin (builds signed server::GroupInfo by hand via GroupDataSchemaMapper::encrypt, no live bridge)
 add_executable(test_unit_GroupRosterTagTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupRosterTagTest.cpp)
@@ -182,9 +202,15 @@ target_link_libraries(test_unit_GroupEnvelopeTest privmx privmxendpointcore priv
 add_executable(test_unit_GroupEnvelopeKeyFilterTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupEnvelopeKeyFilterTest.cpp)
 target_link_libraries(test_unit_GroupEnvelopeKeyFilterTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 
-# Merge from plans to a complete submitted state (real EC keys; each state is climbed to prove members who should still have access do)
+# Commit plans to the wire shapes the bridge receives (real EC keys; each state is climbed to prove members who should still have access do)
 add_executable(test_unit_TreeWireTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeWireTest.cpp)
 target_link_libraries(test_unit_TreeWireTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+# Context listings and context custom events bound to the context asked for; event keys only to vouched keys
+add_executable(test_unit_ContextBindingTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/ContextBindingTest.cpp)
+target_link_libraries(test_unit_ContextBindingTest privmx privmxendpointcore privmxendpointevent privmxendpointthread privmxendpointstore privmxendpointkvdb privmxendpointinbox privmxendpointstream privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+# Stopping a live publication runs every step whatever the others do (fake gateway and WebRTC)
+add_executable(test_unit_StreamPublicationStopTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/StreamPublicationStopTest.cpp)
+target_link_libraries(test_unit_StreamPublicationStopTest privmx privmxendpointcore privmxendpointstream privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 add_executable(test_unit_GroupCustomChannelTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/GroupCustomChannelTest.cpp)
 target_link_libraries(test_unit_GroupCustomChannelTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
 

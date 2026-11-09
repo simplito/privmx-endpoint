@@ -12,10 +12,16 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREETYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREETYPES_HPP_
 
+#include <algorithm>
 #include <cstdint>
+#include <map>
 #include <optional>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
+
+#include <Poco/Dynamic/Var.h>
 
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
@@ -33,8 +39,13 @@ enum class EdgeChildKind {
 
 // One edge of the tree: `wrap(sk_parent -> pk_child)`. Encrypted to the child and carrying the parent's private
 // key, so members travel strictly upward — that asymmetry is where collusion resistance comes from.
+//
+// The parent is the child's lowest FILLED keyed ancestor, not necessarily its structural parent: buckets carry no
+// key and blank nodes have none to give, so an edge skips over them. Every member and every filled node has exactly
+// one incoming edge besides the grant edge.
 struct TreeEdge {
-    // When true the parent is the grant keypair rather than a tree node, and the child is the tree root.
+    // When true the parent is the grant keypair rather than a tree node, and the child is the tree root (or the
+    // sole member of a one-leaf tree).
     bool isGrantEdge = false;
     // Meaningless when `isGrantEdge`.
     std::uint32_t parentIndex = 0;
@@ -48,6 +59,30 @@ struct TreeEdge {
 
     // ECIES ciphertext, base64. Opaque to the server.
     std::string blob;
+
+    // The grant edge at `epoch` to the sole member of a one-leaf tree. Field by field rather than designated
+    // initializers: the fields these two leave at their defaults would each warn, in every includer.
+    static TreeEdge grantToUser(std::uint32_t epoch, const std::string& userId, std::string blob) {
+        TreeEdge edge;
+        edge.isGrantEdge = true;
+        edge.parentGeneration = epoch;
+        edge.childKind = EdgeChildKind::User;
+        edge.childUserId = userId;
+        edge.blob = std::move(blob);
+        return edge;
+    }
+
+    // The grant edge at `epoch` to the root at `generation`.
+    static TreeEdge grantToNode(std::uint32_t epoch, std::uint32_t root, std::uint32_t generation, std::string blob) {
+        TreeEdge edge;
+        edge.isGrantEdge = true;
+        edge.parentGeneration = epoch;
+        edge.childKind = EdgeChildKind::Node;
+        edge.childIndex = root;
+        edge.childGeneration = generation;
+        edge.blob = std::move(blob);
+        return edge;
+    }
 };
 
 // A node's public key kept as served, turned into a point only where one is needed: parsing runs the subgroup
@@ -85,11 +120,15 @@ private:
     std::string _der;
 };
 
-// Nodes are never deleted, only refreshed into a new generation.
+// A keyed node's record. Blanking drops the key and keeps the generation, so the next fill is one generation on and
+// the bridge can tell an advanced node from a minted one. A keyed node with no record at all is blank too.
 struct TreeNodeState {
     std::uint32_t nodeIndex = 0;
     std::uint32_t generation = 0;
-    NodePublicKey publicKey;
+    // Absent on a blank node.
+    std::optional<NodePublicKey> publicKey;
+    // On a filled node: `seq` of the commit statement that set this key, the one that vouches for it.
+    std::optional<std::uint64_t> setBy;
 };
 
 // The group state a client needs to work with the tree, as served. Topology is not stored — it follows from
@@ -104,6 +143,23 @@ struct TreeGroupState {
     // Current epoch and its public grant key — what containers wrap to.
     std::uint32_t epoch = 0;
     core::PublicKey grantPublicKey;
+    // `seq` of the latest commit statement; the next commit is this plus one.
+    std::uint64_t commitSeq = 0;
+    // `seq` -> committer of the statements the filled nodes cite (`setBy`): who minted each key, which a removal
+    // needs to blank everything the leaver could know.
+    std::map<std::uint64_t, std::string> setters;
+
+    // The record of `nodeIndex`, or null when the state holds none.
+    const TreeNodeState* record(std::uint32_t nodeIndex) const {
+        const auto it = std::find_if(nodes.begin(), nodes.end(), [&](const TreeNodeState& node) {
+            return node.nodeIndex == nodeIndex;
+        });
+        return it == nodes.end() ? nullptr : &*it;
+    }
+
+    TreeNodeState* record(std::uint32_t nodeIndex) {
+        return const_cast<TreeNodeState*>(std::as_const(*this).record(nodeIndex));
+    }
 };
 
 enum class ClimbFailure {
@@ -111,6 +167,9 @@ enum class ClimbFailure {
     NotAMember,    // the caller holds no leaf in this tree
     MissingEdge,   // the chain is broken: no edge leads on from a node we reached
     DecryptFailed, // an edge did not open with the key we hold
+    // The first edge above our own leaf does not open with the key we hold: our identity key changed since it was
+    // wrapped, or its wrapper garbled it. `tamperedNode` as for `DecryptFailed` (unset in a one-leaf tree).
+    LeafDidNotOpen,
     // A recovered key does not match the published one: corrupted, substituted, or from another tree. A security
     // event, not a transient failure — never retry, it is deterministic and adversarial.
     Tampered,
@@ -121,60 +180,118 @@ struct ClimbResult {
     ClimbFailure failure = ClimbFailure::None;
     // Deepest node reached before stopping. Partial progress is still cached and useful.
     std::uint32_t reachedNode = 0;
-    // Which node failed verification, when `failure == Tampered`.
+    // The node whose edge failed, when `failure` is `Tampered`, `DecryptFailed` or `LeafDidNotOpen`; none for the grant
+    // edge.
     std::optional<std::uint32_t> tamperedNode;
 };
 
-// A node refreshed by a removal: a fresh keypair plus edges to all of its existing children.
-struct NodeRefresh {
-    std::uint32_t nodeIndex = 0;
-    std::uint32_t newGeneration = 0;
-    core::PrivateKey newKey;
-    std::vector<TreeEdge> edges;
-};
-
-// Everything a removal must submit, plus the wrap count so callers can assert the cost.
-struct RemovalPlan {
-    // Seats being blanked, ascending. One epoch covers them all, however many there are.
-    std::vector<std::uint32_t> blankedPositions;
-    // The union of the blanked leaves' direct paths — each shared ancestor appears once.
-    std::vector<NodeRefresh> pathRefresh;
-    core::PrivateKey newGrantKey;
-    TreeEdge grantEdge;
-    std::uint32_t newEpoch = 0;
-    // Tree edges + the grant edge. Excludes ladder rungs, which the ladder module builds.
-    std::uint32_t wrapCount = 0;
-};
-
-// Everything an addition must submit: the new leaf's path re-keyed, `2*depth + 1` wraps.
-struct AdditionPlan {
-    // Seats taken, index-aligned with the newcomers the plan was built for.
-    std::vector<std::uint32_t> positions;
-    std::vector<TreeEdge> edges;
-    // Every node on the new leaf's path: minted where the tree grew, one generation on where it existed.
-    std::vector<TreeNodeState> nodes;
-    // The keys behind those nodes, to keep locally so the next climb starts from cache.
-    std::vector<std::pair<std::uint32_t, core::PrivateKey>> nodeKeys;
-    // Present only when the tree grew a level; the grant keypair is unchanged either way.
-    std::optional<TreeNodeState> newRoot;
-    std::optional<core::PrivateKey> newRootKey;
-    std::uint32_t newNumLeaves = 0;
-    std::uint32_t wrapCount = 0;
-};
-
-struct BuildPlan {
+// What one commit changes, before any key exists: who sits where afterwards, which nodes it blanks and which it
+// mints. Every operation — create, add, remove, self-update — is one of these.
+struct CommitShape {
     std::uint32_t numLeaves = 0;
-    std::vector<TreeNodeState> nodes;
+    std::vector<std::optional<std::string>> leafAssignment;
+    // Keyed nodes a removal blanks: everything the leavers could know (their paths, every node they set, and every
+    // ancestor of those), minus the committer's own path, which it re-keys.
+    std::set<std::uint32_t> blanked;
+    // Keyed nodes minted besides the committer's path: every other keyed node at creation, the newcomers' paths
+    // below the adder's on an addition.
+    std::set<std::uint32_t> filledOffPath;
+    std::uint32_t committerSeat = 0;
+    // Seats added (index-aligned with the newcomers) or emptied (ascending); empty for create and self-update.
+    std::vector<std::uint32_t> subjectSeats;
+};
+
+// One node the commit mints, with its fresh key.
+struct RefreshedNode {
+    std::uint32_t nodeIndex = 0;
+    // The generation the node was read at; absent when it had no record.
+    std::optional<std::uint32_t> fromGeneration;
+    std::uint32_t generation = 0;
+    core::PrivateKey key;
+};
+
+struct CommitPlan {
+    CommitShape shape;
+    // `shape.filledOffPath` ascending, then the committer's keyed path bottom-up, root last.
+    std::vector<RefreshedNode> refreshed;
+    // Every edge the refreshed nodes owe on the post state, then the grant edge.
     std::vector<TreeEdge> edges;
+    // The grant edge's epoch and the key it carries: new on a removal or create, the current one otherwise.
+    std::uint32_t epoch = 0;
     core::PrivateKey grantKey;
-    // Kept locally; the server only ever receives the public halves.
-    std::vector<std::pair<std::uint32_t, core::PrivateKey>> nodeKeys;
-    std::uint32_t wrapCount = 0;
+    // The statement this commit is signed as, and the hash of the tree it leaves behind (refreshed nodes carry
+    // `setBy = seq`). Raw bytes.
+    std::uint64_t seq = 0;
+    std::string treeHash;
+    // `CH` of every inner node of the post state, by index: what each statement path entry signs.
+    std::map<std::uint32_t, std::string> subtreeHashes;
 };
 
 struct TreeMember {
     std::string userId;
     core::PublicKey publicKey;
+};
+
+enum class CommitOp : std::uint8_t {
+    Create = 1,
+    Add = 2,
+    Remove = 3,
+    SelfUpdate = 4,
+    Rotate = 5, // the bridge-side `generateNewGroupKey`
+    Policy = 6, // a policy change: only `policyHash` moves
+};
+
+struct StatementNode {
+    std::uint32_t nodeIndex = 0;
+    std::uint32_t generation = 0;
+    std::string publicKey; // base58 DER
+    // `CH` of the node in the post state: pins the subtree the key was minted over, so a served node whose subtree
+    // has changed since (a child re-keyed under a rolled-back parent) no longer matches its voucher. Raw bytes.
+    std::string subtreeHash;
+};
+
+// What the tree, the roster and the grant key look like after one commit, signed by the committer. The bridge
+// stores the statements and serves them; it cannot forge one, so a state it serves is only as good as the
+// statement whose `treeHash` it matches. Hashes and the signature are raw bytes here, hex/base64 on the wire.
+struct CommitStatement {
+    std::uint64_t seq = 0;
+    // `digest` of the statement at `seq - 1`, empty at seq 1: chains every statement to the history it extends, so
+    // nothing below a verified statement can be swapped or forked. Raw bytes.
+    std::string prevDigest;
+    CommitOp op = CommitOp::Create;
+    // The group's id — except at seq 1, where the group has none yet and this is the creator's resourceId.
+    std::string groupId;
+    std::uint32_t treeVersion = 0;
+    std::uint64_t date = 0;
+    std::uint64_t keyVersion = 0;
+    std::string groupPubKey;
+    std::uint64_t rosterVersion = 0;
+    std::string rosterHash;
+    std::string treeHash;
+    // `TreeCommits::rules(policy, creator).hash` of the group's policy after the commit: the rules that govern commits
+    // and the creator the `owner` atom names, signed into every statement. Raw bytes.
+    std::string policyHash;
+    std::string committer;
+    // The committer's Context public key (base58 DER) at signing time; the signature verifies against it, and the
+    // UserVerifier vouches for the pair.
+    std::string committerPubKey;
+    std::uint32_t committerSeat = 0;
+    // The refreshed nodes, bottom-up, as the transition submitted them.
+    std::vector<StatementNode> path;
+    std::vector<std::string> addedUsers;
+    std::vector<std::string> addedManagers;
+    std::vector<std::string> removed;
+    std::string signature;
+    // Wire only, on `Create` and `Policy`: the group's whole policy after the commit. Not signed itself; it counts only
+    // once it hashes to `policyHash`, and only its four commit rules do.
+    std::optional<Poco::Dynamic::Var> policy;
+};
+
+// The part of a group's policy its statements sign: who may commit what, and who the owner is. Absent, "inherit"
+// and "default" resolve to the frozen v3 defaults, never to the context policy, which only the bridge holds.
+struct GroupRules {
+    std::string creator, update, rotateKeys, updatePolicy, ownerCanBeRemovedFromManagers;
+    std::string hash; // policyHash, raw
 };
 
 } // namespace keytree

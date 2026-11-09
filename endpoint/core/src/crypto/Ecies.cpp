@@ -51,20 +51,6 @@ std::string wrapKeyFor(const std::string& sharedSecret) {
 }
 
 /**
- * The curve a key actually agrees secrets on.
- *
- * A composed identity agrees on its second half; everything else agrees on itself. `secp256k1` and
- * `PrivmxSecp256k1` are one curve in two spellings — the registry keeps them apart only because
- * their data formats differ — so they must not be read as two.
- */
-cs::AsymAlg agreementCurveOf(cs::AsymAlg algorithm) {
-    if (keyAlgorithmNeedsAgreementKey(algorithm)) {
-        return agreementAlgorithmFor(algorithm);
-    }
-    return algorithm == cs::AsymAlg::secp256k1 ? cs::AsymAlg::PrivmxSecp256k1 : algorithm;
-}
-
-/**
  * Both ends of a shared secret have to be on one curve.
  *
  * Checked here because the alternative is worse in both directions: with a composed identity OpenSSL
@@ -72,9 +58,13 @@ cs::AsymAlg agreementCurveOf(cs::AsymAlg algorithm) {
  * (`keymgmt_lib.c: match_type`), and with two plain keys pmx-crypto reports "Wrong type of private
  * key", which names neither key nor algorithm and reads like a corrupted key rather than a pairing
  * that was never possible.
+ *
+ * This is the last line of defence, not the first. Callers that know the pairing earlier — a group
+ * commit knows every recipient before it plans anything — should refuse with an error that names the
+ * real problem; see `keyAlgorithmsCanAgree`.
  */
 void assertSameCurve(const PublicKey& pub, const PrivateKey& sender, const std::string& what) {
-    if (agreementCurveOf(pub.algorithm()) != agreementCurveOf(sender.algorithm())) {
+    if (!keyAlgorithmsCanAgree(pub.algorithm(), sender.algorithm())) {
         throw MalformedEncryptionKeyException(
             what +
             ": the two keys are of different algorithms (" +
@@ -96,7 +86,7 @@ std::string wrapToComposedIdentity(const PublicKey& pub, const std::string& data
     if (senderPublic.size() != AGREEMENT_PUBLIC_LENGTH) {
         throw MalformedEncryptionKeyException("agreement public key of unexpected length");
     }
-    std::string shared = keyString(sender.agreementImpl()->deriveSharedSecret(*pub.agreementImpl()));
+    std::string shared = keyString(sender.agreementImpl()->deriveSharedSecret(pub.agreementImpl()));
     // The post-quantum term, when the recipient has one. A key encapsulation is not a Diffie-Hellman:
     // the secret is chosen here and the recipient can only reach it through the ciphertext, which
     // therefore travels with the wrap. Both secrets go through one KDF, so recovering the wrapping
@@ -123,7 +113,7 @@ std::string unwrapForComposedIdentity(const PrivateKey& priv, const std::string&
     auto senderPublic = cryptoProvider().importPublicKey(
         keyBytes(cipher.substr(0, AGREEMENT_PUBLIC_LENGTH)), cs::KeyFormat::Raw, agreementAlgorithmFor(priv.algorithm())
     );
-    std::string shared = keyString(priv.agreementImpl()->deriveSharedSecret(*senderPublic));
+    std::string shared = keyString(priv.agreementImpl()->deriveSharedSecret(senderPublic));
     if (kemLength != 0) {
         if (priv.kemImpl() == nullptr) {
             throw MalformedEncryptionKeyException("post-quantum identity is missing its encapsulation half");
@@ -144,7 +134,7 @@ std::string Ecies::encrypt(const PublicKey& pub, const std::string& data, const 
         if (keyAlgorithmNeedsAgreementKey(pub.algorithm())) {
             return wrapToComposedIdentity(pub, data, privForSignature);
         }
-        return keyString(pub.agreementImpl()->seal(keyBytes(data), *privForSignature.agreementImpl()));
+        return keyString(pub.agreementImpl()->seal(keyBytes(data), privForSignature.agreementImpl()));
     });
 }
 
@@ -166,8 +156,8 @@ std::string Ecies::decrypt(
         if (keyAlgorithmNeedsAgreementKey(priv.algorithm())) {
             return unwrapForComposedIdentity(priv, cipher);
         }
-        const privmx::cryptoservice::IPublicKey* expectedSender = pubOfSignature.has_value() ?
-            pubOfSignature->agreementImpl().get() :
+        const std::shared_ptr<cs::IPublicKey> expectedSender = pubOfSignature.has_value() ?
+            pubOfSignature->agreementImpl() :
             nullptr;
         return keyString(priv.agreementImpl()->open(keyBytes(cipher), expectedSender));
     });
@@ -199,4 +189,23 @@ Poco::JSON::Object::Ptr Ecies::decryptObjectFromBase64(
     const std::optional<PublicKey>& pubOfSignature
 ) {
     return privmx::utils::Utils::parseJsonObject(decryptFromBase64(priv, cipherBase64, pubOfSignature));
+}
+
+bool Ecies::sealedBy(const std::string& cipherBase64, const std::string& senderBase58DER) {
+    try {
+        const PublicKey sender = PublicKey::fromBase58DER(senderBase58DER);
+        if (sender.empty()) {
+            return false;
+        }
+        const std::string cipher = privmx::utils::Base64::toString(cipherBase64);
+        if (keyAlgorithmNeedsAgreementKey(sender.algorithm())) {
+            // `wrapToComposedIdentity` opens with the sender's raw agreement public key, nothing before it.
+            const std::string agreement = keyString(sender.agreementImpl()->export_(cs::KeyFormat::Raw));
+            return agreement.size() == AGREEMENT_PUBLIC_LENGTH && cipher.size() > AGREEMENT_PUBLIC_LENGTH &&
+                   cipher.compare(0, AGREEMENT_PUBLIC_LENGTH, agreement) == 0;
+        }
+        // The pmx-crypto frame: 'e' || sender DER || recipient DER || iv || ciphertext || tag.
+        const std::string der = sender.toDER();
+        return cipher.size() > 1 + der.size() && cipher.front() == 'e' && cipher.compare(1, der.size(), der) == 0;
+    } catch (...) { return false; }
 }

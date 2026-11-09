@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREEKEYS_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_TREEKEYS_HPP_
 
+#include <algorithm>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -28,15 +29,23 @@ namespace group {
 namespace keytree {
 
 // Builds and traverses the hidden key tree; every wrap is an ECIES encryption of a private key, verified on
-// unwrap. Minted keys must never be derived from the key they replace — a removed member would compute the next.
+// unwrap.
+//
+// The invariant everything here preserves: a member knows a node's current key only if that node is in its
+// knowledge closure — its own path, every node it set (`setBy`), and every ancestor of those. Keys are always fresh
+// random, never derived from the key they replace, or a removed member would compute the next one. The creator
+// fills every keyed node and an adder the newcomers' paths below its own, so commits stay cheap from the start; a
+// removal blanks the leavers' closures and re-keys the remover's path, which leaves nothing a leaver can open.
+// Members heal nodes set from outside their subtree by self-updating over them, which shrinks those closures.
 class TreeKeys {
 public:
     explicit TreeKeys(TreeKeyCache& cache);
 
     // ── Traversal ───────────────────────────────────────────────────────────
 
-    // Climbs from the caller's leaf to the grant private key (`log2(numLeaves)` unwraps, cached per node and
-    // generation), verifying each against `state.nodes`. useCache=false when the node keys on the way are the point.
+    // Climbs from the caller's leaf to the grant private key, verifying every recovered key against `state.nodes`
+    // and the grant key against `state.grantPublicKey`; recovered node keys are cached per node and generation.
+    // useCache=false when the node keys on the way are the point.
     ClimbResult climbToGrantKey(
         const TreeGroupState& state,
         const std::string& ownUserId,
@@ -44,60 +53,123 @@ public:
         bool useCache = true
     );
 
-    // ── Construction ────────────────────────────────────────────────────────
+    // The resolution of a node, ascending: itself when keyed and filled, a seated leaf as itself, otherwise the
+    // resolution of its children — the set an edge-holder above it has to wrap to. Leaves come back as their node
+    // index (`2 * position`).
+    static std::vector<std::uint32_t> resolution(const TreeGroupState& state, std::uint32_t nodeIndex);
 
-    // Builds a complete tree for a new group, bottom-up. Costs `2(N-1) + 1` wraps, once.
-    BuildPlan build(const std::vector<TreeMember>& members, const core::PrivateKey& signer);
+    // ── Commit shapes: who sits where afterwards, what gets blanked, whose path is refreshed ───────────────
 
-    // Re-keys the new leaf's direct path and wraps each new key to both children (`2*depth + 1` wraps). The cheaper
-    // one-wrap shape needs the parent's private key, which a climb only ever recovers for the caller's own seat.
-    AdditionPlan planAddition(
+    // Members are seated in the order given; the creator mints every keyed node.
+    static CommitShape shapeCreate(const std::vector<std::string>& memberIds, const std::string& creatorId);
+
+    // `positions` are index-aligned with `newMemberIds`: blanks a removal left, or appended contiguously. The adder
+    // mints the newcomers' paths below its own.
+    static CommitShape shapeAddition(
+        const TreeGroupState& state,
+        const std::vector<std::string>& newMemberIds,
+        const std::vector<std::uint32_t>& positions,
+        const std::string& adderId
+    );
+
+    // Refuses a remover who is among the leaving: the remover mints the next grant key. Blanks the leavers'
+    // knowledge closure, which needs `state.setters` for every filled node (std::invalid_argument otherwise).
+    static CommitShape shapeRemoval(
+        const TreeGroupState& state,
+        const std::vector<std::string>& leavingUserIds,
+        const std::string& removerId
+    );
+
+    static CommitShape shapeSelfUpdate(const TreeGroupState& state, const std::string& memberId);
+
+    // The members a commit of this shape wraps to directly — whose long-term public keys it needs. Ascending.
+    static std::vector<std::string> recipients(const TreeGroupState& state, const CommitShape& shape);
+
+    // ── Planning: one commit each. Member keys come from `setMemberKeyStrings` (newcomers' from the arguments). ──
+
+    // Epoch 1, a fresh grant key.
+    CommitPlan planCreate(
+        const std::vector<TreeMember>& members,
+        const std::string& creatorId,
+        const core::PrivateKey& signer
+    );
+
+    // Same epoch and grant key, which must already be in the cache (climb first).
+    CommitPlan planAddition(
         const TreeGroupState& state,
         const std::vector<TreeMember>& newMembers,
         const std::vector<std::uint32_t>& positions,
+        const std::string& adderId,
         const core::PrivateKey& signer
     );
 
-    // Refreshes every node on the leaving member's direct path, mints a fresh grant keypair and re-links the grant
-    // edge. Blank subtrees are wrapped to anyway: unopenable, but skipping them would break the chain of edges.
-    RemovalPlan planRemoval(
+    // Next epoch, a fresh grant key.
+    CommitPlan planRemoval(
         const TreeGroupState& state,
         const std::vector<std::string>& leavingUserIds,
+        const std::string& removerId,
         const core::PrivateKey& signer
     );
 
-    // Supplies the members' long-term public keys: a removal wraps to surviving sibling leaves, whose keys are not
-    // in the tree state the server serves, and skipping them would silently cut those members off.
-    void setMemberKeys(const std::vector<TreeMember>& members);
+    // Next epoch, a fresh grant key, no node touched: the one grant edge, wrapped to the root's published key, or
+    // in a one-leaf tree (whose root is the sole member's leaf) to the rotator's own key, `signer`. `state` must
+    // carry every record (the "plan" view): the statement signs its tree hash, which a rotation leaves as it is.
+    CommitPlan planRotation(
+        const TreeGroupState& state,
+        const std::string& rotatorId,
+        const core::PrivateKey& signer
+    );
 
-    // The same keys as base58 strings, parsed only when a wrap needs one — a plan touches `log n` of them but the
-    // caller hands over the whole roster. Overrides any earlier `setMemberKeys`.
+    // Same epoch and grant key, which must already be in the cache (climb first).
+    CommitPlan planSelfUpdate(
+        const TreeGroupState& state,
+        const std::string& memberId,
+        const core::PrivateKey& signer
+    );
+
+    // Supplies the members' long-term public keys, which are not part of the tree state, as base58 strings parsed
+    // only when a wrap needs one. Replaces any keys supplied before.
     void setMemberKeyStrings(std::map<std::string, std::string> membersByUserId);
-
-    // Seats for `count` newcomers: blanks a removal left, lowest first, then appended past the last leaf.
-    // The live path asks the server for this instead; here for planning against a state already in hand.
-    static std::vector<std::uint32_t> choosePositions(const TreeGroupState& state, std::uint32_t count);
 
     static std::optional<std::uint32_t> positionOf(const TreeGroupState& state, const std::string& userId);
 
-    // The occupied leaves hanging off the refreshed frontier — `O(k log n)` keys to find, not the whole roster.
-    // `excludedSeats` drops seats the operation is emptying; a departing member's key may no longer resolve.
-    static std::vector<std::string> membersToWrapTo(
-        const TreeGroupState& state,
-        const std::vector<std::uint32_t>& positions,
-        std::uint32_t numLeaves,
-        const std::set<std::uint32_t>& excludedSeats = {}
-    );
-
     // ── Primitives, exposed for tests and for the ladder module ─────────────
 
+    // `label` is sealed in front of the key; `unwrapKey` refuses a blob that does not start with it.
     static std::string wrapKey(
         const core::PrivateKey& keyToWrap,
         const core::PublicKey& to,
-        const core::PrivateKey& signer
+        const core::PrivateKey& signer,
+        const std::string& label = ""
     );
 
-    static std::optional<core::PrivateKey> unwrapKey(const std::string& blob, const core::PrivateKey& with);
+    static std::optional<core::PrivateKey> unwrapKey(
+        const std::string& blob,
+        const core::PrivateKey& with,
+        const std::string& label = ""
+    );
+
+    /**
+     * @brief Refuses a member whose identity cannot be wrapped to with this group's keys.
+     *
+     * A group is homogeneous in key algorithm, and nothing declares that — it follows from the shape
+     * of the tree. A node key is one key for a whole subtree, wrapped by Diffie-Hellman straight to
+     * each member's identity key, so every member has to sit on the curve the committer's keys are
+     * on. (Containers are the opposite: they wrap their key separately per recipient, so a container
+     * may have members of several algorithms.) The algorithm is therefore fixed when the group is
+     * created, like a container's crypto suite, and changing it means a new group.
+     *
+     * Called where the pairing first becomes known, so the refusal names the member and the reason.
+     * Without it the first wrap throws `MalformedEncryptionKeyException` from `Ecies`, which reads
+     * like a corrupted key rather than a group that was never possible to build.
+     *
+     * @throws GroupMemberKeyAlgorithmMismatchException when the two keys cannot agree a secret
+     */
+    static void assertCanReceiveGroupKeys(
+        const core::PublicKey& memberKey,
+        const core::PrivateKey& signer,
+        const std::string& userId
+    );
 
 private:
     /**
@@ -108,20 +180,57 @@ private:
      */
     static core::PrivateKey freshKey(const core::PrivateKey& signer);
 
-    static const TreeEdge* findEdgeFromNode(
+    // `resolution` into `out`: the node itself when it is occupied or keyed, else its children resolved in turn.
+    static void resolveInto(const TreeGroupState& state, std::uint32_t nodeIndex, std::vector<std::uint32_t>& out);
+
+    // `node` if keyed, and every keyed ancestor of it up to the root: what a holder of `node`'s key can climb to.
+    static void climbInto(std::uint32_t node, std::uint32_t numLeaves, std::set<std::uint32_t>& out);
+
+    // The edge that carries an ancestor's key down to the node we stand on, as the current state describes it: from a
+    // filled node still on our path above us, at that node's current generation. A leftover edge of an older state
+    // fails one of those and is passed over rather than followed into a key that no longer verifies.
+    template<typename AddressedToUs>
+    static const TreeEdge* findClimbingEdge(
         const TreeGroupState& state,
-        std::uint32_t childIndex,
-        std::uint32_t childGeneration
+        const AddressedToUs& addressedToUs,
+        const std::vector<std::uint32_t>& above
+    ) {
+        for (const TreeEdge& edge : state.edges) {
+            if (edge.isGrantEdge || !addressedToUs(edge)) {
+                continue;
+            }
+            if (std::find(above.begin(), above.end(), edge.parentIndex) == above.end()) {
+                continue;
+            }
+            const TreeNodeState* parent = state.record(edge.parentIndex);
+            if (parent != nullptr && parent->publicKey.has_value() && parent->generation == edge.parentGeneration) {
+                return &edge;
+            }
+        }
+        return nullptr;
+    }
+
+    // The single planner behind every operation (§6): blank `shape.blanked`, mint fresh keys for
+    // `shape.filledOffPath` and the committer's keyed path, and wrap each of them to the resolution of its children
+    // on the resulting state.
+    CommitPlan commit(
+        const TreeGroupState& state,
+        CommitShape shape,
+        std::uint32_t epoch,
+        const core::PrivateKey& grantKey,
+        const core::PrivateKey& signer
     );
-    static const TreeEdge* findEdgeFromUser(const TreeGroupState& state, const std::string& userId);
-    static const TreeEdge* findGrantEdge(const TreeGroupState& state);
-    static const TreeNodeState* findNode(const TreeGroupState& state, std::uint32_t nodeIndex);
+
+    // The records a commit of this shape starts from: blanked nodes lose their key, keep their generation.
+    static TreeGroupState postState(const TreeGroupState& state, const CommitShape& shape);
+
+    core::PrivateKey currentGrantKey(const TreeGroupState& state) const;
 
     // Parsed on first use.
     std::optional<core::PublicKey> memberKey(const std::string& userId);
 
     TreeKeyCache& _cache;
-    // Parsed keys: supplied whole by `setMemberKeys`, or filled in on demand from the strings below.
+    // Parsed keys: newcomers' from planning, or filled in on demand from the strings below.
     std::map<std::string, core::PublicKey> _memberKeys;
     // Unparsed roster from `setMemberKeyStrings`, base58-DER per user id.
     std::map<std::string, std::string> _memberKeyStrings;

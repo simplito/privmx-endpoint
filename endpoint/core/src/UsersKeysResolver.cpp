@@ -50,7 +50,8 @@ void UsersKeysResolver::init(
             }
         }
     }
-    _needNewKey = deletedUsersIds.size() > 0 || forceGenerateNewKey;
+    // A V1 current key is unsigned, so it is never written under nor re-wrapped: the update replaces it.
+    _needNewKey = deletedUsersIds.size() > 0 || forceGenerateNewKey || moduleCurrentKey.dataStructureVersion < 2;
 }
 
 std::vector<UserWithPubKey> UsersKeysResolver::getUsersToAddKey() {

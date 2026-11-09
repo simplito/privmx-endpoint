@@ -131,8 +131,8 @@ TEST(Ed25519Capabilities, X25519CanDoTheKeyAgreementEd25519Cannot) {
     auto alicePriv = cryptoProvider().generatePrivateKey(cs::AsymAlg::X25519);
     auto bobPriv = cryptoProvider().generatePrivateKey(cs::AsymAlg::X25519);
 
-    const auto aliceSees = alicePriv->deriveSharedSecret(*bobPriv->publicKey());
-    const auto bobSees = bobPriv->deriveSharedSecret(*alicePriv->publicKey());
+    const auto aliceSees = alicePriv->deriveSharedSecret(bobPriv->publicKey());
+    const auto bobSees = bobPriv->deriveSharedSecret(alicePriv->publicKey());
 
     EXPECT_FALSE(aliceSees.empty());
     EXPECT_EQ(std::string(aliceSees.begin(), aliceSees.end()), std::string(bobSees.begin(), bobSees.end()));
@@ -146,9 +146,15 @@ namespace {
 
 /// One secret, two keys, each of a different algorithm — the shape the composed identity needed.
 /// The split is pmx-crypto's: `IExtKey` derives a separate sub-seed per usage, so the signing and
-/// the agreement key never come from the same bytes.
-std::shared_ptr<cs::IPrivateKey> fromSeed(const std::string& seed, cs::KeyUsageScheme usage, cs::AsymAlg algorithm) {
-    return cryptoProvider().extKeyFromSeed(keyBytes(seed), algorithm)->privateKey(usage);
+/// the agreement key never come from the same bytes. Both algorithms are named, because an ext key
+/// validates each half against the scheme it serves and will not infer one from the other.
+std::shared_ptr<cs::IPrivateKey> fromSeed(
+    const std::string& seed,
+    cs::KeyUsageScheme usage,
+    cs::AsymAlg signAlg,
+    cs::AsymAlg derEncAlg
+) {
+    return cryptoProvider().extKeyFromSeed(keyBytes(seed), signAlg, derEncAlg)->privateKey(usage);
 }
 
 } // namespace
@@ -166,8 +172,8 @@ TEST(Ed25519Capabilities, AComposedIdentityCanBothSignAndBeWrappedTo) {
     EXPECT_TRUE(aliceSigning->publicKey()->verify(keyBytes(message), signature, cs::SigScheme::Default));
 
     EXPECT_EQ(
-        keyString(aliceAgreement->deriveSharedSecret(*bobAgreement->publicKey())),
-        keyString(bobAgreement->deriveSharedSecret(*aliceAgreement->publicKey()))
+        keyString(aliceAgreement->deriveSharedSecret(bobAgreement->publicKey())),
+        keyString(bobAgreement->deriveSharedSecret(aliceAgreement->publicKey()))
     );
 
     EXPECT_EQ(32u, keyString(aliceSigning->publicKey()->export_(cs::KeyFormat::Raw)).size());
@@ -179,21 +185,21 @@ TEST(Ed25519Capabilities, AComposedIdentityCanBothSignAndBeWrappedTo) {
 TEST(Ed25519Capabilities, AKeyCanBeRebuiltFromASeedAlone) {
     const std::string seed(32, 'a');
 
-    auto signing = fromSeed(seed, cs::KeyUsageScheme::Sign, cs::AsymAlg::ED25519);
+    auto signing = fromSeed(seed, cs::KeyUsageScheme::Sign, cs::AsymAlg::ED25519, cs::AsymAlg::X25519);
     ASSERT_NE(nullptr, signing);
     EXPECT_NO_THROW(signing->sign(keyBytes("data"), cs::SigScheme::Default));
     EXPECT_EQ(
         keyString(signing->publicKey()->export_(cs::KeyFormat::Raw)),
         keyString(
-            fromSeed(seed, cs::KeyUsageScheme::Sign, cs::AsymAlg::ED25519)->publicKey()->export_(cs::KeyFormat::Raw)
+            fromSeed(seed, cs::KeyUsageScheme::Sign, cs::AsymAlg::ED25519, cs::AsymAlg::X25519)->publicKey()->export_(cs::KeyFormat::Raw)
         )
     ) << "the same seed gave two different signing keys";
 
-    // Naming ED25519 asks for the identity, and the agreement half of an Ed25519 identity is X25519 —
-    // the pairing lives in pmx-crypto now, not in a table here.
-    auto agreement = fromSeed(seed, cs::KeyUsageScheme::DerEnc, cs::AsymAlg::ED25519);
+    // The pairing is named here: an ext key checks each half against the scheme it serves, so Ed25519
+    // alone is refused as the derivation half rather than silently standing in for X25519.
+    auto agreement = fromSeed(seed, cs::KeyUsageScheme::DerEnc, cs::AsymAlg::ED25519, cs::AsymAlg::X25519);
     auto peer = cryptoProvider().generatePrivateKey(cs::AsymAlg::X25519);
-    EXPECT_NO_THROW(agreement->deriveSharedSecret(*peer->publicKey()));
+    EXPECT_NO_THROW(agreement->deriveSharedSecret(peer->publicKey()));
 
     // The two halves must never be the same bytes: Ed25519 hashes its seed into a scalar and X25519
     // clamps its one, so sharing a seed would give two keys whose scalars are related in a way

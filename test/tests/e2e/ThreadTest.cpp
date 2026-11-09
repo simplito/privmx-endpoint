@@ -1006,12 +1006,12 @@ TEST_F(ThreadTest, userValidator_false) {
         ASSERT_EQ(threads.readItems.size(), 1);
         EXPECT_EQ(threads.readItems[0].statusCode, failureCode);
     });
-    EXPECT_NO_THROW({
+    EXPECT_THROW({
         threadApi->createThread(
             contextId(), users({1}), users({1}),
             core::Buffer::from("public"), core::Buffer::from("private")
         );
-    });
+    }, core::Exception);
     EXPECT_THROW({
         threadApi->updateThread(
             threadId(1), users({1}), users({1}),
@@ -1041,4 +1041,25 @@ TEST_F(ThreadTest, userValidator_false) {
         );
     }, core::Exception);
     EXPECT_NO_THROW({ threadApi->deleteMessage(messageId(2)); });
+}
+
+TEST_F(ThreadTest, SECURITY_a_key_the_verifier_refuses_is_never_wrapped_to) {
+    // user_2's listed key is one the application's verifier refuses (a substituted key, as far as the client can
+    // tell). Create, update (an added user and a new key) and rotate all refuse before the key is wrapped to it.
+    const std::string withBoth = threadApi->createThread(contextId(), users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"));
+    const std::string withOne = threadApi->createThread(contextId(), users({1}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"));
+    const auto listed = [&] { return threadApi->listThreads(contextId(), {.skip=0, .limit=1, .sortOrder="desc"}).totalAvailable; };
+    const auto before = listed();
+    connection->setUserVerifier(
+        std::make_shared<core::RefusingKeyVerifier>(std::set<std::string>{user(2).pubKey})
+    );
+    core::expectVerificationFailure([&] { threadApi->createThread(contextId(), users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private")); });
+    core::expectVerificationFailure([&] { threadApi->updateThread(withOne, users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, false); });
+    core::expectVerificationFailure([&] { threadApi->updateThread(withBoth, users({1, 2}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, true); });
+    core::expectVerificationFailure([&] { threadApi->rotateThreadKeys(withBoth, users({1, 2}), users({1}), 1, false); });
+    EXPECT_EQ(listed(), before);
+    EXPECT_EQ(threadApi->getThread(withBoth).version, 1);
+    EXPECT_EQ(threadApi->getThread(withOne).version, 1);
+    // Without user_2 nothing is refused.
+    EXPECT_NO_THROW({ threadApi->updateThread(withBoth, users({1}), users({1}), core::Buffer::from("public"), core::Buffer::from("private"), 1, false, true); });
 }

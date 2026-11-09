@@ -2,6 +2,7 @@
 #define _PRIVMXLIB_ENDPOINT_GROUP_SUBSCRIBERIMPL_HPP_
 
 #include "privmx/endpoint/group/Types.hpp"
+#include <optional>
 #include <privmx/endpoint/core/Subscriber.hpp>
 
 namespace privmx {
@@ -20,10 +21,18 @@ public:
         const std::string& selectorId
     );
     static std::string channelNameFromQuery(const std::string& subscriptionQuery);
+    // A custom event is sealed with its channel name in front, inside what the sender signs and encrypts, so
+    // the bridge cannot deliver it on another channel: `"pmx-event\0" || u32(len) || channelName || data`.
+    static std::string sealOnChannel(const std::string& channelName, const std::string& data);
+    // The data `sealed` carries for `channelName`; nullopt when it was sealed for another channel.
+    static std::optional<std::string> openOnChannel(const std::string& channelName, const std::string& sealed);
 
 private:
     virtual std::vector<std::string> transform(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
     virtual void assertQuery(const std::vector<core::SubscriptionQueryObj>& subscriptionQueries);
+
+    // What every payload on a channel is sealed behind, so one channel's envelope cannot be replayed on another.
+    static std::string channelPrefix(const std::string& channelName);
 
     static std::vector<std::string> getChannelPath(EventType eventType);
     static std::vector<std::string> getCustomChannelPath(const std::string& channelName);

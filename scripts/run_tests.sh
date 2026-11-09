@@ -2,7 +2,7 @@
 #
 # Usage: ./scripts/run_tests.sh [--unit-only] [--e2e-only] [--keep-bridge] [--filter PATTERN]
 #                               [--build-dir DIR] [--bridge-image IMAGE] [--dataset-dir DIR]
-#                               [--e2e-workers N]
+#                               [--e2e-workers N] [--log-file FILE]
 
 set -uo pipefail
 
@@ -12,11 +12,13 @@ cd "$REPO_ROOT"
 BUILD_DIR="build"
 BRIDGE_IMAGE="hub.simplito.com/privmx/privmx-bridge:dev"
 DATASET_DIR="test/env/datasets/Dataset"
-E2E_WORKERS=4
+E2E_WORKERS=6
 RUN_UNIT=1
 RUN_E2E=1
 KEEP_BRIDGE=0
 FILTER=""
+LOG_DIR="test/runner/logs"
+LOG_FILE=""
 
 usage() {
     cat <<EOF
@@ -28,8 +30,10 @@ Usage: $0 [options]
   --filter PATTERN       Run only tests matching the GTest pattern (also: --test)
   --build-dir DIR        Build directory to look for test binaries in (default: build)
   --bridge-image IMAGE   Bridge image used for e2e tests (default: $BRIDGE_IMAGE)
-  --dataset-dir DIR      Dataset used to seed the Bridge for e2e tests (default: $DATASET_DIR)
+  --dataset-dir DIR      Dataset used to seed the Bridge for e2e tests (default: $DATASET_DIR;
+                         create it first with scripts/generate_test_dataset.sh)
   --e2e-workers N        Number Workers running e2e tests (default: $E2E_WORKERS)
+  --log-file FILE        Log file for the unit and e2e output (default: $LOG_DIR/<timestamp>.log)
   -h, --help          Show this help
 
 Examples:
@@ -48,6 +52,7 @@ while [[ $# -gt 0 ]]; do
         --dataset-dir) DATASET_DIR="$2"; shift 2 ;;
         --bridge-image) BRIDGE_IMAGE="$2"; shift 2 ;;
         --e2e-workers) E2E_WORKERS="$2"; shift 2 ;;
+        --log-file) LOG_FILE="$2"; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
     esac
@@ -55,6 +60,17 @@ done
 
 GTEST_FILTER_ARGS=()
 [[ -n "$FILTER" ]] && GTEST_FILTER_ARGS+=("--gtest_filter=$FILTER")
+
+[[ -z "$LOG_FILE" ]] && LOG_FILE="$LOG_DIR/$(date +%Y%m%d_%H%M%S).log"
+mkdir -p "$(dirname "$LOG_FILE")"
+LOG_FILE="$(cd "$(dirname "$LOG_FILE")" && pwd)/$(basename "$LOG_FILE")"
+# e2e_common.py appends its own entries to the same file, so one run leaves one log.
+export PRIVMX_TEST_LOG_FILE="$LOG_FILE"
+
+say() { printf '%s\n' "$*" | tee -a "$LOG_FILE"; }
+say_err() { printf '%s\n' "$*" | tee -a "$LOG_FILE" >&2; }
+
+say "Log file: $LOG_FILE"
 
 UNIT_FAILED=0
 E2E_FAILED=0
@@ -80,7 +96,7 @@ else
 fi
 
 if [[ "$RUN_UNIT" -eq 1 ]]; then
-    echo "=== Unit tests ==="
+    say "=== Unit tests ==="
     UNIT_START=$SECONDS
     UNIT_BINARIES=()
     for bin in \
@@ -95,13 +111,14 @@ if [[ "$RUN_UNIT" -eq 1 ]]; then
     done < <(find "$BUILD_DIR/test" -maxdepth 1 -type f -executable -name "test_unit_*" -print0 2>/dev/null | sort -z)
 
     if [[ ${#UNIT_BINARIES[@]} -eq 0 ]]; then
-        echo "No unit test binaries found under '$BUILD_DIR'. Build the project first (see scripts/build.sh)."
+        say "No unit test binaries found under '$BUILD_DIR'. Build the project first (see scripts/build.sh)."
         UNIT_FAILED=1
     else
         for bin in "${UNIT_BINARIES[@]}"; do
-            echo "--- $bin ---"
-            if ! "$bin" ${GTEST_FILTER_ARGS[@]+"${GTEST_FILTER_ARGS[@]}"}; then
+            say "--- $bin ---"
+            if ! "$bin" ${GTEST_FILTER_ARGS[@]+"${GTEST_FILTER_ARGS[@]}"} 2>&1 | tee -a "$LOG_FILE"; then
                 UNIT_FAILED=1
+                say "[UNIT-FAILED] $bin"
             fi
         done
     fi
@@ -109,10 +126,14 @@ if [[ "$RUN_UNIT" -eq 1 ]]; then
 fi
 
 if [[ "$RUN_E2E" -eq 1 ]]; then
-    echo "=== E2E tests ==="
+    say "=== E2E tests ==="
     E2E_START=$SECONDS
-    echo "Starting Bridge backend via docker compose..."
-    if (cd test/env && docker compose up -d); then
+    # Datasets are not stored in the repository: scripts/generate_test_dataset.sh creates one before the e2e run.
+    if [[ ! -f "$DATASET_DIR/ServerData.ini" ]]; then
+        say_err "No dataset with a ServerData.ini at '$DATASET_DIR'. Create it first:"
+        say_err "  ./scripts/generate_test_dataset.sh --build-dir \"$BUILD_DIR\" --bridge-image \"$BRIDGE_IMAGE\""
+        E2E_FAILED=1
+    elif echo "Starting Bridge backend via docker compose..." && (cd test/env && docker compose up -d); then
         echo "Waiting for the backend to come up..."
         sleep 15
 
@@ -126,16 +147,17 @@ if [[ "$RUN_E2E" -eq 1 ]]; then
             (cd test/env && docker compose down)
         fi
     else
-        echo "Failed to start the Bridge backend via docker compose." >&2
+        say_err "Failed to start the Bridge backend via docker compose."
         E2E_FAILED=1
     fi
     E2E_TIME=$((SECONDS - E2E_START))
 fi
 
-echo
-echo "=== Summary ==="
-[[ "$RUN_UNIT" -eq 1 ]] && echo "Unit tests: $([[ "$UNIT_FAILED" -eq 0 ]] && echo PASSED || echo FAILED)  ($(fmt_time $UNIT_TIME))"
-[[ "$RUN_E2E" -eq 1 ]] && echo "E2E tests:  $([[ "$E2E_FAILED" -eq 0 ]] && echo PASSED || echo FAILED)  ($(fmt_time $E2E_TIME))"
-echo "Total time: $(fmt_time $SECONDS)"
+say ""
+say "=== Summary ==="
+[[ "$RUN_UNIT" -eq 1 ]] && say "Unit tests: $([[ "$UNIT_FAILED" -eq 0 ]] && echo PASSED || echo FAILED)  ($(fmt_time $UNIT_TIME))"
+[[ "$RUN_E2E" -eq 1 ]] && say "E2E tests:  $([[ "$E2E_FAILED" -eq 0 ]] && echo PASSED || echo FAILED)  ($(fmt_time $E2E_TIME))"
+say "Total time: $(fmt_time $SECONDS)"
+say "Log file: $LOG_FILE"
 
 [[ "$UNIT_FAILED" -eq 0 && "$E2E_FAILED" -eq 0 ]]

@@ -9,6 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/store/ServerApi.hpp>
 #include <privmx/utils/JsonHelper.hpp>
 
@@ -33,7 +34,9 @@ void ServerApi::storeDelete(const server::StoreDeleteModel& model) {
 }
 
 server::StoreGetResult ServerApi::storeGet(const server::StoreGetModel& model) {
-    return request<server::StoreGetResult>("storeGet", model.toJSON());
+    auto result = request<server::StoreGetResult>("storeGet", model.toJSON());
+    core::EndpointUtils::assertServedId(model.storeId, result.store.id);
+    return result;
 }
 
 server::StoreListResult ServerApi::storeList(const server::StoreListModel& model) {
@@ -41,15 +44,22 @@ server::StoreListResult ServerApi::storeList(const server::StoreListModel& model
 }
 
 server::StoreFileGetResult ServerApi::storeFileGet(const server::StoreFileGetModel& model) {
-    return request<server::StoreFileGetResult>("storeFileGet", model.toJSON());
+    auto result = request<server::StoreFileGetResult>("storeFileGet", model.toJSON());
+    core::EndpointUtils::assertServedId(model.fileId, result.file.id);
+    core::EndpointUtils::assertServedId(result.file.storeId, result.store.id);
+    return result;
 }
 
 server::StoreFileGetManyResult ServerApi::storeFileGetMany(const server::StoreFileGetManyModel& model) {
-    return request<server::StoreFileGetManyResult>("storeFileGetMany", model.toJSON());
+    auto result = request<server::StoreFileGetManyResult>("storeFileGetMany", model.toJSON());
+    core::EndpointUtils::assertServedId(model.storeId, result.store.id);
+    return result;
 }
 
 server::StoreFileListResult ServerApi::storeFileList(const server::StoreFileListModel& model) {
-    return request<server::StoreFileListResult>("storeFileList", model.toJSON());
+    auto result = request<server::StoreFileListResult>("storeFileList", model.toJSON());
+    core::EndpointUtils::assertServedId(model.storeId, result.store.id);
+    return result;
 }
 
 server::StoreFileCreateResult ServerApi::storeFileCreate(const server::StoreFileCreateModel& model) {

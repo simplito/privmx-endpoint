@@ -85,41 +85,56 @@ def run_single_test(
     docker_image: str = e2e_common.DEFAULT_BRIDGE_DOCKER_IMAGE,
 ) -> tuple[str, bool, int, bytes | str, bytes | str]:
     last_result: tuple[str, bool, int, bytes | str, bytes | str] = (test_name, False, -1, b"", b"")
+    started_at = time.time()
+    started_clock = e2e_common.clock_now()
+    e2e_common.log(f"[START] {test_name} at {started_clock}")
 
-    for attempt in range(1, e2e_common.RETRY_COUNT + 2):
-        bridge_info: BridgeInfo | None = None
-        try:
-            bridge_info = pre_test(index, dataset_dir_path, test_name, docker_image)
-            print(f"Running: {test_name}")
-            success, rc, out, err = execute_test(
-                test_file_path,
-                test_name,
-                init_file_path,
-                bridge_info,
-                passthrough_args,
-            )
-            e2e_common.log(f"[TEST] {test_name} (attempt {attempt})")
-            last_result = (test_name, success, rc, out, err)
-            if success:
-                return last_result
-        except Exception as exc:
-            e2e_common.log(f"[ERROR] {test_name}: {exc}")
-            last_result = (test_name, False, -1, b"", str(exc))
-        finally:
-            if bridge_info is not None:
-                post_test(test_name, bridge_info)
+    try:
+        for attempt in range(1, e2e_common.RETRY_COUNT + 2):
+            bridge_info: BridgeInfo | None = None
+            try:
+                setup_started_at = time.time()
+                bridge_info = pre_test(index, dataset_dir_path, test_name, docker_image)
+                e2e_common.log(f"[SETUP] {test_name} (attempt {attempt}) took {time.time() - setup_started_at:.2f}s")
 
-        if attempt <= e2e_common.RETRY_COUNT:
-            time.sleep(e2e_common.RETRY_DELAY)
+                print(f"Running: {test_name}")
+                execution_started_at = time.time()
+                success, rc, out, err = execute_test(
+                    test_file_path,
+                    test_name,
+                    init_file_path,
+                    bridge_info,
+                    passthrough_args,
+                )
+                e2e_common.log(f"[TEST] {test_name} (attempt {attempt}) took {time.time() - execution_started_at:.2f}s")
+                last_result = (test_name, success, rc, out, err)
+                if success:
+                    return last_result
+            except Exception as exc:
+                e2e_common.log(f"[ERROR] {test_name}: {exc}")
+                last_result = (test_name, False, -1, b"", str(exc))
+            finally:
+                if bridge_info is not None:
+                    post_test(test_name, bridge_info)
 
-    return last_result
+            if attempt <= e2e_common.RETRY_COUNT:
+                time.sleep(e2e_common.RETRY_DELAY)
+
+        return last_result
+    finally:
+        e2e_common.log(
+            f"[STOP] {test_name} | start={started_clock} stop={e2e_common.clock_now()} "
+            f"total={time.time() - started_at:.2f}s"
+        )
 
 
 def print_result(test_name: str, success: bool, rc: int, out: bytes | str, err: bytes | str) -> None:
     if success:
         print(f"Success - {test_name}")
+        e2e_common.log(f"[RESULT] PASSED {test_name}")
         return
 
+    e2e_common.log(f"[RESULT] FAILED {test_name} (exit={rc})")
     print(f"Failed  - {test_name} (exit={rc})")
     print("----- STDOUT -----")
     print(e2e_common.decode_output(out))

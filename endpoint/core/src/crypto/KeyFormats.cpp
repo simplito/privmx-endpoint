@@ -247,6 +247,17 @@ cs::AsymAlg kemAlgorithmFor(cs::AsymAlg algorithm) {
     return spec->kemAlgorithm;
 }
 
+cs::AsymAlg agreementCurveOf(cs::AsymAlg algorithm) {
+    if (keyAlgorithmNeedsAgreementKey(algorithm)) {
+        return agreementAlgorithmFor(algorithm);
+    }
+    return algorithm == cs::AsymAlg::secp256k1 ? cs::AsymAlg::PrivmxSecp256k1 : algorithm;
+}
+
+bool keyAlgorithmsCanAgree(cs::AsymAlg a, cs::AsymAlg b) {
+    return agreementCurveOf(a) == agreementCurveOf(b);
+}
+
 std::string encodeTaggedPublicKey(
     const std::string& rawKey,
     cs::AsymAlg algorithm,

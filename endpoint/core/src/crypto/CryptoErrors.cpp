@@ -64,16 +64,18 @@ void CryptoErrors::rethrow(const std::exception& e, const std::string& context) 
     }
 
     // --- pozostale: po kategorii (roli kryptograficznej) --------------------------------------
-    // Kategorii jest siedem i pokrywaja cale `Exceptions.hpp` oraz `AsyncExceptions.hpp`.
+    // Kategorii jest szesc i pokrywaja cale `Exceptions.hpp` oraz `AsyncExceptions.hpp`.
+    //
+    // Bez osobnej galezi dla ECC: pmx-crypto wycofalo `PrivmxCryptoserviceEccException`, a bledy
+    // operacji na krzywych wywodza sie teraz z `PrivmxCryptoserviceAsyncKeyException` i lapie je
+    // galaz ponizej. `crypto::EccOperationFailureException` zostaje w API — nadal rzuca ja
+    // `crypto/` (stary modul) — ale stad juz nie wychodzi.
 
     if (dynamic_cast<const cs::PrivmxCryptoserviceAsyncKeyException*>(&e) != nullptr) {
         throw crypto::AsymmetricKeyFailureException(description);
     }
     if (dynamic_cast<const cs::PrivmxCryptoserviceSymmetricCipherException*>(&e) != nullptr) {
         throw crypto::SymmetricCipherFailureException(description);
-    }
-    if (dynamic_cast<const cs::PrivmxCryptoserviceEccException*>(&e) != nullptr) {
-        throw crypto::EccOperationFailureException(description);
     }
     if (dynamic_cast<const cs::PrivmxCryptoserviceKdfException*>(&e) != nullptr) {
         throw crypto::KdfFailureException(description);

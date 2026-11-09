@@ -1,6 +1,6 @@
 #!/bin/bash
 SCRIPT_PATH=$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )
-BUILD_PATH="${SCRIPT_PATH}/../../../build/test"
+BUILD_PATH="${DATASET_TESTS_DIR:-${SCRIPT_PATH}/../../../build/test}"
 
 {
 

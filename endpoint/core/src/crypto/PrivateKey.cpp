@@ -53,14 +53,18 @@ PrivateKey identityFromSecret(const std::string& secret, cs::AsymAlg algorithm) 
         );
     }
     // The signing and agreement halves come from one ext key, so pmx-crypto keeps them on separate
-    // sub-seeds. The post-quantum half is a third algorithm with no place in that pairing, so it
-    // gets an ext key of its own — ML-KEM-768 named directly, which also stretches the seed to the
-    // 64 bytes its keygen wants.
-    const auto extKey = cryptoProvider().extKeyFromSeed(keyBytes(secret), signingAlgorithmFor(algorithm));
+    // sub-seeds. Both algorithms are named explicitly: an ext key validates each half against the
+    // scheme it has to serve, and Ed25519 — which cannot agree keys — is rejected as the derivation
+    // half. The post-quantum half is a third algorithm with no place in that pairing, so it gets an
+    // ext key of its own, whose signing half is unused and only names something that can sign.
+    const auto extKey = cryptoProvider()
+                            .extKeyFromSeed(
+                                keyBytes(secret), signingAlgorithmFor(algorithm), agreementAlgorithmFor(algorithm)
+                            );
     std::shared_ptr<cs::IPrivateKey> kemKey;
     if (keyAlgorithmNeedsKemKey(algorithm)) {
         kemKey = cryptoProvider()
-                     .extKeyFromSeed(keyBytes(secret), kemAlgorithmFor(algorithm))
+                     .extKeyFromSeed(keyBytes(secret), signingAlgorithmFor(algorithm), kemAlgorithmFor(algorithm))
                      ->privateKey(cs::KeyUsageScheme::DerEnc);
     }
     return PrivateKey(
@@ -170,6 +174,6 @@ std::string PrivateKey::derive(const PublicKey& publicKey) const {
         if (publicKey.empty()) {
             throw MalformedEncryptionKeyException("cannot derive against an empty public key");
         }
-        return keyString(agreementImpl()->deriveSharedSecret(*publicKey.agreementImpl()));
+        return keyString(agreementImpl()->deriveSharedSecret(publicKey.agreementImpl()));
     });
 }

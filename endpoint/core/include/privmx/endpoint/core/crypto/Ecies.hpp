@@ -71,6 +71,22 @@ public:
         const std::string& cipherBase64,
         const std::optional<PublicKey>& pubOfSignature = std::nullopt
     );
+
+    /**
+     * @brief Czy `cipherBase64` zostal zapieczetowany przez posiadacza `senderBase58DER`.
+     *
+     * Ramka niesie klucz nadawcy jawnie, a otwiera sie wylacznie przez ECDH z nim — wiec kto ja
+     * zapieczetowal, trzymal klucz prywatny nadawcy albo odbiorcy. To wystarcza do atrybucji
+     * (`groupArchiveRung.author`), bez otwierania samej tresci.
+     *
+     * Pyta o zgodnosc z podanym kluczem, zamiast zwracac klucz nadawcy, bo dla tozsamosci zlozonej
+     * (ed25519, ed25519x25519mlkem768) ramka niesie tylko polowe uzgadniajaca — z niej nie da sie
+     * odtworzyc otagowanego klucza tozsamosci, ale da sie ja porownac.
+     *
+     * `false` dla ramki, ktora sie nie parsuje, i dla klucza, ktory sie nie parsuje: brak atrybucji
+     * jest tu bezpiecznym domyslnym wynikiem.
+     */
+    static bool sealedBy(const std::string& cipherBase64, const std::string& senderBase58DER);
 };
 
 } // namespace core

@@ -163,6 +163,25 @@ privmx::cryptoservice::AsymAlg signingAlgorithmFor(privmx::cryptoservice::AsymAl
 privmx::cryptoservice::AsymAlg kemAlgorithmFor(privmx::cryptoservice::AsymAlg algorithm);
 
 /**
+ * @brief The curve a key of this algorithm actually agrees secrets on.
+ *
+ * A composed identity agrees on its second half; everything else agrees on itself. `secp256k1` and
+ * `PrivmxSecp256k1` are one curve in two spellings — the registry keeps them apart only because their
+ * data formats differ — so they must not be read as two.
+ */
+privmx::cryptoservice::AsymAlg agreementCurveOf(privmx::cryptoservice::AsymAlg algorithm);
+
+/**
+ * @brief Whether a key of one algorithm can agree a shared secret with a key of another.
+ *
+ * Diffie-Hellman needs both ends on one curve, so this decides whether a key may be wrapped to a given
+ * identity at all. Callers that know the pairing before they reach the wrap should check here and
+ * refuse with an error of their own: `Ecies` can only throw `MalformedEncryptionKeyException`, which
+ * names a broken key where the real problem is a pairing that was never possible.
+ */
+bool keyAlgorithmsCanAgree(privmx::cryptoservice::AsymAlg a, privmx::cryptoservice::AsymAlg b);
+
+/**
  * @brief Encodes a public key as `Base58Check(tag || rawKey || rawAgreementKey || rawKemKey)`.
  *
  * This is the only encoding a key travels in. It exists because a key has to say which algorithm it
