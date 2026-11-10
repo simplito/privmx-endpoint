@@ -1,7 +1,9 @@
 
 #include <gtest/gtest.h>
+#include <map>
 #include "../utils/BaseTest.hpp"
 #include "../utils/FalseUserVerifierInterface.hpp"
+#include "../utils/PairBindingUserVerifierInterface.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
@@ -2979,5 +2981,80 @@ TEST_F(StoreTest, falseUserVerifierInterface) {
         EXPECT_EQ(fileListResult.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
     } else {
         FAIL();
+    }
+}
+
+TEST_F(StoreTest, fileUpdatedByAnotherManager_bindsTheEditorToTheirOwnKey) {
+    const core::UserWithPubKey user1{
+        .userId=reader->getString("Login.user_1_id"),
+        .pubKey=reader->getString("Login.user_1_pubKey")
+    };
+    const core::UserWithPubKey user2{
+        .userId=reader->getString("Login.user_2_id"),
+        .pubKey=reader->getString("Login.user_2_pubKey")
+    };
+    const std::string content = "from user_1";
+
+    std::string storeId;
+    EXPECT_NO_THROW({
+        storeId = storeApi->createStore(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user1, user2},
+            std::vector<core::UserWithPubKey>{user1, user2},
+            core::Buffer::from("public"),
+            core::Buffer::from("private")
+        );
+    });
+    std::string fileId;
+    EXPECT_NO_THROW({
+        int64_t handle = storeApi->createFile(
+            storeId,
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            content.length()
+        );
+        storeApi->writeToFile(handle, core::Buffer::from(content));
+        fileId = storeApi->closeFile(handle);
+    });
+
+    disconnect();
+    connectAs(ConnectionType::User2);
+    std::shared_ptr<core::PairBindingUserVerifierInterface> verifier =
+        std::make_shared<core::PairBindingUserVerifierInterface>(
+            std::map<std::string, std::string>{{user1.userId, user1.pubKey}, {user2.userId, user2.pubKey}}
+        );
+    connection->setUserVerifier(verifier);
+
+    store::File created;
+    EXPECT_NO_THROW({ created = storeApi->getFile(fileId); });
+    EXPECT_EQ(created.statusCode, 0);
+    EXPECT_EQ(created.info.author, user1.userId);
+    EXPECT_EQ(created.authorPubKey, user1.pubKey);
+
+    EXPECT_NO_THROW({
+        storeApi->updateFileMeta(
+            fileId,
+            core::Buffer::from("public updated by user_2"),
+            core::Buffer::from("private updated by user_2")
+        );
+    });
+
+    store::File updated;
+    EXPECT_NO_THROW({ updated = storeApi->getFile(fileId); });
+    // The file keeps naming user_1 as its author, while the signature over its meta is now user_2's.
+    EXPECT_EQ(updated.info.author, user1.userId);
+    EXPECT_EQ(updated.authorPubKey, user2.pubKey);
+    EXPECT_EQ(updated.statusCode, 0);
+
+    core::PagingList<store::File> listed;
+    EXPECT_NO_THROW({ listed = storeApi->listFiles(storeId, {.skip=0, .limit=1, .sortOrder="desc"}); });
+    if(listed.readItems.size() == 1) {
+        EXPECT_EQ(listed.readItems[0].statusCode, 0);
+    } else {
+        FAIL();
+    }
+
+    for(const auto& one : verifier->refused) {
+        ADD_FAILURE() << "verifier was asked to accept " << one.senderId << " paired with a key that is not theirs";
     }
 }
