@@ -1,5 +1,5 @@
 build/
-build-emscripten/
+build-*/
 .vscode/
 .VSCodeCounter/
 .idea/
