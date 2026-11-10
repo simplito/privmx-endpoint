@@ -265,11 +265,13 @@ public:
             if (result[i].statusCode != 0) {
                 continue;
             }
+            // The DIO describes who signed the item as it stands now, which an edit by another member makes
+            // different from the creator the server reports in `info`.
             verifyReqs.push_back(
                 {.contextId = moduleKeys.contextId,
-                 .senderId = result[i].info.author,
-                 .senderPubKey = result[i].authorPubKey,
-                 .date = result[i].info.createDate,
+                 .senderId = dios[i].creatorUserId,
+                 .senderPubKey = dios[i].creatorPubKey,
+                 .date = dios[i].timestamp,
                  .bridgeIdentity = dios[i].bridgeIdentity}
             );
             verifyIdxs.push_back(i);

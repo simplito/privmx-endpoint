@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
+#include <map>
 #include "../utils/BaseTest.hpp"
 #include "../utils/FalseUserVerifierInterface.hpp"
+#include "../utils/PairBindingUserVerifierInterface.hpp"
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
@@ -2162,5 +2164,78 @@ TEST_F(ThreadTest, falseUserVerifierInterface) {
         EXPECT_EQ(messagesListResult.readItems[0].statusCode, core::UserVerificationFailureException().getCode());
     } else {
         FAIL();
+    }
+}
+
+TEST_F(ThreadTest, messageUpdatedByAnotherManager_bindsTheEditorToTheirOwnKey) {
+    const core::UserWithPubKey user1{
+        .userId=reader->getString("Login.user_1_id"),
+        .pubKey=reader->getString("Login.user_1_pubKey")
+    };
+    const core::UserWithPubKey user2{
+        .userId=reader->getString("Login.user_2_id"),
+        .pubKey=reader->getString("Login.user_2_pubKey")
+    };
+
+    std::string threadId;
+    EXPECT_NO_THROW({
+        threadId = threadApi->createThread(
+            reader->getString("Context_1.contextId"),
+            std::vector<core::UserWithPubKey>{user1, user2},
+            std::vector<core::UserWithPubKey>{user1, user2},
+            core::Buffer::from("public"),
+            core::Buffer::from("private")
+        );
+    });
+    std::string messageId;
+    EXPECT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            threadId,
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            core::Buffer::from("from user_1")
+        );
+    });
+
+    disconnect();
+    connectAs(ConnectionType::User2);
+    std::shared_ptr<core::PairBindingUserVerifierInterface> verifier =
+        std::make_shared<core::PairBindingUserVerifierInterface>(
+            std::map<std::string, std::string>{{user1.userId, user1.pubKey}, {user2.userId, user2.pubKey}}
+        );
+    connection->setUserVerifier(verifier);
+
+    thread::Message sent;
+    EXPECT_NO_THROW({ sent = threadApi->getMessage(messageId); });
+    EXPECT_EQ(sent.statusCode, 0);
+    EXPECT_EQ(sent.info.author, user1.userId);
+    EXPECT_EQ(sent.authorPubKey, user1.pubKey);
+
+    EXPECT_NO_THROW({
+        threadApi->updateMessage(
+            messageId,
+            core::Buffer::from("public"),
+            core::Buffer::from("private"),
+            core::Buffer::from("updated by user_2")
+        );
+    });
+
+    thread::Message updated;
+    EXPECT_NO_THROW({ updated = threadApi->getMessage(messageId); });
+    // The message keeps naming user_1 as its author, while the signature over it is now user_2's.
+    EXPECT_EQ(updated.info.author, user1.userId);
+    EXPECT_EQ(updated.authorPubKey, user2.pubKey);
+    EXPECT_EQ(updated.statusCode, 0);
+
+    core::PagingList<thread::Message> listed;
+    EXPECT_NO_THROW({ listed = threadApi->listMessages(threadId, {.skip=0, .limit=1, .sortOrder="desc"}); });
+    if(listed.readItems.size() == 1) {
+        EXPECT_EQ(listed.readItems[0].statusCode, 0);
+    } else {
+        FAIL();
+    }
+
+    for(const auto& one : verifier->refused) {
+        ADD_FAILURE() << "verifier was asked to accept " << one.senderId << " paired with a key that is not theirs";
     }
 }
