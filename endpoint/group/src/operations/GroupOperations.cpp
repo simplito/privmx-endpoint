@@ -281,7 +281,8 @@ std::string GroupOperations::create(
     };
     model.tree = keytree::TreeWire::toCreateTree(plan);
     // The policy is signed into the chain: the statement carries it, and every later one its hash.
-    const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies.value_or(core::ContainerPolicy{})
+    const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(
+        policies.value_or(core::ContainerPolicy{})
     );
     const keytree::GroupRules rules = requestedRules(policy, creatorId);
     // Commit B: a creator who could not write its own metadata would leave every member's read of the new group

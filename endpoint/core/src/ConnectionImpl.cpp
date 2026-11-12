@@ -90,7 +90,8 @@ void ConnectionImpl::connectOver(
     _gateway = gateway;
     _serverApi.emplace(_gateway);
     _userPrivKey = key;
-    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
+    _keyProvider = std::shared_ptr<KeyProvider>(
+        new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
     _eventMiddleware = std::shared_ptr<EventMiddleware>(
         new EventMiddleware(EventQueueImpl::getInstance(), _connectionId)
@@ -160,7 +161,8 @@ void ConnectionImpl::connectPublic(
     auto key = privmx::crypto::PrivateKey::generateRandom();
     _public = true;
     _userPrivKey = key;
-    _keyProvider = std::shared_ptr<KeyProvider>(new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
+    _keyProvider = std::shared_ptr<KeyProvider>(
+        new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
     _gateway = privfs::RpcGateway::createGatewayFromEcdheConnection(key, options, solutionId);
     _serverApi.emplace(_gateway);

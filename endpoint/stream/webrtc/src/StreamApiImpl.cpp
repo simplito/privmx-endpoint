@@ -260,8 +260,8 @@ MediaTrack StreamApiImpl::addTrack(
             throw IncorrectStreamHandleException();
         }
         auto streamData = streamDataOpt.value();
-        libwebrtc::scoped_refptr<libwebrtc::RTCDesktopDevice> desktopDevice = _peerConnectionFactory->GetDesktopDevice(
-        );
+        libwebrtc::scoped_refptr<libwebrtc::RTCDesktopDevice> desktopDevice = _peerConnectionFactory
+                                                                                  ->GetDesktopDevice();
         libwebrtc::scoped_refptr<libwebrtc::RTCDesktopMediaList> desktopMediaList;
         if (mediaDevice.type == DeviceType::Desktop_Screen) {
             desktopMediaList = desktopDevice->GetDesktopMediaList(libwebrtc::DesktopType::kScreen);

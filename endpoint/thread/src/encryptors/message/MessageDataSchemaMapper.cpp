@@ -75,8 +75,7 @@ std::tuple<Message, core::DataIntegrityObject> MessageDataSchemaMapper::decrypt(
 
 MessageDataSchema::Version MessageDataSchemaMapper::getMessagesDataStructureVersion(const server::Message& message) {
     return core::DataSchemaMapperUtils::mapVersionedData(
-        message.data, MessageDataSchema::Version::UNKNOWN,
-        [](int64_t v) {
+        message.data, MessageDataSchema::Version::UNKNOWN, [](int64_t v) {
             switch (v) {
             case MessageDataSchema::Version::VERSION_4:
                 return MessageDataSchema::Version::VERSION_4;
