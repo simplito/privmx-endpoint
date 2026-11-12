@@ -48,12 +48,16 @@ GroupAwareModuleApi::~GroupAwareModuleApi() = default;
 
 void GroupAwareModuleApi::absorbAutoRekeyFailure(
     const std::string& moduleId,
-    const privmx::endpoint::core::Exception& e
+    const privmx::endpoint::core::Exception& e,
+    bool forwardSecrecyEnforced
 ) {
     auto code = e.getCode();
     if (code == privmx::endpoint::server::ContainerRotatedAlreadyException().getCode()) {
         invalidateModuleKeysInCache(moduleId);
         return;
+    }
+    if (!forwardSecrecyEnforced) {
+        return; // the container stays on the old epoch, and the write that follows is allowed to use it
     }
     if (code == privmx::endpoint::server::AccessDeniedException().getCode()) {
         throw core::StaleKeyRekeyRequiredException("automatic re-key of moduleId=" + moduleId + " was denied", e);
