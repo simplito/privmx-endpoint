@@ -14,8 +14,9 @@ using namespace privmx::endpoint;
 
 /**
  * LockApi itself knows nothing about groups - it locks a resource id and holds no keys. What it does inherit is
- * the Store's access check: a lock is only granted to a caller who may write the file, so whether a grantee
- * group's member can lock is decided by the same policy that decides whether they can write.
+ * the Store's access check, asked for the level the lock is taken at: a shared lock needs the access a read of
+ * the file needs, every higher level the access a write needs. So whether a grantee group's member can lock is
+ * decided by the same policy that decides whether they can read or write, and the two answers differ.
  */
 class LockUsingGroupsTest : public privmx::test::BaseGroupTest {
 protected:
@@ -106,9 +107,8 @@ TEST_F(LockUsingGroupsTest, lock_via_group_manager_grant) {
 }
 
 TEST_F(LockUsingGroupsTest, lock_via_group_user_grant) {
-    // "user" is the weaker grant and the default item policy is "itemOwner&user,manager", so it reaches a file
-    // the caller wrote itself and nothing else. That is the policy talking, not the group - a direct member
-    // with the same role fares the same.
+    // "user" is the weaker grant and the default item policy is "itemOwner&user,manager", so a write lock
+    // reaches a file the caller wrote itself and nothing else. A shared lock asks only for read access.
     const std::string storeId = grantedStore("user");
     ASSERT_FALSE(storeId.empty());
     // written by user_1, so user_2 does not own it
@@ -118,8 +118,14 @@ TEST_F(LockUsingGroupsTest, lock_via_group_user_grant) {
 
     disconnect();
     connectAs(2);
-    // someone else's file: neither half of "itemOwner&user,manager" is satisfied
-    EXPECT_THROW({ lockApi->lock(othersResourceId, newUuid(), lock::LockLevel::SHARED); }, core::Exception);
+    // someone else's file: the grant makes it readable, so the shared lock a reader takes is granted
+    const std::string othersUuid = newUuid();
+    expectLockGranted(othersResourceId, othersUuid, lock::LockLevel::SHARED, lock::LockLevel::SHARED);
+    // but not writable: neither half of "itemOwner&user,manager" is satisfied
+    EXPECT_THROW({
+        lockApi->lock(othersResourceId, othersUuid, lock::LockLevel::EXCLUSIVE);
+    }, core::Exception);
+    expectUnlockTo(othersResourceId, othersUuid, lock::LockLevel::NONE, lock::LockLevel::NONE);
 
     // its own file, in the same store: `itemOwner&user` is
     std::string ownResourceId;

@@ -1090,9 +1090,7 @@ TEST_F(ThreadUsingGroupsTest, user_role_grantee_permissions) {
 
 TEST_F(ThreadUsingGroupsTest, manager_role_grantee_permissions) {
     // The same thread under the stronger role. `item.update` is "itemOwner&user,manager", so the second
-    // alternative is met through the grant alone; `update` needs the grantee to name itself a direct manager,
-    // because `updaterIsRemovedFromManagersAndItIsForbidden` compares the submitted `managers` against the
-    // group-aware copy the grant put user_2 into; `delete` is guarded by the policy atom alone.
+    // alternative is met through the grant alone, and so are `update` and `delete`.
     group::Group group_2;
     ASSERT_NO_THROW({ group_2 = groupApi->getGroup(reader->getString("Group_2.groupId")); });
     ASSERT_EQ(group_2.statusCode, 0);
@@ -1148,32 +1146,15 @@ TEST_F(ThreadUsingGroupsTest, manager_role_grantee_permissions) {
         .groupId = group_2.groupId, .role = "manager", .groupPubKey = group_2.groupPubKey
     }};
 
-    EXPECT_THROW({
-        threadApi->updateThread(
-            threadId,
-            std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("trap_public"),
-            core::Buffer::from("trap_private"),
-            t.version,
-            false,
-            false,
-            std::nullopt,
-            grant
-        );
-    }, server::AccessDeniedException);
-
-    // Same call, same version - the refusal above left the thread untouched - but now naming user_2 as a
-    // manager of the container itself.
+    // May update the container without naming itself a direct manager: the grant it is keeping is what makes
+    // it one, so "modifier has to belong to managers" has nothing to object to.
     EXPECT_NO_THROW({
         threadApi->updateThread(
             threadId,
             std::vector<core::UserWithPubKey>{user(1)},
-            std::vector<core::UserWithPubKey>{
-                user(1), user(2)
-            },
-            core::Buffer::from("promoted_public"),
-            core::Buffer::from("promoted_private"),
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("kept_public"),
+            core::Buffer::from("kept_private"),
             t.version,
             false,
             false,
@@ -1185,8 +1166,26 @@ TEST_F(ThreadUsingGroupsTest, manager_role_grantee_permissions) {
     thread::Thread updated;
     EXPECT_NO_THROW({ updated = threadApi->getThread(threadId); });
     EXPECT_EQ(updated.statusCode, 0);
-    EXPECT_EQ(updated.privateMeta.stdString(), "promoted_private");
-    EXPECT_EQ(std::count(updated.managers.begin(), updated.managers.end(), reader->getString("Login.user_2_id")), 1);
+    EXPECT_EQ(updated.privateMeta.stdString(), "kept_private");
+    // Still a manager through the grant alone - the update it just made did not make it a direct one.
+    EXPECT_EQ(std::count(updated.managers.begin(), updated.managers.end(), reader->getString("Login.user_2_id")), 0);
+
+    // But it may not revoke the grant its own manager role rides on while leaving itself off the managers:
+    // that is the self-lockout `updaterCanBeRemovedFromManagers` forbids by default.
+    EXPECT_THROW({
+        threadApi->updateThread(
+            threadId,
+            std::vector<core::UserWithPubKey>{user(1)},
+            std::vector<core::UserWithPubKey>{user(1)},
+            core::Buffer::from("revoked_public"),
+            core::Buffer::from("revoked_private"),
+            updated.version,
+            false,
+            false,
+            std::nullopt,
+            std::vector<core::GroupGrantWithKey>{}
+        );
+    }, server::AccessDeniedException);
 
     // and may destroy it - last, because nothing else can run afterwards
     EXPECT_NO_THROW({ threadApi->deleteThread(threadId); });
