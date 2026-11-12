@@ -213,7 +213,7 @@ protected:
             rotateContainerKeys<TRotateModel>(
                 moduleId, container, roster.users, roster.managers, container.version, false, {}, sendRotateRequest
             );
-        } catch (const privmx::endpoint::core::Exception& e) { 
+        } catch (const privmx::endpoint::core::Exception& e) {
             absorbAutoRekeyFailure(moduleId, e, forwardSecrecyEnforced);
         }
     }
