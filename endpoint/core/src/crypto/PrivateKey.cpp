@@ -105,6 +105,12 @@ PrivateKey PrivateKey::generateRandom() {
     return generateRandom(defaultKeyAlgorithm());
 }
 
+// Takes the algorithm from the key rather than from this build, for the same reason `fromWIF` does: what
+// an identity is, is decided where it lives, not by how the client minting it happened to be configured.
+PrivateKey PrivateKey::generateRandomLike(const PublicKey& identity) {
+    return generateRandom(identity.algorithm());
+}
+
 PrivateKey PrivateKey::generateRandom(cs::AsymAlg algorithm) {
     return mapCryptoErrors("PrivateKey::generateRandom", [&] {
         if (!keyAlgorithmNeedsAgreementKey(algorithm)) {

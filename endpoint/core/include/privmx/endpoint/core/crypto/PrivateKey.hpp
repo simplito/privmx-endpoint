@@ -58,6 +58,22 @@ public:
     static PrivateKey generateRandom();
     static PrivateKey generateRandom(privmx::cryptoservice::AsymAlg algorithm);
 
+    /**
+     * @brief A fresh random key of the same algorithm as an identity that already exists.
+     *
+     * The form to reach for when minting an identity that has to work **alongside** others — a user
+     * joining a context, a member being added to a group. Such identities are not independent: a
+     * container key reaches a member by Diffie-Hellman with their public key, so every identity meeting
+     * in one place has to share an algorithm. That algorithm is a property of the place, which this
+     * build has no way of knowing; `generateRandom()` would answer with whatever
+     * `PRIVMX_DEFAULT_KEY_ALGORITHM` it was compiled with and produce an identity the place refuses.
+     *
+     * Any existing identity from that place will do — they all name the same algorithm, which is the
+     * invariant the bridge keeps (a user whose key is of another algorithm is refused at
+     * `addUserToContext`). `listContextUsers` is one way to get one.
+     */
+    static PrivateKey generateRandomLike(const PublicKey& identity);
+
     /// @brief An empty handle. Anything beyond `empty()` throws.
     PrivateKey() = default;
 

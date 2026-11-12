@@ -229,8 +229,11 @@ TEST(KeyAlgorithm, AnEd25519IdentityLoadsOnAnyBuild) {
 TEST(KeyAlgorithm, DerivedAndGeneratedKeysHonourTheAlgorithmTheyAreGiven) {
     const std::string secret = PrivateKey::fromWIF(WIF).getPrivateEncKey();
 
+    // Every algorithm an identity can be, the post-quantum one included: a build defaulting to one of
+    // them must still be able to mint the others, or a client could not join a context unlike itself.
     for (const auto algorithm :
-         {privmx::cryptoservice::AsymAlg::PrivmxSecp256k1, privmx::cryptoservice::AsymAlg::ED25519}) {
+         {privmx::cryptoservice::AsymAlg::PrivmxSecp256k1, privmx::cryptoservice::AsymAlg::ED25519,
+          privmx::cryptoservice::AsymAlg::X25519MLKEM768}) {
         EXPECT_EQ(algorithm, PrivateKey::fromRaw(secret, algorithm).algorithm());
         EXPECT_EQ(algorithm, PrivateKey::generateRandom(algorithm).algorithm());
         // Deterministic, so two readers of the same container key reach the same keypair.
@@ -246,6 +249,29 @@ TEST(KeyAlgorithm, DerivedAndGeneratedKeysHonourTheAlgorithmTheyAreGiven) {
         PrivateKey::fromRaw(secret, privmx::cryptoservice::AsymAlg::PrivmxSecp256k1).getPublicKey().toBase58DER(),
         PrivateKey::fromRaw(secret, privmx::cryptoservice::AsymAlg::ED25519).getPublicKey().toBase58DER()
     );
+}
+
+/**
+ * Minting an identity that has to live beside others takes its algorithm from one of them.
+ *
+ * This is the gap that made a client built for one algorithm unusable against a context made of
+ * another: `generateRandom()` can only answer with what the build was configured with, and what a new
+ * identity has to be is a property of where it is going, which the build cannot know.
+ */
+TEST(KeyAlgorithm, AKeyMintedLikeAnotherSharesItsAlgorithmAndCanAgreeWithIt) {
+    for (const auto algorithm :
+         {privmx::cryptoservice::AsymAlg::PrivmxSecp256k1, privmx::cryptoservice::AsymAlg::ED25519,
+          privmx::cryptoservice::AsymAlg::X25519MLKEM768}) {
+        const PrivateKey seated = PrivateKey::generateRandom(algorithm);
+        const PrivateKey newcomer = PrivateKey::generateRandomLike(seated.getPublicKey());
+
+        EXPECT_EQ(algorithm, newcomer.algorithm());
+        EXPECT_NE(seated.getPublicKey().toBase58DER(), newcomer.getPublicKey().toBase58DER()) << "not fresh";
+        // The point of matching: a container key can be wrapped between the two. Diffie-Hellman across
+        // two algorithms has no meaning, so this is what `generateRandom()` would have broken.
+        EXPECT_FALSE(newcomer.derive(seated.getPublicKey()).empty());
+        EXPECT_EQ(newcomer.derive(seated.getPublicKey()), seated.derive(newcomer.getPublicKey()));
+    }
 }
 
 TEST(KeyAlgorithm, APrivateKeyThatNamesNothingWeCanReadIsRefused) {
