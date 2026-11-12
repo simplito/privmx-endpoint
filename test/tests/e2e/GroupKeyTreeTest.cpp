@@ -228,9 +228,12 @@ protected:
         }
     }
 
-    // A context user with a fresh key, seated nowhere.
+    // A context user with a fresh key, seated nowhere. Of the context's algorithm, not this build's: the
+    // bridge refuses a user whose key is not what the context is made of, and rightly so.
     core::PrivateKey registerOutsider(const std::string& userId) {
-        const auto key = core::PrivateKey::generateRandom();
+        const auto key = core::PrivateKey::generateRandomLike(
+            core::PrivateKey::fromWIF(privKeyOf(1)).getPublicKey()
+        );
         const std::string params = "{\"contextId\": \"" + contextId() + "\", \"userId\": \"" + userId +
             "\", \"userPubKey\": \"" + key.getPublicKey().toBase58DER() + "\"}";
         const std::string response = core::BackendRequester::backendRequest(
@@ -239,6 +242,17 @@ protected:
         );
         EXPECT_EQ(response.find("\"error\""), std::string::npos) << response;
         return key;
+    }
+
+    // `context/addUserToContext` for a key of a named algorithm, returning whatever the bridge answered.
+    std::string registerKeyOfAlgorithm(const std::string& userId, privmx::cryptoservice::AsymAlg algorithm) {
+        const auto key = core::PrivateKey::generateRandom(algorithm);
+        const std::string params = "{\"contextId\": \"" + contextId() + "\", \"userId\": \"" + userId +
+            "\", \"userPubKey\": \"" + key.getPublicKey().toBase58DER() + "\"}";
+        return core::BackendRequester::backendRequest(
+            getPlatformUrl(), reader->getString("Api.apiKeyId"), reader->getString("Api.apiKeySecret"), 0,
+            "context/addUserToContext", params
+        );
     }
 
     // user_1 creates {user_1, user_2, user_3} and moves it to `epoch` by removing user_3 (re-added in between).
@@ -1078,6 +1092,26 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_from_below_the_era_flo
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
     EXPECT_EQ(after.keyVersion, 3);
     EXPECT_NE(std::find(after.users.begin(), after.users.end(), user(2).userId), after.users.end());
+}
+
+TEST_F(GroupKeyTreeTest, SECURITY_a_context_refuses_an_identity_of_another_algorithm) {
+    // The policy level: a context holds identities of one algorithm, and the bridge is what keeps it that
+    // way. Without this a client built for one algorithm would seat a key the context cannot wrap to, and
+    // the mistake would only surface later, at the first group that tried to include it — blaming the user
+    // rather than the build that minted them.
+    const auto contextAlgorithm = core::PrivateKey::fromWIF(privKeyOf(1)).algorithm();
+    const auto otherAlgorithm = contextAlgorithm == privmx::cryptoservice::AsymAlg::PrivmxSecp256k1
+        ? privmx::cryptoservice::AsymAlg::ED25519
+        : privmx::cryptoservice::AsymAlg::PrivmxSecp256k1;
+
+    const std::string refusal = registerKeyOfAlgorithm("algorithm_outsider", otherAlgorithm);
+    EXPECT_NE(refusal.find("\"error\""), std::string::npos)
+        << "the bridge seated an identity of another algorithm: " << refusal;
+
+    // Control: the very same call with the context's own algorithm goes through, so the refusal above is
+    // about the algorithm and not about the call being malformed.
+    const std::string accepted = registerKeyOfAlgorithm("algorithm_insider", contextAlgorithm);
+    EXPECT_EQ(accepted.find("\"error\""), std::string::npos) << accepted;
 }
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_group_key_in_another_spelling_is_refused) {

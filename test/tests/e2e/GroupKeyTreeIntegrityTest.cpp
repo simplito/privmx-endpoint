@@ -99,8 +99,14 @@ protected:
         std::string privKey;
         std::string pubKey;
     };
+    // Minted to match the context, not this build: `PRIVMX_DEFAULT_KEY_ALGORITHM` decides what a client
+    // generates when nothing else says, and a newcomer to a context is exactly the case where something
+    // else does. Running these tests against a dataset of another algorithm used to fail here, with the
+    // bridge rightly refusing an identity the context is not made of.
     Identity newIdentity(const std::string& userId) {
-        const core::PrivateKey key = core::PrivateKey::generateRandom();
+        const core::PrivateKey key = core::PrivateKey::generateRandomLike(
+            core::PrivateKey::fromWIF(privKeyOf(1)).getPublicKey()
+        );
         return Identity{
             .userId = userId, .privKey = key.toWIF(), .pubKey = key.getPublicKey().toBase58DER()
         };
@@ -1390,9 +1396,11 @@ TEST_F(GroupKeyTreeIntegrityTest, SECURITY_an_unsigned_v1_key_entry_never_become
         forged.push_back(core::server::KeyEntrySet{
             .user = user(index).userId,
             .keyId = forgedKeyId,
+            // The ephemeral sender has to be on the recipient's curve — Diffie-Hellman has no meaning
+            // otherwise — so it is minted from the recipient rather than to this build's default.
             .data = core::Ecies::encryptToBase64(
                 core::PublicKey::fromBase58DER(user(index).pubKey), std::string(32, '\x5a'),
-                core::PrivateKey::generateRandom()
+                core::PrivateKey::generateRandomLike(core::PublicKey::fromBase58DER(user(index).pubKey))
             )
         });
     }
