@@ -11,7 +11,6 @@ limitations under the License.
 
 #include <privmx/endpoint/core/ConnectionImpl.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
-#include <privmx/endpoint/core/ExceptionConverter.hpp>
 
 #include "privmx/endpoint/lock/LockApi.hpp"
 #include "privmx/endpoint/lock/LockApiImpl.hpp"
@@ -30,44 +29,21 @@ LockApi::LockApi(LockApi&& obj) : BaseApiClass(std::move(obj)) {}
 LockApi::~LockApi() {}
 
 LockApi LockApi::create(core::Connection& connection) {
-    try {
-        std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
-        std::shared_ptr<LockApiImpl> impl(new LockApiImpl(connectionImpl->getGateway()));
-        return LockApi(impl);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    std::shared_ptr<core::ConnectionImpl> connectionImpl = connection.getImpl();
+    std::shared_ptr<LockApiImpl> impl(new LockApiImpl(connectionImpl->getGateway()));
+    return LockApi(impl);
 }
 
 LockApi::LockApi(const std::shared_ptr<LockApiImpl>& impl) : BaseApiClass(impl) {}
 
 LockOperationResult LockApi::lock(const std::string& resourceId, const std::string& uuid, LockLevel lockLevel) {
-    auto impl = getImpl();
-    try {
-        return impl->lock(resourceId, uuid, lockLevel);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return getImpl()->lock(resourceId, uuid, lockLevel);
 }
 
 LockOperationResult LockApi::unlock(const std::string& resourceId, const std::string& uuid, LockLevel lockLevel) {
-    auto impl = getImpl();
-    try {
-        return impl->unlock(resourceId, uuid, lockLevel);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return getImpl()->unlock(resourceId, uuid, lockLevel);
 }
 
 bool LockApi::checkReservedLock(const std::string& resourceId, const std::string& uuid) {
-    auto impl = getImpl();
-    try {
-        return impl->checkReservedLock(resourceId, uuid);
-    } catch (const privmx::utils::PrivmxException& e) {
-        core::ExceptionConverter::rethrowAsCoreException(e);
-        throw core::Exception("ExceptionConverter rethrow error");
-    }
+    return getImpl()->checkReservedLock(resourceId, uuid);
 }

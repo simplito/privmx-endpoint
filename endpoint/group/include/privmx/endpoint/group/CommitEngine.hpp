@@ -20,7 +20,7 @@ limitations under the License.
 
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
-#include <privmx/utils/PrivmxException.hpp>
+#include <privmx/endpoint/core/Exception.hpp>
 
 #include "privmx/endpoint/group/GroupApiHooks.hpp"
 #include "privmx/endpoint/group/GroupSession.hpp"
@@ -57,7 +57,7 @@ public:
     static void commitWithRetry(const std::function<void()>& attempt);
 
     // A concurrent commit moved the generations or versions the refused one was planned against.
-    static bool isRetryableCommitRejection(const privmx::utils::PrivmxException& e);
+    static bool isRetryableCommitRejection(const privmx::endpoint::core::Exception& e);
 
     // Right after a read that verified, before planning on it: completes this client's unresolved commit to the
     // group, if any (resend, or noticing it landed: the pin is exactly it). Past its window, behind the pin, or

@@ -19,7 +19,6 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/core/Exception.hpp"
-#include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/cinterface/InterfaceException.hpp"
 #include <privmx/utils/PrivmxException.hpp>
 
@@ -31,7 +30,6 @@ class ExceptionHandler {
 public:
     static Poco::Dynamic::Var make_error(const std::string& message = "Unknown");
     static Poco::Dynamic::Var make_error(const endpoint::core::Exception& e);
-    static Poco::Dynamic::Var make_error(const utils::PrivmxException& e);
     static Poco::Dynamic::Var make_error(const Poco::Exception& e);
     static Poco::Dynamic::Var make_error(const std::exception& e);
 };
@@ -52,10 +50,6 @@ inline Poco::Dynamic::Var ExceptionHandler::make_error(const endpoint::core::Exc
     }
     error->set("__type", "Error");
     return error;
-}
-
-inline Poco::Dynamic::Var ExceptionHandler::make_error(const utils::PrivmxException& e) {
-    return make_error(endpoint::core::ExceptionConverter::convert(e));
 }
 
 inline Poco::Dynamic::Var ExceptionHandler::make_error(const Poco::Exception& e) {

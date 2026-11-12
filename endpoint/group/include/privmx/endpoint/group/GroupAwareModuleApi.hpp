@@ -119,8 +119,8 @@ protected:
         }
         try {
             return op(keys);
-        } catch (const privmx::utils::PrivmxException& e) {
-            auto code = core::ExceptionConverter::convert(e).getCode();
+        } catch (const privmx::endpoint::core::Exception& e) {
+            auto code = e.getCode();
             if (code == invalidKeyCode) {
                 return op(getNewModuleKeysAndUpdateCache(moduleId));
             }
@@ -213,15 +213,8 @@ protected:
             rotateContainerKeys<TRotateModel>(
                 moduleId, container, roster.users, roster.managers, container.version, false, {}, sendRotateRequest
             );
-        } catch (const privmx::utils::PrivmxException& e) {
+        } catch (const privmx::endpoint::core::Exception& e) { 
             absorbAutoRekeyFailure(moduleId, e, forwardSecrecyEnforced);
-        } catch (const core::Exception&) {
-            // Without forward secrecy this re-key is a courtesy, not a precondition: the write it runs ahead of is
-            // one the bridge takes on the old key anyway. So every way it can fail — a refusal, a grantee group
-            // this caller holds no seat in — leaves the container as it was and the write to proceed.
-            if (forwardSecrecyEnforced) {
-                throw;
-            }
         }
     }
 

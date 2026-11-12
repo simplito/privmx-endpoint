@@ -29,7 +29,7 @@ std::tuple<StreamRoom, core::DataIntegrityObject> StreamRoomDataSchemaStrategyV5
 ) const {
     return {
         StreamRoomDataSchemaMapper::toLibStreamRoom(
-            streamRoom, raw.publicMeta, raw.privateMeta, raw.statusCode, StreamRoomDataSchema::Version::VERSION_5
+            streamRoom, raw.publicMeta, raw.privateMeta, raw.statusCode(), StreamRoomDataSchema::Version::VERSION_5
         ),
         raw.dio
     };

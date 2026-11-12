@@ -220,8 +220,8 @@ DecryptedEncKeyV2 ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleKeys
 }
 
 void ContainerBaseApi::assertWriteKey(const DecryptedEncKey& key) {
-    if (key.statusCode != 0) {
-        throw EncryptionKeyValidationException("Current encryption key statusCode: " + std::to_string(key.statusCode));
+    if (key.error) {
+        throw EncryptionKeyValidationException("current encryption key cannot be used", *key.error);
     }
     if (key.dataStructureVersion != EncryptionKeyDataSchema::Version::VERSION_2) {
         throw EncryptionKeyValidationException("Current encryption key is not a signed (V2) key entry");
