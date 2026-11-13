@@ -120,7 +120,10 @@ if [[ "$RUN_E2E" -eq 1 ]]; then
         echo "Waiting for the backend to come up..."
         sleep 15
 
-        python3 test/runner/e2e_runner.py --tests-dir "$BUILD_DIR/test" --dataset-dir "$DATASET_DIR" \
+        # python3 and pip must link the system OpenSSL, so the conan runtime path is handed over
+        # in PRIVMX_RUNTIME_LD_LIBRARY_PATH and re-applied to the test binaries they spawn.
+        PRIVMX_RUNTIME_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" \
+            env -u LD_LIBRARY_PATH python3 test/runner/e2e_runner.py --tests-dir "$BUILD_DIR/test" --dataset-dir "$DATASET_DIR" \
             --docker-image "$BRIDGE_IMAGE" --max-workers $E2E_WORKERS \
             ${GTEST_FILTER_ARGS[@]+"${GTEST_FILTER_ARGS[@]}"}
         E2E_FAILED=$?

@@ -2,6 +2,7 @@
 #define _PRIVMXLIB_ENDPOINT_CORE_USERVERIFIERINTERFACE_HPP_
 
 #include "privmx/endpoint/core/Types.hpp"
+#include <cstdint>
 #include <optional>
 #include <string>
 

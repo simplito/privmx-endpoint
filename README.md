@@ -40,7 +40,8 @@ Conan resolves all dependencies automatically: `poco`, `openssl`, `gmp`, `pson`,
 **Manual steps:**
 ```bash
 mkdir -p ./build
-conan install . --output-folder=build --build=missing -s build_type=Debug
+conan install . --output-folder=build --build=missing -s build_type=Debug \
+  -c 'tools.build:cflags=["-std=gnu17"]'
 cd build
 source build/Debug/generators/conanbuild.sh
 cmake .. -G "Unix Makefiles" \
@@ -51,6 +52,9 @@ cmake .. -G "Unix Makefiles" \
 cmake --build . -- -j$(nproc)
 source build/Debug/generators/deactivate_conanbuild.sh
 ```
+
+> The `tools.build:cflags` setting is required on GCC 15+ and Clang 20+, which default to `-std=gnu23`.
+> The legacy `termcap` dependency (pulled in by `readline`) has K&R sources that no C23 compiler accepts.
 
 ### 2. Building without Conan (find_package)
 

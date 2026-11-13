@@ -15,6 +15,8 @@ LOG_DIR = SCRIPT_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 # run_tests.sh sets this so the unit and e2e phases of one run share a single log file.
 LOG_FILE_ENV_VAR = "PRIVMX_TEST_LOG_FILE"
+# run_tests.sh parks the conan runtime library path here instead of LD_LIBRARY_PATH.
+RUNTIME_LIBRARY_PATH_ENV_VAR = "PRIVMX_RUNTIME_LD_LIBRARY_PATH"
 
 MAX_WORKERS = 4
 TIMEOUT_PER_TEST = 300
@@ -66,6 +68,16 @@ def format_command(cmd: Sequence[str]) -> str:
     return shlex.join(str(part) for part in cmd)
 
 
+def spawn_env() -> dict[str, str]:
+    # The test binaries need the conan libraries that run_tests.sh kept out of this process,
+    # so that python itself could keep linking the system OpenSSL.
+    env = os.environ.copy()
+    runtime_library_path = env.pop(RUNTIME_LIBRARY_PATH_ENV_VAR, "")
+    if runtime_library_path:
+        env["LD_LIBRARY_PATH"] = runtime_library_path
+    return env
+
+
 def run_command(cmd: Sequence[str], timeout: int | None = None) -> tuple[int, bytes, bytes]:
     command = [str(part) for part in cmd]
     log(f"$ {format_command(command)}")
@@ -74,6 +86,7 @@ def run_command(cmd: Sequence[str], timeout: int | None = None) -> tuple[int, by
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=spawn_env(),
         )
     except OSError as exc:
         return 127, b"", str(exc).encode("utf-8", errors="replace")

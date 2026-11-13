@@ -12,10 +12,12 @@ limitations under the License.
 #ifndef _PRIVMXLIB_RPC_DRIVER_WEBSOCKETCHANNEL_HPP_
 #define _PRIVMXLIB_RPC_DRIVER_WEBSOCKETCHANNEL_HPP_
 
+#include <atomic>
 #include <chrono>
 #include <future>
 #include <functional>
 #include <istream>
+#include <mutex>
 #include <unordered_map>
 
 #include <privmx/drv/net.h>
@@ -70,6 +72,10 @@ private:
     std::thread _process_incoming_data_thread;
     std::thread _ping_thread;
     std::condition_variable _connected_cv;
+    // The driver calls back through a raw pointer to this channel, so teardown has to shut new
+    // callbacks out and wait for one that is already running. Recursive: a callback may disconnect.
+    std::atomic_bool _disconnecting = false;
+    std::recursive_mutex _callback_mutex;
 };
 
 } // driverimpl

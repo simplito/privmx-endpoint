@@ -14,6 +14,7 @@ limitations under the License.
 
 #include "privmx/endpoint/stream/webrtc/OnTrackInterface.hpp"
 #include "privmx/endpoint/stream/webrtc/Types.hpp"
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <privmx/endpoint/core/BaseApiClass.hpp>

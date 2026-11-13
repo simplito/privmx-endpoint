@@ -10,7 +10,17 @@ else
 fi
 
 function server_curl {
-    local JSON=$(curl -s -X POST $URL --data-binary "{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"$1\", \"params\": $2}" -H "Authorization: Basic $AUTH")
+    # curl is a system binary and must link the system OpenSSL, not the older one the conan
+    # runtime env puts on LD_LIBRARY_PATH for the test binaries.
+    local JSON
+    if ! JSON=$(env -u LD_LIBRARY_PATH curl -s -X POST $URL --data-binary "{\"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"$1\", \"params\": $2}" -H "Authorization: Basic $AUTH"); then
+        echo "Bridge request '$1' failed: curl could not run" >&2
+        exit 1
+    fi
+    if [ -z "$JSON" ]; then
+        echo "Bridge request '$1' returned an empty response" >&2
+        exit 1
+    fi
     sleep 0.5
     echo "$JSON"
 }

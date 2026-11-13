@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_STREAM_EVENTS_HPP_
 
 #include "privmx/endpoint/stream/Types.hpp"
+#include <cstdint>
 #include <privmx/endpoint/core/Events.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 

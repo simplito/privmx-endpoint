@@ -2,6 +2,7 @@
 #define _PRIVMXLIB_ENDPOINT_EVENT_EVENTAPI_TYPES_HPP_
 
 #include "privmx/endpoint/core/Types.hpp"
+#include <cstdint>
 
 namespace privmx {
 namespace endpoint {
