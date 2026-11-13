@@ -49,11 +49,14 @@ enum class SuiteId : std::uint8_t {
  * Writing: the suite chosen for the operation (`defaultForWrite()` when nothing says otherwise).
  * Reading: always the tag read from the data.
  *
- * **Scope.** This layer covers data encrypted with the container's key. It does **not** cover the
- * integrity layer — DIO field checksums and `EncKeyV2.secretHash` stay on fixed SHA-256, versioned
- * by those structures' `structureVersion`. The reason: a reader has to know up front what to verify
- * with, and a DIO carries no suite tag; it is also part of the envelope rather than of what happens
- * inside the container. Do not move them onto this layer without changing the DIO format.
+ * **Scope.** This layer covers data encrypted with the container's key **and** the integrity layer
+ * over it: the DIO field checksums and `EncKeyV2.secretHash` follow the container's suite too. They
+ * can, because the DIO records the suite it was written with (`DataIntegrityObject.cryptoSuite`), so
+ * a reader takes it from the data instead of having to know it up front — and that field is inside
+ * the signed bytes, so it cannot be rewritten to name a weaker suite.
+ *
+ * What this layer does **not** cover is hashes pinned by a format rather than chosen: see
+ * `FormatHash` for the list and for why each one is pinned.
  *
  * Frame produced by `encrypt()`:
  * @code

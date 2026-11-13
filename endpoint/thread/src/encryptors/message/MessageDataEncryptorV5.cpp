@@ -15,7 +15,6 @@ limitations under the License.
 #include "privmx/endpoint/thread/Constants.hpp"
 #include "privmx/endpoint/thread/ThreadException.hpp"
 #include "privmx/utils/Utils.hpp"
-#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 using namespace privmx::endpoint;
@@ -30,25 +29,25 @@ server::EncryptedMessageDataV5 MessageDataEncryptorV5::encrypt(
     result.version = MessageDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta = _dataEncryptor.signAndEncode(messageData.publicMeta, authorPrivateKey);
-    fieldChecksums.insert(std::make_pair("publicMeta", core::FormatHash::sha256(result.publicMeta)));
+    fieldChecksums.insert(std::make_pair("publicMeta", encryptionKey.suite.hash(result.publicMeta)));
     try {
         result.publicMetaObject = utils::Utils::parseJsonObject(messageData.publicMeta.stdString());
     } catch (...) { result.publicMetaObject = Poco::Dynamic::Var(); }
     result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(
         messageData.privateMeta, authorPrivateKey, encryptionKey
     );
-    fieldChecksums.insert(std::make_pair("privateMeta", core::FormatHash::sha256(result.privateMeta)));
+    fieldChecksums.insert(std::make_pair("privateMeta", encryptionKey.suite.hash(result.privateMeta)));
     result.data = _dataEncryptor.signAndEncryptAndEncode(messageData.data, authorPrivateKey, encryptionKey);
-    fieldChecksums.insert(std::make_pair("data", core::FormatHash::sha256(result.data)));
+    fieldChecksums.insert(std::make_pair("data", encryptionKey.suite.hash(result.data)));
     if (messageData.internalMeta.has_value()) {
         result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(
             messageData.internalMeta.value(), authorPrivateKey, encryptionKey
         );
-        fieldChecksums.insert(std::make_pair("internalMeta", core::FormatHash::sha256(result.internalMeta.value())));
+        fieldChecksums.insert(std::make_pair("internalMeta", encryptionKey.suite.hash(result.internalMeta.value())));
     }
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
     core::ExpandedDataIntegrityObject expandedDio = {
-        messageData.dio, MessageDataSchema::Version::VERSION_5, fieldChecksums
+        messageData.dio, MessageDataSchema::Version::VERSION_5, fieldChecksums, encryptionKey.suite
     };
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;
@@ -129,11 +128,11 @@ core::DataIntegrityObject MessageDataEncryptorV5::getDIOAndAssertIntegrity(
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedMessageData.dio);
     if (dio.structureVersion != MessageDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedMessageData.authorPubKey ||
-        dio.fieldChecksums.at("publicMeta") != core::FormatHash::sha256(encryptedMessageData.publicMeta) ||
-        dio.fieldChecksums.at("privateMeta") != core::FormatHash::sha256(encryptedMessageData.privateMeta) ||
-        dio.fieldChecksums.at("data") != core::FormatHash::sha256(encryptedMessageData.data) ||
+        dio.fieldChecksums.at("publicMeta") != dio.suite.hash(encryptedMessageData.publicMeta) ||
+        dio.fieldChecksums.at("privateMeta") != dio.suite.hash(encryptedMessageData.privateMeta) ||
+        dio.fieldChecksums.at("data") != dio.suite.hash(encryptedMessageData.data) ||
         (encryptedMessageData.internalMeta.has_value() &&
-         dio.fieldChecksums.at("internalMeta") != core::FormatHash::sha256(encryptedMessageData.internalMeta.value())
+         dio.fieldChecksums.at("internalMeta") != dio.suite.hash(encryptedMessageData.internalMeta.value())
         )) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }

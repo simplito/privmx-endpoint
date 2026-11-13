@@ -204,7 +204,7 @@ void GroupMetadata::writeMeta(
     // cannot disagree.
     const dynamic::MetaBlock block{
         .metaTag = (publicPlane ? GroupDataSchemaMapper::publicMetaTag : GroupDataSchemaMapper::privateMetaTag)(
-            w.ctx.key.key, w.currentEpoch, version + 1
+            w.ctx.key.suite, w.ctx.key.key, w.currentEpoch, version + 1
         ),
         .keyId = w.ctx.key.id,
         .keyVersion = w.currentEpoch,
@@ -224,7 +224,9 @@ void GroupMetadata::writeMeta(
         server::GroupUpdatePublicMetaModel model;
         fill(model);
         model.data = mapper.encryptPublicMeta(
-            GroupPublicMetaToEncryptV5{.publicMeta = meta, .dio = w.ctx.dio, .meta = block}
+            GroupPublicMetaToEncryptV5{
+                .publicMeta = meta, .dio = w.ctx.dio, .meta = block, .suite = w.ctx.key.suite
+            }
         );
         deps.serverApi.groupUpdatePublicMeta(model);
     } else {

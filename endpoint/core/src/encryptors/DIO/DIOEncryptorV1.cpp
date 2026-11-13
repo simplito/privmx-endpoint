@@ -17,6 +17,9 @@ limitations under the License.
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Utils.hpp>
 
+#include <cstdint>
+#include <limits>
+
 using namespace privmx::endpoint::core;
 
 std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio, const core::PrivateKey& authorKey) {
@@ -39,6 +42,9 @@ std::string DIOEncryptorV1::signAndEncode(const ExpandedDataIntegrityObject& dio
     dioJSON.containerResourceId = dio.containerResourceId;
     dioJSON.fieldChecksums = std::unordered_map<std::string, std::string>();
     dioJSON.structureVersion = dio.structureVersion;
+    // Recorded so the checksums can be verified without the reader knowing the container's suite.
+    // Inside the signed bytes, so naming a weaker suite breaks the signature.
+    dioJSON.cryptoSuite = static_cast<int64_t>(dio.suite.id());
     dioJSON.bridgeIdentity = std::nullopt;
     for (const auto& checksum : dio.fieldChecksums) {
         dioJSON.fieldChecksums.insert_or_assign(checksum.first, privmx::utils::Base64::from(checksum.second));
@@ -93,8 +99,22 @@ ExpandedDataIntegrityObject DIOEncryptorV1::decodeAndVerify(const std::string& s
             .containerResourceId = dioJSON.containerResourceId,
             .bridgeIdentity = bridgeIdentity
         },
-        dioJSON.structureVersion, fieldChecksums
+        dioJSON.structureVersion, fieldChecksums, suiteOf(dioJSON)
     };
+}
+
+CryptoSuite DIOEncryptorV1::suiteOf(const dynamic::DataIntegrityObject& dioJSON) {
+    // A DIO from before the format carried a suite names none, and those checksums are SHA-256.
+    if (!dioJSON.cryptoSuite.has_value()) {
+        return CryptoSuite::forId(SuiteId::Aes256GcmSha256);
+    }
+    const auto id = dioJSON.cryptoSuite.value();
+    // Checked here rather than let through to `forId`, so a value outside the enum's range — which
+    // the cast below would otherwise turn into an arbitrary `SuiteId` — fails as what it is.
+    if (id < 0 || id > static_cast<int64_t>(std::numeric_limits<std::uint8_t>::max())) {
+        throw UnknownCryptoSuiteException(std::to_string(id));
+    }
+    return CryptoSuite::forId(static_cast<SuiteId>(static_cast<std::uint8_t>(id)));
 }
 
 void DIOEncryptorV1::assertDataFormat(const dynamic::DataIntegrityObject& dioJSON) {

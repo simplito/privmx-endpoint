@@ -33,6 +33,18 @@ struct GroupPublicMetaToEncryptV5 {
     core::Buffer publicMeta;
     core::DataIntegrityObject dio;
     dynamic::MetaBlock meta;
+    /**
+     * The suite this plane's DIO checksums are computed with.
+     *
+     * Carried here rather than taken from a key, because the public plane is signed and not
+     * encrypted, so no `EncKey` reaches this far — it is the one place in the group where the
+     * suite has no other way in. Callers pass the group's own key's suite, so both planes of a
+     * group are checksummed alike.
+     *
+     * Deliberately without a default: `CryptoSuite` has no default constructor, so a call site
+     * that forgets it fails to compile instead of quietly falling back to this build's choice.
+     */
+    core::CryptoSuite suite;
 };
 
 struct DecryptedGroupPublicMetaV5 : public core::DecryptedVersionedData {

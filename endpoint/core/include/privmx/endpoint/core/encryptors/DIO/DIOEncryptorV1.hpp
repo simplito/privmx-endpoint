@@ -30,6 +30,8 @@ public:
 
 private:
     void assertDataFormat(const dynamic::DataIntegrityObject& dioJSON);
+    /// @throws UnknownCryptoSuiteException when the DIO names a suite this build does not know
+    static CryptoSuite suiteOf(const dynamic::DataIntegrityObject& dioJSON);
     DataInnerEncryptorV4 _dataEncryptor;
 };
 

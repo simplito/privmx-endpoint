@@ -14,7 +14,6 @@ limitations under the License.
 #include "privmx/endpoint/inbox/Constants.hpp"
 #include "privmx/endpoint/inbox/DynamicTypes.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
-#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 using namespace privmx::endpoint;
@@ -43,7 +42,7 @@ server::InboxData InboxDataProcessorV5::packForServer(
         plainData.privateData.privateMeta, authorPrivateKey, inboxKey
     );
     privateDataMapOfDataSha256.insert(
-        std::make_pair("privateMeta", core::FormatHash::sha256(serverPrivateData.privateMeta))
+        std::make_pair("privateMeta", inboxKey.suite.hash(serverPrivateData.privateMeta))
     );
 
     dynamic::InboxInternalMetaV5 internalMetaObj{
@@ -55,11 +54,11 @@ server::InboxData InboxDataProcessorV5::packForServer(
         core::Buffer::from(internalMetaObj.serialize()), authorPrivateKey, inboxKey
     );
     privateDataMapOfDataSha256.insert(
-        std::make_pair("internalMeta", core::FormatHash::sha256(serverPrivateData.internalMeta))
+        std::make_pair("internalMeta", inboxKey.suite.hash(serverPrivateData.internalMeta))
     );
     serverPrivateData.authorPubKey = authorPubKeyECC;
     core::ExpandedDataIntegrityObject privateDataExpandedDio = {
-        plainData.privateData.dio, InboxDataSchema::Version::VERSION_5, privateDataMapOfDataSha256
+        plainData.privateData.dio, InboxDataSchema::Version::VERSION_5, privateDataMapOfDataSha256, inboxKey.suite
     };
     serverPrivateData.dio = _DIOEncryptor.signAndEncode(privateDataExpandedDio, authorPrivateKey);
 
@@ -178,8 +177,8 @@ core::DataIntegrityObject InboxDataProcessorV5::getDIOAndAssertIntegrity(
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedPrivateData.dio);
     if (dio.structureVersion != InboxDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedPrivateData.authorPubKey ||
-        dio.fieldChecksums.at("privateMeta") != core::FormatHash::sha256(encryptedPrivateData.privateMeta) ||
-        dio.fieldChecksums.at("internalMeta") != core::FormatHash::sha256(encryptedPrivateData.internalMeta)) {
+        dio.fieldChecksums.at("privateMeta") != dio.suite.hash(encryptedPrivateData.privateMeta) ||
+        dio.fieldChecksums.at("internalMeta") != dio.suite.hash(encryptedPrivateData.internalMeta)) {
         throw core::InvalidDataIntegrityObjectChecksumException();
     }
     return dio;

@@ -95,7 +95,12 @@ public:
 
     // `HMAC(subkey, epoch | rosterVersion | roster)`. Lists are sorted and length-prefixed so one roster's tag
     // cannot match another's under a different split; `rosterVersion` binds the counter the monotone pin checks.
+    //
+    // The suite comes first because it decides what the tag *is*, and it is the container's, never this
+    // build's: both ends read it off the key entry they already hold (`EncKey::suite`), so a writer and a
+    // reader configured differently still compute the same tag.
     static std::string rosterTag(
+        core::CryptoSuite suite,
         const std::string& key,
         int64_t keyVersion,
         int64_t rosterVersion,
@@ -123,15 +128,25 @@ public:
 
     // `HMAC(subkey, "publicMeta" | epoch | publicMetaVersion)`. Key-bound rather than merely signed: nothing in
     // this plane is encrypted, so a bridge with a keypair of its own could otherwise re-author the envelope.
-    static std::string publicMetaTag(const std::string& key, int64_t keyVersion, int64_t metaVersion);
+    static std::string publicMetaTag(
+        core::CryptoSuite suite,
+        const std::string& key,
+        int64_t keyVersion,
+        int64_t metaVersion
+    );
 
     // `HMAC(subkey, "privateMeta" | epoch | privateMetaVersion)`. This plane also sign-and-encrypts under the
     // content key, with every field verified against the one `authorPubKey` the DIO pins.
-    static std::string privateMetaTag(const std::string& key, int64_t keyVersion, int64_t metaVersion);
+    static std::string privateMetaTag(
+        core::CryptoSuite suite,
+        const std::string& key,
+        int64_t keyVersion,
+        int64_t metaVersion
+    );
 
     // One subkey per tag purpose, derived from the epoch's content key, which is also the AES key for the meta
-    // planes. `Crypto::kdf` gives distinct purposes independent keys, so preimages cannot collide by prefix.
-    static std::string tagSubkey(const std::string& contentKey, const std::string& purpose);
+    // planes. The suite's KDF gives distinct purposes independent keys, so preimages cannot collide by prefix.
+    static std::string tagSubkey(core::CryptoSuite suite, const std::string& contentKey, const std::string& purpose);
 
     // The status code, plus the roster head's DIO when that code is 0.
     std::pair<uint32_t, core::DataIntegrityObject> validateDataIntegrity(const server::GroupInfo& groupInfo);
@@ -206,6 +221,7 @@ private:
     // One preimage builder for both metadata planes, so the canonical form cannot drift between them. `domain`
     // names the plane in both the subkey label and the payload.
     static std::string metaPlaneTag(
+        core::CryptoSuite suite,
         const char* domain,
         const std::string& key,
         int64_t keyVersion,

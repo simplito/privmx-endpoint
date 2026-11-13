@@ -248,17 +248,18 @@ std::string GroupOperations::create(
         .publicMeta = publicMeta,
         .dio = publicMetaDio,
         .meta = dynamic::MetaBlock{
-            .metaTag = GroupDataSchemaMapper::publicMetaTag(ctx.key.key, 1, 1),
+            .metaTag = GroupDataSchemaMapper::publicMetaTag(ctx.key.suite, ctx.key.key, 1, 1),
             .keyId = ctx.key.id,
             .keyVersion = 1,
             .metaVersion = 1
-        }
+        },
+        .suite = ctx.key.suite
     };
     GroupPrivateMetaToEncryptV5 privateMetaToEncrypt{
         .privateMeta = privateMeta,
         .dio = privateMetaDio,
         .meta = dynamic::MetaBlock{
-            .metaTag = GroupDataSchemaMapper::privateMetaTag(ctx.key.key, 1, 1),
+            .metaTag = GroupDataSchemaMapper::privateMetaTag(ctx.key.suite, ctx.key.key, 1, 1),
             .keyId = ctx.key.id,
             .keyVersion = 1,
             .metaVersion = 1

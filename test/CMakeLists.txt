@@ -153,6 +153,10 @@ target_link_libraries(test_unit_CryptoSuiteTest privmx privmxendpointcore Poco::
 target_compile_definitions(test_unit_CryptoSuiteTest
     PRIVATE PRIVMX_DEFAULT_CRYPTO_SUITE_ID=${PRIVMX_DEFAULT_CRYPTO_SUITE_ID})
 
+# The integrity layer's half of the suite choice: the suite a DIO records, and that the signature covers it.
+add_executable(test_unit_DioSuiteTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/DioSuiteTest.cpp)
+target_link_libraries(test_unit_DioSuiteTest privmx privmxendpointcore Poco::Foundation Poco::JSON GTest::GTest GTest::Main)
+
 # Real EC keys and ECIES (creates, climbs, commits and removes members from trees entirely in-process; still no server/docker/network)
 add_executable(test_unit_TreeKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeKeysTest.cpp)
 target_link_libraries(test_unit_TreeKeysTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)

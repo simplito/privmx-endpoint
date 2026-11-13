@@ -16,7 +16,6 @@ limitations under the License.
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
 #include "privmx/endpoint/core/ServerTypes.hpp"
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
-#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Utils.hpp>
 using namespace privmx::endpoint::core;
@@ -33,10 +32,10 @@ server::EncryptedKeyEntryDataV2 EncKeyEncryptorV2::encrypt(
     };
     result.encryptedKey = core::Ecies::encryptObjectToBase64(encryptionKey, keyToEncrypt.toJSON(), authorPrivateKey);
     std::unordered_map<std::string, std::string> fieldChecksums;
-    fieldChecksums.insert(std::make_pair("encryptedKey", FormatHash::sha256(result.encryptedKey)));
+    fieldChecksums.insert(std::make_pair("encryptedKey", key.suite.hash(result.encryptedKey)));
     fieldChecksums.insert(std::make_pair("secretHash", key.secretHash));
     ExpandedDataIntegrityObject expandedDio = ExpandedDataIntegrityObject{
-        key.dio, EncryptionKeyDataSchema::Version::VERSION_2, fieldChecksums
+        key.dio, EncryptionKeyDataSchema::Version::VERSION_2, fieldChecksums, key.suite
     };
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;
@@ -53,7 +52,12 @@ DecryptedEncKeyV2 EncKeyEncryptorV2::decrypt(
         assertDataFormat(encryptedEncKey);
         ExpandedDataIntegrityObject expandedDio = _DIOEncryptor.decodeAndVerify(encryptedEncKey.dio);
         result.dio = expandedDio;
-        if (expandedDio.fieldChecksums.at("encryptedKey") != FormatHash::sha256(encryptedEncKey.encryptedKey)) {
+        // The suite this entry was written under, so a decrypted key reports its own algorithm rather
+        // than this build's default. Everything keyed by the container key — the group's roster and
+        // metadata tags among them — reads it from here, and both ends of such a tag reach the same
+        // value because both read it off the key entry instead of deciding for themselves.
+        result.suite = expandedDio.suite;
+        if (expandedDio.fieldChecksums.at("encryptedKey") != expandedDio.suite.hash(encryptedEncKey.encryptedKey)) {
             throw InvalidDataIntegrityObjectChecksumException();
         }
         dynamic::EncryptionKey decryptedKey = dynamic::EncryptionKey::fromJSON(

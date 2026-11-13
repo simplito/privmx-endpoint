@@ -12,7 +12,6 @@ limitations under the License.
 #include "privmx/endpoint/core/encryptors/module/ModuleDataEncryptorV5.hpp"
 #include "privmx/endpoint/core/CoreException.hpp"
 #include "privmx/endpoint/core/ExceptionConverter.hpp"
-#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/endpoint/core/encryptors/module/Constants.hpp>
 #include <privmx/utils/Utils.hpp>
@@ -28,12 +27,12 @@ dynamic::EncryptedModuleDataV5 ModuleDataEncryptorV5::encrypt(
     result.version = ModuleDataSchema::Version::VERSION_5;
     std::unordered_map<std::string, std::string> fieldChecksums;
     result.publicMeta = _dataEncryptor.signAndEncode(kvdbData.publicMeta, authorPrivateKey);
-    fieldChecksums.insert(std::make_pair("publicMeta", FormatHash::sha256(result.publicMeta)));
+    fieldChecksums.insert(std::make_pair("publicMeta", encryptionKey.suite.hash(result.publicMeta)));
     try {
         result.publicMetaObject = utils::Utils::parseJsonObject(kvdbData.publicMeta.stdString());
     } catch (...) { result.publicMetaObject = Poco::Dynamic::Var(); }
     result.privateMeta = _dataEncryptor.signAndEncryptAndEncode(kvdbData.privateMeta, authorPrivateKey, encryptionKey);
-    fieldChecksums.insert(std::make_pair("privateMeta", FormatHash::sha256(result.privateMeta)));
+    fieldChecksums.insert(std::make_pair("privateMeta", encryptionKey.suite.hash(result.privateMeta)));
     dynamic::ModuleInternalMetaV5 internalMeta{
         .secret = kvdbData.internalMeta.secret,
         .resourceId = kvdbData.internalMeta.resourceId,
@@ -42,9 +41,9 @@ dynamic::EncryptedModuleDataV5 ModuleDataEncryptorV5::encrypt(
     result.internalMeta = _dataEncryptor.signAndEncryptAndEncode(
         Buffer::from(internalMeta.serialize()), authorPrivateKey, encryptionKey
     );
-    fieldChecksums.insert(std::make_pair("internalMeta", FormatHash::sha256(result.internalMeta)));
+    fieldChecksums.insert(std::make_pair("internalMeta", encryptionKey.suite.hash(result.internalMeta)));
     result.authorPubKey = authorPrivateKey.getPublicKey().toBase58DER();
-    ExpandedDataIntegrityObject expandedDio = {kvdbData.dio, 5, fieldChecksums};
+    ExpandedDataIntegrityObject expandedDio = {kvdbData.dio, 5, fieldChecksums, encryptionKey.suite};
     result.dio = _DIOEncryptor.signAndEncode(expandedDio, authorPrivateKey);
     return result;
 }
@@ -128,9 +127,9 @@ DataIntegrityObject ModuleDataEncryptorV5::getDIOAndAssertIntegrity(
     auto dio = _DIOEncryptor.decodeAndVerify(encryptedDIO);
     if (dio.structureVersion != ModuleDataSchema::Version::VERSION_5 ||
         dio.creatorPubKey != encryptedModuleData.authorPubKey ||
-        dio.fieldChecksums.at("publicMeta") != FormatHash::sha256(encryptedModuleData.publicMeta) ||
-        dio.fieldChecksums.at("privateMeta") != FormatHash::sha256(encryptedModuleData.privateMeta) ||
-        dio.fieldChecksums.at("internalMeta") != FormatHash::sha256(encryptedModuleData.internalMeta)) {
+        dio.fieldChecksums.at("publicMeta") != dio.suite.hash(encryptedModuleData.publicMeta) ||
+        dio.fieldChecksums.at("privateMeta") != dio.suite.hash(encryptedModuleData.privateMeta) ||
+        dio.fieldChecksums.at("internalMeta") != dio.suite.hash(encryptedModuleData.internalMeta)) {
         throw InvalidDataIntegrityObjectChecksumException();
     }
     return dio;

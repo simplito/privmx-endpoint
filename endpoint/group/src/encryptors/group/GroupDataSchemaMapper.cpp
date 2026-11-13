@@ -138,7 +138,8 @@ void GroupDataSchemaMapper::assertRosterIsAttested(
         throw GroupMembershipMismatchException();
     }
     const std::string expected = rosterTag(
-        rosterKey.key, membership.keyVersion, membership.rosterVersion, groupInfo.users, groupInfo.managers
+        rosterKey.suite, rosterKey.key, membership.keyVersion, membership.rosterVersion, groupInfo.users,
+        groupInfo.managers
     );
     if (expected != membership.rosterTag) {
         throw GroupMembershipMismatchException();
@@ -190,7 +191,7 @@ void GroupDataSchemaMapper::assertPublicMetaIsAttested(
         throw GroupMembershipMismatchException();
     }
     const std::string expected = publicMetaTag(
-        publicMetaKey.key, groupInfo.publicMeta.keyVersion, groupInfo.publicMeta.version
+        publicMetaKey.suite, publicMetaKey.key, groupInfo.publicMeta.keyVersion, groupInfo.publicMeta.version
     );
     if (expected != meta.metaTag) {
         throw GroupMembershipMismatchException();
@@ -235,7 +236,7 @@ void GroupDataSchemaMapper::assertPrivateMetaIsAttested(
         throw GroupMembershipMismatchException();
     }
     const std::string expected = privateMetaTag(
-        privateMetaKey.key, groupInfo.privateMeta.keyVersion, groupInfo.privateMeta.version
+        privateMetaKey.suite, privateMetaKey.key, groupInfo.privateMeta.keyVersion, groupInfo.privateMeta.version
     );
     if (expected != meta.metaTag) {
         throw GroupMembershipMismatchException();
@@ -257,7 +258,7 @@ dynamic::MembershipBlock GroupDataSchemaMapper::buildMembershipBlock(
 ) {
     return dynamic::MembershipBlock{
         .rosterTag = rosterTag(
-            key.key, keyVersion, rosterVersion, core::EndpointUtils::usersWithPubKeyToIds(users),
+            key.suite, key.key, keyVersion, rosterVersion, core::EndpointUtils::usersWithPubKeyToIds(users),
             core::EndpointUtils::usersWithPubKeyToIds(managers)
         ),
         .groupPubKey = groupPubKey,
@@ -284,6 +285,7 @@ PriorRole GroupDataSchemaMapper::priorOf(const server::GroupInfo& group) {
 }
 
 std::string GroupDataSchemaMapper::rosterTag(
+    core::CryptoSuite suite,
     const std::string& key,
     int64_t keyVersion,
     int64_t rosterVersion,
@@ -301,10 +303,11 @@ std::string GroupDataSchemaMapper::rosterTag(
     std::string payload = std::to_string(keyVersion) + "\n" + std::to_string(rosterVersion) + "\n";
     appendList(payload, users);
     appendList(payload, managers);
-    return privmx::utils::Hex::from(core::FormatHash::hmacSha256(tagSubkey(key, "roster-tag"), payload));
+    return privmx::utils::Hex::from(suite.mac(tagSubkey(suite, key, "roster-tag"), payload));
 }
 
 std::string GroupDataSchemaMapper::metaPlaneTag(
+    core::CryptoSuite suite,
     const char* domain,
     const std::string& key,
     int64_t keyVersion,
@@ -318,21 +321,35 @@ std::string GroupDataSchemaMapper::metaPlaneTag(
         "\n" +
         std::to_string(metaVersion) +
         "\n";
-    return privmx::utils::Hex::from(
-        core::FormatHash::hmacSha256(tagSubkey(key, std::string(domain) + "-tag"), payload)
-    );
+    return privmx::utils::Hex::from(suite.mac(tagSubkey(suite, key, std::string(domain) + "-tag"), payload));
 }
 
-std::string GroupDataSchemaMapper::tagSubkey(const std::string& contentKey, const std::string& purpose) {
-    return core::FormatHash::kdf(contentKey, "privmx/group/" + purpose, 32);
+std::string GroupDataSchemaMapper::tagSubkey(
+    core::CryptoSuite suite,
+    const std::string& contentKey,
+    const std::string& purpose
+) {
+    // Length given rather than taken from the suite's hash: this is a key, and the MAC below wants one
+    // of a fixed size whatever the hash behind it happens to produce.
+    return suite.deriveKey(contentKey, "privmx/group/" + purpose, 32);
 }
 
-std::string GroupDataSchemaMapper::publicMetaTag(const std::string& key, int64_t keyVersion, int64_t metaVersion) {
-    return metaPlaneTag("publicMeta", key, keyVersion, metaVersion);
+std::string GroupDataSchemaMapper::publicMetaTag(
+    core::CryptoSuite suite,
+    const std::string& key,
+    int64_t keyVersion,
+    int64_t metaVersion
+) {
+    return metaPlaneTag(suite, "publicMeta", key, keyVersion, metaVersion);
 }
 
-std::string GroupDataSchemaMapper::privateMetaTag(const std::string& key, int64_t keyVersion, int64_t metaVersion) {
-    return metaPlaneTag("privateMeta", key, keyVersion, metaVersion);
+std::string GroupDataSchemaMapper::privateMetaTag(
+    core::CryptoSuite suite,
+    const std::string& key,
+    int64_t keyVersion,
+    int64_t metaVersion
+) {
+    return metaPlaneTag(suite, "privateMeta", key, keyVersion, metaVersion);
 }
 
 // Head-entry integrity only: the DIO signature and field checksums, plus a comparison against the monotone version
@@ -652,7 +669,7 @@ core::ModuleInternalMetaV5 GroupDataSchemaMapper::decryptInternalMeta(
         // must stay tied to the identity, context and resource the DIO commits to.
         auto dio = _DIOEncryptor.decodeAndVerify(encData.dio);
         if (dio.creatorPubKey != encData.authorPubKey ||
-            dio.fieldChecksums.at("internalMeta") != core::FormatHash::sha256(encData.internalMeta)) {
+            dio.fieldChecksums.at("internalMeta") != dio.suite.hash(encData.internalMeta)) {
             return {};
         }
         auto raw = _dataEncryptor.decodeAndDecryptAndVerify(

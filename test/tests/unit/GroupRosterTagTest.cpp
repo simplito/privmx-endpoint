@@ -60,6 +60,11 @@ using privmx::endpoint::core::PrivateKey;
 
 // The group's grant key as served: a real point, since the membership block's copy is compared as one.
 const std::string PUB0 = PrivateKey::generateRandom().getPublicKey().toBase58DER();
+
+// The suite every tag here is computed under. A tag is only ever compared against another computed with
+// the same key entry, so one value throughout is what a real group looks like; which value it is does not
+// matter to these tests, only that both ends use it.
+const privmx::endpoint::core::CryptoSuite TAG_SUITE = privmx::endpoint::core::CryptoSuite::defaultForWrite();
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
@@ -131,7 +136,9 @@ protected:
             .membership =
                 dynamic::MembershipBlock{
                     .rosterTag =
-                        GroupDataSchemaMapper::rosterTag(tagKey, keyVersion, rosterVersion, users, managers),
+                        GroupDataSchemaMapper::rosterTag(
+                            TAG_SUITE, tagKey, keyVersion, rosterVersion, users, managers
+                        ),
                     .groupPubKey = PUB0,
                     .keyId = "key1",
                     .keyVersion = keyVersion,
@@ -150,11 +157,15 @@ protected:
             .dio = dioFor(group, "alice", "rnd2"),
             .meta =
                 dynamic::MetaBlock{
-                    .metaTag = GroupDataSchemaMapper::publicMetaTag(tagKey, publicMetaEpoch, publicMetaVersion),
+                    .metaTag =
+                        GroupDataSchemaMapper::publicMetaTag(TAG_SUITE, tagKey, publicMetaEpoch, publicMetaVersion),
                     .keyId = "metaKey1",
                     .keyVersion = publicMetaEpoch,
                     .metaVersion = publicMetaVersion
-                }
+                },
+            // The public plane carries no key, so it is told the suite outright — here the one a
+            // container of this build would write with, which is what the other planes use too.
+            .suite = core::CryptoSuite::defaultForWrite()
         };
         group.publicMeta = server::GroupMetaEntry{
             .version = publicMetaVersion,
@@ -170,7 +181,8 @@ protected:
             .dio = dioFor(group, "alice", "rnd3"),
             .meta =
                 dynamic::MetaBlock{
-                    .metaTag = GroupDataSchemaMapper::privateMetaTag(tagKey, privateMetaEpoch, privateMetaVersion),
+                    .metaTag =
+                        GroupDataSchemaMapper::privateMetaTag(TAG_SUITE, tagKey, privateMetaEpoch, privateMetaVersion),
                     .keyId = "metaKey1",
                     .keyVersion = privateMetaEpoch,
                     .metaVersion = privateMetaVersion
@@ -376,7 +388,8 @@ TEST_F(GroupRosterTag, PublicAndPrivateMetaTagsAreDomainSeparated) {
     // Two lines, and the whole reason the prefixes exist: both planes carry the same `MetaBlock` shape, so at
     // the same (epoch, version) an undomained tag would verify in either position.
     EXPECT_NE(
-        GroupDataSchemaMapper::publicMetaTag(encKey, 2, 7), GroupDataSchemaMapper::privateMetaTag(encKey, 2, 7)
+        GroupDataSchemaMapper::publicMetaTag(TAG_SUITE, encKey, 2, 7),
+        GroupDataSchemaMapper::privateMetaTag(TAG_SUITE, encKey, 2, 7)
     );
 }
 
@@ -545,9 +558,9 @@ TEST_F(GroupRosterTag, SECURITY_EachTagPurposeGetsItsOwnKey) {
     // The content key is also the AES key for the metadata fields and the HMAC key behind the tags. Disjoint
     // preimages are a convention someone must keep re-deriving; the subkeys make the separation structural.
     const std::string k = core::CryptoSuite::randomBytes(32);
-    const std::string roster = GroupDataSchemaMapper::tagSubkey(k, "roster-tag");
-    const std::string publicMeta = GroupDataSchemaMapper::tagSubkey(k, "publicMeta-tag");
-    const std::string privateMeta = GroupDataSchemaMapper::tagSubkey(k, "privateMeta-tag");
+    const std::string roster = GroupDataSchemaMapper::tagSubkey(TAG_SUITE, k, "roster-tag");
+    const std::string publicMeta = GroupDataSchemaMapper::tagSubkey(TAG_SUITE, k, "publicMeta-tag");
+    const std::string privateMeta = GroupDataSchemaMapper::tagSubkey(TAG_SUITE, k, "privateMeta-tag");
     EXPECT_EQ(roster.size(), 32u);
     EXPECT_NE(roster, k);
     EXPECT_NE(publicMeta, k);
@@ -561,9 +574,18 @@ TEST_F(GroupRosterTag, SECURITY_ARosterTagCannotBeReplayedAsAMetadataTag) {
     // Three tags over the same numbers under one content key. Even if a preimage change made the payloads
     // coincide, the subkeys keep them apart — the two metadata planes included, identical in shape otherwise.
     const std::string k = core::CryptoSuite::randomBytes(32);
-    EXPECT_NE(GroupDataSchemaMapper::rosterTag(k, 2, 7, {}, {}), GroupDataSchemaMapper::publicMetaTag(k, 2, 7));
-    EXPECT_NE(GroupDataSchemaMapper::rosterTag(k, 2, 7, {}, {}), GroupDataSchemaMapper::privateMetaTag(k, 2, 7));
-    EXPECT_NE(GroupDataSchemaMapper::publicMetaTag(k, 2, 7), GroupDataSchemaMapper::privateMetaTag(k, 2, 7));
+    EXPECT_NE(
+        GroupDataSchemaMapper::rosterTag(TAG_SUITE, k, 2, 7, {}, {}),
+        GroupDataSchemaMapper::publicMetaTag(TAG_SUITE, k, 2, 7)
+    );
+    EXPECT_NE(
+        GroupDataSchemaMapper::rosterTag(TAG_SUITE, k, 2, 7, {}, {}),
+        GroupDataSchemaMapper::privateMetaTag(TAG_SUITE, k, 2, 7)
+    );
+    EXPECT_NE(
+        GroupDataSchemaMapper::publicMetaTag(TAG_SUITE, k, 2, 7),
+        GroupDataSchemaMapper::privateMetaTag(TAG_SUITE, k, 2, 7)
+    );
 }
 
 TEST_F(GroupRosterTag, TheInternalMetaViewReadsTheRosterPlane) {
@@ -598,7 +620,8 @@ TEST_F(GroupRosterTag, TheInternalMetaViewReadsTheRosterPlane) {
         GroupPublicMetaToEncryptV5{
             .publicMeta = core::Buffer::from(std::string("pub")),
             .dio = dioFor(group, "alice", "rnd2"),
-            .meta = dynamic::MetaBlock{.metaTag = "tag", .keyId = "key1", .keyVersion = 1, .metaVersion = 1}
+            .meta = dynamic::MetaBlock{.metaTag = "tag", .keyId = "key1", .keyVersion = 1, .metaVersion = 1},
+            .suite = core::CryptoSuite::defaultForWrite()
         }
     );
     EXPECT_EQ(mapper.decryptInternalMeta(publicMeta, key(encKey)).secret, "");

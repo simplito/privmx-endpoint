@@ -10,7 +10,6 @@ limitations under the License.
 */
 
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
-#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 #include <privmx/utils/Logger.hpp>
@@ -252,10 +251,8 @@ server::KeyEntrySet KeyProvider::createKeyEntrySet(
     // clang-format off
     key_entry_set.data = _encKeyEncryptorV2.encrypt(
         EncKeyV2ToEncrypt{
-            EncKey{.id = key.id, .key = key.key}, dio, location, keySecret,
-            FormatHash::hmacSha256(
-                containerSecret, keySecret + location.contextId + location.resourceId
-            )
+            EncKey{.id = key.id, .key = key.key, .suite = key.suite}, dio, location, keySecret,
+            key.suite.mac(containerSecret, keySecret + location.contextId + location.resourceId)
         },
         core::PublicKeyCache::getInstance()->fromBase58DER(user.pubKey), _key
     ).toJSON();
@@ -269,7 +266,9 @@ bool KeyProvider::verifyKeysSecret(
     const std::string& containerSecret
 ) {
     for (auto key : decryptedKeys) {
-        auto keySecretHash = FormatHash::hmacSha256(
+        // The suite the entry was written with, taken from its own DIO rather than from this build or
+        // from the container being read — the same reason the checksums beside it are verified that way.
+        auto keySecretHash = key.second.dio.suite.mac(
             containerSecret, key.second.keySecret + location.contextId + location.resourceId
         );
         if (key.second.statusCode != 0 ||
