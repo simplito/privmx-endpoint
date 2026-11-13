@@ -29,7 +29,7 @@ using namespace std;
 using namespace Poco;
 
 WebSocketChannel::WebSocketChannel(const URI& uri, WebSocketNotify::Ptr notify) : rpc::WebSocketChannel(uri, notify) {
-    notify->on_close_all_channels = [&]{ disconnect(); };
+    notify->on_close_all_channels = [this]{ disconnect(); };
 }
 
 WebSocketChannel::~WebSocketChannel() {
@@ -61,6 +61,7 @@ future<string> WebSocketChannel::send(const string& data, const string& path, [[
 }
 
 void WebSocketChannel::disconnect() {
+    _disconnecting = true;
     {
         Lock lock(_connected_mutex);
         if (_ws != nullptr) {
@@ -72,6 +73,9 @@ void WebSocketChannel::disconnect() {
             _ws = nullptr;
         }
     }
+    // Closing the socket makes the driver fire onclose on its own thread; wait for it to return
+    // before the caller destroys this channel and everything its listeners reach through it.
+    { std::lock_guard<std::recursive_mutex> callback_lock(_callback_mutex); }
     tryJoinThreads();
 }
 
@@ -86,6 +90,7 @@ void WebSocketChannel::connect(const std::string& path) {
     privmxDrvNet_Ws* ws;
     privmxDrvNet_WsOptions options;
     options.url = url.c_str();
+    _disconnecting = false;
     int status = privmxDrvNet_wsConnect(&options, &WebSocketChannel::onopen, &WebSocketChannel::onmessage, &WebSocketChannel::onerror, &WebSocketChannel::onclose, this, &ws);
     if (status != 0) {
         throw WsConnectException(to_string(status));
@@ -180,6 +185,10 @@ void WebSocketChannel::onerror([[maybe_unused]] const char* msg, [[maybe_unused]
 }
 
 void WebSocketChannel::onclose([[maybe_unused]] int wasClean) {
+    std::lock_guard<std::recursive_mutex> callback_lock(_callback_mutex);
+    if (_disconnecting) {
+        return;
+    }
     Lock lock(_state_mutex);
     {
         _connected = false;
