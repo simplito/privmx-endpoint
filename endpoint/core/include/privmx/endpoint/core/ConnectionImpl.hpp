@@ -165,7 +165,7 @@ private:
     int _gatewayNotificationEventListener = -1, _gatewayConnectedEventListener = -1,
         _gatewayDisconnectedEventListener = -1, _gatewaySessionLostEventListener = -1;
     int _notificationListenerId = -1;
-    // libConnected reports a transition, so it is emitted once until a disconnect resets this.
+    // libConnected and libDisconnected report transitions, so each is emitted once per flip of this.
     std::atomic_bool _connectedEventEmitted = false;
 };
 

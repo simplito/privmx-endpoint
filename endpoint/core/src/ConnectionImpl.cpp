@@ -110,7 +110,9 @@ void ConnectionImpl::connectOver(
         return _serverApi->contextGet(model).context;
     });
     _eventMiddleware->addDisconnectedEventListener([&] {
-        _connectedEventEmitted = false;
+        if (!_connectedEventEmitted.exchange(false)) {
+            return;
+        }
         auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
@@ -187,7 +189,9 @@ void ConnectionImpl::connectPublic(
         return server::ContextInfo{.userId = "<anonymous>", .contextId = id};
     });
     _eventMiddleware->addDisconnectedEventListener([&] {
-        _connectedEventEmitted = false;
+        if (!_connectedEventEmitted.exchange(false)) {
+            return;
+        }
         auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
