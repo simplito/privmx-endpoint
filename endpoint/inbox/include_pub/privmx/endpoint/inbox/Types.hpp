@@ -3,6 +3,7 @@
 
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/store/Types.hpp"
+#include <cstdint>
 
 namespace privmx {
 namespace endpoint {

@@ -1,6 +1,7 @@
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_EVENTS_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_EVENTS_HPP_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>

@@ -1,6 +1,7 @@
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_ONTRACKINTERFACE_HPP
 #define _PRIVMXLIB_ENDPOINT_STREAM_ONTRACKINTERFACE_HPP
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>

@@ -1,6 +1,7 @@
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_BACKENDREQUESTER_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_BACKENDREQUESTER_HPP_
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>

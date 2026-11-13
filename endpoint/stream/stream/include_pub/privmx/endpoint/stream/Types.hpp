@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_TYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_STREAMAPI_TYPES_HPP_
 
+#include <cstdint>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <privmx/endpoint/core/Types.hpp>
 
