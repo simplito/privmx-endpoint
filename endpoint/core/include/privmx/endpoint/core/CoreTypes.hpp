@@ -66,6 +66,17 @@ struct DecryptedEncKey : public EncKey, public DecryptedVersionedData {};
 struct ExpandedDataIntegrityObject : public DataIntegrityObject {
     int64_t structureVersion;
     std::unordered_map<std::string, std::string> fieldChecksums;
+    /**
+     * The suite the field checksums are computed with.
+     *
+     * On the way out it comes from the key the data is encrypted with (`EncKey::suite`), so the
+     * checksums follow the container's algorithm. On the way back it comes from the DIO itself, so a
+     * read never has to be told which hash to verify with — which is the whole point of recording it.
+     *
+     * A DIO written before the format carried a suite reads as `SuiteId::Aes256GcmSha256`, the hash
+     * those checksums were in fact made with.
+     */
+    CryptoSuite suite = CryptoSuite::forId(SuiteId::Aes256GcmSha256);
 };
 
 struct EncKeyLocation {
@@ -111,13 +122,14 @@ struct ModuleKeys {
     std::string moduleResourceId;
     std::string contextId;
     /**
-     * The algorithm suite of the container these keys belong to.
+     * The suite the container's **policy** names, or nothing when it names none.
      *
-     * Needed because a key read from the server **carries no suite** — `EncKey::suite` is set only
-     * on generation. Without this field every item write (a message, a KVDB entry, a group envelope)
-     * would use the build's default suite, even though the container named another one.
+     * Empty is not "no opinion, use the build's default": a container that names no suite still has
+     * one, recorded in its key entry's DIO, and a key read from the server reports it. Empty means
+     * exactly that — defer to the key. Anything else would let a differently-built client move an
+     * existing container to another algorithm just by writing to it.
      */
-    CryptoSuite cryptoSuite = CryptoSuite::defaultForWrite();
+    std::optional<CryptoSuite> cryptoSuite;
 };
 
 struct GroupEpochInfo {

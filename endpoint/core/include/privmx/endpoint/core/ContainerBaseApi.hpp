@@ -142,9 +142,40 @@ protected:
      * The type is `ContainerPolicyWithoutItem` because that is where `cryptoSuite` lives, and
      * `stream` uses only that part of the policy.
      *
+     * Falls back to the build's default, which is right only where the container is being **made**.
+     * For one that already exists use `suiteOfExisting` — see the warning there.
+     *
      * @throws UnknownCryptoSuiteException when the policy names a suite this build does not know
      */
     static CryptoSuite suiteFromPolicy(const std::optional<ContainerPolicyWithoutItem>& policies);
+
+    /**
+     * @brief The suite an **existing** container writes with: its policy's, or the one it already uses.
+     *
+     * The difference from `suiteFromPolicy` is the fallback, and it matters. A container whose policy
+     * names no suite has still been written with one, recorded in its key entry's DIO. Falling back to
+     * this build's default there would let a client switch a container to another suite merely by being
+     * configured differently — which the contract forbids: once chosen, a container's algorithm stays.
+     *
+     * It is also not only a question of principle. Anything keyed by the container key and **compared**
+     * rather than tagged — the group's roster and metadata tags — is computed by a writer and recomputed
+     * by every reader. Readers take the suite from the key entry, so a writer that took it from its own
+     * build would produce tags nobody could verify.
+     *
+     * @throws UnknownCryptoSuiteException when the policy names a suite this build does not know
+     */
+    static CryptoSuite suiteOfExisting(const std::optional<ContainerPolicyWithoutItem>& policies, const EncKey& inUse);
+
+    /**
+     * @brief The suite the policy names, or nothing when it names none.
+     *
+     * The shared half of the two above: whether a policy names a suite is the question, and the two
+     * differ only in what they do when it does not.
+     *
+     * @throws UnknownCryptoSuiteException when the policy names a suite this build does not know —
+     *         never a silent fallback, which would write with a weaker suite than was asked for.
+     */
+    static std::optional<CryptoSuite> suiteNamedByPolicy(const std::optional<ContainerPolicyWithoutItem>& policies);
 
     /**
      * @brief Reconciles an update policy's `cryptoSuite` with the container's own.
@@ -218,10 +249,10 @@ protected:
             .moduleResourceId = container.resourceId.value_or(""),
             .contextId = container.contextId,
             // The container's suite travels with the keys, because it decides what **items** are
-            // written with. A key read back from the server carries no suite — `EncKey::suite` is
-            // set only on generation — so without this field every item write would use the build's
-            // default suite, whatever the container's policy says.
-            .cryptoSuite = suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy))
+            // written with. Empty when the policy names none, and then the key's own suite stands —
+            // see `suiteOfExisting`. It must not become the build's default here: that would move an
+            // existing container to whatever algorithm the writing client happens to prefer.
+            .cryptoSuite = suiteNamedByPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy))
         };
     }
 
@@ -424,7 +455,12 @@ ContainerBaseApi::ContainerUpdatePlan ContainerBaseApi::planContainerUpdate(
     // legally change it, and reading it from there was a bug: a caller changing only permissions does
     // not repeat `cryptoSuite`, so `suiteFromPolicy` fell back to the **build's default** suite. A
     // container created with a stronger suite would then have written part of its data weaker.
-    const CryptoSuite suite = suiteFromPolicy(Factory::parsePolicyServerObjectWithoutItem(container.policy));
+    //
+    // `suiteOfExisting`, so a container whose policy names none keeps the suite it has been using
+    // rather than taking this build's. Without that, a differently-built client silently moves the
+    // container to another algorithm, and the group tags it writes verify for nobody.
+    const CryptoSuite suite =
+        suiteOfExisting(Factory::parsePolicyServerObjectWithoutItem(container.policy), keptKey);
 
     core::EncKey key = keptKey;
     core::DataIntegrityObject dio = _connection.getImpl()->createDIO(container.contextId, resourceId);

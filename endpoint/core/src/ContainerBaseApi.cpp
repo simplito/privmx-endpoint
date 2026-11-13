@@ -15,7 +15,6 @@ limitations under the License.
 #include <privmx/utils/Utils.hpp>
 #include <set>
 
-#include <privmx/endpoint/core/crypto/FormatHash.hpp>
 #include <privmx/endpoint/core/crypto/PublicKeyCache.hpp>
 
 #include "privmx/endpoint/core/ContainerBaseApi.hpp"
@@ -84,13 +83,24 @@ void ContainerBaseApi::assertUserKeysVerified(const std::string& contextId, cons
 }
 
 CryptoSuite ContainerBaseApi::suiteFromPolicy(const std::optional<ContainerPolicyWithoutItem>& policies) {
+    return suiteNamedByPolicy(policies).value_or(CryptoSuite::defaultForWrite());
+}
+
+std::optional<CryptoSuite> ContainerBaseApi::suiteNamedByPolicy(
+    const std::optional<ContainerPolicyWithoutItem>& policies
+) {
     if (policies.has_value() && policies->cryptoSuite.has_value()) {
-        // Throws `UnknownCryptoSuiteException` when this build does not know the named suite. We
-        // deliberately do not fall back to the default: writing with a weaker suite than the policy
-        // asked for would weaken the container's protection unnoticeably.
         return CryptoSuite::forPolicyValue(policies->cryptoSuite.value());
     }
-    return CryptoSuite::defaultForWrite();
+    return std::nullopt;
+}
+
+CryptoSuite ContainerBaseApi::suiteOfExisting(
+    const std::optional<ContainerPolicyWithoutItem>& policies,
+    const EncKey& inUse
+) {
+    // Not `defaultForWrite()`: the container already has an algorithm, and this is where it is recorded.
+    return suiteNamedByPolicy(policies).value_or(inUse.suite);
 }
 
 ContainerCreateContext ContainerBaseApi::prepareContainerCreate(
@@ -212,10 +222,11 @@ DecryptedEncKeyV2 ContainerBaseApi::getAndValidateModuleCurrentEncKey(ModuleKeys
                    .at(location)
                    .at(moduleKeys.currentKeyId);
     assertWriteKey(key);
-    // The key comes back from the server without a suite, yet it is the **write key**: everything
-    // written with it should use the algorithm the container chose, not the build's default. That is
-    // exactly why `ModuleKeys` carries the suite — see `containerToModuleKeys`.
-    key.suite = moduleKeys.cryptoSuite;
+    // This is the **write key**, so everything written with it uses the algorithm the container chose.
+    // The policy's when it names one; otherwise the key keeps the suite its own entry recorded, which
+    // is the container's algorithm as actually written down. The build's default has no say here — a
+    // container already has an algorithm, and the point of recording it is that it stays.
+    key.suite = moduleKeys.cryptoSuite.value_or(key.suite);
     return key;
 }
 
@@ -306,9 +317,9 @@ std::vector<server::GroupKeyEntrySet> ContainerBaseApi::buildGroupKeyEntries(
         auto keySecret = privmx::utils::Hex::from(CryptoSuite::randomBytes(32));
         auto encData = encryptor.encrypt(
             EncKeyV2ToEncrypt{
-                EncKey{.id = key.id, .key = key.key}, dio,
+                EncKey{.id = key.id, .key = key.key, .suite = key.suite}, dio,
                 EncKeyLocation{.contextId = contextId, .resourceId = resourceId}, keySecret,
-                FormatHash::hmacSha256(containerSecret, keySecret + contextId + resourceId)
+                key.suite.mac(containerSecret, keySecret + contextId + resourceId)
             },
             groupPubKey, _userPrivKey
         );
