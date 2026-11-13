@@ -8,7 +8,7 @@ cd $SCRIPT_PATH/..
 CLANG_FORMAT_VERSION="20.1.8"
 
 find_clang_format() {
-    for candidate in "$CLANG_FORMAT" clang-format clang-format-20; do
+    for candidate in "${CLANG_FORMAT:-}" clang-format clang-format-20; do
         [ -n "$candidate" ] || continue
         command -v "$candidate" >/dev/null 2>&1 || continue
         if "$candidate" --version | grep -qF "clang-format version $CLANG_FORMAT_VERSION"; then

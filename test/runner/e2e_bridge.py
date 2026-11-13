@@ -67,10 +67,12 @@ def check_backend_ready() -> None:
             "mongodb://localhost:27017/?directConnection=true",
             serverSelectionTimeoutMS=BACKEND_READY_TIMEOUT_SECONDS * 1000,
         )
-        wait_for_writable_primary(client, BACKEND_READY_TIMEOUT_SECONDS)
-        client.close()
+        try:
+            wait_for_writable_primary(client, BACKEND_READY_TIMEOUT_SECONDS)
+        finally:
+            client.close()
     except Exception as exc:
-        raise RuntimeError(f"MongoDB is not reachable at localhost:27017. {hint}") from exc
+        raise RuntimeError(f"MongoDB is not usable at localhost:27017: {exc} {hint}") from exc
 
     rc, _, _ = e2e_common.run_command(["docker", "network", "inspect", DOCKER_NETWORK])
     if rc != 0:
@@ -220,7 +222,8 @@ def create_bridge_docker(index: int, docker_image: str, dataset_dir_path: str) -
     if migration_id:
         env_list.append(f"PMX_MIGRATION={migration_id}")
 
-    mongo_client = MongoClient(local_mongo_url)
+    # Keep server selection well under the primary wait, so an unreachable mongo still gets retried.
+    mongo_client = MongoClient(local_mongo_url, serverSelectionTimeoutMS=BACKEND_READY_TIMEOUT_SECONDS * 1000)
     e2e_common.run_command(["docker", "rm", "-f", container_name])
     wait_for_writable_primary(mongo_client)
     mongo_client.drop_database(db_name)

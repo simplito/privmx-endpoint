@@ -76,6 +76,8 @@ void WebSocketChannel::disconnect() {
     // Closing the socket makes the driver fire onclose on its own thread; wait for it to return
     // before the caller destroys this channel and everything its listeners reach through it.
     { std::lock_guard<std::recursive_mutex> callback_lock(_callback_mutex); }
+    // onclose is suppressed for this close, so the senders it would have failed are failed here.
+    try { rejectAllPromises(); } catch (...) {}
     tryJoinThreads();
 }
 
