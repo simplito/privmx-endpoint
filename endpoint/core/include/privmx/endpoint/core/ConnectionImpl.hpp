@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_CONNECTIONIMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_CONNECTIONIMPL_HPP_
 
+#include <atomic>
 #include <exception>
 #include <functional>
 #include <map>
@@ -160,9 +161,12 @@ private:
     std::shared_ptr<SubscriberImpl> _subscriber;
     std::optional<ServerApi> _serverApi;
     std::shared_ptr<privmx::utils::GuardedExecutor> _guardedExecutor;
-    int _gatewayNotificationEventListener, _gatewayConnectedEventListener, _gatewayDisconnectedEventListener,
-        _gatewaySessionLostEventListener;
-    int _notificationListenerId;
+    // -1 is never handed out as a listener id, so an unregistered listener removes nothing.
+    int _gatewayNotificationEventListener = -1, _gatewayConnectedEventListener = -1,
+        _gatewayDisconnectedEventListener = -1, _gatewaySessionLostEventListener = -1;
+    int _notificationListenerId = -1;
+    // libConnected reports a transition, so it is emitted once until a disconnect resets this.
+    std::atomic_bool _connectedEventEmitted = false;
 };
 
 } // namespace core

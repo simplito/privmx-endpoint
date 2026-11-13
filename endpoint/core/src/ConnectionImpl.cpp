@@ -98,6 +98,9 @@ void ConnectionImpl::connectOver(
     );
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
     _eventMiddleware->addConnectedEventListener([&] {
+        if (_connectedEventEmitted.exchange(true)) {
+            return;
+        }
         auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
@@ -106,11 +109,8 @@ void ConnectionImpl::connectOver(
         model.id = id;
         return _serverApi->contextGet(model).context;
     });
-    if (_gateway->isConnected()) {
-        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
-        _eventMiddleware->emitApiEvent(event);
-    }
     _eventMiddleware->addDisconnectedEventListener([&] {
+        _connectedEventEmitted = false;
         auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
@@ -135,6 +135,11 @@ void ConnectionImpl::connectOver(
     _gatewaySessionLostEventListener = _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); }
     );
+    // Asked only once the listener is registered, so a connection that completes mid-setup is
+    // reported by one path or the other instead of falling between them.
+    if (_gateway->isConnected()) {
+        _eventMiddleware->emitConnectedEvent();
+    }
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -172,17 +177,17 @@ void ConnectionImpl::connectPublic(
     );
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
     _eventMiddleware->addConnectedEventListener([&] {
+        if (_connectedEventEmitted.exchange(true)) {
+            return;
+        }
         auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
         return server::ContextInfo{.userId = "<anonymous>", .contextId = id};
     });
-    if (_gateway->isConnected()) {
-        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
-        _eventMiddleware->emitApiEvent(event);
-    }
     _eventMiddleware->addDisconnectedEventListener([&] {
+        _connectedEventEmitted = false;
         auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
         _eventMiddleware->emitApiEvent(event);
     });
@@ -191,7 +196,7 @@ void ConnectionImpl::connectPublic(
                                                                                ) {
         _eventMiddleware->emitNotificationEvent(event.type, convertRpcNotificationEventToCoreNotificationEvent(event));
     });
-    _gatewayDisconnectedEventListener = _gateway->addConnectedEventListener(
+    _gatewayConnectedEventListener = _gateway->addConnectedEventListener(
         [&, this]([[maybe_unused]] const rpc::ConnectedEvent& event) { _eventMiddleware->emitConnectedEvent(); }
     );
     _gatewayDisconnectedEventListener = _gateway->addDisconnectedEventListener(
@@ -200,6 +205,11 @@ void ConnectionImpl::connectPublic(
     _gatewaySessionLostEventListener = _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); }
     );
+    // Asked only once the listener is registered, so a connection that completes mid-setup is
+    // reported by one path or the other instead of falling between them.
+    if (_gateway->isConnected()) {
+        _eventMiddleware->emitConnectedEvent();
+    }
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
