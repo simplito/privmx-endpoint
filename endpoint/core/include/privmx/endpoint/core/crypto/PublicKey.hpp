@@ -77,7 +77,9 @@ public:
      *
      * Maps to `SigScheme::Compact`, **not** `CompactWithHash`: the latter computes a further
      * `sha256`, giving ECDSA over `sha256(sha256(m))`. The name misleads — do not "fix" this.
-     * Measured proof: crypto-update/sigcompat.cpp
+     * Checked against the previous implementation and against the bridge, which verifies over the
+     * single digest; `CompactWithHash` produces signatures that verify only among themselves, with
+     * no error at compile time or run time to say so.
      */
     bool verifyCompactSignatureWithHash(const std::string& message, const std::string& signature) const;
 

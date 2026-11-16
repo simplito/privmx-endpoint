@@ -54,8 +54,8 @@ privmx::cryptoservice::AsymAlg defaultKeyAlgorithm();
  * For ECDSA curves this is **`Compact`**, not `CompactWithHash`. `Compact` gives ECDSA over
  * `sha256(m)`; `CompactWithHash` computes a further `sha256`, i.e. ECDSA over `sha256(sha256(m))`.
  * The name suggests the opposite — switching to `CompactWithHash` produces signatures that verify
- * only among themselves, with no compile-time or run-time error.
- * Measured proof: crypto-update/sigcompat.cpp
+ * only among themselves, with no compile-time or run-time error. Measured against both the previous
+ * implementation and the bridge, which verifies over the single digest.
  *
  * @throws UnsupportedKeyAlgorithmException when the algorithm has no scheme assigned here
  */
@@ -178,8 +178,32 @@ privmx::cryptoservice::AsymAlg agreementCurveOf(privmx::cryptoservice::AsymAlg a
  * identity at all. Callers that know the pairing before they reach the wrap should check here and
  * refuse with an error of their own: `Ecies` can only throw `MalformedEncryptionKeyException`, which
  * names a broken key where the real problem is a pairing that was never possible.
+ *
+ * **Agreeing is weaker than matching.** Two identities that share a curve may still differ in what
+ * else they carry — `ed25519` and `ed25519x25519mlkem768` both agree on X25519 — and a wrap between
+ * them succeeds while protecting only as well as the *weaker* of the two. Where that matters, ask
+ * `keyAlgorithmsAreTheSame` instead.
  */
 bool keyAlgorithmsCanAgree(privmx::cryptoservice::AsymAlg a, privmx::cryptoservice::AsymAlg b);
+
+/**
+ * @brief Whether two keys are of one and the same identity algorithm.
+ *
+ * Stricter than `keyAlgorithmsCanAgree`, and the right question wherever an algorithm's *guarantees*
+ * have to hold rather than merely its arithmetic. `Ecies` decides whether to encapsulate from the
+ * recipient's algorithm alone, so wrapping to an `ed25519` member produces a classical, X25519-only
+ * wrap with no error raised — which, for a key that is meant to be post-quantum, silently removes the
+ * property it exists for. A group is exactly such a place: one node key serves a whole subtree, so a
+ * single member of the weaker algorithm downgrades every wrap of that key.
+ *
+ * The only difference tolerated is spelling: `secp256k1` and `PrivmxSecp256k1` are one algorithm in
+ * two data formats, and the registry keeps them apart for that reason alone.
+ *
+ * This is also what the bridge enforces — `GroupService.assertMembersMatchTheGroupsAlgorithm`
+ * compares tags for equality — so matching here keeps the client from planning a commit the server
+ * will refuse, and, more to the point, keeps the guarantee client-side where it belongs.
+ */
+bool keyAlgorithmsAreTheSame(privmx::cryptoservice::AsymAlg a, privmx::cryptoservice::AsymAlg b);
 
 /**
  * @brief Encodes a public key as `Base58Check(tag || rawKey || rawAgreementKey || rawKemKey)`.

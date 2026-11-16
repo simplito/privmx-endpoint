@@ -20,10 +20,27 @@ limitations under the License.
 using namespace privmx::endpoint::core;
 
 namespace {
+
+/**
+ * Guards the slot itself, which is not the same thing as the cache's own `_mutex`.
+ *
+ * Declared **before** `slot`, so it outlives it: objects in a translation unit are destroyed in
+ * reverse order of definition, and `freeInstance` may run during static destruction.
+ *
+ * The slot needs a lock because `getInstance` reads a `std::shared_ptr` and then writes it, and
+ * `freeInstance` resets the same one. Two threads reaching a cold cache at once — which is the
+ * ordinary case, since the event-queue thread and the calling thread both decrypt — would otherwise
+ * race on that pointer, and each walk away with a cache of its own. This is cheap next to what a
+ * miss costs: one uncontended lock against parsing an EC point.
+ */
+std::mutex slotMutex;
+
 privmx::utils::SingletonSlot<PublicKeyCache> slot;
+
 } // namespace
 
 std::shared_ptr<PublicKeyCache> PublicKeyCache::getInstance() {
+    std::lock_guard<std::mutex> lock(slotMutex);
     if (!slot.ref()) {
         slot.ref() = std::shared_ptr<PublicKeyCache>(new PublicKeyCache());
     }
@@ -31,15 +48,16 @@ std::shared_ptr<PublicKeyCache> PublicKeyCache::getInstance() {
 }
 
 void PublicKeyCache::freeInstance() {
-    // Znacznik sprawdzamy przed dotknieciem slotu - patrz SingletonSlot.
+    // The flag is checked before the slot is touched - see SingletonSlot.
     if (!privmx::utils::SingletonSlot<PublicKeyCache>::alive()) {
         return;
     }
+    std::lock_guard<std::mutex> lock(slotMutex);
     slot.ref().reset();
 }
 
-// Trafienie oddaje kazdemu watkowi ten sam uchwyt backendu. Jest to poprawne tylko dlatego, ze nic tutaj
-// przez niego nie zapisuje: weryfikacja i derywacja czytaja klucz i zostawiaja go niezmienionym.
+// A hit hands every thread the same backend handle. That is correct only because nothing here writes
+// through it: verification and derivation read the key and leave it unchanged.
 PublicKey PublicKeyCache::fromBase58DER(const std::string& base58DER) {
     std::optional<PublicKey> demoted;
     {
@@ -51,9 +69,9 @@ PublicKey PublicKeyCache::fromBase58DER(const std::string& base58DER) {
             demoted = it->second;
         }
     }
-    // Parsowanie bez trzymania blokady, wiec jedno wolne parsowanie nigdy nie blokuje czytelnikow. Dwa watki
-    // scigajace sie o to samo chybienie kosztuja jedno zmarnowane parsowanie, co jest tansze niz wpuszczanie
-    // kazdego wolajacego pod blokade zapisu.
+    // Parsed without holding the lock, so one slow parse never blocks the readers. Two threads racing
+    // on the same miss cost one wasted parse, which is cheaper than putting every caller through the
+    // write lock.
     PublicKey key = demoted.has_value() ? demoted.value() : PublicKey::fromBase58DER(base58DER);
 
     std::unique_lock<std::shared_mutex> lock(_mutex);
@@ -62,8 +80,8 @@ PublicKey PublicKeyCache::fromBase58DER(const std::string& base58DER) {
         _previous = std::move(_current);
         _current = {};
     }
-    // `emplace`, wiec watek, ktory przegral wyscig, uzywa wpisu juz opublikowanego zamiast zastepowac go
-    // wlasna rownowazna kopia.
+    // `emplace`, so the thread that lost the race uses the entry already published instead of
+    // replacing it with its own equivalent copy.
     return _current.emplace(base58DER, key).first->second;
 }
 

@@ -141,13 +141,13 @@ target_link_libraries(test_unit_LadderMathTest privmxendpointgroup GTest::GTest 
 
 add_executable(test_unit_StoreFileFormatTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/StoreFileFormatTest.cpp)
 target_link_libraries(test_unit_StoreFileFormatTest privmx privmxendpointcore privmxendpointstore GTest::GTest GTest::Main)
-# Test dostaje te sama definicje co biblioteka, zeby moc sprawdzic, ze opcja CMake **doszla**
-# do kompilacji `privmxendpointstore`. Bez tego ustawienie opcji moze cicho nie zadzialac
-# (tak bylo, gdy `set_target_properties(... COMPILE_DEFINITIONS ...)` nadpisywalo definicje).
+# The test gets the same definition as the library, so it can check that the CMake option **reached**
+# the compilation of `privmxendpointstore`. Without this, setting the option can quietly do nothing
+# (as it did when `set_target_properties(... COMPILE_DEFINITIONS ...)` overwrote the definitions).
 target_compile_definitions(test_unit_StoreFileFormatTest
     PRIVATE PRIVMX_DEFAULT_FILE_CIPHER_ID=${PRIVMX_DEFAULT_FILE_CIPHER_ID})
 
-# Warstwa zwinnosci algorytmicznej kontenera: rejestr zestawow i ramka ze znacznikiem.
+# The container's crypto-agility layer: the suite registry and the tagged frame.
 add_executable(test_unit_CryptoSuiteTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/CryptoSuiteTest.cpp)
 target_link_libraries(test_unit_CryptoSuiteTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
 target_compile_definitions(test_unit_CryptoSuiteTest
@@ -156,6 +156,11 @@ target_compile_definitions(test_unit_CryptoSuiteTest
 # The integrity layer's half of the suite choice: the suite a DIO records, and that the signature covers it.
 add_executable(test_unit_DioSuiteTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/DioSuiteTest.cpp)
 target_link_libraries(test_unit_DioSuiteTest privmx privmxendpointcore Poco::Foundation Poco::JSON GTest::GTest GTest::Main)
+
+# The policy's trip through `Var`, which is how every wrapper language passes one in. A field the
+# serializer writes and the deserializer does not read works in C++ and nowhere else.
+add_executable(test_unit_ContainerPolicyVarTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/ContainerPolicyVarTest.cpp)
+target_link_libraries(test_unit_ContainerPolicyVarTest privmx privmxendpointcore Poco::Foundation Poco::JSON GTest::GTest GTest::Main)
 
 # Real EC keys and ECIES (creates, climbs, commits and removes members from trees entirely in-process; still no server/docker/network)
 add_executable(test_unit_TreeKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/TreeKeysTest.cpp)

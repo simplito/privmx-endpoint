@@ -487,8 +487,26 @@ TEST(StoreFileSha512Format, LayoutIsIdenticalToFormatTwo) {
     EXPECT_EQ(gcm().encryptedChunkSize(1024), gcm512().encryptedChunkSize(1024));
 }
 
+/**
+ * The chunk key is a **cipher** key, and all three formats cipher with AES-256 — 32 bytes, whatever
+ * hash function computed it.
+ *
+ * Only the top hash is as long as its hash function; the chunk key has to be cut to the cipher's
+ * size. Format 3 hashes with SHA-512, so it produces 64 bytes, and handing those over whole worked
+ * only because the provider does not check key lengths and OpenSSL takes the first 32 in silence
+ * (pmx-crypto passes `key.data()` straight through — `issue-pmx-crypto-key-iv-length`). The day that
+ * check is added, every format-3 file would have become unreadable and unwritable at once, with the
+ * round-trip test below still passing right up to it. Hence a test on the length itself.
+ */
+TEST(StoreFileCipher, ChunkKeyIsTheCiphersKeyLengthInEveryFormat) {
+    for (const int64_t type : FileCipher::known()) {
+        EXPECT_EQ(32u, FileCipher::forType(type).chunkKey(KEY, 0).size()) << "cipherType " << type;
+    }
+}
+
 /// The point of this format: the same layout, a different hash. If the chunk key came out the same,
-/// format 3 would be no more than another label on format 2.
+/// format 3 would be no more than another label on format 2. With both keys now cut to 32 bytes this
+/// also says the truncation did not collapse the two formats into one.
 TEST(StoreFileSha512Format, ChunkKeyAndTopHashDifferFromFormatTwo) {
     EXPECT_NE(gcm().chunkKey(KEY, 0), gcm512().chunkKey(KEY, 0));
 

@@ -12,6 +12,7 @@ limitations under the License.
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 #include <privmx/utils/Base58.hpp>
 
@@ -130,6 +131,14 @@ constexpr std::array<KeyAlgorithmSpec, 4> KEY_ALGORITHMS{{
      cs::AsymAlg::MLKEM768, 1184, false},
 }};
 
+/// Two hex digits, because a tag is only ever written in hex. `std::to_string` prints decimal, which
+/// under an `0x` prefix turns tag 0x82 into "0x130" in the one message someone reads to find out what
+/// the unrecognised key was.
+std::string hexByte(std::uint8_t value) {
+    constexpr char DIGITS[] = "0123456789abcdef";
+    return std::string{DIGITS[value >> 4], DIGITS[value & 0x0F]};
+}
+
 const KeyAlgorithmSpec* findSpecByTag(std::uint8_t tag) {
     if (tag == UNTAGGED) {
         return nullptr;
@@ -149,6 +158,17 @@ const KeyAlgorithmSpec* findSpec(cs::AsymAlg algorithm) {
         }
     }
     return nullptr;
+}
+
+/**
+ * One name per algorithm, so two spellings of one thing never compare unequal.
+ *
+ * `secp256k1` is an import-only spelling of `PrivmxSecp256k1` — the same curve, differing only in the
+ * data formats the provider reads and writes. Two keys of those two rows are the same identity
+ * algorithm, and anything comparing algorithms has to say so.
+ */
+constexpr cs::AsymAlg canonicalKeyAlgorithm(cs::AsymAlg algorithm) {
+    return algorithm == cs::AsymAlg::secp256k1 ? cs::AsymAlg::PrivmxSecp256k1 : algorithm;
 }
 
 /**
@@ -251,11 +271,15 @@ cs::AsymAlg agreementCurveOf(cs::AsymAlg algorithm) {
     if (keyAlgorithmNeedsAgreementKey(algorithm)) {
         return agreementAlgorithmFor(algorithm);
     }
-    return algorithm == cs::AsymAlg::secp256k1 ? cs::AsymAlg::PrivmxSecp256k1 : algorithm;
+    return canonicalKeyAlgorithm(algorithm);
 }
 
 bool keyAlgorithmsCanAgree(cs::AsymAlg a, cs::AsymAlg b) {
     return agreementCurveOf(a) == agreementCurveOf(b);
+}
+
+bool keyAlgorithmsAreTheSame(cs::AsymAlg a, cs::AsymAlg b) {
+    return canonicalKeyAlgorithm(a) == canonicalKeyAlgorithm(b);
 }
 
 std::string encodeTaggedPublicKey(
@@ -373,7 +397,7 @@ TaggedPublicKey decodeTaggedPublicKey(const std::string& base58) {
         // Deliberately not a fallback to "assume secp256k1": the old untagged encoding is no longer
         // accepted, so a key from before the cut fails here by name instead of being guessed at.
         throw MalformedEncryptionKeyException(
-            "unknown public key tag: 0x" + std::to_string(static_cast<int>(static_cast<std::uint8_t>(payload[0])))
+            "unknown public key tag: 0x" + hexByte(static_cast<std::uint8_t>(payload[0]))
         );
     }
     const std::size_t expected = spec->publicKeyLength + spec->agreementKeyLength + spec->kemKeyLength;

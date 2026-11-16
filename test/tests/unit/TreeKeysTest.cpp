@@ -432,11 +432,12 @@ TEST_F(TreeKeysCreate, EveryMemberClimbs) {
  * configured one way unable to touch a group whose members hold keys of the other — the group
  * created fine right up to the first wrap, which failed with "Wrong type of private key".
  *
- * Both algorithms are run, so the test says the same thing whichever way the build is configured.
+ * Every algorithm is run, so the test says the same thing whichever way the build is configured.
  */
 TEST_F(TreeKeysCreate, TreeKeysTakeTheCommittersAlgorithmNotTheBuilds) {
     for (const auto algorithm :
-         {privmx::cryptoservice::AsymAlg::PrivmxSecp256k1, privmx::cryptoservice::AsymAlg::ED25519}) {
+         {privmx::cryptoservice::AsymAlg::PrivmxSecp256k1, privmx::cryptoservice::AsymAlg::ED25519,
+          privmx::cryptoservice::AsymAlg::X25519MLKEM768}) {
         std::vector<TestMember> members;
         for (std::uint32_t i = 0; i < 4; ++i) {
             members.push_back(TestMember{"user" + std::to_string(i), PrivateKey::generateRandom(algorithm)});
@@ -461,18 +462,27 @@ TEST_F(TreeKeysCreate, TreeKeysTakeTheCommittersAlgorithmNotTheBuilds) {
  * A group is homogeneous in key algorithm, and says so itself.
  *
  * Nothing in the protocol declares that property — it follows from the shape of the tree. One node key
- * serves a whole subtree and is wrapped straight to each member's identity by Diffie-Hellman, so a member
- * on another curve cannot be handed it at all. (Containers are the opposite: they wrap their key once per
- * recipient, so a container tolerates a mixed context.)
+ * serves a whole subtree and is wrapped straight to each member's identity, so a member of another
+ * algorithm cannot be handed it. (Containers are the opposite: they wrap their key once per recipient,
+ * so a container tolerates a mixed context.)
  *
  * Before the check the plan ran to its first wrap and threw `MalformedEncryptionKeyException` from `Ecies`,
  * which names a broken key where the real problem is a group that could never have been built. Both
  * directions are run, so the test says the same thing whichever way the build is configured.
+ *
+ * The `ed25519` / `ed25519x25519mlkem768` pair is the one that does not announce itself. Those two
+ * *can* agree a secret — both on X25519 — so no wrap fails and nothing throws from `Ecies`; the group
+ * would be built, and only its post-quantum guarantee would be gone, because `Ecies` encapsulates
+ * only when the recipient has a KEM half. That is why the check asks for the same algorithm rather
+ * than a compatible one, and why this pair is here.
  */
 TEST_F(TreeKeysCreate, RefusesAMemberWhoseKeyAlgorithmIsNotTheGroups) {
     const std::vector<std::pair<privmx::cryptoservice::AsymAlg, privmx::cryptoservice::AsymAlg>> pairs = {
         {privmx::cryptoservice::AsymAlg::PrivmxSecp256k1, privmx::cryptoservice::AsymAlg::ED25519},
         {privmx::cryptoservice::AsymAlg::ED25519, privmx::cryptoservice::AsymAlg::PrivmxSecp256k1},
+        {privmx::cryptoservice::AsymAlg::X25519MLKEM768, privmx::cryptoservice::AsymAlg::ED25519},
+        {privmx::cryptoservice::AsymAlg::ED25519, privmx::cryptoservice::AsymAlg::X25519MLKEM768},
+        {privmx::cryptoservice::AsymAlg::X25519MLKEM768, privmx::cryptoservice::AsymAlg::PrivmxSecp256k1},
     };
     for (const auto& [committerAlgorithm, strangerAlgorithm] : pairs) {
         std::vector<TestMember> members;
@@ -499,7 +509,8 @@ TEST_F(TreeKeysCreate, RefusesAMemberWhoseKeyAlgorithmIsNotTheGroups) {
  */
 TEST_F(TreeKeysCreate, AcceptsAGroupWhoseMembersShareOneAlgorithm) {
     for (const auto algorithm :
-         {privmx::cryptoservice::AsymAlg::PrivmxSecp256k1, privmx::cryptoservice::AsymAlg::ED25519}) {
+         {privmx::cryptoservice::AsymAlg::PrivmxSecp256k1, privmx::cryptoservice::AsymAlg::ED25519,
+          privmx::cryptoservice::AsymAlg::X25519MLKEM768}) {
         std::vector<TestMember> members;
         for (std::uint32_t i = 0; i < 4; ++i) {
             members.push_back(TestMember{"user" + std::to_string(i), PrivateKey::generateRandom(algorithm)});

@@ -41,14 +41,22 @@ void TreeKeys::assertCanReceiveGroupKeys(
     const core::PrivateKey& signer,
     const std::string& userId
 ) {
-    if (core::keyAlgorithmsCanAgree(memberKey.algorithm(), signer.algorithm())) {
+    // Equality, not `keyAlgorithmsCanAgree`. Agreeing is the weaker question — `ed25519` and
+    // `ed25519x25519mlkem768` agree on X25519 and would pass it — and `Ecies` decides whether to
+    // encapsulate from the *recipient's* algorithm alone, so a post-quantum group that admitted an
+    // `ed25519` member would wrap its node key to them classically, without error. One node key
+    // serves a whole subtree, so that single member would strip the post-quantum protection off
+    // every wrap of that key: exactly the harvest-now-decrypt-later case the algorithm exists for.
+    // The bridge compares tags for equality too (`GroupService.assertMembersMatchTheGroupsAlgorithm`),
+    // and this check is what makes that agreement rather than the only thing enforcing it.
+    if (core::keyAlgorithmsAreTheSame(memberKey.algorithm(), signer.algorithm())) {
         return;
     }
     throw GroupMemberKeyAlgorithmMismatchException(
         "member '" + userId + "' has a key of algorithm " +
         std::to_string(static_cast<int>(memberKey.algorithm())) + ", and this group's keys are of algorithm " +
         std::to_string(static_cast<int>(signer.algorithm())) +
-        "; a group's node key is wrapped to every member by Diffie-Hellman, so all of them must be of one algorithm"
+        "; a group's node key is wrapped to every member from one key, so all of them must be of one algorithm"
     );
 }
 

@@ -141,19 +141,19 @@ ItemPolicy VarDeserializer::deserialize<ItemPolicy>(const Poco::Dynamic::Var& va
 
 template<>
 ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynamic::Var& val, const std::string& name) {
-    TypeValidator::validateObject(val, name);
-    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    // The base's fields are read by the base's own deserializer, not listed again here.
+    //
+    // `ContainerPolicy` *is* a `ContainerPolicyWithoutItem` with `item` added, and repeating its
+    // fields meant that every field added to the base had to be added in two places — with nothing
+    // to catch the omission. `rotateKeys`, `forwardSecrecy` and `cryptoSuite` were all read on the
+    // base's path and dropped on this one, and this is the type `createThread`, `createStore` and
+    // the rest take, so a policy arriving through the Var interface — that is, from every wrapper
+    // language — silently lost them. Worse than an error: the container was created, just not with
+    // the algorithms it asked for, and the build's default quietly stood in. `VarSerializer` has
+    // always delegated the other way round, so only the reading side could drift.
     ContainerPolicy result{};
-    result.get = deserializeOptional<std::string>(obj->get("get"), name + ".get");
-    result.update = deserializeOptional<std::string>(obj->get("update"), name + ".update");
-    result.delete_ = deserializeOptional<std::string>(obj->get("delete_"), name + ".delete_");
-    result.updatePolicy = deserializeOptional<std::string>(obj->get("updatePolicy"), name + ".updatePolicy");
-    result.updaterCanBeRemovedFromManagers = deserializeOptional<std::string>(
-        obj->get("updaterCanBeRemovedFromManagers"), name + ".updaterCanBeRemovedFromManagers"
-    );
-    result.ownerCanBeRemovedFromManagers = deserializeOptional<std::string>(
-        obj->get("ownerCanBeRemovedFromManagers"), name + ".ownerCanBeRemovedFromManagers"
-    );
+    static_cast<ContainerPolicyWithoutItem&>(result) = deserialize<ContainerPolicyWithoutItem>(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     result.item = deserializeOptional<ItemPolicy>(obj->get("item"), name + ".item");
     return result;
 }

@@ -72,6 +72,15 @@ struct CipherSpec {
 constexpr std::size_t GCM_IV_LENGTH = 12;
 constexpr std::size_t GCM_TAG_LENGTH = 16;
 
+/**
+ * The key length every format here cipher with — all three are AES-256.
+ *
+ * Named separately from the hash, because the two are independent: the chunk key is a *digest*, and
+ * a digest is as long as the hash function that made it. SHA-512 gives 64 bytes where AES-256 wants
+ * 32, so the digest has to be cut to size rather than handed over whole. See `chunkKey`.
+ */
+constexpr std::size_t CIPHER_KEY_LENGTH = 32;
+
 constexpr std::array<CipherSpec, 3> CIPHERS{{
     {FileCipher::AES_CBC_HMAC_SHA256, Mode::CbcHmac, IV_SIZE, HMAC_SIZE, CHUNK_PADDING, HMAC_SIZE + IV_SIZE,
      core::SuiteId::Aes256GcmSha256},
@@ -222,7 +231,20 @@ std::string FileCipher::chunkKey(const std::string& fileKey, std::uint64_t index
     // SHA-256 — exactly what `Crypto::sha256` computed here before, so files written earlier read
     // unchanged. Format 3 computes the same thing with SHA-512, which is why it has its own
     // `cipherType`.
-    return core::CryptoSuite::forId(requireSpec(_type).hashSuite).hash(fileKey + indexToBE(index));
+    const std::string digest = core::CryptoSuite::forId(requireSpec(_type).hashSuite).hash(fileKey + indexToBE(index));
+    // Cut to the cipher's key length, which the hash knows nothing about: SHA-512 gives 64 bytes and
+    // AES-256 takes 32. Formats 1 and 2 hash with SHA-256 and this is a no-op for them, so nothing
+    // already on disk changes meaning — and it does not change what format 3 writes either, because
+    // OpenSSL reads the first 32 bytes of whatever it is handed and silently ignores the rest. That
+    // is precisely the problem: it is the provider's missing length check (pmx-crypto passes
+    // `key.data()` straight through — see `issue-pmx-crypto-key-iv-length`) that made the oversized
+    // key work at all, so format 3 would have broken on the day that check was added. Note that
+    // `CryptoSuite::encrypt` does check, and would have caught this; `store` goes to the provider
+    // directly because the suite's frame is not the file's frame (see `symEncrypt`).
+    //
+    // Both registered hash suites yield at least 32 bytes, so this never shortens a key below the
+    // cipher's requirement; a shorter hash would need its own key derivation, not a `substr`.
+    return digest.substr(0, CIPHER_KEY_LENGTH);
 }
 
 IChunkEncryptor::Chunk FileCipher::encryptChunk(const std::string& chunkKey, const std::string& plain) const {

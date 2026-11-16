@@ -46,8 +46,20 @@ constexpr std::size_t AGREEMENT_PUBLIC_LENGTH = 32;
 constexpr std::size_t KEM_CIPHERTEXT_LENGTH = 1088;
 constexpr const char* WRAP_KDF_LABEL = "privmx-key-wrap";
 
-std::string wrapKeyFor(const std::string& sharedSecret) {
-    return FormatHash::kdf(sharedSecret, WRAP_KDF_LABEL, CryptoSuite::defaultForWrite().keyLength());
+/**
+ * The wrapping key, as long as the suite that will consume it needs.
+ *
+ * The suite is passed in rather than read from the build, because the two ends of this are not the
+ * same build. Writing takes `defaultForWrite()`, which is right by definition; reading has to take
+ * the suite the *frame* names, which may be another one — that is the whole point of the tag in the
+ * frame. Deriving the read side's length from this build's default worked only as long as every
+ * registered suite had a 32-byte key, and would have turned the first suite with a different one
+ * into a wrap that no differently-configured client could open: `CryptoSuite::decrypt` checks the
+ * key against the frame's suite, so the failure would come out as a key-length error on a perfectly
+ * good key.
+ */
+std::string wrapKeyFor(const std::string& sharedSecret, const CryptoSuite& suite) {
+    return FormatHash::kdf(sharedSecret, WRAP_KDF_LABEL, suite.keyLength());
 }
 
 /**
@@ -100,7 +112,8 @@ std::string wrapToComposedIdentity(const PublicKey& pub, const std::string& data
         shared += keyString(kemSecret);
         kemCiphertext = keyString(ciphertext);
     }
-    return senderPublic + kemCiphertext + CryptoSuite::defaultForWrite().encrypt(wrapKeyFor(shared), data);
+    const CryptoSuite suite = CryptoSuite::defaultForWrite();
+    return senderPublic + kemCiphertext + suite.encrypt(wrapKeyFor(shared, suite), data);
 }
 
 std::string unwrapForComposedIdentity(const PrivateKey& priv, const std::string& cipher) {
@@ -120,7 +133,11 @@ std::string unwrapForComposedIdentity(const PrivateKey& priv, const std::string&
         }
         shared += keyString(priv.kemImpl()->decapsulate(keyBytes(cipher.substr(AGREEMENT_PUBLIC_LENGTH, kemLength))));
     }
-    return CryptoSuite::decrypt(wrapKeyFor(shared), cipher.substr(AGREEMENT_PUBLIC_LENGTH + kemLength));
+    // The suite comes from the frame, not from this build: a wrap written by a client configured
+    // differently names its own suite, and the key has to be derived to *that* suite's length.
+    const std::string framed = cipher.substr(AGREEMENT_PUBLIC_LENGTH + kemLength);
+    const CryptoSuite suite = CryptoSuite::forId(CryptoSuite::readSuiteId(framed));
+    return CryptoSuite::decrypt(wrapKeyFor(shared, suite), framed);
 }
 
 } // namespace
