@@ -1551,6 +1551,47 @@ TEST_F(GroupApiLyingBridge, AnOwnCommitLostToAnotherCommitMakesTheOneQueuedBehin
     EXPECT_EQ(bridge.tree.state.epoch, 3u) << "both removals landed, one after the other";
 }
 
+/**
+ * The other side of the same guard: a seq the bridge says was taken and then never serves a statement at.
+ *
+ * `refusedAsLostRace` makes this client refuse to sign at that seq again, and two places enforce it —
+ * `CommitEngine::chainTo` and `CommitEngine::settle` as an integrity failure, `CommitEngine::submit` as a retryable
+ * StalePlan. Which applies turns on *when* the refusal was recorded relative to the read a plan stands on, and the
+ * test above covers the retryable side: a refusal that arrived after the read is this client racing itself, not the
+ * bridge lying.
+ *
+ * This is the case that must stay terminal. The bridge claims a concurrent commit every time while leaving the chain
+ * where it was, so every retry re-reads, is told the seq is taken, and is served nothing at it. Taken for honest
+ * concurrency it would retry against a bridge that is simply lying, and report the lie as a lost race.
+ *
+ * Both terminal sites are exercised, because they are reached differently and the suite covered neither — the whole
+ * file passed with `chainTo`'s refusal turned into a StalePlan, so relaxing it to quiet the flake above would have
+ * deleted a real defence in silence. `settle` is reached while the refused commit is still unresolved (it is the
+ * resend that is refused); `chainTo` only once that commit is out of the way and a plan is made afresh at the same
+ * seq, which is why the unresolved one is aged past its release window in between.
+ */
+TEST_F(GroupApiLyingBridge, SECURITY_ASeqSaidTakenThatIsNeverServedIsRefusedNotRetriedForever) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    bridge.beforeRemoval = [](std::unique_lock<std::mutex>&) { refuse("ROTATED_ALREADY", 0x621C); };
+
+    // `settle`: the retry resends the still-unresolved commit at the seq the bridge said was taken.
+    expectRefusal<GroupDataIntegrityException>(
+        [&] { client("alice").removeGroupMembers(groupId, {"carol"}); },
+        "a seq the bridge said a concurrent commit took, and now serves none at"
+    );
+
+    // Past its release window, so the next call drops it instead of resending it and plans afresh — at the same seq,
+    // the chain not having moved. The refusal is now older than that plan's own read, which is exactly what
+    // `chainTo` must refuse rather than re-plan.
+    GroupApiImplTestAccess::ageUnresolved(client("alice"), groupId, GroupApiImplTestAccess::RELEASE_WINDOW_MS + 1);
+    expectRefusal<GroupDataIntegrityException>(
+        [&] { client("alice").removeGroupMembers(groupId, {"carol"}); },
+        "a seq the bridge said a concurrent commit took, and now serves none at"
+    );
+    EXPECT_EQ(bridge.tree.state.epoch, 1u) << "nothing landed";
+}
+
 TEST_F(GroupApiLyingBridge, ALandedAddIsNotReportedFailedOnceItsNewcomerIsNoLongerVouchedFor) {
     // alice's add of dave lands but its answer is lost; bob builds on it, alice's pin passes it, and only then does
     // the verifier stop vouching for dave's key. Retried, the add is found landed: success, nothing resent.
