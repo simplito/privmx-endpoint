@@ -68,17 +68,23 @@ def format_command(cmd: Sequence[str]) -> str:
     return shlex.join(str(part) for part in cmd)
 
 
-def spawn_env() -> dict[str, str]:
-    # The test binaries need the conan libraries that run_tests.sh kept out of this process,
-    # so that python itself could keep linking the system OpenSSL.
+def spawn_env(runtime_libs: bool) -> dict[str, str]:
+    # The test binaries need the conan libraries that run_tests.sh kept out of this process, so that
+    # python itself could keep linking the system OpenSSL. System tools must not see them either.
     env = os.environ.copy()
     runtime_library_path = env.pop(RUNTIME_LIBRARY_PATH_ENV_VAR, "")
-    if runtime_library_path:
+    if runtime_libs and runtime_library_path:
         env["LD_LIBRARY_PATH"] = runtime_library_path
+    elif not runtime_libs:
+        env.pop("LD_LIBRARY_PATH", None)
     return env
 
 
-def run_command(cmd: Sequence[str], timeout: int | None = None) -> tuple[int, bytes, bytes]:
+def run_command(
+    cmd: Sequence[str],
+    timeout: int | None = None,
+    runtime_libs: bool = False,
+) -> tuple[int, bytes, bytes]:
     command = [str(part) for part in cmd]
     log(f"$ {format_command(command)}")
     try:
@@ -86,7 +92,7 @@ def run_command(cmd: Sequence[str], timeout: int | None = None) -> tuple[int, by
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env=spawn_env(),
+            env=spawn_env(runtime_libs),
         )
     except OSError as exc:
         return 127, b"", str(exc).encode("utf-8", errors="replace")

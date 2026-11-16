@@ -39,6 +39,23 @@ WebSocketChannel::~WebSocketChannel() {
 future<string> WebSocketChannel::send(const string& data, const string& path, [[maybe_unused]] const std::vector<std::pair<std::string, std::string>>& headers, [[maybe_unused]] privmx::utils::CancellationToken::Ptr token,
         [[maybe_unused]] const string& content_type, [[maybe_unused]] bool get, [[maybe_unused]] bool keepAlive) {
     connect(path);
+    {
+        UniqueLock lock(_connected_mutex);
+        _connected_cv.wait(lock, [this] { return _socket_state != SocketState::Connecting || _disconnecting; });
+    }
+    // Held from here on so that a disconnect racing this send waits at its callback barrier
+    // instead of freeing _ws underneath privmxDrvNet_wsSend.
+    RecursiveLock callback_lock(_callback_mutex);
+    privmxDrvNet_Ws* ws = nullptr;
+    {
+        Lock lock(_connected_mutex);
+        if (_socket_state == SocketState::Open) {
+            ws = _ws;
+        }
+    }
+    if (ws == nullptr) {
+        throw WebsocketDisconnectedException();
+    }
     std::future<string> future;
     Int32 id;
     {
@@ -48,13 +65,10 @@ future<string> WebSocketChannel::send(const string& data, const string& path, [[
         future = _promises[id].get_future();
     }
     string raw_payload = Payload::toRaw(id, data);
-    if(!_connected){
-        std::unique_lock lock(_connected_mutex);
-        _connected_cv.wait(lock);
-
-    }
-    int status = privmxDrvNet_wsSend(_ws, raw_payload.data(), raw_payload.length());
+    int status = privmxDrvNet_wsSend(ws, raw_payload.data(), raw_payload.length());
     if (status != 0) {
+        Lock lock(_promises_mutex);
+        _promises.erase(id);
         throw WsSend1Exception("wsSend1: " + to_string(status));
     }
     return future;
@@ -62,20 +76,27 @@ future<string> WebSocketChannel::send(const string& data, const string& path, [[
 
 void WebSocketChannel::disconnect() {
     _disconnecting = true;
+    privmxDrvNet_Ws* ws = nullptr;
+    bool was_open = false;
     {
         Lock lock(_connected_mutex);
-        if (_ws != nullptr) {
-            if (_connected) {
-                privmxDrvNet_wsClose(_ws);
-                _connected = false;
-            }
-            privmxDrvNet_wsFree(_ws);
-            _ws = nullptr;
-        }
+        ws = _ws;
+        was_open = _socket_state == SocketState::Open;
+        _ws = nullptr;
+        _socket_state = SocketState::Closed;
     }
-    // Closing the socket makes the driver fire onclose on its own thread; wait for it to return
-    // before the caller destroys this channel and everything its listeners reach through it.
-    { std::lock_guard<std::recursive_mutex> callback_lock(_callback_mutex); }
+    // Wakes senders parked in send(); with _ws gone they fail instead of waiting for an open that
+    // the driver will no longer report.
+    _connected_cv.notify_all();
+    // Closing the socket makes the driver fire onclose on its own thread; wait for callbacks and
+    // sends already inside to return before the socket is freed and this channel is destroyed.
+    { RecursiveLock callback_lock(_callback_mutex); }
+    if (ws != nullptr) {
+        if (was_open) {
+            privmxDrvNet_wsClose(ws);
+        }
+        privmxDrvNet_wsFree(ws);
+    }
     // onclose is suppressed for this close, so the senders it would have failed are failed here.
     try { rejectAllPromises(); } catch (...) {}
     tryJoinThreads();
@@ -83,8 +104,12 @@ void WebSocketChannel::disconnect() {
 
 void WebSocketChannel::connect(const std::string& path) {
     Lock lock(_state_mutex);
-    Lock lock2(_connected_mutex);
-    if (_connected) return;
+    {
+        Lock connected_lock(_connected_mutex);
+        if (_socket_state == SocketState::Open || _socket_state == SocketState::Connecting) return;
+        _socket_state = SocketState::Connecting;
+        _disconnecting = false;
+    }
     tryJoinThreads();
     Poco::URI url2 = _uri;
     url2.setPath(path);
@@ -92,12 +117,21 @@ void WebSocketChannel::connect(const std::string& path) {
     privmxDrvNet_Ws* ws;
     privmxDrvNet_WsOptions options;
     options.url = url.c_str();
-    _disconnecting = false;
     int status = privmxDrvNet_wsConnect(&options, &WebSocketChannel::onopen, &WebSocketChannel::onmessage, &WebSocketChannel::onerror, &WebSocketChannel::onclose, this, &ws);
     if (status != 0) {
+        {
+            Lock connected_lock(_connected_mutex);
+            _socket_state = SocketState::Closed;
+        }
+        _connected_cv.notify_all();
         throw WsConnectException(to_string(status));
     }
-    _ws = ws;
+    {
+        Lock connected_lock(_connected_mutex);
+        _ws = ws;
+    }
+    // onopen may already have run on the driver thread, so senders waiting for _ws are woken here.
+    _connected_cv.notify_all();
 }
 
 void WebSocketChannel::rejectAllPromises() {
@@ -134,30 +168,39 @@ string WebSocketChannel::Payload::toRaw(const Int32& id, const string& data) {
 }
 
 
-void WebSocketChannel::onopen(void* ctx) {
+// Shuts the driver out once teardown has begun and keeps this channel alive for the duration of a
+// callback that got in before that, which is what disconnect() waits for at its barrier.
+void WebSocketChannel::runCallback(void* ctx, const std::function<void(WebSocketChannel&)>& callback) {
     WebSocketChannel* channel = static_cast<WebSocketChannel*>(ctx);
-    channel->onopen();
+    RecursiveLock lock(channel->_callback_mutex);
+    if (channel->_disconnecting) {
+        return;
+    }
+    callback(*channel);
+}
+
+void WebSocketChannel::onopen(void* ctx) {
+    runCallback(ctx, [](WebSocketChannel& channel) { channel.onopen(); });
 }
 
 void WebSocketChannel::onmessage(void* ctx, const char* msg, int msglen) {
-    WebSocketChannel* channel = static_cast<WebSocketChannel*>(ctx);
-    channel->onmessage(msg, msglen);
+    runCallback(ctx, [&](WebSocketChannel& channel) { channel.onmessage(msg, msglen); });
 }
 
 void WebSocketChannel::onerror(void* ctx, const char* msg, int msglen) {
-    WebSocketChannel* channel = static_cast<WebSocketChannel*>(ctx);
-    channel->onerror(msg, msglen);
+    runCallback(ctx, [&](WebSocketChannel& channel) { channel.onerror(msg, msglen); });
 }
 
 void WebSocketChannel::onclose(void* ctx, int wasClean) {
-    WebSocketChannel* channel = static_cast<WebSocketChannel*>(ctx);
-    channel->onclose(wasClean);
+    runCallback(ctx, [&](WebSocketChannel& channel) { channel.onclose(wasClean); });
 }
 
 void WebSocketChannel::onopen() {
-    _connected = true;
+    {
+        Lock lock(_connected_mutex);
+        _socket_state = SocketState::Open;
+    }
     _connected_cv.notify_all();
-
 }
 
 void WebSocketChannel::onmessage(const char* msg, int msglen) {
@@ -187,14 +230,13 @@ void WebSocketChannel::onerror([[maybe_unused]] const char* msg, [[maybe_unused]
 }
 
 void WebSocketChannel::onclose([[maybe_unused]] int wasClean) {
-    std::lock_guard<std::recursive_mutex> callback_lock(_callback_mutex);
-    if (_disconnecting) {
-        return;
-    }
     Lock lock(_state_mutex);
     {
-        _connected = false;
+        Lock connected_lock(_connected_mutex);
+        _socket_state = SocketState::Closed;
     }
+    // A sender waiting for this socket to open will never get it, so wake it to fail instead.
+    _connected_cv.notify_all();
     try {
         _notify->onWebSocketClose();
     } catch (...) {}

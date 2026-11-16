@@ -17,7 +17,9 @@ def normalize_gtest_entry(entry: str) -> str:
 
 
 def list_tests(test_file_path: str, passthrough_args: Sequence[str]) -> list[str]:
-    return_code, out, err = e2e_common.run_command([test_file_path, "--gtest_list_tests", *passthrough_args])
+    return_code, out, err = e2e_common.run_command(
+        [test_file_path, "--gtest_list_tests", *passthrough_args], runtime_libs=True
+    )
     if return_code != 0:
         print(f"Failed to load tests list for {test_file_path}")
         print("Received error:")
@@ -68,7 +70,7 @@ def execute_test(
         *passthrough_args,
         f"--gtest_filter={test_name}",
     ]
-    rc, out, err = e2e_common.run_command(command, timeout=e2e_common.TIMEOUT_PER_TEST)
+    rc, out, err = e2e_common.run_command(command, timeout=e2e_common.TIMEOUT_PER_TEST, runtime_libs=True)
     e2e_common.log("=" * 80)
     e2e_common.log(e2e_common.decode_output(out))
     e2e_common.log(e2e_common.decode_output(err))

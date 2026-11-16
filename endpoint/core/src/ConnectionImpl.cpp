@@ -97,25 +97,13 @@ void ConnectionImpl::connectOver(
         new EventMiddleware(EventQueueImpl::getInstance(), _connectionId)
     );
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
-    _eventMiddleware->addConnectedEventListener([&] {
-        if (_connectedEventEmitted.exchange(true)) {
-            return;
-        }
-        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
-        _eventMiddleware->emitApiEvent(event);
-    });
+    _eventMiddleware->addConnectedEventListener([this] { emitLibConnectionStateChange(true); });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
         server::ContextGetModel model;
         model.id = id;
         return _serverApi->contextGet(model).context;
     });
-    _eventMiddleware->addDisconnectedEventListener([&] {
-        if (!_connectedEventEmitted.exchange(false)) {
-            return;
-        }
-        auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
-        _eventMiddleware->emitApiEvent(event);
-    });
+    _eventMiddleware->addDisconnectedEventListener([this] { emitLibConnectionStateChange(false); });
     _gatewayNotificationEventListener = _gateway->addNotificationEventListener(
         [&, this](const rpc::NotificationEvent& event) {
             if (event.type == "janus") {
@@ -137,11 +125,9 @@ void ConnectionImpl::connectOver(
     _gatewaySessionLostEventListener = _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); }
     );
-    // Asked only once the listener is registered, so a connection that completes mid-setup is
+    // Asked only once the listeners are registered, so a connection that completes mid-setup is
     // reported by one path or the other instead of falling between them.
-    if (_gateway->isConnected()) {
-        _eventMiddleware->emitConnectedEvent();
-    }
+    emitLibConnectionStateFromGateway();
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -178,23 +164,11 @@ void ConnectionImpl::connectPublic(
         new EventMiddleware(EventQueueImpl::getInstance(), _connectionId)
     );
     _handleManager = std::shared_ptr<HandleManager>(new HandleManager());
-    _eventMiddleware->addConnectedEventListener([&] {
-        if (_connectedEventEmitted.exchange(true)) {
-            return;
-        }
-        auto event = EventBuilder::buildLibEvent<LibConnectedEvent>();
-        _eventMiddleware->emitApiEvent(event);
-    });
+    _eventMiddleware->addConnectedEventListener([this] { emitLibConnectionStateChange(true); });
     _contextProvider = std::make_shared<ContextProvider>([&](const std::string& id) {
         return server::ContextInfo{.userId = "<anonymous>", .contextId = id};
     });
-    _eventMiddleware->addDisconnectedEventListener([&] {
-        if (!_connectedEventEmitted.exchange(false)) {
-            return;
-        }
-        auto event = EventBuilder::buildLibEvent<LibDisconnectedEvent>();
-        _eventMiddleware->emitApiEvent(event);
-    });
+    _eventMiddleware->addDisconnectedEventListener([this] { emitLibConnectionStateChange(false); });
     _gatewayNotificationEventListener = _gateway->addNotificationEventListener([&, this](
                                                                                    const rpc::NotificationEvent& event
                                                                                ) {
@@ -209,11 +183,9 @@ void ConnectionImpl::connectPublic(
     _gatewaySessionLostEventListener = _gateway->addSessionLostEventListener(
         [&, this]([[maybe_unused]] const rpc::SessionLostEvent& event) { _eventMiddleware->emitDisconnectedEvent(); }
     );
-    // Asked only once the listener is registered, so a connection that completes mid-setup is
+    // Asked only once the listeners are registered, so a connection that completes mid-setup is
     // reported by one path or the other instead of falling between them.
-    if (_gateway->isConnected()) {
-        _eventMiddleware->emitConnectedEvent();
-    }
+    emitLibConnectionStateFromGateway();
     _notificationListenerId = _eventMiddleware->addNotificationEventListener(
         std::bind(&ConnectionImpl::processNotificationEvent, this, std::placeholders::_1, std::placeholders::_2)
     );
@@ -496,4 +468,28 @@ void ConnectionImpl::processNotificationEvent(const std::string& type, const cor
             LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
         }
     });
+}
+
+void ConnectionImpl::emitLibConnectionStateChangeUnlocked(bool connected) {
+    if (_connectedEventEmitted == connected) {
+        return;
+    }
+    _connectedEventEmitted = connected;
+    if (connected) {
+        _eventMiddleware->emitApiEvent(EventBuilder::buildLibEvent<LibConnectedEvent>());
+    } else {
+        _eventMiddleware->emitApiEvent(EventBuilder::buildLibEvent<LibDisconnectedEvent>());
+    }
+}
+
+void ConnectionImpl::emitLibConnectionStateChange(bool connected) {
+    std::lock_guard<std::mutex> lock(_connectedEventMutex);
+    emitLibConnectionStateChangeUnlocked(connected);
+}
+
+void ConnectionImpl::emitLibConnectionStateFromGateway() {
+    // The gateway state is read under the lock the listeners take, so a disconnect arriving here
+    // waits instead of being swallowed by the guard and leaving a stale libConnected behind.
+    std::lock_guard<std::mutex> lock(_connectedEventMutex);
+    emitLibConnectionStateChangeUnlocked(_gateway->isConnected());
 }

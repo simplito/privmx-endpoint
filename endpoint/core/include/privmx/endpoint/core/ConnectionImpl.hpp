@@ -12,7 +12,6 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CORE_CONNECTIONIMPL_HPP_
 #define _PRIVMXLIB_ENDPOINT_CORE_CONNECTIONIMPL_HPP_
 
-#include <atomic>
 #include <exception>
 #include <functional>
 #include <map>
@@ -141,6 +140,9 @@ private:
     NotificationEvent convertRpcNotificationEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
     NotificationEvent convertJanusEventToCoreNotificationEvent(const rpc::NotificationEvent& event);
     void processNotificationEvent(const std::string& type, const core::NotificationEvent& notification);
+    void emitLibConnectionStateChangeUnlocked(bool connected);
+    void emitLibConnectionStateChange(bool connected);
+    void emitLibConnectionStateFromGateway();
 
     const int64_t _connectionId;
     privfs::RpcGateway::Ptr _gateway;
@@ -166,7 +168,9 @@ private:
         _gatewayDisconnectedEventListener = -1, _gatewaySessionLostEventListener = -1;
     int _notificationListenerId = -1;
     // libConnected and libDisconnected report transitions, so each is emitted once per flip of this.
-    std::atomic_bool _connectedEventEmitted = false;
+    bool _connectedEventEmitted = false;
+    // Also held while the gateway state is read, so an event cannot overtake that read.
+    std::mutex _connectedEventMutex;
 };
 
 } // namespace core
