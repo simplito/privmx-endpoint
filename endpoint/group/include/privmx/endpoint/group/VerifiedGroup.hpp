@@ -73,10 +73,23 @@ public:
         const std::function<void()>& afterVerify
     );
 
+    // `TreeVerifier::refusedSeqOf` as it stood when this read was taken, sampled **before** the answer was asked for.
+    //
+    // It dates the refusals this answer can be held against. A plan made on this read may not sign at a seq that was
+    // already refused when the read went out — the bridge had said the seq was taken and then served a chain that
+    // does not reach it, which is a lie. A seq refused only after the read is a different thing entirely: another
+    // call of this client took it while this plan was being made, and the plan simply has to be made again.
+    // `CommitEngine::chainTo` tells the two apart with this. Sampled before the fetch rather than after, so a refusal
+    // recorded while the answer was in flight counts as the newer, retried case; the retry reads afresh and then
+    // judges it properly.
+    std::uint64_t refusedSeqAtRead() const { return _refusedSeqAtRead; }
+
 private:
-    explicit VerifiedGroup(server::GroupInfo group) : _group(std::move(group)) {}
+    VerifiedGroup(server::GroupInfo group, std::uint64_t refusedSeqAtRead)
+        : _group(std::move(group)), _refusedSeqAtRead(refusedSeqAtRead) {}
 
     server::GroupInfo _group;
+    std::uint64_t _refusedSeqAtRead = 0;
 };
 
 // What `readGroup` saw: `verified`, or, for a group without a supported tree or a caller without a seat, the answer

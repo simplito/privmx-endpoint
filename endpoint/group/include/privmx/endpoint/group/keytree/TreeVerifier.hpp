@@ -178,6 +178,14 @@ public:
     // The same as a question: false where `assertMaySignAt` throws.
     bool maySignAt(const std::string& groupId, std::uint64_t seq) const;
 
+    // The highest seq refused as a lost race so far, 0 where none was.
+    //
+    // Sampled by a read (`VerifiedGroup::refusedSeqAtRead`) so a plan can tell *when* a refusal was recorded, which
+    // is what separates a lying bridge from this client's own concurrency: a refusal older than the read means the
+    // answer is fresh and still serves nothing at that seq, while one newer than the read means another call of ours
+    // took the seq out from under a plan that was made before anybody knew. See `CommitEngine::chainTo`.
+    std::uint64_t refusedSeqOf(const std::string& groupId) const;
+
     // Public for the unit tests of `step` (a walk that skips statements passes `adjacent = false`).
     // The roster as the statements replay it, with the hash the last of them signed.
     struct Roster {

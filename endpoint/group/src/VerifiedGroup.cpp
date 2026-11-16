@@ -70,6 +70,9 @@ GroupRead VerifiedGroup::read(
     keytree::TreeVerifier::Scope scope,
     const std::function<void()>& afterVerify
 ) {
+    // Sampled before the answer is asked for, so every refusal this read can be held against is already in it.
+    // See `VerifiedGroup::refusedSeqAtRead`.
+    const std::uint64_t refusedSeqAtRead = treeVerifier.refusedSeqOf(model.groupId);
     server::GroupInfo group = serverApi.groupGet(model).group;
     // Whatever this verification moved, refusals included.
     struct AfterVerify {
@@ -103,5 +106,5 @@ GroupRead VerifiedGroup::read(
         assertOwnSeat();
         treeVerifier.verify(group, scope, environment);
     }
-    return GroupRead{.verified = VerifiedGroup(std::move(group)), .unseated = {}};
+    return GroupRead{.verified = VerifiedGroup(std::move(group), refusedSeqAtRead), .unseated = {}};
 }

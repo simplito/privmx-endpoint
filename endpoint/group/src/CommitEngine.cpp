@@ -128,6 +128,21 @@ std::optional<GroupRead> CommitEngine::readForCommit(
 
 void CommitEngine::chainTo(keytree::CommitStatement& statement, const VerifiedGroup& group) const {
     // Nothing is signed on pins this device cannot keep, or behind what a sibling instance saved meanwhile.
+    //
+    // A refusal recorded *after* this read is not the bridge lying — it is this client racing itself. Two mutating
+    // calls on one group plan on one head; the first is refused as a lost race and records the seq; the second, whose
+    // plan was made before anybody knew, arrives here and must simply plan again. `submit` says exactly that about the
+    // same condition and throws StalePlan for it, but only for a plan that got as far as the commit lock. Whichever
+    // of the two a caller reached was decided by timing alone, so the same honest concurrency surfaced as a retried
+    // StalePlan or as a flat GroupDataIntegrityException — an accusation against the bridge — depending on the thread
+    // schedule.
+    //
+    // `refusedSeqAtRead` dates the refusal against the read. Older than the read: the answer was fetched knowing the
+    // seq was taken and still reaches nothing at it, which is the integrity failure `assertMaySignAt` names. Newer:
+    // re-plan, and the fresh read decides it then.
+    if (!deps.treeVerifier.maySignAt(group->id, statement.seq) && statement.seq > group.refusedSeqAtRead()) {
+        throw StalePlan{};
+    }
     deps.treeVerifier.assertMaySignAt(group->id, statement.seq);
     const keytree::CommitStatement previous = keytree::TreeCommits::fromWire(group->treeCommit.value());
     statement.prevDigest = keytree::TreeCommits::digest(previous);

@@ -1005,6 +1005,12 @@ bool TreeVerifier::maySignAt(const std::string& groupId, std::uint64_t seq) cons
     return it == _pins.end() || seq > it->second.refusedSeq;
 }
 
+std::uint64_t TreeVerifier::refusedSeqOf(const std::string& groupId) const {
+    std::lock_guard lock(_mutex);
+    const auto it = _pins.find(groupId);
+    return it == _pins.end() ? 0 : it->second.refusedSeq;
+}
+
 bool TreeVerifier::raiseGeneration(
     std::map<std::uint32_t, std::uint32_t>& generations,
     std::uint32_t node,
