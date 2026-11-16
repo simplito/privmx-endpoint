@@ -80,8 +80,13 @@ public:
     VerifiedGroup rereadVerified(const server::GroupGetModel& model, keytree::TreeVerifier::Scope scope) const;
 
     // Chains an unsigned statement to `group`'s latest (verified) one: its digest as `prevDigest`, and a date no
-    // earlier than its, which readers require of the chain. Refused at a seq a statement of ours was refused at as a
-    // lost race: that one may have been applied, and a second one there would be a fork.
+    // earlier than its, which readers require of the chain.
+    //
+    // Never at a seq a statement of ours was refused at as a lost race: that one may have been applied, and a second
+    // one there would be a fork. Which way it is refused depends on when that refusal was recorded, measured against
+    // `group.refusedSeqAtRead()`. Already known when this read went out: the answer is fresh and still reaches
+    // nothing at the seq the bridge said was taken, so GroupDataIntegrityException. Recorded since: another call of
+    // ours took the seq while this plan was being made, so StalePlan and the caller re-plans.
     void chainTo(keytree::CommitStatement& statement, const VerifiedGroup& group) const;
 
     // Sends a signed statement and keeps `commit` until its outcome is known. Throws StalePlan for a plan
