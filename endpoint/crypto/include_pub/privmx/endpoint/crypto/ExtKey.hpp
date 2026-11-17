@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_CRYPTO_EXTKEY_HPP_
 #define _PRIVMXLIB_ENDPOINT_CRYPTO_EXTKEY_HPP_
 
+#include <cstdint>
 #include <memory>
 #include <privmx/endpoint/core/Buffer.hpp>
 #include <string>

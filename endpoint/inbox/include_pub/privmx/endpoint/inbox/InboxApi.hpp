@@ -1,6 +1,7 @@
 #ifndef _PRIVMXLIB_ENDPOINT_INBOX_INBOXAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXAPI_HPP_
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>

@@ -4,6 +4,7 @@
 #include "privmx/endpoint/core/Events.hpp"
 #include "privmx/endpoint/core/Types.hpp"
 #include "privmx/endpoint/group/Types.hpp"
+#include <cstdint>
 
 namespace privmx {
 namespace endpoint {

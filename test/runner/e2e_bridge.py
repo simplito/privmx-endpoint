@@ -16,6 +16,8 @@ MongoClient = None
 
 DOCKER_NETWORK = "endpoint_e2e_testing_network"
 BACKEND_READY_TIMEOUT_SECONDS = 5
+# Per-test writes ride out an election or a container restart, like the bridge start timeout.
+MONGO_PRIMARY_TIMEOUT_SECONDS = 30
 READY_POLL_INTERVAL_SECONDS = 0.1
 # Each container check spawns a docker CLI process, so it runs far less often than the HTTP poll.
 CONTAINER_CHECK_INTERVAL_SECONDS = 2.0
@@ -40,6 +42,23 @@ def load_runtime_dependencies() -> None:
     MongoClient = mongo_client_class
 
 
+def wait_for_writable_primary(client: Any, timeout_seconds: int = MONGO_PRIMARY_TIMEOUT_SECONDS) -> None:
+    # directConnection skips primary selection, so a write during an election fails with
+    # NotWritablePrimary. Mongo runs as a one-node replica set, so it elects itself shortly.
+    deadline = time.monotonic() + timeout_seconds
+    last_state = None
+    while True:
+        try:
+            if client.admin.command("hello").get("isWritablePrimary"):
+                return
+            last_state = "secondary"
+        except Exception as exc:
+            last_state = str(exc)
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f"MongoDB did not become a writable primary in {timeout_seconds}s ({last_state}).")
+        time.sleep(0.2)
+
+
 def check_backend_ready() -> None:
     hint = "Start it with 'docker compose up -d' from the test/env/ directory (see test/env/compose.yaml)."
 
@@ -48,10 +67,12 @@ def check_backend_ready() -> None:
             "mongodb://localhost:27017/?directConnection=true",
             serverSelectionTimeoutMS=BACKEND_READY_TIMEOUT_SECONDS * 1000,
         )
-        client.admin.command("ping")
-        client.close()
+        try:
+            wait_for_writable_primary(client, BACKEND_READY_TIMEOUT_SECONDS)
+        finally:
+            client.close()
     except Exception as exc:
-        raise RuntimeError(f"MongoDB is not reachable at localhost:27017. {hint}") from exc
+        raise RuntimeError(f"MongoDB is not usable at localhost:27017: {exc} {hint}") from exc
 
     rc, _, _ = e2e_common.run_command(["docker", "network", "inspect", DOCKER_NETWORK])
     if rc != 0:
@@ -75,6 +96,8 @@ def load_mongo_dataset(db: Any, dataset_path: str) -> None:
     full_path = Path(dataset_path) / "mongo_collections"
     if not full_path.exists():
         return
+
+    wait_for_writable_primary(db.client)
 
     for file_path in sorted(full_path.iterdir()):
         if file_path.suffix != ".json":
@@ -199,8 +222,10 @@ def create_bridge_docker(index: int, docker_image: str, dataset_dir_path: str) -
     if migration_id:
         env_list.append(f"PMX_MIGRATION={migration_id}")
 
-    mongo_client = MongoClient(local_mongo_url)
+    # Keep server selection well under the primary wait, so an unreachable mongo still gets retried.
+    mongo_client = MongoClient(local_mongo_url, serverSelectionTimeoutMS=BACKEND_READY_TIMEOUT_SECONDS * 1000)
     e2e_common.run_command(["docker", "rm", "-f", container_name])
+    wait_for_writable_primary(mongo_client)
     mongo_client.drop_database(db_name)
 
     cmd = [

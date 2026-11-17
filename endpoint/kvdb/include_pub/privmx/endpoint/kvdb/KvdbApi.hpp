@@ -1,6 +1,7 @@
 #ifndef _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPI_HPP_
 #define _PRIVMXLIB_ENDPOINT_KVDB_KVDBAPI_HPP_
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <optional>
