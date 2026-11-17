@@ -49,7 +49,7 @@ protected:
     std::string keyId = "0123456789abcdef0123456789abcdef";
     // Bound to nothing, said out loud: what every case here uses unless it is about the binding itself.
     EnvelopeBinding none{};
-    EnvelopeSeal seal{.binding = none, .keyVersion = 7, .encryptedAt = 1700000000000};
+    EnvelopeSeal seal{.binding = none, .keyVersion = 7, .encryptedAt = 1700000000000, .authorUserId = "alice"};
 
     core::Buffer buf(const std::string& s) { return core::Buffer::from(s); }
 };
@@ -143,7 +143,7 @@ TEST_F(GroupEnvelope, HeaderIsSignedSoAnEnvelopeCannotBeReplayedIntoAnotherGroup
     std::string otherKey = privmx::crypto::Crypto::randomBytes(32);
     core::DataInnerEncryptorV4 raw;
     // ver | type | flags | groupId | keyId | authorDER | u64 keyVersion
-    std::size_t headerLen = 3 + 1 + std::string("groupA").size() + 1 + keyId.size() + 1 + 33 + 8;
+    std::size_t headerLen = 3 + 1 + std::string("groupA").size() + 1 + keyId.size() + 1 + 5 + 1 + 33 + 8;
     core::Buffer sealed = raw.decrypt(buf(envA.stdString().substr(headerLen)), groupKey);
 
     std::string forgedHeader;
@@ -155,6 +155,8 @@ TEST_F(GroupEnvelope, HeaderIsSignedSoAnEnvelopeCannotBeReplayedIntoAnotherGroup
     forgedHeader.append(other);
     forgedHeader.push_back(static_cast<char>(keyId.size()));
     forgedHeader.append(keyId);
+    forgedHeader.push_back(5);
+    forgedHeader.append("alice");
     std::string der = author.getPublicKey().toDER();
     forgedHeader.push_back(static_cast<char>(der.size()));
     forgedHeader.append(der);
@@ -535,7 +537,7 @@ protected:
     Path messageB = {name("chat"), id("c1"), name("message"), id("m2")};
     EnvelopeBinding atA = GroupEnvelopeEncryptor::bindLocation(messageA);
     EnvelopeBinding atB = GroupEnvelopeEncryptor::bindLocation(messageB);
-    EnvelopeSeal sealA{.binding = atA, .keyVersion = 3, .encryptedAt = 1700000000123};
+    EnvelopeSeal sealA{.binding = atA, .keyVersion = 3, .encryptedAt = 1700000000123, .authorUserId = "alice"};
 
     PrivateKey outsider = PrivateKey::generateRandom();
     PrivateKey billingKey = PrivateKey::generateRandom(); // another group's identity key
@@ -554,6 +556,7 @@ TEST_F(GroupEnvelopeV3, OpensAtTheLocationItWasWrittenFor) {
     EXPECT_EQ(out.data.stdString(), "hello");
     EXPECT_EQ(out.keyVersion, 3);
     EXPECT_EQ(out.encryptedAt, 1700000000123);
+    EXPECT_EQ(out.authorUserId, "alice");
     EXPECT_TRUE(out.recipients.empty());
 }
 
@@ -734,6 +737,9 @@ TEST_F(GroupEnvelopeV3, EveryReaderOpensASharedEnvelope) {
     EXPECT_EQ(billing.data.stdString(), "discharge");
     EXPECT_EQ(billing.groupId, groupId);
     EXPECT_EQ(billing.type, ENVELOPE_FROM_MEMBER);
+    // ...which is only what the writer says: a recipient never held the home group's key.
+    EXPECT_TRUE(billing.homeGroupUnverified);
+    EXPECT_FALSE(home.homeGroupUnverified);
     EXPECT_EQ(billing.authorPubKey, author.getPublicKey().toBase58DER());
     EXPECT_EQ(billing.keyVersion, 3);
 
@@ -804,7 +810,7 @@ TEST_F(GroupEnvelopeV3, SECURITY_ALadderRungIsNotARecipientWrap) {
     auto routing = GroupEnvelopeEncryptor::peekAny(env);
     ASSERT_EQ(routing.recipients.size(), 1u);
     // header length = everything up to and including the recipients block
-    std::size_t headerLen = 3 + 1 + groupId.size() + 1 + keyId.size() + 1 + 33 + 8 + 1 +
+    std::size_t headerLen = 3 + 1 + groupId.size() + 1 + keyId.size() + 1 + 5 + 1 + 33 + 8 + 1 +
         (1 + 1 + recipients[0].id.size() + 1 + recipients[0].pubKey.size() + 8);
     std::size_t homeWrapLen = static_cast<std::uint8_t>(wire[headerLen]);
     std::size_t slot = headerLen + 1 + homeWrapLen;
@@ -830,4 +836,36 @@ TEST_F(GroupEnvelopeV3, TruncatedSharedEnvelopesThrowRatherThanParseGarbage) {
         EXPECT_ANY_THROW(enc.openSharedEnvelope(buf(wire.substr(0, len)), 0, billingKey, atA)) << "length " << len;
         EXPECT_ANY_THROW(enc.openMemberEnvelope(buf(wire.substr(0, len)), groupKey, atA)) << "length " << len;
     }
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_TheAuthorsUserIdIsSigned) {
+    // The server relabels alice's envelope as bob's. The id is inside the signed header, so the open fails.
+    std::string wire = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA).stdString();
+    std::size_t at = wire.find("alice");
+    ASSERT_NE(at, std::string::npos);
+    wire.replace(at, 5, "bobby");
+    EXPECT_ANY_THROW(enc.openMemberEnvelope(buf(wire), groupKey, atA));
+
+    EnvelopeSeal fromDevice = sealA;
+    fromDevice.authorUserId = "analyzer";
+    core::Buffer env = enc.packOutsiderEnvelope(groupId, grantKey.getPublicKey(), buf("x"), outsider, fromDevice);
+    EXPECT_EQ(enc.openOutsiderEnvelope(env, grantKey, atA).authorUserId, "analyzer");
+    EXPECT_EQ(GroupEnvelopeEncryptor::peekAny(env).authorUserId, "analyzer");
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_AMemberClaimIsNotProofForARecipient) {
+    // Mallory is in no group. She writes "from a member of grp1" to billing, sealing the home wrap under a key she
+    // made up. Billing cannot tell from the envelope: it opens, and it must come back marked as unverified.
+    PrivateKey mallory = PrivateKey::generateRandom();
+    std::string madeUpGroupKey = privmx::crypto::Crypto::randomBytes(32);
+    EnvelopeSeal forgedSeal = sealA;
+    forgedSeal.authorUserId = "mallory";
+    core::Buffer forged = enc.packMemberEnvelope(
+        groupId, keyId, buf("approved"), mallory, madeUpGroupKey, forgedSeal, {recipients[0]}
+    );
+    OpenedEnvelope billing = enc.openSharedEnvelope(forged, 0, billingKey, atA);
+    EXPECT_EQ(billing.data.stdString(), "approved");
+    EXPECT_TRUE(billing.homeGroupUnverified);
+    // The home group itself refuses it: its real key does not open the made-up wrap.
+    EXPECT_ANY_THROW(enc.openMemberEnvelope(forged, groupKey, atA));
 }

@@ -62,8 +62,12 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  *
  * ## TYPE 1 - member -> group, symmetric
  *
- *   header  = ... | u8len groupId | u8len keyId | u8len authorPubKeyDER | u64be keyVersion
+ *   header  = ... | u8len groupId | u8len keyId | u8len authorUserId | u8len authorPubKeyDER | u64be keyVersion
  *   payload = encrypt(sign(header || binding || u64be encryptedAt || content, authorPriv), groupKey32)
+ *
+ * `authorUserId` is the writer's claim, as the public key beside it is: the caller has the UserVerifier confirm
+ * that this user holds that key. It is in the header so that a reader can name the author without a directory
+ * of every member's key.
  *
  * Re-sealing the header stops a member of two groups re-sealing another member's signed content into the
  * second group under their name, and stops a file envelope being relabelled as a message - which would hand
@@ -84,7 +88,8 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  *
  * ## TYPE 5 - outsider -> group, signed
  *
- *   header  = ... | u8len groupId | u8len groupPubKeyBase58DER | u8len senderPubKeyDER | recipients
+ *   header  = ... | u8len groupId | u8len groupPubKeyBase58DER | u8len senderUserId | u8len senderPubKeyDER
+ *             | recipients
  *   payload = u8len ecies(group) | count * u8len ecies(recipient)
  *             || encrypt(sign(header || binding || u64be encryptedAt || content, senderPriv), contentKey32)
  *
@@ -92,7 +97,8 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  *
  * ## TYPE 6 - member -> group and further recipients
  *
- *   header  = ... | u8len groupId | u8len keyId | u8len authorPubKeyDER | u64be keyVersion | recipients
+ *   header  = ... | u8len groupId | u8len keyId | u8len authorUserId | u8len authorPubKeyDER | u64be keyVersion
+ *             | recipients
  *   payload = u8len encrypt(KEY_WRAP_LABEL || contentKey32, groupKey32) | count * u8len ecies(recipient)
  *             || encrypt(sign(header || binding || u64be encryptedAt || content, authorPriv), contentKey32)
  *
@@ -102,7 +108,7 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  *
  * ## TYPE 3 - member -> group, file header
  *
- *   header  = ... | u8len groupId | u8len keyId | u8len authorPubKeyDER | u64be keyVersion
+ *   header  = ... | u8len groupId | u8len keyId | u8len authorUserId | u8len authorPubKeyDER | u64be keyVersion
  *   payload = encrypt(sign(header || binding || u64be plainSize || fileKey32, authorPriv), groupKey32)
  *   body    = for each chunk i: encrypt(plain_i, hmac-sha256(fileKey, CHUNK_KEY_LABEL || u32be i))
  *
@@ -232,7 +238,10 @@ public:
         const EnvelopeBinding& binding
     );
     // Types 5 and 6, as the recipient at `recipientIndex` in the header's list, with that recipient's private
-    // key. `type` in the result says who wrote it: a member of the home group, or an outsider to it.
+    // key. The signature and the binding are checked as everywhere. What is NOT established is the home group:
+    // `type` (a member of it, or an outsider to it), `groupId` and `keyVersion` in the result are the writer's
+    // signed claims - a recipient never held the home group's key to check them with. The result says so
+    // (`homeGroupUnverified`), and the caller decides membership against the group's roster or reports it unknown.
     OpenedEnvelope openSharedEnvelope(
         const core::Buffer& envelope,
         std::size_t recipientIndex,

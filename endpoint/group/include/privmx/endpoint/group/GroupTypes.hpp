@@ -42,8 +42,10 @@ using ByteCount = std::uint64_t;
 struct EnvelopeFileHeader {
     EnvelopeType type;
     std::string groupId;
-    std::string keyId;        // set for ENVELOPE_FROM_MEMBER only
-    std::string authorPubKey; // base58-DER, signature verified; EMPTY for ENVELOPE_ANONYMOUS
+    std::string keyId;           // set for ENVELOPE_FROM_MEMBER only
+    std::int64_t keyVersion = 0; // set for ENVELOPE_FROM_MEMBER only: the epoch the writer claims
+    std::string authorUserId;    // the writer's claim, signed; EMPTY for ENVELOPE_ANONYMOUS
+    std::string authorPubKey;    // base58-DER, signature verified; EMPTY for ENVELOPE_ANONYMOUS
     ByteCount plainSize;
     std::string fileKey; // 32 raw bytes
 };
@@ -60,6 +62,9 @@ struct EnvelopeSeal {
     EnvelopeBinding binding{};
     std::int64_t keyVersion = 0;  // member envelopes: the epoch of the group key used
     std::int64_t encryptedAt = 0; // signed envelopes: the writer's clock, ms
+    // Signed envelopes: who the writer says they are. A claim like the public key beside it: the caller has the
+    // UserVerifier confirm that this user holds that key before showing either.
+    std::string authorUserId{};
 };
 
 // One more reader of an envelope, beside the group it is written in. Part of the signed header.
@@ -79,6 +84,7 @@ struct EnvelopeRouting {
     std::string keyId;                         // member envelopes only
     std::int64_t keyVersion = 0;               // member envelopes only: the epoch the writer claims
     std::string groupPubKey;                   // base58-DER; outsider and anonymous envelopes only
+    std::string authorUserId;                  // signed envelopes only
     std::string authorPubKey;                  // base58-DER; signed envelopes only
     std::vector<EnvelopeRecipient> recipients; // signed message envelopes only
 };
@@ -89,10 +95,16 @@ struct OpenedEnvelope {
     std::string groupId;
     std::string keyId;
     std::int64_t keyVersion = 0;
+    std::string authorUserId;
     std::string authorPubKey;
     std::int64_t encryptedAt = 0;
     std::vector<EnvelopeRecipient> recipients;
     EnvelopeType type;
+    // true when it was opened as a further recipient (`openSharedEnvelope`). The reader then never held the home
+    // group's key, so `groupId`, `keyId`, `keyVersion` and `type` are what the writer signed and nothing more:
+    // anyone in the context can write "from a member of group G" to a recipient. Whether the writer is a member
+    // of `groupId` is for the caller to establish against that group's roster, or to report as unknown.
+    bool homeGroupUnverified = false;
 };
 
 struct EnvelopeFileState {

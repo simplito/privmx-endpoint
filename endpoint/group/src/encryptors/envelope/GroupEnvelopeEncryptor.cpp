@@ -101,12 +101,14 @@ GroupEnvelopeEncryptor::ParsedHeader GroupEnvelopeEncryptor::parseHeader(Envelop
     if (memberKeyed) {
         routing.type = ENVELOPE_FROM_MEMBER;
         routing.keyId = cursor.readField();
+        routing.authorUserId = cursor.readField();
         routing.authorPubKey = privmx::crypto::PublicKey::fromDER(cursor.readField()).toBase58DER();
         routing.keyVersion = static_cast<std::int64_t>(cursor.readU64());
     } else {
         routing.type = type == TYPE_OUTSIDER ? ENVELOPE_FROM_OUTSIDER : ENVELOPE_ANONYMOUS;
         routing.groupPubKey = cursor.readField();
         if (type == TYPE_OUTSIDER) {
+            routing.authorUserId = cursor.readField();
             routing.authorPubKey = privmx::crypto::PublicKey::fromDER(cursor.readField()).toBase58DER();
         }
     }
@@ -247,6 +249,7 @@ OpenedEnvelope GroupEnvelopeEncryptor::openSignedMessage(
         .groupId = header.routing.groupId,
         .keyId = header.routing.keyId,
         .keyVersion = header.routing.keyVersion,
+        .authorUserId = header.routing.authorUserId,
         .authorPubKey = header.routing.authorPubKey,
         .encryptedAt = encryptedAt,
         .recipients = header.routing.recipients,
@@ -266,7 +269,7 @@ core::Buffer GroupEnvelopeEncryptor::packMemberEnvelope(
     const bool shared = !recipients.empty();
     std::string header = writeHeader(
         shared ? TYPE_MEMBER_SHARED : TYPE_GROUP_KEY, seal.binding,
-        {groupId, keyId, authorPrivKey.getPublicKey().toDER()}
+        {groupId, keyId, seal.authorUserId, authorPrivKey.getPublicKey().toDER()}
     );
     header.append(EnvelopeWriter::toBE(static_cast<std::uint64_t>(seal.keyVersion), 8));
     if (!shared) {
@@ -323,7 +326,8 @@ core::Buffer GroupEnvelopeEncryptor::packOutsiderEnvelope(
     const std::vector<EnvelopeRecipient>& recipients
 ) {
     std::string header = writeHeader(
-        TYPE_OUTSIDER, seal.binding, {groupId, groupPubKey.toBase58DER(), senderPrivKey.getPublicKey().toDER()}
+        TYPE_OUTSIDER, seal.binding,
+        {groupId, groupPubKey.toBase58DER(), seal.authorUserId, senderPrivKey.getPublicKey().toDER()}
     );
     putRecipients(header, recipients);
     std::string contentKey = privmx::crypto::Crypto::randomBytes(CONTENT_KEY_SIZE);
@@ -378,10 +382,14 @@ OpenedEnvelope GroupEnvelopeEncryptor::openSharedEnvelope(
         }
     }
     std::string contentKey = unwrapContentKey(recipientPrivKey, header.routing.recipients[recipientIndex].pubKey, wrap);
-    return openSignedMessage(
+    OpenedEnvelope opened = openSignedMessage(
         cursor.readRest(), contentKey, header, binding,
         header.wireType == TYPE_OUTSIDER ? ENVELOPE_FROM_OUTSIDER : ENVELOPE_FROM_MEMBER
     );
+    // A recipient holds only its own wrap, never the home group's key: nothing here shows that the writer could
+    // open the home wrap, or that there is a group behind `groupId` at all. `type` is the writer's claim.
+    opened.homeGroupUnverified = true;
+    return opened;
 }
 
 // -- type 2 --------------------------------------------------------------------------------------------
@@ -425,6 +433,7 @@ OpenedEnvelope GroupEnvelopeEncryptor::openAnonymousEnvelope(
         .keyVersion = 0,
         // Deliberately empty: the throwaway sender key attests to nothing, so reporting it would invite
         // callers to treat it as an identity.
+        .authorUserId = std::string(),
         .authorPubKey = std::string(),
         .encryptedAt = 0,
         .recipients = {},
@@ -443,7 +452,9 @@ core::Buffer GroupEnvelopeEncryptor::packFileEnvelope(
     const std::string& groupKey,
     const EnvelopeSeal& seal
 ) {
-    std::string header = writeHeader(TYPE_FILE, seal.binding, {groupId, keyId, authorPrivKey.getPublicKey().toDER()});
+    std::string header = writeHeader(
+        TYPE_FILE, seal.binding, {groupId, keyId, seal.authorUserId, authorPrivKey.getPublicKey().toDER()}
+    );
     header.append(EnvelopeWriter::toBE(static_cast<std::uint64_t>(seal.keyVersion), 8));
     // `plainSize` inside the signature is the only thing that makes a dropped trailing chunk detectable -
     // each chunk authenticates itself, but nothing about chunk N says how many were supposed to follow.
@@ -473,6 +484,8 @@ EnvelopeFileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
         .type = ENVELOPE_FROM_MEMBER,
         .groupId = header.routing.groupId,
         .keyId = header.routing.keyId,
+        .keyVersion = header.routing.keyVersion,
+        .authorUserId = header.routing.authorUserId,
         .authorPubKey = header.routing.authorPubKey,
         .plainSize = plainSize,
         .fileKey = fileKey,
@@ -523,7 +536,9 @@ EnvelopeFileHeader GroupEnvelopeEncryptor::unpackAnonymousFileEnvelope(
         .type = ENVELOPE_ANONYMOUS,
         .groupId = header.routing.groupId,
         .keyId = std::string(),
+        .keyVersion = 0,
         // Deliberately empty: the throwaway sender key attests to nothing.
+        .authorUserId = std::string(),
         .authorPubKey = std::string(),
         .plainSize = plainSize,
         .fileKey = fileKey,
