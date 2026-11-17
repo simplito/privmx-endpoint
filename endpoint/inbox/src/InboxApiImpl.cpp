@@ -154,7 +154,8 @@ std::string InboxApiImpl::createInbox(
         .publicData = {
             .publicMeta = publicMeta,
             .inboxEntriesPubKeyBase58DER = pubKey.toBase58DER(),
-            .inboxEntriesKeyId = inboxKey.id
+            .inboxEntriesKeyId = inboxKey.id,
+            .fileCipherType = fileCipherTypeFor(policies)
         }
     };
 
@@ -212,7 +213,11 @@ void InboxApiImpl::updateInbox(
     inboxUpdateModel.version = version;
     inboxUpdateModel.force = force;
     inboxUpdateModel.data = encryptInboxData(
-        currentInboxData, getFilesConfigOptOrDefault(fileConfig), publicMeta, privateMeta, ctx, currentInboxResourceId
+        currentInboxData, getFilesConfigOptOrDefault(fileConfig), publicMeta, privateMeta, ctx, currentInboxResourceId,
+        // From the **served** Inbox, never from `policies`: the suite is fixed at creation, and a caller
+        // changing only permissions does not repeat it. Reading it from the caller's policy would move
+        // the Inbox's attachments to this build's default format on every unrelated update.
+        fileCipherTypeFor(core::Factory::parsePolicyServerObjectWithoutItem(currentInbox.policy))
     );
     // The grant list is the caller's: this is the call that adds and removes group grantees, so an empty list
     // revokes every grant the Inbox had.
@@ -348,10 +353,23 @@ int64_t InboxApiImpl::prepareEntry(
     if (!inboxFileHandles.empty()) {
         std::vector<std::shared_ptr<store::FileWriteHandle>> fileHandles;
         std::vector<store::server::FileDefinition> filesList;
+        // The Inbox names the file format; the handle was made before this call knew which Inbox it
+        // was for, so it still carries the build's default. Set it before `getEncryptedFileSize`,
+        // which the server request is sized from — the two must describe the same format.
+        //
+        // Absent for an Inbox written before the field existed: the default then stands, as it did
+        // for every attachment until now.
+        const std::optional<store::FileCipher> inboxCipher =
+            inboxPublicData.fileCipherType.has_value() ?
+                std::make_optional(store::FileCipher::forType(inboxPublicData.fileCipherType.value())) :
+                std::nullopt;
         for (auto inboxFileHandle : inboxFileHandles) {
             std::shared_ptr<store::FileWriteHandle> handle = _inboxHandleManager.getFileWriteHandle(inboxFileHandle);
             fileHandles.push_back(handle);
 
+            if (inboxCipher.has_value()) {
+                handle->setCipher(inboxCipher.value());
+            }
             auto fileSizeInfo = handle->getEncryptedFileSize();
             store::server::FileDefinition fileDefinition;
             fileDefinition.size = fileSizeInfo.size;
@@ -596,7 +614,8 @@ inbox::server::InboxData InboxApiImpl::encryptInboxData(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const core::ContainerUpdateContext& ctx,
-    const std::string& resourceId
+    const std::string& resourceId,
+    int64_t fileCipherType
 ) {
     auto pubKey = entriesPubKeyOf(ctx.key.key, _userPrivKey.algorithm());
     InboxDataProcessorModelV5 inboxDataIn{
@@ -611,10 +630,15 @@ inbox::server::InboxData InboxApiImpl::encryptInboxData(
         .publicData = {
             .publicMeta = publicMeta,
             .inboxEntriesPubKeyBase58DER = pubKey.toBase58DER(),
-            .inboxEntriesKeyId = ctx.key.id
+            .inboxEntriesKeyId = ctx.key.id,
+            .fileCipherType = fileCipherType
         }
     };
     return _inboxDataSchemaMapper->encrypt(inboxDataIn, ctx.key);
+}
+
+int64_t InboxApiImpl::fileCipherTypeFor(const std::optional<core::ContainerPolicyWithoutItem>& policy) {
+    return store::FileCipher::forContainerSuite(suiteNamedByPolicy(policy)).type();
 }
 
 InboxPublicViewData InboxApiImpl::getInboxPublicViewData(const std::string& inboxId) {

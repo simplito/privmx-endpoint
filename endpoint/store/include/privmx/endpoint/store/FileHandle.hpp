@@ -111,6 +111,8 @@ public:
     core::Buffer getPrivateMeta();
     privmx::endpoint::store::FileSizeResult getEncryptedFileSize();
     void createRequestData();
+    /// @brief The write format, for a caller that learns it after the handle exists — see `ChunkStreamer::setCipher`.
+    void setCipher(FileCipher cipher);
     void setRequestData(const std::string& requestId, const std::string& key, const int64_t& fileIndex);
     bool isWriteHandle() const override { return true; }
 

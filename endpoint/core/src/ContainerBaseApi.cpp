@@ -284,7 +284,8 @@ ContainerKeyCache::CachedModuleKeys ContainerBaseApi::convertModuleKeysToContain
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,
         .contextId = moduleKeys.contextId,
-        .moduleVersion = moduleVersion
+        .moduleVersion = moduleVersion,
+        .cryptoSuite = moduleKeys.cryptoSuite
     };
 }
 
@@ -298,7 +299,8 @@ ModuleKeys ContainerBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat
         .currentKeyId = moduleKeys.currentKeyId,
         .moduleSchemaVersion = moduleKeys.moduleSchemaVersion,
         .moduleResourceId = moduleKeys.moduleResourceId,
-        .contextId = moduleKeys.contextId
+        .contextId = moduleKeys.contextId,
+        .cryptoSuite = moduleKeys.cryptoSuite
     };
 }
 

@@ -174,6 +174,10 @@ privmx::endpoint::store::FileSizeResult FileWriteHandle::getEncryptedFileSize() 
     return _streamer.getFileSize();
 }
 
+void FileWriteHandle::setCipher(FileCipher cipher) {
+    _streamer.setCipher(cipher);
+}
+
 void FileWriteHandle::createRequestData() {
     _streamer.createRequest(getRandomWriteSupport());
 }

@@ -697,6 +697,40 @@ TEST_F(InboxTest, prepareEntry_sendEntry) {
     expectEntryWithTwoFiles(inboxId(2), sentByUser, 3, "desc");
 }
 
+/**
+ * An Inbox naming a non-default suite must still take entries with attachments, including from a
+ * sender that is nobody.
+ *
+ * The attachment format follows the Inbox's suite (`FileCipher::forContainerSuite`), and a public
+ * sender can read neither the Inbox policy nor the inner Store's — it learns the format from the
+ * Inbox's public view. The size the server request reserves is computed from that same format, so
+ * applying it late, or to only one of the two, shows up here as a failed upload rather than as a
+ * file nobody can read.
+ *
+ * What the public API cannot show is which format was actually used — `cipherType` lives in the
+ * file's internal meta. `ChunkStreamerCipher.*` covers that half.
+ */
+TEST_F(InboxTest, entry_attachments_in_an_inbox_with_its_own_suite) {
+    core::ContainerPolicyWithoutItem policy;
+    policy.cryptoSuite = "aes256gcm-sha512";
+
+    std::string suitedInboxId;
+    ASSERT_NO_THROW({
+        suitedInboxId = inboxApi->createInbox(
+            contextId(), users({1}), users({1}),
+            core::Buffer::from("public"), core::Buffer::from("private"), std::nullopt, policy
+        );
+    });
+    ASSERT_FALSE(suitedInboxId.empty());
+
+    disconnect();
+    connectAs(ConnectionType::Public);
+    const std::string sentByPublic = sendEntryWithTwoFiles(suitedInboxId);
+    disconnect();
+    connectAs(ConnectionType::User1);
+    expectEntryWithTwoFiles(suitedInboxId, sentByPublic, 1, "desc");
+}
+
 TEST_F(InboxTest, readEntry) {
     // incorrect entryId
     EXPECT_THROW({ inboxApi->readEntry(contextId()); }, core::Exception);

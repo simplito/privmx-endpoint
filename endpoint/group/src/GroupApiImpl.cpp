@@ -574,7 +574,12 @@ core::ModuleKeys GroupApiImpl::groupToModuleKeys(const server::GroupInfo& group)
         .currentKeyId = group.data.back().keyId,
         .moduleSchemaVersion = _groupDataSchemaMapper->getDataStructureVersion(group.data.back()),
         .moduleResourceId = group.resourceId.value_or(""),
-        .contextId = group.contextId
+        .contextId = group.contextId,
+        // As in `ContainerBaseApi::containerToModuleKeys`: the group's suite travels with its keys,
+        // empty when the policy names none so the key's own suite stands. A group builds this itself
+        // rather than through the template because its keys live on the group plane, and leaving the
+        // field out here made its items follow the build's default instead of the group's policy.
+        .cryptoSuite = suiteNamedByPolicy(core::Factory::parsePolicyServerObjectWithoutItem(group.policy))
     };
 }
 

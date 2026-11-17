@@ -673,7 +673,12 @@ void StreamApiLowImpl::updateStreamRoom(
         model, streamRoomId, currentStreamRoomResourceId, users, managers, ctx, version, force, groups
     );
     if (policies.has_value()) {
-        model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(policies.value());
+        // Through `policyForUpdate` like every other container update: an update carries the whole
+        // policy, so a caller changing only permissions would drop `cryptoSuite` and the bridge would
+        // refuse the call with INVALID_PARAMS.
+        model.policy = privmx::endpoint::core::Factory::createPolicyServerObject(
+            policyForUpdate<core::ContainerPolicyWithoutItem>(currentStreamRoom, policies.value())
+        );
     }
     core::ModuleDataToEncryptV5 streamRoomDataToEncrypt{
         .publicMeta = publicMeta,

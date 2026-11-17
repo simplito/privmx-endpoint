@@ -359,6 +359,10 @@ private:
     // Whether this user's entry for `keyId` is a V1 one: told apart without decrypting, a V1 entry being a bare string.
     static bool hasUnsignedEntry(const std::vector<server::KeyEntry>& keys, const std::string& keyId);
 
+    // `protected` rather than `private` only so a test can put a `ModuleKeys` through both and check
+    // nothing is lost on the way. A field these two forget is a write suite decided by cache timing,
+    // which is what `ContainerKeyCacheRoundTrip` guards.
+protected:
     static core::ContainerKeyCache::CachedModuleKeys convertModuleKeysToContainerKeyCacheFormat(
         const ModuleKeys& moduleKeys,
         int64_t moduleVersion
@@ -367,6 +371,7 @@ private:
         const core::ContainerKeyCache::CachedModuleKeys& moduleKeys
     );
 
+private:
     std::shared_ptr<core::BaseModuleDataSchemaMapper> _moduleDataSchemaMapper;
     core::ContainerKeyCache _keyCache;
 };

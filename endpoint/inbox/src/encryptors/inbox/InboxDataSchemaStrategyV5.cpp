@@ -72,6 +72,7 @@ InboxPublicViewData InboxDataSchemaStrategyV5::getPublicViewData(
     result.publicMeta = publicData.publicMeta;
     result.inboxEntriesPubKeyBase58DER = publicData.inboxEntriesPubKeyBase58DER;
     result.inboxEntriesKeyId = publicData.inboxEntriesKeyId;
+    result.fileCipherType = publicData.fileCipherType;
     result.inboxId = publicView.inboxId;
     result.resourceId = "";
     result.version = publicView.version;

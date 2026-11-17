@@ -81,8 +81,19 @@ struct GroupApiHooks {
     // Throws core::CryptoSuiteIsFixedAtCreationException when the caller names a different one.
     std::function<core::ContainerPolicy(const server::GroupInfo& group, const core::ContainerPolicy& policies)>
         policyForUpdate;
-    // The suite the group's data is written with, from its own policy — fixed when it was created. Needed
-    // wherever a key is minted outside `prepareCreate`/`prepareUpdate`, which settle it themselves.
+    // The suite the group's data is written with, read from its policy. Needed wherever a key is minted
+    // outside `prepareCreate`/`prepareUpdate`, which settle it themselves.
+    //
+    // Reading it from the policy is enough because `GroupOperations::create` writes the suite into every
+    // group's policy, whether or not the caller named one — and it has to be, since this hook's one
+    // caller is the `abandonHistory` branch of `sealRosterForNewEpoch`, reached exactly when the current
+    // grant key is missing. There the key that records the suite in use cannot be opened, so
+    // `ContainerBaseApi::suiteOfExisting` has nothing to fall back to and the policy is the only source
+    // left.
+    //
+    // The build's default therefore stands only for a group whose policy carries no suite, which now
+    // means one created before that rule — a seeded dataset, say. Such a group comes out of a
+    // history-abandoning removal written with whatever the removing client was built for.
     std::function<core::CryptoSuite(const server::GroupInfo& group)> suiteOf;
 };
 

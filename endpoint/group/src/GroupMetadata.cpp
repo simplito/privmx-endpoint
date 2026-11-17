@@ -38,8 +38,9 @@ NewEpochRoster GroupMetadata::sealRosterForNewEpoch(
     auto ctx = abandonHistory ?
         core::ContainerUpdateContext{
             .location = {.contextId = currentGroup.contextId, .resourceId = resourceId},
-            // The group's own suite, not the build's: it was fixed when the group was created, and
-            // abandoning history replaces the key, not the format its data is written in.
+            // The group's own suite, read from its policy: abandoning history replaces the key, not
+            // the format its data is written in. The policy is where `create` records it precisely
+            // for this path, which cannot open the old key. See `GroupApiHooks::suiteOf`.
             .key = keyProvider->generateKey(deps.facade.suiteOf(currentGroup)),
             .dio = deps.connection.getImpl()->createDIO(currentGroup.contextId, resourceId),
             .secret = keyProvider->generateSecret(),

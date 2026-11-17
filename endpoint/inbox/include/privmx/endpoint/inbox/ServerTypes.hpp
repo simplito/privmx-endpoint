@@ -71,7 +71,8 @@ JSON_STRUCT_EXT(PrivateDataV5, core::dynamic::VersionedData, PRIVATE_DATA_V5_FIE
     F(publicMetaObject, Poco::Dynamic::Var)                                                                            \
     F(authorPubKey, std::string)                                                                                       \
     F(inboxPubKey, std::string)                                                                                        \
-    F(inboxKeyId, std::string)
+    F(inboxKeyId, std::string)                                                                                         \
+    F(fileCipherType, std::optional<int64_t>)
 JSON_STRUCT_EXT(PublicDataV5, core::dynamic::VersionedData, PUBLIC_DATA_V5_FIELDS);
 
 /////////////// MODELS AND RESULTS ////////////////////////////

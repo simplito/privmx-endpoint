@@ -291,8 +291,20 @@ std::string GroupOperations::create(
     };
     model.tree = keytree::TreeWire::toCreateTree(plan);
     // The policy is signed into the chain: the statement carries it, and every later one its hash.
-    const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policies.value_or(core::ContainerPolicy{})
-    );
+    //
+    // The suite settled above is written into it even when the caller named none. A group is the one
+    // container that can lose the ability to open its own key — a removal whose climb is broken
+    // abandons history (`GroupOperations::removeUsers`), and from there `suiteOf` has nothing left to
+    // read the suite from. Recorded here it is readable from the served policy forever, so a
+    // history-abandoning re-key keeps the group's format instead of taking the removing client's
+    // build default.
+    //
+    // Only groups do this. For a container with files, "the policy names no suite" and "the policy
+    // names the default suite" pick different file formats (`FileCipher::forContainerSuite`), so
+    // stamping would quietly move new files off the build's default; groups have no files.
+    core::ContainerPolicy policyWithSuite = policies.value_or(core::ContainerPolicy{});
+    policyWithSuite.cryptoSuite = ctx.key.suite.policyValue();
+    const Poco::Dynamic::Var policy = core::Factory::createPolicyServerObject(policyWithSuite);
     const keytree::GroupRules rules = requestedRules(policy, creatorId);
     // Commit B: a creator who could not write its own metadata would leave every member's read of the new group
     // refused. Refused before anything is signed.

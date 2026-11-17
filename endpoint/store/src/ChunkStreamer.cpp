@@ -32,6 +32,13 @@ ChunkStreamer::ChunkStreamer(
     : _requestApi(requestApi), _chunkSize(chunkSize), _fileSize(fileSize), _chunkBufferedStream(serverRequestChunkSize),
       _cipher(cipher) {}
 
+void ChunkStreamer::setCipher(FileCipher cipher) {
+    if (!_requestId.empty() || _seq != 0 || _dataProcessed != 0) {
+        throw FileRandomWriteInternalException("the write format cannot change once the upload has started");
+    }
+    _cipher = cipher;
+}
+
 void ChunkStreamer::createRequest(bool randomWriteSupport) {
     _key = core::CryptoSuite::randomBytes(32);
     auto size = getFileSize();

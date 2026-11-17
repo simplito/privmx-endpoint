@@ -226,6 +226,11 @@ TEST_F(GroupTest, createGroup) {
     if (group.managers.size() == 1) {
         EXPECT_EQ(group.managers[0], reader->getString("Login.user_1_id"));
     }
+    // The suite is recorded in the policy even though the caller named none. A group is the one
+    // container that can end up unable to open its own key — `removeUsers` abandons history when the
+    // climb is broken — and from there the policy is the only place the suite is still readable. See
+    // `GroupApiHooks::suiteOf`.
+    EXPECT_TRUE(group.policy.cryptoSuite.has_value());
     // same users and managers
     EXPECT_NO_THROW({
         groupId = groupApi->createGroup(

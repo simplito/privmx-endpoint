@@ -32,7 +32,9 @@ limitations under the License.
 
 #include <privmx/endpoint/core/ContainerBaseApi.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
+#include <privmx/endpoint/core/CoreTypes.hpp>
 #include <privmx/endpoint/core/Types.hpp>
+#include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
 
 using namespace privmx::endpoint::core;
 
@@ -54,6 +56,8 @@ FakeContainer containerWithSuite(const std::optional<std::string>& suite) {
 /// `policyForUpdate` is `protected` and static — inheriting is the simplest way to reach it without
 /// opening it up to the outside world just for a test.
 struct Reach : ContainerBaseApi {
+    using ContainerBaseApi::convertContainerKeyCacheModuleKeysToModuleApiFormat;
+    using ContainerBaseApi::convertModuleKeysToContainerKeyCacheFormat;
     using ContainerBaseApi::policyForUpdate;
 };
 
@@ -120,4 +124,43 @@ TEST(ContainerPolicySuite, TheRestOfThePolicyIsLeftAlone) {
     ASSERT_TRUE(result.get.has_value());
     EXPECT_EQ("all", result.get.value());
     EXPECT_EQ(SUITE_A, result.cryptoSuite.value());
+}
+
+/**
+ * The key cache sits between `ModuleKeys` and every module that writes with it, so whatever the
+ * round trip through it drops is decided by whether a write happened to hit a warm cache.
+ *
+ * `cryptoSuite` is the field where that shows: dropped, a cache hit writes with the container's
+ * suite and a miss with the build's default, on the same container, minutes apart.
+ */
+TEST(ContainerKeyCacheRoundTrip, TheSuiteSurvivesTheCache) {
+    ModuleKeys keys{};
+    keys.currentKeyId = "key-1";
+    keys.contextId = "ctx-1";
+    keys.moduleResourceId = "res-1";
+    keys.moduleSchemaVersion = 5;
+    keys.cryptoSuite = CryptoSuite::forPolicyValue(SUITE_B);
+
+    const auto back =
+        Reach::convertContainerKeyCacheModuleKeysToModuleApiFormat(
+            Reach::convertModuleKeysToContainerKeyCacheFormat(keys, 7)
+        );
+
+    ASSERT_TRUE(back.cryptoSuite.has_value());
+    EXPECT_EQ(SUITE_B, back.cryptoSuite->policyValue());
+}
+
+/// Empty must stay empty, not become the build's default: that is how a container whose policy names
+/// no suite keeps deferring to the suite its key already records.
+TEST(ContainerKeyCacheRoundTrip, NoSuiteStaysNoSuite) {
+    ModuleKeys keys{};
+    keys.currentKeyId = "key-1";
+    keys.cryptoSuite = std::nullopt;
+
+    const auto back =
+        Reach::convertContainerKeyCacheModuleKeysToModuleApiFormat(
+            Reach::convertModuleKeysToContainerKeyCacheFormat(keys, 1)
+        );
+
+    EXPECT_FALSE(back.cryptoSuite.has_value());
 }

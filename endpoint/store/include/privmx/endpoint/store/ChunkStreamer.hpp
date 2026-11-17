@@ -51,6 +51,18 @@ public:
         FileCipher cipher = FileCipher::defaultForWrite()
     );
     void createRequest(bool enableRandomWrite = false);
+    /**
+     * @brief Replaces the write format before the upload starts.
+     *
+     * For a writer that learns the container only after the handle exists — `inbox`, whose public
+     * API makes a file handle with no Inbox named, and only ties it to one in `prepareEntry`.
+     *
+     * The cipher fixes the encrypted chunk size, hence the declared file size and every server
+     * offset, so this is only legal while no request has been made and nothing has been sent.
+     *
+     * @throws FileRandomWriteInternalException when the upload has already begun
+     */
+    void setCipher(FileCipher cipher);
     void setRequestData(const std::string& requestId, const std::string& key, const uint64_t& fileIndex);
     void sendChunk(const std::string& data);
     ChunksSentInfo finalize(const std::string& data);

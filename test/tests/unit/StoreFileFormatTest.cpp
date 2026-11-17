@@ -41,8 +41,12 @@ limitations under the License.
 #include <gtest/gtest.h>
 
 #include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/store/ChunkStreamer.hpp>
+#include <privmx/endpoint/store/Mapper.hpp>
+#include <privmx/endpoint/store/ServerTypes.hpp>
 #include <privmx/endpoint/store/StoreException.hpp>
 #include <privmx/endpoint/store/StoreTypes.hpp>
+#include <privmx/endpoint/store/Types.hpp>
 #include <privmx/endpoint/store/encryptors/fileData/ChunkEncryptor.hpp>
 #include <privmx/endpoint/store/encryptors/fileData/FileCipher.hpp>
 #include <privmx/endpoint/store/encryptors/fileData/HmacList.hpp>
@@ -593,4 +597,97 @@ TEST(StoreFileCipher, HashListHonoursTheCipherItWasGiven) {
     HmacList list(topKey, cipher.topHash(topKey, hashes), hashes, cipher);
 
     EXPECT_EQ(cipher.hashLength(), list.getHashSize());
+}
+
+/**
+ * `storeFileUpdated` reports the changed range in **server** offsets, and the application is handed
+ * plain ones. The conversion divides by the encrypted chunk size and multiplies by the plain one —
+ * both of which belong to the file's own format, never to whatever this build writes with.
+ *
+ * Every format is checked, so a file written with any of them reports its own ranges correctly.
+ */
+TEST(StoreFileUpdatedMapping, ServerOffsetsConvertWithTheFilesOwnCipher) {
+    constexpr size_t chunkSize = 1024;
+
+    for (const int64_t type : FileCipher::known()) {
+        const FileCipher cipher = FileCipher::forType(type);
+        const int64_t encrypted = static_cast<int64_t>(cipher.encryptedChunkSize(chunkSize));
+
+        FileDecryptionParams params{};
+        params.key = KEY;
+        params.chunkSize = chunkSize;
+        params.cipherType = type;
+
+        File file{};
+        file.size = 4 * static_cast<int64_t>(chunkSize);
+
+        server::StoreFileUpdatedEventData data{};
+        data.changes = std::vector<server::StoreFileChange>{
+            server::StoreFileChange{.type = "file", .pos = encrypted, .length = encrypted, .truncate = false}
+        };
+
+        const auto mapped = Mapper::mapToStoreFileUpdatedEventData(data, file, params);
+
+        ASSERT_EQ(1u, mapped.changes.size()) << "cipherType " << type;
+        // The second encrypted chunk is the second plain chunk, whatever the frame overhead is.
+        EXPECT_EQ(static_cast<int64_t>(chunkSize), mapped.changes[0].pos) << "cipherType " << type;
+        EXPECT_EQ(static_cast<int64_t>(chunkSize), mapped.changes[0].length) << "cipherType " << type;
+    }
+}
+
+/**
+ * `inbox` makes a file handle before it knows which Inbox the entry is for, so it learns the write
+ * format only in `prepareEntry`. `setCipher` is what lets it apply it, and the size the server
+ * request is made from has to follow — otherwise the request reserves one format's layout and the
+ * chunks arrive in another's.
+ */
+TEST(ChunkStreamerCipher, SettingTheCipherChangesTheDeclaredSize) {
+    constexpr size_t chunkSize = 1024;
+    constexpr uint64_t fileSize = 4 * 1024;
+
+    ChunkStreamer streamer(nullptr, chunkSize, fileSize, chunkSize, FileCipher::forType(FileCipher::AES_CBC_HMAC_SHA256));
+    const auto asCbc = streamer.getFileSize();
+
+    streamer.setCipher(FileCipher::forType(FileCipher::AES_GCM));
+    const auto asGcm = streamer.getFileSize();
+
+    EXPECT_NE(asCbc.size, asGcm.size);
+    EXPECT_NE(asCbc.checksumSize, asGcm.checksumSize);
+    EXPECT_EQ(gcm().encryptedFileSize(fileSize, chunkSize), asGcm.size);
+}
+
+/// Once the upload is tied to a server request the layout is fixed — the reserved size was computed
+/// from the old format, so a later change would address the wrong offsets.
+TEST(ChunkStreamerCipher, TheCipherCannotChangeOnceTheUploadIsTied) {
+    ChunkStreamer streamer(nullptr, 1024, 4 * 1024, 1024);
+    streamer.setRequestData("request-1", std::string(32, 'k'), 0);
+
+    EXPECT_THROW(streamer.setCipher(FileCipher::forType(FileCipher::AES_GCM)), FileRandomWriteInternalException);
+}
+
+/// A change the server places past the end of the file used to come out as a negative length, which
+/// the application would read as a range running backwards.
+TEST(StoreFileUpdatedMapping, AChangePastTheEndIsClampedNotNegative) {
+    constexpr size_t chunkSize = 1024;
+    const FileCipher cipher = FileCipher::forType(FileCipher::AES_CBC_HMAC_SHA256);
+    const int64_t encrypted = static_cast<int64_t>(cipher.encryptedChunkSize(chunkSize));
+
+    FileDecryptionParams params{};
+    params.key = KEY;
+    params.chunkSize = chunkSize;
+    params.cipherType = FileCipher::AES_CBC_HMAC_SHA256;
+
+    File file{};
+    file.size = static_cast<int64_t>(chunkSize); // one plain chunk
+
+    server::StoreFileUpdatedEventData data{};
+    data.changes = std::vector<server::StoreFileChange>{
+        server::StoreFileChange{.type = "file", .pos = 5 * encrypted, .length = encrypted, .truncate = false}
+    };
+
+    const auto mapped = Mapper::mapToStoreFileUpdatedEventData(data, file, params);
+
+    ASSERT_EQ(1u, mapped.changes.size());
+    EXPECT_GE(mapped.changes[0].length, 0);
+    EXPECT_LE(mapped.changes[0].pos + mapped.changes[0].length, file.size);
 }

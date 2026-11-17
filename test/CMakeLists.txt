@@ -147,6 +147,11 @@ target_link_libraries(test_unit_StoreFileFormatTest privmx privmxendpointcore pr
 target_compile_definitions(test_unit_StoreFileFormatTest
     PRIVATE PRIVMX_DEFAULT_FILE_CIPHER_ID=${PRIVMX_DEFAULT_FILE_CIPHER_ID})
 
+# The file format an Inbox publishes for its senders, who may be unauthenticated.
+add_executable(test_unit_InboxPublicCipherTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/InboxPublicCipherTest.cpp)
+target_link_libraries(test_unit_InboxPublicCipherTest
+    privmx privmxendpointcore privmxendpointstore privmxendpointinbox Poco::Foundation GTest::GTest GTest::Main)
+
 # The container's crypto-agility layer: the suite registry and the tagged frame.
 add_executable(test_unit_CryptoSuiteTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/CryptoSuiteTest.cpp)
 target_link_libraries(test_unit_CryptoSuiteTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)

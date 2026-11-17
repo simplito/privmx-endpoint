@@ -20,6 +20,7 @@ limitations under the License.
 #include <vector>
 
 #include <privmx/endpoint/core/ServerTypes.hpp>
+#include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -37,6 +38,16 @@ public:
         std::string moduleResourceId;
         std::string contextId;
         int64_t moduleVersion;
+        /**
+         * The suite the container's policy names, or nothing when it names none — see
+         * `ModuleKeys::cryptoSuite`, of which this is the cached copy.
+         *
+         * It is cached rather than recomputed because the cache is the only thing standing between
+         * `ModuleKeys` and the module that writes with it: without this field a cache hit and a
+         * cache miss on the same container hand back different write suites, and which one a write
+         * gets is a matter of timing.
+         */
+        std::optional<CryptoSuite> cryptoSuite;
     };
     std::optional<CachedModuleKeys> getKeys(
         const std::string& moduleId,

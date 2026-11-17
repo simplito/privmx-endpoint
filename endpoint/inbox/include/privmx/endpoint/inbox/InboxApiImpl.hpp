@@ -154,8 +154,20 @@ private:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const core::ContainerUpdateContext& ctx,
-        const std::string& resourceId
+        const std::string& resourceId,
+        int64_t fileCipherType
     );
+    /**
+     * @brief The file format this Inbox's attachments are written with (level 2).
+     *
+     * The same rule the inner Store follows (`StoreApiImpl::fileCipherFor`), and deliberately the
+     * same `optional` argument: "the policy names no suite" is not "the policy names the default
+     * suite", and only the first should follow the build setting.
+     *
+     * The Inbox publishes the answer rather than leaving each sender to work it out, because a
+     * sender may be unauthenticated and able to read neither policy.
+     */
+    static int64_t fileCipherTypeFor(const std::optional<core::ContainerPolicyWithoutItem>& policy);
     inbox::server::InboxDataEntry getInboxCurrentDataEntry(inbox::server::InboxInfo inbox);
     virtual std::pair<core::ModuleKeys, int64_t> getModuleKeysAndVersionFromServer(std::string moduleId) override;
 

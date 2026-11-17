@@ -34,6 +34,9 @@ server::InboxData InboxDataProcessorV5::packForServer(
     serverPublicData.authorPubKey = authorPubKeyECC;
     serverPublicData.inboxPubKey = plainData.publicData.inboxEntriesPubKeyBase58DER;
     serverPublicData.inboxKeyId = plainData.publicData.inboxEntriesKeyId;
+    // Public on purpose: the sender of an entry may be unauthenticated and has no other way to learn
+    // which file format this Inbox's attachments use. See `InboxPublicViewData::fileCipherType`.
+    serverPublicData.fileCipherType = plainData.publicData.fileCipherType;
 
     std::unordered_map<std::string, std::string> privateDataMapOfDataSha256;
     server::PrivateDataV5 serverPrivateData;
@@ -116,6 +119,7 @@ InboxPublicDataV5AsResult InboxDataProcessorV5::unpackPublic(const Poco::Dynamic
         }
         result.inboxEntriesPubKeyBase58DER = publicDataV5.inboxPubKey;
         result.inboxEntriesKeyId = publicDataV5.inboxKeyId;
+        result.fileCipherType = publicDataV5.fileCipherType;
         result.authorPubKey = publicDataV5.authorPubKey;
 
     } catch (const privmx::endpoint::core::Exception& e) {

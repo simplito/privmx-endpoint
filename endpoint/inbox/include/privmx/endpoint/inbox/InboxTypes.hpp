@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_INBOX_INBOXTYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_INBOX_INBOXTYPES_HPP_
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -31,6 +32,19 @@ struct InboxPublicViewData : public core::DecryptedVersionedData {
     std::string inboxId;
     std::string resourceId;
     int64_t version;
+    /**
+     * The `store::FileCipher` type an entry's attachments are to be written with — the inbox owner's
+     * suite, resolved to a file format when the Inbox was written.
+     *
+     * It lives in the **public** view because the sender needs it and may be nobody: an Inbox takes
+     * entries from unauthenticated clients, which can read neither the Inbox policy nor the inner
+     * Store's. Without this the sender has only its own build's default, so an Inbox created with one
+     * suite collects attachments written with another.
+     *
+     * Empty for an Inbox written before this field existed; the sender then falls back to its default,
+     * which is what it did for all of them before.
+     */
+    std::optional<int64_t> fileCipherType;
 };
 
 // V4
@@ -92,6 +106,8 @@ struct InboxPublicDataV5 {
     core::Buffer publicMeta;
     std::string inboxEntriesPubKeyBase58DER;
     std::string inboxEntriesKeyId;
+    /// The file format entries' attachments are written with — see `InboxPublicViewData::fileCipherType`.
+    std::optional<int64_t> fileCipherType;
 };
 
 struct InboxPublicDataV5AsResult : public InboxPublicDataV5, public core::DecryptedVersionedData {

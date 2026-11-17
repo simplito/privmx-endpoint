@@ -288,6 +288,22 @@ void FileHandler::sync(
     const store::FileDecryptionParams& newParms,
     const core::DecryptedEncKey& fileEncKey
 ) {
+    // The cipher is baked into `_chunkEncryptor` and `_hashList` at construction and cannot be
+    // re-pointed here: it fixes the plain and encrypted chunk sizes, which is how every offset this
+    // handle holds — dirty chunk indices, `_encryptedFileSize`, the hash-table stride — was computed.
+    //
+    // Another client's `updateFile` rewrites the whole content and may pick another format. The sizes
+    // alone do not catch it (two formats can share a hash length), so the next `flush()` would write
+    // correctly-encrypted chunks at offsets addressing the wrong places on the server. Refuse instead:
+    // the caller re-opens the file and gets a handle built for the format it now has.
+    if (newParms.cipherType != _fileMeta.internalFileMeta.cipherType) {
+        throw FileCipherChangedException(
+            "handle: " +
+            std::to_string(_fileMeta.internalFileMeta.cipherType) +
+            ", served: " +
+            std::to_string(newParms.cipherType)
+        );
+    }
     _hashList->sync(newParms.key, newParms.hmac, _chunkDataProvider->getCurrentChecksumsFromBridge());
     _chunkDataProvider->sync(_version, _encryptedFileSize);
     _chunkReader->sync(newParms);
