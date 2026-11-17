@@ -22,7 +22,7 @@ MAX_WORKERS = 4
 TIMEOUT_PER_TEST = 300
 RETRY_COUNT = 1
 RETRY_DELAY = 5
-DEFAULT_BRIDGE_DOCKER_IMAGE = "privmx-bridge:latest"
+DEFAULT_BRIDGE_DOCKER_IMAGE = "hub.simplito.com/privmx/privmx-bridge:dev"
 # The bridge container is disposable, so it does not need docker's default 10s grace period.
 STOP_GRACE_SECONDS = 1
 
