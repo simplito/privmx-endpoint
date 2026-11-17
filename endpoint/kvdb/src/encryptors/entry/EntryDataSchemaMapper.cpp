@@ -79,8 +79,7 @@ std::tuple<KvdbEntry, core::DataIntegrityObject> EntryDataSchemaMapper::decrypt(
 
 KvdbEntryDataSchema::Version EntryDataSchemaMapper::getDataStructureVersion(const server::KvdbEntryInfo& entry) {
     return core::DataSchemaMapperUtils::mapVersionedData(
-        entry.kvdbEntryValue, KvdbEntryDataSchema::Version::UNKNOWN,
-        [](int64_t v) {
+        entry.kvdbEntryValue, KvdbEntryDataSchema::Version::UNKNOWN, [](int64_t v) {
             switch (v) {
             case KvdbEntryDataSchema::Version::VERSION_5:
                 return KvdbEntryDataSchema::Version::VERSION_5;

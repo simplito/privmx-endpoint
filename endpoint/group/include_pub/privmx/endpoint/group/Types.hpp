@@ -1,6 +1,7 @@
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_TYPES_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_TYPES_HPP_
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>

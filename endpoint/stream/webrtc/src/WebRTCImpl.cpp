@@ -374,8 +374,8 @@ void WebRTCImpl::AddDataChannel(
     const std::pair<std::string, std::function<void(std::string)>*>& dataChannelInfo,
     const std::string& streamRoomId
 ) {
-    std::shared_ptr<libwebrtc::RTCDataChannelInit> rtcDataChannelInit = std::make_shared<libwebrtc::RTCDataChannelInit>(
-    );
+    std::shared_ptr<libwebrtc::RTCDataChannelInit>
+        rtcDataChannelInit = std::make_shared<libwebrtc::RTCDataChannelInit>();
     auto dataChannel = jc->peerConnection->pc->CreateDataChannel(dataChannelInfo.first, rtcDataChannelInit.get());
     auto observer = std::make_shared<PmxDataChannelObserver>(nullptr, _apiLow, dataChannelInfo.first, streamRoomId);
     dataChannel->RegisterObserver(observer.get());

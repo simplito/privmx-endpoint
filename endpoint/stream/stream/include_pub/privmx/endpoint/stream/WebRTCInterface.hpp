@@ -12,6 +12,7 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_STREAM_WEBRTCINTERFACE_HPP_
 #define _PRIVMXLIB_ENDPOINT_STREAM_WEBRTCINTERFACE_HPP_
 
+#include <cstdint>
 #include <string>
 #include <vector>
 

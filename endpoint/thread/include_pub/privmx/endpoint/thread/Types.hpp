@@ -3,6 +3,7 @@
 
 #include "privmx/endpoint/core/Buffer.hpp"
 #include "privmx/endpoint/core/Types.hpp"
+#include <cstdint>
 
 namespace privmx {
 namespace endpoint {
