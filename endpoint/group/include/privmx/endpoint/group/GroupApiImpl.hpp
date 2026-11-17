@@ -56,14 +56,24 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies,
+        const std::optional<core::Buffer>& idSeed = std::nullopt,
+        const std::string& visibleTo = "members"
     );
+    // The resourceId a group created with `idSeed` is named by: 64 hex digits, a digest of the seed under a label
+    // of its own, so a seed is never some other digest the application already publishes.
+    static std::string resourceIdOfSeed(const core::Buffer& idSeed);
+    static std::string deriveGroupId(const std::string& contextId, const core::Buffer& idSeed);
+    std::vector<GroupResult> getGroups(const std::vector<std::string>& groupIds);
+    GroupPublicKey getGroupPublicKey(const std::string& contextId, const std::string& groupId);
+    void setGroupVisibility(const std::string& groupId, const std::string& visibleTo);
 
     void addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers);
 
-    void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
+    // Both return the group's epoch after the call.
+    int64_t removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
-    void rotateGroupKey(const std::string& groupId);
+    int64_t rotateGroupKey(const std::string& groupId);
     bool renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey);
 
     // The pins the PinStore holds for `previous` (an earlier identity key of this user), taken only for groups

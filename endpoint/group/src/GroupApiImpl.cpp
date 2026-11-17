@@ -117,9 +117,68 @@ std::string GroupApiImpl::createGroup(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::optional<core::Buffer>& idSeed,
+    const std::string& visibleTo
 ) {
-    return _ops.create(contextId, users, managers, publicMeta, privateMeta, policies);
+    if (visibleTo != "members" && visibleTo != "context") {
+        throw core::InvalidParamsException("visibleTo is \"members\" or \"context\"");
+    }
+    return _ops.create(
+        contextId, users, managers, publicMeta, privateMeta, policies,
+        idSeed.has_value() ? std::optional<std::string>(resourceIdOfSeed(idSeed.value())) : std::nullopt,
+        visibleTo == "members" ? std::nullopt : std::optional<std::string>(visibleTo)
+    );
+}
+
+std::string GroupApiImpl::resourceIdOfSeed(const core::Buffer& idSeed) {
+    if (idSeed.size() == 0) {
+        throw core::InvalidParamsException("an id seed cannot be empty");
+    }
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::sha256("privmx/group/id-seed" + idSeed.stdString()));
+}
+
+std::string GroupApiImpl::deriveGroupId(const std::string& contextId, const core::Buffer& idSeed) {
+    return keytree::TreeCommits::groupId(contextId, resourceIdOfSeed(idSeed));
+}
+
+std::vector<GroupResult> GroupApiImpl::getGroups(const std::vector<std::string>& groupIds) {
+    // One verified read per group: each goes through everything `getGroup` checks. (The Bridge's groupGetMany
+    // serves them in one request; feeding its answers through the same verification is a later step.)
+    std::vector<GroupResult> results;
+    results.reserve(groupIds.size());
+    for (const std::string& groupId : groupIds) {
+        GroupResult result{};
+        try {
+            result.group = getGroup(groupId);
+            result.statusCode = result.group.statusCode;
+        } catch (const core::Exception& e) { result.statusCode = e.getCode(); } catch (...) {
+            result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        }
+        results.push_back(std::move(result));
+    }
+    return results;
+}
+
+GroupPublicKey GroupApiImpl::getGroupPublicKey(const std::string& contextId, const std::string& groupId) {
+    const auto epochs = fetchGroupEpochs(contextId, {groupId});
+    const auto epoch = epochs.find(groupId);
+    if (epoch == epochs.end()) {
+        throw GroupDataIntegrityException("group " + groupId + " has no verifiable key");
+    }
+    return GroupPublicKey{
+        .groupId = groupId, .keyVersion = epoch->second.keyVersion, .pubKey = epoch->second.groupPubKey
+    };
+}
+
+void GroupApiImpl::setGroupVisibility(const std::string& groupId, const std::string& visibleTo) {
+    if (visibleTo != "members" && visibleTo != "context") {
+        throw core::InvalidParamsException("visibleTo is \"members\" or \"context\"");
+    }
+    server::GroupSetVisibilityModel model;
+    model.groupId = groupId;
+    model.visibleTo = visibleTo;
+    _serverApi.groupSetVisibility(model);
 }
 
 void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
@@ -134,7 +193,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     runDueWork(groupId);
 }
 
-void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
+int64_t GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
     // A narrowing's carry still to do runs first: after the removal its plane would be judged under the new rules.
     _metadata.retryPendingCarry(groupId);
     std::optional<bool> historyAbandoned;
@@ -147,9 +206,11 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
         _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), userIds, prior);
     }
     runDueWork(groupId);
+    // The epoch this client committed, or verified when an earlier call's removal turned out to have landed.
+    return static_cast<int64_t>(pinnedKeyVersion(groupId));
 }
 
-void GroupApiImpl::rotateGroupKey(const std::string& groupId) {
+int64_t GroupApiImpl::rotateGroupKey(const std::string& groupId) {
     _metadata.retryPendingCarry(groupId);
     bool committedHere = true;
     PriorRole prior;
@@ -161,6 +222,7 @@ void GroupApiImpl::rotateGroupKey(const std::string& groupId) {
         _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, {}, prior);
     }
     runDueWork(groupId);
+    return static_cast<int64_t>(pinnedKeyVersion(groupId));
 }
 
 void GroupApiImpl::runDueWork(const std::string& groupId) {
@@ -347,6 +409,7 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
             listed = _serverApi.groupList(model).groups;
         } catch (const std::exception& e) { LOG_WARN("[fetchGroupEpochs] groupList by id unavailable: ", e.what()) }
         std::vector<server::GroupInfo> read;
+        std::set<std::string> listedIds; // read in full below
         for (const auto& summary : listed) {
             // A listing for another context would have the UserVerifier vouch for the committer there.
             if (summary.contextId != contextId) {
@@ -363,8 +426,37 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
             // roster read would do if non-member writes to new or rotated groups get hot.
             try {
                 read.push_back(_serverApi.groupGet(VerifiedGroup::pathRead(summary.id)).group);
+                listedIds.insert(summary.id);
             } catch (const std::exception& e) {
                 LOG_WARN("[fetchGroupEpochs] group ", summary.id, " unreadable: ", e.what())
+            }
+        }
+        // What neither the listing nor `groupGet` serves this caller: a group it is not in. The Bridge hands the
+        // identity key, the roster and the latest statement of a group visible to the context to anybody in it,
+        // and that is all `verifyListed` reads.
+        for (const std::string& id : ids) {
+            if (listedIds.count(id) != 0 || epochs.count(id) != 0) {
+                continue;
+            }
+            try {
+                server::GroupGetPublicKeyModel publicKeyModel;
+                publicKeyModel.groupId = id;
+                const server::GroupPublicInfo info = _serverApi.groupGetPublicKey(publicKeyModel).group;
+                server::GroupInfo asListed;
+                asListed.id = info.id;
+                asListed.contextId = info.contextId;
+                asListed.resourceId = info.resourceId;
+                asListed.creator = info.creator;
+                asListed.users = info.users;
+                asListed.managers = info.managers;
+                asListed.rosterVersion = info.rosterVersion;
+                asListed.keyVersion = info.keyVersion;
+                asListed.groupPubKey = info.groupPubKey;
+                asListed.policy = info.policy;
+                asListed.treeCommit = info.treeCommit;
+                read.push_back(std::move(asListed));
+            } catch (const std::exception& e) {
+                LOG_WARN("[fetchGroupEpochs] group ", id, " serves no key to this caller: ", e.what())
             }
         }
         _treeVerifier.preverifyListed(read, VerifiedGroup::treeEnvironment(_serverApi, _connection, std::string()));

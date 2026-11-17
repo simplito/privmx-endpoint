@@ -4427,3 +4427,50 @@ TEST_F(GroupApiLyingBridge, SECURITY_TheRosterAnAuthorIsCheckedAgainstIsNeverOld
     client("bob").getGroup(groupId); // the read that refills bob's key cache
     EXPECT_THROW(client("bob").decrypt(groupId, message("m1"), fromCarol, ANY), EnvelopeAuthorNotMemberException);
 }
+
+TEST(GroupApiPaths, AGroupIdFollowsFromItsContextAndItsSeed) {
+    const core::Buffer seed = core::Buffer::from("contact/chat/42");
+    const std::string id = GroupApiImpl::deriveGroupId(CONTEXT, seed);
+    EXPECT_EQ(id.size(), 64u);
+    EXPECT_EQ(id, GroupApiImpl::deriveGroupId(CONTEXT, seed));
+    EXPECT_NE(id, GroupApiImpl::deriveGroupId(CONTEXT, core::Buffer::from("contact/chat/43")));
+    EXPECT_NE(id, GroupApiImpl::deriveGroupId("another-context", seed));
+    // The name a group is created under is a digest of the seed under a label of its own: what the Bridge takes
+    // beside a uuid, and never the seed itself.
+    const std::string resourceId = GroupApiImpl::resourceIdOfSeed(seed);
+    EXPECT_EQ(resourceId.size(), 64u);
+    EXPECT_EQ(resourceId.find_first_not_of("0123456789abcdef"), std::string::npos);
+    EXPECT_NE(resourceId, privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(seed.stdString())));
+    EXPECT_EQ(id, privmx::endpoint::group::keytree::TreeCommits::groupId(CONTEXT, resourceId));
+    EXPECT_THROW(GroupApiImpl::deriveGroupId(CONTEXT, core::Buffer()), core::InvalidParamsException);
+}
+
+TEST_F(GroupApiLyingBridge, AGroupCreatedFromASeedHasTheIdEveryClientComputes) {
+    quiet = true;
+    const core::Buffer seed = core::Buffer::from("contact/chat/42");
+    const std::string groupId = client("alice").createGroup(
+        CONTEXT, {user("bob")}, {user("alice")}, core::Buffer::from("public"), core::Buffer::from("private"), OPEN, seed
+    );
+    EXPECT_EQ(groupId, GroupApiImpl::deriveGroupId(CONTEXT, seed));
+    // Bob finds it from the seed alone, and it verifies like any other group.
+    const Group found = client("bob").getGroup(GroupApiImpl::deriveGroupId(CONTEXT, seed));
+    EXPECT_EQ(found.statusCode, 0);
+    EXPECT_EQ(found.creator, "alice");
+    EXPECT_EQ(found.visibleTo, "members");
+    EXPECT_THROW(
+        client("alice").createGroup(
+            CONTEXT, {}, {user("alice")}, core::Buffer(), core::Buffer(), OPEN, std::nullopt, "everybody"
+        ),
+        core::InvalidParamsException
+    );
+}
+
+TEST_F(GroupApiLyingBridge, ARemovalAndARotationSayWhichEpochTheyMade) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    EXPECT_EQ(client("alice").removeGroupMembers(groupId, {"carol"}), 2);
+    EXPECT_EQ(client("alice").rotateGroupKey(groupId), 3);
+    EXPECT_EQ(
+        GroupApiImpl::peekEnvelope(client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("x"), {})).keyVersion, 3
+    );
+}

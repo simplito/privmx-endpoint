@@ -54,6 +54,10 @@ public:
         PeekEnvelope = 34,
         NoLocation = 35,
         IdFromString = 36,
+        DeriveGroupId = 37,
+        GetGroups = 38,
+        GetGroupPublicKey = 39,
+        SetGroupVisibility = 40,
     };
 
     GroupApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -85,6 +89,10 @@ public:
     Poco::Dynamic::Var peekEnvelope(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var noLocation(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var idFromString(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var deriveGroupId(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getGroups(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getGroupPublicKey(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var setGroupVisibility(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var beginFileEncryption(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var encryptFileChunk(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var beginFileDecryption(const Poco::Dynamic::Var& args);

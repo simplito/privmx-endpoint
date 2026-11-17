@@ -30,6 +30,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& va
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("schemaVersion", serialize(val.schemaVersion));
     obj->set("keyVersion", serialize(val.keyVersion));
+    obj->set("visibleTo", serialize(val.visibleTo));
     if (val.type.has_value()) {
         obj->set("type", serialize(val.type.value()));
     }
@@ -225,6 +226,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupSummary>(const group::Gr
     obj->set("rosterVersion", serialize(val.rosterVersion));
     obj->set("policy", serialize(val.policy));
     obj->set("keyVersion", serialize(val.keyVersion));
+    obj->set("visibleTo", serialize(val.visibleTo));
     if (val.type.has_value()) {
         obj->set("type", serialize(val.type.value()));
     }
@@ -304,4 +306,27 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupCustomEventData>(const g
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::GroupCustomEvent>(const group::GroupCustomEvent& val) {
     return serializeBaseWithData<Event>(val, "group$GroupCustomEvent");
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupResult>(const group::GroupResult& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$GroupResult");
+    }
+    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("group", serialize(val.group));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupPublicKey>(const group::GroupPublicKey& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$GroupPublicKey");
+    }
+    obj->set("groupId", serialize(val.groupId));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    obj->set("pubKey", serialize(val.pubKey));
+    return obj;
 }

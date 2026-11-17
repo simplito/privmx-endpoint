@@ -65,6 +65,12 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::PathSegment>(const group::PathSegment& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupResult>(const group::GroupResult& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupPublicKey>(const group::GroupPublicKey& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedFileInfo>(const group::DecryptedFileInfo& val);
 
 template<>

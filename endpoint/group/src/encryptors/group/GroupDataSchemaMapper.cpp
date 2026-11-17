@@ -470,7 +470,8 @@ Group GroupDataSchemaMapper::toLibGroup(
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
         .type = info.type,
-        .keyVersion = info.keyVersion
+        .keyVersion = info.keyVersion,
+        .visibleTo = info.visibleTo.value_or("members")
     };
 }
 
@@ -488,7 +489,8 @@ GroupSummary GroupDataSchemaMapper::toLibGroupSummary(const server::GroupSummary
         .rosterVersion = info.rosterVersion,
         .policy = core::Factory::parsePolicyServerObject(info.policy),
         .type = info.type,
-        .keyVersion = info.keyVersion
+        .keyVersion = info.keyVersion,
+        .visibleTo = info.visibleTo.value_or("members")
     };
 }
 

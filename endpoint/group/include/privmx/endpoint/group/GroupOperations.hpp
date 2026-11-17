@@ -68,7 +68,10 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies
+        const std::optional<core::ContainerPolicy>& policies,
+        // The name the group is created under instead of a random one: its id follows from it (TreeCommits::groupId).
+        const std::optional<std::string>& resourceId = std::nullopt,
+        const std::optional<std::string>& visibleTo = std::nullopt
     ) const;
 
     void add(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) const;

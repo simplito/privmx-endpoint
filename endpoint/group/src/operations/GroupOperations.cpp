@@ -192,7 +192,9 @@ std::string GroupOperations::create(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::optional<std::string>& resourceId,
+    const std::optional<std::string>& visibleTo
 ) const {
     // The creator commits from a seat of its own, like any committer. Checked by
     // key first, which needs no request; the id the seat is planned under is checked again once it is known.
@@ -206,6 +208,11 @@ std::string GroupOperations::create(
 
     // Empty rosters: the metadata key is wrapped once to the group's own grant key, and members open it by climbing.
     auto ctx = deps.facade.prepareCreate(contextId);
+    if (resourceId.has_value()) {
+        // Before anything is signed: the first statement, the DIOs and the roster entry all name the group by it.
+        ctx.resourceId = resourceId.value();
+        ctx.dio.resourceId = resourceId.value();
+    }
     const std::string creatorId = ctx.dio.creatorUserId;
     if (std::none_of(members.begin(), members.end(), [&](const keytree::TreeMember& m) {
             return m.userId == creatorId && m.publicKey == ownKey;
@@ -266,6 +273,7 @@ std::string GroupOperations::create(
     model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
     model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     model.groupPubKey = groupPubKeyStr;
+    model.visibleTo = visibleTo;
     model.type = GROUP_TYPE_FILTER_FLAG;
     const auto selfAddressed = deps.facade.buildGroupKeyEntries(
         {core::GroupGrantWithKey{

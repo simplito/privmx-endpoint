@@ -28,13 +28,41 @@ std::string GroupApi::createGroup(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::optional<core::Buffer>& idSeed,
+    const std::string& visibleTo
 ) {
     auto impl = getImpl();
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateUserListFormat(users, "field:users ");
     core::Validator::validateUserListFormat(managers, "field:managers ");
-    return impl->createGroup(contextId, users, managers, publicMeta, privateMeta, policies);
+    return impl->createGroup(contextId, users, managers, publicMeta, privateMeta, policies, idSeed, visibleTo);
+}
+
+std::string GroupApi::deriveGroupId(const std::string& contextId, const core::Buffer& idSeed) {
+    core::Validator::validateId(contextId, "field:contextId ");
+    return GroupApiImpl::deriveGroupId(contextId, idSeed);
+}
+
+std::vector<GroupResult> GroupApi::getGroups(const std::vector<std::string>& groupIds) {
+    auto impl = getImpl();
+    for (const std::string& groupId : groupIds) {
+        core::Validator::validateId(groupId, "field:groupIds ");
+    }
+    return impl->getGroups(groupIds);
+}
+
+GroupPublicKey GroupApi::getGroupPublicKey(const std::string& contextId, const std::string& groupId) {
+    auto impl = getImpl();
+    core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->getGroupPublicKey(contextId, groupId);
+}
+
+void GroupApi::setGroupVisibility(const std::string& groupId, const std::string& visibleTo) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    impl->setGroupVisibility(groupId, visibleTo);
 }
 
 void GroupApi::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
@@ -56,19 +84,19 @@ void GroupApi::addGroupMembers(const std::string& groupId, const std::vector<Gro
     impl->addGroupMembers(groupId, newMembers);
 }
 
-void GroupApi::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
+int64_t GroupApi::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     for (const std::string& userId : userIds) {
         core::Validator::validateId(userId, "field:userIds ");
     }
-    impl->removeGroupMembers(groupId, userIds);
+    return impl->removeGroupMembers(groupId, userIds);
 }
 
-void GroupApi::rotateGroupKey(const std::string& groupId) {
+int64_t GroupApi::rotateGroupKey(const std::string& groupId) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    impl->rotateGroupKey(groupId);
+    return impl->rotateGroupKey(groupId);
 }
 
 bool GroupApi::renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey) {

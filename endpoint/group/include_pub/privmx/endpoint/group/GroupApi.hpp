@@ -74,8 +74,36 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt
+        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::optional<core::Buffer>& idSeed = std::nullopt,
+        const std::string& visibleTo = "members"
     );
+
+    /**
+     * The ID of a Group created with `idSeed`: every client computes the same one from the Context and the seed,
+     * so no server has to be asked which Group belongs to an entity.
+     *
+     * A seed anybody can compute is a name anybody can take first. Creating a Group under a seed fails when one
+     * exists or ever existed; a caller who finds a Group under a derived ID checks `Group::creator` against who
+     * owns the entity before trusting it.
+     */
+    static std::string deriveGroupId(const std::string& contextId, const core::Buffer& idSeed);
+
+    /** `getGroup` for several Groups. One result per ID, in order; a Group that fails reports its own code. */
+    std::vector<GroupResult> getGroups(const std::vector<std::string>& groupIds);
+
+    /**
+     * The Group's current identity key, read and verified against the Group's latest statement. For a member,
+     * and for any user of the Context when the Group is visible to the Context (`setGroupVisibility`).
+     */
+    GroupPublicKey getGroupPublicKey(const std::string& contextId, const std::string& groupId);
+
+    /**
+     * Sets who beside the members may read the Group's identity key, roster and statements: "members" or
+     * "context". A manager's call. Making a Group visible to the Context is what lets someone outside it write to
+     * it with `encryptAsOutsider`; it also shows the roster to every user of the Context.
+     */
+    void setGroupVisibility(const std::string& groupId, const std::string& visibleTo);
 
     /**
      * Adds members to a tree-backed Group, without advancing its key epoch.
@@ -116,7 +144,7 @@ public:
      * @param groupId ID of the Group
      * @param userIds IDs of the members to remove
      */
-    void removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
+    int64_t removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     /**
      * Replaces the Group's key without changing who is in it: the key epoch advances, and a fresh Group key is
@@ -136,7 +164,7 @@ public:
      *
      * @param groupId ID of the Group
      */
-    void rotateGroupKey(const std::string& groupId);
+    int64_t rotateGroupKey(const std::string& groupId);
 
     /**
      * Re-wraps the caller's own leaf to its current identity key after that key changed in the Context.

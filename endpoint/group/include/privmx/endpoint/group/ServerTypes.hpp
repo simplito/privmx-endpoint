@@ -175,8 +175,37 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(eraFloor, std::optional<int64_t>)                                                                                \
     F(archivePrunedBelow, std::optional<int64_t>)                                                                      \
     F(policy, Poco::Dynamic::Var)                                                                                      \
-    F(history, std::vector<GroupHistoryEntryInfo>)
+    F(history, std::vector<GroupHistoryEntryInfo>)                                                                     \
+    F(visibleTo, std::optional<std::string>)
 JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
+
+// What `groupGetPublicKey` serves somebody who may hold no seat: the identity key, the roster and the latest
+// statement, which is what vouches for the key (TreeVerifier::verifyListed). No tree, no keys, no metadata.
+#define GROUP_PUBLIC_INFO_FIELDS(F)                                                                                    \
+    F(id, std::string)                                                                                                 \
+    F(contextId, std::string)                                                                                          \
+    F(resourceId, std::optional<std::string>)                                                                          \
+    F(creator, std::string)                                                                                            \
+    F(users, std::vector<std::string>)                                                                                 \
+    F(managers, std::vector<std::string>)                                                                              \
+    F(rosterVersion, int64_t)                                                                                          \
+    F(keyVersion, int64_t)                                                                                             \
+    F(groupPubKey, std::string)                                                                                        \
+    F(policy, Poco::Dynamic::Var)                                                                                      \
+    F(visibleTo, std::string)                                                                                          \
+    F(treeCommit, GroupTreeCommit)
+JSON_STRUCT(GroupPublicInfo, GROUP_PUBLIC_INFO_FIELDS);
+
+#define GROUP_GET_PUBLIC_KEY_MODEL_FIELDS(F) F(groupId, std::string)
+JSON_STRUCT(GroupGetPublicKeyModel, GROUP_GET_PUBLIC_KEY_MODEL_FIELDS);
+
+#define GROUP_GET_PUBLIC_KEY_RESULT_FIELDS(F) F(group, GroupPublicInfo)
+JSON_STRUCT(GroupGetPublicKeyResult, GROUP_GET_PUBLIC_KEY_RESULT_FIELDS);
+
+#define GROUP_SET_VISIBILITY_MODEL_FIELDS(F)                                                                           \
+    F(groupId, std::string)                                                                                            \
+    F(visibleTo, std::string)
+JSON_STRUCT(GroupSetVisibilityModel, GROUP_SET_VISIBILITY_MODEL_FIELDS);
 
 #define GROUP_SUMMARY_FIELDS(F)                                                                                        \
     F(id, std::string)                                                                                                 \
@@ -192,7 +221,8 @@ JSON_STRUCT(GroupInfo, GROUP_INFO_FIELDS);
     F(privateMetaVersion, int64_t)                                                                                     \
     F(rosterVersion, int64_t)                                                                                          \
     F(keyVersion, int64_t)                                                                                             \
-    F(policy, Poco::Dynamic::Var)
+    F(policy, Poco::Dynamic::Var)                                                                                      \
+    F(visibleTo, std::optional<std::string>)
 // Constant size: no roster and no statement, so `groupPubKey` is unvouched (TreeVerifier::pinnedAt).
 JSON_STRUCT(GroupSummary, GROUP_SUMMARY_FIELDS);
 
@@ -215,7 +245,8 @@ JSON_STRUCT(GroupKeyEntrySetForNewGroup, GROUP_KEY_ENTRY_SET_FOR_NEW_GROUP_FIELD
     F(groupPubKey, std::string)                                                                                        \
     F(groupKeys, std::optional<GroupKeyEntrySetForNewGroup>)                                                           \
     F(tree, GroupTreeState)                                                                                            \
-    F(commit, GroupTreeCommit)
+    F(commit, GroupTreeCommit)                                                                                         \
+    F(visibleTo, std::optional<std::string>)
 JSON_STRUCT(GroupCreateModel, GROUP_CREATE_MODEL_FIELDS);
 
 // The public metadata plane's write. CAS-guarded on `publicMetaVersion` and nothing else, so a concurrent

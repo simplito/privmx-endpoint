@@ -31,6 +31,17 @@ void ServerApi::groupDelete(server::GroupDeleteModel model) {
     request("groupDelete", model.toJSON());
 }
 
+server::GroupGetPublicKeyResult ServerApi::groupGetPublicKey(server::GroupGetPublicKeyModel model) {
+    auto result = request<server::GroupGetPublicKeyResult>("groupGetPublicKey", model.toJSON());
+    // Everything verified off the answer is bound to the id it carries, so it has to be the one asked for.
+    if (result.group.id != model.groupId) {
+        throw GroupDataIntegrityException();
+    }
+    return result;
+}
+void ServerApi::groupSetVisibility(server::GroupSetVisibilityModel model) {
+    request("groupSetVisibility", model.toJSON());
+}
 server::GroupGetResult ServerApi::groupGet(server::GroupGetModel model) {
     auto result = request<server::GroupGetResult>("groupGet", model.toJSON());
     // Everything verified off the answer is bound to the id it carries, so it has to be the one asked for.

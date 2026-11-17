@@ -23,6 +23,9 @@ public:
     void groupDelete(server::GroupDeleteModel model);
     server::GroupGetResult groupGet(server::GroupGetModel model);
     server::GroupListResult groupList(server::GroupListModel model);
+    // The identity key with what vouches for it, for a caller who may hold no seat in the group.
+    server::GroupGetPublicKeyResult groupGetPublicKey(server::GroupGetPublicKeyModel model);
+    void groupSetVisibility(server::GroupSetVisibilityModel model);
 
     // ── Tree-backed membership (documents/nested_groups/09-hidden-key-tree.md) ──
     void groupAddMembers(server::GroupAddMembersModel model);

@@ -143,6 +143,12 @@ struct Group {
      * whose bridge does not yet emit this field.
      */
     int64_t keyVersion;
+
+    /**
+     * "members" or "context": who beside the members may read the Group's identity key, roster and statements,
+     * and so write to it from outside. The Bridge's own setting; no statement signs it.
+     */
+    std::string visibleTo;
 };
 
 /**
@@ -226,6 +232,9 @@ struct GroupSummary {
      * whose bridge does not yet emit this field.
      */
     int64_t keyVersion;
+
+    /** "members" or "context"; see `Group::visibleTo`. */
+    std::string visibleTo;
 };
 
 /**
@@ -380,6 +389,25 @@ struct DecryptedSharedEnvelope {
     std::string via;
     int64_t encryptedAt;
     EnvelopeAudience sharedWith;
+};
+
+/** `getGroups` reports per Group, the way lists do elsewhere in the Endpoint. */
+struct GroupResult {
+    /** 0 on success; otherwise the code of the exception `getGroup` would have thrown. */
+    int64_t statusCode;
+    /** Meaningful only when `statusCode` is 0. */
+    Group group;
+};
+
+/**
+ * A Group's current identity key, verified against the Group's latest statement. What a writer outside the
+ * Group seals to. Stale after the Group's next removal or rotation: fetch it when it is needed, do not store it.
+ */
+struct GroupPublicKey {
+    std::string groupId;
+    int64_t keyVersion;
+    /** Base58-DER. */
+    std::string pubKey;
 };
 
 struct GroupEpochRef {

@@ -6,6 +6,7 @@
 #include <privmx/utils/Utils.hpp>
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
 #include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
@@ -749,19 +750,41 @@ TEST_F(GroupTest, envelope_from_a_non_member) {
     );
 }
 
-// Disabled until the Bridge serves a group's current key to a non-member (groups-v2 B2, context/groupGetPublicKey):
-// today a non-member cannot list the group, so `encryptAsOutsider` has no verified key to seal to. The unit suite
-// covers the call against a bridge that does serve it (GroupApiLyingBridge.AnOutsiderWritesSignedAndCannotReadBack).
-TEST_F(GroupTest, DISABLED_envelope_signed_by_a_non_member) {
+TEST_F(GroupTest, envelope_signed_by_a_non_member) {
     std::string groupId = createGroupOf({user(1)});
     const std::string contextId = reader->getString("Context_1.contextId");
+    EXPECT_EQ(groupApi->getGroup(groupId).visibleTo, "members");
 
     disconnect();
     connectAs(2);
+    // A group shows its key to nobody outside it until a manager says so: there is nothing to seal to.
+    EXPECT_ANY_THROW({ groupApi->getGroupPublicKey(contextId, groupId); });
+    EXPECT_ANY_THROW({
+        groupApi->encryptAsOutsider(contextId, groupId, messagePath("lab1"), core::Buffer::from("a signed result"));
+    });
+    // And only a manager can say so.
+    EXPECT_ANY_THROW({ groupApi->setGroupVisibility(groupId, "context"); });
+
+    disconnect();
+    connectAs(1);
+    ASSERT_NO_THROW({ groupApi->setGroupVisibility(groupId, "context"); });
+    EXPECT_EQ(groupApi->getGroup(groupId).visibleTo, "context");
+
+    disconnect();
+    connectAs(2);
+    group::GroupPublicKey key;
+    EXPECT_NO_THROW({ key = groupApi->getGroupPublicKey(contextId, groupId); });
+    EXPECT_EQ(key.groupId, groupId);
+    EXPECT_EQ(key.keyVersion, 1);
+    EXPECT_FALSE(key.pubKey.empty());
+    // Visible is not readable.
+    EXPECT_ANY_THROW({ groupApi->getGroup(groupId); });
+
     core::Buffer fromOutsider;
     EXPECT_NO_THROW({
         fromOutsider = groupApi->encryptAsOutsider(contextId, groupId, messagePath("lab1"), core::Buffer::from("a signed result"));
     });
+    // The writer cannot read it back.
     EXPECT_ANY_THROW({ groupApi->decryptFromOutsider(groupId, messagePath("lab1"), fromOutsider, anyAuthor()); });
 
     disconnect();
@@ -775,11 +798,91 @@ TEST_F(GroupTest, DISABLED_envelope_signed_by_a_non_member) {
     EXPECT_EQ(signedResult.data.stdString(), "a signed result");
     EXPECT_EQ(signedResult.sender.userId, reader->getString("Login.user_2_id"));
     EXPECT_EQ(signedResult.sender.pubKey, reader->getString("Login.user_2_pubKey"));
+    EXPECT_EQ(signedResult.keyVersion, 1);
     EXPECT_THROW(
         { groupApi->decrypt(groupId, messagePath("lab1"), fromOutsider, anyAuthor()); }, group::EnvelopeWrongKindException
     );
     EXPECT_THROW(
         { groupApi->decryptAnonymous(groupId, messagePath("lab1"), fromOutsider); }, group::EnvelopeWrongKindException
+    );
+    EXPECT_THROW(
+        { groupApi->decryptFromOutsider(groupId, messagePath("lab2"), fromOutsider, anyAuthor()); },
+        group::EnvelopeWrongLocationException
+    );
+
+    // Hidden again: the next write from outside finds no key. What was written stays readable.
+    ASSERT_NO_THROW({ groupApi->setGroupVisibility(groupId, "members"); });
+    disconnect();
+    connectAs(2);
+    EXPECT_ANY_THROW({
+        groupApi->encryptAsOutsider(contextId, groupId, messagePath("lab3"), core::Buffer::from("too late"));
+    });
+}
+
+TEST_F(GroupTest, group_id_follows_from_a_seed) {
+    const std::string contextId = reader->getString("Context_1.contextId");
+    // What an application has before any group exists: the entity the group is for.
+    const core::Buffer seed = core::Buffer::from("contact/chat/" + core::EndpointUtils::generateId());
+    const std::string expected = group::GroupApi::deriveGroupId(contextId, seed);
+    EXPECT_EQ(expected, group::GroupApi::deriveGroupId(contextId, seed));
+    EXPECT_NE(expected, group::GroupApi::deriveGroupId(contextId, core::Buffer::from("contact/chat/other")));
+    EXPECT_NE(expected, group::GroupApi::deriveGroupId(reader->getString("Context_2.contextId"), seed));
+
+    std::string groupId;
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId, {user(1), user(2)}, {user(1)}, core::Buffer::from("public"), core::Buffer::from("private"),
+            std::nullopt, seed
+        );
+    });
+    EXPECT_EQ(groupId, expected);
+    EXPECT_EQ(groupApi->getGroup(groupId).creator, reader->getString("Login.user_1_id"));
+
+    // Another device finds the group from the entity alone, and checks who made it.
+    disconnect();
+    connectAs(2);
+    group::Group found;
+    EXPECT_NO_THROW({ found = groupApi->getGroup(group::GroupApi::deriveGroupId(contextId, seed)); });
+    EXPECT_EQ(found.creator, reader->getString("Login.user_1_id"));
+    // SECURITY: a second group under the seed is refused, whoever asks. Finding one there is not creating it.
+    EXPECT_ANY_THROW({
+        groupApi->createGroup(
+            contextId, {user(2)}, {user(2)}, core::Buffer::from("public"), core::Buffer::from("private"),
+            std::nullopt, seed
+        );
+    });
+}
+
+TEST_F(GroupTest, getGroups_reports_each_group_on_its_own) {
+    std::string first = createGroupOf({user(1), user(2)});
+    std::string second = createGroupOf({user(1)});
+    std::vector<group::GroupResult> results;
+    ASSERT_NO_THROW({ results = groupApi->getGroups({first, "no-such-group", second}); });
+    ASSERT_EQ(results.size(), 3u);
+    EXPECT_EQ(results[0].statusCode, 0);
+    EXPECT_EQ(results[0].group.groupId, first);
+    EXPECT_NE(results[1].statusCode, 0);
+    EXPECT_EQ(results[2].statusCode, 0);
+    EXPECT_EQ(results[2].group.groupId, second);
+
+    disconnect();
+    connectAs(2);
+    ASSERT_NO_THROW({ results = groupApi->getGroups({first, second}); });
+    EXPECT_EQ(results[0].statusCode, 0);
+    EXPECT_NE(results[1].statusCode, 0); // user_2 is not in the second one
+}
+
+TEST_F(GroupTest, a_removal_and_a_rotation_say_which_epoch_they_made) {
+    std::string groupId = createGroupOf({user(1), user(2)});
+    int64_t epoch = 0;
+    ASSERT_NO_THROW({ epoch = groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_2_id")}); });
+    EXPECT_EQ(epoch, 2);
+    EXPECT_EQ(groupApi->getGroup(groupId).keyVersion, 2);
+    ASSERT_NO_THROW({ epoch = groupApi->rotateGroupKey(groupId); });
+    EXPECT_EQ(epoch, 3);
+    // The envelope a server gates on carries that epoch.
+    EXPECT_EQ(
+        group::GroupApi::peekEnvelope(groupApi->encrypt(groupId, messagePath("m1"), core::Buffer::from("x"))).keyVersion, 3
     );
 }
 
