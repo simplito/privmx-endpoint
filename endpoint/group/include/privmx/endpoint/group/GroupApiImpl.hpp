@@ -117,8 +117,8 @@ public:
     // The one Path that stands for "bound to no location": a single identifier segment with no bytes, which no
     // real path can contain.
     static Path noLocation();
-    // One spelling per identifier: a UUID in any case, with or without dashes or braces, becomes its 16 bytes;
-    // anything else its bytes as given.
+    // One spelling per identifier: a UUID in one of its exact forms (32 hex digits, 8-4-4-4-12, that in braces; any
+    // case) becomes a tag byte and its 16 bytes; anything else a different tag byte and its bytes as given.
     static core::Buffer idFromString(const std::string& identifier);
     static EnvelopeHeader peekEnvelope(const core::Buffer& envelope);
 
@@ -247,12 +247,17 @@ private:
     struct RosterView {
         std::string contextId;
         std::int64_t keyVersion = 0;
+        std::int64_t rosterVersion = 0;
         std::vector<std::string> users;
         std::vector<std::string> managers;
         // "manager", "user", or "" for someone who is not in the group.
         std::string roleOf(const std::string& userId) const;
     };
     RosterView rosterOf(const std::string& groupId);
+    // The only writer of `_rosters`: called wherever the module-key cache is filled from a verified read.
+    void rememberRoster(const server::GroupInfo& group);
+    // The only way this class drops a group's cached keys: the roster goes with them.
+    void dropCachedGroup(const std::optional<std::string>& groupId = std::nullopt);
 
     static EnvelopeBinding bindingOf(const Path& location);
     // "member", "outsider", "anonymous" or "shared", as GroupErrorDetails::envelopeKind names them.

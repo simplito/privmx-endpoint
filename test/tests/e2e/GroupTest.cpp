@@ -713,7 +713,6 @@ TEST_F(GroupTest, envelope_of_a_removed_member_is_not_attributed_to_a_member) {
 TEST_F(GroupTest, envelope_from_a_non_member) {
     // A group user_2 is deliberately not in.
     std::string groupId = createGroupOf({user(1)});
-    const std::string contextId = reader->getString("Context_1.contextId");
     const std::string groupPubKey = groupApi->getGroup(groupId).groupPubKey;
     ASSERT_FALSE(groupPubKey.empty());
 
@@ -727,13 +726,8 @@ TEST_F(GroupTest, envelope_from_a_non_member) {
         anonymous =
             groupApi->encryptAnonymously(groupId, groupPubKey, messagePath("tip1"), core::Buffer::from("a tip from outside"));
     });
-    core::Buffer fromOutsider;
-    EXPECT_NO_THROW({
-        fromOutsider = groupApi->encryptAsOutsider(contextId, groupId, messagePath("lab1"), core::Buffer::from("a signed result"));
-    });
     // The sender cannot read back what they wrote; only the group can.
     EXPECT_ANY_THROW({ groupApi->decryptAnonymous(groupId, messagePath("tip1"), anonymous); });
-    EXPECT_ANY_THROW({ groupApi->decryptFromOutsider(groupId, messagePath("lab1"), fromOutsider, anyAuthor()); });
 
     disconnect();
     connectAs(1);
@@ -742,6 +736,36 @@ TEST_F(GroupTest, envelope_from_a_non_member) {
     EXPECT_EQ(opened.data.stdString(), "a tip from outside");
     EXPECT_EQ(opened.keyVersion, 1);
 
+    // What nobody signed is never read as somebody's, and never at another place.
+    EXPECT_THROW(
+        { groupApi->decrypt(groupId, messagePath("tip1"), anonymous, anyAuthor()); }, group::EnvelopeWrongKindException
+    );
+    EXPECT_THROW(
+        { groupApi->decryptFromOutsider(groupId, messagePath("tip1"), anonymous, anyAuthor()); },
+        group::EnvelopeWrongKindException
+    );
+    EXPECT_THROW(
+        { groupApi->decryptAnonymous(groupId, messagePath("tip2"), anonymous); }, group::EnvelopeWrongLocationException
+    );
+}
+
+// Disabled until the Bridge serves a group's current key to a non-member (groups-v2 B2, context/groupGetPublicKey):
+// today a non-member cannot list the group, so `encryptAsOutsider` has no verified key to seal to. The unit suite
+// covers the call against a bridge that does serve it (GroupApiLyingBridge.AnOutsiderWritesSignedAndCannotReadBack).
+TEST_F(GroupTest, DISABLED_envelope_signed_by_a_non_member) {
+    std::string groupId = createGroupOf({user(1)});
+    const std::string contextId = reader->getString("Context_1.contextId");
+
+    disconnect();
+    connectAs(2);
+    core::Buffer fromOutsider;
+    EXPECT_NO_THROW({
+        fromOutsider = groupApi->encryptAsOutsider(contextId, groupId, messagePath("lab1"), core::Buffer::from("a signed result"));
+    });
+    EXPECT_ANY_THROW({ groupApi->decryptFromOutsider(groupId, messagePath("lab1"), fromOutsider, anyAuthor()); });
+
+    disconnect();
+    connectAs(1);
     group::DecryptedOutsiderEnvelope signedResult;
     EXPECT_NO_THROW({
         signedResult = groupApi->decryptFromOutsider(
@@ -751,17 +775,8 @@ TEST_F(GroupTest, envelope_from_a_non_member) {
     EXPECT_EQ(signedResult.data.stdString(), "a signed result");
     EXPECT_EQ(signedResult.sender.userId, reader->getString("Login.user_2_id"));
     EXPECT_EQ(signedResult.sender.pubKey, reader->getString("Login.user_2_pubKey"));
-
-    // What a non-member wrote is never read as a member's, and what nobody signed never as somebody's.
-    EXPECT_THROW(
-        { groupApi->decrypt(groupId, messagePath("tip1"), anonymous, anyAuthor()); }, group::EnvelopeWrongKindException
-    );
     EXPECT_THROW(
         { groupApi->decrypt(groupId, messagePath("lab1"), fromOutsider, anyAuthor()); }, group::EnvelopeWrongKindException
-    );
-    EXPECT_THROW(
-        { groupApi->decryptFromOutsider(groupId, messagePath("tip1"), anonymous, anyAuthor()); },
-        group::EnvelopeWrongKindException
     );
     EXPECT_THROW(
         { groupApi->decryptAnonymous(groupId, messagePath("lab1"), fromOutsider); }, group::EnvelopeWrongKindException

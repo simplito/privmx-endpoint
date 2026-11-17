@@ -248,7 +248,7 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
     server::GroupDeleteModel model{.groupId = groupId};
     _serverApi.groupDelete(model);
     _sessions.forget(groupId);
-    invalidateModuleKeysInCache(groupId);
+    dropCachedGroup(groupId);
 }
 
 Group GroupApiImpl::getGroup(const std::string& groupId) {
@@ -284,6 +284,9 @@ Group GroupApiImpl::getGroup(const std::string& groupId) {
     // Writes take their key from this cache, so only an answer that passed everything may fill it.
     if (seated && result.statusCode == 0) {
         assertHeadKeyAtEpoch(group);
+        // The roster with the keys, never one without the other: an author is checked against the roster of the
+        // same answer the cached keys came from.
+        rememberRoster(group);
         setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.rosterVersion);
     }
     runDueWork(groupId);
@@ -468,7 +471,7 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupUpdated") {
             auto raw = server::GroupChangedEventData::fromJSON(notification.data);
-            invalidateModuleKeysInCache(raw.groupId);
+            dropCachedGroup(raw.groupId);
             auto data = Mapper::mapToGroupChangedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupUpdatedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
@@ -477,7 +480,7 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
             // Key caches only. The pins stay as tombstones: the event is the bridge's word alone, and dropping them
             // would make the next read of the group a first contact the bridge could answer with any old state.
             _sessions.forget(raw.groupId);
-            invalidateModuleKeysInCache(raw.groupId);
+            dropCachedGroup(raw.groupId);
             auto data = Mapper::mapToGroupDeletedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupDeletedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
@@ -495,7 +498,7 @@ void GroupApiImpl::processConnectedEvent() {
     // Open file handles too. A handle used after this reports "not an open encrypted-file handle", which a reconnect
     // made true.
     _envelopeFiles.clear();
-    invalidateModuleKeysInCache();
+    dropCachedGroup();
 }
 
 // The sessions' unresolved commits are kept on purpose: a dropped connection is the commonest unknown outcome of a
@@ -507,21 +510,13 @@ void GroupApiImpl::processDisconnectedEvent() {
     savePins();
     _sessions.dropKeys();
     _envelopeFiles.clear();
-    invalidateModuleKeysInCache();
+    dropCachedGroup();
 }
 
 std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     const VerifiedGroup group = readGroupForKeys(moduleId);
     // The attested roster of the same read the keys come from: who an envelope's author is checked against.
-    _rosters.set(
-        moduleId,
-        RosterView{
-            .contextId = group->contextId,
-            .keyVersion = group->keyVersion,
-            .users = group->users,
-            .managers = group->managers,
-        }
-    );
+    rememberRoster(group);
     // Roster version: key material moves with that plane, so a metadata-only write must not stale the cache.
     return std::make_pair(groupToModuleKeys(group), group->rosterVersion);
 }
@@ -655,7 +650,7 @@ GroupApiHooks GroupApiImpl::bindHooks() {
         .resolveMemberKeys = [this](
                                  const std::string& contextId, const std::vector<std::string>& userIds
                              ) { return resolveMemberKeys(contextId, userIds); },
-        .invalidateModuleKeys = [this](const std::string& groupId) { invalidateModuleKeysInCache(groupId); },
+        .invalidateModuleKeys = [this](const std::string& groupId) { dropCachedGroup(groupId); },
     };
 }
 
@@ -690,28 +685,34 @@ Path GroupApiImpl::noLocation() {
 }
 
 core::Buffer GroupApiImpl::idFromString(const std::string& identifier) {
+    if (identifier.empty()) {
+        throw core::InvalidParamsException("an identifier cannot be empty");
+    }
     // A UUID is the one identifier that commonly travels in several spellings (case, dashes, braces): two clients
-    // that spelled it differently would bind to different paths. Its 16 bytes are the same for all of them.
+    // that spelled it differently would bind to different paths. Only its exact forms count - 32 hex digits,
+    // 8-4-4-4-12, or that in one pair of braces - so nothing else is ever reinterpreted.
+    std::string body = identifier;
+    if (body.size() == 38 && body.front() == '{' && body.back() == '}') {
+        body = body.substr(1, 36);
+    }
+    bool uuid = body.size() == 32 || body.size() == 36;
     std::string hex;
-    for (char c : identifier) {
-        if (c == '-' || c == '{' || c == '}') {
-            continue;
+    for (std::size_t i = 0; uuid && i < body.size(); ++i) {
+        const bool dashExpected = body.size() == 36 && (i == 8 || i == 13 || i == 18 || i == 23);
+        if (dashExpected) {
+            uuid = body[i] == '-';
+        } else if (std::isxdigit(static_cast<unsigned char>(body[i]))) {
+            hex.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(body[i]))));
+        } else {
+            uuid = false;
         }
-        if (!std::isxdigit(static_cast<unsigned char>(c))) {
-            hex.clear();
-            break;
-        }
-        hex.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
     }
-    const bool uuidShaped = hex.size() == 32 &&
-        (identifier.size() == 32 || identifier.size() == 36 || identifier.size() == 38);
-    if (!uuidShaped) {
-        if (identifier.empty()) {
-            throw core::InvalidParamsException("an identifier cannot be empty");
-        }
-        return core::Buffer::from(identifier);
+    // The first byte says which of the two it is, so the 16 bytes of a UUID are never the bytes of some other
+    // identifier written as text.
+    if (!uuid) {
+        return core::Buffer::from(std::string(1, '\x00') + identifier);
     }
-    std::string bytes;
+    std::string bytes(1, '\x01');
     for (std::size_t i = 0; i < hex.size(); i += 2) {
         bytes.push_back(static_cast<char>(std::stoi(hex.substr(i, 2), nullptr, 16)));
     }
@@ -784,6 +785,29 @@ std::string GroupApiImpl::RosterView::roleOf(const std::string& userId) const {
         return "user";
     }
     return std::string();
+}
+
+void GroupApiImpl::rememberRoster(const server::GroupInfo& group) {
+    _rosters.set(
+        group.id,
+        RosterView{
+            .contextId = group.contextId,
+            .keyVersion = group.keyVersion,
+            .rosterVersion = group.rosterVersion,
+            .users = group.users,
+            .managers = group.managers,
+        }
+    );
+}
+
+void GroupApiImpl::dropCachedGroup(const std::optional<std::string>& groupId) {
+    // Before the keys: a reader between the two finds no roster and re-reads, rather than a roster without keys.
+    if (groupId.has_value()) {
+        _rosters.erase(groupId.value());
+    } else {
+        _rosters.clear();
+    }
+    invalidateModuleKeysInCache(groupId);
 }
 
 GroupApiImpl::RosterView GroupApiImpl::rosterOf(const std::string& groupId) {

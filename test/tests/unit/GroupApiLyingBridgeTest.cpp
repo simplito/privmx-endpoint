@@ -4391,13 +4391,21 @@ TEST_F(GroupApiLyingBridge, APageOfEnvelopesReportsEachOnItsOwn) {
 
 TEST(GroupApiPaths, AnIdentifierIsSpelledOneWay) {
     const core::Buffer canonical = GroupApiImpl::idFromString("6f9619ff-8b86-d011-b42d-00c04fc964ff");
-    EXPECT_EQ(canonical.size(), 16u);
+    EXPECT_EQ(canonical.size(), 17u); // a tag byte and the 16 bytes
     EXPECT_EQ(GroupApiImpl::idFromString("6F9619FF-8B86-D011-B42D-00C04FC964FF").stdString(), canonical.stdString());
     EXPECT_EQ(GroupApiImpl::idFromString("6f9619ff8b86d011b42d00c04fc964ff").stdString(), canonical.stdString());
     EXPECT_EQ(GroupApiImpl::idFromString("{6F9619FF-8B86-D011-B42D-00C04FC964FF}").stdString(), canonical.stdString());
     // Anything else is its own bytes: no guessing at what a case-insensitive identifier might be.
-    EXPECT_EQ(GroupApiImpl::idFromString("Chat-42").stdString(), "Chat-42");
+    EXPECT_EQ(GroupApiImpl::idFromString("Chat-42").stdString(), std::string(1, '\0') + "Chat-42");
     EXPECT_NE(GroupApiImpl::idFromString("chat-42").stdString(), GroupApiImpl::idFromString("Chat-42").stdString());
+    // SECURITY: only the exact UUID forms are a UUID. Dashes or braces anywhere else leave the text as it is.
+    EXPECT_NE(GroupApiImpl::idFromString("6f96-19ff8b86d011b42d00c04fc964ff").stdString(), canonical.stdString());
+    EXPECT_NE(GroupApiImpl::idFromString("{6f9619ff8b86d011b42d00c04fc964ff").stdString(), canonical.stdString());
+    EXPECT_NE(GroupApiImpl::idFromString("6f9619ff-8b86-d011-b42d-00c04fc964f").stdString(), canonical.stdString());
+    // SECURITY: an identifier whose text is the 16 bytes of a UUID is not that UUID.
+    EXPECT_NE(
+        GroupApiImpl::idFromString(canonical.stdString().substr(1)).stdString(), canonical.stdString()
+    );
     EXPECT_THROW(GroupApiImpl::idFromString(""), core::InvalidParamsException);
 }
 
@@ -4406,4 +4414,16 @@ TEST(GroupApiPaths, NoLocationIsNoRealPath) {
     ASSERT_EQ(none.size(), 1u);
     EXPECT_TRUE(none[0].isId);
     EXPECT_EQ(none[0].value.size(), 0u);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_TheRosterAnAuthorIsCheckedAgainstIsNeverOlderThanTheCachedKeys) {
+    // `getGroup` fills the key cache too. If it left the roster beside it alone, bob would go on checking authors
+    // against the roster of his first read: carol, removed since, would still pass as a member.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Envelope fromCarol = client("carol").encrypt(groupId, message("m1"), core::Buffer::from("x"), {});
+    EXPECT_NO_THROW(client("bob").decrypt(groupId, message("m1"), fromCarol, ANY)); // bob's roster: with carol
+    client("alice").removeGroupMembers(groupId, {"carol"});
+    client("bob").getGroup(groupId); // the read that refills bob's key cache
+    EXPECT_THROW(client("bob").decrypt(groupId, message("m1"), fromCarol, ANY), EnvelopeAuthorNotMemberException);
 }

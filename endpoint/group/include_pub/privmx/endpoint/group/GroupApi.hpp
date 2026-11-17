@@ -259,8 +259,9 @@ public:
 
     /**
      * The bytes of an identifier, for a PathSegment with `isId` set. Spells every identifier one way: a UUID
-     * in any case, with or without dashes or braces, becomes its 16 bytes; anything else its bytes as given.
-     * Two clients that spell one identifier differently would otherwise bind to two different paths.
+     * (32 hex digits, 8-4-4-4-12, or that in braces; any case) becomes its 16 bytes, anything else its bytes
+     * as given, each behind a byte that says which it is. Two clients that spell one identifier differently
+     * would otherwise bind to two different paths.
      */
     static core::Buffer idFromString(const std::string& identifier);
 

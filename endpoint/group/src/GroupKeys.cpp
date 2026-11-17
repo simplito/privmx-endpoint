@@ -313,9 +313,12 @@ core::DecryptedEncKeyV2 GroupKeys::encKeyById(
     std::int64_t* epochOut
 ) const {
     if (const auto session = deps.sessions.find(groupId)) {
-        if (auto cached = session->envelopeKeys.get(keyId); cached.has_value()) {
+        // A key without its epoch is no cache entry: the epoch is what a claimed key version is checked against,
+        // and "unknown" must never read as an epoch.
+        const auto cachedEpoch = session->envelopeKeyEpochs.get(keyId);
+        if (auto cached = session->envelopeKeys.get(keyId); cached.has_value() && cachedEpoch.has_value()) {
             if (epochOut != nullptr) {
-                *epochOut = session->envelopeKeyEpochs.get(keyId).value_or(0);
+                *epochOut = cachedEpoch.value();
             }
             return cached.value();
         }
@@ -391,7 +394,11 @@ core::DecryptedEncKeyV2 GroupKeys::encKeyById(
         )) {
         throw core::EncryptionKeyValidationException("Group key " + keyId + " was not wrapped by its epoch's opener");
     }
-    const std::int64_t epoch = candidates.front().keys.front().groupEpoch.value_or(0);
+    const std::optional<std::int64_t> routeEpoch = candidates.front().keys.front().groupEpoch;
+    if (!routeEpoch.has_value() || routeEpoch.value() < 1) {
+        throw core::EncryptionKeyValidationException("Group key " + keyId + " is served without its epoch");
+    }
+    const std::int64_t epoch = routeEpoch.value();
     const auto session = deps.sessions.of(groupId);
     session->envelopeKeyEpochs.set(keyId, epoch);
     session->envelopeKeys.set(keyId, found);
