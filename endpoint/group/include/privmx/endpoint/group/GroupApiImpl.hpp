@@ -32,6 +32,7 @@
 #include "privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp"
 #include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 #include "privmx/endpoint/group/keytree/TreeVerifier.hpp"
+#include <privmx/utils/ThreadSaveMap.hpp>
 
 namespace privmx {
 namespace endpoint {
@@ -111,12 +112,58 @@ public:
         const std::vector<std::string>& users
     );
 
-    Envelope encrypt(const std::string& groupId, const core::Buffer& content);
-    DecryptedEnvelope decrypt(const Envelope& envelope);
+    // -- envelopes. `location` is a path, or `noLocation()`; see GroupApi.hpp for what each call promises. ------
+
+    // The one Path that stands for "bound to no location": a single identifier segment with no bytes, which no
+    // real path can contain.
+    static Path noLocation();
+    // One spelling per identifier: a UUID in any case, with or without dashes or braces, becomes its 16 bytes;
+    // anything else its bytes as given.
+    static core::Buffer idFromString(const std::string& identifier);
+    static EnvelopeHeader peekEnvelope(const core::Buffer& envelope);
+
+    Envelope encrypt(
+        const std::string& groupId,
+        const Path& location,
+        const core::Buffer& content,
+        const EncryptOptions& options
+    );
+    DecryptedEnvelope decrypt(
+        const std::string& groupId,
+        const Path& location,
+        const Envelope& envelope,
+        const DecryptOptions& options
+    );
+    std::vector<DecryptResult> decryptMany(const std::string& groupId, const std::vector<DecryptItem>& items);
+    Envelope encryptAsOutsider(
+        const std::string& contextId,
+        const std::string& groupId,
+        const Path& location,
+        const core::Buffer& content,
+        const EncryptOptions& options
+    );
     Envelope encryptAnonymously(
         const std::string& groupId,
         const std::string& groupPubKey,
+        const Path& location,
         const core::Buffer& content
+    );
+    DecryptedOutsiderEnvelope decryptFromOutsider(
+        const std::string& groupId,
+        const Path& location,
+        const Envelope& envelope,
+        const DecryptOptions& options
+    );
+    DecryptedAnonymousEnvelope decryptAnonymous(
+        const std::string& groupId,
+        const Path& location,
+        const Envelope& envelope
+    );
+    DecryptedSharedEnvelope decryptShared(
+        const std::string& contextId,
+        const Path& location,
+        const Envelope& envelope,
+        const DecryptOptions& options
     );
 
     FileHandle beginFileEncryption(const std::string& groupId, FileSize size);
@@ -189,7 +236,53 @@ private:
     };
 
     // `GroupKeys::encKeyById` over this instance's module keys and resolver.
-    core::DecryptedEncKeyV2 encKeyById(const std::string& groupId, const std::string& keyId);
+    core::DecryptedEncKeyV2 encKeyById(
+        const std::string& groupId,
+        const std::string& keyId,
+        std::int64_t* epochOut = nullptr
+    );
+
+    // What the last verified read of a group said about who is in it. Kept beside the module-key cache and
+    // refreshed with it, so reading an envelope's author does not cost a `groupGet` each time.
+    struct RosterView {
+        std::string contextId;
+        std::int64_t keyVersion = 0;
+        std::vector<std::string> users;
+        std::vector<std::string> managers;
+        // "manager", "user", or "" for someone who is not in the group.
+        std::string roleOf(const std::string& userId) const;
+    };
+    RosterView rosterOf(const std::string& groupId);
+
+    static EnvelopeBinding bindingOf(const Path& location);
+    // "member", "outsider", "anonymous" or "shared", as GroupErrorDetails::envelopeKind names them.
+    static std::string kindOf(const EnvelopeRouting& routing);
+    static EnvelopeAudience audienceOf(const std::vector<WireRecipient>& recipients);
+    static void requireAuthorStated(const DecryptOptions& options);
+    // The envelope must name `groupId` and be of `kind`, or the call throws before any key is looked up.
+    static void requireFor(const EnvelopeRouting& routing, const std::string& groupId, EnvelopeType kind);
+    // `alsoFor` resolved to the keys the content key is wrapped to: each group's current verified key, each
+    // user's key once the UserVerifier accepted it.
+    std::vector<WireRecipient> wireRecipients(
+        const std::string& contextId,
+        const std::string& homeGroupId,
+        const std::vector<EnvelopeRecipient>& alsoFor
+    );
+    // The writer named in a signed envelope, checked: it is the expected one, and the UserVerifier accepts the
+    // signing key for that user.
+    void requireVerifiedWriter(
+        const std::string& contextId,
+        const OpenedEnvelope& opened,
+        const DecryptOptions& options
+    );
+    // The key new member envelopes are sealed with, and everything signed beside the content.
+    Envelope sealAsMember(
+        const std::string& groupId,
+        const EnvelopeBinding& binding,
+        const core::Buffer& content,
+        const std::vector<EnvelopeRecipient>& alsoFor
+    );
+    void requireCurrentKey(const std::string& groupId, const std::string& keyId);
 
     ServerApi _serverApi;
     SubscriberImpl _subscriber;
@@ -212,6 +305,7 @@ private:
         _deps, *_groupDataSchemaMapper, _keyProvider, _groupPrivKeyResolver, _keys, _deferred, _metadata, _engine
     };
     bool _dueWorkOff = false; // tests: `runDueWork` does nothing
+    privmx::utils::ThreadSaveMap<std::string, RosterView> _rosters;
 
     // Lock order: GroupSession::commitMutex -> _pinSaveMutex -> _pinsMovedMutex. _pinsMovedMutex is a leaf, like
     // GroupSession::mutex and DeferredWork's lock (see CommitEngine and DeferredWork).

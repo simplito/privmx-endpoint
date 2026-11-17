@@ -126,26 +126,91 @@ core::PagingList<GroupSummary> GroupApi::listGroups(
     return impl->listGroups(contextId, pagingQuery);
 }
 
-Envelope GroupApi::encrypt(const std::string& groupId, const core::Buffer& content) {
+Path GroupApi::noLocation() {
+    return GroupApiImpl::noLocation();
+}
+core::Buffer GroupApi::idFromString(const std::string& identifier) {
+    return GroupApiImpl::idFromString(identifier);
+}
+EnvelopeHeader GroupApi::peekEnvelope(const core::Buffer& envelope) {
+    return GroupApiImpl::peekEnvelope(envelope);
+}
+Envelope GroupApi::encrypt(
+    const std::string& groupId,
+    const Path& location,
+    const core::Buffer& content,
+    const EncryptOptions& options
+) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    return impl->encrypt(groupId, content);
+    return impl->encrypt(groupId, location, content, options);
 }
-
-DecryptedEnvelope GroupApi::decrypt(const Envelope& envelope) {
+DecryptedEnvelope GroupApi::decrypt(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
     auto impl = getImpl();
-    return impl->decrypt(envelope);
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->decrypt(groupId, location, envelope, options);
 }
-
+std::vector<DecryptResult> GroupApi::decryptMany(const std::string& groupId, const std::vector<DecryptItem>& items) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->decryptMany(groupId, items);
+}
+Envelope GroupApi::encryptAsOutsider(
+    const std::string& contextId,
+    const std::string& groupId,
+    const Path& location,
+    const core::Buffer& content,
+    const EncryptOptions& options
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->encryptAsOutsider(contextId, groupId, location, content, options);
+}
 Envelope GroupApi::encryptAnonymously(
     const std::string& groupId,
     const std::string& groupPubKey,
+    const Path& location,
     const core::Buffer& content
 ) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     core::Validator::validatePubKeyBase58DER(groupPubKey, "field:groupPubKey ");
-    return impl->encryptAnonymously(groupId, groupPubKey, content);
+    return impl->encryptAnonymously(groupId, groupPubKey, location, content);
+}
+DecryptedOutsiderEnvelope GroupApi::decryptFromOutsider(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->decryptFromOutsider(groupId, location, envelope, options);
+}
+DecryptedAnonymousEnvelope GroupApi::decryptAnonymous(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->decryptAnonymous(groupId, location, envelope);
+}
+DecryptedSharedEnvelope GroupApi::decryptShared(
+    const std::string& contextId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(contextId, "field:contextId ");
+    return impl->decryptShared(contextId, location, envelope, options);
 }
 
 FileHandle GroupApi::beginFileEncryption(const std::string& groupId, const FileSize size) {

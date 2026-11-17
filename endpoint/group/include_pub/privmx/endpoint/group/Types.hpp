@@ -254,33 +254,156 @@ struct PathSegment {
 /** A path in the application's own data. An envelope is bound to one: it opens only with the same path. */
 using Path = std::vector<PathSegment>;
 
-/**
- * The plaintext of an envelope, together with what could be established about who wrote it.
- */
-struct DecryptedEnvelope {
+/** The verified author of a member's envelope. */
+struct EnvelopeAuthor {
+    std::string userId;
+    /** Base58-DER. The key the envelope was signed with; the UserVerifier accepted it for `userId`. */
+    std::string pubKey;
     /**
-     * Decrypted content
+     * "user" or "manager": the author's role in the Group **now**. The Group's past rosters are not kept, so
+     * this is not the role they had when they wrote.
      */
-    core::Buffer data;
+    std::string role;
+};
 
+/** A verified writer who is not a member of the Group the envelope was read with. */
+struct EnvelopeSender {
+    std::string userId;
+    /** Base58-DER. */
+    std::string pubKey;
+};
+
+/** Who else an envelope was written for (`EncryptOptions::alsoFor`). Signed by the writer. */
+struct EnvelopeAudience {
+    std::vector<std::string> groups;
+    std::vector<std::string> users;
+};
+
+/** What `decrypt` returns: a member's envelope, opened. */
+struct DecryptedEnvelope {
+    core::Buffer data;
+    EnvelopeAuthor author;
+    /** The epoch of the Group key it was sealed under. */
+    int64_t keyVersion;
+    /** The author's clock, signed, in milliseconds. Not proof of when it was written. */
+    int64_t encryptedAt;
+    EnvelopeAudience sharedWith;
+};
+
+/**
+ * Every read says whose writing it expects. Exactly one of `expectedAuthor` and `anyAuthor` must be set; with
+ * neither the call throws EnvelopeAuthorNotStatedException, so the question cannot be skipped.
+ */
+struct DecryptOptions {
     /**
-     * ID of the Group the envelope was sealed for. Authenticated — an envelope that names a Group it was not
-     * sealed for does not decrypt.
+     * The author about to be displayed: usually the one the application's server names next to the envelope.
+     * A different author fails with EnvelopeWrongAuthorException.
+     */
+    std::string expectedAuthor;
+    /** Set instead of `expectedAuthor` when the author is shown from the result, never from elsewhere. */
+    bool anyAuthor = false;
+    /** For content that arrived as new: refuse an envelope from an epoch older than the current one. */
+    bool currentEpochOnly = false;
+};
+
+/** One envelope to read with `decryptMany`. */
+struct DecryptItem {
+    core::Buffer envelope;
+    Path location;
+    DecryptOptions options;
+};
+
+/** Who or what a failure is about. Only the fields that apply are filled. */
+struct GroupErrorDetails {
+    /** The user and key in question: who really signed, or whose key the UserVerifier refused. */
+    std::string userId;
+    std::string pubKey;
+    /** On a wrong kind of envelope: what it is - "member", "outsider", "anonymous" or "shared". */
+    std::string envelopeKind;
+};
+
+/** `decryptMany` reports per item. */
+struct DecryptResult {
+    /** 0 on success; otherwise the code of the exception `decrypt` would have thrown. */
+    int64_t statusCode;
+    /** Empty unless `statusCode` is 0. */
+    DecryptedEnvelope envelope;
+    GroupErrorDetails details;
+};
+
+/** One more reader of an envelope, beside the Group it is written in. Exactly one field is set. */
+struct EnvelopeRecipient {
+    /**
+     * Another Group, by its ID. The caller need not be in it. The Group is named, not given as a key: its
+     * current, verified key is fetched at every encryption, so a key from before a removal cannot be used.
      */
     std::string groupId;
+    /** One user. Their key goes through the UserVerifier first. */
+    std::optional<core::UserWithPubKey> user;
+};
 
-    /**
-     * Public key of the author (base58-DER encoded), whose signature over the envelope has been verified.
-     *
-     * EMPTY when `type` is ENVELOPE_ANONYMOUS: that envelope was sealed with a throwaway keypair, which
-     * attests to nothing. Branch on `type`, not on this field being non-empty.
-     */
-    std::string authorPubKey;
+struct EncryptOptions {
+    std::vector<EnvelopeRecipient> alsoFor;
+};
 
+/** What `decryptFromOutsider` returns: written to the Group, and signed, by someone who is not a member. */
+struct DecryptedOutsiderEnvelope {
+    core::Buffer data;
+    /** The epoch of the Group key it was sealed to. */
+    int64_t keyVersion;
+    EnvelopeSender sender;
+    /** The sender's clock, signed, in milliseconds. */
+    int64_t encryptedAt;
+    EnvelopeAudience sharedWith;
+};
+
+/** What `decryptAnonymous` returns. No sender: anyone who knows the Group's public key could have written it. */
+struct DecryptedAnonymousEnvelope {
+    core::Buffer data;
+    /** The epoch of the Group key it was sealed to. */
+    int64_t keyVersion;
+};
+
+/** What `decryptShared` returns: written in another Group and shared with the caller through `alsoFor`. */
+struct DecryptedSharedEnvelope {
+    core::Buffer data;
+    EnvelopeSender sender;
+    /** The Group it says it was written in. The writer's claim; see `senderMembership`. */
+    std::string homeGroupId;
     /**
-     * Which of the Group's keys sealed this envelope.
+     * "member", "notMember" or "unknown": whether the sender is a member of `homeGroupId` now. "unknown" when
+     * the caller cannot see that Group's roster. Anyone in the Context can address an envelope to a Group or a
+     * user and write any `homeGroupId` into it: only "member" says it came from inside that Group.
      */
-    EnvelopeType type;
+    std::string senderMembership;
+    /** How the caller had access: "user", or the ID of the recipient Group the caller is a member of. */
+    std::string via;
+    int64_t encryptedAt;
+    EnvelopeAudience sharedWith;
+};
+
+struct GroupEpochRef {
+    std::string groupId;
+    int64_t keyVersion;
+};
+
+/** The part of an envelope readable without any key. Not authenticated: for refusing writes early. */
+struct EnvelopeHeader {
+    int64_t version;
+    std::string groupId;
+    /** The epoch the writer claims. 0 for an envelope written from outside the Group. */
+    int64_t keyVersion;
+    /** true when the writer is not a member of `groupId`: read it with decryptFromOutsider or decryptAnonymous. */
+    bool fromOutsider;
+    /** true when a writer signed it. Always true for a member's envelope. */
+    bool isSigned;
+    bool isFile;
+    /** false for an envelope written with GroupApi::noLocation(). A server can refuse those. */
+    bool hasLocation;
+    /** The writer's claim, for a signed envelope; empty otherwise. */
+    std::string authorUserId;
+    std::vector<GroupEpochRef> alsoForGroups;
+    std::vector<std::string> alsoForUsers;
 };
 
 /**

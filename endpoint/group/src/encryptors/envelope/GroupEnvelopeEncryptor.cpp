@@ -64,12 +64,12 @@ std::string GroupEnvelopeEncryptor::writeHeader(
     return header;
 }
 
-void GroupEnvelopeEncryptor::putRecipients(std::string& header, const std::vector<EnvelopeRecipient>& recipients) {
+void GroupEnvelopeEncryptor::putRecipients(std::string& header, const std::vector<WireRecipient>& recipients) {
     if (recipients.size() > 255) {
         throw InvalidEnvelopeFormatException("an envelope takes at most 255 further recipients");
     }
     header.push_back(static_cast<char>(recipients.size()));
-    for (const EnvelopeRecipient& recipient : recipients) {
+    for (const WireRecipient& recipient : recipients) {
         header.push_back(static_cast<char>(recipient.isGroup ? RECIPIENT_GROUP : RECIPIENT_USER));
         EnvelopeWriter::putField(header, recipient.id);
         EnvelopeWriter::putField(header, recipient.pubKey);
@@ -116,7 +116,7 @@ GroupEnvelopeEncryptor::ParsedHeader GroupEnvelopeEncryptor::parseHeader(Envelop
         std::size_t count = cursor.readU8();
         routing.recipients.reserve(count);
         for (std::size_t i = 0; i < count; ++i) {
-            EnvelopeRecipient recipient;
+            WireRecipient recipient;
             std::uint8_t kind = cursor.readU8();
             if (kind != RECIPIENT_GROUP && kind != RECIPIENT_USER) {
                 throw InvalidEnvelopeFormatException("unknown envelope recipient kind");
@@ -264,7 +264,7 @@ core::Buffer GroupEnvelopeEncryptor::packMemberEnvelope(
     const privmx::crypto::PrivateKey& authorPrivKey,
     const std::string& groupKey,
     const EnvelopeSeal& seal,
-    const std::vector<EnvelopeRecipient>& recipients
+    const std::vector<WireRecipient>& recipients
 ) {
     const bool shared = !recipients.empty();
     std::string header = writeHeader(
@@ -283,7 +283,7 @@ core::Buffer GroupEnvelopeEncryptor::packMemberEnvelope(
     EnvelopeWriter::putField(
         out, _dataEncryptor.encrypt(core::Buffer::from(KEY_WRAP_LABEL + contentKey), groupKey).stdString()
     );
-    for (const EnvelopeRecipient& recipient : recipients) {
+    for (const WireRecipient& recipient : recipients) {
         EnvelopeWriter::putField(
             out, wrapContentKey(privmx::crypto::PublicKey::fromBase58DER(recipient.pubKey), contentKey)
         );
@@ -323,7 +323,7 @@ core::Buffer GroupEnvelopeEncryptor::packOutsiderEnvelope(
     const core::Buffer& content,
     const privmx::crypto::PrivateKey& senderPrivKey,
     const EnvelopeSeal& seal,
-    const std::vector<EnvelopeRecipient>& recipients
+    const std::vector<WireRecipient>& recipients
 ) {
     std::string header = writeHeader(
         TYPE_OUTSIDER, seal.binding,
@@ -333,7 +333,7 @@ core::Buffer GroupEnvelopeEncryptor::packOutsiderEnvelope(
     std::string contentKey = privmx::crypto::Crypto::randomBytes(CONTENT_KEY_SIZE);
     std::string out = header;
     EnvelopeWriter::putField(out, wrapContentKey(groupPubKey, contentKey));
-    for (const EnvelopeRecipient& recipient : recipients) {
+    for (const WireRecipient& recipient : recipients) {
         EnvelopeWriter::putField(
             out, wrapContentKey(privmx::crypto::PublicKey::fromBase58DER(recipient.pubKey), contentKey)
         );

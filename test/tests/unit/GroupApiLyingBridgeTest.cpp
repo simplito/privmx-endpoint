@@ -59,6 +59,11 @@ namespace core = privmx::endpoint::core;
 using privmx::crypto::PublicKey;
 using privmx::endpoint::group::GroupApiImplTestAccess;
 
+// What the cases about keys and trees use for the parts of an envelope they are not about: bound to no location,
+// any author accepted. The cases about locations and authors say their own.
+static const privmx::endpoint::group::Path NOWHERE = privmx::endpoint::group::GroupApiImpl::noLocation();
+static const privmx::endpoint::group::DecryptOptions ANY{.expectedAuthor = "", .anyAuthor = true, .currentEpochOnly = false};
+
 namespace {
 
 const std::string CONTEXT = "ctx-lying";
@@ -939,16 +944,16 @@ TEST_F(GroupApiLyingBridge, SECURITY_EveryKeyReadRefusesAStateRolledBackBelowThe
     client("alice").resolveGroupPrivKey(groupId); // reads seq 2, pins it
     bridge.tree = atSeq1.tree;
     EXPECT_THROW(client("alice").getGroup(groupId), GroupHistoryForkException);
-    EXPECT_THROW(client("alice").encrypt(groupId, core::Buffer::from("x")), GroupHistoryForkException);
+    EXPECT_THROW(client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("x"), {}), GroupHistoryForkException);
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AKeyCachedBehindTheVerifiedEpochIsReadAgainBeforeSealing) {
     // `currentEncKey`: alice's cached head is from before carol's removal, which a later read of hers verified.
     const std::string groupId = createGroup({"alice", "bob", "carol"});
-    client("alice").encrypt(groupId, core::Buffer::from("warm"));
+    client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("warm"), {});
     client("bob").removeGroupMembers(groupId, {"carol"});
     client("alice").resolveGroupPrivKey(groupId); // pins epoch 2
-    const Envelope sealed = client("alice").encrypt(groupId, core::Buffer::from("after"));
+    const Envelope sealed = client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("after"), {});
     EXPECT_EQ(GroupEnvelopeEncryptor().peek(sealed).keyId, bridge.rest.data.back().keyId)
         << "sealed under the key carol still holds";
 }
@@ -1016,7 +1021,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsTakenOnlyOnTheChannelItWasSealedFo
 TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsTakenOnlyUnderTheCurrentEpochsKey) {
     // A removed member still holds the epoch it was removed from, and seals events with it.
     const std::string groupId = createGroup({"alice", "bob"});
-    client("bob").encrypt(groupId, core::Buffer::from("warm")); // bob's client caches the epoch 1 key
+    client("bob").encrypt(groupId, NOWHERE, core::Buffer::from("warm"), {}); // bob's client caches the epoch 1 key
     client("alice").removeGroupMembers(groupId, {"bob"});
     client("bob").sendCustomEvent(groupId, "chat", core::Buffer::from("still here"), {});
     EXPECT_NE(deliver(groupId, "chat", 0, "bob").statusCode, 0);
@@ -1026,8 +1031,8 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEventIsNotTakenUnderAKeyCachedBehindThePi
     // alice's cached head is from before carol removed bob, which a later read of hers verified (epoch 2); bob still
     // seals under epoch 1. The cache alone must not make that key current.
     const std::string groupId = createGroup({"alice", "bob", "carol"});
-    client("alice").encrypt(groupId, core::Buffer::from("warm")); // alice caches epoch 1's head
-    client("bob").encrypt(groupId, core::Buffer::from("warm"));   // and so does bob
+    client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("warm"), {}); // alice caches epoch 1's head
+    client("bob").encrypt(groupId, NOWHERE, core::Buffer::from("warm"), {});   // and so does bob
     client("carol").removeGroupMembers(groupId, {"bob"});
     client("alice").resolveGroupPrivKey(groupId); // pins epoch 2; the cached head stays
     client("bob").sendCustomEvent(groupId, "chat", core::Buffer::from("still here"), {});
@@ -2571,7 +2576,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AFailedRenewalLeavesNoGrantKeyCached) {
     EXPECT_EQ(sent(bridge), 0u);
     EXPECT_THROW(client("bob").resolveGroupPrivKey(groupId, 1), core::EncryptionKeyValidationException);
     EXPECT_THROW(client("bob").resolveGroupPrivKey(groupId), core::EncryptionKeyValidationException);
-    EXPECT_ANY_THROW(client("bob").encrypt(groupId, core::Buffer::from("x")));
+    EXPECT_ANY_THROW(client("bob").encrypt(groupId, NOWHERE, core::Buffer::from("x"), {}));
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_ARenewalWrapsOthersOnlyToKeysTheVerifierVouchesFor) {
@@ -2670,7 +2675,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_APinSavedByOneSessionRefusesARollbackInTheN
     clients.erase("alice");                       // the session ends (its destructor saves)
     rollBackTo(beforeRemoval);
     EXPECT_THROW(client("alice").getGroup(groupId), GroupHistoryForkException);
-    EXPECT_THROW(client("alice").encrypt(groupId, core::Buffer::from("x")), GroupHistoryForkException);
+    EXPECT_THROW(client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("x"), {}), GroupHistoryForkException);
 }
 
 TEST_F(GroupApiLyingBridge, WithoutAStoreEverySessionIsAFirstContact) {
@@ -2708,7 +2713,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ALiveSiblingTakesTheRemovalAtItsNextSave) {
     store = std::make_shared<MemoryPinStore>();
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     GroupApiImpl& alice2 = sibling("alice");
-    alice2.encrypt(groupId, core::Buffer::from("warm")); // caches the epoch 1 key
+    alice2.encrypt(groupId, NOWHERE, core::Buffer::from("warm"), {}); // caches the epoch 1 key
     const Bridge beforeRemoval = bridge;
     client("bob").removeGroupMembers(groupId, {"carol"});
     client("alice").resolveGroupPrivKey(groupId); // alice1 pins epoch 2
@@ -2716,7 +2721,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ALiveSiblingTakesTheRemovalAtItsNextSave) {
     rollBackTo(beforeRemoval);
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(alice2));
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(alice2, groupId), 2u);
-    EXPECT_THROW(alice2.encrypt(groupId, core::Buffer::from("x")), GroupHistoryForkException);
+    EXPECT_THROW(alice2.encrypt(groupId, NOWHERE, core::Buffer::from("x"), {}), GroupHistoryForkException);
     EXPECT_EQ(storedPin(groupId, bridge.users.at("alice"))->seq, 2u);
 }
 
@@ -2835,7 +2840,7 @@ TEST_F(GroupApiLyingBridge, ABrokenStoreDoesNotStopTheClientAndIsRetried) {
     for (int i = 0; i < 3; ++i) {
         EXPECT_FALSE(GroupApiImplTestAccess::savePins(client("alice")));
     }
-    EXPECT_NO_THROW(client("alice").encrypt(groupId, core::Buffer::from("x")));
+    EXPECT_NO_THROW(client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("x"), {}));
     client("bob").removeGroupMembers(groupId, {"carol"});
     client("alice").resolveGroupPrivKey(groupId);
     store->failSaves = false;
@@ -2889,13 +2894,13 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEnvelopeNamingAGroupWithoutTheCallersSeat
     const std::string groupId = client("bob").createGroup(
         CONTEXT, {user("carol")}, {user("bob")}, core::Buffer::from("public"), core::Buffer::from("private"), OPEN
     );
-    const Envelope sealed = client("bob").encrypt(groupId, core::Buffer::from("not for alice"));
+    const Envelope sealed = client("bob").encrypt(groupId, NOWHERE, core::Buffer::from("not for alice"), {});
     bridge.onRead = [&](const std::string& caller, server::GroupInfo& info) {
         if (caller == "alice") {
             info = bridge.serve("bob", false);
         }
     };
-    EXPECT_THROW(client("alice").decrypt(sealed), GroupDataIntegrityException);
+    EXPECT_THROW(client("alice").decrypt(groupId, NOWHERE, sealed, ANY), GroupDataIntegrityException);
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 0u);
 }
 
@@ -3060,7 +3065,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AMetadataVersionSeenByAContainerKeyLookupIs
     ASSERT_TRUE(GroupApiImplTestAccess::savePins(client("alice")));
     kill("alice"); // a fresh session that loads the version pins and has no module keys cached
     client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("v2"), 1);
-    client("alice").encrypt(groupId, core::Buffer::from("x")); // the group's module keys, read for the envelope
+    client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("x"), {}); // the group's module keys, read for the envelope
     const PrivateKey& key = bridge.users.at("alice");
     const std::string slot = store->keyWith("group-pins/", "/" + key.getPublicKey().toBase58DER());
     const auto body = core::LocalSeal(key, PinBlob::LABEL, PinBlob::VERSION, slot).open(store->get(slot));
@@ -3399,12 +3404,15 @@ TEST_F(GroupApiLyingBridge, AnEnvelopeNamingAGroupWithNoKeysLeavesNoSessionBehin
     for (int i = 0; i < 3; ++i) {
         const std::string groupId = "unknown-" + std::to_string(i);
         EXPECT_ANY_THROW(alice.decrypt(
+            groupId, NOWHERE,
             GroupEnvelopeEncryptor().packMemberEnvelope(
                 groupId, "no-such-key", core::Buffer::from("x"), stranger, key, EnvelopeSeal{}
             )
+            , ANY
         ));
-        EXPECT_ANY_THROW(alice.decrypt(
-            alice.encryptAnonymously(groupId, stranger.getPublicKey().toBase58DER(), core::Buffer::from("x"))
+        EXPECT_ANY_THROW(alice.decryptAnonymous(
+            groupId, NOWHERE,
+            alice.encryptAnonymously(groupId, stranger.getPublicKey().toBase58DER(), NOWHERE, core::Buffer::from("x"))
         ));
     }
     EXPECT_EQ(GroupApiImplTestAccess::sessionCount(alice), 0u);
@@ -3416,16 +3424,16 @@ TEST_F(GroupApiLyingBridge, SECURITY_AnEpochTheHistoryMislabelsIsNotRemembered) 
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     const std::string epoch1 = bridge.tree.state.grantPublicKey.toBase58DER();
-    const Envelope sealed = client("bob").encryptAnonymously(groupId, epoch1, core::Buffer::from("to epoch 1"));
+    const Envelope sealed = client("bob").encryptAnonymously(groupId, epoch1, NOWHERE, core::Buffer::from("to epoch 1"));
     client("alice").rotateGroupKey(groupId);
     // The epoch as `groupGetEpochKeys` serves it for the envelope's grant key: mislabelled, then as an honest bridge.
     std::int64_t labelled = 2;
     bridge.onEpochKeys = [&](server::GroupGetEpochKeysResult& result) {
         result.keyHistory = {{.keyVersion = labelled, .groupPubKey = epoch1}};
     };
-    EXPECT_ANY_THROW(client("alice").decrypt(sealed));
+    EXPECT_ANY_THROW(client("alice").decryptAnonymous(groupId, NOWHERE, sealed));
     labelled = 1;
-    EXPECT_EQ(client("alice").decrypt(sealed).data.stdString(), "to epoch 1");
+    EXPECT_EQ(client("alice").decryptAnonymous(groupId, NOWHERE, sealed).data.stdString(), "to epoch 1");
     bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
 }
 
@@ -3437,13 +3445,13 @@ TEST_F(GroupApiLyingBridge, AnEnvelopeUnderAnEpochPastThePinButBehindTheCurrentO
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     client("bob").getGroup(groupId);
     client("alice").rotateGroupKey(groupId);
-    const Envelope sealed = client("alice").encrypt(groupId, core::Buffer::from("at epoch 2"));
+    const Envelope sealed = client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("at epoch 2"), {});
     client("alice").rotateGroupKey(groupId);
     for (const auto& key : bridge.serve("bob", false).groupKeys->at(0).keys) {
         ASSERT_NE(key.groupEpoch.value_or(0), 2) << "epoch 2 must not come with groupGet";
     }
     ASSERT_EQ(client("bob").pinnedKeyVersion(groupId), 1u);
-    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 2");
+    EXPECT_EQ(client("bob").decrypt(groupId, NOWHERE, sealed, ANY).data.stdString(), "at epoch 2");
     EXPECT_EQ(client("bob").pinnedKeyVersion(groupId), 3u);
 }
 
@@ -3453,14 +3461,19 @@ TEST_F(GroupApiLyingBridge, AnEnvelopeUnderThePinnedEpochIsLookedUpWithoutReadin
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     client("bob").getGroup(groupId);
     client("alice").rotateGroupKey(groupId);
-    const Envelope sealed = client("alice").encrypt(groupId, core::Buffer::from("at epoch 2"));
+    const Envelope sealed = client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("at epoch 2"), {});
     client("bob").resolveGroupPrivKey(groupId);
     ASSERT_EQ(client("bob").pinnedKeyVersion(groupId), 2u);
     const std::size_t reads = count("bob", "context.groupGet");
     const std::size_t lookups = count("bob", "context.groupGetEpochKeys");
-    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 2");
+    EXPECT_EQ(client("bob").decrypt(groupId, NOWHERE, sealed, ANY).data.stdString(), "at epoch 2");
     ASSERT_EQ(count("bob", "context.groupGetEpochKeys"), lookups + 1) << "the key came off the cache: no case here";
-    EXPECT_EQ(count("bob", "context.groupGet"), reads);
+    // The key costs no group read. Naming the author does, once: bob's roster is from epoch 1, and whether alice
+    // is still a member is a question about the group as it is now.
+    EXPECT_EQ(count("bob", "context.groupGet"), reads + 1);
+    EXPECT_EQ(client("bob").decrypt(groupId, NOWHERE, sealed, ANY).data.stdString(), "at epoch 2");
+    EXPECT_EQ(count("bob", "context.groupGet"), reads + 1) << "a second envelope reads the group again";
+    EXPECT_EQ(count("bob", "context.groupGetEpochKeys"), lookups + 1) << "a second envelope looks the key up again";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AKeyIsCheckedAgainstTheOpenerOfTheRouteThatOpenedIt) {
@@ -3470,7 +3483,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_AKeyIsCheckedAgainstTheOpenerOfTheRouteThat
     // remembered, so the honest key opens afterwards.
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
-    const Envelope honest = client("alice").encrypt(groupId, core::Buffer::from("honest"));
+    const Envelope honest = client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("honest"), {});
     const auto epochEntry = [&](std::int64_t epoch) {
         for (const auto& key : bridge.rest.groupKeys->at(0).keys) {
             if (key.groupEpoch.value_or(0) == epoch) {
@@ -3518,10 +3531,10 @@ TEST_F(GroupApiLyingBridge, SECURITY_AKeyIsCheckedAgainstTheOpenerOfTheRouteThat
                                       {.keyId = keyId, .data = dummy, .groupEpoch = 2}}}};
     };
     expectRefusal<core::EncryptionKeyValidationException>(
-        [&] { client("bob").decrypt(forged); }, "was not wrapped by its epoch's opener"
+        [&] { client("bob").decrypt(groupId, NOWHERE, forged, ANY); }, "was not wrapped by its epoch's opener"
     );
     bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
-    EXPECT_EQ(client("bob").decrypt(honest).data.stdString(), "honest") << "the refused key was remembered";
+    EXPECT_EQ(client("bob").decrypt(groupId, NOWHERE, honest, ANY).data.stdString(), "honest") << "the refused key was remembered";
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AGrantKeyLabelledEpochZeroIsNotRemembered) {
@@ -3530,14 +3543,14 @@ TEST_F(GroupApiLyingBridge, SECURITY_AGrantKeyLabelledEpochZeroIsNotRemembered) 
     quiet = true;
     const std::string groupId = createGroup({"alice", "bob", "carol"});
     const std::string epoch1 = bridge.tree.state.grantPublicKey.toBase58DER();
-    const Envelope sealed = client("bob").encryptAnonymously(groupId, epoch1, core::Buffer::from("to epoch 1"));
+    const Envelope sealed = client("bob").encryptAnonymously(groupId, epoch1, NOWHERE, core::Buffer::from("to epoch 1"));
     bridge.onEpochKeys = [&](server::GroupGetEpochKeysResult& result) {
         result.keyHistory = {{.keyVersion = 0, .groupPubKey = epoch1}};
     };
-    EXPECT_ANY_THROW(client("alice").decrypt(sealed));
+    EXPECT_ANY_THROW(client("alice").decryptAnonymous(groupId, NOWHERE, sealed));
     bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
     client("alice").rotateGroupKey(groupId);
-    EXPECT_EQ(client("alice").decrypt(sealed).data.stdString(), "to epoch 1");
+    EXPECT_EQ(client("alice").decryptAnonymous(groupId, NOWHERE, sealed).data.stdString(), "to epoch 1");
 }
 
 TEST_F(GroupApiLyingBridge, AListedGrantKeyIsHandedOutInItsOneSpelling) {
@@ -3680,7 +3693,7 @@ protected:
         GroupApiLyingBridge::SetUp();
         quiet = true;
         groupId = createGroup({"alice", "bob", "carol"});
-        sealed = client("alice").encrypt(groupId, core::Buffer::from("at epoch 1"));
+        sealed = client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("at epoch 1"), {});
         rotate();
         ASSERT_EQ(bridge.tree.state.epoch, ROTATIONS + 1);
     }
@@ -3697,7 +3710,7 @@ protected:
 };
 
 TEST_F(GroupApiLyingBridgeOldEpochs, AnEnvelopeSealedFarBelowWhatGroupGetServesOpensByItsKeyId) {
-    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1");
+    EXPECT_EQ(client("bob").decrypt(groupId, NOWHERE, sealed, ANY).data.stdString(), "at epoch 1");
     EXPECT_EQ(count("bob", "context.groupGetEpochKeys"), 1u);
     const auto asks = archiveAsks(bridge, "bob");
     ASSERT_EQ(asks.size(), 1u) << "the path held";
@@ -3714,14 +3727,14 @@ TEST_F(GroupApiLyingBridgeOldEpochs, AnEnvelopeSealedFarBelowWhatGroupGetServesO
     EXPECT_LT(served * 4, windowed);
     // Cached as before: a second envelope under the same key asks nothing.
     const std::size_t calls = bridge.calls.size();
-    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1");
+    EXPECT_EQ(client("bob").decrypt(groupId, NOWHERE, sealed, ANY).data.stdString(), "at epoch 1");
     EXPECT_EQ(bridge.calls.size(), calls);
 }
 
 TEST_F(GroupApiLyingBridgeOldEpochs, AnAnonymousEnvelopeToAFarOlderEpochOpensByItsGrantKey) {
     const std::string epoch1 = bridge.rest.history.at(0).groupPubKey;
-    const Envelope anonymous = client("carol").encryptAnonymously(groupId, epoch1, core::Buffer::from("to epoch 1"));
-    EXPECT_EQ(client("bob").decrypt(anonymous).data.stdString(), "to epoch 1");
+    const Envelope anonymous = client("carol").encryptAnonymously(groupId, epoch1, NOWHERE, core::Buffer::from("to epoch 1"));
+    EXPECT_EQ(client("bob").decryptAnonymous(groupId, NOWHERE, anonymous).data.stdString(), "to epoch 1");
     EXPECT_EQ(count("bob", "context.groupGetEpochKeys"), 1u);
     const auto asks = archiveAsks(bridge, "bob");
     ASSERT_EQ(asks.size(), 1u);
@@ -3731,7 +3744,7 @@ TEST_F(GroupApiLyingBridgeOldEpochs, AnAnonymousEnvelopeToAFarOlderEpochOpensByI
 TEST_F(GroupApiLyingBridgeOldEpochs, AGarbageRungOnThePathIsRoutedRoundByADetourNotTheWindow) {
     const std::vector<RungSpan> path = LadderMath::canonicalDescent(ROTATIONS + 1, 1, 1);
     corrupt(path.at(1).at, path.at(1).target);
-    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1");
+    EXPECT_EQ(client("bob").decrypt(groupId, NOWHERE, sealed, ANY).data.stdString(), "at epoch 1");
     const auto asks = archiveAsks(bridge, "bob");
     ASSERT_EQ(asks.size(), 2u) << "the path, then the ways round the epoch it stopped at";
     const std::vector<RungSpan> detour = spansOf(asks[1]);
@@ -3745,7 +3758,7 @@ TEST_F(GroupApiLyingBridgeOldEpochs, ABridgeServingNoSpanFallsBackToTheClosedWin
     ASSERT_GT(bridge.rungs.size(), 256u);
     const std::int64_t current = bridge.tree.state.epoch;
     bridge.servesSpans = false; // as if it ignored them
-    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1");
+    EXPECT_EQ(client("bob").decrypt(groupId, NOWHERE, sealed, ANY).data.stdString(), "at epoch 1");
     const auto asks = archiveAsks(bridge, "bob");
     // The path, the detour (if the current epoch has any), then the window [1, current] page after page, each from
     // the top epoch of the one before.
@@ -3789,10 +3802,10 @@ TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_AnEntryOfAnotherEpochServedForTheK
                 }
             }
         };
-        EXPECT_ANY_THROW(client("bob").decrypt(sealed)) << "lie " << i;
+        EXPECT_ANY_THROW(client("bob").decrypt(groupId, NOWHERE, sealed, ANY)) << "lie " << i;
     }
     bridge.onEpochKeys = [](server::GroupGetEpochKeysResult&) {};
-    EXPECT_EQ(client("bob").decrypt(sealed).data.stdString(), "at epoch 1") << "the honest answer still opens it";
+    EXPECT_EQ(client("bob").decrypt(groupId, NOWHERE, sealed, ANY).data.stdString(), "at epoch 1") << "the honest answer still opens it";
 }
 
 namespace {
@@ -3823,7 +3836,7 @@ TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_AWindowPageThatDoesNotMoveOnEndsTh
             result.rungs = fullPageAt(bridge, 5);
         }
     };
-    EXPECT_ANY_THROW(client("bob").decrypt(sealed));
+    EXPECT_ANY_THROW(client("bob").decrypt(groupId, NOWHERE, sealed, ANY));
     const auto asks = windowAsks(bridge, "bob");
     ASSERT_EQ(asks.size(), 2u) << "the stuck page was asked for again";
     EXPECT_EQ(asks[0].fromKeyVersion, std::optional<std::int64_t>(1));
@@ -3839,7 +3852,7 @@ TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_WindowPagesThatNeverEndStopAtTheWi
             result.rungs = fullPageAt(bridge, ask.fromKeyVersion.value_or(1) + 1);
         }
     };
-    EXPECT_ANY_THROW(client("bob").decrypt(sealed));
+    EXPECT_ANY_THROW(client("bob").decrypt(groupId, NOWHERE, sealed, ANY));
     const auto asks = windowAsks(bridge, "bob");
     ASSERT_FALSE(asks.empty());
     EXPECT_LE(asks.size(), static_cast<std::size_t>(ROTATIONS + 1));
@@ -4076,4 +4089,321 @@ TEST_F(GroupApiLyingBridge, AMemberRepairsARungUnderAnEpochWhoseKeyIsSpelledUnco
     client("bob").resolveGroupPrivKey(groupId);
     GroupApiImplTestAccess::runDueWorkNow(client("bob"), groupId);
     EXPECT_EQ(count("bob", "context.groupRepairRung"), 1u);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// Envelopes through the API: where a value lives, who wrote it, and which kind of envelope a call reads
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+using privmx::endpoint::group::DecryptOptions;
+using privmx::endpoint::group::Path;
+using privmx::endpoint::group::PathSegment;
+
+PathSegment name(const std::string& text) {
+    return {false, core::Buffer::from(text)};
+}
+PathSegment id(const std::string& value) {
+    return {true, GroupApiImpl::idFromString(value)};
+}
+Path message(const std::string& messageId) {
+    return {name("chat"), id("c1"), name("message"), id(messageId), name("body")};
+}
+DecryptOptions from(const std::string& userId) {
+    return DecryptOptions{.expectedAuthor = userId, .anyAuthor = false, .currentEpochOnly = false};
+}
+
+} // namespace
+
+TEST_F(GroupApiLyingBridge, AMembersEnvelopeNamesItsAuthorAndTheirRole) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"});
+    const Envelope fromAlice = client("alice").encrypt(groupId, message("m1"), core::Buffer::from("hello"), {});
+    const Envelope fromBob = client("bob").encrypt(groupId, message("m2"), core::Buffer::from("hi"), {});
+
+    const DecryptedEnvelope read = client("bob").decrypt(groupId, message("m1"), fromAlice, from("alice"));
+    EXPECT_EQ(read.data.stdString(), "hello");
+    EXPECT_EQ(read.author.userId, "alice");
+    EXPECT_EQ(read.author.pubKey, bridge.users.at("alice").getPublicKey().toBase58DER());
+    EXPECT_EQ(read.author.role, "manager");
+    EXPECT_EQ(read.keyVersion, 1);
+    EXPECT_GT(read.encryptedAt, 0);
+    EXPECT_TRUE(read.sharedWith.groups.empty());
+    EXPECT_TRUE(read.sharedWith.users.empty());
+
+    EXPECT_EQ(client("alice").decrypt(groupId, message("m2"), fromBob, ANY).author.role, "user");
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AnEnvelopeMovedToAnotherRecordIsRefused) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"});
+    const Envelope sealed = client("alice").encrypt(groupId, message("m1"), core::Buffer::from("pay 100"), {});
+    EXPECT_THROW(client("bob").decrypt(groupId, message("m2"), sealed, ANY), EnvelopeWrongLocationException);
+    EXPECT_THROW(client("bob").decrypt(groupId, NOWHERE, sealed, ANY), EnvelopeWrongLocationException);
+    EXPECT_NO_THROW(client("bob").decrypt(groupId, message("m1"), sealed, ANY));
+
+    const Envelope unbound = client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("x"), {});
+    EXPECT_THROW(client("bob").decrypt(groupId, message("m1"), unbound, ANY), EnvelopeWrongLocationException);
+}
+
+TEST_F(GroupApiLyingBridge, ALocationHasToBeSaid) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"});
+    // Leaving the location out is not the same as binding to none.
+    EXPECT_THROW(client("alice").encrypt(groupId, Path{}, core::Buffer::from("x"), {}), core::InvalidParamsException);
+    EXPECT_THROW(
+        client("alice").encrypt(groupId, Path{name("chat"), name("")}, core::Buffer::from("x"), {}),
+        core::InvalidParamsException
+    );
+    EXPECT_THROW(client("alice").decrypt(groupId, Path{}, core::Buffer::from("x"), ANY), core::InvalidParamsException);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AnEnvelopeOfAnotherGroupIsRefusedBeforeAnyKeyIsLookedUp) {
+    // The caller names the group it is reading for. An envelope of another group is refused on its plain header:
+    // it must not steer the client into reads against a group id of the envelope's choosing.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"});
+    const Envelope sealed = client("alice").encrypt(groupId, message("m1"), core::Buffer::from("x"), {});
+    client("bob").getGroup(groupId);
+    const std::size_t lookups = count("bob", "context.groupGetEpochKeys");
+    const std::size_t reads = count("bob", "context.groupGet");
+    EXPECT_THROW(client("bob").decrypt("another-group", message("m1"), sealed, ANY), EnvelopeWrongGroupException);
+    EXPECT_EQ(count("bob", "context.groupGetEpochKeys"), lookups);
+    EXPECT_EQ(count("bob", "context.groupGet"), reads);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AReadSaysWhoseWritingItExpects) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Envelope sealed = client("alice").encrypt(groupId, message("m1"), core::Buffer::from("x"), {});
+
+    // The server files alice's envelope under carol's name.
+    EXPECT_THROW(client("bob").decrypt(groupId, message("m1"), sealed, from("carol")), EnvelopeWrongAuthorException);
+    EXPECT_NO_THROW(client("bob").decrypt(groupId, message("m1"), sealed, from("alice")));
+    // The question cannot be skipped, nor answered twice.
+    EXPECT_THROW(
+        client("bob").decrypt(groupId, message("m1"), sealed, DecryptOptions{}), EnvelopeAuthorNotStatedException
+    );
+    EXPECT_THROW(
+        client("bob").decrypt(
+            groupId, message("m1"), sealed, DecryptOptions{.expectedAuthor = "alice", .anyAuthor = true}
+        ),
+        EnvelopeAuthorNotStatedException
+    );
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AMemberCannotSignAsAnotherMember) {
+    // Carol holds the group key, so she can seal anything. She writes "alice" into the header and signs with her
+    // own key: the UserVerifier knows that key is not alice's.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const core::DecryptedEncKeyV2 key = GroupApiImplTestAccess::currentEncKey(client("carol"), groupId);
+    const Envelope forged = GroupEnvelopeEncryptor().packMemberEnvelope(
+        groupId, key.id, core::Buffer::from("approved"), bridge.users.at("carol"), key.key,
+        EnvelopeSeal{.binding = {}, .keyVersion = 1, .encryptedAt = 1, .authorUserId = "alice"}
+    );
+    EXPECT_THROW(client("bob").decrypt(groupId, NOWHERE, forged, from("alice")), EnvelopeUnverifiedAuthorException);
+    EXPECT_THROW(client("bob").decrypt(groupId, NOWHERE, forged, ANY), EnvelopeUnverifiedAuthorException);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_TheEpochInTheHeaderIsTheEpochOfTheKey) {
+    // What a keyless server gates writes on is the epoch in the plain header. A member who labels an envelope
+    // with another epoch than its key's gets it past that gate; every reader has to refuse it.
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const core::DecryptedEncKeyV2 key = GroupApiImplTestAccess::currentEncKey(client("carol"), groupId);
+    const Envelope mislabelled = GroupEnvelopeEncryptor().packMemberEnvelope(
+        groupId, key.id, core::Buffer::from("x"), bridge.users.at("carol"), key.key,
+        EnvelopeSeal{.binding = {}, .keyVersion = 2, .encryptedAt = 1, .authorUserId = "carol"}
+    );
+    EXPECT_EQ(GroupApiImpl::peekEnvelope(mislabelled).keyVersion, 2);
+    EXPECT_THROW(client("bob").decrypt(groupId, NOWHERE, mislabelled, ANY), InvalidEnvelopeFormatException);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ARemovedMembersWritingIsNotShownAsAMembers) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    const Envelope before = client("carol").encrypt(groupId, message("m1"), core::Buffer::from("before"), {});
+    const Envelope fromAlice = client("alice").encrypt(groupId, message("m2"), core::Buffer::from("old"), {});
+    client("alice").removeGroupMembers(groupId, {"carol"});
+
+    // Carol kept epoch 1's key; what she sealed with it still opens, but she is no member to attribute it to.
+    EXPECT_THROW(client("bob").decrypt(groupId, message("m1"), before, ANY), EnvelopeAuthorNotMemberException);
+
+    // Alice is still a member: her epoch 1 envelope is history, readable unless the caller wants current only.
+    EXPECT_EQ(client("bob").decrypt(groupId, message("m2"), fromAlice, ANY).keyVersion, 1);
+    EXPECT_THROW(
+        client("bob").decrypt(
+            groupId, message("m2"), fromAlice, DecryptOptions{.expectedAuthor = "alice", .currentEpochOnly = true}
+        ),
+        EnvelopeStaleEpochException
+    );
+    const Envelope fresh = client("alice").encrypt(groupId, message("m3"), core::Buffer::from("new"), {});
+    const DecryptedEnvelope read = client("bob").decrypt(
+        groupId, message("m3"), fresh, DecryptOptions{.expectedAuthor = "alice", .currentEpochOnly = true}
+    );
+    EXPECT_EQ(read.keyVersion, 2);
+    EXPECT_EQ(GroupApiImpl::peekEnvelope(fresh).keyVersion, 2);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_EachReadingCallTakesOneKindOfEnvelope) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"});
+    const std::string groupPubKey = client("alice").getGroup(groupId).groupPubKey;
+    const Envelope member = client("alice").encrypt(groupId, message("m1"), core::Buffer::from("x"), {});
+    const Envelope outsider =
+        client("carol").encryptAsOutsider(CONTEXT, groupId, message("m1"), core::Buffer::from("x"), {});
+    const Envelope anonymous =
+        client("carol").encryptAnonymously(groupId, groupPubKey, message("m1"), core::Buffer::from("x"));
+
+    EXPECT_THROW(client("bob").decrypt(groupId, message("m1"), outsider, ANY), EnvelopeWrongKindException);
+    EXPECT_THROW(client("bob").decrypt(groupId, message("m1"), anonymous, ANY), EnvelopeWrongKindException);
+    EXPECT_THROW(client("bob").decryptFromOutsider(groupId, message("m1"), member, ANY), EnvelopeWrongKindException);
+    EXPECT_THROW(client("bob").decryptFromOutsider(groupId, message("m1"), anonymous, ANY), EnvelopeWrongKindException);
+    EXPECT_THROW(client("bob").decryptAnonymous(groupId, message("m1"), member), EnvelopeWrongKindException);
+    EXPECT_THROW(client("bob").decryptAnonymous(groupId, message("m1"), outsider), EnvelopeWrongKindException);
+    // None of the three is shared with anybody.
+    EXPECT_THROW(client("bob").decryptShared(CONTEXT, message("m1"), member, ANY), EnvelopeWrongKindException);
+    EXPECT_THROW(client("bob").decryptShared(CONTEXT, message("m1"), outsider, ANY), EnvelopeWrongKindException);
+    EXPECT_THROW(client("bob").decryptShared(CONTEXT, message("m1"), anonymous, ANY), EnvelopeWrongKindException);
+
+    EXPECT_EQ(client("bob").decryptAnonymous(groupId, message("m1"), anonymous).data.stdString(), "x");
+    EXPECT_EQ(client("bob").decryptAnonymous(groupId, message("m1"), anonymous).keyVersion, 1);
+}
+
+TEST_F(GroupApiLyingBridge, AnOutsiderWritesSignedAndCannotReadBack) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"});
+    const Envelope sealed =
+        client("carol").encryptAsOutsider(CONTEXT, groupId, message("lab1"), core::Buffer::from("result"), {});
+
+    const DecryptedOutsiderEnvelope read = client("bob").decryptFromOutsider(groupId, message("lab1"), sealed, from("carol"));
+    EXPECT_EQ(read.data.stdString(), "result");
+    EXPECT_EQ(read.sender.userId, "carol");
+    EXPECT_EQ(read.sender.pubKey, bridge.users.at("carol").getPublicKey().toBase58DER());
+    EXPECT_EQ(read.keyVersion, 1);
+
+    EXPECT_THROW(
+        client("bob").decryptFromOutsider(groupId, message("lab1"), sealed, from("alice")), EnvelopeWrongAuthorException
+    );
+    EXPECT_THROW(
+        client("bob").decryptFromOutsider(groupId, message("lab2"), sealed, ANY), EnvelopeWrongLocationException
+    );
+    // The writer holds no key of the group.
+    EXPECT_ANY_THROW(client("carol").decryptFromOutsider(groupId, message("lab1"), sealed, ANY));
+
+    const privmx::endpoint::group::EnvelopeHeader header = GroupApiImpl::peekEnvelope(sealed);
+    EXPECT_TRUE(header.fromOutsider);
+    EXPECT_TRUE(header.isSigned);
+    EXPECT_TRUE(header.hasLocation);
+    EXPECT_EQ(header.authorUserId, "carol");
+}
+
+TEST_F(GroupApiLyingBridge, AnEnvelopeSharedWithAUserOpensForThatUserOnly) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"});
+    privmx::endpoint::group::EncryptOptions options;
+    options.alsoFor.push_back({.groupId = "", .user = user("carol")});
+    const Envelope sealed = client("alice").encrypt(groupId, message("d1"), core::Buffer::from("discharge"), options);
+
+    // The home group reads it as a member's, and sees who else can.
+    const DecryptedEnvelope home = client("bob").decrypt(groupId, message("d1"), sealed, from("alice"));
+    EXPECT_EQ(home.data.stdString(), "discharge");
+    EXPECT_EQ(home.sharedWith.users, std::vector<std::string>{"carol"});
+
+    const DecryptedSharedEnvelope shared = client("carol").decryptShared(CONTEXT, message("d1"), sealed, from("alice"));
+    EXPECT_EQ(shared.data.stdString(), "discharge");
+    EXPECT_EQ(shared.sender.userId, "alice");
+    EXPECT_EQ(shared.homeGroupId, groupId);
+    EXPECT_EQ(shared.via, "user");
+    // Carol cannot see the home group's roster: that alice wrote this from inside it is alice's word.
+    EXPECT_EQ(shared.senderMembership, "unknown");
+    EXPECT_EQ(shared.sharedWith.users, std::vector<std::string>{"carol"});
+
+    EXPECT_THROW(client("carol").decryptShared(CONTEXT, message("d2"), sealed, ANY), EnvelopeWrongLocationException);
+    EXPECT_THROW(client("carol").decryptShared(CONTEXT, message("d1"), sealed, from("bob")), EnvelopeWrongAuthorException);
+    // Bob is in the home group, not among the further recipients.
+    EXPECT_THROW(client("bob").decryptShared(CONTEXT, message("d1"), sealed, ANY), EnvelopeNotARecipientException);
+
+    const privmx::endpoint::group::EnvelopeHeader header = GroupApiImpl::peekEnvelope(sealed);
+    EXPECT_FALSE(header.fromOutsider);
+    EXPECT_EQ(header.alsoForUsers, std::vector<std::string>{"carol"});
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_AMemberClaimToARecipientIsReportedAsWhatItIs) {
+    // Carol is in billing. She addresses an envelope to billing and writes another group in as its origin, sealing
+    // the home wrap under a key she made up. Billing's members can open it; nothing must call it that group's.
+    // (This bridge serves one group, so the origin is one the reader cannot see into: two real groups, and the
+    // "member" and "notMember" answers, are in the end-to-end GroupTest.)
+    quiet = true;
+    const std::string billing = createGroup({"alice", "carol"});
+    const std::string billingKey = client("alice").getGroup(billing).groupPubKey;
+    const Envelope forged = GroupEnvelopeEncryptor().packMemberEnvelope(
+        "care-team", "0123456789abcdef0123456789abcdef", core::Buffer::from("approved"), bridge.users.at("carol"),
+        privmx::crypto::Crypto::randomBytes(32),
+        EnvelopeSeal{.binding = {}, .keyVersion = 1, .encryptedAt = 1, .authorUserId = "carol"},
+        {WireRecipient{.isGroup = true, .id = billing, .pubKey = billingKey, .keyVersion = 1}}
+    );
+    const DecryptedSharedEnvelope read = client("alice").decryptShared(CONTEXT, NOWHERE, forged, ANY);
+    EXPECT_EQ(read.data.stdString(), "approved");
+    EXPECT_EQ(read.via, billing);
+    EXPECT_EQ(read.sender.userId, "carol");
+    EXPECT_EQ(read.homeGroupId, "care-team");
+    EXPECT_EQ(read.senderMembership, "unknown");
+    EXPECT_EQ(read.sharedWith.groups, std::vector<std::string>{billing});
+
+    // Bob is in neither.
+    EXPECT_THROW(client("bob").decryptShared(CONTEXT, NOWHERE, forged, ANY), EnvelopeNotARecipientException);
+}
+
+TEST_F(GroupApiLyingBridge, APageOfEnvelopesReportsEachOnItsOwn) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"});
+    const std::string groupPubKey = client("alice").getGroup(groupId).groupPubKey;
+    const Envelope good = client("alice").encrypt(groupId, message("m1"), core::Buffer::from("one"), {});
+    const Envelope moved = client("alice").encrypt(groupId, message("m2"), core::Buffer::from("two"), {});
+    const Envelope fromBob = client("bob").encrypt(groupId, message("m4"), core::Buffer::from("four"), {});
+    const Envelope anonymous =
+        client("carol").encryptAnonymously(groupId, groupPubKey, message("m5"), core::Buffer::from("five"));
+
+    const std::vector<privmx::endpoint::group::DecryptResult> results = client("bob").decryptMany(
+        groupId,
+        {
+            {.envelope = good, .location = message("m1"), .options = from("alice")},
+            {.envelope = moved, .location = message("m3"), .options = from("alice")},
+            {.envelope = fromBob, .location = message("m4"), .options = from("alice")},
+            {.envelope = anonymous, .location = message("m5"), .options = ANY},
+            {.envelope = core::Buffer::from("garbage"), .location = message("m6"), .options = ANY},
+        }
+    );
+    ASSERT_EQ(results.size(), 5u);
+    EXPECT_EQ(results[0].statusCode, 0);
+    EXPECT_EQ(results[0].envelope.data.stdString(), "one");
+    EXPECT_EQ(results[1].statusCode, static_cast<int64_t>(EnvelopeWrongLocationException::FULL_CODE));
+    EXPECT_EQ(results[1].envelope.data.size(), 0u);
+    EXPECT_EQ(results[2].statusCode, static_cast<int64_t>(EnvelopeWrongAuthorException::FULL_CODE));
+    EXPECT_EQ(results[2].details.userId, "bob"); // who really signed
+    EXPECT_EQ(results[3].statusCode, static_cast<int64_t>(EnvelopeWrongKindException::FULL_CODE));
+    EXPECT_EQ(results[3].details.envelopeKind, "anonymous");
+    EXPECT_NE(results[4].statusCode, 0);
+}
+
+TEST(GroupApiPaths, AnIdentifierIsSpelledOneWay) {
+    const core::Buffer canonical = GroupApiImpl::idFromString("6f9619ff-8b86-d011-b42d-00c04fc964ff");
+    EXPECT_EQ(canonical.size(), 16u);
+    EXPECT_EQ(GroupApiImpl::idFromString("6F9619FF-8B86-D011-B42D-00C04FC964FF").stdString(), canonical.stdString());
+    EXPECT_EQ(GroupApiImpl::idFromString("6f9619ff8b86d011b42d00c04fc964ff").stdString(), canonical.stdString());
+    EXPECT_EQ(GroupApiImpl::idFromString("{6F9619FF-8B86-D011-B42D-00C04FC964FF}").stdString(), canonical.stdString());
+    // Anything else is its own bytes: no guessing at what a case-insensitive identifier might be.
+    EXPECT_EQ(GroupApiImpl::idFromString("Chat-42").stdString(), "Chat-42");
+    EXPECT_NE(GroupApiImpl::idFromString("chat-42").stdString(), GroupApiImpl::idFromString("Chat-42").stdString());
+    EXPECT_THROW(GroupApiImpl::idFromString(""), core::InvalidParamsException);
+}
+
+TEST(GroupApiPaths, NoLocationIsNoRealPath) {
+    const Path none = GroupApiImpl::noLocation();
+    ASSERT_EQ(none.size(), 1u);
+    EXPECT_TRUE(none[0].isId);
+    EXPECT_EQ(none[0].value.size(), 0u);
 }

@@ -1606,7 +1606,7 @@ TEST_F(GroupKeyTreeIntegrityTest, pins_saved_by_one_session_carry_the_next_acros
         const group::Group read = groups.getGroup(groupId);
         EXPECT_EQ(read.statusCode, 0);
         EXPECT_EQ(read.keyVersion, 2);
-        EXPECT_NO_THROW(groups.encrypt(groupId, core::Buffer::from("after the removal")));
+        EXPECT_NO_THROW(groups.encrypt(groupId, group::GroupApi::noLocation(), core::Buffer::from("after the removal")));
     }
     EXPECT_NE(store->slots(), first);
 }
@@ -1634,7 +1634,7 @@ TEST_F(GroupKeyTreeIntegrityTest, two_live_sessions_of_one_user_converge_on_one_
     const group::Group read = second.getGroup(groupId);
     EXPECT_EQ(read.statusCode, 0);
     EXPECT_EQ(read.keyVersion, 2);
-    EXPECT_NO_THROW(second.encrypt(groupId, core::Buffer::from("converged")));
+    EXPECT_NO_THROW(second.encrypt(groupId, group::GroupApi::noLocation(), core::Buffer::from("converged")));
 }
 
 TEST_F(GroupKeyTreeIntegrityTest, a_corrupted_pin_blob_is_ignored_and_the_session_reads_as_before) {
@@ -1658,5 +1658,5 @@ TEST_F(GroupKeyTreeIntegrityTest, a_corrupted_pin_blob_is_ignored_and_the_sessio
     session->setPinStore(store);
     auto groups = group::GroupApi::create(*session);
     EXPECT_EQ(groups.getGroup(groupId).statusCode, 0);
-    EXPECT_NO_THROW(groups.encrypt(groupId, core::Buffer::from("as before")));
+    EXPECT_NO_THROW(groups.encrypt(groupId, group::GroupApi::noLocation(), core::Buffer::from("as before")));
 }

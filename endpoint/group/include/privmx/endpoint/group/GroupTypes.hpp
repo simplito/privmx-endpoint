@@ -68,7 +68,7 @@ struct EnvelopeSeal {
 };
 
 // One more reader of an envelope, beside the group it is written in. Part of the signed header.
-struct EnvelopeRecipient {
+struct WireRecipient {
     bool isGroup = false;
     std::string id{};            // group id or user id
     std::string pubKey{};        // base58-DER: the key the content key is wrapped to
@@ -81,12 +81,12 @@ struct EnvelopeRouting {
     bool isFile = false;
     bool hasLocation = false;
     std::string groupId;
-    std::string keyId;                         // member envelopes only
-    std::int64_t keyVersion = 0;               // member envelopes only: the epoch the writer claims
-    std::string groupPubKey;                   // base58-DER; outsider and anonymous envelopes only
-    std::string authorUserId;                  // signed envelopes only
-    std::string authorPubKey;                  // base58-DER; signed envelopes only
-    std::vector<EnvelopeRecipient> recipients; // signed message envelopes only
+    std::string keyId;                     // member envelopes only
+    std::int64_t keyVersion = 0;           // member envelopes only: the epoch the writer claims
+    std::string groupPubKey;               // base58-DER; outsider and anonymous envelopes only
+    std::string authorUserId;              // signed envelopes only
+    std::string authorPubKey;              // base58-DER; signed envelopes only
+    std::vector<WireRecipient> recipients; // signed message envelopes only
 };
 
 // A message envelope, opened. `authorPubKey` is empty for ENVELOPE_ANONYMOUS.
@@ -98,7 +98,7 @@ struct OpenedEnvelope {
     std::string authorUserId;
     std::string authorPubKey;
     std::int64_t encryptedAt = 0;
-    std::vector<EnvelopeRecipient> recipients;
+    std::vector<WireRecipient> recipients;
     EnvelopeType type;
     // true when it was opened as a further recipient (`openSharedEnvelope`). The reader then never held the home
     // group's key, so `groupId`, `keyId`, `keyVersion` and `type` are what the writer signed and nothing more:

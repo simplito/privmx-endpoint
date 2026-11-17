@@ -247,58 +247,143 @@ public:
     core::PagingList<GroupSummary> listGroups(const std::string& contextId, const core::PagingQuery& pagingQuery);
 
     /**
-     * Seals content for a Group, as one of its members.
+     * "Bound to no location": the one Path accepted where a location goes, for a value that belongs to no spot
+     * in the application's data. An empty Path is refused: leaving the location out has to be said.
      *
-     * The returned envelope is self-contained: it names the Group and the key version it was sealed under, so
-     * any member can `decrypt` it later — including after the Group's key has rotated — without being told
-     * anything alongside it. It is signed with your own key, so a reader also learns that you wrote it.
+     * What is given up: the application's server can move such an envelope to another record of the same
+     * Group, or hand back an older one, and nothing here notices. The author, the epoch and the Group are
+     * checked as always. An envelope written with no location never opens with one, and the other way round
+     * (EnvelopeWrongLocationException both ways).
+     */
+    static Path noLocation();
+
+    /**
+     * The bytes of an identifier, for a PathSegment with `isId` set. Spells every identifier one way: a UUID
+     * in any case, with or without dashes or braces, becomes its 16 bytes; anything else its bytes as given.
+     * Two clients that spell one identifier differently would otherwise bind to two different paths.
+     */
+    static core::Buffer idFromString(const std::string& identifier);
+
+    /**
+     * The part of an envelope (a message's or a file's) readable without any key: for a server that refuses
+     * writes early, such as one from a stale epoch. Nothing in it is authenticated.
+     */
+    static EnvelopeHeader peekEnvelope(const core::Buffer& envelope);
+
+    /**
+     * Seals content for a Group, as one of its members, bound to a location in the application's data.
      *
-     * Requires membership. To seal for a Group you are not in, use `encryptAnonymously`.
+     * The envelope opens only with the same `location`: a server that stores it under another record gets
+     * EnvelopeWrongLocationException on every reader. It is signed with the caller's key and names the caller.
+     * `options.alsoFor` adds readers beside the Group: other Groups, single users.
      *
-     * @param groupId ID of the Group to seal for
+     * @param groupId ID of the Group to seal for; the caller must be a member
+     * @param location where the value lives, at least one segment, or `noLocation()`
      * @param content data to encrypt
      * @return the envelope
      */
-    Envelope encrypt(const std::string& groupId, const core::Buffer& content);
+    Envelope encrypt(
+        const std::string& groupId,
+        const Path& location,
+        const core::Buffer& content,
+        const EncryptOptions& options = {}
+    );
+
+    /**
+     * Opens an envelope written by a member of `groupId` with `encrypt`.
+     *
+     * Each of the four reading calls takes exactly one kind of envelope and throws EnvelopeWrongKindException
+     * for the others:
+     *   decrypt              written by a member of this Group
+     *   decryptFromOutsider  written to this Group, signed, by a non-member
+     *   decryptAnonymous     written to this Group, unsigned
+     *   decryptShared        written in another Group, shared through `alsoFor`
+     * So what a non-member wrote is never shown as a member's, and what nobody signed is never shown as
+     * somebody's.
+     *
+     * Checked before anything is returned: the envelope names `groupId` (EnvelopeWrongGroupException), it
+     * was written for `location` (EnvelopeWrongLocationException), the epoch its header claims is the epoch
+     * of the key that opened it, its author is the expected one (EnvelopeWrongAuthorException), the
+     * UserVerifier accepts the signing key for that author (EnvelopeUnverifiedAuthorException), and the author
+     * is a member of the Group now (EnvelopeAuthorNotMemberException).
+     *
+     * A removed member keeps the keys of the epochs they were in. For content that arrived as new, set
+     * `options.currentEpochOnly` (EnvelopeStaleEpochException), and have the application's server refuse
+     * envelopes that are not from the current epoch (`peekEnvelope`).
+     */
+    DecryptedEnvelope decrypt(
+        const std::string& groupId,
+        const Path& location,
+        const Envelope& envelope,
+        const DecryptOptions& options
+    );
+
+    /** `decrypt` for a page of envelopes of one Group. Never throws for a bad item: each reports its own code. */
+    std::vector<DecryptResult> decryptMany(const std::string& groupId, const std::vector<DecryptItem>& items);
+
+    /**
+     * Seals content for a Group the caller is not a member of, signed by the caller: they can write and prove
+     * it was them, and cannot read it back. The Group opens it with `decryptFromOutsider`.
+     *
+     * The Group's current key is read and verified here; none is passed in.
+     * @param contextId ID of the Context the Group is in
+     */
+    Envelope encryptAsOutsider(
+        const std::string& contextId,
+        const std::string& groupId,
+        const Path& location,
+        const core::Buffer& content,
+        const EncryptOptions& options = {}
+    );
 
     /**
      * Seals content for a Group without revealing, or proving, who sent it.
-     *
-     * Needs only public information — the Group's ID and its identity public key, both readable from
-     * `Group::groupPubKey` — so it works whether or not you are a member, and makes no server call. A
-     * throwaway keypair is generated per call and discarded, which is what makes the result unattributable:
-     * members open it with `decrypt`, which reports `ENVELOPE_ANONYMOUS` and no author.
-     *
-     * You cannot read back what you sealed here. Only the Group can.
-     *
-     * If the Group later rotates its identity key, envelopes already sealed to the old one stay readable, as
-     * long as the Group's history has not been pruned past that point.
-     *
-     * @param groupId ID of the Group to seal for
+     * Needs only public information - the Group's ID and its identity public key - and makes no server call.
+     * The Group opens it with `decryptAnonymous`, which reports no sender.
      * @param groupPubKey the Group's identity public key (base58-DER encoded)
-     * @param content data to encrypt
-     * @return the envelope
      */
     Envelope encryptAnonymously(
         const std::string& groupId,
         const std::string& groupPubKey,
+        const Path& location,
         const core::Buffer& content
     );
 
     /**
-     * Opens an envelope sealed by `encrypt` or by `encryptAnonymously`.
-     *
-     * Which of the two it was is reported as `DecryptedEnvelope::type`, and that decides what the result's
-     * `authorPubKey` is worth: `ENVELOPE_FROM_MEMBER` means the signature was verified and the author is who
-     * it says; `ENVELOPE_ANONYMOUS` means the sender is unknown and `authorPubKey` is empty. Branch on the
-     * type, not on the field being non-empty.
-     *
-     * A file envelope is not accepted here — open one with `beginFileDecryption`.
-     *
-     * @param envelope envelope to open
-     * @return the content, and what could be established about its author
+     * Opens an envelope written to `groupId`, and signed, by someone who is not a member (`encryptAsOutsider`).
+     * The sender is who they say; whether they may write here is the application's question to answer.
      */
-    DecryptedEnvelope decrypt(const Envelope& envelope);
+    DecryptedOutsiderEnvelope decryptFromOutsider(
+        const std::string& groupId,
+        const Path& location,
+        const Envelope& envelope,
+        const DecryptOptions& options
+    );
+
+    /** Opens an unsigned envelope written to `groupId` (`encryptAnonymously`). There is no sender to report. */
+    DecryptedAnonymousEnvelope decryptAnonymous(
+        const std::string& groupId,
+        const Path& location,
+        const Envelope& envelope
+    );
+
+    /**
+     * Opens an envelope written in another Group and shared with the caller through `alsoFor`: as a user, or
+     * as a member of one of the recipient Groups. The caller need not know which. `location` is the one the
+     * author wrote it at.
+     *
+     * The result has a sender, not an author. Check `senderMembership`: anyone in the Context can address an
+     * envelope to the caller and name any Group as its origin.
+     *
+     * Throws EnvelopeNotARecipientException when the caller is not among the recipients.
+     * @param contextId ID of the Context the envelope was written in
+     */
+    DecryptedSharedEnvelope decryptShared(
+        const std::string& contextId,
+        const Path& location,
+        const Envelope& envelope,
+        const DecryptOptions& options
+    );
 
     /**
      * Begins sealing a file for a Group, as one of its members.

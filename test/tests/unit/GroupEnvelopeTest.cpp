@@ -542,7 +542,7 @@ protected:
     PrivateKey outsider = PrivateKey::generateRandom();
     PrivateKey billingKey = PrivateKey::generateRandom(); // another group's identity key
     PrivateKey auditorKey = PrivateKey::generateRandom(); // a single user's key
-    std::vector<EnvelopeRecipient> recipients = {
+    std::vector<WireRecipient> recipients = {
         {.isGroup = true, .id = "billing", .pubKey = billingKey.getPublicKey().toBase58DER(), .keyVersion = 4},
         {.isGroup = false, .id = "auditor", .pubKey = auditorKey.getPublicKey().toBase58DER(), .keyVersion = 0},
     };
@@ -823,7 +823,7 @@ TEST_F(GroupEnvelopeV3, SECURITY_ALadderRungIsNotARecipientWrap) {
 }
 
 TEST_F(GroupEnvelopeV3, TooManyRecipientsAreRefused) {
-    std::vector<EnvelopeRecipient> many(256, recipients[1]);
+    std::vector<WireRecipient> many(256, recipients[1]);
     EXPECT_THROW(
         enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA, many), InvalidEnvelopeFormatException
     );

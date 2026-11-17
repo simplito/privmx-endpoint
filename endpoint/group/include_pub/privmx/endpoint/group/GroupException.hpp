@@ -99,6 +99,12 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, CannotExtractGroupCustomEvent
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeWrongLocationException, "Envelope was written for another location", 0x0015)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeWrongKindException, "Envelope is not the kind this call reads", 0x0016)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeNotARecipientException, "Caller is not among the envelope's recipients", 0x0017)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeWrongGroupException, "Envelope was written for another group", 0x0018)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeWrongAuthorException, "Envelope was written by someone other than the expected author", 0x0019)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeUnverifiedAuthorException, "The UserVerifier does not accept the key the envelope was signed with for its author", 0x001A)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeAuthorNotMemberException, "The envelope's author is not a member of the group", 0x001B)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeStaleEpochException, "Envelope is not from the group's current epoch", 0x001C)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeAuthorNotStatedException, "A read must name the expected author or say that any author is accepted", 0x001D)
 // clang-format on
 } // namespace group
 } // namespace endpoint

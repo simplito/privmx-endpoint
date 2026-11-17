@@ -198,7 +198,7 @@ public:
         const privmx::crypto::PrivateKey& authorPrivKey,
         const std::string& groupKey,
         const EnvelopeSeal& seal,
-        const std::vector<EnvelopeRecipient>& recipients = {}
+        const std::vector<WireRecipient>& recipients = {}
     );
 
     // Type 5.
@@ -208,7 +208,7 @@ public:
         const core::Buffer& content,
         const privmx::crypto::PrivateKey& senderPrivKey,
         const EnvelopeSeal& seal,
-        const std::vector<EnvelopeRecipient>& recipients = {}
+        const std::vector<WireRecipient>& recipients = {}
     );
 
     // Type 2.
@@ -343,7 +343,7 @@ private:
         const EnvelopeBinding& binding,
         const std::vector<std::string>& fields
     );
-    static void putRecipients(std::string& header, const std::vector<EnvelopeRecipient>& recipients);
+    static void putRecipients(std::string& header, const std::vector<WireRecipient>& recipients);
     // The echoed header and the binding, checked; returns where the rest of `plain` starts.
     static std::size_t checkSealedPrefix(
         const std::string& plain,

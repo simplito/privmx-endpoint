@@ -309,10 +309,14 @@ core::DecryptedEncKeyV2 GroupKeys::encKeyById(
     const std::string& keyId,
     const std::function<core::ModuleKeys(bool fresh)>& moduleKeysOf,
     core::KeyProvider& keyProvider,
-    const core::KeyProvider::GroupPrivKeyResolver& resolver
+    const core::KeyProvider::GroupPrivKeyResolver& resolver,
+    std::int64_t* epochOut
 ) const {
     if (const auto session = deps.sessions.find(groupId)) {
         if (auto cached = session->envelopeKeys.get(keyId); cached.has_value()) {
+            if (epochOut != nullptr) {
+                *epochOut = session->envelopeKeyEpochs.get(keyId).value_or(0);
+            }
             return cached.value();
         }
     }
@@ -387,8 +391,21 @@ core::DecryptedEncKeyV2 GroupKeys::encKeyById(
         )) {
         throw core::EncryptionKeyValidationException("Group key " + keyId + " was not wrapped by its epoch's opener");
     }
-    deps.sessions.of(groupId)->envelopeKeys.set(keyId, found);
+    const std::int64_t epoch = candidates.front().keys.front().groupEpoch.value_or(0);
+    const auto session = deps.sessions.of(groupId);
+    session->envelopeKeyEpochs.set(keyId, epoch);
+    session->envelopeKeys.set(keyId, found);
+    if (epochOut != nullptr) {
+        *epochOut = epoch;
+    }
     return found;
+}
+
+std::int64_t GroupKeys::grantEpochOf(const std::string& groupId, const std::string& groupPubKeyBase58) const {
+    if (const auto session = deps.sessions.find(groupId)) {
+        return session->envelopeGrantEpochs.get(groupPubKeyBase58).value_or(0);
+    }
+    return 0;
 }
 
 privmx::crypto::PrivateKey GroupKeys::grantKeyForPubKey(

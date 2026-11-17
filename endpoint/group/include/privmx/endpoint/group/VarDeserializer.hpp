@@ -22,6 +22,36 @@ template<>
 group::EventType VarDeserializer::deserialize<group::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>
+group::PathSegment VarDeserializer::deserialize<group::PathSegment>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
+template<>
+group::DecryptOptions VarDeserializer::deserialize<group::DecryptOptions>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
+template<>
+group::EnvelopeRecipient VarDeserializer::deserialize<group::EnvelopeRecipient>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
+template<>
+group::EncryptOptions VarDeserializer::deserialize<group::EncryptOptions>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
+template<>
+group::DecryptItem VarDeserializer::deserialize<group::DecryptItem>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
+template<>
 group::EventSelectorType VarDeserializer::deserialize<group::EventSelectorType>(
     const Poco::Dynamic::Var& val,
     const std::string& name

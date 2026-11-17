@@ -7,6 +7,7 @@
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
+#include <privmx/endpoint/group/GroupException.hpp>
 #include <privmx/endpoint/group/VarSerializer.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 
@@ -570,32 +571,106 @@ struct CipherStorage {
 
 // -- envelopes -----------------------------------------------------------------------------------------
 
+// What the envelope cases bind to: a message in a chat, as an application would name it.
+static group::Path messagePath(const std::string& messageId) {
+    return {
+        {false, core::Buffer::from("chat")},
+        {true, group::GroupApi::idFromString("6f9619ff-8b86-d011-b42d-00c04fc964ff")},
+        {false, core::Buffer::from("message")},
+        {true, group::GroupApi::idFromString(messageId)},
+        {false, core::Buffer::from("body")},
+    };
+}
+static group::DecryptOptions anyAuthor() {
+    return group::DecryptOptions{.expectedAuthor = "", .anyAuthor = true, .currentEpochOnly = false};
+}
+static group::DecryptOptions writtenBy(const std::string& userId) {
+    return group::DecryptOptions{.expectedAuthor = userId, .anyAuthor = false, .currentEpochOnly = false};
+}
+
 TEST_F(GroupTest, envelope_roundtrip_between_members) {
     std::string groupId = createGroupOf({user(1), user(2)});
+    const std::string author = reader->getString("Login.user_1_id");
 
     core::Buffer envelope;
-    EXPECT_NO_THROW({ envelope = groupApi->encrypt(groupId, core::Buffer::from("secret payload")); });
+    EXPECT_NO_THROW({ envelope = groupApi->encrypt(groupId, messagePath("m1"), core::Buffer::from("secret payload")); });
     EXPECT_GT(envelope.size(), 0u);
-    // The point of an envelope: it travels alone, with nothing alongside it saying how to open it.
     EXPECT_EQ(envelope.stdString().find("secret payload"), std::string::npos);
+
+    const group::EnvelopeHeader header = group::GroupApi::peekEnvelope(envelope);
+    EXPECT_EQ(header.groupId, groupId);
+    EXPECT_EQ(header.keyVersion, 1);
+    EXPECT_FALSE(header.fromOutsider);
+    EXPECT_TRUE(header.hasLocation);
+    EXPECT_EQ(header.authorUserId, author);
 
     disconnect();
     connectAs(2);
 
     group::DecryptedEnvelope opened;
-    EXPECT_NO_THROW({ opened = groupApi->decrypt(envelope); });
+    EXPECT_NO_THROW({ opened = groupApi->decrypt(groupId, messagePath("m1"), envelope, writtenBy(author)); });
     EXPECT_EQ(opened.data.stdString(), "secret payload");
-    EXPECT_EQ(opened.groupId, groupId);
-    EXPECT_EQ(opened.type, group::ENVELOPE_FROM_MEMBER);
-    EXPECT_EQ(opened.authorPubKey, reader->getString("Login.user_1_pubKey"));
+    EXPECT_EQ(opened.author.userId, author);
+    EXPECT_EQ(opened.author.pubKey, reader->getString("Login.user_1_pubKey"));
+    EXPECT_EQ(opened.author.role, "manager");
+    EXPECT_EQ(opened.keyVersion, 1);
+    EXPECT_GT(opened.encryptedAt, 0);
+}
+
+TEST_F(GroupTest, envelope_is_bound_to_its_location_and_its_author) {
+    std::string groupId = createGroupOf({user(1), user(2)});
+    const std::string author = reader->getString("Login.user_1_id");
+    const std::string other = reader->getString("Login.user_2_id");
+    core::Buffer envelope = groupApi->encrypt(groupId, messagePath("m1"), core::Buffer::from("pay 100"));
+    core::Buffer unbound = groupApi->encrypt(groupId, group::GroupApi::noLocation(), core::Buffer::from("x"));
+
+    disconnect();
+    connectAs(2);
+
+    // The application's server stores the envelope under another message, or names another author beside it.
+    EXPECT_THROW(
+        { groupApi->decrypt(groupId, messagePath("m2"), envelope, anyAuthor()); }, group::EnvelopeWrongLocationException
+    );
+    EXPECT_THROW(
+        { groupApi->decrypt(groupId, group::GroupApi::noLocation(), envelope, anyAuthor()); },
+        group::EnvelopeWrongLocationException
+    );
+    EXPECT_THROW(
+        { groupApi->decrypt(groupId, messagePath("m1"), unbound, anyAuthor()); }, group::EnvelopeWrongLocationException
+    );
+    EXPECT_THROW(
+        { groupApi->decrypt(groupId, messagePath("m1"), envelope, writtenBy(other)); },
+        group::EnvelopeWrongAuthorException
+    );
+    EXPECT_THROW(
+        { groupApi->decrypt(groupId, messagePath("m1"), envelope, group::DecryptOptions{}); },
+        group::EnvelopeAuthorNotStatedException
+    );
+    EXPECT_EQ(
+        groupApi->decrypt(groupId, group::GroupApi::noLocation(), unbound, anyAuthor()).data.stdString(), "x"
+    );
+
+    // A page: each item reports on its own.
+    const auto page = groupApi->decryptMany(
+        groupId,
+        {
+            {.envelope = envelope, .location = messagePath("m1"), .options = writtenBy(author)},
+            {.envelope = envelope, .location = messagePath("m2"), .options = writtenBy(author)},
+        }
+    );
+    ASSERT_EQ(page.size(), 2u);
+    EXPECT_EQ(page[0].statusCode, 0);
+    EXPECT_EQ(page[0].envelope.data.stdString(), "pay 100");
+    EXPECT_EQ(page[1].statusCode, static_cast<int64_t>(group::EnvelopeWrongLocationException::FULL_CODE));
 }
 
 TEST_F(GroupTest, envelope_survives_a_key_rotation) {
     // Removing a member advances the group's key epoch. An envelope sealed before that must still open
-    // afterwards — which is the whole reason the key id travels inside it.
+    // afterwards - which is the whole reason the key id travels inside it.
     std::string groupId = createGroupOf({user(1), user(2)});
+    const std::string author = reader->getString("Login.user_1_id");
 
-    core::Buffer before = groupApi->encrypt(groupId, core::Buffer::from("written before the rotation"));
+    core::Buffer before = groupApi->encrypt(groupId, messagePath("m1"), core::Buffer::from("written before the rotation"));
     const int64_t epochBefore = groupApi->getGroup(groupId).keyVersion;
 
     EXPECT_NO_THROW({
@@ -604,36 +679,155 @@ TEST_F(GroupTest, envelope_survives_a_key_rotation) {
     EXPECT_GT(groupApi->getGroup(groupId).keyVersion, epochBefore);
 
     group::DecryptedEnvelope opened;
-    EXPECT_NO_THROW({ opened = groupApi->decrypt(before); });
+    EXPECT_NO_THROW({ opened = groupApi->decrypt(groupId, messagePath("m1"), before, writtenBy(author)); });
     EXPECT_EQ(opened.data.stdString(), "written before the rotation");
+    EXPECT_EQ(opened.keyVersion, epochBefore);
+
+    // History, readable; but not what a reader takes as having arrived just now.
+    EXPECT_THROW(
+        {
+            groupApi->decrypt(
+                groupId, messagePath("m1"), before,
+                group::DecryptOptions{.expectedAuthor = author, .anyAuthor = false, .currentEpochOnly = true}
+            );
+        },
+        group::EnvelopeStaleEpochException
+    );
+}
+
+TEST_F(GroupTest, envelope_of_a_removed_member_is_not_attributed_to_a_member) {
+    std::string groupId = createGroupOf({user(1), user(2)});
+    disconnect();
+    connectAs(2);
+    core::Buffer fromUser2 = groupApi->encrypt(groupId, messagePath("m1"), core::Buffer::from("before I left"));
+    disconnect();
+    connectAs(1);
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_2_id")}); });
+
+    EXPECT_THROW(
+        { groupApi->decrypt(groupId, messagePath("m1"), fromUser2, anyAuthor()); },
+        group::EnvelopeAuthorNotMemberException
+    );
 }
 
 TEST_F(GroupTest, envelope_from_a_non_member) {
     // A group user_2 is deliberately not in.
     std::string groupId = createGroupOf({user(1)});
+    const std::string contextId = reader->getString("Context_1.contextId");
     const std::string groupPubKey = groupApi->getGroup(groupId).groupPubKey;
     ASSERT_FALSE(groupPubKey.empty());
 
     disconnect();
     connectAs(2);
 
-    // Not a member: reading the group is refused, but sealing to it is not — that asymmetry is the feature.
+    // Not a member: reading the group is refused, but sealing to it is not - that asymmetry is the feature.
     EXPECT_ANY_THROW({ groupApi->getGroup(groupId); });
-    core::Buffer envelope;
+    core::Buffer anonymous;
     EXPECT_NO_THROW({
-        envelope = groupApi->encryptAnonymously(groupId, groupPubKey, core::Buffer::from("a tip from outside"));
+        anonymous =
+            groupApi->encryptAnonymously(groupId, groupPubKey, messagePath("tip1"), core::Buffer::from("a tip from outside"));
+    });
+    core::Buffer fromOutsider;
+    EXPECT_NO_THROW({
+        fromOutsider = groupApi->encryptAsOutsider(contextId, groupId, messagePath("lab1"), core::Buffer::from("a signed result"));
     });
     // The sender cannot read back what they wrote; only the group can.
-    EXPECT_ANY_THROW({ groupApi->decrypt(envelope); });
+    EXPECT_ANY_THROW({ groupApi->decryptAnonymous(groupId, messagePath("tip1"), anonymous); });
+    EXPECT_ANY_THROW({ groupApi->decryptFromOutsider(groupId, messagePath("lab1"), fromOutsider, anyAuthor()); });
 
     disconnect();
     connectAs(1);
-    group::DecryptedEnvelope opened;
-    EXPECT_NO_THROW({ opened = groupApi->decrypt(envelope); });
+    group::DecryptedAnonymousEnvelope opened;
+    EXPECT_NO_THROW({ opened = groupApi->decryptAnonymous(groupId, messagePath("tip1"), anonymous); });
     EXPECT_EQ(opened.data.stdString(), "a tip from outside");
-    EXPECT_EQ(opened.type, group::ENVELOPE_ANONYMOUS);
-    // Anonymous means anonymous — no author is reported, not even the throwaway key that sealed it.
-    EXPECT_TRUE(opened.authorPubKey.empty());
+    EXPECT_EQ(opened.keyVersion, 1);
+
+    group::DecryptedOutsiderEnvelope signedResult;
+    EXPECT_NO_THROW({
+        signedResult = groupApi->decryptFromOutsider(
+            groupId, messagePath("lab1"), fromOutsider, writtenBy(reader->getString("Login.user_2_id"))
+        );
+    });
+    EXPECT_EQ(signedResult.data.stdString(), "a signed result");
+    EXPECT_EQ(signedResult.sender.userId, reader->getString("Login.user_2_id"));
+    EXPECT_EQ(signedResult.sender.pubKey, reader->getString("Login.user_2_pubKey"));
+
+    // What a non-member wrote is never read as a member's, and what nobody signed never as somebody's.
+    EXPECT_THROW(
+        { groupApi->decrypt(groupId, messagePath("tip1"), anonymous, anyAuthor()); }, group::EnvelopeWrongKindException
+    );
+    EXPECT_THROW(
+        { groupApi->decrypt(groupId, messagePath("lab1"), fromOutsider, anyAuthor()); }, group::EnvelopeWrongKindException
+    );
+    EXPECT_THROW(
+        { groupApi->decryptFromOutsider(groupId, messagePath("tip1"), anonymous, anyAuthor()); },
+        group::EnvelopeWrongKindException
+    );
+    EXPECT_THROW(
+        { groupApi->decryptAnonymous(groupId, messagePath("lab1"), fromOutsider); }, group::EnvelopeWrongKindException
+    );
+}
+
+TEST_F(GroupTest, envelope_shared_with_another_group_and_a_user) {
+    // The care team writes; billing (another group) and one auditor (a single user) read it too.
+    const std::string contextId = reader->getString("Context_1.contextId");
+    const std::string user1 = reader->getString("Login.user_1_id");
+    const std::string user2 = reader->getString("Login.user_2_id");
+    std::string care = createGroupOf({user(1)});
+    std::string billing = createGroupOf({user(1), user(2)});
+
+    group::EncryptOptions options;
+    options.alsoFor.push_back({.groupId = billing, .user = std::nullopt});
+    core::Buffer shared = groupApi->encrypt(care, messagePath("d1"), core::Buffer::from("discharge"), options);
+
+    group::EncryptOptions toUser;
+    toUser.alsoFor.push_back({.groupId = "", .user = user(2)});
+    core::Buffer sharedWithUser = groupApi->encrypt(care, messagePath("d2"), core::Buffer::from("for the auditor"), toUser);
+
+    // The home group reads it as its own member's, and sees who else can.
+    group::DecryptedEnvelope home = groupApi->decrypt(care, messagePath("d1"), shared, writtenBy(user1));
+    EXPECT_EQ(home.sharedWith.groups, std::vector<std::string>{billing});
+    // user_1 is in billing as well, and in the home group: the sender is known to be a member.
+    group::DecryptedSharedEnvelope viaBilling = groupApi->decryptShared(contextId, messagePath("d1"), shared, anyAuthor());
+    EXPECT_EQ(viaBilling.via, billing);
+    EXPECT_EQ(viaBilling.senderMembership, "member");
+
+    disconnect();
+    connectAs(2);
+
+    group::DecryptedSharedEnvelope opened;
+    EXPECT_NO_THROW({ opened = groupApi->decryptShared(contextId, messagePath("d1"), shared, writtenBy(user1)); });
+    EXPECT_EQ(opened.data.stdString(), "discharge");
+    EXPECT_EQ(opened.sender.userId, user1);
+    EXPECT_EQ(opened.homeGroupId, care);
+    EXPECT_EQ(opened.via, billing);
+    // user_2 cannot see the care team's roster: that user_1 wrote this from inside it is user_1's word.
+    EXPECT_EQ(opened.senderMembership, "unknown");
+    EXPECT_EQ(opened.sharedWith.groups, std::vector<std::string>{billing});
+    EXPECT_THROW(
+        { groupApi->decryptShared(contextId, messagePath("d9"), shared, anyAuthor()); },
+        group::EnvelopeWrongLocationException
+    );
+    // Not through the home group: user_2 is not in it.
+    EXPECT_ANY_THROW({ groupApi->decrypt(care, messagePath("d1"), shared, anyAuthor()); });
+
+    group::DecryptedSharedEnvelope asUser;
+    EXPECT_NO_THROW({ asUser = groupApi->decryptShared(contextId, messagePath("d2"), sharedWithUser, anyAuthor()); });
+    EXPECT_EQ(asUser.data.stdString(), "for the auditor");
+    EXPECT_EQ(asUser.via, "user");
+    EXPECT_EQ(asUser.sharedWith.users, std::vector<std::string>{user2});
+
+    // A removal in billing replaces its key: the next envelope is wrapped to the new one, not the old.
+    disconnect();
+    connectAs(1);
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(billing, {user2}); });
+    core::Buffer after = groupApi->encrypt(care, messagePath("d3"), core::Buffer::from("after the removal"), options);
+    const group::EnvelopeHeader header = group::GroupApi::peekEnvelope(after);
+    ASSERT_EQ(header.alsoForGroups.size(), 1u);
+    EXPECT_EQ(header.alsoForGroups[0].keyVersion, 2);
+    disconnect();
+    connectAs(2);
+    EXPECT_ANY_THROW({ groupApi->decryptShared(contextId, messagePath("d3"), after, anyAuthor()); });
 }
 
 TEST_F(GroupTest, envelope_file_roundtrip_as_documented) {
@@ -818,24 +1012,27 @@ TEST_F(GroupTest, envelope_repeated_decrypt_and_two_keys_in_one_session) {
 
     std::vector<core::Buffer> envelopes;
     for (int i = 0; i < 20; ++i) {
-        envelopes.push_back(groupApi->encrypt(groupId, core::Buffer::from("message " + std::to_string(i))));
+        envelopes.push_back(
+            groupApi->encrypt(groupId, messagePath("m" + std::to_string(i)), core::Buffer::from("message " + std::to_string(i)))
+        );
     }
     // Every one of these but the first should be served from the unwrapped-key memo. Correctness is what is
     // assertable here; that they cost no round trips is structural, not something the test can observe.
     for (int i = 0; i < 20; ++i) {
         group::DecryptedEnvelope opened;
-        EXPECT_NO_THROW({ opened = groupApi->decrypt(envelopes[i]); });
+        EXPECT_NO_THROW({
+            opened = groupApi->decrypt(groupId, messagePath("m" + std::to_string(i)), envelopes[i], anyAuthor());
+        });
         EXPECT_EQ(opened.data.stdString(), "message " + std::to_string(i));
-        EXPECT_EQ(opened.groupId, groupId);
     }
 
     // A removal mints a new metadata key, so from here two distinct keyIds are live in the same session.
     ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_2_id")}); });
-    core::Buffer afterRotation = groupApi->encrypt(groupId, core::Buffer::from("after the rotation"));
+    core::Buffer afterRotation = groupApi->encrypt(groupId, messagePath("after"), core::Buffer::from("after the rotation"));
 
     // Interleaved on purpose: an envelope under the new key, then one under the old, then the new one again.
-    EXPECT_EQ(groupApi->decrypt(afterRotation).data.stdString(), "after the rotation");
-    EXPECT_EQ(groupApi->decrypt(envelopes[7]).data.stdString(), "message 7");
-    EXPECT_EQ(groupApi->decrypt(afterRotation).data.stdString(), "after the rotation");
-    EXPECT_EQ(groupApi->decrypt(envelopes[19]).data.stdString(), "message 19");
+    EXPECT_EQ(groupApi->decrypt(groupId, messagePath("after"), afterRotation, anyAuthor()).data.stdString(), "after the rotation");
+    EXPECT_EQ(groupApi->decrypt(groupId, messagePath("m7"), envelopes[7], anyAuthor()).data.stdString(), "message 7");
+    EXPECT_EQ(groupApi->decrypt(groupId, messagePath("after"), afterRotation, anyAuthor()).data.stdString(), "after the rotation");
+    EXPECT_EQ(groupApi->decrypt(groupId, messagePath("m19"), envelopes[19], anyAuthor()).data.stdString(), "message 19");
 }

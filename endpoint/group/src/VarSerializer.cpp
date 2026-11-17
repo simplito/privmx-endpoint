@@ -37,15 +37,160 @@ Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& va
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::EnvelopeAuthor>(const group::EnvelopeAuthor& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$EnvelopeAuthor");
+    }
+    obj->set("userId", serialize(val.userId));
+    obj->set("pubKey", serialize(val.pubKey));
+    obj->set("role", serialize(val.role));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::EnvelopeSender>(const group::EnvelopeSender& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$EnvelopeSender");
+    }
+    obj->set("userId", serialize(val.userId));
+    obj->set("pubKey", serialize(val.pubKey));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::EnvelopeAudience>(const group::EnvelopeAudience& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$EnvelopeAudience");
+    }
+    obj->set("groups", serialize(val.groups));
+    obj->set("users", serialize(val.users));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedEnvelope>(const group::DecryptedEnvelope& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
         obj->set("__type", "group$DecryptedEnvelope");
     }
     obj->set("data", serialize(val.data));
+    obj->set("author", serialize(val.author));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    obj->set("encryptedAt", serialize(val.encryptedAt));
+    obj->set("sharedWith", serialize(val.sharedWith));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupErrorDetails>(const group::GroupErrorDetails& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$GroupErrorDetails");
+    }
+    obj->set("userId", serialize(val.userId));
+    obj->set("pubKey", serialize(val.pubKey));
+    obj->set("envelopeKind", serialize(val.envelopeKind));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::DecryptResult>(const group::DecryptResult& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$DecryptResult");
+    }
+    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("envelope", serialize(val.envelope));
+    obj->set("details", serialize(val.details));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedOutsiderEnvelope>(
+    const group::DecryptedOutsiderEnvelope& val
+) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$DecryptedOutsiderEnvelope");
+    }
+    obj->set("data", serialize(val.data));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    obj->set("sender", serialize(val.sender));
+    obj->set("encryptedAt", serialize(val.encryptedAt));
+    obj->set("sharedWith", serialize(val.sharedWith));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedAnonymousEnvelope>(
+    const group::DecryptedAnonymousEnvelope& val
+) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$DecryptedAnonymousEnvelope");
+    }
+    obj->set("data", serialize(val.data));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedSharedEnvelope>(const group::DecryptedSharedEnvelope& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$DecryptedSharedEnvelope");
+    }
+    obj->set("data", serialize(val.data));
+    obj->set("sender", serialize(val.sender));
+    obj->set("homeGroupId", serialize(val.homeGroupId));
+    obj->set("senderMembership", serialize(val.senderMembership));
+    obj->set("via", serialize(val.via));
+    obj->set("encryptedAt", serialize(val.encryptedAt));
+    obj->set("sharedWith", serialize(val.sharedWith));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupEpochRef>(const group::GroupEpochRef& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$GroupEpochRef");
+    }
     obj->set("groupId", serialize(val.groupId));
-    obj->set("authorPubKey", serialize(val.authorPubKey));
-    obj->set("type", serialize((int64_t)val.type));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::EnvelopeHeader>(const group::EnvelopeHeader& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$EnvelopeHeader");
+    }
+    obj->set("version", serialize(val.version));
+    obj->set("groupId", serialize(val.groupId));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    obj->set("fromOutsider", serialize(val.fromOutsider));
+    obj->set("isSigned", serialize(val.isSigned));
+    obj->set("isFile", serialize(val.isFile));
+    obj->set("hasLocation", serialize(val.hasLocation));
+    obj->set("authorUserId", serialize(val.authorUserId));
+    obj->set("alsoForGroups", serialize(val.alsoForGroups));
+    obj->set("alsoForUsers", serialize(val.alsoForUsers));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::PathSegment>(const group::PathSegment& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$PathSegment");
+    }
+    obj->set("isId", serialize(val.isId));
+    obj->set("value", serialize(val.value));
     return obj;
 }
 

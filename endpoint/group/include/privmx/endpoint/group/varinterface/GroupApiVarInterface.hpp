@@ -46,6 +46,14 @@ public:
         UpdateGroupPolicy = 26,
         RotateGroupKey = 27,
         RenewLeaf = 28,
+        DecryptMany = 29,
+        EncryptAsOutsider = 30,
+        DecryptFromOutsider = 31,
+        DecryptAnonymous = 32,
+        DecryptShared = 33,
+        PeekEnvelope = 34,
+        NoLocation = 35,
+        IdFromString = 36,
     };
 
     GroupApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -69,6 +77,14 @@ public:
     Poco::Dynamic::Var encrypt(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var decrypt(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var encryptAnonymously(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var decryptMany(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var encryptAsOutsider(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var decryptFromOutsider(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var decryptAnonymous(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var decryptShared(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var peekEnvelope(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var noLocation(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var idFromString(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var beginFileEncryption(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var encryptFileChunk(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var beginFileDecryption(const Poco::Dynamic::Var& args);
