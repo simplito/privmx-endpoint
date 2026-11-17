@@ -90,7 +90,15 @@ void CryptoErrors::rethrow(const std::exception& e, const std::string& context) 
         throw crypto::RandomGeneratorFailureException(description);
     }
 
-    // Korzen hierarchii pmx-crypto oraz goly `std::runtime_error`, ktory pmx-crypto rzuca
-    // z `CryptoProvider::encrypt` (`PrivmxDriverCryptoException` to alias na `std::runtime_error`).
+    // The root of pmx-crypto's own hierarchy, and anything deriving from `std::runtime_error` that it
+    // throws from outside that hierarchy.
+    //
+    // `CryptoProvider::encrypt` used to land here: it threw a bare `std::runtime_error` (through an
+    // alias named `PrivmxDriverCryptoException`, unrelated to this library's class of that name) when
+    // the cipher failed to finalize. It now throws `PrivmxCryptoserviceEncryptionUpdateFailedException`
+    // and `...EncryptionFinalizationFailedException`, both under `PrivmxCryptoserviceSymmetricCipherException`,
+    // so those are caught by the branch above and reported as `SymmetricCipherFailureException` rather
+    // than falling through to this one. The branch stays: it is the catch-all for a hierarchy that is
+    // still growing, and a pmx-crypto error reaching the caller untranslated would carry no code.
     throw crypto::EndpointCryptoException(description);
 }
