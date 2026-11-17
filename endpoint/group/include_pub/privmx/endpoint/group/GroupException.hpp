@@ -96,6 +96,9 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, IncompleteEpochLadderExceptio
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, InvalidEnvelopeFormatException, "Malformed group envelope", 0x0012)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeTruncatedFileException, "Encrypted file is shorter than its envelope declares", 0x0013)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, CannotExtractGroupCustomEventException, "Cannot extract GroupCustomEvent", 0x0014)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeWrongLocationException, "Envelope was written for another location", 0x0015)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeWrongKindException, "Envelope is not the kind this call reads", 0x0016)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeNotARecipientException, "Caller is not among the envelope's recipients", 0x0017)
 // clang-format on
 } // namespace group
 } // namespace endpoint

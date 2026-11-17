@@ -48,12 +48,51 @@ struct EnvelopeFileHeader {
     std::string fileKey; // 32 raw bytes
 };
 
-// The routing header, read without opening anything.
+// What an envelope is bound to, beside its group: a location in the application's data, or - said, never
+// defaulted - none. Not transmitted: the writer signs it, the reader supplies it again and the two must agree.
+struct EnvelopeBinding {
+    bool hasLocation = false;
+    std::string locationDigest{}; // 32 bytes when `hasLocation`, empty otherwise
+};
+
+// What a writer stamps into the signed part of an envelope.
+struct EnvelopeSeal {
+    EnvelopeBinding binding{};
+    std::int64_t keyVersion = 0;  // member envelopes: the epoch of the group key used
+    std::int64_t encryptedAt = 0; // signed envelopes: the writer's clock, ms
+};
+
+// One more reader of an envelope, beside the group it is written in. Part of the signed header.
+struct EnvelopeRecipient {
+    bool isGroup = false;
+    std::string id{};            // group id or user id
+    std::string pubKey{};        // base58-DER: the key the content key is wrapped to
+    std::int64_t keyVersion = 0; // groups: the epoch of `pubKey`; 0 for a user
+};
+
+// The plain header, read without opening anything. Nothing in it is authenticated until the envelope is opened.
 struct EnvelopeRouting {
     EnvelopeType type;
+    bool isFile = false;
+    bool hasLocation = false;
     std::string groupId;
-    std::string keyId;       // set for ENVELOPE_FROM_MEMBER only
-    std::string groupPubKey; // base58-DER; set for ENVELOPE_ANONYMOUS only
+    std::string keyId;                         // member envelopes only
+    std::int64_t keyVersion = 0;               // member envelopes only: the epoch the writer claims
+    std::string groupPubKey;                   // base58-DER; outsider and anonymous envelopes only
+    std::string authorPubKey;                  // base58-DER; signed envelopes only
+    std::vector<EnvelopeRecipient> recipients; // signed message envelopes only
+};
+
+// A message envelope, opened. `authorPubKey` is empty for ENVELOPE_ANONYMOUS.
+struct OpenedEnvelope {
+    core::Buffer data;
+    std::string groupId;
+    std::string keyId;
+    std::int64_t keyVersion = 0;
+    std::string authorPubKey;
+    std::int64_t encryptedAt = 0;
+    std::vector<EnvelopeRecipient> recipients;
+    EnvelopeType type;
 };
 
 struct EnvelopeFileState {

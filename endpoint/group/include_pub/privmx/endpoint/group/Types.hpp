@@ -236,7 +236,23 @@ enum EnvelopeType : int64_t {
     ENVELOPE_FROM_MEMBER = 1,
     /** Sealed to the Group's identity public key by an outsider using a throwaway keypair. Unattributable. */
     ENVELOPE_ANONYMOUS = 2,
+    /** Sealed to the Group's identity public key by someone who is not a member, and signed by them. */
+    ENVELOPE_FROM_OUTSIDER = 3,
 };
+
+/**
+ * One segment of a path in the application's own data: a name written in code ("chat", "body") or an
+ * identifier that comes from data (a chat ID). The two never collide: "ab" as a name and the bytes 0x61 0x62 as
+ * an identifier are different segments.
+ */
+struct PathSegment {
+    /** false: `value` is a UTF-8 name written in code. true: `value` is the bytes of an identifier. */
+    bool isId;
+    core::Buffer value;
+};
+
+/** A path in the application's own data. An envelope is bound to one: it opens only with the same path. */
+using Path = std::vector<PathSegment>;
 
 /**
  * The plaintext of an envelope, together with what could be established about who wrote it.

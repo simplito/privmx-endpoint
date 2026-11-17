@@ -3399,8 +3399,8 @@ TEST_F(GroupApiLyingBridge, AnEnvelopeNamingAGroupWithNoKeysLeavesNoSessionBehin
     for (int i = 0; i < 3; ++i) {
         const std::string groupId = "unknown-" + std::to_string(i);
         EXPECT_ANY_THROW(alice.decrypt(
-            GroupEnvelopeEncryptor().packGroupKeyEnvelope(
-                groupId, "no-such-key", core::Buffer::from("x"), stranger, key
+            GroupEnvelopeEncryptor().packMemberEnvelope(
+                groupId, "no-such-key", core::Buffer::from("x"), stranger, key, EnvelopeSeal{}
             )
         ));
         EXPECT_ANY_THROW(alice.decrypt(
@@ -3508,9 +3508,9 @@ TEST_F(GroupApiLyingBridge, SECURITY_AKeyIsCheckedAgainstTheOpenerOfTheRouteThat
             PublicKey::fromBase58DER(epoch1), carol
         )
         .toJSON();
-    const Envelope forged = GroupEnvelopeEncryptor().packGroupKeyEnvelope(
-        groupId, keyId, core::Buffer::from("forged"), carol, forgedKey.key
-    );
+    const Envelope forged = GroupEnvelopeEncryptor().packMemberEnvelope(
+        groupId, keyId, core::Buffer::from("forged"), carol, forgedKey.key, EnvelopeSeal{}
+            );
     const auto dummy = epochEntry(2).data;
     bridge.onEpochKeys = [&](server::GroupGetEpochKeysResult& result) {
         result.groupKeys = {{.group = groupId,

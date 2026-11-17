@@ -32,6 +32,7 @@ limitations under the License.
 #include <privmx/endpoint/core/Exception.hpp>
 
 #include <privmx/endpoint/group/GroupException.hpp>
+#include <privmx/endpoint/group/encryptors/envelope/EnvelopeWire.hpp>
 #include <privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp>
 
 using privmx::crypto::PrivateKey;
@@ -46,6 +47,9 @@ protected:
     std::string groupKey = privmx::crypto::Crypto::randomBytes(32);
     std::string groupId = "grp1";
     std::string keyId = "0123456789abcdef0123456789abcdef";
+    // Bound to nothing, said out loud: what every case here uses unless it is about the binding itself.
+    EnvelopeBinding none{};
+    EnvelopeSeal seal{.binding = none, .keyVersion = 7, .encryptedAt = 1700000000000};
 
     core::Buffer buf(const std::string& s) { return core::Buffer::from(s); }
 };
@@ -53,8 +57,8 @@ protected:
 // -- round trips ---------------------------------------------------------------------------------------
 
 TEST_F(GroupEnvelope, GroupKeyRoundTrip) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("hello group"), author, groupKey);
-    DecryptedEnvelope out = enc.openGroupKeyEnvelope(env, groupKey);
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf("hello group"), author, groupKey, seal);
+    OpenedEnvelope out = enc.openMemberEnvelope(env, groupKey, none);
 
     EXPECT_EQ(out.data.stdString(), "hello group");
     EXPECT_EQ(out.groupId, groupId);
@@ -63,8 +67,8 @@ TEST_F(GroupEnvelope, GroupKeyRoundTrip) {
 }
 
 TEST_F(GroupEnvelope, AnonymousRoundTripAndCarriesNoAuthor) {
-    core::Buffer env = enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("from outside"));
-    DecryptedEnvelope out = enc.openAnonymousEnvelope(env, grantKey);
+    core::Buffer env = enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("from outside"), none);
+    OpenedEnvelope out = enc.openAnonymousEnvelope(env, grantKey, none);
 
     EXPECT_EQ(out.data.stdString(), "from outside");
     EXPECT_EQ(out.groupId, groupId);
@@ -76,23 +80,23 @@ TEST_F(GroupEnvelope, AnonymousRoundTripAndCarriesNoAuthor) {
 TEST_F(GroupEnvelope, AnonymousEnvelopesAreNotDeterministic) {
     // The ECIES layer derives its IV from the sender key, so a fixed sender would leak plaintext equality.
     // A fresh ephemeral key per call is what stops that.
-    core::Buffer a = enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("same"));
-    core::Buffer b = enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("same"));
+    core::Buffer a = enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("same"), none);
+    core::Buffer b = enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("same"), none);
     EXPECT_NE(a.stdString(), b.stdString());
 }
 
 TEST_F(GroupEnvelope, EmptyContentRoundTrips) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf(""), author, groupKey);
-    EXPECT_EQ(enc.openGroupKeyEnvelope(env, groupKey).data.stdString(), "");
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf(""), author, groupKey, seal);
+    EXPECT_EQ(enc.openMemberEnvelope(env, groupKey, none).data.stdString(), "");
 }
 
 TEST_F(GroupEnvelope, PeekRoutesWithoutOpening) {
-    auto r1 = enc.peek(enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupKey));
+    auto r1 = enc.peek(enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, seal));
     EXPECT_EQ(r1.type, ENVELOPE_FROM_MEMBER);
     EXPECT_EQ(r1.groupId, groupId);
     EXPECT_EQ(r1.keyId, keyId);
 
-    auto r2 = enc.peek(enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("x")));
+    auto r2 = enc.peek(enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("x"), none));
     EXPECT_EQ(r2.type, ENVELOPE_ANONYMOUS);
     EXPECT_EQ(r2.groupPubKey, grantKey.getPublicKey().toBase58DER());
 }
@@ -119,14 +123,14 @@ TEST_F(GroupEnvelope, LadderRungIsNotAnEnvelope) {
     forged.append(rung);
     forged.append(privmx::crypto::Crypto::randomBytes(64)); // payload never gets reached
 
-    EXPECT_THROW(enc.openAnonymousEnvelope(buf(forged), grantKey), InvalidEnvelopeFormatException);
+    EXPECT_THROW(enc.openAnonymousEnvelope(buf(forged), grantKey, none), InvalidEnvelopeFormatException);
 }
 
 TEST_F(GroupEnvelope, AnonymousRejectsAMismatchedGroupKey) {
     // A hostile server steering us onto the wrong epoch's key must not leave ECIES's 4-byte checksum as the
     // only thing between us and a wrong answer.
-    core::Buffer env = enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("x"));
-    EXPECT_THROW(enc.openAnonymousEnvelope(env, PrivateKey::generateRandom()), InvalidEnvelopeFormatException);
+    core::Buffer env = enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("x"), none);
+    EXPECT_THROW(enc.openAnonymousEnvelope(env, PrivateKey::generateRandom(), none), InvalidEnvelopeFormatException);
 }
 
 // -- header authentication -----------------------------------------------------------------------------
@@ -134,16 +138,18 @@ TEST_F(GroupEnvelope, AnonymousRejectsAMismatchedGroupKey) {
 TEST_F(GroupEnvelope, HeaderIsSignedSoAnEnvelopeCannotBeReplayedIntoAnotherGroup) {
     // A member of both groups re-seals Alice's *same signed inner blob* under group B's key. Her signature still
     // verifies, so only the header being inside that signature stops her "yes" in A becoming a "yes" in B.
-    core::Buffer envA = enc.packGroupKeyEnvelope("groupA", keyId, buf("approve"), author, groupKey);
+    core::Buffer envA = enc.packMemberEnvelope("groupA", keyId, buf("approve"), author, groupKey, seal);
 
     std::string otherKey = privmx::crypto::Crypto::randomBytes(32);
     core::DataInnerEncryptorV4 raw;
-    std::size_t headerLen = 2 + 1 + std::string("groupA").size() + 1 + keyId.size() + 1 + 33;
+    // ver | type | flags | groupId | keyId | authorDER | u64 keyVersion
+    std::size_t headerLen = 3 + 1 + std::string("groupA").size() + 1 + keyId.size() + 1 + 33 + 8;
     core::Buffer sealed = raw.decrypt(buf(envA.stdString().substr(headerLen)), groupKey);
 
     std::string forgedHeader;
     forgedHeader.push_back(static_cast<char>(GroupEnvelopeEncryptor::VERSION));
     forgedHeader.push_back(1);
+    forgedHeader.push_back(0); // flags: no location, as in the original
     std::string other = "groupB";
     forgedHeader.push_back(static_cast<char>(other.size()));
     forgedHeader.append(other);
@@ -152,30 +158,31 @@ TEST_F(GroupEnvelope, HeaderIsSignedSoAnEnvelopeCannotBeReplayedIntoAnotherGroup
     std::string der = author.getPublicKey().toDER();
     forgedHeader.push_back(static_cast<char>(der.size()));
     forgedHeader.append(der);
+    forgedHeader.append(EnvelopeWriter::toBE(7, 8)); // the same key version the original carries
 
     core::Buffer forged = buf(forgedHeader + raw.encrypt(sealed, otherKey).stdString());
-    EXPECT_THROW(enc.openGroupKeyEnvelope(forged, otherKey), InvalidEnvelopeFormatException);
+    EXPECT_THROW(enc.openMemberEnvelope(forged, otherKey, none), InvalidEnvelopeFormatException);
 }
 
 TEST_F(GroupEnvelope, TypeCannotBeRelabelled) {
     // Relabelling a file envelope as a message would hand back the file key as content.
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupKey);
+    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupKey, seal);
 
     std::string relabelled = env.stdString();
     relabelled[1] = 1; // TYPE_FILE -> TYPE_GROUP_KEY
-    EXPECT_THROW(enc.openGroupKeyEnvelope(buf(relabelled), groupKey), InvalidEnvelopeFormatException);
+    EXPECT_THROW(enc.openMemberEnvelope(buf(relabelled), groupKey, none), InvalidEnvelopeFormatException);
 
     // And a file envelope must not route through the message dispatcher at all.
     EXPECT_THROW(enc.peek(env), InvalidEnvelopeFormatException);
 }
 
 TEST_F(GroupEnvelope, TamperedHeaderFieldsAreRejected) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupKey);
-    for (std::size_t i = 2; i < 2 + 1 + groupId.size() + 1 + keyId.size(); ++i) {
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, seal);
+    for (std::size_t i = 2; i < 3 + 1 + groupId.size() + 1 + keyId.size(); ++i) {
         std::string tampered = env.stdString();
         tampered[i] = static_cast<char>(tampered[i] ^ 0x01);
-        EXPECT_ANY_THROW(enc.openGroupKeyEnvelope(buf(tampered), groupKey)) << "byte " << i;
+        EXPECT_ANY_THROW(enc.openMemberEnvelope(buf(tampered), groupKey, none)) << "byte " << i;
     }
 }
 
@@ -192,19 +199,19 @@ TEST_F(GroupEnvelope, AMalformedSignatureFrameThrowsAPrivmxException) {
     }
     core::Buffer forged = buf(header + raw.encrypt(buf(std::string("\x01\xFF", 2)), groupKey).stdString());
 
-    EXPECT_THROW(enc.openGroupKeyEnvelope(forged, groupKey), core::Exception);
+    EXPECT_THROW(enc.openMemberEnvelope(forged, groupKey, none), core::Exception);
 }
 
 TEST_F(GroupEnvelope, WrongGroupKeyIsRejected) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupKey);
-    EXPECT_ANY_THROW(enc.openGroupKeyEnvelope(env, privmx::crypto::Crypto::randomBytes(32)));
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, seal);
+    EXPECT_ANY_THROW(enc.openMemberEnvelope(env, privmx::crypto::Crypto::randomBytes(32), none));
 }
 
 TEST_F(GroupEnvelope, TamperedCiphertextIsRejected) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("payload here"), author, groupKey);
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf("payload here"), author, groupKey, seal);
     std::string tampered = env.stdString();
     tampered[tampered.size() - 1] = static_cast<char>(tampered[tampered.size() - 1] ^ 0x01);
-    EXPECT_ANY_THROW(enc.openGroupKeyEnvelope(buf(tampered), groupKey));
+    EXPECT_ANY_THROW(enc.openMemberEnvelope(buf(tampered), groupKey, none));
 }
 
 // -- malformed input -----------------------------------------------------------------------------------
@@ -212,12 +219,12 @@ TEST_F(GroupEnvelope, TamperedCiphertextIsRejected) {
 TEST_F(GroupEnvelope, TruncatedEnvelopesThrowRatherThanParseGarbage) {
     for (const std::string& junk : {std::string(""), std::string("\x01"), std::string("\x01\x01\x40")}) {
         EXPECT_THROW(enc.peek(buf(junk)), InvalidEnvelopeFormatException) << "len " << junk.size();
-        EXPECT_THROW(enc.openGroupKeyEnvelope(buf(junk), groupKey), InvalidEnvelopeFormatException);
+        EXPECT_THROW(enc.openMemberEnvelope(buf(junk), groupKey, none), InvalidEnvelopeFormatException);
     }
 }
 
 TEST_F(GroupEnvelope, UnsupportedVersionIsRejected) {
-    core::Buffer env = enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupKey);
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, seal);
     std::string bumped = env.stdString();
     bumped[0] = 99;
     EXPECT_THROW(enc.peek(buf(bumped)), InvalidEnvelopeFormatException);
@@ -226,7 +233,7 @@ TEST_F(GroupEnvelope, UnsupportedVersionIsRejected) {
 TEST_F(GroupEnvelope, OversizedFieldThrowsInsteadOfTruncating) {
     // One length octet on the wire; a silent wrap would produce an envelope that parses into the wrong group.
     EXPECT_THROW(
-        enc.packGroupKeyEnvelope(std::string(256, 'a'), keyId, buf("x"), author, groupKey),
+        enc.packMemberEnvelope(std::string(256, 'a'), keyId, buf("x"), author, groupKey, seal),
         InvalidEnvelopeFormatException
     );
 }
@@ -235,8 +242,8 @@ TEST_F(GroupEnvelope, OversizedFieldThrowsInsteadOfTruncating) {
 
 TEST_F(GroupEnvelope, FileEnvelopeRoundTrip) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 4096, fileKey, author, groupKey);
-    auto header = enc.unpackFileEnvelope(env, groupKey);
+    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 4096, fileKey, author, groupKey, seal);
+    auto header = enc.unpackFileEnvelope(env, groupKey, none);
 
     EXPECT_EQ(header.groupId, groupId);
     EXPECT_EQ(header.keyId, keyId);
@@ -279,10 +286,10 @@ TEST_F(GroupEnvelope, FileEnvelopeRejectsAnUnsignedSizeChange) {
     // `plainSize` is the only thing that makes a dropped trailing chunk detectable, so it has to be inside
     // the signature rather than alongside it.
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 999999, fileKey, author, groupKey);
+    core::Buffer env = enc.packFileEnvelope(groupId, keyId, 999999, fileKey, author, groupKey, seal);
     std::string tampered = env.stdString();
     tampered[tampered.size() - 1] = static_cast<char>(tampered[tampered.size() - 1] ^ 0x01);
-    EXPECT_ANY_THROW(enc.unpackFileEnvelope(buf(tampered), groupKey));
+    EXPECT_ANY_THROW(enc.unpackFileEnvelope(buf(tampered), groupKey, none));
 }
 
 // Both directions find chunk edges purely from the signed `plainSize` — nothing on the wire says where a chunk
@@ -352,8 +359,8 @@ TEST_F(GroupEnvelope, DroppedTrailingChunkIsOnlyCaughtByTheDeclaredSize) {
 
 TEST_F(GroupEnvelope, AnonymousFileEnvelopeRoundTrip) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer env = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 4096, fileKey);
-    auto header = enc.unpackAnonymousFileEnvelope(env, grantKey);
+    core::Buffer env = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 4096, fileKey, none);
+    auto header = enc.unpackAnonymousFileEnvelope(env, grantKey, none);
 
     EXPECT_EQ(header.type, ENVELOPE_ANONYMOUS);
     EXPECT_EQ(header.groupId, groupId);
@@ -368,11 +375,11 @@ TEST_F(GroupEnvelope, AnonymousFileBodyIsIdenticalToAMemberFileBody) {
     // The two file types differ only in how the header wraps the file key. If the bodies ever diverged, the
     // shared chunk arithmetic and the shared streaming path would both be silently wrong for one of them.
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer memberEnv = enc.packFileEnvelope(groupId, keyId, 100, fileKey, author, groupKey);
-    core::Buffer anonEnv = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 100, fileKey);
+    core::Buffer memberEnv = enc.packFileEnvelope(groupId, keyId, 100, fileKey, author, groupKey, seal);
+    core::Buffer anonEnv = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 100, fileKey, none);
 
-    auto a = enc.unpackFileEnvelope(memberEnv, groupKey);
-    auto b = enc.unpackAnonymousFileEnvelope(anonEnv, grantKey);
+    auto a = enc.unpackFileEnvelope(memberEnv, groupKey, none);
+    auto b = enc.unpackAnonymousFileEnvelope(anonEnv, grantKey, none);
     EXPECT_EQ(a.fileKey, b.fileKey);
     EXPECT_EQ(a.plainSize, b.plainSize);
     EXPECT_EQ(a.type, ENVELOPE_FROM_MEMBER);
@@ -399,47 +406,47 @@ TEST_F(GroupEnvelope, AnonymousFileIsNotALadderRungOracleEither) {
     forged.append(rung);
     forged.append(privmx::crypto::Crypto::randomBytes(64));
 
-    EXPECT_THROW(enc.unpackAnonymousFileEnvelope(buf(forged), grantKey), InvalidEnvelopeFormatException);
+    EXPECT_THROW(enc.unpackAnonymousFileEnvelope(buf(forged), grantKey, none), InvalidEnvelopeFormatException);
 }
 
 TEST_F(GroupEnvelope, AnonymousFileRejectsAMismatchedGroupKey) {
-    core::Buffer env = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, groupKey);
+    core::Buffer env = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, groupKey, none);
     EXPECT_THROW(
-        enc.unpackAnonymousFileEnvelope(env, PrivateKey::generateRandom()), InvalidEnvelopeFormatException
+        enc.unpackAnonymousFileEnvelope(env, PrivateKey::generateRandom(), none), InvalidEnvelopeFormatException
     );
 }
 
 TEST_F(GroupEnvelope, FileTypesCannotBeSwappedForEachOther) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    core::Buffer memberEnv = enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupKey);
-    core::Buffer anonEnv = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey);
+    core::Buffer memberEnv = enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupKey, seal);
+    core::Buffer anonEnv = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey, none);
 
-    EXPECT_THROW(enc.unpackAnonymousFileEnvelope(memberEnv, grantKey), InvalidEnvelopeFormatException);
-    EXPECT_THROW(enc.unpackFileEnvelope(anonEnv, groupKey), InvalidEnvelopeFormatException);
+    EXPECT_THROW(enc.unpackAnonymousFileEnvelope(memberEnv, grantKey, none), InvalidEnvelopeFormatException);
+    EXPECT_THROW(enc.unpackFileEnvelope(anonEnv, groupKey, none), InvalidEnvelopeFormatException);
 
     // Relabelling the type byte must not work either: the header is sealed inside the payload.
     std::string relabelled = anonEnv.stdString();
     relabelled[1] = 3;
-    EXPECT_ANY_THROW(enc.unpackFileEnvelope(buf(relabelled), groupKey));
+    EXPECT_ANY_THROW(enc.unpackFileEnvelope(buf(relabelled), groupKey, none));
 }
 
 TEST_F(GroupEnvelope, PeekFileRoutesBothKindsAndRejectsMessages) {
     std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
-    auto member = enc.peekFile(enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupKey));
+    auto member = enc.peekFile(enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupKey, seal));
     EXPECT_EQ(member.type, ENVELOPE_FROM_MEMBER);
     EXPECT_EQ(member.keyId, keyId);
 
-    auto anon = enc.peekFile(enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey));
+    auto anon = enc.peekFile(enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey, none));
     EXPECT_EQ(anon.type, ENVELOPE_ANONYMOUS);
     EXPECT_EQ(anon.groupPubKey, grantKey.getPublicKey().toBase58DER());
 
     // A message envelope has no body to stream; routing it here would hand back a handle onto nothing.
-    EXPECT_THROW(enc.peekFile(enc.packGroupKeyEnvelope(groupId, keyId, buf("x"), author, groupKey)),
+    EXPECT_THROW(enc.peekFile(enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, seal)),
                  InvalidEnvelopeFormatException);
-    EXPECT_THROW(enc.peekFile(enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("x"))),
+    EXPECT_THROW(enc.peekFile(enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("x"), none)),
                  InvalidEnvelopeFormatException);
     // ...and conversely a file envelope must not route through the message dispatcher.
-    EXPECT_THROW(enc.peek(enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey)),
+    EXPECT_THROW(enc.peek(enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey, none)),
                  InvalidEnvelopeFormatException);
 }
 
@@ -513,4 +520,314 @@ TEST_F(GroupEnvelope, ASeekedReadIsNeverAnError) {
 TEST_F(GroupEnvelope, AnEmptyFileNeedsNoChunks) {
     EXPECT_EQ(GroupEnvelopeEncryptor::chunkCount(0), 0u);
     EXPECT_EQ(enc.classifyRead(false, 0, 0, true), Outcome::Complete);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// Format 3: location binding, signed outsiders, further recipients
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+class GroupEnvelopeV3 : public GroupEnvelope {
+protected:
+    static PathSegment name(const std::string& text) { return {false, core::Buffer::from(text)}; }
+    static PathSegment id(const std::string& bytes) { return {true, core::Buffer::from(bytes)}; }
+
+    Path messageA = {name("chat"), id("c1"), name("message"), id("m1")};
+    Path messageB = {name("chat"), id("c1"), name("message"), id("m2")};
+    EnvelopeBinding atA = GroupEnvelopeEncryptor::bindLocation(messageA);
+    EnvelopeBinding atB = GroupEnvelopeEncryptor::bindLocation(messageB);
+    EnvelopeSeal sealA{.binding = atA, .keyVersion = 3, .encryptedAt = 1700000000123};
+
+    PrivateKey outsider = PrivateKey::generateRandom();
+    PrivateKey billingKey = PrivateKey::generateRandom(); // another group's identity key
+    PrivateKey auditorKey = PrivateKey::generateRandom(); // a single user's key
+    std::vector<EnvelopeRecipient> recipients = {
+        {.isGroup = true, .id = "billing", .pubKey = billingKey.getPublicKey().toBase58DER(), .keyVersion = 4},
+        {.isGroup = false, .id = "auditor", .pubKey = auditorKey.getPublicKey().toBase58DER(), .keyVersion = 0},
+    };
+};
+
+// -- binding -------------------------------------------------------------------------------------------
+
+TEST_F(GroupEnvelopeV3, OpensAtTheLocationItWasWrittenFor) {
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf("hello"), author, groupKey, sealA);
+    OpenedEnvelope out = enc.openMemberEnvelope(env, groupKey, atA);
+    EXPECT_EQ(out.data.stdString(), "hello");
+    EXPECT_EQ(out.keyVersion, 3);
+    EXPECT_EQ(out.encryptedAt, 1700000000123);
+    EXPECT_TRUE(out.recipients.empty());
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_AMovedEnvelopeIsRefused) {
+    // The server stores message m1's envelope in m2's row. Everything about it is authentic; it is just not here.
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf("pay 100"), author, groupKey, sealA);
+    EXPECT_THROW(enc.openMemberEnvelope(env, groupKey, atB), EnvelopeWrongLocationException);
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_BoundAndUnboundNeverOpenAsEachOther) {
+    core::Buffer bound = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA);
+    core::Buffer unbound = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, seal);
+    EXPECT_THROW(enc.openMemberEnvelope(bound, groupKey, none), EnvelopeWrongLocationException);
+    EXPECT_THROW(enc.openMemberEnvelope(unbound, groupKey, atA), EnvelopeWrongLocationException);
+    EXPECT_NO_THROW(enc.openMemberEnvelope(unbound, groupKey, none));
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_TheLocationFlagIsSigned) {
+    // Clearing the flag on the wire must not turn a bound envelope into an unbound one.
+    std::string wire = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA).stdString();
+    wire[2] = 0;
+    EXPECT_THROW(enc.openMemberEnvelope(buf(wire), groupKey, none), InvalidEnvelopeFormatException);
+}
+
+TEST_F(GroupEnvelopeV3, UnknownFlagsAreRefused) {
+    std::string wire = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA).stdString();
+    wire[2] = static_cast<char>(wire[2] | 0x02);
+    EXPECT_THROW(enc.peek(buf(wire)), InvalidEnvelopeFormatException);
+}
+
+TEST_F(GroupEnvelopeV3, DifferentPathsNeverBindAlike) {
+    auto digest = [](const Path& path) { return GroupEnvelopeEncryptor::bindLocation(path).locationDigest; };
+    // Segment boundaries count.
+    EXPECT_NE(digest({name("ab")}), digest({name("a"), name("b")}));
+    // A name is not an identifier with the same bytes.
+    EXPECT_NE(digest({name("chat"), name("c1")}), digest({name("chat"), id("c1")}));
+    // Order counts.
+    EXPECT_NE(digest({name("a"), name("b")}), digest({name("b"), name("a")}));
+    // A length cannot be smuggled in as content.
+    EXPECT_NE(digest({name(std::string("a\0\0\0\0\1b", 7))}), digest({name("a"), name("b")}));
+    EXPECT_EQ(digest(messageA), digest({name("chat"), id("c1"), name("message"), id("m1")}));
+    EXPECT_EQ(digest(messageA).size(), 32u);
+}
+
+TEST_F(GroupEnvelopeV3, AnEmptyLocationIsRefused) {
+    EXPECT_THROW(GroupEnvelopeEncryptor::bindLocation({}), InvalidEnvelopeFormatException);
+}
+
+TEST_F(GroupEnvelopeV3, AMalformedBindingIsRefusedOnWrite) {
+    EnvelopeSeal bad{.binding = EnvelopeBinding{.hasLocation = true, .locationDigest = "short"}};
+    EXPECT_THROW(
+        enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, bad), InvalidEnvelopeFormatException
+    );
+}
+
+TEST_F(GroupEnvelopeV3, AnonymousAndFileEnvelopesAreBoundToo) {
+    core::Buffer anon = enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("x"), atA);
+    EXPECT_NO_THROW(enc.openAnonymousEnvelope(anon, grantKey, atA));
+    EXPECT_THROW(enc.openAnonymousEnvelope(anon, grantKey, atB), EnvelopeWrongLocationException);
+    EXPECT_THROW(enc.openAnonymousEnvelope(anon, grantKey, none), EnvelopeWrongLocationException);
+
+    std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
+    core::Buffer file = enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupKey, sealA);
+    EXPECT_EQ(enc.unpackFileEnvelope(file, groupKey, atA).fileKey, fileKey);
+    EXPECT_THROW(enc.unpackFileEnvelope(file, groupKey, atB), EnvelopeWrongLocationException);
+
+    core::Buffer anonFile = enc.packAnonymousFileEnvelope(groupId, grantKey.getPublicKey(), 10, fileKey, atA);
+    EXPECT_EQ(enc.unpackAnonymousFileEnvelope(anonFile, grantKey, atA).fileKey, fileKey);
+    EXPECT_THROW(enc.unpackAnonymousFileEnvelope(anonFile, grantKey, atB), EnvelopeWrongLocationException);
+}
+
+// -- the plain header ----------------------------------------------------------------------------------
+
+TEST_F(GroupEnvelopeV3, PeekReportsWhatAServerGateNeeds) {
+    auto bound = GroupEnvelopeEncryptor::peekAny(
+        enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA, recipients)
+    );
+    EXPECT_EQ(bound.type, ENVELOPE_FROM_MEMBER);
+    EXPECT_FALSE(bound.isFile);
+    EXPECT_TRUE(bound.hasLocation);
+    EXPECT_EQ(bound.keyVersion, 3);
+    EXPECT_EQ(bound.authorPubKey, author.getPublicKey().toBase58DER());
+    ASSERT_EQ(bound.recipients.size(), 2u);
+    EXPECT_TRUE(bound.recipients[0].isGroup);
+    EXPECT_EQ(bound.recipients[0].id, "billing");
+    EXPECT_EQ(bound.recipients[0].keyVersion, 4);
+    EXPECT_FALSE(bound.recipients[1].isGroup);
+    EXPECT_EQ(bound.recipients[1].id, "auditor");
+
+    auto unbound = GroupEnvelopeEncryptor::peekAny(
+        enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, seal)
+    );
+    EXPECT_FALSE(unbound.hasLocation);
+
+    std::string fileKey = privmx::crypto::Crypto::randomBytes(32);
+    auto file = GroupEnvelopeEncryptor::peekAny(
+        enc.packFileEnvelope(groupId, keyId, 10, fileKey, author, groupKey, sealA)
+    );
+    EXPECT_TRUE(file.isFile);
+    EXPECT_EQ(file.keyVersion, 3);
+
+    auto fromOutside = GroupEnvelopeEncryptor::peekAny(
+        enc.packOutsiderEnvelope(groupId, grantKey.getPublicKey(), buf("x"), outsider, sealA)
+    );
+    EXPECT_EQ(fromOutside.type, ENVELOPE_FROM_OUTSIDER);
+    EXPECT_EQ(fromOutside.authorPubKey, outsider.getPublicKey().toBase58DER());
+}
+
+// -- signed outsiders ----------------------------------------------------------------------------------
+
+TEST_F(GroupEnvelopeV3, OutsiderRoundTripNamesTheSender) {
+    core::Buffer env = enc.packOutsiderEnvelope(groupId, grantKey.getPublicKey(), buf("lab result"), outsider, sealA);
+    OpenedEnvelope out = enc.openOutsiderEnvelope(env, grantKey, atA);
+    EXPECT_EQ(out.data.stdString(), "lab result");
+    EXPECT_EQ(out.type, ENVELOPE_FROM_OUTSIDER);
+    EXPECT_EQ(out.authorPubKey, outsider.getPublicKey().toBase58DER());
+    EXPECT_EQ(out.encryptedAt, 1700000000123);
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_EachOpenerReadsItsOwnKindOnly) {
+    core::Buffer member = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA);
+    core::Buffer shared = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA, recipients);
+    core::Buffer fromOutside = enc.packOutsiderEnvelope(groupId, grantKey.getPublicKey(), buf("x"), outsider, sealA);
+    core::Buffer anon = enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("x"), atA);
+
+    // What a non-member wrote is never opened as a member's, and what nobody signed is never opened as signed.
+    EXPECT_ANY_THROW(enc.openMemberEnvelope(fromOutside, groupKey, atA));
+    EXPECT_ANY_THROW(enc.openMemberEnvelope(anon, groupKey, atA));
+    EXPECT_ANY_THROW(enc.openOutsiderEnvelope(member, grantKey, atA));
+    EXPECT_ANY_THROW(enc.openOutsiderEnvelope(shared, grantKey, atA));
+    EXPECT_ANY_THROW(enc.openOutsiderEnvelope(anon, grantKey, atA));
+    EXPECT_ANY_THROW(enc.openAnonymousEnvelope(member, grantKey, atA));
+    EXPECT_ANY_THROW(enc.openAnonymousEnvelope(fromOutside, grantKey, atA));
+    EXPECT_ANY_THROW(enc.openSharedEnvelope(member, 0, billingKey, atA));
+    EXPECT_ANY_THROW(enc.openSharedEnvelope(anon, 0, billingKey, atA));
+
+    EXPECT_NO_THROW(enc.openMemberEnvelope(member, groupKey, atA));
+    EXPECT_NO_THROW(enc.openMemberEnvelope(shared, groupKey, atA));
+    EXPECT_NO_THROW(enc.openOutsiderEnvelope(fromOutside, grantKey, atA));
+    EXPECT_NO_THROW(enc.openAnonymousEnvelope(anon, grantKey, atA));
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_AnOutsiderEnvelopeCannotBeRelabelledAnonymousOrBack) {
+    std::string fromOutside =
+        enc.packOutsiderEnvelope(groupId, grantKey.getPublicKey(), buf("x"), outsider, sealA).stdString();
+    fromOutside[1] = 2; // TYPE_OUTSIDER -> TYPE_ANONYMOUS
+    EXPECT_ANY_THROW(enc.openAnonymousEnvelope(buf(fromOutside), grantKey, atA));
+
+    std::string anon = enc.packAnonymousEnvelope(groupId, grantKey.getPublicKey(), buf("x"), atA).stdString();
+    anon[1] = 5; // TYPE_ANONYMOUS -> TYPE_OUTSIDER
+    EXPECT_ANY_THROW(enc.openOutsiderEnvelope(buf(anon), grantKey, atA));
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_AnotherSendersKeyInTheHeaderIsRefused) {
+    // The server swaps the sender's public key for someone else's: the signature no longer verifies.
+    PrivateKey mallory = PrivateKey::generateRandom();
+    std::string wire =
+        enc.packOutsiderEnvelope(groupId, grantKey.getPublicKey(), buf("x"), outsider, sealA).stdString();
+    std::string from = outsider.getPublicKey().toDER();
+    std::string to = mallory.getPublicKey().toDER();
+    std::size_t at = wire.find(from);
+    ASSERT_NE(at, std::string::npos);
+    wire.replace(at, from.size(), to);
+    EXPECT_ANY_THROW(enc.openOutsiderEnvelope(buf(wire), grantKey, atA));
+}
+
+// -- further recipients --------------------------------------------------------------------------------
+
+TEST_F(GroupEnvelopeV3, EveryReaderOpensASharedEnvelope) {
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf("discharge"), author, groupKey, sealA, recipients);
+
+    OpenedEnvelope home = enc.openMemberEnvelope(env, groupKey, atA);
+    EXPECT_EQ(home.data.stdString(), "discharge");
+    ASSERT_EQ(home.recipients.size(), 2u);
+    EXPECT_EQ(home.recipients[0].id, "billing");
+
+    OpenedEnvelope billing = enc.openSharedEnvelope(env, 0, billingKey, atA);
+    EXPECT_EQ(billing.data.stdString(), "discharge");
+    EXPECT_EQ(billing.groupId, groupId);
+    EXPECT_EQ(billing.type, ENVELOPE_FROM_MEMBER);
+    EXPECT_EQ(billing.authorPubKey, author.getPublicKey().toBase58DER());
+    EXPECT_EQ(billing.keyVersion, 3);
+
+    OpenedEnvelope auditor = enc.openSharedEnvelope(env, 1, auditorKey, atA);
+    EXPECT_EQ(auditor.data.stdString(), "discharge");
+}
+
+TEST_F(GroupEnvelopeV3, AnOutsidersEnvelopeCanBeSharedToo) {
+    core::Buffer env =
+        enc.packOutsiderEnvelope(groupId, grantKey.getPublicKey(), buf("result"), outsider, sealA, recipients);
+    EXPECT_EQ(enc.openOutsiderEnvelope(env, grantKey, atA).data.stdString(), "result");
+    OpenedEnvelope billing = enc.openSharedEnvelope(env, 0, billingKey, atA);
+    EXPECT_EQ(billing.data.stdString(), "result");
+    // Whoever reads it through `alsoFor` still learns it came from outside the home group.
+    EXPECT_EQ(billing.type, ENVELOPE_FROM_OUTSIDER);
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_ARecipientOpensOnlyItsOwnWrap) {
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA, recipients);
+    EXPECT_ANY_THROW(enc.openSharedEnvelope(env, 0, auditorKey, atA)); // the auditor's key on billing's slot
+    EXPECT_ANY_THROW(enc.openSharedEnvelope(env, 1, billingKey, atA));
+    EXPECT_ANY_THROW(enc.openSharedEnvelope(env, 0, PrivateKey::generateRandom(), atA));
+    EXPECT_THROW(enc.openSharedEnvelope(env, 2, billingKey, atA), EnvelopeNotARecipientException);
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_SharedEnvelopesAreBoundToTheirLocationForEveryReader) {
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA, recipients);
+    EXPECT_THROW(enc.openSharedEnvelope(env, 0, billingKey, atB), EnvelopeWrongLocationException);
+    EXPECT_THROW(enc.openMemberEnvelope(env, groupKey, atB), EnvelopeWrongLocationException);
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_TheListOfReadersIsSigned) {
+    // A server that renames a recipient - so that a reader shows "shared with billing" as something else -
+    // breaks the signed header.
+    std::string wire =
+        enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA, recipients).stdString();
+    std::size_t at = wire.find("billing");
+    ASSERT_NE(at, std::string::npos);
+    wire[at] = 'B';
+    EXPECT_ANY_THROW(enc.openMemberEnvelope(buf(wire), groupKey, atA));
+    EXPECT_ANY_THROW(enc.openSharedEnvelope(buf(wire), 0, billingKey, atA));
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_AWrappedContentKeyIsNotAMemberEnvelope) {
+    // Type 6 seals the content key under the group key. That seal must never open as a type 1 payload, and a
+    // type 1 payload must never be taken for a wrapped key.
+    core::Buffer shared = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA, recipients);
+    std::string relabelled = shared.stdString();
+    relabelled[1] = 1; // TYPE_MEMBER_SHARED -> TYPE_GROUP_KEY
+    EXPECT_ANY_THROW(enc.openMemberEnvelope(buf(relabelled), groupKey, atA));
+
+    core::Buffer plain = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA);
+    std::string up = plain.stdString();
+    up[1] = 6; // TYPE_GROUP_KEY -> TYPE_MEMBER_SHARED
+    EXPECT_ANY_THROW(enc.openMemberEnvelope(buf(up), groupKey, atA));
+}
+
+TEST_F(GroupEnvelopeV3, SECURITY_ALadderRungIsNotARecipientWrap) {
+    // The same oracle as `LadderRungIsNotAnEnvelope`, through the recipient slot: a rung addressed to billing's
+    // key, put where billing's wrap goes, must not come back as a content key.
+    core::Buffer env = enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA, {recipients[0]});
+    std::string wire = env.stdString();
+    PrivateKey eph = PrivateKey::generateRandom();
+    std::string rung = privmx::crypto::EciesEncryptor::encrypt(
+        billingKey.getPublicKey(), PrivateKey::generateRandom().toWIF(), eph
+    );
+    // Locate billing's wrap: it is the second length-prefixed field after the header.
+    auto routing = GroupEnvelopeEncryptor::peekAny(env);
+    ASSERT_EQ(routing.recipients.size(), 1u);
+    // header length = everything up to and including the recipients block
+    std::size_t headerLen = 3 + 1 + groupId.size() + 1 + keyId.size() + 1 + 33 + 8 + 1 +
+        (1 + 1 + recipients[0].id.size() + 1 + recipients[0].pubKey.size() + 8);
+    std::size_t homeWrapLen = static_cast<std::uint8_t>(wire[headerLen]);
+    std::size_t slot = headerLen + 1 + homeWrapLen;
+    std::size_t oldLen = static_cast<std::uint8_t>(wire[slot]);
+    std::string forged = wire.substr(0, slot);
+    forged.push_back(static_cast<char>(rung.size()));
+    forged.append(rung);
+    forged.append(wire.substr(slot + 1 + oldLen));
+    EXPECT_THROW(enc.openSharedEnvelope(buf(forged), 0, billingKey, atA), InvalidEnvelopeFormatException);
+}
+
+TEST_F(GroupEnvelopeV3, TooManyRecipientsAreRefused) {
+    std::vector<EnvelopeRecipient> many(256, recipients[1]);
+    EXPECT_THROW(
+        enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA, many), InvalidEnvelopeFormatException
+    );
+}
+
+TEST_F(GroupEnvelopeV3, TruncatedSharedEnvelopesThrowRatherThanParseGarbage) {
+    std::string wire =
+        enc.packMemberEnvelope(groupId, keyId, buf("x"), author, groupKey, sealA, recipients).stdString();
+    for (std::size_t len = 0; len < wire.size(); len += 7) {
+        EXPECT_ANY_THROW(enc.openSharedEnvelope(buf(wire.substr(0, len)), 0, billingKey, atA)) << "length " << len;
+        EXPECT_ANY_THROW(enc.openMemberEnvelope(buf(wire.substr(0, len)), groupKey, atA)) << "length " << len;
+    }
 }

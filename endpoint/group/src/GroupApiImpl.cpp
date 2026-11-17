@@ -668,7 +668,8 @@ core::DecryptedEncKeyV2 GroupApiImpl::currentEncKey(const std::string& groupId) 
 
 Envelope GroupApiImpl::encrypt(const std::string& groupId, const core::Buffer& content) {
     auto key = currentEncKey(groupId);
-    return _envelopeEncryptor.packGroupKeyEnvelope(groupId, key.id, content, _userPrivKey, key.key);
+    // TODO(groups-v2 E1, API step): location, key version and clock come with the new public API.
+    return _envelopeEncryptor.packMemberEnvelope(groupId, key.id, content, _userPrivKey, key.key, EnvelopeSeal{});
 }
 
 // The notification is an ordinary member envelope: one `encrypt` under the group's current key, one request
@@ -697,13 +698,16 @@ DecryptedEnvelope GroupApiImpl::decrypt(const Envelope& envelope) {
     // The group id comes off an envelope we have not authenticated yet. Validating it here keeps a hostile one
     // from steering us into a `groupGet` and a tree climb against an id of its choosing.
     core::Validator::validateId(routing.groupId, "field:envelope.groupId ");
-    if (routing.type == ENVELOPE_FROM_MEMBER) {
-        return _envelopeEncryptor.openGroupKeyEnvelope(envelope, encKeyById(routing.groupId, routing.keyId).key);
-    }
-
-    return _envelopeEncryptor.openAnonymousEnvelope(
-        envelope, _keys.grantKeyForPubKey(routing.groupId, routing.groupPubKey)
-    );
+    OpenedEnvelope opened = routing.type == ENVELOPE_FROM_MEMBER ?
+        _envelopeEncryptor.openMemberEnvelope(
+            envelope, encKeyById(routing.groupId, routing.keyId).key, EnvelopeBinding{}
+        ) :
+        _envelopeEncryptor.openAnonymousEnvelope(
+            envelope, _keys.grantKeyForPubKey(routing.groupId, routing.groupPubKey), EnvelopeBinding{}
+        );
+    return DecryptedEnvelope{
+        .data = opened.data, .groupId = opened.groupId, .authorPubKey = opened.authorPubKey, .type = opened.type
+    };
 }
 
 Envelope GroupApiImpl::encryptAnonymously(
@@ -714,7 +718,7 @@ Envelope GroupApiImpl::encryptAnonymously(
     // Public information only — no membership, no server call. That is the whole point: the sender is outside
     // the group and must stay able to write into it knowing nothing but its id and its identity key.
     return _envelopeEncryptor.packAnonymousEnvelope(
-        groupId, privmx::crypto::PublicKey::fromBase58DER(groupPubKey), content
+        groupId, privmx::crypto::PublicKey::fromBase58DER(groupPubKey), content, EnvelopeBinding{}
     );
 }
 
@@ -773,10 +777,10 @@ FileHandle GroupApiImpl::beginFileDecryption(const Envelope& envelope) {
     std::string groupKey;
     if (routing.type == ENVELOPE_FROM_MEMBER) {
         groupKey = encKeyById(routing.groupId, routing.keyId).key;
-        header = _envelopeEncryptor.unpackFileEnvelope(envelope, groupKey);
+        header = _envelopeEncryptor.unpackFileEnvelope(envelope, groupKey, EnvelopeBinding{});
     } else {
         header = _envelopeEncryptor.unpackAnonymousFileEnvelope(
-            envelope, _keys.grantKeyForPubKey(routing.groupId, routing.groupPubKey)
+            envelope, _keys.grantKeyForPubKey(routing.groupId, routing.groupPubKey), EnvelopeBinding{}
         );
     }
 
@@ -809,11 +813,12 @@ Envelope GroupApiImpl::finishFileEncryption(FileHandle fileHandle) {
     auto state = _envelopeFiles.finish(fileHandle, false);
     if (state.type == ENVELOPE_ANONYMOUS) {
         return _envelopeEncryptor.packAnonymousFileEnvelope(
-            state.groupId, privmx::crypto::PublicKey::fromBase58DER(state.groupPubKey), state.plainSize, state.fileKey
+            state.groupId, privmx::crypto::PublicKey::fromBase58DER(state.groupPubKey), state.plainSize, state.fileKey,
+            EnvelopeBinding{}
         );
     }
     return _envelopeEncryptor.packFileEnvelope(
-        state.groupId, state.keyId, state.plainSize, state.fileKey, _userPrivKey, state.groupKey
+        state.groupId, state.keyId, state.plainSize, state.fileKey, _userPrivKey, state.groupKey, EnvelopeSeal{}
     );
 }
 
