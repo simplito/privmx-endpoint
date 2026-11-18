@@ -1232,10 +1232,16 @@ TEST_F(GroupKeyTreeTest, SECURITY_repairRung_below_a_cut_floor_is_refused) {
 // ── the signed group policy ──
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_policy_change_is_a_signed_commit_every_member_follows) {
-    // The manager lets every member update; a plain member then removes the manager; a third session, pinned before
+    // The manager lets every member update; a plain member then removes that manager; a third session, pinned before
     // either, replays both from its pin: the policy statement, then a removal its committer now holds the role for.
+    // user_3 manages too: a group that has managers keeps one, so the last of them cannot be removed.
     std::string groupId;
-    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
+    ASSERT_NO_THROW({
+        groupId = groupApi->createGroup(
+            contextId(), {user(1), user(2), user(3)}, {user(1), user(3)}, core::Buffer::from("keytree_public"),
+            core::Buffer::from("keytree_private")
+        );
+    });
     const auto third = connect(3);
     group::GroupApi thirdGroups = group::GroupApi::create(*third);
     ASSERT_EQ(thirdGroups.getGroup(groupId).statusCode, 0);

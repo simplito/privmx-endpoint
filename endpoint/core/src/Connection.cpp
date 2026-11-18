@@ -118,6 +118,12 @@ void Connection::renewIdentity(const std::string& previousUserPrivKey) {
     impl->renewIdentity(privmx::crypto::PrivateKey::fromWIF(previousUserPrivKey));
 }
 
+void Connection::useKeyContinuity() {
+    auto impl = getImpl();
+    assertConnection(impl);
+    impl->useKeyContinuity();
+}
+
 void Connection::acceptKeyChange(
     const std::string& contextId,
     const std::string& userId,

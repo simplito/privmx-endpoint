@@ -146,16 +146,16 @@ protected:
     }
 
     // Registers `userId` in Context_1 holding `pubKey` - no proof of possession is asked for anywhere.
-    // A connection without a UserVerifier of its own keeps to key continuity, so a second key for one user is told to
-    // the fixture's connection as the application would (`acceptKeyChange`); `tellFixture` false leaves that to the
-    // test, for the ones that are about it.
+    // A connection that keeps to key continuity (`useKeyContinuity`) is told of a second key for one user as the
+    // application would tell it (`acceptKeyChange`); `tellFixture` false leaves that to the test, for the ones that
+    // are about it. On any other connection the call is refused, and nothing is told.
     std::map<std::string, std::string> registeredKeys;
     void registerContextUser(const std::string& userId, const std::string& pubKey, bool tellFixture = true) {
         const auto known = registeredKeys.find(userId);
         if (tellFixture && connection && known != registeredKeys.end() && known->second != pubKey) {
             try {
                 connection->acceptKeyChange(contextId(), userId, known->second, pubKey);
-            } catch (const core::Exception&) {} // a verifier of the test's own, or a connection that never saw the user
+            } catch (const core::Exception&) {} // key continuity not on, or a connection that never saw the user
         }
         registeredKeys[userId] = pubKey;
         const std::string params = "{\"contextId\": \"" + contextId() + "\", \"userId\": \"" + userId +
@@ -729,6 +729,8 @@ TEST_F(GroupKeyTreeIntegrityTest, a_reseat_lets_a_member_with_a_replaced_key_bac
     if (!hasManagementApi()) {
         GTEST_SKIP() << MANAGEMENT_API_MISSING;
     }
+    // This client keeps to key continuity: it wraps to the key it first saw a user with, and to no other untold.
+    ASSERT_NO_THROW({ connection->useKeyContinuity(); });
     const Identity firstKey = newIdentity("reseated_member");
     ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
     std::string groupId;
@@ -813,10 +815,7 @@ TEST_F(GroupKeyTreeIntegrityTest, renewIdentity_renews_the_leaf_on_the_first_rea
     }
     // From then on the new key reads on its own.
     EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << lastReadError;
-    // The other member accepts the change it was told about, and verifies the renewal's statement.
-    ASSERT_NO_THROW({
-        connection->acceptKeyChange(contextId(), firstKey.userId, firstKey.pubKey, secondKey.pubKey);
-    });
+    // The other member verifies the renewal's statement.
     group::Group seenByCreator;
     ASSERT_NO_THROW({ seenByCreator = groupApi->getGroup(groupId); });
     EXPECT_EQ(seenByCreator.statusCode, 0);

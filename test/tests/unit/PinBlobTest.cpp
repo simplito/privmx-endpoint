@@ -133,6 +133,27 @@ TEST(PinBlob, RoundTripKeepsEveryField) {
     EXPECT_EQ(back.planes, pins.planes);
 }
 
+TEST(PinBlob, TheRosterRulesTravelOnlyWhenTheGroupSetsThem) {
+    // A group that never split `update`: the record is the layout from before the roster rules existed, byte for
+    // byte, and reads back with both rules following `update`.
+    PinSet plain;
+    plain.tree["g"] = pinAt(5, "D5");
+    const PinSet plainBack = roundTrip(plain);
+    EXPECT_FALSE(plainBack.tree.at("g").rules.splitsRoster);
+    EXPECT_EQ(plainBack.tree.at("g").rules.addMembers, "manager");
+    EXPECT_EQ(plainBack.tree.at("g").rules.removeMembers, "manager");
+
+    PinSet split = plain;
+    split.tree["g"].rules.splitsRoster = true;
+    split.tree["g"].rules.addMembers = "user";
+    split.tree["g"].rules.removeMembers = "manager,owner";
+    EXPECT_GT(PinBlob::encode(split).size(), PinBlob::encode(plain).size());
+    const PinSet splitBack = roundTrip(split);
+    EXPECT_TRUE(splitBack.tree.at("g").rules.splitsRoster);
+    EXPECT_EQ(splitBack.tree.at("g").rules.addMembers, "user");
+    EXPECT_EQ(splitBack.tree.at("g").rules.removeMembers, "manager,owner");
+}
+
 TEST(PinBlob, SECURITY_ALengthPastTheEndIsRefused) {
     // A body the seal accepts (it was written by a key holder) is still parsed strictly: never past its end.
     PinSet pins;

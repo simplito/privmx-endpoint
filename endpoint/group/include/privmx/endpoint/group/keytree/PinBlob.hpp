@@ -72,6 +72,10 @@ private:
     // The bits of a record's `flags` byte.
     static constexpr std::uint8_t ROSTER = 1;
     static constexpr std::uint8_t NODES = 2;
+    // The group's policy sets a roster rule of its own: `addMembers` and `removeMembers` follow the flags. A record
+    // without it is the layout from before those rules existed, and reads as "both follow `update`": pins saved by
+    // an earlier build stay readable, and nothing a device verified is lost to the format.
+    static constexpr std::uint8_t RULES = 8; // 4 was `forked` in an earlier layout: not reused
 
     // A counter below zero (no pin yet) written as 0.
     static std::uint64_t counter(std::int64_t value);

@@ -172,8 +172,8 @@ public:
      * caller's new wraps go to the identity keys the Context lists for them now. They keep their seats, their roles
      * and their place on the roster; whoever still holds a previous key reads nothing written from here on.
      *
-     * The members' current keys go through the Connection's UserVerifier like any key this client wraps to: with a
-     * verifier that pins keys (the default one does), accept the change first (Connection::acceptKeyChange).
+     * The members' current keys go through the Connection's UserVerifier like any key this client wraps to: with
+     * key continuity on (Connection::useKeyContinuity), accept the change first (Connection::acceptKeyChange).
      *
      * Allowed by the `removeMembers` rule. The caller cannot be among `userIds`. A failed call may still take
      * effect (see the class note).

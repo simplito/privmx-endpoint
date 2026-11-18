@@ -13,9 +13,9 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_CORE_KEYCONTINUITYVERIFIER_HPP_
 
 #include <chrono>
+#include <functional>
 #include <map>
 #include <mutex>
-#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,7 +27,7 @@ namespace privmx {
 namespace endpoint {
 namespace core {
 
-// The verifier a connection has until the application sets its own: trust on first use, then continuity. The first
+// The verifier Connection::useKeyContinuity sets: trust on first use, then continuity. The first
 // key a user of a Context is seen with is taken as theirs; any other key for that user is refused until the
 // application accepts the change (`accept`, behind Connection::acceptKeyChange). A key replaced that way stays good
 // for what was dated before the change was accepted, and for nothing after.
@@ -39,13 +39,49 @@ namespace core {
 // map into the PinStore next to the group pins when that matters.
 class KeyContinuityVerifier : public virtual UserVerifierInterface {
 public:
+    // `ownUserId`: this connection's user id in a Context, or "" when it cannot be told. Asked only for a request
+    // that presents one of the connection's own keys.
+    explicit KeyContinuityVerifier(std::function<std::string(const std::string& contextId)> ownUserId = nullptr)
+        : _ownUserId(std::move(ownUserId)) {}
+
     std::vector<bool> verify(const std::vector<VerificationRequest>& request) override {
+        // Which requests present a key of this connection's own user, as that user: looked up outside the lock.
+        // UNDECIDED goes through continuity below; the other two are the answer.
+        enum class Own {
+            UNDECIDED,
+            YES,
+            NO
+        };
+        std::vector<Own> own(request.size(), Own::UNDECIDED);
+        for (std::size_t i = 0; i < request.size(); ++i) {
+            const VerificationRequest& item = request[i];
+            std::int64_t validUntil = 0;
+            {
+                std::lock_guard<std::mutex> lock(_mutex);
+                const auto key = _own.find(item.senderPubKey);
+                if (key == _own.end()) {
+                    continue;
+                }
+                validUntil = key->second;
+            }
+            // SECURITY: an own key vouches for the own user only. Under any other user id it is a key like any
+            // other, and goes through continuity below.
+            std::string self;
+            try {
+                self = _ownUserId ? _ownUserId(item.contextId) : std::string();
+            } catch (...) {}
+            if (!self.empty() && self == item.senderId) {
+                // The connection knows this key of its own user, and until when it was theirs: nothing to guess.
+                own[i] = validUntil == CURRENT || item.date <= validUntil ? Own::YES : Own::NO;
+            }
+        }
         std::lock_guard<std::mutex> lock(_mutex);
         std::vector<bool> result;
         result.reserve(request.size());
-        for (const VerificationRequest& item : request) {
-            if (_own.count(item.senderPubKey) != 0) {
-                result.push_back(true);
+        for (std::size_t i = 0; i < request.size(); ++i) {
+            const VerificationRequest& item = request[i];
+            if (own[i] != Own::UNDECIDED) {
+                result.push_back(own[i] == Own::YES);
                 continue;
             }
             std::vector<Known>& known = _keys[{item.contextId, item.senderId}];
@@ -65,12 +101,21 @@ public:
         return result;
     }
 
-    // A key of this connection's own user: the one it connected with, or one it was told it had before
-    // (Connection::adoptPreviousIdentity). Whatever is signed with it is the user's own, so continuity has nothing to
-    // say about it: without this a user who changed key would be refused their own statements.
-    void trustOwn(const std::string& pubKey) {
+    // A key of this connection's own user: the one it connected with (`current`), or one it was told it had before
+    // (Connection::adoptPreviousIdentity), which stays good for what is dated up to now, like a key replaced through
+    // `accept`. Without this a user who changed key would be refused their own statements.
+    void trustOwn(const std::string& pubKey, bool current) {
+        const std::int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     std::chrono::system_clock::now().time_since_epoch()
+        )
+                                     .count();
         std::lock_guard<std::mutex> lock(_mutex);
-        _own.insert(pubKey);
+        const auto known = _own.find(pubKey);
+        if (current) {
+            _own[pubKey] = CURRENT;
+        } else if (known == _own.end()) {
+            _own[pubKey] = now;
+        }
     }
 
     // `newPubKey` becomes the user's key; `previousPubKey` stays good for what is dated up to now. Throws
@@ -123,7 +168,8 @@ private:
     };
 
     std::mutex _mutex;
-    std::set<std::string> _own;
+    std::function<std::string(const std::string&)> _ownUserId;
+    std::map<std::string, std::int64_t> _own; // own public key -> CURRENT, or when it was adopted as a previous one
     std::map<std::pair<std::string, std::string>, std::vector<Known>> _keys; // (contextId, userId)
 };
 

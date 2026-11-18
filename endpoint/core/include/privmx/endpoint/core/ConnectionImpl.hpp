@@ -111,8 +111,11 @@ public:
     // (once per group) where the current key does not open it.
     void renewIdentity(const crypto::PrivateKey& previous);
     bool renewsLeaves();
-    // Accepts a user's key change in the built-in key-continuity verifier. Throws InvalidParamsException when the
-    // application set its own UserVerifier: that one decides, and is the thing to update.
+    // Replaces the UserVerifier with the built-in key-continuity one (KeyContinuityVerifier), which knows this
+    // connection's own keys from the start.
+    void useKeyContinuity();
+    // Accepts a user's key change in the key-continuity verifier. Throws InvalidParamsException when that verifier is
+    // not the one in use: the application's own decides then, and is the thing to update.
     void acceptKeyChange(
         const std::string& contextId,
         const std::string& userId,
@@ -167,7 +170,7 @@ private:
     std::shared_ptr<EventMiddleware> _eventMiddleware;
     std::shared_ptr<HandleManager> _handleManager;
     std::shared_ptr<UserVerifier> _userVerifier;
-    std::shared_ptr<KeyContinuityVerifier> _keyContinuity; // under _mutex; null once the app set its own verifier
+    std::shared_ptr<KeyContinuityVerifier> _keyContinuity; // under _mutex; set by useKeyContinuity, null otherwise
     bool _renewsLeaves = false;                            // under _mutex
     std::shared_ptr<PinStoreInterface> _pinStore;          // under _mutex
     std::map<std::string, std::string> _stagedPinBodies;   // under _mutex

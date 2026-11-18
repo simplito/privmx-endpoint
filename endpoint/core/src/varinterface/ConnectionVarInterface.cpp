@@ -30,7 +30,8 @@ std::map<ConnectionVarInterface::METHOD, Poco::Dynamic::Var (ConnectionVarInterf
         {ListContextUsers, &ConnectionVarInterface::listContextUsers},
         {AdoptPreviousIdentity, &ConnectionVarInterface::adoptPreviousIdentity},
         {RenewIdentity, &ConnectionVarInterface::renewIdentity},
-        {AcceptKeyChange, &ConnectionVarInterface::acceptKeyChange}
+        {AcceptKeyChange, &ConnectionVarInterface::acceptKeyChange},
+        {UseKeyContinuity, &ConnectionVarInterface::useKeyContinuity}
 };
 
 Poco::Dynamic::Var ConnectionVarInterface::connect(const Poco::Dynamic::Var& args) {
@@ -116,6 +117,12 @@ Poco::Dynamic::Var ConnectionVarInterface::renewIdentity(const Poco::Dynamic::Va
     auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto previousUserPrivKey = _deserializer.deserialize<std::string>(argsArr->get(0), "previousUserPrivKey");
     _connection.renewIdentity(previousUserPrivKey);
+    return {};
+}
+
+Poco::Dynamic::Var ConnectionVarInterface::useKeyContinuity(const Poco::Dynamic::Var& args) {
+    VarInterfaceUtil::validateAndExtractArray(args, 0);
+    _connection.useKeyContinuity();
     return {};
 }
 

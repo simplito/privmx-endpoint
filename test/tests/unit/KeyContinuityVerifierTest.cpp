@@ -66,10 +66,32 @@ TEST(KeyContinuityVerifier, SECURITY_AChangeIsAcceptedOnlyFromTheKeyTheUserIsKno
     EXPECT_FALSE(ask(verifier, "dave", "D1", FAR_FUTURE));
 }
 
-TEST(KeyContinuityVerifier, TheConnectionsOwnKeysAreNeverRefused) {
-    KeyContinuityVerifier verifier;
+TEST(KeyContinuityVerifier, TheConnectionsOwnKeysAreAcceptedForItsOwnUser) {
+    KeyContinuityVerifier verifier([](const std::string&) { return std::string("me"); });
     ASSERT_TRUE(ask(verifier, "me", "OLD")); // a statement signed before the key change, seen first
-    verifier.trustOwn("NEW");
+    verifier.trustOwn("NEW", true);
     EXPECT_TRUE(ask(verifier, "me", "NEW")) << "the user's own current key, after a change";
+    EXPECT_TRUE(ask(verifier, "me", "NEW", FAR_FUTURE));
     EXPECT_FALSE(ask(verifier, "me", "ELSE"));
+}
+
+TEST(KeyContinuityVerifier, SECURITY_AnOwnKeyVouchesForTheOwnUserOnly) {
+    KeyContinuityVerifier verifier([](const std::string&) { return std::string("me"); });
+    verifier.trustOwn("MINE", true);
+    ASSERT_TRUE(ask(verifier, "bob", "BOBS"));
+    EXPECT_FALSE(ask(verifier, "bob", "MINE")) << "the Bridge presenting this user's key as bob's";
+    // Without knowing who this connection is, an own key is a key like any other.
+    KeyContinuityVerifier anonymous;
+    anonymous.trustOwn("MINE", true);
+    ASSERT_TRUE(ask(anonymous, "bob", "BOBS"));
+    EXPECT_FALSE(ask(anonymous, "bob", "MINE"));
+}
+
+TEST(KeyContinuityVerifier, SECURITY_APreviousOwnKeyIsGoodOnlyForWhatWasDatedBeforeItWasAdopted) {
+    KeyContinuityVerifier verifier([](const std::string&) { return std::string("me"); });
+    verifier.trustOwn("NEW", true);
+    ASSERT_TRUE(ask(verifier, "me", "NEW"));
+    verifier.trustOwn("OLD", false);
+    EXPECT_TRUE(ask(verifier, "me", "OLD", 1));
+    EXPECT_FALSE(ask(verifier, "me", "OLD", FAR_FUTURE)) << "whoever holds the old key signs nothing new";
 }

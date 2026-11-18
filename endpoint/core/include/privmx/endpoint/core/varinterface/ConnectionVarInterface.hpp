@@ -40,6 +40,7 @@ public:
         AdoptPreviousIdentity = 12,
         RenewIdentity = 13,
         AcceptKeyChange = 14,
+        UseKeyContinuity = 15,
     };
 
     ConnectionVarInterface(const core::VarSerializer& serializer) : _serializer(serializer) {}
@@ -61,6 +62,7 @@ public:
     Poco::Dynamic::Var adoptPreviousIdentity(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var renewIdentity(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var acceptKeyChange(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var useKeyContinuity(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var subscribeFor(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var unsubscribeFrom(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildSubscriptionQuery(const Poco::Dynamic::Var& args);

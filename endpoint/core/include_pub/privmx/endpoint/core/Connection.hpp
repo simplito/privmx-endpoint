@@ -127,8 +127,7 @@ public:
      * A developer can implement an interface and pass the implementation to the function. 
      * Each time data is read from the container, a callback will be triggered, allowing the developer to validate the sender in an external service,
      * e.g. Developer's Application Server or PKI Server.
-     * Until one is set, the connection keeps to key continuity: the first key a user is seen with is taken as
-     * theirs and any other is refused until acceptKeyChange.
+     * Without a service to ask, useKeyContinuity gives a verifier that needs none.
      *
      * @param verifier an implementation of the UserVerifierInterface
      * 
@@ -189,19 +188,32 @@ public:
     void renewIdentity(const std::string& previousUserPrivKey);
 
     /**
-     * Tells this connection that a user's identity key changed, and that the application has checked the change.
+     * Sets the built-in key-continuity verifier as this connection's UserVerifier: the first key a user of a Context
+     * is seen with is taken as theirs (trust on first use), and any other key for that user is refused until
+     * acceptKeyChange. For an application with no server or PKI of its own to ask; one that has such a service should
+     * implement UserVerifierInterface instead, which also covers the first key.
      *
-     * A connection without a UserVerifier of the application's own keeps to key continuity: the first key it sees a
-     * user of a Context with is taken as theirs, and any other is refused. After this call `newPubKey` is the user's
-     * key; `previousPubKey` stays good for what was signed before, and for nothing dated later than this call.
-     * The knowledge lives in this connection's memory: a new connection sees each user for the first time again.
+     * Not the default, and not free of consequences. What it knows lives in this connection's memory, so every new
+     * connection trusts first use again and has to be told again of every change it must accept. And a user whose key
+     * changed is refused wherever both keys appear: in a Group's history after a leaf renewal, or on an item one user
+     * wrote and another edited (the item is checked as its author's id with the editor's key). Call it right after
+     * `connect`, before creating any module API.
+     */
+    void useKeyContinuity();
+
+    /**
+     * Tells this connection that a user's identity key changed, and that the application has checked the change.
+     * For a connection that keeps to key continuity (useKeyContinuity).
+     *
+     * After this call `newPubKey` is the user's key; `previousPubKey` stays good for what was signed before, and for
+     * nothing dated later than this call. The knowledge lives in this connection's memory.
      *
      * @param contextId ID of the Context the user belongs to
      * @param userId ID of the user
      * @param previousPubKey the key the user had, in Base58DER
      * @param newPubKey the key the user has now, in Base58DER
      * @throws InvalidParamsException when `previousPubKey` is not the key this connection knows the user by, or when
-     * the application set a UserVerifier (setUserVerifier): that verifier decides, and is the thing to update
+     * key continuity is not on: the application's own UserVerifier decides then, and is the thing to update
      */
     void acceptKeyChange(
         const std::string& contextId,
