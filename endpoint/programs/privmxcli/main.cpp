@@ -102,6 +102,8 @@ void printHelp() {
     std::cout << "\tadd timestamps to executed command" << std::endl;
     std::cout << "-i, --interactive" << std::endl;
     std::cout << "\tenable interactive mode" << std::endl;
+    std::cout << "-q, --quiet" << std::endl;
+    std::cout << "\tprint only command results on stdout, everything else (logs, progress) goes to stderr" << std::endl;
     std::cout << "-g [NUM], --get-format=NUM" << std::endl;
     std::cout << "\tset output formatting for command 'get', NUM is a number where 0 represent default mode, 1 bash like, 2 c++ like, 3 python like " << std::endl;
     std::cout << "-f [PATH], --file=PATH" << std::endl;
@@ -110,19 +112,23 @@ void printHelp() {
     std::cout << "\texecute 'set' command. VAR represents string of variable name and variable data separated by space" << std::endl;
     std::cout << "-c [COM], --command=COM" << std::endl;
     std::cout << "\texecute command. COM represents command string" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Every command result is stored in the variable 'last_result'. Use 'VAR = command ARGS' to store it under VAR too." << std::endl;
+    std::cout << "A dotted variable reads a field of the stored JSON, e.g. ${last_result.solutionId} or ${last_result.readItems.0.contextId}." << std::endl;
 }
 
 CliArgsData parseArgs(int argc, char *argv[]) {
     CliConfig config;
     vector<string> lines_to_process;
     vector<string> filenames;
-    const char* const short_opts = "c:s:f:g:iTeh";
+    const char* const short_opts = "c:s:f:g:iqTeh";
     const option long_opts[] = {
             {"command", required_argument, nullptr, 'c'},
             {"set", required_argument, nullptr, 's'},
             {"file", required_argument, nullptr, 'f'},
             {"get-format", required_argument, nullptr, 'g'},
             {"interactive", no_argument, nullptr, 'i'},
+            {"quiet", no_argument, nullptr, 'q'},
             {"timestamps", no_argument, nullptr, 'T'},
             {"error-exit", no_argument, nullptr, 'e'},
             {"help", no_argument, nullptr, 'h'},
@@ -171,6 +177,9 @@ CliArgsData parseArgs(int argc, char *argv[]) {
                 config.update_history = true;
                 config_auto_completion = true;
                 break;
+            case 'q':
+                config.quiet = true;
+                break;
             case 'T':
                 config.add_timestamps = true;
                 break;
@@ -179,7 +188,7 @@ CliArgsData parseArgs(int argc, char *argv[]) {
                 break;
             case 'h':
                 printHelp();
-                exit;
+                exit(EXIT_SUCCESS);
                 break;
         }
     }
@@ -190,6 +199,10 @@ int main(int argc, char *argv[]){
     std::srand(std::time(nullptr));
     std::thread::id main_thread_id = this_thread::get_id();
     CliArgsData cli_args_data = parseArgs(argc, argv);
+    if(cli_args_data.config.quiet) {
+        // result_output keeps the real stdout, so library logs and progress text land on stderr
+        std::cout.rdbuf(std::cerr.rdbuf());
+    }
     string pre_filename = Poco::Environment::get("PRIVMXCLI_PRE", "");
     if(pre_filename != ""){
         cli_args_data.filenames.push_back(pre_filename);
@@ -200,26 +213,44 @@ int main(int argc, char *argv[]){
     
     DataProcesor data_procesor = DataProcesor(std::make_shared<Executer>(main_thread_id, config, console_writer), main_thread_id, config);
 
+    // a failed command aborts the rest of the batch, so the following commands do not run on a broken state
+    bool batch_aborted = false;
+    auto batch_failed = [&]() {
+        return console_writer->hadError() || missing_data == -1;
+    };
+
     //executing data form args
     for(auto line : cli_args_data.lines_to_process) {
         missing_data = data_procesor.processLine(line);
         if(missing_data == -1) {
             cout << ConsoleStatusColor::normal << "-> " << ConsoleStatusColor::warning << "Incorrect JSON format - skipping command" << endl;
         }
+        if(batch_failed()) {
+            batch_aborted = true;
+            break;
+        }
     }
     missing_data = 0;
     for(auto &filename : cli_args_data.filenames){
+        if(batch_aborted) break;
         ifstream f_stream(filename);
         if(!f_stream.good()){
             cerr << ConsoleStatusColor::warning << "File error " << filename << endl;
             if(config->stop_on_error) exit(EXIT_FAILURE);
+            batch_aborted = true;
+            break;
         }
         std::string line;
         while(getline(f_stream, line)){
             missing_data = data_procesor.processLine(line);
+            if(batch_failed()) {
+                batch_aborted = true;
+                cerr << ConsoleStatusColor::warning << "Stopped on error, skipping the rest of " << filename << endl;
+                break;
+            }
         }
     }
-    while(missing_data) {
+    while(missing_data && !batch_aborted) {
         char *input_missing_data = readline("?> ");
         missing_data = data_procesor.processLine(input_missing_data);
         free(input_missing_data);
@@ -234,6 +265,10 @@ int main(int argc, char *argv[]){
         }
     }
     
+
+    if(batch_aborted && !config->std_input) {
+        return EXIT_FAILURE;
+    }
 
     //executing data form interactive mode
     if(config->std_input){
@@ -263,6 +298,8 @@ int main(int argc, char *argv[]){
             char *input = readline(msg.c_str());
             if(!input) break;
             std::string str_input = input;
+            // an error in interactive mode stops nothing, so every line starts clean
+            console_writer->clearError();
             missing_data = data_procesor.processLine(input);
             if(!missing_data && config->update_history && prev_input != str_input) {
                 prev_input = str_input;

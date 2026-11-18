@@ -91,7 +91,6 @@ Tokens DataProcesor::ParseCommand(string command) {
         std::tie(token_val, token_type) = tokensData[i];
         auto processed_token = procesRawToken(token_type, token_val);
         if(processed_token.has_value()) {
-        auto processed_token = procesRawToken(token_type, token_val);
             result.push_back(processed_token.value());
         } 
     }
@@ -278,7 +277,8 @@ std::tuple<size_t, size_t> DataProcesor::findNextVariablePos(const std::string &
                     last_char = '\0';
                     continue;
                 }
-            } else if (c == '\'' || c == '"') {
+            } else if (c == '\'') {
+                // only '' suppresses evaluation, so a variable can be used inside a JSON string, e.g. {"id":"${contextId}"}
                 string_data = true;
                 string_char = c;
             } else if (last_char == '$' && c == '{' && !variable_data) {
