@@ -31,6 +31,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& va
     obj->set("schemaVersion", serialize(val.schemaVersion));
     obj->set("keyVersion", serialize(val.keyVersion));
     obj->set("visibleTo", serialize(val.visibleTo));
+    obj->set("rules", serialize(val.rules));
     if (val.type.has_value()) {
         obj->set("type", serialize(val.type.value()));
     }
@@ -316,6 +317,50 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupResult>(const group::Gro
     }
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("group", serialize(val.group));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupRules>(const group::GroupRules& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$GroupRules");
+    }
+    obj->set("addMembers", serialize(val.addMembers));
+    obj->set("removeMembers", serialize(val.removeMembers));
+    obj->set("updateMeta", serialize(val.updateMeta));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::GroupLogEntry>(const group::GroupLogEntry& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$GroupLogEntry");
+    }
+    obj->set("seq", serialize(val.seq));
+    obj->set("kind", serialize(val.kind));
+    obj->set("author", serialize(val.author));
+    obj->set("authorPubKey", serialize(val.authorPubKey));
+    obj->set("date", serialize(val.date));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    obj->set("rosterVersion", serialize(val.rosterVersion));
+    obj->set("addedUsers", serialize(val.addedUsers));
+    obj->set("addedManagers", serialize(val.addedManagers));
+    obj->set("removed", serialize(val.removed));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::GroupLogEntry>>(
+    const core::PagingList<group::GroupLogEntry>& val
+) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$PagingList<group$GroupLogEntry>");
+    }
+    obj->set("totalAvailable", serialize(val.totalAvailable));
+    obj->set("readItems", serialize(val.readItems));
     return obj;
 }
 

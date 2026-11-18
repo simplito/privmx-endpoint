@@ -22,6 +22,33 @@ group::GroupMemberToAdd VarDeserializer::deserialize<group::GroupMemberToAdd>(
 }
 
 template<>
+group::GroupRoleChange VarDeserializer::deserialize<group::GroupRoleChange>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .userId = deserialize<std::string>(obj->get("userId"), name + ".userId"),
+        .role = deserialize<std::string>(obj->get("role"), name + ".role")
+    };
+}
+
+template<>
+group::GroupRulesUpdate VarDeserializer::deserialize<group::GroupRulesUpdate>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .addMembers = deserializeOptional<std::string>(obj->get("addMembers"), name + ".addMembers"),
+        .removeMembers = deserializeOptional<std::string>(obj->get("removeMembers"), name + ".removeMembers"),
+        .updateMeta = deserializeOptional<std::string>(obj->get("updateMeta"), name + ".updateMeta")
+    };
+}
+
+template<>
 group::EventType VarDeserializer::deserialize<group::EventType>(
     const Poco::Dynamic::Var& val,
     const std::string& name

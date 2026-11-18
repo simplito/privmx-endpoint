@@ -335,6 +335,17 @@ JSON_STRUCT(GroupAddMemberEntry, GROUP_ADD_MEMBER_ENTRY_FIELDS);
     F(commit, GroupTreeCommit)
 JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
 
+// A change of role for members already in the group: a roster entry and a `roles` statement, no key.
+#define GROUP_SET_ROLES_MODEL_FIELDS(F)                                                                                \
+    F(id, std::string)                                                                                                 \
+    F(changes, std::vector<GroupAddMemberEntry>)                                                                       \
+    F(keyId, std::string)                                                                                              \
+    F(data, Poco::Dynamic::Var)                                                                                        \
+    F(commit, GroupTreeCommit)                                                                                         \
+    F(expectedKeyVersion, int64_t)                                                                                     \
+    F(expectedRosterVersion, int64_t)
+JSON_STRUCT(GroupSetRolesModel, GROUP_SET_ROLES_MODEL_FIELDS);
+
 // Removing several at once is not a convenience: done one at a time each removal advances the epoch on its own,
 // so every container the group can read goes stale k times and the rotation budget is charged k times.
 #define GROUP_REMOVE_MEMBERS_MODEL_FIELDS(F)                                                                           \

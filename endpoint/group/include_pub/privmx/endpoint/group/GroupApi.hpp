@@ -167,6 +167,57 @@ public:
     int64_t rotateGroupKey(const std::string& groupId);
 
     /**
+     * Lets members back in after their identity key was replaced and they cannot renew their own leaf (renewLeaf
+     * needs the previous key): everything they could open is re-keyed, the key epoch advances **once**, and the
+     * caller's new wraps go to the identity keys the Context lists for them now. They keep their seats, their roles
+     * and their place on the roster; whoever still holds a previous key reads nothing written from here on.
+     *
+     * The members' current keys go through the Connection's UserVerifier like any key this client wraps to: with a
+     * verifier that pins keys (the default one does), accept the change first (Connection::acceptKeyChange).
+     *
+     * Allowed by the `removeMembers` rule. The caller cannot be among `userIds`. A failed call may still take
+     * effect (see the class note).
+     *
+     * @param groupId ID of the Group
+     * @param userIds IDs of the members to reseat
+     * @return the Group's key epoch after the call
+     */
+    int64_t reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
+
+    /**
+     * Changes the role of members already in the Group. No key moves: a role decides what the Bridge and the other
+     * members accept from somebody, not what they can read.
+     *
+     * Allowed by the `updatePolicy` rule (managers, by default). Refused when it would leave a Group that has
+     * managers with none. A failed call may still take effect (see the class note).
+     *
+     * @param groupId ID of the Group
+     * @param changes the members and the role each takes ("user" or "manager")
+     */
+    void setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes);
+
+    /**
+     * Changes who may add members, remove members and rewrite the Group's metadata, leaving the rest of the policy
+     * as it is. A signed commit like updateGroupPolicy, under the same rule.
+     *
+     * @param groupId ID of the Group
+     * @param rules the rules to change; an unset one stays as it is
+     */
+    void updateGroupRules(const std::string& groupId, const GroupRulesUpdate& rules);
+
+    /**
+     * The Group's history: every signed statement since its creation, verified from the first to the one the Group
+     * is at now (the chain, what each kind of statement may change, the role of whoever signed it).
+     *
+     * Reads the whole chain on every call, so its cost grows with the Group's age, not with `limit`.
+     *
+     * @param groupId ID of the Group
+     * @param pagingQuery `skip`, `limit` and `sortOrder` ("asc": oldest first, "desc": newest first)
+     * @return the statements in the requested window, and how many there are in all
+     */
+    core::PagingList<GroupLogEntry> getGroupLog(const std::string& groupId, const core::PagingQuery& pagingQuery);
+
+    /**
      * Re-wraps the caller's own leaf to its current identity key after that key changed in the Context.
      *
      * Call from a session connected with the NEW key, after the Context lists it, and after

@@ -28,7 +28,9 @@ std::map<ConnectionVarInterface::METHOD, Poco::Dynamic::Var (ConnectionVarInterf
         {UnsubscribeFrom, &ConnectionVarInterface::unsubscribeFrom},
         {BuildSubscriptionQuery, &ConnectionVarInterface::buildSubscriptionQuery},
         {ListContextUsers, &ConnectionVarInterface::listContextUsers},
-        {AdoptPreviousIdentity, &ConnectionVarInterface::adoptPreviousIdentity}
+        {AdoptPreviousIdentity, &ConnectionVarInterface::adoptPreviousIdentity},
+        {RenewIdentity, &ConnectionVarInterface::renewIdentity},
+        {AcceptKeyChange, &ConnectionVarInterface::acceptKeyChange}
 };
 
 Poco::Dynamic::Var ConnectionVarInterface::connect(const Poco::Dynamic::Var& args) {
@@ -107,6 +109,23 @@ Poco::Dynamic::Var ConnectionVarInterface::adoptPreviousIdentity(const Poco::Dyn
     auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto previousUserPrivKey = _deserializer.deserialize<std::string>(argsArr->get(0), "previousUserPrivKey");
     _connection.adoptPreviousIdentity(previousUserPrivKey);
+    return {};
+}
+
+Poco::Dynamic::Var ConnectionVarInterface::renewIdentity(const Poco::Dynamic::Var& args) {
+    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto previousUserPrivKey = _deserializer.deserialize<std::string>(argsArr->get(0), "previousUserPrivKey");
+    _connection.renewIdentity(previousUserPrivKey);
+    return {};
+}
+
+Poco::Dynamic::Var ConnectionVarInterface::acceptKeyChange(const Poco::Dynamic::Var& args) {
+    auto argsArr = VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto userId = _deserializer.deserialize<std::string>(argsArr->get(1), "userId");
+    auto previousPubKey = _deserializer.deserialize<std::string>(argsArr->get(2), "previousPubKey");
+    auto newPubKey = _deserializer.deserialize<std::string>(argsArr->get(3), "newPubKey");
+    _connection.acceptKeyChange(contextId, userId, previousPubKey, newPubKey);
     return {};
 }
 

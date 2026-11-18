@@ -93,6 +93,39 @@ int64_t GroupApi::removeGroupMembers(const std::string& groupId, const std::vect
     return impl->removeGroupMembers(groupId, userIds);
 }
 
+int64_t GroupApi::reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    for (const std::string& userId : userIds) {
+        core::Validator::validateId(userId, "field:userIds ");
+    }
+    return impl->reseatGroupMembers(groupId, userIds);
+}
+
+void GroupApi::setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    for (const GroupRoleChange& change : changes) {
+        core::Validator::validateId(change.userId, "field:changes ");
+    }
+    impl->setGroupRoles(groupId, changes);
+}
+
+void GroupApi::updateGroupRules(const std::string& groupId, const GroupRulesUpdate& rules) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    impl->updateGroupRules(groupId, rules);
+}
+
+core::PagingList<GroupLogEntry> GroupApi::getGroupLog(
+    const std::string& groupId,
+    const core::PagingQuery& pagingQuery
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->getGroupLog(groupId, pagingQuery);
+}
+
 int64_t GroupApi::rotateGroupKey(const std::string& groupId) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");

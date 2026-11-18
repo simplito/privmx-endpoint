@@ -111,6 +111,28 @@ void Connection::adoptPreviousIdentity(const std::string& previousUserPrivKey) {
     impl->adoptPreviousIdentity(privmx::crypto::PrivateKey::fromWIF(previousUserPrivKey));
 }
 
+void Connection::renewIdentity(const std::string& previousUserPrivKey) {
+    auto impl = getImpl();
+    assertConnection(impl);
+    Validator::validatePrivKeyWIF(previousUserPrivKey, "field:previousUserPrivKey ");
+    impl->renewIdentity(privmx::crypto::PrivateKey::fromWIF(previousUserPrivKey));
+}
+
+void Connection::acceptKeyChange(
+    const std::string& contextId,
+    const std::string& userId,
+    const std::string& previousPubKey,
+    const std::string& newPubKey
+) {
+    auto impl = getImpl();
+    assertConnection(impl);
+    Validator::validateId(contextId, "field:contextId ");
+    Validator::validateId(userId, "field:userId ");
+    Validator::validatePubKeyBase58DER(previousPubKey, "field:previousPubKey ");
+    Validator::validatePubKeyBase58DER(newPubKey, "field:newPubKey ");
+    impl->acceptKeyChange(contextId, userId, previousPubKey, newPubKey);
+}
+
 std::vector<std::string> Connection::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto impl = getImpl();
     assertConnection(impl);

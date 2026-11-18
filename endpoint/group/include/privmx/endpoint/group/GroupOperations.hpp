@@ -78,10 +78,20 @@ public:
     // Returns whether the removal abandoned history (the caller held no current grant key); nullopt when an
     // earlier attempt of the same removal turned out to have landed (`settle` ran its metadata refresh then).
     // `prior` is what the attempt read, for `carryMetadataForward`.
+    // `reseat`: the same commit with its subjects left seated and on the roster (op `reseat`); the caller's path then
+    // wraps to the long-term keys they have now.
     std::optional<bool> remove(
         const std::string& groupId,
         const std::vector<std::string>& userIds,
-        PriorRole& prior
+        PriorRole& prior,
+        bool reseat = false
+    ) const;
+    // Moves members between the two lists (op `roles`): a roster entry, no node, no epoch. `carry` is set when a
+    // metadata plane's author loses `update` with its role.
+    void setRoles(
+        const std::string& groupId,
+        const std::vector<GroupRoleChange>& changes,
+        std::optional<PendingCarry>& carry
     ) const;
     // `prior` is what the attempt read, for `carryMetadataForward`. False when an earlier attempt of a rotation turned
     // out to have landed (`settle` ran its metadata refresh then).

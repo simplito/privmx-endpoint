@@ -451,6 +451,17 @@ Group GroupDataSchemaMapper::toLibGroup(
     int64_t statusCode,
     int64_t schemaVersion
 ) {
+    // The rules as the statements sign them. A policy outside the group grammar leaves them empty: the status code
+    // already says the group did not verify.
+    GroupRules rules;
+    try {
+        const keytree::GroupRules signedRules = keytree::TreeCommits::rules(info.policy, info.creator);
+        rules = GroupRules{
+            .addMembers = signedRules.addMembers,
+            .removeMembers = signedRules.removeMembers,
+            .updateMeta = signedRules.update
+        };
+    } catch (const std::invalid_argument&) {}
     return Group{
         .contextId = info.contextId,
         .groupId = info.id,
@@ -471,7 +482,8 @@ Group GroupDataSchemaMapper::toLibGroup(
         .schemaVersion = schemaVersion,
         .type = info.type,
         .keyVersion = info.keyVersion,
-        .visibleTo = info.visibleTo.value_or("members")
+        .visibleTo = info.visibleTo.value_or("members"),
+        .rules = rules
     };
 }
 

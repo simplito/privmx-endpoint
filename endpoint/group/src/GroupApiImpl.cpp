@@ -143,8 +143,16 @@ std::string GroupApiImpl::deriveGroupId(const std::string& contextId, const core
 }
 
 std::vector<GroupResult> GroupApiImpl::getGroups(const std::vector<std::string>& groupIds) {
-    // One verified read per group: each goes through everything `getGroup` checks. (The Bridge's groupGetMany
-    // serves them in one request; feeding its answers through the same verification is a later step.)
+    // One request for all of them (`groupGetMany`), then each answer through everything `getGroup` checks: the
+    // answers are what `groupGet` would have served, so nothing is verified any less. A Bridge without the call, or
+    // one that fails it, costs a request per group instead.
+    try {
+        _serverApi.prefetchGroups(groupIds);
+    } catch (const std::exception& e) { LOG_WARN("[groups] reading several at once failed: ", e.what()) }
+    struct DropPrefetched {
+        ServerApi& serverApi;
+        ~DropPrefetched() { serverApi.dropPrefetched(); }
+    } drop{_serverApi};
     std::vector<GroupResult> results;
     results.reserve(groupIds.size());
     for (const std::string& groupId : groupIds) {
@@ -225,6 +233,102 @@ int64_t GroupApiImpl::rotateGroupKey(const std::string& groupId) {
     return static_cast<int64_t>(pinnedKeyVersion(groupId));
 }
 
+int64_t GroupApiImpl::reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
+    _metadata.retryPendingCarry(groupId);
+    std::optional<bool> historyAbandoned;
+    PriorRole prior;
+    CommitEngine::commitWithRetry([&] { historyAbandoned = _ops.remove(groupId, userIds, prior, true); });
+    // As after a rotation: the planes sit one epoch behind, and nobody left, so nobody beyond the members is accepted
+    // as an author.
+    if (historyAbandoned.has_value()) {
+        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), {}, prior);
+    }
+    runDueWork(groupId);
+    return static_cast<int64_t>(pinnedKeyVersion(groupId));
+}
+
+void GroupApiImpl::setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes) {
+    if (changes.empty()) {
+        throw core::InvalidParamsException("no member to change the role of");
+    }
+    std::set<std::string> named;
+    for (const GroupRoleChange& change : changes) {
+        if (!named.insert(change.userId).second) {
+            throw core::InvalidParamsException("user '" + change.userId + "' is listed twice");
+        }
+    }
+    _metadata.retryPendingCarry(groupId);
+    std::optional<PendingCarry> carry;
+    CommitEngine::commitWithRetry([&] {
+        carry.reset();
+        _ops.setRoles(groupId, changes, carry);
+    });
+    // A plane whose author lost `update` with its role is refused from now on; carry it under the caller's name.
+    if (carry.has_value()) {
+        _metadata.runPolicyCarry(groupId, carry.value());
+    }
+    runDueWork(groupId);
+}
+
+void GroupApiImpl::updateGroupRules(const std::string& groupId, const GroupRulesUpdate& rules) {
+    // The rules are three fields of the policy: the rest of it is carried over as the Group has it.
+    core::ContainerPolicy policy = getGroup(groupId).policy;
+    if (rules.addMembers.has_value()) {
+        policy.addMembers = rules.addMembers;
+    }
+    if (rules.removeMembers.has_value()) {
+        policy.removeMembers = rules.removeMembers;
+    }
+    if (rules.updateMeta.has_value()) {
+        policy.update = rules.updateMeta;
+    }
+    updateGroupPolicy(groupId, policy);
+}
+
+core::PagingList<GroupLogEntry> GroupApiImpl::getGroupLog(
+    const std::string& groupId,
+    const core::PagingQuery& pagingQuery
+) {
+    if (pagingQuery.skip < 0 ||
+        pagingQuery.limit < 1 ||
+        (pagingQuery.sortOrder != "asc" && pagingQuery.sortOrder != "desc")) {
+        throw core::InvalidParamsException("skip >= 0, limit >= 1 and sortOrder \"asc\" or \"desc\" are required");
+    }
+    // The latest state first, verified and pinned: the history is replayed up to exactly that statement.
+    const GroupRead read = _hooks.read(VerifiedGroup::pathRead(groupId), keytree::TreeVerifier::Scope::Path);
+    if (!read.verified.has_value()) {
+        throw core::InvalidParamsException("only a member of a group can read its history");
+    }
+    const std::string contextId = read.group().contextId;
+    std::vector<keytree::CommitStatement> statements = _treeVerifier.history(
+        groupId, contextId, VerifiedGroup::treeEnvironment(_serverApi, _connection, groupId)
+    );
+    if (pagingQuery.sortOrder == "desc") {
+        std::reverse(statements.begin(), statements.end());
+    }
+    core::PagingList<GroupLogEntry> result{.totalAvailable = static_cast<int64_t>(statements.size()), .readItems = {}};
+    for (std::size_t i = static_cast<std::size_t>(pagingQuery.skip);
+         i < statements.size() && result.readItems.size() < static_cast<std::size_t>(pagingQuery.limit); ++i) {
+        const keytree::CommitStatement& statement = statements[i];
+        result.readItems.push_back(
+            GroupLogEntry{
+                .seq = static_cast<int64_t>(statement.seq),
+                .kind = keytree::TreeCommits::toWire(statement).op,
+                .author = statement.committer,
+                .authorPubKey = statement.committerPubKey,
+                .date = static_cast<int64_t>(statement.date),
+                .keyVersion = static_cast<int64_t>(statement.keyVersion),
+                .rosterVersion = static_cast<int64_t>(statement.rosterVersion),
+                .addedUsers = statement.addedUsers,
+                .addedManagers = statement.addedManagers,
+                .removed = statement.removed
+            }
+        );
+    }
+    runDueWork(groupId);
+    return result;
+}
+
 void GroupApiImpl::runDueWork(const std::string& groupId) {
     if (_dueWorkOff) {
         return;
@@ -267,6 +371,29 @@ bool GroupApiImpl::renewLeaf(const std::string& groupId, const std::string& prev
     CommitEngine::commitWithRetry([&] { renewed = _ops.selfUpdate(groupId, &previous.value(), RENEW_LEAF_OP, true); });
     runDueWork(groupId);
     return renewed;
+}
+
+void GroupApiImpl::renewOwnLeafOnce(const std::string& groupId) {
+    const auto connection = _connection.getImpl();
+    if (!connection->renewsLeaves()) {
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(_leafRenewalMutex);
+        if (!_leafRenewalTried.insert(groupId).second) {
+            return;
+        }
+    }
+    for (const privmx::crypto::PrivateKey& previous : connection->previousIdentities()) {
+        try {
+            adoptPreviousIdentity(previous);
+            bool renewed = false;
+            CommitEngine::commitWithRetry([&] { renewed = _ops.selfUpdate(groupId, &previous, RENEW_LEAF_OP, true); });
+            if (renewed) {
+                return;
+            }
+        } catch (const std::exception& e) { LOG_WARN("[groups] leaf renewal of ", groupId, " failed: ", e.what()) }
+    }
 }
 
 void GroupApiImpl::updateGroupPublicMeta(
@@ -314,6 +441,7 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
 }
 
 Group GroupApiImpl::getGroup(const std::string& groupId) {
+    renewOwnLeafOnce(groupId);
     _metadata.retryPendingCarry(groupId);
     const server::GroupGetModel params = VerifiedGroup::pathRead(groupId);
     // The head roster entry and the current metadata entry — two entries, whatever the group's age. The cache is
@@ -614,6 +742,7 @@ std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromSe
 }
 
 VerifiedGroup GroupApiImpl::readGroupForKeys(const std::string& groupId) {
+    renewOwnLeafOnce(groupId);
     // On return, after the roster attestation below has moved the version pins too, not only the tree's.
     const SaveDuePins saveAfter{*this};
     // The tree pins `keyVersion` (never below what this client verified or committed itself); the head entry's

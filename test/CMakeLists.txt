@@ -122,6 +122,9 @@ target_link_libraries(test_unit_CryptoTest privmx privmxendpointcore privmxendpo
 add_executable(test_unit_UtilsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/UtilsTest.cpp)
 target_link_libraries(test_unit_UtilsTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
 
+add_executable(test_unit_KeyContinuityVerifierTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/KeyContinuityVerifierTest.cpp)
+target_link_libraries(test_unit_KeyContinuityVerifierTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
+
 # Choosing between several group-addressed routes to one container key. Stubs the group key resolver, which is
 # the only way to make a route unopenable on demand and to assert that a route was NOT attempted.
 add_executable(test_unit_KeyProviderGroupKeysTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/KeyProviderGroupKeysTest.cpp)

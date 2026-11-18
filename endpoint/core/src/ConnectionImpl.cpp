@@ -32,7 +32,8 @@ using namespace privmx::endpoint::core;
 
 ConnectionImpl::ConnectionImpl() : _connectionId(generateConnectionId()) {
     LOG_TRACE("ConnectionImpl");
-    _userVerifier = std::make_shared<core::UserVerifier>(std::make_shared<core::DefaultUserVerifierInterface>());
+    _keyContinuity = std::make_shared<core::KeyContinuityVerifier>();
+    _userVerifier = std::make_shared<core::UserVerifier>(_keyContinuity);
     _guardedExecutor = std::make_shared<privmx::utils::GuardedExecutor>();
 }
 
@@ -90,6 +91,9 @@ void ConnectionImpl::connectOver(
     _gateway = gateway;
     _serverApi.emplace(_gateway);
     _userPrivKey = key;
+    if (_keyContinuity) {
+        _keyContinuity->trustOwn(key.getPublicKey().toBase58DER());
+    }
     _keyProvider = std::shared_ptr<KeyProvider>(
         new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
@@ -154,6 +158,9 @@ void ConnectionImpl::connectPublic(
     auto key = privmx::crypto::PrivateKey::generateRandom();
     _public = true;
     _userPrivKey = key;
+    if (_keyContinuity) {
+        _keyContinuity->trustOwn(key.getPublicKey().toBase58DER());
+    }
     _keyProvider = std::shared_ptr<KeyProvider>(
         new KeyProvider(key, std::bind(&ConnectionImpl::getUserVerifier, this))
     );
@@ -243,6 +250,37 @@ PagingList<UserInfo> ConnectionImpl::listContextUsers(const std::string& context
 void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> verifier) {
     std::unique_lock lock(_mutex);
     _userVerifier = std::make_shared<UserVerifier>(verifier);
+    _keyContinuity.reset();
+}
+
+void ConnectionImpl::acceptKeyChange(
+    const std::string& contextId,
+    const std::string& userId,
+    const std::string& previousPubKey,
+    const std::string& newPubKey
+) {
+    std::shared_ptr<KeyContinuityVerifier> verifier;
+    {
+        std::shared_lock lock(_mutex);
+        verifier = _keyContinuity;
+    }
+    if (!verifier) {
+        throw InvalidParamsException(
+            "this connection uses the application's own UserVerifier: a key change is accepted by what it answers"
+        );
+    }
+    verifier->accept(contextId, userId, previousPubKey, newPubKey);
+}
+
+void ConnectionImpl::renewIdentity(const crypto::PrivateKey& previous) {
+    adoptPreviousIdentity(previous);
+    std::unique_lock lock(_mutex);
+    _renewsLeaves = true;
+}
+
+bool ConnectionImpl::renewsLeaves() {
+    std::shared_lock lock(_mutex);
+    return _renewsLeaves;
 }
 
 void ConnectionImpl::setPinStore(std::shared_ptr<PinStoreInterface> store) {
@@ -287,6 +325,9 @@ void ConnectionImpl::adoptPreviousIdentity(const crypto::PrivateKey& previous) {
     }
     // Recorded only once the slot opened (or there is none): a failed adoption leaves nothing behind.
     std::unique_lock lock(_mutex);
+    if (_keyContinuity) {
+        _keyContinuity->trustOwn(previousPub);
+    }
     if (std::none_of(_previousIdentities.begin(), _previousIdentities.end(), [&](const crypto::PrivateKey& k) {
             return k.getPublicKey().toBase58DER() == previousPub;
         })) {

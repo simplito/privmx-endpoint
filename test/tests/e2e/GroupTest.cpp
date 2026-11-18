@@ -1154,3 +1154,173 @@ TEST_F(GroupTest, envelope_repeated_decrypt_and_two_keys_in_one_session) {
     EXPECT_EQ(groupApi->decrypt(groupId, messagePath("after"), afterRotation, anyAuthor()).data.stdString(), "after the rotation");
     EXPECT_EQ(groupApi->decrypt(groupId, messagePath("m19"), envelopes[19], anyAuthor()).data.stdString(), "message 19");
 }
+
+// ── Roles, the roster's own rules, the log ──────────────────────────────────────────────────────────────────────
+
+TEST_F(GroupTest, a_role_change_is_a_statement_every_member_verifies) {
+    std::string groupId = createGroupOf({user(1), user(2)});
+    const std::string user2 = reader->getString("Login.user_2_id");
+    ASSERT_NO_THROW({ groupApi->setGroupRoles(groupId, {group::GroupRoleChange{.userId = user2, .role = "manager"}}); });
+    group::Group promoted;
+    ASSERT_NO_THROW({ promoted = groupApi->getGroup(groupId); });
+    EXPECT_EQ(promoted.statusCode, 0);
+    EXPECT_EQ(promoted.keyVersion, 1) << "a role is not a key: no epoch opens";
+    EXPECT_EQ(promoted.rosterVersion, 2);
+    EXPECT_NE(std::find(promoted.managers.begin(), promoted.managers.end(), user2), promoted.managers.end());
+    EXPECT_EQ(std::find(promoted.users.begin(), promoted.users.end(), user2), promoted.users.end());
+    // Naming somebody for the role they have changes nothing, and is refused before anything is signed.
+    EXPECT_THROW(
+        { groupApi->setGroupRoles(groupId, {group::GroupRoleChange{.userId = user2, .role = "manager"}}); },
+        core::Exception
+    );
+    EXPECT_THROW(
+        { groupApi->setGroupRoles(groupId, {group::GroupRoleChange{.userId = "nobody", .role = "user"}}); },
+        core::Exception
+    );
+
+    // The promoted member reads the group from the statements alone, and does what a manager may: rewrite metadata.
+    disconnect();
+    connectAs(2);
+    group::Group asManager;
+    ASSERT_NO_THROW({ asManager = groupApi->getGroup(groupId); });
+    EXPECT_EQ(asManager.statusCode, 0);
+    ASSERT_NO_THROW({
+        groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("by the new manager"), asManager.publicMetaVersion);
+    });
+
+    // Demoted again, by the other manager. The metadata the demoted member wrote stays readable: it is carried.
+    disconnect();
+    connectAs(1);
+    ASSERT_NO_THROW({ groupApi->setGroupRoles(groupId, {group::GroupRoleChange{.userId = user2, .role = "user"}}); });
+    group::Group demoted;
+    ASSERT_NO_THROW({ demoted = groupApi->getGroup(groupId); });
+    EXPECT_EQ(demoted.statusCode, 0);
+    EXPECT_EQ(demoted.publicMeta.stdString(), "by the new manager");
+    EXPECT_EQ(std::find(demoted.managers.begin(), demoted.managers.end(), user2), demoted.managers.end());
+    // A group that has managers keeps one.
+    EXPECT_THROW(
+        {
+            groupApi->setGroupRoles(
+                groupId, {group::GroupRoleChange{.userId = reader->getString("Login.user_1_id"), .role = "user"}}
+            );
+        },
+        core::Exception
+    );
+
+    disconnect();
+    connectAs(2);
+    ASSERT_NO_THROW({ demoted = groupApi->getGroup(groupId); });
+    EXPECT_EQ(demoted.statusCode, 0);
+    EXPECT_THROW(
+        { groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("no longer mine"), demoted.publicMetaVersion); },
+        core::Exception
+    );
+    // A user handing itself the role is refused by its own client, before the Bridge sees anything.
+    EXPECT_THROW(
+        { groupApi->setGroupRoles(groupId, {group::GroupRoleChange{.userId = user2, .role = "manager"}}); },
+        group::GroupUnauthorizedSignerException
+    );
+}
+
+TEST_F(GroupTest, the_rules_split_adding_from_removing) {
+    core::ContainerPolicy policy;
+    policy.addMembers = "user";
+    std::string groupId = groupApi->createGroup(
+        reader->getString("Context_1.contextId"), {user(1), user(2)}, {user(1)}, core::Buffer::from("public"),
+        core::Buffer::from("private"), policy
+    );
+    group::Group created;
+    ASSERT_NO_THROW({ created = groupApi->getGroup(groupId); });
+    EXPECT_EQ(created.rules.addMembers, "user");
+    EXPECT_EQ(created.rules.removeMembers, "manager") << "left unset, it follows update";
+    EXPECT_EQ(created.rules.updateMeta, "manager");
+
+    // A plain user adds, and may not remove.
+    disconnect();
+    connectAs(2);
+    ASSERT_NO_THROW({
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
+    });
+    EXPECT_THROW(
+        { groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "manager"}}); },
+        core::Exception
+    ) << "adding is not handing out the manager role";
+    const std::string user3 = reader->getString("Login.user_3_id");
+    EXPECT_THROW({ groupApi->removeGroupMembers(groupId, {user3}); }, group::GroupUnauthorizedSignerException);
+
+    // The manager opens removing to users too; the rest of the policy stays.
+    disconnect();
+    connectAs(1);
+    ASSERT_NO_THROW({ groupApi->updateGroupRules(groupId, group::GroupRulesUpdate{.removeMembers = "user"}); });
+    group::Group opened;
+    ASSERT_NO_THROW({ opened = groupApi->getGroup(groupId); });
+    EXPECT_EQ(opened.statusCode, 0);
+    EXPECT_EQ(opened.rules.addMembers, "user");
+    EXPECT_EQ(opened.rules.removeMembers, "user");
+
+    disconnect();
+    connectAs(2);
+    int64_t epoch = 0;
+    ASSERT_NO_THROW({ epoch = groupApi->removeGroupMembers(groupId, {user3}); });
+    EXPECT_EQ(epoch, 2);
+}
+
+TEST_F(GroupTest, the_log_lists_every_statement_from_the_creation) {
+    std::string groupId = createGroupOf({user(1), user(2)});
+    const std::string user1 = reader->getString("Login.user_1_id");
+    const std::string user2 = reader->getString("Login.user_2_id");
+    const std::string user3 = reader->getString("Login.user_3_id");
+    ASSERT_NO_THROW({
+        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
+        groupApi->setGroupRoles(groupId, {group::GroupRoleChange{.userId = user2, .role = "manager"}});
+        groupApi->removeGroupMembers(groupId, {user3});
+    });
+    // A self-update is a statement too, and the library makes them when it sees fit: left out of the comparison.
+    const auto roster = [&](const core::PagingQuery& query) {
+        std::vector<group::GroupLogEntry> entries;
+        for (const group::GroupLogEntry& entry : groupApi->getGroupLog(groupId, query).readItems) {
+            if (entry.kind != "selfUpdate") {
+                entries.push_back(entry);
+            }
+        }
+        return entries;
+    };
+    std::vector<group::GroupLogEntry> log;
+    ASSERT_NO_THROW({ log = roster(core::PagingQuery{.skip = 0, .limit = 100, .sortOrder = "asc"}); });
+    ASSERT_EQ(log.size(), 4u);
+    EXPECT_EQ(log[0].kind, "create");
+    EXPECT_EQ(log[0].seq, 1);
+    EXPECT_EQ(log[1].kind, "add");
+    EXPECT_EQ(log[1].addedUsers, std::vector<std::string>{user3});
+    EXPECT_EQ(log[2].kind, "roles");
+    EXPECT_EQ(log[2].addedManagers, std::vector<std::string>{user2});
+    EXPECT_EQ(log[3].kind, "remove");
+    EXPECT_EQ(log[3].removed, std::vector<std::string>{user3});
+    EXPECT_EQ(log[3].keyVersion, 2);
+    for (const group::GroupLogEntry& entry : log) {
+        EXPECT_EQ(entry.author, user1);
+        EXPECT_EQ(entry.authorPubKey, user(1).pubKey);
+    }
+    // Newest first, and a window of it.
+    core::PagingList<group::GroupLogEntry> page;
+    ASSERT_NO_THROW({ page = groupApi->getGroupLog(groupId, core::PagingQuery{.skip = 0, .limit = 1, .sortOrder = "desc"}); });
+    EXPECT_GE(page.totalAvailable, 4);
+    ASSERT_EQ(page.readItems.size(), 1u);
+    EXPECT_GE(page.readItems[0].seq, 4);
+    EXPECT_THROW(
+        { groupApi->getGroupLog(groupId, core::PagingQuery{.skip = 0, .limit = 0, .sortOrder = "asc"}); },
+        core::Exception
+    );
+
+    // Another member replays the same chain. Somebody outside the group is told nothing.
+    disconnect();
+    connectAs(2);
+    ASSERT_NO_THROW({ log = roster(core::PagingQuery{.skip = 0, .limit = 100, .sortOrder = "asc"}); });
+    EXPECT_EQ(log.size(), 4u);
+    disconnect();
+    connectAs(3);
+    EXPECT_THROW(
+        { groupApi->getGroupLog(groupId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "asc"}); },
+        core::Exception
+    );
+}

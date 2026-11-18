@@ -146,7 +146,18 @@ protected:
     }
 
     // Registers `userId` in Context_1 holding `pubKey` - no proof of possession is asked for anywhere.
-    void registerContextUser(const std::string& userId, const std::string& pubKey) {
+    // A connection without a UserVerifier of its own keeps to key continuity, so a second key for one user is told to
+    // the fixture's connection as the application would (`acceptKeyChange`); `tellFixture` false leaves that to the
+    // test, for the ones that are about it.
+    std::map<std::string, std::string> registeredKeys;
+    void registerContextUser(const std::string& userId, const std::string& pubKey, bool tellFixture = true) {
+        const auto known = registeredKeys.find(userId);
+        if (tellFixture && connection && known != registeredKeys.end() && known->second != pubKey) {
+            try {
+                connection->acceptKeyChange(contextId(), userId, known->second, pubKey);
+            } catch (const core::Exception&) {} // a verifier of the test's own, or a connection that never saw the user
+        }
+        registeredKeys[userId] = pubKey;
         const std::string params = "{\"contextId\": \"" + contextId() + "\", \"userId\": \"" + userId +
             "\", \"userPubKey\": \"" + pubKey + "\"}";
         std::string response;
@@ -712,6 +723,103 @@ TEST_F(GroupKeyTreeIntegrityTest, changing_a_members_public_key_locks_them_out_w
     EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << "re-seating did not restore access; " << lastReadError;
     EXPECT_TRUE(canReadMessageAs(secondKey, messageId)) <<
         "re-seating did not hand back the pre-rotation history; " << lastReadError;
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, a_reseat_lets_a_member_with_a_replaced_key_back_in_without_leaving_the_roster) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    const Identity firstKey = newIdentity("reseated_member");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), asMember(firstKey)}); });
+    group::Group atEpoch1;
+    ASSERT_NO_THROW({ atEpoch1 = groupApi->getGroup(groupId); });
+    std::string threadId;
+    ASSERT_NO_THROW({ threadId = createThreadGrantedTo(atEpoch1); });
+    std::string messageId;
+    ASSERT_NO_THROW({
+        messageId = threadApi->sendMessage(
+            threadId, core::Buffer::from("reseat_public"), core::Buffer::from("reseat_private"),
+            core::Buffer::from("reseat_data")
+        );
+    });
+
+    // The member loses the old key altogether: a new one in the Context, nothing to renew the leaf with.
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey, false));
+    ASSERT_FALSE(canReadGroupAs(secondKey, groupId));
+
+    // SECURITY: this client knows the member by the first key. It wraps to another only once told the change is
+    // genuine, or a Bridge swapping a user's key would be handed the group by the next reseat.
+    EXPECT_THROW(
+        { groupApi->reseatGroupMembers(groupId, {firstKey.userId}); }, core::UserVerificationFailureException
+    );
+    EXPECT_THROW(
+        { connection->acceptKeyChange(contextId(), firstKey.userId, secondKey.pubKey, firstKey.pubKey); },
+        core::InvalidParamsException
+    ) << "the change named is not the one this client is looking at";
+    ASSERT_NO_THROW({
+        connection->acceptKeyChange(contextId(), firstKey.userId, firstKey.pubKey, secondKey.pubKey);
+    });
+    int64_t epoch = 0;
+    ASSERT_NO_THROW({ epoch = groupApi->reseatGroupMembers(groupId, {firstKey.userId}); });
+    EXPECT_EQ(epoch, 2);
+    EXPECT_THROW(
+        { groupApi->reseatGroupMembers(groupId, {user(1).userId}); }, core::Exception
+    ) << "nobody reseats themselves";
+
+    group::Group afterReseat;
+    ASSERT_NO_THROW({ afterReseat = groupApi->getGroup(groupId); });
+    EXPECT_EQ(afterReseat.statusCode, 0);
+    EXPECT_EQ(afterReseat.keyVersion, 2);
+    EXPECT_EQ(afterReseat.rosterVersion, atEpoch1.rosterVersion + 1);
+    EXPECT_TRUE(contains(afterReseat.users, firstKey.userId)) << "a reseat removes nobody";
+
+    EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << "the reseat did not restore access; " << lastReadError;
+    EXPECT_TRUE(canReadMessageAs(secondKey, messageId)) <<
+        "the reseat did not hand back the history; " << lastReadError;
+    std::vector<group::GroupLogEntry> log;
+    ASSERT_NO_THROW({
+        log = groupApi->getGroupLog(groupId, core::PagingQuery{.skip = 0, .limit = 1, .sortOrder = "desc"}).readItems;
+    });
+    ASSERT_EQ(log.size(), 1u);
+    EXPECT_EQ(log[0].kind, "reseat");
+    EXPECT_EQ(log[0].removed, std::vector<std::string>{firstKey.userId});
+}
+
+TEST_F(GroupKeyTreeIntegrityTest, renewIdentity_renews_the_leaf_on_the_first_read) {
+    if (!hasManagementApi()) {
+        GTEST_SKIP() << MANAGEMENT_API_MISSING;
+    }
+    const Identity firstKey = newIdentity("self_renewing_member");
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(firstKey.userId, firstKey.pubKey));
+    std::string groupId;
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), asMember(firstKey)}); });
+    const Identity secondKey = newIdentity(firstKey.userId);
+    ASSERT_NO_FATAL_FAILURE(registerContextUser(secondKey.userId, secondKey.pubKey, false));
+    ASSERT_FALSE(canReadGroupAs(secondKey, groupId));
+
+    // The member still has the old key: one call on the connection, and the first read of the group renews the leaf.
+    {
+        auto renewing = connectWith(secondKey.privKey);
+        privmx::test::ScopeExit closeIt([&] { renewing->disconnect(); });
+        ASSERT_NO_THROW({ renewing->renewIdentity(firstKey.privKey); });
+        auto groups = group::GroupApi::create(*renewing);
+        group::Group read;
+        ASSERT_NO_THROW({ read = groups.getGroup(groupId); });
+        EXPECT_EQ(read.statusCode, 0) << "the first read did not renew the leaf";
+        EXPECT_EQ(read.keyVersion, 1) << "a renewal opens no epoch";
+    }
+    // From then on the new key reads on its own.
+    EXPECT_TRUE(canReadGroupAs(secondKey, groupId)) << lastReadError;
+    // The other member accepts the change it was told about, and verifies the renewal's statement.
+    ASSERT_NO_THROW({
+        connection->acceptKeyChange(contextId(), firstKey.userId, firstKey.pubKey, secondKey.pubKey);
+    });
+    group::Group seenByCreator;
+    ASSERT_NO_THROW({ seenByCreator = groupApi->getGroup(groupId); });
+    EXPECT_EQ(seenByCreator.statusCode, 0);
 }
 
 // -- renewing a leaf after a key change --

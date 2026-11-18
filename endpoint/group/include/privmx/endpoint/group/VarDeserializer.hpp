@@ -19,6 +19,18 @@ group::GroupMemberToAdd VarDeserializer::deserialize<group::GroupMemberToAdd>(
 );
 
 template<>
+group::GroupRoleChange VarDeserializer::deserialize<group::GroupRoleChange>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
+template<>
+group::GroupRulesUpdate VarDeserializer::deserialize<group::GroupRulesUpdate>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
+template<>
 group::EventType VarDeserializer::deserialize<group::EventType>(const Poco::Dynamic::Var& val, const std::string& name);
 
 template<>

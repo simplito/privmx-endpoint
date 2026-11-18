@@ -162,6 +162,14 @@ struct ContainerPolicyWithoutItem {
      * Enforce forward secrecy: block writes when group grants are stale after a group key rotation
      */
     std::optional<std::string> forwardSecrecy;
+    /**
+     * Groups only: who can add members. Unset, whoever `update` allows. Refused by the Bridge on any other container.
+     */
+    std::optional<std::string> addMembers;
+    /**
+     * Groups only: who can remove or reseat members. Unset, whoever `update` allows.
+     */
+    std::optional<std::string> removeMembers;
 };
 
 /**

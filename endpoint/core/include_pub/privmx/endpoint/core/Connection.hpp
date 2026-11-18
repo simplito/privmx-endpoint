@@ -127,6 +127,9 @@ public:
      * A developer can implement an interface and pass the implementation to the function. 
      * Each time data is read from the container, a callback will be triggered, allowing the developer to validate the sender in an external service,
      * e.g. Developer's Application Server or PKI Server.
+     * Until one is set, the connection keeps to key continuity: the first key a user is seen with is taken as
+     * theirs and any other is refused until acceptKeyChange.
+     *
      * @param verifier an implementation of the UserVerifierInterface
      * 
      */
@@ -170,6 +173,42 @@ public:
      * without a pin under the current key are then read on trust once, as on first contact.
      */
     void adoptPreviousIdentity(const std::string& previousUserPrivKey);
+
+    /**
+     * After the user's identity key changed and the previous one is still at hand: adoptPreviousIdentity, and from
+     * then on every GroupApi of this connection re-wraps the caller's own leaf to the current key by itself, the
+     * first time it reads a Group whose leaf the current key does not open (what GroupApi::renewLeaf does for one
+     * Group on request). Call it where adoptPreviousIdentity would be called: right after `connect` and
+     * `setPinStore`, on every start for as long as some Group may still be waiting.
+     *
+     * Without the previous key there is nothing to renew with: another member lets the user back in with
+     * GroupApi::reseatGroupMembers.
+     * @param previousUserPrivKey the previous identity private key in WIF
+     * @throws LocalStateIntegrityException as adoptPreviousIdentity
+     */
+    void renewIdentity(const std::string& previousUserPrivKey);
+
+    /**
+     * Tells this connection that a user's identity key changed, and that the application has checked the change.
+     *
+     * A connection without a UserVerifier of the application's own keeps to key continuity: the first key it sees a
+     * user of a Context with is taken as theirs, and any other is refused. After this call `newPubKey` is the user's
+     * key; `previousPubKey` stays good for what was signed before, and for nothing dated later than this call.
+     * The knowledge lives in this connection's memory: a new connection sees each user for the first time again.
+     *
+     * @param contextId ID of the Context the user belongs to
+     * @param userId ID of the user
+     * @param previousPubKey the key the user had, in Base58DER
+     * @param newPubKey the key the user has now, in Base58DER
+     * @throws InvalidParamsException when `previousPubKey` is not the key this connection knows the user by, or when
+     * the application set a UserVerifier (setUserVerifier): that verifier decides, and is the thing to update
+     */
+    void acceptKeyChange(
+        const std::string& contextId,
+        const std::string& userId,
+        const std::string& previousPubKey,
+        const std::string& newPubKey
+    );
 
 private:
     void assertGateway(const std::shared_ptr<ConnectionImpl>& impl);

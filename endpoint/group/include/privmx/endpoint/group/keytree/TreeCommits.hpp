@@ -129,8 +129,9 @@ public:
 
     // `GroupRules` of a policy object (empty = `{}`) and its creator, with `hash` =
     // `H("pmx-group-policy\0" || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy)
-    // || lp(ownerCanBeRemovedFromManagers))`, each resolved against the frozen v3 defaults (manager, manager, manager,
-    // yes) and hashed verbatim. Throws std::invalid_argument on a non-object policy, a non-string rule, or a rule outside
+    // || lp(ownerCanBeRemovedFromManagers) [|| lp(addMembers) || lp(removeMembers)])`, each resolved against the frozen
+    // v3 defaults (manager, manager, manager, yes) and hashed verbatim; the bracketed pair (an unset one is `update`'s
+    // value) only when the policy sets one of them. Throws std::invalid_argument on a non-object policy, a non-string rule, or a rule outside
     // the bridge's group grammar (`none`, `all`, or unique alternatives of unique user/manager/owner atoms, no part
     // empty; `ownerCanBeRemovedFromManagers` yes/no): such a policy is never signed and, served, is an integrity error.
     static GroupRules rules(const Poco::Dynamic::Var& policy, const std::string& creator);
@@ -149,9 +150,9 @@ public:
     );
 
     // The role column of the op-effect table, on the rules and roster before `statement`: create none (the
-    // committer is the creator), add `update`, remove `update` (and, removing the creator from the managers,
-    // `ownerCanBeRemovedFromManagers` "yes"), rotate `rotateKeys`, selfUpdate a seat, policy `updatePolicy`. False for
-    // an op without a row.
+    // committer is the creator), add `addMembers`, remove and reseat `removeMembers` (and, removing the creator from
+    // the managers, `ownerCanBeRemovedFromManagers` "yes"), rotate `rotateKeys`, selfUpdate a seat, policy and roles
+    // `updatePolicy` (roles with the same owner rule). False for an op without a row.
     static bool permits(
         const GroupRules& rules,
         const CommitStatement& statement,
@@ -160,9 +161,10 @@ public:
     );
 
     // The roster-delta column of the op-effect table on the roster before `statement`: nullopt when the deltas fit the
-    // op, else what is wrong. Only add and remove carry deltas; an addition names newcomers only (an existing member
-    // cannot be promoted), once each; a removal names members, never its committer. Shared by `TreeVerifier`'s replay
-    // and the check before this client signs.
+    // op, else what is wrong. Add, remove, reseat and roles carry deltas; an addition names newcomers only (an existing
+    // member is promoted by a roles statement), once each; a removal or reseat names members, never its committer; a
+    // role change names members, at least one of whom changes lists. Shared by `TreeVerifier`'s replay and the check
+    // before this client signs.
     static std::optional<std::string> deltasProblem(
         const CommitStatement& statement,
         const std::set<std::string>& users,

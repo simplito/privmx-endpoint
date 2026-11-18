@@ -74,7 +74,15 @@ public:
     int64_t removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     int64_t rotateGroupKey(const std::string& groupId);
+    int64_t reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
+    void setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes);
+    void updateGroupRules(const std::string& groupId, const GroupRulesUpdate& rules);
+    core::PagingList<GroupLogEntry> getGroupLog(const std::string& groupId, const core::PagingQuery& pagingQuery);
     bool renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey);
+    // After Connection::renewIdentity: the caller's own leaf of `groupId` re-wrapped with a previous identity key
+    // where the current one does not open it. Tried once per group by this GroupApi, before its first read of the
+    // group; a failure is logged and leaves the read to fail as it would have (renewLeaf remains).
+    void renewOwnLeafOnce(const std::string& groupId);
 
     // The pins the PinStore holds for `previous` (an earlier identity key of this user), taken only for groups
     // with no pin under the current key (never replacing or raising one) and saved under the current key. No store,
@@ -310,6 +318,8 @@ private:
     GroupEnvelopeFiles _envelopeFiles{_envelopeEncryptor, _connection};
     // Every group's keys, commit state and pending work.
     GroupSessions _sessions;
+    std::mutex _leafRenewalMutex;
+    std::set<std::string> _leafRenewalTried; // under _leafRenewalMutex
     GroupApiHooks _hooks{bindHooks()};
     GroupDeps _deps{_serverApi, _treeVerifier, _connection, _sessions, _userPrivKey, _hooks};
     DeferredWork _deferred{_deps};

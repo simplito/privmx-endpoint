@@ -42,6 +42,54 @@ struct GroupMemberToAdd {
     std::string role;
 };
 
+/** A member of a group and the role it is given by GroupApi::setGroupRoles. */
+struct GroupRoleChange {
+    std::string userId;
+    /** "user" or "manager". */
+    std::string role;
+};
+
+/**
+ * Who may change what in a Group, as the Group's signed statements bind it. Each value is a policy entry: "manager",
+ * "user", "owner", "all", "none", or alternatives joined with "," ("manager,owner").
+ */
+struct GroupRules {
+    /** Who may add members. */
+    std::string addMembers;
+    /** Who may remove or reseat members. */
+    std::string removeMembers;
+    /** Who may rewrite the Group's metadata (the policy's `update`). */
+    std::string updateMeta;
+};
+
+/** The rules GroupApi::updateGroupRules changes; an unset one stays as it is. */
+struct GroupRulesUpdate {
+    std::optional<std::string> addMembers;
+    std::optional<std::string> removeMembers;
+    std::optional<std::string> updateMeta;
+};
+
+/** One signed statement of a Group's history, as GroupApi::getGroupLog returns it. */
+struct GroupLogEntry {
+    /** 1 for the creation, one more for each later statement. */
+    int64_t seq;
+    /** "create", "add", "remove", "reseat", "roles", "rotate", "policy" or "selfUpdate". */
+    std::string kind;
+    /** The member who signed it, and the identity key it was signed with. */
+    std::string author;
+    std::string authorPubKey;
+    /** The author's clock, in milliseconds. */
+    int64_t date;
+    /** The Group's key epoch and roster version after it. */
+    int64_t keyVersion;
+    int64_t rosterVersion;
+    /** For "add": who joined as a user or as a manager. For "roles": who became one. */
+    std::vector<std::string> addedUsers;
+    std::vector<std::string> addedManagers;
+    /** For "remove": who left. For "reseat": who was reseated. */
+    std::vector<std::string> removed;
+};
+
 struct Group {
     /**
      * ID of the Context
@@ -149,6 +197,11 @@ struct Group {
      * and so write to it from outside. The Bridge's own setting; no statement signs it.
      */
     std::string visibleTo;
+
+    /**
+     * the Group's signed rules, resolved (GroupRules). Empty strings when the policy served does not parse
+     */
+    GroupRules rules;
 };
 
 /**

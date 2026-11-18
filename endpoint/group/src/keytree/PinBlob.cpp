@@ -61,6 +61,9 @@ std::string PinBlob::record(const std::string& groupId, const Pin& pin, const Pl
     be::putLp(out, pin.rules.rotateKeys);
     be::putLp(out, pin.rules.updatePolicy);
     be::putLp(out, pin.rules.ownerCanBeRemovedFromManagers);
+    be::putU8(out, pin.rules.splitsRoster ? 1 : 0);
+    be::putLp(out, pin.rules.addMembers);
+    be::putLp(out, pin.rules.removeMembers);
     be::putLp(out, pin.rules.hash);
     be::putLp(out, pin.treeHash);
     be::putU64(out, pin.refusedSeq);
@@ -187,6 +190,13 @@ std::optional<PinSet> PinBlob::decode(const std::string& body) {
             pin.rules.rotateKeys = in.lp();
             pin.rules.updatePolicy = in.lp();
             pin.rules.ownerCanBeRemovedFromManagers = in.lp();
+            const std::uint8_t splitsRoster = in.u8();
+            if (splitsRoster > 1) {
+                return std::nullopt;
+            }
+            pin.rules.splitsRoster = splitsRoster == 1;
+            pin.rules.addMembers = in.lp();
+            pin.rules.removeMembers = in.lp();
             pin.rules.hash = in.lp();
             pin.treeHash = in.lp();
             pin.refusedSeq = in.u64();

@@ -189,7 +189,7 @@ public:
     std::vector<std::string> users() const { return usersOf(state, managers); }
 
     // The rules the stored policy and creator sign.
-    GroupRules rules() const { return TreeCommits::rules(policy, creator); }
+    privmx::endpoint::group::keytree::GroupRules rules() const { return TreeCommits::rules(policy, creator); }
 
     // The shared lost-race check: a statement not extending the stored latest is answered ROTATED_ALREADY.
     void assertExtendsHead(const server::GroupTreeCommit& wire) const {
@@ -213,7 +213,7 @@ public:
         std::vector<std::string> removed,
         const std::set<std::string>& postManagers,
         std::vector<std::string> addedManagers = {},
-        const std::optional<GroupRules>& postRules = std::nullopt
+        const std::optional<privmx::endpoint::group::keytree::GroupRules>& postRules = std::nullopt
     ) {
         CommitStatement statement;
         ASSERT_NO_THROW(statement = TreeCommits::fromWire(wire));
@@ -457,7 +457,7 @@ public:
         assertExtendsHead(commit);
         ASSERT_TRUE(seatOf(state, committer).has_value()) << "only a seated member commits";
         ASSERT_TRUE(commit.policy.has_value());
-        const GroupRules next = TreeCommits::rules(commit.policy.value(), creator);
+        const privmx::endpoint::group::keytree::GroupRules next = TreeCommits::rules(commit.policy.value(), creator);
         checkStatement(commit, CommitOp::Policy, committer, state, rosterVersion, {}, {}, {}, managers, {}, next);
         policy = commit.policy.value();
         commits.push_back(commit);
