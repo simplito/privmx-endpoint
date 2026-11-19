@@ -106,6 +106,7 @@ public:
     // The state after `statement`, which must be the one that may follow `prior` (std::nullopt: it is the first).
     // Checks everything the statement itself can show: the chain, both signatures, the signer's standing among
     // the recipients before it, and that the recipients and the key version moved only as its op allows.
+    // A recipient group's pinned epoch and key move forward only, by a manager or through that group itself.
     // What it cannot check is that `signer` is who holds `signerPubKey`: that is the caller's to ask the UserVerifier.
     // Throws GroupDataIntegrityException or GroupUnauthorizedSignerException.
     static SpaceLogState apply(const std::optional<SpaceLogState>& prior, const SpaceStatement& statement);

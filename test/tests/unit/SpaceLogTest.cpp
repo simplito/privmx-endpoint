@@ -168,11 +168,28 @@ TEST_F(SpaceLogRules, SECURITY_ARotationChangesTheKeyAndNothingElse) {
     s = statement(SpaceOp::Rotate, state, 2, key2);
     s.users[0] = user("alice", eve, "manager");
     EXPECT_THROW(SpaceLog::apply(state, by(s, "bob", bob)), GroupDataIntegrityException);
-    // A group's epoch and key may move with it: that is what a refresh after a removal in the group is.
+    // A group's epoch and key may move with it: that is what a refresh after a removal in the group is. Bob, a
+    // user of the Space, is not the one to do it: with his own key in the sales group's place he would be a manager.
     s = statement(SpaceOp::Rotate, state, 2, key2);
     s.groups[0] = group("sales", sales2, 2, "manager");
-    const SpaceLogState refreshed = SpaceLog::apply(state, by(s, "bob", bob));
+    EXPECT_THROW(SpaceLog::apply(state, by(s, "bob", bob)), GroupUnauthorizedSignerException);
+    EXPECT_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)), GroupUnauthorizedSignerException);
+    // A manager is, and so is the group itself - which shows its standing with the key it had.
+    EXPECT_NO_THROW(SpaceLog::apply(state, by(s, "alice", alice)));
+    const SpaceLogState refreshed = SpaceLog::apply(state, through(s, "carol", carol, "sales", sales1));
     EXPECT_EQ(refreshed.group("sales")->groupKeyVersion, 2u);
+    // A group that is a user of the Space refreshes its own key and nobody else's.
+    s = statement(SpaceOp::Rotate, state, 2, key2);
+    s.groups[1] = group("support", eve, 5, "user");
+    EXPECT_NO_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)));
+    s.groups[0] = group("sales", sales2, 2, "manager");
+    EXPECT_THROW(SpaceLog::apply(state, through(s, "dave", eve, "support", support)), GroupUnauthorizedSignerException);
+    // Only forward, and only to another key.
+    s = statement(SpaceOp::Rotate, state, 2, key2);
+    s.groups[0] = group("sales", sales2, 1, "manager");
+    EXPECT_THROW(SpaceLog::apply(state, by(s, "alice", alice)), GroupDataIntegrityException);
+    s.groups[0] = group("sales", sales1, 2, "manager");
+    EXPECT_THROW(SpaceLog::apply(state, by(s, "alice", alice)), GroupDataIntegrityException);
     // From then on the group's standing is shown with its new key: the one removed from sales holds only the old.
     EXPECT_THROW(
         SpaceLog::apply(refreshed, through(statement(SpaceOp::Rotate, refreshed, 3, key1), "mallory", eve, "sales", sales1)),

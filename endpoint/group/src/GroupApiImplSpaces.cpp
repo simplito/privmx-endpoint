@@ -107,21 +107,27 @@ group::server::SpaceInfo GroupApiImpl::spaceInfo(const std::string& spaceId, boo
 // Bridge. It is what the Space's signed statements add up to, replayed from the first one (or from where this
 // process stopped), each checked by `SpaceLog::apply` and its signer by the UserVerifier.
 
-std::vector<keytree::SpaceStatement> GroupApiImpl::spaceStatements(const std::string& spaceId, std::int64_t fromSeq) {
+std::vector<keytree::SpaceStatement> GroupApiImpl::spaceStatements(
+    const std::string& spaceId,
+    std::int64_t fromSeq,
+    std::int64_t upToSeq
+) {
+    // As many as the head calls for and no more: how long this runs is not the Bridge's to decide.
     std::vector<keytree::SpaceStatement> statements;
-    for (;;) {
+    while (fromSeq + static_cast<std::int64_t>(statements.size()) < upToSeq) {
         group::server::SpaceGetStatementsModel model;
         model.id = spaceId;
         model.fromSeq = fromSeq + static_cast<std::int64_t>(statements.size());
-        model.limit = 100;
+        model.limit = std::min<std::int64_t>(100, upToSeq - model.fromSeq);
         const auto page = _serverApi.spaceGetStatements(model).statements;
+        if (page.empty() || static_cast<std::int64_t>(page.size()) > model.limit) {
+            throw GroupDataIntegrityException("Space " + spaceId + ": its statements do not reach the state served");
+        }
         for (const auto& wire : page) {
             statements.push_back(keytree::SpaceLog::fromWire(wire));
         }
-        if (page.size() < 100) {
-            return statements;
-        }
     }
+    return statements;
 }
 
 // The device's memory of each Space: the last statement it verified. A Space served behind that, or with another
@@ -221,7 +227,7 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
     }
     if (!state.has_value() || state->seq < static_cast<std::uint64_t>(space.seq)) {
         for (const keytree::SpaceStatement& statement :
-             spaceStatements(space.id, state.has_value() ? static_cast<std::int64_t>(state->seq) : 0)) {
+             spaceStatements(space.id, state.has_value() ? static_cast<std::int64_t>(state->seq) : 0, space.seq)) {
             if (statement.spaceId != space.id || statement.contextId != space.contextId) {
                 throw GroupDataIntegrityException("space statement: of another Space");
             }
@@ -283,23 +289,46 @@ keytree::SpaceStatement GroupApiImpl::signSpaceStatement(
     const bool needManager = statement.op != keytree::SpaceOp::Rotate;
     const auto& users = prior.has_value() ? prior->users : statement.users;
     const auto& groups = prior.has_value() ? prior->groups : statement.groups;
+    // Each standing the caller has is tried until the statement is one that may follow: a group's key, for one,
+    // is refreshed by a manager or through that very group, so the first standing found is not always the one.
+    std::optional<GroupUnauthorizedSignerException> refused;
+    const auto follows = [&](const keytree::SpaceStatement& candidate) {
+        try {
+            keytree::SpaceLog::apply(prior, candidate);
+            return true;
+        } catch (const GroupUnauthorizedSignerException& e) {
+            refused = e;
+            return false;
+        }
+    };
     for (const keytree::SpaceLogUser& user : users) {
         if (user.userId == statement.signer && user.pubKey == ownPubKey && (!needManager || user.role == "manager")) {
+            statement.via.clear();
             keytree::SpaceLog::sign(statement, _userPrivKey, std::nullopt);
-            return statement;
+            if (follows(statement)) {
+                return statement;
+            }
         }
     }
     for (const keytree::SpaceLogGroup& group : groups) {
         if (needManager && group.role != "manager") {
             continue;
         }
+        std::optional<privmx::crypto::PrivateKey> groupKey;
         try {
             core::Validator::validateId(group.groupId, "field:space.groups.groupId ");
-            const privmx::crypto::PrivateKey groupKey = _keys.grantKeyForPubKey(group.groupId, group.groupPubKey);
-            statement.via = group.groupId;
-            keytree::SpaceLog::sign(statement, _userPrivKey, groupKey);
+            groupKey = _keys.grantKeyForPubKey(group.groupId, group.groupPubKey);
+        } catch (const core::Exception&) {
+            continue; // not a group of the caller's
+        }
+        statement.via = group.groupId;
+        keytree::SpaceLog::sign(statement, _userPrivKey, groupKey);
+        if (follows(statement)) {
             return statement;
-        } catch (const core::Exception&) {} // not a group of the caller's
+        }
+    }
+    if (refused.has_value()) {
+        throw refused.value();
     }
     throw GroupUnauthorizedSignerException(
         needManager ? "only a manager of the Space changes its recipients" : "the caller is no recipient of the Space"
@@ -319,10 +348,7 @@ core::PagingList<SpaceLogEntry> GroupApiImpl::getSpaceLog(
     const std::uint64_t head = static_cast<std::uint64_t>(spaceInfo(spaceId, true).seq);
     std::vector<SpaceLogEntry> entries;
     std::optional<keytree::SpaceLogState> state;
-    for (const keytree::SpaceStatement& statement : spaceStatements(spaceId, 0)) {
-        if (statement.seq > head) {
-            break;
-        }
+    for (const keytree::SpaceStatement& statement : spaceStatements(spaceId, 0, static_cast<std::int64_t>(head))) {
         const keytree::SpaceLogState next = keytree::SpaceLog::apply(state, statement);
         SpaceLogEntry entry{
             .seq = static_cast<int64_t>(statement.seq),
@@ -922,6 +948,21 @@ core::Buffer GroupApiImpl::sealInSpace(
             replaceSpaceKey(spaceId, {}, {});
         } catch (const SpaceRecipientUnavailableException&) { throw; } catch (const GroupHistoryForkException&) {
             throw; // a history that does not hold is the answer, never a lost race
+        } catch (const GroupUnauthorizedSignerException&) {
+            // Not this caller's to replace: a group's key is refreshed by a manager of the Space or by that group.
+            // The value is written under the key there is; whoever may, replaces it.
+            LOG_WARN("[sealInSpace] space ", spaceId, " has a stale key this caller cannot replace")
+            space = spaceInfo(spaceId, true);
+            const SpaceKeyUse use = spaceKeyAt(space, space.keyVersion);
+            return _envelopeEncryptor.packSpaceEnvelope(
+                spaceId, use.via, content, _userPrivKey, use.key,
+                EnvelopeSeal{
+                    .binding = binding,
+                    .keyVersion = space.keyVersion,
+                    .encryptedAt = privmx::utils::Utils::getNowTimestamp(),
+                    .authorUserId = _connection.getImpl()->getMyUserId(space.contextId),
+                }
+            );
         } catch (const core::Exception&) {
             // Lost to another writer doing the same: fine if the key is fresh now.
             if (spaceKeyIsStale(spaceInfo(spaceId, true))) {

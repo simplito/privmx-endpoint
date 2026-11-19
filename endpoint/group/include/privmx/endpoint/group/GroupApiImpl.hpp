@@ -500,7 +500,12 @@ private:
     // The Space's signed history: see GroupApiImplSpaces.cpp. `verifySpace` replaces what the Bridge said about
     // the recipients, the key version and the creator with what the statements say.
     keytree::SpaceLogState verifySpace(server::SpaceInfo& space);
-    std::vector<keytree::SpaceStatement> spaceStatements(const std::string& spaceId, std::int64_t fromSeq);
+    // The statements after `fromSeq`, up to and including `upToSeq`.
+    std::vector<keytree::SpaceStatement> spaceStatements(
+        const std::string& spaceId,
+        std::int64_t fromSeq,
+        std::int64_t upToSeq
+    );
     std::optional<keytree::SpaceLogState> spaceLogOf(const std::string& spaceId);
     void rememberSpaceLog(const keytree::SpaceLogState& state);
     std::map<std::string, std::pair<std::uint64_t, std::string>> storedSpacePins();

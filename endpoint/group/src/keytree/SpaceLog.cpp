@@ -258,6 +258,25 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
         if (!newKey && statement.keyCommit != prior->keyCommits.at(prior->keyVersion)) {
             throw broken("an addition keeps the key");
         }
+        // A group's pinned epoch and key are what "through that group" is checked against from here on, and what
+        // the next key is wrapped to. So they move only forward, and only by a manager - who could replace the
+        // group among the recipients anyway - or by the group itself. Any other recipient could otherwise put a
+        // key of their own in a manager group's place.
+        for (const SpaceLogGroup& group : statement.groups) {
+            const SpaceLogGroup* before = prior->group(group.groupId);
+            if (before == nullptr ||
+                (before->groupPubKey == group.groupPubKey && before->groupKeyVersion == group.groupKeyVersion)) {
+                continue;
+            }
+            if (group.groupKeyVersion <= before->groupKeyVersion || before->groupPubKey == group.groupPubKey) {
+                throw broken("a group's key is replaced by a later epoch's only");
+            }
+            if (role != "manager" && statement.via != group.groupId) {
+                throw GroupUnauthorizedSignerException(
+                    "space statement: the key of group " + group.groupId + " is refreshed by a manager or by that group"
+                );
+            }
+        }
         switch (statement.op) {
         case SpaceOp::Add:
             // Nobody already there is touched - a group's epoch and key included.
