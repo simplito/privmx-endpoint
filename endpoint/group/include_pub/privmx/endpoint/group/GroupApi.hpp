@@ -649,6 +649,90 @@ public:
     /** Frees a handle from openSequence, or from beginSequence without finishing it. */
     void closeSequence(const SequenceHandle sequence);
 
+    // ── Spaces: one key for several Groups ──
+    //
+    // For an application's own container on its own database: records that the same Groups read all the time.
+    // alsoFor wraps a value's key once per recipient, for every value. A Space wraps its key once per recipient
+    // when it is created and when the key is replaced; writing a value wraps nothing.
+    //
+    // The Bridge stores a Space like a container with no data: the key's versions, each wrapped for the
+    // recipients and signed by whoever made it. The Bridge holds no key to wrap, and a wrap it made of a key of
+    // its own would not carry the signature of a user the UserVerifier accepts.
+    //
+    // A stale key. When a recipient Group removes a member, that member still holds the Space's key. The Bridge
+    // marks the Space (SpaceState::keyIsStale), and the next write by someone who can reach every recipient
+    // Group's current key makes a new one first. Until then what is written can be read by the removed member,
+    // if the application's server gives them the ciphertext. Where that window matters, call rotateSpaceKey
+    // right after the removal, or use alsoFor.
+    //
+    // A Space has its own kind of envelope: decrypt() refuses it and decryptInSpace refuses the others
+    // (EnvelopeWrongKindException). No outsiders and no alsoFor: to let someone write, make them a recipient.
+    // Files and sequences use the chunk and item calls above with the handles returned here.
+    //
+    // ponytail: the Space is read from the Bridge at most every 5 seconds per Space, not on every write. A writer
+    // notices a stale key up to that much later. Space events would close the window; nobody has needed them yet.
+
+    /**
+     * @param recipients the Groups and users the key is wrapped for; the caller must be among them as a manager,
+     * themselves or through a Group
+     * @param idSeed when set, the Space's ID is deriveSpaceId(contextId, idSeed) instead of random
+     * @return the Space's ID
+     */
+    std::string createSpace(
+        const std::string& contextId,
+        const std::vector<SpaceRecipient>& recipients,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const std::optional<core::Buffer>& idSeed = std::nullopt
+    );
+    static std::string deriveSpaceId(const std::string& contextId, const core::Buffer& idSeed);
+    SpaceState getSpace(const std::string& spaceId);
+    core::PagingList<SpaceState> listSpaces(const std::string& contextId, const core::PagingQuery& pagingQuery);
+    void deleteSpace(const std::string& spaceId);
+    /** The current key and every earlier version are wrapped for them: they read what is already there. */
+    void addSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipient>& recipients);
+    /** Makes a new key the removed do not get. @return the new key version */
+    int64_t removeSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipientRef>& recipients);
+    /**
+     * Makes a new key, wrapped for every recipient's current key. Throws SpaceRecipientUnavailableException
+     * when the caller cannot see a recipient Group's current key.
+     * @return the new key version
+     */
+    int64_t rotateSpaceKey(const std::string& spaceId);
+    void updateSpacePublicMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
+    void updateSpacePrivateMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
+
+    /** One symmetric encryption and one signature. When the key is stale, it is replaced first. */
+    core::Buffer encryptInSpace(const std::string& spaceId, const Path& location, const core::Buffer& data);
+    /** `options.currentEpochOnly` means the Space's current key version. */
+    DecryptedSpaceEnvelope decryptInSpace(
+        const std::string& spaceId,
+        const Path& location,
+        const core::Buffer& envelope,
+        const DecryptOptions& options
+    );
+    std::vector<SpaceDecryptResult> decryptManyInSpace(
+        const std::string& spaceId,
+        const std::vector<DecryptItem>& items
+    );
+    FileHandle beginFileEncryptionInSpace(const std::string& spaceId, const Path& location);
+    FileHandle beginFileDecryptionInSpace(
+        const std::string& spaceId,
+        const Path& location,
+        const core::Buffer& envelope,
+        const DecryptOptions& options
+    );
+    SequenceHandle beginSequenceInSpace(const std::string& spaceId, const Path& location, int64_t checkpointEvery = 64);
+    SequenceHandle openSequenceInSpace(
+        const std::string& spaceId,
+        const Path& location,
+        const core::Buffer& header,
+        const DecryptOptions& options,
+        const std::optional<core::Buffer>& resumeFrom = std::nullopt
+    );
+    /** Who wrote the sequence opened with openSequenceInSpace, and how they had access. */
+    SpaceOrigin getSpaceSequenceOrigin(const SequenceHandle sequence);
+
     /**
      * Subscribe for the Group events on the given subscription query.
      *

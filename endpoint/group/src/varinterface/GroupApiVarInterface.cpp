@@ -66,7 +66,25 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {ReadSequenceItem, &GroupApiVarInterface::readSequenceItem},
         {VerifySequenceMark, &GroupApiVarInterface::verifySequenceMark},
         {CloseSequence, &GroupApiVarInterface::closeSequence},
-        {PeekSequenceItem, &GroupApiVarInterface::peekSequenceItem}
+        {PeekSequenceItem, &GroupApiVarInterface::peekSequenceItem},
+        {CreateSpace, &GroupApiVarInterface::createSpace},
+        {DeriveSpaceId, &GroupApiVarInterface::deriveSpaceId},
+        {GetSpace, &GroupApiVarInterface::getSpace},
+        {ListSpaces, &GroupApiVarInterface::listSpaces},
+        {DeleteSpace, &GroupApiVarInterface::deleteSpace},
+        {AddSpaceRecipients, &GroupApiVarInterface::addSpaceRecipients},
+        {RemoveSpaceRecipients, &GroupApiVarInterface::removeSpaceRecipients},
+        {RotateSpaceKey, &GroupApiVarInterface::rotateSpaceKey},
+        {UpdateSpacePublicMeta, &GroupApiVarInterface::updateSpacePublicMeta},
+        {UpdateSpacePrivateMeta, &GroupApiVarInterface::updateSpacePrivateMeta},
+        {EncryptInSpace, &GroupApiVarInterface::encryptInSpace},
+        {DecryptInSpace, &GroupApiVarInterface::decryptInSpace},
+        {DecryptManyInSpace, &GroupApiVarInterface::decryptManyInSpace},
+        {BeginFileEncryptionInSpace, &GroupApiVarInterface::beginFileEncryptionInSpace},
+        {BeginFileDecryptionInSpace, &GroupApiVarInterface::beginFileDecryptionInSpace},
+        {BeginSequenceInSpace, &GroupApiVarInterface::beginSequenceInSpace},
+        {OpenSequenceInSpace, &GroupApiVarInterface::openSequenceInSpace},
+        {GetSpaceSequenceOrigin, &GroupApiVarInterface::getSpaceSequenceOrigin}
 };
 
 Poco::Dynamic::Var GroupApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -563,4 +581,148 @@ Poco::Dynamic::Var GroupApiVarInterface::peekSequenceItem(const Poco::Dynamic::V
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto itemOrMark = _deserializer.deserialize<core::Buffer>(argsArr->get(0), "itemOrMark");
     return _serializer.serialize(GroupApi::peekSequenceItem(itemOrMark));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::createSpace(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4, 5);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto recipients = _deserializer.deserializeVector<SpaceRecipient>(argsArr->get(1), "recipients");
+    auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "publicMeta");
+    auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "privateMeta");
+    auto idSeed = argsArr->size() > 4 && !argsArr->get(4).isEmpty() ?
+        std::optional<core::Buffer>(_deserializer.deserialize<core::Buffer>(argsArr->get(4), "idSeed")) :
+        std::optional<core::Buffer>();
+    return _serializer.serialize(_groupApi.createSpace(contextId, recipients, publicMeta, privateMeta, idSeed));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::deriveSpaceId(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto idSeed = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "idSeed");
+    return _serializer.serialize(GroupApi::deriveSpaceId(contextId, idSeed));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::getSpace(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    return _serializer.serialize(_groupApi.getSpace(spaceId));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::listSpaces(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto pagingQuery = _deserializer.deserialize<core::PagingQuery>(argsArr->get(1), "pagingQuery");
+    return _serializer.serialize(_groupApi.listSpaces(contextId, pagingQuery));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::deleteSpace(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    _groupApi.deleteSpace(spaceId);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::addSpaceRecipients(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto recipients = _deserializer.deserializeVector<SpaceRecipient>(argsArr->get(1), "recipients");
+    _groupApi.addSpaceRecipients(spaceId, recipients);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::removeSpaceRecipients(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto recipients = _deserializer.deserializeVector<SpaceRecipientRef>(argsArr->get(1), "recipients");
+    return _serializer.serialize(_groupApi.removeSpaceRecipients(spaceId, recipients));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::rotateSpaceKey(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    return _serializer.serialize(_groupApi.rotateSpaceKey(spaceId));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::updateSpacePublicMeta(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto meta = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "meta");
+    auto version = _deserializer.deserialize<int64_t>(argsArr->get(2), "version");
+    _groupApi.updateSpacePublicMeta(spaceId, meta, version);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::updateSpacePrivateMeta(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto meta = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "meta");
+    auto version = _deserializer.deserialize<int64_t>(argsArr->get(2), "version");
+    _groupApi.updateSpacePrivateMeta(spaceId, meta, version);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::encryptInSpace(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto data = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "data");
+    return _serializer.serialize(_groupApi.encryptInSpace(spaceId, location, data));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::decryptInSpace(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "envelope");
+    auto options = _deserializer.deserialize<DecryptOptions>(argsArr->get(3), "options");
+    return _serializer.serialize(_groupApi.decryptInSpace(spaceId, location, envelope, options));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::decryptManyInSpace(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto items = _deserializer.deserializeVector<DecryptItem>(argsArr->get(1), "items");
+    return _serializer.serialize(_groupApi.decryptManyInSpace(spaceId, items));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::beginFileEncryptionInSpace(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    return _serializer.serialize(_groupApi.beginFileEncryptionInSpace(spaceId, location));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::beginFileDecryptionInSpace(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "envelope");
+    auto options = _deserializer.deserialize<DecryptOptions>(argsArr->get(3), "options");
+    return _serializer.serialize(_groupApi.beginFileDecryptionInSpace(spaceId, location, envelope, options));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::beginSequenceInSpace(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto checkpointEvery = _deserializer.deserialize<int64_t>(argsArr->get(2), "checkpointEvery");
+    return _serializer.serialize(_groupApi.beginSequenceInSpace(spaceId, location, checkpointEvery));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::openSequenceInSpace(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4, 5);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto header = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "header");
+    auto options = _deserializer.deserialize<DecryptOptions>(argsArr->get(3), "options");
+    auto resumeFrom = argsArr->size() > 4 && !argsArr->get(4).isEmpty() ?
+        std::optional<core::Buffer>(_deserializer.deserialize<core::Buffer>(argsArr->get(4), "resumeFrom")) :
+        std::optional<core::Buffer>();
+    return _serializer.serialize(_groupApi.openSequenceInSpace(spaceId, location, header, options, resumeFrom));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::getSpaceSequenceOrigin(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto sequence = _deserializer.deserialize<int64_t>(argsArr->get(0), "sequence");
+    return _serializer.serialize(_groupApi.getSpaceSequenceOrigin(sequence));
 }

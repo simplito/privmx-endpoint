@@ -245,6 +245,13 @@ std::string TreeCommits::groupId(const std::string& contextId, const std::string
     return privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(preimage));
 }
 
+std::string TreeCommits::spaceId(const std::string& contextId, const std::string& resourceId) {
+    std::string preimage = tag("pmx-space-id");
+    be::putLp(preimage, contextId);
+    be::putLp(preimage, resourceId);
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::sha256(preimage));
+}
+
 std::string TreeCommits::signedBytes(const CommitStatement& statement) {
     if (statement.rosterHash.size() != 32 ||
         statement.treeHash.size() != 32 ||

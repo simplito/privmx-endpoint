@@ -93,6 +93,8 @@ public:
     // `H("pmx-group-id\0" || lp(contextId) || lp(resourceId))`. It ties the id to the resourceId the creator signs
     // at seq 1, so that statement cannot be served as another group's.
     static std::string groupId(const std::string& contextId, const std::string& resourceId);
+    // `hex(H("pmx-space-id\0" || lp(contextId) || lp(resourceId)))`: a Space's id, as the Bridge derives it.
+    static std::string spaceId(const std::string& contextId, const std::string& resourceId);
 
     static std::string signedBytes(const CommitStatement& statement);
 

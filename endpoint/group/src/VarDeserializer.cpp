@@ -115,6 +115,33 @@ group::DecryptOptions VarDeserializer::deserialize<group::DecryptOptions>(
 }
 
 template<>
+group::SpaceRecipient VarDeserializer::deserialize<group::SpaceRecipient>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .groupId = deserializeOptional<std::string>(obj->get("groupId"), name + ".groupId").value_or(std::string()),
+        .user = deserializeOptional<core::UserWithPubKey>(obj->get("user"), name + ".user"),
+        .role = deserialize<std::string>(obj->get("role"), name + ".role")
+    };
+}
+
+template<>
+group::SpaceRecipientRef VarDeserializer::deserialize<group::SpaceRecipientRef>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .groupId = deserializeOptional<std::string>(obj->get("groupId"), name + ".groupId").value_or(std::string()),
+        .userId = deserializeOptional<std::string>(obj->get("userId"), name + ".userId").value_or(std::string())
+    };
+}
+
+template<>
 group::EnvelopeRecipient VarDeserializer::deserialize<group::EnvelopeRecipient>(
     const Poco::Dynamic::Var& val,
     const std::string& name

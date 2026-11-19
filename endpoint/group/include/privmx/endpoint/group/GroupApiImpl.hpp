@@ -243,6 +243,52 @@ public:
     void closeSequence(SequenceHandle sequence);
     static SequenceItemHeader peekSequenceItem(const core::Buffer& itemOrMark);
 
+    // -- spaces: GroupApiImplSpaces.cpp --
+    std::string createSpace(
+        const std::string& contextId,
+        const std::vector<SpaceRecipient>& recipients,
+        const core::Buffer& publicMeta,
+        const core::Buffer& privateMeta,
+        const std::optional<core::Buffer>& idSeed
+    );
+    static std::string deriveSpaceId(const std::string& contextId, const core::Buffer& idSeed);
+    SpaceState getSpace(const std::string& spaceId);
+    core::PagingList<SpaceState> listSpaces(const std::string& contextId, const core::PagingQuery& pagingQuery);
+    void deleteSpace(const std::string& spaceId);
+    void addSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipient>& recipients);
+    int64_t removeSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipientRef>& recipients);
+    int64_t rotateSpaceKey(const std::string& spaceId);
+    void updateSpacePublicMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
+    void updateSpacePrivateMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
+    core::Buffer encryptInSpace(const std::string& spaceId, const Path& location, const core::Buffer& data);
+    DecryptedSpaceEnvelope decryptInSpace(
+        const std::string& spaceId,
+        const Path& location,
+        const core::Buffer& envelope,
+        const DecryptOptions& options,
+        EnvelopeContent content = EnvelopeContent::Message
+    );
+    std::vector<SpaceDecryptResult> decryptManyInSpace(
+        const std::string& spaceId,
+        const std::vector<DecryptItem>& items
+    );
+    FileHandle beginFileEncryptionInSpace(const std::string& spaceId, const Path& location);
+    FileHandle beginFileDecryptionInSpace(
+        const std::string& spaceId,
+        const Path& location,
+        const core::Buffer& envelope,
+        const DecryptOptions& options
+    );
+    SequenceHandle beginSequenceInSpace(const std::string& spaceId, const Path& location, int64_t checkpointEvery);
+    SequenceHandle openSequenceInSpace(
+        const std::string& spaceId,
+        const Path& location,
+        const core::Buffer& header,
+        const DecryptOptions& options,
+        const std::optional<core::Buffer>& resumeFrom
+    );
+    SpaceOrigin getSpaceSequenceOrigin(SequenceHandle sequence);
+
     // The group's own route to its head entry's key must be at the answer's (verified) `keyVersion`: a key from an
     // earlier epoch is one a member removed since still holds. Throws GroupDataIntegrityException.
     static void assertHeadKeyAtEpoch(const server::GroupInfo& group);
@@ -390,11 +436,73 @@ private:
         std::function<void()> requireCurrentEpoch{}; // throws once the sequence's epoch is over
         // Read side.
         std::string authorPubKey{};
+        std::optional<SpaceOrigin> spaceOrigin{}; // a sequence read from a Space
         bool gap = false;          // an item since the last mark never arrived: the transcript cannot be checked
         std::uint64_t inOrder = 0; // the position after the last item read with no gap before it
         std::uint64_t attested = 0;
     };
     SequenceHandle openSequenceHandle(const std::string& label, std::shared_ptr<Sequence> sequence);
+    // The two halves every sequence shares, whatever seals its header. `sealHeader` gets the new sequence key;
+    // `requireCurrentEpoch` gets the header it returned and throws once the sequence must not go on.
+    SequenceHandle beginSequenceOver(
+        const std::function<core::Buffer(const core::Buffer& key)>& sealHeader,
+        const std::function<std::function<void()>(const core::Buffer& header)>& epochGuard,
+        int64_t checkpointEvery
+    );
+    SequenceHandle openSequenceOver(
+        const core::Buffer& header,
+        const core::Buffer& key,
+        const std::string& authorPubKey,
+        const std::optional<core::Buffer>& resumeFrom,
+        std::optional<SpaceOrigin> spaceOrigin = std::nullopt
+    );
+
+    // -- spaces --
+    // A Space as the Bridge serves it, kept for a moment: writes are frequent and each needs the current key
+    // version and whether it is stale.
+    // ponytail: a time bound instead of events. A stale key is noticed up to SPACE_CACHE_MS late by a writer that
+    // made no change itself; subscribe to the Space's events and drop the entry on them if that window matters.
+    static constexpr std::int64_t SPACE_CACHE_MS = 5000;
+    struct CachedSpace {
+        server::SpaceInfo info;
+        std::int64_t readAt = 0;
+        bool allVersions = false; // read with spaceGet: `info.keys` holds every version the caller can open
+    };
+    struct SpaceKeyUse {
+        std::string key{};
+        std::string via{}; // the recipient group the caller holds the key through; empty for the caller's own entry
+    };
+    struct SpaceTarget {
+        bool isGroup = false;
+        std::string id{};
+        std::string pubKey{}; // base58-DER
+        std::int64_t groupKeyVersion = 0;
+    };
+    server::SpaceInfo spaceInfo(const std::string& spaceId, bool fresh = false);
+    void forgetSpace(const std::string& spaceId);
+    SpaceKeyUse spaceKeyAt(const server::SpaceInfo& space, std::int64_t keyVersion);
+    // The recipients' current keys, each verified: a group's off its latest statement, a user's by the UserVerifier.
+    std::vector<SpaceTarget> spaceTargets(
+        const std::string& contextId,
+        const std::vector<std::string>& groupIds,
+        const std::vector<core::UserWithPubKey>& users
+    );
+    std::vector<server::SpaceKeyEntry> wrapSpaceKeyFor(
+        const std::string& spaceId,
+        const std::string& contextId,
+        std::int64_t keyVersion,
+        const std::string& spaceKey,
+        const std::vector<SpaceTarget>& targets
+    );
+    std::int64_t replaceSpaceKey(
+        const std::string& spaceId,
+        const std::vector<std::string>& withoutGroups,
+        const std::vector<std::string>& withoutUsers
+    );
+    core::Buffer sealInSpace(const std::string& spaceId, const EnvelopeBinding& binding, const core::Buffer& content);
+    SpaceState toSpaceState(const server::SpaceInfo& space);
+    privmx::utils::ThreadSaveMap<std::string, CachedSpace> _spaces;
+    privmx::utils::ThreadSaveMap<std::string, SpaceKeyUse> _spaceKeys; // by "<spaceId>:<keyVersion>"
     std::shared_ptr<Sequence> sequenceOf(SequenceHandle handle, bool wantReading);
     core::Buffer markSequence(Sequence& sequence, bool closed);
     privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<Sequence>> _sequences;

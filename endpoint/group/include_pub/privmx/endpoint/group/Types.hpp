@@ -492,6 +492,11 @@ struct EnvelopeHeader {
     std::string authorUserId;
     /** Set when the envelope is the header of a sequence: the id its items and marks carry. */
     std::string sequenceId;
+    /**
+     * Set when the envelope was written in a Space. `keyVersion` is then the version of the Space's key, and
+     * `groupId` the Group the author wrote through (empty for an author who is a recipient themselves).
+     */
+    std::string spaceId;
     std::vector<GroupEpochRef> alsoForGroups;
     std::vector<std::string> alsoForUsers;
 };
@@ -503,6 +508,7 @@ struct EnvelopeHeader {
  *   beginFileDecryptionFromOutsider  `sender`
  *   beginAnonymousFileDecryption     neither: nobody signed it
  *   beginSharedFileDecryption        `sender`, and the three fields about its origin
+ *   beginFileDecryptionInSpace       `sender`, `via`, and `senderMembership` as SpaceOrigin::authorAccess
  * A sender is never reported as an author.
  */
 struct DecryptedFileInfo {
@@ -510,7 +516,9 @@ struct DecryptedFileInfo {
     std::optional<EnvelopeSender> sender;
     /** For a shared file only: as in DecryptedSharedEnvelope. */
     std::string homeGroupId;
+    /** For a shared file as in DecryptedSharedEnvelope; for a file in a Space, SpaceOrigin::authorAccess. */
     std::string senderMembership;
+    /** For a shared file as in DecryptedSharedEnvelope; for a file in a Space, SpaceOrigin::via. */
     std::string via;
     EnvelopeAudience sharedWith;
     /** The epoch of the Group key the envelope was sealed to. 0 for a shared file. */
@@ -563,6 +571,82 @@ struct SequenceMarkInfo {
     int64_t attestedItems;
     /** true for a close: the author wrote nothing after it. */
     bool closed;
+};
+
+// ── Spaces: one key for several Groups ──
+
+/** Who a Space's key is wrapped for. Exactly one of `groupId` and `user` is set. */
+struct SpaceRecipient {
+    std::string groupId;
+    std::optional<core::UserWithPubKey> user;
+    /** "manager" may change the recipients and the meta. Everyone may write, read, and replace the key. */
+    std::string role;
+};
+
+/** A recipient to remove. Exactly one field is set. */
+struct SpaceRecipientRef {
+    std::string groupId;
+    std::string userId;
+};
+
+struct SpaceGroupRecipient {
+    std::string groupId;
+    std::string role;
+    /** The Group's epoch the current key is wrapped for. */
+    int64_t keyVersion;
+};
+
+struct SpaceUserRecipient {
+    std::string userId;
+    std::string pubKey;
+    std::string role;
+};
+
+struct SpaceState {
+    std::string spaceId;
+    std::string contextId;
+    std::string createdBy;
+    std::vector<SpaceGroupRecipient> groups;
+    std::vector<SpaceUserRecipient> users;
+    int64_t keyVersion;
+    /**
+     * true when a recipient Group has had a removal since the key was made: whoever was removed still holds
+     * this key. The next write by anyone who can reach every recipient Group's key replaces it.
+     */
+    bool keyIsStale;
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    int64_t publicMetaVersion;
+    int64_t privateMetaVersion;
+};
+
+/** How the author of a value in a Space had access to it. */
+struct SpaceOrigin {
+    EnvelopeSender author;
+    /** "user", or the ID of the Group the author wrote through. Signed by the author. */
+    std::string via;
+    /**
+     * "yes", "no" or "unknown": whether the author is a recipient - themselves, or as a member of `via` - at
+     * the time of the read. "unknown" when `via` is a Group whose roster the caller cannot see. The key alone
+     * does not answer this: a member removed from a Group keeps the Space's key until it is replaced.
+     */
+    std::string authorAccess;
+    /** The version of the Space's key the value was sealed under. */
+    int64_t keyVersion;
+};
+
+struct DecryptedSpaceEnvelope {
+    core::Buffer data;
+    SpaceOrigin origin;
+    /** The author's clock, signed. Not proof of when it was written. */
+    int64_t encryptedAt;
+};
+
+/** `decryptManyInSpace` reports per item. */
+struct SpaceDecryptResult {
+    int64_t statusCode;
+    DecryptedSpaceEnvelope envelope;
+    GroupErrorDetails details;
 };
 
 enum EventType : int64_t {

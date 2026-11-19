@@ -769,6 +769,8 @@ void GroupApiImpl::processConnectedEvent() {
     // made true.
     _envelopeFiles.clear();
     _sequences.clear();
+    _spaces.clear();
+    _spaceKeys.clear();
     dropCachedGroup();
 }
 
@@ -782,6 +784,8 @@ void GroupApiImpl::processDisconnectedEvent() {
     _sessions.dropKeys();
     _envelopeFiles.clear();
     _sequences.clear();
+    _spaces.clear();
+    _spaceKeys.clear();
     dropCachedGroup();
 }
 
@@ -1010,6 +1014,9 @@ EnvelopeBinding GroupApiImpl::bindingOf(const Path& location, EnvelopeContent co
 }
 
 std::string GroupApiImpl::kindOf(const EnvelopeRouting& routing) {
+    if (!routing.spaceId.empty()) {
+        return "space";
+    }
     switch (routing.type) {
     case ENVELOPE_FROM_MEMBER:
         return "member";
@@ -1034,7 +1041,7 @@ EnvelopeHeader GroupApiImpl::peekEnvelope(const core::Buffer& envelope) {
         .version = GroupEnvelopeEncryptor::VERSION,
         .groupId = routing.groupId,
         .keyVersion = routing.keyVersion,
-        .fromOutsider = routing.type != ENVELOPE_FROM_MEMBER,
+        .fromOutsider = routing.type != ENVELOPE_FROM_MEMBER && routing.spaceId.empty(),
         .isSigned = routing.type != ENVELOPE_ANONYMOUS,
         .isFile = routing.content == EnvelopeContent::File,
         .hasLocation = routing.hasLocation,
@@ -1042,6 +1049,7 @@ EnvelopeHeader GroupApiImpl::peekEnvelope(const core::Buffer& envelope) {
         .sequenceId = routing.content == EnvelopeContent::Sequence ?
             privmx::utils::Hex::from(GroupEnvelopeEncryptor::sequenceIdOf(envelope)) :
             std::string(),
+        .spaceId = routing.spaceId,
         .alsoForGroups = {},
         .alsoForUsers = {},
     };
@@ -1085,6 +1093,8 @@ void GroupApiImpl::dropCachedGroup(const std::optional<std::string>& groupId) {
     } else {
         _rosters.clear();
     }
+    // A change in a group can make a Space's key stale; the next write reads the Space again.
+    _spaces.clear();
     invalidateModuleKeysInCache(groupId);
 }
 
@@ -1119,7 +1129,8 @@ void GroupApiImpl::requireFor(const EnvelopeRouting& routing, const std::string&
     if (routing.groupId != groupId) {
         throw EnvelopeWrongGroupException();
     }
-    if (routing.type != kind) {
+    // An envelope of a Space parses as a member's; it is read with the Space, never with a group.
+    if (routing.type != kind || !routing.spaceId.empty()) {
         throw EnvelopeWrongKindException(kindOf(routing));
     }
 }
@@ -1435,6 +1446,9 @@ DecryptedSharedEnvelope GroupApiImpl::decryptShared(
     }
     const EnvelopeBinding binding = bindingOf(location, content);
     const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope, content);
+    if (!routing.spaceId.empty()) {
+        throw EnvelopeWrongKindException(kindOf(routing));
+    }
     core::Validator::validateId(routing.groupId, "field:envelope.groupId ");
     if (routing.type == ENVELOPE_ANONYMOUS || routing.recipients.empty()) {
         // Not shared with anybody: a plain member's or outsider's envelope is read with the group it names.
@@ -1730,24 +1744,37 @@ void GroupApiImpl::closeSequence(SequenceHandle handle) {
     _connection.getImpl()->getHandleManager()->removeHandle(handle);
 }
 
-SequenceHandle GroupApiImpl::beginSequence(const std::string& groupId, const Path& location, int64_t checkpointEvery) {
+SequenceHandle GroupApiImpl::beginSequenceOver(
+    const std::function<core::Buffer(const core::Buffer& key)>& sealHeader,
+    const std::function<std::function<void()>(const core::Buffer& header)>& epochGuard,
+    int64_t checkpointEvery
+) {
     if (checkpointEvery < 0) {
         throw core::InvalidParamsException("field:checkpointEvery cannot be negative");
     }
     auto sequence = std::make_shared<Sequence>();
     sequence->key = privmx::crypto::Crypto::randomBytes(32);
-    // The header is a member's envelope like any other: signed, bound to the location, sealed to the epoch.
-    sequence->header = sealAsMember(
-        groupId, bindingOf(location, EnvelopeContent::Sequence), core::Buffer::from(sequence->key), {}
-    );
+    sequence->header = sealHeader(core::Buffer::from(sequence->key));
     sequence->id = GroupEnvelopeEncryptor::sequenceIdOf(sequence->header);
     sequence->transcript = GroupEnvelopeEncryptor::sequenceTranscriptStart(sequence->id);
     sequence->checkpointEvery = checkpointEvery;
-    // Whoever was removed since still knows this sequence's key: it must not go on.
-    sequence->requireCurrentEpoch = [this, groupId, keyId = GroupEnvelopeEncryptor::peekAny(sequence->header).keyId]() {
-        requireCurrentKey(groupId, keyId);
-    };
+    sequence->requireCurrentEpoch = epochGuard(sequence->header);
     return openSequenceHandle("GroupSequence:Write", std::move(sequence));
+}
+
+SequenceHandle GroupApiImpl::beginSequence(const std::string& groupId, const Path& location, int64_t checkpointEvery) {
+    const EnvelopeBinding binding = bindingOf(location, EnvelopeContent::Sequence);
+    return beginSequenceOver(
+        // The header is a member's envelope like any other: signed, bound to the location, sealed to the epoch.
+        [&](const core::Buffer& key) { return sealAsMember(groupId, binding, key, {}); },
+        // Whoever was removed since still knows this sequence's key: it must not go on.
+        [&](const core::Buffer& header) -> std::function<void()> {
+            return [this, groupId, keyId = GroupEnvelopeEncryptor::peekAny(header).keyId]() {
+                requireCurrentKey(groupId, keyId);
+            };
+        },
+        checkpointEvery
+    );
 }
 
 core::Buffer GroupApiImpl::getSequenceHeader(SequenceHandle handle) {
@@ -1816,15 +1843,26 @@ SequenceHandle GroupApiImpl::openSequence(
     const std::optional<core::Buffer>& resumeFrom
 ) {
     const DecryptedEnvelope opened = decrypt(groupId, location, header, options, EnvelopeContent::Sequence);
-    if (opened.data.size() != 32) {
+    return openSequenceOver(header, opened.data, opened.author.pubKey, resumeFrom);
+}
+
+SequenceHandle GroupApiImpl::openSequenceOver(
+    const core::Buffer& header,
+    const core::Buffer& key,
+    const std::string& authorPubKey,
+    const std::optional<core::Buffer>& resumeFrom,
+    std::optional<SpaceOrigin> spaceOrigin
+) {
+    if (key.size() != 32) {
         throw InvalidEnvelopeFormatException("sequence header carries a malformed key");
     }
     auto sequence = std::make_shared<Sequence>();
     sequence->reading = true;
-    sequence->key = opened.data.stdString();
+    sequence->key = key.stdString();
     sequence->id = GroupEnvelopeEncryptor::sequenceIdOf(header);
     sequence->transcript = GroupEnvelopeEncryptor::sequenceTranscriptStart(sequence->id);
-    sequence->authorPubKey = opened.author.pubKey;
+    sequence->authorPubKey = authorPubKey;
+    sequence->spaceOrigin = std::move(spaceOrigin);
     if (resumeFrom.has_value()) {
         const auto wire = GroupEnvelopeEncryptor::parseSequenceWire(resumeFrom.value());
         if (!wire.isMark || wire.sequenceId != sequence->id) {

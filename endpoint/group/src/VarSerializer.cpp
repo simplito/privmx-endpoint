@@ -181,6 +181,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::EnvelopeHeader>(const group::
     obj->set("hasLocation", serialize(val.hasLocation));
     obj->set("authorUserId", serialize(val.authorUserId));
     obj->set("sequenceId", serialize(val.sequenceId));
+    obj->set("spaceId", serialize(val.spaceId));
     obj->set("alsoForGroups", serialize(val.alsoForGroups));
     obj->set("alsoForUsers", serialize(val.alsoForUsers));
     return obj;
@@ -216,6 +217,100 @@ Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedFileInfo>(const grou
     obj->set("keyVersion", serialize(val.keyVersion));
     obj->set("size", serialize(val.size));
     obj->set("complete", serialize(val.complete));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceGroupRecipient>(const group::SpaceGroupRecipient& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$SpaceGroupRecipient");
+    }
+    obj->set("groupId", serialize(val.groupId));
+    obj->set("role", serialize(val.role));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceUserRecipient>(const group::SpaceUserRecipient& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$SpaceUserRecipient");
+    }
+    obj->set("userId", serialize(val.userId));
+    obj->set("pubKey", serialize(val.pubKey));
+    obj->set("role", serialize(val.role));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceState>(const group::SpaceState& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$SpaceState");
+    }
+    obj->set("spaceId", serialize(val.spaceId));
+    obj->set("contextId", serialize(val.contextId));
+    obj->set("createdBy", serialize(val.createdBy));
+    obj->set("groups", serialize(val.groups));
+    obj->set("users", serialize(val.users));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    obj->set("keyIsStale", serialize(val.keyIsStale));
+    obj->set("publicMeta", serialize(val.publicMeta));
+    obj->set("privateMeta", serialize(val.privateMeta));
+    obj->set("publicMetaVersion", serialize(val.publicMetaVersion));
+    obj->set("privateMetaVersion", serialize(val.privateMetaVersion));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceOrigin>(const group::SpaceOrigin& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$SpaceOrigin");
+    }
+    obj->set("author", serialize(val.author));
+    obj->set("via", serialize(val.via));
+    obj->set("authorAccess", serialize(val.authorAccess));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedSpaceEnvelope>(const group::DecryptedSpaceEnvelope& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$DecryptedSpaceEnvelope");
+    }
+    obj->set("data", serialize(val.data));
+    obj->set("origin", serialize(val.origin));
+    obj->set("encryptedAt", serialize(val.encryptedAt));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceDecryptResult>(const group::SpaceDecryptResult& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$SpaceDecryptResult");
+    }
+    obj->set("statusCode", serialize(val.statusCode));
+    obj->set("envelope", serialize(val.envelope));
+    obj->set("details", serialize(val.details));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::SpaceState>>(
+    const core::PagingList<group::SpaceState>& val
+) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$PagingList<group$SpaceState>");
+    }
+    obj->set("totalAvailable", serialize(val.totalAvailable));
+    obj->set("readItems", serialize(val.readItems));
     return obj;
 }
 

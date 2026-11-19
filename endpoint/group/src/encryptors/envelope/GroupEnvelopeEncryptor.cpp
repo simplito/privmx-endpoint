@@ -26,6 +26,10 @@ const std::string GroupEnvelopeEncryptor::LOCATION_LABEL = "privmx/group/locatio
 // Domain label on a content key sealed under a group's symmetric key (type 6). Without it that seal is an
 // ordinary ciphertext under the group key, which is also what a type 1 payload is.
 const std::string GroupEnvelopeEncryptor::KEY_WRAP_LABEL = "PMXENVK";
+// A Space key's wrap is the same ECIES construction as an envelope's content key, to the same kind of key. Its own
+// domain keeps one from being presented as the other.
+const std::string GroupEnvelopeEncryptor::SPACE_KEY_DOMAIN = "PMXSPC1";
+const std::string GroupEnvelopeEncryptor::SPACE_KEY_LABEL = "privmx/space/key";
 const std::string GroupEnvelopeEncryptor::SEQUENCE_ITEM_LABEL = "privmx/group/sequence-item";
 const std::string GroupEnvelopeEncryptor::SEQUENCE_MARK_LABEL = "privmx/group/sequence-mark";
 
@@ -104,6 +108,18 @@ GroupEnvelopeEncryptor::ParsedHeader GroupEnvelopeEncryptor::parseHeader(Envelop
     routing.groupId = cursor.readField();
 
     const std::uint8_t type = header.wireType;
+    if (type == TYPE_SPACE) {
+        routing.type = ENVELOPE_FROM_MEMBER;
+        routing.spaceId = cursor.readField();
+        if (routing.spaceId.empty()) {
+            throw InvalidEnvelopeFormatException("an envelope in a Space names the Space");
+        }
+        routing.authorUserId = cursor.readField();
+        routing.authorPubKey = privmx::crypto::PublicKey::fromDER(cursor.readField()).toBase58DER();
+        routing.keyVersion = static_cast<std::int64_t>(cursor.readU64());
+        header.bytes = cursor.consumed();
+        return header;
+    }
     const bool memberKeyed = type == TYPE_GROUP_KEY || type == TYPE_MEMBER_SHARED;
     const bool pubKeyed = type == TYPE_ANONYMOUS || type == TYPE_OUTSIDER;
     if (!memberKeyed && !pubKeyed) {
@@ -183,18 +199,20 @@ std::string GroupEnvelopeEncryptor::chunkKey(const std::string& fileKey, ChunkIn
 
 std::string GroupEnvelopeEncryptor::wrapContentKey(
     const privmx::crypto::PublicKey& pubKey,
-    const std::string& contentKey
+    const std::string& contentKey,
+    const std::string& domain
 ) {
     // Throwaway, never retained: it exists only to carry out one ECDH with the reader's key. A fresh one per
     // wrap, because the ECIES layer derives its IV from the sender key.
     privmx::crypto::PrivateKey ephemeralPrivKey = privmx::crypto::PrivateKey::generateRandom();
-    return privmx::crypto::EciesEncryptor::encrypt(pubKey, ECIES_DOMAIN + contentKey, ephemeralPrivKey);
+    return privmx::crypto::EciesEncryptor::encrypt(pubKey, domain + contentKey, ephemeralPrivKey);
 }
 
 std::string GroupEnvelopeEncryptor::unwrapContentKey(
     const privmx::crypto::PrivateKey& groupPrivKey,
     const std::string& groupPubKeyBase58,
-    const std::string& wrap
+    const std::string& wrap,
+    const std::string& domain
 ) {
     // The key we resolved must be the key the envelope names, or a hostile server could steer us onto another
     // epoch's key with only the ECIES 4-byte checksum between us and a wrong answer.
@@ -203,12 +221,12 @@ std::string GroupEnvelopeEncryptor::unwrapContentKey(
         throw InvalidEnvelopeFormatException("resolved key does not match the key named by the envelope");
     }
     std::string unwrapped = privmx::crypto::EciesEncryptor::decrypt(groupPrivKey, wrap);
-    if (unwrapped.rfind(ECIES_DOMAIN, 0) != 0 || unwrapped.size() != ECIES_DOMAIN.size() + CONTENT_KEY_SIZE) {
+    if (unwrapped.rfind(domain, 0) != 0 || unwrapped.size() != domain.size() + CONTENT_KEY_SIZE) {
         // Not one of ours. Most importantly: an epoch-ladder rung, which is the same ECIES construction
         // addressed to the same key but carries a grant private key. See ECIES_DOMAIN above.
         throw InvalidEnvelopeFormatException("wrapped key is not a group envelope key");
     }
-    return unwrapped.substr(ECIES_DOMAIN.size());
+    return unwrapped.substr(domain.size());
 }
 
 // -- signed messages: types 1, 5, 6 ----------------------------------------------------------------------
@@ -442,6 +460,113 @@ OpenedEnvelope GroupEnvelopeEncryptor::openAnonymousEnvelope(
         .recipients = {},
         .type = ENVELOPE_ANONYMOUS,
     };
+}
+
+// -- spaces --------------------------------------------------------------------------------------------
+
+core::Buffer GroupEnvelopeEncryptor::packSpaceEnvelope(
+    const std::string& spaceId,
+    const std::string& viaGroupId,
+    const core::Buffer& content,
+    const privmx::crypto::PrivateKey& authorPrivKey,
+    const std::string& spaceKey,
+    const EnvelopeSeal& seal
+) {
+    std::string header = writeHeader(
+        TYPE_SPACE, seal.binding, {viaGroupId, spaceId, seal.authorUserId, authorPrivKey.getPublicKey().toDER()}
+    );
+    header.append(EnvelopeWriter::toBE(static_cast<std::uint64_t>(seal.keyVersion), 8));
+    return core::Buffer::from(
+        header + _dataEncryptor.encrypt(signMessage(header, seal, content, authorPrivKey), spaceKey).stdString()
+    );
+}
+
+OpenedEnvelope GroupEnvelopeEncryptor::openSpaceEnvelope(
+    const core::Buffer& envelope,
+    const std::string& spaceKey,
+    const EnvelopeBinding& binding
+) {
+    EnvelopeReader cursor(envelope.stdString());
+    ParsedHeader header = parseHeader(cursor);
+    if (header.wireType != TYPE_SPACE) {
+        throw InvalidEnvelopeFormatException("not an envelope of a Space");
+    }
+    return openSignedMessage(cursor.readRest(), spaceKey, header, binding, ENVELOPE_FROM_MEMBER);
+}
+
+std::string GroupEnvelopeEncryptor::spaceKeySignedBytes(const SpaceKeySlot& slot, const std::string& data) {
+    std::string bytes = SPACE_KEY_LABEL;
+    EnvelopeWriter::putField(bytes, slot.spaceId);
+    bytes.append(EnvelopeWriter::toBE(static_cast<std::uint64_t>(slot.keyVersion), 8));
+    bytes.push_back(slot.isGroup ? '\x01' : '\x02');
+    EnvelopeWriter::putField(bytes, slot.recipientId);
+    bytes.append(EnvelopeWriter::toBE(static_cast<std::uint64_t>(slot.isGroup ? slot.groupKeyVersion : 0), 8));
+    return privmx::crypto::Crypto::sha256(bytes + data);
+}
+
+GroupEnvelopeEncryptor::SpaceKeyWrap GroupEnvelopeEncryptor::wrapSpaceKey(
+    const std::string& spaceKey,
+    const SpaceKeySlot& slot,
+    const privmx::crypto::PublicKey& recipientPubKey,
+    const std::string& signerUserId,
+    const privmx::crypto::PrivateKey& signerPrivKey
+) {
+    if (spaceKey.size() != CONTENT_KEY_SIZE) {
+        throw InvalidEnvelopeFormatException("a Space key is 32 bytes");
+    }
+    std::string data(1, '\x01');
+    EnvelopeWriter::putField(data, signerUserId);
+    EnvelopeWriter::putField(data, signerPrivKey.getPublicKey().toDER());
+    EnvelopeWriter::putField(data, recipientPubKey.toBase58DER());
+    EnvelopeWriter::putField(data, wrapContentKey(recipientPubKey, spaceKey, SPACE_KEY_DOMAIN));
+    return SpaceKeyWrap{
+        .data = data,
+        .signature = _dataEncryptor
+                         .signAndPackDataWithSignature(
+                             core::Buffer::from(spaceKeySignedBytes(slot, data)), signerPrivKey
+                         )
+                         .stdString(),
+    };
+}
+
+GroupEnvelopeEncryptor::SpaceKeyWrapHeader GroupEnvelopeEncryptor::peekSpaceKeyWrap(const std::string& data) {
+    EnvelopeReader cursor(data);
+    if (cursor.readU8() != 1) {
+        throw InvalidEnvelopeFormatException("unknown Space key wrap");
+    }
+    SpaceKeyWrapHeader header;
+    header.signerUserId = cursor.readField();
+    header.signerPubKey = privmx::crypto::PublicKey::fromDER(cursor.readField()).toBase58DER();
+    header.recipientPubKey = cursor.readField();
+    return header;
+}
+
+std::string GroupEnvelopeEncryptor::unwrapSpaceKey(
+    const SpaceKeyWrap& wrap,
+    const SpaceKeySlot& slot,
+    const privmx::crypto::PrivateKey& recipientPrivKey
+) {
+    const SpaceKeyWrapHeader header = peekSpaceKeyWrap(wrap.data);
+    // Signature first: nothing is decrypted for a wrap its signer did not make for this Space, version and reader.
+    const std::string signedBytes = _dataEncryptor
+                                        .verifyAndExtractData(
+                                            core::Buffer::from(wrap.signature),
+                                            privmx::crypto::PublicKey::fromBase58DER(header.signerPubKey)
+                                        )
+                                        .stdString();
+    if (signedBytes != spaceKeySignedBytes(slot, wrap.data)) {
+        throw InvalidEnvelopeFormatException("Space key wrap was signed for another Space, version or recipient");
+    }
+    EnvelopeReader cursor(wrap.data);
+    cursor.skip(1);
+    cursor.readField();
+    cursor.readField();
+    cursor.readField();
+    const std::string sealed = cursor.readField();
+    if (!cursor.readRest().empty()) {
+        throw InvalidEnvelopeFormatException("malformed Space key wrap");
+    }
+    return unwrapContentKey(recipientPrivKey, header.recipientPubKey, sealed, SPACE_KEY_DOMAIN);
 }
 
 // -- files ---------------------------------------------------------------------------------------------

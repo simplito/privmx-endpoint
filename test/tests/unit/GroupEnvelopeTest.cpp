@@ -808,3 +808,151 @@ TEST_F(GroupSequenceWire, TheIdAndTheTranscriptFollowFromTheBytes) {
     EXPECT_NE(next(next(start, a), b), next(next(start, b), a));
     EXPECT_NE(next(start, a), next(start, buf(flipped(a, a.size() - 1))));
 }
+
+// -- spaces --------------------------------------------------------------------------------------------
+
+class GroupSpaceWire : public GroupEnvelopeContent {
+protected:
+    using Slot = GroupEnvelopeEncryptor::SpaceKeySlot;
+    std::string spaceKey = privmx::crypto::Crypto::randomBytes(32);
+    std::string spaceId = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    PrivateKey recipient = PrivateKey::generateRandom();
+    Slot slot{.spaceId = spaceId, .keyVersion = 2, .isGroup = true, .recipientId = "sales", .groupKeyVersion = 5};
+    GroupEnvelopeEncryptor::SpaceKeyWrap wrap =
+        enc.wrapSpaceKey(spaceKey, slot, recipient.getPublicKey(), "alice", author);
+};
+
+TEST_F(GroupSpaceWire, EnvelopeRoundTripAndPlainHeader) {
+    const core::Buffer env = enc.packSpaceEnvelope(spaceId, "sales", buf("note"), author, spaceKey, seal);
+    const auto routing = GroupEnvelopeEncryptor::peekAny(env);
+    EXPECT_EQ(routing.spaceId, spaceId);
+    EXPECT_EQ(routing.groupId, "sales");
+    EXPECT_EQ(routing.keyVersion, 7);
+    EXPECT_EQ(routing.authorUserId, "alice");
+
+    const OpenedEnvelope opened = enc.openSpaceEnvelope(env, spaceKey, none);
+    EXPECT_EQ(opened.data.stdString(), "note");
+    EXPECT_EQ(opened.groupId, "sales");
+    EXPECT_EQ(opened.keyVersion, 7);
+    EXPECT_EQ(opened.authorPubKey, author.getPublicKey().toBase58DER());
+    EXPECT_EQ(opened.encryptedAt, 1700000000000);
+
+    EXPECT_ANY_THROW(enc.openSpaceEnvelope(env, privmx::crypto::Crypto::randomBytes(32), none));
+    EXPECT_THROW(
+        enc.openSpaceEnvelope(env, spaceKey, GroupEnvelopeEncryptor::bindLocation({{false, buf("x")}})),
+        EnvelopeWrongLocationException
+    );
+}
+
+TEST_F(GroupSpaceWire, ASpaceEnvelopeAndAMembersNeverOpenAsEachOther) {
+    // The same 32 bytes as both keys: only the type keeps them apart, and the type is in the signed header.
+    const core::Buffer inSpace = enc.packSpaceEnvelope(spaceId, "", buf("note"), author, groupKey, seal);
+    const core::Buffer inGroup = enc.packMemberEnvelope(groupId, keyId, buf("note"), author, groupKey, seal);
+    EXPECT_THROW(enc.openMemberEnvelope(inSpace, groupKey, none), InvalidEnvelopeFormatException);
+    EXPECT_THROW(enc.openSpaceEnvelope(inGroup, groupKey, none), InvalidEnvelopeFormatException);
+    std::string relabelled = inSpace.stdString();
+    relabelled[1] = 1; // TYPE_SPACE -> TYPE_GROUP_KEY
+    EXPECT_ANY_THROW(enc.openMemberEnvelope(buf(relabelled), groupKey, none));
+    // The Space, the group written through and the key version are signed.
+    for (const std::size_t at : {std::size_t{4}, std::size_t{12}}) {
+        EXPECT_ANY_THROW(enc.openSpaceEnvelope(buf(flipped(enc.packSpaceEnvelope(spaceId, "sales", buf("n"), author, spaceKey, seal), at)), spaceKey, none));
+    }
+    // A Space is named: an envelope cannot be in none.
+    EXPECT_THROW(
+        GroupEnvelopeEncryptor::peekAny(enc.packSpaceEnvelope("", "sales", buf("n"), author, spaceKey, seal)),
+        InvalidEnvelopeFormatException
+    );
+}
+
+TEST_F(GroupSpaceWire, AKeyWrapOpensForItsSpaceVersionAndRecipientOnly) {
+    EXPECT_EQ(enc.unwrapSpaceKey(wrap, slot, recipient), spaceKey);
+    const auto header = GroupEnvelopeEncryptor::peekSpaceKeyWrap(wrap.data);
+    EXPECT_EQ(header.signerUserId, "alice");
+    EXPECT_EQ(header.signerPubKey, author.getPublicKey().toBase58DER());
+    EXPECT_EQ(header.recipientPubKey, recipient.getPublicKey().toBase58DER());
+
+    // The Bridge files it under another Space, version, recipient or epoch: the signature says where it belongs.
+    Slot other = slot;
+    other.spaceId[0] = 'f';
+    EXPECT_THROW(enc.unwrapSpaceKey(wrap, other, recipient), InvalidEnvelopeFormatException);
+    other = slot;
+    other.keyVersion = 3;
+    EXPECT_THROW(enc.unwrapSpaceKey(wrap, other, recipient), InvalidEnvelopeFormatException);
+    other = slot;
+    other.recipientId = "support";
+    EXPECT_THROW(enc.unwrapSpaceKey(wrap, other, recipient), InvalidEnvelopeFormatException);
+    other = slot;
+    other.isGroup = false;
+    EXPECT_THROW(enc.unwrapSpaceKey(wrap, other, recipient), InvalidEnvelopeFormatException);
+    other = slot;
+    other.groupKeyVersion = 6;
+    EXPECT_THROW(enc.unwrapSpaceKey(wrap, other, recipient), InvalidEnvelopeFormatException);
+    // Not the key it is wrapped to.
+    EXPECT_ANY_THROW(enc.unwrapSpaceKey(wrap, slot, PrivateKey::generateRandom()));
+}
+
+TEST_F(GroupSpaceWire, SECURITY_AKeyWrapNamesWhoMadeItAndTheSignatureHoldsThemToIt) {
+    // The Bridge wraps a key it knows for the recipient. It can sign with a key of its own, and then the wrap names
+    // that key: the caller's UserVerifier is asked about it, and says no.
+    const PrivateKey bridge = PrivateKey::generateRandom();
+    const std::string bridgeKey = privmx::crypto::Crypto::randomBytes(32);
+    const auto planted = enc.wrapSpaceKey(bridgeKey, slot, recipient.getPublicKey(), "alice", bridge);
+    EXPECT_EQ(GroupEnvelopeEncryptor::peekSpaceKeyWrap(planted.data).signerPubKey, bridge.getPublicKey().toBase58DER());
+    // What it cannot do is keep alice's key in the header: her signature is not on its data.
+    GroupEnvelopeEncryptor::SpaceKeyWrap spliced{.data = planted.data, .signature = wrap.signature};
+    EXPECT_ANY_THROW(enc.unwrapSpaceKey(spliced, slot, recipient));
+    spliced = {.data = wrap.data, .signature = planted.signature};
+    EXPECT_ANY_THROW(enc.unwrapSpaceKey(spliced, slot, recipient));
+    // Nor change a byte of a wrap alice made.
+    spliced = {.data = wrap.data, .signature = wrap.signature};
+    spliced.data[spliced.data.size() - 1] ^= 0x01;
+    EXPECT_ANY_THROW(enc.unwrapSpaceKey(spliced, slot, recipient));
+    spliced = {.data = wrap.data + "x", .signature = wrap.signature};
+    EXPECT_ANY_THROW(enc.unwrapSpaceKey(spliced, slot, recipient));
+}
+
+TEST_F(GroupSpaceWire, SECURITY_AnEnvelopeKeyWrapIsNotASpaceKeyAndTheOtherWayRound) {
+    // Both are ECIES to a group's identity key. An anonymous envelope's content key, lifted into a Space key wrap,
+    // would make a key the sender of that envelope knows the Space's key.
+    const core::Buffer anonymous = enc.packAnonymousEnvelope(groupId, recipient.getPublicKey(), buf("x"), none);
+    EnvelopeReader cursor(anonymous.stdString());
+    cursor.skip(3);
+    cursor.readField();
+    cursor.readField();
+    const std::string contentKeyWrap = cursor.readField();
+
+    std::string data(1, '\x01');
+    EnvelopeWriter::putField(data, "alice");
+    EnvelopeWriter::putField(data, author.getPublicKey().toDER());
+    EnvelopeWriter::putField(data, recipient.getPublicKey().toBase58DER());
+    EnvelopeWriter::putField(data, contentKeyWrap);
+    // Signed properly by a member, so only the domain stands between the two.
+    core::DataInnerEncryptorV4 raw;
+    std::string preimage = "privmx/space/key";
+    EnvelopeWriter::putField(preimage, slot.spaceId);
+    preimage += EnvelopeWriter::toBE(2, 8);
+    preimage.push_back('\x01');
+    EnvelopeWriter::putField(preimage, slot.recipientId);
+    preimage += EnvelopeWriter::toBE(5, 8);
+    const GroupEnvelopeEncryptor::SpaceKeyWrap lifted{
+        .data = data,
+        .signature =
+            raw.signAndPackDataWithSignature(buf(privmx::crypto::Crypto::sha256(preimage + data)), author).stdString(),
+    };
+    EXPECT_THROW(enc.unwrapSpaceKey(lifted, slot, recipient), InvalidEnvelopeFormatException);
+    // The control: the same construction over a real Space key wrap opens.
+    std::string good(1, '\x01');
+    EnvelopeReader real(wrap.data);
+    real.skip(1);
+    EnvelopeWriter::putField(good, real.readField());
+    EnvelopeWriter::putField(good, real.readField());
+    EnvelopeWriter::putField(good, real.readField());
+    EnvelopeWriter::putField(good, real.readField());
+    EXPECT_EQ(good, wrap.data);
+    const GroupEnvelopeEncryptor::SpaceKeyWrap resigned{
+        .data = good,
+        .signature =
+            raw.signAndPackDataWithSignature(buf(privmx::crypto::Crypto::sha256(preimage + good)), author).stdString(),
+    };
+    EXPECT_EQ(enc.unwrapSpaceKey(resigned, slot, recipient), spaceKey);
+}

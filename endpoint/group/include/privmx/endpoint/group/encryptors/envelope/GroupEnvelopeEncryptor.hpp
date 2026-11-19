@@ -107,6 +107,25 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  * add or drop one unnoticed. The home group opens it as a member's envelope (`openMemberEnvelope`), every
  * other reader with `openSharedEnvelope`, as do the further recipients of a type 5.
  *
+ * ## TYPE 9 - a recipient of a Space -> the Space, symmetric
+ *
+ *   header  = ... | u8len viaGroupId | u8len spaceId | u8len authorUserId | u8len authorPubKeyDER | u64be keyVersion
+ *   payload = encrypt(sign(header || binding || u64be encryptedAt || content, authorPriv), spaceKey32)
+ *
+ * `viaGroupId` is the recipient group the author says they had the Space's key through (empty for an author
+ * who is a recipient themselves); `keyVersion` is the version of the Space's key. Both signed, both claims: the
+ * caller checks the version against the key that opened it, and the group against its roster.
+ *
+ * A version of a Space's key, wrapped for one recipient (not an envelope; stored by the Bridge):
+ *
+ *   data      = u8 1 | u8len signerUserId | u8len signerPubKeyDER | u8len recipientPubKeyBase58DER
+ *               | u8len ecies(SPACE_KEY_DOMAIN || spaceKey32)
+ *   signature = sign(sha256(SPACE_KEY_LABEL || u8len spaceId || u64be keyVersion || u8 kind || u8len recipientId
+ *               || u64be groupKeyVersion || data), signerPriv)
+ *
+ * The Bridge holds no key to wrap, but it could store a wrap of a key of its own: the signature, by a user the
+ * UserVerifier vouches for, is what a reader has against that.
+ *
  * ## Files (content 1, any type above)
  *
  *   content = fileKey32 | u32be count | count * (u32be plainSize | sha256(cipher_i))
@@ -240,6 +259,58 @@ public:
         const EnvelopeBinding& binding
     );
 
+    // -- spaces -----------------------------------------------------------------------------------------
+
+    // Type 9. `seal.keyVersion` is the version of the Space's key.
+    core::Buffer packSpaceEnvelope(
+        const std::string& spaceId,
+        const std::string& viaGroupId,
+        const core::Buffer& content,
+        const privmx::crypto::PrivateKey& authorPrivKey,
+        const std::string& spaceKey,
+        const EnvelopeSeal& seal
+    );
+    // `groupId` in the result is the group the author wrote through; `keyVersion` the Space key's version.
+    OpenedEnvelope openSpaceEnvelope(
+        const core::Buffer& envelope,
+        const std::string& spaceKey,
+        const EnvelopeBinding& binding
+    );
+
+    // What one wrapped version of a Space's key is about. All of it is signed.
+    struct SpaceKeySlot {
+        std::string spaceId{};
+        std::int64_t keyVersion = 0;
+        bool isGroup = false;
+        std::string recipientId{};
+        std::int64_t groupKeyVersion = 0; // groups only
+    };
+    struct SpaceKeyWrap {
+        std::string data{};
+        std::string signature{};
+    };
+    // The plain part of `data`: who signed, and which key it is wrapped to.
+    struct SpaceKeyWrapHeader {
+        std::string signerUserId{};
+        std::string signerPubKey{};    // base58-DER
+        std::string recipientPubKey{}; // base58-DER
+    };
+    SpaceKeyWrap wrapSpaceKey(
+        const std::string& spaceKey,
+        const SpaceKeySlot& slot,
+        const privmx::crypto::PublicKey& recipientPubKey,
+        const std::string& signerUserId,
+        const privmx::crypto::PrivateKey& signerPrivKey
+    );
+    static SpaceKeyWrapHeader peekSpaceKeyWrap(const std::string& data);
+    // Checks the signature over `slot` and `data` with the signer's key named in `data`, then unwraps. Whether
+    // that signer is who they say is the caller's to ask the UserVerifier.
+    std::string unwrapSpaceKey(
+        const SpaceKeyWrap& wrap,
+        const SpaceKeySlot& slot,
+        const privmx::crypto::PrivateKey& recipientPrivKey
+    );
+
     // -- files -------------------------------------------------------------------------------------------
 
     // The content of a file envelope, and back. Reading refuses a list that is not exactly `count` entries, a
@@ -305,6 +376,7 @@ private:
     static constexpr std::uint8_t TYPE_MEMBER_SHARED = 6;
     static constexpr std::uint8_t TYPE_SEQUENCE_ITEM = 7;
     static constexpr std::uint8_t TYPE_SEQUENCE_MARK = 8;
+    static constexpr std::uint8_t TYPE_SPACE = 9;
 
     static constexpr std::uint8_t FLAG_HAS_LOCATION = 0x01;
     static constexpr std::uint8_t FLAG_CONTENT_SHIFT = 1;
@@ -324,6 +396,8 @@ private:
     // Domain label on the location digest, and on a content key wrapped under a group's symmetric key.
     static const std::string LOCATION_LABEL;
     static const std::string KEY_WRAP_LABEL;
+    static const std::string SPACE_KEY_DOMAIN;
+    static const std::string SPACE_KEY_LABEL;
     static const std::string SEQUENCE_ITEM_LABEL;
     static const std::string SEQUENCE_MARK_LABEL;
 
@@ -364,13 +438,19 @@ private:
     static std::string chunkKey(const std::string& fileKey, ChunkIndex index);
 
     // ECIES key wrap of `contentKey` to `pubKey`, with a throwaway sender key.
-    static std::string wrapContentKey(const privmx::crypto::PublicKey& pubKey, const std::string& contentKey);
+    static std::string wrapContentKey(
+        const privmx::crypto::PublicKey& pubKey,
+        const std::string& contentKey,
+        const std::string& domain = ECIES_DOMAIN
+    );
     // Inverse, including the domain check that keeps epoch-ladder rungs out.
     static std::string unwrapContentKey(
         const privmx::crypto::PrivateKey& groupPrivKey,
         const std::string& groupPubKeyBase58,
-        const std::string& wrap
+        const std::string& wrap,
+        const std::string& domain = ECIES_DOMAIN
     );
+    static std::string spaceKeySignedBytes(const SpaceKeySlot& slot, const std::string& data);
 
     core::DataInnerEncryptorV4 _dataEncryptor;
 };

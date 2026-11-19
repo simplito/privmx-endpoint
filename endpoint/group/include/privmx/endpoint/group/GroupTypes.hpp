@@ -77,12 +77,13 @@ struct EnvelopeRouting {
     EnvelopeType type;
     EnvelopeContent content = EnvelopeContent::Message;
     bool hasLocation = false;
-    std::string groupId;
-    std::string keyId;                     // member envelopes only
-    std::int64_t keyVersion = 0;           // member envelopes only: the epoch the writer claims
-    std::string groupPubKey;               // base58-DER; outsider and anonymous envelopes only
-    std::string authorUserId;              // signed envelopes only
-    std::string authorPubKey;              // base58-DER; signed envelopes only
+    std::string groupId;         // for an envelope in a Space: the group the author wrote through, or empty
+    std::string spaceId;         // envelopes in a Space only
+    std::string keyId;           // member envelopes only
+    std::int64_t keyVersion = 0; // member envelopes: the epoch the writer claims; in a Space: the Space key's version
+    std::string groupPubKey;     // base58-DER; outsider and anonymous envelopes only
+    std::string authorUserId;    // signed envelopes only
+    std::string authorPubKey;    // base58-DER; signed envelopes only
     std::vector<WireRecipient> recipients; // signed message envelopes only
 };
 

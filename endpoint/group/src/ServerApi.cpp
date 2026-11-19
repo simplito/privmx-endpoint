@@ -120,6 +120,39 @@ void ServerApi::groupSetRoles(server::GroupSetRolesModel model) {
     request("groupSetRoles", model.toJSON());
 }
 
+server::SpaceCreateResult ServerApi::spaceCreate(server::SpaceCreateModel model) {
+    return request<server::SpaceCreateResult>("spaceCreate", model.toJSON());
+}
+
+server::SpaceGetResult ServerApi::spaceGet(server::SpaceIdModel model) {
+    return request<server::SpaceGetResult>("spaceGet", model.toJSON());
+}
+
+server::SpaceListResult ServerApi::spaceList(server::SpaceListModel model) {
+    return request<server::SpaceListResult>("spaceList", model.toJSON());
+}
+
+void ServerApi::spaceDelete(server::SpaceIdModel model) {
+    request("spaceDelete", model.toJSON());
+}
+
+void ServerApi::spaceAddRecipients(server::SpaceAddRecipientsModel model) {
+    request("spaceAddRecipients", model.toJSON());
+}
+
+server::SpaceRotateKeyResult ServerApi::spaceRotateKey(server::SpaceRotateKeyModel model) {
+    const bool removal = model.groups.has_value() || model.users.has_value();
+    return request<server::SpaceRotateKeyResult>(removal ? "spaceRemoveRecipients" : "spaceRotateKey", model.toJSON());
+}
+
+void ServerApi::spaceUpdatePublicMeta(server::SpaceUpdateMetaModel model) {
+    request("spaceUpdatePublicMeta", model.toJSON());
+}
+
+void ServerApi::spaceUpdatePrivateMeta(server::SpaceUpdateMetaModel model) {
+    request("spaceUpdatePrivateMeta", model.toJSON());
+}
+
 void ServerApi::groupSelfUpdate(server::GroupSelfUpdateModel model) {
     request("groupSelfUpdate", model.toJSON());
 }
