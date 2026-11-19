@@ -30,6 +30,7 @@
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp"
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeFiles.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp"
+#include "privmx/endpoint/group/keytree/SpaceLog.hpp"
 #include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 #include "privmx/endpoint/group/keytree/TreeVerifier.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
@@ -291,6 +292,7 @@ public:
         const std::optional<core::Buffer>& resumeFrom
     );
     SpaceOrigin getSpaceSequenceOrigin(SequenceHandle sequence);
+    core::PagingList<SpaceLogEntry> getSpaceLog(const std::string& spaceId, const core::PagingQuery& pagingQuery);
 
     // The group's own route to its head entry's key must be at the answer's (verified) `keyVersion`: a key from an
     // earlier epoch is one a member removed since still holds. Throws GroupDataIntegrityException.
@@ -491,19 +493,26 @@ private:
     };
     server::SpaceInfo spaceInfo(const std::string& spaceId, bool fresh = false);
     void forgetSpace(const std::string& spaceId);
-    // A deleted Space: its keys go too, or one created again under the same id would reuse the old key. The version
-    // seen stays, unless this process creates the Space again (`createSpace`).
+    // A deleted Space: its keys go too, and a read sent before the delete is not kept (`spaceGeneration`), or one
+    // created again under the same id would reuse the old key.
     void dropSpace(const std::string& spaceId);
-    // What a read of a Space is held to, taken before its request: the mark and the Space's generation then.
-    struct SpaceReadTicket {
-        std::int64_t seen = 0;
-        std::uint64_t generation = 0;
-    };
-    SpaceReadTicket spaceReadTicket(const std::string& spaceId);
-    bool keepSpaceRead(
-        const server::SpaceInfo& space,
-        const SpaceReadTicket& ticket,
-        const std::optional<CachedSpace>& keep
+    std::uint64_t spaceGeneration(const std::string& spaceId);
+    // The Space's signed history: see GroupApiImplSpaces.cpp. `verifySpace` replaces what the Bridge said about
+    // the recipients, the key version and the creator with what the statements say.
+    keytree::SpaceLogState verifySpace(server::SpaceInfo& space);
+    std::vector<keytree::SpaceStatement> spaceStatements(const std::string& spaceId, std::int64_t fromSeq);
+    std::optional<keytree::SpaceLogState> spaceLogOf(const std::string& spaceId);
+    void rememberSpaceLog(const keytree::SpaceLogState& state);
+    std::map<std::string, std::pair<std::uint64_t, std::string>> storedSpacePins();
+    void storeSpacePin(const keytree::SpaceLogState& state);
+    keytree::SpaceStatement signSpaceStatement(
+        keytree::SpaceStatement statement,
+        const std::optional<keytree::SpaceLogState>& prior
+    );
+    void appendRecipients(
+        keytree::SpaceStatement& statement,
+        const std::vector<SpaceRecipient>& recipients,
+        const std::vector<SpaceTarget>& targets
     );
     SpaceKeyUse spaceKeyAt(const server::SpaceInfo& space, std::int64_t keyVersion);
     // The recipients' current keys, each verified: a group's off its latest statement, a user's by the UserVerifier.
@@ -534,9 +543,14 @@ private:
     // Subject pins of a connection with no PinStore. With a store they live there, sealed.
     std::mutex _subjectPinsMutex;
     std::map<std::string, std::string> _subjectPins;
-    std::mutex _spaceKeyVersionsMutex;
-    std::map<std::string, std::int64_t> _spaceKeyVersions;  // guarded by the mutex above
-    std::map<std::string, std::uint64_t> _spaceGenerations; // guarded by it too; moved by a delete or own create
+    // Guards the four below. The verified state of each Space this process has read: it only moves forward, and
+    // is not dropped on a reconnect.
+    std::mutex _spaceLogsMutex;
+    std::map<std::string, keytree::SpaceLogState> _spaceLogs;
+    std::map<std::string, std::pair<std::uint64_t, std::string>>
+        _spacePins; // what the device's store held at first use
+    bool _spacePinsLoaded = false;
+    std::map<std::string, std::uint64_t> _spaceGenerations; // moved by a delete or own create
     privmx::utils::ThreadSaveMap<std::string, SpaceKeyUse> _spaceKeys; // by "<spaceId>:<keyVersion>"
     std::shared_ptr<Sequence> sequenceOf(SequenceHandle handle, bool wantReading);
     core::Buffer markSequence(Sequence& sequence, bool closed);

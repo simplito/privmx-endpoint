@@ -591,6 +591,15 @@ SpaceOrigin GroupApi::getSpaceSequenceOrigin(const SequenceHandle sequence) {
     return impl->getSpaceSequenceOrigin(sequence);
 }
 
+core::PagingList<SpaceLogEntry> GroupApi::getSpaceLog(
+    const std::string& spaceId,
+    const core::PagingQuery& pagingQuery
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->getSpaceLog(spaceId, pagingQuery);
+}
+
 std::vector<std::string> GroupApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {
     auto impl = getImpl();
     return impl->subscribeFor(subscriptionQueries);

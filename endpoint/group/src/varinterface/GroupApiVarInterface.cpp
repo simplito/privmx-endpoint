@@ -87,6 +87,7 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {GetSpaceSequenceOrigin, &GroupApiVarInterface::getSpaceSequenceOrigin},
         {EncodePath, &GroupApiVarInterface::encodePath},
         {PinGroupToSubject, &GroupApiVarInterface::pinGroupToSubject},
+        {GetSpaceLog, &GroupApiVarInterface::getSpaceLog},
         {AbortFile, &GroupApiVarInterface::abortFile}
 };
 
@@ -743,6 +744,13 @@ Poco::Dynamic::Var GroupApiVarInterface::pinGroupToSubject(const Poco::Dynamic::
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(2), "groupId");
     _groupApi.pinGroupToSubject(contextId, subject, groupId);
     return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::getSpaceLog(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto pagingQuery = _deserializer.deserialize<core::PagingQuery>(argsArr->get(1), "pagingQuery");
+    return _serializer.serialize(_groupApi.getSpaceLog(spaceId, pagingQuery));
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::abortFile(const Poco::Dynamic::Var& args) {

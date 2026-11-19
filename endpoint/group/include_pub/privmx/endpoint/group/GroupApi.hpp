@@ -663,9 +663,11 @@ public:
     // alsoFor wraps a value's key once per recipient, for every value. A Space wraps its key once per recipient
     // when it is created and when the key is replaced; writing a value wraps nothing.
     //
-    // The Bridge stores a Space like a container with no data: the key's versions, each wrapped for the
-    // recipients and signed by whoever made it. The Bridge holds no key to wrap, and a wrap it made of a key of
-    // its own would not carry the signature of a user the UserVerifier accepts.
+    // A Space has a signed history, like a Group: every change of its recipients or its key is a statement signed
+    // by a recipient and chained to the one before. The Bridge stores the statements and the wrapped keys; who
+    // the recipients are, which key is current and who made the Space is what the statements add up to, replayed
+    // and checked here. The Bridge cannot add a recipient or plant a key, and neither can a user of the Context
+    // who is no recipient: a statement needs a recipient's own signature, or the key of a recipient Group.
     //
     // A stale key. When a recipient Group removes a member, that member still holds the Space's key. The Bridge
     // marks the Space (SpaceState::keyIsStale), and the next write by someone who can reach every recipient
@@ -753,6 +755,11 @@ public:
     );
     /** Who wrote the sequence opened with openSequenceInSpace, and how they had access. */
     SpaceOrigin getSpaceSequenceOrigin(const SequenceHandle sequence);
+    /**
+     * The Space's history: every change of its recipients and its key, verified from the creation. Each
+     * statement is signed by a recipient - themselves, or through a recipient Group, shown by that Group's key.
+     */
+    core::PagingList<SpaceLogEntry> getSpaceLog(const std::string& spaceId, const core::PagingQuery& pagingQuery);
 
     /**
      * Subscribe for the Group events on the given subscription query.

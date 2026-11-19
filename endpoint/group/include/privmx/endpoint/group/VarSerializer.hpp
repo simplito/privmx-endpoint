@@ -108,6 +108,14 @@ Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::SpaceState>>
 );
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceLogEntry>(const group::SpaceLogEntry& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::SpaceLogEntry>>(
+    const core::PagingList<group::SpaceLogEntry>& val
+);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::CipherRange>(const group::CipherRange& val);
 
 template<>

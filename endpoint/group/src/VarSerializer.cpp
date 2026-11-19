@@ -315,6 +315,39 @@ Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::SpaceState>>
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceLogEntry>(const group::SpaceLogEntry& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$SpaceLogEntry");
+    }
+    obj->set("seq", serialize(val.seq));
+    obj->set("kind", serialize(val.kind));
+    obj->set("author", serialize(val.author));
+    obj->set("authorPubKey", serialize(val.authorPubKey));
+    obj->set("via", serialize(val.via));
+    obj->set("date", serialize(val.date));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    obj->set("addedGroups", serialize(val.addedGroups));
+    obj->set("addedUsers", serialize(val.addedUsers));
+    obj->set("removedGroups", serialize(val.removedGroups));
+    obj->set("removedUsers", serialize(val.removedUsers));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::SpaceLogEntry>>(
+    const core::PagingList<group::SpaceLogEntry>& val
+) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "core$PagingList<group$SpaceLogEntry>");
+    }
+    obj->set("totalAvailable", serialize(val.totalAvailable));
+    obj->set("readItems", serialize(val.readItems));
+    return obj;
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::CipherRange>(const group::CipherRange& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {

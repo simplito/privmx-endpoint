@@ -623,6 +623,7 @@ struct SpaceUserRecipient {
 struct SpaceState {
     std::string spaceId;
     std::string contextId;
+    /** Who created the Space: the signer of its first statement. */
     std::string createdBy;
     std::vector<SpaceGroupRecipient> groups;
     std::vector<SpaceUserRecipient> users;
@@ -651,6 +652,27 @@ struct SpaceOrigin {
     std::string authorAccess;
     /** The version of the Space's key the value was sealed under. */
     int64_t keyVersion;
+};
+
+/** One signed statement of a Space's history, as GroupApi::getSpaceLog returns it. */
+struct SpaceLogEntry {
+    /** 1 for the creation, one more for each later statement. */
+    int64_t seq;
+    /** "create", "add", "remove" or "rotate". */
+    std::string kind;
+    /** The recipient who signed it, and the identity key it was signed with. */
+    std::string author;
+    std::string authorPubKey;
+    /** "user", or the ID of the recipient Group the author acted through (shown by that Group's key). */
+    std::string via;
+    /** The author's clock, in milliseconds. */
+    int64_t date;
+    /** The version of the Space's key after it. */
+    int64_t keyVersion;
+    std::vector<std::string> addedGroups;
+    std::vector<std::string> addedUsers;
+    std::vector<std::string> removedGroups;
+    std::vector<std::string> removedUsers;
 };
 
 struct DecryptedSpaceEnvelope {
