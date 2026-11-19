@@ -86,12 +86,13 @@ static Path patient(const core::Buffer& patientId) { return {name("clinic"), nam
 static Path billing() { return {name("clinic"), name("billing")}; }
 
 static core::Buffer saveDischarge(
-    GroupHandle& team, const core::Buffer& dischargeId, const core::UserWithPubKey& auditor, const std::string& text
+    GroupHandle& team, const core::Buffer& dischargeId, const std::string& billingOwner,
+    const core::UserWithPubKey& auditor, const std::string& text
 ) {
     EncryptOptions options;
     // Billing is named, not given as a key: its current key is fetched at every encryption.
-    options.alsoFor.push_back({.groupId = {}, .groupSubject = billing(), .user = std::nullopt});
-    options.alsoFor.push_back({.groupId = {}, .groupSubject = {}, .user = auditor});
+    options.alsoFor.push_back({.groupId = {}, .groupSubject = billing(), .groupCreatedBy = billingOwner, .user = std::nullopt});
+    options.alsoFor.push_back({.groupId = {}, .groupSubject = {}, .groupCreatedBy = {}, .user = auditor});
     return team.encrypt({name("discharge"), id(dischargeId)}, core::Buffer::from(text), options);
 }
 
@@ -103,17 +104,15 @@ static DecryptedSharedEnvelope readSharedDischarge(
     const std::string& authorId,
     const core::Buffer& body
 ) {
-    Path location = patient(patientId);
-    location.push_back(name("discharge"));
-    location.push_back(id(dischargeId));
-    return groups.decryptShared(location, body, by(authorId));
+    return groups.decryptShared(patient(patientId), {name("discharge"), id(dischargeId)}, body, by(authorId));
 }
 
 // Runs on the analyzer: an account in the Context, a member of no care team.
 static core::Buffer sendLabResult(
-    GroupClient& analyzerGroups, const core::Buffer& patientId, const core::Buffer& resultId, const std::string& result
+    GroupClient& analyzerGroups, const core::Buffer& patientId, const std::string& doctorId,
+    const core::Buffer& resultId, const std::string& result
 ) {
-    GroupOutsider outsider = analyzerGroups.openForWriting(patient(patientId)); // writes only: there is no decrypt on it
+    GroupOutsider outsider = analyzerGroups.openForWriting(patient(patientId), doctorId); // writes only: there is no decrypt on it
     return outsider.encrypt({name("lab"), id(resultId)}, core::Buffer::from(result));
 }
 
@@ -161,13 +160,14 @@ static Path team(const std::string& teamId) { return {name("crm"), name("team"),
 
 // The Space's key is wrapped once for each team, here and never again until the key is replaced.
 static Space createProjectSpace(
-    GroupClient& groups, const std::string& projectId, const std::string& salesId, const std::string& supportId
+    GroupClient& groups, const std::string& projectId, const std::string& salesId, const std::string& salesOwner,
+    const std::string& supportId, const std::string& supportOwner
 ) {
     return groups.createSpaceFor(
         project(projectId),
         {
-            {.groupId = {}, .groupSubject = team(salesId), .user = std::nullopt, .role = "manager"},
-            {.groupId = {}, .groupSubject = team(supportId), .user = std::nullopt, .role = "user"},
+            {.groupId = {}, .groupSubject = team(salesId), .groupCreatedBy = salesOwner, .user = std::nullopt, .role = "manager"},
+            {.groupId = {}, .groupSubject = team(supportId), .groupCreatedBy = supportOwner, .user = std::nullopt, .role = "user"},
         },
         {},
         {}
@@ -362,7 +362,11 @@ TEST_F(GroupClientTest, records_three_audiences_a_writer_that_cannot_read_and_a_
 
     switchTo(1);
     care = groups.openGroup(patient(patientId), {.createdBy = userId(1)});
-    const core::Buffer discharge = saveDischarge(care, dischargeId, user(3), "discharged, stable");
+    // Billing is named with who made it: wrapped for a Group somebody else put under that name, the summary
+    // would be theirs to read.
+    EXPECT_THROW({ saveDischarge(care, dischargeId, userId(3), user(3), "x"); }, GroupWrongCreatorException);
+    EXPECT_THROW({ saveDischarge(care, dischargeId, "", user(3), "x"); }, core::InvalidParamsException);
+    const core::Buffer discharge = saveDischarge(care, dischargeId, userId(2), user(3), "discharged, stable");
     // The care team reads it as its own; billing (user 2) and the auditor (user 3) as shared with them.
     EXPECT_EQ(care.decrypt({name("discharge"), id(dischargeId)}, discharge, by(userId(1))).data.stdString(), "discharged, stable");
     EXPECT_THROW({ readSharedDischarge(groups, patientId, dischargeId, userId(1), discharge); }, EnvelopeNotARecipientException);
@@ -373,15 +377,28 @@ TEST_F(GroupClientTest, records_three_audiences_a_writer_that_cannot_read_and_a_
     EXPECT_EQ(shared.via, billingGroup.getGroupId());
     EXPECT_EQ(shared.homeGroupId, care.getGroupId());
     EXPECT_EQ(shared.senderMembership, "member"); // the care team is visible to the Context
+    // The same envelope presented as another patient's: it says which Group it was written in.
+    EXPECT_THROW(
+        { groups.decryptShared(patient(GroupApi::idFromString("someone-else")), {name("discharge"), id(dischargeId)}, discharge, by(userId(1))); },
+        EnvelopeWrongGroupException
+    );
+    EXPECT_THROW(
+        { groups.decryptShared(patient(patientId), {name("discharge"), id(dischargeId)}, discharge, by(userId(1)), {.createdBy = userId(3)}); },
+        GroupWrongCreatorException
+    );
+    // A Group named by its subject is named with its creator: user 3 could have made "this patient's team" first.
+    EXPECT_THROW({ groups.openForWriting(patient(patientId), userId(3)); }, GroupWrongCreatorException);
+    EXPECT_THROW({ groups.openForWriting(patient(patientId), ""); }, core::InvalidParamsException);
+    EXPECT_THROW({ groups.getPublicKey(patient(patientId), userId(3)); }, GroupWrongCreatorException);
     // The analyzer: a writer that cannot read, not even its own result.
-    const core::Buffer lab = sendLabResult(groups, patientId, resultId, "CRP 3.1");
+    const core::Buffer lab = sendLabResult(groups, patientId, userId(1), resultId, "CRP 3.1");
     EXPECT_ANY_THROW({ groups.openGroup(patient(patientId)); });
 
     switchTo(3);
     shared = readSharedDischarge(groups, patientId, dischargeId, userId(1), discharge);
     EXPECT_EQ(shared.via, "user");
     // A public form: a key the team published, and no account behind the writer.
-    const GroupPublicKey published = groups.getPublicKey(patient(patientId));
+    const GroupPublicKey published = groups.getPublicKey(patient(patientId), userId(1));
     const core::Buffer intake =
         GroupOutsider::anonymous(*groupApi, published, patient(patientId)).encrypt({name("intake"), id("i1")}, core::Buffer::from("form"));
 
@@ -416,9 +433,10 @@ TEST_F(GroupClientTest, space_one_key_for_two_teams_named_by_their_subjects) {
     groups.createGroupFor(team(supportId), {member(3, "manager")}, {}, {}, std::nullopt, "context");
     switchTo(1);
 
-    Space projectSpace = createProjectSpace(groups, projectId, salesId, supportId);
+    EXPECT_THROW({ createProjectSpace(groups, projectId, salesId, userId(1), supportId, userId(2)); }, GroupWrongCreatorException);
+    Space projectSpace = createProjectSpace(groups, projectId, salesId, userId(1), supportId, userId(3));
     EXPECT_EQ(projectSpace.getSpaceId(), GroupApi::deriveSpaceId(contextId(), GroupApi::encodePath(project(projectId))));
-    EXPECT_THROW({ createProjectSpace(groups, projectId, salesId, supportId); }, GroupAlreadyExistsException);
+    EXPECT_THROW({ createProjectSpace(groups, projectId, salesId, userId(1), supportId, userId(3)); }, GroupAlreadyExistsException);
     const core::Buffer note = saveNote(projectSpace, "n1", "call the client");
 
     switchTo(3);
@@ -445,7 +463,7 @@ TEST_F(GroupClientTest, space_one_key_for_two_teams_named_by_their_subjects) {
 
     // changeTeams: support leaves by its subject, and a user joins who reads what is already there.
     EXPECT_EQ(projectSpace.removeRecipients({{.groupId = {}, .groupSubject = team(supportId), .userId = {}}}), 3);
-    projectSpace.addRecipients({{.groupId = {}, .groupSubject = {}, .user = user(2), .role = "user"}});
+    projectSpace.addRecipients({{.groupId = {}, .groupSubject = {}, .groupCreatedBy = {}, .user = user(2), .role = "user"}});
     switchTo(2);
     EXPECT_EQ(groups.openSpace(project(projectId)).decrypt({name("note"), id("n3"), name("rev"), name("1")}, after, by(userId(1))).data.stdString(), "new terms");
     switchTo(3);
@@ -453,7 +471,7 @@ TEST_F(GroupClientTest, space_one_key_for_two_teams_named_by_their_subjects) {
 
     // A Space bound to no entity: a full location, or none.
     switchTo(1);
-    Space unbound = groups.createUnboundSpace({{.groupId = {}, .groupSubject = {}, .user = user(1), .role = "manager"}}, {}, {});
+    Space unbound = groups.createUnboundSpace({{.groupId = {}, .groupSubject = {}, .groupCreatedBy = {}, .user = user(1), .role = "manager"}}, {}, {});
     const core::Buffer plain = unbound.encrypt(GroupApi::noLocation(), core::Buffer::from("x"));
     EXPECT_EQ(groups.openUnboundSpace(unbound.getSpaceId()).decrypt(GroupApi::noLocation(), plain, by(userId(1))).data.stdString(), "x");
 }

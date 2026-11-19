@@ -52,18 +52,57 @@ std::vector<DecryptItem> placed(const Path& subject, std::vector<DecryptItem> it
     return items;
 }
 
+// A Group named by its subject, for something that is about to be wrapped for it or written to it by someone
+// who may not be in it. Whoever knows a subject can make a Group under it first, so the caller says who made the
+// right one, and the Group's signed policy has to agree.
+std::string groupOfSubject(
+    GroupApi& api,
+    const std::string& contextId,
+    const Path& subject,
+    const std::string& createdBy
+) {
+    if (createdBy.empty()) {
+        throw core::InvalidParamsException("a Group named by its subject is named with the user who created it");
+    }
+    const std::string groupId = GroupApi::deriveGroupId(contextId, GroupApi::encodePath(subject));
+    const std::string creator = api.getGroupPublicKey(contextId, groupId).creator;
+    if (creator != createdBy) {
+        throw GroupWrongCreatorException(creator);
+    }
+    return groupId;
+}
+
 // Further recipients named by subject, turned into the IDs GroupApi takes.
-EncryptOptions resolved(const std::string& contextId, EncryptOptions options) {
+EncryptOptions resolved(GroupApi& api, const std::string& contextId, EncryptOptions options) {
     for (EnvelopeRecipient& recipient : options.alsoFor) {
         if (!recipient.groupSubject.empty()) {
             if (!recipient.groupId.empty() || recipient.user.has_value()) {
                 throw core::InvalidParamsException("a recipient is one group, by its ID or its subject, or one user");
             }
-            recipient.groupId = GroupApi::deriveGroupId(contextId, GroupApi::encodePath(recipient.groupSubject));
+            recipient.groupId = groupOfSubject(api, contextId, recipient.groupSubject, recipient.groupCreatedBy);
             recipient.groupSubject.clear();
+            recipient.groupCreatedBy.clear();
         }
     }
     return options;
+}
+
+std::vector<SpaceRecipient> resolvedRecipients(
+    GroupApi& api,
+    const std::string& contextId,
+    std::vector<SpaceRecipient> recipients
+) {
+    for (SpaceRecipient& recipient : recipients) {
+        if (!recipient.groupSubject.empty()) {
+            if (!recipient.groupId.empty() || recipient.user.has_value()) {
+                throw core::InvalidParamsException("a recipient is one group, by its ID or its subject, or one user");
+            }
+            recipient.groupId = groupOfSubject(api, contextId, recipient.groupSubject, recipient.groupCreatedBy);
+            recipient.groupSubject.clear();
+            recipient.groupCreatedBy.clear();
+        }
+    }
+    return recipients;
 }
 
 std::optional<core::ContainerPolicy> policyOf(const std::optional<GroupRules>& rules) {
@@ -150,7 +189,7 @@ core::PagingList<GroupLogEntry> GroupHandle::getLog(const core::PagingQuery& que
 }
 
 core::Buffer GroupHandle::encrypt(const Path& place, const core::Buffer& data, const EncryptOptions& options) {
-    return _api.encrypt(_groupId, at(place), data, resolved(_contextId, options));
+    return _api.encrypt(_groupId, at(place), data, resolved(_api, _contextId, options));
 }
 DecryptedEnvelope GroupHandle::decrypt(const Path& place, const core::Buffer& envelope, const DecryptOptions& options) {
     return _api.decrypt(_groupId, at(place), envelope, options);
@@ -170,7 +209,7 @@ DecryptedAnonymousEnvelope GroupHandle::decryptAnonymous(const Path& place, cons
 }
 
 GroupFileWriter GroupHandle::beginFileEncryption(const Path& place, const EncryptOptions& options) {
-    return GroupFileWriter(_api, _api.beginFileEncryption(_groupId, at(place), resolved(_contextId, options)));
+    return GroupFileWriter(_api, _api.beginFileEncryption(_groupId, at(place), resolved(_api, _contextId, options)));
 }
 GroupFileReader GroupHandle::beginFileDecryption(
     const Path& place,
@@ -264,7 +303,7 @@ Path GroupOutsider::at(const Path& place) const {
 
 core::Buffer GroupOutsider::encrypt(const Path& place, const core::Buffer& data, const EncryptOptions& options) {
     if (!_contextId.empty()) {
-        return _api.encryptAsOutsider(_contextId, _groupId, at(place), data, resolved(_contextId, options));
+        return _api.encryptAsOutsider(_contextId, _groupId, at(place), data, resolved(_api, _contextId, options));
     }
     if (!options.alsoFor.empty()) {
         throw core::InvalidParamsException("an anonymous writer has no further recipients");
@@ -275,7 +314,8 @@ core::Buffer GroupOutsider::encrypt(const Path& place, const core::Buffer& data,
 GroupFileWriter GroupOutsider::beginFileEncryption(const Path& place, const EncryptOptions& options) {
     if (!_contextId.empty()) {
         return GroupFileWriter(
-            _api, _api.beginFileEncryptionAsOutsider(_contextId, _groupId, at(place), resolved(_contextId, options))
+            _api,
+            _api.beginFileEncryptionAsOutsider(_contextId, _groupId, at(place), resolved(_api, _contextId, options))
         );
     }
     if (!options.alsoFor.empty()) {
@@ -325,17 +365,7 @@ GroupSequenceReader Space::openSequence(
 }
 
 void Space::addRecipients(const std::vector<SpaceRecipient>& recipients) {
-    std::vector<SpaceRecipient> resolved = recipients;
-    for (SpaceRecipient& recipient : resolved) {
-        if (!recipient.groupSubject.empty()) {
-            if (!recipient.groupId.empty()) {
-                throw core::InvalidParamsException("a recipient Group is named by its ID or by its subject, not both");
-            }
-            recipient.groupId = GroupApi::deriveGroupId(_contextId, GroupApi::encodePath(recipient.groupSubject));
-            recipient.groupSubject.clear();
-        }
-    }
-    _api.addSpaceRecipients(_spaceId, resolved);
+    _api.addSpaceRecipients(_spaceId, resolvedRecipients(_api, _contextId, recipients));
 }
 int64_t Space::removeRecipients(const std::vector<SpaceRecipientRef>& recipients) {
     std::vector<SpaceRecipientRef> resolved = recipients;
@@ -549,18 +579,8 @@ GroupHandle GroupClient::openUnboundGroup(const std::string& groupId) {
     return GroupHandle(_api, _contextId, groupId, Path{});
 }
 
-std::vector<SpaceRecipient> GroupClient::resolve(const std::vector<SpaceRecipient>& recipients) const {
-    std::vector<SpaceRecipient> resolved = recipients;
-    for (SpaceRecipient& recipient : resolved) {
-        if (!recipient.groupSubject.empty()) {
-            if (!recipient.groupId.empty()) {
-                throw core::InvalidParamsException("a recipient Group is named by its ID or by its subject, not both");
-            }
-            recipient.groupId = groupIdOf(recipient.groupSubject);
-            recipient.groupSubject.clear();
-        }
-    }
-    return resolved;
+std::vector<SpaceRecipient> GroupClient::resolve(const std::vector<SpaceRecipient>& recipients) {
+    return resolvedRecipients(_api, _contextId, recipients);
 }
 
 Space GroupClient::createSpaceFor(
@@ -602,31 +622,52 @@ Space GroupClient::openUnboundSpace(const std::string& spaceId) {
     return Space(_api, _contextId, spaceId, Path{});
 }
 
-GroupOutsider GroupClient::openForWriting(const Path& subject) {
+GroupOutsider GroupClient::openForWriting(const Path& subject, const std::string& createdBy) {
     GroupOutsider writer;
     writer._api = _api;
     writer._contextId = _contextId;
-    writer._groupId = groupIdOf(subject);
+    writer._groupId = groupOfSubject(_api, _contextId, subject, createdBy);
     writer._subject = subject;
     return writer;
 }
 
-GroupPublicKey GroupClient::getPublicKey(const Path& subject) {
+GroupPublicKey GroupClient::getPublicKey(const Path& subject, const std::string& createdBy) {
+    groupOfSubject(_api, _contextId, subject, createdBy);
     return _api.getGroupPublicKey(_contextId, groupIdOf(subject));
 }
 
+// The envelope says which Group it was written in; the place it was found at says which Group that should be.
+// Checked on the plain header first, and it is that header the signature covers.
+void GroupClient::requireHome(const Path& authorSubject, const core::Buffer& envelope, const OpenGroupOptions& home) {
+    const std::string homeId = groupIdOf(authorSubject);
+    if (GroupApi::peekEnvelope(envelope).groupId != homeId) {
+        throw EnvelopeWrongGroupException("not written in the Group of the author's subject");
+    }
+    if (home.createdBy.has_value()) {
+        groupOfSubject(_api, _contextId, authorSubject, home.createdBy.value());
+    }
+}
+
 DecryptedSharedEnvelope GroupClient::decryptShared(
-    const Path& location,
+    const Path& authorSubject,
+    const Path& place,
     const core::Buffer& envelope,
-    const DecryptOptions& options
+    const DecryptOptions& options,
+    const OpenGroupOptions& home
 ) {
-    return _api.decryptShared(_contextId, location, envelope, options);
+    requireHome(authorSubject, envelope, home);
+    return _api.decryptShared(_contextId, join(authorSubject, place), envelope, options);
 }
 
 GroupFileReader GroupClient::beginSharedFileDecryption(
-    const Path& location,
+    const Path& authorSubject,
+    const Path& place,
     const core::Buffer& envelope,
-    const DecryptOptions& options
+    const DecryptOptions& options,
+    const OpenGroupOptions& home
 ) {
-    return GroupFileReader(_api, _api.beginSharedFileDecryption(_contextId, location, envelope, options));
+    requireHome(authorSubject, envelope, home);
+    return GroupFileReader(
+        _api, _api.beginSharedFileDecryption(_contextId, join(authorSubject, place), envelope, options)
+    );
 }

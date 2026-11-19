@@ -42,10 +42,10 @@ protected:
         );
     }
     SpaceRecipient team(const std::string& groupId, const std::string& role) {
-        return SpaceRecipient{.groupId = groupId, .user = std::nullopt, .role = role};
+        return SpaceRecipient{.groupId = groupId, .groupSubject = {}, .groupCreatedBy = {}, .user = std::nullopt, .role = role};
     }
     SpaceRecipient person(int index, const std::string& role) {
-        return SpaceRecipient{.groupId = {}, .user = user(index), .role = role};
+        return SpaceRecipient{.groupId = {}, .groupSubject = {}, .groupCreatedBy = {}, .user = user(index), .role = role};
     }
     void switchTo(int index) {
         disconnect();
@@ -208,12 +208,12 @@ TEST_F(GroupSpaceTest, an_added_recipient_reads_the_past_and_a_removed_one_gets_
     EXPECT_EQ(opened.origin.authorAccess, "yes");
     EXPECT_EQ(groupApi->decryptInSpace(spaceId, note("n2"), second, by(userId(1))).data.stdString(), "second");
     // Not a manager: the recipients are not theirs to change.
-    EXPECT_ANY_THROW({ groupApi->removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .userId = userId(2)}}); });
+    EXPECT_ANY_THROW({ groupApi->removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .groupSubject = {}, .userId = userId(2)}}); });
 
     switchTo(1);
     int64_t version = 0;
     ASSERT_NO_THROW({
-        version = groupApi->removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .userId = userId(2)}});
+        version = groupApi->removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .groupSubject = {}, .userId = userId(2)}});
     });
     EXPECT_EQ(version, 3);
     const core::Buffer third = groupApi->encryptInSpace(spaceId, note("n3"), text("third"));

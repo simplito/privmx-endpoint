@@ -124,6 +124,7 @@ group::SpaceRecipient VarDeserializer::deserialize<group::SpaceRecipient>(
     return {
         .groupId = deserializeOptional<std::string>(obj->get("groupId"), name + ".groupId").value_or(std::string()),
         .groupSubject = {},
+        .groupCreatedBy = {},
         .user = deserializeOptional<core::UserWithPubKey>(obj->get("user"), name + ".user"),
         .role = deserialize<std::string>(obj->get("role"), name + ".role")
     };
@@ -153,6 +154,7 @@ group::EnvelopeRecipient VarDeserializer::deserialize<group::EnvelopeRecipient>(
     return {
         .groupId = deserializeOptional<std::string>(obj->get("groupId"), name + ".groupId").value_or(std::string()),
         .groupSubject = {},
+        .groupCreatedBy = {},
         .user = deserializeOptional<core::UserWithPubKey>(obj->get("user"), name + ".user")
     };
 }

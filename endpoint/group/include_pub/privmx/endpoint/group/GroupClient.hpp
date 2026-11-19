@@ -405,27 +405,39 @@ public:
     );
     Space openUnboundSpace(const std::string& spaceId);
 
-    /** For an account that is not in the Group of `subject`: a writer that signs as the caller. */
-    GroupOutsider openForWriting(const Path& subject);
+    /**
+     * For an account that is not in the Group of `subject`: a writer that signs as the caller.
+     * @param createdBy the user who created that Group. Anyone who knows a subject can make a Group under it
+     * first, and a writer outside it would then write to theirs: throws GroupWrongCreatorException.
+     */
+    GroupOutsider openForWriting(const Path& subject, const std::string& createdBy);
     /**
      * The verified key of the Group of `subject`, to publish for writers with no account
      * (GroupOutsider::anonymous). A non-member may call it when the Group is visible to the Context.
+     * @param createdBy as in openForWriting
      */
-    GroupPublicKey getPublicKey(const Path& subject);
+    GroupPublicKey getPublicKey(const Path& subject, const std::string& createdBy);
 
     /**
      * Reads what was written in another Group and shared with the caller through alsoFor
-     * (GroupApi::decryptShared). `location` is the author's subject + place.
+     * (GroupApi::decryptShared). The value sits at `authorSubject + place`, and must say it was written in
+     * the Group of `authorSubject` (EnvelopeWrongGroupException otherwise): `senderMembership` in the result
+     * is then about that Group. With `home.createdBy`, that Group must have been created by that user.
      */
     DecryptedSharedEnvelope decryptShared(
-        const Path& location,
+        const Path& authorSubject,
+        const Path& place,
         const core::Buffer& envelope,
-        const DecryptOptions& options
+        const DecryptOptions& options,
+        const OpenGroupOptions& home = {}
     );
+    /** The file form of decryptShared. The envelope's Group is checked before the handle is returned. */
     GroupFileReader beginSharedFileDecryption(
-        const Path& location,
+        const Path& authorSubject,
+        const Path& place,
         const core::Buffer& envelope,
-        const DecryptOptions& options
+        const DecryptOptions& options,
+        const OpenGroupOptions& home = {}
     );
 
     /** The ID of the Group `subject` names. */
@@ -442,7 +454,8 @@ private:
     );
     // Throws unless the Group was opened the way `item` asks: its creator, its fixed roster, or neither.
     void check(const OpenGroupItem& item, const Group& state);
-    std::vector<SpaceRecipient> resolve(const std::vector<SpaceRecipient>& recipients) const;
+    std::vector<SpaceRecipient> resolve(const std::vector<SpaceRecipient>& recipients);
+    void requireHome(const Path& authorSubject, const core::Buffer& envelope, const OpenGroupOptions& home);
 
     GroupApi _api;
     std::string _contextId;
