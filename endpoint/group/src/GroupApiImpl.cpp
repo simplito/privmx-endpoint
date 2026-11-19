@@ -577,6 +577,37 @@ group::server::GroupInfo GroupApiImpl::listedFrom(const group::server::GroupPubl
     return asListed;
 }
 
+// The roster of a group the caller is not in, when the group is visible to the Context. Read now, and held to the
+// group's latest signed statement exactly as a key read off it is: the roster is hashed into that statement.
+std::optional<GroupApiImpl::RosterView> GroupApiImpl::publicRosterOf(
+    const std::string& contextId,
+    const std::string& groupId
+) {
+    try {
+        server::GroupGetPublicKeyModel model;
+        model.groupId = groupId;
+        const server::GroupInfo group = listedFrom(_serverApi.groupGetPublicKey(model).group);
+        if (group.contextId != contextId) {
+            return std::nullopt;
+        }
+        _treeVerifier.preverifyListed({group}, VerifiedGroup::treeEnvironment(_serverApi, _connection, std::string()));
+        _treeVerifier.verifyListed(group, VerifiedGroup::treeEnvironment(_serverApi, _connection, group.id));
+        if (group.treeCommit->seq < static_cast<std::int64_t>(_treeVerifier.pinnedSeq(group.id))) {
+            return std::nullopt;
+        }
+        return RosterView{
+            .contextId = group.contextId,
+            .keyVersion = group.keyVersion,
+            .rosterVersion = group.rosterVersion,
+            .users = group.users,
+            .managers = group.managers,
+        };
+    } catch (const std::exception& e) {
+        LOG_WARN("[publicRosterOf] group ", groupId, " shows no roster to this caller: ", e.what())
+        return std::nullopt;
+    }
+}
+
 std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEpochs(
     const std::string& contextId,
     const std::vector<std::string>& groupIds
@@ -1173,8 +1204,8 @@ std::vector<WireRecipient> GroupApiImpl::wireRecipients(
     std::vector<WireRecipient> recipients;
     std::vector<std::string> groupIds;
     for (const EnvelopeRecipient& recipient : alsoFor) {
-        if (recipient.groupId.empty() == !recipient.user.has_value()) {
-            throw core::InvalidParamsException("a recipient is one group or one user");
+        if (recipient.groupId.empty() == !recipient.user.has_value() || !recipient.groupSubject.empty()) {
+            throw core::InvalidParamsException("a recipient is one group, by its ID, or one user");
         }
         if (!recipient.groupId.empty()) {
             core::Validator::validateId(recipient.groupId, "field:alsoFor.groupId ");
@@ -1503,6 +1534,10 @@ DecryptedSharedEnvelope GroupApiImpl::decryptShared(
         } catch (const core::Exception& e) {
             if (isForgedHistory(e)) {
                 throw;
+            }
+            // Not a group of the caller's. One visible to the Context still shows its signed roster.
+            if (const auto roster = publicRosterOf(contextId, opened->groupId); roster.has_value()) {
+                membership = roster->roleOf(opened->authorUserId).empty() ? "notMember" : "member";
             }
         }
     }

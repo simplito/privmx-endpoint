@@ -402,6 +402,8 @@ struct EnvelopeRecipient {
      * current, verified key is fetched at every encryption, so a key from before a removal cannot be used.
      */
     std::string groupId;
+    /** GroupClient only: another Group by its subject. GroupApi refuses it. */
+    Path groupSubject;
     /** One user. Their key goes through the UserVerifier first. */
     std::optional<core::UserWithPubKey> user;
 };
@@ -580,9 +582,11 @@ struct SequenceMarkInfo {
 
 // ── Spaces: one key for several Groups ──
 
-/** Who a Space's key is wrapped for. Exactly one of `groupId` and `user` is set. */
+/** Who a Space's key is wrapped for. Exactly one of `groupId`, `groupSubject` and `user` is set. */
 struct SpaceRecipient {
     std::string groupId;
+    /** GroupClient only: the Group by its subject. GroupApi refuses it. */
+    Path groupSubject;
     std::optional<core::UserWithPubKey> user;
     /** "manager" may change the recipients and the meta. Everyone may write, read, and replace the key. */
     std::string role;
@@ -591,6 +595,8 @@ struct SpaceRecipient {
 /** A recipient to remove. Exactly one field is set. */
 struct SpaceRecipientRef {
     std::string groupId;
+    /** GroupClient only: the Group by its subject. GroupApi refuses it. */
+    Path groupSubject;
     std::string userId;
 };
 

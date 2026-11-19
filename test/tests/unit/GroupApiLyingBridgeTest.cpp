@@ -5016,3 +5016,39 @@ TEST_F(GroupSequences, SECURITY_ASequenceEndsWithItsEpoch) {
     EXPECT_NO_THROW(alice.appendToSequence(w2, core::Buffer::from(std::string("n0"))));
     EXPECT_EQ(GroupApiImpl::peekEnvelope(alice.getSequenceHeader(w2)).keyVersion, 2);
 }
+
+// -- a subject tied to a group, on the device -------------------------------------------------------------
+
+TEST_F(GroupApiLyingBridge, SECURITY_ASubjectKeepsTheGroupThisDeviceFirstOpenedForIt) {
+    // openPinnedGroup's memory. The application's server says which Group serves a record; the first answer is
+    // taken on trust, and a different one later is refused - also in the next session, and by the same user only.
+    store = std::make_shared<MemoryPinStore>();
+    const Path room = {name("chat"), id("room-1")};
+    const Path otherRoom = {name("chat"), id("room-2")};
+    const std::string g1(64, 'a'), g2(64, 'b');
+
+    client("alice").pinGroupToSubject(CONTEXT, room, g1);
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g1));
+    EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2), GroupSubjectReboundException);
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, otherRoom, g2));
+    // A name is not an identifier with the same bytes, and another Context is another subject.
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, {name("chat"), name("room-1")}, g2));
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject("another-context", room, g2));
+    EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, Path{}, g1), core::InvalidParamsException);
+
+    clients.erase("alice"); // the session ends; the store stays
+    EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2), GroupSubjectReboundException);
+    EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, otherRoom, g1), GroupSubjectReboundException);
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g1));
+    // Bob, on the same store, keeps his own list.
+    EXPECT_NO_THROW(client("bob").pinGroupToSubject(CONTEXT, room, g2));
+}
+
+TEST_F(GroupApiLyingBridge, WithoutAStoreASubjectIsKeptForTheSession) {
+    const Path room = {name("chat"), id("room-1")};
+    const std::string g1(64, 'a'), g2(64, 'b');
+    client("alice").pinGroupToSubject(CONTEXT, room, g1);
+    EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2), GroupSubjectReboundException);
+    clients.erase("alice");
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2)); // a first contact again
+}

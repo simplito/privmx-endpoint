@@ -35,21 +35,26 @@ const std::string GroupEnvelopeEncryptor::SEQUENCE_MARK_LABEL = "privmx/group/se
 
 // -- header --------------------------------------------------------------------------------------------
 
+std::string GroupEnvelopeEncryptor::canonicalPath(const Path& path) {
+    // Length-prefixed and kind-tagged, so no two different paths share an encoding: {"ab"} is not {"a","b"},
+    // and a name is not an identifier with the same bytes.
+    std::string canonical = EnvelopeWriter::toBE(path.size(), 4);
+    for (const PathSegment& segment : path) {
+        canonical.push_back(segment.isId ? '\x01' : '\x00');
+        canonical.append(EnvelopeWriter::toBE(segment.value.size(), 4));
+        canonical.append(segment.value.stdString());
+    }
+    return canonical;
+}
+
 EnvelopeBinding GroupEnvelopeEncryptor::bindLocation(const Path& location) {
     if (location.empty()) {
         // With no segment every value of a group would be bound to the same spot, and any two could be swapped.
         throw InvalidEnvelopeFormatException("a location needs at least one segment");
     }
-    // Length-prefixed and kind-tagged, so no two different paths share an encoding: {"ab"} is not {"a","b"},
-    // and a name is not an identifier with the same bytes.
-    std::string canonical = EnvelopeWriter::toBE(location.size(), 4);
-    for (const PathSegment& segment : location) {
-        canonical.push_back(segment.isId ? '\x01' : '\x00');
-        canonical.append(EnvelopeWriter::toBE(segment.value.size(), 4));
-        canonical.append(segment.value.stdString());
-    }
     return EnvelopeBinding{
-        .hasLocation = true, .locationDigest = privmx::crypto::Crypto::sha256(LOCATION_LABEL + canonical)
+        .hasLocation = true,
+        .locationDigest = privmx::crypto::Crypto::sha256(LOCATION_LABEL + canonicalPath(location)),
     };
 }
 

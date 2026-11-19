@@ -461,6 +461,17 @@ std::string GroupApi::deriveSpaceId(const std::string& contextId, const core::Bu
     return GroupApiImpl::deriveSpaceId(contextId, idSeed);
 }
 
+core::Buffer GroupApi::encodePath(const Path& path) {
+    return GroupApiImpl::encodePath(path);
+}
+
+void GroupApi::pinGroupToSubject(const std::string& contextId, const Path& subject, const std::string& groupId) {
+    auto impl = getImpl();
+    core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validateId(groupId, "field:groupId ");
+    impl->pinGroupToSubject(contextId, subject, groupId);
+}
+
 SpaceState GroupApi::getSpace(const std::string& spaceId) {
     auto impl = getImpl();
     core::Validator::validateId(spaceId, "field:spaceId ");

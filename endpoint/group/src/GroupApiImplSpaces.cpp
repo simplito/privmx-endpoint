@@ -25,6 +25,7 @@ limitations under the License.
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
+#include <privmx/endpoint/core/LocalSeal.hpp>
 #include <privmx/utils/Utils.hpp>
 
 #include "privmx/endpoint/core/ListQueryMapper.hpp"
@@ -338,8 +339,8 @@ std::string GroupApiImpl::createSpace(
     std::vector<core::UserWithPubKey> users;
     group::server::SpaceCreateModel model;
     for (const SpaceRecipient& recipient : recipients) {
-        if (recipient.groupId.empty() == !recipient.user.has_value()) {
-            throw core::InvalidParamsException("a Space recipient is one group or one user");
+        if (recipient.groupId.empty() == !recipient.user.has_value() || !recipient.groupSubject.empty()) {
+            throw core::InvalidParamsException("a Space recipient is one group, by its ID, or one user");
         }
         requireRole(recipient.role);
         group::server::SpaceRecipient wire;
@@ -477,8 +478,8 @@ void GroupApiImpl::addSpaceRecipients(const std::string& spaceId, const std::vec
     group::server::SpaceAddRecipientsModel model;
     model.id = spaceId;
     for (const SpaceRecipient& recipient : recipients) {
-        if (recipient.groupId.empty() == !recipient.user.has_value()) {
-            throw core::InvalidParamsException("a Space recipient is one group or one user");
+        if (recipient.groupId.empty() == !recipient.user.has_value() || !recipient.groupSubject.empty()) {
+            throw core::InvalidParamsException("a Space recipient is one group, by its ID, or one user");
         }
         requireRole(recipient.role);
         group::server::SpaceRecipient wire;
@@ -563,7 +564,7 @@ std::int64_t GroupApiImpl::removeSpaceRecipients(
     std::vector<std::string> groups;
     std::vector<std::string> users;
     for (const SpaceRecipientRef& recipient : recipients) {
-        if (recipient.groupId.empty() == recipient.userId.empty()) {
+        if (recipient.groupId.empty() == recipient.userId.empty() || !recipient.groupSubject.empty()) {
             throw core::InvalidParamsException("a recipient to remove is one group or one user");
         }
         (recipient.groupId.empty() ? users : groups)
@@ -713,7 +714,9 @@ DecryptedSpaceEnvelope GroupApiImpl::decryptInSpace(
             core::Validator::validateId(opened.groupId, "field:envelope.via ");
             access = rosterOf(opened.groupId).roleOf(opened.authorUserId).empty() ? "no" : "yes";
         } catch (const core::Exception&) {
-            access = "unknown"; // a recipient group the caller is not in
+            // A recipient group the caller is not in: its roster shows only when it is visible to the Context.
+            const auto roster = publicRosterOf(space.contextId, opened.groupId);
+            access = !roster.has_value() ? "unknown" : roster->roleOf(opened.authorUserId).empty() ? "no" : "yes";
         }
     }
     return DecryptedSpaceEnvelope{
@@ -830,4 +833,61 @@ SpaceOrigin GroupApiImpl::getSpaceSequenceOrigin(SequenceHandle handle) {
         throw core::InvalidParamsException("field:sequence was not opened with openSequenceInSpace");
     }
     return sequence->spaceOrigin.value();
+}
+
+// -- subjects ----------------------------------------------------------------------------------------------
+
+core::Buffer GroupApiImpl::encodePath(const Path& path) {
+    if (path.empty()) {
+        throw core::InvalidParamsException("a subject needs at least one segment");
+    }
+    for (const PathSegment& segment : path) {
+        if (segment.value.size() == 0) {
+            throw core::InvalidParamsException("a path segment cannot be empty");
+        }
+    }
+    return core::Buffer::from(GroupEnvelopeEncryptor::canonicalPath(path));
+}
+
+// The device's own list of "this subject is that Group", sealed like the group pins and kept beside them. An entry
+// is written once and never replaced: a second Group for a subject is what this is here to refuse.
+void GroupApiImpl::pinGroupToSubject(const std::string& contextId, const Path& subject, const std::string& groupId) {
+    const std::string key = privmx::utils::Hex::from(
+        privmx::crypto::Crypto::sha256(
+            "privmx/group/subject" +
+            std::string(1, '\0') +
+            contextId +
+            std::string(1, '\0') +
+            encodePath(subject).stdString()
+        )
+    );
+    if (!_pinStore) {
+        // No store on this device: the pin lasts as long as this GroupApi does.
+        std::lock_guard lock(_subjectPinsMutex);
+        const auto [pin, added] = _subjectPins.emplace(key, groupId);
+        if (!added && pin->second != groupId) {
+            throw GroupSubjectReboundException("known as " + pin->second);
+        }
+        return;
+    }
+    const std::string slot = _connection.getImpl()->localStateSlot("group-subjects", _userPrivKey.getPublicKey());
+    const core::LocalSeal seal(_userPrivKey, "privmx/group/subjects", 1, slot);
+    std::string known;
+    const bool saved = seal.update(*_pinStore, [&](const std::optional<std::string>& body) {
+        // Lines of "<subject key> <group id>": both are hex, so a space and a newline separate them safely.
+        std::string lines = body.value_or(std::string());
+        const std::size_t at = lines.find(key + " ");
+        if (at != std::string::npos && (at == 0 || lines[at - 1] == '\n')) {
+            known = lines.substr(at + key.size() + 1, lines.find('\n', at) - at - key.size() - 1);
+            return lines;
+        }
+        known = groupId;
+        return lines + key + " " + groupId + "\n";
+    });
+    if (known != groupId) {
+        throw GroupSubjectReboundException("known as " + known);
+    }
+    if (!saved) {
+        throw core::InvalidParamsException("the pin store did not take the subject's pin");
+    }
 }

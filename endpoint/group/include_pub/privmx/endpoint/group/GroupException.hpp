@@ -108,6 +108,9 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeAuthorNotStatedExcept
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeSequenceOrderException, "Sequence item or mark is out of order, repeated, or does not match what was read", 0x001E)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeFileCorruptedException, "Encrypted file data is not what its envelope lists", 0x001F)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, SpaceRecipientUnavailableException, "The caller cannot see the current key of a recipient Group of the Space", 0x0020)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupAlreadyExistsException, "A Group or Space already exists, or existed, under this subject", 0x0021)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupWrongCreatorException, "The Group or Space was created by someone other than the expected user", 0x0022)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupSubjectReboundException, "This device knows the subject under another Group", 0x0023)
 // clang-format on
 } // namespace group
 } // namespace endpoint

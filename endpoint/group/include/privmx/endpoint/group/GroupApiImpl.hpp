@@ -253,6 +253,8 @@ public:
         const std::optional<core::Buffer>& idSeed
     );
     static std::string deriveSpaceId(const std::string& contextId, const core::Buffer& idSeed);
+    static core::Buffer encodePath(const Path& path);
+    void pinGroupToSubject(const std::string& contextId, const Path& subject, const std::string& groupId);
     SpaceState getSpace(const std::string& spaceId);
     core::PagingList<SpaceState> listSpaces(const std::string& contextId, const core::PagingQuery& pagingQuery);
     void deleteSpace(const std::string& spaceId);
@@ -366,6 +368,7 @@ private:
     };
     RosterView rosterOf(const std::string& groupId);
     static server::GroupInfo listedFrom(const server::GroupPublicInfo& info);
+    std::optional<RosterView> publicRosterOf(const std::string& contextId, const std::string& groupId);
     // The only writer of `_rosters`: called wherever the module-key cache is filled from a verified read.
     void rememberRoster(const server::GroupInfo& group);
     // The only way this class drops a group's cached keys: the roster goes with them.
@@ -528,6 +531,9 @@ private:
     SpaceState toSpaceState(const server::SpaceInfo& space);
     privmx::utils::ThreadSaveMap<std::string, CachedSpace> _spaces;
     // The highest key version each Space was seen at. Not dropped on a reconnect: it only ever moves forward.
+    // Subject pins of a connection with no PinStore. With a store they live there, sealed.
+    std::mutex _subjectPinsMutex;
+    std::map<std::string, std::string> _subjectPins;
     std::mutex _spaceKeyVersionsMutex;
     std::map<std::string, std::int64_t> _spaceKeyVersions;  // guarded by the mutex above
     std::map<std::string, std::uint64_t> _spaceGenerations; // guarded by it too; moved by a delete or own create

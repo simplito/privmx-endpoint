@@ -123,6 +123,7 @@ group::SpaceRecipient VarDeserializer::deserialize<group::SpaceRecipient>(
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     return {
         .groupId = deserializeOptional<std::string>(obj->get("groupId"), name + ".groupId").value_or(std::string()),
+        .groupSubject = {},
         .user = deserializeOptional<core::UserWithPubKey>(obj->get("user"), name + ".user"),
         .role = deserialize<std::string>(obj->get("role"), name + ".role")
     };
@@ -137,6 +138,7 @@ group::SpaceRecipientRef VarDeserializer::deserialize<group::SpaceRecipientRef>(
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     return {
         .groupId = deserializeOptional<std::string>(obj->get("groupId"), name + ".groupId").value_or(std::string()),
+        .groupSubject = {},
         .userId = deserializeOptional<std::string>(obj->get("userId"), name + ".userId").value_or(std::string())
     };
 }
@@ -150,6 +152,7 @@ group::EnvelopeRecipient VarDeserializer::deserialize<group::EnvelopeRecipient>(
     Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
     return {
         .groupId = deserializeOptional<std::string>(obj->get("groupId"), name + ".groupId").value_or(std::string()),
+        .groupSubject = {},
         .user = deserializeOptional<core::UserWithPubKey>(obj->get("user"), name + ".user")
     };
 }
