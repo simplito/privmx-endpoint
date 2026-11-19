@@ -1832,7 +1832,7 @@ SequenceHandle GroupApiImpl::openSequence(
         }
         // The author's signature is all a late reader has for what came before; it is enough.
         const auto mark = _envelopeEncryptor.openSequenceMark(wire, sequence->key, sequence->authorPubKey);
-        sequence->next = sequence->attested = mark.count;
+        sequence->next = sequence->attested = sequence->inOrder = mark.count;
         sequence->transcript = mark.transcript;
         sequence->closed = mark.closed;
     }
@@ -1873,6 +1873,9 @@ SequenceItem GroupApiImpl::readSequenceItem(SequenceHandle handle, const core::B
         sequence->transcript = GroupEnvelopeEncryptor::sequenceTranscriptNext(sequence->transcript, item);
     }
     sequence->next = wire.index + 1;
+    if (!sequence->gap) {
+        sequence->inOrder = sequence->next;
+    }
     return result;
 }
 
@@ -1887,19 +1890,18 @@ SequenceMarkInfo GroupApiImpl::verifySequenceMark(SequenceHandle handle, const c
         throw InvalidEnvelopeFormatException("mark of another sequence");
     }
     const auto mark = _envelopeEncryptor.openSequenceMark(wire, sequence->key, sequence->authorPubKey);
-    if (mark.count < sequence->attested || (mark.count < sequence->next && !sequence->gap)) {
-        // About a point the reader is already past, with every item since read in order: nothing kept to check
-        // it against, and nothing to repair.
-        throw EnvelopeSequenceOrderException("mark covers fewer items than were read");
-    }
     // After a gap the position is only what an unsigned item claimed - any member can seal one far ahead and
     // have the real items refused as "earlier". The author's mark is signed: it puts the reader back, also behind
-    // that claim.
+    // that claim - but never behind an item that was read in order, or that item could be replayed.
+    if (mark.count < sequence->attested || mark.count < (sequence->gap ? sequence->inOrder : sequence->next)) {
+        throw EnvelopeSequenceOrderException("mark covers fewer items than were read");
+    }
     const bool agrees = !sequence->gap && mark.count == sequence->next && mark.transcript == sequence->transcript;
     // The mark is the author's either way, so reading goes on from it: what follows can be attested again.
     sequence->next = mark.count;
     sequence->transcript = mark.transcript;
     sequence->gap = false;
+    sequence->inOrder = mark.count;
     sequence->closed = mark.closed;
     if (!agrees) {
         throw EnvelopeSequenceOrderException(

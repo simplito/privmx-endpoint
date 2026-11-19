@@ -4910,7 +4910,9 @@ TEST_F(GroupSequences, SECURITY_AMembersItemFarAheadDoesNotLockTheReaderOut) {
     // An item's position is plain, and carol holds the sequence key: she seals one far ahead of where alice is.
     // Without a way back, bob would refuse every real item after it as "earlier".
     GroupApiImpl& bob = client("bob");
-    const core::Buffer e0 = append("e0"), e1 = append("e1");
+    const core::Buffer e0 = append("e0");
+    const core::Buffer early = client("alice").checkpointSequence(writer);
+    const core::Buffer e1 = append("e1");
     const core::Buffer first = client("alice").checkpointSequence(writer);
     const core::Buffer e2 = append("e2");
     const core::Buffer second = client("alice").checkpointSequence(writer);
@@ -4929,6 +4931,7 @@ TEST_F(GroupSequences, SECURITY_AMembersItemFarAheadDoesNotLockTheReaderOut) {
 
     const SequenceHandle r = open();
     bob.readSequenceItem(r, e0);
+    bob.readSequenceItem(r, e1);
     // A position no arithmetic holds is refused outright, and moves nothing.
     EXPECT_THROW(bob.readSequenceItem(r, forgedAt(std::numeric_limits<std::uint64_t>::max())), InvalidEnvelopeFormatException);
     EXPECT_THROW(
@@ -4936,10 +4939,15 @@ TEST_F(GroupSequences, SECURITY_AMembersItemFarAheadDoesNotLockTheReaderOut) {
         InvalidEnvelopeFormatException
     );
     // A large one reads, as a member's unattested item with a gap before it...
-    EXPECT_EQ(bob.readSequenceItem(r, forgedAt(1'000'000)).missing, 999'999);
+    EXPECT_EQ(bob.readSequenceItem(r, forgedAt(1'000'000)).missing, 999'998);
+    EXPECT_THROW(bob.readSequenceItem(r, e2), EnvelopeSequenceOrderException);
+    // A mark does not put bob back behind what he read in order: e1 would otherwise be read twice.
+    EXPECT_THROW(bob.verifySequenceMark(r, early), EnvelopeSequenceOrderException);
     EXPECT_THROW(bob.readSequenceItem(r, e1), EnvelopeSequenceOrderException);
-    // ...and alice's next mark puts bob back where she is, though it attests nothing he read around the gap.
+    EXPECT_THROW(bob.readSequenceItem(r, e2), EnvelopeSequenceOrderException);
+    // Alice's mark at his own position does: it attests nothing around the gap, and reading goes on from it.
     EXPECT_THROW(bob.verifySequenceMark(r, first), EnvelopeSequenceOrderException);
+    EXPECT_THROW(bob.readSequenceItem(r, e1), EnvelopeSequenceOrderException);
     EXPECT_EQ(bob.readSequenceItem(r, e2).missing, 0);
     EXPECT_EQ(bob.verifySequenceMark(r, second).attestedItems, 3);
     // A mark older than what is attested stays refused, and puts nobody back.

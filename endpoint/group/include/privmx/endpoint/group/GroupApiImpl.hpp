@@ -390,7 +390,8 @@ private:
         std::function<void()> requireCurrentEpoch{}; // throws once the sequence's epoch is over
         // Read side.
         std::string authorPubKey{};
-        bool gap = false; // an item since the last mark never arrived: the transcript cannot be checked
+        bool gap = false;          // an item since the last mark never arrived: the transcript cannot be checked
+        std::uint64_t inOrder = 0; // the position after the last item read with no gap before it
         std::uint64_t attested = 0;
     };
     SequenceHandle openSequenceHandle(const std::string& label, std::shared_ptr<Sequence> sequence);
