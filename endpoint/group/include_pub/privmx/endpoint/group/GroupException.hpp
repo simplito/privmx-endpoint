@@ -105,6 +105,8 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeUnverifiedAuthorExcep
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeAuthorNotMemberException, "The envelope's author is not a member of the group", 0x001B)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeStaleEpochException, "Envelope is not from the group's current epoch", 0x001C)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeAuthorNotStatedException, "A read must name the expected author or say that any author is accepted", 0x001D)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeSequenceOrderException, "Sequence item or mark is out of order, repeated, or does not match what was read", 0x001E)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, EnvelopeFileCorruptedException, "Encrypted file data is not what its envelope lists", 0x001F)
 // clang-format on
 } // namespace group
 } // namespace endpoint

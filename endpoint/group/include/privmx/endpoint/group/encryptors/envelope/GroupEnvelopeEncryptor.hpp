@@ -51,6 +51,7 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  *
  *   header  = u8 ver | u8 type | u8 flags | type-specific fields
  *   flags   = bit 0: the envelope is bound to a location
+ *             bits 1-2: what the content is - 0 a message, 1 a file manifest, 2 the key of a sequence
  *   binding = sha256(LOCATION_LABEL || canonical path) when bit 0 is set, empty otherwise
  *
  * `binding` is never transmitted. The writer puts it into the signed (or sealed) body right after the header;
@@ -106,21 +107,30 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  * add or drop one unnoticed. The home group opens it as a member's envelope (`openMemberEnvelope`), every
  * other reader with `openSharedEnvelope`, as do the further recipients of a type 5.
  *
- * ## TYPE 3 - member -> group, file header
+ * ## Files (content 1, any type above)
  *
- *   header  = ... | u8len groupId | u8len keyId | u8len authorUserId | u8len authorPubKeyDER | u64be keyVersion
- *   payload = encrypt(sign(header || binding || u64be plainSize || fileKey32, authorPriv), groupKey32)
- *   body    = for each chunk i: encrypt(plain_i, hmac-sha256(fileKey, CHUNK_KEY_LABEL || u32be i))
+ *   content = fileKey32 | u32be count | count * (u32be plainSize | sha256(cipher_i))
+ *   body    = for each chunk i: cipher_i = encrypt(plain_i, hmac-sha256(fileKey, CHUNK_KEY_LABEL || u32be i))
  *
- * `plainSize` sits inside the signature because each chunk authenticates only itself - nothing about chunk N
- * says how many were supposed to follow, so a dropped trailing chunk is otherwise undetectable.
+ * The envelope is made when the file ends. A chunk is whatever the writer sealed in one go, at most
+ * `CHUNK_SIZE`; its size and the digest of its ciphertext are listed, so the reader re-cuts the ciphertext
+ * without being told the sizes by anybody else, a dropped or added chunk shows, and - in a signed envelope -
+ * the bytes are the author's: every member knows the file key, none can forge the author's list.
+ * (Types 3 and 4, file headers with a size declared up front, are gone.)
  *
- * ## TYPE 4 - anonymous -> group, file header
+ * ## Sequences (content 2, a member's envelope)
  *
- *   header  = ... | u8len groupId | u8len groupPubKeyBase58DER
- *   payload = u8len ecies(ECIES_DOMAIN || contentKey32)
- *             || encrypt(header || binding || u64be plainSize || fileKey32, contentKey32)
- *   body    = identical to type 3
+ *   content = sequenceKey32
+ *   id      = the first 16 bytes of sha256(the header envelope)
+ *   item    = u8 ver | u8 7 | id16 | u64be index
+ *             | encrypt(data, hmac-sha256(sequenceKey, SEQUENCE_ITEM_LABEL || u64be index))
+ *   mark    = u8 ver | u8 8 | id16 | u64be count
+ *             | encrypt(sign(SEQUENCE_MARK_LABEL || id16 || u64be count || u8 closed || transcript32, authorPriv),
+ *                       hmac-sha256(sequenceKey, SEQUENCE_MARK_LABEL))
+ *   transcript_0 = sha256(SEQUENCE_MARK_LABEL || id16), transcript_n+1 = sha256(transcript_n || sha256(item_n))
+ *
+ * An item is not signed: its key says which sequence and which position it belongs to, and that whoever
+ * made it holds the sequence key. A mark is the author's signature over every item up to it.
  */
 class GroupEnvelopeEncryptor {
 public:
@@ -133,33 +143,14 @@ public:
     // force a divide-by-zero or an allocation bomb. `VERSION` is the upgrade path if it ever has to change.
     static constexpr ByteCount CHUNK_SIZE = 128 * 1024;
 
-    // Sealed size of a full chunk. Derived, so it cannot drift from `encryptedChunkSizeFor`.
-    static constexpr ByteCount ENCRYPTED_CHUNK_SIZE = encryptedChunkSizeFor(CHUNK_SIZE);
-
-    // Every chunk but the last is exactly `ENCRYPTED_CHUNK_SIZE`, so this is a multiplication rather than a
-    // running sum — which is what makes random access possible without an index or a second pass.
-    static ByteCount cipherOffsetOfChunk(ChunkIndex index) {
-        return static_cast<ByteCount>(index) * ENCRYPTED_CHUNK_SIZE;
-    }
-
-    // An exact multiple of CHUNK_SIZE gets no trailing empty chunk and an empty file gets none at all;
-    // the off-by-one lives nowhere but here.
-    static constexpr ByteCount chunkCount(ByteCount plainSize) { return (plainSize + CHUNK_SIZE - 1) / CHUNK_SIZE; }
-
-    // `index` must be below `chunkCount(plainSize)`.
-    static ByteCount plainChunkSizeAt(ByteCount plainSize, ChunkIndex index) {
-        // Past the end the subtraction below wraps and hands back a full chunk, which desynchronises the
-        // stream several chunks later rather than here. Both callers loop under `chunkCount`; say so.
-        assert(index < chunkCount(plainSize));
-        ByteCount offset = static_cast<ByteCount>(index) * CHUNK_SIZE;
-        return plainSize - offset < CHUNK_SIZE ? plainSize - offset : CHUNK_SIZE;
-    }
+    static constexpr std::size_t DIGEST_SIZE = 32;
+    static constexpr std::size_t SEQUENCE_ID_SIZE = 16;
 
     // After a seek a partly-filled buffer is the expected outcome, so leftover bytes are not an error there.
     enum class ReadOutcome {
-        // Every chunk the signed size called for arrived, and nothing followed them.
+        // Every chunk the envelope called for arrived, and nothing followed them.
         Complete,
-        // Fewer chunks arrived than the signed size calls for. A dropped tail, or an unfinished write.
+        // Fewer chunks arrived than the envelope calls for. A dropped tail, or an unfinished write.
         Truncated,
         // Every chunk arrived, and then more bytes followed.
         Overrun,
@@ -167,7 +158,7 @@ public:
         PartialRange,
     };
 
-    // `chunksOpened` is how many chunks were actually opened, `chunksExpected` what the signed size calls for.
+    // `chunksOpened` is how many chunks were actually opened, `chunksExpected` what the envelope calls for.
     static ReadOutcome classifyRead(bool seeked, ByteCount chunksOpened, ByteCount chunksExpected, bool bufferEmpty) {
         // A seeked reader chose what to read, so neither "did it all arrive" nor "was there anything left
         // over" is a question this handle can answer. Both checks below would misfire.
@@ -251,62 +242,73 @@ public:
 
     // -- files -------------------------------------------------------------------------------------------
 
-    core::Buffer packFileEnvelope(
-        const std::string& groupId,
-        const std::string& keyId,
-        ByteCount plainSize,
-        const std::string& fileKey,
-        const privmx::crypto::PrivateKey& authorPrivKey,
-        const std::string& groupKey,
-        const EnvelopeSeal& seal
-    );
-
-    EnvelopeFileHeader unpackFileEnvelope(
-        const core::Buffer& envelope,
-        const std::string& groupKey,
-        const EnvelopeBinding& binding
-    );
-
-    core::Buffer packAnonymousFileEnvelope(
-        const std::string& groupId,
-        const privmx::crypto::PublicKey& groupPubKey,
-        ByteCount plainSize,
-        const std::string& fileKey,
-        const EnvelopeBinding& binding
-    );
-
-    EnvelopeFileHeader unpackAnonymousFileEnvelope(
-        const core::Buffer& envelope,
-        const privmx::crypto::PrivateKey& groupPrivKey,
-        const EnvelopeBinding& binding
-    );
+    // The content of a file envelope, and back. Reading refuses a list that is not exactly `count` entries, a
+    // chunk above `CHUNK_SIZE` and an empty one.
+    static core::Buffer packFileManifest(const std::string& fileKey, const std::vector<FileChunk>& chunks);
+    static std::vector<FileChunk> readFileManifest(const core::Buffer& manifest, std::string& fileKey);
 
     core::Buffer encryptChunk(const core::Buffer& plainChunk, const std::string& fileKey, ChunkIndex index);
     core::Buffer decryptChunk(const core::Buffer& cipherChunk, const std::string& fileKey, ChunkIndex index);
 
+    // -- sequences --------------------------------------------------------------------------------------
+
+    struct SequenceWire {
+        bool isMark = false;
+        std::string sequenceId{}; // raw, SEQUENCE_ID_SIZE bytes
+        std::uint64_t index = 0;  // an item's position; a mark's item count
+        std::string sealed{};
+    };
+    struct SequenceMark {
+        std::uint64_t count = 0;
+        bool closed = false;
+        std::string transcript{};
+    };
+    static std::string sequenceIdOf(const core::Buffer& headerEnvelope);
+    static std::string sequenceTranscriptStart(const std::string& sequenceId);
+    static std::string sequenceTranscriptNext(const std::string& transcript, const core::Buffer& item);
+    static SequenceWire parseSequenceWire(const core::Buffer& itemOrMark);
+    core::Buffer packSequenceItem(
+        const std::string& sequenceId,
+        const std::string& sequenceKey,
+        std::uint64_t index,
+        const core::Buffer& data
+    );
+    core::Buffer openSequenceItem(const SequenceWire& item, const std::string& sequenceKey);
+    core::Buffer packSequenceMark(
+        const std::string& sequenceId,
+        const std::string& sequenceKey,
+        const SequenceMark& mark,
+        const privmx::crypto::PrivateKey& authorPrivKey
+    );
+    // Throws unless `authorPubKey` signed it, for this sequence, with the count its plain part shows.
+    SequenceMark openSequenceMark(
+        const SequenceWire& mark,
+        const std::string& sequenceKey,
+        const std::string& authorPubKey
+    );
+
     // -- dispatch ----------------------------------------------------------------------------------------
 
-    // Message envelopes only. A file envelope is refused: letting one through would hand back a file key as
-    // though it were message content.
-    EnvelopeRouting peek(const core::Buffer& envelope) { return peekFamily(envelope, EnvelopeFamily::Message); }
+    // Envelopes of one content only. Any other is refused: a file's manifest must not come back as message
+    // content, and a message has no chunks to stream.
+    EnvelopeRouting peek(const core::Buffer& envelope, EnvelopeContent content = EnvelopeContent::Message);
 
-    // File envelopes only. A message envelope is refused: it has no body to stream, so the caller would be
-    // left with a handle onto data that does not exist.
-    EnvelopeRouting peekFile(const core::Buffer& envelope) { return peekFamily(envelope, EnvelopeFamily::File); }
-
-    // Either family; `isFile` in the result says which. For a caller that only inspects (a server's write gate).
+    // Any content; `content` in the result says which. For a caller that only inspects (a server's write gate).
     static EnvelopeRouting peekAny(const core::Buffer& envelope);
 
 private:
     // The type octet of each envelope type, as the format notes above spell them out.
     static constexpr std::uint8_t TYPE_GROUP_KEY = 1;
     static constexpr std::uint8_t TYPE_ANONYMOUS = 2;
-    static constexpr std::uint8_t TYPE_FILE = 3;
-    static constexpr std::uint8_t TYPE_ANON_FILE = 4;
+    // 3 and 4 were file headers with a declared size; not reused.
     static constexpr std::uint8_t TYPE_OUTSIDER = 5;
     static constexpr std::uint8_t TYPE_MEMBER_SHARED = 6;
+    static constexpr std::uint8_t TYPE_SEQUENCE_ITEM = 7;
+    static constexpr std::uint8_t TYPE_SEQUENCE_MARK = 8;
 
     static constexpr std::uint8_t FLAG_HAS_LOCATION = 0x01;
+    static constexpr std::uint8_t FLAG_CONTENT_SHIFT = 1;
+    static constexpr std::uint8_t FLAG_CONTENT_MASK = 0x06;
     static constexpr std::uint8_t RECIPIENT_GROUP = 1;
     static constexpr std::uint8_t RECIPIENT_USER = 2;
 
@@ -322,13 +324,8 @@ private:
     // Domain label on the location digest, and on a content key wrapped under a group's symmetric key.
     static const std::string LOCATION_LABEL;
     static const std::string KEY_WRAP_LABEL;
-
-    enum class EnvelopeFamily {
-        Message,
-        File
-    };
-
-    static EnvelopeRouting peekFamily(const core::Buffer& envelope, EnvelopeFamily family);
+    static const std::string SEQUENCE_ITEM_LABEL;
+    static const std::string SEQUENCE_MARK_LABEL;
 
     // A header as read off the wire: its fields, and the exact bytes the writer signed or sealed.
     struct ParsedHeader {
@@ -365,10 +362,6 @@ private:
         EnvelopeType type
     );
     static std::string chunkKey(const std::string& fileKey, ChunkIndex index);
-
-    // The sealed tail both file types carry after the echoed header and the binding:
-    // `u64be plainSize || fileKey32`, starting at `offset`. Returns `{plainSize, fileKey}`.
-    static std::pair<ByteCount, std::string> readFileBody(const std::string& plain, std::size_t offset);
 
     // ECIES key wrap of `contentKey` to `pubKey`, with a throwaway sender key.
     static std::string wrapContentKey(const privmx::crypto::PublicKey& pubKey, const std::string& contentKey);

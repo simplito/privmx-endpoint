@@ -351,6 +351,11 @@ public:
      * writes early, such as one from a stale epoch. Nothing in it is authenticated.
      */
     static EnvelopeHeader peekEnvelope(const core::Buffer& envelope);
+    /**
+     * The plain part of a sequence item or mark. For a server that refuses stale writes: remember the epoch of
+     * a sequence when its header arrives (`peekEnvelope` gives its `sequenceId`), then match every item to it.
+     */
+    static SequenceItemHeader peekSequenceItem(const core::Buffer& itemOrMark);
 
     /**
      * Seals content for a Group, as one of its members, bound to a location in the application's data.
@@ -469,223 +474,180 @@ public:
         const DecryptOptions& options
     );
 
-    /**
-     * Begins sealing a file for a Group, as one of its members.
-     *
-     * ## How sealing a file works
-     *
-     * The library never touches your storage or your network. It converts bytes and hands them straight back;
-     * where they come from and where they go is entirely yours. You drive it in three steps:
-     *
-     *   1. `beginFileEncryption` — name the Group and declare the plaintext size. You get a handle, not data.
-     *   2. `encryptFileChunk` — push plaintext in, take ciphertext out. As many times as you like.
-     *   3. `finishFileEncryption` — get the envelope.
-     *
-     * Keep **both** outputs. The ciphertext is the file. The envelope is a small header naming the Group, the
-     * key version, the author and the size, and without it nobody can open the ciphertext — not even a member
-     * of the Group. Store them however suits you: two files, two columns, the envelope prepended to the
-     * ciphertext. The library has no opinion, because it never sees your storage.
-     *
-     *     FileHandle h = api.beginFileEncryption(groupId, plaintextSize);
-     *     while (source.hasMore()) {
-     *         sink.write(api.encryptFileChunk(h, source.read(1 << 20)));  // may write nothing; that is normal
-     *     }
-     *     Envelope envelope = api.finishFileEncryption(h);  // keep this alongside the ciphertext
-     *
-     * Memory stays flat no matter how large the file — but only if you write each `encryptFileChunk` result
-     * out as it arrives. Collecting the ciphertext in a buffer defeats the whole design, and in a WebAssembly
-     * build will exhaust the heap.
-     *
-     * The size is declared up front, as it is for a Store file, and enforced at `finishFileEncryption`:
-     * supplying less than you promised is an error, because it cannot be told apart from a file cut short.
-     *
-     * Calls on one handle may come from several threads; they are applied one at a time, in no guaranteed
-     * order, and a call after the handle is finished is refused. Push chunks in order, from one caller, to get
-     * the file you meant.
-     *
-     * @param groupId ID of the Group to seal for
-     * @param size total size of the plaintext file, in bytes
-     * @return handle to seal file data with
-     */
-    FileHandle beginFileEncryption(const std::string& groupId, const FileSize size);
+    // ── Files: the caller moves the bytes, in chunks ──
+    //
+    // A file comes out as two things: the ciphertext, which `encryptFileChunk` hands back call by call, and the
+    // envelope, which `finishFileEncryption` returns. Store both; the envelope is small.
+    //
+    //     FileHandle h = api.beginFileEncryption(groupId, location);
+    //     while (source.hasMore()) sink.write(api.encryptFileChunk(h, source.read(1 << 17)));
+    //     Envelope envelope = api.finishFileEncryption(h);
+    //
+    // The envelope is made when the file ends, and the writer signs in it the size and a digest of every
+    // chunk. So the size need not be known up front, a file cut short is detected, and the content is the
+    // author's: a member who rewrites the stored ciphertext is caught at the chunk they touched.
+    //
+    // Every `encryptFileChunk` call returns all the ciphertext of what it was given: nothing is held back for
+    // the finish. Each call makes one chunk (more when it is given above 128 KiB), and every chunk costs 36
+    // bytes of envelope, so feed it blocks of tens of kilobytes or more, not single lines.
+    //
+    // ponytail: the chunk list lives in the envelope: 36 bytes per chunk, about 300 KB of envelope per GB at
+    // 128 KiB blocks. Move to a Merkle tree with the proofs beside the ciphertext when that is too big.
 
     /**
-     * Begins sealing a file for a Group without revealing, or proving, who sent it.
+     * Begins encrypting a file for a Group, as one of its members.
      *
-     * The file counterpart of `encryptAnonymously`. Driven exactly like `beginFileEncryption` — same
-     * `encryptFileChunk`, same `finishFileEncryption`, and the ciphertext it produces is byte-for-byte the
-     * same shape. Only the envelope differs, in how it wraps the file key.
-     *
-     * Needs public information only: the Group's ID and its identity public key. No membership, no server
-     * call. A throwaway keypair is generated and discarded, so the result is unattributable — and therefore
-     * unreadable to you afterwards. Only the Group can open it.
-     *
-     * Because nothing about it is attributable, nothing about it is authorised or metered either. If you
-     * accept these from the open internet, bound the size and the volume in your own transport.
-     *
-     * @param groupId ID of the Group to seal for
-     * @param groupPubKey the Group's identity public key (base58-DER encoded)
-     * @param size total size of the plaintext file, in bytes
-     * @return handle to seal file data with
+     * @param groupId ID of the Group
+     * @param location where the file lives in the application's data; the envelope opens nowhere else
+     * @param options further readers of the file, as for `encrypt`
+     * @return handle to encrypt file data with
      */
+    FileHandle beginFileEncryption(
+        const std::string& groupId,
+        const Path& location,
+        const EncryptOptions& options = {}
+    );
+
+    /** As `beginFileEncryption`, for a writer who is not a member of the Group. The file counterpart of `encryptAsOutsider`. */
+    FileHandle beginFileEncryptionAsOutsider(
+        const std::string& contextId,
+        const std::string& groupId,
+        const Path& location,
+        const EncryptOptions& options = {}
+    );
+
+    /** The file counterpart of `encryptAnonymously`: nobody signs the file, and no server call is made. */
     FileHandle beginFileEncryptionAnonymously(
         const std::string& groupId,
         const std::string& groupPubKey,
-        const FileSize size
+        const Path& location
     );
 
     /**
-     * Seals the next piece of a file: takes plaintext, returns ciphertext.
+     * Encrypts the next piece of a file.
      *
-     * You supply the bytes — nothing is read from anywhere. Blocks may be any size up to 4 MiB and need not
-     * align with anything; the library finds its own internal boundaries.
-     *
-     * The return covers whichever internal chunks this call completed, so it is **empty whenever your block
-     * did not finish one**, and larger than your block when it finished several. Neither is an error. Write
-     * whatever comes back straight out, in the order it comes back.
-     *
-     * @param fileHandle handle from `beginFileEncryption` or `beginFileEncryptionAnonymously`
-     * @param plainChunk plaintext to append, at most 4 MiB
-     * @return ciphertext to store, possibly empty
+     * @param fileHandle handle from one of the `beginFileEncryption...` calls
+     * @param plainChunk the next bytes of the file
+     * @return their ciphertext, whole; append it to what the earlier calls returned
      */
     core::Buffer encryptFileChunk(const FileHandle fileHandle, const core::Buffer& plainChunk);
 
     /**
-     * Finishes sealing a file and releases its handle.
+     * Ends the file and releases its handle.
      *
-     * Returns the envelope — the one piece without which the ciphertext is unopenable. Store it.
-     *
-     * Throws if less plaintext arrived than was declared. The handle is released either way, so there is no
-     * need — and no way — to close it again after a failure.
-     *
-     * @param fileHandle handle from `beginFileEncryption` or `beginFileEncryptionAnonymously`
-     * @return the envelope, needed to read the file back
+     * @return the file envelope; keep it next to the ciphertext
      */
     Envelope finishFileEncryption(const FileHandle fileHandle);
 
     /**
-     * Begins opening a sealed file.
+     * Begins decrypting a file a member of the Group wrote. Checks the envelope exactly as `decrypt` checks a
+     * message's: the location, the Group, the kind, and the author - who must be named, or accepted as anyone.
      *
-     * ## How opening a file works
-     *
-     * The mirror of sealing, and again the library is only a converter: you fetch the ciphertext from
-     * wherever you put it, push it through, and take plaintext out.
-     *
-     *     FileHandle h = api.beginFileDecryption(envelope);
-     *     while (storage.hasMore()) {
-     *         sink.write(api.decryptFileChunk(h, storage.read(1 << 20)));
-     *     }
-     *     DecryptedFileInfo info = api.finishFileDecryption(h);  // who sent it, and was it whole
-     *
-     * Feed the ciphertext in the order it was produced. Block sizes need not match the ones used when
-     * sealing, and need not match each other.
-     *
-     * To read only part of a file rather than all of it, see `seekInEncryptedFile`.
-     *
-     * Accepts envelopes from both `beginFileEncryption` and `beginFileEncryptionAnonymously`; which one it
-     * was is reported by `finishFileDecryption`.
-     *
-     * @param envelope envelope returned by `finishFileEncryption`
-     * @return handle to open file data with
+     * @param envelope what `finishFileEncryption` returned
+     * @return handle to decrypt file data with
      */
-    FileHandle beginFileDecryption(const Envelope& envelope);
+    FileHandle beginFileDecryption(
+        const std::string& groupId,
+        const Path& location,
+        const Envelope& envelope,
+        const DecryptOptions& options
+    );
+    /** The file counterparts of `decryptFromOutsider`, `decryptAnonymous` and `decryptShared`. */
+    FileHandle beginFileDecryptionFromOutsider(
+        const std::string& groupId,
+        const Path& location,
+        const Envelope& envelope,
+        const DecryptOptions& options
+    );
+    FileHandle beginAnonymousFileDecryption(const std::string& groupId, const Path& location, const Envelope& envelope);
+    FileHandle beginSharedFileDecryption(
+        const std::string& contextId,
+        const Path& location,
+        const Envelope& envelope,
+        const DecryptOptions& options
+    );
 
     /**
-     * Opens the next piece of a file: takes ciphertext, returns plaintext.
+     * Decrypts the next piece of a file. The ciphertext may be cut any way: bytes that do not yet make a
+     * whole chunk wait for the next call, so a call may return nothing.
      *
-     * You supply the bytes. Note the difference from `StoreApi::readFromFile`, which fetches for you and
-     * takes a *length* as its second argument — here the second argument is the data itself, and nothing is
-     * fetched.
-     *
-     * As on the sealing side, the return covers whichever internal chunks this call completed: empty when it
-     * completed none, several chunks' worth when it completed several.
-     *
-     * @param fileHandle handle from `beginFileDecryption`
-     * @param cipherChunk ciphertext to append, at most 4 MiB
-     * @return plaintext, possibly empty
+     * A chunk is checked against the digest the writer put in the envelope before it is returned: every byte
+     * that comes out is the writer's. A chunk that was changed, moved or swapped throws
+     * `EnvelopeFileCorruptedException` at that chunk. `finishFileDecryption` adds only that the file is complete.
      */
     core::Buffer decryptFileChunk(const FileHandle fileHandle, const core::Buffer& cipherChunk);
 
+    /** Which ciphertext bytes hold plaintext bytes [from, to): for an HTTP Range request. */
+    CipherRange getFileCipherRange(const FileHandle fileHandle, const FilePosition from, const FilePosition to);
+
     /**
-     * Moves the read cursor to `position` in the plaintext, and returns where to resume feeding ciphertext.
+     * Moves reading to `position` in the plaintext.
      *
-     * ## Why it returns an offset rather than just moving a cursor
+     * A chunk only opens whole, so reading continues from the start of the chunk that holds `position`; the
+     * bytes before `position` in it are dropped for you.
      *
-     * You are the source of the bytes, so the library cannot fetch anything for you — it can only tell you
-     * what to fetch. And it has to tell you, because the two coordinate spaces do not line up: the file is
-     * sealed in chunks, each slightly larger than the plaintext it carries, so plaintext byte 1'000'000 does
-     * not sit at ciphertext byte 1'000'000. Only the library knows that mapping.
-     *
-     * A chunk is also the smallest thing that can be opened, so the offset you get back points at the start
-     * of the chunk *containing* `position`, never at `position` itself. The head of that chunk is then
-     * discarded for you, so what comes out of the next `decryptFileChunk` still begins exactly at `position`.
-     *
-     * ## Reading a range
-     *
-     * To read `length` plaintext bytes starting at `from`:
-     *
-     *     FileHandle h = api.beginFileDecryption(envelope);
-     *     CipherOffset at = api.seekInEncryptedFile(h, from);
-     *
-     *     std::string out;
-     *     while (out.size() < length) {
-     *         core::Buffer block = storage.read(at, 1 << 20);  // your storage, your transport
-     *         if (block.size() == 0) break;                    // ran off the end of the ciphertext
-     *         at += block.size();
-     *         out += api.decryptFileChunk(h, block).stdString();
-     *     }
-     *     out.resize(length);                                  // front is exact, tail may overshoot
-     *     api.finishFileDecryption(h);
-     *
-     * The output starts exactly where you asked and may run past where you stopped asking, because opening
-     * happens a whole chunk at a time — trim the tail yourself. Stop feeding as soon as you have enough;
-     * there is no need to read on to the end of the file.
-     *
-     * Seek as often as you like on one handle, forwards or backwards. Anything buffered from the previous
-     * position is discarded.
-     *
-     * ## What it is for
-     *
-     * Playing media from the middle, reading a header out of a large file without transferring the rest,
-     * building a preview, resuming an interrupted read, or answering HTTP range requests from sealed storage.
-     *
-     * ## What it costs
-     *
-     * Seeking gives up the truncation guarantee for this handle, and `DecryptedFileInfo::complete` comes back
-     * false to say so. A reader that deliberately skips most of a file cannot also confirm the skipped parts
-     * were ever there.
-     *
-     * Everything you *do* read stays fully authenticated: a chunk cannot be forged, reordered, moved to a
-     * different position in the file, or lifted from another file. Only "is the rest of it present" becomes
-     * unanswerable. If you need that guarantee as well, read the file start to finish on a separate handle.
-     *
-     * @param fileHandle handle from `beginFileDecryption`
-     * @param position new cursor position in the plaintext, from 0 to the file size
-     * @return ciphertext byte offset to resume feeding from
+     * @return where in the ciphertext to continue reading from
      */
     CipherOffset seekInEncryptedFile(const FileHandle fileHandle, const FilePosition position);
 
     /**
-     * Finishes opening a file, reports where it came from, and releases its handle.
-     *
-     * Call it even when you are sure you are done. Each chunk verifies on its own, so a missing tail is
-     * detectable here and nowhere else: this is the only point at which "the file ended early" can be
-     * distinguished from "the file ended".
-     *
-     * Throws if less ciphertext arrived than the envelope declares — unless you seeked, in which case a short
-     * read is what you asked for, and it reports `complete = false` instead of throwing. The handle is
-     * released either way.
-     *
-     * The provenance arrives here rather than at `beginFileDecryption` because this is the first moment the
-     * file is known to have been received whole; attributing it earlier would attribute something that might
-     * still turn out to be truncated. Check `DecryptedFileInfo::type` before trusting `authorPubKey`, and
-     * `DecryptedFileInfo::complete` before treating the file as whole.
-     *
-     * @param fileHandle handle from `beginFileDecryption`
-     * @return which Group the file was sealed for, who — if anyone — is provably its author, and whether all
-     *         of it arrived
+     * Ends reading and releases the handle. Throws `EnvelopeTruncatedFileException` when chunks the envelope
+     * lists never arrived - unless the reader seeked, in which case `complete` is false instead.
      */
     DecryptedFileInfo finishFileDecryption(const FileHandle fileHandle);
+
+    // ── Sequences: many small items from one author, in order ──
+    //
+    // For what is too frequent to sign one by one: edits of a shared document, live captions, cursors.
+    // The author signs once, in the header (an envelope bound to `location`). Each item is then encrypted
+    // under the sequence's own key with its position, at the cost of a symmetric operation.
+    //
+    // What a reader knows about an item:
+    // - at once: nobody without the Group's key made, changed, moved or replayed it, and how many items
+    //   before it are missing;
+    // - after the next checkpoint or the close verifies: the author wrote it. Until then another *member*
+    //   could have forged it, because every member can open the header and learn the sequence's key.
+    // Sign with encrypt() instead when each item must be the author's the moment it is read.
+    //
+    // A sequence belongs to one epoch. After a removal or a rotation appendToSequence throws
+    // EnvelopeStaleEpochException: begin a new sequence. Old ones stay readable.
+    //
+    // ponytail: sequences have one audience. Share a sequence by sharing the Group, until someone needs more.
+
+    /**
+     * @param checkpointEvery a checkpoint is made by itself after this many items, so a writer cannot forget
+     * to make any; 0 turns that off, for a writer that calls checkpointSequence on its own schedule.
+     */
+    SequenceHandle beginSequence(const std::string& groupId, const Path& location, int64_t checkpointEvery = 64);
+    /** The signed header. Send or store it before the items. */
+    core::Buffer getSequenceHeader(const SequenceHandle sequence);
+    SequenceAppendResult appendToSequence(const SequenceHandle sequence, const core::Buffer& data);
+    /** A signature over everything appended so far. Send it like an item. */
+    core::Buffer checkpointSequence(const SequenceHandle sequence);
+    /** A final checkpoint that also says nothing follows. Frees the handle. */
+    core::Buffer finishSequence(const SequenceHandle sequence);
+
+    /**
+     * Opens a sequence for reading; checks the header as decrypt() checks an envelope.
+     * @param resumeFrom a checkpoint of this sequence to start after, for a reader that joins late or
+     * continues another day. Without it, reading starts at item 0.
+     */
+    SequenceHandle openSequence(
+        const std::string& groupId,
+        const Path& location,
+        const core::Buffer& header,
+        const DecryptOptions& options,
+        const std::optional<core::Buffer>& resumeFrom = std::nullopt
+    );
+    /** Items must arrive in order. A skipped one is reported in `missing`; an earlier or repeated one throws. */
+    SequenceItem readSequenceItem(const SequenceHandle sequence, const core::Buffer& item);
+    /**
+     * Checks a checkpoint or a close against the items read. Throws `EnvelopeSequenceOrderException` if any
+     * item was missing or forged; reading may go on, and the next mark attests what follows this one.
+     */
+    SequenceMarkInfo verifySequenceMark(const SequenceHandle sequence, const core::Buffer& mark);
+    /** Frees a handle from openSequence, or from beginSequence without finishing it. */
+    void closeSequence(const SequenceHandle sequence);
 
     /**
      * Subscribe for the Group events on the given subscription query.

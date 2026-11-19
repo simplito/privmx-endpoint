@@ -62,6 +62,21 @@ public:
         SetGroupRoles = 42,
         UpdateGroupRules = 43,
         GetGroupLog = 44,
+        BeginFileEncryptionAsOutsider = 45,
+        BeginFileDecryptionFromOutsider = 46,
+        BeginAnonymousFileDecryption = 47,
+        BeginSharedFileDecryption = 48,
+        GetFileCipherRange = 49,
+        BeginSequence = 50,
+        GetSequenceHeader = 51,
+        AppendToSequence = 52,
+        CheckpointSequence = 53,
+        FinishSequence = 54,
+        OpenSequence = 55,
+        ReadSequenceItem = 56,
+        VerifySequenceMark = 57,
+        CloseSequence = 58,
+        PeekSequenceItem = 59,
     };
 
     GroupApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -109,6 +124,21 @@ public:
     Poco::Dynamic::Var finishFileDecryption(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var beginFileEncryptionAnonymously(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var seekInEncryptedFile(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginFileEncryptionAsOutsider(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginFileDecryptionFromOutsider(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginAnonymousFileDecryption(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginSharedFileDecryption(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getFileCipherRange(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getSequenceHeader(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var appendToSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var checkpointSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var finishSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var openSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var readSequenceItem(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var verifySequenceMark(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var closeSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var peekSequenceItem(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var sendCustomEvent(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildCustomEventSubscriptionQuery(const Poco::Dynamic::Var& args);
 

@@ -768,6 +768,7 @@ void GroupApiImpl::processConnectedEvent() {
     // Open file handles too. A handle used after this reports "not an open encrypted-file handle", which a reconnect
     // made true.
     _envelopeFiles.clear();
+    _sequences.clear();
     dropCachedGroup();
 }
 
@@ -780,6 +781,7 @@ void GroupApiImpl::processDisconnectedEvent() {
     savePins();
     _sessions.dropKeys();
     _envelopeFiles.clear();
+    _sequences.clear();
     dropCachedGroup();
 }
 
@@ -990,9 +992,9 @@ core::Buffer GroupApiImpl::idFromString(const std::string& identifier) {
     return core::Buffer::from(bytes);
 }
 
-EnvelopeBinding GroupApiImpl::bindingOf(const Path& location) {
+EnvelopeBinding GroupApiImpl::bindingOf(const Path& location, EnvelopeContent content) {
     if (location.size() == 1 && location.front().isId && location.front().value.size() == 0) {
-        return EnvelopeBinding{};
+        return EnvelopeBinding{.content = content};
     }
     if (location.empty()) {
         throw core::InvalidParamsException("a location needs at least one segment; say noLocation() to bind to none");
@@ -1002,7 +1004,9 @@ EnvelopeBinding GroupApiImpl::bindingOf(const Path& location) {
             throw core::InvalidParamsException("a location segment cannot be empty");
         }
     }
-    return GroupEnvelopeEncryptor::bindLocation(location);
+    EnvelopeBinding binding = GroupEnvelopeEncryptor::bindLocation(location);
+    binding.content = content;
+    return binding;
 }
 
 std::string GroupApiImpl::kindOf(const EnvelopeRouting& routing) {
@@ -1032,9 +1036,12 @@ EnvelopeHeader GroupApiImpl::peekEnvelope(const core::Buffer& envelope) {
         .keyVersion = routing.keyVersion,
         .fromOutsider = routing.type != ENVELOPE_FROM_MEMBER,
         .isSigned = routing.type != ENVELOPE_ANONYMOUS,
-        .isFile = routing.isFile,
+        .isFile = routing.content == EnvelopeContent::File,
         .hasLocation = routing.hasLocation,
         .authorUserId = routing.authorUserId,
+        .sequenceId = routing.content == EnvelopeContent::Sequence ?
+            privmx::utils::Hex::from(GroupEnvelopeEncryptor::sequenceIdOf(envelope)) :
+            std::string(),
         .alsoForGroups = {},
         .alsoForUsers = {},
     };
@@ -1260,11 +1267,12 @@ DecryptedEnvelope GroupApiImpl::decrypt(
     const std::string& groupId,
     const Path& location,
     const Envelope& envelope,
-    const DecryptOptions& options
+    const DecryptOptions& options,
+    EnvelopeContent content
 ) {
     requireAuthorStated(options);
-    const EnvelopeBinding binding = bindingOf(location);
-    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope);
+    const EnvelopeBinding binding = bindingOf(location, content);
+    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope, content);
     // Before any key is looked up: the caller names the group, so an envelope cannot steer the read to another.
     requireFor(routing, groupId, ENVELOPE_FROM_MEMBER);
 
@@ -1332,7 +1340,16 @@ Envelope GroupApiImpl::encryptAsOutsider(
     const core::Buffer& content,
     const EncryptOptions& options
 ) {
-    const EnvelopeBinding binding = bindingOf(location);
+    return sealAsOutsider(contextId, groupId, bindingOf(location), content, options.alsoFor);
+}
+
+Envelope GroupApiImpl::sealAsOutsider(
+    const std::string& contextId,
+    const std::string& groupId,
+    const EnvelopeBinding& binding,
+    const core::Buffer& content,
+    const std::vector<EnvelopeRecipient>& alsoFor
+) {
     // The group's current key, off its latest verified statement: the same read a container's grant uses.
     const auto epochs = fetchGroupEpochs(contextId, {groupId});
     const auto epoch = epochs.find(groupId);
@@ -1347,7 +1364,7 @@ Envelope GroupApiImpl::encryptAsOutsider(
     };
     return _envelopeEncryptor.packOutsiderEnvelope(
         groupId, privmx::crypto::PublicKey::fromBase58DER(epoch->second.groupPubKey), content, _userPrivKey, seal,
-        wireRecipients(contextId, groupId, options.alsoFor)
+        wireRecipients(contextId, groupId, alsoFor)
     );
 }
 
@@ -1355,11 +1372,12 @@ DecryptedOutsiderEnvelope GroupApiImpl::decryptFromOutsider(
     const std::string& groupId,
     const Path& location,
     const Envelope& envelope,
-    const DecryptOptions& options
+    const DecryptOptions& options,
+    EnvelopeContent content
 ) {
     requireAuthorStated(options);
-    const EnvelopeBinding binding = bindingOf(location);
-    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope);
+    const EnvelopeBinding binding = bindingOf(location, content);
+    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope, content);
     requireFor(routing, groupId, ENVELOPE_FROM_OUTSIDER);
 
     const OpenedEnvelope opened = _envelopeEncryptor.openOutsiderEnvelope(
@@ -1389,10 +1407,11 @@ DecryptedOutsiderEnvelope GroupApiImpl::decryptFromOutsider(
 DecryptedAnonymousEnvelope GroupApiImpl::decryptAnonymous(
     const std::string& groupId,
     const Path& location,
-    const Envelope& envelope
+    const Envelope& envelope,
+    EnvelopeContent content
 ) {
-    const EnvelopeBinding binding = bindingOf(location);
-    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope);
+    const EnvelopeBinding binding = bindingOf(location, content);
+    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope, content);
     requireFor(routing, groupId, ENVELOPE_ANONYMOUS);
     const OpenedEnvelope opened = _envelopeEncryptor.openAnonymousEnvelope(
         envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey), binding
@@ -1406,15 +1425,16 @@ DecryptedSharedEnvelope GroupApiImpl::decryptShared(
     const std::string& contextId,
     const Path& location,
     const Envelope& envelope,
-    const DecryptOptions& options
+    const DecryptOptions& options,
+    EnvelopeContent content
 ) {
     requireAuthorStated(options);
     if (options.currentEpochOnly) {
         // A recipient holds no epoch of the author's Group to compare with: refused, never silently ignored.
         throw core::InvalidParamsException("currentEpochOnly does not apply to a shared envelope");
     }
-    const EnvelopeBinding binding = bindingOf(location);
-    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope);
+    const EnvelopeBinding binding = bindingOf(location, content);
+    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope, content);
     core::Validator::validateId(routing.groupId, "field:envelope.groupId ");
     if (routing.type == ENVELOPE_ANONYMOUS || routing.recipients.empty()) {
         // Not shared with anybody: a plain member's or outsider's envelope is read with the group it names.
@@ -1497,80 +1517,167 @@ Envelope GroupApiImpl::encryptAnonymously(
 }
 
 // -- envelope files --------------------------------------------------------------------------------------
+//
+// A file's envelope is an ordinary envelope whose content is the file's manifest. So a file is written and read
+// through the same four doors as a message, with the same checks, and only the bytes go another way.
 
-FileHandle GroupApiImpl::beginFileEncryption(const std::string& groupId, FileSize size) {
-    auto key = currentEncKey(groupId);
-    return _envelopeFiles.open(
-        "GroupEnvelope:Encrypt",
-        EnvelopeFileState{
-            .reading = false,
-            .type = ENVELOPE_FROM_MEMBER,
-            .groupId = groupId,
-            .keyId = key.id,
-            .groupKey = key.key,
-            // Per file, so a chunk lifted from one file is useless in any other.
-            .fileKey = privmx::crypto::Crypto::randomBytes(32),
-            .index = 0,
-            .plainSize = static_cast<ByteCount>(size),
-        }
-    );
+FileHandle GroupApiImpl::beginFileWrite(std::function<core::Buffer(const core::Buffer&)> seal) {
+    EnvelopeFileState state{};
+    // Per file, so a chunk lifted from one file is useless in any other.
+    state.fileKey = privmx::crypto::Crypto::randomBytes(32);
+    state.seal = std::move(seal);
+    return _envelopeFiles.open("GroupEnvelope:Encrypt", std::move(state));
+}
+
+FileHandle GroupApiImpl::beginFileRead(const core::Buffer& manifest, DecryptedFileInfo info) {
+    EnvelopeFileState state{};
+    state.reading = true;
+    state.chunks = GroupEnvelopeEncryptor::readFileManifest(manifest, state.fileKey);
+    info.size = static_cast<int64_t>(GroupEnvelopeFiles::plainSizeOf(state));
+    state.info = std::move(info);
+    return _envelopeFiles.open("GroupEnvelope:Decrypt", std::move(state));
+}
+
+FileHandle GroupApiImpl::beginFileEncryption(
+    const std::string& groupId,
+    const Path& location,
+    const EncryptOptions& options
+) {
+    const EnvelopeBinding binding = bindingOf(location, EnvelopeContent::File);
+    // Now, so that a caller who cannot write to the group learns it before the upload and not after. The
+    // envelope is sealed at the finish, under the key that is current then.
+    currentEncKey(groupId);
+    return beginFileWrite([this, groupId, binding, alsoFor = options.alsoFor](const core::Buffer& manifest) {
+        return sealAsMember(groupId, binding, manifest, alsoFor);
+    });
+}
+
+FileHandle GroupApiImpl::beginFileEncryptionAsOutsider(
+    const std::string& contextId,
+    const std::string& groupId,
+    const Path& location,
+    const EncryptOptions& options
+) {
+    const EnvelopeBinding binding = bindingOf(location, EnvelopeContent::File);
+    if (fetchGroupEpochs(contextId, {groupId}).count(groupId) == 0) {
+        throw core::InvalidParamsException("group " + groupId + " has no verifiable key");
+    }
+    return beginFileWrite([this, contextId, groupId, binding, alsoFor = options.alsoFor](const core::Buffer& manifest) {
+        return sealAsOutsider(contextId, groupId, binding, manifest, alsoFor);
+    });
 }
 
 FileHandle GroupApiImpl::beginFileEncryptionAnonymously(
     const std::string& groupId,
     const std::string& groupPubKey,
-    FileSize size
+    const Path& location
 ) {
-    // No server call and no membership, exactly like `encryptAnonymously`. The public key is enough to seal
-    // to, and the envelope is not built until the finish, so nothing here needs the group's own key.
-    privmx::crypto::PublicKey::fromBase58DER(groupPubKey); // reject a malformed key now, not at the finish
-    return _envelopeFiles.open(
-        "GroupEnvelope:EncryptAnonymous",
-        EnvelopeFileState{
-            .reading = false,
-            .type = ENVELOPE_ANONYMOUS,
-            .groupId = groupId,
-            .groupPubKey = groupPubKey,
-            .fileKey = privmx::crypto::Crypto::randomBytes(32),
-            .index = 0,
-            .plainSize = static_cast<ByteCount>(size),
-        }
-    );
+    const EnvelopeBinding binding = bindingOf(location, EnvelopeContent::File);
+    // No server call and no membership, exactly like `encryptAnonymously`.
+    const privmx::crypto::PublicKey pubKey = privmx::crypto::PublicKey::fromBase58DER(groupPubKey);
+    return beginFileWrite([this, groupId, pubKey, binding](const core::Buffer& manifest) {
+        return _envelopeEncryptor.packAnonymousEnvelope(groupId, pubKey, manifest, binding);
+    });
 }
 
 core::Buffer GroupApiImpl::encryptFileChunk(FileHandle fileHandle, const core::Buffer& plainChunk) {
     return _envelopeFiles.encryptChunk(fileHandle, plainChunk);
 }
 
-FileHandle GroupApiImpl::beginFileDecryption(const Envelope& envelope) {
-    auto routing = _envelopeEncryptor.peekFile(envelope);
-    core::Validator::validateId(routing.groupId, "field:envelope.groupId ");
+Envelope GroupApiImpl::finishFileEncryption(FileHandle fileHandle) {
+    const EnvelopeFileState state = _envelopeFiles.finish(fileHandle, false);
+    return state.seal(GroupEnvelopeEncryptor::packFileManifest(state.fileKey, state.chunks));
+}
 
-    // Both kinds open into the same reader: only the header is wrapped differently, the body is not.
-    EnvelopeFileHeader header;
-    std::string groupKey;
-    if (routing.type == ENVELOPE_FROM_MEMBER) {
-        groupKey = encKeyById(routing.groupId, routing.keyId).key;
-        header = _envelopeEncryptor.unpackFileEnvelope(envelope, groupKey, EnvelopeBinding{});
-    } else {
-        header = _envelopeEncryptor.unpackAnonymousFileEnvelope(
-            envelope, _keys.grantKeyForPubKey(routing.groupId, routing.groupPubKey), EnvelopeBinding{}
-        );
-    }
+FileHandle GroupApiImpl::beginFileDecryption(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
+    const DecryptedEnvelope opened = decrypt(groupId, location, envelope, options, EnvelopeContent::File);
+    return beginFileRead(
+        opened.data,
+        DecryptedFileInfo{
+            .author = opened.author,
+            .sender = std::nullopt,
+            .homeGroupId = {},
+            .senderMembership = {},
+            .via = {},
+            .sharedWith = opened.sharedWith,
+            .keyVersion = opened.keyVersion,
+            .size = 0,
+            .complete = false,
+        }
+    );
+}
 
-    return _envelopeFiles.open(
-        "GroupEnvelope:Decrypt",
-        EnvelopeFileState{
-            .reading = true,
-            .type = header.type,
-            .groupId = header.groupId,
-            .keyId = header.keyId,
-            .groupKey = groupKey,
-            .groupPubKey = routing.groupPubKey,
-            .authorPubKey = header.authorPubKey,
-            .fileKey = header.fileKey,
-            .index = 0,
-            .plainSize = header.plainSize,
+FileHandle GroupApiImpl::beginFileDecryptionFromOutsider(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
+    const DecryptedOutsiderEnvelope opened = decryptFromOutsider(
+        groupId, location, envelope, options, EnvelopeContent::File
+    );
+    return beginFileRead(
+        opened.data,
+        DecryptedFileInfo{
+            .author = std::nullopt,
+            .sender = opened.sender,
+            .homeGroupId = {},
+            .senderMembership = {},
+            .via = {},
+            .sharedWith = opened.sharedWith,
+            .keyVersion = opened.keyVersion,
+            .size = 0,
+            .complete = false,
+        }
+    );
+}
+
+FileHandle GroupApiImpl::beginAnonymousFileDecryption(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope
+) {
+    const DecryptedAnonymousEnvelope opened = decryptAnonymous(groupId, location, envelope, EnvelopeContent::File);
+    return beginFileRead(
+        opened.data,
+        DecryptedFileInfo{
+            .author = std::nullopt,
+            .sender = std::nullopt,
+            .homeGroupId = {},
+            .senderMembership = {},
+            .via = {},
+            .sharedWith = {},
+            .keyVersion = opened.keyVersion,
+            .size = 0,
+            .complete = false,
+        }
+    );
+}
+
+FileHandle GroupApiImpl::beginSharedFileDecryption(
+    const std::string& contextId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
+    const DecryptedSharedEnvelope opened = decryptShared(contextId, location, envelope, options, EnvelopeContent::File);
+    return beginFileRead(
+        opened.data,
+        DecryptedFileInfo{
+            .author = std::nullopt,
+            .sender = opened.sender,
+            .homeGroupId = opened.homeGroupId,
+            .senderMembership = opened.senderMembership,
+            .via = opened.via,
+            .sharedWith = opened.sharedWith,
+            .keyVersion = 0,
+            .size = 0,
+            .complete = false,
         }
     );
 }
@@ -1579,30 +1686,231 @@ core::Buffer GroupApiImpl::decryptFileChunk(FileHandle fileHandle, const core::B
     return _envelopeFiles.decryptChunk(fileHandle, cipherChunk);
 }
 
+CipherRange GroupApiImpl::getFileCipherRange(FileHandle fileHandle, FilePosition from, FilePosition to) {
+    return _envelopeFiles.cipherRange(fileHandle, from, to);
+}
+
 CipherOffset GroupApiImpl::seekInEncryptedFile(FileHandle fileHandle, FilePosition position) {
     return _envelopeFiles.seek(fileHandle, position);
 }
 
-Envelope GroupApiImpl::finishFileEncryption(FileHandle fileHandle) {
-    auto state = _envelopeFiles.finish(fileHandle, false);
-    if (state.type == ENVELOPE_ANONYMOUS) {
-        return _envelopeEncryptor.packAnonymousFileEnvelope(
-            state.groupId, privmx::crypto::PublicKey::fromBase58DER(state.groupPubKey), state.plainSize, state.fileKey,
-            EnvelopeBinding{}
+DecryptedFileInfo GroupApiImpl::finishFileDecryption(FileHandle fileHandle) {
+    EnvelopeFileState state = _envelopeFiles.finish(fileHandle, true);
+    state.info.complete = !state.seeked;
+    return state.info;
+}
+
+// -- sequences -------------------------------------------------------------------------------------------
+
+SequenceHandle GroupApiImpl::openSequenceHandle(const std::string& label, std::shared_ptr<Sequence> sequence) {
+    const SequenceHandle handle = _connection.getImpl()->getHandleManager()->createHandle(label);
+    _sequences.set(handle, std::move(sequence));
+    return handle;
+}
+
+std::shared_ptr<GroupApiImpl::Sequence> GroupApiImpl::sequenceOf(SequenceHandle handle, bool wantReading) {
+    const auto sequence = _sequences.get(handle);
+    if (!sequence.has_value()) {
+        throw core::InvalidParamsException("field:sequence is not an open sequence handle");
+    }
+    if (sequence.value()->reading != wantReading) {
+        throw core::InvalidParamsException(
+            wantReading ? "field:sequence came from beginSequence, not openSequence" :
+                          "field:sequence came from openSequence, not beginSequence"
         );
     }
-    return _envelopeEncryptor.packFileEnvelope(
-        state.groupId, state.keyId, state.plainSize, state.fileKey, _userPrivKey, state.groupKey, EnvelopeSeal{}
+    return sequence.value();
+}
+
+void GroupApiImpl::closeSequence(SequenceHandle handle) {
+    if (!_sequences.get(handle).has_value()) {
+        throw core::InvalidParamsException("field:sequence is not an open sequence handle");
+    }
+    _sequences.erase(handle);
+    _connection.getImpl()->getHandleManager()->removeHandle(handle);
+}
+
+SequenceHandle GroupApiImpl::beginSequence(const std::string& groupId, const Path& location, int64_t checkpointEvery) {
+    if (checkpointEvery < 0) {
+        throw core::InvalidParamsException("field:checkpointEvery cannot be negative");
+    }
+    auto sequence = std::make_shared<Sequence>();
+    sequence->key = privmx::crypto::Crypto::randomBytes(32);
+    // The header is a member's envelope like any other: signed, bound to the location, sealed to the epoch.
+    sequence->header = sealAsMember(
+        groupId, bindingOf(location, EnvelopeContent::Sequence), core::Buffer::from(sequence->key), {}
+    );
+    sequence->id = GroupEnvelopeEncryptor::sequenceIdOf(sequence->header);
+    sequence->transcript = GroupEnvelopeEncryptor::sequenceTranscriptStart(sequence->id);
+    sequence->checkpointEvery = checkpointEvery;
+    // Whoever was removed since still knows this sequence's key: it must not go on.
+    sequence->requireCurrentEpoch = [this, groupId, keyId = GroupEnvelopeEncryptor::peekAny(sequence->header).keyId]() {
+        requireCurrentKey(groupId, keyId);
+    };
+    return openSequenceHandle("GroupSequence:Write", std::move(sequence));
+}
+
+core::Buffer GroupApiImpl::getSequenceHeader(SequenceHandle handle) {
+    return sequenceOf(handle, false)->header;
+}
+
+core::Buffer GroupApiImpl::markSequence(Sequence& sequence, bool closed) {
+    sequence.sinceMark = 0;
+    return _envelopeEncryptor.packSequenceMark(
+        sequence.id, sequence.key,
+        GroupEnvelopeEncryptor::SequenceMark{
+            .count = sequence.next, .closed = closed, .transcript = sequence.transcript
+        },
+        _userPrivKey
     );
 }
 
-DecryptedFileInfo GroupApiImpl::finishFileDecryption(FileHandle fileHandle) {
-    auto state = _envelopeFiles.finish(fileHandle, true);
-    return DecryptedFileInfo{
-        .groupId = state.groupId,
-        .authorPubKey = state.authorPubKey,
-        .type = state.type,
-        .complete = !state.seeked,
+SequenceAppendResult GroupApiImpl::appendToSequence(SequenceHandle handle, const core::Buffer& data) {
+    const auto sequence = sequenceOf(handle, false);
+    std::lock_guard lock(sequence->mutex);
+    if (sequence->closed) {
+        throw core::InvalidParamsException("field:sequence is finished");
+    }
+    sequence->requireCurrentEpoch();
+    SequenceAppendResult result{
+        .item = _envelopeEncryptor.packSequenceItem(sequence->id, sequence->key, sequence->next, data),
+        .mark = std::nullopt,
+    };
+    sequence->transcript = GroupEnvelopeEncryptor::sequenceTranscriptNext(sequence->transcript, result.item);
+    sequence->next++;
+    if (++sequence->sinceMark >= sequence->checkpointEvery && sequence->checkpointEvery > 0) {
+        result.mark = markSequence(*sequence, false);
+    }
+    return result;
+}
+
+core::Buffer GroupApiImpl::checkpointSequence(SequenceHandle handle) {
+    const auto sequence = sequenceOf(handle, false);
+    std::lock_guard lock(sequence->mutex);
+    if (sequence->closed) {
+        throw core::InvalidParamsException("field:sequence is finished");
+    }
+    return markSequence(*sequence, false);
+}
+
+core::Buffer GroupApiImpl::finishSequence(SequenceHandle handle) {
+    const auto sequence = sequenceOf(handle, false);
+    core::Buffer mark;
+    {
+        std::lock_guard lock(sequence->mutex);
+        if (sequence->closed) {
+            throw core::InvalidParamsException("field:sequence is finished");
+        }
+        sequence->closed = true;
+        mark = markSequence(*sequence, true);
+    }
+    closeSequence(handle);
+    return mark;
+}
+
+SequenceHandle GroupApiImpl::openSequence(
+    const std::string& groupId,
+    const Path& location,
+    const core::Buffer& header,
+    const DecryptOptions& options,
+    const std::optional<core::Buffer>& resumeFrom
+) {
+    const DecryptedEnvelope opened = decrypt(groupId, location, header, options, EnvelopeContent::Sequence);
+    if (opened.data.size() != 32) {
+        throw InvalidEnvelopeFormatException("sequence header carries a malformed key");
+    }
+    auto sequence = std::make_shared<Sequence>();
+    sequence->reading = true;
+    sequence->key = opened.data.stdString();
+    sequence->id = GroupEnvelopeEncryptor::sequenceIdOf(header);
+    sequence->transcript = GroupEnvelopeEncryptor::sequenceTranscriptStart(sequence->id);
+    sequence->authorPubKey = opened.author.pubKey;
+    if (resumeFrom.has_value()) {
+        const auto wire = GroupEnvelopeEncryptor::parseSequenceWire(resumeFrom.value());
+        if (!wire.isMark || wire.sequenceId != sequence->id) {
+            throw core::InvalidParamsException("field:resumeFrom is not a checkpoint of this sequence");
+        }
+        // The author's signature is all a late reader has for what came before; it is enough.
+        const auto mark = _envelopeEncryptor.openSequenceMark(wire, sequence->key, sequence->authorPubKey);
+        sequence->next = sequence->attested = mark.count;
+        sequence->transcript = mark.transcript;
+        sequence->closed = mark.closed;
+    }
+    return openSequenceHandle("GroupSequence:Read", std::move(sequence));
+}
+
+SequenceItem GroupApiImpl::readSequenceItem(SequenceHandle handle, const core::Buffer& item) {
+    const auto sequence = sequenceOf(handle, true);
+    std::lock_guard lock(sequence->mutex);
+    const auto wire = GroupEnvelopeEncryptor::parseSequenceWire(item);
+    if (wire.isMark) {
+        throw core::InvalidParamsException("field:item is a mark; give it to verifySequenceMark");
+    }
+    if (wire.sequenceId != sequence->id) {
+        throw InvalidEnvelopeFormatException("item of another sequence");
+    }
+    if (sequence->closed) {
+        throw EnvelopeSequenceOrderException("the author closed the sequence before this item");
+    }
+    if (wire.index < sequence->next) {
+        throw EnvelopeSequenceOrderException(
+            "item " + std::to_string(wire.index) + " is earlier than, or repeats, one already read"
+        );
+    }
+    SequenceItem result{
+        .data = _envelopeEncryptor.openSequenceItem(wire, sequence->key),
+        .index = static_cast<int64_t>(wire.index),
+        .missing = static_cast<int64_t>(wire.index - sequence->next),
+    };
+    if (result.missing > 0) {
+        sequence->gap = true;
+    } else if (!sequence->gap) {
+        sequence->transcript = GroupEnvelopeEncryptor::sequenceTranscriptNext(sequence->transcript, item);
+    }
+    sequence->next = wire.index + 1;
+    return result;
+}
+
+SequenceMarkInfo GroupApiImpl::verifySequenceMark(SequenceHandle handle, const core::Buffer& markBytes) {
+    const auto sequence = sequenceOf(handle, true);
+    std::lock_guard lock(sequence->mutex);
+    const auto wire = GroupEnvelopeEncryptor::parseSequenceWire(markBytes);
+    if (!wire.isMark) {
+        throw core::InvalidParamsException("field:mark is an item; give it to readSequenceItem");
+    }
+    if (wire.sequenceId != sequence->id) {
+        throw InvalidEnvelopeFormatException("mark of another sequence");
+    }
+    const auto mark = _envelopeEncryptor.openSequenceMark(wire, sequence->key, sequence->authorPubKey);
+    if (mark.count < sequence->next) {
+        // About a point the reader is already past: nothing kept to check it against.
+        throw EnvelopeSequenceOrderException("mark covers fewer items than were read");
+    }
+    const bool agrees = !sequence->gap && mark.count == sequence->next && mark.transcript == sequence->transcript;
+    // The mark is the author's either way, so reading goes on from it: what follows can be attested again.
+    sequence->next = mark.count;
+    sequence->transcript = mark.transcript;
+    sequence->gap = false;
+    sequence->closed = mark.closed;
+    if (!agrees) {
+        throw EnvelopeSequenceOrderException(
+            "items " +
+            std::to_string(sequence->attested) +
+            ".." +
+            std::to_string(mark.count) +
+            " were missing or are not what the author wrote"
+        );
+    }
+    sequence->attested = mark.count;
+    return SequenceMarkInfo{.attestedItems = static_cast<int64_t>(mark.count), .closed = mark.closed};
+}
+
+SequenceItemHeader GroupApiImpl::peekSequenceItem(const core::Buffer& itemOrMark) {
+    const auto wire = GroupEnvelopeEncryptor::parseSequenceWire(itemOrMark);
+    return SequenceItemHeader{
+        .sequenceId = privmx::utils::Hex::from(wire.sequenceId),
+        .index = static_cast<int64_t>(wire.index),
+        .isMark = wire.isMark,
     };
 }
 

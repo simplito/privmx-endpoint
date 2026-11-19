@@ -51,7 +51,22 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {ReseatGroupMembers, &GroupApiVarInterface::reseatGroupMembers},
         {SetGroupRoles, &GroupApiVarInterface::setGroupRoles},
         {UpdateGroupRules, &GroupApiVarInterface::updateGroupRules},
-        {GetGroupLog, &GroupApiVarInterface::getGroupLog}
+        {GetGroupLog, &GroupApiVarInterface::getGroupLog},
+        {BeginFileEncryptionAsOutsider, &GroupApiVarInterface::beginFileEncryptionAsOutsider},
+        {BeginFileDecryptionFromOutsider, &GroupApiVarInterface::beginFileDecryptionFromOutsider},
+        {BeginAnonymousFileDecryption, &GroupApiVarInterface::beginAnonymousFileDecryption},
+        {BeginSharedFileDecryption, &GroupApiVarInterface::beginSharedFileDecryption},
+        {GetFileCipherRange, &GroupApiVarInterface::getFileCipherRange},
+        {BeginSequence, &GroupApiVarInterface::beginSequence},
+        {GetSequenceHeader, &GroupApiVarInterface::getSequenceHeader},
+        {AppendToSequence, &GroupApiVarInterface::appendToSequence},
+        {CheckpointSequence, &GroupApiVarInterface::checkpointSequence},
+        {FinishSequence, &GroupApiVarInterface::finishSequence},
+        {OpenSequence, &GroupApiVarInterface::openSequence},
+        {ReadSequenceItem, &GroupApiVarInterface::readSequenceItem},
+        {VerifySequenceMark, &GroupApiVarInterface::verifySequenceMark},
+        {CloseSequence, &GroupApiVarInterface::closeSequence},
+        {PeekSequenceItem, &GroupApiVarInterface::peekSequenceItem}
 };
 
 Poco::Dynamic::Var GroupApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -285,11 +300,11 @@ Poco::Dynamic::Var GroupApiVarInterface::idFromString(const Poco::Dynamic::Var& 
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::beginFileEncryption(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
-    auto size = _deserializer.deserialize<int64_t>(argsArr->get(1), "size");
-    auto result = _groupApi.beginFileEncryption(groupId, size);
-    return _serializer.serialize(result);
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto options = _deserializer.deserialize<EncryptOptions>(argsArr->get(2), "options");
+    return _serializer.serialize(_groupApi.beginFileEncryption(groupId, location, options));
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::encryptFileChunk(const Poco::Dynamic::Var& args) {
@@ -301,10 +316,12 @@ Poco::Dynamic::Var GroupApiVarInterface::encryptFileChunk(const Poco::Dynamic::V
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::beginFileDecryption(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(0), "envelope");
-    auto result = _groupApi.beginFileDecryption(envelope);
-    return _serializer.serialize(result);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "envelope");
+    auto options = _deserializer.deserialize<DecryptOptions>(argsArr->get(3), "options");
+    return _serializer.serialize(_groupApi.beginFileDecryption(groupId, location, envelope, options));
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::decryptFileChunk(const Poco::Dynamic::Var& args) {
@@ -333,9 +350,8 @@ Poco::Dynamic::Var GroupApiVarInterface::beginFileEncryptionAnonymously(const Po
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     auto groupPubKey = _deserializer.deserialize<std::string>(argsArr->get(1), "groupPubKey");
-    auto size = _deserializer.deserialize<int64_t>(argsArr->get(2), "size");
-    auto result = _groupApi.beginFileEncryptionAnonymously(groupId, groupPubKey, size);
-    return _serializer.serialize(result);
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(2), "location");
+    return _serializer.serialize(_groupApi.beginFileEncryptionAnonymously(groupId, groupPubKey, location));
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::seekInEncryptedFile(const Poco::Dynamic::Var& args) {
@@ -432,4 +448,119 @@ Poco::Dynamic::Var GroupApiVarInterface::getGroupLog(const Poco::Dynamic::Var& a
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     auto pagingQuery = _deserializer.deserialize<core::PagingQuery>(argsArr->get(1), "pagingQuery");
     return _serializer.serialize(_groupApi.getGroupLog(groupId, pagingQuery));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::beginFileEncryptionAsOutsider(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(1), "groupId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(2), "location");
+    auto options = _deserializer.deserialize<EncryptOptions>(argsArr->get(3), "options");
+    return _serializer.serialize(_groupApi.beginFileEncryptionAsOutsider(contextId, groupId, location, options));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::beginFileDecryptionFromOutsider(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "envelope");
+    auto options = _deserializer.deserialize<DecryptOptions>(argsArr->get(3), "options");
+    return _serializer.serialize(_groupApi.beginFileDecryptionFromOutsider(groupId, location, envelope, options));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::beginAnonymousFileDecryption(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "envelope");
+    return _serializer.serialize(_groupApi.beginAnonymousFileDecryption(groupId, location, envelope));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::beginSharedFileDecryption(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "envelope");
+    auto options = _deserializer.deserialize<DecryptOptions>(argsArr->get(3), "options");
+    return _serializer.serialize(_groupApi.beginSharedFileDecryption(contextId, location, envelope, options));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::getFileCipherRange(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto fileHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "fileHandle");
+    auto from = _deserializer.deserialize<int64_t>(argsArr->get(1), "from");
+    auto to = _deserializer.deserialize<int64_t>(argsArr->get(2), "to");
+    return _serializer.serialize(_groupApi.getFileCipherRange(fileHandle, from, to));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::beginSequence(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto checkpointEvery = _deserializer.deserialize<int64_t>(argsArr->get(2), "checkpointEvery");
+    return _serializer.serialize(_groupApi.beginSequence(groupId, location, checkpointEvery));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::getSequenceHeader(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto sequence = _deserializer.deserialize<int64_t>(argsArr->get(0), "sequence");
+    return _serializer.serialize(_groupApi.getSequenceHeader(sequence));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::appendToSequence(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto sequence = _deserializer.deserialize<int64_t>(argsArr->get(0), "sequence");
+    auto data = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "data");
+    return _serializer.serialize(_groupApi.appendToSequence(sequence, data));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::checkpointSequence(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto sequence = _deserializer.deserialize<int64_t>(argsArr->get(0), "sequence");
+    return _serializer.serialize(_groupApi.checkpointSequence(sequence));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::finishSequence(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto sequence = _deserializer.deserialize<int64_t>(argsArr->get(0), "sequence");
+    return _serializer.serialize(_groupApi.finishSequence(sequence));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::openSequence(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4, 5);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto header = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "header");
+    auto options = _deserializer.deserialize<DecryptOptions>(argsArr->get(3), "options");
+    auto resumeFrom = argsArr->size() > 4 && !argsArr->get(4).isEmpty() ?
+        std::optional<core::Buffer>(_deserializer.deserialize<core::Buffer>(argsArr->get(4), "resumeFrom")) :
+        std::optional<core::Buffer>();
+    return _serializer.serialize(_groupApi.openSequence(groupId, location, header, options, resumeFrom));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::readSequenceItem(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto sequence = _deserializer.deserialize<int64_t>(argsArr->get(0), "sequence");
+    auto item = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "item");
+    return _serializer.serialize(_groupApi.readSequenceItem(sequence, item));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::verifySequenceMark(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto sequence = _deserializer.deserialize<int64_t>(argsArr->get(0), "sequence");
+    auto mark = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "mark");
+    return _serializer.serialize(_groupApi.verifySequenceMark(sequence, mark));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::closeSequence(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto sequence = _deserializer.deserialize<int64_t>(argsArr->get(0), "sequence");
+    _groupApi.closeSequence(sequence);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::peekSequenceItem(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto itemOrMark = _deserializer.deserialize<core::Buffer>(argsArr->get(0), "itemOrMark");
+    return _serializer.serialize(GroupApi::peekSequenceItem(itemOrMark));
 }

@@ -180,6 +180,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::EnvelopeHeader>(const group::
     obj->set("isFile", serialize(val.isFile));
     obj->set("hasLocation", serialize(val.hasLocation));
     obj->set("authorUserId", serialize(val.authorUserId));
+    obj->set("sequenceId", serialize(val.sequenceId));
     obj->set("alsoForGroups", serialize(val.alsoForGroups));
     obj->set("alsoForUsers", serialize(val.alsoForUsers));
     return obj;
@@ -202,10 +203,78 @@ Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedFileInfo>(const grou
     if (_options.addType) {
         obj->set("__type", "group$DecryptedFileInfo");
     }
-    obj->set("groupId", serialize(val.groupId));
-    obj->set("authorPubKey", serialize(val.authorPubKey));
-    obj->set("type", serialize((int64_t)val.type));
+    if (val.author.has_value()) {
+        obj->set("author", serialize(val.author.value()));
+    }
+    if (val.sender.has_value()) {
+        obj->set("sender", serialize(val.sender.value()));
+    }
+    obj->set("homeGroupId", serialize(val.homeGroupId));
+    obj->set("senderMembership", serialize(val.senderMembership));
+    obj->set("via", serialize(val.via));
+    obj->set("sharedWith", serialize(val.sharedWith));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    obj->set("size", serialize(val.size));
     obj->set("complete", serialize(val.complete));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::CipherRange>(const group::CipherRange& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$CipherRange");
+    }
+    obj->set("offset", serialize(val.offset));
+    obj->set("length", serialize(val.length));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SequenceItemHeader>(const group::SequenceItemHeader& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$SequenceItemHeader");
+    }
+    obj->set("sequenceId", serialize(val.sequenceId));
+    obj->set("index", serialize(val.index));
+    obj->set("isMark", serialize(val.isMark));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SequenceAppendResult>(const group::SequenceAppendResult& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$SequenceAppendResult");
+    }
+    obj->set("item", serialize(val.item));
+    if (val.mark.has_value()) {
+        obj->set("mark", serialize(val.mark.value()));
+    }
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SequenceItem>(const group::SequenceItem& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$SequenceItem");
+    }
+    obj->set("data", serialize(val.data));
+    obj->set("index", serialize(val.index));
+    obj->set("missing", serialize(val.missing));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SequenceMarkInfo>(const group::SequenceMarkInfo& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$SequenceMarkInfo");
+    }
+    obj->set("attestedItems", serialize(val.attestedItems));
+    obj->set("closed", serialize(val.closed));
     return obj;
 }
 

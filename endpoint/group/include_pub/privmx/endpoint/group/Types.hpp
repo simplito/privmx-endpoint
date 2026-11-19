@@ -26,6 +26,8 @@ using FileSize = int64_t;
 using FilePosition = int64_t;
 /** A position in bytes within a file's *ciphertext* — what `seekInEncryptedFile` hands back. */
 using CipherOffset = int64_t;
+/** An open sequence, being written or read. Opaque. */
+using SequenceHandle = int64_t;
 
 /**
  * Holds all available information about a Group.
@@ -488,43 +490,79 @@ struct EnvelopeHeader {
     bool hasLocation;
     /** The writer's claim, for a signed envelope; empty otherwise. */
     std::string authorUserId;
+    /** Set when the envelope is the header of a sequence: the id its items and marks carry. */
+    std::string sequenceId;
     std::vector<GroupEpochRef> alsoForGroups;
     std::vector<std::string> alsoForUsers;
 };
 
 /**
- * What could be established about a sealed file, once all of it has been received.
- *
- * Reported at the end rather than the start deliberately: attributing a file before its last chunk has
- * arrived would attribute something the sender may not have finished writing.
+ * What is known about a decrypted file. Which fields are set follows from the call that opened it, exactly
+ * as with envelopes - an opening call reads one kind of file and refuses the others:
+ *   beginFileDecryption              `author` (a member, with a role)
+ *   beginFileDecryptionFromOutsider  `sender`
+ *   beginAnonymousFileDecryption     neither: nobody signed it
+ *   beginSharedFileDecryption        `sender`, and the three fields about its origin
+ * A sender is never reported as an author.
  */
 struct DecryptedFileInfo {
+    std::optional<EnvelopeAuthor> author;
+    std::optional<EnvelopeSender> sender;
+    /** For a shared file only: as in DecryptedSharedEnvelope. */
+    std::string homeGroupId;
+    std::string senderMembership;
+    std::string via;
+    EnvelopeAudience sharedWith;
+    /** The epoch of the Group key the envelope was sealed to. 0 for a shared file. */
+    int64_t keyVersion;
+    /** The size of the plaintext, as the envelope states it. */
+    int64_t size;
     /**
-     * ID of the Group the file was sealed for
-     */
-    std::string groupId;
-
-    /**
-     * Public key of the author (base58-DER encoded), whose signature over the file header has been verified.
-     *
-     * EMPTY when `type` is ENVELOPE_ANONYMOUS. Branch on `type`, not on this field being non-empty.
-     */
-    std::string authorPubKey;
-
-    /**
-     * Whether the file came from a member or from an anonymous outsider.
-     */
-    EnvelopeType type;
-
-    /**
-     * Whether the whole file was verified to be present.
-     *
-     * True for a straight read from start to finish: every chunk the envelope's signed size called for
-     * arrived. False once `seekInEncryptedFile` has been used — the parts you did read are still individually
-     * authenticated and cannot have been reordered or substituted, but nothing can tell you whether the parts
-     * you skipped exist at all. That is inherent to random access, not a weakness of the seek.
+     * true when every chunk the envelope lists was read. false after a seek: the parts read are the
+     * writer's, the whole file is not proven.
      */
     bool complete;
+};
+
+/** Where in the ciphertext a range of the plaintext lives. */
+struct CipherRange {
+    int64_t offset;
+    int64_t length;
+};
+
+/** The plain part of a sequence item, checkpoint or close. Not authenticated. */
+struct SequenceItemHeader {
+    std::string sequenceId;
+    /** An item's position; for a mark, how many items it covers. */
+    int64_t index;
+    bool isMark;
+};
+
+/** What appendToSequence produced: send both, in this order. */
+struct SequenceAppendResult {
+    core::Buffer item;
+    /** An automatic checkpoint, when one was due. */
+    std::optional<core::Buffer> mark;
+};
+
+/**
+ * One decrypted item of a sequence. Not yet the author's: until a later mark verifies, another member
+ * could have forged it. verifySequenceMark says how many items are attested.
+ */
+struct SequenceItem {
+    core::Buffer data;
+    /** Position in the sequence, from 0. */
+    int64_t index;
+    /** How many items before this one never arrived. 0 when nothing was skipped. */
+    int64_t missing;
+};
+
+/** What a checkpoint or a close proved. */
+struct SequenceMarkInfo {
+    /** Items 0 .. attestedItems-1 are exactly what the author wrote, in that order. */
+    int64_t attestedItems;
+    /** true for a close: the author wrote nothing after it. */
+    bool closed;
 };
 
 enum EventType : int64_t {

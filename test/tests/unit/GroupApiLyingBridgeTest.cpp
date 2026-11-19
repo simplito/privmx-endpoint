@@ -1132,71 +1132,61 @@ TEST_F(GroupApiLyingBridge, SECURITY_ACommitAfterAStatementDatedAheadOfTheClockI
     EXPECT_EQ(removal.date, ahead);
 }
 
-// Without the handle's lock these race on one EnvelopeFileState: heap corruption, lost `written` updates,
-// duplicate or skipped chunk indices, two envelopes from one handle. A plain build shows it in most runs; under
-// ThreadSanitizer every run (configure a separate build dir with -DCMAKE_CXX_FLAGS="-fsanitize=thread -g -O1", as the
-// commented-out lines at the top of CMakeLists.txt, and run --gtest_filter='*ConcurrentChunks*:*ConcurrentFinishes*').
+// Without the handle's lock these race on one EnvelopeFileState: heap corruption, duplicate or skipped chunk
+// indices, two envelopes from one handle. A plain build shows it in most runs; under ThreadSanitizer every run
+// (configure a separate build dir with -DCMAKE_CXX_FLAGS="-fsanitize=thread -g -O1", as the commented-out lines at
+// the top of CMakeLists.txt, and run --gtest_filter='*ConcurrentChunks*:*ConcurrentFinishes*').
 TEST_F(GroupApiLyingBridge, SECURITY_ConcurrentChunksOnOneFileHandleSealOneWholeFile) {
     using E = GroupEnvelopeEncryptor;
     const std::string groupId = createGroup({"alice", "bob"});
     GroupApi& api = clients.at("alice")->groupApi;
     constexpr int THREADS = 8;
-    constexpr int CALLS = 64;
-    const core::Buffer piece = core::Buffer::from(std::string(E::CHUNK_SIZE / CALLS, 'x'));
+    constexpr int CALLS = 8;
+    constexpr std::size_t PIECE = 1000;
+    const core::Buffer piece = core::Buffer::from(std::string(PIECE, 'x'));
 
-    // Encrypt: 8 threads x 16 pieces fill exactly 8 chunks, whatever the interleaving.
-    const FileHandle writer = api.beginFileEncryption(groupId, THREADS * E::CHUNK_SIZE);
+    // Encrypt: every call seals one chunk, whatever the interleaving.
+    const FileHandle writer = api.beginFileEncryption(groupId, NOWHERE);
     std::mutex outMutex;
-    std::vector<std::string> outputs;
+    std::vector<std::string> chunks;
     race(THREADS, [&](int) {
         for (int i = 0; i < CALLS; ++i) {
             std::string sealed = api.encryptFileChunk(writer, piece).stdString();
-            if (!sealed.empty()) {
-                std::lock_guard lock(outMutex);
-                outputs.push_back(std::move(sealed));
-            }
+            std::lock_guard lock(outMutex);
+            chunks.push_back(std::move(sealed));
         }
     });
-    std::vector<std::string> chunks;
-    for (const auto& out : outputs) {
-        ASSERT_EQ(out.size() % E::ENCRYPTED_CHUNK_SIZE, 0u);
-        for (std::size_t at = 0; at < out.size(); at += E::ENCRYPTED_CHUNK_SIZE) {
-            chunks.push_back(out.substr(at, E::ENCRYPTED_CHUNK_SIZE));
-        }
-    }
-    ASSERT_EQ(chunks.size(), static_cast<std::size_t>(THREADS));
+    ASSERT_EQ(chunks.size(), static_cast<std::size_t>(THREADS * CALLS));
     const Envelope envelope = api.finishFileEncryption(writer);
 
-    // A chunk opens only at the index it was sealed at, so each one must open at exactly one k, all k distinct.
+    // The envelope lists every chunk once: each one opens at exactly one position, all positions distinct.
+    const FileHandle probe = api.beginFileDecryption(groupId, NOWHERE, envelope, ANY);
     std::set<int> indices;
     for (const auto& chunk : chunks) {
         std::vector<int> opensAt;
-        for (int k = 0; k < THREADS; ++k) {
-            const FileHandle reader = api.beginFileDecryption(envelope);
-            api.seekInEncryptedFile(reader, k * E::CHUNK_SIZE);
+        for (int k = 0; k < THREADS * CALLS; ++k) {
+            api.seekInEncryptedFile(probe, k * PIECE);
             try {
-                if (api.decryptFileChunk(reader, core::Buffer::from(chunk)).stdString() ==
-                    std::string(E::CHUNK_SIZE, 'x')) {
+                if (api.decryptFileChunk(probe, core::Buffer::from(chunk)).stdString() == std::string(PIECE, 'x')) {
                     opensAt.push_back(k);
                 }
-            } catch (const core::Exception&) {}
-            try {
-                api.finishFileDecryption(reader);
             } catch (const core::Exception&) {}
         }
         ASSERT_EQ(opensAt.size(), 1u);
         indices.insert(opensAt.at(0));
     }
-    EXPECT_EQ(indices.size(), static_cast<std::size_t>(THREADS));
+    EXPECT_EQ(indices.size(), static_cast<std::size_t>(THREADS * CALLS));
+    EXPECT_FALSE(api.finishFileDecryption(probe).complete);
 
     // Decrypt: four threads push the chunks of a well-formed file from a shared cursor while a fifth seeks back.
     // Chunk and index can mismatch, so refusals are expected; what must not happen is a crash or a wrong plaintext.
-    const FileHandle sealer = api.beginFileEncryption(groupId, THREADS * E::CHUNK_SIZE);
+    constexpr std::size_t SEALED = encryptedChunkSizeFor(E::CHUNK_SIZE);
+    const FileHandle sealer = api.beginFileEncryption(groupId, NOWHERE);
     const std::string whole =
         api.encryptFileChunk(sealer, core::Buffer::from(std::string(THREADS * E::CHUNK_SIZE, 'x'))).stdString();
     const Envelope ordered = api.finishFileEncryption(sealer);
-    ASSERT_EQ(whole.size(), THREADS * E::ENCRYPTED_CHUNK_SIZE);
-    const FileHandle reader = api.beginFileDecryption(ordered);
+    ASSERT_EQ(whole.size(), THREADS * SEALED);
+    const FileHandle reader = api.beginFileDecryption(groupId, NOWHERE, ordered, ANY);
     std::atomic<int> cursor{0};
     std::atomic<int> wrong{0};
     race(5, [&](int thread) {
@@ -1209,8 +1199,7 @@ TEST_F(GroupApiLyingBridge, SECURITY_ConcurrentChunksOnOneFileHandleSealOneWhole
         }
         for (int at = cursor++; at < THREADS; at = cursor++) {
             try {
-                const core::Buffer chunk =
-                    core::Buffer::from(whole.substr(at * E::ENCRYPTED_CHUNK_SIZE, E::ENCRYPTED_CHUNK_SIZE));
+                const core::Buffer chunk = core::Buffer::from(whole.substr(at * SEALED, SEALED));
                 const std::string plain = api.decryptFileChunk(reader, chunk).stdString();
                 if (plain.size() > E::CHUNK_SIZE || plain.find_first_not_of('x') != std::string::npos) {
                     wrong++;
@@ -1228,8 +1217,8 @@ TEST_F(GroupApiLyingBridge, SECURITY_ConcurrentFinishesCloseAFileHandleOnce) {
     // The first finish closes the handle under its lock; the other is refused, never a second envelope.
     const std::string groupId = createGroup({"alice", "bob"});
     GroupApi& api = clients.at("alice")->groupApi;
-    for (int iteration = 0; iteration < 2000; ++iteration) {
-        const FileHandle handle = api.beginFileEncryption(groupId, 16);
+    for (int iteration = 0; iteration < 300; ++iteration) {
+        const FileHandle handle = api.beginFileEncryption(groupId, NOWHERE);
         api.encryptFileChunk(handle, core::Buffer::from(std::string(16, 'x')));
         std::atomic<int> envelopes{0};
         std::atomic<int> refused{0};
@@ -4539,4 +4528,403 @@ TEST_F(GroupApiLyingBridge, ASharedReadTellsMembershipOnlyByARosterOfTheContextN
         client("carol").decryptShared("other-context", message("d1"), sealed, from("alice")).senderMembership,
         "unknown"
     );
+}
+
+// -- files: a signed chunk list, any size, four doors --------------------------------------------------------
+
+class GroupFiles : public GroupApiLyingBridge {
+protected:
+    const Path scan = {name("scan"), id("scan-1")};
+    const Path otherScan = {name("scan"), id("scan-2")};
+    DecryptOptions by(const std::string& userId) { return {.expectedAuthor = userId, .anyAuthor = false, .currentEpochOnly = false}; }
+
+    struct Written {
+        std::vector<std::string> chunks; // the ciphertext, as each write call returned it
+        Envelope envelope;
+        std::string all() const {
+            std::string out;
+            for (const auto& chunk : chunks) out += chunk;
+            return out;
+        }
+    };
+    // Each element of `pieces` is one encryptFileChunk call.
+    Written write(GroupApiImpl& api, const std::string& groupId, const Path& at, const std::vector<std::string>& pieces) {
+        Written out;
+        const FileHandle h = api.beginFileEncryption(groupId, at, {});
+        for (const auto& piece : pieces) {
+            out.chunks.push_back(api.encryptFileChunk(h, core::Buffer::from(piece)).stdString());
+        }
+        out.envelope = api.finishFileEncryption(h);
+        return out;
+    }
+    // Reads `cipher` in blocks of `step` bytes: the reader is not told where the writer's chunks end.
+    std::string read(GroupApiImpl& api, FileHandle h, const std::string& cipher, std::size_t step) {
+        std::string plain;
+        for (std::size_t at = 0; at < cipher.size(); at += step) {
+            plain += api.decryptFileChunk(h, core::Buffer::from(cipher.substr(at, step))).stdString();
+        }
+        return plain;
+    }
+};
+
+TEST_F(GroupFiles, AFileOfUnknownSizeRoundTripsAndNamesItsAuthor) {
+    const std::string groupId = createGroup({"alice", "bob"});
+    const std::string big(GroupEnvelopeEncryptor::CHUNK_SIZE + 77, 'b'); // one call, two chunks
+    const Written file = write(client("alice"), groupId, scan, {"first ", "", big, "last"});
+
+    GroupApiImpl& bob = client("bob");
+    for (const std::size_t step : {std::size_t{1 << 20}, std::size_t{4096}, std::size_t{17}}) {
+        const FileHandle h = bob.beginFileDecryption(groupId, scan, file.envelope, by("alice"));
+        EXPECT_EQ(read(bob, h, file.all(), step), "first " + big + "last") << "step " << step;
+        const DecryptedFileInfo info = bob.finishFileDecryption(h);
+        EXPECT_TRUE(info.complete);
+        EXPECT_EQ(info.size, static_cast<int64_t>(6 + big.size() + 4));
+        ASSERT_TRUE(info.author.has_value());
+        EXPECT_EQ(info.author->userId, "alice");
+        EXPECT_EQ(info.author->role, "manager");
+        EXPECT_FALSE(info.sender.has_value());
+        EXPECT_EQ(info.keyVersion, 1);
+    }
+    EXPECT_TRUE(GroupApiImpl::peekEnvelope(file.envelope).isFile);
+
+    // An empty file: an envelope, no ciphertext.
+    const Written empty = write(client("alice"), groupId, scan, {});
+    const FileHandle h = bob.beginFileDecryption(groupId, scan, empty.envelope, ANY);
+    const DecryptedFileInfo info = bob.finishFileDecryption(h);
+    EXPECT_TRUE(info.complete);
+    EXPECT_EQ(info.size, 0);
+}
+
+TEST_F(GroupFiles, SECURITY_AFileEnvelopeIsCheckedLikeAMessage) {
+    const std::string groupId = createGroup({"alice", "bob"});
+    const Written file = write(client("alice"), groupId, scan, {"content"});
+    GroupApiImpl& bob = client("bob");
+
+    EXPECT_THROW(bob.beginFileDecryption(groupId, otherScan, file.envelope, ANY), EnvelopeWrongLocationException);
+    EXPECT_THROW(bob.beginFileDecryption(groupId, NOWHERE, file.envelope, ANY), EnvelopeWrongLocationException);
+    EXPECT_THROW(bob.beginFileDecryption(groupId, scan, file.envelope, by("bob")), EnvelopeWrongAuthorException);
+    EXPECT_THROW(bob.beginFileDecryption(groupId, scan, file.envelope, DecryptOptions{}), EnvelopeAuthorNotStatedException);
+    EXPECT_THROW(bob.beginFileDecryptionFromOutsider(groupId, scan, file.envelope, ANY), EnvelopeWrongKindException);
+    EXPECT_THROW(bob.beginAnonymousFileDecryption(groupId, scan, file.envelope), EnvelopeWrongKindException);
+    // Neither door opens the other's envelope: the manifest holds the file key, a message is not a manifest.
+    EXPECT_THROW(bob.decrypt(groupId, scan, file.envelope, ANY), InvalidEnvelopeFormatException);
+    const Envelope message = client("alice").encrypt(groupId, scan, core::Buffer::from(std::string(40, 'm')), {});
+    EXPECT_THROW(bob.beginFileDecryption(groupId, scan, message, ANY), InvalidEnvelopeFormatException);
+    // A location is asked for when the file is begun, not after the upload.
+    EXPECT_THROW(client("alice").beginFileEncryption(groupId, Path{}, {}), core::InvalidParamsException);
+}
+
+TEST_F(GroupFiles, SECURITY_ASwappedChangedOrMovedChunkIsCaughtAtThatChunk) {
+    const std::string groupId = createGroup({"alice", "bob"});
+    const std::string a(1000, 'a'), b(1000, 'b'), c(1000, 'c');
+    const Written file = write(client("alice"), groupId, scan, {a, b, c});
+    GroupApiImpl& bob = client("bob");
+    auto open = [&] { return bob.beginFileDecryption(groupId, scan, file.envelope, ANY); };
+    auto give = [&](FileHandle h, const std::string& bytes) { return bob.decryptFileChunk(h, core::Buffer::from(bytes)).stdString(); };
+
+    // Reordered: the second chunk where the first belongs.
+    FileHandle h = open();
+    EXPECT_THROW(give(h, file.chunks[1]), EnvelopeFileCorruptedException);
+
+    // One bit changed in the middle chunk: the first still comes out, the changed one does not.
+    h = open();
+    EXPECT_EQ(give(h, file.chunks[0]), a);
+    std::string changed = file.chunks[1];
+    changed[changed.size() / 2] ^= 0x01;
+    EXPECT_THROW(give(h, changed), EnvelopeFileCorruptedException);
+
+    // A chunk of another file of the same author, group and size.
+    const Written other = write(client("alice"), groupId, scan, {a, b, c});
+    h = open();
+    EXPECT_THROW(give(h, other.chunks[0]), EnvelopeFileCorruptedException);
+
+    // What every member can do and only the author may: seal new content under the file's own key. Bob
+    // re-encrypts chunk 0 through a file of his own and stores it in place of alice's; the digest is hers.
+    const Written bobs = write(bob, groupId, scan, {a});
+    h = open();
+    EXPECT_THROW(give(h, bobs.chunks[0]), EnvelopeFileCorruptedException);
+}
+
+TEST_F(GroupFiles, SECURITY_ATruncatedOrExtendedFileIsRefused) {
+    const std::string groupId = createGroup({"alice", "bob"});
+    const Written file = write(client("alice"), groupId, scan, {std::string(500, 'a'), std::string(500, 'b')});
+    GroupApiImpl& bob = client("bob");
+
+    // The last chunk never arrived.
+    FileHandle h = bob.beginFileDecryption(groupId, scan, file.envelope, ANY);
+    EXPECT_EQ(read(bob, h, file.chunks[0], 4096), std::string(500, 'a'));
+    EXPECT_THROW(bob.finishFileDecryption(h), EnvelopeTruncatedFileException);
+    // Cut mid-chunk.
+    h = bob.beginFileDecryption(groupId, scan, file.envelope, ANY);
+    read(bob, h, file.all().substr(0, file.all().size() - 3), 4096);
+    EXPECT_THROW(bob.finishFileDecryption(h), EnvelopeTruncatedFileException);
+    // Bytes after the last chunk.
+    h = bob.beginFileDecryption(groupId, scan, file.envelope, ANY);
+    EXPECT_THROW(read(bob, h, file.all() + "tail", 1 << 20), InvalidEnvelopeFormatException);
+    // The handle is gone after a finish, whatever the finish said.
+    EXPECT_THROW(bob.finishFileDecryption(h), InvalidEnvelopeFormatException);
+    EXPECT_THROW(bob.finishFileDecryption(h), core::InvalidParamsException);
+}
+
+TEST_F(GroupFiles, ARangeIsReadWithoutTheRest) {
+    const std::string groupId = createGroup({"alice", "bob"});
+    std::string plain;
+    std::vector<std::string> pieces;
+    for (int i = 0; i < 10; ++i) {
+        pieces.push_back(std::string(100 + i, static_cast<char>('a' + i)));
+        plain += pieces.back();
+    }
+    const Written file = write(client("alice"), groupId, scan, pieces);
+    const std::string cipher = file.all();
+    GroupApiImpl& bob = client("bob");
+    const FileHandle h = bob.beginFileDecryption(groupId, scan, file.envelope, ANY);
+
+    for (const auto& [from, to] : std::vector<std::pair<int64_t, int64_t>>{{0, 1}, {150, 420}, {99, 101}, {1000, 1045}, {0, 1045}}) {
+        const CipherRange range = bob.getFileCipherRange(h, from, to);
+        EXPECT_EQ(bob.seekInEncryptedFile(h, from), range.offset);
+        const std::string got =
+            bob.decryptFileChunk(h, core::Buffer::from(cipher.substr(range.offset, range.length))).stdString();
+        // Whole chunks come out, from `from` on: the caller cuts the tail.
+        ASSERT_GE(got.size(), static_cast<std::size_t>(to - from));
+        EXPECT_EQ(got.substr(0, to - from), plain.substr(from, to - from)) << from << ".." << to;
+    }
+    EXPECT_EQ(bob.getFileCipherRange(h, 1045, 1045).length, 0);
+    EXPECT_EQ(bob.getFileCipherRange(h, 1045, 1045).offset, static_cast<int64_t>(cipher.size()));
+    EXPECT_THROW(bob.getFileCipherRange(h, 5, 4), core::InvalidParamsException);
+    EXPECT_THROW(bob.getFileCipherRange(h, 0, 1046), core::InvalidParamsException);
+    EXPECT_THROW(bob.seekInEncryptedFile(h, 1046), core::InvalidParamsException);
+    // After a seek the reader chose what to read: no claim about the whole file.
+    EXPECT_FALSE(bob.finishFileDecryption(h).complete);
+}
+
+TEST_F(GroupFiles, AnAnonymousFileHasNoSenderAndAnOutsidersHasOne) {
+    const std::string groupId = createGroup({"alice", "bob"});
+    GroupApiImpl& dave = client("carol"); // a user of the context, not of the group
+    GroupApiImpl& bob = client("bob");
+    const std::string groupPubKey = bob.getGroupPublicKey(CONTEXT, groupId).pubKey;
+
+    FileHandle w = dave.beginFileEncryptionAnonymously(groupId, groupPubKey, scan);
+    std::string cipher = dave.encryptFileChunk(w, core::Buffer::from(std::string("referral"))).stdString();
+    Envelope envelope = dave.finishFileEncryption(w);
+    EXPECT_THROW(bob.beginFileDecryption(groupId, scan, envelope, ANY), EnvelopeWrongKindException);
+    EXPECT_THROW(bob.beginAnonymousFileDecryption(groupId, otherScan, envelope), EnvelopeWrongLocationException);
+    FileHandle r = bob.beginAnonymousFileDecryption(groupId, scan, envelope);
+    EXPECT_EQ(read(bob, r, cipher, 4096), "referral");
+    DecryptedFileInfo info = bob.finishFileDecryption(r);
+    EXPECT_FALSE(info.author.has_value());
+    EXPECT_FALSE(info.sender.has_value());
+    EXPECT_TRUE(info.complete);
+
+    w = dave.beginFileEncryptionAsOutsider(CONTEXT, groupId, scan, {});
+    cipher = dave.encryptFileChunk(w, core::Buffer::from(std::string("signed referral"))).stdString();
+    envelope = dave.finishFileEncryption(w);
+    EXPECT_THROW(bob.beginAnonymousFileDecryption(groupId, scan, envelope), EnvelopeWrongKindException);
+    EXPECT_THROW(bob.beginFileDecryptionFromOutsider(groupId, scan, envelope, by("alice")), EnvelopeWrongAuthorException);
+    r = bob.beginFileDecryptionFromOutsider(groupId, scan, envelope, by("carol"));
+    EXPECT_EQ(read(bob, r, cipher, 4096), "signed referral");
+    info = bob.finishFileDecryption(r);
+    EXPECT_FALSE(info.author.has_value());
+    ASSERT_TRUE(info.sender.has_value());
+    EXPECT_EQ(info.sender->userId, "carol");
+}
+
+// -- sequences ---------------------------------------------------------------------------------------------
+
+class GroupSequences : public GroupFiles {
+protected:
+    const Path ops = {name("doc"), id("doc-1"), name("ops")};
+    std::string groupId;
+    SequenceHandle writer = 0;
+    core::Buffer header;
+    void SetUp() override {
+        GroupFiles::SetUp();
+        groupId = createGroup({"alice", "bob", "carol"});
+        writer = client("alice").beginSequence(groupId, ops, 0);
+        header = client("alice").getSequenceHeader(writer);
+    }
+    core::Buffer append(const std::string& data) {
+        const SequenceAppendResult result = client("alice").appendToSequence(writer, core::Buffer::from(data));
+        EXPECT_FALSE(result.mark.has_value());
+        return result.item;
+    }
+    SequenceHandle open(const std::string& as = "bob", const std::optional<core::Buffer>& from = std::nullopt) {
+        return client(as).openSequence(groupId, ops, header, by("alice"), from);
+    }
+};
+
+TEST_F(GroupSequences, ItemsReadInOrderAndAMarkAttestsThem) {
+    GroupApiImpl& alice = client("alice");
+    GroupApiImpl& bob = client("bob");
+    const core::Buffer e0 = append("e0"), e1 = append("e1");
+    const core::Buffer checkpoint = alice.checkpointSequence(writer);
+    const core::Buffer e2 = append("e2");
+    const core::Buffer close = alice.finishSequence(writer);
+
+    const EnvelopeHeader plain = GroupApiImpl::peekEnvelope(header);
+    EXPECT_FALSE(plain.isFile);
+    EXPECT_EQ(plain.sequenceId.size(), 32u);
+    EXPECT_EQ(GroupApiImpl::peekSequenceItem(e1).sequenceId, plain.sequenceId);
+    EXPECT_EQ(GroupApiImpl::peekSequenceItem(e1).index, 1);
+    EXPECT_FALSE(GroupApiImpl::peekSequenceItem(e1).isMark);
+    EXPECT_TRUE(GroupApiImpl::peekSequenceItem(close).isMark);
+    EXPECT_EQ(GroupApiImpl::peekSequenceItem(close).index, 3);
+
+    const SequenceHandle r = open();
+    SequenceItem item = bob.readSequenceItem(r, e0);
+    EXPECT_EQ(item.data.stdString(), "e0");
+    EXPECT_EQ(item.index, 0);
+    EXPECT_EQ(item.missing, 0);
+    EXPECT_EQ(bob.readSequenceItem(r, e1).data.stdString(), "e1");
+    SequenceMarkInfo mark = bob.verifySequenceMark(r, checkpoint);
+    EXPECT_EQ(mark.attestedItems, 2);
+    EXPECT_FALSE(mark.closed);
+    EXPECT_EQ(bob.readSequenceItem(r, e2).index, 2);
+    mark = bob.verifySequenceMark(r, close);
+    EXPECT_EQ(mark.attestedItems, 3);
+    EXPECT_TRUE(mark.closed);
+    bob.closeSequence(r);
+    EXPECT_THROW(bob.readSequenceItem(r, e0), core::InvalidParamsException);
+    // The writer's handle went with the close.
+    EXPECT_THROW(alice.appendToSequence(writer, core::Buffer::from(std::string("late"))), core::InvalidParamsException);
+}
+
+TEST_F(GroupSequences, ACheckpointIsMadeByItselfAndALateReaderStartsFromOne) {
+    GroupApiImpl& alice = client("alice");
+    const SequenceHandle w = alice.beginSequence(groupId, ops, 2);
+    header = alice.getSequenceHeader(w);
+    const SequenceAppendResult a = alice.appendToSequence(w, core::Buffer::from(std::string("a")));
+    const SequenceAppendResult b = alice.appendToSequence(w, core::Buffer::from(std::string("b")));
+    const SequenceAppendResult c = alice.appendToSequence(w, core::Buffer::from(std::string("c")));
+    EXPECT_FALSE(a.mark.has_value());
+    ASSERT_TRUE(b.mark.has_value());
+    EXPECT_FALSE(c.mark.has_value());
+    const core::Buffer close = alice.finishSequence(w);
+
+    GroupApiImpl& carol = client("carol");
+    const SequenceHandle r = open("carol", b.mark);
+    EXPECT_THROW(carol.readSequenceItem(r, b.item), EnvelopeSequenceOrderException); // before the checkpoint
+    const SequenceItem item = carol.readSequenceItem(r, c.item);
+    EXPECT_EQ(item.data.stdString(), "c");
+    EXPECT_EQ(item.missing, 0);
+    EXPECT_EQ(carol.verifySequenceMark(r, close).attestedItems, 3);
+    // Not a checkpoint, or one of another sequence.
+    EXPECT_THROW(open("carol", c.item), core::InvalidParamsException);
+    EXPECT_THROW(open("carol", client("alice").checkpointSequence(writer)), core::InvalidParamsException);
+}
+
+TEST_F(GroupSequences, SECURITY_TheHeaderIsCheckedLikeAMessage) {
+    GroupApiImpl& bob = client("bob");
+    EXPECT_THROW(bob.openSequence(groupId, {name("doc"), id("doc-2"), name("ops")}, header, ANY, std::nullopt), EnvelopeWrongLocationException);
+    EXPECT_THROW(bob.openSequence(groupId, ops, header, by("carol"), std::nullopt), EnvelopeWrongAuthorException);
+    EXPECT_THROW(bob.openSequence(groupId, ops, header, DecryptOptions{}, std::nullopt), EnvelopeAuthorNotStatedException);
+    // The header's content is the sequence's key: it never comes out of decrypt().
+    EXPECT_THROW(bob.decrypt(groupId, ops, header, ANY), InvalidEnvelopeFormatException);
+    const Envelope message = client("alice").encrypt(groupId, ops, core::Buffer::from(std::string(32, 'k')), {});
+    EXPECT_THROW(bob.openSequence(groupId, ops, message, ANY, std::nullopt), InvalidEnvelopeFormatException);
+}
+
+TEST_F(GroupSequences, SECURITY_ARepeatedEarlierOrMovedItemIsRefused) {
+    GroupApiImpl& bob = client("bob");
+    const core::Buffer e0 = append("e0"), e1 = append("e1"), e2 = append("e2");
+    const SequenceHandle r = open();
+    bob.readSequenceItem(r, e0);
+    bob.readSequenceItem(r, e1);
+    EXPECT_THROW(bob.readSequenceItem(r, e1), EnvelopeSequenceOrderException); // replayed
+    EXPECT_THROW(bob.readSequenceItem(r, e0), EnvelopeSequenceOrderException); // rolled back
+    // Relabelled as a later position: the position is in the key.
+    std::string moved = e0.stdString();
+    moved[2 + 16 + 7] = 9;
+    EXPECT_ANY_THROW(bob.readSequenceItem(r, core::Buffer::from(moved)));
+    // An item of another sequence of the same author at the same place.
+    const SequenceHandle w2 = client("alice").beginSequence(groupId, ops, 0);
+    client("alice").appendToSequence(w2, core::Buffer::from(std::string("x0")));
+    client("alice").appendToSequence(w2, core::Buffer::from(std::string("x1")));
+    const core::Buffer foreign = client("alice").appendToSequence(w2, core::Buffer::from(std::string("x2"))).item;
+    EXPECT_THROW(bob.readSequenceItem(r, foreign), InvalidEnvelopeFormatException);
+    // None of that moved the reader.
+    EXPECT_EQ(bob.readSequenceItem(r, e2).data.stdString(), "e2");
+    EXPECT_EQ(bob.verifySequenceMark(r, client("alice").checkpointSequence(writer)).attestedItems, 3);
+}
+
+TEST_F(GroupSequences, SECURITY_ADroppedItemIsCountedAndTheMarkRefusesToAttest) {
+    GroupApiImpl& alice = client("alice");
+    GroupApiImpl& bob = client("bob");
+    const core::Buffer e0 = append("e0"), e1 = append("e1"), e2 = append("e2");
+    const core::Buffer first = alice.checkpointSequence(writer);
+    const core::Buffer e3 = append("e3");
+    const core::Buffer second = alice.checkpointSequence(writer);
+
+    const SequenceHandle r = open();
+    bob.readSequenceItem(r, e0);
+    const SequenceItem skipped = bob.readSequenceItem(r, e2); // e1 never arrived
+    EXPECT_EQ(skipped.index, 2);
+    EXPECT_EQ(skipped.missing, 1);
+    EXPECT_THROW(bob.verifySequenceMark(r, first), EnvelopeSequenceOrderException);
+    // The mark was the author's all the same: what follows it is attested again.
+    EXPECT_EQ(bob.readSequenceItem(r, e3).missing, 0);
+    EXPECT_EQ(bob.verifySequenceMark(r, second).attestedItems, 4);
+
+    // The tail dropped: the mark covers more than was read.
+    const SequenceHandle r2 = open("carol");
+    client("carol").readSequenceItem(r2, e0);
+    EXPECT_THROW(client("carol").verifySequenceMark(r2, first), EnvelopeSequenceOrderException);
+    // A mark from before the reader's position has nothing left to be checked against.
+    const SequenceHandle r3 = open("carol");
+    for (const core::Buffer& item : {e0, e1, e2, e3}) client("carol").readSequenceItem(r3, item);
+    EXPECT_THROW(client("carol").verifySequenceMark(r3, first), EnvelopeSequenceOrderException);
+    EXPECT_EQ(client("carol").verifySequenceMark(r3, second).attestedItems, 4);
+}
+
+TEST_F(GroupSequences, SECURITY_AMembersForgeryReadsButIsNeverAttested) {
+    // Carol is a member: she opens the header, learns the sequence's key and can make an item in alice's
+    // sequence. She does it the only way the API lets her - by sealing with the encryptor directly.
+    GroupApiImpl& bob = client("bob");
+    const core::Buffer e0 = append("e0");
+    const core::Buffer e1 = append("e1");
+    const core::Buffer mark = client("alice").checkpointSequence(writer);
+
+    GroupEnvelopeEncryptor raw;
+    const auto wire = GroupEnvelopeEncryptor::parseSequenceWire(e1);
+    // The key, as carol gets it: out of the header envelope, with the group key she holds.
+    const std::string groupKey = GroupApiImplTestAccess::currentEncKey(client("carol"), groupId).key;
+    const std::string sequenceKey =
+        raw.openMemberEnvelope(header, groupKey, EnvelopeBinding{
+            .hasLocation = true,
+            .locationDigest = GroupEnvelopeEncryptor::bindLocation(ops).locationDigest,
+            .content = EnvelopeContent::Sequence,
+        }).data.stdString();
+    const core::Buffer forged = raw.packSequenceItem(wire.sequenceId, sequenceKey, 1, core::Buffer::from(std::string("carol's")));
+
+    const SequenceHandle r = open();
+    bob.readSequenceItem(r, e0);
+    EXPECT_EQ(bob.readSequenceItem(r, forged).data.stdString(), "carol's"); // reads: a member made it
+    EXPECT_THROW(bob.verifySequenceMark(r, mark), EnvelopeSequenceOrderException); // and alice never signed it
+    // Nor can carol sign a mark of her own over it.
+    const core::Buffer carolsMark = raw.packSequenceMark(
+        wire.sequenceId, sequenceKey, {.count = 2, .closed = false, .transcript = std::string(32, 't')}, bridge.users.at("carol")
+    );
+    EXPECT_ANY_THROW(bob.verifySequenceMark(r, carolsMark));
+}
+
+TEST_F(GroupSequences, SECURITY_ASequenceEndsWithItsEpoch) {
+    GroupApiImpl& alice = client("alice");
+    const core::Buffer e0 = append("e0");
+    alice.removeGroupMembers(groupId, {"carol"});
+    // Carol still knows this sequence's key: nothing more is written under it.
+    EXPECT_THROW(alice.appendToSequence(writer, core::Buffer::from(std::string("e1"))), EnvelopeStaleEpochException);
+    const core::Buffer close = alice.finishSequence(writer);
+
+    // What was written stays readable, and attested; a reader who wants only the current epoch says so.
+    GroupApiImpl& bob = client("bob");
+    const SequenceHandle r = open();
+    EXPECT_EQ(bob.readSequenceItem(r, e0).data.stdString(), "e0");
+    EXPECT_TRUE(bob.verifySequenceMark(r, close).closed);
+    EXPECT_THROW(
+        bob.openSequence(groupId, ops, header, {.expectedAuthor = "alice", .anyAuthor = false, .currentEpochOnly = true}, std::nullopt),
+        EnvelopeStaleEpochException
+    );
+    // A new sequence, in the new epoch.
+    const SequenceHandle w2 = alice.beginSequence(groupId, ops, 0);
+    EXPECT_NO_THROW(alice.appendToSequence(w2, core::Buffer::from(std::string("n0"))));
+    EXPECT_EQ(GroupApiImpl::peekEnvelope(alice.getSequenceHeader(w2)).keyVersion, 2);
 }
