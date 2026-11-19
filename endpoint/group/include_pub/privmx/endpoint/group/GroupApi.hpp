@@ -725,7 +725,12 @@ public:
     void updateSpacePublicMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
     void updateSpacePrivateMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
 
-    /** One symmetric encryption and one signature. When the key is stale, it is replaced first. */
+    /**
+     * One symmetric encryption and one signature. When the key is stale, it is replaced first. A caller who may
+     * not replace it (a "user" of the Space outside the Group whose key moved) gets EnvelopeStaleEpochException:
+     * nothing is written under a key a removed member holds. A manager, or a member of that Group, calls
+     * rotateSpaceKey.
+     */
     core::Buffer encryptInSpace(const std::string& spaceId, const Path& location, const core::Buffer& data);
     /** `options.currentEpochOnly` means the Space's current key version. */
     DecryptedSpaceEnvelope decryptInSpace(

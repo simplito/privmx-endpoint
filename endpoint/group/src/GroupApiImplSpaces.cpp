@@ -946,23 +946,14 @@ core::Buffer GroupApiImpl::sealInSpace(
         // Someone removed from a recipient group still holds this key: nothing more is written under it.
         try {
             replaceSpaceKey(spaceId, {}, {});
-        } catch (const SpaceRecipientUnavailableException&) { throw; } catch (const GroupHistoryForkException&) {
+        } catch (const SpaceRecipientUnavailableException&) {
+            throw;
+        } catch (const GroupHistoryForkException&) {
             throw; // a history that does not hold is the answer, never a lost race
-        } catch (const GroupUnauthorizedSignerException&) {
+        } catch (const GroupUnauthorizedSignerException& e) {
             // Not this caller's to replace: a group's key is refreshed by a manager of the Space or by that group.
-            // The value is written under the key there is; whoever may, replaces it.
-            LOG_WARN("[sealInSpace] space ", spaceId, " has a stale key this caller cannot replace")
-            space = spaceInfo(spaceId, true);
-            const SpaceKeyUse use = spaceKeyAt(space, space.keyVersion);
-            return _envelopeEncryptor.packSpaceEnvelope(
-                spaceId, use.via, content, _userPrivKey, use.key,
-                EnvelopeSeal{
-                    .binding = binding,
-                    .keyVersion = space.keyVersion,
-                    .encryptedAt = privmx::utils::Utils::getNowTimestamp(),
-                    .authorUserId = _connection.getImpl()->getMyUserId(space.contextId),
-                }
-            );
+            // Nothing is written under a key a removed member holds; whoever may, replaces it first.
+            throw EnvelopeStaleEpochException("the Space's key is stale and the caller may not replace it", e);
         } catch (const core::Exception&) {
             // Lost to another writer doing the same: fine if the key is fresh now.
             if (spaceKeyIsStale(spaceInfo(spaceId, true))) {
