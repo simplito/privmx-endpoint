@@ -1857,6 +1857,11 @@ SequenceItem GroupApiImpl::readSequenceItem(SequenceHandle handle, const core::B
             "item " + std::to_string(wire.index) + " is earlier than, or repeats, one already read"
         );
     }
+    // The index is plain and an item is sealed by whoever holds the sequence key, so every member can name any
+    // position. One that the arithmetic below cannot hold is nobody's item.
+    if (wire.index >= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
+        throw InvalidEnvelopeFormatException("sequence item at an impossible position");
+    }
     SequenceItem result{
         .data = _envelopeEncryptor.openSequenceItem(wire, sequence->key),
         .index = static_cast<int64_t>(wire.index),
@@ -1882,10 +1887,14 @@ SequenceMarkInfo GroupApiImpl::verifySequenceMark(SequenceHandle handle, const c
         throw InvalidEnvelopeFormatException("mark of another sequence");
     }
     const auto mark = _envelopeEncryptor.openSequenceMark(wire, sequence->key, sequence->authorPubKey);
-    if (mark.count < sequence->next) {
-        // About a point the reader is already past: nothing kept to check it against.
+    if (mark.count < sequence->attested || (mark.count < sequence->next && !sequence->gap)) {
+        // About a point the reader is already past, with every item since read in order: nothing kept to check
+        // it against, and nothing to repair.
         throw EnvelopeSequenceOrderException("mark covers fewer items than were read");
     }
+    // After a gap the position is only what an unsigned item claimed - any member can seal one far ahead and
+    // have the real items refused as "earlier". The author's mark is signed: it puts the reader back, also behind
+    // that claim.
     const bool agrees = !sequence->gap && mark.count == sequence->next && mark.transcript == sequence->transcript;
     // The mark is the author's either way, so reading goes on from it: what follows can be attested again.
     sequence->next = mark.count;

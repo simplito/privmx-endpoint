@@ -1,5 +1,7 @@
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp"
 
+#include <limits>
+
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
@@ -629,6 +631,9 @@ GroupEnvelopeEncryptor::SequenceMark GroupEnvelopeEncryptor::openSequenceMark(
     const std::size_t fixed = SEQUENCE_MARK_LABEL.size() + SEQUENCE_ID_SIZE + 8 + 1;
     if (body.size() != fixed + DIGEST_SIZE) {
         throw InvalidEnvelopeFormatException("malformed sequence mark");
+    }
+    if (mark.index >= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
+        throw InvalidEnvelopeFormatException("sequence mark with an impossible count");
     }
     SequenceMark opened{.count = mark.index, .closed = body[fixed - 1] == '\x01', .transcript = body.substr(fixed)};
     // Rebuilt from the plain parts and compared whole: the signature covers this sequence and this count.
