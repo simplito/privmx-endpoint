@@ -480,6 +480,7 @@ private:
     };
     server::SpaceInfo spaceInfo(const std::string& spaceId, bool fresh = false);
     void forgetSpace(const std::string& spaceId);
+    void requireNoKeyRollback(const server::SpaceInfo& space);
     SpaceKeyUse spaceKeyAt(const server::SpaceInfo& space, std::int64_t keyVersion);
     // The recipients' current keys, each verified: a group's off its latest statement, a user's by the UserVerifier.
     std::vector<SpaceTarget> spaceTargets(
@@ -502,6 +503,8 @@ private:
     core::Buffer sealInSpace(const std::string& spaceId, const EnvelopeBinding& binding, const core::Buffer& content);
     SpaceState toSpaceState(const server::SpaceInfo& space);
     privmx::utils::ThreadSaveMap<std::string, CachedSpace> _spaces;
+    // The highest key version each Space was seen at. Not dropped on a reconnect: it only ever moves forward.
+    privmx::utils::ThreadSaveMap<std::string, std::int64_t> _spaceKeyVersions;
     privmx::utils::ThreadSaveMap<std::string, SpaceKeyUse> _spaceKeys; // by "<spaceId>:<keyVersion>"
     std::shared_ptr<Sequence> sequenceOf(SequenceHandle handle, bool wantReading);
     core::Buffer markSequence(Sequence& sequence, bool closed);

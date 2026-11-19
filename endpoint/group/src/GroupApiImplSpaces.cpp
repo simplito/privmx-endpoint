@@ -39,13 +39,10 @@ using namespace privmx::endpoint::group;
 
 namespace {
 
-// Where a Space's private metadata is bound: no value of the application's can be put in its place.
-Path privateMetaLocation() {
-    return {
-        PathSegment{.isId = false, .value = core::Buffer::from("privmx")},
-        PathSegment{.isId = false, .value = core::Buffer::from("space")},
-        PathSegment{.isId = false, .value = core::Buffer::from("privateMeta")},
-    };
+// A Space's private metadata is an envelope of the Space with a content kind of its own, bound to no location.
+// `bindingOf` makes that kind for nobody, so no value the application writes can be put in its place.
+EnvelopeBinding metaBinding() {
+    return EnvelopeBinding{.hasLocation = false, .locationDigest = {}, .content = EnvelopeContent::SpaceMeta};
 }
 
 Poco::Dynamic::Var toWire(const core::Buffer& bytes) {
@@ -85,8 +82,28 @@ group::server::SpaceInfo GroupApiImpl::spaceInfo(const std::string& spaceId, boo
     model.id = spaceId;
     group::server::SpaceInfo info = _serverApi.spaceGet(model).space;
     core::EndpointUtils::assertServedId(spaceId, info.id);
+    requireNoKeyRollback(info);
     _spaces.set(spaceId, CachedSpace{.info = info, .readAt = now, .allVersions = true});
     return info;
+}
+
+// An earlier version of the key is one a removed recipient still holds: served as the current one, the next write
+// would be theirs to read. So a version this process has seen is never followed by a lower one.
+// ponytail: kept in memory, for the life of the connection's GroupApi. Put it beside the group pins when a
+// rollback across restarts has to be caught as well.
+void GroupApiImpl::requireNoKeyRollback(const group::server::SpaceInfo& space) {
+    const std::int64_t seen = _spaceKeyVersions.get(space.id).value_or(0);
+    if (space.keyVersion < seen) {
+        throw GroupHistoryForkException(
+            "Space " +
+            space.id +
+            " served at key version " +
+            std::to_string(space.keyVersion) +
+            ", seen at " +
+            std::to_string(seen)
+        );
+    }
+    _spaceKeyVersions.set(space.id, space.keyVersion);
 }
 
 void GroupApiImpl::forgetSpace(const std::string& spaceId) {
@@ -280,7 +297,7 @@ std::string GroupApiImpl::createSpace(
     model.privateMeta = toWire(_envelopeEncryptor.packSpaceEnvelope(
         spaceId, std::string(), privateMeta, _userPrivKey, spaceKey,
         EnvelopeSeal{
-            .binding = GroupEnvelopeEncryptor::bindLocation(privateMetaLocation()),
+            .binding = metaBinding(),
             .keyVersion = 1,
             .encryptedAt = privmx::utils::Utils::getNowTimestamp(),
             .authorUserId = _connection.getImpl()->getMyUserId(contextId),
@@ -315,7 +332,7 @@ SpaceState GroupApiImpl::toSpaceState(const group::server::SpaceInfo& space) {
     // The private metadata is an envelope of the Space, at a place of its own. Its version of the key may be an
     // earlier one: a rotation does not rewrite it.
     const core::Buffer sealed = fromWire(space.privateMeta);
-    const EnvelopeRouting routing = _envelopeEncryptor.peek(sealed);
+    const EnvelopeRouting routing = _envelopeEncryptor.peek(sealed, EnvelopeContent::SpaceMeta);
     if (routing.spaceId != space.id) {
         throw EnvelopeWrongGroupException("private metadata of another Space");
     }
@@ -326,8 +343,7 @@ SpaceState GroupApiImpl::toSpaceState(const group::server::SpaceInfo& space) {
         withKeys = spaceInfo(space.id, true); // a listing carries the current version only
     }
     const OpenedEnvelope opened = _envelopeEncryptor.openSpaceEnvelope(
-        sealed, spaceKeyAt(withKeys, routing.keyVersion).key,
-        GroupEnvelopeEncryptor::bindLocation(privateMetaLocation())
+        sealed, spaceKeyAt(withKeys, routing.keyVersion).key, metaBinding()
     );
     requireVerifiedWriter(
         space.contextId, opened, DecryptOptions{.expectedAuthor = {}, .anyAuthor = true, .currentEpochOnly = false}
@@ -351,6 +367,7 @@ core::PagingList<SpaceState> GroupApiImpl::listSpaces(
     std::vector<SpaceState> spaces;
     spaces.reserve(result.spaces.size());
     for (const group::server::SpaceInfo& space : result.spaces) {
+        requireNoKeyRollback(space);
         spaces.push_back(toSpaceState(space));
     }
     return core::PagingList<SpaceState>({.totalAvailable = result.count, .readItems = spaces});
@@ -435,6 +452,10 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
     }
     const std::int64_t made = _serverApi.spaceRotateKey(model).keyVersion;
     forgetSpace(spaceId);
+    if (made != next) {
+        throw GroupHistoryForkException("Space " + spaceId + " rotated to another key version than was sent");
+    }
+    _spaceKeyVersions.set(spaceId, made);
     return made;
 }
 
@@ -473,7 +494,7 @@ void GroupApiImpl::updateSpacePublicMeta(const std::string& spaceId, const core:
 void GroupApiImpl::updateSpacePrivateMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version) {
     group::server::SpaceUpdateMetaModel model;
     model.id = spaceId;
-    model.meta = toWire(sealInSpace(spaceId, GroupEnvelopeEncryptor::bindLocation(privateMetaLocation()), meta));
+    model.meta = toWire(sealInSpace(spaceId, metaBinding(), meta));
     model.version = version;
     _serverApi.spaceUpdatePrivateMeta(model);
     forgetSpace(spaceId);

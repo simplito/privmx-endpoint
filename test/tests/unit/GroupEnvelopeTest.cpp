@@ -693,8 +693,6 @@ TEST_F(GroupEnvelopeContent, TheContentFlagCannotBeRewritten) {
     EXPECT_THROW(enc.openAnonymousEnvelope(buf(relabelled), grantKey, none), InvalidEnvelopeFormatException);
 
     std::string unknown = member.stdString();
-    unknown[2] = 0x06; // content 3: not a kind
-    EXPECT_THROW(GroupEnvelopeEncryptor::peekAny(buf(unknown)), InvalidEnvelopeFormatException);
     unknown[2] = 0x08; // a flag bit nobody defined
     EXPECT_THROW(GroupEnvelopeEncryptor::peekAny(buf(unknown)), InvalidEnvelopeFormatException);
 }
@@ -955,4 +953,22 @@ TEST_F(GroupSpaceWire, SECURITY_AnEnvelopeKeyWrapIsNotASpaceKeyAndTheOtherWayRou
             raw.signAndPackDataWithSignature(buf(privmx::crypto::Crypto::sha256(preimage + good)), author).stdString(),
     };
     EXPECT_EQ(enc.unwrapSpaceKey(resigned, slot, recipient), spaceKey);
+}
+
+TEST_F(GroupSpaceWire, SECURITY_AValueOfTheApplicationIsNeverTheSpacesMetadata) {
+    // Every recipient can write a value at any location. The metadata is not at a location: it is a content kind
+    // of its own, in the signed header, that no write of a value produces.
+    const EnvelopeBinding meta{.hasLocation = false, .locationDigest = {}, .content = EnvelopeContent::SpaceMeta};
+    EnvelopeSeal metaSeal = seal;
+    metaSeal.binding = meta;
+    const core::Buffer real = enc.packSpaceEnvelope(spaceId, "", buf("budget"), author, spaceKey, metaSeal);
+    EXPECT_EQ(enc.openSpaceEnvelope(real, spaceKey, meta).data.stdString(), "budget");
+    EXPECT_THROW(enc.peek(real), InvalidEnvelopeFormatException);
+
+    const core::Buffer value = enc.packSpaceEnvelope(spaceId, "", buf("budget 0"), author, spaceKey, seal);
+    EXPECT_THROW(enc.peek(value, EnvelopeContent::SpaceMeta), InvalidEnvelopeFormatException);
+    EXPECT_THROW(enc.openSpaceEnvelope(value, spaceKey, meta), InvalidEnvelopeFormatException);
+    std::string relabelled = value.stdString();
+    relabelled[2] = 0x06; // the flags octet says "metadata"; the signed header still says "a message"
+    EXPECT_THROW(enc.openSpaceEnvelope(buf(relabelled), spaceKey, meta), InvalidEnvelopeFormatException);
 }

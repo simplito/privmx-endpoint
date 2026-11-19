@@ -99,7 +99,7 @@ GroupEnvelopeEncryptor::ParsedHeader GroupEnvelopeEncryptor::parseHeader(Envelop
     std::uint8_t flags = cursor.readU8();
     const std::uint8_t content = (flags & FLAG_CONTENT_MASK) >> FLAG_CONTENT_SHIFT;
     if ((flags & ~(FLAG_HAS_LOCATION | FLAG_CONTENT_MASK)) != 0 ||
-        content > static_cast<std::uint8_t>(EnvelopeContent::Sequence)) {
+        content > static_cast<std::uint8_t>(EnvelopeContent::SpaceMeta)) {
         throw InvalidEnvelopeFormatException("unknown envelope flags");
     }
     EnvelopeRouting& routing = header.routing;
@@ -640,9 +640,10 @@ EnvelopeRouting GroupEnvelopeEncryptor::peek(const core::Buffer& envelope, Envel
     EnvelopeRouting routing = peekAny(envelope);
     if (routing.content != content) {
         throw InvalidEnvelopeFormatException(
-            content == EnvelopeContent::File         ? "not a file envelope" :
-                content == EnvelopeContent::Sequence ? "not the header of a sequence" :
-                                                       "unsupported envelope type"
+            content == EnvelopeContent::File          ? "not a file envelope" :
+                content == EnvelopeContent::Sequence  ? "not the header of a sequence" :
+                content == EnvelopeContent::SpaceMeta ? "not a Space's metadata" :
+                                                        "unsupported envelope type"
         );
     }
     return routing;

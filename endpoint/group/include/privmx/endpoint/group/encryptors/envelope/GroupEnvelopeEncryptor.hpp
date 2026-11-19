@@ -51,7 +51,8 @@ constexpr ByteCount encryptedChunkSizeFor(ByteCount plainLen) {
  *
  *   header  = u8 ver | u8 type | u8 flags | type-specific fields
  *   flags   = bit 0: the envelope is bound to a location
- *             bits 1-2: what the content is - 0 a message, 1 a file manifest, 2 the key of a sequence
+ *             bits 1-2: what the content is - 0 a message, 1 a file manifest, 2 the key of a sequence,
+ *                       3 a Space's private metadata
  *   binding = sha256(LOCATION_LABEL || canonical path) when bit 0 is set, empty otherwise
  *
  * `binding` is never transmitted. The writer puts it into the signed (or sealed) body right after the header;

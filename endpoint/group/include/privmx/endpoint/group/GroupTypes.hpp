@@ -44,6 +44,9 @@ enum class EnvelopeContent : std::uint8_t {
     Message = 0,
     File = 1,     // content is a file manifest: the file key and a digest of every chunk
     Sequence = 2, // content is the key of a sequence; items and marks follow outside the envelope
+    // A Space's private metadata. A kind of its own, which no location of the application's reaches: a recipient
+    // cannot write a value that reads as the Space's metadata.
+    SpaceMeta = 3,
 };
 
 // What an envelope is bound to, beside its group: a location in the application's data, or - said, never
