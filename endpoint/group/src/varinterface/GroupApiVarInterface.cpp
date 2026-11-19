@@ -85,6 +85,8 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {BeginSequenceInSpace, &GroupApiVarInterface::beginSequenceInSpace},
         {OpenSequenceInSpace, &GroupApiVarInterface::openSequenceInSpace},
         {GetSpaceSequenceOrigin, &GroupApiVarInterface::getSpaceSequenceOrigin},
+        {EncodePath, &GroupApiVarInterface::encodePath},
+        {PinGroupToSubject, &GroupApiVarInterface::pinGroupToSubject},
         {AbortFile, &GroupApiVarInterface::abortFile}
 };
 
@@ -726,6 +728,21 @@ Poco::Dynamic::Var GroupApiVarInterface::getSpaceSequenceOrigin(const Poco::Dyna
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto sequence = _deserializer.deserialize<int64_t>(argsArr->get(0), "sequence");
     return _serializer.serialize(_groupApi.getSpaceSequenceOrigin(sequence));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::encodePath(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto path = _deserializer.deserializeVector<PathSegment>(argsArr->get(0), "path");
+    return _serializer.serialize(GroupApi::encodePath(path));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::pinGroupToSubject(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto subject = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "subject");
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(2), "groupId");
+    _groupApi.pinGroupToSubject(contextId, subject, groupId);
+    return {};
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::abortFile(const Poco::Dynamic::Var& args) {

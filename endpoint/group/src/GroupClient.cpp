@@ -638,13 +638,17 @@ GroupPublicKey GroupClient::getPublicKey(const Path& subject, const std::string&
 
 // The envelope says which Group it was written in; the place it was found at says which Group that should be.
 // Checked on the plain header first, and it is that header the signature covers.
-void GroupClient::requireHome(const Path& authorSubject, const core::Buffer& envelope, const OpenGroupOptions& home) {
+void GroupClient::requireHome(
+    const Path& authorSubject,
+    const core::Buffer& envelope,
+    const std::optional<std::string>& homeCreatedBy
+) {
     const std::string homeId = groupIdOf(authorSubject);
     if (GroupApi::peekEnvelope(envelope).groupId != homeId) {
         throw EnvelopeWrongGroupException("not written in the Group of the author's subject");
     }
-    if (home.createdBy.has_value()) {
-        groupOfSubject(_api, _contextId, authorSubject, home.createdBy.value());
+    if (homeCreatedBy.has_value()) {
+        groupOfSubject(_api, _contextId, authorSubject, homeCreatedBy.value());
     }
 }
 
@@ -653,9 +657,9 @@ DecryptedSharedEnvelope GroupClient::decryptShared(
     const Path& place,
     const core::Buffer& envelope,
     const DecryptOptions& options,
-    const OpenGroupOptions& home
+    const std::optional<std::string>& homeCreatedBy
 ) {
-    requireHome(authorSubject, envelope, home);
+    requireHome(authorSubject, envelope, homeCreatedBy);
     return _api.decryptShared(_contextId, join(authorSubject, place), envelope, options);
 }
 
@@ -664,9 +668,9 @@ GroupFileReader GroupClient::beginSharedFileDecryption(
     const Path& place,
     const core::Buffer& envelope,
     const DecryptOptions& options,
-    const OpenGroupOptions& home
+    const std::optional<std::string>& homeCreatedBy
 ) {
-    requireHome(authorSubject, envelope, home);
+    requireHome(authorSubject, envelope, homeCreatedBy);
     return GroupFileReader(
         _api, _api.beginSharedFileDecryption(_contextId, join(authorSubject, place), envelope, options)
     );

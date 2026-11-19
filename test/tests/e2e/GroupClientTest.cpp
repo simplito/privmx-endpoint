@@ -102,9 +102,10 @@ static DecryptedSharedEnvelope readSharedDischarge(
     const core::Buffer& patientId,
     const core::Buffer& dischargeId,
     const std::string& authorId,
-    const core::Buffer& body
+    const core::Buffer& body,
+    const std::string& doctorId
 ) {
-    return groups.decryptShared(patient(patientId), {name("discharge"), id(dischargeId)}, body, by(authorId));
+    return groups.decryptShared(patient(patientId), {name("discharge"), id(dischargeId)}, body, by(authorId), doctorId);
 }
 
 // Runs on the analyzer: an account in the Context, a member of no care team.
@@ -369,21 +370,21 @@ TEST_F(GroupClientTest, records_three_audiences_a_writer_that_cannot_read_and_a_
     const core::Buffer discharge = saveDischarge(care, dischargeId, userId(2), user(3), "discharged, stable");
     // The care team reads it as its own; billing (user 2) and the auditor (user 3) as shared with them.
     EXPECT_EQ(care.decrypt({name("discharge"), id(dischargeId)}, discharge, by(userId(1))).data.stdString(), "discharged, stable");
-    EXPECT_THROW({ readSharedDischarge(groups, patientId, dischargeId, userId(1), discharge); }, EnvelopeNotARecipientException);
+    EXPECT_THROW({ readSharedDischarge(groups, patientId, dischargeId, userId(1), discharge, userId(1)); }, EnvelopeNotARecipientException);
 
     switchTo(2);
-    DecryptedSharedEnvelope shared = readSharedDischarge(groups, patientId, dischargeId, userId(1), discharge);
+    DecryptedSharedEnvelope shared = readSharedDischarge(groups, patientId, dischargeId, userId(1), discharge, userId(1));
     EXPECT_EQ(shared.data.stdString(), "discharged, stable");
     EXPECT_EQ(shared.via, billingGroup.getGroupId());
     EXPECT_EQ(shared.homeGroupId, care.getGroupId());
     EXPECT_EQ(shared.senderMembership, "member"); // the care team is visible to the Context
     // The same envelope presented as another patient's: it says which Group it was written in.
     EXPECT_THROW(
-        { groups.decryptShared(patient(GroupApi::idFromString("someone-else")), {name("discharge"), id(dischargeId)}, discharge, by(userId(1))); },
+        { groups.decryptShared(patient(GroupApi::idFromString("someone-else")), {name("discharge"), id(dischargeId)}, discharge, by(userId(1)), std::nullopt); },
         EnvelopeWrongGroupException
     );
     EXPECT_THROW(
-        { groups.decryptShared(patient(patientId), {name("discharge"), id(dischargeId)}, discharge, by(userId(1)), {.createdBy = userId(3)}); },
+        { groups.decryptShared(patient(patientId), {name("discharge"), id(dischargeId)}, discharge, by(userId(1)), userId(3)); },
         GroupWrongCreatorException
     );
     // A Group named by its subject is named with its creator: user 3 could have made "this patient's team" first.
@@ -395,7 +396,7 @@ TEST_F(GroupClientTest, records_three_audiences_a_writer_that_cannot_read_and_a_
     EXPECT_ANY_THROW({ groups.openGroup(patient(patientId)); });
 
     switchTo(3);
-    shared = readSharedDischarge(groups, patientId, dischargeId, userId(1), discharge);
+    shared = readSharedDischarge(groups, patientId, dischargeId, userId(1), discharge, userId(1));
     EXPECT_EQ(shared.via, "user");
     // A public form: a key the team published, and no account behind the writer.
     const GroupPublicKey published = groups.getPublicKey(patient(patientId), userId(1));

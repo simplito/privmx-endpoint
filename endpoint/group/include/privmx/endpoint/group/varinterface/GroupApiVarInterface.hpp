@@ -95,6 +95,8 @@ public:
         BeginSequenceInSpace = 75,
         OpenSequenceInSpace = 76,
         GetSpaceSequenceOrigin = 77,
+        EncodePath = 78,
+        PinGroupToSubject = 79,
         AbortFile = 81,
     };
 
@@ -176,6 +178,8 @@ public:
     Poco::Dynamic::Var beginSequenceInSpace(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var openSequenceInSpace(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getSpaceSequenceOrigin(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var encodePath(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var pinGroupToSubject(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var abortFile(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var sendCustomEvent(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildCustomEventSubscriptionQuery(const Poco::Dynamic::Var& args);

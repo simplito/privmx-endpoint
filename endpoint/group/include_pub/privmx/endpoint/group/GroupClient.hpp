@@ -422,14 +422,17 @@ public:
      * Reads what was written in another Group and shared with the caller through alsoFor
      * (GroupApi::decryptShared). The value sits at `authorSubject + place`, and must say it was written in
      * the Group of `authorSubject` (EnvelopeWrongGroupException otherwise): `senderMembership` in the result
-     * is then about that Group. With `home.createdBy`, that Group must have been created by that user.
+     * is then about that Group.
+     * @param homeCreatedBy who created that Group, checked against its signed policy: without it "a member of
+     * the Group under this subject" could be a member of a Group somebody else put there. std::nullopt is said
+     * only by a caller that does not rely on `senderMembership`.
      */
     DecryptedSharedEnvelope decryptShared(
         const Path& authorSubject,
         const Path& place,
         const core::Buffer& envelope,
         const DecryptOptions& options,
-        const OpenGroupOptions& home = {}
+        const std::optional<std::string>& homeCreatedBy
     );
     /** The file form of decryptShared. The envelope's Group is checked before the handle is returned. */
     GroupFileReader beginSharedFileDecryption(
@@ -437,7 +440,7 @@ public:
         const Path& place,
         const core::Buffer& envelope,
         const DecryptOptions& options,
-        const OpenGroupOptions& home = {}
+        const std::optional<std::string>& homeCreatedBy
     );
 
     /** The ID of the Group `subject` names. */
@@ -455,7 +458,11 @@ private:
     // Throws unless the Group was opened the way `item` asks: its creator, its fixed roster, or neither.
     void check(const OpenGroupItem& item, const Group& state);
     std::vector<SpaceRecipient> resolve(const std::vector<SpaceRecipient>& recipients);
-    void requireHome(const Path& authorSubject, const core::Buffer& envelope, const OpenGroupOptions& home);
+    void requireHome(
+        const Path& authorSubject,
+        const core::Buffer& envelope,
+        const std::optional<std::string>& homeCreatedBy
+    );
 
     GroupApi _api;
     std::string _contextId;
