@@ -291,3 +291,62 @@ TEST_F(SpaceLogRules, TheWireFormKeepsEveryByteThatIsSigned) {
     EXPECT_NE(SpaceLog::keyCommit(spaceId, 1, key1), SpaceLog::keyCommit(std::string(64, 'b'), 1, key1));
     EXPECT_NE(SpaceLog::keyCommit(spaceId, 1, key1), SpaceLog::keyCommit(spaceId, 1, key2));
 }
+
+// -- the bytes, against the reference both the Endpoint and the Bridge are held to ------------------------------
+
+#include <fstream>
+#include <sstream>
+
+#include <privmx/utils/Utils.hpp>
+
+namespace {
+
+Poco::JSON::Object::Ptr vectors() {
+    std::ifstream file(std::string(PRIVMX_TEST_FIXTURES_DIR) + "/keytree/keytree-vectors.json");
+    std::stringstream text;
+    text << file.rdbuf();
+    return privmx::utils::Utils::parseJsonObject(text.str());
+}
+
+SpaceStatement statementOf(const Poco::JSON::Object::Ptr& wire) {
+    return SpaceLog::fromWire(server::SpaceStatement::fromJSON(wire));
+}
+
+} // namespace
+
+TEST(SpaceLogVectors, TheSignedBytesAreTheReferenceOnes) {
+    const auto cases = vectors()->getArray("spaceStatement");
+    ASSERT_EQ(cases->size(), 4u);
+    for (std::size_t i = 0; i < cases->size(); ++i) {
+        const auto entry = cases->getObject(static_cast<unsigned>(i));
+        Poco::JSON::Object::Ptr wire = entry->getObject("statement");
+        // The reference lists what is signed; the two signatures are not part of it.
+        wire->set("signature", std::string());
+        wire->set("viaSignature", std::string());
+        const SpaceStatement statement = statementOf(wire);
+        EXPECT_EQ(
+            privmx::utils::Hex::from(SpaceLog::recipientsHash(statement.groups, statement.users)),
+            entry->getValue<std::string>("recipientsHashHex")
+        ) << "case " << i;
+        EXPECT_EQ(privmx::utils::Hex::from(SpaceLog::signedBytes(statement)), entry->getValue<std::string>("signedBytesHex"))
+            << "case " << i;
+        EXPECT_EQ(privmx::utils::Hex::from(SpaceLog::viaBytes(statement)), entry->getValue<std::string>("viaBytesHex"))
+            << "case " << i;
+    }
+}
+
+TEST(SpaceLogVectors, AKeyCommitmentIsTheReferenceOne) {
+    const auto cases = vectors()->getArray("spaceKeyCommit");
+    ASSERT_EQ(cases->size(), 3u);
+    for (std::size_t i = 0; i < cases->size(); ++i) {
+        const auto entry = cases->getObject(static_cast<unsigned>(i));
+        EXPECT_EQ(
+            privmx::utils::Hex::from(SpaceLog::keyCommit(
+                entry->getValue<std::string>("spaceId"),
+                entry->getValue<std::uint64_t>("keyVersion"),
+                privmx::utils::Hex::toString(entry->getValue<std::string>("keyHex"))
+            )),
+            entry->getValue<std::string>("expectedHex")
+        ) << "case " << i;
+    }
+}

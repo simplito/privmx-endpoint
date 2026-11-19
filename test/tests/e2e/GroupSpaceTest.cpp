@@ -283,3 +283,58 @@ TEST_F(GroupSpaceTest, files_and_sequences_in_a_space) {
     EXPECT_EQ(origin.keyVersion, 1);
     EXPECT_THROW({ groupApi->openSequence(sales, note("ops"), header, anyAuthor()); }, EnvelopeWrongKindException);
 }
+
+TEST_F(GroupSpaceTest, the_history_of_a_space_is_signed_and_says_who_did_what) {
+    const std::string sales = createTeam({user(1), user(2)});
+    // User 1 is no recipient themselves: the Space is made, and later changed, through the sales team.
+    const std::string spaceId = groupApi->createSpace(contextId(), {team(sales, "manager")}, text(""), text(""));
+    ASSERT_NO_THROW({ groupApi->addSpaceRecipients(spaceId, {person(3, "user")}); });
+    switchTo(3);
+    // A user of the Space replaces the key; the recipients are not theirs to change.
+    ASSERT_NO_THROW({ groupApi->rotateSpaceKey(spaceId); });
+    EXPECT_ANY_THROW({ groupApi->addSpaceRecipients(spaceId, {person(2, "user")}); });
+    switchTo(2);
+    int64_t version = 0;
+    ASSERT_NO_THROW({
+        version = groupApi->removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .groupSubject = {}, .userId = userId(3)}});
+    });
+    EXPECT_EQ(version, 3);
+
+    // A fresh session of the first user: nothing remembered, the whole history replayed and checked.
+    switchTo(1);
+    const auto log = groupApi->getSpaceLog(spaceId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "asc"});
+    ASSERT_EQ(log.totalAvailable, 4);
+    ASSERT_EQ(log.readItems.size(), 4u);
+    EXPECT_EQ(log.readItems[0].kind, "create");
+    EXPECT_EQ(log.readItems[0].author, userId(1));
+    EXPECT_EQ(log.readItems[0].via, sales);
+    EXPECT_EQ(log.readItems[0].addedGroups, std::vector<std::string>{sales});
+    EXPECT_EQ(log.readItems[0].keyVersion, 1);
+    EXPECT_EQ(log.readItems[1].kind, "add");
+    EXPECT_EQ(log.readItems[1].addedUsers, std::vector<std::string>{userId(3)});
+    EXPECT_EQ(log.readItems[1].keyVersion, 1);
+    EXPECT_EQ(log.readItems[2].kind, "rotate");
+    EXPECT_EQ(log.readItems[2].author, userId(3));
+    EXPECT_EQ(log.readItems[2].via, "user");
+    EXPECT_EQ(log.readItems[2].keyVersion, 2);
+    EXPECT_EQ(log.readItems[3].kind, "remove");
+    EXPECT_EQ(log.readItems[3].author, userId(2));
+    EXPECT_EQ(log.readItems[3].via, sales);
+    EXPECT_EQ(log.readItems[3].removedUsers, std::vector<std::string>{userId(3)});
+    EXPECT_EQ(log.readItems[3].keyVersion, 3);
+    const auto newest = groupApi->getSpaceLog(spaceId, core::PagingQuery{.skip = 0, .limit = 1, .sortOrder = "desc"});
+    ASSERT_EQ(newest.readItems.size(), 1u);
+    EXPECT_EQ(newest.readItems[0].seq, 4);
+
+    // The state is what the statements say: who made the Space, who is in it, which key is current.
+    const SpaceState state = groupApi->getSpace(spaceId);
+    EXPECT_EQ(state.createdBy, userId(1));
+    EXPECT_EQ(state.keyVersion, 3);
+    EXPECT_TRUE(state.users.empty());
+    ASSERT_EQ(state.groups.size(), 1u);
+    // What was written under each version still opens, each key checked against its statement.
+    const core::Buffer sealed = groupApi->encryptInSpace(spaceId, note("n1"), text("after"));
+    EXPECT_EQ(GroupApi::peekEnvelope(sealed).keyVersion, 3);
+    switchTo(3);
+    EXPECT_ANY_THROW({ groupApi->getSpaceLog(spaceId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "asc"}); });
+}

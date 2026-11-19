@@ -130,6 +130,7 @@ target_link_libraries(test_unit_UtilsTest privmx privmxendpointcore Poco::Founda
 
 add_executable(test_unit_SpaceLogTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/SpaceLogTest.cpp)
 target_link_libraries(test_unit_SpaceLogTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+target_compile_definitions(test_unit_SpaceLogTest PRIVATE PRIVMX_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 
 add_executable(test_unit_KeyContinuityVerifierTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/KeyContinuityVerifierTest.cpp)
 target_link_libraries(test_unit_KeyContinuityVerifierTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
