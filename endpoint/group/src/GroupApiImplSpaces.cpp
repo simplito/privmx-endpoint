@@ -92,7 +92,9 @@ group::server::SpaceInfo GroupApiImpl::spaceInfo(const std::string& spaceId, boo
 // ponytail: kept in memory, for the life of the connection's GroupApi. Put it beside the group pins when a
 // rollback across restarts has to be caught as well.
 void GroupApiImpl::requireNoKeyRollback(const group::server::SpaceInfo& space) {
-    const std::int64_t seen = _spaceKeyVersions.get(space.id).value_or(0);
+    // One step under one lock: two reads racing must not leave the lower version as the mark.
+    std::lock_guard lock(_spaceKeyVersionsMutex);
+    std::int64_t& seen = _spaceKeyVersions[space.id];
     if (space.keyVersion < seen) {
         throw GroupHistoryForkException(
             "Space " +
@@ -103,7 +105,7 @@ void GroupApiImpl::requireNoKeyRollback(const group::server::SpaceInfo& space) {
             std::to_string(seen)
         );
     }
-    _spaceKeyVersions.set(space.id, space.keyVersion);
+    seen = space.keyVersion;
 }
 
 void GroupApiImpl::forgetSpace(const std::string& spaceId) {
@@ -455,7 +457,11 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
     if (made != next) {
         throw GroupHistoryForkException("Space " + spaceId + " rotated to another key version than was sent");
     }
-    _spaceKeyVersions.set(spaceId, made);
+    {
+        std::lock_guard lock(_spaceKeyVersionsMutex);
+        std::int64_t& seen = _spaceKeyVersions[spaceId];
+        seen = std::max(seen, made);
+    }
     return made;
 }
 

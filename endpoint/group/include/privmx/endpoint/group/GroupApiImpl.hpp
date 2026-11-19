@@ -504,7 +504,8 @@ private:
     SpaceState toSpaceState(const server::SpaceInfo& space);
     privmx::utils::ThreadSaveMap<std::string, CachedSpace> _spaces;
     // The highest key version each Space was seen at. Not dropped on a reconnect: it only ever moves forward.
-    privmx::utils::ThreadSaveMap<std::string, std::int64_t> _spaceKeyVersions;
+    std::mutex _spaceKeyVersionsMutex;
+    std::map<std::string, std::int64_t> _spaceKeyVersions;             // guarded by the mutex above
     privmx::utils::ThreadSaveMap<std::string, SpaceKeyUse> _spaceKeys; // by "<spaceId>:<keyVersion>"
     std::shared_ptr<Sequence> sequenceOf(SequenceHandle handle, bool wantReading);
     core::Buffer markSequence(Sequence& sequence, bool closed);
