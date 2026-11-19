@@ -367,3 +367,39 @@ TEST(SpaceLogVectors, AKeyCommitmentIsTheReferenceOne) {
         ) << "case " << i;
     }
 }
+
+TEST(SpaceLogVectors, AStatementSignedByTheBridgesOwnCodeVerifiesHere) {
+    // Made and signed by the Bridge's implementation (its SpaceStatement.test.ts, keys 0x11.. and 0x22..): the
+    // signatures of another library, and the digest that chains the next statement to this one.
+    const std::string json = R"({
+        "spaceId": "abababababababababababababababababababababababababababababababab",
+        "contextId": "ctx-1", "seq": 2,
+        "prevDigest": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "op": "rotate", "date": 1700000000000, "keyVersion": 2,
+        "keyCommit": "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+        "groups": [
+            {"groupId": "sales", "role": "manager", "groupKeyVersion": 5, "groupPubKey": "5RWLQudhUehv8bFcVwqJWBor8VTy4psRS2J2s9PwahRhw6fEVp"},
+            {"groupId": "billing", "role": "user", "groupKeyVersion": 1, "groupPubKey": "7S7oY6Jrjzq8txrPmBwUhUmKzpN64835E7ura1HDDAVUvqRjJ1"}
+        ],
+        "users": [
+            {"userId": "zoe", "pubKey": "5RWLQudhUehv8bFcVwqJWBor8VTy4psRS2J2s9PwahRhw6fEVp", "role": "user"},
+            {"userId": "alice", "pubKey": "7S7oY6Jrjzq8txrPmBwUhUmKzpN64835E7ura1HDDAVUvqRjJ1", "role": "manager"}
+        ],
+        "signer": "alice", "signerPubKey": "7S7oY6Jrjzq8txrPmBwUhUmKzpN64835E7ura1HDDAVUvqRjJ1", "via": "sales",
+        "signature": "G6mLHiR0fTTrDsC3Ke/uZ//1RYR40WbTjqQgaMXi5EWl/Kdmn5VvwLxr53bLfOAO3kAl3byD+sGQEfiEXasM4/4=",
+        "viaSignature": "G1TnXQdLHxn6nFvDK6rWIwDIni+O/xF6Vdw7uvenf/Ucnie6YGSnn65ks/MXkPIoQigIX0kTMIyGbbPtvqN/n80="
+    })";
+    const SpaceStatement statement = statementOf(privmx::utils::Utils::parseJsonObject(json));
+    EXPECT_EQ(
+        privmx::utils::Hex::from(SpaceLog::recipientsHash(statement.groups, statement.users)),
+        "4fb2f91ff12ef35fba60b41356dcdad801e2cc0a44c47acf42d066563cce7a7c"
+    );
+    EXPECT_EQ(privmx::utils::Hex::from(SpaceLog::digest(statement)), "81cb2d7e7415da314d438d87d4d2980688f92f7acdeabba2abda5571ad01809b");
+    using privmx::crypto::PublicKey;
+    EXPECT_TRUE(PublicKey::fromBase58DER(statement.signerPubKey).verifyCompactSignatureWithHash(SpaceLog::signedBytes(statement), statement.signature));
+    EXPECT_TRUE(PublicKey::fromBase58DER(statement.groups[0].groupPubKey).verifyCompactSignatureWithHash(SpaceLog::viaBytes(statement), statement.viaSignature));
+    // And not for a statement one byte off.
+    SpaceStatement other = statement;
+    other.date += 1;
+    EXPECT_FALSE(PublicKey::fromBase58DER(statement.signerPubKey).verifyCompactSignatureWithHash(SpaceLog::signedBytes(other), statement.signature));
+}
