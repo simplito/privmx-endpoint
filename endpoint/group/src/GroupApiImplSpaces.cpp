@@ -20,6 +20,7 @@ limitations under the License.
 // - Whether an author still had access is not something the key shows: see `SpaceOrigin::authorAccess`.
 
 #include <algorithm>
+#include <cctype>
 #include <set>
 
 #include <privmx/crypto/Crypto.hpp>
@@ -852,6 +853,13 @@ core::Buffer GroupApiImpl::encodePath(const Path& path) {
 // The device's own list of "this subject is that Group", sealed like the group pins and kept beside them. An entry
 // is written once and never replaced: a second Group for a subject is what this is here to refuse.
 void GroupApiImpl::pinGroupToSubject(const std::string& contextId, const Path& subject, const std::string& groupId) {
+    // The pins are kept as lines of "<key> <group id>": an id with a space or a line break in it would write a pin
+    // for another subject.
+    if (groupId.empty() || groupId.size() > 128 || !std::all_of(groupId.begin(), groupId.end(), [](unsigned char c) {
+            return std::isalnum(c) != 0 || c == '-' || c == '_';
+        })) {
+        throw core::InvalidParamsException("field:groupId is not a group id");
+    }
     const std::string key = privmx::utils::Hex::from(
         privmx::crypto::Crypto::sha256(
             "privmx/group/subject" +

@@ -5035,6 +5035,10 @@ TEST_F(GroupApiLyingBridge, SECURITY_ASubjectKeepsTheGroupThisDeviceFirstOpenedF
     EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, {name("chat"), name("room-1")}, g2));
     EXPECT_NO_THROW(client("alice").pinGroupToSubject("another-context", room, g2));
     EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, Path{}, g1), core::InvalidParamsException);
+    // The store keeps one pin per line: an id that carries a line of its own is no id.
+    for (const std::string& bad : {std::string(), g1 + "\n" + std::string(64, 'c') + " " + g2, g1 + " x", std::string("a\0b", 3)}) {
+        EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, otherRoom, bad), core::InvalidParamsException);
+    }
 
     clients.erase("alice"); // the session ends; the store stays
     EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2), GroupSubjectReboundException);
