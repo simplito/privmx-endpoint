@@ -61,7 +61,7 @@ static Path directSubject(std::string me, std::string peer) {
 
 // A 1:1 chat is named by its two users: a fixed Group, opened only if it holds exactly those two.
 static GroupHandle openDirect(GroupClient& groups, std::string me, std::string peer) {
-    return groups.openFixedGroup(directSubject(me, peer), {me, peer});
+    return groups.openGroup(directSubject(me, peer), {.createdBy = {}, .fixedMembers = std::vector<std::string>{me, peer}});
 }
 
 static core::Buffer sendMessage(GroupHandle& chat, const core::Buffer& messageId, const std::string& text) {
@@ -297,9 +297,14 @@ TEST_F(GroupClientTest, chat_a_direct_chat_is_a_fixed_group_of_exactly_its_two_u
     const core::Buffer sealed = sendMessage(dm, GroupApi::idFromString("m1"), "just us");
 
     // Opened only by naming exactly its members; a subject-and-creator open is not for a fixed Group.
-    EXPECT_THROW({ groups.openFixedGroup(subject, {userId(1), userId(3)}); }, GroupMembershipMismatchException);
-    EXPECT_THROW({ groups.openFixedGroup(subject, {userId(1)}); }, GroupMembershipMismatchException);
+    EXPECT_THROW({ groups.openGroup(subject, {.createdBy = {}, .fixedMembers = std::vector<std::string>{userId(1), userId(3)}}); }, GroupMembershipMismatchException);
+    EXPECT_THROW({ groups.openGroup(subject, {.createdBy = {}, .fixedMembers = std::vector<std::string>{userId(1)}}); }, GroupMembershipMismatchException);
     EXPECT_THROW({ groups.openGroup(subject); }, GroupMembershipMismatchException);
+    // The creator or the roster, never both.
+    EXPECT_THROW(
+        { groups.openGroup(subject, {.createdBy = userId(1), .fixedMembers = std::vector<std::string>{userId(1), userId(2)}}); },
+        core::InvalidParamsException
+    );
     // Frozen: nobody is added or removed, and the rules that say so cannot be changed.
     EXPECT_ANY_THROW({ dm.addMembers({member(3, "user")}); });
     EXPECT_ANY_THROW({ dm.removeMembers({userId(2)}); });
@@ -315,7 +320,7 @@ TEST_F(GroupClientTest, chat_a_direct_chat_is_a_fixed_group_of_exactly_its_two_u
     const Path forged = directSubject(userId(1), fresh("nobody"));
     GroupHandle trap = groups.createGroup(forged, {member(3, "manager"), member(1, "user")}, {}, {});
     switchTo(1);
-    EXPECT_THROW({ groups.openFixedGroup(forged, {userId(1), userId(2)}); }, GroupMembershipMismatchException);
+    EXPECT_THROW({ groups.openGroup(forged, {.createdBy = {}, .fixedMembers = std::vector<std::string>{userId(1), userId(2)}}); }, GroupMembershipMismatchException);
     EXPECT_EQ(groups.openGroup(forged).getGroupId(), trap.getGroupId());
 }
 

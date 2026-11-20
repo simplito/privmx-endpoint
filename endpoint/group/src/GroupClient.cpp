@@ -459,7 +459,7 @@ void GroupClient::check(const OpenGroupItem& item, const Group& state) {
     if (isFixed(state) && !item.pinnedGroupId.has_value()) {
         // Anyone can make a fixed Group under a subject they chose; it is opened only by someone who names its
         // members.
-        throw GroupMembershipMismatchException("a fixed Group: open it with openFixedGroup");
+        throw GroupMembershipMismatchException("a fixed Group: open it with OpenGroupOptions::fixedMembers");
     }
     if (item.createdBy.has_value()) {
         // The signer of the first statement, verified with the rest of the history - not the Bridge's `creator`.
@@ -476,9 +476,17 @@ void GroupClient::check(const OpenGroupItem& item, const Group& state) {
 }
 
 GroupHandle GroupClient::openGroup(const Path& subject, const OpenGroupOptions& options) {
+    if (options.createdBy.has_value() && options.fixedMembers.has_value()) {
+        throw core::InvalidParamsException("openGroup checks the creator or the fixed roster, not both");
+    }
     const std::string groupId = groupIdOf(subject);
     check(
-        OpenGroupItem{.subject = subject, .createdBy = options.createdBy, .fixedMembers = {}, .pinnedGroupId = {}},
+        OpenGroupItem{
+            .subject = subject,
+            .createdBy = options.createdBy,
+            .fixedMembers = options.fixedMembers,
+            .pinnedGroupId = {}
+        },
         _api.getGroup(groupId)
     );
     return GroupHandle(_api, _contextId, groupId, subject);
@@ -511,15 +519,6 @@ GroupHandle GroupClient::createFixedGroup(
             subject
         );
     } catch (const server::DuplicateResourceIdException& e) { throw GroupAlreadyExistsException(e); }
-}
-
-GroupHandle GroupClient::openFixedGroup(const Path& subject, const std::vector<std::string>& userIds) {
-    const std::string groupId = groupIdOf(subject);
-    check(
-        OpenGroupItem{.subject = subject, .createdBy = {}, .fixedMembers = userIds, .pinnedGroupId = {}},
-        _api.getGroup(groupId)
-    );
-    return GroupHandle(_api, _contextId, groupId, subject);
 }
 
 std::vector<OpenGroupResult> GroupClient::openGroups(const std::vector<OpenGroupItem>& items) {
@@ -583,6 +582,9 @@ Space GroupClient::createSpaceFor(
 }
 
 Space GroupClient::openSpace(const Path& subject, const OpenGroupOptions& options) {
+    if (options.fixedMembers.has_value()) {
+        throw core::InvalidParamsException("a Space has no fixed roster: fixedMembers is for openGroup");
+    }
     const std::string spaceId = GroupApi::deriveSpaceId(_contextId, GroupApi::encodePath(subject));
     const SpaceState state = _api.getSpace(spaceId);
     if (options.createdBy.has_value() && state.createdBy != options.createdBy.value()) {

@@ -255,14 +255,20 @@ private:
     Path _subject;
 };
 
+/** How openGroup checks the Group: by its creator, or by its frozen roster. Not both. */
 struct OpenGroupOptions {
     /**
      * The user who created the entity; needed unless the entity's identifier was made at random right before
-     * createGroup. The Group's first, signed commit
-     * names who created the Group; if it is someone else, openGroup throws GroupWrongCreatorException.
+     * createGroup. The Group's first, signed commit names who created the Group; if it is someone else,
+     * openGroup throws GroupWrongCreatorException.
      * For a Space the creator is the Bridge's word: a Space has no signed history.
      */
     std::optional<std::string> createdBy;
+    /**
+     * For a Group made with createFixedGroup: the users it must hold, exactly. Anything else throws
+     * GroupMembershipMismatchException.
+     */
+    std::optional<std::vector<std::string>> fixedMembers;
 };
 
 /** One Group to open with openGroups. At most one of the optional fields is set; none means openGroup. */
@@ -270,7 +276,7 @@ struct OpenGroupItem {
     Path subject;
     /** As in openGroup with OpenGroupOptions::createdBy. */
     std::optional<std::string> createdBy;
-    /** As in openFixedGroup: the users the Group must hold. */
+    /** As in openGroup with OpenGroupOptions::fixedMembers: the users the Group must hold. */
     std::optional<std::vector<std::string>> fixedMembers;
     /** As in openPinnedGroup: the Group's own ID. */
     std::optional<std::string> pinnedGroupId;
@@ -300,7 +306,7 @@ struct OpenGroupResult {
  *       the one expected. The application's own server is not caught if it also lies about the creator.
  *   (GroupApi) + openPinnedGroup            A Group that already exists under an ID of its own. The first time,
  *       the ID is taken on trust; from then on this device refuses any other Group for that subject.
- *   createFixedGroup + openFixedGroup       A subject the caller chose and a roster frozen for good; opening
+ *   createFixedGroup + openGroup{fixedMembers}   A subject the caller chose and a roster frozen for good; opening
  *       checks that the Group holds exactly the users the reader expects.
  *   createUnboundGroup + openUnboundGroup   No entity at all: Groups as before subjects. Another user cannot
  *       choose the ID; the application's server is NOT caught - the ID passed in is trusted.
@@ -329,7 +335,11 @@ public:
         const std::optional<GroupRules>& rules = std::nullopt,
         const std::string& visibleTo = "members"
     );
-    /** Opens and verifies the Group of `subject`. Refuses a Group made by createFixedGroup. */
+    /**
+     * Opens and verifies the Group of `subject`. A Group made by createFixedGroup opens only with
+     * OpenGroupOptions::fixedMembers, and then only when it holds exactly those users; without the option it is
+     * refused (GroupMembershipMismatchException), so forgetting it cannot open someone else's roster.
+     */
     GroupHandle openGroup(const Path& subject, const OpenGroupOptions& options = {});
     /**
      * Opens a Group that exists under an ID of its own (made through GroupApi) and ties it to `subject` on
@@ -348,8 +358,6 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta
     );
-    /** Opens a fixed Group; throws GroupMembershipMismatchException unless it holds exactly `userIds`. */
-    GroupHandle openFixedGroup(const Path& subject, const std::vector<std::string>& userIds);
     /**
      * Opens many Groups with one request to the Bridge for their states (GroupApi::getGroups): a list of chats,
      * 1:1 chats among them. One result per item, in order; a Group that failed has a non-zero statusCode and an
