@@ -1,7 +1,11 @@
 #include <gtest/gtest.h>
 #include "BaseGroupTest.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
+#include <chrono>
+#include <thread>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/EventQueue.hpp>
+#include <privmx/endpoint/group/Events.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
@@ -337,4 +341,49 @@ TEST_F(GroupSpaceTest, the_history_of_a_space_is_signed_and_says_who_did_what) {
     EXPECT_EQ(GroupApi::peekEnvelope(sealed).keyVersion, 3);
     switchTo(3);
     EXPECT_ANY_THROW({ groupApi->getSpaceLog(spaceId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "asc"}); });
+}
+
+TEST_F(GroupSpaceTest, a_recipient_is_told_when_the_space_changes_and_when_it_is_gone) {
+    const std::string sales = createTeam({user(1), user(2)});
+    const std::string spaceId = groupApi->createSpace(contextId(), {team(sales, "manager")}, text(""), text(""));
+    core::EventQueue eventQueue = core::EventQueue::getInstance();
+    auto connection2 = connect(2);
+    auto groupApi2 = group::GroupApi::create(*connection2);
+    groupApi2.subscribeFor({
+        groupApi2.buildSubscriptionQuery(EventType::SPACE_UPDATE, EventSelectorType::SPACE_ID, spaceId),
+        groupApi2.buildSubscriptionQuery(EventType::SPACE_DELETE, EventSelectorType::SPACE_ID, spaceId),
+    });
+    // Drains: connecting and subscribing put other events in front of the one waited for.
+    const auto awaitChange = [&]() -> std::optional<SpaceChangedEvent> {
+        for (int i = 0; i < 20; ++i) {
+            auto holder = eventQueue.getEvent();
+            if (!holder.has_value()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(150));
+            } else if (Events::isSpaceChangedEvent(holder.value())) {
+                return Events::extractSpaceChangedEvent(holder.value());
+            }
+        }
+        return std::nullopt;
+    };
+
+    EXPECT_EQ(groupApi2.getSpace(spaceId).keyVersion, 1);
+    groupApi->rotateSpaceKey(spaceId);
+    auto rotated = awaitChange();
+    ASSERT_TRUE(rotated.has_value());
+    EXPECT_EQ(rotated->data.spaceId, spaceId);
+    EXPECT_EQ(rotated->data.contextId, contextId());
+    EXPECT_EQ(rotated->data.changeKind, "keyRotated");
+    EXPECT_EQ(rotated->data.keyVersion, 2);
+    // The event dropped the cached read, so this one is fresh and verified.
+    EXPECT_EQ(groupApi2.getSpace(spaceId).keyVersion, 2);
+
+    groupApi->deleteSpace(spaceId);
+    auto deleted = awaitChange();
+    ASSERT_TRUE(deleted.has_value());
+    EXPECT_EQ(deleted->data.spaceId, spaceId);
+    EXPECT_EQ(deleted->data.changeKind, "deleted");
+
+    // A custom channel is a Group's thing; a Space query never names one.
+    EXPECT_ANY_THROW({ groupApi2.subscribeFor({"context/spaces/custom/typing|containerId=" + spaceId}); });
+    connection2->disconnect();
 }

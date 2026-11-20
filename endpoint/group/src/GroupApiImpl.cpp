@@ -785,6 +785,21 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
             auto data = Mapper::mapToGroupDeletedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupDeletedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
+        } else if (type == "spaceCreated" || type == "spaceUpdated" || type == "spaceDeleted") {
+            auto raw = server::SpaceChangedEventData::fromJSON(notification.data);
+            // The cached read only. The pinned history stays: the event is the bridge's word alone, and the next
+            // read of the Space verifies whatever it says against that pin.
+            _spaces.erase(raw.spaceId);
+            SpaceChangedEventData data{
+                .spaceId = raw.spaceId,
+                .contextId = raw.contextId,
+                .keyVersion = raw.keyVersion.value_or(0),
+                .publicMetaVersion = raw.publicMetaVersion.value_or(0),
+                .privateMetaVersion = raw.privateMetaVersion.value_or(0),
+                .changeKind = type == "spaceDeleted" ? "deleted" : raw.changeKind.value_or("")
+            };
+            auto event = core::EventBuilder::buildEvent<SpaceChangedEvent>("context", data, notification);
+            _eventMiddleware->emitApiEvent(event);
         } else {
             LOG_ERROR("UNRESOLVED EVENT in CPP layer: '", type, "'");
         }

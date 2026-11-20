@@ -95,3 +95,25 @@ GroupDeletedEvent Events::extractGroupDeletedEvent(const core::EventHolder& even
     }
     return *event;
 }
+
+std::string SpaceChangedEvent::toJSON() const {
+    return core::JsonSerializer<SpaceChangedEvent>::serialize(*this);
+}
+
+std::shared_ptr<core::SerializedEvent> SpaceChangedEvent::serialize() const {
+    return std::make_shared<core::SerializedEvent>(
+        core::SerializedEvent{core::EventVarSerializer::getInstance()->serialize(*this)}
+    );
+}
+
+bool Events::isSpaceChangedEvent(const core::EventHolder& eventHolder) {
+    return eventHolder.type() == "spaceChanged";
+}
+
+SpaceChangedEvent Events::extractSpaceChangedEvent(const core::EventHolder& eventHolder) {
+    auto event = std::dynamic_pointer_cast<SpaceChangedEvent>(eventHolder.get());
+    if (!event) {
+        throw CannotExtractSpaceChangedEventException();
+    }
+    return *event;
+}

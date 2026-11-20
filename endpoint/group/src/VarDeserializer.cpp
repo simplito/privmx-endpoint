@@ -61,6 +61,12 @@ group::EventType VarDeserializer::deserialize<group::EventType>(
         return group::EventType::GROUP_UPDATE;
     case group::EventType::GROUP_DELETE:
         return group::EventType::GROUP_DELETE;
+    case group::EventType::SPACE_CREATE:
+        return group::EventType::SPACE_CREATE;
+    case group::EventType::SPACE_UPDATE:
+        return group::EventType::SPACE_UPDATE;
+    case group::EventType::SPACE_DELETE:
+        return group::EventType::SPACE_DELETE;
     }
     throw InvalidParamsException(
         name + " | " + ("Unknown group::EventType value, received " + std::to_string(val.convert<int64_t>()))
@@ -78,6 +84,8 @@ group::EventSelectorType VarDeserializer::deserialize<group::EventSelectorType>(
         return group::EventSelectorType::CONTEXT_ID;
     case group::EventSelectorType::GROUP_ID:
         return group::EventSelectorType::GROUP_ID;
+    case group::EventSelectorType::SPACE_ID:
+        return group::EventSelectorType::SPACE_ID;
     }
     throw InvalidParamsException(
         name + " | " + ("Unknown group::EventSelectorType value, received " + std::to_string(val.convert<int64_t>()))

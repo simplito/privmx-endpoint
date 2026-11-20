@@ -316,6 +316,15 @@ JSON_STRUCT(GroupDeletedEventData, GROUP_DELETED_EVENT_DATA_FIELDS);
     F(keyVersion, int64_t)                                                                                             \
     F(changeKind, std::string)
 JSON_STRUCT(GroupChangedEventData, GROUP_CHANGED_EVENT_DATA_FIELDS);
+// `spaceDeleted` carries the two ids only; the rest stays at its default.
+#define SPACE_CHANGED_EVENT_DATA_FIELDS(F)                                                                             \
+    F(spaceId, std::string)                                                                                            \
+    F(contextId, std::string)                                                                                          \
+    F(keyVersion, std::optional<int64_t>)                                                                              \
+    F(publicMetaVersion, std::optional<int64_t>)                                                                       \
+    F(privateMetaVersion, std::optional<int64_t>)                                                                      \
+    F(changeKind, std::optional<std::string>)
+JSON_STRUCT(SpaceChangedEventData, SPACE_CHANGED_EVENT_DATA_FIELDS);
 
 // One newcomer. Their seat is `transition.positions[i]` — named in one place, so the two cannot disagree.
 // A batch is not k additions sent together: the newcomers' paths overlap, so the delta re-keys their union once.

@@ -111,6 +111,7 @@ DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, SpaceRecipientUnavailableExce
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupAlreadyExistsException, "A Group or Space already exists, or existed, under this subject", 0x0021)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupWrongCreatorException, "The Group or Space was created by someone other than the expected user", 0x0022)
 DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, GroupSubjectReboundException, "This device knows the subject under another Group", 0x0023)
+DECLARE_ENDPOINT_EXCEPTION(EndpointGroupException, CannotExtractSpaceChangedEventException, "Cannot extract SpaceChangedEvent", 0x0024)
 // clang-format on
 } // namespace group
 } // namespace endpoint

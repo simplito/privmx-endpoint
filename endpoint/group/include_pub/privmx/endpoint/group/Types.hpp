@@ -693,11 +693,15 @@ enum EventType : int64_t {
     GROUP_CREATE = 0,
     GROUP_UPDATE = 1,
     GROUP_DELETE = 2,
+    SPACE_CREATE = 3,
+    SPACE_UPDATE = 4,
+    SPACE_DELETE = 5,
 };
 
 enum EventSelectorType : int64_t {
     CONTEXT_ID = 0,
     GROUP_ID = 1,
+    SPACE_ID = 2,
 };
 
 } // namespace group

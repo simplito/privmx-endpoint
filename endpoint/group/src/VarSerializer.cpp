@@ -488,6 +488,26 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupDeletedEvent>(const grou
 }
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceChangedEventData>(const group::SpaceChangedEventData& val) {
+    Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+    if (_options.addType) {
+        obj->set("__type", "group$SpaceChangedEventData");
+    }
+    obj->set("spaceId", serialize(val.spaceId));
+    obj->set("contextId", serialize(val.contextId));
+    obj->set("keyVersion", serialize(val.keyVersion));
+    obj->set("publicMetaVersion", serialize(val.publicMetaVersion));
+    obj->set("privateMetaVersion", serialize(val.privateMetaVersion));
+    obj->set("changeKind", serialize(val.changeKind));
+    return obj;
+}
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceChangedEvent>(const group::SpaceChangedEvent& val) {
+    return serializeBaseWithData<Event>(val, "group$SpaceChangedEvent");
+}
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::GroupCustomEventData>(const group::GroupCustomEventData& val) {
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     if (_options.addType) {
