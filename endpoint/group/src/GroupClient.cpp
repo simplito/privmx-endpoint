@@ -16,7 +16,6 @@ limitations under the License.
 #include <algorithm>
 #include <set>
 
-#include <Poco/UUIDGenerator.h>
 #include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 
@@ -434,7 +433,7 @@ std::string GroupClient::create(
     }
 }
 
-GroupHandle GroupClient::createGroupFor(
+GroupHandle GroupClient::createGroup(
     const Path& subject,
     const std::vector<GroupMemberToAdd>& members,
     const core::Buffer& publicMeta,
@@ -443,21 +442,6 @@ GroupHandle GroupClient::createGroupFor(
     const std::string& visibleTo
 ) {
     return GroupHandle(_api, _contextId, create(subject, members, publicMeta, privateMeta, rules, visibleTo), subject);
-}
-
-CreatedGroup GroupClient::createGroup(
-    const Path& kind,
-    const std::vector<GroupMemberToAdd>& members,
-    const core::Buffer& publicMeta,
-    const core::Buffer& privateMeta,
-    const std::optional<GroupRules>& rules,
-    const std::string& visibleTo
-) {
-    // Made here, at random: nobody knew the subject before its Group existed.
-    const core::Buffer id = GroupApi::idFromString(Poco::UUIDGenerator().createRandom().toString());
-    Path subject = kind;
-    subject.push_back(PathSegment{.isId = true, .value = id});
-    return CreatedGroup{.group = createGroupFor(subject, members, publicMeta, privateMeta, rules, visibleTo), .id = id};
 }
 
 void GroupClient::check(const OpenGroupItem& item, const Group& state) {

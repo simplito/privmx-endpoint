@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <Poco/UUIDGenerator.h>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/Connection.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
@@ -40,9 +41,18 @@ struct MessageRow {
     core::Buffer body;
 };
 
-// The library makes the chat's ID together with the Group: created.id is what the chat row gets.
+struct CreatedGroup {
+    GroupHandle group;
+    core::Buffer id;
+};
+
+// The app makes the chat's ID at random right before the Group: created.id is what the chat row gets.
 static CreatedGroup createChat(GroupClient& groups, const std::vector<GroupMemberToAdd>& members) {
-    return groups.createGroup({name("chat-app"), name("chat")}, members, {}, core::Buffer::from("Design"));
+    const core::Buffer chatId = GroupApi::idFromString(Poco::UUIDGenerator().createRandom().toString());
+    return CreatedGroup{
+        .group = groups.createGroup({name("chat-app"), name("chat"), id(chatId)}, members, {}, core::Buffer::from("Design")),
+        .id = chatId
+    };
 }
 
 static Path directSubject(std::string me, std::string peer) {
@@ -243,7 +253,7 @@ TEST_F(GroupClientTest, chat_a_group_made_with_its_entity_is_opened_by_subject_a
     EXPECT_TRUE(mayStore(first, created.group.getGroupId(), 1));
     // The same subject a second time: somebody has made its Group, and it was not this call.
     EXPECT_THROW(
-        { groups.createGroupFor(subject, {member(1, "manager")}, {}, {}); }, GroupAlreadyExistsException
+        { groups.createGroup(subject, {member(1, "manager")}, {}, {}); }, GroupAlreadyExistsException
     );
     // A place is said: every value of the chat would otherwise sit at the same spot.
     EXPECT_THROW({ created.group.encrypt(GroupApi::noLocation(), core::Buffer::from("x")); }, core::InvalidParamsException);
@@ -303,7 +313,7 @@ TEST_F(GroupClientTest, chat_a_direct_chat_is_a_fixed_group_of_exactly_its_two_u
     // other users. Whoever opens that chat names its members, and gets a refusal.
     switchTo(3);
     const Path forged = directSubject(userId(1), fresh("nobody"));
-    GroupHandle trap = groups.createGroupFor(forged, {member(3, "manager"), member(1, "user")}, {}, {});
+    GroupHandle trap = groups.createGroup(forged, {member(3, "manager"), member(1, "user")}, {}, {});
     switchTo(1);
     EXPECT_THROW({ groups.openFixedGroup(forged, {userId(1), userId(2)}); }, GroupMembershipMismatchException);
     EXPECT_EQ(groups.openGroup(forged).getGroupId(), trap.getGroupId());
@@ -354,11 +364,11 @@ TEST_F(GroupClientTest, many_groups_open_with_one_read_and_a_group_with_its_own_
 TEST_F(GroupClientTest, records_three_audiences_a_writer_that_cannot_read_and_a_sequence) {
     const core::Buffer patientId = GroupApi::idFromString(fresh("patient"));
     const core::Buffer dischargeId = GroupApi::idFromString("d1"), resultId = GroupApi::idFromString("r1");
-    GroupHandle care = groups.createGroupFor(patient(patientId), {member(1, "manager")}, {}, {}, std::nullopt, "context");
+    GroupHandle care = groups.createGroup(patient(patientId), {member(1, "manager")}, {}, {}, std::nullopt, "context");
     switchTo(2);
     GroupHandle billingGroup;
     try {
-        billingGroup = groups.createGroupFor(billing(), {member(2, "manager")}, {}, {}, std::nullopt, "context");
+        billingGroup = groups.createGroup(billing(), {member(2, "manager")}, {}, {}, std::nullopt, "context");
     } catch (const GroupAlreadyExistsException&) { billingGroup = groups.openGroup(billing()); }
 
     switchTo(1);
@@ -429,9 +439,9 @@ TEST_F(GroupClientTest, records_three_audiences_a_writer_that_cannot_read_and_a_
 
 TEST_F(GroupClientTest, space_one_key_for_two_teams_named_by_their_subjects) {
     const std::string projectId = fresh("project"), salesId = fresh("sales"), supportId = fresh("support");
-    groups.createGroupFor(team(salesId), {member(1, "manager"), member(2, "user")}, {}, {}, std::nullopt, "context");
+    groups.createGroup(team(salesId), {member(1, "manager"), member(2, "user")}, {}, {}, std::nullopt, "context");
     switchTo(3);
-    groups.createGroupFor(team(supportId), {member(3, "manager")}, {}, {}, std::nullopt, "context");
+    groups.createGroup(team(supportId), {member(3, "manager")}, {}, {}, std::nullopt, "context");
     switchTo(1);
 
     EXPECT_THROW({ createProjectSpace(groups, projectId, salesId, userId(1), supportId, userId(2)); }, GroupWrongCreatorException);

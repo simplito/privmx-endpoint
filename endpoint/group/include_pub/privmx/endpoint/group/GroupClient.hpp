@@ -257,7 +257,8 @@ private:
 
 struct OpenGroupOptions {
     /**
-     * For a Group made with createGroupFor: the user who created the entity. The Group's first, signed commit
+     * The user who created the entity; needed unless the entity's identifier was made at random right before
+     * createGroup. The Group's first, signed commit
      * names who created the Group; if it is someone else, openGroup throws GroupWrongCreatorException.
      * For a Space the creator is the Bridge's word: a Space has no signed history.
      */
@@ -281,12 +282,6 @@ struct OpenGroupResult {
     GroupHandle group;
 };
 
-struct CreatedGroup {
-    GroupHandle group;
-    /** The identifier the library made for the new entity: the last segment of the Group's subject. */
-    core::Buffer id;
-};
-
 /**
  * The Groups of one Context, addressed by subject: {"contact", "chat", <chatId>}.
  *
@@ -296,12 +291,13 @@ struct CreatedGroup {
  * Whoever knows a subject before its Group exists can create that Group first, with the right members and
  * themselves. The ways to create and open a Group differ in who can do that to you.
  *
- *   createGroupFor + openGroup{createdBy}   The entity has its own identifier (new or existing); the Group
- *       may be created after it. Another user of the Context is caught: createGroupFor throws
- *       GroupAlreadyExistsException, and openGroup throws when the Group's creator is not the one expected.
- *       The application's own server is not caught if it also lies about the creator.
- *   createGroup + openGroup                 A new entity whose identifier is made here, at random. Nobody knew
- *       it before the Group existed: neither another user nor the server can have created the Group first.
+ *   createGroup + openGroup                 A new entity whose identifier the caller makes at random right
+ *       before createGroup (GroupApi::idFromString of a fresh UUID). Nobody knew it before the Group existed:
+ *       neither another user nor the server can have created the Group first.
+ *   createGroup + openGroup{createdBy}      The entity's identifier was known earlier (the server numbered it,
+ *       an existing record); the Group may be created after it. Another user of the Context is caught:
+ *       createGroup throws GroupAlreadyExistsException, and openGroup throws when the Group's creator is not
+ *       the one expected. The application's own server is not caught if it also lies about the creator.
  *   (GroupApi) + openPinnedGroup            A Group that already exists under an ID of its own. The first time,
  *       the ID is taken on trust; from then on this device refuses any other Group for that subject.
  *   createFixedGroup + openFixedGroup       A subject the caller chose and a roster frozen for good; opening
@@ -318,23 +314,15 @@ public:
     GroupClient() = default;
 
     /**
-     * Creates the Group of an entity that has its own identifier. Throws GroupAlreadyExistsException when the
-     * subject has a Group: if the caller did not create it, someone else did.
+     * Creates the Group of the entity `subject` names. Call it once per entity. Throws
+     * GroupAlreadyExistsException when the subject has a Group: if the caller did not create it, someone else did.
+     *
+     * For a new entity, make its identifier at random right before the call (a fresh UUID through
+     * GroupApi::idFromString); openGroup(subject) is then enough. For an identifier that was known before this
+     * call, always open with OpenGroupOptions::createdBy.
      */
-    GroupHandle createGroupFor(
+    GroupHandle createGroup(
         const Path& subject,
-        const std::vector<GroupMemberToAdd>& members,
-        const core::Buffer& publicMeta,
-        const core::Buffer& privateMeta,
-        const std::optional<GroupRules>& rules = std::nullopt,
-        const std::string& visibleTo = "members"
-    );
-    /**
-     * Creates a Group for a new entity of `kind` ({"contact", "chat"}). The entity's identifier is made here;
-     * the subject is kind + that identifier.
-     */
-    CreatedGroup createGroup(
-        const Path& kind,
         const std::vector<GroupMemberToAdd>& members,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
@@ -386,7 +374,7 @@ public:
 
     // ── Spaces ──
     /**
-     * Creates the Space of an entity. As with createGroupFor: call it once, open with `createdBy`.
+     * Creates the Space of an entity. As with createGroup: call it once, open with `createdBy`.
      * Throws GroupAlreadyExistsException when a Space under this subject exists.
      */
     Space createSpaceFor(
