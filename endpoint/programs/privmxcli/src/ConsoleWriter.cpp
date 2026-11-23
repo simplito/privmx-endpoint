@@ -18,6 +18,7 @@ ConsoleWriter::ConsoleWriter(std::thread::id main_thread_id, std::shared_ptr<Cli
     _main_thread_id(main_thread_id), _config(config), _loading_animation(LoadingAnimation()) {}
 
 void ConsoleWriter::print_info(std::string message, bool disable_animation) {
+    if(_config->quiet) return;
     if(_config->is_rl_input && std::this_thread::get_id() != _main_thread_id){
         rl_clear_visible_line();
     }
@@ -38,6 +39,21 @@ void ConsoleWriter::print_info(std::string message, bool disable_animation) {
 }
 
 void ConsoleWriter::print_result(Status status, std::chrono::duration<double> time, const std::string& result_message, const std::string& status_info) {
+    bool is_error = status == Status::Error || status == Status::ErrorInvalidInput;
+    if(is_error && std::this_thread::get_id() == _main_thread_id) {
+        _had_error = true;
+    }
+    if(_config->quiet) {
+        if(!result_message.empty()) {
+            if(status == Status::Success) {
+                result_output << result_message << std::endl;
+            } else {
+                std::cerr << result_message << std::endl;
+            }
+        }
+        if(is_error && _config->stop_on_error) exit(EXIT_FAILURE);
+        return;
+    }
     if(_config->is_rl_input && std::this_thread::get_id() == _main_thread_id){
         #ifndef PRIVMX_USE_DEBUG
         _loading_animation.stop();
@@ -69,5 +85,5 @@ void ConsoleWriter::print_result(Status status, std::chrono::duration<double> ti
         rl_on_new_line();
         rl_redisplay();
     }
-    if(status == Status::Error && _config->stop_on_error) exit(EXIT_FAILURE);
+    if(is_error && _config->stop_on_error) exit(EXIT_FAILURE);
 }

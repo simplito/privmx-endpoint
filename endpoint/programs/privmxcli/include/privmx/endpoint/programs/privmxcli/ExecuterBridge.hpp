@@ -39,7 +39,7 @@ namespace privmxcli {
 class ExecuterBridge {
 public:
     ExecuterBridge(std::thread::id main_thread_id, std::shared_ptr<CliConfig> config, std::shared_ptr<ConsoleWriter> console_writer);
-    bool execute(const func_enum& fun_code, const Tokens &st);
+    bool execute(const func_enum& fun_code, const Tokens &st, const std::string& result_var = last_result_var);
     bool execute_help(const func_enum& fun_code, const std::string& function_name);
     std::string  get_all_function_help_printable_string();
 private:

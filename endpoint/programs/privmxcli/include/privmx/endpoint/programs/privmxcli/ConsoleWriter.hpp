@@ -8,6 +8,7 @@ This software is Licensed under the PrivMX Free License.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+#include <atomic>
 #include <string>
 #include <thread>
 #include <chrono>
@@ -33,10 +34,14 @@ public:
     ConsoleWriter(std::thread::id main_thread_id, std::shared_ptr<CliConfig>  config);
     void print_info(std::string message, bool disable_animation = false);
     void print_result(Status status, std::chrono::duration<double> time, const std::string& result_message = std::string(), const std::string& status_info = std::string());
+    // set by any failed command run on the main thread, results from detached threads are ignored
+    bool hadError() const { return _had_error; }
+    void clearError() { _had_error = false; }
 private:
     std::thread::id _main_thread_id;
     std::shared_ptr<CliConfig> _config;
     LoadingAnimation _loading_animation;
+    std::atomic<bool> _had_error = false;
 };
 
 

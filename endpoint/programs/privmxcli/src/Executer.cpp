@@ -51,12 +51,7 @@ void Executer::setFA(const std::string &key, const std::string &value){
 }
 
 void Executer::setS(const std::string &key, const Poco::Dynamic::Var &value){
-    auto it = session.find(key);
-    if(it == session.end()) {
-        session[key] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var(value));
-        return;
-    }
-    session[key]->operator=(value);
+    setSessionVar(key, value);
 }
 
 void Executer::setSA(const std::string &key, const std::string &key_2){
@@ -96,51 +91,61 @@ std::shared_ptr<Poco::Dynamic::Var> Executer::getS_ptr(const string &key){
 }
 
 Poco::Dynamic::Var Executer::getS_var(const string &key){
-    auto it = session.find(key);
-    if(it == session.end()){
-        return Poco::Dynamic::Var(key);
-    }
-    return Poco::Dynamic::Var(*((*it).second));
+    return getSessionVar(key);
 }
 
 void Executer::addF(const std::string &key, const Poco::Dynamic::Var &value) {
     auto it = session.find(key);
     if(it != session.end()){
-        session[key]->operator=(value.convert<std::string>() + (*it).second->convert<std::string>());
-        return;
+        setSessionVar(key, value.convert<std::string>() + (*it).second->convert<std::string>());
     } else {
-        session[key] = std::make_shared<Poco::Dynamic::Var>(value);
-        return;
+        setSessionVar(key, value);
     }
-    cout << ConsoleStatusColor::error_critical << key << ": Unknown Data" << endl;
 }
 
 void Executer::addB(const std::string &key, const Poco::Dynamic::Var &value) {
     auto it = session.find(key);
     if(it != session.end()){
-        session[key]->operator=((*it).second->convert<std::string>() + value.convert<std::string>());
-        return;
+        setSessionVar(key, (*it).second->convert<std::string>() + value.convert<std::string>());
     } else {
-        session[key] = std::make_shared<Poco::Dynamic::Var>(value);
-        return;
+        setSessionVar(key, value);
     }
-    cout << ConsoleStatusColor::error_critical << key << ": Unknown Data" << endl;    
 }
 
-string Executer::readFileToString(const string& path) {
-    ifstream f_stream(path);
+optional<string> Executer::readFileToString(const string& path) {
+    ifstream f_stream(path, ios::binary);
+    if(!f_stream.is_open()) {
+        return nullopt;
+    }
     stringstream buf;
     buf << f_stream.rdbuf();
+    if(f_stream.bad()) {
+        return nullopt;
+    }
     return buf.str();
 }
 
-void Executer::writeFileFromString(const string& content, const string& path) {
-    ofstream f_stream(path);
+bool Executer::writeFileFromString(const string& content, const string& path) {
+    ofstream f_stream(path, ios::binary);
+    if(!f_stream.is_open()) {
+        return false;
+    }
     f_stream << content;
+    f_stream.close();
+    return f_stream.good();
 }
 
-void Executer::execute(const Tokens &st) {
-    if(st.size() == 0) return;
+void Executer::execute(const Tokens &input) {
+    if(input.size() == 0) return;
+
+    // "VAR = func ARGS" stores the result under VAR, every call also stores it under "last_result"
+    std::string result_var = last_result_var;
+    Tokens assignment_tokens;
+    if(input.size() >= 3 && input[1] == "=" && isValidVarName(input[0]) && getFunc(input[0]) == nonfunc) {
+        result_var = input[0];
+        assignment_tokens.assign(input.begin() + 2, input.end());
+    }
+    const Tokens &st = assignment_tokens.empty() ? input : assignment_tokens;
 
     std::thread t;
     _timer_start = std::chrono::system_clock::now();
@@ -233,22 +238,33 @@ void Executer::execute(const Tokens &st) {
                     _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
                     return;
                 }
-                string tmp = readFileToString(st[2]);
-                setS(st[1], tmp);
-                setS(st[1] + "_size", tmp.size());
+                auto tmp = readFileToString(st[2]);
+                if(!tmp.has_value()) {
+                    _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Cannot read file " + st[2]);
+                    return;
+                }
+                setS(st[1], tmp.value());
+                // stored as text so that it can be read back with get and ${}
+                setS(st[1] + "_size", std::to_string(tmp.value().size()));
                 _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             }
             return;
         case swriteFile:
             CHECK_ST_ARGS(2);
-            {   
+            {
+                _console_writer->print_info("writing file");
                 if(!isValidVarName(st[1])) {
                     _console_writer->print_result(Status::ErrorInvalidInput, chrono::system_clock::now() - _timer_start, "Invalid var name "  + st[1]);
                     return;
                 }
-                auto data = getS_ptr(st[1]);
-                if(data->type() == typeid(std::string)) {
-                    writeFileFromString(data->convert<std::string>(), st[2]);
+                auto data = getS_var(st[1]);
+                if(data.type() != typeid(std::string)) {
+                    _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, st[1] + ": Unknown Data");
+                    return;
+                }
+                if(!writeFileFromString(data.convert<std::string>(), st[2])) {
+                    _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Cannot write file " + st[2]);
+                    return;
                 }
                 _console_writer->print_result(Status::Success, chrono::system_clock::now() - _timer_start);
             }
@@ -326,13 +342,16 @@ void Executer::execute(const Tokens &st) {
         default:
             {
                 if(fun_code == func_enum::core_waitEvent) {
-                    auto t = std::thread([&](func_enum function_code, const Tokens &st){_endpoint.execute(function_code, st);}, fun_code, st);
+                    auto t = std::thread(
+                        [&](func_enum function_code, const Tokens &st, const std::string &result_var){_endpoint.execute(function_code, st, result_var);},
+                        fun_code, st, result_var
+                    );
                     t.detach();
                     return;
-                } else if (_endpoint.execute(fun_code, st)) {
+                } else if (_endpoint.execute(fun_code, st, result_var)) {
                     return;
-                } 
-                if(_bridge.execute(fun_code, st)) return;
+                }
+                if(_bridge.execute(fun_code, st, result_var)) return;
                 _console_writer->print_result(Status::Error, chrono::system_clock::now() - _timer_start, "Function execute not found -" + st[0]);
             }
     }
@@ -449,9 +468,10 @@ bool Executer::isNumber(const std::string &val) {
 }
 
 string Executer::getS_printable(const std::string &key) {
-    auto var = getS_ptr(key);
-    if(var->type() == typeid(std::string)) {
-        std::string val = var->convert<std::string>();
+    auto var = getS_var(key);
+    if(var.type() == typeid(std::string)) {
+        std::string val = var.convert<std::string>();
+        if(_config->quiet) return val;
         if(isNumber(val)) {
             switch (_config->get_format) {
                 case get_format_type::bash:
