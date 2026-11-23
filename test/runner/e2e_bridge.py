@@ -68,7 +68,7 @@ def check_backend_ready() -> None:
             serverSelectionTimeoutMS=BACKEND_READY_TIMEOUT_SECONDS * 1000,
         )
         try:
-            wait_for_writable_primary(client, BACKEND_READY_TIMEOUT_SECONDS)
+            wait_for_writable_primary(client, MONGO_PRIMARY_TIMEOUT_SECONDS)
         finally:
             client.close()
     except Exception as exc:
