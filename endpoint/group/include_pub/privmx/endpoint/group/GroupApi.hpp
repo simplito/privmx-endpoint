@@ -699,14 +699,14 @@ public:
     );
     static std::string deriveSpaceId(const std::string& contextId, const core::Buffer& idSeed);
     /**
-     * The one spelling of a path, as bytes: what GroupClient gives deriveGroupId and deriveSpaceId as the seed
+     * The one spelling of a path, as bytes: what a high-level client gives deriveGroupId and deriveSpaceId as the seed
      * of a Group or Space addressed by its subject. Two paths give the same bytes only when they have the same
      * segments, each of the same kind.
      */
     static core::Buffer encodePath(const Path& path);
     /**
      * Ties a Group to a subject on this device (in the PinStore). Throws GroupSubjectReboundException when the
-     * device already knows the subject under another Group. For GroupClient::openPinnedGroup.
+     * device already knows the subject under another Group. For a high-level client's "open pinned" (a wrapper's GroupClient).
      */
     void pinGroupToSubject(const std::string& contextId, const Path& subject, const std::string& groupId);
     SpaceState getSpace(const std::string& spaceId);

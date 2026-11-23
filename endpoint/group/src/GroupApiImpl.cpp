@@ -1219,7 +1219,7 @@ std::vector<WireRecipient> GroupApiImpl::wireRecipients(
     std::vector<WireRecipient> recipients;
     std::vector<std::string> groupIds;
     for (const EnvelopeRecipient& recipient : alsoFor) {
-        if (recipient.groupId.empty() == !recipient.user.has_value() || !recipient.groupSubject.empty()) {
+        if (recipient.groupId.empty() == !recipient.user.has_value()) {
             throw core::InvalidParamsException("a recipient is one group, by its ID, or one user");
         }
         if (!recipient.groupId.empty()) {

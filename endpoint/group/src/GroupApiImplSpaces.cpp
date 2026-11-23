@@ -635,7 +635,7 @@ std::string GroupApiImpl::createSpace(
     std::vector<core::UserWithPubKey> users;
     group::server::SpaceCreateModel model;
     for (const SpaceRecipient& recipient : recipients) {
-        if (recipient.groupId.empty() == !recipient.user.has_value() || !recipient.groupSubject.empty()) {
+        if (recipient.groupId.empty() == !recipient.user.has_value()) {
             throw core::InvalidParamsException("a Space recipient is one group, by its ID, or one user");
         }
         requireRole(recipient.role);
@@ -776,7 +776,7 @@ void GroupApiImpl::addSpaceRecipients(const std::string& spaceId, const std::vec
     group::server::SpaceAddRecipientsModel model;
     model.id = spaceId;
     for (const SpaceRecipient& recipient : recipients) {
-        if (recipient.groupId.empty() == !recipient.user.has_value() || !recipient.groupSubject.empty()) {
+        if (recipient.groupId.empty() == !recipient.user.has_value()) {
             throw core::InvalidParamsException("a Space recipient is one group, by its ID, or one user");
         }
         requireRole(recipient.role);
@@ -900,7 +900,7 @@ std::int64_t GroupApiImpl::removeSpaceRecipients(
     std::vector<std::string> groups;
     std::vector<std::string> users;
     for (const SpaceRecipientRef& recipient : recipients) {
-        if (recipient.groupId.empty() == recipient.userId.empty() || !recipient.groupSubject.empty()) {
+        if (recipient.groupId.empty() == recipient.userId.empty()) {
             throw core::InvalidParamsException("a recipient to remove is one group or one user");
         }
         (recipient.groupId.empty() ? users : groups)

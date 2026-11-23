@@ -76,14 +76,11 @@ target_link_libraries(test_e2e_InboxGroupScenarioTest privmx privmxendpointcore 
 # Tree-backed groups end to end (only place the full round trip runs; unit tests and the conformance fixture each cover just one side)
 add_executable(test_e2e_GroupKeyTreeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupKeyTreeTest.cpp)
 target_link_libraries(test_e2e_GroupKeyTreeTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
-# A hostile client against the key tree: a group's key worn as a user's, nested groups, seat churn, a concurrent
-# add and remove of one member. Needs the Bridge management API key from the dataset ini to register context users.
-add_executable(test_e2e_GroupClientTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupClientTest.cpp)
-target_link_libraries(test_e2e_GroupClientTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
-
 add_executable(test_e2e_GroupSpaceTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupSpaceTest.cpp)
 target_link_libraries(test_e2e_GroupSpaceTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 
+# A hostile client against the key tree: a group's key worn as a user's, nested groups, seat churn, a concurrent
+# add and remove of one member. Needs the Bridge management API key from the dataset ini to register context users.
 add_executable(test_e2e_GroupKeyTreeIntegrityTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupKeyTreeIntegrityTest.cpp)
 target_link_libraries(test_e2e_GroupKeyTreeIntegrityTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 # Lock
