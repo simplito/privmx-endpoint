@@ -147,6 +147,11 @@ target_link_libraries(test_unit_StoreFileFormatTest privmx privmxendpointcore pr
 target_compile_definitions(test_unit_StoreFileFormatTest
     PRIVATE PRIVMX_DEFAULT_FILE_CIPHER_ID=${PRIVMX_DEFAULT_FILE_CIPHER_ID})
 
+# The entry frame's two framings, and the marker that tells them apart.
+add_executable(test_unit_InboxEntryFrameTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/InboxEntryFrameTest.cpp)
+target_link_libraries(test_unit_InboxEntryFrameTest
+    privmx privmxendpointcore privmxendpointstore privmxendpointinbox Poco::Foundation GTest::GTest GTest::Main)
+
 # The file format an Inbox publishes for its senders, who may be unauthenticated.
 add_executable(test_unit_InboxPublicCipherTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/InboxPublicCipherTest.cpp)
 target_link_libraries(test_unit_InboxPublicCipherTest

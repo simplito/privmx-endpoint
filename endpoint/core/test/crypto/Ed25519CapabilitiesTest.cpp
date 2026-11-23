@@ -30,6 +30,7 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/crypto/Ecies.hpp>
 #include <privmx/endpoint/core/crypto/FormatHash.hpp>
@@ -40,6 +41,7 @@ limitations under the License.
 
 using namespace privmx::endpoint::core;
 namespace cs = privmx::cryptoservice;
+namespace epcrypto = privmx::endpoint::crypto;
 
 namespace {
 
@@ -238,6 +240,55 @@ TEST(Ed25519Composed, SignsAndIsWrappedToThroughOneIdentity) {
     EXPECT_EQ(containerKey, Ecies::decrypt(bob, wrapped));
 
     EXPECT_EQ(alice.derive(bob.getPublicKey()), bob.derive(alice.getPublicKey()));
+}
+
+/**
+ * Naming an expected sender means the same on a composed identity as on a plain one.
+ *
+ * The wrap's header carries the sender's agreement key and the wrapping key is derived from it, so a
+ * frame naming a sender whose private half the writer does not hold simply fails to open. That alone
+ * proves "somebody who holds a key made this" — not "the one the caller named made this". Mallory is
+ * a perfectly good key holder, so without comparing the header against `pubOfSignature` her wrap is
+ * accepted as Alice's.
+ *
+ * This went unnoticed because the composed branch validated the argument and then dropped it: the
+ * classical branch got the check from `IPrivateKey::open`, and `scripts/build.sh` pins the composed
+ * one, so the default build was the build where it did nothing.
+ */
+TEST(Ed25519Composed, AWrapFromSomeoneElseIsRefusedWhenASenderIsNamed) {
+    const PrivateKey alice = composedIdentity(std::string(32, 'a'));
+    const PrivateKey bob = composedIdentity(std::string(32, 'b'));
+    const PrivateKey mallory = composedIdentity(std::string(32, 'm'));
+    const std::string containerKey(32, 'k');
+
+    const std::string fromMallory = Ecies::encrypt(bob.getPublicKey(), containerKey, mallory);
+
+    // It opens — Mallory holds a key, and the frame is hers to make.
+    EXPECT_EQ(containerKey, Ecies::decrypt(bob, fromMallory));
+    // It must not open as Alice's.
+    EXPECT_THROW(
+        Ecies::decrypt(bob, fromMallory, alice.getPublicKey()),
+        epcrypto::AsymmetricKeyFailureException
+    );
+    // Named correctly, it still opens, so the check refuses only what it should.
+    EXPECT_EQ(containerKey, Ecies::decrypt(bob, fromMallory, mallory.getPublicKey()));
+}
+
+/// The same on a post-quantum identity, whose frame carries an encapsulation between the header and
+/// the payload — the header the check reads is in the same place.
+TEST(Ed25519Composed, APostQuantumWrapFromSomeoneElseIsAlsoRefused) {
+    const PrivateKey alice = PrivateKey::fromRaw(std::string(32, 'a'), cs::AsymAlg::X25519MLKEM768);
+    const PrivateKey bob = PrivateKey::fromRaw(std::string(32, 'b'), cs::AsymAlg::X25519MLKEM768);
+    const PrivateKey mallory = PrivateKey::fromRaw(std::string(32, 'm'), cs::AsymAlg::X25519MLKEM768);
+    const std::string containerKey(32, 'k');
+
+    const std::string fromMallory = Ecies::encrypt(bob.getPublicKey(), containerKey, mallory);
+
+    EXPECT_THROW(
+        Ecies::decrypt(bob, fromMallory, alice.getPublicKey()),
+        epcrypto::AsymmetricKeyFailureException
+    );
+    EXPECT_EQ(containerKey, Ecies::decrypt(bob, fromMallory, mallory.getPublicKey()));
 }
 
 /**

@@ -16,11 +16,78 @@ limitations under the License.
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
 #include <privmx/utils/BinaryBufferBE.hpp>
 
+#include "privmx/endpoint/inbox/InboxException.hpp"
 #include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataEncryptorV1.hpp"
 
 using namespace privmx;
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::inbox;
+
+namespace {
+
+/**
+ * Telling the two framings of this entry apart.
+ *
+ * Two length prefixes here widened from one octet to two when a post-quantum public key stopped
+ * fitting in 255 bytes: the public block's own length, and the sender key's inside it. The frame
+ * carried no version marker, so the widened reader had no way to know it was looking at an older
+ * entry and rejected every one of them as corrupt.
+ *
+ * Shape alone cannot settle it. Reading an old frame's one-octet length as two octets usually
+ * overruns the buffer, but not always: the overrun is only certain while the ECIES wrap is short,
+ * and an entry's text has no bound. A long enough entry makes the two framings genuinely
+ * indistinguishable, so guessing would fail on exactly the entries hardest to notice.
+ *
+ * So the new frame says what it is. An old frame opens with the one-octet length of its public
+ * block, and that is never zero — the block always carries at least a sender key — which leaves
+ * `0x00` free as a marker, followed by a version octet. Dispatch is then exact.
+ */
+constexpr unsigned char VERSIONED_FRAME_MARKER = 0x00;
+constexpr unsigned char FRAME_VERSION_WIDE_LENGTHS = 0x02;
+
+struct EntryFrame {
+    InboxEntryPublicData publicData;
+    std::string eciesWrap;
+};
+
+EntryFrame readFrame(const std::string& raw) {
+    if (raw.empty()) {
+        throw InvalidEncryptedInboxDataVersionException("inbox entry frame is empty");
+    }
+    const bool versioned = static_cast<unsigned char>(raw[0]) == VERSIONED_FRAME_MARKER;
+
+    utils::BinaryBufferBE wholeBuffer(versioned ? raw.substr(2) : raw);
+    if (versioned) {
+        if (raw.size() < 2 || static_cast<unsigned char>(raw[1]) != FRAME_VERSION_WIDE_LENGTHS) {
+            throw InvalidEncryptedInboxDataVersionException(
+                "inbox entry frame version: " + std::to_string(raw.size() < 2 ? -1 : int(raw[1]))
+            );
+        }
+    }
+
+    EntryFrame frame;
+    std::string publicDataStr;
+    if (versioned) {
+        wholeBuffer.readTwoOctetLengthBuffer(publicDataStr);
+    } else {
+        wholeBuffer.readOneOctetLengthBuffer(publicDataStr);
+    }
+
+    utils::BinaryBufferBE publicDataBuffer(publicDataStr);
+    if (versioned) {
+        publicDataBuffer.readTwoOctetLengthBuffer(frame.publicData.userPubKey);
+    } else {
+        publicDataBuffer.readOneOctetLengthBuffer(frame.publicData.userPubKey);
+    }
+    publicDataBuffer.readBool(frame.publicData.keyPreset);
+    // Short by construction in both framings, so it never widened.
+    publicDataBuffer.readOneOctetLengthBuffer(frame.publicData.usedInboxKeyId);
+
+    wholeBuffer.readRawUntilEnd(frame.eciesWrap);
+    return frame;
+}
+
+} // namespace
 
 std::string InboxEntryDataEncryptorV1::encrypt(
     InboxEntrySendModel data,
@@ -46,6 +113,9 @@ std::string InboxEntryDataEncryptorV1::encrypt(
     auto cipherWithKey = core::Ecies::encrypt(inboxPub, dataSecuredBuffer.str(), userPriv);
 
     utils::BinaryBufferBE concatBuffer;
+    // The marker and version that let a reader tell this framing from the one-octet one it replaced.
+    concatBuffer.writeRaw(std::string(1, static_cast<char>(VERSIONED_FRAME_MARKER)));
+    concatBuffer.writeRaw(std::string(1, static_cast<char>(FRAME_VERSION_WIDE_LENGTHS)));
     concatBuffer.writeTwoOctetLengthBuffer(sendDataBuffer.str());
     concatBuffer.writeRaw(cipherWithKey);
     return utils::Base64::from(concatBuffer.str());
@@ -55,19 +125,9 @@ InboxEntryDataResult InboxEntryDataEncryptorV1::decrypt(std::string& serializedB
     InboxEntryDataResult result;
     try {
         result.statusCode = 0;
-        utils::BinaryBufferBE wholeBuffer(utils::Base64::toString(serializedBase64));
-        std::string publicDataStr;
-        wholeBuffer.readTwoOctetLengthBuffer(publicDataStr);
-        InboxEntryPublicData publicData;
-
-        utils::BinaryBufferBE sendDataBuffer(publicDataStr);
-        sendDataBuffer.readTwoOctetLengthBuffer(publicData.userPubKey);
-        sendDataBuffer.readBool(publicData.keyPreset);
-        sendDataBuffer.readOneOctetLengthBuffer(publicData.usedInboxKeyId);
-
-        std::string privateDataStr;
-        wholeBuffer.readRawUntilEnd(privateDataStr);
-        auto decrypted = core::Ecies::decrypt(inboxPriv, privateDataStr);
+        const EntryFrame frame = readFrame(utils::Base64::toString(serializedBase64));
+        InboxEntryPublicData publicData = frame.publicData;
+        auto decrypted = core::Ecies::decrypt(inboxPriv, frame.eciesWrap);
 
         InboxEntryPrivateData privateData;
         utils::BinaryBufferBE securedBuffer(decrypted);
@@ -90,15 +150,10 @@ InboxEntryPublicDataResult InboxEntryDataEncryptorV1::decryptPublicOnly(std::str
     InboxEntryPublicDataResult result;
     try {
         result.statusCode = 0;
-        utils::BinaryBufferBE wholeBuffer(utils::Base64::toString(serializedBase64));
-        std::string publicDataStr;
-        wholeBuffer.readTwoOctetLengthBuffer(publicDataStr);
-
-        utils::BinaryBufferBE publicDataBuffer(publicDataStr);
-        publicDataBuffer.readTwoOctetLengthBuffer(result.userPubKey);
-        publicDataBuffer.readBool(result.keyPreset);
-        publicDataBuffer.readOneOctetLengthBuffer(result.usedInboxKeyId);
-
+        const EntryFrame frame = readFrame(utils::Base64::toString(serializedBase64));
+        result.userPubKey = frame.publicData.userPubKey;
+        result.keyPreset = frame.publicData.keyPreset;
+        result.usedInboxKeyId = frame.publicData.usedInboxKeyId;
     } catch (const privmx::endpoint::core::Exception& e) {
         result.statusCode = e.getCode();
     } catch (const privmx::utils::PrivmxException& e) {

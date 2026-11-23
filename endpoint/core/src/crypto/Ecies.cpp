@@ -12,6 +12,7 @@ limitations under the License.
 #include <privmx/cryptoservice/base/CoreTypes.hpp>
 #include <privmx/utils/Utils.hpp>
 
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/crypto/CryptoErrors.hpp>
 #include <privmx/endpoint/core/crypto/CryptoSuite.hpp>
@@ -116,15 +117,47 @@ std::string wrapToComposedIdentity(const PublicKey& pub, const std::string& data
     return senderPublic + kemCiphertext + suite.encrypt(wrapKeyFor(shared, suite), data);
 }
 
-std::string unwrapForComposedIdentity(const PrivateKey& priv, const std::string& cipher) {
+std::string unwrapForComposedIdentity(
+    const PrivateKey& priv,
+    const std::string& cipher,
+    const std::optional<PublicKey>& expectedSender
+) {
     // The KEM ciphertext has one length for a given algorithm, so the frame still splits by length
     // alone. An identity with no post-quantum half reads exactly the frame it always did.
     const std::size_t kemLength = keyAlgorithmNeedsKemKey(priv.algorithm()) ? KEM_CIPHERTEXT_LENGTH : 0;
     if (cipher.size() <= AGREEMENT_PUBLIC_LENGTH + kemLength) {
         throw MalformedEncryptionKeyException("wrapped key shorter than its own header");
     }
+    const std::string senderPublicRaw = cipher.substr(0, AGREEMENT_PUBLIC_LENGTH);
+    // Who the wrap says made it, against who the caller expected.
+    //
+    // The header is not unauthenticated: the wrapping key is `DH(sender, recipient)`, so a frame
+    // naming a sender it does not hold the private half of simply fails to decrypt. What that gives
+    // is "somebody who holds *a* private key made this", and the header says which — not "the one
+    // the caller named made this". Without this comparison a member of the same container can wrap
+    // under their own identity and have it accepted as anyone's, which is precisely what
+    // `pubOfSignature` exists to rule out; the classical branch below gets it from
+    // `IPrivateKey::open`, and this one used to drop the argument on the floor.
+    //
+    // Compared as raw bytes rather than by importing: both are X25519 public keys of one fixed
+    // length, so there is nothing to normalise, and a key that fails to import should be reported
+    // against the frame below rather than here.
+    if (expectedSender.has_value()) {
+        if (expectedSender->agreementImpl() == expectedSender->impl()) {
+            throw MalformedEncryptionKeyException("expected sender is missing its agreement half");
+        }
+        const std::string expectedRaw = keyString(expectedSender->agreementImpl()->export_(cs::KeyFormat::Raw));
+        if (expectedRaw != senderPublicRaw) {
+            // The same endpoint-level error the classical branch produces for this condition
+            // (`PrivmxCryptoservicePeerKeyVerifyException` maps here), so a caller sees one
+            // behaviour whatever algorithm the identity is of.
+            throw privmx::endpoint::crypto::AsymmetricKeyFailureException(
+                "ecies decrypt: the wrap was not made by the expected sender"
+            );
+        }
+    }
     auto senderPublic = cryptoProvider().importPublicKey(
-        keyBytes(cipher.substr(0, AGREEMENT_PUBLIC_LENGTH)), cs::KeyFormat::Raw, agreementAlgorithmFor(priv.algorithm())
+        keyBytes(senderPublicRaw), cs::KeyFormat::Raw, agreementAlgorithmFor(priv.algorithm())
     );
     std::string shared = keyString(priv.agreementImpl()->deriveSharedSecret(senderPublic));
     if (kemLength != 0) {
@@ -171,7 +204,7 @@ std::string Ecies::decrypt(
             assertSameCurve(pubOfSignature.value(), priv, "ecies decrypt");
         }
         if (keyAlgorithmNeedsAgreementKey(priv.algorithm())) {
-            return unwrapForComposedIdentity(priv, cipher);
+            return unwrapForComposedIdentity(priv, cipher, pubOfSignature);
         }
         const std::shared_ptr<cs::IPublicKey> expectedSender = pubOfSignature.has_value() ?
             pubOfSignature->agreementImpl() :

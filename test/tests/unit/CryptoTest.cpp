@@ -2,6 +2,8 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <string>
+#include <privmx/crypto/CipherType.hpp>
+#include <privmx/crypto/CryptoPrivmx.hpp>
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
 #include <privmx/endpoint/core/crypto/KeyFormats.hpp>
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
@@ -171,6 +173,36 @@ TEST_F(CryptoTest, encryptDataSymmetric_decryptDataSymmetric) {
         decryptedData = cryptoApi->decryptDataSymmetric(encryptedData, key);
     });
     EXPECT_EQ(decryptedData.stdString(), "data");
+}
+
+/**
+ * A blob this API produced before the suite-tagged frame must still open.
+ *
+ * What `encryptDataSymmetric` hands back does not live on the bridge — the caller keeps the bytes
+ * wherever it likes — so there is no container to migrate and no second chance at the old data.
+ * Reading 2.x output is the only way it stays reachable.
+ *
+ * The legacy frame is produced here through the module that wrote it, rather than pasted as a
+ * constant, so the test keeps describing the real format if that module ever moves.
+ */
+TEST_F(CryptoTest, decryptDataSymmetric_readsA2xBlob) {
+    const std::string key = privmx::utils::Hex::toString(
+        "3ad696c8c37f286adbbd66b2f31e90041850ae2d3ec30250020c0209085f8c62"
+    );
+    const std::string legacy = privmx::crypto::CryptoPrivmx::privmxEncrypt(
+        privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), "data", key
+    );
+    // The marker the dispatch turns on, and one no `SuiteId` uses. Copied into a local because
+    // `CipherType`'s members are in-class declarations with no out-of-line definition, so binding
+    // one to `ASSERT_EQ`'s reference parameter would not link.
+    const char signedCbcMarker = privmx::crypto::CipherType::AES_256_CBC_PKCS7_WITH_IV_AND_HMAC_SHA256;
+    ASSERT_EQ(signedCbcMarker, legacy[0]);
+
+    core::Buffer decrypted;
+    EXPECT_NO_THROW({
+        decrypted = cryptoApi->decryptDataSymmetric(core::Buffer::from(legacy), core::Buffer::from(key));
+    });
+    EXPECT_EQ("data", decrypted.stdString());
 }
 
 TEST_F(CryptoTest, convertPEMKeytoWIFKey) {
