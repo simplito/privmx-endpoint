@@ -26,15 +26,18 @@ class PrivmxEndpointDevRecipe(ConanFile):
     )
 
     def requirements(self):
-        self.requires("privmxdrvcrypto/1.0.3")
-        self.requires("privmxdrvecc/1.0.3")
-        self.requires("privmxdrvnet/1.0.3")
-        self.requires("gmp/6.3.0")
+        # private headers #include the dependencies' headers, so consumers must see them
+        headers = bool(self.options.private_headers)
+        self.requires("privmxdrvcrypto/1.0.3", transitive_headers=headers)
+        self.requires("privmxdrvecc/1.0.3", transitive_headers=headers)
+        self.requires("privmxdrvnet/1.0.3", transitive_headers=headers)
+        self.requires("gmp/6.3.0", transitive_headers=headers)
         if self.options.with_webrtc:
-            self.requires("libwebrtc/m125.1.0")
-        self.requires("poco/1.13.2")
-        self.requires("pson/1.0.7")
-        self.requires("sqlite3/3.50.4")
+            # consumers implementing WebRTCInterface call libwebrtc symbols directly
+            self.requires("libwebrtc/m125.1.0", transitive_headers=headers, transitive_libs=headers)
+        self.requires("poco/1.13.2", transitive_headers=headers)
+        self.requires("pson/1.0.7", transitive_headers=headers)
+        self.requires("sqlite3/3.50.4", transitive_headers=headers)
 
     def config_options(self):
         if self.settings.os == "Windows":
@@ -233,7 +236,7 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "privmxdrvcrypto::privmxdrvcrypto",
             "privmxdrvecc::privmxdrvecc",
             "privmxdrvnet::privmxdrvnet",
-            "sqlite3::SQLite3",
+            "sqlite3::sqlite",
         ]
 
         self.cpp_info.components["privmxendpointlock"].libs = ["privmxendpointlock"]
