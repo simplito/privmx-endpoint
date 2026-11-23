@@ -10,11 +10,56 @@ class PrivmxEndpointDevRecipe(ConanFile):
     license = "PrivMX Free License"
 
     settings = "os", "compiler", "build_type", "arch"
-    options = {"shared": [True, False], "fPIC": [True, False], "private_headers": [True, False], "with_webrtc": [True, False]}
-    default_options = {"shared": True, "fPIC": False, "private_headers": False, "with_webrtc": True}
+    options = {
+        "shared": [True, False],
+        "fPIC": [True, False],
+        "private_headers": [True, False],
+        "with_webrtc": [True, False],
+        "with_cli": [True, False],
+        "with_tests": [True, False],
+    }
+    default_options = {
+        "shared": True,
+        "fPIC": False,
+        "private_headers": False,
+        "with_webrtc": False,
+        "with_cli": False,
+        "with_tests": True,
+        "*:shared": True,
+        "pson/*:fPIC": False,
+        "sqlite3/*:enable_fts5": True,
+        "poco/*:enable_jwt": False,
+        "poco/*:enable_net": True,
+        "poco/*:enable_pdf": False,
+        "poco/*:enable_xml": True,
+        "poco/*:enable_zip": False,
+        "poco/*:enable_data": False,
+        "poco/*:enable_fork": True,
+        "poco/*:enable_json": True,
+        "poco/*:enable_util": True,
+        "poco/*:enable_redis": False,
+        "poco/*:enable_crypto": True,
+        "poco/*:enable_netssl": True,
+        "poco/*:enable_mongodb": False,
+        "poco/*:enable_pocodoc": False,
+        "poco/*:enable_sevenzip": False,
+        "poco/*:with_sql_parser": False,
+        "poco/*:enable_cppparser": False,
+        "poco/*:enable_data_odbc": False,
+        "poco/*:enable_encodings": True,
+        "poco/*:enable_data_mysql": False,
+        "poco/*:enable_prometheus": False,
+        "poco/*:enable_data_sqlite": False,
+        "poco/*:enable_activerecord": False,
+        "poco/*:enable_pagecompiler": False,
+        "poco/*:enable_apacheconnector": False,
+        "poco/*:enable_data_postgresql": False,
+        "poco/*:enable_activerecord_compiler": False,
+        "poco/*:enable_pagecompiler_file2page": False,
+    }
 
-    # Test recipe for local development checkout. Put this file in the root of
-    # the Endpoint repository so Conan builds from local sources instead of GitHub.
+    # Development recipe for a local checkout: the single entry point for local
+    # and CI builds (conan install conanfile-dev.py -o with_webrtc=True ...).
     exports_sources = (
         "CMakeLists.txt",
         "LICENSE.md",
@@ -28,50 +73,25 @@ class PrivmxEndpointDevRecipe(ConanFile):
     def requirements(self):
         # private headers #include the dependencies' headers, so consumers must see them
         headers = bool(self.options.private_headers)
-        self.requires("privmxdrvcrypto/1.0.3", transitive_headers=headers)
+        self.requires("privmxdrvcrypto/1.0.4", transitive_headers=headers)
         self.requires("privmxdrvecc/1.0.3", transitive_headers=headers)
         self.requires("privmxdrvnet/1.0.3", transitive_headers=headers)
         self.requires("gmp/6.3.0", transitive_headers=headers)
+        self.requires("openssl/[>=3.0 <3.1]")
+        self.requires("poco/1.13.2", transitive_headers=headers)
+        self.requires("pson/1.0.7", transitive_headers=headers)
+        self.requires("sqlite3/[^3.50.4]", transitive_headers=headers)
         if self.options.with_webrtc:
             # consumers implementing WebRTCInterface call libwebrtc symbols directly
             self.requires("libwebrtc/m125.1.0", transitive_headers=headers, transitive_libs=headers)
-        self.requires("poco/1.13.2", transitive_headers=headers)
-        self.requires("pson/1.0.7", transitive_headers=headers)
-        self.requires("sqlite3/3.50.4", transitive_headers=headers)
+        if self.options.with_cli:
+            self.requires("readline/[^8.2.0]")
+        if self.options.with_tests:
+            self.requires("gtest/[^1.15.0]")
 
     def config_options(self):
         if self.settings.os == "Windows":
             self.options.rm_safe("fPIC")
-        self.options["poco/*"].shared = True
-        self.options["poco/*"].enable_jwt = False
-        self.options["poco/*"].enable_net = True
-        self.options["poco/*"].enable_pdf = False
-        self.options["poco/*"].enable_xml = False
-        self.options["poco/*"].enable_zip = False
-        self.options["poco/*"].enable_data = False
-        self.options["poco/*"].enable_fork = True
-        self.options["poco/*"].enable_json = True
-        self.options["poco/*"].enable_util = True
-        self.options["poco/*"].enable_redis = False
-        self.options["poco/*"].enable_crypto = True
-        self.options["poco/*"].enable_netssl = True
-        self.options["poco/*"].enable_mongodb = False
-        self.options["poco/*"].enable_pocodoc = False
-        self.options["poco/*"].enable_sevenzip = False
-        self.options["poco/*"].with_sql_parser = False
-        self.options["poco/*"].enable_cppparser = False
-        self.options["poco/*"].enable_data_odbc = False
-        self.options["poco/*"].enable_encodings = True
-        self.options["poco/*"].enable_data_mysql = False
-        self.options["poco/*"].enable_prometheus = False
-        self.options["poco/*"].enable_data_sqlite = False
-        self.options["poco/*"].enable_activerecord = False
-        self.options["poco/*"].enable_pagecompiler = False
-        self.options["poco/*"].enable_apacheconnector = False
-        self.options["poco/*"].enable_data_postgresql = False
-        self.options["poco/*"].enable_activerecord_compiler = False
-        self.options["poco/*"].enable_pagecompiler_file2page = False
-        self.options["sqlite3/*"].enable_fts5 = True
 
     def configure(self):
         if self.options.shared:
@@ -92,6 +112,8 @@ class PrivmxEndpointDevRecipe(ConanFile):
         tc.variables["PRIVMX_DRIVER_NET"] = True
         tc.variables["PRIVMX_BUILD_WITH_WEBRTC"] = bool(self.options.with_webrtc)
         tc.variables["USE_PREBUILT_WEBRTC"] = bool(self.options.with_webrtc)
+        tc.variables["PRIVMX_BUILD_CLI"] = bool(self.options.with_cli)
+        tc.variables["PRIVMX_ENABLE_TESTS"] = bool(self.options.with_tests)
         tc.variables["PRIVMX_INSTALL_PRIVATE_HEADERS"] = bool(self.options.private_headers)
         tc.generate()
 
