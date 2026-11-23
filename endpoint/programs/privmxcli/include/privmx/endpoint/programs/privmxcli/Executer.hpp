@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_PRIVMXCLI_EXECUTER_HPP_
 
 #include <chrono>
+#include <optional>
 #include <thread>
 #include <readline/readline.h>
 
@@ -46,8 +47,8 @@ private:
     void addB(const std::string &key, const Poco::Dynamic::Var &value);
     std::string getS_printable(const std::string &key);
     std::string evalS(const std::string &value_string);
-    std::string readFileToString(const std::string& path);
-    void writeFileFromString(const std::string& content, const std::string& path);
+    std::optional<std::string> readFileToString(const std::string& path);
+    bool writeFileFromString(const std::string& content, const std::string& path);
     std::vector<std::string> getAllVars();
     unsigned int sleep_for(const int& T);
     unsigned int sleep_for_random(const int& T1, const int& T2);
@@ -84,11 +85,16 @@ private:
         {sget, 
             "get VAR_NAME"
         },
-        {sreadFile, 
-            "setFromFile VAR_NAME path"
+        {sreadFile,
+            "setFromFile VAR_NAME PATH\n"
+            "\tread the whole file into VAR_NAME, its size is stored in VAR_NAME_size\n"
+            "\tfails if the file cannot be read"
         },
-        {swriteFile, 
-            "saveToFile VAR_NAME path"
+        {swriteFile,
+            "saveToFile VAR_NAME PATH\n"
+            "\twrite VAR_NAME to the file, overwriting it\n"
+            "\tVAR_NAME may be a dotted name, e.g. saveToFile last_result.contextId PATH\n"
+            "\tfails if the var holds no text or the file cannot be written"
         },
         {help, 
             "help FUNCTION_NAME\n"
@@ -137,8 +143,8 @@ private:
         {sset, "set new var"},
         // {ssetArray, "setArray ARRAY_NAME VAR_VALUE ..."},
         {sget, "gets var"},
-        {sreadFile, "reads from file"},
-        {swriteFile, "write to file"},
+        {sreadFile, "read a file into a var"},
+        {swriteFile, "write a var to a file"},
         {help, "help"},
         {loopStart, "marker to start loop"},
         {loopStop, "marker to stop loop"},

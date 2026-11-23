@@ -16,7 +16,9 @@ static int is_terminal_c(FILE *out) {
 #endif
 }
 
+// escape sequences are dropped when stdout is not a terminal, so piped and captured output stays plain
 const char* get_clear_c() {
+    if(!is_terminal_c(stdout)) return "";
     return "\033[2J\033[;H";
 }
 void clear_c() {
@@ -26,6 +28,7 @@ void clear_c() {
 }
 
 const char* get_reset_c() {
+    if(!is_terminal_c(stdout)) return "";
     return "\033[00m";
 }
 void reset_c() {
@@ -35,6 +38,7 @@ void reset_c() {
 }
 
 const char* get_color_c(enum Color color) {
+    if(!is_terminal_c(stdout)) return "";
     switch(color) {
         case BLACK:
             return "\033[30m";
@@ -79,6 +83,7 @@ void set_color_c(enum Color color) {
 }
 
 const char* get_bgcolor_c(enum Color color) {
+    if(!is_terminal_c(stdout)) return "";
     switch(color) {
         case BLACK:
             return "\033[40m";

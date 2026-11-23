@@ -31,7 +31,7 @@ ExecuterBridge::ExecuterBridge(std::thread::id main_thread_id, std::shared_ptr<C
     core::VarSerializer serializer = core::VarSerializer(core::VarSerializer::Options{.addType = true, .binaryFormat = core::VarSerializer::Options::STD_STRING_AS_BASE64});
     _bridge = std::make_shared<core::BackendRequesterVarInterface>(serializer);
 }
-bool ExecuterBridge::execute(const func_enum& fun_code, const Tokens &st) {
+bool ExecuterBridge::execute(const func_enum& fun_code, const Tokens &st, const std::string& result_var) {
     _timer_start = std::chrono::system_clock::now();
     std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
     const std::string fun_name = st[0];
@@ -81,19 +81,23 @@ bool ExecuterBridge::execute(const func_enum& fun_code, const Tokens &st) {
             std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
             Status exec_status = Status::Success;
             std::string output = "null";
+            Poco::Dynamic::Var result_value;
             if(!value.isEmpty()) {
                 Poco::JSON::Object::Ptr output_JSON = privmx::utils::Utils::parseJsonObject(value.extract<std::string>());
                 if(output_JSON->has("result")) {
                     exec_status = Status::Success;
-                    output = privmx::utils::Utils::stringifyVar(output_JSON->get("result"), true);
+                    result_value = output_JSON->get("result");
                 } else if (output_JSON->has("error")) {
                     exec_status = Status::Error;
-                    output = privmx::utils::Utils::stringifyVar(output_JSON->get("error"), true);
+                    result_value = output_JSON->get("error");
                 } else {
                     exec_status = Status::Error;
-                    output = privmx::utils::Utils::stringifyVar(output_JSON, true);
+                    result_value = output_JSON;
                 }
+                // quiet mode keeps every result on a single line so it composes in a shell
+                output = _config->quiet ? varToSessionString(result_value) : privmx::utils::Utils::stringifyVar(result_value, true);
             }
+            setResultVar(result_var, varToSessionString(result_value));
             _console_writer->print_result(exec_status, time, output, this_thread::get_id() != _main_thread_id ? fun_name+"-": std::string());
         } catch (const core::Exception& e) {
             std::chrono::duration<double> time = chrono::system_clock::now() - _timer_start;
@@ -160,11 +164,7 @@ std::string ExecuterBridge::get_all_function_help_printable_string() {
 }
 
 Poco::Dynamic::Var ExecuterBridge::getS_var(const string &key){
-    auto it = session.find(key);
-    if(it == session.end()){
-        return Poco::Dynamic::Var(key);
-    }
-    return Poco::Dynamic::Var(*((*it).second));
+    return getSessionVar(key);
 }
 
 void ExecuterBridge::set_api_creds(const std::string &api_key_id, const std::string &api_key_secret, const std::string &url) {

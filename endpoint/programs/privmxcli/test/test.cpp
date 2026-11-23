@@ -1,5 +1,6 @@
 
 #include <gtest/gtest.h>
+#include <cstdio>
 #include "privmx/endpoint/programs/privmxcli/colors/Colors.hpp"
 #include "privmx/endpoint/programs/privmxcli/Tokenizer.hpp"
 #include "privmx/endpoint/programs/privmxcli/DataProcesor.hpp"
@@ -351,6 +352,133 @@ TEST_F(CLITest, DataProcesor_eval_$_val) {
     data_procesor.processLine("get ${a}${b}");
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "-> getting variable ... OK \n-> RESULT:\nd: value_d\n");
+}
+
+TEST_F(CLITest, DataProcesor_json_field_access) {
+    std::shared_ptr<CliConfig> config = std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash});
+    std::shared_ptr<ConsoleWriter> console_writer = std::make_shared<ConsoleWriter>(this_thread::get_id(), config);
+    DataProcesor data_procesor = DataProcesor(std::make_shared<Executer>(this_thread::get_id(), config, console_writer), this_thread::get_id(), config);
+    session[last_result_var] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var(std::string(
+        "{\"solutionId\":\"abc\",\"list\":[{\"id\":\"x\"}],\"nested\":{\"n\":1}}"
+    )));
+    testing::internal::CaptureStdout();
+    data_procesor.processLine("get last_result.solutionId");
+    data_procesor.processLine("get last_result.list.0.id");
+    data_procesor.processLine("get last_result.nested.n");
+    data_procesor.processLine("get last_result.missing");
+    std::string output = testing::internal::GetCapturedStdout();
+    EXPECT_EQ(output,
+        "-> getting variable ... OK \n-> RESULT:\nlast_result.solutionId: abc\n"
+        "-> getting variable ... OK \n-> RESULT:\nlast_result.list.0.id: x\n"
+        "-> getting variable ... OK \n-> RESULT:\nlast_result.nested.n: 1\n"
+        "-> getting variable ... OK \n-> RESULT:\nlast_result.missing: last_result.missing\n"
+    );
+}
+
+TEST_F(CLITest, DataProcesor_json_field_access_$) {
+    std::shared_ptr<CliConfig> config = std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash});
+    std::shared_ptr<ConsoleWriter> console_writer = std::make_shared<ConsoleWriter>(this_thread::get_id(), config);
+    DataProcesor data_procesor = DataProcesor(std::make_shared<Executer>(this_thread::get_id(), config, console_writer), this_thread::get_id(), config);
+    session[last_result_var] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var(std::string("{\"solutionId\":\"abc\"}")));
+    testing::internal::CaptureStdout();
+    data_procesor.processLine("set out ${last_result.solutionId}");
+    testing::internal::GetCapturedStdout();
+    EXPECT_EQ("abc", session["out"]->convert<std::string>());
+}
+
+TEST_F(CLITest, DataProcesor_eval_in_json_string) {
+    std::shared_ptr<CliConfig> config = std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash});
+    std::shared_ptr<ConsoleWriter> console_writer = std::make_shared<ConsoleWriter>(this_thread::get_id(), config);
+    DataProcesor data_procesor = DataProcesor(std::make_shared<Executer>(this_thread::get_id(), config, console_writer), this_thread::get_id(), config);
+    session["contextId"] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var(std::string("ctx-1")));
+    testing::internal::CaptureStdout();
+    data_procesor.processLine("set out {\"id\":\"${contextId}\"}");
+    data_procesor.processLine("set quoted \"${contextId}\"");
+    data_procesor.processLine("set raw '${contextId}'");
+    testing::internal::GetCapturedStdout();
+    EXPECT_EQ("{\"id\":\"ctx-1\"}", session["out"]->convert<std::string>());
+    EXPECT_EQ("ctx-1", session["quoted"]->convert<std::string>());
+    EXPECT_EQ("${contextId}", session["raw"]->convert<std::string>());
+}
+
+TEST_F(CLITest, SetResultVar) {
+    setResultVar("named", Poco::Dynamic::Var(std::string("value")));
+    EXPECT_EQ("value", session["named"]->convert<std::string>());
+    EXPECT_EQ("value", session[last_result_var]->convert<std::string>());
+    setResultVar(last_result_var, Poco::Dynamic::Var(std::string("other")));
+    EXPECT_EQ("other", session[last_result_var]->convert<std::string>());
+    EXPECT_EQ("value", session["named"]->convert<std::string>());
+}
+
+TEST_F(CLITest, VarToSessionString) {
+    EXPECT_EQ("null", varToSessionString(Poco::Dynamic::Var()));
+    EXPECT_EQ("abc", varToSessionString(Poco::Dynamic::Var(std::string("abc"))));
+    Poco::JSON::Object::Ptr object = new Poco::JSON::Object();
+    object->set("a", 1);
+    EXPECT_EQ("{\"a\":1}", varToSessionString(Poco::Dynamic::Var(object)));
+}
+
+TEST_F(CLITest, DataProcesor_file_read_write) {
+    std::shared_ptr<CliConfig> config = std::make_shared<CliConfig>(CliConfig{.quiet=true, .get_format=get_format_type::bash});
+    std::shared_ptr<ConsoleWriter> console_writer = std::make_shared<ConsoleWriter>(this_thread::get_id(), config);
+    DataProcesor data_procesor = DataProcesor(std::make_shared<Executer>(this_thread::get_id(), config, console_writer), this_thread::get_id(), config);
+    std::string path = Poco::Path(Poco::Path::temp(), "privmxcli_file_test").toString();
+    session[last_result_var] = std::make_shared<Poco::Dynamic::Var>(Poco::Dynamic::Var(std::string("{\"contextId\":\"ctx\"}")));
+    testing::internal::CaptureStdout();
+    data_procesor.processLine("saveToFile last_result.contextId " + path);
+    data_procesor.processLine("setFromFile back " + path);
+    data_procesor.processLine("get back");
+    data_procesor.processLine("get back_size");
+    std::string output = testing::internal::GetCapturedStdout();
+    EXPECT_EQ(output, "ctx\n3\n");
+    std::remove(path.data());
+}
+
+TEST_F(CLITest, DataProcesor_file_read_missing) {
+    std::shared_ptr<CliConfig> config = std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash});
+    std::shared_ptr<ConsoleWriter> console_writer = std::make_shared<ConsoleWriter>(this_thread::get_id(), config);
+    DataProcesor data_procesor = DataProcesor(std::make_shared<Executer>(this_thread::get_id(), config, console_writer), this_thread::get_id(), config);
+    testing::internal::CaptureStdout();
+    data_procesor.processLine("setFromFile a /nonexistent_dir/nonexistent_file");
+    std::string output = testing::internal::GetCapturedStdout();
+    EXPECT_NE(output.find("Cannot read file"), std::string::npos);
+    EXPECT_EQ(session.find("a"), session.end());
+}
+
+TEST_F(CLITest, ConsoleWriter_had_error) {
+    std::shared_ptr<CliConfig> config = std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash});
+    std::shared_ptr<ConsoleWriter> console_writer = std::make_shared<ConsoleWriter>(this_thread::get_id(), config);
+    DataProcesor data_procesor = DataProcesor(std::make_shared<Executer>(this_thread::get_id(), config, console_writer), this_thread::get_id(), config);
+    testing::internal::CaptureStdout();
+    data_procesor.processLine("set a b");
+    EXPECT_FALSE(console_writer->hadError());
+    // an unknown command reports ErrorInvalidInput, which used to slip past stop_on_error
+    data_procesor.processLine("no_such_command x");
+    testing::internal::GetCapturedStdout();
+    EXPECT_TRUE(console_writer->hadError());
+    console_writer->clearError();
+    EXPECT_FALSE(console_writer->hadError());
+}
+
+TEST_F(CLITest, ConsoleWriter_had_error_on_failed_command) {
+    std::shared_ptr<CliConfig> config = std::make_shared<CliConfig>(CliConfig{.get_format=get_format_type::bash});
+    std::shared_ptr<ConsoleWriter> console_writer = std::make_shared<ConsoleWriter>(this_thread::get_id(), config);
+    DataProcesor data_procesor = DataProcesor(std::make_shared<Executer>(this_thread::get_id(), config, console_writer), this_thread::get_id(), config);
+    testing::internal::CaptureStdout();
+    data_procesor.processLine("setFromFile a /nonexistent_dir/nonexistent_file");
+    testing::internal::GetCapturedStdout();
+    EXPECT_TRUE(console_writer->hadError());
+}
+
+TEST_F(CLITest, ConsoleWriter_quiet) {
+    std::shared_ptr<CliConfig> config = std::make_shared<CliConfig>(CliConfig{.quiet=true, .get_format=get_format_type::bash});
+    std::shared_ptr<ConsoleWriter> console_writer = std::make_shared<ConsoleWriter>(this_thread::get_id(), config);
+    DataProcesor data_procesor = DataProcesor(std::make_shared<Executer>(this_thread::get_id(), config, console_writer), this_thread::get_id(), config);
+    testing::internal::CaptureStdout();
+    data_procesor.processLine("set a b");
+    data_procesor.processLine("get a");
+    std::string output = testing::internal::GetCapturedStdout();
+    EXPECT_EQ(output, "b\n");
 }
 
 int main(int argc, char **argv){
