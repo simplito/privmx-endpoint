@@ -30,7 +30,16 @@ The library always uses the driver backends (`privmxdrvcrypto`, `privmxdrvecc`, 
 
 ### 1. Building with Conan (Recommended)
 
-Conan resolves all dependencies automatically: `poco`, `openssl`, `gmp`, `pson`, `privmxdrvcrypto`, `privmxdrvecc`, `privmxdrvnet`, `gtest`.
+All Conan builds (local and CI) go through `conanfile-dev.py`. It resolves `poco`, `openssl`, `gmp`, `pson`, `sqlite3`, `privmxdrvcrypto`, `privmxdrvecc`, `privmxdrvnet`, and pulls the optional dependencies only when the matching option is on:
+
+| Conan option | Default | Adds | Turns on |
+|--------------|---------|------|----------|
+| `with_webrtc` | False | `libwebrtc` | `PRIVMX_BUILD_WITH_WEBRTC`, `USE_PREBUILT_WEBRTC` |
+| `with_cli` | False | `readline` | `PRIVMX_BUILD_CLI` |
+| `with_tests` | True | `gtest` | `PRIVMX_ENABLE_TESTS` |
+| `private_headers` | False | — | `PRIVMX_INSTALL_PRIVATE_HEADERS` + `transitive_headers` on dependencies |
+
+Those CMake options come from the generated toolchain, so they must not be repeated on the `cmake` command line.
 
 **Quick start:**
 ```bash
@@ -40,15 +49,14 @@ Conan resolves all dependencies automatically: `poco`, `openssl`, `gmp`, `pson`,
 **Manual steps:**
 ```bash
 mkdir -p ./build
-conan install . --output-folder=build --build=missing -s build_type=Debug \
+conan install conanfile-dev.py --output-folder=build --build=missing -s build_type=Debug \
+  -o "&:with_webrtc=False" -o "&:with_cli=False" -o "&:with_tests=True" \
   -c 'tools.build:cflags=["-std=gnu17"]'
 cd build
 source build/Debug/generators/conanbuild.sh
 cmake .. -G "Unix Makefiles" \
   -DCMAKE_TOOLCHAIN_FILE=build/Debug/generators/conan_toolchain.cmake \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DPRIVMX_CONAN=ON \
-  -DPRIVMX_ENABLE_TESTS=ON
+  -DCMAKE_BUILD_TYPE=Debug
 cmake --build . -- -j$(nproc)
 source build/Debug/generators/deactivate_conanbuild.sh
 ```
