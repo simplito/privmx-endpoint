@@ -103,7 +103,7 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         int64_t size,
-        const std::string& authorPubKey,
+        const std::string& lastModifierPubKey,
         int64_t statusCode,
         int64_t schemaVersion,
         bool randomWrite = false

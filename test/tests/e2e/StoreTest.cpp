@@ -163,7 +163,7 @@ protected:
             privmx::utils::Hex::toString(reader->getString(section + ".privateMeta_inHex"))
         );
         EXPECT_EQ(file.size, reader->getInt64(section + ".size"));
-        EXPECT_EQ(file.authorPubKey, reader->getString(section + ".authorPubKey"));
+        EXPECT_EQ(file.lastModifierPubKey, reader->getString(section + ".lastModifierPubKey"));
         EXPECT_EQ(file.statusCode, 0);
         EXPECT_EQ(
             privmx::utils::Utils::stringifyVar(_serializer.serialize(file)),

@@ -33,7 +33,7 @@ void StructValidator<store::File>::validate(const store::File& value, const std:
     // StructValidator<core::Buffer>::validate(value.publicMeta, stack_trace + ".publicMeta");
     // StructValidator<core::Buffer>::validate(value.privateMeta, stack_trace + ".privateMeta");
     Validator::validateNumberNonNegative(value.size, stack_trace + ".size");
-    Validator::validatePubKeyBase58DER(value.authorPubKey, stack_trace + ".authorPubKey");
+    Validator::validatePubKeyBase58DER(value.lastModifierPubKey, stack_trace + ".lastModifierPubKey");
 }
 
 void StructValidator<PagingList<store::File>>::validate(

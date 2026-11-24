@@ -32,6 +32,16 @@ struct ServerFileInfo {
      * ID of the user who created the file
      */
     std::string author;
+
+    /**
+     * file's last modification timestamp
+     */
+    int64_t lastModificationDate;
+
+    /**
+     * ID of the user who last modified the file
+     */
+    std::string lastModifier;
 };
 
 /**
@@ -80,9 +90,9 @@ struct File {
     int64_t size;
 
     /**
-     * public key of the author of the file
+     * public key of the user who last modified the file
      */
-    std::string authorPubKey;
+    std::string lastModifierPubKey;
 
     /**
      * status code of retrieval and decryption of the file

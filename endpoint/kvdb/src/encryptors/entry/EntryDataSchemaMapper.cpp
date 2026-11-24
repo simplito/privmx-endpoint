@@ -150,7 +150,7 @@ KvdbEntry EntryDataSchemaMapper::toLibKvdbEntry(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const core::Buffer& data,
-    const std::string& authorPubKey,
+    const std::string& lastModifierPubKey,
     int64_t statusCode,
     int64_t schemaVersion
 ) {
@@ -161,11 +161,13 @@ KvdbEntry EntryDataSchemaMapper::toLibKvdbEntry(
                 .key = entry.kvdbEntryKey,
                 .createDate = entry.createDate,
                 .author = entry.author,
+                .lastModificationDate = entry.lastModificationDate,
+                .lastModifier = entry.lastModifier,
             },
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
         .data = data,
-        .authorPubKey = authorPubKey,
+        .lastModifierPubKey = lastModifierPubKey,
         .version = entry.version,
         .statusCode = statusCode,
         .schemaVersion = schemaVersion

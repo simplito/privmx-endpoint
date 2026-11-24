@@ -186,7 +186,7 @@ protected:
             EXPECT_EQ(file.info.fileId, reader->getString(p + "info_fileId"));
             EXPECT_EQ(file.info.createDate, reader->getInt64(p + "info_createDate"));
             EXPECT_EQ(file.info.author, reader->getString(p + "info_author"));
-            EXPECT_EQ(file.authorPubKey, reader->getString(p + "authorPubKey"));
+            EXPECT_EQ(file.lastModifierPubKey, reader->getString(p + "lastModifierPubKey"));
             EXPECT_EQ(file.statusCode, 0);
             EXPECT_EQ(file.publicMeta.stdString(), Hex::toString(reader->getString(p + "publicMeta_inHex")));
             EXPECT_EQ(file.publicMeta.stdString(), Hex::toString(reader->getString(up + "publicMeta_inHex")));

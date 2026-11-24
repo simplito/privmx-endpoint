@@ -49,6 +49,12 @@ JSON_STRUCT_EXT(StoreRotateKeysModel, core::server::ContainerRotateKeysModelBase
 #define FILE_THUMB_FIELDS(F) F(size, int64_t)
 JSON_STRUCT(FileThumb, FILE_THUMB_FIELDS);
 
+#define FILE_UPDATE_FIELDS(F)                                                                                          \
+    F(createDate, int64_t)                                                                                             \
+    F(author, std::string)
+JSON_STRUCT(FileUpdate, FILE_UPDATE_FIELDS);
+
+// Bridge marks lastModificationDate and lastModifier deprecated and derives them from updates.
 #define FILE_FIELDS_SERVER(F)                                                                                          \
     F(id, std::string)                                                                                                 \
     F(resourceId, std::string)                                                                                         \
@@ -59,6 +65,7 @@ JSON_STRUCT(FileThumb, FILE_THUMB_FIELDS);
     F(creator, std::string)                                                                                            \
     F(lastModificationDate, int64_t)                                                                                   \
     F(lastModifier, std::string)                                                                                       \
+    F(updates, std::vector<FileUpdate>)                                                                                \
     F(meta, Poco::Dynamic::Var)                                                                                        \
     F(size, int64_t)                                                                                                   \
     F(keyId, std::string)                                                                                              \
