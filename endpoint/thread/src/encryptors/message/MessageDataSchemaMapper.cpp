@@ -114,9 +114,8 @@ std::pair<uint32_t, std::optional<core::DataIntegrityObject>> MessageDataSchemaM
             auto encData = server::EncryptedMessageDataV5::fromJSON(message.data);
             auto dio = _strategyV5->getDIOAndAssertIntegrity(encData);
             core::DataSchemaMapperUtils::assertEntryDIOIntegrity(
-                dio, message.contextId, message.resourceId, message.threadId, threadResourceId,
-                lastModifierOf(message), lastModificationDateOf(message),
-                [] { throw MessageDataIntegrityException(); }
+                dio, message.contextId, message.resourceId, message.threadId, threadResourceId, lastModifierOf(message),
+                lastModificationDateOf(message), [] { throw MessageDataIntegrityException(); }
             );
             verifiedDio = dio;
             return;
