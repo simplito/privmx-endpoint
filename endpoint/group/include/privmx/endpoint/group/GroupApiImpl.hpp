@@ -75,7 +75,7 @@ public:
     int64_t removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     int64_t rotateGroupKey(const std::string& groupId);
-    int64_t reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
+    int64_t replaceGroupMemberKeys(const std::string& groupId, const std::vector<std::string>& userIds);
     void setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes);
     void updateGroupRules(const std::string& groupId, const GroupRulesUpdate& rules);
     core::PagingList<GroupLogEntry> getGroupLog(const std::string& groupId, const core::PagingQuery& pagingQuery);

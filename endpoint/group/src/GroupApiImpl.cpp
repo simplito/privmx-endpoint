@@ -277,7 +277,7 @@ int64_t GroupApiImpl::rotateGroupKey(const std::string& groupId) {
     return static_cast<int64_t>(pinnedKeyVersion(groupId));
 }
 
-int64_t GroupApiImpl::reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
+int64_t GroupApiImpl::replaceGroupMemberKeys(const std::string& groupId, const std::vector<std::string>& userIds) {
     _metadata.retryPendingCarry(groupId);
     std::optional<bool> historyAbandoned;
     PriorRole prior;

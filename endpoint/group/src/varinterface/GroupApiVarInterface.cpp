@@ -48,7 +48,7 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {GetGroups, &GroupApiVarInterface::getGroups},
         {GetGroupPublicKey, &GroupApiVarInterface::getGroupPublicKey},
         {SetGroupVisibility, &GroupApiVarInterface::setGroupVisibility},
-        {ReseatGroupMembers, &GroupApiVarInterface::reseatGroupMembers},
+        {ReplaceGroupMemberKeys, &GroupApiVarInterface::replaceGroupMemberKeys},
         {SetGroupRoles, &GroupApiVarInterface::setGroupRoles},
         {UpdateGroupRules, &GroupApiVarInterface::updateGroupRules},
         {GetGroupLog, &GroupApiVarInterface::getGroupLog},
@@ -442,11 +442,11 @@ Poco::Dynamic::Var GroupApiVarInterface::setGroupVisibility(const Poco::Dynamic:
     return {};
 }
 
-Poco::Dynamic::Var GroupApiVarInterface::reseatGroupMembers(const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var GroupApiVarInterface::replaceGroupMemberKeys(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     auto userIds = _deserializer.deserializeVector<std::string>(argsArr->get(1), "userIds");
-    return _serializer.serialize(_groupApi.reseatGroupMembers(groupId, userIds));
+    return _serializer.serialize(_groupApi.replaceGroupMemberKeys(groupId, userIds));
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::setGroupRoles(const Poco::Dynamic::Var& args) {

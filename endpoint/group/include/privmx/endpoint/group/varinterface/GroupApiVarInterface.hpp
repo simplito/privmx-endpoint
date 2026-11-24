@@ -58,7 +58,7 @@ public:
         GetGroups = 38,
         GetGroupPublicKey = 39,
         SetGroupVisibility = 40,
-        ReseatGroupMembers = 41,
+        ReplaceGroupMemberKeys = 41,
         SetGroupRoles = 42,
         UpdateGroupRules = 43,
         GetGroupLog = 44,
@@ -134,7 +134,7 @@ public:
     Poco::Dynamic::Var getGroups(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getGroupPublicKey(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var setGroupVisibility(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var reseatGroupMembers(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var replaceGroupMemberKeys(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var setGroupRoles(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateGroupRules(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getGroupLog(const Poco::Dynamic::Var& args);

@@ -755,7 +755,7 @@ TEST_F(GroupKeyTreeIntegrityTest, a_reseat_lets_a_member_with_a_replaced_key_bac
     // SECURITY: this client knows the member by the first key. It wraps to another only once told the change is
     // genuine, or a Bridge swapping a user's key would be handed the group by the next reseat.
     EXPECT_THROW(
-        { groupApi->reseatGroupMembers(groupId, {firstKey.userId}); }, core::UserVerificationFailureException
+        { groupApi->replaceGroupMemberKeys(groupId, {firstKey.userId}); }, core::UserVerificationFailureException
     );
     EXPECT_THROW(
         { connection->acceptKeyChange(contextId(), firstKey.userId, secondKey.pubKey, firstKey.pubKey); },
@@ -765,10 +765,10 @@ TEST_F(GroupKeyTreeIntegrityTest, a_reseat_lets_a_member_with_a_replaced_key_bac
         connection->acceptKeyChange(contextId(), firstKey.userId, firstKey.pubKey, secondKey.pubKey);
     });
     int64_t epoch = 0;
-    ASSERT_NO_THROW({ epoch = groupApi->reseatGroupMembers(groupId, {firstKey.userId}); });
+    ASSERT_NO_THROW({ epoch = groupApi->replaceGroupMemberKeys(groupId, {firstKey.userId}); });
     EXPECT_EQ(epoch, 2);
     EXPECT_THROW(
-        { groupApi->reseatGroupMembers(groupId, {user(1).userId}); }, core::Exception
+        { groupApi->replaceGroupMemberKeys(groupId, {user(1).userId}); }, core::Exception
     ) << "nobody reseats themselves";
 
     group::Group afterReseat;

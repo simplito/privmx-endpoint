@@ -58,7 +58,7 @@ struct GroupRoleChange {
 struct GroupRules {
     /** Who may add members. */
     std::string addMembers;
-    /** Who may remove or reseat members. */
+    /** Who may remove members or replace their keys. */
     std::string removeMembers;
     /** Who may rewrite the Group's metadata (the policy's `update`). */
     std::string updateMeta;
@@ -75,7 +75,7 @@ struct GroupRulesUpdate {
 struct GroupLogEntry {
     /** 1 for the creation, one more for each later statement. */
     int64_t seq;
-    /** "create", "add", "remove", "reseat", "roles", "rotate", "policy" or "selfUpdate". */
+    /** "create", "add", "remove", "reseat" (a member's key replaced, see GroupApi::replaceGroupMemberKeys), "roles", "rotate", "policy" or "selfUpdate". */
     std::string kind;
     /** The member who signed it, and the identity key it was signed with. */
     std::string author;
@@ -88,7 +88,7 @@ struct GroupLogEntry {
     /** For "add": who joined as a user or as a manager. For "roles": who became one. */
     std::vector<std::string> addedUsers;
     std::vector<std::string> addedManagers;
-    /** For "remove": who left. For "reseat": who was reseated. */
+    /** For "remove": who left. For "reseat": whose key was replaced. */
     std::vector<std::string> removed;
 };
 

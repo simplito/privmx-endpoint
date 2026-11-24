@@ -181,10 +181,10 @@ public:
      * effect (see the class note).
      *
      * @param groupId ID of the Group
-     * @param userIds IDs of the members to reseat
+     * @param userIds IDs of the members whose key is replaced
      * @return the Group's key epoch after the call
      */
-    int64_t reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
+    int64_t replaceGroupMemberKeys(const std::string& groupId, const std::vector<std::string>& userIds);
 
     /**
      * Changes the role of members already in the Group. No key moves: a role decides what the Bridge and the other

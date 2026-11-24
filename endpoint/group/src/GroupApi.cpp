@@ -93,13 +93,13 @@ int64_t GroupApi::removeGroupMembers(const std::string& groupId, const std::vect
     return impl->removeGroupMembers(groupId, userIds);
 }
 
-int64_t GroupApi::reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
+int64_t GroupApi::replaceGroupMemberKeys(const std::string& groupId, const std::vector<std::string>& userIds) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     for (const std::string& userId : userIds) {
         core::Validator::validateId(userId, "field:userIds ");
     }
-    return impl->reseatGroupMembers(groupId, userIds);
+    return impl->replaceGroupMemberKeys(groupId, userIds);
 }
 
 void GroupApi::setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes) {
