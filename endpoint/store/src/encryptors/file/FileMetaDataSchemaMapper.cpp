@@ -20,6 +20,19 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::store;
 
+namespace {
+
+// Bridge reports file edits as an updates list; an unedited file has none.
+const std::string& lastModifierOf(const server::File& file) {
+    return file.updates.empty() ? file.creator : file.updates.back().author;
+}
+
+int64_t lastModificationDateOf(const server::File& file) {
+    return file.updates.empty() ? file.created : file.updates.back().createDate;
+}
+
+} // namespace
+
 FileMetaDataSchemaMapper::FileMetaDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
     const core::Connection& connection
@@ -110,8 +123,8 @@ std::pair<uint32_t, std::optional<core::DataIntegrityObject>> FileMetaDataSchema
             auto fileMeta = server::EncryptedFileMetaV5::fromJSON(file.meta);
             auto dio = _strategyV5->getDIOAndAssertIntegrity(fileMeta);
             core::DataSchemaMapperUtils::assertEntryDIOIntegrity(
-                dio, file.contextId, file.resourceId, file.storeId, storeResourceId, file.lastModifier,
-                file.lastModificationDate, [] { throw FileDataIntegrityException(); }
+                dio, file.contextId, file.resourceId, file.storeId, storeResourceId, lastModifierOf(file),
+                lastModificationDateOf(file), [] { throw FileDataIntegrityException(); }
             );
             verifiedDio = dio;
             return;
@@ -210,7 +223,7 @@ File FileMetaDataSchemaMapper::toLibFile(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     int64_t size,
-    const std::string& authorPubKey,
+    const std::string& lastModifierPubKey,
     int64_t statusCode,
     int64_t schemaVersion,
     bool randomWrite
@@ -222,11 +235,13 @@ File FileMetaDataSchemaMapper::toLibFile(
                 .fileId = file.id,
                 .createDate = file.created,
                 .author = file.creator,
+                .lastModificationDate = lastModificationDateOf(file),
+                .lastModifier = lastModifierOf(file),
             },
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
         .size = size,
-        .authorPubKey = authorPubKey,
+        .lastModifierPubKey = lastModifierPubKey,
         .statusCode = statusCode,
         .schemaVersion = schemaVersion,
         .randomWrite = randomWrite

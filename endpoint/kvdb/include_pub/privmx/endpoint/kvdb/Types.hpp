@@ -130,6 +130,16 @@ struct ServerKvdbEntryInfo {
      * ID of the user who created the entry
      */
     std::string author;
+
+    /**
+     * Entry's last modification timestamp
+     */
+    int64_t lastModificationDate;
+
+    /**
+     * ID of the user who last modified the entry
+     */
+    std::string lastModifier;
 };
 
 /**
@@ -158,9 +168,9 @@ struct KvdbEntry {
     core::Buffer data;
 
     /**
-     * public key of an author of the entry
+     * public key of the user who last modified the entry
      */
-    std::string authorPubKey;
+    std::string lastModifierPubKey;
 
     /**
      * version number (changes on every on existing item)

@@ -18,6 +18,19 @@ limitations under the License.
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::thread;
 
+namespace {
+
+// Bridge reports message edits as an updates list; an unedited message has none.
+const std::string& lastModifierOf(const server::Message& message) {
+    return message.updates.empty() ? message.author : message.updates.back().author;
+}
+
+int64_t lastModificationDateOf(const server::Message& message) {
+    return message.updates.empty() ? message.createDate : message.updates.back().createDate;
+}
+
+} // namespace
+
 MessageDataSchemaMapper::MessageDataSchemaMapper(
     const privmx::crypto::PrivateKey& userPrivKey,
     const core::Connection& connection
@@ -100,10 +113,9 @@ std::pair<uint32_t, std::optional<core::DataIntegrityObject>> MessageDataSchemaM
         case MessageDataSchema::Version::VERSION_5: {
             auto encData = server::EncryptedMessageDataV5::fromJSON(message.data);
             auto dio = _strategyV5->getDIOAndAssertIntegrity(encData);
-            const auto& lastModifier = message.updates.empty() ? message.author : message.updates.back().author;
-            const auto lastDate = message.updates.empty() ? message.createDate : message.updates.back().createDate;
             core::DataSchemaMapperUtils::assertEntryDIOIntegrity(
-                dio, message.contextId, message.resourceId, message.threadId, threadResourceId, lastModifier, lastDate,
+                dio, message.contextId, message.resourceId, message.threadId, threadResourceId,
+                lastModifierOf(message), lastModificationDateOf(message),
                 [] { throw MessageDataIntegrityException(); }
             );
             verifiedDio = dio;
@@ -134,7 +146,7 @@ Message MessageDataSchemaMapper::toLibMessage(
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
     const core::Buffer& data,
-    const std::string& authorPubKey,
+    const std::string& lastModifierPubKey,
     int64_t statusCode,
     int64_t schemaVersion
 ) {
@@ -143,11 +155,13 @@ Message MessageDataSchemaMapper::toLibMessage(
             {.threadId = message.threadId,
              .messageId = message.id,
              .createDate = message.createDate,
-             .author = message.author},
+             .author = message.author,
+             .lastModificationDate = lastModificationDateOf(message),
+             .lastModifier = lastModifierOf(message)},
         .publicMeta = publicMeta,
         .privateMeta = privateMeta,
         .data = data,
-        .authorPubKey = authorPubKey,
+        .lastModifierPubKey = lastModifierPubKey,
         .statusCode = statusCode,
         .schemaVersion = schemaVersion
     };

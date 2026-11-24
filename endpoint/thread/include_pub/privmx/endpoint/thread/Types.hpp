@@ -32,6 +32,16 @@ struct ServerMessageInfo {
      * ID of the user who created the message
      */
     std::string author;
+
+    /**
+     * message's last modification timestamp
+     */
+    int64_t lastModificationDate;
+
+    /**
+     * ID of the user who last modified the message
+     */
+    std::string lastModifier;
 };
 
 /**
@@ -59,9 +69,9 @@ struct Message {
     core::Buffer data;
 
     /**
-     * public key of an author of the message
+     * public key of the user who last modified the message
      */
-    std::string authorPubKey;
+    std::string lastModifierPubKey;
 
     /**
      * status code of retrieval and decryption of the message

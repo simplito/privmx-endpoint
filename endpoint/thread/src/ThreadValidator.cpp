@@ -39,7 +39,7 @@ void StructValidator<thread::ServerMessageInfo>::validate(
 }
 
 void StructValidator<thread::Message>::validate(const thread::Message& value, const std::string& stack_trace) {
-    Validator::validatePubKeyBase58DER(value.authorPubKey, stack_trace + ".authorPubKey");
+    Validator::validatePubKeyBase58DER(value.lastModifierPubKey, stack_trace + ".lastModifierPubKey");
     StructValidator<thread::ServerMessageInfo>::validate(value.info, stack_trace + ".info");
 }
 

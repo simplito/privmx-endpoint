@@ -90,7 +90,7 @@ public:
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
         const core::Buffer& data,
-        const std::string& authorPubKey,
+        const std::string& lastModifierPubKey,
         int64_t statusCode,
         int64_t schemaVersion
     );
