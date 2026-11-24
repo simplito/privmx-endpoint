@@ -1,19 +1,31 @@
-# Kryptografia jest realizowana wylacznie przez drivery (privmxdrvcrypto / privmxdrvecc).
 # Backendy "OPENSSL" i "EMSCRIPTEN" zostaly usuniete: wybor backendu i tak zawsze
 # rozstrzygal sie na DRIVER, wiec ich zrodla nie trafialy do zadnego artefaktu
 # od ok. wersji 2.6.
+#
+# Prymitywy (hasze, HMAC, AES, PBKDF2, losowosc) realizuje teraz pmx-crypto - patrz
+# pmxcrypto/. API `privmx::crypto` sie nie zmienia, wiec rpc/, privfs/ i czesci endpointu
+# nadal siedzace na starym stosie kompiluja sie bez zmian, a privmxdrvcrypto znika.
+#
+# Z driver/ zostaje wylacznie ecc/ (privmxdrvecc): BNImpl i PointImpl to arytmetyka
+# duzych liczb i punktow krzywej, ktorej pmx-crypto nie wystawia - ma klucze, nie goly
+# BN. ECCImpl to z kolei podpisy i wyprowadzanie kluczy starych typow `crypto::ecc::*`.
+# Dlatego granica tej zmiany biegnie tutaj.
 set(PRIVMX_DEFAULT_CRYPTO_DRIVER ON)
 
 file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/base/src/*.cpp)
-file(GLOB_RECURSE SOURCES_DRIVER ${CMAKE_CURRENT_SOURCE_DIR}/driver/src/*.cpp)
-list(APPEND SOURCES ${SOURCES_DRIVER})
+file(GLOB_RECURSE SOURCES_PMXCRYPTO ${CMAKE_CURRENT_SOURCE_DIR}/pmxcrypto/src/*.cpp)
+# Celowo nie GLOB_RECURSE po calym driver/src: CryptoService.cpp i CryptoEnv.cpp zastapil
+# backend pmxcrypto, a `CryptoEnv::getEnv()` moze byc zdefiniowane tylko w jednej jednostce.
+file(GLOB_RECURSE SOURCES_DRIVER_ECC ${CMAKE_CURRENT_SOURCE_DIR}/driver/src/ecc/*.cpp)
+list(APPEND SOURCES ${SOURCES_PMXCRYPTO} ${SOURCES_DRIVER_ECC})
 
 set(INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/base/include
     ${CMAKE_CURRENT_SOURCE_DIR}/driver/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/pmxcrypto/include
     ${CMAKE_CURRENT_BINARY_DIR}/include
 )
-set(LIBS privmxdrvcrypto privmxdrvecc)
+set(LIBS privmxcryptolib privmxdrvecc)
 
 if(PRIVMX_INSTALL_PRIVATE_HEADERS)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/driver/include/privmx DESTINATION include)
