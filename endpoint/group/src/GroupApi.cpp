@@ -318,6 +318,11 @@ Envelope GroupApi::finishFileEncryption(const FileHandle fileHandle) {
     return impl->finishFileEncryption(fileHandle);
 }
 
+void GroupApi::abortFile(const FileHandle fileHandle) {
+    auto impl = getImpl();
+    impl->abortFile(fileHandle);
+}
+
 FileHandle GroupApi::beginFileDecryption(
     const std::string& groupId,
     const Path& location,

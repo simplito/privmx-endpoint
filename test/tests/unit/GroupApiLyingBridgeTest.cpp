@@ -4666,6 +4666,29 @@ TEST_F(GroupFiles, SECURITY_ATruncatedOrExtendedFileIsRefused) {
     EXPECT_THROW(bob.finishFileDecryption(h), core::InvalidParamsException);
 }
 
+TEST_F(GroupFiles, AFinishThatFailsKeepsTheUploadAndAnyHandleCanBeAbandoned) {
+    const std::string groupId = createGroup({"alice", "bob"});
+    GroupApiImpl& bob = client("bob");
+    const FileHandle upload = bob.beginFileEncryption(groupId, scan, {});
+    bob.encryptFileChunk(upload, core::Buffer::from(std::string("content")));
+    // A seal that fails (a network error, say): the handle is still the writer's, to retry or give up.
+    EXPECT_THROW(
+        GroupApiImplTestAccess::files(bob).finishWrite(
+            upload, [](const EnvelopeFileState&) -> Envelope { throw core::InvalidParamsException("offline"); }
+        ),
+        core::InvalidParamsException
+    );
+    EXPECT_NO_THROW(bob.encryptFileChunk(upload, core::Buffer::from(std::string("more"))));
+    bob.abortFile(upload);
+    EXPECT_THROW(bob.encryptFileChunk(upload, core::Buffer::from(std::string("x"))), core::InvalidParamsException);
+    EXPECT_THROW(bob.abortFile(upload), core::InvalidParamsException);
+
+    const Written file = write(client("alice"), groupId, scan, {"content"});
+    const FileHandle reading = client("alice").beginFileDecryption(groupId, scan, file.envelope, ANY);
+    client("alice").abortFile(reading);
+    EXPECT_THROW(client("alice").finishFileDecryption(reading), core::InvalidParamsException);
+}
+
 TEST_F(GroupFiles, ARangeIsReadWithoutTheRest) {
     const std::string groupId = createGroup({"alice", "bob"});
     std::string plain;

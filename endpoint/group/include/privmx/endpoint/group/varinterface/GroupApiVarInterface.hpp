@@ -95,6 +95,7 @@ public:
         BeginSequenceInSpace = 75,
         OpenSequenceInSpace = 76,
         GetSpaceSequenceOrigin = 77,
+        AbortFile = 81,
     };
 
     GroupApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -175,6 +176,7 @@ public:
     Poco::Dynamic::Var beginSequenceInSpace(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var openSequenceInSpace(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getSpaceSequenceOrigin(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var abortFile(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var sendCustomEvent(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildCustomEventSubscriptionQuery(const Poco::Dynamic::Var& args);
 

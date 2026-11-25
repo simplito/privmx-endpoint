@@ -533,11 +533,18 @@ public:
     core::Buffer encryptFileChunk(const FileHandle fileHandle, const core::Buffer& plainChunk);
 
     /**
-     * Ends the file and releases its handle.
+     * Ends the file and releases its handle. When it throws (the Group's or Space's key could not be read, a
+     * network error) the handle stays open: call it again, or `abortFile`.
      *
      * @return the file envelope; keep it next to the ciphertext
      */
     Envelope finishFileEncryption(const FileHandle fileHandle);
+
+    /**
+     * Releases a file handle of either kind (from a `beginFileEncryption...` or a `beginFileDecryption...` call)
+     * without finishing it: no envelope is made, no completeness is checked. For an upload or a read given up.
+     */
+    void abortFile(const FileHandle fileHandle);
 
     /**
      * Begins decrypting a file a member of the Group wrote. Checks the envelope exactly as `decrypt` checks a

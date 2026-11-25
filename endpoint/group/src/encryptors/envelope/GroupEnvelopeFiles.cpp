@@ -44,7 +44,38 @@ FileHandle GroupEnvelopeFiles::open(const std::string& label, EnvelopeFileState 
 }
 
 void GroupEnvelopeFiles::clear() {
-    _files.clear();
+    std::vector<int64_t> handles;
+    _files.forAll([&](const int64_t& handle, const std::shared_ptr<EnvelopeFile>&) { handles.push_back(handle); });
+    for (const int64_t handle : handles) {
+        try {
+            release(handle);
+        } catch (...) {}
+    }
+}
+
+Envelope GroupEnvelopeFiles::finishWrite(
+    FileHandle fileHandle,
+    const std::function<Envelope(const EnvelopeFileState&)>& seal
+) {
+    auto file = get(fileHandle, false);
+    std::lock_guard lock(file->mutex);
+    Envelope envelope = seal(openState(*file));
+    file->state.closed = true;
+    // `release` takes only the map and HandleManager locks; nothing takes those and then a file lock.
+    release(fileHandle);
+    return envelope;
+}
+
+void GroupEnvelopeFiles::abort(FileHandle fileHandle) {
+    auto file = _files.get(fileHandle);
+    if (!file.has_value()) {
+        throw core::InvalidParamsException(NOT_AN_OPEN_FILE_HANDLE);
+    }
+    {
+        std::lock_guard lock(file.value()->mutex);
+        openState(*file.value()).closed = true;
+    }
+    release(fileHandle);
 }
 
 // `reading` never changes after construction, so it is checked here without the handle's lock.

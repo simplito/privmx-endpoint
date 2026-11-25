@@ -84,7 +84,8 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {BeginFileDecryptionInSpace, &GroupApiVarInterface::beginFileDecryptionInSpace},
         {BeginSequenceInSpace, &GroupApiVarInterface::beginSequenceInSpace},
         {OpenSequenceInSpace, &GroupApiVarInterface::openSequenceInSpace},
-        {GetSpaceSequenceOrigin, &GroupApiVarInterface::getSpaceSequenceOrigin}
+        {GetSpaceSequenceOrigin, &GroupApiVarInterface::getSpaceSequenceOrigin},
+        {AbortFile, &GroupApiVarInterface::abortFile}
 };
 
 Poco::Dynamic::Var GroupApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -725,4 +726,11 @@ Poco::Dynamic::Var GroupApiVarInterface::getSpaceSequenceOrigin(const Poco::Dyna
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto sequence = _deserializer.deserialize<int64_t>(argsArr->get(0), "sequence");
     return _serializer.serialize(_groupApi.getSpaceSequenceOrigin(sequence));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::abortFile(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto fileHandle = _deserializer.deserialize<int64_t>(argsArr->get(0), "fileHandle");
+    _groupApi.abortFile(fileHandle);
+    return {};
 }

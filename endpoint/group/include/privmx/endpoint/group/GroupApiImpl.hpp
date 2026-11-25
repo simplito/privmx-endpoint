@@ -202,6 +202,7 @@ public:
     );
     core::Buffer encryptFileChunk(FileHandle fileHandle, const core::Buffer& plainChunk);
     Envelope finishFileEncryption(FileHandle fileHandle);
+    void abortFile(FileHandle fileHandle);
     FileHandle beginFileDecryption(
         const std::string& groupId,
         const Path& location,

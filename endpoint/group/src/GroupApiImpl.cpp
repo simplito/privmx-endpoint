@@ -1599,8 +1599,13 @@ core::Buffer GroupApiImpl::encryptFileChunk(FileHandle fileHandle, const core::B
 }
 
 Envelope GroupApiImpl::finishFileEncryption(FileHandle fileHandle) {
-    const EnvelopeFileState state = _envelopeFiles.finish(fileHandle, false);
-    return state.seal(GroupEnvelopeEncryptor::packFileManifest(state.fileKey, state.chunks));
+    return _envelopeFiles.finishWrite(fileHandle, [](const EnvelopeFileState& state) {
+        return state.seal(GroupEnvelopeEncryptor::packFileManifest(state.fileKey, state.chunks));
+    });
+}
+
+void GroupApiImpl::abortFile(FileHandle fileHandle) {
+    _envelopeFiles.abort(fileHandle);
 }
 
 FileHandle GroupApiImpl::beginFileDecryption(
