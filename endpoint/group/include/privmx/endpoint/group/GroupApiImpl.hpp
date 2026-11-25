@@ -471,12 +471,14 @@ private:
     struct CachedSpace {
         server::SpaceInfo info;
         std::int64_t readAt = 0;
-        bool allVersions = false; // read with spaceGet: `info.keys` holds every version the caller can open
-        bool groupsFresh = false; // `spaceKeyIsStale` found no recipient group ahead of its entry, for this read
+        bool allVersions = false;     // read with spaceGet: `info.keys` holds every version the caller can open
+        bool groupsFresh = false;     // `spaceKeyIsStale` found no recipient group ahead of its entry, for this read
+        std::uint64_t generation = 0; // of the Space when it was read: one from before a delete or create is not used
     };
     struct SpaceKeyUse {
         std::string key{};
-        std::string via{}; // the recipient group the caller holds the key through; empty for the caller's own entry
+        std::string via{};  // the recipient group the caller holds the key through; empty for the caller's own entry
+        std::string wrap{}; // the entry it was unwrapped from: a cached key is used only with that entry served
     };
     struct SpaceTarget {
         bool isGroup = false;
@@ -486,7 +488,22 @@ private:
     };
     server::SpaceInfo spaceInfo(const std::string& spaceId, bool fresh = false);
     void forgetSpace(const std::string& spaceId);
-    void requireNoKeyRollback(const server::SpaceInfo& space);
+    // A deleted Space: its keys and the version seen go too, or one created again under the same id would reuse the
+    // old key or be called a fork.
+    void dropSpace(const std::string& spaceId);
+    // The highest key version seen of the Space.
+    std::int64_t seenKeyVersion(const std::string& spaceId);
+    // What a read of a Space is held to, taken before its request: the mark and the Space's generation then.
+    struct SpaceReadTicket {
+        std::int64_t seen = 0;
+        std::uint64_t generation = 0;
+    };
+    SpaceReadTicket spaceReadTicket(const std::string& spaceId);
+    bool keepSpaceRead(
+        const server::SpaceInfo& space,
+        const SpaceReadTicket& ticket,
+        const std::optional<CachedSpace>& keep
+    );
     SpaceKeyUse spaceKeyAt(const server::SpaceInfo& space, std::int64_t keyVersion);
     // The recipients' current keys, each verified: a group's off its latest statement, a user's by the UserVerifier.
     std::vector<SpaceTarget> spaceTargets(
@@ -514,7 +531,8 @@ private:
     privmx::utils::ThreadSaveMap<std::string, CachedSpace> _spaces;
     // The highest key version each Space was seen at. Not dropped on a reconnect: it only ever moves forward.
     std::mutex _spaceKeyVersionsMutex;
-    std::map<std::string, std::int64_t> _spaceKeyVersions;             // guarded by the mutex above
+    std::map<std::string, std::int64_t> _spaceKeyVersions;  // guarded by the mutex above
+    std::map<std::string, std::uint64_t> _spaceGenerations; // guarded by it too; moved by a delete or own create
     privmx::utils::ThreadSaveMap<std::string, SpaceKeyUse> _spaceKeys; // by "<spaceId>:<keyVersion>"
     std::shared_ptr<Sequence> sequenceOf(SequenceHandle handle, bool wantReading);
     core::Buffer markSequence(Sequence& sequence, bool closed);

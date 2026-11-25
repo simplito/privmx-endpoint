@@ -79,9 +79,10 @@ std::string GroupApiImpl::deriveSpaceId(const std::string& contextId, const core
 
 group::server::SpaceInfo GroupApiImpl::spaceInfo(const std::string& spaceId, bool fresh) {
     const std::int64_t now = privmx::utils::Utils::getNowTimestamp();
+    const SpaceReadTicket ticket = spaceReadTicket(spaceId);
     if (!fresh) {
         const auto cached = _spaces.get(spaceId);
-        if (cached.has_value() && now - cached->readAt < SPACE_CACHE_MS) {
+        if (cached.has_value() && now - cached->readAt < SPACE_CACHE_MS && cached->generation == ticket.generation) {
             return cached->info;
         }
     }
@@ -89,8 +90,13 @@ group::server::SpaceInfo GroupApiImpl::spaceInfo(const std::string& spaceId, boo
     model.id = spaceId;
     group::server::SpaceInfo info = _serverApi.spaceGet(model).space;
     core::EndpointUtils::assertServedId(spaceId, info.id);
-    requireNoKeyRollback(info);
-    _spaces.set(spaceId, CachedSpace{.info = info, .readAt = now, .allVersions = true});
+    if (!keepSpaceRead(
+            info, ticket, CachedSpace{.info = info, .readAt = now, .allVersions = true, .generation = ticket.generation}
+        )) {
+        // Sent before this process rotated the key or deleted the Space: asked again, and that answer is held to
+        // what is known now (a delete: the Bridge says so; a lower version: a rollback).
+        return spaceInfo(spaceId, true);
+    }
     return info;
 }
 
@@ -98,30 +104,89 @@ group::server::SpaceInfo GroupApiImpl::spaceInfo(const std::string& spaceId, boo
 // would be theirs to read. So a version this process has seen is never followed by a lower one.
 // ponytail: kept in memory, for the life of the connection's GroupApi. Put it beside the group pins when a
 // rollback across restarts has to be caught as well.
-void GroupApiImpl::requireNoKeyRollback(const group::server::SpaceInfo& space) {
-    // One step under one lock: two reads racing must not leave the lower version as the mark.
+std::int64_t GroupApiImpl::seenKeyVersion(const std::string& spaceId) {
     std::lock_guard lock(_spaceKeyVersionsMutex);
-    std::int64_t& seen = _spaceKeyVersions[space.id];
-    if (space.keyVersion < seen) {
+    const auto seen = _spaceKeyVersions.find(spaceId);
+    return seen == _spaceKeyVersions.end() ? 0 : seen->second;
+}
+
+GroupApiImpl::SpaceReadTicket GroupApiImpl::spaceReadTicket(const std::string& spaceId) {
+    std::lock_guard lock(_spaceKeyVersionsMutex);
+    const auto seen = _spaceKeyVersions.find(spaceId);
+    const auto generation = _spaceGenerations.find(spaceId);
+    return SpaceReadTicket{
+        .seen = seen == _spaceKeyVersions.end() ? 0 : seen->second,
+        .generation = generation == _spaceGenerations.end() ? 0 : generation->second,
+    };
+}
+
+// Thrown on a version below the one seen when the request was issued: a rollback. A read in flight while this process
+// rotated the key may answer with the version before that rotation, which is no rollback - but it is not kept either
+// (false): nothing is written under a key this process already replaced. Nor is an answer to a request sent before
+// this process deleted the Space. Kept: the mark moves up and `keep` is cached, both under the one lock.
+bool GroupApiImpl::keepSpaceRead(
+    const group::server::SpaceInfo& space,
+    const SpaceReadTicket& ticket,
+    const std::optional<CachedSpace>& keep
+) {
+    std::lock_guard lock(_spaceKeyVersionsMutex);
+    if (space.keyVersion < ticket.seen) {
         throw GroupHistoryForkException(
             "Space " +
             space.id +
             " served at key version " +
             std::to_string(space.keyVersion) +
             ", seen at " +
-            std::to_string(seen)
+            std::to_string(ticket.seen)
         );
     }
+    const auto generation = _spaceGenerations.find(space.id);
+    if ((generation == _spaceGenerations.end() ? 0 : generation->second) != ticket.generation) {
+        return false;
+    }
+    std::int64_t& seen = _spaceKeyVersions[space.id];
+    if (space.keyVersion < seen) {
+        return false;
+    }
     seen = space.keyVersion;
+    if (keep.has_value()) {
+        _spaces.set(space.id, keep.value());
+    }
+    return true;
 }
 
 void GroupApiImpl::forgetSpace(const std::string& spaceId) {
     _spaces.erase(spaceId);
 }
 
+void GroupApiImpl::dropSpace(const std::string& spaceId) {
+    {
+        // A new generation: an answer to a request sent before the delete is not kept. The version mark stays: a
+        // Space that comes back under this id is held to it, unless this process creates it again (`createSpace`).
+        std::lock_guard lock(_spaceKeyVersionsMutex);
+        ++_spaceGenerations[spaceId];
+    }
+    forgetSpace(spaceId);
+    std::vector<std::string> keys;
+    _spaceKeys.forAll([&](const std::string& key, const SpaceKeyUse&) {
+        if (key.rfind(spaceId + ":", 0) == 0) {
+            keys.push_back(key);
+        }
+    });
+    for (const std::string& key : keys) {
+        _spaceKeys.erase(key);
+    }
+}
+
 GroupApiImpl::SpaceKeyUse GroupApiImpl::spaceKeyAt(const group::server::SpaceInfo& space, std::int64_t keyVersion) {
     const std::string cacheKey = space.id + ":" + std::to_string(keyVersion);
-    if (const auto cached = _spaceKeys.get(cacheKey); cached.has_value()) {
+    // A key cached from an entry this read no longer serves (a Space deleted and created again, a read from before
+    // that) is not this read's key: unwrapped again.
+    if (const auto cached = _spaceKeys.get(cacheKey); cached.has_value() &&
+        std::any_of(space.keys.begin(), space.keys.end(), [&](const group::server::SpaceKeyEntry& entry) {
+                                                          return entry.keyVersion == keyVersion &&
+                                                              entry.data == cached->wrap;
+                                                      })) {
         return cached.value();
     }
     const std::string ownUserId = _connection.getImpl()->getMyUserId(space.contextId);
@@ -166,7 +231,9 @@ GroupApiImpl::SpaceKeyUse GroupApiImpl::spaceKeyAt(const group::server::SpaceInf
                     space.contextId,
                     {core::UserWithPubKey{.userId = header.signerUserId, .pubKey = header.signerPubKey}}
                 );
-                const SpaceKeyUse use{.key = key, .via = isGroup ? slot.recipientId : std::string()};
+                const SpaceKeyUse use{
+                    .key = key, .via = isGroup ? slot.recipientId : std::string(), .wrap = entry.data
+                };
                 _spaceKeys.set(cacheKey, use);
                 return use;
             } catch (const std::exception& e) {
@@ -313,6 +380,12 @@ std::string GroupApiImpl::createSpace(
         }
     ));
     core::EndpointUtils::assertServedId(spaceId, _serverApi.spaceCreate(model).spaceId);
+    dropSpace(spaceId); // whatever is cached of an earlier Space under this id
+    {
+        // This process made it, at version 1: the only way a version mark of an earlier Space under this id resets.
+        std::lock_guard lock(_spaceKeyVersionsMutex);
+        _spaceKeyVersions[spaceId] = 1;
+    }
     return spaceId;
 }
 
@@ -372,12 +445,24 @@ core::PagingList<SpaceState> GroupApiImpl::listSpaces(
     group::server::SpaceListModel model;
     model.contextId = contextId;
     core::ListQueryMapper::map(model, pagingQuery);
+    std::map<std::string, SpaceReadTicket> tickets;
+    {
+        std::lock_guard lock(_spaceKeyVersionsMutex);
+        for (const auto& [id, seen] : _spaceKeyVersions) {
+            tickets[id].seen = seen;
+        }
+        for (const auto& [id, generation] : _spaceGenerations) {
+            tickets[id].generation = generation;
+        }
+    }
     const group::server::SpaceListResult result = _serverApi.spaceList(model);
     std::vector<SpaceState> spaces;
     spaces.reserve(result.spaces.size());
     for (const group::server::SpaceInfo& space : result.spaces) {
-        requireNoKeyRollback(space);
-        spaces.push_back(toSpaceState(space));
+        // Throws on a rollback. An answer overtaken by a rotation, a delete or a create of this process is left out.
+        if (keepSpaceRead(space, tickets[space.id], std::nullopt)) {
+            spaces.push_back(toSpaceState(space));
+        }
     }
     return core::PagingList<SpaceState>({.totalAvailable = result.count, .readItems = spaces});
 }
@@ -386,7 +471,7 @@ void GroupApiImpl::deleteSpace(const std::string& spaceId) {
     group::server::SpaceIdModel model;
     model.id = spaceId;
     _serverApi.spaceDelete(model);
-    forgetSpace(spaceId);
+    dropSpace(spaceId);
 }
 
 void GroupApiImpl::addSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipient>& recipients) {
@@ -521,6 +606,9 @@ core::Buffer GroupApiImpl::sealInSpace(
     const core::Buffer& content
 ) {
     group::server::SpaceInfo space = spaceInfo(spaceId);
+    if (space.keyVersion < seenKeyVersion(spaceId)) {
+        space = spaceInfo(spaceId, true); // a cached read from before this process moved the key on
+    }
     if (spaceKeyIsStale(space)) {
         // Someone removed from a recipient group still holds this key: nothing more is written under it.
         try {
