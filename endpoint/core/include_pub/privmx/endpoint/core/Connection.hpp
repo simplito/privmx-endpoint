@@ -189,9 +189,12 @@ public:
 
     /**
      * Sets the built-in key-continuity verifier as this connection's UserVerifier: the first key a user of a Context
-     * is seen with is taken as theirs (trust on first use), and any other key for that user is refused until
-     * acceptKeyChange. For an application with no server or PKI of its own to ask; one that has such a service should
-     * implement UserVerifierInterface instead, which also covers the first key.
+     * is seen with is taken as theirs (trust on first use) if it is the key the Bridge lists for that user in that
+     * Context and is not already taken as another user's there, and any other key for that user is refused until
+     * acceptKeyChange. The first key is the Bridge's word, never the one a signed item names for its own author; a
+     * user the Bridge no longer lists (removed from the Context) is refused on first use. For an application with no
+     * server or PKI of its own to ask; one that has such a service should implement UserVerifierInterface instead,
+     * which also covers the first key.
      *
      * Not the default, and not free of consequences. What it knows lives in this connection's memory, so every new
      * connection trusts first use again and has to be told again of every change it must accept. And a user whose key

@@ -16,6 +16,7 @@ limitations under the License.
 #include <functional>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -28,21 +29,34 @@ namespace endpoint {
 namespace core {
 
 // The verifier Connection::useKeyContinuity sets: trust on first use, then continuity. The first
-// key a user of a Context is seen with is taken as theirs; any other key for that user is refused until the
-// application accepts the change (`accept`, behind Connection::acceptKeyChange). A key replaced that way stays good
-// for what was dated before the change was accepted, and for nothing after.
+// key a user of a Context is seen with is taken as theirs if it is the key the Bridge lists for that user in that
+// Context (`listedKeys`, read fresh) and is not already pinned to another user there; any other key for that user is refused
+// until the application accepts the change (`accept`, behind Connection::acceptKeyChange). A key replaced that way
+// stays good for what was dated before the change was accepted, and for nothing after.
 //
-// It proves nothing about the first key: an application that can ask its own server or a PKI should set a
-// UserVerifierInterface that does.
+// SECURITY: the first key is never taken from the request alone. The request's key comes from what is being
+// verified (a signed header names its own author and key), so anyone in the Context could otherwise sign as "ceo"
+// with her own key and have it pinned as ceo's.
+//
+// It proves nothing about the first key beyond the Bridge's word: an application that can ask its own server or a
+// PKI should set a UserVerifierInterface that does.
 //
 // ponytail: kept in memory for the connection's lifetime, so every new connection trusts first use again; seal the
 // map into the PinStore next to the group pins when that matters.
 class KeyContinuityVerifier : public virtual UserVerifierInterface {
 public:
+    // userId -> public key (Base58DER) of every user the Bridge lists in a Context.
+    using ListedKeys = std::function<std::map<std::string, std::string>(const std::string& contextId)>;
+
     // `ownUserId`: this connection's user id in a Context, or "" when it cannot be told. Asked only for a request
     // that presents one of the connection's own keys.
-    explicit KeyContinuityVerifier(std::function<std::string(const std::string& contextId)> ownUserId = nullptr)
-        : _ownUserId(std::move(ownUserId)) {}
+    // `listedKeys`: asked once per `verify` call and Context with a first use in it, never cached across calls (a
+    // pinned user is not asked about again). Null, or throwing: no first use is accepted.
+    explicit KeyContinuityVerifier(
+        std::function<std::string(const std::string& contextId)> ownUserId = nullptr,
+        ListedKeys listedKeys = nullptr
+    )
+        : _ownUserId(std::move(ownUserId)), _listedKeys(std::move(listedKeys)) {}
 
     std::vector<bool> verify(const std::vector<VerificationRequest>& request) override {
         // Which requests present a key of this connection's own user, as that user: looked up outside the lock.
@@ -75,6 +89,16 @@ public:
                 own[i] = validUntil == CURRENT || item.date <= validUntil ? Own::YES : Own::NO;
             }
         }
+        // What the Bridge lists for each user seen for the first time: looked up outside the lock, too.
+        std::vector<bool> listed(request.size(), false);
+        std::map<std::string, std::optional<std::map<std::string, std::string>>> listings; // this call's only
+        for (std::size_t i = 0; i < request.size(); ++i) {
+            const VerificationRequest& item = request[i];
+            if (own[i] != Own::UNDECIDED || isPinned(item.contextId, item.senderId)) {
+                continue;
+            }
+            listed[i] = isListed(item.contextId, item.senderId, item.senderPubKey, listings);
+        }
         std::lock_guard<std::mutex> lock(_mutex);
         std::vector<bool> result;
         result.reserve(request.size());
@@ -86,8 +110,14 @@ public:
             }
             std::vector<Known>& known = _keys[{item.contextId, item.senderId}];
             if (known.empty()) {
-                known.push_back(Known{item.senderPubKey, CURRENT});
-                result.push_back(true);
+                // SECURITY: first use takes the Bridge's key for the user, never one pinned to another user.
+                const bool ok = listed[i] && !pinnedToAnother(item.contextId, item.senderId, item.senderPubKey);
+                if (ok) {
+                    known.push_back(Known{item.senderPubKey, CURRENT});
+                } else {
+                    _keys.erase({item.contextId, item.senderId});
+                }
+                result.push_back(ok);
                 continue;
             }
             bool ok = false;
@@ -167,8 +197,57 @@ private:
         std::int64_t validUntil; // CURRENT, or the time its replacement was accepted (ms)
     };
 
+    bool isPinned(const std::string& contextId, const std::string& userId) {
+        std::lock_guard<std::mutex> lock(_mutex);
+        const auto known = _keys.find({contextId, userId});
+        return known != _keys.end() && !known->second.empty();
+    }
+
+    // Under _mutex.
+    bool pinnedToAnother(const std::string& contextId, const std::string& userId, const std::string& pubKey) {
+        for (auto it = _keys.lower_bound({contextId, ""}); it != _keys.end() && it->first.first == contextId; ++it) {
+            if (it->first.second == userId) {
+                continue;
+            }
+            for (const Known& key : it->second) {
+                if (key.pubKey == pubKey) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Whether the Bridge lists `pubKey` for the user; false when it cannot be asked. Not under _mutex.
+    // SECURITY: the listing is fetched fresh for each `verify` call that has a first use in the Context, never taken
+    // from an earlier call: a key the user replaced (after a compromise, say) must not be pinned off a stale list.
+    bool isListed(
+        const std::string& contextId,
+        const std::string& userId,
+        const std::string& pubKey,
+        std::map<std::string, std::optional<std::map<std::string, std::string>>>& listings
+    ) {
+        if (!_listedKeys) {
+            return false;
+        }
+        auto listing = listings.find(contextId);
+        if (listing == listings.end()) {
+            std::optional<std::map<std::string, std::string>> users;
+            try {
+                users = _listedKeys(contextId);
+            } catch (...) {}
+            listing = listings.emplace(contextId, std::move(users)).first;
+        }
+        if (!listing->second.has_value()) {
+            return false;
+        }
+        const auto user = listing->second->find(userId);
+        return user != listing->second->end() && user->second == pubKey;
+    }
+
     std::mutex _mutex;
     std::function<std::string(const std::string&)> _ownUserId;
+    ListedKeys _listedKeys;
     std::map<std::string, std::int64_t> _own; // own public key -> CURRENT, or when it was adopted as a previous one
     std::map<std::pair<std::string, std::string>, std::vector<Known>> _keys; // (contextId, userId)
 };

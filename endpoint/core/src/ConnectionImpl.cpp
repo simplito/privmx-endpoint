@@ -254,9 +254,24 @@ void ConnectionImpl::setUserVerifier(std::shared_ptr<UserVerifierInterface> veri
 
 void ConnectionImpl::useKeyContinuity() {
     // `this` outlives the verifier's use: the connection owns it, and drops it with itself.
-    auto verifier = std::make_shared<KeyContinuityVerifier>([this](const std::string& contextId) {
-        return getMyUserId(contextId);
-    });
+    auto verifier = std::make_shared<KeyContinuityVerifier>(
+        [this](const std::string& contextId) { return getMyUserId(contextId); },
+        [this](const std::string& contextId) {
+            std::map<std::string, std::string> keys;
+            const int64_t limit = 100;
+            for (int64_t skip = 0;; skip += limit) {
+                const PagingList<UserInfo> page = listContextUsers(
+                    contextId, PagingQuery{.skip = skip, .limit = limit, .sortOrder = "asc"}
+                );
+                for (const UserInfo& user : page.readItems) {
+                    keys[user.user.userId] = user.user.pubKey;
+                }
+                if (page.readItems.size() < static_cast<std::size_t>(limit) || skip + limit >= page.totalAvailable) {
+                    return keys;
+                }
+            }
+        }
+    );
     std::unique_lock lock(_mutex);
     verifier->trustOwn(_userPrivKey.getPublicKey().toBase58DER(), true);
     for (const crypto::PrivateKey& previous : _previousIdentities) {
