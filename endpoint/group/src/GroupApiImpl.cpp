@@ -1360,9 +1360,15 @@ DecryptedOutsiderEnvelope GroupApiImpl::decryptFromOutsider(
         envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey), binding
     );
     const std::int64_t epoch = _keys.grantEpochOf(groupId, routing.groupPubKey);
-    const RosterView roster = rosterOf(groupId);
+    RosterView roster = rosterOf(groupId);
     if (options.currentEpochOnly && epoch != roster.keyVersion) {
-        throw EnvelopeStaleEpochException();
+        // The epoch was just looked up, the roster may be a cached one behind it: read again before refusing (as
+        // `requireCurrentKey` does).
+        getNewModuleKeysAndUpdateCache(groupId);
+        roster = rosterOf(groupId);
+        if (epoch != roster.keyVersion) {
+            throw EnvelopeStaleEpochException();
+        }
     }
     requireVerifiedWriter(roster.contextId, opened, options);
     return DecryptedOutsiderEnvelope{
