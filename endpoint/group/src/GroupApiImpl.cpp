@@ -1455,8 +1455,16 @@ DecryptedSharedEnvelope GroupApiImpl::decryptShared(
         membership = "notMember";
     } else {
         try {
-            membership = rosterOf(opened->groupId).roleOf(opened->authorUserId).empty() ? "notMember" : "member";
-        } catch (const core::Exception&) {}
+            // A roster of another Context says nothing about a group of this one: "unknown".
+            const RosterView roster = rosterOf(opened->groupId);
+            if (roster.contextId == contextId) {
+                membership = roster.roleOf(opened->authorUserId).empty() ? "notMember" : "member";
+            }
+        } catch (const core::Exception& e) {
+            if (isForgedHistory(e)) {
+                throw;
+            }
+        }
     }
     return DecryptedSharedEnvelope{
         .data = opened->data,

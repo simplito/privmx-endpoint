@@ -285,6 +285,9 @@ struct Bridge {
                 bridgeError<srv::GroupDoesNotExistException>();
             }
             const auto model = server::GroupGetModel::fromJSON(params);
+            if (model.groupId != tree.groupId) {
+                bridgeError<srv::GroupDoesNotExistException>(); // the one group this bridge serves is another
+            }
             const bool plan = model.scope == std::optional<std::string>("plan");
             server::GroupInfo info = serve(caller, plan);
             if (model.forNewMembers.has_value()) {
@@ -4478,5 +4481,19 @@ TEST_F(GroupApiLyingBridge, ARemovalAndARotationSayWhichEpochTheyMade) {
     EXPECT_EQ(client("alice").rotateGroupKey(groupId), 3);
     EXPECT_EQ(
         GroupApiImpl::peekEnvelope(client("alice").encrypt(groupId, NOWHERE, core::Buffer::from("x"), {})).keyVersion, 3
+    );
+}
+
+TEST_F(GroupApiLyingBridge, ASharedReadTellsMembershipOnlyByARosterOfTheContextNamed) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "carol"});
+    privmx::endpoint::group::EncryptOptions options;
+    options.alsoFor.push_back({.groupId = "", .user = user("carol")});
+    const Envelope sealed = client("alice").encrypt(groupId, message("d1"), core::Buffer::from("discharge"), options);
+    EXPECT_EQ(client("carol").decryptShared(CONTEXT, message("d1"), sealed, from("alice")).senderMembership, "member");
+    // The home group's roster is of another Context than the one the caller says the envelope was written in.
+    EXPECT_EQ(
+        client("carol").decryptShared("other-context", message("d1"), sealed, from("alice")).senderMembership,
+        "unknown"
     );
 }
