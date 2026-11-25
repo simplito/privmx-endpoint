@@ -521,13 +521,15 @@ core::Buffer GroupApiImpl::sealInSpace(
     const core::Buffer& content
 ) {
     group::server::SpaceInfo space = spaceInfo(spaceId);
-    if (space.keyIsStale) {
+    if (spaceKeyIsStale(space)) {
         // Someone removed from a recipient group still holds this key: nothing more is written under it.
         try {
             replaceSpaceKey(spaceId, {}, {});
-        } catch (const SpaceRecipientUnavailableException&) { throw; } catch (const core::Exception&) {
+        } catch (const SpaceRecipientUnavailableException&) { throw; } catch (const GroupHistoryForkException&) {
+            throw; // a history that does not hold is the answer, never a lost race
+        } catch (const core::Exception&) {
             // Lost to another writer doing the same: fine if the key is fresh now.
-            if (spaceInfo(spaceId, true).keyIsStale) {
+            if (spaceKeyIsStale(spaceInfo(spaceId, true))) {
                 throw;
             }
         }
@@ -543,6 +545,39 @@ core::Buffer GroupApiImpl::sealInSpace(
             .authorUserId = _connection.getImpl()->getMyUserId(space.contextId),
         }
     );
+}
+
+bool GroupApiImpl::spaceKeyIsStale(const group::server::SpaceInfo& space) {
+    if (space.keyIsStale) {
+        return true;
+    }
+    if (space.groups.empty()) {
+        return false;
+    }
+    // The Bridge's "fresh" is only its word: each recipient group's epoch, as this client verifies it now, is held
+    // against the one the group's entry was wrapped to - as a client that sees a member removed rotates by itself.
+    // Checked once per cached read of the Space.
+    if (const auto cached = _spaces.get(space.id);
+        cached.has_value() && cached->groupsFresh && cached->info.keyVersion == space.keyVersion) {
+        return false;
+    }
+    std::vector<std::string> groupIds;
+    for (const group::server::SpaceGroup& group : space.groups) {
+        groupIds.push_back(group.groupId);
+    }
+    const auto epochs = fetchGroupEpochs(space.contextId, groupIds);
+    for (const group::server::SpaceGroup& group : space.groups) {
+        const auto epoch = epochs.find(group.groupId);
+        if (epoch == epochs.end() || epoch->second.keyVersion > group.groupKeyVersion) {
+            return true; // a group with no verifiable epoch is refused as a target by the rotation, loudly
+        }
+    }
+    _spaces.updateValueIfExist(space.id, [&](const CachedSpace& cached) {
+        CachedSpace checked = cached;
+        checked.groupsFresh = cached.info.keyVersion == space.keyVersion;
+        return checked;
+    });
+    return false;
 }
 
 core::Buffer GroupApiImpl::encryptInSpace(const std::string& spaceId, const Path& location, const core::Buffer& data) {
@@ -685,7 +720,7 @@ SequenceHandle GroupApiImpl::beginSequenceInSpace(
         [&](const core::Buffer& header) -> std::function<void()> {
             return [this, spaceId, keyVersion = GroupEnvelopeEncryptor::peekAny(header).keyVersion]() {
                 const group::server::SpaceInfo space = spaceInfo(spaceId);
-                if (space.keyVersion != keyVersion || space.keyIsStale) {
+                if (space.keyVersion != keyVersion || spaceKeyIsStale(space)) {
                     throw EnvelopeStaleEpochException();
                 }
             };

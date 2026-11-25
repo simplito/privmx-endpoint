@@ -472,6 +472,7 @@ private:
         server::SpaceInfo info;
         std::int64_t readAt = 0;
         bool allVersions = false; // read with spaceGet: `info.keys` holds every version the caller can open
+        bool groupsFresh = false; // `spaceKeyIsStale` found no recipient group ahead of its entry, for this read
     };
     struct SpaceKeyUse {
         std::string key{};
@@ -506,6 +507,9 @@ private:
         const std::vector<std::string>& withoutUsers
     );
     core::Buffer sealInSpace(const std::string& spaceId, const EnvelopeBinding& binding, const core::Buffer& content);
+    // Whether the Space's current key must not be written under: the Bridge says so, or a recipient group's verified
+    // current epoch is ahead of the one its entry was wrapped to (a member removed since still holds the key).
+    bool spaceKeyIsStale(const server::SpaceInfo& space);
     SpaceState toSpaceState(const server::SpaceInfo& space);
     privmx::utils::ThreadSaveMap<std::string, CachedSpace> _spaces;
     // The highest key version each Space was seen at. Not dropped on a reconnect: it only ever moves forward.
