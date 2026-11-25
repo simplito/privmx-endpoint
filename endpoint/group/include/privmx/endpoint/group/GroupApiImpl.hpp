@@ -272,6 +272,7 @@ private:
         std::string roleOf(const std::string& userId) const;
     };
     RosterView rosterOf(const std::string& groupId);
+    static server::GroupInfo listedFrom(const server::GroupPublicInfo& info);
     // The only writer of `_rosters`: called wherever the module-key cache is filled from a verified read.
     void rememberRoster(const server::GroupInfo& group);
     // The only way this class drops a group's cached keys: the roster goes with them.

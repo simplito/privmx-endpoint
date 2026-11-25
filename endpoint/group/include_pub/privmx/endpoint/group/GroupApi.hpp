@@ -84,8 +84,9 @@ public:
      * so no server has to be asked which Group belongs to an entity.
      *
      * A seed anybody can compute is a name anybody can take first. Creating a Group under a seed fails when one
-     * exists or ever existed; a caller who finds a Group under a derived ID checks `Group::creator` against who
-     * owns the entity before trusting it.
+     * exists or ever existed; a caller who finds a Group under a derived ID checks who created it against who owns
+     * the entity before trusting it: `Group::creator` for a member, `GroupPublicKey::creator` (getGroupPublicKey)
+     * for a writer outside the Group, before `encryptAsOutsider` or naming it in `alsoFor`.
      */
     static std::string deriveGroupId(const std::string& contextId, const core::Buffer& idSeed);
 
@@ -94,7 +95,8 @@ public:
 
     /**
      * The Group's current identity key, read and verified against the Group's latest statement. For a member,
-     * and for any user of the Context when the Group is visible to the Context (`setGroupVisibility`).
+     * and for any user of the Context when the Group is visible to the Context (`setGroupVisibility`). `creator`
+     * is held to the same statement: what a writer outside the Group checks a Group found by `deriveGroupId` by.
      */
     GroupPublicKey getGroupPublicKey(const std::string& contextId, const std::string& groupId);
 

@@ -461,6 +461,11 @@ struct GroupPublicKey {
     int64_t keyVersion;
     /** Base58-DER. */
     std::string pubKey;
+    /**
+     * Who created the Group. The Bridge's field, held to the Group's latest signed statement: the creator is
+     * part of the policy every statement signs.
+     */
+    std::string creator;
 };
 
 struct GroupEpochRef {

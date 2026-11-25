@@ -373,5 +373,6 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupPublicKey>(const group::
     obj->set("groupId", serialize(val.groupId));
     obj->set("keyVersion", serialize(val.keyVersion));
     obj->set("pubKey", serialize(val.pubKey));
+    obj->set("creator", serialize(val.creator));
     return obj;
 }

@@ -777,6 +777,7 @@ TEST_F(GroupTest, envelope_signed_by_a_non_member) {
     EXPECT_EQ(key.groupId, groupId);
     EXPECT_EQ(key.keyVersion, 1);
     EXPECT_FALSE(key.pubKey.empty());
+    EXPECT_EQ(key.creator, reader->getString("Login.user_1_id")) << "what an outsider checks a derived ID by";
     // Visible is not readable.
     EXPECT_ANY_THROW({ groupApi->getGroup(groupId); });
 

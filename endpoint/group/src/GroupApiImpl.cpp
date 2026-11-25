@@ -32,6 +32,21 @@
 using namespace privmx::endpoint;
 using namespace group;
 
+namespace {
+
+// A Group whose served history does not verify: the answer, never a reason to fall back to another read.
+bool isForgedHistory(const core::Exception& e) {
+    const auto code = e.getCode();
+    return code == GroupHistoryForkException::FULL_CODE ||
+        code == GroupDataIntegrityException::FULL_CODE ||
+        code == GroupChainBrokenException::FULL_CODE ||
+        code == GroupUnauthorizedSignerException::FULL_CODE ||
+        code == GroupMembershipMismatchException::FULL_CODE ||
+        code == GroupPublicDataMismatchException::FULL_CODE;
+}
+
+} // namespace
+
 GroupApiImpl::GroupApiImpl(
     const privfs::RpcGateway::Ptr& gateway,
     const privmx::crypto::PrivateKey& userPrivKey,
@@ -174,8 +189,31 @@ GroupPublicKey GroupApiImpl::getGroupPublicKey(const std::string& contextId, con
     if (epoch == epochs.end()) {
         throw GroupDataIntegrityException("group " + groupId + " has no verifiable key");
     }
+    // The creator, from a read held to the latest signed statement (the policy it signs names the creator): the
+    // caller's own verified read when they are a member, the public one otherwise. A history that does not verify
+    // is the answer, never a reason to try the other read.
+    std::string creator;
+    try {
+        creator = getGroup(groupId).creator;
+    } catch (const core::Exception& e) {
+        if (isForgedHistory(e)) {
+            throw;
+        }
+        server::GroupGetPublicKeyModel model;
+        model.groupId = groupId;
+        const server::GroupInfo group = listedFrom(_serverApi.groupGetPublicKey(model).group);
+        _treeVerifier.preverifyListed({group}, VerifiedGroup::treeEnvironment(_serverApi, _connection, std::string()));
+        _treeVerifier.verifyListed(group, VerifiedGroup::treeEnvironment(_serverApi, _connection, group.id));
+        if (group.contextId != contextId) {
+            throw GroupDataIntegrityException("group " + groupId + " is of another Context");
+        }
+        creator = group.creator;
+    }
     return GroupPublicKey{
-        .groupId = groupId, .keyVersion = epoch->second.keyVersion, .pubKey = epoch->second.groupPubKey
+        .groupId = groupId,
+        .keyVersion = epoch->second.keyVersion,
+        .pubKey = epoch->second.groupPubKey,
+        .creator = creator
     };
 }
 
@@ -516,6 +554,23 @@ bool GroupApiImpl::hasVerifiedGrantKey(const server::GroupInfo& group) {
     return group.treeCommit->seq >= static_cast<std::int64_t>(_treeVerifier.pinnedSeq(group.id));
 }
 
+// What `groupGetPublicKey` serves, in the shape the listing checks take.
+group::server::GroupInfo GroupApiImpl::listedFrom(const group::server::GroupPublicInfo& info) {
+    server::GroupInfo asListed;
+    asListed.id = info.id;
+    asListed.contextId = info.contextId;
+    asListed.resourceId = info.resourceId;
+    asListed.creator = info.creator;
+    asListed.users = info.users;
+    asListed.managers = info.managers;
+    asListed.rosterVersion = info.rosterVersion;
+    asListed.keyVersion = info.keyVersion;
+    asListed.groupPubKey = info.groupPubKey;
+    asListed.policy = info.policy;
+    asListed.treeCommit = info.treeCommit;
+    return asListed;
+}
+
 std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEpochs(
     const std::string& contextId,
     const std::vector<std::string>& groupIds
@@ -570,18 +625,7 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
                 server::GroupGetPublicKeyModel publicKeyModel;
                 publicKeyModel.groupId = id;
                 const server::GroupPublicInfo info = _serverApi.groupGetPublicKey(publicKeyModel).group;
-                server::GroupInfo asListed;
-                asListed.id = info.id;
-                asListed.contextId = info.contextId;
-                asListed.resourceId = info.resourceId;
-                asListed.creator = info.creator;
-                asListed.users = info.users;
-                asListed.managers = info.managers;
-                asListed.rosterVersion = info.rosterVersion;
-                asListed.keyVersion = info.keyVersion;
-                asListed.groupPubKey = info.groupPubKey;
-                asListed.policy = info.policy;
-                asListed.treeCommit = info.treeCommit;
+                server::GroupInfo asListed = listedFrom(info);
                 read.push_back(std::move(asListed));
             } catch (const std::exception& e) {
                 LOG_WARN("[fetchGroupEpochs] group ", id, " serves no key to this caller: ", e.what())
