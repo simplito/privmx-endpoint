@@ -39,10 +39,17 @@ using namespace privmx::endpoint::group;
 
 namespace {
 
-// A Space's private metadata is an envelope of the Space with a content kind of its own, bound to no location.
+// A Space's private metadata is an envelope of the Space with a content kind of its own, bound to its version
+// (`privateMetaVersion`) as a value is to its location: the Bridge cannot serve an earlier one as the current.
 // `bindingOf` makes that kind for nobody, so no value the application writes can be put in its place.
-EnvelopeBinding metaBinding() {
-    return EnvelopeBinding{.hasLocation = false, .locationDigest = {}, .content = EnvelopeContent::SpaceMeta};
+EnvelopeBinding metaBinding(std::int64_t privateMetaVersion) {
+    return EnvelopeBinding{
+        .hasLocation = true,
+        .locationDigest = privmx::crypto::Crypto::sha256(
+            "privmx/space/privateMetaVersion:" + std::to_string(privateMetaVersion)
+        ),
+        .content = EnvelopeContent::SpaceMeta,
+    };
 }
 
 Poco::Dynamic::Var toWire(const core::Buffer& bytes) {
@@ -299,7 +306,7 @@ std::string GroupApiImpl::createSpace(
     model.privateMeta = toWire(_envelopeEncryptor.packSpaceEnvelope(
         spaceId, std::string(), privateMeta, _userPrivKey, spaceKey,
         EnvelopeSeal{
-            .binding = metaBinding(),
+            .binding = metaBinding(1),
             .keyVersion = 1,
             .encryptedAt = privmx::utils::Utils::getNowTimestamp(),
             .authorUserId = _connection.getImpl()->getMyUserId(contextId),
@@ -345,7 +352,7 @@ SpaceState GroupApiImpl::toSpaceState(const group::server::SpaceInfo& space) {
         withKeys = spaceInfo(space.id, true); // a listing carries the current version only
     }
     const OpenedEnvelope opened = _envelopeEncryptor.openSpaceEnvelope(
-        sealed, spaceKeyAt(withKeys, routing.keyVersion).key, metaBinding()
+        sealed, spaceKeyAt(withKeys, routing.keyVersion).key, metaBinding(space.privateMetaVersion)
     );
     requireVerifiedWriter(
         space.contextId, opened, DecryptOptions{.expectedAuthor = {}, .anyAuthor = true, .currentEpochOnly = false}
@@ -500,7 +507,7 @@ void GroupApiImpl::updateSpacePublicMeta(const std::string& spaceId, const core:
 void GroupApiImpl::updateSpacePrivateMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version) {
     group::server::SpaceUpdateMetaModel model;
     model.id = spaceId;
-    model.meta = toWire(sealInSpace(spaceId, metaBinding(), meta));
+    model.meta = toWire(sealInSpace(spaceId, metaBinding(version + 1), meta)); // the version it is stored at
     model.version = version;
     _serverApi.spaceUpdatePrivateMeta(model);
     forgetSpace(spaceId);
