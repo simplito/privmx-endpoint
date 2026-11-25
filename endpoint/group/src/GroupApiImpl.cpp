@@ -768,7 +768,7 @@ void GroupApiImpl::processConnectedEvent() {
     // Open file handles too. A handle used after this reports "not an open encrypted-file handle", which a reconnect
     // made true.
     _envelopeFiles.clear();
-    _sequences.clear();
+    dropSequences();
     _spaces.clear();
     _spaceKeys.clear();
     dropCachedGroup();
@@ -783,7 +783,7 @@ void GroupApiImpl::processDisconnectedEvent() {
     savePins();
     _sessions.dropKeys();
     _envelopeFiles.clear();
-    _sequences.clear();
+    dropSequences();
     _spaces.clear();
     _spaceKeys.clear();
     dropCachedGroup();
@@ -1739,6 +1739,20 @@ std::shared_ptr<GroupApiImpl::Sequence> GroupApiImpl::sequenceOf(SequenceHandle 
         );
     }
     return sequence.value();
+}
+
+// Every open sequence, out of the HandleManager too: a handle used after this is "not an open sequence handle".
+void GroupApiImpl::dropSequences() {
+    std::vector<SequenceHandle> handles;
+    _sequences.forAll([&](const SequenceHandle& handle, const std::shared_ptr<Sequence>&) {
+        handles.push_back(handle);
+    });
+    for (const SequenceHandle handle : handles) {
+        _sequences.erase(handle);
+        try {
+            _connection.getImpl()->getHandleManager()->removeHandle(handle);
+        } catch (...) {}
+    }
 }
 
 void GroupApiImpl::closeSequence(SequenceHandle handle) {
