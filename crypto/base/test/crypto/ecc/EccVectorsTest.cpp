@@ -24,8 +24,10 @@ limitations under the License.
  *
  * The key is a fixed private scalar; the expected values were taken from the driver-backed
  * implementation, which is the behaviour already deployed and therefore the definition of correct
- * here. Unlike the composition vectors, an independent model is not available: these are curve
- * operations, and reimplementing secp256k1 to check them would be the very mistake being avoided.
+ * here. Reimplementing secp256k1 to check them would be the very mistake being avoided — but one
+ * question does have an independent answer, and `SignsOverASingleSha256` asks it: **how many times
+ * the message is hashed** is settled by a signature the `openssl` command line produced from this
+ * same scalar, which no code in this repository had a hand in.
  */
 
 #include <string>
@@ -100,6 +102,36 @@ TEST(EccVectorsTest, CompactSignatureFraming) {
     EXPECT_EQ(0x1b, static_cast<unsigned char>(first[0])) << "the leading byte is a constant, not a recovery id";
     EXPECT_EQ(0x1b, static_cast<unsigned char>(second[0]));
     EXPECT_NE(first, second) << "signing draws a fresh k; if this ever holds, k became deterministic";
+}
+
+/**
+ * Which digest the signature is over — the one thing here an outside tool can settle.
+ *
+ * `sign`/`verify` take the **message** and hash it once with SHA-256 themselves. A signature over
+ * `sha256(sha256(message))` is what the wrapper in `crypto/base` used to build, by hashing before
+ * calling in, and nothing else accepts it: the bridge verifies over a single digest
+ * (`NonceService`, `src/utils/crypto/VerifyKey.ts`) and so does `core::PublicKey`. It reached
+ * production as an `INVALID_SIGNATURE` at login on every secp256k1 build.
+ *
+ * A round-trip cannot catch that, because hashing twice on both sides still agrees with itself —
+ * which is exactly how it got through. These two signatures were made by `openssl dgst -sha256
+ * -sign` from `privateScalar()`, over the message and over its digest respectively, so they fix the
+ * hash count from outside this code. Verification is deterministic, so unlike a signature of our
+ * own they can be pinned (see `CompactSignatureFraming` for why signing cannot).
+ */
+TEST(EccVectorsTest, SignsOverASingleSha256) {
+    const ECC key = ECC::fromPrivateKey(privateScalar());
+    const string overMessage = privmx::utils::Hex::toString(
+        "1b1d29c1af25818c9486036709f2056edb99d56966d51e3a6e91820b46a79eb5"
+        "af572d11c81008db767bb990c040f009be9cc1ca8e4629cab91fde837cf09d7b94"
+    );
+    const string overItsDigest = privmx::utils::Hex::toString(
+        "1be00111a40909b8ec6e317fc6787ae1687493911f5cd2dc60f9a547435dbcd0"
+        "81a31665e5b98359a70fca0bbcf395c9b1b1c74766e8ce221fe9a2672e235b52e5"
+    );
+
+    EXPECT_TRUE(key.verify(MESSAGE, overMessage)) << "the signature is over sha256(message)";
+    EXPECT_FALSE(key.verify(MESSAGE, overItsDigest)) << "hashing twice is the bug this pins";
 }
 
 TEST(EccVectorsTest, SignatureVerifies) {

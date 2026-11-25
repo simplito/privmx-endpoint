@@ -29,7 +29,6 @@ public:
     PrivateKey(const ECC& key);
     PublicKey getPublicKey() const;
     std::string getPrivateEncKey() const;
-    std::string signToCompactSignature(const std::string& message) const;
     std::string signToCompactSignatureWithHash(const std::string& message) const;
     std::string derive(const PublicKey& public_key) const;
     ECC getEccKey() const;

@@ -53,11 +53,8 @@ string PublicKey::toBase58Address() const {
     return Base58::encodeWithChecksum(payload, Crypto::sha256);
 }
 
-bool PublicKey::verifyCompactSignature(const string& message, const string& signature) const {
-    return _key.verify(message, signature);
-}
-
+/// The verifying half of `PrivateKey::signToCompactSignatureWithHash` — see there for why the message
+/// goes in whole: `ECC::verify` digests it, and hashing first as well would check the wrong digest.
 bool PublicKey::verifyCompactSignatureWithHash(const string& message, const string& signature) const {
-    string hash = Crypto::sha256(message);
-    return verifyCompactSignature(hash, signature);
+    return _key.verify(message, signature);
 }

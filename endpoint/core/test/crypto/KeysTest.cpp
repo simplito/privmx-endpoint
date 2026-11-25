@@ -109,11 +109,19 @@ TEST(Keys, SharedSecretMatchesLegacy) {
     EXPECT_EQ(legacyPriv.derive(legacyPeer.getPublicKey()), priv.derive(peer));
 }
 
-/// The most important compatibility test: a signature made by the new implementation has to pass
-/// verification by the old one, and the other way round. It guards against the Compact /
-/// CompactWithHash mix-up.
+/**
+ * The most important compatibility test: a signature made by the new implementation has to pass
+ * verification by the old one, and the other way round. It guards against the Compact /
+ * CompactWithHash mix-up.
+ *
+ * Deliberately **not** skipped on a build that generates other keys, unlike its neighbours. A WIF
+ * names secp256k1 by being one, so both sides here are secp256k1 keys whatever
+ * `PRIVMX_DEFAULT_KEY_ALGORITHM` says, and the old stack knows no other curve anyway. Skipping it
+ * once hid a double SHA-256 in the old wrapper for as long as only Ed25519 builds were run: those
+ * never reach it, because a split identity signs through the new implementation instead — so the
+ * suite was green while every secp256k1 login was refused by the bridge.
+ */
 TEST(Keys, SignaturesVerifyAcrossImplementations) {
-    SKIP_UNLESS_SECP256K1();
     const auto legacyPriv = legacy::PrivateKey::fromWIF(WIF);
     const auto priv = PrivateKey::fromWIF(WIF);
 

@@ -318,8 +318,9 @@ Var ConnectionClient::validateKeyInit(const Var& packet) {
     ECIES ecies(_private_key.value(), PublicKey::fromBase58DER(key_init->getValue<string>("pub")));
     string K_base64 = Base64::from(ecies.encrypt(_K));
     string signature = "login" + K_base64 + " " + nonce + " " + to_string(timestamp);
-    signature = Crypto::sha256(signature);
-    signature = _private_key.value().signToCompactSignature(signature);
+    // The SHA-256 the format is over belongs to the signing call, which applies it — doing it here as
+    // well would sign the digest of a digest.
+    signature = _private_key.value().signToCompactSignatureWithHash(signature);
     Object::Ptr result = new Object();
     result->set("type", "key_exchange");
     result->set("sessionId", session_id);

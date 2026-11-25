@@ -188,8 +188,10 @@ string pmximpl::ECCImpl::sign(const string& data) const {
         throw ECCIsNotInitializedException();
     }
     return mapped("eccSign", [&] {
-        // `Compact` signs the message as given; `CompactWithHash` would digest it again, and the
-        // callers here pass a digest already.
+        // `data` is the **message**, not a digest: for secp256k1 `Compact` is EVP_DigestSign with
+        // SHA-256, so the provider hashes it here (`CompactWithHash` would hash a second time).
+        // There is no scheme that signs a digest handed to it, which is why the callers above stopped
+        // pre-hashing — `EccVectorsTest.SignsOverASingleSha256` pins which of the two this is.
         string signature = str(_priv->sign(view(data), cs::SigScheme::Compact));
         if (signature.size() != COMPACT_SIGNATURE_LENGTH) {
             throw InvalidSignatureSizeException(to_string(signature.size()));

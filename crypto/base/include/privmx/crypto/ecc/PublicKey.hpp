@@ -31,7 +31,6 @@ public:
     std::string toDER() const;
     std::string toBase58DER() const;
     std::string toBase58Address() const;
-    bool verifyCompactSignature(const std::string& message, const std::string& signature) const;
     bool verifyCompactSignatureWithHash(const std::string& message, const std::string& signature) const;
     const ECC& getEcc() const;
 

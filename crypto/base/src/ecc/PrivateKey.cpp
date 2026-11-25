@@ -52,13 +52,17 @@ string PrivateKey::getPrivateEncKey() const {
     return Utils::fillTo32(key);
 }
 
-string PrivateKey::signToCompactSignature(const string& message) const {
-    return _key.sign(message);
-}
-
+/**
+ * ECDSA over `sha256(message)`, which is the signature every other side verifies.
+ *
+ * The hash is **not** applied here: `ECC::sign` digests the message itself. Doing both would sign
+ * `sha256(sha256(message))`, which the bridge rejects as an invalid signature — `NonceService`
+ * verifies over a single SHA-256 digest (`src/utils/crypto/VerifyKey.ts`), and so does the endpoint's
+ * own `core::PublicKey`. There is deliberately no entry point that signs a digest handed to it: the
+ * provider has no such scheme for secp256k1, so one could only be faked by hashing a second time.
+ */
 string PrivateKey::signToCompactSignatureWithHash(const string& message) const {
-    string hash = Crypto::sha256(message);
-    return signToCompactSignature(hash);
+    return _key.sign(message);
 }
 
 string PrivateKey::derive(const PublicKey& public_key) const {
