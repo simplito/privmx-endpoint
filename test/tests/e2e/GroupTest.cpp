@@ -820,6 +820,46 @@ TEST_F(GroupTest, envelope_signed_by_a_non_member) {
     });
 }
 
+TEST_F(GroupTest, a_writer_outside_a_group_follows_its_rotation_in_one_session) {
+    const std::string contextId = reader->getString("Context_1.contextId");
+    const std::string groupId = createGroupOf({user(1), user(3)});
+    ASSERT_NO_THROW({ groupApi->setGroupVisibility(groupId, "context"); });
+
+    // User 2 stays outside the group, in one session for the whole test: what it verifies first is pinned.
+    auto outsiderConnection = connect(2);
+    auto outsider = std::make_shared<group::GroupApi>(group::GroupApi::create(*outsiderConnection));
+    group::GroupPublicKey first;
+    ASSERT_NO_THROW({ first = outsider->getGroupPublicKey(contextId, groupId); });
+    EXPECT_EQ(first.keyVersion, 1);
+    core::Buffer before;
+    ASSERT_NO_THROW({
+        before = outsider->encryptAsOutsider(contextId, groupId, messagePath("o1"), core::Buffer::from("before"));
+    });
+
+    // A removal: a new epoch, with a new key. The outsider's pin has to catch up through the signed chain.
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {reader->getString("Login.user_3_id")}); });
+
+    group::GroupPublicKey second;
+    ASSERT_NO_THROW({ second = outsider->getGroupPublicKey(contextId, groupId); });
+    EXPECT_EQ(second.keyVersion, 2);
+    EXPECT_NE(second.pubKey, first.pubKey);
+    core::Buffer after;
+    ASSERT_NO_THROW({
+        after = outsider->encryptAsOutsider(contextId, groupId, messagePath("o2"), core::Buffer::from("after"));
+    });
+    outsider.reset();
+    outsiderConnection->disconnect();
+
+    const std::string writer = reader->getString("Login.user_2_id");
+    group::DecryptedOutsiderEnvelope read;
+    ASSERT_NO_THROW({ read = groupApi->decryptFromOutsider(groupId, messagePath("o2"), after, writtenBy(writer)); });
+    EXPECT_EQ(read.data.stdString(), "after");
+    EXPECT_EQ(read.keyVersion, 2);
+    EXPECT_EQ(
+        groupApi->decryptFromOutsider(groupId, messagePath("o1"), before, writtenBy(writer)).keyVersion, 1
+    );
+}
+
 TEST_F(GroupTest, group_id_follows_from_a_seed) {
     const std::string contextId = reader->getString("Context_1.contextId");
     // What an application has before any group exists: the entity the group is for.
