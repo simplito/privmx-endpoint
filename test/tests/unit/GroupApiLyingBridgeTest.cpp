@@ -5056,3 +5056,28 @@ TEST_F(GroupApiLyingBridge, WithoutAStoreASubjectIsKeptForTheSession) {
     clients.erase("alice");
     EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2)); // a first contact again
 }
+
+TEST(SpaceGroupKeyRefresh, SECURITY_ARefreshThroughTheGroupIsHeldToTheGroupsVerifiedKeys) {
+    using Access = GroupApiImplTestAccess;
+    const std::string real = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    const std::string forged = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    const core::GroupEpochInfo current{.keyVersion = 4, .groupPubKey = real};
+    const auto viaG = [](std::uint64_t version, const std::string& key) {
+        return Access::GroupKeyRefresh{.seq = 7, .groupId = "g", .groupKeyVersion = version, .groupPubKey = key, .byGroup = true};
+    };
+    // A removed member, still holding the key the Space pinned for G, signs "via G" a key of their own for G.
+    EXPECT_TRUE(Access::refusedRefresh(viaG(4, forged), std::nullopt, current).has_value()) << "another key at G's epoch";
+    EXPECT_TRUE(Access::refusedRefresh(viaG(5, forged), std::nullopt, current).has_value()) << "ahead of G";
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current).has_value()) << "cannot be verified";
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, std::nullopt).has_value()) << "G shows nothing";
+    // A member of G knows every epoch key of G.
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::int64_t{2}, current).has_value());
+    EXPECT_FALSE(Access::refusedRefresh(viaG(3, forged), std::int64_t{3}, current).has_value());
+    // The real current key holds, through G or from a manager.
+    EXPECT_FALSE(Access::refusedRefresh(viaG(4, real), std::nullopt, current).has_value());
+    auto byManager = viaG(3, forged);
+    byManager.byGroup = false;
+    EXPECT_FALSE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "a manager could replace G";
+    byManager.groupKeyVersion = 4;
+    EXPECT_TRUE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "shown wrong even for a manager";
+}

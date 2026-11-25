@@ -387,3 +387,36 @@ TEST_F(GroupSpaceTest, a_recipient_is_told_when_the_space_changes_and_when_it_is
     EXPECT_ANY_THROW({ groupApi2.subscribeFor({"context/spaces/custom/typing|containerId=" + spaceId}); });
     connection2->disconnect();
 }
+
+TEST_F(GroupSpaceTest, a_reader_outside_a_team_verifies_its_key_refresh_through_the_public_tree) {
+    std::shared_ptr<core::Connection> keep3;
+    switchTo(3);
+    const std::string support = createTeam({user(3)});
+    switchTo(1);
+    const std::string sales = createTeam({user(1), user(2)});
+    const std::string spaceId =
+        groupApi->createSpace(contextId(), {team(sales, "manager"), team(support, "user")}, text(""), text(""));
+    const core::Buffer before = groupApi->encryptInSpace(spaceId, note("n0"), text("before"));
+    // User 3 reads before the removal, in a session that stays open: what it verified of sales is the old epoch.
+    keep3 = connect(3);
+    auto user3 = std::make_shared<group::GroupApi>(group::GroupApi::create(*keep3));
+    EXPECT_EQ(user3->decryptInSpace(spaceId, note("n0"), before, by(userId(1))).data.stdString(), "before");
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(sales, {userId(2)}); });
+    int64_t version = 0;
+    ASSERT_NO_THROW({ version = groupApi->rotateSpaceKey(spaceId); });
+    EXPECT_EQ(version, 2);
+    const core::Buffer after = groupApi->encryptInSpace(spaceId, note("n1"), text("after"));
+
+    // User 3 is in support, not in sales: the refresh of sales' key, signed through sales, is held to sales'
+    // public verified tree, which the Context can see - in the session that verified the old epoch, and a new one.
+    EXPECT_NO_THROW({ EXPECT_EQ(user3->getSpace(spaceId).keyVersion, 2); });
+    EXPECT_EQ(user3->decryptInSpace(spaceId, note("n1"), after, by(userId(1))).data.stdString(), "after");
+    user3.reset();
+    keep3->disconnect();
+    keep3.reset();
+    switchTo(3);
+    SpaceState state;
+    ASSERT_NO_THROW({ state = groupApi->getSpace(spaceId); });
+    EXPECT_EQ(state.keyVersion, 2);
+    EXPECT_EQ(groupApi->decryptInSpace(spaceId, note("n1"), after, by(userId(1))).data.stdString(), "after");
+}

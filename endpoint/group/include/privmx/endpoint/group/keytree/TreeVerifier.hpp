@@ -100,6 +100,10 @@ public:
     // stored or moved up to the statement, so the writer is on first use only once per GroupApi (per device with a PinStore). A statement below
     // the pin passes, and `pinnedSeq` tells it apart. Throws GroupDataIntegrityException.
     void verifyListed(const server::GroupInfo& summary, const Environment& environment);
+    // What a first contact checks of a served group, and nothing more: its latest statement is genuine and describes
+    // it. No pin is read or moved, so a caller holding a pin it cannot catch up (no seat, no chain to read) can still
+    // tell what the group's latest statement says.
+    void verifyLatestOnly(const server::GroupInfo& summary, const Environment& environment);
 
     // The latest statements of several `groupGet` answers, put to the UserVerifier in one call, so that
     // `verifyListed` on each finds its statement checked already. Refuses nothing itself: a statement that fails is

@@ -54,6 +54,14 @@ struct GroupApiImplTestAccess {
     }
     static bool savePins(GroupApiImpl& api) { return api.savePins(); }
     static GroupEnvelopeFiles& files(GroupApiImpl& api) { return api._envelopeFiles; }
+    using GroupKeyRefresh = GroupApiImpl::GroupKeyRefresh;
+    static std::optional<std::string> refusedRefresh(
+        const GroupKeyRefresh& refresh,
+        std::optional<std::int64_t> memberEpoch,
+        const std::optional<core::GroupEpochInfo>& current
+    ) {
+        return GroupApiImpl::refusedRefresh(refresh, memberEpoch, current);
+    }
     // As if the last pin save (or failed attempt) were PIN_SAVE_IDLE_INTERVAL ago: no clock to move in a unit test.
     static void agePinSave(GroupApiImpl& api) {
         std::lock_guard<std::mutex> lock(api._pinsMovedMutex);

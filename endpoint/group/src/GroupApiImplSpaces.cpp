@@ -273,25 +273,41 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
         throw fork("served behind the history this process has verified");
     }
     if (!state.has_value() || state->seq < static_cast<std::uint64_t>(space.seq)) {
+        std::vector<core::UserWithPubKey> signers;
+        std::vector<GroupKeyRefresh> refreshes;
         for (const keytree::SpaceStatement& statement :
              spaceStatements(space.id, state.has_value() ? static_cast<std::int64_t>(state->seq) : 0, space.seq)) {
             if (statement.spaceId != space.id || statement.contextId != space.contextId) {
                 throw GroupDataIntegrityException("space statement: of another Space");
             }
+            const std::optional<keytree::SpaceLogState> before = state;
             state = keytree::SpaceLog::apply(state, statement);
-            // The statement names its signer's key; whether that user holds it is the application's to say.
-            try {
-                assertUserKeysVerified(
-                    space.contextId,
-                    {core::UserWithPubKey{.userId = statement.signer, .pubKey = statement.signerPubKey}}
-                );
-            } catch (const core::Exception& e) {
-                throw GroupUnauthorizedSignerException("space statement " + std::to_string(statement.seq), e);
+            signers.push_back(core::UserWithPubKey{.userId = statement.signer, .pubKey = statement.signerPubKey});
+            for (const keytree::SpaceLogGroup& group : state->groups) {
+                const keytree::SpaceLogGroup* was = before.has_value() ? before->group(group.groupId) : nullptr;
+                if (was != nullptr &&
+                    (was->groupKeyVersion != group.groupKeyVersion || was->groupPubKey != group.groupPubKey)) {
+                    refreshes.push_back(
+                        GroupKeyRefresh{
+                            .seq = statement.seq,
+                            .groupId = group.groupId,
+                            .groupKeyVersion = group.groupKeyVersion,
+                            .groupPubKey = group.groupPubKey,
+                            .byGroup = !statement.via.empty(),
+                        }
+                    );
+                }
             }
             if (stored.has_value() && state->seq == stored->first && state->digest != stored->second) {
                 throw fork("another statement where this device verified one");
             }
         }
+        // The statements name their signers' keys; whether those users hold them is the application's to say. Asked
+        // once for the replay.
+        try {
+            assertUserKeysVerified(space.contextId, core::EndpointUtils::uniqueListUserWithPubKey(signers, {}));
+        } catch (const core::Exception& e) { throw GroupUnauthorizedSignerException("space statement signer", e); }
+        requireGroupKeyRefreshesHold(space.contextId, refreshes);
     }
     if (!state.has_value() || state->seq != static_cast<std::uint64_t>(space.seq)) {
         throw GroupDataIntegrityException("Space " + space.id + ": its statements do not reach the state served");
@@ -320,6 +336,98 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
         space.users.push_back(std::move(entry));
     }
     return state.value();
+}
+
+// SECURITY: a group's pinned key in a Space's log is what "signed via that group" is checked against from then on,
+// so a refresh of it is held to the group's own verified history, not taken from whoever signed it. Through the group
+// itself (anyone who ever held one of its keys, a removed member too) it must be a key that group had at that epoch,
+// as this client can verify it: one of its epoch keys for a member, its verified current key otherwise. A manager
+// signing as a user could replace the group anyway: refused only when that is shown wrong (ahead of the group, or
+// another key at its current epoch). What cannot be verified is refused.
+void GroupApiImpl::requireGroupKeyRefreshesHold(
+    const std::string& contextId,
+    const std::vector<GroupKeyRefresh>& refreshes
+) {
+    if (refreshes.empty()) {
+        return;
+    }
+    std::vector<std::string> groupIds;
+    for (const GroupKeyRefresh& refresh : refreshes) {
+        if (std::find(groupIds.begin(), groupIds.end(), refresh.groupId) == groupIds.end()) {
+            groupIds.push_back(refresh.groupId);
+        }
+    }
+    auto epochs = fetchGroupEpochs(contextId, groupIds);
+    // A group visible to the Context but not the caller's, that the caller verified before a change of it: its pin
+    // cannot be caught up (the Bridge serves the chain to members only), so `fetchGroupEpochs` has no key for it.
+    // Its latest statement still is checked as on first contact, and that is what such a refresh is held to.
+    for (const std::string& groupId : groupIds) {
+        if (epochs.count(groupId) != 0) {
+            continue;
+        }
+        try {
+            server::GroupGetPublicKeyModel model;
+            model.groupId = groupId;
+            const server::GroupInfo group = listedFrom(_serverApi.groupGetPublicKey(model).group);
+            if (group.contextId != contextId) {
+                continue;
+            }
+            _treeVerifier.verifyLatestOnly(group, VerifiedGroup::treeEnvironment(_serverApi, _connection, group.id));
+            epochs[groupId] = core::GroupEpochInfo{
+                .keyVersion = group.keyVersion, .groupPubKey = keytree::TreeVerifier::canonicalKey(group.groupPubKey)
+            };
+        } catch (const std::exception& e) {
+            LOG_WARN("[space log] group ", groupId, " shows no verifiable key to this caller: ", e.what())
+        }
+    }
+    for (const GroupKeyRefresh& refresh : refreshes) {
+        // The epoch the caller's own view of the group gives that key: only a member has one.
+        std::optional<std::int64_t> memberEpoch;
+        try {
+            core::Validator::validateId(refresh.groupId, "field:space.groups.groupId ");
+            _keys.grantKeyForPubKey(refresh.groupId, refresh.groupPubKey);
+            memberEpoch = _keys.grantEpochOf(refresh.groupId, refresh.groupPubKey);
+        } catch (const std::exception&) {} // not a group of the caller's, or not a key of it
+        const auto epoch = epochs.find(refresh.groupId);
+        if (const auto why = refusedRefresh(
+                refresh, memberEpoch,
+                epoch == epochs.end() ? std::nullopt : std::optional<core::GroupEpochInfo>(epoch->second)
+            )) {
+            throw GroupUnauthorizedSignerException(
+                "space statement " + std::to_string(refresh.seq) + ": group " + refresh.groupId + " " + why.value()
+            );
+        }
+    }
+}
+
+std::optional<std::string> GroupApiImpl::refusedRefresh(
+    const GroupKeyRefresh& refresh,
+    std::optional<std::int64_t> memberEpoch,
+    const std::optional<core::GroupEpochInfo>& current
+) {
+    if (memberEpoch.has_value() && memberEpoch.value() > 0) {
+        return memberEpoch.value() == static_cast<std::int64_t>(refresh.groupKeyVersion) ?
+            std::nullopt :
+            std::optional<std::string>("had that key at another epoch");
+    }
+    const auto canonical = [](const std::string& key) {
+        try {
+            return privmx::crypto::PublicKey::fromBase58DER(key).toBase58DER();
+        } catch (...) { return std::string(); }
+    };
+    if (current.has_value() && refresh.groupKeyVersion == static_cast<std::uint64_t>(current->keyVersion)) {
+        return canonical(current->groupPubKey) == canonical(refresh.groupPubKey) &&
+                !canonical(refresh.groupPubKey).empty() ?
+            std::nullopt :
+            std::optional<std::string>("has another key at that epoch");
+    }
+    if (current.has_value() && refresh.groupKeyVersion > static_cast<std::uint64_t>(current->keyVersion)) {
+        return "is not at that epoch yet";
+    }
+    if (refresh.byGroup) {
+        return "refreshed through a group to a key this client cannot verify";
+    }
+    return std::nullopt;
 }
 
 // A statement by the caller, in whichever standing they have: as a recipient themselves, or through a recipient
