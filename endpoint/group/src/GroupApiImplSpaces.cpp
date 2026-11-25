@@ -162,9 +162,23 @@ void GroupApiImpl::storeSpacePin(const keytree::SpaceLogState& state) {
     }
     const std::string slot = _connection.getImpl()->localStateSlot("space-pins", _userPrivKey.getPublicKey());
     const core::LocalSeal seal(_userPrivKey, "privmx/space/pins", 1, slot);
-    seal.update(*_pinStore, [&](const std::optional<std::string>& body) {
+    // What this process holds: the pins it loaded and every Space it verified since. A stored blob that does not
+    // open (nothing stored, or corrupted) is rebuilt from these, not from the one Space at hand.
+    std::map<std::string, std::pair<std::uint64_t, std::string>> held;
+    {
+        std::lock_guard lock(_spaceLogsMutex);
+        for (const auto& [id, pin] : _spacePins) {
+            held[id] = {pin.first, privmx::utils::Hex::from(pin.second)};
+        }
+        for (const auto& [id, log] : _spaceLogs) {
+            if (log.seq >= held[id].first) {
+                held[id] = {log.seq, privmx::utils::Hex::from(log.digest)};
+            }
+        }
+    }
+    const bool saved = seal.update(*_pinStore, [&](const std::optional<std::string>& body) {
         // One line a Space: "<id> <seq> <digest hex>". The higher position stays.
-        std::map<std::string, std::pair<std::uint64_t, std::string>> pins;
+        std::map<std::string, std::pair<std::uint64_t, std::string>> pins = body.has_value() ? decltype(held)() : held;
         std::istringstream lines(body.value_or(std::string()));
         std::string spaceId, digest;
         std::uint64_t seq = 0;
@@ -181,6 +195,9 @@ void GroupApiImpl::storeSpacePin(const keytree::SpaceLogState& state) {
         }
         return out;
     });
+    if (!saved) {
+        LOG_WARN("[space pins] the store kept changing under the save of Space ", state.spaceId, "; not saved")
+    }
 }
 
 std::optional<keytree::SpaceLogState> GroupApiImpl::spaceLogOf(const std::string& spaceId) {
@@ -199,7 +216,13 @@ void GroupApiImpl::rememberSpaceLog(const keytree::SpaceLogState& state) {
         }
         _spaceLogs[state.spaceId] = state;
     }
-    storeSpacePin(state);
+    // The Bridge has taken the change, or the read is done: a store that fails is logged, never the caller's error.
+    // The next save carries this Space again.
+    try {
+        storeSpacePin(state);
+    } catch (const std::exception& e) { LOG_WARN("[space pins] save dropped: ", e.what()) } catch (...) {
+        LOG_WARN("[space pins] save dropped")
+    }
 }
 
 keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space) {
@@ -946,9 +969,7 @@ core::Buffer GroupApiImpl::sealInSpace(
         // Someone removed from a recipient group still holds this key: nothing more is written under it.
         try {
             replaceSpaceKey(spaceId, {}, {});
-        } catch (const SpaceRecipientUnavailableException&) {
-            throw;
-        } catch (const GroupHistoryForkException&) {
+        } catch (const SpaceRecipientUnavailableException&) { throw; } catch (const GroupHistoryForkException&) {
             throw; // a history that does not hold is the answer, never a lost race
         } catch (const GroupUnauthorizedSignerException& e) {
             // Not this caller's to replace: a group's key is refreshed by a manager of the Space or by that group.
