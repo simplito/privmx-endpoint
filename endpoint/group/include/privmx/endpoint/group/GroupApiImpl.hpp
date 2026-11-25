@@ -370,6 +370,7 @@ private:
     };
     RosterView rosterOf(const std::string& groupId);
     static server::GroupInfo listedFrom(const server::GroupPublicInfo& info);
+    static bool isForgedHistory(const core::Exception& e);
     std::optional<RosterView> publicRosterOf(const std::string& contextId, const std::string& groupId);
     // The only writer of `_rosters`: called wherever the module-key cache is filled from a verified read.
     void rememberRoster(const server::GroupInfo& group);

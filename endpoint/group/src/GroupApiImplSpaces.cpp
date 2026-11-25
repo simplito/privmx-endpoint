@@ -1248,7 +1248,10 @@ DecryptedSpaceEnvelope GroupApiImpl::decryptInSpace(
         try {
             core::Validator::validateId(opened.groupId, "field:envelope.via ");
             access = rosterOf(opened.groupId).roleOf(opened.authorUserId).empty() ? "no" : "yes";
-        } catch (const core::Exception&) {
+        } catch (const core::Exception& e) {
+            if (isForgedHistory(e)) {
+                throw; // the group's history does not verify: the answer, not "a group the caller is not in"
+            }
             // A recipient group the caller is not in: its roster shows only when it is visible to the Context.
             const auto roster = publicRosterOf(space.contextId, opened.groupId);
             access = !roster.has_value() ? "unknown" : roster->roleOf(opened.authorUserId).empty() ? "no" : "yes";

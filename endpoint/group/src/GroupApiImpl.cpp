@@ -32,10 +32,8 @@
 using namespace privmx::endpoint;
 using namespace group;
 
-namespace {
-
 // A Group whose served history does not verify: the answer, never a reason to fall back to another read.
-bool isForgedHistory(const core::Exception& e) {
+bool GroupApiImpl::isForgedHistory(const core::Exception& e) {
     const auto code = e.getCode();
     return code == GroupHistoryForkException::FULL_CODE ||
         code == GroupDataIntegrityException::FULL_CODE ||
@@ -44,8 +42,6 @@ bool isForgedHistory(const core::Exception& e) {
         code == GroupMembershipMismatchException::FULL_CODE ||
         code == GroupPublicDataMismatchException::FULL_CODE;
 }
-
-} // namespace
 
 GroupApiImpl::GroupApiImpl(
     const privfs::RpcGateway::Ptr& gateway,

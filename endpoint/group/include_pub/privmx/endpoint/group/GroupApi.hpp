@@ -680,7 +680,8 @@ public:
     // Files and sequences use the chunk and item calls above with the handles returned here.
     //
     // ponytail: the Space is read from the Bridge at most every 5 seconds per Space, not on every write. A writer
-    // notices a stale key up to that much later. Space events would close the window; nobody has needed them yet.
+    // notices a stale key up to that much later, unless it is subscribed to the Space's events (SpaceChangedEvent):
+    // each one drops the cached read, so the next write reads the Space again.
 
     /**
      * @param recipients the Groups and users the key is wrapped for; the caller must be among them as a manager,

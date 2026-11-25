@@ -49,10 +49,10 @@ std::map<std::string, std::string> rolesOf(
 ) {
     std::map<std::string, std::string> roles;
     for (const SpaceLogGroup& group : groups) {
-        roles["g\0" + group.groupId] = group.role;
+        roles[tag("g") + group.groupId] = group.role;
     }
     for (const SpaceLogUser& user : users) {
-        roles["u\0" + user.userId] = user.role + '\0' + user.pubKey;
+        roles[tag("u") + user.userId] = user.role + '\0' + user.pubKey;
     }
     return roles;
 }
@@ -190,12 +190,12 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
     // The recipients after it: each once, each with a role.
     std::set<std::string> ids;
     for (const SpaceLogGroup& group : statement.groups) {
-        if (group.groupId.empty() || !isRole(group.role) || !ids.insert("g\0" + group.groupId).second) {
+        if (group.groupId.empty() || !isRole(group.role) || !ids.insert(tag("g") + group.groupId).second) {
             throw broken("malformed recipients");
         }
     }
     for (const SpaceLogUser& user : statement.users) {
-        if (user.userId.empty() || !isRole(user.role) || !ids.insert("u\0" + user.userId).second) {
+        if (user.userId.empty() || !isRole(user.role) || !ids.insert(tag("u") + user.userId).second) {
             throw broken("malformed recipients");
         }
     }
