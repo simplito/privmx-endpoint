@@ -208,8 +208,12 @@ public:
      * Tells this connection that a user's identity key changed, and that the application has checked the change.
      * For a connection that keeps to key continuity (useKeyContinuity).
      *
-     * After this call `newPubKey` is the user's key; `previousPubKey` stays good for what was signed before, and for
-     * nothing dated later than this call. The knowledge lives in this connection's memory.
+     * After this call `newPubKey` is the user's key; `previousPubKey` stays good for what is dated before this call,
+     * and for nothing dated later. The knowledge lives in this connection's memory.
+     *
+     * A GroupApi envelope is checked as of now, not as of the date it claims (that date is the signer's word, and a
+     * stolen retired key could backdate it): an envelope signed with `previousPubKey` is refused once this call
+     * retired it, as it is after Connection::renewIdentity. Re-encrypt what must stay readable before the change.
      *
      * @param contextId ID of the Context the user belongs to
      * @param userId ID of the user
