@@ -11,7 +11,7 @@
 using namespace privmx::endpoint;
 using namespace privmx::endpoint::group;
 
-// Load-bearing: epoch-ladder rungs wrap a past grant private key to the same key with the same `EciesEncryptor`,
+// Load-bearing: epoch-ladder rungs wrap a past grant private key to the same key with the same `core::Ecies`,
 // so without this prefix a rung could be replayed as a type 2 envelope and opened as message content.
 const std::string GroupEnvelopeEncryptor::ECIES_DOMAIN = "PMXENV1";
 

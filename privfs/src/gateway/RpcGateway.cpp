@@ -37,35 +37,15 @@ using rpc::MessageSendOptionsEx;
 
 RpcGateway::Ptr RpcGateway::createGatewayFromEcdheConnection(const std::optional<crypto::PrivateKey>& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey) {
     auto connection = rpc::ConnectionManager::getInstance()->createEcdheConnection({.key = key, .solution = solution, .serverPubKey = serverPubKey}, options);
-    return new RpcGateway(connection, nullopt);
+    return new RpcGateway(connection);
 }
 
 RpcGateway::Ptr RpcGateway::createGatewayFromEcdhexConnection(const crypto::PrivateKey& key, const rpc::ConnectionOptions& options, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey, const std::optional<rpc::SplitIdentity>& identity) {
     auto connection = rpc::ConnectionManager::getInstance()->createEcdhexConnection({.key = key, .solution = solution, .serverPubKey = serverPubKey, .identity = identity}, options);
-    return new RpcGateway(connection, nullopt);
+    return new RpcGateway(connection);
 }
 
-RpcGateway::Ptr RpcGateway::createGatewayFromKeyConnection(const crypto::PrivateKey& key, types::InitParameters init_parameters) {
-    auto connection = rpc::ConnectionManager::getInstance()->createKeyConnection({
-        .key = key,
-        .properties = init_parameters.gateway_properties,
-        .on_additional_login_step = init_parameters.additional_login_step_callback
-    }, init_parameters.options);
-    return new RpcGateway(connection, init_parameters.additional_login_step_callback);
-}
-
-RpcGateway::Ptr RpcGateway::createGatewayFromSrpConnection(const std::string& username, const std::string& password, types::InitParameters init_parameters) {
-    auto connection = rpc::ConnectionManager::getInstance()->createSrpConnection({
-        .username = username,
-        .password = password,
-        .properties = init_parameters.gateway_properties,
-        .on_additional_login_step = init_parameters.additional_login_step_callback
-    }, init_parameters.options);
-    return new RpcGateway(connection, init_parameters.additional_login_step_callback);
-}
-
-RpcGateway::RpcGateway(rpc::AuthorizedConnection::Ptr rpc, std::optional<rpc::AdditionalLoginStepCallback> additional_login_step_on_relogin_callback)
-        : _rpc(rpc), _additional_login_step_on_relogin_callback(additional_login_step_on_relogin_callback) {
+RpcGateway::RpcGateway(rpc::AuthorizedConnection::Ptr rpc) : _rpc(rpc) {
     bindEventsFromRpc();
 }
 
@@ -98,15 +78,6 @@ bool RpcGateway::isConnected() {
     return _rpc->isConnected();
 }
 
-bool RpcGateway::isSessionEstablished() {
-    return _rpc->isSessionEstablished();
-}
-
-bool RpcGateway::isRestorableBySession() {
-    auto info = getInfo();
-    return info->type != "ecdhe" && info.cast<rpc::ConnectionInfoWithSession>();
-}
-
 rpc::ConnectionInfo::Ptr RpcGateway::getInfo() {
     return _rpc->getInfo();
 }
@@ -121,66 +92,6 @@ const rpc::ConnectionOptionsFull& RpcGateway::getOptions() {
 
 std::string RpcGateway::getType() {
     return _rpc->getInfo()->type;
-}
-
-rpc::GatewayProperties::Ptr RpcGateway::getProperties() {
-    auto info = _rpc->getInfo();
-    auto session_info = info.cast<rpc::ConnectionInfoWithSession>();
-    if (session_info.isNull()) {
-        throw CannotGetPropertiesFromNonSrpKeySessionConnectionException();
-    }
-    return session_info->properties;
-}
-
-std::string RpcGateway::getUsername() {
-    auto info = _rpc->getInfo();
-    auto session_info = info.cast<rpc::ConnectionInfoWithSession>();
-    if (session_info.isNull()) {
-        throw CannotGetUsernameFromNonSrpKeySessionConnectionException();
-    }
-    return session_info->username;
-}
-
-types::InitParameters RpcGateway::getInitParameters() {
-    types::InitParameters res;
-    res.options = getOptions().asOpt();
-    res.gateway_properties = getProperties();
-    res.additional_login_step_callback = _additional_login_step_on_relogin_callback;
-    return res;
-}
-
-void RpcGateway::srpRelogin([[maybe_unused]] const std::string& username, [[maybe_unused]] const std::string& password) {
-    auto new_rpc = rpc::ConnectionManager::getInstance()->createSrpConnection({
-        .username = username,
-        .password = password,
-        .properties = getProperties(),
-        .on_additional_login_step = _additional_login_step_on_relogin_callback
-    }, getOptions().asOpt());
-    if (new_rpc->getInfo().cast<rpc::SrpConnectionInfo>()->username != getUsername()) {
-        throw CannotReloginUserMismatchException();
-    }
-    switchRpc(new_rpc);
-}
-
-void RpcGateway::tryRestoreBySession() {
-    auto info = getInfo().cast<rpc::ConnectionInfoWithSession>();
-    if (info.isNull() || !info->session_key.has_value()) {
-        throw ConnectionCannotBeRestoredBySessionException();
-    }
-    try {
-        auto new_rpc = rpc::ConnectionManager::getInstance()->createSessionConnection({
-            .session_id = info->session_id,
-            .session_key = info->session_key.value(),
-            .username = info->username,
-            .properties = info->properties
-        }, getOptions().asOpt());
-        switchRpc(new_rpc);
-    } catch (PrivmxException& e) {
-        if (e.getType() == PrivmxException::ALERT) {
-            info->session_key = nullopt;
-        }
-        e.rethrow();
-    }
 }
 
 int RpcGateway::addNotificationEventListener(const utils::Callback<rpc::NotificationEvent>& event_listener, int listener_id) {
@@ -213,13 +124,6 @@ void RpcGateway::removeConnectedEventListener(int listener_id) {
 
 void RpcGateway::removeDisconnectedEventListener(int listener_id) {
     _disconnected_event_dispatcher.removeEventListener(listener_id);
-}
-
-void RpcGateway::switchRpc(rpc::AuthorizedConnection::Ptr new_rpc) {
-    if (_rpc) _rpc->destroy();
-    _rpc = new_rpc;
-    bindEventsFromRpc();
-    _connected_event_dispatcher.dispatch({});
 }
 
 void RpcGateway::bindEventsFromRpc() {

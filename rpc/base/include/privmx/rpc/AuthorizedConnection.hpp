@@ -15,7 +15,6 @@ limitations under the License.
 #include <atomic>
 #include <Poco/SharedPtr.h>
 
-#include <privmx/crypto/SRP.hpp>
 #include <privmx/rpc/channel/ChannelManager.hpp>
 #include <privmx/rpc/Types.hpp>
 #include <privmx/rpc/tls/TicketsManager.hpp>
@@ -56,7 +55,6 @@ public:
     ~AuthorizedConnection();
     void init();
     bool isConnected();
-    bool isSessionEstablished();
     ConnectionInfo::Ptr getInfo();
     std::string getHost();
     const ConnectionOptionsFull& getOptions();
@@ -75,9 +73,6 @@ public:
     //
     void ecdheConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey);
     void ecdhexConnect(const crypto::PrivateKey& key, const std::optional<std::string>& solution, const std::optional<crypto::PublicKey>& serverPubKey, const std::optional<SplitIdentity>& identity = std::nullopt);
-    Poco::JSON::Object::Ptr srpConnect(const std::string& username, const std::string& password, GatewayProperties::Ptr properties);
-    Poco::JSON::Object::Ptr keyConnect(const crypto::PrivateKey& private_key, GatewayProperties::Ptr properties);
-    void sessionConnect(const SessionRestoreOptionsEx& options);
 
 private:
     void checkState();
@@ -121,21 +116,6 @@ private:
     constexpr static size_t MAX_ATTEMPTS_OF_SESSION_RECONNECTION = 16;
     //
     std::thread _ticketLoop;
-};
-
-class SecondFactorServiceImpl : public SecondFactorService
-{
-public:
-    using Ptr = Poco::SharedPtr<SecondFactorService>;
-
-    SecondFactorServiceImpl(AuthorizedConnection::Ptr connection) : _connection(connection) {}
-    std::string getHost() { return _connection->getHost(); }
-    void confirm(Poco::JSON::Object::Ptr model) { _connection->call("twofaChallenge", model); }
-    void resendCode() { _connection->call("twofaResendCode", Poco::JSON::Object::Ptr(new Poco::JSON::Object())); };
-    void reject(const std::string& e) { throw RejectedException(e); }
-
-private:
-    AuthorizedConnection::Ptr _connection;
 };
 
 } // rpc

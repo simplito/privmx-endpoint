@@ -82,7 +82,7 @@ inline ByteCount encryptedChunkSizeFor(ByteCount plainLen, const core::CryptoSui
  * nothing. Header integrity rests on the payload's own encrypt-then-MAC instead.
  *
  * `ECIES_DOMAIN` is load-bearing. Epoch-ladder rungs wrap a past grant private key to this same key with the
- * same `EciesEncryptor`, so without the prefix a rung lifted off the wire could be presented here and opened
+ * same `core::Ecies`, so without the prefix a rung lifted off the wire could be presented here and opened
  * as message content. A rung's plaintext is a WIF and can never carry it.
  *
  * ## TYPE 3 — member -> group, file header

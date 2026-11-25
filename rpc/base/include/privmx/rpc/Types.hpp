@@ -28,20 +28,6 @@ namespace rpc {
 
 using GatewayProperties = Poco::JSON::Object;
 
-class SecondFactorService
-{
-public:
-    using Ptr = Poco::SharedPtr<SecondFactorService>;
-
-    virtual ~SecondFactorService() = default;
-    virtual std::string getHost() = 0;
-    virtual void confirm(Poco::JSON::Object::Ptr model) = 0;
-    virtual void resendCode() = 0;
-    virtual void reject(const std::string& e) = 0;
-};
-
-using AdditionalLoginStepCallback = std::function<void(Poco::Dynamic::Var, SecondFactorService::Ptr)>;
-
 struct ServerConfig {
     size_t requestChunkSize;
     privmx::utils::VersionNumber serverVersion;
@@ -102,87 +88,6 @@ struct EcdhexConnectionInfo : public ConnectionInfo
     std::string host;
 };
 
-struct ConnectionInfoWithSession : public ConnectionInfo
-{
-    using Ptr = Poco::SharedPtr<ConnectionInfoWithSession>;
-
-    ConnectionInfoWithSession(const std::string& type) : ConnectionInfo(type) {}
-    virtual ~ConnectionInfoWithSession() = default;
-
-    Poco::Dynamic::Var serializeToVar() override {
-        Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        auto object= package.extract<Poco::JSON::Object::Ptr>();
-        object->set("type",this->type);
-        object->set("sessionId",this->session_id);
-        if(session_key.has_value()){
-            object->set("sessionKey",this->session_key.value().toWIF());
-        }
-        object->set("username",this->username);
-        object->set("properties",this->properties);
-        return package;
-    }
-
-    std::string session_id;
-    std::optional<crypto::PrivateKey> session_key;
-    GatewayProperties::Ptr properties;
-    std::string username;
-};
-
-struct SrpConnectionInfo : public ConnectionInfoWithSession
-{
-    using Ptr = Poco::SharedPtr<SrpConnectionInfo>;
-
-    SrpConnectionInfo() : ConnectionInfoWithSession("srp") {}
-    virtual ~SrpConnectionInfo() = default;
-
-    Poco::Dynamic::Var serializeToVar() override {
-        Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        auto object= package.extract<Poco::JSON::Object::Ptr>();
-        object->set("type",this->type);
-        object->set("sessionId",this->session_id);
-        if(session_key.has_value()){
-            object->set("sessionKey",this->session_key.value().toWIF());
-        }
-        object->set("username",this->username);
-        object->set("mixed",Pson::BinaryString(this->mixed));
-        object->set("properties",this->properties);
-        return package;
-    }
-
-    std::string mixed;
-};
-
-struct KeyConnectionInfo : public ConnectionInfoWithSession
-{
-    using Ptr = Poco::SharedPtr<KeyConnectionInfo>;
-
-    KeyConnectionInfo() : ConnectionInfoWithSession("key") {}
-    virtual ~KeyConnectionInfo() = default;
-
-    Poco::Dynamic::Var serializeToVar()     override {
-        Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        auto object= package.extract<Poco::JSON::Object::Ptr>();
-        object->set("type",this->type);
-        object->set("sessionId",this->session_id);
-        if(session_key.has_value()){
-            object->set("sessionKey",this->session_key.value().toWIF());
-        }
-        object->set("username",this->username);
-        object->set("key",this->key.toBase58DER());
-        object->set("properties",this->properties);
-        return package;
-    }
-    
-    crypto::PublicKey key;
-};
-
-struct SessionConnectionInfo : public ConnectionInfoWithSession
-{
-    using Ptr = Poco::SharedPtr<SessionConnectionInfo>;
-
-    SessionConnectionInfo() : ConnectionInfoWithSession("session") {}
-    virtual ~SessionConnectionInfo() = default;
-};
 
 struct HeartBeatEvent
 {
@@ -310,7 +215,6 @@ struct ConnectionOptions
     WebSocketOptions websocket_options;
     std::optional<bool> notifications;
     std::optional<bool> over_ecdhe;
-    std::optional<bool> restorable_session;
     std::optional<int> connection_request_timeout;
     std::function<void(const std::string&)> server_agent_validator; 
     TicketConfig tickets;
@@ -340,9 +244,6 @@ struct ConnectionOptions
         }
         if(over_ecdhe.has_value()){
             object->set("overEcdhe",this->over_ecdhe.value());
-        }
-        if(restorable_session.has_value()){
-            object->set("restorableSession",this->restorable_session.value());
         }
         if(connection_request_timeout.has_value()){
             object->set("connectionRequestTimeout",this->connection_request_timeout.value());
@@ -437,7 +338,6 @@ struct ConnectionOptionsFull
     WebSocketOptionsFull websocket_options;
     bool notifications;
     bool over_ecdhe;
-    bool restorable_session;
     int connection_request_timeout;
     std::function<void(const std::string&)> server_agent_validator;
     TicketConfigFull tickets;
@@ -453,7 +353,6 @@ struct ConnectionOptionsFull
             .websocket_options = websocket_options.asOpt(),
             .notifications = notifications,
             .over_ecdhe = over_ecdhe,
-            .restorable_session = restorable_session,
             .connection_request_timeout = connection_request_timeout,
             .server_agent_validator = server_agent_validator,
             .tickets = tickets.asOpt(),
@@ -530,83 +429,6 @@ struct EcdhexOptions
     std::optional<SplitIdentity> identity;
 };
 
-struct SrpOptions
-{
-    std::string username;
-    std::string password;
-    GatewayProperties::Ptr properties;
-    std::optional<AdditionalLoginStepCallback> on_additional_login_step;
-    
-    Poco::Dynamic::Var serializeToVar(){
-        Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        auto object= package.extract<Poco::JSON::Object::Ptr>();
-        
-        object->set("username",this->username);
-        object->set("password",this->password);
-        object->set("properties",this->properties);
-        //TODO callback
-        // if(this->on_additional_login_step.has_value()){
-        //     object->set("onAditionalLoginStep",this->on_additional_login_step);
-        // }
-        return package;
-    }
-};
-
-struct KeyOptions
-{
-    crypto::PrivateKey key;
-    GatewayProperties::Ptr properties;
-    std::optional<AdditionalLoginStepCallback> on_additional_login_step;
-    
-    Poco::Dynamic::Var serializeToVar(){
-        Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        auto object= package.extract<Poco::JSON::Object::Ptr>();
-        
-        object->set("key",this->key.toWIF());
-        object->set("properties",this->properties);
-        //TODO callback
-        // if(this->on_additional_login_step.has_value()){
-        //     object->set("onAditionalLoginStep",this->on_additional_login_step);
-        // }
-        return package;
-    }
-};
-
-struct SessionRestoreOptions
-{
-    std::string session_id;
-    crypto::PrivateKey session_key;
-
-    Poco::Dynamic::Var serializeToVar(){
-        Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        auto object= package.extract<Poco::JSON::Object::Ptr>();
-        
-        object->set("sessionId",this->session_id);
-        object->set("sessionKey",this->session_key.toWIF());
-        return package;
-    }
-};
-
-
-struct SessionRestoreOptionsEx
-{
-    std::string session_id;
-    crypto::PrivateKey session_key;
-    std::string username;
-    GatewayProperties::Ptr properties;
-
-    Poco::Dynamic::Var serializeToVar(){
-        Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        auto object= package.extract<Poco::JSON::Object::Ptr>();
-        
-        object->set("sessionId",this->session_id);
-        object->set("sessionKey",this->session_key.toWIF());
-        object->set("username",this->username);
-        object->set("properties",this->properties);
-        return package;
-    }
-};
-
 struct MessageSendOptionsEx
 {
     std::optional<ChannelType> channel_type = std::nullopt;
@@ -632,46 +454,6 @@ struct MessageSendOptionsEx
         return package;
     }
 
-};
-
-struct SrpHandshakeResult
-{
-    std::string session_id;
-    std::optional<crypto::PrivateKey> session_key;
-    std::string mixed;
-    Poco::JSON::Object::Ptr additional_login_step;
-    
-    Poco::Dynamic::Var serializeToVar(){
-        Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        auto object= package.extract<Poco::JSON::Object::Ptr>();
-        object->set("sessionId",this->session_id);
-        object->set("mixed",Pson::BinaryString(this->mixed));
-        object->set("additionalLoginStep",this->additional_login_step);
-        if(session_key.has_value()){
-            object->set("sessionKey",this->session_key.value().toWIF());
-        }
-        return package;
-    }  
-};
-
-struct KeyHandshakeResult
-{
-    std::string username;
-    std::string session_id;
-    std::optional<crypto::PrivateKey> session_key;
-    Poco::JSON::Object::Ptr additional_login_step;
-    
-    Poco::Dynamic::Var serializeToVar(){
-        Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        auto object= package.extract<Poco::JSON::Object::Ptr>();
-        object->set("sessionId",this->session_id);
-        object->set("username",this->username);
-        object->set("additionalLoginStep",this->additional_login_step);
-        if(session_key.has_value()){
-            object->set("sessionKey",this->session_key.value().toWIF());
-        }
-        return package;
-    }  
 };
 
 } // rpc

@@ -531,7 +531,7 @@ struct Bridge {
 class Gateway : public privmx::privfs::RpcGateway {
 public:
     Gateway(Bridge& bridge, const std::string& userId, const PrivateKey& sessionKey)
-        : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr(), std::nullopt), _bridge(bridge), _userId(userId),
+        : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr()), _bridge(bridge), _userId(userId),
           _sessionPub(sessionKey.getPublicKey().toBase58DER()) {}
 
     Poco::Dynamic::Var request(

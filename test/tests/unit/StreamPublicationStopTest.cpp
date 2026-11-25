@@ -125,7 +125,7 @@ struct Log {
 class Gateway : public privmx::privfs::RpcGateway {
 public:
     Gateway(Log& log, bool failUnpublish)
-        : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr(), std::nullopt), _log(log), _failUnpublish(failUnpublish) {}
+        : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr()), _log(log), _failUnpublish(failUnpublish) {}
     std::optional<stream::server::StreamRoomInfo> served; // what stream.streamRoomGet answers, when set
     // Answers a method instead of the defaults below.
     std::map<std::string, std::function<Poco::Dynamic::Var(Poco::JSON::Object::Ptr)>> handlers;

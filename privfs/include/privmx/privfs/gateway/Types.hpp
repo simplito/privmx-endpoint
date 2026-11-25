@@ -100,46 +100,6 @@ public:
     LIST_FIELD(rights, std::string)
 };
 
-struct InitParameters
-{
-    rpc::ConnectionOptions options;
-    rpc::GatewayProperties::Ptr gateway_properties;
-    std::optional<rpc::AdditionalLoginStepCallback> additional_login_step_callback;
-    
-    Poco::Dynamic::Var serializeToVar(){
-        Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        auto object= package.extract<Poco::JSON::Object::Ptr>();
-        
-        object->set("options",this->options.serializeToVar());
-        object->set("gatewayProperties",this->gateway_properties);
-        //TODO callback
-        // if(this->additional_login_step_callback.has_value()){ 
-        //     object->set("additionalLoginStepCallback",this->additional_login_step_callback);
-        // }
-        return package;
-    }
-};
-
-struct InitParametersFull
-{
-    rpc::ConnectionOptionsFull options;
-    rpc::GatewayProperties::Ptr gateway_properties;
-    std::optional<rpc::AdditionalLoginStepCallback> additional_login_step_callback;
-    
-    Poco::Dynamic::Var serializeToVar(){
-        Poco::Dynamic::Var package = Poco::JSON::Object::Ptr(new Poco::JSON::Object());
-        auto object= package.extract<Poco::JSON::Object::Ptr>();
-
-        object->set("options",this->options.serializeToVar());
-        object->set("gatewayProperties",this->gateway_properties);
-        //TODO callback
-        // if(this->additional_login_step_callback.has_value()){
-        //     object->set("additionalLoginStepCallback",this->additional_login_step_callback);
-        // }
-        return package;
-    }
-};
-
 } // types
 } // privfs
 } // privmx

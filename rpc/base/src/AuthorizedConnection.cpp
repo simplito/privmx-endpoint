@@ -58,10 +58,6 @@ bool AuthorizedConnection::isConnected() {
     return !_destroyed && _channels_connected && _session_checked && _session_established;
 }
 
-bool AuthorizedConnection::isSessionEstablished() {
-    return _session_established;
-}
-
 ConnectionInfo::Ptr AuthorizedConnection::getInfo() {
     return _connection_info;
 }
@@ -211,74 +207,6 @@ void AuthorizedConnection::ecdhexConnect(const crypto::PrivateKey& key, const st
     info->key = key.getPublicKey();
     info->host = endpoint.connection.getHost();
     info->serverConfig = endpoint.connection.getServerConfig();
-    _connection_info = info;
-    activate();
-}
-
-Poco::JSON::Object::Ptr AuthorizedConnection::srpConnect(const string& username, const string& password, GatewayProperties::Ptr properties) {
-    ClientEndpoint endpoint(_tickets_manager, _options);
-    endpoint.connection.ecdheHandshake();
-    endpoint.connection.ticketRequest(endpoint.TICKETS_MIN_COUNT);
-    sendRequest(endpoint);
-    endpoint.connection.reset();
-    endpoint.connection.ticketHandshake();
-    endpoint.connection.srpHandshake2(username, getHost(), password, endpoint.TICKETS_MAX_COUNT, properties);
-    // send srp init
-    sendRequest(endpoint);
-    // send srp exchange
-    sendRequest(endpoint);
-    const auto& handshake_result = endpoint.connection.getSrpHandshakeResult();
-    SrpConnectionInfo::Ptr info = new SrpConnectionInfo();
-    info->session_id = handshake_result.session_id;
-    info->session_key = handshake_result.session_key;
-    info->username = username,
-    info->mixed = handshake_result.mixed;
-    info->properties = properties;
-    _connection_info = info;
-    activate();
-    return handshake_result.additional_login_step;
-}
-
-Poco::JSON::Object::Ptr AuthorizedConnection::keyConnect(const crypto::PrivateKey& private_key, GatewayProperties::Ptr properties) {
-    ClientEndpoint endpoint(_tickets_manager,_options);
-    endpoint.connection.ecdheHandshake();
-    endpoint.connection.ticketRequest(endpoint.TICKETS_MIN_COUNT);
-    sendRequest(endpoint);
-    endpoint.connection.reset();
-    endpoint.connection.ticketHandshake();
-    endpoint.connection.keyHandshake2(private_key, endpoint.TICKETS_MAX_COUNT, properties);
-    // send key init
-    sendRequest(endpoint);
-    // send key exchange
-    sendRequest(endpoint);
-    const auto& handshake_result = endpoint.connection.getKeyHandshakeResult();
-    KeyConnectionInfo::Ptr info = new KeyConnectionInfo();
-    info->session_id = handshake_result.session_id;
-    info->session_key = handshake_result.session_key;
-    info->username = handshake_result.username;
-    info->key = private_key.getPublicKey();
-    info->properties = properties;
-    _connection_info = info;
-    activate();
-    return handshake_result.additional_login_step;
-}
-
-void AuthorizedConnection::sessionConnect(const SessionRestoreOptionsEx& options) {
-    ClientEndpoint endpoint(_tickets_manager, _options);
-    endpoint.connection.ecdheHandshake();
-    endpoint.connection.ticketRequest(endpoint.TICKETS_MIN_COUNT);
-    sendRequest(endpoint);
-    endpoint.connection.reset();
-    endpoint.connection.ticketHandshake();
-    endpoint.connection.sessionHandshake(options.session_id, options.session_key, options.properties);
-    endpoint.connection.ticketRequest(endpoint.TICKETS_MAX_COUNT);
-    // send session
-    sendRequest(endpoint);
-    SessionConnectionInfo::Ptr info = new SessionConnectionInfo();
-    info->session_id = options.session_id;
-    info->session_key = options.session_key;
-    info->username = options.username;
-    info->properties = options.properties;
     _connection_info = info;
     activate();
 }

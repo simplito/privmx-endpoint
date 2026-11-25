@@ -28,9 +28,6 @@ public:
     static ConnectionManager::Ptr getInstance();
     AuthorizedConnection::Ptr createEcdheConnection(const EcdheOptions& auth, const ConnectionOptions& options);
     AuthorizedConnection::Ptr createEcdhexConnection(const EcdhexOptions& auth, const ConnectionOptions& options);
-    AuthorizedConnection::Ptr createSrpConnection(const SrpOptions& auth, const ConnectionOptions& options);
-    AuthorizedConnection::Ptr createKeyConnection(const KeyOptions& auth, const ConnectionOptions& options);
-    AuthorizedConnection::Ptr createSessionConnection(const SessionRestoreOptionsEx& auth, const ConnectionOptions& options);
     PlainConnection::Ptr createPlainConnection(const ConnectionOptions& options);
     void probe(const std::string& url, long timeout = 10000);
 
@@ -38,8 +35,6 @@ public:
     static ConnectionOptionsFull fillOptions(const ConnectionOptions& options);
 
 private:
-    void processAdditionalLoginStep(AuthorizedConnection::Ptr connection, Poco::JSON::Object::Ptr additional_login_step, std::optional<AdditionalLoginStepCallback> additional_login_step_callback);
-
     static ConnectionManager::Ptr _instance;
 };
 

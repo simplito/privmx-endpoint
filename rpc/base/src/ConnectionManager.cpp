@@ -38,32 +38,6 @@ AuthorizedConnection::Ptr ConnectionManager::createEcdhexConnection(const Ecdhex
     return connection;
 }
 
-AuthorizedConnection::Ptr ConnectionManager::createSrpConnection(const SrpOptions& auth, const ConnectionOptions& options) {
-    auto full_options = fillOptions(options);
-    AuthorizedConnection::Ptr connection = new AuthorizedConnection(full_options);
-    auto additional_login_step = connection->srpConnect(auth.username, auth.password, auth.properties);
-    processAdditionalLoginStep(connection, additional_login_step, auth.on_additional_login_step);
-    connection->init();
-    return connection;
-}
-
-AuthorizedConnection::Ptr ConnectionManager::createKeyConnection(const KeyOptions& auth, const ConnectionOptions& options) {
-    auto full_options = fillOptions(options);
-    AuthorizedConnection::Ptr connection = new AuthorizedConnection(full_options);
-    auto additional_login_step = connection->keyConnect(auth.key, auth.properties);
-    processAdditionalLoginStep(connection, additional_login_step, auth.on_additional_login_step);
-    connection->init();
-    return connection;
-}
-
-AuthorizedConnection::Ptr ConnectionManager::createSessionConnection(const SessionRestoreOptionsEx& auth, const ConnectionOptions& options) {
-    auto full_options = fillOptions(options);
-    AuthorizedConnection::Ptr connection = new AuthorizedConnection(full_options);
-    connection->sessionConnect(auth);
-    connection->init();
-    return connection;
-}
-
 PlainConnection::Ptr ConnectionManager::createPlainConnection(const ConnectionOptions& options) {
     auto full_options = fillOptions(options);
     AuthorizedConnection::Ptr connection = new AuthorizedConnection(full_options);
@@ -83,12 +57,6 @@ void ConnectionManager::probe(const std::string& url, long timeout) {
     }
 }
 
-void ConnectionManager::processAdditionalLoginStep(AuthorizedConnection::Ptr connection, Poco::JSON::Object::Ptr additional_login_step, std::optional<AdditionalLoginStepCallback> additional_login_step_callback) {
-    if (additional_login_step.isNull() || !additional_login_step_callback.has_value() || !additional_login_step_callback.value()) return;
-    SecondFactorServiceImpl::Ptr service = new SecondFactorServiceImpl(connection);
-    additional_login_step_callback.value()(additional_login_step, service);
-}
-
 ConnectionOptionsFull ConnectionManager::fillOptions(const ConnectionOptions& options) {
     ConnectionOptionsFull res {
         .url = options.url,
@@ -105,7 +73,6 @@ ConnectionOptionsFull ConnectionManager::fillOptions(const ConnectionOptions& op
         },
         .notifications = options.notifications.value_or(true),
         .over_ecdhe = options.over_ecdhe.value_or(true),
-        .restorable_session = options.restorable_session.value_or(true),
         .connection_request_timeout = options.connection_request_timeout.value_or(15000),
         .server_agent_validator = options.server_agent_validator,
         .tickets = {

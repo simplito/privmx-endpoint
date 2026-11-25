@@ -244,7 +244,7 @@ struct Bridge {
 class Gateway : public privmx::privfs::RpcGateway {
 public:
     Gateway(Bridge& bridge, std::string userId)
-        : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr(), std::nullopt), _bridge(bridge),
+        : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr()), _bridge(bridge),
           _userId(std::move(userId)) {}
 
     Poco::Dynamic::Var request(
@@ -385,7 +385,7 @@ class Answering : public privmx::privfs::RpcGateway {
 public:
     std::map<std::string, Poco::Dynamic::Var> answers;
     std::vector<std::string> asked;
-    Answering() : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr(), std::nullopt) {}
+    Answering() : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr()) {}
     Poco::Dynamic::Var request(
         const std::string& method,
         Poco::JSON::Object::Ptr,
@@ -745,7 +745,7 @@ struct OneFileStore {
     class Gateway : public privmx::privfs::RpcGateway {
     public:
         explicit Gateway(OneFileStore& owner)
-            : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr(), std::nullopt), _owner(owner) {}
+            : RpcGateway(privmx::rpc::AuthorizedConnection::Ptr()), _owner(owner) {}
         Poco::Dynamic::Var request(
             const std::string& method,
             Poco::JSON::Object::Ptr,
