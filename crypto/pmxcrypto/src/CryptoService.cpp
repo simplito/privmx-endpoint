@@ -15,8 +15,6 @@ limitations under the License.
 #include <string>
 #include <tuple>
 
-#include <Poco/ByteOrder.h>
-
 #include <privmx/cryptoservice/base/CoreTypes.hpp>
 #include <privmx/cryptoservice/base/Exceptions.hpp>
 
@@ -29,8 +27,6 @@ namespace cs = privmx::cryptoservice;
 using namespace privmx;
 using namespace privmx::crypto;
 using namespace std;
-using Poco::ByteOrder;
-using Poco::UInt32;
 
 namespace {
 
@@ -86,7 +82,7 @@ std::string symmetric(
 } // namespace
 
 // ---------------------------------------------------------------------------------------------
-// The sixteen that used to call privmxdrvcrypto.
+// The sixteen primitives the provider supplies whole.
 // ---------------------------------------------------------------------------------------------
 
 string pmximpl::CryptoService::randomBytes(size_t length) const {
@@ -210,9 +206,19 @@ std::string pmximpl::CryptoService::pbkdf2(
 }
 
 // ---------------------------------------------------------------------------------------------
-// The twelve built on top of the above. Carried over from the driver implementation unchanged:
-// they are backend-independent, and each one is a wire format shared with the bridge, so the only
-// safe edit here is no edit.
+// Composed constructions.
+//
+// These are built from HMAC and CBC rather than handed over whole, and every one of them is a wire
+// format the bridge implements too. They are **delegated** to pmx-crypto rather than reimplemented:
+// composing AEAD out of parts is the classic way to introduce a subtle, silent break, and doing it
+// in two places at once doubles the chance that only one of them gets fixed.
+//
+// What makes the delegation safe is not that pmx-crypto's code reads the same, but
+// `CompositionVectorsTest`: golden vectors computed from an independent model of each construction,
+// which passed against the previous hand-written implementation and pass against this one.
+//
+// `hash160` and the `ct*` framings below stay local - they are byte layout (a prefix, a digest of a
+// digest), not cryptographic constructions, and pmx-crypto has no equivalent to delegate to.
 // ---------------------------------------------------------------------------------------------
 
 string pmximpl::CryptoService::hash160(const string& data) const {
@@ -221,35 +227,29 @@ string pmximpl::CryptoService::hash160(const string& data) const {
 }
 
 string pmximpl::CryptoService::prf_tls12(const string& key, const string& seed, size_t length) const {
-    string a = seed;
-    string result = "";
-    while (result.length() < length) {
-        a = hmacSha256(key, a);
-        string tmp = a + seed;
-        string d = hmacSha256(key, tmp);
-        result.append(d);
-    }
-    return result.substr(0, length);
+    return mapped("prf_tls12", [&] {
+        // The seed travels as `salt`; pmx-crypto's Prf12 takes the key as the secret data.
+        const cs::KdfParams params{
+            .kdf = cs::Kdf::Prf12, .length = length, .hash = cs::Hash::Sha256, .rounds = 0, .salt = view(seed)
+        };
+        return str(cryptoProvider().derive(params, view(key)));
+    });
 }
 
 string pmximpl::CryptoService::kdf(size_t length, const string& key, const string& label) const {
-    UInt32 len = ByteOrder::toBigEndian((UInt32)length);
-    string seed = label + '\0' + string((char*)&len, 4);
-    string k = "";
-    UInt32 i = 1;
-    string result;
-    while (result.length() < length) {
-        string input = k;
-        UInt32 count = ByteOrder::toBigEndian(i++);
-        input.append((char*)&count, 4).append(seed);
-        k = hmacSha256(key, input);
-        result.append(k);
-    }
-    return result.substr(0, length);
+    return mapped("kdf", [&] {
+        const cs::KdfParams params{
+            .kdf = cs::Kdf::Kdf, .length = length, .hash = cs::Hash::Sha256, .rounds = 0, .salt = {}, .label = label
+        };
+        return str(cryptoProvider().derive(params, view(key)));
+    });
 }
 
 string pmximpl::CryptoService::generateIv(const string& key, Poco::Int32 idx) const {
-    return hmacSha256(key, "iv" + to_string(idx)).substr(0, 16);
+    return mapped("generateIv", [&] {
+        cs::IvParams params{.hash = cs::Hash::Sha256, .ivLen = 16};
+        return str(cryptoProvider().generateIv(params, view(key), idx));
+    });
 }
 
 tuple<string, string> pmximpl::CryptoService::getKEM(const string& key, size_t kelen, size_t kmlen) const {
@@ -259,30 +259,26 @@ tuple<string, string> pmximpl::CryptoService::getKEM(const string& key, size_t k
 
 string pmximpl::CryptoService::aes256CbcHmac256Encrypt(string data, const string& key32, string iv, size_t taglen)
     const {
-    string kE, kM;
-    tie(kE, kM) = getKEM(key32);
-    if (iv.empty()) {
-        iv = hmacSha256(key32, data);
-    }
-    iv = iv.substr(0, 16);
-    data = string(16, 0).append(data);
-    string cipher = aes256CbcPkcs7Encrypt(data, kE, iv);
-    string tag = hmacSha256(kM, cipher).substr(0, taglen);
-    return cipher.append(tag);
+    // An empty IV still means "derive one from the plaintext"; pmx-crypto keeps that branch, so the
+    // emptiness is passed through rather than resolved here.
+    return mapped("aes256CbcHmac256Encrypt", [&] {
+        const cs::SymParams params{
+            .cipher = cs::SymAlg::Aes256CbcHmac, .key = view(key32), .iv = view(iv), .aad = {}, .taglen = taglen
+        };
+        return str(cryptoProvider().encrypt(params, view(data)));
+    });
 }
 
 string pmximpl::CryptoService::aes256CbcHmac256Decrypt(string data, const string& key32, size_t taglen) const {
-    string kE, kM;
-    tie(kE, kM) = getKEM(key32);
-    string tag = data.substr(data.length() - taglen);
-    data = data.substr(0, data.length() - taglen);
-    string rtag = hmacSha256(kM, data).substr(0, taglen);
-    if (tag != rtag) {
-        throw WrongMessageSecurityTagException();
-    }
-    string iv = data.substr(0, 16);
-    data = data.substr(16);
-    return aes256CbcPkcs7Decrypt(data, kE, iv);
+    // The tag check lives inside pmx-crypto now. Its failure arrives as
+    // PrivmxCryptoserviceDecryptionWrongMessageSecurityTagException and `mapped` turns that back
+    // into WrongMessageSecurityTagException, which is what callers here have always caught.
+    return mapped("aes256CbcHmac256Decrypt", [&] {
+        const cs::SymParams params{
+            .cipher = cs::SymAlg::Aes256CbcHmac, .key = view(key32), .iv = {}, .aad = {}, .taglen = taglen
+        };
+        return str(cryptoProvider().decrypt(params, view(data)));
+    });
 }
 
 string pmximpl::CryptoService::ctAes256CbcPkcs7NoIv(const string& data, const string& key, const string& iv) const {

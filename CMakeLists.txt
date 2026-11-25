@@ -160,12 +160,7 @@ if(PRIVMX_IMPORTED_LIBRARIES)
         set_property(TARGET readline PROPERTY IMPORTED_LOCATION ${PRIVMX_CLI_READLINE})
         include_directories(${PRIVMX_CLI_READLINE_INCLUDES})
     endif(PRIVMX_BUILD_CLI AND PRIVMX_CLI_READLINE)
-    # PRIVMX_DRVCRYPTO nie jest juz wciagany - patrz komentarz przy find_package(privmxdrvecc).
-    if(PRIVMX_DRVECC)
-        add_library(privmxdrvecc SHARED IMPORTED GLOBAL)
-        set_property(TARGET privmxdrvecc PROPERTY IMPORTED_LOCATION ${PRIVMX_DRVECC})
-        include_directories(${PRIVMX_DRVECC_INCLUDES})
-    endif(PRIVMX_DRVECC)
+    # Wtyczek kryptograficznych juz nie wciagamy - cala kryptografia idzie przez pmx-crypto.
     if(PRIVMX_DRVNET)
         add_library(privmxdrvnet SHARED IMPORTED GLOBAL)
         set_property(TARGET privmxdrvnet PROPERTY IMPORTED_LOCATION ${PRIVMX_DRVNET})
@@ -204,11 +199,8 @@ if(PRIVMX_CONAN)
     add_library(Pson ALIAS pson::Pson)
     find_package(gmp REQUIRED)
     add_library(gmp ALIAS gmp::gmp)
-    # privmxdrvcrypto juz nie jest potrzebny: prymitywy realizuje pmx-crypto (crypto/pmxcrypto).
-    # privmxdrvecc zostaje - dostarcza arytmetyke BN/Point oraz ECCImpl dla starych typow
-    # `crypto::ecc::*`, czego pmx-crypto nie wystawia.
-    find_package(privmxdrvecc REQUIRED)
-    add_library(privmxdrvecc ALIAS privmxdrvecc::privmxdrvecc)
+    # Kryptografia idzie w calosci przez pmx-crypto (crypto/pmxcrypto) - zadnych wtyczek.
+    # Z privmxdrv* zostaje wylacznie siec.
     if(PRIVMX_DRIVER_NET)
         find_package(privmxdrvnet REQUIRED)
         add_library(privmxdrvnet ALIAS privmxdrvnet::privmxdrvnet)

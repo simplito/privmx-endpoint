@@ -3,8 +3,6 @@ poco/1.13.2
 pson/1.0.7
 openssl/[>=3.5.9 <3.6]
 gmp/6.3.0
-privmxdrvcrypto/1.0.3
-privmxdrvecc/1.0.3
 privmxdrvnet/1.0.3
 gtest/[^1.15.0]
 readline/[^8.2.0]

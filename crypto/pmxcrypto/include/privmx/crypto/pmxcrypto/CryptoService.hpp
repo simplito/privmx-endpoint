@@ -19,7 +19,7 @@ namespace crypto {
 namespace pmximpl {
 
 /**
- * @brief `privmx::crypto::CryptoService` backed by pmx-crypto instead of `privmxdrvcrypto`.
+ * @brief `privmx::crypto::CryptoService` backed by pmx-crypto.
  *
  * The API above this class does not change, which is the point: `rpc/`, `privfs/` and the parts of
  * `endpoint/` still on the legacy stack keep compiling untouched, while the driver underneath is

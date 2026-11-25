@@ -26,8 +26,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
     )
 
     def requirements(self):
-        self.requires("privmxdrvcrypto/1.0.3")
-        self.requires("privmxdrvecc/1.0.3")
         self.requires("privmxdrvnet/1.0.3")
         self.requires("gmp/6.3.0")
         if self.options.with_webrtc:
@@ -112,8 +110,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
                 "gmp::gmp",
                 "pson::Pson",
                 "poco::poco",
-                "privmxdrvcrypto::privmxdrvcrypto",
-                "privmxdrvecc::privmxdrvecc",
                 "privmxdrvnet::privmxdrvnet",
             ]
 
@@ -123,8 +119,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "gmp::gmp",
             "pson::Pson",
             "poco::poco",
-            "privmxdrvcrypto::privmxdrvcrypto",
-            "privmxdrvecc::privmxdrvecc",
             "privmxdrvnet::privmxdrvnet",
         ]
 
@@ -132,8 +126,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
         self.cpp_info.components["privmxendpointcrypto"].set_property("cmake_target_name", "privmxendpoint::privmxendpointcrypto")
         self.cpp_info.components["privmxendpointcrypto"].requires = [
             "gmp::gmp",
-            "privmxdrvcrypto::privmxdrvcrypto",
-            "privmxdrvecc::privmxdrvecc",
         ]
 
         self.cpp_info.components["privmxendpointthread"].libs = ["privmxendpointthread"]
@@ -142,8 +134,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "gmp::gmp",
             "pson::Pson",
             "poco::poco",
-            "privmxdrvcrypto::privmxdrvcrypto",
-            "privmxdrvecc::privmxdrvecc",
             "privmxdrvnet::privmxdrvnet",
         ]
 
@@ -153,8 +143,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "gmp::gmp",
             "pson::Pson",
             "poco::poco",
-            "privmxdrvcrypto::privmxdrvcrypto",
-            "privmxdrvecc::privmxdrvecc",
             "privmxdrvnet::privmxdrvnet",
         ]
 
@@ -164,8 +152,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "gmp::gmp",
             "pson::Pson",
             "poco::poco",
-            "privmxdrvcrypto::privmxdrvcrypto",
-            "privmxdrvecc::privmxdrvecc",
             "privmxdrvnet::privmxdrvnet",
         ]
 
@@ -175,8 +161,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "gmp::gmp",
             "pson::Pson",
             "poco::poco",
-            "privmxdrvcrypto::privmxdrvcrypto",
-            "privmxdrvecc::privmxdrvecc",
             "privmxdrvnet::privmxdrvnet",
         ]
 
@@ -186,8 +170,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "gmp::gmp",
             "pson::Pson",
             "poco::poco",
-            "privmxdrvcrypto::privmxdrvcrypto",
-            "privmxdrvecc::privmxdrvecc",
             "privmxdrvnet::privmxdrvnet",
         ]
 
@@ -197,8 +179,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "gmp::gmp",
             "pson::Pson",
             "poco::poco",
-            "privmxdrvcrypto::privmxdrvcrypto",
-            "privmxdrvecc::privmxdrvecc",
             "privmxdrvnet::privmxdrvnet",
         ]
 
@@ -210,8 +190,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
                 "libwebrtc::libwebrtc",
                 "pson::Pson",
                 "poco::poco",
-                "privmxdrvcrypto::privmxdrvcrypto",
-                "privmxdrvecc::privmxdrvecc",
                 "privmxdrvnet::privmxdrvnet",
             ]
         else:
@@ -219,8 +197,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
                 "gmp::gmp",
                 "pson::Pson",
                 "poco::poco",
-                "privmxdrvcrypto::privmxdrvcrypto",
-                "privmxdrvecc::privmxdrvecc",
                 "privmxdrvnet::privmxdrvnet",
             ]
 
@@ -230,8 +206,6 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "gmp::gmp",
             "pson::Pson",
             "poco::poco",
-            "privmxdrvcrypto::privmxdrvcrypto",
-            "privmxdrvecc::privmxdrvecc",
             "privmxdrvnet::privmxdrvnet",
             "sqlite3::SQLite3",
         ]
@@ -242,7 +216,5 @@ class PrivmxEndpointDevRecipe(ConanFile):
             "gmp::gmp",
             "pson::Pson",
             "poco::poco",
-            "privmxdrvcrypto::privmxdrvcrypto",
-            "privmxdrvecc::privmxdrvecc",
             "privmxdrvnet::privmxdrvnet",
         ]

@@ -2,33 +2,30 @@
 # rozstrzygal sie na DRIVER, wiec ich zrodla nie trafialy do zadnego artefaktu
 # od ok. wersji 2.6.
 #
-# Prymitywy (hasze, HMAC, AES, PBKDF2, losowosc) realizuje teraz pmx-crypto - patrz
-# pmxcrypto/. API `privmx::crypto` sie nie zmienia, wiec rpc/, privfs/ i czesci endpointu
-# nadal siedzace na starym stosie kompiluja sie bez zmian, a privmxdrvcrypto znika.
+# Caly backend to teraz pmx-crypto (pmxcrypto/): prymitywy, kompozycje i operacje na
+# kluczach EC. API `privmx::crypto` sie nie zmienia, wiec rpc/, privfs/ i czesci endpointu
+# nadal siedzace na starym stosie kompiluja sie bez zmian - znikaja za to obie wtyczki
+# kryptograficzne, a z nimi wymuszanie jednej wersji OpenSSL-a w grafie zaleznosci.
 #
-# Z driver/ zostaje wylacznie ecc/ (privmxdrvecc): BNImpl i PointImpl to arytmetyka
-# duzych liczb i punktow krzywej, ktorej pmx-crypto nie wystawia - ma klucze, nie goly
-# BN. ECCImpl to z kolei podpisy i wyprowadzanie kluczy starych typow `crypto::ecc::*`.
-# Dlatego granica tej zmiany biegnie tutaj.
+# Formaty pilnuja wektory: CompositionVectorsTest (kdf, PRF, encrypt-then-MAC) oraz
+# EccVectorsTest (kodowanie kluczy, ramka podpisu, ECDH, rzad krzywej). Oba zestawy
+# przeszly najpierw na implementacji driverowej, a potem na tej - stad wiadomo, ze
+# bajty na drucie sie nie zmienily.
 set(PRIVMX_DEFAULT_CRYPTO_DRIVER ON)
 
 file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/base/src/*.cpp)
 file(GLOB_RECURSE SOURCES_PMXCRYPTO ${CMAKE_CURRENT_SOURCE_DIR}/pmxcrypto/src/*.cpp)
-# Celowo nie GLOB_RECURSE po calym driver/src: CryptoService.cpp i CryptoEnv.cpp zastapil
-# backend pmxcrypto, a `CryptoEnv::getEnv()` moze byc zdefiniowane tylko w jednej jednostce.
-file(GLOB_RECURSE SOURCES_DRIVER_ECC ${CMAKE_CURRENT_SOURCE_DIR}/driver/src/ecc/*.cpp)
-list(APPEND SOURCES ${SOURCES_PMXCRYPTO} ${SOURCES_DRIVER_ECC})
+list(APPEND SOURCES ${SOURCES_PMXCRYPTO})
 
 set(INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/base/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/driver/include
     ${CMAKE_CURRENT_SOURCE_DIR}/pmxcrypto/include
     ${CMAKE_CURRENT_BINARY_DIR}/include
 )
-set(LIBS privmxcryptolib privmxdrvecc)
+set(LIBS privmxcryptolib)
 
 if(PRIVMX_INSTALL_PRIVATE_HEADERS)
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/driver/include/privmx DESTINATION include)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/pmxcrypto/include/privmx DESTINATION include)
 endif()
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/base/include/privmx/crypto/CryptoConfig.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/crypto/CryptoConfig.hpp @ONLY)
