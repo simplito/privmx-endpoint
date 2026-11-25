@@ -479,6 +479,7 @@ private:
         bool allVersions = false;     // read with spaceGet: `info.keys` holds every version the caller can open
         bool groupsFresh = false;     // `spaceKeyIsStale` found no recipient group ahead of its entry, for this read
         std::uint64_t generation = 0; // of the Space when it was read: one from before a delete or create is not used
+        keytree::SpaceLogState log{}; // what `info` was verified as: the one state a write builds on
     };
     struct SpaceKeyUse {
         std::string key{};
@@ -491,15 +492,33 @@ private:
         std::string pubKey{}; // base58-DER
         std::int64_t groupKeyVersion = 0;
     };
-    server::SpaceInfo spaceInfo(const std::string& spaceId, bool fresh = false);
+    // `log`, when given, gets the verified state `info` was replaced with: the same read, never a later one.
+    server::SpaceInfo spaceInfo(const std::string& spaceId, bool fresh = false, keytree::SpaceLogState* log = nullptr);
     void forgetSpace(const std::string& spaceId);
     // A deleted Space: its keys go too, and a read sent before the delete is not kept (`spaceGeneration`), or one
     // created again under the same id would reuse the old key.
     void dropSpace(const std::string& spaceId);
     std::uint64_t spaceGeneration(const std::string& spaceId);
+    bool spaceOvertaken(const server::SpaceInfo& space, std::uint64_t seqWhenSent);
     // The Space's signed history: see GroupApiImplSpaces.cpp. `verifySpace` replaces what the Bridge said about
     // the recipients, the key version and the creator with what the statements say.
     keytree::SpaceLogState verifySpace(server::SpaceInfo& space);
+    // A recipient group's pinned (epoch, key) moved by a statement.
+    struct GroupKeyRefresh {
+        std::uint64_t seq = 0;
+        std::string groupId{};
+        std::uint64_t groupKeyVersion = 0;
+        std::string groupPubKey{};
+        bool byGroup = false; // signed through a group, not by a manager as a user
+    };
+    void requireGroupKeyRefreshesHold(const std::string& contextId, const std::vector<GroupKeyRefresh>& refreshes);
+    // Why a refresh is refused, given the epoch the caller's own key tree gives its key (members only) and the group's
+    // verified current epoch (when there is one); nullopt when it holds.
+    static std::optional<std::string> refusedRefresh(
+        const GroupKeyRefresh& refresh,
+        std::optional<std::int64_t> memberEpoch,
+        const std::optional<core::GroupEpochInfo>& current
+    );
     // The statements after `fromSeq`, up to and including `upToSeq`.
     std::vector<keytree::SpaceStatement> spaceStatements(
         const std::string& spaceId,

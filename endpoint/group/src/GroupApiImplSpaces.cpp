@@ -83,21 +83,37 @@ std::string GroupApiImpl::deriveSpaceId(const std::string& contextId, const core
 
 // -- reading the Space and its key -----------------------------------------------------------------------
 
-group::server::SpaceInfo GroupApiImpl::spaceInfo(const std::string& spaceId, bool fresh) {
+group::server::SpaceInfo GroupApiImpl::spaceInfo(const std::string& spaceId, bool fresh, keytree::SpaceLogState* log) {
     const std::int64_t now = privmx::utils::Utils::getNowTimestamp();
     const std::uint64_t generation = spaceGeneration(spaceId);
     if (!fresh) {
         const auto cached = _spaces.get(spaceId);
         if (cached.has_value() && now - cached->readAt < SPACE_CACHE_MS && cached->generation == generation) {
+            if (log != nullptr) {
+                *log = cached->log;
+            }
             return cached->info;
         }
     }
     group::server::SpaceIdModel model;
     model.id = spaceId;
+    const auto before = spaceLogOf(spaceId);
     group::server::SpaceInfo info = _serverApi.spaceGet(model).space;
     core::EndpointUtils::assertServedId(spaceId, info.id);
-    verifySpace(info);
-    _spaces.set(spaceId, CachedSpace{.info = info, .readAt = now, .allVersions = true, .generation = generation});
+    if (spaceOvertaken(info, before.has_value() ? before->seq : 0)) {
+        return spaceInfo(spaceId, true, log);
+    }
+    const keytree::SpaceLogState verified = verifySpace(info);
+    if (spaceGeneration(spaceId) != generation) {
+        return spaceInfo(spaceId, true, log); // sent before this process deleted or created the Space: not kept
+    }
+    _spaces.set(
+        spaceId,
+        CachedSpace{.info = info, .readAt = now, .allVersions = true, .generation = generation, .log = verified}
+    );
+    if (log != nullptr) {
+        *log = verified;
+    }
     return info;
 }
 
@@ -198,6 +214,14 @@ void GroupApiImpl::storeSpacePin(const keytree::SpaceLogState& state) {
     if (!saved) {
         LOG_WARN("[space pins] the store kept changing under the save of Space ", state.spaceId, "; not saved")
     }
+}
+
+// An answer behind the history this process holds now, but not behind what it held when the request was sent: a read
+// in flight while this process changed the Space itself. No rollback, and nothing to keep or write under: asked again.
+bool GroupApiImpl::spaceOvertaken(const group::server::SpaceInfo& space, std::uint64_t seqWhenSent) {
+    const auto now = spaceLogOf(space.id);
+    const auto served = static_cast<std::uint64_t>(std::max<std::int64_t>(space.seq, 0));
+    return now.has_value() && served < now->seq && served >= seqWhenSent;
 }
 
 std::optional<keytree::SpaceLogState> GroupApiImpl::spaceLogOf(const std::string& spaceId) {
@@ -368,7 +392,8 @@ core::PagingList<SpaceLogEntry> GroupApiImpl::getSpaceLog(
         throw core::InvalidParamsException("skip >= 0, limit >= 1 and sortOrder \"asc\" or \"desc\" are required");
     }
     // The latest state first, verified: the history below is replayed up to exactly that statement.
-    const std::uint64_t head = static_cast<std::uint64_t>(spaceInfo(spaceId, true).seq);
+    keytree::SpaceLogState verified;
+    const std::uint64_t head = static_cast<std::uint64_t>(spaceInfo(spaceId, true, &verified).seq);
     std::vector<SpaceLogEntry> entries;
     std::optional<keytree::SpaceLogState> state;
     for (const keytree::SpaceStatement& statement : spaceStatements(spaceId, 0, static_cast<std::int64_t>(head))) {
@@ -407,11 +432,7 @@ core::PagingList<SpaceLogEntry> GroupApiImpl::getSpaceLog(
         entries.push_back(std::move(entry));
         state = next;
     }
-    const auto verified = spaceLogOf(spaceId);
-    if (!state.has_value() ||
-        !verified.has_value() ||
-        state->seq != verified->seq ||
-        state->digest != verified->digest) {
+    if (!state.has_value() || state->seq != verified.seq || state->digest != verified.digest) {
         throw GroupHistoryForkException("Space " + spaceId + ": its history changed while it was read");
     }
     if (pagingQuery.sortOrder == "desc") {
@@ -774,12 +795,28 @@ core::PagingList<SpaceState> GroupApiImpl::listSpaces(
     group::server::SpaceListModel model;
     model.contextId = contextId;
     core::ListQueryMapper::map(model, pagingQuery);
+    std::map<std::string, std::uint64_t> seqsWhenSent;
+    std::map<std::string, std::uint64_t> generationsWhenSent;
+    {
+        std::lock_guard lock(_spaceLogsMutex);
+        for (const auto& [id, log] : _spaceLogs) {
+            seqsWhenSent[id] = log.seq;
+        }
+        generationsWhenSent = _spaceGenerations;
+    }
     const group::server::SpaceListResult result = _serverApi.spaceList(model);
     std::vector<SpaceState> spaces;
     spaces.reserve(result.spaces.size());
     for (const group::server::SpaceInfo& space : result.spaces) {
+        // Overtaken by a change, a delete or a create of this process while the listing was in flight: left out.
+        if (spaceOvertaken(space, seqsWhenSent[space.id])) {
+            continue;
+        }
         group::server::SpaceInfo verified = space;
         verifySpace(verified);
+        if (spaceGeneration(space.id) != generationsWhenSent[space.id]) {
+            continue;
+        }
         spaces.push_back(toSpaceState(verified));
     }
     return core::PagingList<SpaceState>({.totalAvailable = result.count, .readItems = spaces});
@@ -793,7 +830,8 @@ void GroupApiImpl::deleteSpace(const std::string& spaceId) {
 }
 
 void GroupApiImpl::addSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipient>& recipients) {
-    const group::server::SpaceInfo space = spaceInfo(spaceId, true);
+    keytree::SpaceLogState verified;
+    const group::server::SpaceInfo space = spaceInfo(spaceId, true, &verified);
     std::vector<std::string> groupIds;
     std::vector<core::UserWithPubKey> users;
     group::server::SpaceAddRecipientsModel model;
@@ -824,7 +862,8 @@ void GroupApiImpl::addSpaceRecipients(const std::string& spaceId, const std::vec
         );
         model.keys.insert(model.keys.end(), entries.begin(), entries.end());
     }
-    const auto prior = spaceLogOf(spaceId);
+    // The state of the same read the versions above came from: a later one could commit to a newer key.
+    const std::optional<keytree::SpaceLogState> prior = verified;
     keytree::SpaceStatement statement;
     statement.spaceId = spaceId;
     statement.contextId = space.contextId;
@@ -848,7 +887,8 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
     const std::vector<std::string>& withoutUsers,
     bool forStaleWrite
 ) {
-    const group::server::SpaceInfo space = spaceInfo(spaceId, true);
+    keytree::SpaceLogState verified;
+    const group::server::SpaceInfo space = spaceInfo(spaceId, true, &verified);
     const auto dropped = [](const std::vector<std::string>& list, const std::string& id) {
         return std::find(list.begin(), list.end(), id) != list.end();
     };
@@ -872,8 +912,9 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
     model.keyId = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(16));
     model.keys = wrapSpaceKeyFor(spaceId, space.contextId, next, spaceKey, targets);
     model.expectedKeyVersion = space.keyVersion;
-    // Who stays, as the statements have them; each group at the epoch and key it was just wrapped for.
-    const auto prior = spaceLogOf(spaceId);
+    // Who stays, as the statements of the same read have them; each group at the epoch and key it was just wrapped
+    // for.
+    const std::optional<keytree::SpaceLogState> prior = verified;
     keytree::SpaceStatement statement;
     statement.spaceId = spaceId;
     statement.contextId = space.contextId;
@@ -975,6 +1016,9 @@ core::Buffer GroupApiImpl::sealInSpace(
     const core::Buffer& content
 ) {
     group::server::SpaceInfo space = spaceInfo(spaceId);
+    if (const auto log = spaceLogOf(spaceId); log.has_value() && static_cast<std::uint64_t>(space.seq) < log->seq) {
+        space = spaceInfo(spaceId, true); // a cached read from before a change this process has verified since
+    }
     if (spaceKeyIsStale(space)) {
         // Someone removed from a recipient group still holds this key: nothing more is written under it.
         try {
