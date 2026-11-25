@@ -106,11 +106,6 @@ enum func_enum {
     crypto_encryptDataSymmetric,
     crypto_decryptDataSymmetric,
     crypto_convertPEMKeytoWIFKey,
-    crypto_fromMnemonic,
-    crypto_fromEntropy,
-    crypto_entropyToMnemonic,
-    crypto_mnemonicToEntropy,
-    crypto_mnemonicToSeed,
     //  crypto extKey
     extkey_fromSeed,
     extkey_fromBase58,

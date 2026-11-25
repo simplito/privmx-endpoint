@@ -20,13 +20,11 @@ limitations under the License.
 #include <Poco/SharedPtr.h>
 
 #include "privmx/privfs/gateway/Types.hpp"
-#include "privmx/crypto/ecc/ExtKey.hpp"
 #include "privmx/crypto/ecc/PrivateKey.hpp"
 #include <privmx/rpc/Types.hpp>
 #include <privmx/privfs/gateway/Types.hpp>
 #include <privmx/rpc/AuthorizedConnection.hpp>
 #include <privmx/utils/EventDispatcher.hpp>
-#include <privmx/crypto/BIP39.hpp>
 
 namespace privmx {
 namespace privfs {
@@ -57,7 +55,6 @@ public:
     virtual std::string getUsername();
     virtual types::InitParameters getInitParameters();
     virtual void srpRelogin(const std::string& username, const std::string& password);
-    virtual void keyRelogin(const crypto::BIP39_t& recovery);
     virtual void tryRestoreBySession();
     virtual int addNotificationEventListener(const utils::Callback<rpc::NotificationEvent>& event_listener, int listener_id = -1);
     virtual int addSessionLostEventListener(const utils::Callback<rpc::SessionLostEvent>& event_listener, int listener_id = -1);

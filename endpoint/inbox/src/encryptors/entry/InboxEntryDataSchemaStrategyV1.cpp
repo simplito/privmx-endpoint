@@ -11,7 +11,6 @@ limitations under the License.
 
 #include "privmx/endpoint/inbox/encryptors/entry/InboxEntryDataSchemaStrategyV1.hpp"
 #include "privmx/endpoint/inbox/InboxException.hpp"
-#include <privmx/crypto/ecc/ECC.hpp>
 #include <privmx/endpoint/core/CoreConstants.hpp>
 #include <privmx/endpoint/core/ExceptionConverter.hpp>
 #include <privmx/endpoint/core/Types.hpp>

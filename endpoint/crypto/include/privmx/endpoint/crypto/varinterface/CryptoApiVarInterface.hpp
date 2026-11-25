@@ -38,12 +38,8 @@ public:
         DecryptDataSymmetric = 8,
         ConvertPEMKeytoWIFKey = 9,
         VerifySignature = 10,
-        GenerateBip39 = 11,
-        FromMnemonic = 12,
-        FromEntropy = 13,
-        EntropyToMnemonic = 14,
-        MnemonicToEntropy = 15,
-        MnemonicToSeed = 16,
+        // 11..16 held the BIP-39 methods. The numbers stay retired rather than reused: a wrapper
+        // built against an older header would otherwise dispatch to a different method entirely.
         ConvertPGPAsn1KeyToBase58DERKey = 17
     };
 
@@ -61,12 +57,6 @@ public:
     Poco::Dynamic::Var decryptDataSymmetric(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var convertPEMKeytoWIFKey(const Poco::Dynamic::Var& args);
 
-    Poco::Dynamic::Var generateBip39(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var fromMnemonic(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var fromEntropy(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var entropyToMnemonic(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var mnemonicToEntropy(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var mnemonicToSeed(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var convertPGPAsn1KeyToBase58DERKey(const Poco::Dynamic::Var& args);
 
     Poco::Dynamic::Var exec(METHOD method, const Poco::Dynamic::Var& args);

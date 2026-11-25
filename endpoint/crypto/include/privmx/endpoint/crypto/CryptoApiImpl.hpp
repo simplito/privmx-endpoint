@@ -17,7 +17,6 @@ limitations under the License.
 #include <string>
 
 #include "privmx/endpoint/core/Buffer.hpp"
-#include "privmx/endpoint/crypto/Types.hpp"
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
 namespace privmx {
@@ -37,12 +36,6 @@ public:
     core::Buffer decryptDataSymmetric(const core::Buffer& data, const core::Buffer& key);
     std::string convertPEMKeytoWIFKey(const std::string& keyPEM);
     std::string convertPGPAsn1KeyToBase58DERKey(const std::string& keyPGP);
-    BIP39_t generateBip39(std::size_t strength, const std::string& password = std::string());
-    BIP39_t fromMnemonic(const std::string& mnemonic, const std::string& password = std::string());
-    BIP39_t fromEntropy(const core::Buffer& entropy, const std::string& password = std::string());
-    std::string entropyToMnemonic(const core::Buffer& entropy);
-    core::Buffer mnemonicToEntropy(const std::string& mnemonic);
-    core::Buffer mnemonicToSeed(const std::string& mnemonic, const std::string& password = std::string());
 
 private:
     /// Zwraca klucz w formacie WIF - uzasadnienie przy definicji.

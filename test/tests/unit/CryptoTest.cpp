@@ -5,6 +5,7 @@
 #include <privmx/crypto/CipherType.hpp>
 #include <privmx/crypto/CryptoPrivmx.hpp>
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
+#include <privmx/endpoint/crypto/ExtKey.hpp>
 #include <privmx/endpoint/core/crypto/KeyFormats.hpp>
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
@@ -231,74 +232,6 @@ TEST_F(CryptoTest, convertPGPAsn1KeyToBase58DERKey) {
         privmx::endpoint::core::PublicKey::fromBase58DER(keyInBase58DER);
     });
     EXPECT_EQ(keyInBase58DER, "L5vBUKhJ9qrxwTwuHd7AYiaVRRQJVKsbYFpbkF6KsrF1wzq3tQbQ");
-}
-
-TEST_F(CryptoTest, generateBip39) {
-    EXPECT_NO_THROW({
-        cryptoApi->generateBip39(128, _BIP39_password);
-    });;
-}
-
-TEST_F(CryptoTest, fromMnemonic) {
-    privmx::endpoint::crypto::BIP39_t bip39;
-    EXPECT_NO_THROW({
-        bip39 = cryptoApi->fromMnemonic(_BIP39_mnemonic);
-    });
-    EXPECT_EQ(bip39.mnemonic, _BIP39_mnemonic);
-    EXPECT_EQ(bip39.entropy.stdString(), _BIP39_entropy);
-    EXPECT_EQ(bip39.ext_key.getPrivatePartAsBase58(), _BIP39_privatePartAsBase58_withoutPassword);
-
-    EXPECT_NO_THROW({
-        bip39 = cryptoApi->fromMnemonic(_BIP39_mnemonic, _BIP39_password);
-    });
-    EXPECT_EQ(bip39.mnemonic, _BIP39_mnemonic);
-    EXPECT_EQ(bip39.entropy.stdString(), _BIP39_entropy);
-    EXPECT_EQ(bip39.ext_key.getPrivatePartAsBase58(), _BIP39_privatePartAsBase58_withPassword);
-}
-
-TEST_F(CryptoTest, fromEntropy) {
-    privmx::endpoint::crypto::BIP39_t bip39;
-    EXPECT_NO_THROW({
-        bip39 = cryptoApi->fromEntropy(core::Buffer::from(_BIP39_entropy));
-    });
-    EXPECT_EQ(bip39.mnemonic, _BIP39_mnemonic);
-    EXPECT_EQ(bip39.entropy.stdString(), _BIP39_entropy);
-    EXPECT_EQ(bip39.ext_key.getPrivatePartAsBase58(), _BIP39_privatePartAsBase58_withoutPassword);
-
-    EXPECT_NO_THROW({
-        bip39 = cryptoApi->fromEntropy(core::Buffer::from(_BIP39_entropy), _BIP39_password);
-    });
-    EXPECT_EQ(bip39.mnemonic, _BIP39_mnemonic);
-    EXPECT_EQ(bip39.entropy.stdString(), _BIP39_entropy);
-    EXPECT_EQ(bip39.ext_key.getPrivatePartAsBase58(), _BIP39_privatePartAsBase58_withPassword);
-}
-
-TEST_F(CryptoTest, entropyToMnemonic) {
-    std::string resultMnemonic;
-    EXPECT_NO_THROW({
-        resultMnemonic = cryptoApi->entropyToMnemonic(core::Buffer::from(_BIP39_entropy));
-    });
-    EXPECT_EQ(resultMnemonic, _BIP39_mnemonic);
-}
-
-TEST_F(CryptoTest, mnemonicToEntropy) {
-    std::string resultEntropy;
-    EXPECT_NO_THROW({
-        resultEntropy = cryptoApi->mnemonicToEntropy(_BIP39_mnemonic).stdString();
-    });
-    EXPECT_EQ(resultEntropy, _BIP39_entropy);
-}
-
-TEST_F(CryptoTest, mnemonicToSeed) {
-    std::string resultSeed;
-    EXPECT_NO_THROW({
-        resultSeed = cryptoApi->mnemonicToSeed(_BIP39_mnemonic).stdString();
-    });
-    EXPECT_EQ(resultSeed, _BIP39_seed_withoutPassword);
-    EXPECT_NO_THROW({
-        resultSeed = cryptoApi->mnemonicToSeed(_BIP39_mnemonic, _BIP39_password).stdString();
-    });
-    EXPECT_EQ(resultSeed, _BIP39_seed_withPassword);
 }
 
 TEST_F(CryptoTest, ExtKey_fromSeed) {

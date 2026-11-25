@@ -17,13 +17,11 @@ limitations under the License.
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/CryptoPrivmx.hpp>
-#include <privmx/crypto/ecc/ExtKey.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/privfs/types/Types.hpp>
 #include <privmx/utils/TypedObject.hpp>
 #include <privmx/utils/Utils.hpp>
 #include <privmx/rpc/ConnectionManager.hpp>
-#include <privmx/crypto/BIP39.hpp>
 #include <privmx/utils/PrivmxException.hpp>
 #include <privmx/privfs/PrivFsException.hpp>
 #include <optional>
@@ -155,18 +153,6 @@ void RpcGateway::srpRelogin([[maybe_unused]] const std::string& username, [[mayb
     auto new_rpc = rpc::ConnectionManager::getInstance()->createSrpConnection({
         .username = username,
         .password = password,
-        .properties = getProperties(),
-        .on_additional_login_step = _additional_login_step_on_relogin_callback
-    }, getOptions().asOpt());
-    if (new_rpc->getInfo().cast<rpc::SrpConnectionInfo>()->username != getUsername()) {
-        throw CannotReloginUserMismatchException();
-    }
-    switchRpc(new_rpc);
-}
-
-void RpcGateway::keyRelogin(const BIP39_t& recovery) {
-    auto new_rpc = rpc::ConnectionManager::getInstance()->createKeyConnection({
-        .key = recovery.ext_key.getPrivateKey(),
         .properties = getProperties(),
         .on_additional_login_step = _additional_login_step_on_relogin_callback
     }, getOptions().asOpt());

@@ -249,21 +249,6 @@ private:
         {crypto_convertPEMKeytoWIFKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->crypto->convertPEMKeytoWIFKey(args);
         }},
-        {crypto_fromMnemonic, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto->fromMnemonic(args);
-        }},
-        {crypto_fromEntropy, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto->fromEntropy(args);
-        }},
-        {crypto_entropyToMnemonic, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto->entropyToMnemonic(args);
-        }},
-        {crypto_mnemonicToEntropy, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto->mnemonicToEntropy(args);
-        }},
-        {crypto_mnemonicToSeed, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->crypto->mnemonicToSeed(args);
-        }},
         // ExtKey: factory methods return an int64 handle to an ExtKey instance;
         // instance methods take that handle as the first argument.
         {extkey_fromSeed, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
@@ -1284,36 +1269,6 @@ private:
             "\tjson format - [data]\n"
             "\t\tdata [STRING] - string to trim of trailing whitespace"
         },
-        {crypto_fromMnemonic,
-            "fromMnemonic JSON_ARRAY\n"
-            "\tjson format - [mnemonic, password]\n"
-            "\t\tmnemonic [STRING] - the BIP-39 mnemonic used to generate the key\n"
-            "\t\tpassword [STRING] - the password used to generate the key\n"
-            "\treturns a BIP39 object (privateKey, publicKey, mnemonic, entropy) plus an extKey handle"
-        },
-        {crypto_fromEntropy,
-            "fromEntropy JSON_ARRAY\n"
-            "\tjson format - [entropy, password]\n"
-            "\t\tentropy [BUFFER] - the BIP-39 entropy used to generate the key\n"
-            "\t\tpassword [STRING] - the password used to generate the key\n"
-            "\treturns a BIP39 object (privateKey, publicKey, mnemonic, entropy) plus an extKey handle"
-        },
-        {crypto_entropyToMnemonic,
-            "entropyToMnemonic JSON_ARRAY\n"
-            "\tjson format - [entropy]\n"
-            "\t\tentropy [BUFFER] - the BIP-39 entropy to convert"
-        },
-        {crypto_mnemonicToEntropy,
-            "mnemonicToEntropy JSON_ARRAY\n"
-            "\tjson format - [mnemonic]\n"
-            "\t\tmnemonic [STRING] - the BIP-39 mnemonic to convert"
-        },
-        {crypto_mnemonicToSeed,
-            "mnemonicToSeed JSON_ARRAY\n"
-            "\tjson format - [mnemonic, password]\n"
-            "\t\tmnemonic [STRING] - the BIP-39 mnemonic\n"
-            "\t\tpassword [STRING] - the password used to generate the seed"
-        },
         {extkey_fromSeed,
             "fromSeed JSON_ARRAY\n"
             "\tjson format - [seed]\n"
@@ -1893,11 +1848,6 @@ private:
         {utils_split, "Splits a string by a delimiter into parts."},
         {utils_ltrim, "Removes whitespace from the left of a string."},
         {utils_rtrim, "Removes whitespace from the right of a string."},
-        {crypto_fromMnemonic, "Generates an ECC key and an extKey handle from a BIP-39 mnemonic."},
-        {crypto_fromEntropy, "Generates an ECC key and an extKey handle from BIP-39 entropy."},
-        {crypto_entropyToMnemonic, "Converts BIP-39 entropy to a mnemonic."},
-        {crypto_mnemonicToEntropy, "Converts a BIP-39 mnemonic to entropy."},
-        {crypto_mnemonicToSeed, "Generates a seed from a BIP-39 mnemonic."},
         {extkey_fromSeed, "Creates an ExtKey from the given seed and returns its handle."},
         {extkey_fromBase58, "Creates an ExtKey from a Base58 string and returns its handle."},
         {extkey_generateRandom, "Generates a new random ExtKey and returns its handle."},
@@ -2047,11 +1997,6 @@ private:
         {utils_split, "Splitting"},
         {utils_ltrim, "Left-trimming"},
         {utils_rtrim, "Right-trimming"},
-        {crypto_fromMnemonic, "Generating key from mnemonic"},
-        {crypto_fromEntropy, "Generating key from entropy"},
-        {crypto_entropyToMnemonic, "Converting entropy to mnemonic"},
-        {crypto_mnemonicToEntropy, "Converting mnemonic to entropy"},
-        {crypto_mnemonicToSeed, "Generating seed from mnemonic"},
         {extkey_fromSeed, "Creating ExtKey from seed"},
         {extkey_fromBase58, "Creating ExtKey from base58"},
         {extkey_generateRandom, "Generating random ExtKey"},

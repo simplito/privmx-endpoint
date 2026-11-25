@@ -15,7 +15,6 @@ limitations under the License.
 #include <privmx/utils/TypedObject.hpp>
 #include <privmx/utils/TypesMacros.hpp>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/ExtKey.hpp>
 
 namespace privmx {
 namespace privfs {

@@ -6,7 +6,6 @@
 #include <string>
 
 #include "privmx/endpoint/core/Buffer.hpp"
-#include "privmx/endpoint/crypto/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
@@ -126,58 +125,6 @@ public:
      * @return public key in base58DER format
      */
     std::string convertPGPAsn1KeyToBase58DERKey(const std::string& pgpKey);
-
-    /**
-     * Generates ECC key and BIP-39 mnemonic from a password using BIP-39.
-     * 
-     * @param strength size of BIP-39 entropy, must be a multiple of 32 between 128 and 256.
-     * @param password the password used to generate the Key
-     * @return BIP39_t object containing ECC Key and associated with it BIP-39 mnemonic and entropy
-     */
-    BIP39_t generateBip39(std::size_t strength, const std::string& password = std::string());
-
-    /**
-     * Generates ECC key using BIP-39 mnemonic.
-     * 
-     * @param mnemonic the BIP-39 mnemonic used to generate the Key
-     * @param password the password used to generate the Key
-     * @return BIP39_t object containing ECC Key and associated with it BIP-39 mnemonic and entropy
-     */
-    BIP39_t fromMnemonic(const std::string& mnemonic, const std::string& password = std::string());
-
-    /**
-     * Generates ECC key using BIP-39 entropy.
-     * 
-     * @param entropy the BIP-39 entropy used to generate the Key
-     * @param password the password used to generate the Key
-     * @return BIP39_t object containing ECC Key and associated with it BIP-39 mnemonic and entropy
-     */
-    BIP39_t fromEntropy(const core::Buffer& entropy, const std::string& password = std::string());
-
-    /**
-     * Converts BIP-39 entropy to mnemonic.
-     * 
-     * @param entropy BIP-39 entropy
-     * @return BIP-39 mnemonic
-     */
-    std::string entropyToMnemonic(const core::Buffer& entropy);
-
-    /**
-     * Converts BIP-39 mnemonic to entropy.
-     * 
-     * @param mnemonic BIP-39 mnemonic
-     * @return BIP-39 entropy
-     */
-    core::Buffer mnemonicToEntropy(const std::string& mnemonic);
-
-    /**
-     * Generates a seed used to generate a key using BIP-39 mnemonic with PBKDF2.
-     * 
-     * @param mnemonic BIP-39 mnemonic
-     * @param password the password used to generate the seed
-     * @return generated seed 
-     */
-    core::Buffer mnemonicToSeed(const std::string& mnemonic, const std::string& password = std::string());
 
 private:
     CryptoApi(const std::shared_ptr<CryptoApiImpl>& impl);

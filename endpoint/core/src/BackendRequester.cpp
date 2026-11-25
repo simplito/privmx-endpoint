@@ -18,7 +18,6 @@ limitations under the License.
 #include "privmx/endpoint/core/BackendRequester.hpp"
 #include <optional>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/ecc/ECC.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <regex>
 

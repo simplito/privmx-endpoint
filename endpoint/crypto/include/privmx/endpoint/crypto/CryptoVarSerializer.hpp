@@ -17,14 +17,11 @@ limitations under the License.
 #include <privmx/endpoint/core/VarSerializer.hpp>
 #include <string>
 
-#include "privmx/endpoint/crypto/Types.hpp"
 
 namespace privmx {
 namespace endpoint {
 namespace core {
 
-template<>
-Poco::Dynamic::Var VarSerializer::serialize<crypto::BIP39_t>(const crypto::BIP39_t& val);
 
 } // namespace core
 } // namespace endpoint
