@@ -845,7 +845,8 @@ void GroupApiImpl::addSpaceRecipients(const std::string& spaceId, const std::vec
 std::int64_t GroupApiImpl::replaceSpaceKey(
     const std::string& spaceId,
     const std::vector<std::string>& withoutGroups,
-    const std::vector<std::string>& withoutUsers
+    const std::vector<std::string>& withoutUsers,
+    bool forStaleWrite
 ) {
     const group::server::SpaceInfo space = spaceInfo(spaceId, true);
     const auto dropped = [](const std::vector<std::string>& list, const std::string& id) {
@@ -899,7 +900,16 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
             statement.users.push_back(user);
         }
     }
-    statement = signSpaceStatement(std::move(statement), prior);
+    try {
+        statement = signSpaceStatement(std::move(statement), prior);
+    } catch (const GroupUnauthorizedSignerException& e) {
+        if (!forStaleWrite) {
+            throw;
+        }
+        // Not this caller's to replace: a group's key is refreshed by a manager of the Space or by that group.
+        // Nothing is written under a key a removed member holds; whoever may, replaces it first.
+        throw EnvelopeStaleEpochException("the Space's key is stale and the caller may not replace it", e);
+    }
     const keytree::SpaceLogState replaced = keytree::SpaceLog::apply(prior, statement);
     model.statement = keytree::SpaceLog::toWire(statement);
     if (!withoutGroups.empty() || !withoutUsers.empty()) {
@@ -968,13 +978,13 @@ core::Buffer GroupApiImpl::sealInSpace(
     if (spaceKeyIsStale(space)) {
         // Someone removed from a recipient group still holds this key: nothing more is written under it.
         try {
-            replaceSpaceKey(spaceId, {}, {});
-        } catch (const SpaceRecipientUnavailableException&) { throw; } catch (const GroupHistoryForkException&) {
+            replaceSpaceKey(spaceId, {}, {}, true);
+        } catch (const SpaceRecipientUnavailableException&) { throw; } catch (const EnvelopeStaleEpochException&) {
+            throw; // the caller may not sign the replacement
+        } catch (const GroupHistoryForkException&) {
             throw; // a history that does not hold is the answer, never a lost race
-        } catch (const GroupUnauthorizedSignerException& e) {
-            // Not this caller's to replace: a group's key is refreshed by a manager of the Space or by that group.
-            // Nothing is written under a key a removed member holds; whoever may, replaces it first.
-            throw EnvelopeStaleEpochException("the Space's key is stale and the caller may not replace it", e);
+        } catch (const GroupUnauthorizedSignerException&) {
+            throw; // a statement served that does not verify: what verifySpace found, not a lost race
         } catch (const core::Exception&) {
             // Lost to another writer doing the same: fine if the key is fresh now.
             if (spaceKeyIsStale(spaceInfo(spaceId, true))) {

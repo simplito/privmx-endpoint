@@ -533,10 +533,13 @@ private:
         const std::string& spaceKey,
         const std::vector<SpaceTarget>& targets
     );
+    // `forStaleWrite`: the caller may not sign the replacement (EnvelopeStaleEpochException then, for the write that
+    // needed it). Any other refusal - a history that does not verify - is thrown as it is.
     std::int64_t replaceSpaceKey(
         const std::string& spaceId,
         const std::vector<std::string>& withoutGroups,
-        const std::vector<std::string>& withoutUsers
+        const std::vector<std::string>& withoutUsers,
+        bool forStaleWrite = false
     );
     core::Buffer sealInSpace(const std::string& spaceId, const EnvelopeBinding& binding, const core::Buffer& content);
     // Whether the Space's current key must not be written under: the Bridge says so, or a recipient group's verified
@@ -555,7 +558,7 @@ private:
     std::map<std::string, std::pair<std::uint64_t, std::string>>
         _spacePins; // what the device's store held at first use
     bool _spacePinsLoaded = false;
-    std::map<std::string, std::uint64_t> _spaceGenerations; // moved by a delete or own create
+    std::map<std::string, std::uint64_t> _spaceGenerations;            // moved by a delete or own create
     privmx::utils::ThreadSaveMap<std::string, SpaceKeyUse> _spaceKeys; // by "<spaceId>:<keyVersion>"
     std::shared_ptr<Sequence> sequenceOf(SequenceHandle handle, bool wantReading);
     core::Buffer markSequence(Sequence& sequence, bool closed);
