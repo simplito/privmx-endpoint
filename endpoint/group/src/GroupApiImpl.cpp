@@ -1154,12 +1154,15 @@ Envelope GroupApiImpl::sealAsMember(
     const core::Buffer& content,
     const std::vector<EnvelopeRecipient>& alsoFor
 ) {
-    auto key = currentEncKey(groupId);
-    // After the key: a re-read `currentEncKey` forced has refreshed the roster to the same answer.
+    const std::string keyId = currentEncKey(groupId).id;
+    // The epoch of the key used, looked up by its id as `decrypt` does: the roster is a second lookup, and a rotation
+    // between the two would label K_n's envelope n+1, which nobody could open. The roster gives only who it is for.
+    std::int64_t epoch = 0;
+    const core::DecryptedEncKeyV2 key = encKeyById(groupId, keyId, &epoch);
     const RosterView roster = rosterOf(groupId);
     const EnvelopeSeal seal{
         .binding = binding,
-        .keyVersion = roster.keyVersion,
+        .keyVersion = epoch,
         .encryptedAt = privmx::utils::Utils::getNowTimestamp(),
         .authorUserId = _connection.getImpl()->getMyUserId(roster.contextId),
     };
