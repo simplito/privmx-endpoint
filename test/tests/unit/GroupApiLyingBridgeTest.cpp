@@ -4325,6 +4325,12 @@ TEST_F(GroupApiLyingBridge, AnEnvelopeSharedWithAUserOpensForThatUserOnly) {
     EXPECT_THROW(client("carol").decryptShared(CONTEXT, message("d1"), sealed, from("bob")), EnvelopeWrongAuthorException);
     // Bob is in the home group, not among the further recipients.
     EXPECT_THROW(client("bob").decryptShared(CONTEXT, message("d1"), sealed, ANY), EnvelopeNotARecipientException);
+    // A recipient holds no epoch of the home group: asking for the current one is refused, not ignored.
+    DecryptOptions currentOnly = from("alice");
+    currentOnly.currentEpochOnly = true;
+    EXPECT_THROW(
+        client("carol").decryptShared(CONTEXT, message("d1"), sealed, currentOnly), core::InvalidParamsException
+    );
 
     const privmx::endpoint::group::EnvelopeHeader header = GroupApiImpl::peekEnvelope(sealed);
     EXPECT_FALSE(header.fromOutsider);

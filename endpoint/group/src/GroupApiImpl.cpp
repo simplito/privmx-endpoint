@@ -1403,6 +1403,10 @@ DecryptedSharedEnvelope GroupApiImpl::decryptShared(
     const DecryptOptions& options
 ) {
     requireAuthorStated(options);
+    if (options.currentEpochOnly) {
+        // A recipient holds no epoch of the author's Group to compare with: refused, never silently ignored.
+        throw core::InvalidParamsException("currentEpochOnly does not apply to a shared envelope");
+    }
     const EnvelopeBinding binding = bindingOf(location);
     const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope);
     core::Validator::validateId(routing.groupId, "field:envelope.groupId ");

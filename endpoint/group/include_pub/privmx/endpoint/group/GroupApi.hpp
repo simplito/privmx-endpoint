@@ -457,7 +457,9 @@ public:
      * The result has a sender, not an author. Check `senderMembership`: anyone in the Context can address an
      * envelope to the caller and name any Group as its origin.
      *
-     * Throws EnvelopeNotARecipientException when the caller is not among the recipients.
+     * Throws EnvelopeNotARecipientException when the caller is not among the recipients, and
+     * InvalidParamsException for `options.currentEpochOnly`: a recipient has no epoch of the author's Group to hold
+     * the envelope to.
      * @param contextId ID of the Context the envelope was written in
      */
     DecryptedSharedEnvelope decryptShared(
