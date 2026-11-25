@@ -12,11 +12,11 @@ limitations under the License.
 #include <privmx/crypto/CipherType.hpp>
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/CryptoPrivmx.hpp>
-#include <privmx/crypto/ecc/ExtKey.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
+#include <privmx/endpoint/crypto/ExtKey.hpp>
 
 #include "privmx/endpoint/core/crypto/CryptoSuite.hpp"
 #include "privmx/endpoint/crypto/CryptoApiImpl.hpp"
@@ -45,14 +45,18 @@ std::string CryptoApiImpl::generatePrivateKey(const std::optional<std::string>& 
 
 std::string CryptoApiImpl::derivePrivateKey_deprecated(const std::string& password, const std::string& salt) {
     auto pbkdf2{privmx::crypto::Crypto::pbkdf2(password, salt, 1000, 32, "SHA512")};
-    auto extKey{privmx::crypto::ExtKey::fromSeed(pbkdf2)};
-    return extKey.getPrivateKey().toWIF();
+    // Same master key as before: `fromSeed` is BIP-32's HMAC-SHA512 over "Bitcoin seed" either way,
+    // which `ExtKeyBip32VectorsTest` pins against the specification. The WIF a caller derives from a
+    // password therefore does not change - which matters, because that key is what they log in with.
+    return crypto::ExtKey::fromSeed(core::Buffer::from(pbkdf2)).getPrivateKey();
 }
 
 std::string CryptoApiImpl::derivePrivateKey(const std::string& password, const std::string& salt) {
     auto pbkdf2{privmx::crypto::Crypto::pbkdf2(password, salt, 200000, 32, "SHA512")};
-    auto extKey{privmx::crypto::ExtKey::fromSeed(pbkdf2)};
-    return extKey.getPrivateKey().toWIF();
+    // Same master key as before: `fromSeed` is BIP-32's HMAC-SHA512 over "Bitcoin seed" either way,
+    // which `ExtKeyBip32VectorsTest` pins against the specification. The WIF a caller derives from a
+    // password therefore does not change - which matters, because that key is what they log in with.
+    return crypto::ExtKey::fromSeed(core::Buffer::from(pbkdf2)).getPrivateKey();
 }
 
 std::string CryptoApiImpl::derivePublicKey(const std::string& privkey) {
@@ -98,8 +102,10 @@ core::Buffer CryptoApiImpl::decryptDataSymmetric(const core::Buffer& data, const
 std::string CryptoApiImpl::getPrivKeyFromSeed(const std::string& seed, size_t rounds) {
     auto salt{core::CryptoSuite::randomBytes(16)};
     auto pbkdf2{privmx::crypto::Crypto::pbkdf2(seed, salt, rounds, 32, "SHA512")};
-    auto extKey{privmx::crypto::ExtKey::fromSeed(pbkdf2)};
-    return extKey.getPrivateKey().toWIF();
+    // Same master key as before: `fromSeed` is BIP-32's HMAC-SHA512 over "Bitcoin seed" either way,
+    // which `ExtKeyBip32VectorsTest` pins against the specification. The WIF a caller derives from a
+    // password therefore does not change - which matters, because that key is what they log in with.
+    return crypto::ExtKey::fromSeed(core::Buffer::from(pbkdf2)).getPrivateKey();
 }
 
 std::string CryptoApiImpl::convertPEMKeytoWIFKey(const std::string& keyPEM) {

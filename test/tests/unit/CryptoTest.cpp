@@ -47,10 +47,14 @@ protected:
     const std::string _BIP39_mnemonic = "segment machine okay tank speak giraffe exercise mixed awkward welcome carry wisdom";
     const std::string _BIP39_entropy = privmx::utils::Hex::toString("c330b267eedd0cc453d47110df288bfe");
     const std::string _BIP39_password = "password";
-    const std::string _BIP39_privatePartAsBase58_withoutPassword = "xprv9s21ZrQH143K2S9osSQbnVRZY3fgyJ36oxS35mPEPEkoaEXGRegy8HFavePnVqM6eUd9agxwJyrDmYoJ7BJtbwZrc5S63chmH5rD4rwejUA";
-    const std::string _BIP39_privatePartAsBase58_withPassword = "xprv9s21ZrQH143K3nFYh4axNfWq5k4xn8qspfzzZRS8u6D2awiBfe6Tc8Je3NjhXfz1YbjKCTMqPJUdBieU4k9sbZogccWe4PKHEWdxaVzyZE3";
-    const std::string _BIP39_publicPartAsBase58_withoutPassword = "xpub661MyMwAqRbcEvEGyTwc9dNJ65WBNkkxBBMdt9nqwaHnT2rQyC1Dg5a4mw6gJ1QUBBDq7YguV26kHuJgLNVBL3wBwLzhgUPQ85Er6Tn5Eq2";
-    const std::string _BIP39_publicPartAsBase58_withPassword = "xpub661MyMwAqRbcGGL1o67xjoTZdmuTBbZjBtvbMoqkTRk1Tk3LDBQi9vd7tdKFss79vRWUaX14biVwRDSYzJW4YkmH4LvkGq6zfsSctGxoidd";
+    // Not `xprv…`/`xpub…` any more: extended keys serialise in pmx-crypto's envelope, which records
+    // the algorithms and can hold a composed identity. BIP-32's own format has one key slot and no
+    // algorithm field, so it cannot express that. The derivation is unchanged and still pinned
+    // against the specification's numbers - see ExtKeyBip32VectorsTest.
+    const std::string _ExtKey_privatePartAsBase58_withPassword =
+        "11157uBnWSDsKThuemijkbHRDg6b33U7mmePe7breLbiWU6xEWTaynVobtB6kYd9ygTiE8hDJw8vBbZc7g8cLmVeUHFm2rTwvm4JyhPLhhBeGpbYiWWj8XiyZ7FK";
+    const std::string _ExtKey_publicPartAsBase58_withPassword =
+        "11124CcKRXpzuMZCJbC7nrHrqmaXQyT25eNdR6hdVUWErPX7NUyX83Yeu1EtFKb1taetJScyUPRsUYjJNX";
     const std::string _BIP39_seed_withoutPassword = privmx::utils::Hex::toString(
         "69aee18924f7e6724a7598d49813cfa4eadd31b7671367c7f6de784479d75e1aa4904a498b75e9bcde322bd1011d205d3051ba43c3b4c3a3296451b1a36044f7"
     );
@@ -244,20 +248,33 @@ TEST_F(CryptoTest, ExtKey_fromSeed) {
     });
 }
 
+/**
+ * Round-tripped through the API rather than fed fixed strings, so the test says what it means — that
+ * what the type exports, it can read back — instead of pinning an envelope twice. One exact value is
+ * still pinned, in ExtKey_getPrivatePartAsBase58, to catch the format changing by accident.
+ */
 TEST_F(CryptoTest, ExtKey_fromBase58) {
+    const privmx::endpoint::crypto::ExtKey source =
+        privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withPassword));
+
     privmx::endpoint::crypto::ExtKey ext_key;
-    EXPECT_NO_THROW({
-        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_privatePartAsBase58_withoutPassword);
-    });
-    EXPECT_NO_THROW({
-        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_privatePartAsBase58_withPassword);
-    });
-    EXPECT_NO_THROW({
-        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_publicPartAsBase58_withoutPassword);
-    });
-    EXPECT_NO_THROW({
-        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_publicPartAsBase58_withPassword);
-    });
+    EXPECT_NO_THROW({ ext_key = privmx::endpoint::crypto::ExtKey::fromBase58(source.getPrivatePartAsBase58()); });
+    EXPECT_EQ(source.getPrivateKey(), ext_key.getPrivateKey());
+
+    EXPECT_NO_THROW({ ext_key = privmx::endpoint::crypto::ExtKey::fromBase58(source.getPublicPartAsBase58()); });
+    EXPECT_EQ(source.getPublicKey(), ext_key.getPublicKey());
+}
+
+/// A BIP-32 `xprv` is no longer this type's format, and has to be refused rather than misread.
+TEST_F(CryptoTest, ExtKey_fromBase58_rejectsBip32Envelope) {
+    EXPECT_THROW(
+        {
+            privmx::endpoint::crypto::ExtKey::fromBase58(
+                "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi"
+            );
+        },
+        core::Exception
+    );
 }
 
 TEST_F(CryptoTest, ExtKey_derive_deriveHardened) {
@@ -294,7 +311,7 @@ TEST_F(CryptoTest, ExtKey_getPrivatePartAsBase58) {
     EXPECT_NO_THROW({
         privatePart = ext_key.getPrivatePartAsBase58();
     });
-    EXPECT_EQ(privatePart, _BIP39_privatePartAsBase58_withPassword);
+    EXPECT_EQ(privatePart, _ExtKey_privatePartAsBase58_withPassword);
 }
 
 TEST_F(CryptoTest, ExtKey_getPublicPartAsBase58) {
@@ -306,7 +323,7 @@ TEST_F(CryptoTest, ExtKey_getPublicPartAsBase58) {
     EXPECT_NO_THROW({
         publicPart = ext_key.getPublicPartAsBase58();
     });
-    EXPECT_EQ(publicPart, _BIP39_publicPartAsBase58_withPassword);
+    EXPECT_EQ(publicPart, _ExtKey_publicPartAsBase58_withPassword);
 }
 
 TEST_F(CryptoTest, ExtKey_getPrivateKey) {
@@ -383,14 +400,15 @@ TEST_F(CryptoTest, ExtKey_verifyCompactSignatureWithHash) {
 }
 
 TEST_F(CryptoTest, ExtKey_isPrivate) {
+    const privmx::endpoint::crypto::ExtKey source =
+        privmx::endpoint::crypto::ExtKey::fromSeed(core::Buffer::from(_BIP39_seed_withoutPassword));
+    EXPECT_TRUE(source.isPrivate());
+
     privmx::endpoint::crypto::ExtKey ext_key;
-    EXPECT_NO_THROW({
-        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_privatePartAsBase58_withoutPassword);
-    });
+    EXPECT_NO_THROW({ ext_key = privmx::endpoint::crypto::ExtKey::fromBase58(source.getPrivatePartAsBase58()); });
     EXPECT_TRUE(ext_key.isPrivate());
-    EXPECT_NO_THROW({
-        ext_key =  privmx::endpoint::crypto::ExtKey::fromBase58(_BIP39_publicPartAsBase58_withoutPassword);
-    });
+
+    EXPECT_NO_THROW({ ext_key = privmx::endpoint::crypto::ExtKey::fromBase58(source.getPublicPartAsBase58()); });
     EXPECT_FALSE(ext_key.isPrivate());
 }
 

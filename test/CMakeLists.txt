@@ -124,6 +124,10 @@ endif()
 add_executable(test_unit_CryptoTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/CryptoTest.cpp)
 target_link_libraries(test_unit_CryptoTest privmx privmxendpointcore privmxendpointcrypto Poco::Foundation GTest::GTest GTest::Main)
 
+# The official BIP-32 vectors, kept at the public API so they outlive any one ExtKey backend.
+add_executable(test_unit_ExtKeyBip32VectorsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/ExtKeyBip32VectorsTest.cpp)
+target_link_libraries(test_unit_ExtKeyBip32VectorsTest privmx privmxendpointcore privmxendpointcrypto Poco::Foundation GTest::GTest GTest::Main)
+
 add_executable(test_unit_UtilsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/UtilsTest.cpp)
 target_link_libraries(test_unit_UtilsTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
 

@@ -17,9 +17,9 @@ limitations under the License.
 #include <string>
 
 namespace privmx {
-namespace crypto {
-class ExtKey;
-} // namespace crypto
+namespace cryptoservice {
+class IExtKey;
+} // namespace cryptoservice
 
 namespace endpoint {
 namespace crypto {
@@ -54,7 +54,7 @@ public:
     /**
      * //doc-gen:ignore
      */
-    ExtKey(const privmx::crypto::ExtKey& impl);
+    ExtKey(std::shared_ptr<privmx::cryptoservice::IExtKey> impl, bool isPrivate);
 
     /**
      * Generates child ExtKey from a current ExtKey using BIP32.
@@ -139,7 +139,10 @@ public:
     bool isPrivate() const;
 
 private:
-    std::shared_ptr<privmx::crypto::ExtKey> _impl;
+    std::shared_ptr<privmx::cryptoservice::IExtKey> _impl;
+    // Held beside the key because `IExtKey` does not report it, and every private operation here has
+    // to refuse a public-only key rather than ask it for a private part.
+    bool _isPrivate = false;
 };
 
 } // namespace crypto
