@@ -650,7 +650,8 @@ public:
     SequenceItem readSequenceItem(const SequenceHandle sequence, const core::Buffer& item);
     /**
      * Checks a checkpoint or a close against the items read. Throws `EnvelopeSequenceOrderException` if any
-     * item was missing or forged; reading may go on, and the next mark attests what follows this one.
+     * item was missing or forged; reading may go on, and the next mark attests what follows this one only
+     * (`SequenceMarkInfo::attestedFrom`), not what came before it.
      */
     SequenceMarkInfo verifySequenceMark(const SequenceHandle sequence, const core::Buffer& mark);
     /** Frees a handle from openSequence, or from beginSequence without finishing it. */

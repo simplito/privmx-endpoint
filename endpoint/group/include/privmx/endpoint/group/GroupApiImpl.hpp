@@ -441,8 +441,12 @@ private:
         bool gap = false;          // an item since the last mark never arrived: the transcript cannot be checked
         std::uint64_t inOrder = 0; // the position after the last item read with no gap before it
         std::uint64_t attested = 0;
+        // Where the transcript chain runs unbroken from since the last mark that verified: what the next mark that
+        // verifies attests. A mark that does not agree moves it to that mark.
+        std::uint64_t segmentStart = 0;
     };
     SequenceHandle openSequenceHandle(const std::string& label, std::shared_ptr<Sequence> sequence);
+    void dropSequences();
     // The two halves every sequence shares, whatever seals its header. `sealHeader` gets the new sequence key;
     // `requireCurrentEpoch` gets the header it returned and throws once the sequence must not go on.
     SequenceHandle beginSequenceOver(

@@ -567,7 +567,12 @@ struct SequenceItem {
 
 /** What a checkpoint or a close proved. */
 struct SequenceMarkInfo {
-    /** Items 0 .. attestedItems-1 are exactly what the author wrote, in that order. */
+    /**
+     * Items attestedFrom .. attestedItems-1 are exactly what the author wrote, in that order. Earlier items are
+     * covered only if every earlier mark verified: after a mark that threw, this one attests only from that mark on.
+     */
+    int64_t attestedFrom;
+    /** One past the last item this mark attests: the number of items the author had written at the mark. */
     int64_t attestedItems;
     /** true for a close: the author wrote nothing after it. */
     bool closed;

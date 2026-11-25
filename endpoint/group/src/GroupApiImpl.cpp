@@ -1875,7 +1875,7 @@ SequenceHandle GroupApiImpl::openSequenceOver(
         }
         // The author's signature is all a late reader has for what came before; it is enough.
         const auto mark = _envelopeEncryptor.openSequenceMark(wire, sequence->key, sequence->authorPubKey);
-        sequence->next = sequence->attested = sequence->inOrder = mark.count;
+        sequence->next = sequence->attested = sequence->inOrder = sequence->segmentStart = mark.count;
         sequence->transcript = mark.transcript;
         sequence->closed = mark.closed;
     }
@@ -1947,6 +1947,9 @@ SequenceMarkInfo GroupApiImpl::verifySequenceMark(SequenceHandle handle, const c
     sequence->inOrder = mark.count;
     sequence->closed = mark.closed;
     if (!agrees) {
+        // SECURITY: what came before this mark is not attested by the next one that agrees: that one proves only
+        // the items since this mark.
+        sequence->segmentStart = mark.count;
         throw EnvelopeSequenceOrderException(
             "items " +
             std::to_string(sequence->attested) +
@@ -1955,8 +1958,13 @@ SequenceMarkInfo GroupApiImpl::verifySequenceMark(SequenceHandle handle, const c
             " were missing or are not what the author wrote"
         );
     }
-    sequence->attested = mark.count;
-    return SequenceMarkInfo{.attestedItems = static_cast<int64_t>(mark.count), .closed = mark.closed};
+    const SequenceMarkInfo info{
+        .attestedFrom = static_cast<int64_t>(sequence->segmentStart),
+        .attestedItems = static_cast<int64_t>(mark.count),
+        .closed = mark.closed,
+    };
+    sequence->segmentStart = sequence->attested = mark.count;
+    return info;
 }
 
 SequenceItemHeader GroupApiImpl::peekSequenceItem(const core::Buffer& itemOrMark) {

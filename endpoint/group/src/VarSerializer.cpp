@@ -368,6 +368,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::SequenceMarkInfo>(const group
     if (_options.addType) {
         obj->set("__type", "group$SequenceMarkInfo");
     }
+    obj->set("attestedFrom", serialize(val.attestedFrom));
     obj->set("attestedItems", serialize(val.attestedItems));
     obj->set("closed", serialize(val.closed));
     return obj;

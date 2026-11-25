@@ -4885,7 +4885,9 @@ TEST_F(GroupSequences, SECURITY_ADroppedItemIsCountedAndTheMarkRefusesToAttest) 
     EXPECT_THROW(bob.verifySequenceMark(r, first), EnvelopeSequenceOrderException);
     // The mark was the author's all the same: what follows it is attested again.
     EXPECT_EQ(bob.readSequenceItem(r, e3).missing, 0);
-    EXPECT_EQ(bob.verifySequenceMark(r, second).attestedItems, 4);
+    const SequenceMarkInfo afterGap = bob.verifySequenceMark(r, second);
+    EXPECT_EQ(afterGap.attestedItems, 4);
+    EXPECT_EQ(afterGap.attestedFrom, 3) << "only what followed the mark that did not agree";
 
     // The tail dropped: the mark covers more than was read.
     const SequenceHandle r2 = open("carol");
@@ -4927,6 +4929,20 @@ TEST_F(GroupSequences, SECURITY_AMembersForgeryReadsButIsNeverAttested) {
         wire.sequenceId, sequenceKey, {.count = 2, .closed = false, .transcript = std::string(32, 't')}, bridge.users.at("carol")
     );
     EXPECT_ANY_THROW(bob.verifySequenceMark(r, carolsMark));
+
+    // The next good mark attests what followed the refused one, and nothing before it: the forged item stays out.
+    const core::Buffer e2 = append("e2");
+    const core::Buffer next = client("alice").checkpointSequence(writer);
+    EXPECT_EQ(bob.readSequenceItem(r, e2).missing, 0);
+    const SequenceMarkInfo attested = bob.verifySequenceMark(r, next);
+    EXPECT_EQ(attested.attestedFrom, 2) << "the refused mark's count";
+    EXPECT_EQ(attested.attestedItems, 3);
+    // A reader with no break attests from the start.
+    const SequenceHandle clean = open("carol");
+    for (const core::Buffer& item : {e0, e1}) client("carol").readSequenceItem(clean, item);
+    EXPECT_EQ(client("carol").verifySequenceMark(clean, mark).attestedFrom, 0);
+    client("carol").readSequenceItem(clean, e2);
+    EXPECT_EQ(client("carol").verifySequenceMark(clean, next).attestedFrom, 2);
 }
 
 TEST_F(GroupSequences, SECURITY_AMembersItemFarAheadDoesNotLockTheReaderOut) {
