@@ -207,6 +207,10 @@ void GroupApiImpl::storeSpacePin(const keytree::SpaceLogState& state) {
         }
         std::string out;
         for (const auto& [id, entry] : pins) {
+            if (!std::all_of(id.begin(), id.end(), [](unsigned char c) { return std::isalnum(c) != 0; }) ||
+                id.empty()) {
+                continue; // no id with a space or a line break makes a line of its own
+            }
             out += id + " " + std::to_string(entry.first) + " " + entry.second + "\n";
         }
         return out;
@@ -250,6 +254,12 @@ void GroupApiImpl::rememberSpaceLog(const keytree::SpaceLogState& state) {
 }
 
 keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space) {
+    // The id goes into the pin store's line format and into every cache key. A Space's id is a hash in hex: anything
+    // else the Bridge serves (a space, a line break) is refused here, before it reaches either.
+    if (space.id.empty() ||
+        !std::all_of(space.id.begin(), space.id.end(), [](unsigned char c) { return std::isalnum(c) != 0; })) {
+        throw GroupDataIntegrityException("a Space id is letters and digits only");
+    }
     const auto fork = [&](const std::string& what) {
         return GroupHistoryForkException("Space " + space.id + ": " + what);
     };
