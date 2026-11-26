@@ -40,8 +40,10 @@ using namespace privmx::endpoint::group;
 namespace {
 
 // A Space's private metadata is an envelope of the Space with a content kind of its own, bound to its version
-// (`privateMetaVersion`) as a value is to its location: the Bridge cannot serve an earlier one as the current.
-// `bindingOf` makes that kind for nobody, so no value the application writes can be put in its place.
+// (`privateMetaVersion`) as a value is to its location: the pair (metadata, version) is served together or not at
+// all, never one metadata under another's version. It does not stop the Bridge serving an older pair whole
+// (freshness, which the Bridge is trusted for). `bindingOf` makes that kind for nobody, so no value the application
+// writes can be put in its place.
 EnvelopeBinding metaBinding(std::int64_t privateMetaVersion) {
     return EnvelopeBinding{
         .hasLocation = true,

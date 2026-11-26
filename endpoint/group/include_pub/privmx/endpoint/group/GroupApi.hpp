@@ -683,7 +683,9 @@ public:
     /**
      * @param recipients the Groups and users the key is wrapped for; the caller must be among them as a manager,
      * themselves or through a Group
-     * @param idSeed when set, the Space's ID is deriveSpaceId(contextId, idSeed) instead of random
+     * @param idSeed when set, the Space's ID is deriveSpaceId(contextId, idSeed) instead of random. A Space deleted
+     * and created again under the same derived ID by another user starts again at key version 1, below what this
+     * process has seen of the earlier one: it reads as a rollback (GroupHistoryForkException) here until restart.
      * @return the Space's ID
      */
     std::string createSpace(
