@@ -12,8 +12,10 @@ limitations under the License.
 #ifndef _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_LADDERMATH_HPP_
 #define _PRIVMXLIB_ENDPOINT_GROUP_KEYTREE_LADDERMATH_HPP_
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
+#include <type_traits>
 #include <vector>
 
 namespace privmx {
@@ -57,6 +59,22 @@ enum class DescentFloorReason {
 struct DescentFloor {
     std::uint32_t floor;
     DescentFloorReason reason;
+};
+
+// How `LadderMath::walkDown` ended.
+enum class LadderWalkEnd {
+    Reached, // at the goal
+    NoRung,  // nothing served at `reached` points down to a version not below the goal
+    Refused, // every such rung failed to open, or opened to a key that did not verify
+    TooLong, // `maxHops` spent
+};
+
+template<typename Key>
+struct LadderWalk {
+    LadderWalkEnd end;
+    std::uint32_t reached; // the lowest version whose key the walk holds
+    Key key;               // that version's key
+    std::uint32_t hops;
 };
 
 // Pure epoch arithmetic: which rungs an epoch must publish and how a descent traverses them. Must agree with the
@@ -113,6 +131,78 @@ public:
         std::uint32_t newEpoch,
         std::uint32_t eraFloor
     );
+
+    // The two parts of a ladder that do not depend on what a key is - a group's grant keys (EC, LadderKeys) and a
+    // Space's symmetric keys (GroupApiImplSpaces) both use them; sealing, opening and verifying are the caller's.
+
+    // The rung set a new version publishes: `seal(span)` for each of `rungSpansFor(newVersion, floor, includeSkips)`,
+    // in that order (the unit rung, then the skips oldest first). `seal` throws for a key it cannot reach.
+    template<typename Seal>
+    static auto buildRungSet(std::uint32_t newVersion, std::uint32_t floor, bool includeSkips, Seal&& seal) {
+        std::vector<std::decay_t<decltype(seal(RungSpan{0, 0}))>> rungs;
+        for (const RungSpan& span : rungSpansFor(newVersion, floor, includeSkips)) {
+            rungs.push_back(seal(span));
+        }
+        return rungs;
+    }
+
+    // Descends from `from`, whose key is `start`, to `goal`. At each version the rungs `rungsAt(version)` serves
+    // (each with a `span`) that point down to a version not below the goal are tried, lowest target first - the
+    // largest jump that does not overshoot, `O(log delta)` on an aligned set - until one `open(rung, key)`s to a key
+    // `verify(target, key)` accepts; `onStep(rung, key)` then, or `onRefused(rung, opened)` for each that did not.
+    // Wrong-direction rungs are never traversed: they are what would hand a removed member a later key.
+    template<typename Key, typename RungsAt, typename Open, typename Verify, typename OnRefused, typename OnStep>
+    static LadderWalk<Key> walkDown(
+        std::uint32_t from,
+        std::uint32_t goal,
+        const Key& start,
+        std::uint32_t maxHops,
+        RungsAt&& rungsAt,
+        Open&& open,
+        Verify&& verify,
+        OnRefused&& onRefused,
+        OnStep&& onStep
+    ) {
+        LadderWalk<Key> walk{LadderWalkEnd::Reached, from, start, 0};
+        while (walk.reached > goal) {
+            if (walk.hops >= maxHops) {
+                walk.end = LadderWalkEnd::TooLong;
+                return walk;
+            }
+            auto&& served = rungsAt(walk.reached);
+            std::vector<const std::decay_t<decltype(*served.begin())>*> candidates;
+            for (const auto& rung : served) {
+                if (rung.span.target < rung.span.at && rung.span.at == walk.reached && rung.span.target >= goal) {
+                    candidates.push_back(&rung);
+                }
+            }
+            if (candidates.empty()) {
+                walk.end = LadderWalkEnd::NoRung;
+                return walk;
+            }
+            std::stable_sort(candidates.begin(), candidates.end(), [](const auto* a, const auto* b) {
+                return a->span.target < b->span.target;
+            });
+            bool stepped = false;
+            for (const auto* candidate : candidates) {
+                const std::optional<Key> opened = open(*candidate, walk.key);
+                if (opened.has_value() && verify(candidate->span.target, opened.value())) {
+                    onStep(*candidate, opened.value());
+                    walk.reached = candidate->span.target;
+                    walk.key = opened.value();
+                    ++walk.hops;
+                    stepped = true;
+                    break;
+                }
+                onRefused(*candidate, opened.has_value());
+            }
+            if (!stepped) {
+                walk.end = LadderWalkEnd::Refused;
+                return walk;
+            }
+        }
+        return walk;
+    }
 
 private:
     static void assertEpoch(std::uint32_t value, const char* name);
