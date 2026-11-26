@@ -706,7 +706,7 @@ public:
      * @param recipients the Groups and users the key is wrapped for; the caller must be among them as a manager,
      * themselves or through a Group. Every writer must be able to see each recipient Group (visible to the Context,
      * or the writer a member): see the note above.
-     * @param publicMeta, privateMeta at most 64 KiB each (the Bridge's limit per plane)
+     * @param publicMeta, privateMeta at most 64 KiB of content per plane (the Bridge's limit)
      * @param idSeed when set, the Space's ID is deriveSpaceId(contextId, idSeed) instead of random. The ID of a
      * deleted Space is never taken again: creating under its seed is refused (server::DuplicateResourceIdException).
      * @return the Space's ID
@@ -747,7 +747,7 @@ public:
      * @return the new key version
      */
     int64_t rotateSpaceKey(const std::string& spaceId);
-    /** `meta` at most 64 KiB (the Bridge's limit per plane), as for updateSpacePrivateMeta. */
+    /** `meta`: at most 64 KiB of content per plane (the Bridge's limit), here and for updateSpacePrivateMeta. */
     void updateSpacePublicMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
     void updateSpacePrivateMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
 

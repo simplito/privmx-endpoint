@@ -35,7 +35,7 @@ namespace keytree {
 //   body   = u32 count || record*count                                   (sorted by groupId, no duplicates)
 //   record = lp(groupId) || lp(contextId) || u64 seq || lp(digest) || u64 date
 //          || u64 keyVersion || lp(groupPubKey) || u64 rosterVersion || lp(rosterHash)
-//          || lp(creator) || lp(rule)*9 (TreeCommits::ruleFields order)
+//          || lp(creator) || lp(rule)*8 (TreeCommits::ruleFields order)
 //          || lp(rulesHash) || lp(treeHash) || u64 refusedSeq || u64 seenAt
 //          || u64 planeRosterVersion || u64 planePublicMetaVersion || u64 planePrivateMetaVersion
 //          || u8 flags        bit0 roster present, bit1 nodes present (requires bit0), others 0
