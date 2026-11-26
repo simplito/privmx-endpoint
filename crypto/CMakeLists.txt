@@ -1,17 +1,20 @@
-# Backendy "OPENSSL" i "EMSCRIPTEN" zostaly usuniete: wybor backendu i tak zawsze
-# rozstrzygal sie na DRIVER, wiec ich zrodla nie trafialy do zadnego artefaktu
-# od ok. wersji 2.6.
+# The whole backend is pmx-crypto (pmxcrypto/): primitives, compositions and EC key operations.
+# The `privmx::crypto` API above it is unchanged, so rpc/, privfs/ and the parts of endpoint/ still
+# on the legacy stack compile untouched - what went are both crypto plugins, and with them the
+# pinned OpenSSL version they forced on the dependency graph. The "OPENSSL" and "EMSCRIPTEN"
+# backends had already stopped reaching any artifact around 2.6, because the choice always resolved
+# to DRIVER.
 #
-# Caly backend to teraz pmx-crypto (pmxcrypto/): prymitywy, kompozycje i operacje na
-# kluczach EC. API `privmx::crypto` sie nie zmienia, wiec rpc/, privfs/ i czesci endpointu
-# nadal siedzace na starym stosie kompiluja sie bez zmian - znikaja za to obie wtyczki
-# kryptograficzne, a z nimi wymuszanie jednej wersji OpenSSL-a w grafie zaleznosci.
+# There is no backend switch any more: one backend means the base factories (CryptoEnv::getEnv,
+# ECCImpl::fromPrivateKey and friends) are defined here unconditionally, where they used to sit
+# behind PRIVMX_DEFAULT_CRYPTO_DRIVER. That option named a driver that no longer exists and could
+# never be OFF, so it is gone rather than renamed - and with it the generated CryptoConfig.hpp,
+# whose only content it was.
 #
-# Formaty pilnuja wektory: CompositionVectorsTest (kdf, PRF, encrypt-then-MAC) oraz
-# EccVectorsTest (kodowanie kluczy, ramka podpisu, ECDH, rzad krzywej). Oba zestawy
-# przeszly najpierw na implementacji driverowej, a potem na tej - stad wiadomo, ze
-# bajty na drucie sie nie zmienily.
-set(PRIVMX_DEFAULT_CRYPTO_DRIVER ON)
+# Vectors pin the formats: CompositionVectorsTest (PRF, encrypt-then-MAC), FormatHashVectorsTest
+# (the KDF) and EccVectorsTest (key encodings, the signature frame, ECDH, the curve order). Each set
+# passed against the driver implementation first and against this one after, which is how the bytes
+# on the wire are known not to have moved.
 
 file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/base/src/*.cpp)
 file(GLOB_RECURSE SOURCES_PMXCRYPTO ${CMAKE_CURRENT_SOURCE_DIR}/pmxcrypto/src/*.cpp)
@@ -20,17 +23,11 @@ list(APPEND SOURCES ${SOURCES_PMXCRYPTO})
 set(INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/base/include
     ${CMAKE_CURRENT_SOURCE_DIR}/pmxcrypto/include
-    ${CMAKE_CURRENT_BINARY_DIR}/include
 )
 set(LIBS privmxcryptolib)
 
 if(PRIVMX_INSTALL_PRIVATE_HEADERS)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/pmxcrypto/include/privmx DESTINATION include)
-endif()
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/base/include/privmx/crypto/CryptoConfig.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/crypto/CryptoConfig.hpp @ONLY)
-if(PRIVMX_INSTALL_PRIVATE_HEADERS)
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/privmx/crypto/CryptoConfig.hpp DESTINATION include/privmx/crypto)
 endif()
 
 add_library(privmxcrypto OBJECT ${SOURCES})

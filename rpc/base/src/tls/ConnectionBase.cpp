@@ -32,6 +32,11 @@ using Poco::Dynamic::Var;
 const std::vector<std::string> ConnectionBase::DICT = { "type", "ticket", "tickets", "ticket_id", "ticket_request",
         "ticket_response", "ecdhe", "ecdh", "key", "count", "client_random" };
 
+namespace {
+/// All-zero CBC IV for the single-block frame header; see the call sites for why it is zero.
+const std::string ZERO_IV(16, '\0');
+} // namespace
+
 ConnectionBase::ConnectionBase(std::ostream& output) : _output(output) {
     _pson_decoder.dict = DICT;
 }
@@ -57,7 +62,12 @@ void ConnectionBase::send(const string& packet, UInt8 content_type, bool force_p
         string frame_seed = seq_bin.str() + frame_header_body.str();
         string frame_header_tag = Crypto::hmacSha256(_write_state.mac_key, frame_seed);
         string frame_header2 = frame_header_body.str() + frame_header_tag.substr(0, 8);
-        frame_header2 = Crypto::aes256EcbEncrypt(frame_header2, _write_state.key);
+        // One 16-byte block (8 bytes of header body, 8 bytes of tag), so CBC with an all-zero IV is
+        // the same bytes AES-ECB produced here before: CBC is `E(P xor IV)`, and a zero IV leaves
+        // `E(P)`. The frame on the wire is unchanged; what changes is that the library no longer
+        // offers ECB, whose weakness - equal blocks encrypt equal - is exactly what a mode used on
+        // repeated, structured headers must not have.
+        frame_header2 = Crypto::aes256CbcNoPadEncrypt(frame_header2, _write_state.key, ZERO_IV);
         frame_header.writeRaw(frame_header2);
         if (frame_length > 0) {
             string iv = frame_header2;
@@ -93,7 +103,8 @@ void ConnectionBase::process(istream& input) {
                 return;
             }
             iv = frame_header;
-            frame_header = Crypto::aes256EcbDecrypt(frame_header, _read_state.key);
+            // The reading half of the frame header - see the note at the encrypting call above.
+            frame_header = Crypto::aes256CbcNoPadDecrypt(frame_header, _read_state.key, ZERO_IV);
             string frame_header_tag = frame_header.substr(8);
             frame_header = frame_header.substr(0, 8);
             BinaryBuffer seq_bin;

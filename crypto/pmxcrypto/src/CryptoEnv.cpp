@@ -9,7 +9,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/crypto/CryptoConfig.hpp>
 #include <privmx/crypto/pmxcrypto/CryptoEnv.hpp>
 #include <privmx/crypto/pmxcrypto/CryptoService.hpp>
 
@@ -19,14 +18,11 @@ using namespace privmx::crypto;
 utils::Mutex pmximpl::CryptoEnv::_mutex;
 pmximpl::CryptoEnv::Ptr pmximpl::CryptoEnv::_env;
 
-// The definition of the base factory, which is what decides the backend at link time. It used to
-// live in the driver's CryptoEnv.cpp under the same guard; exactly one translation unit may define
-// it, which is why that file is no longer compiled.
-#ifdef PRIVMX_DEFAULT_CRYPTO_DRIVER
+// The definition of the base factory, which is what decides the backend at link time. Exactly one
+// translation unit may define it; with pmx-crypto the only backend, this is that one.
 CryptoEnv::Ptr CryptoEnv::getEnv() {
     return pmximpl::CryptoEnv::getEnv();
 }
-#endif
 
 pmximpl::CryptoEnv::Ptr pmximpl::CryptoEnv::getEnv() {
     utils::Lock lock(_mutex);

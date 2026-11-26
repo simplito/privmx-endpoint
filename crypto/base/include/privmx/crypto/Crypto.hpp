@@ -12,45 +12,49 @@ limitations under the License.
 #ifndef _PRIVMXLIB_CRYPTO_CRYPTO_HPP_
 #define _PRIVMXLIB_CRYPTO_CRYPTO_HPP_
 
-#include <tuple>
 #include <string>
-#include <Poco/Types.h>
 
 #include <privmx/crypto/CryptoEnv.hpp>
 
 namespace privmx {
 namespace crypto {
 
+/**
+ * The primitives the old stack still needs, and only those.
+ *
+ * This is not a general-purpose crypto facade. Everything here has a caller in `rpc/`, `privfs/` or
+ * the part of `endpoint/` not yet on `core::CryptoSuite`; anything that lost its last caller has been
+ * removed rather than kept available, because an unused primitive is one someone reaches for later
+ * without asking which format it belongs to. New code uses `core::CryptoSuite` and `core::FormatHash`.
+ *
+ * What went, and why it is not coming back by accident:
+ *   - `sha1`, `sha512`, `ripemd160`, `hmacSha1`, `hmacSha512` — no callers. `hash160` still hashes a
+ *     digest of a digest, it just does it inside `CryptoService` now.
+ *   - `aes256Gcm*` — no callers; GCM is reached through `core::CryptoSuite`.
+ *   - `aes256Ecb*` — replaced by `aes256CbcNoPad*`. Its one caller encrypts a single 16-byte block
+ *     (the rpc frame header), and for one block CBC with an all-zero IV is the same bytes: CBC is
+ *     `E(P xor IV)`, so a zero IV leaves `E(P)`. The wire format is unchanged and ECB — whose whole
+ *     problem is that equal blocks encrypt equal — is out of the library.
+ *   - `kdf`, `getKEM`, `generateIv` — no callers. The KDF construction itself is alive and on the
+ *     wire through `core::FormatHash::kdf`, which `FormatHashVectorsTest` pins.
+ *   - the encrypting half of the legacy frame (`aes256CbcHmac256Encrypt`, the three `ct*` framings
+ *     and `CryptoPrivmx::privmxEncrypt`) — nothing writes that format any more. The decrypting half
+ *     stays, because callers still hold bytes written by 2.x.
+ */
 class Crypto
 {
 public:
     static std::string randomBytes(size_t length);
-    static std::string hmacSha1(const std::string& key, const std::string& data);
     static std::string hmacSha256(const std::string& key, const std::string& data);
-    static std::string hmacSha512(const std::string& key, const std::string& data);
-    static std::string sha1(const std::string& data);
     static std::string sha256(const std::string& data);
-    static std::string sha512(const std::string& data);
-    static std::string ripemd160(const std::string& data);
     static std::string hash160(const std::string& data);
-    static std::string aes256EcbEncrypt(const std::string& data, const std::string& key);
-    static std::string aes256EcbDecrypt(const std::string& data, const std::string& key);
-    static std::string aes256CbcPkcs7Encrypt(const std::string& data, const std::string& key, const std::string& iv);
-    static std::string aes256CbcPkcs7Decrypt(const std::string& data, const std::string& key, const std::string& iv);
     static std::string aes256CbcNoPadEncrypt(const std::string& data, const std::string& key, const std::string& iv);
     static std::string aes256CbcNoPadDecrypt(const std::string& data, const std::string& key, const std::string& iv);
-    static std::string aes256GcmEncrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad = "");
-    static std::string aes256GcmDecrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad = "");
+    static std::string aes256CbcPkcs7Encrypt(const std::string& data, const std::string& key, const std::string& iv);
+    static std::string aes256CbcPkcs7Decrypt(const std::string& data, const std::string& key, const std::string& iv);
     static std::string prf_tls12(const std::string& key, const std::string& seed, size_t length);
     static std::string pbkdf2(const std::string& password, const std::string& salt, size_t rounds, size_t length, const std::string& algorithm);
-    static std::string kdf(size_t length, const std::string& key, const std::string& label);
-    static std::string generateIv(const std::string& key, Poco::Int32 idx);
-    static std::tuple<std::string, std::string> getKEM(const std::string& key, size_t kelen = 32, size_t kmlen = 32);
-    static std::string aes256CbcHmac256Encrypt(std::string data, const std::string& key32, std::string iv = std::string(), size_t taglen = 16);
     static std::string aes256CbcHmac256Decrypt(std::string data, const std::string& key32, size_t taglen = 16);
-    static std::string ctAes256CbcPkcs7NoIv(const std::string& data, const std::string& key, const std::string& iv);
-    static std::string ctAes256CbcPkcs7WithIv(const std::string& data, const std::string& key, const std::string& iv);
-    static std::string ctAes256CbcPkcs7WithIvAndHmacSha256(const std::string& data, const std::string& key, const std::string& iv, size_t taglen = 16);
     static std::string ctDecrypt(const std::string& data, const std::string& key32, const std::string& iv16, size_t taglen = 16, const std::string& key16 = std::string());
 };
 
@@ -59,24 +63,9 @@ inline std::string Crypto::randomBytes(size_t length) {
     return crypto_service->randomBytes(length);
 }
 
-inline std::string Crypto::hmacSha1(const std::string& key, const std::string& data) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->hmacSha1(key, data);
-}
-
 inline std::string Crypto::hmacSha256(const std::string& key, const std::string& data) {
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->hmacSha256(key, data);
-}
-
-inline std::string Crypto::hmacSha512(const std::string& key, const std::string& data) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->hmacSha512(key, data);
-}
-
-inline std::string Crypto::sha1(const std::string& data) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->sha1(data);
 }
 
 inline std::string Crypto::sha256(const std::string& data) {
@@ -84,39 +73,9 @@ inline std::string Crypto::sha256(const std::string& data) {
     return crypto_service->sha256(data);
 }
 
-inline std::string Crypto::sha512(const std::string& data) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->sha512(data);
-}
-
-inline std::string Crypto::ripemd160(const std::string& data) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->ripemd160(data);
-}
-
 inline std::string Crypto::hash160(const std::string& data) {
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->hash160(data);
-}
-
-inline std::string Crypto::aes256EcbEncrypt(const std::string& data, const std::string& key) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->aes256EcbEncrypt(data, key);
-}
-
-inline std::string Crypto::aes256EcbDecrypt(const std::string& data, const std::string& key) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->aes256EcbDecrypt(data, key);
-}
-
-inline std::string Crypto::aes256CbcPkcs7Encrypt(const std::string& data, const std::string& key, const std::string& iv) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->aes256CbcPkcs7Encrypt(data, key, iv);
-}
-
-inline std::string Crypto::aes256CbcPkcs7Decrypt(const std::string& data, const std::string& key, const std::string& iv) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->aes256CbcPkcs7Decrypt(data, key, iv);
 }
 
 inline std::string Crypto::aes256CbcNoPadEncrypt(const std::string& data, const std::string& key, const std::string& iv) {
@@ -129,14 +88,14 @@ inline std::string Crypto::aes256CbcNoPadDecrypt(const std::string& data, const 
     return crypto_service->aes256CbcNoPadDecrypt(data, key, iv);
 }
 
-inline std::string Crypto::aes256GcmEncrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad) {
+inline std::string Crypto::aes256CbcPkcs7Encrypt(const std::string& data, const std::string& key, const std::string& iv) {
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->aes256GcmEncrypt(data, key, iv, aad);
+    return crypto_service->aes256CbcPkcs7Encrypt(data, key, iv);
 }
 
-inline std::string Crypto::aes256GcmDecrypt(const std::string& data, const std::string& key, const std::string& iv, const std::string& aad) {
+inline std::string Crypto::aes256CbcPkcs7Decrypt(const std::string& data, const std::string& key, const std::string& iv) {
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->aes256GcmDecrypt(data, key, iv, aad);
+    return crypto_service->aes256CbcPkcs7Decrypt(data, key, iv);
 }
 
 inline std::string Crypto::prf_tls12(const std::string& key, const std::string& seed, size_t length) {
@@ -149,51 +108,15 @@ inline std::string Crypto::pbkdf2(const std::string& password, const std::string
     return crypto_service->pbkdf2(password, salt, rounds, length, algorithm);
 }
 
-inline std::string Crypto::kdf(size_t length, const std::string& key, const std::string& label) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->kdf(length, key, label);
-}
-
-inline std::string Crypto::generateIv(const std::string& key, Poco::Int32 idx) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->generateIv(key, idx);
-}
-
-inline std::tuple<std::string, std::string> Crypto::getKEM(const std::string& key, size_t kelen, size_t kmlen) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->getKEM(key, kelen, kmlen);
-}
-
-inline std::string Crypto::aes256CbcHmac256Encrypt(std::string data, const std::string& key32, std::string iv, size_t taglen) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->aes256CbcHmac256Encrypt(data, key32, iv, taglen);
-}
-
 inline std::string Crypto::aes256CbcHmac256Decrypt(std::string data, const std::string& key32, size_t taglen) {
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->aes256CbcHmac256Decrypt(data, key32, taglen);
-}
-
-inline std::string Crypto::ctAes256CbcPkcs7NoIv(const std::string& data, const std::string& key, const std::string& iv) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->ctAes256CbcPkcs7NoIv(data, key, iv);
-}
-
-inline std::string Crypto::ctAes256CbcPkcs7WithIv(const std::string& data, const std::string& key, const std::string& iv) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->ctAes256CbcPkcs7WithIv(data, key, iv);
-}
-
-inline std::string Crypto::ctAes256CbcPkcs7WithIvAndHmacSha256(const std::string& data, const std::string& key, const std::string& iv, size_t taglen) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->ctAes256CbcPkcs7WithIvAndHmacSha256(data, key, iv, taglen);
 }
 
 inline std::string Crypto::ctDecrypt(const std::string& data, const std::string& key32, const std::string& iv16, size_t taglen, const std::string& key16) {
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->ctDecrypt(data, key32, iv16, taglen, key16);
 }
-
 
 } // crypto
 } // privmx

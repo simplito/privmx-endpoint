@@ -43,10 +43,9 @@ protected:
     "cwm8oTdBqHcksITfIiKdyhGLPP3MvGGlpu4uevoM7cVZ\n"
     "=LRYU\n"
     "-----END PGP PUBLIC KEY BLOCK-----\n";
-    // BIP39
-    const std::string _BIP39_mnemonic = "segment machine okay tank speak giraffe exercise mixed awkward welcome carry wisdom";
-    const std::string _BIP39_entropy = privmx::utils::Hex::toString("c330b267eedd0cc453d47110df288bfe");
-    const std::string _BIP39_password = "password";
+    // Seed material, named after the BIP-39 vector it came from. BIP-39 itself is gone - it cannot
+    // express a post-quantum identity - but the seeds it produced are still useful fixed inputs to
+    // the extended-key cases below, which is all they are used for now.
     // Not `xprv…`/`xpub…` any more: extended keys serialise in pmx-crypto's envelope, which records
     // the algorithms and can hold a composed identity. BIP-32's own format has one key slot and no
     // algorithm field, so it cannot express that. The derivation is unchanged and still pinned
@@ -187,15 +186,20 @@ TEST_F(CryptoTest, encryptDataSymmetric_decryptDataSymmetric) {
  * wherever it likes — so there is no container to migrate and no second chance at the old data.
  * Reading 2.x output is the only way it stays reachable.
  *
- * The legacy frame is produced here through the module that wrote it, rather than pasted as a
- * constant, so the test keeps describing the real format if that module ever moves.
+ * The blob is a **constant**, and has to be: nothing writes this format any more. It was captured
+ * from `CryptoPrivmx::privmxEncrypt` while that still existed — the same function 2.x shipped, whose
+ * output `CompositionVectorsTest` pinned against an independent model — so it is a real 2.x frame
+ * and not a description of today's code. Producing it here instead would have meant keeping a writer
+ * alive for its own test, which is how the old login paths stayed in the tree for years.
+ *
+ * 49 bytes: the cipher-type marker, a 16-byte IV, one AES block of ciphertext, and a 16-byte tag.
  */
 TEST_F(CryptoTest, decryptDataSymmetric_readsA2xBlob) {
     const std::string key = privmx::utils::Hex::toString(
         "3ad696c8c37f286adbbd66b2f31e90041850ae2d3ec30250020c0209085f8c62"
     );
-    const std::string legacy = privmx::crypto::CryptoPrivmx::privmxEncrypt(
-        privmx::crypto::CryptoPrivmx::privmxOptAesWithSignature(), "data", key
+    const std::string legacy = privmx::utils::Hex::toString(
+        "0478d6fcdf5be68f5ea8af3029ef637bcbc785d94c3064d008e67f6bd2a7c6669a05219eba9963e53571c782ea17eee476"
     );
     // The marker the dispatch turns on, and one no `SuiteId` uses. Copied into a local because
     // `CipherType`'s members are in-class declarations with no out-of-line definition, so binding

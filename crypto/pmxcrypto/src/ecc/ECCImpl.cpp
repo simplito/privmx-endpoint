@@ -17,7 +17,6 @@ limitations under the License.
 #include <privmx/cryptoservice/base/CoreTypes.hpp>
 #include <privmx/cryptoservice/base/Exceptions.hpp>
 
-#include <privmx/crypto/CryptoConfig.hpp>
 #include <privmx/crypto/CryptoException.hpp>
 #include <privmx/crypto/pmxcrypto/ProviderAccess.hpp>
 
@@ -74,7 +73,8 @@ constexpr size_t SCALAR_LENGTH = 32;
 
 } // namespace
 
-#ifdef PRIVMX_DEFAULT_CRYPTO_DRIVER
+// The base factories, defined here for the same reason as `CryptoEnv::getEnv`: one backend, one
+// translation unit that may define them.
 privmx::crypto::ECCImpl::Ptr privmx::crypto::ECCImpl::genPair() {
     return privmx::crypto::pmximpl::ECCImpl::genPair();
 }
@@ -86,7 +86,6 @@ privmx::crypto::ECCImpl::Ptr privmx::crypto::ECCImpl::fromPublicKey(const string
 privmx::crypto::ECCImpl::Ptr privmx::crypto::ECCImpl::fromPrivateKey(const string& private_key) {
     return privmx::crypto::pmximpl::ECCImpl::fromPrivateKey(private_key);
 }
-#endif
 
 pmximpl::ECCImpl::ECCImpl(shared_ptr<cs::IPrivateKey> priv, shared_ptr<cs::IPublicKey> pub)
     : _priv(move(priv)), _pub(move(pub)) {}

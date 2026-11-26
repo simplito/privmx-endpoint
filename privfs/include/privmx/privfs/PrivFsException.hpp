@@ -37,10 +37,7 @@ DECLARE_PRIVMX_EXCEPTION_CHILD(InvalidResponseException, PrivFsException, "INVAL
 DECLARE_PRIVMX_EXCEPTION_CHILD(UnsupportedPrivDataInfoVersionException, PrivFsException, "Unsupported privDataInfo version", 0x0010)
 DECLARE_PRIVMX_EXCEPTION_CHILD(CosignerKeystoreStateAndUuidAreRequiredException, PrivFsException, "Cosigner 'keystore', 'state' and 'uuid' are required", 0x0011)
 DECLARE_PRIVMX_EXCEPTION_CHILD(ExpectedDocumentsPacketExportClassException, PrivFsException, "Expected DocumentsPacket export class", 0x0012)
-DECLARE_PRIVMX_EXCEPTION_CHILD(CannotGetPropertiesFromNonSrpKeySessionConnectionException, PrivFsException, "Cannot get properties from non srp/key/session connection", 0x0013)
-DECLARE_PRIVMX_EXCEPTION_CHILD(CannotGetUsernameFromNonSrpKeySessionConnectionException, PrivFsException, "Cannot get username from non srp/key/session connection", 0x0014)
-DECLARE_PRIVMX_EXCEPTION_CHILD(CannotReloginUserMismatchException, PrivFsException, "Cannot relogin - user mismatch", 0x0015)
-DECLARE_PRIVMX_EXCEPTION_CHILD(ConnectionCannotBeRestoredBySessionException, PrivFsException, "Connection cannot be restored by session", 0x0016)
+// 0x0013..0x0016 were the SRP, key-login and session-restore gateway errors; those paths are gone.
 DECLARE_PRIVMX_EXCEPTION_CHILD(WorkerRunningException, PrivFsException, "Worker running", 0x0017)
 
 

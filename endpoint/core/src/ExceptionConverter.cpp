@@ -147,16 +147,12 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
         switch (code_second_two_bytes) {
         case 0x0001:
             throw crypto::UnsupportedKeyFormatException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0002:
-            throw crypto::EmptyPointException(std::string(e.what()) + "\n" + e.getData());
         case 0x0003:
             throw crypto::InvalidSignatureSizeException(std::string(e.what()) + "\n" + e.getData());
         case 0x0004:
             throw crypto::InvalidSignatureHeaderException(std::string(e.what()) + "\n" + e.getData());
         case 0x0005:
             throw crypto::ECCIsNotInitializedException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0006:
-            throw crypto::EmptyBNException(std::string(e.what()) + "\n" + e.getData());
         case 0x0007:
             throw crypto::WrongMessageSecurityTagException(std::string(e.what()) + "\n" + e.getData());
         case 0x0008:
@@ -169,68 +165,22 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
             throw crypto::UnsupportedHashAlgorithmException(std::string(e.what()) + "\n" + e.getData());
         case 0x000C:
             throw crypto::CryptoNotImplementedException(std::string(e.what()) + "\n" + e.getData());
-        case 0x000D:
-            throw crypto::InvalidStrengthException(std::string(e.what()) + "\n" + e.getData());
-        case 0x000E:
-            throw crypto::InvalidEntropyException(std::string(e.what()) + "\n" + e.getData());
-        case 0x000F:
-            throw crypto::InvalidMnemonicException(std::string(e.what()) + "\n" + e.getData());
         case 0x0010:
             throw crypto::InvalidChecksumException(std::string(e.what()) + "\n" + e.getData());
         case 0x0011:
             throw crypto::EncryptInvalidKeyLengthException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0012:
-            throw crypto::OnlyHmacSHA256WithIvIsSupportedForAES256CBCException(
-                std::string(e.what()) + "\n" + e.getData()
-            );
-        case 0x0013:
-            throw crypto::CannotPassIvToDeterministicAES256CBCHmacSHA256Exception(
-                std::string(e.what()) + "\n" + e.getData()
-            );
-        case 0x0014:
-            throw crypto::XTEAECBEncryptionDoesntSupportHmacAndIvException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0015:
-            throw crypto::UnsupportedEncryptionAlgorithmException(std::string(e.what()) + "\n" + e.getData());
         case 0x0016:
             throw crypto::MissingRequiredSignatureException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0017:
-            throw crypto::InvalidFirstByteOfCipherException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0018:
-            throw crypto::GivenPrivKeyDoesNotMatchException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0019:
-            throw crypto::UnsupportedAlgorithmException(std::string(e.what()) + "\n" + e.getData());
-        case 0x001A:
-            throw crypto::UnsupportedVersionException(std::string(e.what()) + "\n" + e.getData());
         case 0x001B:
             throw crypto::IncorrectParamsException(std::string(e.what()) + "\n" + e.getData());
         case 0x001C:
             throw crypto::InvalidHandshakeStateException(std::string(e.what()) + "\n" + e.getData());
-        case 0x001D:
-            throw crypto::InvalidBNException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0001E:
-            throw crypto::InvalidM2Exception(std::string(e.what()) + "\n" + e.getData());
-        case 0x001F:
-            throw crypto::InvalidVersionException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0020:
-            throw crypto::InvalidParentFingerprintException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0022:
-            throw crypto::InvalidResultSizeException(std::string(e.what()) + "\n" + e.getData());
         case 0x0023:
             throw crypto::InvalidNetworkException(std::string(e.what()) + "\n" + e.getData());
         case 0x0024:
             throw crypto::InvalidCompressionFlagException(std::string(e.what()) + "\n" + e.getData());
         case 0x0025:
             throw crypto::InvalidWIFPayloadLengthException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0026:
-            throw crypto::OpenSSLException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0027:
-            throw crypto::PrivmxDriverCryptoException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0028:
-            throw crypto::PrivmxDriverEccException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0029:
-            throw crypto::GivenPublicKeyDoesNotMatchWithSignatureException(std::string(e.what()) + "\n" + e.getData());
-        case 0x002A:
-            throw crypto::ExtKeyDoesNotHoldPrivateKeyException(std::string(e.what()) + "\n" + e.getData());
         default:
             throw crypto::EndpointCryptoException(std::string(e.what()) + "-" + e.getData());
         }
@@ -272,18 +222,6 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
             throw crypto::CosignerKeystoreStateAndUuidAreRequiredException(std::string(e.what()) + "\n" + e.getData());
         case 0x0012:
             throw crypto::ExpectedDocumentsPacketExportClassException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0013:
-            throw crypto::CannotGetPropertiesFromNonSrpKeySessionConnectionException(
-                std::string(e.what()) + "\n" + e.getData()
-            );
-        case 0x0014:
-            throw crypto::CannotGetUsernameFromNonSrpKeySessionConnectionException(
-                std::string(e.what()) + "\n" + e.getData()
-            );
-        case 0x0015:
-            throw crypto::CannotReloginUserMismatchException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0016:
-            throw crypto::ConnectionCannotBeRestoredBySessionException(std::string(e.what()) + "\n" + e.getData());
         case 0x0017:
             throw crypto::WorkerRunningException(std::string(e.what()) + "\n" + e.getData());
         default:

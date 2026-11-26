@@ -14,4 +14,4 @@ limitations under the License.
 using namespace privmx;
 using namespace privmx::crypto;
 
-const Networks::Network Networks::BITCOIN{{0x0488B21E, 0x0488ADE4}, 0x00, 0x80};
+const Networks::Network Networks::BITCOIN{0x00, 0x80};

@@ -12,19 +12,16 @@ limitations under the License.
 #ifndef _PRIVMXLIB_CRYPTO_NETWORKS_HPP_
 #define _PRIVMXLIB_CRYPTO_NETWORKS_HPP_
 
-#include <Poco/Types.h>
-
 namespace privmx {
 namespace crypto {
 
+/// The two version bytes a WIF and a Base58 address carry. The xprv/xpub pair that used to sit
+/// beside them went with the legacy `ExtKey`: pmx-crypto serialises extended keys in its own
+/// envelope, which names the algorithm instead of assuming one curve.
 struct Networks
 {
     struct Network
     {
-        const struct {
-            const Poco::UInt32 PUBLIC;
-            const Poco::UInt32 PRIVATE;
-        } BIP39;
         const char PUB_KEY_HASH;
         const char WIF;
     };
