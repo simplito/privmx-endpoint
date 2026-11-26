@@ -346,6 +346,113 @@ JSON_STRUCT(GroupAddMembersModel, GROUP_ADD_MEMBERS_MODEL_FIELDS);
     F(expectedRosterVersion, int64_t)
 JSON_STRUCT(GroupSetRolesModel, GROUP_SET_ROLES_MODEL_FIELDS);
 
+// -- spaces: a key in versions, wrapped for several groups and users ---------------------------------------------------
+
+// One of `groupId` and `userId` (with `pubKey`) is set.
+#define SPACE_RECIPIENT_FIELDS(F)                                                                                      \
+    F(groupId, std::optional<std::string>)                                                                             \
+    F(userId, std::optional<std::string>)                                                                              \
+    F(pubKey, std::optional<std::string>)                                                                              \
+    F(role, std::string)
+JSON_STRUCT(SpaceRecipient, SPACE_RECIPIENT_FIELDS);
+
+#define SPACE_KEY_RECIPIENT_FIELDS(F)                                                                                  \
+    F(groupId, std::optional<std::string>)                                                                             \
+    F(groupKeyVersion, std::optional<int64_t>)                                                                         \
+    F(userId, std::optional<std::string>)
+JSON_STRUCT(SpaceKeyRecipient, SPACE_KEY_RECIPIENT_FIELDS);
+
+// `data` and `signature` are the client's (base64); the Bridge checks only that every recipient has an entry.
+#define SPACE_KEY_ENTRY_FIELDS(F)                                                                                      \
+    F(keyVersion, int64_t)                                                                                             \
+    F(recipient, SpaceKeyRecipient)                                                                                    \
+    F(data, std::string)                                                                                               \
+    F(signature, std::string)
+JSON_STRUCT(SpaceKeyEntry, SPACE_KEY_ENTRY_FIELDS);
+
+#define SPACE_GROUP_FIELDS(F)                                                                                          \
+    F(groupId, std::string)                                                                                            \
+    F(role, std::string)                                                                                               \
+    F(groupKeyVersion, int64_t)
+JSON_STRUCT(SpaceGroup, SPACE_GROUP_FIELDS);
+
+#define SPACE_USER_FIELDS(F)                                                                                           \
+    F(userId, std::string)                                                                                             \
+    F(pubKey, std::string)                                                                                             \
+    F(role, std::string)
+JSON_STRUCT(SpaceUser, SPACE_USER_FIELDS);
+
+#define SPACE_INFO_FIELDS(F)                                                                                           \
+    F(id, std::string)                                                                                                 \
+    F(contextId, std::string)                                                                                          \
+    F(creator, std::string)                                                                                            \
+    F(createDate, int64_t)                                                                                             \
+    F(lastModifier, std::string)                                                                                       \
+    F(lastModificationDate, int64_t)                                                                                   \
+    F(groups, std::vector<SpaceGroup>)                                                                                 \
+    F(users, std::vector<SpaceUser>)                                                                                   \
+    F(keyId, std::string)                                                                                              \
+    F(keyVersion, int64_t)                                                                                             \
+    F(keyIsStale, bool)                                                                                                \
+    F(keys, std::vector<SpaceKeyEntry>)                                                                                \
+    F(publicMeta, Poco::Dynamic::Var)                                                                                  \
+    F(privateMeta, Poco::Dynamic::Var)                                                                                 \
+    F(publicMetaVersion, int64_t)                                                                                      \
+    F(privateMetaVersion, int64_t)
+JSON_STRUCT(SpaceInfo, SPACE_INFO_FIELDS);
+
+#define SPACE_CREATE_MODEL_FIELDS(F)                                                                                   \
+    F(contextId, std::string)                                                                                          \
+    F(resourceId, std::string)                                                                                         \
+    F(recipients, std::vector<SpaceRecipient>)                                                                         \
+    F(keyId, std::string)                                                                                              \
+    F(keys, std::vector<SpaceKeyEntry>)                                                                                \
+    F(publicMeta, Poco::Dynamic::Var)                                                                                  \
+    F(privateMeta, Poco::Dynamic::Var)
+JSON_STRUCT(SpaceCreateModel, SPACE_CREATE_MODEL_FIELDS);
+
+#define SPACE_CREATE_RESULT_FIELDS(F) F(spaceId, std::string)
+JSON_STRUCT(SpaceCreateResult, SPACE_CREATE_RESULT_FIELDS);
+
+#define SPACE_ID_MODEL_FIELDS(F) F(id, std::string)
+JSON_STRUCT(SpaceIdModel, SPACE_ID_MODEL_FIELDS);
+
+#define SPACE_GET_RESULT_FIELDS(F) F(space, SpaceInfo)
+JSON_STRUCT(SpaceGetResult, SPACE_GET_RESULT_FIELDS);
+
+#define SPACE_LIST_MODEL_EXTRA_FIELDS(F)
+JSON_STRUCT_EXT(SpaceListModel, core::server::ContainerListModel, SPACE_LIST_MODEL_EXTRA_FIELDS);
+
+#define SPACE_LIST_RESULT_FIELDS(F)                                                                                    \
+    F(spaces, std::vector<SpaceInfo>)                                                                                  \
+    F(count, int64_t)
+JSON_STRUCT(SpaceListResult, SPACE_LIST_RESULT_FIELDS);
+
+#define SPACE_ADD_RECIPIENTS_MODEL_FIELDS(F)                                                                           \
+    F(id, std::string)                                                                                                 \
+    F(recipients, std::vector<SpaceRecipient>)                                                                         \
+    F(keys, std::vector<SpaceKeyEntry>)
+JSON_STRUCT(SpaceAddRecipientsModel, SPACE_ADD_RECIPIENTS_MODEL_FIELDS);
+
+// A rotation; with `groups` or `users`, a removal - which is a rotation those recipients are left out of.
+#define SPACE_ROTATE_KEY_MODEL_FIELDS(F)                                                                               \
+    F(id, std::string)                                                                                                 \
+    F(keyId, std::string)                                                                                              \
+    F(keys, std::vector<SpaceKeyEntry>)                                                                                \
+    F(expectedKeyVersion, int64_t)                                                                                     \
+    F(groups, std::optional<std::vector<std::string>>)                                                                 \
+    F(users, std::optional<std::vector<std::string>>)
+JSON_STRUCT(SpaceRotateKeyModel, SPACE_ROTATE_KEY_MODEL_FIELDS);
+
+#define SPACE_ROTATE_KEY_RESULT_FIELDS(F) F(keyVersion, int64_t)
+JSON_STRUCT(SpaceRotateKeyResult, SPACE_ROTATE_KEY_RESULT_FIELDS);
+
+#define SPACE_UPDATE_META_MODEL_FIELDS(F)                                                                              \
+    F(id, std::string)                                                                                                 \
+    F(meta, Poco::Dynamic::Var)                                                                                        \
+    F(version, int64_t)
+JSON_STRUCT(SpaceUpdateMetaModel, SPACE_UPDATE_META_MODEL_FIELDS);
+
 // Removing several at once is not a convenience: done one at a time each removal advances the epoch on its own,
 // so every container the group can read goes stale k times and the rotation budget is charged k times.
 #define GROUP_REMOVE_MEMBERS_MODEL_FIELDS(F)                                                                           \

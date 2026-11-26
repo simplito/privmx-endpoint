@@ -53,6 +53,7 @@ struct GroupApiImplTestAccess {
         api.runDueWork(groupId);
     }
     static bool savePins(GroupApiImpl& api) { return api.savePins(); }
+    static GroupEnvelopeFiles& files(GroupApiImpl& api) { return api._envelopeFiles; }
     // As if the last pin save (or failed attempt) were PIN_SAVE_IDLE_INTERVAL ago: no clock to move in a unit test.
     static void agePinSave(GroupApiImpl& api) {
         std::lock_guard<std::mutex> lock(api._pinsMovedMutex);

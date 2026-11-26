@@ -85,6 +85,44 @@ template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedFileInfo>(const group::DecryptedFileInfo& val);
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceGroupRecipient>(const group::SpaceGroupRecipient& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceUserRecipient>(const group::SpaceUserRecipient& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceState>(const group::SpaceState& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceOrigin>(const group::SpaceOrigin& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::DecryptedSpaceEnvelope>(const group::DecryptedSpaceEnvelope& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceDecryptResult>(const group::SpaceDecryptResult& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::SpaceState>>(
+    const core::PagingList<group::SpaceState>& val
+);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::CipherRange>(const group::CipherRange& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SequenceItemHeader>(const group::SequenceItemHeader& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SequenceAppendResult>(const group::SequenceAppendResult& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SequenceItem>(const group::SequenceItem& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SequenceMarkInfo>(const group::SequenceMarkInfo& val);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::GroupDeletedEventData>(const group::GroupDeletedEventData& val);
 
 template<>

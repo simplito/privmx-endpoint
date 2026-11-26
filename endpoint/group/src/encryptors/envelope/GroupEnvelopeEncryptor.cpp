@@ -1,5 +1,7 @@
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp"
 
+#include <limits>
+
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/EciesEncryptor.hpp>
 #include <privmx/crypto/ecc/PublicKeyCache.hpp>
@@ -24,6 +26,12 @@ const std::string GroupEnvelopeEncryptor::LOCATION_LABEL = "privmx/group/locatio
 // Domain label on a content key sealed under a group's symmetric key (type 6). Without it that seal is an
 // ordinary ciphertext under the group key, which is also what a type 1 payload is.
 const std::string GroupEnvelopeEncryptor::KEY_WRAP_LABEL = "PMXENVK";
+// A Space key's wrap is the same ECIES construction as an envelope's content key, to the same kind of key. Its own
+// domain keeps one from being presented as the other.
+const std::string GroupEnvelopeEncryptor::SPACE_KEY_DOMAIN = "PMXSPC1";
+const std::string GroupEnvelopeEncryptor::SPACE_KEY_LABEL = "privmx/space/key";
+const std::string GroupEnvelopeEncryptor::SEQUENCE_ITEM_LABEL = "privmx/group/sequence-item";
+const std::string GroupEnvelopeEncryptor::SEQUENCE_MARK_LABEL = "privmx/group/sequence-mark";
 
 // -- header --------------------------------------------------------------------------------------------
 
@@ -57,7 +65,12 @@ std::string GroupEnvelopeEncryptor::writeHeader(
     std::string header;
     header.push_back(static_cast<char>(VERSION));
     header.push_back(static_cast<char>(type));
-    header.push_back(static_cast<char>(binding.hasLocation ? FLAG_HAS_LOCATION : 0));
+    header.push_back(
+        static_cast<char>(
+            (binding.hasLocation ? FLAG_HAS_LOCATION : 0) |
+            (static_cast<std::uint8_t>(binding.content) << FLAG_CONTENT_SHIFT)
+        )
+    );
     for (const std::string& field : fields) {
         EnvelopeWriter::putField(header, field);
     }
@@ -84,20 +97,34 @@ GroupEnvelopeEncryptor::ParsedHeader GroupEnvelopeEncryptor::parseHeader(Envelop
     ParsedHeader header;
     header.wireType = cursor.readU8();
     std::uint8_t flags = cursor.readU8();
-    if ((flags & ~FLAG_HAS_LOCATION) != 0) {
+    const std::uint8_t content = (flags & FLAG_CONTENT_MASK) >> FLAG_CONTENT_SHIFT;
+    if ((flags & ~(FLAG_HAS_LOCATION | FLAG_CONTENT_MASK)) != 0 ||
+        content > static_cast<std::uint8_t>(EnvelopeContent::SpaceMeta)) {
         throw InvalidEnvelopeFormatException("unknown envelope flags");
     }
     EnvelopeRouting& routing = header.routing;
     routing.hasLocation = (flags & FLAG_HAS_LOCATION) != 0;
+    routing.content = static_cast<EnvelopeContent>(content);
     routing.groupId = cursor.readField();
 
     const std::uint8_t type = header.wireType;
-    const bool memberKeyed = type == TYPE_GROUP_KEY || type == TYPE_MEMBER_SHARED || type == TYPE_FILE;
-    const bool pubKeyed = type == TYPE_ANONYMOUS || type == TYPE_ANON_FILE || type == TYPE_OUTSIDER;
+    if (type == TYPE_SPACE) {
+        routing.type = ENVELOPE_FROM_MEMBER;
+        routing.spaceId = cursor.readField();
+        if (routing.spaceId.empty()) {
+            throw InvalidEnvelopeFormatException("an envelope in a Space names the Space");
+        }
+        routing.authorUserId = cursor.readField();
+        routing.authorPubKey = privmx::crypto::PublicKey::fromDER(cursor.readField()).toBase58DER();
+        routing.keyVersion = static_cast<std::int64_t>(cursor.readU64());
+        header.bytes = cursor.consumed();
+        return header;
+    }
+    const bool memberKeyed = type == TYPE_GROUP_KEY || type == TYPE_MEMBER_SHARED;
+    const bool pubKeyed = type == TYPE_ANONYMOUS || type == TYPE_OUTSIDER;
     if (!memberKeyed && !pubKeyed) {
         throw InvalidEnvelopeFormatException("unsupported envelope type");
     }
-    routing.isFile = type == TYPE_FILE || type == TYPE_ANON_FILE;
     if (memberKeyed) {
         routing.type = ENVELOPE_FROM_MEMBER;
         routing.keyId = cursor.readField();
@@ -142,6 +169,9 @@ std::size_t GroupEnvelopeEncryptor::checkSealedPrefix(
     if (plain.rfind(header.bytes, 0) != 0) {
         throw InvalidEnvelopeFormatException("envelope header does not match the sealed header");
     }
+    if (header.routing.content != binding.content) {
+        throw InvalidEnvelopeFormatException("envelope carries another kind of content");
+    }
     std::size_t offset = header.bytes.size();
     // From here on the envelope is authentic; what is left to decide is whether it belongs where it was found.
     if (header.routing.hasLocation != binding.hasLocation) {
@@ -161,17 +191,6 @@ std::size_t GroupEnvelopeEncryptor::checkSealedPrefix(
     return offset;
 }
 
-std::pair<ByteCount, std::string> GroupEnvelopeEncryptor::readFileBody(const std::string& plain, std::size_t offset) {
-    EnvelopeReader inner(plain);
-    inner.skip(offset);
-    ByteCount plainSize = inner.readU64();
-    std::string fileKey = inner.readRest();
-    if (fileKey.size() != CONTENT_KEY_SIZE) {
-        throw InvalidEnvelopeFormatException("file envelope carries a malformed file key");
-    }
-    return {plainSize, fileKey};
-}
-
 std::string GroupEnvelopeEncryptor::chunkKey(const std::string& fileKey, ChunkIndex index) {
     // Binding the index makes a chunk unusable in any other position; binding the per-file key makes it
     // unusable in any other file. The label keeps this separate from future derivations off the same key.
@@ -180,18 +199,20 @@ std::string GroupEnvelopeEncryptor::chunkKey(const std::string& fileKey, ChunkIn
 
 std::string GroupEnvelopeEncryptor::wrapContentKey(
     const privmx::crypto::PublicKey& pubKey,
-    const std::string& contentKey
+    const std::string& contentKey,
+    const std::string& domain
 ) {
     // Throwaway, never retained: it exists only to carry out one ECDH with the reader's key. A fresh one per
     // wrap, because the ECIES layer derives its IV from the sender key.
     privmx::crypto::PrivateKey ephemeralPrivKey = privmx::crypto::PrivateKey::generateRandom();
-    return privmx::crypto::EciesEncryptor::encrypt(pubKey, ECIES_DOMAIN + contentKey, ephemeralPrivKey);
+    return privmx::crypto::EciesEncryptor::encrypt(pubKey, domain + contentKey, ephemeralPrivKey);
 }
 
 std::string GroupEnvelopeEncryptor::unwrapContentKey(
     const privmx::crypto::PrivateKey& groupPrivKey,
     const std::string& groupPubKeyBase58,
-    const std::string& wrap
+    const std::string& wrap,
+    const std::string& domain
 ) {
     // The key we resolved must be the key the envelope names, or a hostile server could steer us onto another
     // epoch's key with only the ECIES 4-byte checksum between us and a wrong answer.
@@ -200,12 +221,12 @@ std::string GroupEnvelopeEncryptor::unwrapContentKey(
         throw InvalidEnvelopeFormatException("resolved key does not match the key named by the envelope");
     }
     std::string unwrapped = privmx::crypto::EciesEncryptor::decrypt(groupPrivKey, wrap);
-    if (unwrapped.rfind(ECIES_DOMAIN, 0) != 0 || unwrapped.size() != ECIES_DOMAIN.size() + CONTENT_KEY_SIZE) {
+    if (unwrapped.rfind(domain, 0) != 0 || unwrapped.size() != domain.size() + CONTENT_KEY_SIZE) {
         // Not one of ours. Most importantly: an epoch-ladder rung, which is the same ECIES construction
         // addressed to the same key but carries a grant private key. See ECIES_DOMAIN above.
         throw InvalidEnvelopeFormatException("wrapped key is not a group envelope key");
     }
-    return unwrapped.substr(ECIES_DOMAIN.size());
+    return unwrapped.substr(domain.size());
 }
 
 // -- signed messages: types 1, 5, 6 ----------------------------------------------------------------------
@@ -441,108 +462,155 @@ OpenedEnvelope GroupEnvelopeEncryptor::openAnonymousEnvelope(
     };
 }
 
-// -- type 3 --------------------------------------------------------------------------------------------
+// -- spaces --------------------------------------------------------------------------------------------
 
-core::Buffer GroupEnvelopeEncryptor::packFileEnvelope(
-    const std::string& groupId,
-    const std::string& keyId,
-    ByteCount plainSize,
-    const std::string& fileKey,
+core::Buffer GroupEnvelopeEncryptor::packSpaceEnvelope(
+    const std::string& spaceId,
+    const std::string& viaGroupId,
+    const core::Buffer& content,
     const privmx::crypto::PrivateKey& authorPrivKey,
-    const std::string& groupKey,
+    const std::string& spaceKey,
     const EnvelopeSeal& seal
 ) {
     std::string header = writeHeader(
-        TYPE_FILE, seal.binding, {groupId, keyId, seal.authorUserId, authorPrivKey.getPublicKey().toDER()}
+        TYPE_SPACE, seal.binding, {viaGroupId, spaceId, seal.authorUserId, authorPrivKey.getPublicKey().toDER()}
     );
     header.append(EnvelopeWriter::toBE(static_cast<std::uint64_t>(seal.keyVersion), 8));
-    // `plainSize` inside the signature is the only thing that makes a dropped trailing chunk detectable -
-    // each chunk authenticates itself, but nothing about chunk N says how many were supposed to follow.
-    std::string body = header + seal.binding.locationDigest + EnvelopeWriter::toBE(plainSize, 8) + fileKey;
-    core::Buffer signed_ = _dataEncryptor.signAndPackDataWithSignature(core::Buffer::from(body), authorPrivKey);
-    return core::Buffer::from(header + _dataEncryptor.encrypt(signed_, groupKey).stdString());
+    return core::Buffer::from(
+        header + _dataEncryptor.encrypt(signMessage(header, seal, content, authorPrivKey), spaceKey).stdString()
+    );
 }
 
-EnvelopeFileHeader GroupEnvelopeEncryptor::unpackFileEnvelope(
+OpenedEnvelope GroupEnvelopeEncryptor::openSpaceEnvelope(
     const core::Buffer& envelope,
-    const std::string& groupKey,
+    const std::string& spaceKey,
     const EnvelopeBinding& binding
 ) {
     EnvelopeReader cursor(envelope.stdString());
     ParsedHeader header = parseHeader(cursor);
-    if (header.wireType != TYPE_FILE) {
-        throw InvalidEnvelopeFormatException("not a file envelope");
+    if (header.wireType != TYPE_SPACE) {
+        throw InvalidEnvelopeFormatException("not an envelope of a Space");
     }
-    privmx::crypto::PublicKey authorPubKey = privmx::crypto::PublicKey::fromBase58DER(header.routing.authorPubKey);
-    std::string plain = _dataEncryptor
-                            .verifyAndExtractData(
-                                _dataEncryptor.decrypt(core::Buffer::from(cursor.readRest()), groupKey), authorPubKey
-                            )
-                            .stdString();
-    auto [plainSize, fileKey] = readFileBody(plain, checkSealedPrefix(plain, header, binding));
-    return EnvelopeFileHeader{
-        .type = ENVELOPE_FROM_MEMBER,
-        .groupId = header.routing.groupId,
-        .keyId = header.routing.keyId,
-        .keyVersion = header.routing.keyVersion,
-        .authorUserId = header.routing.authorUserId,
-        .authorPubKey = header.routing.authorPubKey,
-        .plainSize = plainSize,
-        .fileKey = fileKey,
+    return openSignedMessage(cursor.readRest(), spaceKey, header, binding, ENVELOPE_FROM_MEMBER);
+}
+
+std::string GroupEnvelopeEncryptor::spaceKeySignedBytes(const SpaceKeySlot& slot, const std::string& data) {
+    std::string bytes = SPACE_KEY_LABEL;
+    EnvelopeWriter::putField(bytes, slot.spaceId);
+    bytes.append(EnvelopeWriter::toBE(static_cast<std::uint64_t>(slot.keyVersion), 8));
+    bytes.push_back(slot.isGroup ? '\x01' : '\x02');
+    EnvelopeWriter::putField(bytes, slot.recipientId);
+    bytes.append(EnvelopeWriter::toBE(static_cast<std::uint64_t>(slot.isGroup ? slot.groupKeyVersion : 0), 8));
+    return privmx::crypto::Crypto::sha256(bytes + data);
+}
+
+GroupEnvelopeEncryptor::SpaceKeyWrap GroupEnvelopeEncryptor::wrapSpaceKey(
+    const std::string& spaceKey,
+    const SpaceKeySlot& slot,
+    const privmx::crypto::PublicKey& recipientPubKey,
+    const std::string& signerUserId,
+    const privmx::crypto::PrivateKey& signerPrivKey
+) {
+    if (spaceKey.size() != CONTENT_KEY_SIZE) {
+        throw InvalidEnvelopeFormatException("a Space key is 32 bytes");
+    }
+    std::string data(1, '\x01');
+    EnvelopeWriter::putField(data, signerUserId);
+    EnvelopeWriter::putField(data, signerPrivKey.getPublicKey().toDER());
+    EnvelopeWriter::putField(data, recipientPubKey.toBase58DER());
+    EnvelopeWriter::putField(data, wrapContentKey(recipientPubKey, spaceKey, SPACE_KEY_DOMAIN));
+    return SpaceKeyWrap{
+        .data = data,
+        .signature = _dataEncryptor
+                         .signAndPackDataWithSignature(
+                             core::Buffer::from(spaceKeySignedBytes(slot, data)), signerPrivKey
+                         )
+                         .stdString(),
     };
 }
 
-// -- type 4 --------------------------------------------------------------------------------------------
+GroupEnvelopeEncryptor::SpaceKeyWrapHeader GroupEnvelopeEncryptor::peekSpaceKeyWrap(const std::string& data) {
+    EnvelopeReader cursor(data);
+    if (cursor.readU8() != 1) {
+        throw InvalidEnvelopeFormatException("unknown Space key wrap");
+    }
+    SpaceKeyWrapHeader header;
+    header.signerUserId = cursor.readField();
+    header.signerPubKey = privmx::crypto::PublicKey::fromDER(cursor.readField()).toBase58DER();
+    header.recipientPubKey = cursor.readField();
+    return header;
+}
 
-core::Buffer GroupEnvelopeEncryptor::packAnonymousFileEnvelope(
-    const std::string& groupId,
-    const privmx::crypto::PublicKey& groupPubKey,
-    ByteCount plainSize,
-    const std::string& fileKey,
-    const EnvelopeBinding& binding
+std::string GroupEnvelopeEncryptor::unwrapSpaceKey(
+    const SpaceKeyWrap& wrap,
+    const SpaceKeySlot& slot,
+    const privmx::crypto::PrivateKey& recipientPrivKey
 ) {
-    std::string contentKey = privmx::crypto::Crypto::randomBytes(CONTENT_KEY_SIZE);
-    std::string header = writeHeader(TYPE_ANON_FILE, binding, {groupId, groupPubKey.toBase58DER()});
+    const SpaceKeyWrapHeader header = peekSpaceKeyWrap(wrap.data);
+    // Signature first: nothing is decrypted for a wrap its signer did not make for this Space, version and reader.
+    const std::string signedBytes = _dataEncryptor
+                                        .verifyAndExtractData(
+                                            core::Buffer::from(wrap.signature),
+                                            privmx::crypto::PublicKey::fromBase58DER(header.signerPubKey)
+                                        )
+                                        .stdString();
+    if (signedBytes != spaceKeySignedBytes(slot, wrap.data)) {
+        throw InvalidEnvelopeFormatException("Space key wrap was signed for another Space, version or recipient");
+    }
+    EnvelopeReader cursor(wrap.data);
+    cursor.skip(1);
+    cursor.readField();
+    cursor.readField();
+    cursor.readField();
+    const std::string sealed = cursor.readField();
+    if (!cursor.readRest().empty()) {
+        throw InvalidEnvelopeFormatException("malformed Space key wrap");
+    }
+    return unwrapContentKey(recipientPrivKey, header.recipientPubKey, sealed, SPACE_KEY_DOMAIN);
+}
 
-    std::string out = header;
-    EnvelopeWriter::putField(out, wrapContentKey(groupPubKey, contentKey));
-    // No signature, for the same reason as type 2: the sender is anonymous by construction. `plainSize` still
-    // sits inside this encrypt-then-MAC payload, so a dropped tail stays detectable.
-    out.append(
-        _dataEncryptor
-            .encrypt(
-                core::Buffer::from(header + binding.locationDigest + EnvelopeWriter::toBE(plainSize, 8) + fileKey),
-                contentKey
-            )
-            .stdString()
-    );
+// -- files ---------------------------------------------------------------------------------------------
+
+core::Buffer GroupEnvelopeEncryptor::packFileManifest(
+    const std::string& fileKey,
+    const std::vector<FileChunk>& chunks
+) {
+    std::string out = fileKey + EnvelopeWriter::toBE(chunks.size(), 4);
+    for (const FileChunk& chunk : chunks) {
+        out.append(EnvelopeWriter::toBE(chunk.plainSize, 4)).append(chunk.digest);
+    }
     return core::Buffer::from(out);
 }
 
-EnvelopeFileHeader GroupEnvelopeEncryptor::unpackAnonymousFileEnvelope(
-    const core::Buffer& envelope,
-    const privmx::crypto::PrivateKey& groupPrivKey,
-    const EnvelopeBinding& binding
-) {
-    EnvelopeReader cursor(envelope.stdString());
-    ParsedHeader header = parseHeader(cursor);
-    if (header.wireType != TYPE_ANON_FILE) {
-        throw InvalidEnvelopeFormatException("not an anonymous file envelope");
+std::vector<FileChunk> GroupEnvelopeEncryptor::readFileManifest(const core::Buffer& manifest, std::string& fileKey) {
+    const std::string& bytes = manifest.stdString();
+    constexpr std::size_t ENTRY = 4 + DIGEST_SIZE;
+    if (bytes.size() < CONTENT_KEY_SIZE + 4) {
+        throw InvalidEnvelopeFormatException("file envelope truncated");
     }
-    std::string contentKey = unwrapContentKey(groupPrivKey, header.routing.groupPubKey, cursor.readField());
-    std::string plain = _dataEncryptor.decrypt(core::Buffer::from(cursor.readRest()), contentKey).stdString();
-    auto [plainSize, fileKey] = readFileBody(plain, checkSealedPrefix(plain, header, binding));
-    return EnvelopeFileHeader{
-        .type = ENVELOPE_ANONYMOUS,
-        .groupId = header.routing.groupId,
-        .keyId = std::string(),
-        .keyVersion = 0,
-        // Deliberately empty: the throwaway sender key attests to nothing.
-        .authorUserId = std::string(),
-        .authorPubKey = std::string(),
-        .plainSize = plainSize,
-        .fileKey = fileKey,
+    auto u32 = [&](std::size_t at) {
+        std::uint32_t value = 0;
+        for (int i = 0; i < 4; ++i) {
+            value = (value << 8) | static_cast<std::uint8_t>(bytes[at + i]);
+        }
+        return value;
     };
+    const std::size_t count = u32(CONTENT_KEY_SIZE);
+    // The count against the bytes that are there, not the other way round: nothing is reserved on its word.
+    if ((bytes.size() - CONTENT_KEY_SIZE - 4) / ENTRY != count || (bytes.size() - CONTENT_KEY_SIZE - 4) % ENTRY != 0) {
+        throw InvalidEnvelopeFormatException("file envelope lists another number of chunks than it holds");
+    }
+    fileKey = bytes.substr(0, CONTENT_KEY_SIZE);
+    std::vector<FileChunk> chunks;
+    chunks.reserve(count);
+    for (std::size_t i = 0, at = CONTENT_KEY_SIZE + 4; i < count; ++i, at += ENTRY) {
+        FileChunk chunk{.plainSize = u32(at), .digest = bytes.substr(at + 4, DIGEST_SIZE)};
+        if (chunk.plainSize == 0 || chunk.plainSize > CHUNK_SIZE) {
+            throw InvalidEnvelopeFormatException("file envelope lists a chunk of an impossible size");
+        }
+        chunks.push_back(std::move(chunk));
+    }
+    return chunks;
 }
 
 core::Buffer GroupEnvelopeEncryptor::encryptChunk(
@@ -568,13 +636,135 @@ EnvelopeRouting GroupEnvelopeEncryptor::peekAny(const core::Buffer& envelope) {
     return parseHeader(cursor).routing;
 }
 
-EnvelopeRouting GroupEnvelopeEncryptor::peekFamily(const core::Buffer& envelope, EnvelopeFamily family) {
-    // Crossing the families is refused - see the notes on `peek` and `peekFile`.
+EnvelopeRouting GroupEnvelopeEncryptor::peek(const core::Buffer& envelope, EnvelopeContent content) {
     EnvelopeRouting routing = peekAny(envelope);
-    if (routing.isFile != (family == EnvelopeFamily::File)) {
+    if (routing.content != content) {
         throw InvalidEnvelopeFormatException(
-            family == EnvelopeFamily::File ? "not a file envelope" : "unsupported envelope type"
+            content == EnvelopeContent::File          ? "not a file envelope" :
+                content == EnvelopeContent::Sequence  ? "not the header of a sequence" :
+                content == EnvelopeContent::SpaceMeta ? "not a Space's metadata" :
+                                                        "unsupported envelope type"
         );
     }
     return routing;
+}
+
+// -- sequences -----------------------------------------------------------------------------------------
+
+std::string GroupEnvelopeEncryptor::sequenceIdOf(const core::Buffer& headerEnvelope) {
+    return privmx::crypto::Crypto::sha256(headerEnvelope.stdString()).substr(0, SEQUENCE_ID_SIZE);
+}
+
+std::string GroupEnvelopeEncryptor::sequenceTranscriptStart(const std::string& sequenceId) {
+    return privmx::crypto::Crypto::sha256(SEQUENCE_MARK_LABEL + sequenceId);
+}
+
+std::string GroupEnvelopeEncryptor::sequenceTranscriptNext(const std::string& transcript, const core::Buffer& item) {
+    return privmx::crypto::Crypto::sha256(transcript + privmx::crypto::Crypto::sha256(item.stdString()));
+}
+
+GroupEnvelopeEncryptor::SequenceWire GroupEnvelopeEncryptor::parseSequenceWire(const core::Buffer& itemOrMark) {
+    const std::string& bytes = itemOrMark.stdString();
+    EnvelopeReader cursor(bytes);
+    if (cursor.readU8() != VERSION) {
+        throw InvalidEnvelopeFormatException("unsupported envelope version");
+    }
+    const std::uint8_t type = cursor.readU8();
+    if (type != TYPE_SEQUENCE_ITEM && type != TYPE_SEQUENCE_MARK) {
+        throw InvalidEnvelopeFormatException("not a sequence item or mark");
+    }
+    SequenceWire wire;
+    wire.isMark = type == TYPE_SEQUENCE_MARK;
+    cursor.skip(SEQUENCE_ID_SIZE);
+    wire.sequenceId = bytes.substr(2, SEQUENCE_ID_SIZE);
+    wire.index = cursor.readU64();
+    wire.sealed = cursor.readRest();
+    return wire;
+}
+
+namespace {
+std::string sequenceWireHead(std::uint8_t type, const std::string& sequenceId, std::uint64_t index) {
+    std::string out;
+    out.push_back(static_cast<char>(GroupEnvelopeEncryptor::VERSION));
+    out.push_back(static_cast<char>(type));
+    return out + sequenceId + EnvelopeWriter::toBE(index, 8);
+}
+
+std::string sequenceMarkBody(
+    const std::string& label,
+    const std::string& sequenceId,
+    const GroupEnvelopeEncryptor::SequenceMark& mark
+) {
+    std::string body = label + sequenceId + EnvelopeWriter::toBE(mark.count, 8);
+    body.push_back(mark.closed ? '\x01' : '\x00');
+    return body + mark.transcript;
+}
+} // namespace
+
+core::Buffer GroupEnvelopeEncryptor::packSequenceItem(
+    const std::string& sequenceId,
+    const std::string& sequenceKey,
+    std::uint64_t index,
+    const core::Buffer& data
+) {
+    // The key says which sequence and which position: an item moved, replayed or lifted into another
+    // sequence does not open.
+    const std::string key = privmx::crypto::Crypto::hmacSha256(
+        sequenceKey, SEQUENCE_ITEM_LABEL + EnvelopeWriter::toBE(index, 8)
+    );
+    return core::Buffer::from(
+        sequenceWireHead(TYPE_SEQUENCE_ITEM, sequenceId, index) + _dataEncryptor.encrypt(data, key).stdString()
+    );
+}
+
+core::Buffer GroupEnvelopeEncryptor::openSequenceItem(const SequenceWire& item, const std::string& sequenceKey) {
+    const std::string key = privmx::crypto::Crypto::hmacSha256(
+        sequenceKey, SEQUENCE_ITEM_LABEL + EnvelopeWriter::toBE(item.index, 8)
+    );
+    return _dataEncryptor.decrypt(core::Buffer::from(item.sealed), key);
+}
+
+core::Buffer GroupEnvelopeEncryptor::packSequenceMark(
+    const std::string& sequenceId,
+    const std::string& sequenceKey,
+    const SequenceMark& mark,
+    const privmx::crypto::PrivateKey& authorPrivKey
+) {
+    const core::Buffer signed_ = _dataEncryptor.signAndPackDataWithSignature(
+        core::Buffer::from(sequenceMarkBody(SEQUENCE_MARK_LABEL, sequenceId, mark)), authorPrivKey
+    );
+    return core::Buffer::from(
+        sequenceWireHead(TYPE_SEQUENCE_MARK, sequenceId, mark.count) +
+        _dataEncryptor.encrypt(signed_, privmx::crypto::Crypto::hmacSha256(sequenceKey, SEQUENCE_MARK_LABEL))
+            .stdString()
+    );
+}
+
+GroupEnvelopeEncryptor::SequenceMark GroupEnvelopeEncryptor::openSequenceMark(
+    const SequenceWire& mark,
+    const std::string& sequenceKey,
+    const std::string& authorPubKey
+) {
+    const std::string body = _dataEncryptor
+                                 .verifyAndExtractData(
+                                     _dataEncryptor.decrypt(
+                                         core::Buffer::from(mark.sealed),
+                                         privmx::crypto::Crypto::hmacSha256(sequenceKey, SEQUENCE_MARK_LABEL)
+                                     ),
+                                     privmx::crypto::PublicKey::fromBase58DER(authorPubKey)
+                                 )
+                                 .stdString();
+    const std::size_t fixed = SEQUENCE_MARK_LABEL.size() + SEQUENCE_ID_SIZE + 8 + 1;
+    if (body.size() != fixed + DIGEST_SIZE) {
+        throw InvalidEnvelopeFormatException("malformed sequence mark");
+    }
+    if (mark.index >= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {
+        throw InvalidEnvelopeFormatException("sequence mark with an impossible count");
+    }
+    SequenceMark opened{.count = mark.index, .closed = body[fixed - 1] == '\x01', .transcript = body.substr(fixed)};
+    // Rebuilt from the plain parts and compared whole: the signature covers this sequence and this count.
+    if (body != sequenceMarkBody(SEQUENCE_MARK_LABEL, mark.sequenceId, opened)) {
+        throw InvalidEnvelopeFormatException("sequence mark does not match its signed body");
+    }
+    return opened;
 }

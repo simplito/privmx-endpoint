@@ -26,6 +26,8 @@ using FileSize = int64_t;
 using FilePosition = int64_t;
 /** A position in bytes within a file's *ciphertext* — what `seekInEncryptedFile` hands back. */
 using CipherOffset = int64_t;
+/** An open sequence, being written or read. Opaque. */
+using SequenceHandle = int64_t;
 
 /**
  * Holds all available information about a Group.
@@ -488,43 +490,168 @@ struct EnvelopeHeader {
     bool hasLocation;
     /** The writer's claim, for a signed envelope; empty otherwise. */
     std::string authorUserId;
+    /** Set when the envelope is the header of a sequence: the id its items and marks carry. */
+    std::string sequenceId;
+    /**
+     * Set when the envelope was written in a Space. `keyVersion` is then the version of the Space's key, and
+     * `groupId` the Group the author wrote through (empty for an author who is a recipient themselves).
+     */
+    std::string spaceId;
     std::vector<GroupEpochRef> alsoForGroups;
     std::vector<std::string> alsoForUsers;
 };
 
 /**
- * What could be established about a sealed file, once all of it has been received.
- *
- * Reported at the end rather than the start deliberately: attributing a file before its last chunk has
- * arrived would attribute something the sender may not have finished writing.
+ * What is known about a decrypted file. Which fields are set follows from the call that opened it, exactly
+ * as with envelopes - an opening call reads one kind of file and refuses the others:
+ *   beginFileDecryption              `author` (a member, with a role)
+ *   beginFileDecryptionFromOutsider  `sender`
+ *   beginAnonymousFileDecryption     neither: nobody signed it
+ *   beginSharedFileDecryption        `sender`, and the three fields about its origin
+ *   beginFileDecryptionInSpace       `sender`, `via`, and `senderMembership` as SpaceOrigin::authorAccess
+ * A sender is never reported as an author.
  */
 struct DecryptedFileInfo {
+    std::optional<EnvelopeAuthor> author;
+    std::optional<EnvelopeSender> sender;
+    /** For a shared file only: as in DecryptedSharedEnvelope. */
+    std::string homeGroupId;
+    /** For a shared file as in DecryptedSharedEnvelope; for a file in a Space, SpaceOrigin::authorAccess. */
+    std::string senderMembership;
+    /** For a shared file as in DecryptedSharedEnvelope; for a file in a Space, SpaceOrigin::via. */
+    std::string via;
+    EnvelopeAudience sharedWith;
+    /** The epoch of the Group key the envelope was sealed to. 0 for a shared file. */
+    int64_t keyVersion;
+    /** The size of the plaintext, as the envelope states it. */
+    int64_t size;
     /**
-     * ID of the Group the file was sealed for
-     */
-    std::string groupId;
-
-    /**
-     * Public key of the author (base58-DER encoded), whose signature over the file header has been verified.
-     *
-     * EMPTY when `type` is ENVELOPE_ANONYMOUS. Branch on `type`, not on this field being non-empty.
-     */
-    std::string authorPubKey;
-
-    /**
-     * Whether the file came from a member or from an anonymous outsider.
-     */
-    EnvelopeType type;
-
-    /**
-     * Whether the whole file was verified to be present.
-     *
-     * True for a straight read from start to finish: every chunk the envelope's signed size called for
-     * arrived. False once `seekInEncryptedFile` has been used — the parts you did read are still individually
-     * authenticated and cannot have been reordered or substituted, but nothing can tell you whether the parts
-     * you skipped exist at all. That is inherent to random access, not a weakness of the seek.
+     * true when every chunk the envelope lists was read. false after a seek: the parts read are the
+     * writer's, the whole file is not proven.
      */
     bool complete;
+};
+
+/** Where in the ciphertext a range of the plaintext lives. */
+struct CipherRange {
+    int64_t offset;
+    int64_t length;
+};
+
+/** The plain part of a sequence item, checkpoint or close. Not authenticated. */
+struct SequenceItemHeader {
+    std::string sequenceId;
+    /** An item's position; for a mark, how many items it covers. */
+    int64_t index;
+    bool isMark;
+};
+
+/** What appendToSequence produced: send both, in this order. */
+struct SequenceAppendResult {
+    core::Buffer item;
+    /** An automatic checkpoint, when one was due. */
+    std::optional<core::Buffer> mark;
+};
+
+/**
+ * One decrypted item of a sequence. Not yet the author's: until a later mark verifies, another member
+ * could have forged it. verifySequenceMark says how many items are attested.
+ */
+struct SequenceItem {
+    core::Buffer data;
+    /** Position in the sequence, from 0. */
+    int64_t index;
+    /** How many items before this one never arrived. 0 when nothing was skipped. */
+    int64_t missing;
+};
+
+/** What a checkpoint or a close proved. */
+struct SequenceMarkInfo {
+    /**
+     * Items attestedFrom .. attestedItems-1 are exactly what the author wrote, in that order. Earlier items are
+     * covered only if every earlier mark verified: after a mark that threw, this one attests only from that mark on.
+     */
+    int64_t attestedFrom;
+    /** One past the last item this mark attests: the number of items the author had written at the mark. */
+    int64_t attestedItems;
+    /** true for a close: the author wrote nothing after it. */
+    bool closed;
+};
+
+// ── Spaces: one key for several Groups ──
+
+/** Who a Space's key is wrapped for. Exactly one of `groupId` and `user` is set. */
+struct SpaceRecipient {
+    std::string groupId;
+    std::optional<core::UserWithPubKey> user;
+    /** "manager" may change the recipients and the meta. Everyone may write, read, and replace the key. */
+    std::string role;
+};
+
+/** A recipient to remove. Exactly one field is set. */
+struct SpaceRecipientRef {
+    std::string groupId;
+    std::string userId;
+};
+
+struct SpaceGroupRecipient {
+    std::string groupId;
+    std::string role;
+    /** The Group's epoch the current key is wrapped for. */
+    int64_t keyVersion;
+};
+
+struct SpaceUserRecipient {
+    std::string userId;
+    std::string pubKey;
+    std::string role;
+};
+
+struct SpaceState {
+    std::string spaceId;
+    std::string contextId;
+    std::string createdBy;
+    std::vector<SpaceGroupRecipient> groups;
+    std::vector<SpaceUserRecipient> users;
+    int64_t keyVersion;
+    /**
+     * true when a recipient Group has had a removal since the key was made: whoever was removed still holds
+     * this key. The next write by anyone who can reach every recipient Group's key replaces it.
+     */
+    bool keyIsStale;
+    core::Buffer publicMeta;
+    core::Buffer privateMeta;
+    int64_t publicMetaVersion;
+    int64_t privateMetaVersion;
+};
+
+/** How the author of a value in a Space had access to it. */
+struct SpaceOrigin {
+    EnvelopeSender author;
+    /** "user", or the ID of the Group the author wrote through. Signed by the author. */
+    std::string via;
+    /**
+     * "yes", "no" or "unknown": whether the author is a recipient - themselves, or as a member of `via` - at
+     * the time of the read. "unknown" when `via` is a Group whose roster the caller cannot see. The key alone
+     * does not answer this: a member removed from a Group keeps the Space's key until it is replaced.
+     */
+    std::string authorAccess;
+    /** The version of the Space's key the value was sealed under. */
+    int64_t keyVersion;
+};
+
+struct DecryptedSpaceEnvelope {
+    core::Buffer data;
+    SpaceOrigin origin;
+    /** The author's clock, signed. Not proof of when it was written. */
+    int64_t encryptedAt;
+};
+
+/** `decryptManyInSpace` reports per item. */
+struct SpaceDecryptResult {
+    int64_t statusCode;
+    DecryptedSpaceEnvelope envelope;
+    GroupErrorDetails details;
 };
 
 enum EventType : int64_t {

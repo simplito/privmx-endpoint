@@ -62,6 +62,40 @@ public:
         SetGroupRoles = 42,
         UpdateGroupRules = 43,
         GetGroupLog = 44,
+        BeginFileEncryptionAsOutsider = 45,
+        BeginFileDecryptionFromOutsider = 46,
+        BeginAnonymousFileDecryption = 47,
+        BeginSharedFileDecryption = 48,
+        GetFileCipherRange = 49,
+        BeginSequence = 50,
+        GetSequenceHeader = 51,
+        AppendToSequence = 52,
+        CheckpointSequence = 53,
+        FinishSequence = 54,
+        OpenSequence = 55,
+        ReadSequenceItem = 56,
+        VerifySequenceMark = 57,
+        CloseSequence = 58,
+        PeekSequenceItem = 59,
+        CreateSpace = 60,
+        DeriveSpaceId = 61,
+        GetSpace = 62,
+        ListSpaces = 63,
+        DeleteSpace = 64,
+        AddSpaceRecipients = 65,
+        RemoveSpaceRecipients = 66,
+        RotateSpaceKey = 67,
+        UpdateSpacePublicMeta = 68,
+        UpdateSpacePrivateMeta = 69,
+        EncryptInSpace = 70,
+        DecryptInSpace = 71,
+        DecryptManyInSpace = 72,
+        BeginFileEncryptionInSpace = 73,
+        BeginFileDecryptionInSpace = 74,
+        BeginSequenceInSpace = 75,
+        OpenSequenceInSpace = 76,
+        GetSpaceSequenceOrigin = 77,
+        AbortFile = 81,
     };
 
     GroupApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -109,6 +143,40 @@ public:
     Poco::Dynamic::Var finishFileDecryption(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var beginFileEncryptionAnonymously(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var seekInEncryptedFile(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginFileEncryptionAsOutsider(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginFileDecryptionFromOutsider(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginAnonymousFileDecryption(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginSharedFileDecryption(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getFileCipherRange(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getSequenceHeader(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var appendToSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var checkpointSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var finishSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var openSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var readSequenceItem(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var verifySequenceMark(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var closeSequence(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var peekSequenceItem(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var createSpace(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var deriveSpaceId(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getSpace(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var listSpaces(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var deleteSpace(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var addSpaceRecipients(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var removeSpaceRecipients(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var rotateSpaceKey(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var updateSpacePublicMeta(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var updateSpacePrivateMeta(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var encryptInSpace(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var decryptInSpace(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var decryptManyInSpace(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginFileEncryptionInSpace(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginFileDecryptionInSpace(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var beginSequenceInSpace(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var openSequenceInSpace(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getSpaceSequenceOrigin(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var abortFile(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var sendCustomEvent(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildCustomEventSubscriptionQuery(const Poco::Dynamic::Var& args);
 

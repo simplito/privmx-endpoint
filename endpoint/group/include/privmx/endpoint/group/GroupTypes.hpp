@@ -14,6 +14,7 @@ limitations under the License.
 
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -37,17 +38,15 @@ using ChunkIndex = std::uint32_t;
 // A count of bytes, or of chunks.
 using ByteCount = std::uint64_t;
 
-// The file header a file envelope carries, once opened. Produced by `GroupEnvelopeEncryptor::unpackFileEnvelope`
-// and `unpackAnonymousFileEnvelope`.
-struct EnvelopeFileHeader {
-    EnvelopeType type;
-    std::string groupId;
-    std::string keyId;           // set for ENVELOPE_FROM_MEMBER only
-    std::int64_t keyVersion = 0; // set for ENVELOPE_FROM_MEMBER only: the epoch the writer claims
-    std::string authorUserId;    // the writer's claim, signed; EMPTY for ENVELOPE_ANONYMOUS
-    std::string authorPubKey;    // base58-DER, signature verified; EMPTY for ENVELOPE_ANONYMOUS
-    ByteCount plainSize;
-    std::string fileKey; // 32 raw bytes
+// What an envelope carries. Part of the signed (or sealed) header, so one kind is never opened as another: a
+// file's manifest would hand back the file key as if it were message content.
+enum class EnvelopeContent : std::uint8_t {
+    Message = 0,
+    File = 1,     // content is a file manifest: the file key and a digest of every chunk
+    Sequence = 2, // content is the key of a sequence; items and marks follow outside the envelope
+    // A Space's private metadata. A kind of its own, which no location of the application's reaches: a recipient
+    // cannot write a value that reads as the Space's metadata.
+    SpaceMeta = 3,
 };
 
 // What an envelope is bound to, beside its group: a location in the application's data, or - said, never
@@ -55,6 +54,7 @@ struct EnvelopeFileHeader {
 struct EnvelopeBinding {
     bool hasLocation = false;
     std::string locationDigest{}; // 32 bytes when `hasLocation`, empty otherwise
+    EnvelopeContent content = EnvelopeContent::Message;
 };
 
 // What a writer stamps into the signed part of an envelope.
@@ -78,14 +78,15 @@ struct WireRecipient {
 // The plain header, read without opening anything. Nothing in it is authenticated until the envelope is opened.
 struct EnvelopeRouting {
     EnvelopeType type;
-    bool isFile = false;
+    EnvelopeContent content = EnvelopeContent::Message;
     bool hasLocation = false;
-    std::string groupId;
-    std::string keyId;                     // member envelopes only
-    std::int64_t keyVersion = 0;           // member envelopes only: the epoch the writer claims
-    std::string groupPubKey;               // base58-DER; outsider and anonymous envelopes only
-    std::string authorUserId;              // signed envelopes only
-    std::string authorPubKey;              // base58-DER; signed envelopes only
+    std::string groupId;         // for an envelope in a Space: the group the author wrote through, or empty
+    std::string spaceId;         // envelopes in a Space only
+    std::string keyId;           // member envelopes only
+    std::int64_t keyVersion = 0; // member envelopes: the epoch the writer claims; in a Space: the Space key's version
+    std::string groupPubKey;     // base58-DER; outsider and anonymous envelopes only
+    std::string authorUserId;    // signed envelopes only
+    std::string authorPubKey;    // base58-DER; signed envelopes only
     std::vector<WireRecipient> recipients; // signed message envelopes only
 };
 
@@ -107,22 +108,27 @@ struct OpenedEnvelope {
     bool homeGroupUnverified = false;
 };
 
+// One chunk of a file, as the file's envelope lists it.
+struct FileChunk {
+    std::uint32_t plainSize = 0;
+    std::string digest{}; // sha256 of the chunk's ciphertext
+};
+
 struct EnvelopeFileState {
     bool reading = false;
-    EnvelopeType type{};
-    std::string groupId{};
-    std::string keyId{};        // member files only
-    std::string groupKey{};     // member files only
-    std::string groupPubKey{};  // anonymous seals only, base58-DER
-    std::string authorPubKey{}; // opening only: provenance handed back at finish
     std::string fileKey{};
-    ChunkIndex index = 0;      // next chunk to seal or open
-    ByteCount plainSize = 0;   // declared plaintext length of the whole file
-    ByteCount written = 0;     // write side: plaintext accepted so far
+    // Writing: the chunks sealed so far. Reading: the chunks the envelope lists.
+    std::vector<FileChunk> chunks{};
+    ChunkIndex index = 0;      // read side: next chunk to open
     ByteCount skipInChunk = 0; // read side: bytes to drop off the next chunk after a seek
     bool seeked = false;       // read side: completeness is no longer checkable
-    std::string buffer{};      // bytes not yet forming a whole chunk
+    std::string buffer{};      // read side: ciphertext not yet forming a whole chunk
     bool closed = false;       // set by the finish, under the handle's lock; later calls are refused
+    // Write side: makes the envelope out of the manifest, at the finish. Which kind of envelope (a member's,
+    // an outsider's, an anonymous one, one in a Space) is decided when the file is begun and lives here.
+    std::function<core::Buffer(const core::Buffer& manifest)> seal{};
+    // Read side: what opening the envelope established, handed back at the finish.
+    DecryptedFileInfo info{};
 };
 
 // One open file handle. Every call on the handle holds `mutex` for its whole duration, so calls on one

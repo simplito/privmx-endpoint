@@ -13,6 +13,7 @@ limitations under the License.
 #define _PRIVMXLIB_ENDPOINT_GROUP_ENCRYPTORS_ENVELOPE_GROUPENVELOPEFILES_HPP_
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -40,9 +41,18 @@ public:
     core::Buffer encryptChunk(FileHandle fileHandle, const core::Buffer& plainChunk);
     core::Buffer decryptChunk(FileHandle fileHandle, const core::Buffer& cipherChunk);
     CipherOffset seek(FileHandle fileHandle, FilePosition position);
-    // Shared tail of both finishers: completeness check, then close and release whatever the outcome.
+    // Which ciphertext bytes hold plaintext [from, to). Whole chunks: a chunk only opens whole.
+    CipherRange cipherRange(FileHandle fileHandle, FilePosition from, FilePosition to);
+    static ByteCount plainSizeOf(const EnvelopeFileState& state);
+    // The reader's finish: completeness check, then close and release whatever the outcome.
     EnvelopeFileState finish(FileHandle fileHandle, bool wantReading);
-    // A handle used after this reports "not an open encrypted-file handle".
+    // The writer's finish: `seal` runs on the state under the handle's lock, and the handle is released only once it
+    // returns. A seal that throws (a network error, a key rotated meanwhile) leaves the handle open, to finish again
+    // or to `abort`: the upload is not lost.
+    Envelope finishWrite(FileHandle fileHandle, const std::function<Envelope(const EnvelopeFileState&)>& seal);
+    // Closes and releases a handle of either kind without finishing it.
+    void abort(FileHandle fileHandle);
+    // A handle used after this reports "not an open encrypted-file handle". Every handle leaves the HandleManager too.
     void clear();
 
 private:
@@ -55,6 +65,14 @@ private:
     void release(FileHandle fileHandle);
     // The caller holds the handle's lock.
     core::Buffer drainChunks(EnvelopeFileState& state);
+    // The chunk holding plaintext byte `position` (the chunk count for the file's end), and where that chunk
+    // starts in the plaintext and in the ciphertext.
+    struct Located {
+        ChunkIndex index;
+        ByteCount plainStart;
+        ByteCount cipherStart;
+    };
+    static Located locate(const EnvelopeFileState& state, ByteCount position);
 
     GroupEnvelopeEncryptor& _encryptor;
     const core::Connection& _connection;

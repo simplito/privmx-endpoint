@@ -274,27 +274,37 @@ DecryptedSharedEnvelope GroupApi::decryptShared(
     return impl->decryptShared(contextId, location, envelope, options);
 }
 
-FileHandle GroupApi::beginFileEncryption(const std::string& groupId, const FileSize size) {
+FileHandle GroupApi::beginFileEncryption(
+    const std::string& groupId,
+    const Path& location,
+    const EncryptOptions& options
+) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
-    if (size < 0) {
-        throw core::InvalidParamsException("field:size cannot be negative");
-    }
-    return impl->beginFileEncryption(groupId, size);
+    return impl->beginFileEncryption(groupId, location, options);
+}
+
+FileHandle GroupApi::beginFileEncryptionAsOutsider(
+    const std::string& contextId,
+    const std::string& groupId,
+    const Path& location,
+    const EncryptOptions& options
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->beginFileEncryptionAsOutsider(contextId, groupId, location, options);
 }
 
 FileHandle GroupApi::beginFileEncryptionAnonymously(
     const std::string& groupId,
     const std::string& groupPubKey,
-    const FileSize size
+    const Path& location
 ) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     core::Validator::validatePubKeyBase58DER(groupPubKey, "field:groupPubKey ");
-    if (size < 0) {
-        throw core::InvalidParamsException("field:size cannot be negative");
-    }
-    return impl->beginFileEncryptionAnonymously(groupId, groupPubKey, size);
+    return impl->beginFileEncryptionAnonymously(groupId, groupPubKey, location);
 }
 
 core::Buffer GroupApi::encryptFileChunk(const FileHandle fileHandle, const core::Buffer& plainChunk) {
@@ -308,15 +318,63 @@ Envelope GroupApi::finishFileEncryption(const FileHandle fileHandle) {
     return impl->finishFileEncryption(fileHandle);
 }
 
-FileHandle GroupApi::beginFileDecryption(const Envelope& envelope) {
+void GroupApi::abortFile(const FileHandle fileHandle) {
     auto impl = getImpl();
-    return impl->beginFileDecryption(envelope);
+    impl->abortFile(fileHandle);
+}
+
+FileHandle GroupApi::beginFileDecryption(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->beginFileDecryption(groupId, location, envelope, options);
+}
+
+FileHandle GroupApi::beginFileDecryptionFromOutsider(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->beginFileDecryptionFromOutsider(groupId, location, envelope, options);
+}
+
+FileHandle GroupApi::beginAnonymousFileDecryption(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->beginAnonymousFileDecryption(groupId, location, envelope);
+}
+
+FileHandle GroupApi::beginSharedFileDecryption(
+    const std::string& contextId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(contextId, "field:contextId ");
+    return impl->beginSharedFileDecryption(contextId, location, envelope, options);
 }
 
 core::Buffer GroupApi::decryptFileChunk(const FileHandle fileHandle, const core::Buffer& cipherChunk) {
     auto impl = getImpl();
     core::Validator::validateBufferSize(cipherChunk, 0, MAX_FILE_BLOCK, "field:cipherChunk");
     return impl->decryptFileChunk(fileHandle, cipherChunk);
+}
+
+CipherRange GroupApi::getFileCipherRange(const FileHandle fileHandle, const FilePosition from, const FilePosition to) {
+    auto impl = getImpl();
+    return impl->getFileCipherRange(fileHandle, from, to);
 }
 
 CipherOffset GroupApi::seekInEncryptedFile(const FileHandle fileHandle, const FilePosition position) {
@@ -327,6 +385,199 @@ CipherOffset GroupApi::seekInEncryptedFile(const FileHandle fileHandle, const Fi
 DecryptedFileInfo GroupApi::finishFileDecryption(const FileHandle fileHandle) {
     auto impl = getImpl();
     return impl->finishFileDecryption(fileHandle);
+}
+
+SequenceHandle GroupApi::beginSequence(const std::string& groupId, const Path& location, int64_t checkpointEvery) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->beginSequence(groupId, location, checkpointEvery);
+}
+
+core::Buffer GroupApi::getSequenceHeader(const SequenceHandle sequence) {
+    auto impl = getImpl();
+    return impl->getSequenceHeader(sequence);
+}
+
+SequenceAppendResult GroupApi::appendToSequence(const SequenceHandle sequence, const core::Buffer& data) {
+    auto impl = getImpl();
+    return impl->appendToSequence(sequence, data);
+}
+
+core::Buffer GroupApi::checkpointSequence(const SequenceHandle sequence) {
+    auto impl = getImpl();
+    return impl->checkpointSequence(sequence);
+}
+
+core::Buffer GroupApi::finishSequence(const SequenceHandle sequence) {
+    auto impl = getImpl();
+    return impl->finishSequence(sequence);
+}
+
+SequenceHandle GroupApi::openSequence(
+    const std::string& groupId,
+    const Path& location,
+    const core::Buffer& header,
+    const DecryptOptions& options,
+    const std::optional<core::Buffer>& resumeFrom
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(groupId, "field:groupId ");
+    return impl->openSequence(groupId, location, header, options, resumeFrom);
+}
+
+SequenceItem GroupApi::readSequenceItem(const SequenceHandle sequence, const core::Buffer& item) {
+    auto impl = getImpl();
+    return impl->readSequenceItem(sequence, item);
+}
+
+SequenceMarkInfo GroupApi::verifySequenceMark(const SequenceHandle sequence, const core::Buffer& mark) {
+    auto impl = getImpl();
+    return impl->verifySequenceMark(sequence, mark);
+}
+
+void GroupApi::closeSequence(const SequenceHandle sequence) {
+    auto impl = getImpl();
+    impl->closeSequence(sequence);
+}
+
+SequenceItemHeader GroupApi::peekSequenceItem(const core::Buffer& itemOrMark) {
+    return GroupApiImpl::peekSequenceItem(itemOrMark);
+}
+
+std::string GroupApi::createSpace(
+    const std::string& contextId,
+    const std::vector<SpaceRecipient>& recipients,
+    const core::Buffer& publicMeta,
+    const core::Buffer& privateMeta,
+    const std::optional<core::Buffer>& idSeed
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(contextId, "field:contextId ");
+    return impl->createSpace(contextId, recipients, publicMeta, privateMeta, idSeed);
+}
+
+std::string GroupApi::deriveSpaceId(const std::string& contextId, const core::Buffer& idSeed) {
+    core::Validator::validateId(contextId, "field:contextId ");
+    return GroupApiImpl::deriveSpaceId(contextId, idSeed);
+}
+
+SpaceState GroupApi::getSpace(const std::string& spaceId) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->getSpace(spaceId);
+}
+
+core::PagingList<SpaceState> GroupApi::listSpaces(const std::string& contextId, const core::PagingQuery& pagingQuery) {
+    auto impl = getImpl();
+    core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validatePagingQuery(pagingQuery, {"createDate", "lastModificationDate"}, "field:pagingQuery ");
+    return impl->listSpaces(contextId, pagingQuery);
+}
+
+void GroupApi::deleteSpace(const std::string& spaceId) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    impl->deleteSpace(spaceId);
+}
+
+void GroupApi::addSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipient>& recipients) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    impl->addSpaceRecipients(spaceId, recipients);
+}
+
+int64_t GroupApi::removeSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipientRef>& recipients) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->removeSpaceRecipients(spaceId, recipients);
+}
+
+int64_t GroupApi::rotateSpaceKey(const std::string& spaceId) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->rotateSpaceKey(spaceId);
+}
+
+void GroupApi::updateSpacePublicMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    impl->updateSpacePublicMeta(spaceId, meta, version);
+}
+
+void GroupApi::updateSpacePrivateMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    impl->updateSpacePrivateMeta(spaceId, meta, version);
+}
+
+core::Buffer GroupApi::encryptInSpace(const std::string& spaceId, const Path& location, const core::Buffer& data) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->encryptInSpace(spaceId, location, data);
+}
+
+DecryptedSpaceEnvelope GroupApi::decryptInSpace(
+    const std::string& spaceId,
+    const Path& location,
+    const core::Buffer& envelope,
+    const DecryptOptions& options
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->decryptInSpace(spaceId, location, envelope, options);
+}
+
+std::vector<SpaceDecryptResult> GroupApi::decryptManyInSpace(
+    const std::string& spaceId,
+    const std::vector<DecryptItem>& items
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->decryptManyInSpace(spaceId, items);
+}
+
+FileHandle GroupApi::beginFileEncryptionInSpace(const std::string& spaceId, const Path& location) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->beginFileEncryptionInSpace(spaceId, location);
+}
+
+FileHandle GroupApi::beginFileDecryptionInSpace(
+    const std::string& spaceId,
+    const Path& location,
+    const core::Buffer& envelope,
+    const DecryptOptions& options
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->beginFileDecryptionInSpace(spaceId, location, envelope, options);
+}
+
+SequenceHandle GroupApi::beginSequenceInSpace(
+    const std::string& spaceId,
+    const Path& location,
+    int64_t checkpointEvery
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->beginSequenceInSpace(spaceId, location, checkpointEvery);
+}
+
+SequenceHandle GroupApi::openSequenceInSpace(
+    const std::string& spaceId,
+    const Path& location,
+    const core::Buffer& header,
+    const DecryptOptions& options,
+    const std::optional<core::Buffer>& resumeFrom
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->openSequenceInSpace(spaceId, location, header, options, resumeFrom);
+}
+
+SpaceOrigin GroupApi::getSpaceSequenceOrigin(const SequenceHandle sequence) {
+    auto impl = getImpl();
+    return impl->getSpaceSequenceOrigin(sequence);
 }
 
 std::vector<std::string> GroupApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

@@ -46,6 +46,18 @@ group::DecryptOptions VarDeserializer::deserialize<group::DecryptOptions>(
 );
 
 template<>
+group::SpaceRecipient VarDeserializer::deserialize<group::SpaceRecipient>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
+template<>
+group::SpaceRecipientRef VarDeserializer::deserialize<group::SpaceRecipientRef>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+);
+
+template<>
 group::EnvelopeRecipient VarDeserializer::deserialize<group::EnvelopeRecipient>(
     const Poco::Dynamic::Var& val,
     const std::string& name

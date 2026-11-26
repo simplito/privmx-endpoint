@@ -41,6 +41,16 @@ public:
     // A removal's request under the `reseat` op: its `userIds` keep their seats.
     void groupReseat(server::GroupRemoveMembersModel model);
     void groupSetRoles(server::GroupSetRolesModel model);
+
+    server::SpaceCreateResult spaceCreate(server::SpaceCreateModel model);
+    server::SpaceGetResult spaceGet(server::SpaceIdModel model);
+    server::SpaceListResult spaceList(server::SpaceListModel model);
+    void spaceDelete(server::SpaceIdModel model);
+    void spaceAddRecipients(server::SpaceAddRecipientsModel model);
+    // With `groups` or `users` set in the model this is `spaceRemoveRecipients`.
+    server::SpaceRotateKeyResult spaceRotateKey(server::SpaceRotateKeyModel model);
+    void spaceUpdatePublicMeta(server::SpaceUpdateMetaModel model);
+    void spaceUpdatePrivateMeta(server::SpaceUpdateMetaModel model);
     void groupSelfUpdate(server::GroupSelfUpdateModel model);
     void groupGenerateNewKey(server::GroupGenerateNewKeyModel model);
     server::GroupGetTreeCommitsResult groupGetTreeCommits(server::GroupGetTreeCommitsModel model);
