@@ -75,11 +75,6 @@ public:
     int64_t removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     int64_t rotateGroupKey(const std::string& groupId);
-    int64_t cutHistory(const std::string& groupId);
-    // A cut's follow-up: both planes carried up, then every Space naming the group re-keyed, which refreshes its
-    // entry for the group to the new epoch (signed via the group with the epoch key the Space pins, still cached
-    // here). Kept in the session until it completes; retried by `runDueWork`.
-    void runCutFollowUp(const std::string& groupId);
     int64_t replaceGroupMemberKeys(const std::string& groupId, const std::vector<std::string>& userIds);
     void setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes);
     void updateGroupRules(const std::string& groupId, const GroupRulesUpdate& rules);
@@ -261,12 +256,7 @@ public:
     static core::Buffer encodePath(const Path& path);
     void pinGroupToSubject(const std::string& contextId, const Path& subject, const std::string& groupId);
     SpaceState getSpace(const std::string& spaceId);
-    // `groupId`: only the Spaces naming that group (the Bridge's filter).
-    core::PagingList<SpaceState> listSpaces(
-        const std::string& contextId,
-        const core::PagingQuery& pagingQuery,
-        const std::optional<std::string>& groupId = std::nullopt
-    );
+    core::PagingList<SpaceState> listSpaces(const std::string& contextId, const core::PagingQuery& pagingQuery);
     void deleteSpace(const std::string& spaceId);
     void addSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipient>& recipients);
     int64_t removeSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipientRef>& recipients);

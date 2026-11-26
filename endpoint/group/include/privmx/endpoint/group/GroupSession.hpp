@@ -19,7 +19,6 @@ limitations under the License.
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -53,14 +52,6 @@ struct UnresolvedCommit {
     std::function<void()> send;                  // the request as first sent; never re-planned
     std::function<void()> landed;                // pin + caches once accepted; looks the TreeKeyCache up itself
     std::function<void()> after;                 // best-effort follow-up (a removal's metadata refresh) or empty
-};
-
-// A history cut's follow-up still to do: the read before the cut, each plane as opened then (public, private), and
-// the Spaces given up on (refused for good), which are not retried.
-struct PendingCut {
-    PriorRole prior;
-    std::array<PlaneOpening, 2> planes;
-    std::set<std::string> givenUp;
 };
 
 // A narrowing's carry-forward still to do: which planes' authors lost that plane's rule, and the read before it.
@@ -114,10 +105,6 @@ struct GroupSession {
     // Limit: in memory only. A crash before the retry leaves the planes refused until a member holding the plane's
     // rule writes it (documented on updateGroupRules); persist it next to the pins if that ever matters.
     std::optional<PendingCarry> pendingCarry;
-    // A history cut's follow-up still to do (the planes carried up, the Spaces naming the group refreshed past the
-    // floor), with the read before the cut. Limit: in memory only, as `pendingCarry`; after a restart the old epoch's
-    // key a Space refresh signs with is gone anyway, and the Space waits for whoever rotates it.
-    std::optional<PendingCut> pendingCut;
     // The deferred self-update, at most one. Dropped on disconnect.
     std::optional<PendingSelfUpdate> selfUpdate;
 

@@ -461,8 +461,7 @@ JSON_STRUCT(SpaceIdModel, SPACE_ID_MODEL_FIELDS);
 #define SPACE_GET_RESULT_FIELDS(F) F(space, SpaceInfo)
 JSON_STRUCT(SpaceGetResult, SPACE_GET_RESULT_FIELDS);
 
-// `groupId`: only the Spaces naming that group.
-#define SPACE_LIST_MODEL_EXTRA_FIELDS(F) F(groupId, std::optional<std::string>)
+#define SPACE_LIST_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(SpaceListModel, core::server::ContainerListModel, SPACE_LIST_MODEL_EXTRA_FIELDS);
 
 #define SPACE_LIST_RESULT_FIELDS(F)                                                                                    \
@@ -526,8 +525,7 @@ JSON_STRUCT(GroupRemoveMembersModel, GROUP_REMOVE_MEMBERS_MODEL_FIELDS);
     F(rungs, std::vector<GroupArchiveRung>)                                                                            \
     F(groupKeys, std::optional<core::server::GroupKeyEntrySet>)                                                        \
     F(expectedKeyVersion, int64_t)                                                                                     \
-    F(expectedRosterVersion, int64_t)                                                                                  \
-    F(cutHistory, std::optional<bool>)
+    F(expectedRosterVersion, int64_t)
 JSON_STRUCT(GroupGenerateNewKeyModel, GROUP_GENERATE_NEW_KEY_MODEL_FIELDS);
 
 // Refills the caller's own keyed path: no epoch change, no roster change, nothing for anybody else to notice.

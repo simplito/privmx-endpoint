@@ -293,7 +293,7 @@ struct CommitStatement {
 // holds no privilege of its own but stays a signed identity. Each is "managers", "members" or "nobody".
 struct GroupRules {
     std::string creator;
-    std::string addMembers, removeMembers, replaceMemberKeys, changeRoles, changeRules, changeVisibility, trimHistory,
+    std::string addMembers, removeMembers, replaceMemberKeys, changeRoles, changeRules, changeVisibility,
         editPublicMeta, editPrivateMeta;
     std::string hash; // rulesHash (the statements' `policyHash`), raw
 };

@@ -66,7 +66,7 @@ public:
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
      * @param rules Group's rules (GroupRules), signed into the Group's state with the creator; an unset one takes
-     * its default ("managers"; `trimHistory` "nobody"). GroupRulesUpdate::createImmutable is the preset of a Group
+     * its default ("managers"). GroupRulesUpdate::createImmutable is the preset of a Group
      * whose membership, roles and rules never change. The creator must hold `editPublicMeta` and `editPrivateMeta`
      * under them, or it could not write the Group's metadata.
      * @return ID of the created Group
@@ -149,11 +149,11 @@ public:
      *
      * When the caller's own leaf does not open, the removal still goes through (a member that garbled it cannot
      * block its own removal) and, unless this session holds the current Group key, abandons the Group's history for
-     * every member, which needs `trimHistory` or `changeRules`, `editPublicMeta` and `editPrivateMeta` beside the
-     * removal's own rules, and is refused by the Bridge while a Space names the Group. Without those rules it is
-     * refused before anything is sent (GroupUnauthorizedSignerException): the caller has lost the Group's current
-     * key; recover it with renewLeaf if its identity key changed, or leave the removal to a member who still holds
-     * the key or has those rules. After the caller's identity key changed and Connection::adoptPreviousIdentity was
+     * every member, which needs `changeRules`, `editPublicMeta` and `editPrivateMeta` beside the removal's own
+     * rules, and is refused by the Bridge while a Space names the Group. Without those rules it is refused before
+     * anything is sent (GroupUnauthorizedSignerException): the caller has lost the Group's current key; recover it
+     * with renewLeaf if its identity key changed, or leave the removal to a member who still holds the key or has
+     * those rules. After the caller's identity key changed and Connection::adoptPreviousIdentity was
      * called, it is refused instead while the previous key still opens the leaf: call renewLeaf first.
      *
      * @param groupId ID of the Group
@@ -179,29 +179,6 @@ public:
      * @param groupId ID of the Group
      */
     int64_t rotateGroupKey(const std::string& groupId);
-
-    /**
-     * The forward-secrecy checkpoint: a rotation whose new epoch publishes no rung down to the earlier ones, after
-     * which the Bridge raises the Group's era floor to it and deletes the rungs and archived epoch keys below.
-     * From then on nobody can derive a key of an epoch before the cut, neither from the current keys nor from
-     * anything the Bridge still stores; members keep only the keys already cached on their own devices, and a member
-     * added later reads nothing from before the cut.
-     *
-     * Allowed by the `trimHistory` rule ("nobody" by default) together with `editPublicMeta` and
-     * `editPrivateMeta` (both metadata planes sit below the new floor and are carried up to the new epoch under
-     * the caller's name), all checked before anything is signed. `trimHistory` is enforced by the Bridge only: a cut
-     * is signed as an ordinary rotation, so readers cannot tell a cut made by a member without the rule. Charged to the rotation budget like
-     * rotateGroupKey; containers granted to the Group go stale and are re-keyed onto the new epoch.
-     *
-     * Every Space naming the Group is re-keyed afterwards (rotateSpaceKey), which moves its entry for the Group to
-     * the new epoch; signing that refresh takes the cut epoch's key, so it runs in this session, and what does not
-     * complete is retried by this client's next call on the Group (in memory only). A Space left behind reads as
-     * stale (SpaceState::keyIsStale) until someone rotates it.
-     *
-     * @param groupId ID of the Group
-     * @return the Group's key epoch after the cut
-     */
-    int64_t cutHistory(const std::string& groupId);
 
     /**
      * Lets members back in after their identity key was replaced and they cannot renew their own leaf (renewLeaf

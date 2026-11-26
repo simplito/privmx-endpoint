@@ -53,8 +53,8 @@ struct GroupRoleChange {
 
 /**
  * Who may do what in a Group, as the Group's signed statements bind it. Every rule is "managers", "members" or
- * "nobody", and defaults to "managers" (`trimHistory` to "nobody"). An operation needs every rule it touches: adding a manager needs
- * `addMembers` and `changeRoles`, removing one `removeMembers` and `changeRoles`. Fixed, with no rule: any member
+ * "nobody", and defaults to "managers". An operation needs every rule it touches: adding a manager needs `addMembers`
+ * and `changeRoles`, removing one `removeMembers` and `changeRoles`. Fixed, with no rule: any member
  * may rotate the Group key (GroupApi::rotateGroupKey) and renew its own leaf; nobody removes themselves (another
  * member removes them); a Group that has managers keeps at least one; deleting a Group is the managers'. The
  * creator holds no privilege of its own.
@@ -72,11 +72,6 @@ struct GroupRules {
     std::string changeRules;
     /** Who may set the Group's visibility (GroupApi::setGroupVisibility). The visibility itself is not signed. */
     std::string changeVisibility;
-    /**
-     * Who may cut the Group's history off (GroupApi::cutHistory); "nobody" by default. Enforced by the Bridge only:
-     * a cut is signed as an ordinary rotation, so readers cannot tell a cut made by a member without the rule.
-     */
-    std::string trimHistory;
     /** Who may rewrite the Group's public metadata. */
     std::string editPublicMeta;
     /** Who may rewrite the Group's private metadata. */
@@ -99,7 +94,6 @@ struct GroupRulesUpdate {
     std::optional<std::string> changeRoles;
     std::optional<std::string> changeRules;
     std::optional<std::string> changeVisibility;
-    std::optional<std::string> trimHistory;
     std::optional<std::string> editPublicMeta;
     std::optional<std::string> editPrivateMeta;
 

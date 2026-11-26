@@ -37,14 +37,6 @@ namespace group {
 // The verified read a committer made before its own commit: the signed rules, the roster and both
 // metadata planes as they stood then. A carry-forward judges an entry identical to the one it read by these, so a
 // plane honestly written before a narrowing or by a member just removed is carried, and nothing else.
-// One metadata plane as a history cut opened it on its read: the content when the plane passed every check on its
-// own, else whether it failed one for good (its author, role, tag, DIO or ciphertext), which a carry may blank.
-// Neither: the plane could not be judged (a key not resolved, the UserVerifier not answering).
-struct PlaneOpening {
-    std::optional<core::Buffer> content;
-    bool failedForGood = false;
-};
-
 struct PriorRole {
     keytree::GroupRules rules;
     std::vector<std::string> users;
@@ -165,16 +157,6 @@ public:
         const std::optional<PriorRole>& prior = std::nullopt,
         // false: compare with the version pins but never move them (an answer the caller may still refuse).
         bool storePins = true
-    );
-
-    // Both planes of a verified read, each judged on its own (the roster, the plane's attestation and decryption, its
-    // DIO's author and the UserVerifier for both authors), so one plane failing does not take the other with it.
-    // Moves no version pin.
-    std::array<PlaneOpening, 2> openPlanesSeparately(
-        const server::GroupInfo& groupInfo,
-        const std::shared_ptr<core::KeyProvider>& keyProvider,
-        const core::KeyProvider::GroupPrivKeyResolver& groupPrivKeyResolver,
-        const PriorRole& prior
     );
 
     Group validateDecryptAndConvertGroup(

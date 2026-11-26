@@ -549,7 +549,6 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupRules>(const group::Grou
     obj->set("changeRoles", serialize(val.changeRoles));
     obj->set("changeRules", serialize(val.changeRules));
     obj->set("changeVisibility", serialize(val.changeVisibility));
-    obj->set("trimHistory", serialize(val.trimHistory));
     obj->set("editPublicMeta", serialize(val.editPublicMeta));
     obj->set("editPrivateMeta", serialize(val.editPrivateMeta));
     return obj;

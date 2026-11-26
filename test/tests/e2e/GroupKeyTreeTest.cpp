@@ -50,13 +50,10 @@ protected:
     }
 
     // A tree-backed group with user_1 managing and the given users as members.
-    std::string createTreeGroup(
-        const std::vector<core::UserWithPubKey>& members,
-        const std::optional<group::GroupRulesUpdate>& rules = std::nullopt
-    ) {
+    std::string createTreeGroup(const std::vector<core::UserWithPubKey>& members) {
         return groupApi->createGroup(
             contextId(), members, std::vector<core::UserWithPubKey>{user(1)},
-            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private"), rules
+            core::Buffer::from("keytree_public"), core::Buffer::from("keytree_private")
         );
     }
 
@@ -225,8 +222,8 @@ protected:
     }
 
     // user_1 creates {user_1, user_2, user_3} and moves it to `epoch` by removing user_3 (re-added in between).
-    std::string groupAtEpoch(int epoch, const std::optional<group::GroupRulesUpdate>& rules = std::nullopt) {
-        const std::string groupId = createTreeGroup({user(1), user(2), user(3)}, rules);
+    std::string groupAtEpoch(int epoch) {
+        const std::string groupId = createTreeGroup({user(1), user(2), user(3)});
         for (int at = 2; at <= epoch; ++at) {
             if (at > 2) {
                 groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
@@ -1022,13 +1019,11 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_remove_anybody) {
 
 // -- grant key reuse --
 
-TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_from_below_the_era_floor_is_refused) {
-    // Every member of an old epoch holds its grant key's private half, the ones removed since included. A cut drops
-    // the old epochs' rows, so the Bridge must find the old keys in the statements, which no cut touches.
+TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_of_an_earlier_epoch_is_refused) {
+    // Every member of an old epoch holds its grant key's private half, the ones removed since included: the Bridge
+    // finds the old keys in the statements and refuses them for a new epoch.
     std::string groupId;
-    ASSERT_NO_THROW({
-        groupId = createTreeGroup({user(1), user(2), user(3)}, group::GroupRulesUpdate{.trimHistory = "managers"});
-    });
+    ASSERT_NO_THROW({ groupId = createTreeGroup({user(1), user(2), user(3)}); });
     std::string k1, k2;
     ASSERT_NO_THROW({ k1 = groupApi->getGroup(groupId).groupPubKey; });
     ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); });
@@ -1036,19 +1031,11 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_from_below_the_era_flo
     ASSERT_NO_THROW({ groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}}); });
     ASSERT_NO_THROW({ groupApi->removeGroupMembers(groupId, {user(3).userId}); });
 
-    group::ServerApi api(connection->getImpl()->getGateway());
-    ASSERT_NO_THROW({ EXPECT_EQ(groupApi->cutHistory(groupId), 4); }); // floor 4: epochs 1 to 3 cut off
-
-    group::server::GroupGetTreeCommitsResult served;
-    ASSERT_NO_THROW({ served = api.groupGetTreeCommits({.groupId = groupId, .fromSeq = 0}); });
-    ASSERT_GE(served.commits.size(), 4u) << "create, remove, add, remove";
-    EXPECT_EQ(served.commits.front().seq, 1) << "the cut took statements with it";
-    EXPECT_EQ(static_cast<int64_t>(served.commits.size()), served.commits.back().seq) << "the statements are no longer contiguous";
 
     for (const auto& old : {k1, k2}) {
         const auto refusal = rawRemovalRefusal(groupId, user(2).userId, old);
         EXPECT_NE(refusal.find("groupPubKey of an earlier epoch"), std::string::npos)
-            << "a key from below the era floor was not recognised: " << refusal;
+            << "a key of an earlier epoch was not recognised: " << refusal;
     }
     // Control: the same model with a fresh key gets past the reuse check, so the refusal above is about the key.
     const auto fresh = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
@@ -1058,7 +1045,7 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_new_epoch_under_a_key_from_below_the_era_flo
 
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
-    EXPECT_EQ(after.keyVersion, 4);
+    EXPECT_EQ(after.keyVersion, 3);
     EXPECT_EQ(after.statusCode, 0);
     EXPECT_NE(std::find(after.users.begin(), after.users.end(), user(2).userId), after.users.end());
 }
@@ -1200,16 +1187,6 @@ TEST_F(GroupKeyTreeTest, the_key_archive_window_also_windows_keyHistory) {
     };
     EXPECT_EQ(epochsServed(2, 3), (std::vector<std::int64_t>{2, 3}));
     EXPECT_EQ(epochsServed(1, 9), (std::vector<std::int64_t>{1, 2, 3})) << "only the epochs behind the current one";
-}
-
-TEST_F(GroupKeyTreeTest, SECURITY_repairRung_below_a_cut_floor_is_refused) {
-    std::string groupId;
-    ASSERT_NO_THROW({ groupId = groupAtEpoch(3, group::GroupRulesUpdate{.trimHistory = "managers"}); });
-    ASSERT_NO_THROW({ groupApi->cutHistory(groupId); }); // epoch 4, floor 4
-    const auto refused = refusalOf([&] { repair(groupId, garbageRung(4, 1)); });
-    ASSERT_TRUE(refused.has_value());
-    EXPECT_EQ(refused->first, GROUP_ARCHIVE_INVALID);
-    EXPECT_NE(refused->second.find("BELOW_ERA_FLOOR"), std::string::npos) << refused->second;
 }
 
 // ── the signed group policy ──

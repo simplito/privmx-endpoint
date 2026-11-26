@@ -79,7 +79,6 @@ GroupRulesUpdate policyWith(const std::map<std::string, std::string>& rules) {
         {"changeRoles", &GroupRulesUpdate::changeRoles},
         {"changeRules", &GroupRulesUpdate::changeRules},
         {"changeVisibility", &GroupRulesUpdate::changeVisibility},
-        {"trimHistory", &GroupRulesUpdate::trimHistory},
         {"editPublicMeta", &GroupRulesUpdate::editPublicMeta},
         {"editPrivateMeta", &GroupRulesUpdate::editPrivateMeta},
     };
@@ -128,7 +127,6 @@ struct Bridge {
     std::function<void()> beforeRotation = [] {}; // runs as a rotation arrives, before it is checked
     // Edits a rotation's statement as stored.
     std::function<void(server::GroupTreeCommit&)> onRotationCommit = [](server::GroupTreeCommit&) {};
-    std::vector<std::string> spaceListsFor; // the groupId of each `spaceList` asked for
     std::function<void()> afterRotation = [] {};  // runs once the rotation is applied; throws to lose the answer
     std::function<void()> onAdd = [] {};
     std::function<void()> afterAdd = [] {}; // runs once the add is applied; throws to lose the answer
@@ -446,33 +444,7 @@ struct Bridge {
             beforeRotation();
             tree.rotate(caller, model.grantEdge, PublicKey::fromBase58DER(model.groupPubKey), model.commit);
             onRotationCommit(tree.commits.back());
-            if (model.cutHistory.value_or(false)) {
-                if (!model.rungs.empty()) {
-                    throw archiveInvalid(); // a cut publishes no rung down
-                }
-                // The era floor at the new epoch; every rung below it deleted.
-                eraFloor = static_cast<std::int64_t>(tree.state.epoch);
-                rungs.erase(
-                    std::remove_if(
-                        rungs.begin(), rungs.end(),
-                        [&](const server::GroupArchiveRung& rung) { return rung.targetKeyVersion < eraFloor; }
-                    ),
-                    rungs.end()
-                );
-            }
             storeNewEpoch(caller, model);
-            if (model.cutHistory.value_or(false)) {
-                // The archived epoch keys below the floor go with the rungs.
-                for (auto& entry : *rest.groupKeys) {
-                    entry.keys.erase(
-                        std::remove_if(
-                            entry.keys.begin(), entry.keys.end(),
-                            [&](const auto& key) { return key.groupEpoch.value_or(eraFloor) < eraFloor; }
-                        ),
-                        entry.keys.end()
-                    );
-                }
-            }
             afterRotation();
             return Poco::Dynamic::Var();
         }
@@ -585,11 +557,6 @@ struct Bridge {
         }
         if (group == "groupDelete") {
             return Poco::Dynamic::Var();
-        }
-        if (group == "spaceList") {
-            // No Space here: the listing is what is checked (`spaceListsFor`).
-            spaceListsFor.push_back(server::SpaceListModel::fromJSON(params).groupId.value_or(""));
-            return server::SpaceListResult{.spaces = {}, .count = 0}.toJSON();
         }
         throw std::runtime_error("the fake bridge has no " + method);
     }
@@ -3500,22 +3467,23 @@ TEST_F(GroupApiLyingBridge, SECURITY_ARemovalDoesNotSealACachedGrantKeyThatIsNot
     EXPECT_TRUE(removal->params->optValue<bool>("abandonHistory", false));
 }
 
-// bob's own leaf does not open, so his removal would abandon history: beside removeMembers, trimHistory or
-// changeRules. Refused before anything is sent without either; the Bridge enforces the same.
+// bob's own leaf does not open, so his removal would abandon history: beside removeMembers, changeRules and both
+// edit rules. Refused before anything is sent without them; the Bridge enforces the same.
 class GroupApiLyingBridgeAbandon : public GroupApiLyingBridge {
 protected:
-    bool bobRemovesCarolUnder(const std::string& trimHistory, const std::string& changeRules) {
+    bool bobRemovesCarolWithout(const std::string& missing) {
         quiet = true;
         std::map<std::string, std::string> rules;
         for (const std::string& field : TreeCommits::ruleFields()) {
-            rules[field] = field == "trimHistory" ? trimHistory : field == "changeRules" ? changeRules : "members";
+            rules[field] = field == missing ? "managers" : "members";
         }
         const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith(rules));
         selfUpdateBy("alice");
         garbleLeafEdgeOf(bridge, "bob", "alice");
         try {
             client("bob").removeGroupMembers(groupId, {"carol"});
-        } catch (const GroupUnauthorizedSignerException&) {
+        } catch (const GroupUnauthorizedSignerException& e) {
+            EXPECT_NE(std::string(e.what()).find("renewLeaf"), std::string::npos) << "not actionable: " << e.what();
             EXPECT_EQ(count("bob", "context.groupRemoveMembers"), 0u);
             return false;
         }
@@ -3524,121 +3492,20 @@ protected:
     }
 };
 
-TEST_F(GroupApiLyingBridgeAbandon, RefusedWithNeitherRule) {
-    EXPECT_FALSE(bobRemovesCarolUnder("nobody", "nobody"));
+TEST_F(GroupApiLyingBridgeAbandon, AllowedWithChangeRulesAndBothEditRules) {
+    EXPECT_TRUE(bobRemovesCarolWithout(""));
 }
 
-TEST_F(GroupApiLyingBridgeAbandon, AllowedUnderTrimHistory) {
-    EXPECT_TRUE(bobRemovesCarolUnder("members", "nobody"));
+TEST_F(GroupApiLyingBridgeAbandon, RefusedWithoutChangeRules) {
+    EXPECT_FALSE(bobRemovesCarolWithout("changeRules"));
 }
 
-TEST_F(GroupApiLyingBridgeAbandon, AllowedUnderChangeRules) {
-    EXPECT_TRUE(bobRemovesCarolUnder("nobody", "members"));
+TEST_F(GroupApiLyingBridgeAbandon, RefusedWithoutEditPublicMeta) {
+    EXPECT_FALSE(bobRemovesCarolWithout("editPublicMeta"));
 }
 
-TEST_F(GroupApiLyingBridge, ACutNeedsTheEditRuleOfEachPlaneItCarries) {
-    // bob may trim history and write the public plane, not the private one, which the cut would carry up.
-    const std::string groupId = createGroup(
-        {"alice", "bob"}, policyWith({{"trimHistory", "members"}, {"editPublicMeta", "members"}})
-    );
-    EXPECT_THROW(client("bob").cutHistory(groupId), GroupUnauthorizedSignerException);
-    EXPECT_EQ(count("bob", "context.groupGenerateNewKey"), 0u);
-}
-
-TEST_F(GroupApiLyingBridge, ACutWhoseAnswerWasLostIsFollowedUpByTheCallThatFindsItLanded) {
-    // The cut lands, its answer is lost. The keys below the new floor are gone, so a later call settling it must carry
-    // the planes as they were opened before the cut, and look for the Spaces to re-key. Not `quiet`: the follow-up is
-    // due work.
-    const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"trimHistory", "managers"}}));
-    int rotations = 0;
-    bridge.afterRotation = [&] {
-        if (rotations++ == 0) {
-            throw std::runtime_error("connection dropped");
-        }
-    };
-    EXPECT_ANY_THROW(client("alice").cutHistory(groupId));
-    EXPECT_EQ(bridge.tree.state.epoch, 2u) << "the cut landed";
-    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 1) << "nothing carried yet";
-    EXPECT_TRUE(bridge.spaceListsFor.empty());
-    // A later call settles it: it finds the cut landed and runs its follow-up.
-    EXPECT_NO_THROW(client("alice").cutHistory(groupId));
-    EXPECT_EQ(bridge.received.size(), 1u) << "the landed cut was not sent again";
-    EXPECT_EQ(bridge.rest.publicMeta.keyVersion, 2);
-    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2);
-    EXPECT_EQ(bridge.rest.privateMeta.author, "alice");
-    EXPECT_EQ(std::count(bridge.spaceListsFor.begin(), bridge.spaceListsFor.end(), groupId), 1)
-        << "the Spaces naming the group were looked for";
-    for (const std::string id : {"bob", "carol"}) {
-        const Group read = client(id).getGroup(groupId);
-        EXPECT_EQ(read.statusCode, 0) << id;
-        EXPECT_EQ(read.privateMeta.stdString(), "private") << id;
-    }
-}
-
-TEST_F(GroupApiLyingBridge, ACutStartsAPlaneItCouldNotAttestOverEmpty) {
-    // bob, a plain member, wrote the public plane without editPublicMeta: refused by every reader. Its key goes below
-    // the floor with the cut, so it could never be opened again: the follow-up starts the planes over, empty.
-    const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"trimHistory", "managers"}}));
-    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("no role"), 1);
-    ASSERT_NE(client("carol").getGroup(groupId).statusCode, 0);
-    EXPECT_EQ(client("alice").cutHistory(groupId), 2);
-    EXPECT_EQ(bridge.rest.publicMeta.keyVersion, 2);
-    EXPECT_EQ(bridge.rest.publicMeta.author, "alice");
-    const Group read = client("carol").getGroup(groupId);
-    EXPECT_EQ(read.statusCode, 0);
-    EXPECT_TRUE(read.publicMeta.stdString().empty());
-}
-
-TEST_F(GroupApiLyingBridge, ACutJudgesEachPlaneOnItsOwn) {
-    // bob writes both planes: the private one under editPrivateMeta ("members"), the public one without
-    // editPublicMeta. Only the public plane is started over; the private one is carried with what it says.
-    const std::string groupId = createGroup(
-        {"alice", "bob", "carol"}, policyWith({{"trimHistory", "managers"}, {"editPrivateMeta", "members"}})
-    );
-    client("bob").updateGroupPrivateMeta(groupId, core::Buffer::from("bob's private"), 1);
-    client("bob").updateGroupPublicMeta(groupId, core::Buffer::from("no role"), 1);
-    ASSERT_NE(client("carol").getGroup(groupId).statusCode, 0);
-    EXPECT_EQ(client("alice").cutHistory(groupId), 2);
-    EXPECT_EQ(bridge.rest.publicMeta.keyVersion, 2);
-    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2);
-    const Group read = client("carol").getGroup(groupId);
-    EXPECT_EQ(read.statusCode, 0);
-    EXPECT_TRUE(read.publicMeta.stdString().empty()) << "the plane that failed is started over";
-    EXPECT_EQ(read.privateMeta.stdString(), "bob's private") << "the good plane was blanked with the failed one";
-}
-
-TEST_F(GroupApiLyingBridge, ACutNeedsTrimHistory) {
-    // "nobody" by default: refused before anything is signed or sent.
-    const std::string groupId = createGroup({"alice", "bob"}, std::nullopt);
-    EXPECT_THROW(client("alice").cutHistory(groupId), GroupUnauthorizedSignerException);
-    EXPECT_EQ(count("alice", "context.groupGenerateNewKey"), 0u);
-    EXPECT_TRUE(bridge.received.empty());
-}
-
-TEST_F(GroupApiLyingBridge, ACutPublishesNoRungAndLeavesTheGroupReadable) {
-    const std::string groupId = createGroup({"alice", "bob", "carol"}, policyWith({{"trimHistory", "managers"}}));
-    client("bob").getGroup(groupId);
-    const std::size_t rungsBefore = bridge.rungs.size();
-    EXPECT_EQ(client("alice").cutHistory(groupId), 2);
-    EXPECT_EQ(bridge.rungs.size(), rungsBefore) << "a cut published a rung down";
-    EXPECT_EQ(bridge.eraFloor, 2);
-    const auto cut = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const Bridge::Call& call) {
-        return call.method == "context.groupGenerateNewKey";
-    });
-    ASSERT_NE(cut, bridge.calls.rend());
-    EXPECT_TRUE(cut->params->optValue<bool>("cutHistory", false));
-    EXPECT_EQ(bridge.rest.publicMeta.keyVersion, 2) << "the planes were carried up";
-    EXPECT_EQ(bridge.rest.privateMeta.keyVersion, 2);
-    for (const std::string id : {"alice", "bob", "carol"}) {
-        const Group read = client(id).getGroup(groupId);
-        EXPECT_EQ(read.statusCode, 0) << id;
-        EXPECT_EQ(read.keyVersion, 2) << id;
-        EXPECT_EQ(read.privateMeta.stdString(), "private") << id;
-    }
-    // A plain rotation after the cut publishes its rung again, down to the floor only.
-    EXPECT_NO_THROW(client("alice").rotateGroupKey(groupId));
-    EXPECT_EQ(bridge.eraFloor, 2);
-    EXPECT_GT(bridge.rungs.size(), rungsBefore);
+TEST_F(GroupApiLyingBridgeAbandon, RefusedWithoutEditPrivateMeta) {
+    EXPECT_FALSE(bobRemovesCarolWithout("editPrivateMeta"));
 }
 
 TEST_F(GroupApiLyingBridge, AVisibilityChangeNeedsChangeVisibility) {
@@ -3656,11 +3523,13 @@ TEST(GroupRulesPreset, TheImmutablePresetClosesMembershipRolesAndRules) {
     for (const auto* field : {&preset.addMembers, &preset.removeMembers, &preset.changeRoles, &preset.changeRules}) {
         EXPECT_EQ(field->value_or(""), "nobody");
     }
-    for (const auto* field : {&preset.replaceMemberKeys, &preset.changeVisibility, &preset.trimHistory,
-                              &preset.editPublicMeta, &preset.editPrivateMeta}) {
+    for (const auto* field :
+         {&preset.replaceMemberKeys, &preset.changeVisibility, &preset.editPublicMeta, &preset.editPrivateMeta}) {
         EXPECT_FALSE(field->has_value()) << "left to its default";
     }
-    privmx::endpoint::group::GroupRules rules{"nobody", "nobody", "managers", "nobody", "nobody", "managers", "managers", "members", "managers"};
+    privmx::endpoint::group::GroupRules rules{
+        "nobody", "nobody", "managers", "nobody", "nobody", "managers", "members", "managers"
+    };
     EXPECT_TRUE(rules.isImmutable());
     rules.changeRules = "managers";
     EXPECT_FALSE(rules.isImmutable());
@@ -4134,8 +4003,9 @@ TEST_F(GroupApiLyingBridgeOldEpochs, SECURITY_WindowPagesThatNeverEndStopAtTheWi
 }
 
 TEST_F(GroupApiLyingBridgeOldEpochs, AFloorSetWithoutARotationReadsAsAnEraBoundaryNotTampering) {
-    // The management API's cut: the floor moves to the current epoch and the rungs below go, with no statement. The
-    // group still reads cleanly; an envelope below the floor is out of reach as history, not a broken ladder.
+    // A floor the Bridge raised with no statement of the group's (as after a removal that abandoned history): the
+    // rungs below go. The group still reads cleanly; an envelope below the floor is out of reach as history, not a
+    // broken ladder.
     bridge.eraFloor = static_cast<std::int64_t>(bridge.tree.state.epoch);
     bridge.rungs.erase(
         std::remove_if(

@@ -53,9 +53,8 @@ keytree::GroupRules GroupOperations::requestedRules(const Poco::Dynamic::Var& po
 
 // The update's fields in `TreeCommits::ruleFields` order.
 std::vector<const std::optional<std::string>*> GroupOperations::fieldsOf(const GroupRulesUpdate& update) {
-    return {&update.addMembers,  &update.removeMembers,  &update.replaceMemberKeys,
-            &update.changeRoles, &update.changeRules,    &update.changeVisibility,
-            &update.trimHistory, &update.editPublicMeta, &update.editPrivateMeta};
+    return {&update.addMembers,  &update.removeMembers,    &update.replaceMemberKeys, &update.changeRoles,
+            &update.changeRules, &update.changeVisibility, &update.editPublicMeta,    &update.editPrivateMeta};
 }
 
 Poco::Dynamic::Var GroupOperations::rulesObject(const GroupRulesUpdate& update, const keytree::GroupRules* base) {
@@ -66,10 +65,9 @@ Poco::Dynamic::Var GroupOperations::rulesObject(const GroupRulesUpdate& update, 
         const std::string& name = keytree::TreeCommits::ruleFields().at(i);
         object->set(
             name,
-            fields[i]->has_value()    ? fields[i]->value() :
-                base                  ? keytree::TreeCommits::ruleOf(current, name) :
-                name == "trimHistory" ? std::string("nobody") :
-                                        std::string("managers")
+            fields[i]->has_value() ? fields[i]->value() :
+                base               ? keytree::TreeCommits::ruleOf(current, name) :
+                                     std::string("managers")
         );
     }
     return object;
@@ -695,24 +693,21 @@ std::optional<bool> GroupOperations::remove(
         currentGrantKey.reset(); // not the epoch's key: wrapped into the unit rung it would cut history off anyway
     }
     const bool abandonHistory = !currentGrantKey.has_value();
-    // Abandoning history (the Bridge's check, not a signed one) needs trimHistory or changeRules beside the
-    // removal's own rules, and both edit rules (the planes start over empty): refused here before signing. The
-    // deliberate trade-off: otherwise anyone holding removeMembers could wipe history by claiming a lost key.
+    // Abandoning history (the Bridge's check, not a signed one) needs changeRules and both edit rules (the planes
+    // start over empty) beside the removal's own rules: refused here before signing. The deliberate trade-off:
+    // otherwise anyone holding removeMembers could wipe history by claiming a lost key.
     if (abandonHistory) {
         const std::string what = "a removal without the group's current key (it abandons the group's history)";
         try {
+            assertRule(verified, &keytree::GroupRules::changeRules, "changeRules", what);
             assertRule(verified, &keytree::GroupRules::editPublicMeta, "editPublicMeta", what);
             assertRule(verified, &keytree::GroupRules::editPrivateMeta, "editPrivateMeta", what);
-            try {
-                assertRule(verified, &keytree::GroupRules::trimHistory, "trimHistory", what);
-            } catch (const GroupUnauthorizedSignerException&) {
-                assertRule(verified, &keytree::GroupRules::changeRules, "trimHistory or changeRules", what);
-            }
         } catch (const GroupUnauthorizedSignerException& e) {
             throw GroupUnauthorizedSignerException(
                 std::string(e.what()) +
                 ": this session has lost the group's current key. Recover it with renewLeaf if your identity key "
-                "changed, or leave the removal to a member who still holds the key or has those rules"
+                "changed, or leave the removal to a member who still holds the key or has changeRules, "
+                "editPublicMeta and editPrivateMeta"
             );
         }
     }
@@ -837,9 +832,9 @@ std::function<void()> GroupOperations::landedEpoch(
     };
 }
 
-bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool cutHistory) const {
+bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior) const {
     // Every record, because the statement signs the tree hash, which a rotation leaves as it is.
-    const std::string op = keytree::TreeCommits::opKey(cutHistory ? "cutHistory" : "rotate");
+    const std::string op = keytree::TreeCommits::opKey("rotate");
     const std::optional<GroupRead> settled = engine.readForCommit(
         VerifiedGroup::planRead(groupId), keytree::TreeVerifier::Scope::Plan, op
     );
@@ -853,31 +848,10 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool 
     const int64_t newEpoch = currentEpoch + 1;
     const int64_t newRosterVersion = currentGroup.rosterVersion + 1;
 
-    // Unlike a removal, a rotation never abandons history by accident: the point is a new key for the same members,
-    // and the climb (a verified root key and the current grant key) is what the rungs down to the old epochs are made
-    // from. A cut publishes none on purpose, under `trimHistory` (the Bridge's check too).
+    // Unlike a removal, a rotation never abandons history: the point is a new key for the same members, and the
+    // climb (a verified root key and the current grant key) is what the rungs down to the old epochs are made from.
     const auto cache = deps.sessions.of(groupId)->treeKeys();
     const VerifiedGroup& verified = planOn(read);
-    if (cutHistory) {
-        // Both planes sit below the new floor, and carrying them up is a write of each.
-        assertRule(verified, &keytree::GroupRules::trimHistory, "trimHistory", "cutting the group's history");
-        assertRule(verified, &keytree::GroupRules::editPublicMeta, "editPublicMeta", "cutting the group's history");
-        assertRule(verified, &keytree::GroupRules::editPrivateMeta, "editPrivateMeta", "cutting the group's history");
-    }
-    // A cut's planes as opened on this read, each on its own: the keys below the new floor are gone once it lands, so
-    // the carry after it writes these (`runCutFollowUp`), whichever call finds it landed. A plane that cannot be
-    // judged now (a key not resolved, the UserVerifier away) could never be later: no cut until it can.
-    std::array<PlaneOpening, 2> planes{};
-    if (cutHistory) {
-        planes = mapper.openPlanesSeparately(currentGroup, keyProvider, keys.resolverOver(&verified), prior);
-        for (const PlaneOpening& plane : planes) {
-            if (!plane.content.has_value() && !plane.failedForGood) {
-                throw core::EncryptionKeyValidationException(
-                    "a metadata plane of the group cannot be opened now; the history is not cut, try again"
-                );
-            }
-        }
-    }
     const keytree::TreeGroupState state = climbForPlanning(verified, cache);
     const auto currentGrantKey = cache->getGrantKey(keytree::GroupKeyResolver::epochOf(currentEpoch));
     if (!currentGrantKey.has_value() ||
@@ -895,17 +869,13 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool 
     const keytree::CommitPlan plan = planOrThrow<keytree::CommitPlan>([&] {
         return tree.planRotation(state, rotatorId, deps.userPrivKey);
     });
-    // A cut: no rung down from the new epoch, so nothing current (or stored) derives an earlier key.
-    const std::vector<keytree::ArchiveRung> rungs = cutHistory ?
-        std::vector<keytree::ArchiveRung>{} :
-        buildRotationRungs(
-            verified, keytree::GroupKeyResolver::epochOf(newEpoch), plan.grantKey, currentGrantKey, rotatorId, *cache
-        );
+    const std::vector<keytree::ArchiveRung> rungs = buildRotationRungs(
+        verified, keytree::GroupKeyResolver::epochOf(newEpoch), plan.grantKey, currentGrantKey, rotatorId, *cache
+    );
     const RosterAfterChange roster = RosterAfterChange::bare(attestedUsers, attestedManagers);
     const std::string newGroupPubKeyStr = plan.grantKey.getPublicKey().toBase58DER();
-    // A cut starts the roster plane's key and secret over, as an abandoned history does.
     const NewEpochRoster sealed = metadata.sealRosterForNewEpoch(
-        currentGroup, roster, newGroupPubKeyStr, newEpoch, newRosterVersion, cutHistory
+        currentGroup, roster, newGroupPubKeyStr, newEpoch, newRosterVersion, false
     );
 
     server::GroupGenerateNewKeyModel model;
@@ -915,9 +885,6 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool 
     model.data = sealed.data;
     model.grantEdge = keytree::TreeWire::toWire(plan.edges.at(0));
     model.rungs = keytree::TreeWire::toWire(rungs);
-    if (cutHistory) {
-        model.cutHistory = true;
-    }
     model.groupKeys = sealed.groupKeys;
     model.expectedKeyVersion = currentEpoch;
     model.expectedRosterVersion = currentGroup.rosterVersion;
@@ -935,34 +902,16 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool 
         groupId, statement,
         UnresolvedCommit{
             .op = op,
-            .kind = cutHistory ? "history cut" : "rotation",
+            .kind = "rotation",
             .contextId = currentGroup.contextId,
             .send = [&serverApi = deps.serverApi, sent] { serverApi.groupGenerateNewKey(*sent); },
             // Pinned before anything reads the group again: the state under the replaced key is refused from here on.
             .landed = landedEpoch(currentGroup.contextId, statement, roster, rules, plan.grantKey),
-            .after = cutHistory ? std::function<void()>([&sessions = deps.sessions, groupId, prior, planes] {
-                queueCutFollowUp(sessions, groupId, prior, planes);
-            }) :
-                                  std::function<void()>([&metadata = metadata, groupId, prior] {
-                                      metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, prior);
-                                  })
+            .after = [&metadata = metadata, groupId,
+                      prior] { metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, prior); }
         }
     );
-    if (cutHistory) {
-        queueCutFollowUp(deps.sessions, groupId, prior, planes);
-    }
     return true;
-}
-
-void GroupOperations::queueCutFollowUp(
-    GroupSessions& sessions,
-    const std::string& groupId,
-    const PriorRole& prior,
-    const std::array<PlaneOpening, 2>& planes
-) {
-    const auto session = sessions.of(groupId);
-    std::lock_guard<std::mutex> lock(session->mutex);
-    session->pendingCut = PendingCut{.prior = prior, .planes = planes, .givenUp = {}};
 }
 
 bool GroupOperations::selfUpdate(

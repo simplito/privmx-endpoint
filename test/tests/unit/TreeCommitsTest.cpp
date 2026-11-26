@@ -267,7 +267,7 @@ TEST(TreeCommitsStatement, SignedBytesMatchTheReference) {
 
 TEST(TreeCommitsPolicy, RulesHashToTheSharedVectors) {
     const auto all = vectors()->getArray("policyHash");
-    ASSERT_EQ(all->size(), 7u);
+    ASSERT_EQ(all->size(), 6u);
     for (std::size_t i = 0; i < all->size(); ++i) {
         const auto vector = all->getObject(static_cast<unsigned>(i));
         EXPECT_EQ(
@@ -277,28 +277,22 @@ TEST(TreeCommitsPolicy, RulesHashToTheSharedVectors) {
     }
 }
 
-TEST(TreeCommitsPolicy, RulesHashToTheBridgesVectors) {
-    // Pasted from the Bridge's conformance test, so neither side's generator is the other's only check.
-    const std::map<std::string, std::string> fifth{
-        {"changeRoles", "nobody"}, {"changeRules", "nobody"}, {"changeVisibility", "members"}, {"editPrivateMeta", "members"}
+TEST(TreeCommitsPolicy, RulesHashToFixedVectors) {
+    // reference.py's output pasted here, so a change to the generator and its output together still shows.
+    const std::map<std::string, std::string> mixed{
+        {"addMembers", "members"},       {"removeMembers", "nobody"},     {"replaceMemberKeys", "members"},
+        {"changeVisibility", "nobody"},  {"editPublicMeta", "members"},
     };
     std::map<std::string, std::string> allMembers;
     for (const std::string& field : TreeCommits::ruleFields()) {
         allMembers[field] = "members";
     }
-    for (const auto& [rules, creator, expected] : std::vector<std::tuple<std::map<std::string, std::string>, std::string, std::string>>{
-             {{}, "alice", "293d66587c59ddae7286ffcdeaa73afea8698e3e1f26b13c3e5dafa212372e77"},
-             {{}, "bob", "83704acfe39c99a755517ae4a56360a3c0f8dc130c52fe56cf553e5b4a43e477"},
-             {{{"addMembers", "members"},
-               {"removeMembers", "nobody"},
-               {"replaceMemberKeys", "members"},
-               {"trimHistory", "nobody"},
-               {"editPublicMeta", "members"}},
-              "alice",
-              "757d92df6e2bef81c90c3aaccddc69642b36a66a0ed15ba807b2ccff639fed9a"},
-             {allMembers, "alice", "833ecdd293832d6ac5daa240242a15b72eb9e9cc8102c2d5de59e86641217586"},
-             {fifth, "alice", "f6f11160baa6217326dbd3e1c8fb2c3a9bbc59253df0ebb60fa7e13eabc42db8"},
-             {{{"trimHistory", "nobody"}}, "alice", "6dfe3f16482ac7cf7cfd4751a784bc12488315209222a81b3c7a60c59f37bbd8"},
+    for (const auto& [rules, creator, expected] :
+         std::vector<std::tuple<std::map<std::string, std::string>, std::string, std::string>>{
+             {{}, "alice", "15f6f5a248e6f17664d9895336e7dbe499d9a517bd2e842c352dc66c36071b1e"},
+             {{}, "bob", "fd7feccffb49d219d3faf8e1fe04481c4ebe75fbc515c2ea9c68e867cb116516"},
+             {mixed, "alice", "b4737673d0ce66bd8d3747de8b23331cee1e9ac2aa0b1fb51071a71f48929d20"},
+             {allMembers, "alice", "90885317e1f2e45075826d5d0799c5cf9cbf9d444ee506af8a9f216c0afd2eb2"},
          }) {
         EXPECT_EQ(hex(TreeCommits::rules(policyOf(rules), creator).hash), expected) << creator;
     }
@@ -307,7 +301,7 @@ TEST(TreeCommitsPolicy, RulesHashToTheBridgesVectors) {
 TEST(TreeCommitsPolicy, SECURITY_RulesOutsideTheContractAreRefused) {
     // Shared with the Bridge: a field missing, an unknown one, a value outside the set, the old grammar.
     const auto invalid = vectors()->getArray("invalidRules");
-    ASSERT_EQ(invalid->size(), 9u);
+    ASSERT_EQ(invalid->size(), 10u);
     for (std::size_t i = 0; i < invalid->size(); ++i) {
         EXPECT_THROW(TreeCommits::rules(invalid->get(static_cast<unsigned>(i)), "alice"), std::invalid_argument) << i;
     }
@@ -322,7 +316,7 @@ TEST(TreeCommitsPolicy, SECURITY_RulesOutsideTheContractAreRefused) {
                 << field << " '" << value << "'";
         }
     }
-    for (const std::string field : {"manage", "history", "update", "rotateKeys"}) {
+    for (const std::string field : {"manage", "history", "trimHistory", "update", "rotateKeys"}) {
         EXPECT_THROW(TreeCommits::rules(policyOf({{field, "managers"}}), "alice"), std::invalid_argument) << field;
     }
 }

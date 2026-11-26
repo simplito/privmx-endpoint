@@ -213,7 +213,6 @@ enum func_enum {
     group_addGroupMembers,
     group_removeGroupMembers,
     group_rotateGroupKey,
-    group_cutHistory,
     group_updateGroupPublicMeta,
     group_updateGroupPrivateMeta,
     group_updateGroupRules,

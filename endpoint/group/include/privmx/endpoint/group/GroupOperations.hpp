@@ -95,17 +95,7 @@ public:
     ) const;
     // `prior` is what the attempt read, for `carryMetadataForward`. False when an earlier attempt of a rotation turned
     // out to have landed (`settle` ran its metadata refresh then).
-    // `cutHistory`: the new epoch publishes no rung down and the Bridge raises the era floor to it (needs
-    // `trimHistory`, checked before signing).
-    // A cut queues its follow-up (`GroupSession::pendingCut`) once it lands, here or in the `settle` of a later call
-    // that finds it landed; `runDueWork` runs it.
-    bool rotate(const std::string& groupId, PriorRole& prior, bool cutHistory = false) const;
-    static void queueCutFollowUp(
-        GroupSessions& sessions,
-        const std::string& groupId,
-        const PriorRole& prior,
-        const std::array<PlaneOpening, 2>& planes
-    );
+    bool rotate(const std::string& groupId, PriorRole& prior) const;
     // A self-update; with `previousKey`, the leaf renewal: no need gates, a climb with the previous key over a
     // call-local cache, signed with the session's (new) key. False when there was nothing to commit (no need, the
     // leaf already opens with the session's key, or deferred behind another commit).
@@ -124,7 +114,7 @@ public:
     ) const;
 
     // The rules object a creator or a rules change signs: `update`'s set fields over `base` (nullptr: the defaults,
-    // "managers" for every rule but `trimHistory`, "nobody").
+    // "managers" for every rule).
     static Poco::Dynamic::Var rulesObject(const GroupRulesUpdate& update, const keytree::GroupRules* base);
     static std::vector<const std::optional<std::string>*> fieldsOf(const GroupRulesUpdate& update);
 

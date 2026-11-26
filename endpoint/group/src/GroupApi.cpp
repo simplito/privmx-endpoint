@@ -132,12 +132,6 @@ int64_t GroupApi::rotateGroupKey(const std::string& groupId) {
     return impl->rotateGroupKey(groupId);
 }
 
-int64_t GroupApi::cutHistory(const std::string& groupId) {
-    auto impl = getImpl();
-    core::Validator::validateId(groupId, "field:groupId ");
-    return impl->cutHistory(groupId);
-}
-
 bool GroupApi::renewLeaf(const std::string& groupId, const std::string& previousUserPrivKey) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");

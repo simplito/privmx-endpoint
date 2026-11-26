@@ -87,8 +87,7 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {EncodePath, &GroupApiVarInterface::encodePath},
         {PinGroupToSubject, &GroupApiVarInterface::pinGroupToSubject},
         {GetSpaceLog, &GroupApiVarInterface::getSpaceLog},
-        {AbortFile, &GroupApiVarInterface::abortFile},
-        {CutHistory, &GroupApiVarInterface::cutHistory}
+        {AbortFile, &GroupApiVarInterface::abortFile}
 };
 
 Poco::Dynamic::Var GroupApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -135,12 +134,6 @@ Poco::Dynamic::Var GroupApiVarInterface::rotateGroupKey(const Poco::Dynamic::Var
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     auto result = _groupApi.rotateGroupKey(groupId);
     return _serializer.serialize(result);
-}
-
-Poco::Dynamic::Var GroupApiVarInterface::cutHistory(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
-    return _serializer.serialize(_groupApi.cutHistory(groupId));
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::renewLeaf(const Poco::Dynamic::Var& args) {

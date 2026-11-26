@@ -56,7 +56,6 @@ const Poco::Dynamic::Var OPEN_POLICY = policyOf(
      {"changeRoles", "members"},
      {"changeRules", "members"},
      {"changeVisibility", "members"},
-     {"trimHistory", "members"},
      {"editPublicMeta", "members"},
      {"editPrivateMeta", "members"}}
 );

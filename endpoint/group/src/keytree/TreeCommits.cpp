@@ -409,9 +409,9 @@ CommitStatement TreeCommits::fromWire(const server::GroupTreeCommit& wire) {
 }
 
 const std::vector<std::string>& TreeCommits::ruleFields() {
-    static const std::vector<std::string> fields{"addMembers",  "removeMembers",  "replaceMemberKeys",
-                                                 "changeRoles", "changeRules",    "changeVisibility",
-                                                 "trimHistory", "editPublicMeta", "editPrivateMeta"};
+    static const std::vector<std::string> fields{"addMembers",     "removeMembers",  "replaceMemberKeys",
+                                                 "changeRoles",    "changeRules",    "changeVisibility",
+                                                 "editPublicMeta", "editPrivateMeta"};
     return fields;
 }
 
@@ -421,7 +421,7 @@ GroupRules TreeCommits::rules(const Poco::Dynamic::Var& policy, const std::strin
     }
     const Poco::JSON::Object::Ptr object = policy.extract<Poco::JSON::Object::Ptr>();
     if (object.isNull() || object->size() != ruleFields().size()) {
-        throw std::invalid_argument("group rules hold other fields than the nine rules");
+        throw std::invalid_argument("group rules hold other fields than the eight rules");
     }
     GroupRules result{.creator = creator};
     std::string preimage = tag("pmx-group-rules-v1");
@@ -440,9 +440,9 @@ GroupRules TreeCommits::rules(const Poco::Dynamic::Var& policy, const std::strin
 }
 
 std::string& TreeCommits::ruleOf(GroupRules& rules, const std::string& field) {
-    std::string* const fields[] = {&rules.addMembers,  &rules.removeMembers,  &rules.replaceMemberKeys,
-                                   &rules.changeRoles, &rules.changeRules,    &rules.changeVisibility,
-                                   &rules.trimHistory, &rules.editPublicMeta, &rules.editPrivateMeta};
+    std::string* const fields[] = {&rules.addMembers,     &rules.removeMembers,  &rules.replaceMemberKeys,
+                                   &rules.changeRoles,    &rules.changeRules,    &rules.changeVisibility,
+                                   &rules.editPublicMeta, &rules.editPrivateMeta};
     const auto& names = ruleFields();
     const auto at = std::find(names.begin(), names.end(), field);
     if (at == names.end()) {

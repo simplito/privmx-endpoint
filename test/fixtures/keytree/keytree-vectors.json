@@ -13,7 +13,7 @@
         "rosterVersion": 9,
         "rosterHash": "d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9d",
         "treeHash": "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d",
-        "policyHash": "293d66587c59ddae7286ffcdeaa73afea8698e3e1f26b13c3e5dafa212372e77",
+        "policyHash": "15f6f5a248e6f17664d9895336e7dbe499d9a517bd2e842c352dc66c36071b1e",
         "committer": "alice",
         "committerPubKey": "APK",
         "committerSeat": 0,
@@ -31,7 +31,7 @@
           "bob"
         ]
       },
-      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d310000000200000000000000070000002022222222222222222222222222222222222222222222222222222222222222220300000199c82cc00000000000000000040000000347504b0000000000000009d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d293d66587c59ddae7286ffcdeaa73afea8698e3e1f26b13c3e5dafa212372e7700000005616c6963650000000341504b0000000000000001000000030000000200000003706b33111111111111111111111111111111111111111111111111111111111111111100000000000000000000000100000003626f62"
+      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d310000000200000000000000070000002022222222222222222222222222222222222222222222222222222222222222220300000199c82cc00000000000000000040000000347504b0000000000000009d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d15f6f5a248e6f17664d9895336e7dbe499d9a517bd2e842c352dc66c36071b1e00000005616c6963650000000341504b0000000000000001000000030000000200000003706b33111111111111111111111111111111111111111111111111111111111111111100000000000000000000000100000003626f62"
     },
     {
       "statement": {
@@ -46,7 +46,7 @@
         "rosterVersion": 9,
         "rosterHash": "d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9d",
         "treeHash": "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d",
-        "policyHash": "757d92df6e2bef81c90c3aaccddc69642b36a66a0ed15ba807b2ccff639fed9a",
+        "policyHash": "b4737673d0ce66bd8d3747de8b23331cee1e9ac2aa0b1fb51071a71f48929d20",
         "committer": "alice",
         "committerPubKey": "APK",
         "committerSeat": 0,
@@ -60,13 +60,12 @@
           "replaceMemberKeys": "members",
           "changeRoles": "managers",
           "changeRules": "managers",
-          "changeVisibility": "managers",
-          "trimHistory": "nobody",
+          "changeVisibility": "nobody",
           "editPublicMeta": "members",
           "editPrivateMeta": "managers"
         }
       },
-      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d310000000200000000000000080000002033333333333333333333333333333333333333333333333333333333333333330600000199c82cc00100000000000000040000000347504b0000000000000009d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d757d92df6e2bef81c90c3aaccddc69642b36a66a0ed15ba807b2ccff639fed9a00000005616c6963650000000341504b0000000000000000000000000000000000000000"
+      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d310000000200000000000000080000002033333333333333333333333333333333333333333333333333333333333333330600000199c82cc00100000000000000040000000347504b0000000000000009d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598db4737673d0ce66bd8d3747de8b23331cee1e9ac2aa0b1fb51071a71f48929d2000000005616c6963650000000341504b0000000000000000000000000000000000000000"
     },
     {
       "statement": {
@@ -81,7 +80,7 @@
         "rosterVersion": 10,
         "rosterHash": "d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9d",
         "treeHash": "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d",
-        "policyHash": "293d66587c59ddae7286ffcdeaa73afea8698e3e1f26b13c3e5dafa212372e77",
+        "policyHash": "15f6f5a248e6f17664d9895336e7dbe499d9a517bd2e842c352dc66c36071b1e",
         "committer": "alice",
         "committerPubKey": "APK",
         "committerSeat": 0,
@@ -94,7 +93,7 @@
         ],
         "removed": []
       },
-      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d310000000200000000000000090000002044444444444444444444444444444444444444444444444444444444444444440700000199c82cc00200000000000000040000000347504b000000000000000ad42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d293d66587c59ddae7286ffcdeaa73afea8698e3e1f26b13c3e5dafa212372e7700000005616c6963650000000341504b000000000000000000000001000000056361726f6c0000000100000003626f6200000000"
+      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d310000000200000000000000090000002044444444444444444444444444444444444444444444444444444444444444440700000199c82cc00200000000000000040000000347504b000000000000000ad42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d15f6f5a248e6f17664d9895336e7dbe499d9a517bd2e842c352dc66c36071b1e00000005616c6963650000000341504b000000000000000000000001000000056361726f6c0000000100000003626f6200000000"
     },
     {
       "statement": {
@@ -109,7 +108,7 @@
         "rosterVersion": 11,
         "rosterHash": "d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9d",
         "treeHash": "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d",
-        "policyHash": "293d66587c59ddae7286ffcdeaa73afea8698e3e1f26b13c3e5dafa212372e77",
+        "policyHash": "15f6f5a248e6f17664d9895336e7dbe499d9a517bd2e842c352dc66c36071b1e",
         "committer": "alice",
         "committerPubKey": "APK",
         "committerSeat": 0,
@@ -127,7 +126,7 @@
           "bob"
         ]
       },
-      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d3100000002000000000000000a0000002055555555555555555555555555555555555555555555555555555555555555550800000199c82cc00300000000000000050000000347504b000000000000000bd42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d293d66587c59ddae7286ffcdeaa73afea8698e3e1f26b13c3e5dafa212372e7700000005616c6963650000000341504b0000000000000001000000030000000200000003706b33111111111111111111111111111111111111111111111111111111111111111100000000000000000000000100000003626f62"
+      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d3100000002000000000000000a0000002055555555555555555555555555555555555555555555555555555555555555550800000199c82cc00300000000000000050000000347504b000000000000000bd42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d15f6f5a248e6f17664d9895336e7dbe499d9a517bd2e842c352dc66c36071b1e00000005616c6963650000000341504b0000000000000001000000030000000200000003706b33111111111111111111111111111111111111111111111111111111111111111100000000000000000000000100000003626f62"
     }
   ],
   "policyHash": [
@@ -139,12 +138,11 @@
         "changeRoles": "managers",
         "changeRules": "managers",
         "changeVisibility": "managers",
-        "trimHistory": "managers",
         "editPublicMeta": "managers",
         "editPrivateMeta": "managers"
       },
       "creator": "alice",
-      "expectedHex": "293d66587c59ddae7286ffcdeaa73afea8698e3e1f26b13c3e5dafa212372e77"
+      "expectedHex": "15f6f5a248e6f17664d9895336e7dbe499d9a517bd2e842c352dc66c36071b1e"
     },
     {
       "policy": {
@@ -154,12 +152,11 @@
         "changeRoles": "managers",
         "changeRules": "managers",
         "changeVisibility": "managers",
-        "trimHistory": "managers",
         "editPublicMeta": "managers",
         "editPrivateMeta": "managers"
       },
       "creator": "bob",
-      "expectedHex": "83704acfe39c99a755517ae4a56360a3c0f8dc130c52fe56cf553e5b4a43e477"
+      "expectedHex": "fd7feccffb49d219d3faf8e1fe04481c4ebe75fbc515c2ea9c68e867cb116516"
     },
     {
       "policy": {
@@ -168,13 +165,12 @@
         "replaceMemberKeys": "members",
         "changeRoles": "managers",
         "changeRules": "managers",
-        "changeVisibility": "managers",
-        "trimHistory": "nobody",
+        "changeVisibility": "nobody",
         "editPublicMeta": "members",
         "editPrivateMeta": "managers"
       },
       "creator": "alice",
-      "expectedHex": "757d92df6e2bef81c90c3aaccddc69642b36a66a0ed15ba807b2ccff639fed9a"
+      "expectedHex": "b4737673d0ce66bd8d3747de8b23331cee1e9ac2aa0b1fb51071a71f48929d20"
     },
     {
       "policy": {
@@ -184,12 +180,11 @@
         "changeRoles": "members",
         "changeRules": "members",
         "changeVisibility": "members",
-        "trimHistory": "members",
         "editPublicMeta": "members",
         "editPrivateMeta": "members"
       },
       "creator": "alice",
-      "expectedHex": "833ecdd293832d6ac5daa240242a15b72eb9e9cc8102c2d5de59e86641217586"
+      "expectedHex": "90885317e1f2e45075826d5d0799c5cf9cbf9d444ee506af8a9f216c0afd2eb2"
     },
     {
       "policy": {
@@ -199,12 +194,11 @@
         "changeRoles": "nobody",
         "changeRules": "nobody",
         "changeVisibility": "members",
-        "trimHistory": "managers",
         "editPublicMeta": "managers",
         "editPrivateMeta": "members"
       },
       "creator": "alice",
-      "expectedHex": "f6f11160baa6217326dbd3e1c8fb2c3a9bbc59253df0ebb60fa7e13eabc42db8"
+      "expectedHex": "f07955eeb5237827bc99e5656fa36635ea8dc59824e14632ebd72d660ddee4cd"
     },
     {
       "policy": {
@@ -214,27 +208,11 @@
         "changeRoles": "nobody",
         "changeRules": "nobody",
         "changeVisibility": "managers",
-        "trimHistory": "managers",
         "editPublicMeta": "managers",
         "editPrivateMeta": "managers"
       },
       "creator": "alice",
-      "expectedHex": "0378bec2d5cba0dc69acd4d78863415009f918570171d1337ff786d3bf03f713"
-    },
-    {
-      "policy": {
-        "addMembers": "managers",
-        "removeMembers": "managers",
-        "replaceMemberKeys": "managers",
-        "changeRoles": "managers",
-        "changeRules": "managers",
-        "changeVisibility": "managers",
-        "trimHistory": "nobody",
-        "editPublicMeta": "managers",
-        "editPrivateMeta": "managers"
-      },
-      "creator": "alice",
-      "expectedHex": "6dfe3f16482ac7cf7cfd4751a784bc12488315209222a81b3c7a60c59f37bbd8"
+      "expectedHex": "1b5aeddebb318b0b74615b7ff9ae363fd4ef016c18ff479c182ee8f79cb03228"
     }
   ],
   "invalidRules": [
@@ -244,7 +222,6 @@
       "replaceMemberKeys": "managers",
       "changeRoles": "managers",
       "changeRules": "managers",
-      "changeVisibility": "managers",
       "editPublicMeta": "managers",
       "editPrivateMeta": "managers"
     },
@@ -255,7 +232,6 @@
       "changeRoles": "managers",
       "changeRules": "managers",
       "changeVisibility": "managers",
-      "trimHistory": "managers",
       "editPublicMeta": "managers",
       "editPrivateMeta": "managers",
       "history": "shared"
@@ -267,7 +243,17 @@
       "changeRoles": "managers",
       "changeRules": "managers",
       "changeVisibility": "managers",
-      "trimHistory": "managers",
+      "editPublicMeta": "managers",
+      "editPrivateMeta": "managers",
+      "trimHistory": "nobody"
+    },
+    {
+      "addMembers": "managers",
+      "removeMembers": "managers",
+      "replaceMemberKeys": "managers",
+      "changeRoles": "managers",
+      "changeRules": "managers",
+      "changeVisibility": "managers",
       "editPublicMeta": "managers",
       "editPrivateMeta": "managers",
       "manage": "managers"
@@ -279,7 +265,6 @@
       "changeRoles": "managers",
       "changeRules": "managers",
       "changeVisibility": "managers",
-      "trimHistory": "managers",
       "editPublicMeta": "managers",
       "editPrivateMeta": "managers"
     },
@@ -290,7 +275,6 @@
       "changeRoles": "managers",
       "changeRules": "managers",
       "changeVisibility": "managers",
-      "trimHistory": "managers",
       "editPublicMeta": "managers",
       "editPrivateMeta": "managers"
     },
@@ -301,7 +285,6 @@
       "changeRoles": "managers",
       "changeRules": "managers",
       "changeVisibility": "managers",
-      "trimHistory": "managers",
       "editPublicMeta": "all",
       "editPrivateMeta": "managers"
     },
@@ -312,7 +295,6 @@
       "changeRoles": "managers",
       "changeRules": "managers",
       "changeVisibility": "managers",
-      "trimHistory": "managers",
       "editPublicMeta": "managers",
       "editPrivateMeta": ""
     },
@@ -323,7 +305,6 @@
       "changeRoles": "managers",
       "changeRules": "managers",
       "changeVisibility": "managers",
-      "trimHistory": "managers",
       "editPublicMeta": "managers",
       "editPrivateMeta": "managers"
     },

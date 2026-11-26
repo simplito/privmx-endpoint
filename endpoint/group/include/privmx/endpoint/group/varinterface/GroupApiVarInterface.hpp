@@ -99,7 +99,7 @@ public:
         PinGroupToSubject = 79,
         GetSpaceLog = 80,
         AbortFile = 81,
-        CutHistory = 82,
+        // 82 was CutHistory (removed): reserved, never reused.
     };
 
     GroupApiVarInterface(core::Connection connection, const core::VarSerializer& serializer)
@@ -110,7 +110,6 @@ public:
     Poco::Dynamic::Var addGroupMembers(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var removeGroupMembers(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var rotateGroupKey(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var cutHistory(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var renewLeaf(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateGroupPublicMeta(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateGroupPrivateMeta(const Poco::Dynamic::Var& args);

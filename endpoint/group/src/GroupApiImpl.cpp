@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <cctype>
-#include <utility>
 
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
@@ -275,137 +274,6 @@ int64_t GroupApiImpl::rotateGroupKey(const std::string& groupId) {
     return static_cast<int64_t>(pinnedKeyVersion(groupId));
 }
 
-int64_t GroupApiImpl::cutHistory(const std::string& groupId) {
-    _metadata.retryPendingCarry(groupId);
-    PriorRole prior;
-    // The follow-up (planes carried up, Spaces re-keyed) is queued by the cut once it lands, here or in the `settle`
-    // of whichever later call finds it landed after a lost answer; the due work below runs it.
-    CommitEngine::commitWithRetry([&] { _ops.rotate(groupId, prior, true); });
-    const int64_t epoch = static_cast<int64_t>(pinnedKeyVersion(groupId));
-    runDueWork(groupId);
-    return epoch;
-}
-
-namespace {
-// Whether a Space's re-key after a cut was refused for good: the Bridge's or this client's word that the caller may
-// not, rather than a lost race, a rate limit or a failed request, which a later call retries.
-bool refusedForGood(const std::exception& e) {
-    if (dynamic_cast<const GroupUnauthorizedSignerException*>(&e) != nullptr ||
-        dynamic_cast<const SpaceRecipientUnavailableException*>(&e) != nullptr) {
-        return true;
-    }
-    const auto* rejection = dynamic_cast<const core::Exception*>(&e);
-    if (rejection == nullptr ||
-        (rejection->getCode() >> 16) != privmx::endpoint::server::EndpointServerException::SCOPE_CODE) {
-        return false;
-    }
-    for (const unsigned int transient :
-         {privmx::endpoint::server::GroupRotatedAlreadyException::FULL_CODE,
-          privmx::endpoint::server::GroupVersionMismatchException::FULL_CODE,
-          privmx::endpoint::server::GroupRotationRateLimitException::FULL_CODE,
-          privmx::endpoint::server::GroupRosterVersionMismatchException::FULL_CODE}) {
-        if (rejection->getCode() == transient) {
-            return false;
-        }
-    }
-    return true;
-}
-} // namespace
-
-void GroupApiImpl::runCutFollowUp(const std::string& groupId) {
-    std::optional<PendingCut> pending;
-    {
-        const auto session = _sessions.find(groupId);
-        if (!session) {
-            return;
-        }
-        std::lock_guard<std::mutex> lock(session->mutex);
-        pending = std::exchange(session->pendingCut, std::nullopt); // taken: a Space write below runs due work too
-    }
-    if (!pending.has_value()) {
-        return;
-    }
-    // Each plane as opened before the cut (their keys below the new floor are gone): carried if it passed every
-    // check then, started over empty if it failed one for good, and only while it is still the entry read then;
-    // already current or written over since, nothing to do. A failed write leaves it for the next call.
-    bool done = true;
-    try {
-        const VerifiedGroup verified = readGroupForKeys(groupId);
-        for (const bool publicPlane : {true, false}) {
-            const PlaneOpening& plane = pending->planes[publicPlane ? 0 : 1];
-            const server::GroupMetaEntry& now = publicPlane ? verified->publicMeta : verified->privateMeta;
-            const server::GroupMetaEntry& then = publicPlane ? pending->prior.publicMeta : pending->prior.privateMeta;
-            if (now.keyVersion >= verified->keyVersion || !GroupDataSchemaMapper::sameEntry(now, then)) {
-                continue;
-            }
-            if (!plane.content.has_value() && !plane.failedForGood) {
-                done = false; // not judged before the cut (never queued so; a guard): never blanked
-                continue;
-            }
-            try {
-                _metadata.writeMeta(
-                    verified, publicPlane, plane.content.value_or(core::Buffer()),
-                    publicPlane ? verified->publicMetaVersion : verified->privateMetaVersion
-                );
-            } catch (const std::exception& e) {
-                done = false;
-                LOG_WARN("[cutHistory] group ", groupId, " plane not carried past the cut yet: ", e.what())
-            }
-        }
-    } catch (const std::exception& e) {
-        done = false;
-        LOG_WARN("[cutHistory] group ", groupId, " planes not carried past the cut yet: ", e.what())
-    }
-    try {
-        const std::string contextId = readGroupForKeys(groupId)->contextId;
-        const auto epoch = static_cast<int64_t>(pinnedKeyVersion(groupId));
-        LOG_INFO(
-            "[cutHistory] group ", groupId, ": Spaces naming it that this user cannot see are not re-keyed here; they",
-            " stay stale until a recipient rotates them"
-        )
-        for (int64_t skip = 0;; skip += 100) {
-            const auto page = listSpaces(
-                contextId, core::PagingQuery{.skip = skip, .limit = 100, .sortOrder = "asc"}, groupId
-            );
-            for (const SpaceState& space : page.readItems) {
-                const bool behind = std::any_of(space.groups.begin(), space.groups.end(), [&](const auto& g) {
-                    return g.groupId == groupId && g.keyVersion < epoch;
-                });
-                if (!behind || pending->givenUp.count(space.spaceId) != 0) {
-                    continue;
-                }
-                try {
-                    rotateSpaceKey(space.spaceId);
-                } catch (const std::exception& e) {
-                    if (refusedForGood(e)) {
-                        pending->givenUp.insert(space.spaceId);
-                        LOG_WARN(
-                            "[cutHistory] Space ", space.spaceId,
-                            " cannot be re-keyed by this user; it stays stale: ", e.what()
-                        )
-                    } else {
-                        done = false;
-                        LOG_WARN("[cutHistory] Space ", space.spaceId, " not re-keyed yet, retried later: ", e.what())
-                    }
-                }
-            }
-            if (page.readItems.size() < 100) {
-                break;
-            }
-        }
-    } catch (const std::exception& e) {
-        done = false;
-        LOG_WARN("[cutHistory] the Spaces of group ", groupId, " were not re-keyed yet: ", e.what())
-    }
-    if (!done) {
-        const auto session = _sessions.of(groupId);
-        std::lock_guard<std::mutex> lock(session->mutex);
-        if (!session->pendingCut.has_value()) {
-            session->pendingCut = pending; // kept for the next call's due work
-        }
-    }
-}
-
 int64_t GroupApiImpl::replaceGroupMemberKeys(const std::string& groupId, const std::vector<std::string>& userIds) {
     _metadata.retryPendingCarry(groupId);
     std::optional<bool> historyAbandoned;
@@ -506,7 +374,6 @@ void GroupApiImpl::runDueWork(const std::string& groupId) {
         return;
     }
     _deferred.run(groupId, [&] { selfUpdate(groupId); });
-    runCutFollowUp(groupId);
     savePinsIfDue();
 }
 

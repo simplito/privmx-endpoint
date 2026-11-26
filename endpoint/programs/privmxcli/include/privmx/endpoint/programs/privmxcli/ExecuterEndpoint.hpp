@@ -583,9 +583,6 @@ private:
         {group_rotateGroupKey, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->rotateGroupKey(args);
         }},
-        {group_cutHistory, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
-            return api->group->cutHistory(args);
-        }},
         {group_updateGroupPublicMeta, [](std::shared_ptr<ApiVar> api, const Poco::JSON::Array::Ptr& args) -> Poco::Dynamic::Var{
             return api->group->updateGroupPublicMeta(args);
         }},
@@ -1680,12 +1677,6 @@ private:
             "\t\tgroupId [STRING] - ID of the Group\n"
             "\treplaces the Group's key for the same members (also a one-member Group); advances the Group's key epoch; containers the Group can read must be re-keyed afterwards"
         },
-        {group_cutHistory,
-            "cutHistory JSON_ARRAY\n"
-            "\tjson format - [groupId]\n"
-            "\t\tgroupId [STRING] - ID of the Group\n"
-            "\tadvances the Group's key epoch with no rung down: nobody derives an earlier epoch's key afterwards; needs the trimHistory rule"
-        },
         {group_updateGroupPublicMeta,
             "updateGroupPublicMeta JSON_ARRAY\n"
             "\tjson format - [groupId, publicMeta, version]\n"
@@ -1956,7 +1947,6 @@ private:
         {group_addGroupMembers, "Adds one member to a tree-backed Group, without advancing its key epoch."},
         {group_removeGroupMembers, "Removes one member from a tree-backed Group and advances its key epoch."},
         {group_rotateGroupKey, "Replaces a Group's key without changing its members and advances its key epoch."},
-        {group_cutHistory, "Rotates a Group's key with no way back to earlier epochs: the forward-secrecy checkpoint."},
         {group_updateGroupPublicMeta, "Updates a Group's public metadata."},
         {group_updateGroupPrivateMeta, "Updates a Group's private metadata."},
         {group_updateGroupRules, "Updates a Group's rules."},
@@ -2111,7 +2101,6 @@ private:
         {group_addGroupMembers, "Adding group member"},
         {group_removeGroupMembers, "Removing group member"},
         {group_rotateGroupKey, "Rotating group key"},
-        {group_cutHistory, "Cutting group history"},
         {group_updateGroupPublicMeta, "Updating group public meta"},
         {group_updateGroupPrivateMeta, "Updating group private meta"},
         {group_updateGroupRules, "Updating group rules"},

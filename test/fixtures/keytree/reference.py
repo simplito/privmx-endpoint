@@ -7,8 +7,8 @@ source of the other's expectations. Change a layout here first, from the spec, t
 
     H = sha256; u8/u32/u64 big-endian; lp(s) = u32(len) || s; a domain tag ends in NUL
     PH = H("pmx-group-rules-v1\\0" || lp(creator) || lp(addMembers) || lp(removeMembers) || lp(replaceMemberKeys)
-           || lp(changeRoles) || lp(changeRules) || lp(changeVisibility) || lp(trimHistory) || lp(editPublicMeta)
-           || lp(editPrivateMeta))     the rules object holds exactly these nine, each "managers", "members" or "nobody"
+           || lp(changeRoles) || lp(changeRules) || lp(changeVisibility) || lp(editPublicMeta)
+           || lp(editPrivateMeta))     the rules object holds exactly these eight, each "managers", "members" or "nobody"
     SB = "pmx-tree-commit\\0" || lp(groupId) || u32(treeVersion) || u64(seq) || lp(prevDigest) || u8(op) || u64(date)
          || u64(keyVersion) || lp(groupPubKey) || u64(rosterVersion) || RH || TH || PH || lp(committer)
          || lp(committerPubKey) || u32(committerSeat) || u32(#path) || (u32(v) || u32(gen) || lp(pk) || CH)*
@@ -41,7 +41,7 @@ OP_CODES = {"create": 1, "add": 2, "remove": 3, "selfUpdate": 4, "rotate": 5, "p
 
 WHO = ("managers", "members", "nobody")
 RULE_FIELDS = [
-    "addMembers", "removeMembers", "replaceMemberKeys", "changeRoles", "changeRules", "changeVisibility", "trimHistory",
+    "addMembers", "removeMembers", "replaceMemberKeys", "changeRoles", "changeRules", "changeVisibility",
     "editPublicMeta", "editPrivateMeta",
 ]
 ALL_MANAGERS = {field: "managers" for field in RULE_FIELDS}
@@ -98,12 +98,12 @@ def signed_bytes(s):
 
 
 EXPLICIT = dict(
-    ALL_MANAGERS, addMembers="members", removeMembers="nobody", replaceMemberKeys="members", trimHistory="nobody",
-    editPublicMeta="members",
+    ALL_MANAGERS, addMembers="members", removeMembers="nobody", replaceMemberKeys="members",
+    changeVisibility="nobody", editPublicMeta="members",
 )
 IMMUTABLE = dict(ALL_MANAGERS, addMembers="nobody", removeMembers="nobody", changeRoles="nobody", changeRules="nobody")
 
-# The first five are the Bridge's own conformance vectors.
+# Shared with the Bridge's conformance tests.
 RULES = [
     (dict(ALL_MANAGERS), "alice"),
     (dict(ALL_MANAGERS), "bob"),
@@ -112,14 +112,13 @@ RULES = [
     (dict(ALL_MANAGERS, changeRoles="nobody", changeRules="nobody", changeVisibility="members", editPrivateMeta="members"),
      "alice"),
     (dict(IMMUTABLE), "alice"),
-    # The defaults a client fills: every rule the managers' but trimHistory, nobody's (also the Bridge's vector).
-    (dict(ALL_MANAGERS, trimHistory="nobody"), "alice"),
 ]
 
 # Rules objects both sides refuse: a field missing, one unknown, a value outside the field's set, the old grammar.
 INVALID_RULES = [
-    {k: v for k, v in ALL_MANAGERS.items() if k != "trimHistory"},
+    {k: v for k, v in ALL_MANAGERS.items() if k != "changeVisibility"},
     dict(ALL_MANAGERS, history="shared"),
+    dict(ALL_MANAGERS, trimHistory="nobody"),
     dict(ALL_MANAGERS, manage="managers"),
     dict(ALL_MANAGERS, addMembers="manager"),
     dict(ALL_MANAGERS, removeMembers="manager,owner"),

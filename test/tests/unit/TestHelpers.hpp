@@ -57,7 +57,7 @@ inline Poco::Dynamic::Var policyOf(const std::map<std::string, std::string>& rul
     Poco::JSON::Object::Ptr policy = new Poco::JSON::Object();
     for (const char* field :
          {"addMembers", "removeMembers", "replaceMemberKeys", "changeRoles", "changeRules", "changeVisibility",
-          "trimHistory", "editPublicMeta", "editPrivateMeta"}) {
+          "editPublicMeta", "editPrivateMeta"}) {
         policy->set(field, "managers");
     }
     for (const auto& [field, rule] : rules) {

@@ -50,7 +50,6 @@ group::GroupRulesUpdate VarDeserializer::deserialize<group::GroupRulesUpdate>(
         .changeRoles = deserializeOptional<std::string>(obj->get("changeRoles"), name + ".changeRoles"),
         .changeRules = deserializeOptional<std::string>(obj->get("changeRules"), name + ".changeRules"),
         .changeVisibility = deserializeOptional<std::string>(obj->get("changeVisibility"), name + ".changeVisibility"),
-        .trimHistory = deserializeOptional<std::string>(obj->get("trimHistory"), name + ".trimHistory"),
         .editPublicMeta = deserializeOptional<std::string>(obj->get("editPublicMeta"), name + ".editPublicMeta"),
         .editPrivateMeta = deserializeOptional<std::string>(obj->get("editPrivateMeta"), name + ".editPrivateMeta")
     };

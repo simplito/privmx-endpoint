@@ -61,17 +61,14 @@ public:
     // Called after a removal, rotation or narrowing commits, never as part of it: best-effort, re-signing under the
     // committer's name only an entry identical to the one it read before its own commit whose author held the
     // plane's rule under that read's rules and roster (`prior`). A narrowing (CarryScope::Policy) carries the planes
-    // `narrowedPublic` / `narrowedPrivate` name. `openedBefore`: the planes as this client opened and attested them
-    // on the read `prior` was taken from (a history cut: the keys below the new floor are gone from the Bridge).
-    // Returns whether nothing is left to carry.
+    // `narrowedPublic` / `narrowedPrivate` name. Returns whether nothing is left to carry.
     bool carryMetadataForward(
         const std::string& groupId,
         CarryScope scope,
         bool historyAbandoned,
         const PriorRole& prior,
         bool narrowedPublic = false,
-        bool narrowedPrivate = false,
-        const Group* openedBefore = nullptr
+        bool narrowedPrivate = false
     ) const;
     // Runs a narrowing's carry-forward; one that does not complete is kept for `retryPendingCarry`.
     void runPolicyCarry(const std::string& groupId, const PendingCarry& carry) const;

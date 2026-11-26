@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include "BaseGroupTest.hpp"
-#include <privmx/endpoint/core/BackendRequester.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <Poco/Util/IniFileConfiguration.h>
 #include <privmx/endpoint/core/EventQueueImpl.hpp>
@@ -1287,95 +1286,6 @@ TEST_F(GroupTest, an_immutable_group_keeps_its_membership_roles_and_rules) {
     EXPECT_NO_THROW({
         groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("still editable"), current.publicMetaVersion);
     }) << "the carry-forwards of the rotation and the reseat moved the version";
-}
-
-TEST_F(GroupTest, cutHistory_needs_trimHistory_which_is_nobody_by_default) {
-    std::string groupId = createGroupOf({user(1), user(2)});
-    group::Group created;
-    ASSERT_NO_THROW({ created = groupApi->getGroup(groupId); });
-    EXPECT_EQ(created.rules.trimHistory, "nobody");
-    EXPECT_THROW({ groupApi->cutHistory(groupId); }, group::GroupUnauthorizedSignerException);
-    ASSERT_NO_THROW({ created = groupApi->getGroup(groupId); });
-    EXPECT_EQ(created.keyVersion, 1) << "nothing was committed";
-}
-
-TEST_F(GroupTest, cutHistory_is_a_forward_secrecy_checkpoint) {
-    const std::string contextId = reader->getString("Context_1.contextId");
-    std::string groupId = groupApi->createGroup(
-        contextId, {user(2)}, {user(1)}, core::Buffer::from("public"), core::Buffer::from("private"),
-        group::GroupRulesUpdate{.trimHistory = "managers"}
-    );
-    core::Buffer before;
-    ASSERT_NO_THROW({ before = groupApi->encrypt(groupId, group::GroupApi::noLocation(), core::Buffer::from("pre")); });
-
-    int64_t epoch = 0;
-    ASSERT_NO_THROW({ epoch = groupApi->cutHistory(groupId); });
-    EXPECT_EQ(epoch, 2);
-    core::Buffer after;
-    ASSERT_NO_THROW({ after = groupApi->encrypt(groupId, group::GroupApi::noLocation(), core::Buffer::from("post")); });
-    ASSERT_NO_THROW({
-        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
-    });
-
-    // An existing member follows the cut to the new epoch, metadata carried up with it.
-    disconnect();
-    connectAs(2);
-    group::Group read;
-    ASSERT_NO_THROW({ read = groupApi->getGroup(groupId); });
-    EXPECT_EQ(read.statusCode, 0);
-    EXPECT_EQ(read.keyVersion, 2);
-    EXPECT_EQ(read.privateMeta.stdString(), "private");
-    EXPECT_EQ(groupApi->decrypt(groupId, group::GroupApi::noLocation(), after, anyAuthor()).data.stdString(), "post");
-
-    // A member added after the cut reads the new epoch and nothing from before it.
-    disconnect();
-    connectAs(3);
-    EXPECT_EQ(groupApi->decrypt(groupId, group::GroupApi::noLocation(), after, anyAuthor()).data.stdString(), "post");
-    EXPECT_ANY_THROW({ groupApi->decrypt(groupId, group::GroupApi::noLocation(), before, anyAuthor()); })
-        << "a member added after the cut read an envelope from before it";
-    disconnect();
-    connectAs(1);
-}
-
-TEST_F(GroupTest, a_management_cut_moves_the_floor_without_a_rotation) {
-    if (!reader->has("Api.apiKeyId") || !reader->has("Api.apiKeySecret")) {
-        GTEST_SKIP() << "the dataset has no management API key";
-    }
-    std::string groupId = createGroupOf({user(1), user(2)}); // trimHistory "nobody": the Bridge acts on its own
-    core::Buffer before;
-    ASSERT_NO_THROW({ before = groupApi->encrypt(groupId, group::GroupApi::noLocation(), core::Buffer::from("pre")); });
-    ASSERT_NO_THROW({ groupApi->rotateGroupKey(groupId); });
-    std::string response;
-    ASSERT_NO_THROW({
-        response = core::BackendRequester::backendRequest(
-            getPlatformUrl(), reader->getString("Api.apiKeyId"), reader->getString("Api.apiKeySecret"), 0,
-            "group/cutHistory", "{\"groupId\": \"" + groupId + "\"}"
-        );
-    });
-    ASSERT_EQ(response.find("\"error\""), std::string::npos) << response;
-    ASSERT_NO_THROW({
-        groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}});
-    });
-
-    // The floor moved with no statement: every member still reads the group cleanly.
-    disconnect();
-    connectAs(2);
-    group::Group read;
-    ASSERT_NO_THROW({ read = groupApi->getGroup(groupId); });
-    EXPECT_EQ(read.statusCode, 0);
-    EXPECT_EQ(read.keyVersion, 2);
-    disconnect();
-    connectAs(3);
-    ASSERT_NO_THROW({ read = groupApi->getGroup(groupId); });
-    EXPECT_EQ(read.statusCode, 0);
-    try {
-        groupApi->decrypt(groupId, group::GroupApi::noLocation(), before, anyAuthor());
-        ADD_FAILURE() << "an envelope below the floor opened for a member added after the cut";
-    } catch (const group::GroupDataIntegrityException& e) {
-        ADD_FAILURE() << "below the floor read as an integrity failure: " << e.what();
-    } catch (const core::Exception&) {}
-    disconnect();
-    connectAs(1);
 }
 
 TEST_F(GroupTest, the_log_lists_every_statement_from_the_creation) {
