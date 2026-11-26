@@ -172,7 +172,8 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointServerException, "Unknown server except
     X(GroupMetaKeyMismatchException, "Group metadata write must use the current epoch's key", 0x6222)                 \
     X(GroupMetaUnreachableException,                                                                                  \
       "Group metadata entry would become unreadable; rewrite the affected metadata plane first", 0x6223)              \
-    X(GroupRosterVersionMismatchException, "Group roster has moved since this change was planned", 0x6224)
+    X(GroupRosterVersionMismatchException, "Group roster has moved since this change was planned", 0x6224)            \
+    X(GroupRulesUnsupportedException, "Group predates group rules and must be recreated", 0x622B)
 
 #define PRIVMX_SERVER_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, NAME, MSG, CODE)
 SERVER_EXCEPTIONS(PRIVMX_SERVER_DECLARE)

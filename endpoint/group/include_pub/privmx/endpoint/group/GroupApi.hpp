@@ -21,6 +21,9 @@ class GroupApiImpl;
 /**
  * 'GroupApi' is a class representing Endpoint's API for Groups.
  *
+ * A Group created before group rules existed (Bridge 3.1.0) is refused with server::GroupRulesUnsupportedException
+ * on every commit: it must be recreated.
+ *
  * A membership, key or rules change that failed may still take effect: the Bridge may have applied it and lost or
  * refused the answer. For a bounded time, or until the Group changes in some other way, this client resends that
  * change before it makes any other change to the Group: a retry of the same call resends it (and returns once it is
