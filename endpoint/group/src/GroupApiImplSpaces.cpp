@@ -179,31 +179,28 @@ void GroupApiImpl::storeSpacePin(const keytree::SpaceLogState& state, bool creat
     }
     const std::string slot = _connection.getImpl()->localStateSlot("space-pins", _userPrivKey.getPublicKey());
     const core::LocalSeal seal(_userPrivKey, "privmx/space/pins", 1, slot);
-    // What this process holds: the pins it loaded and every Space it verified since, merged into every save, so a
-    // save that failed earlier is made up by the next one. A stored blob that does not open (nothing stored, or
-    // corrupted) is rebuilt from these, not from the one Space at hand.
-    std::map<std::string, std::pair<std::uint64_t, std::string>> held;
-    {
-        std::lock_guard lock(_spaceLogsMutex);
-        for (const auto& [id, pin] : _spacePins) {
-            held[id] = {pin.first, privmx::utils::Hex::from(pin.second)};
-        }
-        for (const auto& [id, log] : _spaceLogs) {
-            if (log.seq >= held[id].first) {
-                held[id] = {log.seq, privmx::utils::Hex::from(log.digest)};
-            }
-        }
-    }
     const bool saved = seal.update(*_pinStore, [&](const std::optional<std::string>& body) {
-        // One line a Space: "<id> <seq> <digest hex>". The higher position stays, except for a Space this process
-        // created again: an earlier Space's history under its id is let go.
-        std::map<std::string, std::pair<std::uint64_t, std::string>> pins = held;
+        // One line a Space: "<id> <seq> <digest hex>". Every Space this process verified is merged into every save,
+        // so a save that failed earlier is made up by the next one; the higher position stays. The pins loaded at
+        // first use are not: the store may have moved on since (this device created a Space again, here or in
+        // another process sharing the store). They only rebuild a stored blob that does not open (nothing stored,
+        // or corrupted). Read under the lock createSpace takes, so a Space created again meanwhile is respected.
+        std::map<std::string, std::pair<std::uint64_t, std::string>> pins;
         std::istringstream lines(body.value_or(std::string()));
         std::string spaceId, digest;
         std::uint64_t seq = 0;
         while (lines >> spaceId >> seq >> digest) {
-            if (seq >= pins[spaceId].first) {
-                pins[spaceId] = {seq, digest};
+            pins[spaceId] = {seq, digest};
+        }
+        std::lock_guard lock(_spaceLogsMutex);
+        if (!body.has_value()) {
+            for (const auto& [id, pin] : _spacePins) {
+                pins[id] = {pin.first, privmx::utils::Hex::from(pin.second)};
+            }
+        }
+        for (const auto& [id, log] : _spaceLogs) {
+            if (log.seq >= pins[id].first) {
+                pins[id] = {log.seq, privmx::utils::Hex::from(log.digest)};
             }
         }
         auto& pin = pins[state.spaceId];

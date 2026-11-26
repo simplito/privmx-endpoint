@@ -5096,3 +5096,29 @@ TEST(SpaceGroupKeyRefresh, SECURITY_ARefreshThroughTheGroupIsHeldToTheGroupsVeri
     EXPECT_TRUE(Access::refusedRefresh(viaG(5, forged), std::nullopt, current, std::nullopt, true).has_value());
     EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current, past, true).has_value());
 }
+
+// Two processes of one user on one device store. The second loaded an earlier Space S (at seq 2) before S was
+// created again (seq 1) in a third: its next save, of another Space, must not put the earlier S back.
+TEST_F(GroupApiLyingBridge, ASaveOfAnotherSpaceKeepsASpaceCreatedAgainInAnotherProcess) {
+    using Access = GroupApiImplTestAccess;
+    store = std::make_shared<MemoryPinStore>();
+    const auto state = [](const std::string& id, std::uint64_t seq, const std::string& digest) {
+        privmx::endpoint::group::keytree::SpaceLogState s;
+        s.spaceId = id;
+        s.seq = seq;
+        s.digest = digest;
+        return s;
+    };
+    const std::string oldDigest(32, 'o'), newDigest(32, 'n');
+    Access::rememberSpaceLog(client("alice"), state("S", 2, oldDigest)); // an earlier session
+    GroupApiImpl& second = sibling("alice");
+    Access::loadSpacePins(second);
+    Access::rememberSpaceLog(sibling("alice"), state("S", 1, newDigest), true); // S created again
+    Access::rememberSpaceLog(second, state("T", 1, std::string(32, 't')));
+
+    const auto stored = Access::storedSpacePins(sibling("alice"));
+    ASSERT_EQ(stored.count("S"), 1u);
+    EXPECT_EQ(stored.at("S").first, 1u);
+    EXPECT_EQ(stored.at("S").second, newDigest);
+    EXPECT_EQ(stored.count("T"), 1u);
+}
