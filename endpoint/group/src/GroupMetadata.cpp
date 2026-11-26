@@ -78,7 +78,8 @@ bool GroupMetadata::carryMetadataForward(
     bool historyAbandoned,
     const PriorRole& prior,
     bool narrowedPublic,
-    bool narrowedPrivate
+    bool narrowedPrivate,
+    const Group* openedBefore
 ) const {
     try {
         // One verified answer decides both whether a plane is carried and what it says: re-signing metadata this
@@ -117,9 +118,9 @@ bool GroupMetadata::carryMetadataForward(
         }
         // The entries as read are judged by the read's rules and roster: a plane whose author lacked its rule
         // then is refused here too, so neither a removal nor a narrowing launders it.
-        const Group opened = mapper.validateDecryptAndConvertGroup(
-            group, keyProvider, keys.resolverOver(&verified), prior
-        );
+        const Group opened = openedBefore != nullptr ?
+            *openedBefore :
+            mapper.validateDecryptAndConvertGroup(group, keyProvider, keys.resolverOver(&verified), prior);
         if (opened.statusCode != 0) {
             return false;
         }

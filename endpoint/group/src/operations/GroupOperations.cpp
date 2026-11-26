@@ -696,18 +696,23 @@ std::optional<bool> GroupOperations::remove(
     }
     const bool abandonHistory = !currentGrantKey.has_value();
     // Abandoning history (the Bridge's check, not a signed one) needs trimHistory or changeRules beside the
-    // removal's own rules, and both edit rules (the planes start over empty): refused here before signing.
+    // removal's own rules, and both edit rules (the planes start over empty): refused here before signing. The
+    // deliberate trade-off: otherwise anyone holding removeMembers could wipe history by claiming a lost key.
     if (abandonHistory) {
-        assertRule(verified, &keytree::GroupRules::editPublicMeta, "editPublicMeta", "a removal that abandons history");
-        assertRule(
-            verified, &keytree::GroupRules::editPrivateMeta, "editPrivateMeta", "a removal that abandons history"
-        );
+        const std::string what = "a removal without the group's current key (it abandons the group's history)";
         try {
-            assertRule(verified, &keytree::GroupRules::trimHistory, "trimHistory", "a removal that abandons history");
-        } catch (const GroupUnauthorizedSignerException&) {
-            assertRule(
-                verified, &keytree::GroupRules::changeRules, "trimHistory or changeRules",
-                "a removal that abandons history"
+            assertRule(verified, &keytree::GroupRules::editPublicMeta, "editPublicMeta", what);
+            assertRule(verified, &keytree::GroupRules::editPrivateMeta, "editPrivateMeta", what);
+            try {
+                assertRule(verified, &keytree::GroupRules::trimHistory, "trimHistory", what);
+            } catch (const GroupUnauthorizedSignerException&) {
+                assertRule(verified, &keytree::GroupRules::changeRules, "trimHistory or changeRules", what);
+            }
+        } catch (const GroupUnauthorizedSignerException& e) {
+            throw GroupUnauthorizedSignerException(
+                std::string(e.what()) +
+                ": this session has lost the group's current key. Recover it with renewLeaf if your identity key "
+                "changed, or leave the removal to a member who still holds the key or has those rules"
             );
         }
     }
@@ -832,7 +837,7 @@ std::function<void()> GroupOperations::landedEpoch(
     };
 }
 
-bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool cutHistory) const {
+bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool cutHistory, Group* opened) const {
     // Every record, because the statement signs the tree hash, which a rotation leaves as it is.
     const std::string op = keytree::TreeCommits::opKey(cutHistory ? "cutHistory" : "rotate");
     const std::optional<GroupRead> settled = engine.readForCommit(
@@ -858,6 +863,11 @@ bool GroupOperations::rotate(const std::string& groupId, PriorRole& prior, bool 
         assertRule(verified, &keytree::GroupRules::trimHistory, "trimHistory", "cutting the group's history");
         assertRule(verified, &keytree::GroupRules::editPublicMeta, "editPublicMeta", "cutting the group's history");
         assertRule(verified, &keytree::GroupRules::editPrivateMeta, "editPrivateMeta", "cutting the group's history");
+        if (opened != nullptr) {
+            *opened = mapper.validateDecryptAndConvertGroup(
+                currentGroup, keyProvider, keys.resolverOver(&verified), prior
+            );
+        }
     }
     const keytree::TreeGroupState state = climbForPlanning(verified, cache);
     const auto currentGrantKey = cache->getGrantKey(keytree::GroupKeyResolver::epochOf(currentEpoch));

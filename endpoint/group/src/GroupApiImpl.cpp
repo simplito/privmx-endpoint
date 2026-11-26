@@ -279,12 +279,13 @@ int64_t GroupApiImpl::cutHistory(const std::string& groupId) {
     _metadata.retryPendingCarry(groupId);
     bool committedHere = true;
     PriorRole prior;
-    CommitEngine::commitWithRetry([&] { committedHere = _ops.rotate(groupId, prior, true); });
+    Group opened{};
+    CommitEngine::commitWithRetry([&] { committedHere = _ops.rotate(groupId, prior, true, &opened); });
     // As after a rotation. The cutter still holds the cut epoch's key, so the planes are carried with what they say.
     if (committedHere) {
         const auto session = _sessions.of(groupId);
         std::lock_guard<std::mutex> lock(session->mutex);
-        session->pendingCut = prior;
+        session->pendingCut = std::make_pair(prior, opened);
     }
     const int64_t epoch = static_cast<int64_t>(pinnedKeyVersion(groupId));
     runDueWork(groupId);
@@ -292,7 +293,7 @@ int64_t GroupApiImpl::cutHistory(const std::string& groupId) {
 }
 
 void GroupApiImpl::runCutFollowUp(const std::string& groupId) {
-    std::optional<PriorRole> prior;
+    std::optional<std::pair<PriorRole, Group>> prior;
     {
         const auto session = _sessions.find(groupId);
         if (!session) {
@@ -304,7 +305,11 @@ void GroupApiImpl::runCutFollowUp(const std::string& groupId) {
     if (!prior.has_value()) {
         return;
     }
-    bool done = _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, prior.value());
+    // The planes as opened before the cut: their keys below the new floor are gone. Not attested then, not carried.
+    bool done = prior->second.statusCode != 0 ||
+        _metadata.carryMetadataForward(
+            groupId, CarryScope::NewEpoch, false, prior->first, false, false, &prior->second
+        );
     try {
         const std::string contextId = readGroupForKeys(groupId)->contextId;
         const auto epoch = static_cast<int64_t>(pinnedKeyVersion(groupId));

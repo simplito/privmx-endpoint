@@ -1007,13 +1007,13 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_plain_member_cannot_remove_anybody) {
     // The client refuses that before sending anything; this is what the Bridge says to one sent anyway.
     const auto fresh = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
     const auto refusal = rawRemovalRefusal(groupId, user(3).userId, fresh);
-    EXPECT_NE(refusal.find("policy is not met"), std::string::npos) << "the bridge let a non-manager remove: " << refusal;
+    EXPECT_NE(refusal.find("removeMembers rule is not met"), std::string::npos) << "the bridge let a non-manager remove: " << refusal;
     disconnect();
     connectAs(1);
     // Control: the same removal from a manager gets past the policy gate, so the refusal above is about the caller.
     const auto control = rawRemovalRefusal(groupId, user(3).userId, fresh);
     EXPECT_FALSE(control.empty()) << "a shape-only removal was accepted";
-    EXPECT_EQ(control.find("policy is not met"), std::string::npos) << control;
+    EXPECT_EQ(control.find("rule is not met"), std::string::npos) << control;
     group::Group after;
     ASSERT_NO_THROW({ after = groupApi->getGroup(groupId); });
     EXPECT_NE(std::find(after.users.begin(), after.users.end(), user(3).userId), after.users.end());
@@ -1215,8 +1215,9 @@ TEST_F(GroupKeyTreeTest, SECURITY_repairRung_below_a_cut_floor_is_refused) {
 // ── the signed group policy ──
 
 TEST_F(GroupKeyTreeTest, SECURITY_a_policy_change_is_a_signed_commit_every_member_follows) {
-    // The manager lets every member remove members and change roles; a plain member then removes that manager; a third session, pinned before
-    // either, replays both from its pin: the policy statement, then a removal its committer now holds the role for.
+    // The manager lets every member remove members, change roles and write metadata; a plain member then removes
+    // that manager; a third session, pinned before either, replays both from its pin: the rules statement, then a
+    // removal its committer now holds the rules for.
     // user_3 manages too: a group that has managers keeps one, so the last of them cannot be removed.
     std::string groupId;
     ASSERT_NO_THROW({
@@ -1230,7 +1231,15 @@ TEST_F(GroupKeyTreeTest, SECURITY_a_policy_change_is_a_signed_commit_every_membe
     ASSERT_EQ(thirdGroups.getGroup(groupId).statusCode, 0);
 
     ASSERT_NO_THROW({
-        groupApi->updateGroupRules(groupId, group::GroupRulesUpdate{.removeMembers = "members", .changeRoles = "members"});
+        groupApi->updateGroupRules(
+            groupId,
+            group::GroupRulesUpdate{
+                .removeMembers = "members",
+                .changeRoles = "members",
+                .editPublicMeta = "members", // the remover carries the planes up under its own name
+                .editPrivateMeta = "members"
+            }
+        );
     });
     disconnect();
     connectAs(2);

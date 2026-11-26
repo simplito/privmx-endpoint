@@ -108,7 +108,7 @@ struct GroupSession {
     // A history cut's follow-up still to do (the planes carried up, the Spaces naming the group refreshed past the
     // floor), with the read before the cut. Limit: in memory only, as `pendingCarry`; after a restart the old epoch's
     // key a Space refresh signs with is gone anyway, and the Space waits for whoever rotates it.
-    std::optional<PriorRole> pendingCut;
+    std::optional<std::pair<PriorRole, Group>> pendingCut; // the read before, and its planes as opened then
     // The deferred self-update, at most one. Dropped on disconnect.
     std::optional<PendingSelfUpdate> selfUpdate;
 

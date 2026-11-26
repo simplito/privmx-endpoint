@@ -63,9 +63,9 @@ public:
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
      * @param rules Group's rules (GroupRules), signed into the Group's state with the creator; an unset one takes
-     * its default ("managers"; `trimHistory` "nobody"). GroupRulesUpdate::createImmutable is the preset of a Group whose membership, roles
-     * and rules never change. The creator must hold `editPublicMeta` and `editPrivateMeta` under them, or it could
-     * not write the Group's metadata.
+     * its default ("managers"; `trimHistory` "nobody"). GroupRulesUpdate::createImmutable is the preset of a Group
+     * whose membership, roles and rules never change. The creator must hold `editPublicMeta` and `editPrivateMeta`
+     * under them, or it could not write the Group's metadata.
      * @return ID of the created Group
      */
     std::string createGroup(
@@ -147,8 +147,11 @@ public:
      * When the caller's own leaf does not open, the removal still goes through (a member that garbled it cannot
      * block its own removal) and, unless this session holds the current Group key, abandons the Group's history for
      * every member, which needs `trimHistory` or `changeRules`, `editPublicMeta` and `editPrivateMeta` beside the
-     * removal's own rules, and is refused by the Bridge while a Space names the Group. After the caller's identity key changed and Connection::adoptPreviousIdentity was called, it is
-     * refused instead while the previous key still opens the leaf: call renewLeaf first.
+     * removal's own rules, and is refused by the Bridge while a Space names the Group. Without those rules it is
+     * refused before anything is sent (GroupUnauthorizedSignerException): the caller has lost the Group's current
+     * key; recover it with renewLeaf if its identity key changed, or leave the removal to a member who still holds
+     * the key or has those rules. After the caller's identity key changed and Connection::adoptPreviousIdentity was
+     * called, it is refused instead while the previous key still opens the leaf: call renewLeaf first.
      *
      * @param groupId ID of the Group
      * @param userIds IDs of the members to remove
@@ -205,7 +208,9 @@ public:
      * The members' current keys go through the Connection's UserVerifier like any key this client wraps to: with
      * key continuity on (Connection::useKeyContinuity), accept the change first (Connection::acceptKeyChange).
      *
-     * Allowed by the `replaceMemberKeys` rule. The caller cannot be among `userIds`. A failed call may still take
+     * Allowed by the `replaceMemberKeys` rule. The caller cannot be among `userIds`. A caller that has lost the
+     * Group's current key abandons its history, under the same extra rules and with the same refusal as
+     * removeGroupMembers (renewLeaf, or a member who still holds the key, then). A failed call may still take
      * effect (see the class note).
      *
      * @param groupId ID of the Group
