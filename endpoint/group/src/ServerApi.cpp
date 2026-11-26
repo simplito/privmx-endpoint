@@ -31,7 +31,67 @@ void ServerApi::groupDelete(server::GroupDeleteModel model) {
     request("groupDelete", model.toJSON());
 }
 
+server::GroupGetPublicKeyResult ServerApi::groupGetPublicKey(server::GroupGetPublicKeyModel model) {
+    auto result = request<server::GroupGetPublicKeyResult>("groupGetPublicKey", model.toJSON());
+    // Everything verified off the answer is bound to the id it carries, so it has to be the one asked for.
+    if (result.group.id != model.groupId) {
+        throw GroupDataIntegrityException();
+    }
+    return result;
+}
+void ServerApi::groupSetVisibility(server::GroupSetVisibilityModel model) {
+    request("groupSetVisibility", model.toJSON());
+}
+void ServerApi::prefetchGroups(const std::vector<std::string>& groupIds) {
+    static constexpr std::size_t BATCH = 128; // the bridge's limit for one call
+    for (std::size_t from = 0; from < groupIds.size(); from += BATCH) {
+        const std::size_t to = std::min(groupIds.size(), from + BATCH);
+        Poco::JSON::Array::Ptr ids = new Poco::JSON::Array();
+        for (std::size_t i = from; i < to; ++i) {
+            ids->add(groupIds[i]);
+        }
+        Poco::JSON::Object::Ptr params = new Poco::JSON::Object();
+        params->set("groupIds", ids);
+        const auto answer = request("groupGetMany", params).extract<Poco::JSON::Object::Ptr>();
+        const auto results = answer->getArray("results");
+        if (results.isNull() || results->size() != to - from) {
+            throw GroupDataIntegrityException();
+        }
+        for (std::size_t i = from; i < to; ++i) {
+            const auto entry = results->getObject(static_cast<unsigned int>(i - from));
+            if (entry.isNull() || !entry->has("group")) {
+                continue;
+            }
+            server::GroupInfo group = server::GroupInfo::fromJSON(entry->get("group"));
+            // Bound to the id asked for, as `groupGet` binds its own answer.
+            if (group.id != groupIds[i]) {
+                throw GroupDataIntegrityException();
+            }
+            std::lock_guard<std::mutex> lock(_prefetchedMutex);
+            _prefetched.insert_or_assign(groupIds[i], std::move(group));
+        }
+    }
+}
+
+void ServerApi::dropPrefetched() {
+    std::lock_guard<std::mutex> lock(_prefetchedMutex);
+    _prefetched.clear();
+}
+
 server::GroupGetResult ServerApi::groupGet(server::GroupGetModel model) {
+    if (!model.type.has_value() &&
+        !model.scope.has_value() &&
+        !model.forUserIds.has_value() &&
+        !model.forNewMembers.has_value() &&
+        !model.fromRosterVersion.has_value()) {
+        std::lock_guard<std::mutex> lock(_prefetchedMutex);
+        const auto kept = _prefetched.find(model.groupId);
+        if (kept != _prefetched.end()) {
+            server::GroupGetResult result{.group = std::move(kept->second)};
+            _prefetched.erase(kept);
+            return result;
+        }
+    }
     auto result = request<server::GroupGetResult>("groupGet", model.toJSON());
     // Everything verified off the answer is bound to the id it carries, so it has to be the one asked for.
     if (result.group.id != model.groupId) {
@@ -50,6 +110,14 @@ void ServerApi::groupAddMembers(server::GroupAddMembersModel model) {
 
 void ServerApi::groupRemoveMembers(server::GroupRemoveMembersModel model) {
     request("groupRemoveMembers", model.toJSON());
+}
+
+void ServerApi::groupReseat(server::GroupRemoveMembersModel model) {
+    request("groupReseat", model.toJSON());
+}
+
+void ServerApi::groupSetRoles(server::GroupSetRolesModel model) {
+    request("groupSetRoles", model.toJSON());
 }
 
 void ServerApi::groupSelfUpdate(server::GroupSelfUpdateModel model) {

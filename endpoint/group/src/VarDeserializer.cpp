@@ -22,6 +22,33 @@ group::GroupMemberToAdd VarDeserializer::deserialize<group::GroupMemberToAdd>(
 }
 
 template<>
+group::GroupRoleChange VarDeserializer::deserialize<group::GroupRoleChange>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .userId = deserialize<std::string>(obj->get("userId"), name + ".userId"),
+        .role = deserialize<std::string>(obj->get("role"), name + ".role")
+    };
+}
+
+template<>
+group::GroupRulesUpdate VarDeserializer::deserialize<group::GroupRulesUpdate>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .addMembers = deserializeOptional<std::string>(obj->get("addMembers"), name + ".addMembers"),
+        .removeMembers = deserializeOptional<std::string>(obj->get("removeMembers"), name + ".removeMembers"),
+        .updateMeta = deserializeOptional<std::string>(obj->get("updateMeta"), name + ".updateMeta")
+    };
+}
+
+template<>
 group::EventType VarDeserializer::deserialize<group::EventType>(
     const Poco::Dynamic::Var& val,
     const std::string& name
@@ -55,4 +82,77 @@ group::EventSelectorType VarDeserializer::deserialize<group::EventSelectorType>(
     throw InvalidParamsException(
         name + " | " + ("Unknown group::EventSelectorType value, received " + std::to_string(val.convert<int64_t>()))
     );
+}
+
+template<>
+group::PathSegment VarDeserializer::deserialize<group::PathSegment>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .isId = deserialize<bool>(obj->get("isId"), name + ".isId"),
+        .value = deserialize<core::Buffer>(obj->get("value"), name + ".value")
+    };
+}
+
+template<>
+group::DecryptOptions VarDeserializer::deserialize<group::DecryptOptions>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    // Absent fields mean "not set": the call itself refuses options that name no author.
+    return {
+        .expectedAuthor = deserializeOptional<std::string>(obj->get("expectedAuthor"), name + ".expectedAuthor")
+                              .value_or(std::string()),
+        .anyAuthor = deserializeOptional<bool>(obj->get("anyAuthor"), name + ".anyAuthor").value_or(false),
+        .currentEpochOnly = deserializeOptional<bool>(obj->get("currentEpochOnly"), name + ".currentEpochOnly")
+                                .value_or(false)
+    };
+}
+
+template<>
+group::EnvelopeRecipient VarDeserializer::deserialize<group::EnvelopeRecipient>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .groupId = deserializeOptional<std::string>(obj->get("groupId"), name + ".groupId").value_or(std::string()),
+        .user = deserializeOptional<core::UserWithPubKey>(obj->get("user"), name + ".user")
+    };
+}
+
+template<>
+group::EncryptOptions VarDeserializer::deserialize<group::EncryptOptions>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    if (val.isEmpty()) {
+        return {};
+    }
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .alsoFor = deserializeOptionalVector<group::EnvelopeRecipient>(obj->get("alsoFor"), name + ".alsoFor")
+                       .value_or(std::vector<group::EnvelopeRecipient>{})
+    };
+}
+
+template<>
+group::DecryptItem VarDeserializer::deserialize<group::DecryptItem>(
+    const Poco::Dynamic::Var& val,
+    const std::string& name
+) {
+    core::TypeValidator::validateObject(val, name);
+    Poco::JSON::Object::Ptr obj = val.extract<Poco::JSON::Object::Ptr>();
+    return {
+        .envelope = deserialize<core::Buffer>(obj->get("envelope"), name + ".envelope"),
+        .location = deserializeVector<group::PathSegment>(obj->get("location"), name + ".location"),
+        .options = deserialize<group::DecryptOptions>(obj->get("options"), name + ".options")
+    };
 }

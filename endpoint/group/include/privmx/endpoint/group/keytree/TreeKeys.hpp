@@ -74,10 +74,13 @@ public:
 
     // Refuses a remover who is among the leaving: the remover mints the next grant key. Blanks the leavers'
     // knowledge closure, which needs `state.setters` for every filled node (std::invalid_argument otherwise).
+    // `keepSeated` is a reseat: the same blanks, the subjects left in their seats, so the remover's path wraps to the
+    // long-term keys they have now.
     static CommitShape shapeRemoval(
         const TreeGroupState& state,
         const std::vector<std::string>& leavingUserIds,
-        const std::string& removerId
+        const std::string& removerId,
+        bool keepSeated = false
     );
 
     static CommitShape shapeSelfUpdate(const TreeGroupState& state, const std::string& memberId);
@@ -108,7 +111,8 @@ public:
         const TreeGroupState& state,
         const std::vector<std::string>& leavingUserIds,
         const std::string& removerId,
-        const privmx::crypto::PrivateKey& signer
+        const privmx::crypto::PrivateKey& signer,
+        bool keepSeated = false
     );
 
     // Next epoch, a fresh grant key, no node touched: the one grant edge, wrapped to the root's published key, or

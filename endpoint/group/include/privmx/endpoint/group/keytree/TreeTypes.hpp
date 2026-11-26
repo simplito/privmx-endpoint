@@ -239,6 +239,8 @@ enum class CommitOp : std::uint8_t {
     SelfUpdate = 4,
     Rotate = 5, // the bridge-side `generateNewGroupKey`
     Policy = 6, // a policy change: only `policyHash` moves
+    Roles = 7,  // members move between the two lists: `addedUsers` now users, `addedManagers` now managers
+    Reseat = 8, // a removal whose subjects (`removed`) keep their seats and stay on the roster
 };
 
 struct StatementNode {
@@ -291,6 +293,10 @@ struct CommitStatement {
 // and "default" resolve to the frozen v3 defaults, never to the context policy, which only the bridge holds.
 struct GroupRules {
     std::string creator, update, rotateKeys, updatePolicy, ownerCanBeRemovedFromManagers;
+    // Who may add, and who may remove or reseat, members. Unset in the policy they are `update`'s value, and are
+    // then left out of the hash (`splitsRoster` false), so a group that never split `update` hashes as before.
+    std::string addMembers, removeMembers;
+    bool splitsRoster = false;
     std::string hash; // policyHash, raw
 };
 

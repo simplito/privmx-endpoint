@@ -97,6 +97,10 @@ const char* TreeCommits::opName(CommitOp op) {
         return "rotate";
     case CommitOp::Policy:
         return "policy";
+    case CommitOp::Roles:
+        return "roles";
+    case CommitOp::Reseat:
+        return "reseat";
     }
     return "";
 }
@@ -389,8 +393,8 @@ CommitStatement TreeCommits::fromWire(const server::GroupTreeCommit& wire) {
     }
     bool knownOp = false;
     for (const CommitOp op :
-         {CommitOp::Create, CommitOp::Add, CommitOp::Remove, CommitOp::SelfUpdate, CommitOp::Rotate,
-          CommitOp::Policy}) {
+         {CommitOp::Create, CommitOp::Add, CommitOp::Remove, CommitOp::SelfUpdate, CommitOp::Rotate, CommitOp::Policy,
+          CommitOp::Roles, CommitOp::Reseat}) {
         if (wire.op == opName(op)) {
             statement.op = op;
             knownOp = true;
@@ -453,6 +457,12 @@ GroupRules TreeCommits::rules(const Poco::Dynamic::Var& policy, const std::strin
         .ownerCanBeRemovedFromManagers = resolved(object, "ownerCanBeRemovedFromManagers", "yes"),
         .hash = {}
     };
+    // The roster's two rules: "" from `resolved` is an unset one, which follows `update`.
+    const std::string addMembers = resolved(object, "addMembers", "");
+    const std::string removeMembers = resolved(object, "removeMembers", "");
+    result.splitsRoster = !addMembers.empty() || !removeMembers.empty();
+    result.addMembers = addMembers.empty() ? result.update : grammatical("addMembers", addMembers);
+    result.removeMembers = removeMembers.empty() ? result.update : grammatical("removeMembers", removeMembers);
     if (result.ownerCanBeRemovedFromManagers != "yes" && result.ownerCanBeRemovedFromManagers != "no") {
         throw std::invalid_argument("policy rule ownerCanBeRemovedFromManagers is neither yes nor no");
     }
@@ -461,6 +471,10 @@ GroupRules TreeCommits::rules(const Poco::Dynamic::Var& policy, const std::strin
          {&result.creator, &result.update, &result.rotateKeys, &result.updatePolicy,
           &result.ownerCanBeRemovedFromManagers}) {
         be::putLp(preimage, *value);
+    }
+    if (result.splitsRoster) {
+        be::putLp(preimage, result.addMembers);
+        be::putLp(preimage, result.removeMembers);
     }
     result.hash = privmx::crypto::Crypto::sha256(preimage);
     return result;
@@ -498,11 +512,23 @@ bool TreeCommits::permits(
     case CommitOp::Create:
         return true;
     case CommitOp::Add:
-        return allows(rules.update, member, manager, owner);
+        // Seating somebody as a manager hands out a role: the roles gate on top of the one for adding.
+        return allows(rules.addMembers, member, manager, owner) &&
+            (statement.addedManagers.empty() || allows(rules.updatePolicy, member, manager, owner));
     case CommitOp::Remove: {
         const bool ownerLeavesManagers = managers.count(rules.creator) != 0 &&
             std::find(statement.removed.begin(), statement.removed.end(), rules.creator) != statement.removed.end();
-        return allows(rules.update, member, manager, owner) &&
+        return allows(rules.removeMembers, member, manager, owner) &&
+            (!ownerLeavesManagers || rules.ownerCanBeRemovedFromManagers == "yes");
+    }
+    case CommitOp::Reseat:
+        return allows(rules.removeMembers, member, manager, owner);
+    case CommitOp::Roles: {
+        // Whoever may rewrite the rules may hand out roles; the owner leaves the managers under its own rule.
+        const bool ownerLeavesManagers = managers.count(rules.creator) != 0 &&
+            std::find(statement.addedUsers.begin(), statement.addedUsers.end(), rules.creator) !=
+                statement.addedUsers.end();
+        return allows(rules.updatePolicy, member, manager, owner) &&
             (!ownerLeavesManagers || rules.ownerCanBeRemovedFromManagers == "yes");
     }
     case CommitOp::Rotate:
@@ -542,9 +568,33 @@ std::optional<std::string> TreeCommits::deltasProblem(
         }
         return std::nullopt;
     }
-    case CommitOp::Remove: {
+    case CommitOp::Roles: {
+        if (!added || !statement.removed.empty()) {
+            return "a role change names members and removes none";
+        }
+        std::set<std::string> named;
+        bool moves = false;
+        for (const std::string& userId : statement.addedManagers) {
+            if (!onRoster(userId) || !named.insert(userId).second) {
+                return "user '" + userId + "' is not a member, or is named twice";
+            }
+            moves = moves || managers.count(userId) == 0 || users.count(userId) != 0;
+        }
+        for (const std::string& userId : statement.addedUsers) {
+            if (!onRoster(userId) || !named.insert(userId).second) {
+                return "user '" + userId + "' is not a member, or is named twice";
+            }
+            moves = moves || users.count(userId) == 0 || managers.count(userId) != 0;
+        }
+        if (!moves) {
+            return "a role change that changes no role";
+        }
+        return std::nullopt;
+    }
+    case CommitOp::Remove:
+    case CommitOp::Reseat: {
         if (statement.removed.empty() || added) {
-            return "a removal removes members and adds none";
+            return "a removal or reseat names members and adds none";
         }
         std::set<std::string> leaving;
         for (const std::string& userId : statement.removed) {

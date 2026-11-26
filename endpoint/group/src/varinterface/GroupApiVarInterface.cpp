@@ -35,7 +35,23 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {UpdateGroupPrivateMeta, &GroupApiVarInterface::updateGroupPrivateMeta},
         {UpdateGroupPolicy, &GroupApiVarInterface::updateGroupPolicy},
         {RotateGroupKey, &GroupApiVarInterface::rotateGroupKey},
-        {RenewLeaf, &GroupApiVarInterface::renewLeaf}
+        {RenewLeaf, &GroupApiVarInterface::renewLeaf},
+        {DecryptMany, &GroupApiVarInterface::decryptMany},
+        {EncryptAsOutsider, &GroupApiVarInterface::encryptAsOutsider},
+        {DecryptFromOutsider, &GroupApiVarInterface::decryptFromOutsider},
+        {DecryptAnonymous, &GroupApiVarInterface::decryptAnonymous},
+        {DecryptShared, &GroupApiVarInterface::decryptShared},
+        {PeekEnvelope, &GroupApiVarInterface::peekEnvelope},
+        {NoLocation, &GroupApiVarInterface::noLocation},
+        {IdFromString, &GroupApiVarInterface::idFromString},
+        {DeriveGroupId, &GroupApiVarInterface::deriveGroupId},
+        {GetGroups, &GroupApiVarInterface::getGroups},
+        {GetGroupPublicKey, &GroupApiVarInterface::getGroupPublicKey},
+        {SetGroupVisibility, &GroupApiVarInterface::setGroupVisibility},
+        {ReseatGroupMembers, &GroupApiVarInterface::reseatGroupMembers},
+        {SetGroupRoles, &GroupApiVarInterface::setGroupRoles},
+        {UpdateGroupRules, &GroupApiVarInterface::updateGroupRules},
+        {GetGroupLog, &GroupApiVarInterface::getGroupLog}
 };
 
 Poco::Dynamic::Var GroupApiVarInterface::create(const Poco::Dynamic::Var& args) {
@@ -45,14 +61,21 @@ Poco::Dynamic::Var GroupApiVarInterface::create(const Poco::Dynamic::Var& args) 
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::createGroup(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 6, 8);
     auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
     auto users = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(1), "users");
     auto managers = _deserializer.deserializeVector<core::UserWithPubKey>(argsArr->get(2), "managers");
     auto publicMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "publicMeta");
     auto privateMeta = _deserializer.deserialize<core::Buffer>(argsArr->get(4), "privateMeta");
     auto policies = _deserializer.deserializeOptional<core::ContainerPolicy>(argsArr->get(5), "policies");
-    auto result = _groupApi.createGroup(contextId, users, managers, publicMeta, privateMeta, policies);
+    auto idSeed = argsArr->size() > 6 ? _deserializer.deserializeOptional<core::Buffer>(argsArr->get(6), "idSeed") :
+                                        std::optional<core::Buffer>();
+    auto visibleTo = argsArr->size() > 7 ?
+        _deserializer.deserializeOptional<std::string>(argsArr->get(7), "visibleTo").value_or("members") :
+        std::string("members");
+    auto result = _groupApi.createGroup(
+        contextId, users, managers, publicMeta, privateMeta, policies, idSeed, visibleTo
+    );
     return _serializer.serialize(result);
 }
 
@@ -68,15 +91,15 @@ Poco::Dynamic::Var GroupApiVarInterface::removeGroupMembers(const Poco::Dynamic:
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     auto userIds = _deserializer.deserializeVector<std::string>(argsArr->get(1), "userIds");
-    _groupApi.removeGroupMembers(groupId, userIds);
-    return {};
+    auto result = _groupApi.removeGroupMembers(groupId, userIds);
+    return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::rotateGroupKey(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
-    _groupApi.rotateGroupKey(groupId);
-    return {};
+    auto result = _groupApi.rotateGroupKey(groupId);
+    return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::renewLeaf(const Poco::Dynamic::Var& args) {
@@ -162,26 +185,102 @@ Poco::Dynamic::Var GroupApiVarInterface::buildSubscriptionQuery(const Poco::Dyna
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::encrypt(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3, 4);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
-    auto content = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "content");
-    auto result = _groupApi.encrypt(groupId, content);
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto content = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "content");
+    auto options = argsArr->size() > 3 ? _deserializer.deserialize<EncryptOptions>(argsArr->get(3), "options") :
+                                         EncryptOptions{};
+    auto result = _groupApi.encrypt(groupId, location, content, options);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::decrypt(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
-    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(0), "envelope");
-    auto result = _groupApi.decrypt(envelope);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "envelope");
+    auto options = _deserializer.deserialize<DecryptOptions>(argsArr->get(3), "options");
+    auto result = _groupApi.decrypt(groupId, location, envelope, options);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::decryptMany(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto items = _deserializer.deserializeVector<DecryptItem>(argsArr->get(1), "items");
+    auto result = _groupApi.decryptMany(groupId, items);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::encryptAsOutsider(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4, 5);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(1), "groupId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(2), "location");
+    auto content = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "content");
+    auto options = argsArr->size() > 4 ? _deserializer.deserialize<EncryptOptions>(argsArr->get(4), "options") :
+                                         EncryptOptions{};
+    auto result = _groupApi.encryptAsOutsider(contextId, groupId, location, content, options);
     return _serializer.serialize(result);
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::encryptAnonymously(const Poco::Dynamic::Var& args) {
-    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     auto groupPubKey = _deserializer.deserialize<std::string>(argsArr->get(1), "groupPubKey");
-    auto content = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "content");
-    auto result = _groupApi.encryptAnonymously(groupId, groupPubKey, content);
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(2), "location");
+    auto content = _deserializer.deserialize<core::Buffer>(argsArr->get(3), "content");
+    auto result = _groupApi.encryptAnonymously(groupId, groupPubKey, location, content);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::decryptFromOutsider(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "envelope");
+    auto options = _deserializer.deserialize<DecryptOptions>(argsArr->get(3), "options");
+    auto result = _groupApi.decryptFromOutsider(groupId, location, envelope, options);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::decryptAnonymous(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "envelope");
+    auto result = _groupApi.decryptAnonymous(groupId, location, envelope);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::decryptShared(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 4);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto location = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "location");
+    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(2), "envelope");
+    auto options = _deserializer.deserialize<DecryptOptions>(argsArr->get(3), "options");
+    auto result = _groupApi.decryptShared(contextId, location, envelope, options);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::peekEnvelope(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto envelope = _deserializer.deserialize<core::Buffer>(argsArr->get(0), "envelope");
+    auto result = GroupApi::peekEnvelope(envelope);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::noLocation(const Poco::Dynamic::Var& args) {
+    core::VarInterfaceUtil::validateAndExtractArray(args, 0);
+    auto result = GroupApi::noLocation();
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::idFromString(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto identifier = _deserializer.deserialize<std::string>(argsArr->get(0), "identifier");
+    auto result = GroupApi::idFromString(identifier);
     return _serializer.serialize(result);
 }
 
@@ -272,4 +371,65 @@ Poco::Dynamic::Var GroupApiVarInterface::exec(METHOD method, const Poco::Dynamic
         throw core::InvalidMethodException("method=" + std::to_string((int64_t)method));
     }
     return (*this.*(it->second))(args);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::deriveGroupId(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto idSeed = _deserializer.deserialize<core::Buffer>(argsArr->get(1), "idSeed");
+    auto result = GroupApi::deriveGroupId(contextId, idSeed);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::getGroups(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto groupIds = _deserializer.deserializeVector<std::string>(argsArr->get(0), "groupIds");
+    auto result = _groupApi.getGroups(groupIds);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::getGroupPublicKey(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(1), "groupId");
+    auto result = _groupApi.getGroupPublicKey(contextId, groupId);
+    return _serializer.serialize(result);
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::setGroupVisibility(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto visibleTo = _deserializer.deserialize<std::string>(argsArr->get(1), "visibleTo");
+    _groupApi.setGroupVisibility(groupId, visibleTo);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::reseatGroupMembers(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto userIds = _deserializer.deserializeVector<std::string>(argsArr->get(1), "userIds");
+    return _serializer.serialize(_groupApi.reseatGroupMembers(groupId, userIds));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::setGroupRoles(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto changes = _deserializer.deserializeVector<GroupRoleChange>(argsArr->get(1), "changes");
+    _groupApi.setGroupRoles(groupId, changes);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::updateGroupRules(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto rules = _deserializer.deserialize<GroupRulesUpdate>(argsArr->get(1), "rules");
+    _groupApi.updateGroupRules(groupId, rules);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::getGroupLog(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
+    auto pagingQuery = _deserializer.deserialize<core::PagingQuery>(argsArr->get(1), "pagingQuery");
+    return _serializer.serialize(_groupApi.getGroupLog(groupId, pagingQuery));
 }

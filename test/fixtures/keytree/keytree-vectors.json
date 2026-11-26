@@ -62,6 +62,67 @@
         }
       },
       "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d310000000200000000000000080000002033333333333333333333333333333333333333333333333333333333333333330600000199c82cc00100000000000000040000000347504b0000000000000009d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d271dde78b4cce7b4ebe3738ebefb9d7ad379a35e3b49b1191277b1363de6f29600000005616c6963650000000341504b0000000000000000000000000000000000000000"
+    },
+    {
+      "statement": {
+        "groupId": "grp-1",
+        "treeVersion": 2,
+        "seq": 9,
+        "prevDigest": "4444444444444444444444444444444444444444444444444444444444444444",
+        "op": "roles",
+        "date": 1760000000002,
+        "keyVersion": 4,
+        "groupPubKey": "GPK",
+        "rosterVersion": 10,
+        "rosterHash": "d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9d",
+        "treeHash": "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d",
+        "policyHash": "d444fab7a2429a6663d10e8ec022569d1fcbd498d5fa3089a017f320a0dcde4b",
+        "committer": "alice",
+        "committerPubKey": "APK",
+        "committerSeat": 0,
+        "path": [],
+        "addedUsers": [
+          "carol"
+        ],
+        "addedManagers": [
+          "bob"
+        ],
+        "removed": []
+      },
+      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d310000000200000000000000090000002044444444444444444444444444444444444444444444444444444444444444440700000199c82cc00200000000000000040000000347504b000000000000000ad42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598dd444fab7a2429a6663d10e8ec022569d1fcbd498d5fa3089a017f320a0dcde4b00000005616c6963650000000341504b000000000000000000000001000000056361726f6c0000000100000003626f6200000000"
+    },
+    {
+      "statement": {
+        "groupId": "grp-1",
+        "treeVersion": 2,
+        "seq": 10,
+        "prevDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+        "op": "reseat",
+        "date": 1760000000003,
+        "keyVersion": 5,
+        "groupPubKey": "GPK",
+        "rosterVersion": 11,
+        "rosterHash": "d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9d",
+        "treeHash": "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d",
+        "policyHash": "d444fab7a2429a6663d10e8ec022569d1fcbd498d5fa3089a017f320a0dcde4b",
+        "committer": "alice",
+        "committerPubKey": "APK",
+        "committerSeat": 0,
+        "path": [
+          {
+            "nodeIndex": 3,
+            "generation": 2,
+            "publicKey": "pk3",
+            "subtreeHash": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ],
+        "addedUsers": [],
+        "addedManagers": [],
+        "removed": [
+          "bob"
+        ]
+      },
+      "expectedHex": "706d782d747265652d636f6d6d697400000000056772702d3100000002000000000000000a0000002055555555555555555555555555555555555555555555555555555555555555550800000199c82cc00300000000000000050000000347504b000000000000000bd42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9db4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598dd444fab7a2429a6663d10e8ec022569d1fcbd498d5fa3089a017f320a0dcde4b00000005616c6963650000000341504b0000000000000001000000030000000200000003706b33111111111111111111111111111111111111111111111111111111111111111100000000000000000000000100000003626f62"
     }
   ],
   "policyHash": [
@@ -125,6 +186,52 @@
       },
       "creator": "bob",
       "expectedHex": "1437efb08ac5780ea78d15ae2daa97b9f5b0f0bfdd8b5a3a6803c5be9023eac9"
+    },
+    {
+      "policy": {
+        "update": "user",
+        "rotateKeys": "manager,owner",
+        "updatePolicy": "owner",
+        "ownerCanBeRemovedFromManagers": "no",
+        "addMembers": "inherit",
+        "removeMembers": "default"
+      },
+      "creator": "alice",
+      "expectedHex": "271dde78b4cce7b4ebe3738ebefb9d7ad379a35e3b49b1191277b1363de6f296"
+    },
+    {
+      "policy": {
+        "addMembers": "user"
+      },
+      "creator": "alice",
+      "expectedHex": "5204f50886c53d34836980f3547dd89cd6e044976b9728e6791883af0098a8b0"
+    },
+    {
+      "policy": {
+        "addMembers": "user",
+        "removeMembers": "manager,owner"
+      },
+      "creator": "alice",
+      "expectedHex": "1a1ece539674022c888fea5ddc07301e0238e310ae661aee1a4dcbb7785eb039"
+    },
+    {
+      "policy": {
+        "addMembers": "manager,owner",
+        "removeMembers": "user"
+      },
+      "creator": "alice",
+      "expectedHex": "5b8c69498b17261463fa9bef9f049e177be6304a494a547ebdb5185438bb0f37"
+    },
+    {
+      "policy": {
+        "update": "user",
+        "rotateKeys": "manager,owner",
+        "updatePolicy": "owner",
+        "ownerCanBeRemovedFromManagers": "no",
+        "removeMembers": "none"
+      },
+      "creator": "alice",
+      "expectedHex": "9cf6a23ca29a5f2635e5dd2e990a9cee6c7e48c316fc77b3277f31a72e4dcb85"
     }
   ]
 }

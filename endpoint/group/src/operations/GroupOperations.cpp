@@ -192,7 +192,9 @@ std::string GroupOperations::create(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::optional<std::string>& resourceId,
+    const std::optional<std::string>& visibleTo
 ) const {
     // The creator commits from a seat of its own, like any committer. Checked by
     // key first, which needs no request; the id the seat is planned under is checked again once it is known.
@@ -206,6 +208,11 @@ std::string GroupOperations::create(
 
     // Empty rosters: the metadata key is wrapped once to the group's own grant key, and members open it by climbing.
     auto ctx = deps.facade.prepareCreate(contextId);
+    if (resourceId.has_value()) {
+        // Before anything is signed: the first statement, the DIOs and the roster entry all name the group by it.
+        ctx.resourceId = resourceId.value();
+        ctx.dio.resourceId = resourceId.value();
+    }
     const std::string creatorId = ctx.dio.creatorUserId;
     if (std::none_of(members.begin(), members.end(), [&](const keytree::TreeMember& m) {
             return m.userId == creatorId && m.publicKey == ownKey;
@@ -266,6 +273,7 @@ std::string GroupOperations::create(
     model.users = core::EndpointUtils::usersWithPubKeyToIds(users);
     model.managers = core::EndpointUtils::usersWithPubKeyToIds(managers);
     model.groupPubKey = groupPubKeyStr;
+    model.visibleTo = visibleTo;
     model.type = GROUP_TYPE_FILTER_FLAG;
     const auto selfAddressed = deps.facade.buildGroupKeyEntries(
         {core::GroupGrantWithKey{
@@ -565,14 +573,15 @@ std::vector<keytree::ArchiveRung> GroupOperations::buildRotationRungs(
 std::optional<bool> GroupOperations::remove(
     const std::string& groupId,
     const std::vector<std::string>& userIds,
-    PriorRole& prior
+    PriorRole& prior,
+    bool reseat
 ) const {
     // Every departing member's path, because one commit covers their union — and one epoch covers the batch, where
     // removing them one at a time would stale every container the group can read once per member.
     std::vector<std::string> leavingIds = userIds;
     std::sort(leavingIds.begin(), leavingIds.end());
     leavingIds.erase(std::unique(leavingIds.begin(), leavingIds.end()), leavingIds.end());
-    const std::string op = keytree::TreeCommits::opKey("remove", leavingIds);
+    const std::string op = keytree::TreeCommits::opKey(reseat ? "reseat" : "remove", leavingIds);
     const std::optional<GroupRead> settled = engine.readForCommit(
         VerifiedGroup::planRead(groupId, userIds), keytree::TreeVerifier::Scope::Plan, op
     );
@@ -620,12 +629,14 @@ std::optional<bool> GroupOperations::remove(
     // Only the members the remover's path wraps to — never the departing ones, whose seats resolve to nobody.
     tree.setMemberKeyStrings(commitRecipientKeys(
         currentGroup, planOrThrow<std::vector<std::string>>([&] {
-            return keytree::TreeKeys::recipients(state, keytree::TreeKeys::shapeRemoval(state, userIds, removerId));
+            return keytree::TreeKeys::recipients(
+                state, keytree::TreeKeys::shapeRemoval(state, userIds, removerId, reseat)
+            );
         }),
         removerId
     ));
     const keytree::CommitPlan plan = planOrThrow<keytree::CommitPlan>([&] {
-        return tree.planRemoval(state, userIds, removerId, deps.userPrivKey);
+        return tree.planRemoval(state, userIds, removerId, deps.userPrivKey, reseat);
     });
     const std::vector<keytree::ArchiveRung> rungs = abandonHistory ?
         std::vector<keytree::ArchiveRung>{} :
@@ -633,7 +644,9 @@ std::optional<bool> GroupOperations::remove(
             verified, keytree::GroupKeyResolver::epochOf(newEpoch), plan.grantKey, currentGrantKey, removerId, *cache
         );
     // The roster that remains, derived from the verified head rather than restated by the caller.
-    const std::set<std::string> leaving(userIds.begin(), userIds.end());
+    // A reseat's subjects stay on it.
+    const std::set<std::string> leaving = reseat ? std::set<std::string>() :
+                                                   std::set<std::string>(userIds.begin(), userIds.end());
     RosterAfterChange roster = RosterAfterChange::bare(attestedUsers, attestedManagers);
     const auto drop = [&](std::vector<core::UserWithPubKey>& list) {
         list.erase(
@@ -669,8 +682,8 @@ std::optional<bool> GroupOperations::remove(
     model.expectedRosterVersion = currentGroup.rosterVersion;
     const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(verified);
     keytree::CommitStatement statement = keytree::TreeCommits::statementFor(
-        plan, keytree::CommitOp::Remove, groupId, CommitEngine::commitDate(), static_cast<std::uint64_t>(newEpoch),
-        newGroupPubKeyStr, static_cast<std::uint64_t>(newRosterVersion),
+        plan, reseat ? keytree::CommitOp::Reseat : keytree::CommitOp::Remove, groupId, CommitEngine::commitDate(),
+        static_cast<std::uint64_t>(newEpoch), newGroupPubKeyStr, static_cast<std::uint64_t>(newRosterVersion),
         core::EndpointUtils::usersWithPubKeyToIds(roster.users),
         core::EndpointUtils::usersWithPubKeyToIds(roster.managers), removerId, {}, {}, userIds, rules.hash
     );
@@ -683,16 +696,16 @@ std::optional<bool> GroupOperations::remove(
         UnresolvedCommit{
             .op = op,
             .namesEndState = true,
-            .kind = "remove",
+            .kind = reseat ? "reseat" : "remove",
             .contextId = currentGroup.contextId,
-            .send = [&serverApi = deps.serverApi, sent] { serverApi.groupRemoveMembers(*sent); },
+            .send = [&serverApi = deps.serverApi, sent,
+                     reseat] { reseat ? serverApi.groupReseat(*sent) : serverApi.groupRemoveMembers(*sent); },
             // Pinned before anything reads the group again, or the next read could be the state with the leaver
             // still in.
             .landed = landedEpoch(currentGroup.contextId, statement, roster, rules, plan.grantKey),
             .after =
-                [&metadata = metadata, groupId, abandonHistory, userIds, prior] {
-                    metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, abandonHistory, userIds, prior);
-                }
+                [&metadata = metadata, groupId, abandonHistory, gone = reseat ? std::vector<std::string>() : userIds,
+                 prior] { metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, abandonHistory, gone, prior); }
         }
     );
     return abandonHistory;
@@ -1027,6 +1040,162 @@ void GroupOperations::updatePolicy(
                  users = group.users, managers = group.managers,
                  newRules] { treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, newRules); },
             // Found landed by a later call's `settle`: the carry runs there.
+            .after = losers.empty() ?
+                std::function<void()>() :
+                [&metadata = metadata, groupId, pending] { metadata.runPolicyCarry(groupId, pending); }
+        }
+    );
+    if (!losers.empty()) {
+        carry = pending;
+    }
+}
+
+void GroupOperations::setRoles(
+    const std::string& groupId,
+    const std::vector<GroupRoleChange>& changes,
+    std::optional<PendingCarry>& carry
+) const {
+    std::vector<const GroupRoleChange*> byId;
+    for (const GroupRoleChange& change : changes) {
+        if (change.role != "user" && change.role != "manager") {
+            throw core::InvalidParamsException("a role is \"user\" or \"manager\"");
+        }
+        byId.push_back(&change);
+    }
+    std::stable_sort(byId.begin(), byId.end(), [](const GroupRoleChange* a, const GroupRoleChange* b) {
+        return a->userId < b->userId;
+    });
+    std::vector<std::string> opParts;
+    for (const GroupRoleChange* change : byId) {
+        opParts.insert(opParts.end(), {change->userId, change->role});
+    }
+    const std::string op = keytree::TreeCommits::opKey("roles", opParts);
+    // Like a policy commit: it moves no node and no epoch, so the path view is enough to sign the tree hash as it
+    // stands. Unlike one, it writes a roster entry.
+    const server::GroupGetModel getModel = VerifiedGroup::pathRead(groupId);
+    GroupRead read = deps.facade.read(getModel, keytree::TreeVerifier::Scope::Path);
+    if (!read.verified.has_value()) {
+        throw core::InvalidParamsException("only a member of a group can change roles in it");
+    }
+    VerifiedGroup verified = std::move(read.verified.value());
+    switch (engine.settle(groupId, op, true)) {
+    case Settled::Done:
+        return;
+    case Settled::Reread:
+        verified = engine.rereadVerified(getModel, keytree::TreeVerifier::Scope::Path);
+        break;
+    default:
+        break;
+    }
+    const server::GroupInfo& group = *verified;
+    const auto [attestedUsers, attestedManagers] = mapper.validateAndGetAttestedRoster(
+        group, keyProvider, groupPrivKeyResolver
+    );
+    std::vector<std::string> users = attestedUsers;
+    std::vector<std::string> managers = attestedManagers;
+    std::vector<std::string> toUsers;
+    std::vector<std::string> toManagers;
+    const auto drop = [](std::vector<std::string>& list, const std::string& id) {
+        list.erase(std::remove(list.begin(), list.end(), id), list.end());
+    };
+    const auto has = [](const std::vector<std::string>& list, const std::string& id) {
+        return std::find(list.begin(), list.end(), id) != list.end();
+    };
+    server::GroupSetRolesModel model;
+    for (const GroupRoleChange* change : byId) {
+        const std::string& id = change->userId;
+        if (!has(users, id) && !has(managers, id)) {
+            throw core::InvalidParamsException("user '" + id + "' is not a member");
+        }
+        const bool manager = change->role == "manager";
+        // A member named ends on the one list it is named for.
+        drop(manager ? users : managers, id);
+        if (!has(manager ? managers : users, id)) {
+            (manager ? managers : users).push_back(id);
+        }
+        (manager ? toManagers : toUsers).push_back(id);
+        model.changes.push_back(server::GroupAddMemberEntry{.userId = id, .role = change->role});
+    }
+    const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(verified);
+    // The planes as read, attested under the roster in force, and whose authors the new roster leaves without
+    // `update` (a demoted manager under the default rule): refused once this lands unless somebody carries them.
+    const PriorRole prior = GroupDataSchemaMapper::priorOf(verified);
+    std::vector<std::string> losers;
+    const Group mapped = mapper.validateDecryptAndConvertGroup(group, keyProvider, keys.resolverOver(&verified), prior);
+    const auto keepsUpdate = [&](const std::string& userId) {
+        return keytree::TreeCommits::allows(rules.update, true, has(managers, userId), userId == group.creator);
+    };
+    if (mapped.statusCode == 0) {
+        for (const server::GroupMetaEntry* entry : {&group.publicMeta, &group.privateMeta}) {
+            if (!keepsUpdate(entry->author) && !has(losers, entry->author)) {
+                losers.push_back(entry->author);
+            }
+        }
+    }
+    const std::string self = keytree::GroupKeyResolver::ownUserId(group).value();
+    if (!losers.empty() && !keepsUpdate(self)) {
+        throw core::InvalidParamsException(
+            "this change would strand metadata whose author loses update, and the caller would lose it too"
+        );
+    }
+
+    const int64_t newRosterVersion = group.rosterVersion + 1;
+    const auto resourceId = group.resourceId.value_or(core::EndpointUtils::generateId());
+    const RosterAfterChange roster = RosterAfterChange::bare(users, managers);
+    auto ctx = deps.facade.prepareUpdate(group, resourceId, roster, false);
+    GroupRosterToEncryptV5 rosterToEncrypt{
+        .internalMeta = core::
+            ModuleInternalMetaV5{.secret = ctx.secret, .resourceId = resourceId, .randomId = ctx.dio.randomId},
+        .dio = ctx.dio,
+        .membership = GroupDataSchemaMapper::buildMembershipBlock(
+            ctx.key, group.groupPubKey, group.keyVersion, newRosterVersion, roster.users, roster.managers
+        )
+    };
+
+    const keytree::CommitStatement latest = keytree::TreeCommits::fromWire(group.treeCommit.value());
+    keytree::CommitStatement statement;
+    statement.seq = latest.seq + 1;
+    statement.op = keytree::CommitOp::Roles;
+    statement.groupId = groupId;
+    statement.treeVersion = keytree::TreeMath::TREE_VERSION;
+    statement.date = CommitEngine::commitDate();
+    statement.keyVersion = latest.keyVersion;
+    statement.groupPubKey = latest.groupPubKey;
+    statement.rosterVersion = static_cast<std::uint64_t>(newRosterVersion);
+    statement.rosterHash = keytree::TreeCommits::rosterHash(users, managers);
+    statement.treeHash = latest.treeHash;
+    statement.policyHash = rules.hash;
+    statement.committer = self;
+    statement.committerSeat = static_cast<std::uint32_t>(group.ownLeafPosition.value());
+    std::sort(toUsers.begin(), toUsers.end());
+    std::sort(toManagers.begin(), toManagers.end());
+    statement.addedUsers = toUsers;
+    statement.addedManagers = toManagers;
+    engine.chainTo(statement, verified);
+    keytree::TreeCommits::sign(statement, deps.userPrivKey);
+
+    model.id = groupId;
+    model.keyId = ctx.key.id;
+    model.data = mapper.encryptRoster(rosterToEncrypt, ctx.key.key);
+    model.commit = keytree::TreeCommits::toWire(statement);
+    model.expectedKeyVersion = group.keyVersion;
+    model.expectedRosterVersion = group.rosterVersion;
+    const auto sent = std::make_shared<const server::GroupSetRolesModel>(std::move(model));
+    const PendingCarry pending{losers, prior};
+    engine.submit(
+        groupId, statement,
+        UnresolvedCommit{
+            .op = op,
+            .namesEndState = true,
+            .kind = "role change",
+            .contextId = group.contextId,
+            .send = [&serverApi = deps.serverApi, sent] { serverApi.groupSetRoles(*sent); },
+            .landed =
+                [&treeVerifier = deps.treeVerifier, invalidate = deps.facade.invalidateModuleKeys, groupId,
+                 contextId = group.contextId, statement, users, managers, rules] {
+                    treeVerifier.pinCommitted(groupId, contextId, statement, users, managers, rules);
+                    invalidate(groupId);
+                },
             .after = losers.empty() ?
                 std::function<void()>() :
                 [&metadata = metadata, groupId, pending] { metadata.runPolicyCarry(groupId, pending); }

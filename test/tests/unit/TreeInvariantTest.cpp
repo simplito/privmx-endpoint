@@ -157,7 +157,7 @@ protected:
                 users.push_back(id);
             }
         }
-        const GroupRules rules =
+        const privmx::endpoint::group::keytree::GroupRules rules =
             op == CommitOp::Create ? TreeCommits::rules(createPolicy, committer) : bridge.rules();
         CommitStatement statement = TreeCommits::statementFor(
             plan, op, op == CommitOp::Create ? std::string("res") : GROUP_ID, 1760000000000, keyVersion,
@@ -1898,7 +1898,7 @@ TEST_F(TreeVerification, SECURITY_ARotationThatMovesTheTreeIsRefused) {
         state.grantPublicKey = grant;
         setRecord(state, TreeNodeState{63, generation, NodePublicKey::fromBase58DER(root), bridge.commits.size() + 1});
     }, {.path = {StatementNode{63, generation, root, ""}}, .rosterBump = 1, .op = CommitOp::Rotate});
-    EXPECT_EQ(replay(), "a rotation or policy statement that moves the tree");
+    EXPECT_EQ(replay(), "a rotation, policy or roles statement that moves the tree");
     EXPECT_THROW(verify(id(9), false), GroupDataIntegrityException);
 }
 

@@ -3,6 +3,8 @@
 
 #include "privmx/endpoint/group/ServerTypes.hpp"
 #include <Poco/Dynamic/Var.h>
+#include <map>
+#include <mutex>
 #include <privmx/endpoint/core/ServerTypes.hpp>
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <string>
@@ -23,10 +25,22 @@ public:
     void groupDelete(server::GroupDeleteModel model);
     server::GroupGetResult groupGet(server::GroupGetModel model);
     server::GroupListResult groupList(server::GroupListModel model);
+    // Reads `groupIds` in one request per 128 (`groupGetMany`) and keeps each group served: the next plain `groupGet`
+    // of that id returns it instead of asking again, once. An id the bridge answered with an error keeps nothing, so
+    // its `groupGet` asks, and throws what the bridge says. What is kept is what `groupGet` would have answered, and
+    // goes through the same verification.
+    void prefetchGroups(const std::vector<std::string>& groupIds);
+    void dropPrefetched();
+    // The identity key with what vouches for it, for a caller who may hold no seat in the group.
+    server::GroupGetPublicKeyResult groupGetPublicKey(server::GroupGetPublicKeyModel model);
+    void groupSetVisibility(server::GroupSetVisibilityModel model);
 
     // ── Tree-backed membership (documents/nested_groups/09-hidden-key-tree.md) ──
     void groupAddMembers(server::GroupAddMembersModel model);
     void groupRemoveMembers(server::GroupRemoveMembersModel model);
+    // A removal's request under the `reseat` op: its `userIds` keep their seats.
+    void groupReseat(server::GroupRemoveMembersModel model);
+    void groupSetRoles(server::GroupSetRolesModel model);
     void groupSelfUpdate(server::GroupSelfUpdateModel model);
     void groupGenerateNewKey(server::GroupGenerateNewKeyModel model);
     server::GroupGetTreeCommitsResult groupGetTreeCommits(server::GroupGetTreeCommitsModel model);
@@ -47,6 +61,8 @@ private:
     Poco::Dynamic::Var request(const std::string& method, Poco::JSON::Object::Ptr params);
 
     privfs::RpcGateway::Ptr _gateway;
+    std::mutex _prefetchedMutex;
+    std::map<std::string, server::GroupInfo> _prefetched;
 };
 
 } // namespace group

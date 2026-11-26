@@ -126,8 +126,14 @@ public:
         const std::string& keyId,
         const std::function<core::ModuleKeys(bool fresh)>& moduleKeys,
         core::KeyProvider& keyProvider,
-        const core::KeyProvider::GroupPrivKeyResolver& resolver
+        const core::KeyProvider::GroupPrivKeyResolver& resolver,
+        // The epoch of the route the key was opened through: the label the bridge filed it under, which the opener
+        // check (an earlier epoch) or the head check (the current one) has tied to that epoch.
+        std::int64_t* epochOut = nullptr
     ) const;
+
+    // The epoch `grantKeyForPubKey` resolved a published group key to; 0 when it has not resolved it.
+    std::int64_t grantEpochOf(const std::string& groupId, const std::string& groupPubKeyBase58) const;
 
     // The sender only ever held a public key, so its epoch is recovered from the group's published history
     // (`groupGetEpochKeys` by that key) rather than carried on the wire.

@@ -84,6 +84,15 @@ public:
 
     void verify(const server::GroupInfo& group, Scope scope, const Environment& environment);
 
+    // Every statement of a pinned group, seq 1 to the pin, replayed from genesis as `followChain` checks them (the
+    // chain, each op's effects and role, each committer through the UserVerifier) and ending exactly at the pinned
+    // statement. Throws GroupDataIntegrityException for a group this verifier holds no pin of: read it first.
+    std::vector<CommitStatement> history(
+        const std::string& groupId,
+        const std::string& contextId,
+        const Environment& environment
+    );
+
     // A `groupGet` answer, for a reader or writer that may hold no seat in the group (a listing carries neither the
     // roster nor a statement, so it is never verified itself): its latest statement is genuine and describes the
     // served grant key, counters and roster, and its committer is on that roster. A pinned group must also continue

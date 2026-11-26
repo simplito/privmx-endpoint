@@ -281,7 +281,8 @@ CommitShape TreeKeys::shapeAddition(
 CommitShape TreeKeys::shapeRemoval(
     const TreeGroupState& state,
     const std::vector<std::string>& leavingUserIds,
-    const std::string& removerId
+    const std::string& removerId,
+    bool keepSeated
 ) {
     if (leavingUserIds.empty()) {
         throw std::invalid_argument("a removal must name at least one member");
@@ -312,7 +313,9 @@ CommitShape TreeKeys::shapeRemoval(
             throw std::invalid_argument("member " + leavingUserId + " holds no leaf in this tree");
         }
         shape.subjectSeats.push_back(seat.value());
-        shape.leafAssignment[seat.value()] = std::nullopt;
+        if (!keepSeated) {
+            shape.leafAssignment[seat.value()] = std::nullopt;
+        }
         climbInto(TreeMath::leafNode(seat.value()), shape.numLeaves, known);
     }
     // Everything the leavers could know: their paths, every key they minted, and every ancestor of those — a key
@@ -529,9 +532,10 @@ CommitPlan TreeKeys::planRemoval(
     const TreeGroupState& state,
     const std::vector<std::string>& leavingUserIds,
     const std::string& removerId,
-    const privmx::crypto::PrivateKey& signer
+    const privmx::crypto::PrivateKey& signer,
+    bool keepSeated
 ) {
-    CommitShape shape = shapeRemoval(state, leavingUserIds, removerId);
+    CommitShape shape = shapeRemoval(state, leavingUserIds, removerId, keepSeated);
     // A fresh grant keypair: this is the epoch bump.
     return commit(state, std::move(shape), state.epoch + 1, privmx::crypto::PrivateKey::generateRandom(), signer);
 }

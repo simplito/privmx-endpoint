@@ -68,7 +68,11 @@ std::string PinBlob::record(const std::string& groupId, const Pin& pin, const Pl
     for (const std::int64_t value : planes) {
         be::putU64(out, counter(value));
     }
-    be::putU8(out, full ? ROSTER | NODES : 0);
+    be::putU8(out, (full ? ROSTER | NODES : 0) | (pin.rules.splitsRoster ? RULES : 0));
+    if (pin.rules.splitsRoster) {
+        be::putLp(out, pin.rules.addMembers);
+        be::putLp(out, pin.rules.removeMembers);
+    }
     if (full) {
         putSet(out, pin.roster.users);
         putSet(out, pin.roster.managers);
@@ -196,9 +200,12 @@ std::optional<PinSet> PinBlob::decode(const std::string& body) {
                 value = signedCounter(in.u64());
             }
             const std::uint8_t flags = in.u8();
-            if ((flags & ~(ROSTER | NODES)) != 0 || ((flags & NODES) != 0 && (flags & ROSTER) == 0)) {
+            if ((flags & ~(ROSTER | NODES | RULES)) != 0 || ((flags & NODES) != 0 && (flags & ROSTER) == 0)) {
                 return std::nullopt;
             }
+            pin.rules.splitsRoster = (flags & RULES) != 0;
+            pin.rules.addMembers = pin.rules.splitsRoster ? in.lp() : pin.rules.update;
+            pin.rules.removeMembers = pin.rules.splitsRoster ? in.lp() : pin.rules.update;
             pin.hasRoster = (flags & ROSTER) != 0;
             if (pin.hasRoster) {
                 pin.roster.users = readSet(in);

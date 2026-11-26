@@ -92,7 +92,7 @@ TEST_F(GroupCustomEventsTest, a_notification_still_opens_after_the_group_key_has
         {groupApi2.buildCustomEventSubscriptionQuery("typing", group::EventSelectorType::GROUP_ID, groupId)}
     );
 
-    const auto sealedUnderEpoch1 = groupApi->encrypt(groupId, core::Buffer::from("sealed before rotation"));
+    const auto sealedUnderEpoch1 = groupApi->encrypt(groupId, group::GroupApi::noLocation(), core::Buffer::from("sealed before rotation"));
     // Removal, not addition: seating a member re-keys their path but keeps the epoch, so a removal is the only
     // public call that advances it.
     groupApi->removeGroupMembers(groupId, {userId(3)});
@@ -104,7 +104,7 @@ TEST_F(GroupCustomEventsTest, a_notification_still_opens_after_the_group_key_has
     EXPECT_EQ(received->data.statusCode, 0);
     EXPECT_EQ(received->data.payload.stdString(), "sent after rotation");
     // And the epoch-1 envelope is still readable — the same key path the notification travels.
-    EXPECT_EQ(groupApi2.decrypt(sealedUnderEpoch1).data.stdString(), "sealed before rotation");
+    EXPECT_EQ(groupApi2.decrypt(groupId, group::GroupApi::noLocation(), sealedUnderEpoch1, group::DecryptOptions{.expectedAuthor = "", .anyAuthor = true}).data.stdString(), "sealed before rotation");
 
     connection2->disconnect();
 }

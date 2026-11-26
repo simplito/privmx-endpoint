@@ -31,6 +31,7 @@ void GroupSession::dropTreeKeys() {
 void GroupSession::dropKeys(bool keepEpochKeys) {
     dropTreeKeys();
     envelopeKeys.clear();
+    envelopeKeyEpochs.clear();
     envelopeGrantEpochs.clear();
     if (!keepEpochKeys) {
         epochKeys.clear();

@@ -41,7 +41,7 @@ Pin pinAt(std::uint64_t seq, const std::string& digest, std::uint64_t seenAt = 1
     pin.keyVersion = 2;
     pin.groupPubKey = "GPK";
     pin.rosterVersion = 3;
-    pin.rules = GroupRules{
+    pin.rules = privmx::endpoint::group::keytree::GroupRules{
         .creator = "carol",
         .update = "manager",
         .rotateKeys = "user",
@@ -131,6 +131,27 @@ TEST(PinBlob, RoundTripKeepsEveryField) {
     EXPECT_EQ(back.tree.at("lostRace").seq, 0u);
     EXPECT_EQ(back.tree.at("lostRace").refusedSeq, 3u);
     EXPECT_EQ(back.planes, pins.planes);
+}
+
+TEST(PinBlob, TheRosterRulesTravelOnlyWhenTheGroupSetsThem) {
+    // A group that never split `update`: the record is the layout from before the roster rules existed, byte for
+    // byte, and reads back with both rules following `update`.
+    PinSet plain;
+    plain.tree["g"] = pinAt(5, "D5");
+    const PinSet plainBack = roundTrip(plain);
+    EXPECT_FALSE(plainBack.tree.at("g").rules.splitsRoster);
+    EXPECT_EQ(plainBack.tree.at("g").rules.addMembers, "manager");
+    EXPECT_EQ(plainBack.tree.at("g").rules.removeMembers, "manager");
+
+    PinSet split = plain;
+    split.tree["g"].rules.splitsRoster = true;
+    split.tree["g"].rules.addMembers = "user";
+    split.tree["g"].rules.removeMembers = "manager,owner";
+    EXPECT_GT(PinBlob::encode(split).size(), PinBlob::encode(plain).size());
+    const PinSet splitBack = roundTrip(split);
+    EXPECT_TRUE(splitBack.tree.at("g").rules.splitsRoster);
+    EXPECT_EQ(splitBack.tree.at("g").rules.addMembers, "user");
+    EXPECT_EQ(splitBack.tree.at("g").rules.removeMembers, "manager,owner");
 }
 
 TEST(PinBlob, SECURITY_ALengthPastTheEndIsRefused) {

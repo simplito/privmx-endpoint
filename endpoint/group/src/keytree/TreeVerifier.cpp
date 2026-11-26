@@ -286,6 +286,28 @@ void TreeVerifier::followChain(
     }
 }
 
+std::vector<CommitStatement> TreeVerifier::history(
+    const std::string& groupId,
+    const std::string& contextId,
+    const Environment& environment
+) {
+    const Pin pin = pinOf(groupId);
+    if (pin.seq == 0 || pin.contextId != contextId) {
+        throw GroupDataIntegrityException("no verified state of the group to read its history up to");
+    }
+    // ponytail: the whole chain on every call, O(statements); keep a verified prefix per group if logs get long.
+    Head head;
+    std::set<std::string> grantKeys;
+    std::vector<CommitStatement> statements;
+    followChain(groupId, contextId, head, grantKeys, pin.seq, environment, [&](const CommitStatement& statement) {
+        statements.push_back(statement);
+    });
+    if (head.digest != pin.digest) {
+        throw GroupDataIntegrityException("a chain from genesis that does not end at the pinned statement");
+    }
+    return statements;
+}
+
 TreeVerifier::Step TreeVerifier::step(
     Head& head,
     const CommitStatement& statement,
@@ -304,8 +326,8 @@ TreeVerifier::Step TreeVerifier::step(
     if (const auto problem = TreeCommits::deltasProblem(statement, head.roster.users, head.roster.managers)) {
         throw GroupDataIntegrityException(problem.value());
     }
-    const bool newEpoch = create || op == CommitOp::Remove || op == CommitOp::Rotate;
-    const bool rosterMoves = newEpoch || op == CommitOp::Add;
+    const bool newEpoch = create || op == CommitOp::Remove || op == CommitOp::Rotate || op == CommitOp::Reseat;
+    const bool rosterMoves = newEpoch || op == CommitOp::Add || op == CommitOp::Roles;
     if (create ? statement.keyVersion != 1 || statement.rosterVersion != 1 :
                  statement.keyVersion != head.keyVersion + (newEpoch ? 1 : 0) ||
                 statement.rosterVersion != head.rosterVersion + (rosterMoves ? 1 : 0)) {
@@ -318,9 +340,9 @@ TreeVerifier::Step TreeVerifier::step(
     if (!newEpoch && statement.groupPubKey != head.groupPubKey) {
         throw GroupDataIntegrityException("a grant key moved outside a new epoch");
     }
-    if ((op == CommitOp::Rotate || op == CommitOp::Policy) &&
+    if ((op == CommitOp::Rotate || op == CommitOp::Policy || op == CommitOp::Roles) &&
         (!statement.path.empty() || (adjacent && statement.treeHash != head.treeHash))) {
-        throw GroupDataIntegrityException("a rotation or policy statement that moves the tree");
+        throw GroupDataIntegrityException("a rotation, policy or roles statement that moves the tree");
     }
     // The policy: replayed from the create statement's, moved by a policy statement only.
     std::optional<GroupRules> next;
@@ -916,7 +938,18 @@ bool TreeVerifier::extend(Roster& roster, const CommitStatement& statement, bool
     if (roster.users.count(statement.committer) == 0 && roster.managers.count(statement.committer) == 0) {
         return false;
     }
-    if (!statement.addedUsers.empty() || !statement.addedManagers.empty() || !statement.removed.empty()) {
+    if (statement.op == CommitOp::Reseat) {
+        // Its `removed` are the members reseated: they stay where they are.
+    } else if (!statement.addedUsers.empty() || !statement.addedManagers.empty() || !statement.removed.empty()) {
+        if (statement.op == CommitOp::Roles) {
+            // A member named ends on the one list it is named for.
+            for (const std::string& userId : statement.addedUsers) {
+                roster.managers.erase(userId);
+            }
+            for (const std::string& userId : statement.addedManagers) {
+                roster.users.erase(userId);
+            }
+        }
         roster.users.insert(statement.addedUsers.begin(), statement.addedUsers.end());
         roster.managers.insert(statement.addedManagers.begin(), statement.addedManagers.end());
         for (const std::string& gone : statement.removed) {

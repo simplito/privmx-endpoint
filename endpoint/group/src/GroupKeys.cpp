@@ -309,10 +309,17 @@ core::DecryptedEncKeyV2 GroupKeys::encKeyById(
     const std::string& keyId,
     const std::function<core::ModuleKeys(bool fresh)>& moduleKeysOf,
     core::KeyProvider& keyProvider,
-    const core::KeyProvider::GroupPrivKeyResolver& resolver
+    const core::KeyProvider::GroupPrivKeyResolver& resolver,
+    std::int64_t* epochOut
 ) const {
     if (const auto session = deps.sessions.find(groupId)) {
-        if (auto cached = session->envelopeKeys.get(keyId); cached.has_value()) {
+        // A key without its epoch is no cache entry: the epoch is what a claimed key version is checked against,
+        // and "unknown" must never read as an epoch.
+        const auto cachedEpoch = session->envelopeKeyEpochs.get(keyId);
+        if (auto cached = session->envelopeKeys.get(keyId); cached.has_value() && cachedEpoch.has_value()) {
+            if (epochOut != nullptr) {
+                *epochOut = cachedEpoch.value();
+            }
             return cached.value();
         }
     }
@@ -387,8 +394,25 @@ core::DecryptedEncKeyV2 GroupKeys::encKeyById(
         )) {
         throw core::EncryptionKeyValidationException("Group key " + keyId + " was not wrapped by its epoch's opener");
     }
-    deps.sessions.of(groupId)->envelopeKeys.set(keyId, found);
+    const std::optional<std::int64_t> routeEpoch = candidates.front().keys.front().groupEpoch;
+    if (!routeEpoch.has_value() || routeEpoch.value() < 1) {
+        throw core::EncryptionKeyValidationException("Group key " + keyId + " is served without its epoch");
+    }
+    const std::int64_t epoch = routeEpoch.value();
+    const auto session = deps.sessions.of(groupId);
+    session->envelopeKeyEpochs.set(keyId, epoch);
+    session->envelopeKeys.set(keyId, found);
+    if (epochOut != nullptr) {
+        *epochOut = epoch;
+    }
     return found;
+}
+
+std::int64_t GroupKeys::grantEpochOf(const std::string& groupId, const std::string& groupPubKeyBase58) const {
+    if (const auto session = deps.sessions.find(groupId)) {
+        return session->envelopeGrantEpochs.get(groupPubKeyBase58).value_or(0);
+    }
+    return 0;
 }
 
 privmx::crypto::PrivateKey GroupKeys::grantKeyForPubKey(

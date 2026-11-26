@@ -42,18 +42,69 @@ using ByteCount = std::uint64_t;
 struct EnvelopeFileHeader {
     EnvelopeType type;
     std::string groupId;
-    std::string keyId;        // set for ENVELOPE_FROM_MEMBER only
-    std::string authorPubKey; // base58-DER, signature verified; EMPTY for ENVELOPE_ANONYMOUS
+    std::string keyId;           // set for ENVELOPE_FROM_MEMBER only
+    std::int64_t keyVersion = 0; // set for ENVELOPE_FROM_MEMBER only: the epoch the writer claims
+    std::string authorUserId;    // the writer's claim, signed; EMPTY for ENVELOPE_ANONYMOUS
+    std::string authorPubKey;    // base58-DER, signature verified; EMPTY for ENVELOPE_ANONYMOUS
     ByteCount plainSize;
     std::string fileKey; // 32 raw bytes
 };
 
-// The routing header, read without opening anything.
+// What an envelope is bound to, beside its group: a location in the application's data, or - said, never
+// defaulted - none. Not transmitted: the writer signs it, the reader supplies it again and the two must agree.
+struct EnvelopeBinding {
+    bool hasLocation = false;
+    std::string locationDigest{}; // 32 bytes when `hasLocation`, empty otherwise
+};
+
+// What a writer stamps into the signed part of an envelope.
+struct EnvelopeSeal {
+    EnvelopeBinding binding{};
+    std::int64_t keyVersion = 0;  // member envelopes: the epoch of the group key used
+    std::int64_t encryptedAt = 0; // signed envelopes: the writer's clock, ms
+    // Signed envelopes: who the writer says they are. A claim like the public key beside it: the caller has the
+    // UserVerifier confirm that this user holds that key before showing either.
+    std::string authorUserId{};
+};
+
+// One more reader of an envelope, beside the group it is written in. Part of the signed header.
+struct WireRecipient {
+    bool isGroup = false;
+    std::string id{};            // group id or user id
+    std::string pubKey{};        // base58-DER: the key the content key is wrapped to
+    std::int64_t keyVersion = 0; // groups: the epoch of `pubKey`; 0 for a user
+};
+
+// The plain header, read without opening anything. Nothing in it is authenticated until the envelope is opened.
 struct EnvelopeRouting {
     EnvelopeType type;
+    bool isFile = false;
+    bool hasLocation = false;
     std::string groupId;
-    std::string keyId;       // set for ENVELOPE_FROM_MEMBER only
-    std::string groupPubKey; // base58-DER; set for ENVELOPE_ANONYMOUS only
+    std::string keyId;                     // member envelopes only
+    std::int64_t keyVersion = 0;           // member envelopes only: the epoch the writer claims
+    std::string groupPubKey;               // base58-DER; outsider and anonymous envelopes only
+    std::string authorUserId;              // signed envelopes only
+    std::string authorPubKey;              // base58-DER; signed envelopes only
+    std::vector<WireRecipient> recipients; // signed message envelopes only
+};
+
+// A message envelope, opened. `authorPubKey` is empty for ENVELOPE_ANONYMOUS.
+struct OpenedEnvelope {
+    core::Buffer data;
+    std::string groupId;
+    std::string keyId;
+    std::int64_t keyVersion = 0;
+    std::string authorUserId;
+    std::string authorPubKey;
+    std::int64_t encryptedAt = 0;
+    std::vector<WireRecipient> recipients;
+    EnvelopeType type;
+    // true when it was opened as a further recipient (`openSharedEnvelope`). The reader then never held the home
+    // group's key, so `groupId`, `keyId`, `keyVersion` and `type` are what the writer signed and nothing more:
+    // anyone in the context can write "from a member of group G" to a recipient. Whether the writer is a member
+    // of `groupId` is for the caller to establish against that group's roster, or to report as unknown.
+    bool homeGroupUnverified = false;
 };
 
 struct EnvelopeFileState {

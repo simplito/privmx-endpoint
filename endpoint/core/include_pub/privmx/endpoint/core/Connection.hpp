@@ -127,6 +127,8 @@ public:
      * A developer can implement an interface and pass the implementation to the function. 
      * Each time data is read from the container, a callback will be triggered, allowing the developer to validate the sender in an external service,
      * e.g. Developer's Application Server or PKI Server.
+     * Without a service to ask, useKeyContinuity gives a verifier that needs none.
+     *
      * @param verifier an implementation of the UserVerifierInterface
      * 
      */
@@ -170,6 +172,65 @@ public:
      * without a pin under the current key are then read on trust once, as on first contact.
      */
     void adoptPreviousIdentity(const std::string& previousUserPrivKey);
+
+    /**
+     * After the user's identity key changed and the previous one is still at hand: adoptPreviousIdentity, and from
+     * then on every GroupApi of this connection re-wraps the caller's own leaf to the current key by itself, the
+     * first time it reads a Group whose leaf the current key does not open (what GroupApi::renewLeaf does for one
+     * Group on request). Call it where adoptPreviousIdentity would be called: right after `connect` and
+     * `setPinStore`, on every start for as long as some Group may still be waiting.
+     *
+     * Without the previous key there is nothing to renew with: another member lets the user back in with
+     * GroupApi::reseatGroupMembers.
+     * @param previousUserPrivKey the previous identity private key in WIF
+     * @throws LocalStateIntegrityException as adoptPreviousIdentity
+     */
+    void renewIdentity(const std::string& previousUserPrivKey);
+
+    /**
+     * Sets the built-in key-continuity verifier as this connection's UserVerifier: the first key a user of a Context
+     * is seen with is taken as theirs (trust on first use) if it is the key the Bridge lists for that user in that
+     * Context and is not already taken as another user's there, and any other key for that user is refused until
+     * acceptKeyChange. The first key is the Bridge's word, never the one a signed item names for its own author; a
+     * user the Bridge no longer lists (removed from the Context) is refused on first use. For an application with no
+     * server or PKI of its own to ask; one that has such a service should implement UserVerifierInterface instead,
+     * which also covers the first key.
+     *
+     * Not the default, and not free of consequences. What it knows lives in this connection's memory, so every new
+     * connection trusts first use again and has to be told again of every change it must accept. And a user whose key
+     * changed is refused wherever both keys appear: in a Group's history after a leaf renewal, or on an item one user
+     * wrote and another edited (the item is checked as its author's id with the editor's key). A user removed from
+     * the Context is refused on first use, so a Group whose statements they signed (its latest committer, say) is
+     * unreadable on every new connection. On a `connectPublic` connection, or for a user without permission to list
+     * the Context's users, the Bridge lists nobody and only the connection's own user is accepted. Call it right after
+     * `connect`, before creating any module API.
+     */
+    void useKeyContinuity();
+
+    /**
+     * Tells this connection that a user's identity key changed, and that the application has checked the change.
+     * For a connection that keeps to key continuity (useKeyContinuity).
+     *
+     * After this call `newPubKey` is the user's key; `previousPubKey` stays good for what is dated before this call,
+     * and for nothing dated later. The knowledge lives in this connection's memory.
+     *
+     * A GroupApi envelope is checked as of now, not as of the date it claims (that date is the signer's word, and a
+     * stolen retired key could backdate it): an envelope signed with `previousPubKey` is refused once this call
+     * retired it, as it is after Connection::renewIdentity. Re-encrypt what must stay readable before the change.
+     *
+     * @param contextId ID of the Context the user belongs to
+     * @param userId ID of the user
+     * @param previousPubKey the key the user had, in Base58DER
+     * @param newPubKey the key the user has now, in Base58DER
+     * @throws InvalidParamsException when `previousPubKey` is not the key this connection knows the user by, or when
+     * key continuity is not on: the application's own UserVerifier decides then, and is the thing to update
+     */
+    void acceptKeyChange(
+        const std::string& contextId,
+        const std::string& userId,
+        const std::string& previousPubKey,
+        const std::string& newPubKey
+    );
 
 private:
     void assertGateway(const std::shared_ptr<ConnectionImpl>& impl);

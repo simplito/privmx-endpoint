@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cctype>
 
 #include <privmx/crypto/Crypto.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
@@ -30,6 +31,21 @@
 
 using namespace privmx::endpoint;
 using namespace group;
+
+namespace {
+
+// A Group whose served history does not verify: the answer, never a reason to fall back to another read.
+bool isForgedHistory(const core::Exception& e) {
+    const auto code = e.getCode();
+    return code == GroupHistoryForkException::FULL_CODE ||
+        code == GroupDataIntegrityException::FULL_CODE ||
+        code == GroupChainBrokenException::FULL_CODE ||
+        code == GroupUnauthorizedSignerException::FULL_CODE ||
+        code == GroupMembershipMismatchException::FULL_CODE ||
+        code == GroupPublicDataMismatchException::FULL_CODE;
+}
+
+} // namespace
 
 GroupApiImpl::GroupApiImpl(
     const privfs::RpcGateway::Ptr& gateway,
@@ -116,9 +132,105 @@ std::string GroupApiImpl::createGroup(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies
+    const std::optional<core::ContainerPolicy>& policies,
+    const std::optional<core::Buffer>& idSeed,
+    const std::string& visibleTo
 ) {
-    return _ops.create(contextId, users, managers, publicMeta, privateMeta, policies);
+    if (visibleTo != "members" && visibleTo != "context") {
+        throw core::InvalidParamsException("visibleTo is \"members\" or \"context\"");
+    }
+    return _ops.create(
+        contextId, users, managers, publicMeta, privateMeta, policies,
+        idSeed.has_value() ? std::optional<std::string>(resourceIdOfSeed(idSeed.value())) : std::nullopt,
+        visibleTo == "members" ? std::nullopt : std::optional<std::string>(visibleTo)
+    );
+}
+
+std::string GroupApiImpl::resourceIdOfSeed(const core::Buffer& idSeed) {
+    if (idSeed.size() == 0) {
+        throw core::InvalidParamsException("an id seed cannot be empty");
+    }
+    return privmx::utils::Hex::from(privmx::crypto::Crypto::sha256("privmx/group/id-seed" + idSeed.stdString()));
+}
+
+std::string GroupApiImpl::deriveGroupId(const std::string& contextId, const core::Buffer& idSeed) {
+    return keytree::TreeCommits::groupId(contextId, resourceIdOfSeed(idSeed));
+}
+
+std::vector<GroupResult> GroupApiImpl::getGroups(const std::vector<std::string>& groupIds) {
+    // One request for all of them (`groupGetMany`), then each answer through everything `getGroup` checks: the
+    // answers are what `groupGet` would have served, so nothing is verified any less. A Bridge without the call, or
+    // one that fails it, costs a request per group instead.
+    try {
+        _serverApi.prefetchGroups(groupIds);
+    } catch (const std::exception& e) { LOG_WARN("[groups] reading several at once failed: ", e.what()) }
+    struct DropPrefetched {
+        ServerApi& serverApi;
+        ~DropPrefetched() { serverApi.dropPrefetched(); }
+    } drop{_serverApi};
+    std::vector<GroupResult> results;
+    results.reserve(groupIds.size());
+    for (const std::string& groupId : groupIds) {
+        GroupResult result{};
+        try {
+            result.group = getGroup(groupId);
+            result.statusCode = result.group.statusCode;
+        } catch (const core::Exception& e) { result.statusCode = e.getCode(); } catch (...) {
+            result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE;
+        }
+        results.push_back(std::move(result));
+    }
+    return results;
+}
+
+GroupPublicKey GroupApiImpl::getGroupPublicKey(const std::string& contextId, const std::string& groupId) {
+    const auto epochs = fetchGroupEpochs(contextId, {groupId});
+    const auto epoch = epochs.find(groupId);
+    if (epoch == epochs.end()) {
+        throw GroupDataIntegrityException("group " + groupId + " has no verifiable key");
+    }
+    // The creator, from a read held to the latest signed statement (the policy it signs names the creator): the
+    // caller's own read when it verified (statusCode 0: getGroup reports an unattested answer instead of throwing,
+    // creator still copied from the Bridge), the public one otherwise. A history that does not verify is the
+    // answer, never a reason to try the other read.
+    std::optional<std::string> creator;
+    try {
+        const Group group = getGroup(groupId);
+        if (group.statusCode == 0 && group.contextId == contextId) {
+            creator = group.creator;
+        }
+    } catch (const core::Exception& e) {
+        if (isForgedHistory(e)) {
+            throw;
+        }
+    }
+    if (!creator.has_value()) {
+        server::GroupGetPublicKeyModel model;
+        model.groupId = groupId;
+        const server::GroupInfo group = listedFrom(_serverApi.groupGetPublicKey(model).group);
+        _treeVerifier.preverifyListed({group}, VerifiedGroup::treeEnvironment(_serverApi, _connection, std::string()));
+        _treeVerifier.verifyListed(group, VerifiedGroup::treeEnvironment(_serverApi, _connection, group.id));
+        if (group.contextId != contextId) {
+            throw GroupDataIntegrityException("group " + groupId + " is of another Context");
+        }
+        creator = group.creator;
+    }
+    return GroupPublicKey{
+        .groupId = groupId,
+        .keyVersion = epoch->second.keyVersion,
+        .pubKey = epoch->second.groupPubKey,
+        .creator = creator.value()
+    };
+}
+
+void GroupApiImpl::setGroupVisibility(const std::string& groupId, const std::string& visibleTo) {
+    if (visibleTo != "members" && visibleTo != "context") {
+        throw core::InvalidParamsException("visibleTo is \"members\" or \"context\"");
+    }
+    server::GroupSetVisibilityModel model;
+    model.groupId = groupId;
+    model.visibleTo = visibleTo;
+    _serverApi.groupSetVisibility(model);
 }
 
 void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
@@ -133,7 +245,7 @@ void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector
     runDueWork(groupId);
 }
 
-void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
+int64_t GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
     // A narrowing's carry still to do runs first: after the removal its plane would be judged under the new rules.
     _metadata.retryPendingCarry(groupId);
     std::optional<bool> historyAbandoned;
@@ -146,9 +258,11 @@ void GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::vec
         _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), userIds, prior);
     }
     runDueWork(groupId);
+    // The epoch this client committed, or verified when an earlier call's removal turned out to have landed.
+    return static_cast<int64_t>(pinnedKeyVersion(groupId));
 }
 
-void GroupApiImpl::rotateGroupKey(const std::string& groupId) {
+int64_t GroupApiImpl::rotateGroupKey(const std::string& groupId) {
     _metadata.retryPendingCarry(groupId);
     bool committedHere = true;
     PriorRole prior;
@@ -160,6 +274,103 @@ void GroupApiImpl::rotateGroupKey(const std::string& groupId) {
         _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, {}, prior);
     }
     runDueWork(groupId);
+    return static_cast<int64_t>(pinnedKeyVersion(groupId));
+}
+
+int64_t GroupApiImpl::reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
+    _metadata.retryPendingCarry(groupId);
+    std::optional<bool> historyAbandoned;
+    PriorRole prior;
+    CommitEngine::commitWithRetry([&] { historyAbandoned = _ops.remove(groupId, userIds, prior, true); });
+    // As after a rotation: the planes sit one epoch behind, and nobody left, so nobody beyond the members is accepted
+    // as an author.
+    if (historyAbandoned.has_value()) {
+        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), {}, prior);
+    }
+    runDueWork(groupId);
+    return static_cast<int64_t>(pinnedKeyVersion(groupId));
+}
+
+void GroupApiImpl::setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes) {
+    if (changes.empty()) {
+        throw core::InvalidParamsException("no member to change the role of");
+    }
+    std::set<std::string> named;
+    for (const GroupRoleChange& change : changes) {
+        if (!named.insert(change.userId).second) {
+            throw core::InvalidParamsException("user '" + change.userId + "' is listed twice");
+        }
+    }
+    _metadata.retryPendingCarry(groupId);
+    std::optional<PendingCarry> carry;
+    CommitEngine::commitWithRetry([&] {
+        carry.reset();
+        _ops.setRoles(groupId, changes, carry);
+    });
+    // A plane whose author lost `update` with its role is refused from now on; carry it under the caller's name.
+    if (carry.has_value()) {
+        _metadata.runPolicyCarry(groupId, carry.value());
+    }
+    runDueWork(groupId);
+}
+
+void GroupApiImpl::updateGroupRules(const std::string& groupId, const GroupRulesUpdate& rules) {
+    // The rules are three fields of the policy: the rest of it is carried over as the Group has it.
+    core::ContainerPolicy policy = getGroup(groupId).policy;
+    if (rules.addMembers.has_value()) {
+        policy.addMembers = rules.addMembers;
+    }
+    if (rules.removeMembers.has_value()) {
+        policy.removeMembers = rules.removeMembers;
+    }
+    if (rules.updateMeta.has_value()) {
+        policy.update = rules.updateMeta;
+    }
+    updateGroupPolicy(groupId, policy);
+}
+
+core::PagingList<GroupLogEntry> GroupApiImpl::getGroupLog(
+    const std::string& groupId,
+    const core::PagingQuery& pagingQuery
+) {
+    if (pagingQuery.skip < 0 ||
+        pagingQuery.limit < 1 ||
+        (pagingQuery.sortOrder != "asc" && pagingQuery.sortOrder != "desc")) {
+        throw core::InvalidParamsException("skip >= 0, limit >= 1 and sortOrder \"asc\" or \"desc\" are required");
+    }
+    // The latest state first, verified and pinned: the history is replayed up to exactly that statement.
+    const GroupRead read = _hooks.read(VerifiedGroup::pathRead(groupId), keytree::TreeVerifier::Scope::Path);
+    if (!read.verified.has_value()) {
+        throw core::InvalidParamsException("only a member of a group can read its history");
+    }
+    const std::string contextId = read.group().contextId;
+    std::vector<keytree::CommitStatement> statements = _treeVerifier.history(
+        groupId, contextId, VerifiedGroup::treeEnvironment(_serverApi, _connection, groupId)
+    );
+    if (pagingQuery.sortOrder == "desc") {
+        std::reverse(statements.begin(), statements.end());
+    }
+    core::PagingList<GroupLogEntry> result{.totalAvailable = static_cast<int64_t>(statements.size()), .readItems = {}};
+    for (std::size_t i = static_cast<std::size_t>(pagingQuery.skip);
+         i < statements.size() && result.readItems.size() < static_cast<std::size_t>(pagingQuery.limit); ++i) {
+        const keytree::CommitStatement& statement = statements[i];
+        result.readItems.push_back(
+            GroupLogEntry{
+                .seq = static_cast<int64_t>(statement.seq),
+                .kind = keytree::TreeCommits::toWire(statement).op,
+                .author = statement.committer,
+                .authorPubKey = statement.committerPubKey,
+                .date = static_cast<int64_t>(statement.date),
+                .keyVersion = static_cast<int64_t>(statement.keyVersion),
+                .rosterVersion = static_cast<int64_t>(statement.rosterVersion),
+                .addedUsers = statement.addedUsers,
+                .addedManagers = statement.addedManagers,
+                .removed = statement.removed
+            }
+        );
+    }
+    runDueWork(groupId);
+    return result;
 }
 
 void GroupApiImpl::runDueWork(const std::string& groupId) {
@@ -206,6 +417,29 @@ bool GroupApiImpl::renewLeaf(const std::string& groupId, const std::string& prev
     return renewed;
 }
 
+void GroupApiImpl::renewOwnLeafOnce(const std::string& groupId) {
+    const auto connection = _connection.getImpl();
+    if (!connection->renewsLeaves()) {
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(_leafRenewalMutex);
+        if (!_leafRenewalTried.insert(groupId).second) {
+            return;
+        }
+    }
+    for (const privmx::crypto::PrivateKey& previous : connection->previousIdentities()) {
+        try {
+            adoptPreviousIdentity(previous);
+            bool renewed = false;
+            CommitEngine::commitWithRetry([&] { renewed = _ops.selfUpdate(groupId, &previous, RENEW_LEAF_OP, true); });
+            if (renewed) {
+                return;
+            }
+        } catch (const std::exception& e) { LOG_WARN("[groups] leaf renewal of ", groupId, " failed: ", e.what()) }
+    }
+}
+
 void GroupApiImpl::updateGroupPublicMeta(
     const std::string& groupId,
     const core::Buffer& publicMeta,
@@ -247,10 +481,11 @@ void GroupApiImpl::deleteGroup(const std::string& groupId) {
     server::GroupDeleteModel model{.groupId = groupId};
     _serverApi.groupDelete(model);
     _sessions.forget(groupId);
-    invalidateModuleKeysInCache(groupId);
+    dropCachedGroup(groupId);
 }
 
 Group GroupApiImpl::getGroup(const std::string& groupId) {
+    renewOwnLeafOnce(groupId);
     _metadata.retryPendingCarry(groupId);
     const server::GroupGetModel params = VerifiedGroup::pathRead(groupId);
     // The head roster entry and the current metadata entry — two entries, whatever the group's age. The cache is
@@ -283,6 +518,9 @@ Group GroupApiImpl::getGroup(const std::string& groupId) {
     // Writes take their key from this cache, so only an answer that passed everything may fill it.
     if (seated && result.statusCode == 0) {
         assertHeadKeyAtEpoch(group);
+        // The roster with the keys, never one without the other: an author is checked against the roster of the
+        // same answer the cached keys came from.
+        rememberRoster(group);
         setNewModuleKeysInCache(group.id, groupToModuleKeys(group), group.rosterVersion);
     }
     runDueWork(groupId);
@@ -322,6 +560,23 @@ bool GroupApiImpl::hasVerifiedGrantKey(const server::GroupInfo& group) {
     return group.treeCommit->seq >= static_cast<std::int64_t>(_treeVerifier.pinnedSeq(group.id));
 }
 
+// What `groupGetPublicKey` serves, in the shape the listing checks take.
+group::server::GroupInfo GroupApiImpl::listedFrom(const group::server::GroupPublicInfo& info) {
+    server::GroupInfo asListed;
+    asListed.id = info.id;
+    asListed.contextId = info.contextId;
+    asListed.resourceId = info.resourceId;
+    asListed.creator = info.creator;
+    asListed.users = info.users;
+    asListed.managers = info.managers;
+    asListed.rosterVersion = info.rosterVersion;
+    asListed.keyVersion = info.keyVersion;
+    asListed.groupPubKey = info.groupPubKey;
+    asListed.policy = info.policy;
+    asListed.treeCommit = info.treeCommit;
+    return asListed;
+}
+
 std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEpochs(
     const std::string& contextId,
     const std::vector<std::string>& groupIds
@@ -343,6 +598,7 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
             listed = _serverApi.groupList(model).groups;
         } catch (const std::exception& e) { LOG_WARN("[fetchGroupEpochs] groupList by id unavailable: ", e.what()) }
         std::vector<server::GroupInfo> read;
+        std::set<std::string> listedIds; // read in full below
         for (const auto& summary : listed) {
             // A listing for another context would have the UserVerifier vouch for the committer there.
             if (summary.contextId != contextId) {
@@ -359,8 +615,26 @@ std::unordered_map<std::string, core::GroupEpochInfo> GroupApiImpl::fetchGroupEp
             // roster read would do if non-member writes to new or rotated groups get hot.
             try {
                 read.push_back(_serverApi.groupGet(VerifiedGroup::pathRead(summary.id)).group);
+                listedIds.insert(summary.id);
             } catch (const std::exception& e) {
                 LOG_WARN("[fetchGroupEpochs] group ", summary.id, " unreadable: ", e.what())
+            }
+        }
+        // What neither the listing nor `groupGet` serves this caller: a group it is not in. The Bridge hands the
+        // identity key, the roster and the latest statement of a group visible to the context to anybody in it,
+        // and that is all `verifyListed` reads.
+        for (const std::string& id : ids) {
+            if (listedIds.count(id) != 0 || epochs.count(id) != 0) {
+                continue;
+            }
+            try {
+                server::GroupGetPublicKeyModel publicKeyModel;
+                publicKeyModel.groupId = id;
+                const server::GroupPublicInfo info = _serverApi.groupGetPublicKey(publicKeyModel).group;
+                server::GroupInfo asListed = listedFrom(info);
+                read.push_back(std::move(asListed));
+            } catch (const std::exception& e) {
+                LOG_WARN("[fetchGroupEpochs] group ", id, " serves no key to this caller: ", e.what())
             }
         }
         _treeVerifier.preverifyListed(read, VerifiedGroup::treeEnvironment(_serverApi, _connection, std::string()));
@@ -439,7 +713,9 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
                         "a custom event must be sealed by a member under the current key"
                     );
                 }
-                auto decrypted = decrypt(envelope);
+                const OpenedEnvelope decrypted = _envelopeEncryptor.openMemberEnvelope(
+                    envelope, encKeyById(raw.id, routing.keyId).key, EnvelopeBinding{}
+                );
                 // The bridge names the sender; the application vouches that the key which signed is that user's.
                 assertUserKeysVerified(
                     getModuleKeys(decrypted.groupId).contextId,
@@ -465,7 +741,7 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
             _eventMiddleware->emitApiEvent(event);
         } else if (type == "groupUpdated") {
             auto raw = server::GroupChangedEventData::fromJSON(notification.data);
-            invalidateModuleKeysInCache(raw.groupId);
+            dropCachedGroup(raw.groupId);
             auto data = Mapper::mapToGroupChangedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupUpdatedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
@@ -474,7 +750,7 @@ void GroupApiImpl::processNotificationEvent(const std::string& type, const core:
             // Key caches only. The pins stay as tombstones: the event is the bridge's word alone, and dropping them
             // would make the next read of the group a first contact the bridge could answer with any old state.
             _sessions.forget(raw.groupId);
-            invalidateModuleKeysInCache(raw.groupId);
+            dropCachedGroup(raw.groupId);
             auto data = Mapper::mapToGroupDeletedEventData(raw);
             auto event = core::EventBuilder::buildEvent<GroupDeletedEvent>("context", data, notification);
             _eventMiddleware->emitApiEvent(event);
@@ -492,7 +768,7 @@ void GroupApiImpl::processConnectedEvent() {
     // Open file handles too. A handle used after this reports "not an open encrypted-file handle", which a reconnect
     // made true.
     _envelopeFiles.clear();
-    invalidateModuleKeysInCache();
+    dropCachedGroup();
 }
 
 // The sessions' unresolved commits are kept on purpose: a dropped connection is the commonest unknown outcome of a
@@ -504,16 +780,19 @@ void GroupApiImpl::processDisconnectedEvent() {
     savePins();
     _sessions.dropKeys();
     _envelopeFiles.clear();
-    invalidateModuleKeysInCache();
+    dropCachedGroup();
 }
 
 std::pair<core::ModuleKeys, int64_t> GroupApiImpl::getModuleKeysAndVersionFromServer(std::string moduleId) {
     const VerifiedGroup group = readGroupForKeys(moduleId);
+    // The attested roster of the same read the keys come from: who an envelope's author is checked against.
+    rememberRoster(group);
     // Roster version: key material moves with that plane, so a metadata-only write must not stale the cache.
     return std::make_pair(groupToModuleKeys(group), group->rosterVersion);
 }
 
 VerifiedGroup GroupApiImpl::readGroupForKeys(const std::string& groupId) {
+    renewOwnLeafOnce(groupId);
     // On return, after the roster attestation below has moved the version pins too, not only the tree's.
     const SaveDuePins saveAfter{*this};
     // The tree pins `keyVersion` (never below what this client verified or committed itself); the head entry's
@@ -642,17 +921,21 @@ GroupApiHooks GroupApiImpl::bindHooks() {
         .resolveMemberKeys = [this](
                                  const std::string& contextId, const std::vector<std::string>& userIds
                              ) { return resolveMemberKeys(contextId, userIds); },
-        .invalidateModuleKeys = [this](const std::string& groupId) { invalidateModuleKeysInCache(groupId); },
+        .invalidateModuleKeys = [this](const std::string& groupId) { dropCachedGroup(groupId); },
     };
 }
 
 // -- envelopes -------------------------------------------------------------------------------------------
 
-core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(const std::string& groupId, const std::string& keyId) {
+core::DecryptedEncKeyV2 GroupApiImpl::encKeyById(
+    const std::string& groupId,
+    const std::string& keyId,
+    std::int64_t* epochOut
+) {
     return _keys.encKeyById(
         groupId, keyId,
         [&](bool fresh) { return fresh ? getNewModuleKeysAndUpdateCache(groupId) : getModuleKeys(groupId); },
-        *_keyProvider, _groupPrivKeyResolver
+        *_keyProvider, _groupPrivKeyResolver, epochOut
     );
 }
 
@@ -666,9 +949,285 @@ core::DecryptedEncKeyV2 GroupApiImpl::currentEncKey(const std::string& groupId) 
     return getAndValidateModuleCurrentEncKey(keys);
 }
 
-Envelope GroupApiImpl::encrypt(const std::string& groupId, const core::Buffer& content) {
-    auto key = currentEncKey(groupId);
-    return _envelopeEncryptor.packGroupKeyEnvelope(groupId, key.id, content, _userPrivKey, key.key);
+// -- envelopes: what is checked, in one place -------------------------------------------------------------
+
+Path GroupApiImpl::noLocation() {
+    return Path{PathSegment{.isId = true, .value = core::Buffer()}};
+}
+
+core::Buffer GroupApiImpl::idFromString(const std::string& identifier) {
+    if (identifier.empty()) {
+        throw core::InvalidParamsException("an identifier cannot be empty");
+    }
+    // A UUID is the one identifier that commonly travels in several spellings (case, dashes, braces): two clients
+    // that spelled it differently would bind to different paths. Only its exact forms count - 32 hex digits,
+    // 8-4-4-4-12, or that in one pair of braces - so nothing else is ever reinterpreted.
+    std::string body = identifier;
+    if (body.size() == 38 && body.front() == '{' && body.back() == '}') {
+        body = body.substr(1, 36);
+    }
+    bool uuid = body.size() == 32 || body.size() == 36;
+    std::string hex;
+    for (std::size_t i = 0; uuid && i < body.size(); ++i) {
+        const bool dashExpected = body.size() == 36 && (i == 8 || i == 13 || i == 18 || i == 23);
+        if (dashExpected) {
+            uuid = body[i] == '-';
+        } else if (std::isxdigit(static_cast<unsigned char>(body[i]))) {
+            hex.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(body[i]))));
+        } else {
+            uuid = false;
+        }
+    }
+    // The first byte says which of the two it is, so the 16 bytes of a UUID are never the bytes of some other
+    // identifier written as text.
+    if (!uuid) {
+        return core::Buffer::from(std::string(1, '\x00') + identifier);
+    }
+    std::string bytes(1, '\x01');
+    for (std::size_t i = 0; i < hex.size(); i += 2) {
+        bytes.push_back(static_cast<char>(std::stoi(hex.substr(i, 2), nullptr, 16)));
+    }
+    return core::Buffer::from(bytes);
+}
+
+EnvelopeBinding GroupApiImpl::bindingOf(const Path& location) {
+    if (location.size() == 1 && location.front().isId && location.front().value.size() == 0) {
+        return EnvelopeBinding{};
+    }
+    if (location.empty()) {
+        throw core::InvalidParamsException("a location needs at least one segment; say noLocation() to bind to none");
+    }
+    for (const PathSegment& segment : location) {
+        if (segment.value.size() == 0) {
+            throw core::InvalidParamsException("a location segment cannot be empty");
+        }
+    }
+    return GroupEnvelopeEncryptor::bindLocation(location);
+}
+
+std::string GroupApiImpl::kindOf(const EnvelopeRouting& routing) {
+    switch (routing.type) {
+    case ENVELOPE_FROM_MEMBER:
+        return "member";
+    case ENVELOPE_FROM_OUTSIDER:
+        return "outsider";
+    default:
+        return "anonymous";
+    }
+}
+
+EnvelopeAudience GroupApiImpl::audienceOf(const std::vector<WireRecipient>& recipients) {
+    EnvelopeAudience audience;
+    for (const WireRecipient& recipient : recipients) {
+        (recipient.isGroup ? audience.groups : audience.users).push_back(recipient.id);
+    }
+    return audience;
+}
+
+EnvelopeHeader GroupApiImpl::peekEnvelope(const core::Buffer& envelope) {
+    const EnvelopeRouting routing = GroupEnvelopeEncryptor::peekAny(envelope);
+    EnvelopeHeader header{
+        .version = GroupEnvelopeEncryptor::VERSION,
+        .groupId = routing.groupId,
+        .keyVersion = routing.keyVersion,
+        .fromOutsider = routing.type != ENVELOPE_FROM_MEMBER,
+        .isSigned = routing.type != ENVELOPE_ANONYMOUS,
+        .isFile = routing.isFile,
+        .hasLocation = routing.hasLocation,
+        .authorUserId = routing.authorUserId,
+        .alsoForGroups = {},
+        .alsoForUsers = {},
+    };
+    for (const WireRecipient& recipient : routing.recipients) {
+        if (recipient.isGroup) {
+            header.alsoForGroups.push_back(GroupEpochRef{.groupId = recipient.id, .keyVersion = recipient.keyVersion});
+        } else {
+            header.alsoForUsers.push_back(recipient.id);
+        }
+    }
+    return header;
+}
+
+std::string GroupApiImpl::RosterView::roleOf(const std::string& userId) const {
+    if (std::find(managers.begin(), managers.end(), userId) != managers.end()) {
+        return "manager";
+    }
+    if (std::find(users.begin(), users.end(), userId) != users.end()) {
+        return "user";
+    }
+    return std::string();
+}
+
+void GroupApiImpl::rememberRoster(const server::GroupInfo& group) {
+    _rosters.set(
+        group.id,
+        RosterView{
+            .contextId = group.contextId,
+            .keyVersion = group.keyVersion,
+            .rosterVersion = group.rosterVersion,
+            .users = group.users,
+            .managers = group.managers,
+        }
+    );
+}
+
+void GroupApiImpl::dropCachedGroup(const std::optional<std::string>& groupId) {
+    // Before the keys: a reader between the two finds no roster and re-reads, rather than a roster without keys.
+    if (groupId.has_value()) {
+        _rosters.erase(groupId.value());
+    } else {
+        _rosters.clear();
+    }
+    invalidateModuleKeysInCache(groupId);
+}
+
+GroupApiImpl::RosterView GroupApiImpl::rosterOf(const std::string& groupId) {
+    // The module keys first: a cache the group's own events invalidated is re-read here, and that read is the
+    // one that refreshes the roster beside it.
+    core::ModuleKeys keys = getModuleKeys(groupId);
+    if (isRekeyNeeded(keys)) {
+        getNewModuleKeysAndUpdateCache(groupId);
+    }
+    auto roster = _rosters.get(groupId);
+    if (!roster.has_value()) {
+        getNewModuleKeysAndUpdateCache(groupId);
+        roster = _rosters.get(groupId);
+    }
+    if (!roster.has_value()) {
+        throw core::EncryptionKeyValidationException("caller holds no verifiable seat in this group's key tree");
+    }
+    return roster.value();
+}
+
+void GroupApiImpl::requireAuthorStated(const DecryptOptions& options) {
+    if (options.anyAuthor == !options.expectedAuthor.empty()) {
+        throw EnvelopeAuthorNotStatedException(
+            options.anyAuthor ? "both expectedAuthor and anyAuthor are set" :
+                                "neither expectedAuthor nor anyAuthor is set"
+        );
+    }
+}
+
+void GroupApiImpl::requireFor(const EnvelopeRouting& routing, const std::string& groupId, EnvelopeType kind) {
+    if (routing.groupId != groupId) {
+        throw EnvelopeWrongGroupException();
+    }
+    if (routing.type != kind) {
+        throw EnvelopeWrongKindException(kindOf(routing));
+    }
+}
+
+void GroupApiImpl::requireVerifiedWriter(
+    const std::string& contextId,
+    const OpenedEnvelope& opened,
+    const DecryptOptions& options
+) {
+    if (!options.anyAuthor && opened.authorUserId != options.expectedAuthor) {
+        throw EnvelopeWrongAuthorException("signed by " + opened.authorUserId);
+    }
+    // The id is the writer's own claim, like the key: the application's UserVerifier says whether that user
+    // holds that key. Without this anyone could sign as anyone.
+    try {
+        assertUserKeysVerified(
+            contextId, {core::UserWithPubKey{.userId = opened.authorUserId, .pubKey = opened.authorPubKey}}
+        );
+    } catch (const core::Exception& e) {
+        throw EnvelopeUnverifiedAuthorException(opened.authorUserId + " " + opened.authorPubKey, e);
+    }
+}
+
+void GroupApiImpl::requireCurrentKey(const std::string& groupId, const std::string& keyId) {
+    // A cached head behind the pinned epoch is no current key (as in `currentEncKey`).
+    core::ModuleKeys keys = getModuleKeys(groupId);
+    if (keyId != keys.currentKeyId || isRekeyNeeded(keys)) {
+        keys = getNewModuleKeysAndUpdateCache(groupId);
+    }
+    if (keyId != keys.currentKeyId) {
+        throw EnvelopeStaleEpochException();
+    }
+}
+
+std::vector<WireRecipient> GroupApiImpl::wireRecipients(
+    const std::string& contextId,
+    const std::string& homeGroupId,
+    const std::vector<EnvelopeRecipient>& alsoFor
+) {
+    std::vector<WireRecipient> recipients;
+    std::vector<std::string> groupIds;
+    for (const EnvelopeRecipient& recipient : alsoFor) {
+        if (recipient.groupId.empty() == !recipient.user.has_value()) {
+            throw core::InvalidParamsException("a recipient is one group or one user");
+        }
+        if (!recipient.groupId.empty()) {
+            core::Validator::validateId(recipient.groupId, "field:alsoFor.groupId ");
+            if (recipient.groupId == homeGroupId) {
+                throw core::InvalidParamsException("the group an envelope is written in is not a further recipient");
+            }
+            groupIds.push_back(recipient.groupId);
+        }
+    }
+    // Each group's key is its current one, read and verified now: one from before a removal cannot be passed in.
+    const auto epochs = groupIds.empty() ? std::unordered_map<std::string, core::GroupEpochInfo>{} :
+                                           fetchGroupEpochs(contextId, groupIds);
+    for (const EnvelopeRecipient& recipient : alsoFor) {
+        if (!recipient.groupId.empty()) {
+            const auto epoch = epochs.find(recipient.groupId);
+            if (epoch == epochs.end()) {
+                throw core::InvalidParamsException("recipient group " + recipient.groupId + " has no verifiable key");
+            }
+            recipients.push_back(
+                WireRecipient{
+                    .isGroup = true,
+                    .id = recipient.groupId,
+                    .pubKey = privmx::crypto::PublicKey::fromBase58DER(epoch->second.groupPubKey).toBase58DER(),
+                    .keyVersion = epoch->second.keyVersion,
+                }
+            );
+        } else {
+            assertUserKeysVerified(contextId, {recipient.user.value()});
+            recipients.push_back(
+                WireRecipient{
+                    .isGroup = false,
+                    .id = recipient.user->userId,
+                    .pubKey = privmx::crypto::PublicKey::fromBase58DER(recipient.user->pubKey).toBase58DER(),
+                    .keyVersion = 0,
+                }
+            );
+        }
+    }
+    return recipients;
+}
+
+Envelope GroupApiImpl::sealAsMember(
+    const std::string& groupId,
+    const EnvelopeBinding& binding,
+    const core::Buffer& content,
+    const std::vector<EnvelopeRecipient>& alsoFor
+) {
+    const std::string keyId = currentEncKey(groupId).id;
+    // The epoch of the key used, looked up by its id as `decrypt` does: the roster is a second lookup, and a rotation
+    // between the two would label K_n's envelope n+1, which nobody could open. The roster gives only who it is for.
+    std::int64_t epoch = 0;
+    const core::DecryptedEncKeyV2 key = encKeyById(groupId, keyId, &epoch);
+    const RosterView roster = rosterOf(groupId);
+    const EnvelopeSeal seal{
+        .binding = binding,
+        .keyVersion = epoch,
+        .encryptedAt = privmx::utils::Utils::getNowTimestamp(),
+        .authorUserId = _connection.getImpl()->getMyUserId(roster.contextId),
+    };
+    return _envelopeEncryptor.packMemberEnvelope(
+        groupId, key.id, content, _userPrivKey, key.key, seal, wireRecipients(roster.contextId, groupId, alsoFor)
+    );
+}
+
+Envelope GroupApiImpl::encrypt(
+    const std::string& groupId,
+    const Path& location,
+    const core::Buffer& content,
+    const EncryptOptions& options
+) {
+    return sealAsMember(groupId, bindingOf(location), content, options.alsoFor);
 }
 
 // The notification is an ordinary member envelope: one `encrypt` under the group's current key, one request
@@ -682,8 +1241,13 @@ void GroupApiImpl::sendCustomEvent(
     server::GroupSendCustomEventModel model;
     model.groupId = groupId;
     model.channel = channelName;
+    // Bound to its channel inside the content (`sealOnChannel`), not by a location: an event has no place in the
+    // application's data.
     model.data = privmx::utils::Base64::from(
-        encrypt(groupId, core::Buffer::from(SubscriberImpl::sealOnChannel(channelName, eventData.stdString())))
+        sealAsMember(
+            groupId, EnvelopeBinding{},
+            core::Buffer::from(SubscriberImpl::sealOnChannel(channelName, eventData.stdString())), {}
+        )
             .stdString()
     );
     if (!users.empty()) {
@@ -692,29 +1256,243 @@ void GroupApiImpl::sendCustomEvent(
     _serverApi.groupSendCustomEvent(model);
 }
 
-DecryptedEnvelope GroupApiImpl::decrypt(const Envelope& envelope) {
-    auto routing = _envelopeEncryptor.peek(envelope);
-    // The group id comes off an envelope we have not authenticated yet. Validating it here keeps a hostile one
-    // from steering us into a `groupGet` and a tree climb against an id of its choosing.
+DecryptedEnvelope GroupApiImpl::decrypt(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
+    requireAuthorStated(options);
+    const EnvelopeBinding binding = bindingOf(location);
+    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope);
+    // Before any key is looked up: the caller names the group, so an envelope cannot steer the read to another.
+    requireFor(routing, groupId, ENVELOPE_FROM_MEMBER);
+
+    std::int64_t epoch = 0;
+    const core::DecryptedEncKeyV2 key = encKeyById(groupId, routing.keyId, &epoch);
+    const OpenedEnvelope opened = _envelopeEncryptor.openMemberEnvelope(envelope, key.key, binding);
+    // The epoch in the header is what a server without keys gates writes on. It has to be the epoch of the key
+    // that actually opened the envelope, or a removed member would label an old key's envelope as current.
+    if (opened.keyVersion != epoch) {
+        throw InvalidEnvelopeFormatException("envelope claims an epoch other than its key's");
+    }
+    if (options.currentEpochOnly) {
+        requireCurrentKey(groupId, routing.keyId);
+    }
+    const RosterView roster = rosterOf(groupId);
+    requireVerifiedWriter(roster.contextId, opened, options);
+    const std::string role = roster.roleOf(opened.authorUserId);
+    if (role.empty()) {
+        throw EnvelopeAuthorNotMemberException(opened.authorUserId);
+    }
+    return DecryptedEnvelope{
+        .data = opened.data,
+        .author = EnvelopeAuthor{.userId = opened.authorUserId, .pubKey = opened.authorPubKey, .role = role},
+        .keyVersion = epoch,
+        .encryptedAt = opened.encryptedAt,
+        .sharedWith = audienceOf(opened.recipients),
+    };
+}
+
+std::vector<DecryptResult> GroupApiImpl::decryptMany(
+    const std::string& groupId,
+    const std::vector<DecryptItem>& items
+) {
+    std::vector<DecryptResult> results;
+    results.reserve(items.size());
+    for (const DecryptItem& item : items) {
+        DecryptResult result{};
+        try {
+            result.envelope = decrypt(groupId, item.location, item.envelope, item.options);
+        } catch (const core::Exception& e) {
+            result.statusCode = e.getCode();
+            // What the failure is about, read off the plain header: enough to name it in a warning, and
+            // unauthenticated, so never shown as fact.
+            try {
+                const EnvelopeRouting routing = GroupEnvelopeEncryptor::peekAny(item.envelope);
+                if (e.getCode() == EnvelopeWrongKindException::FULL_CODE) {
+                    result.details.envelopeKind = kindOf(routing);
+                } else if (e.getCode() == EnvelopeWrongAuthorException::FULL_CODE ||
+                           e.getCode() == EnvelopeUnverifiedAuthorException::FULL_CODE ||
+                           e.getCode() == EnvelopeAuthorNotMemberException::FULL_CODE) {
+                    result.details.userId = routing.authorUserId;
+                    result.details.pubKey = routing.authorPubKey;
+                }
+            } catch (...) {}
+        } catch (...) { result.statusCode = ENDPOINT_CORE_EXCEPTION_CODE; }
+        results.push_back(std::move(result));
+    }
+    return results;
+}
+
+Envelope GroupApiImpl::encryptAsOutsider(
+    const std::string& contextId,
+    const std::string& groupId,
+    const Path& location,
+    const core::Buffer& content,
+    const EncryptOptions& options
+) {
+    const EnvelopeBinding binding = bindingOf(location);
+    // The group's current key, off its latest verified statement: the same read a container's grant uses.
+    const auto epochs = fetchGroupEpochs(contextId, {groupId});
+    const auto epoch = epochs.find(groupId);
+    if (epoch == epochs.end()) {
+        throw core::InvalidParamsException("group " + groupId + " has no verifiable key");
+    }
+    const EnvelopeSeal seal{
+        .binding = binding,
+        .keyVersion = 0,
+        .encryptedAt = privmx::utils::Utils::getNowTimestamp(),
+        .authorUserId = _connection.getImpl()->getMyUserId(contextId),
+    };
+    return _envelopeEncryptor.packOutsiderEnvelope(
+        groupId, privmx::crypto::PublicKey::fromBase58DER(epoch->second.groupPubKey), content, _userPrivKey, seal,
+        wireRecipients(contextId, groupId, options.alsoFor)
+    );
+}
+
+DecryptedOutsiderEnvelope GroupApiImpl::decryptFromOutsider(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
+    requireAuthorStated(options);
+    const EnvelopeBinding binding = bindingOf(location);
+    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope);
+    requireFor(routing, groupId, ENVELOPE_FROM_OUTSIDER);
+
+    const OpenedEnvelope opened = _envelopeEncryptor.openOutsiderEnvelope(
+        envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey), binding
+    );
+    const std::int64_t epoch = _keys.grantEpochOf(groupId, routing.groupPubKey);
+    RosterView roster = rosterOf(groupId);
+    if (options.currentEpochOnly && epoch != roster.keyVersion) {
+        // The epoch was just looked up, the roster may be a cached one behind it: read again before refusing (as
+        // `requireCurrentKey` does).
+        getNewModuleKeysAndUpdateCache(groupId);
+        roster = rosterOf(groupId);
+        if (epoch != roster.keyVersion) {
+            throw EnvelopeStaleEpochException();
+        }
+    }
+    requireVerifiedWriter(roster.contextId, opened, options);
+    return DecryptedOutsiderEnvelope{
+        .data = opened.data,
+        .keyVersion = epoch,
+        .sender = EnvelopeSender{.userId = opened.authorUserId, .pubKey = opened.authorPubKey},
+        .encryptedAt = opened.encryptedAt,
+        .sharedWith = audienceOf(opened.recipients),
+    };
+}
+
+DecryptedAnonymousEnvelope GroupApiImpl::decryptAnonymous(
+    const std::string& groupId,
+    const Path& location,
+    const Envelope& envelope
+) {
+    const EnvelopeBinding binding = bindingOf(location);
+    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope);
+    requireFor(routing, groupId, ENVELOPE_ANONYMOUS);
+    const OpenedEnvelope opened = _envelopeEncryptor.openAnonymousEnvelope(
+        envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey), binding
+    );
+    return DecryptedAnonymousEnvelope{
+        .data = opened.data, .keyVersion = _keys.grantEpochOf(groupId, routing.groupPubKey)
+    };
+}
+
+DecryptedSharedEnvelope GroupApiImpl::decryptShared(
+    const std::string& contextId,
+    const Path& location,
+    const Envelope& envelope,
+    const DecryptOptions& options
+) {
+    requireAuthorStated(options);
+    if (options.currentEpochOnly) {
+        // A recipient holds no epoch of the author's Group to compare with: refused, never silently ignored.
+        throw core::InvalidParamsException("currentEpochOnly does not apply to a shared envelope");
+    }
+    const EnvelopeBinding binding = bindingOf(location);
+    const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope);
     core::Validator::validateId(routing.groupId, "field:envelope.groupId ");
-    if (routing.type == ENVELOPE_FROM_MEMBER) {
-        return _envelopeEncryptor.openGroupKeyEnvelope(envelope, encKeyById(routing.groupId, routing.keyId).key);
+    if (routing.type == ENVELOPE_ANONYMOUS || routing.recipients.empty()) {
+        // Not shared with anybody: a plain member's or outsider's envelope is read with the group it names.
+        throw EnvelopeWrongKindException(kindOf(routing));
     }
 
-    return _envelopeEncryptor.openAnonymousEnvelope(
-        envelope, _keys.grantKeyForPubKey(routing.groupId, routing.groupPubKey)
-    );
+    // The caller among the recipients: as a user first (no request), then through a recipient group they are in.
+    const std::string ownPubKey = _userPrivKey.getPublicKey().toBase58DER();
+    std::optional<OpenedEnvelope> opened;
+    std::string via;
+    for (std::size_t i = 0; i < routing.recipients.size() && !opened.has_value(); ++i) {
+        const WireRecipient& recipient = routing.recipients[i];
+        if (!recipient.isGroup &&
+            privmx::crypto::PublicKey::fromBase58DER(recipient.pubKey).toBase58DER() == ownPubKey) {
+            opened = _envelopeEncryptor.openSharedEnvelope(envelope, i, _userPrivKey, binding);
+            via = "user";
+        }
+    }
+    for (std::size_t i = 0; i < routing.recipients.size() && !opened.has_value(); ++i) {
+        const WireRecipient& recipient = routing.recipients[i];
+        if (!recipient.isGroup) {
+            continue;
+        }
+        std::optional<privmx::crypto::PrivateKey> groupKey;
+        try {
+            core::Validator::validateId(recipient.id, "field:envelope.recipient ");
+            groupKey = _keys.grantKeyForPubKey(recipient.id, recipient.pubKey);
+        } catch (const core::Exception&) {
+            continue; // not a group of the caller's, or not a key of that group
+        }
+        // From here a failure is about the envelope, not about who the caller is: it is reported.
+        opened = _envelopeEncryptor.openSharedEnvelope(envelope, i, groupKey.value(), binding);
+        via = recipient.id;
+    }
+    if (!opened.has_value()) {
+        throw EnvelopeNotARecipientException();
+    }
+    requireVerifiedWriter(contextId, opened.value(), options);
+
+    // Whether the writer is inside the group the envelope names is not something a recipient's key can show
+    // (`homeGroupUnverified`). The group's roster can, for a caller who is in that group too.
+    std::string membership = "unknown";
+    if (opened->type == ENVELOPE_FROM_OUTSIDER) {
+        membership = "notMember";
+    } else {
+        try {
+            // A roster of another Context says nothing about a group of this one: "unknown".
+            const RosterView roster = rosterOf(opened->groupId);
+            if (roster.contextId == contextId) {
+                membership = roster.roleOf(opened->authorUserId).empty() ? "notMember" : "member";
+            }
+        } catch (const core::Exception& e) {
+            if (isForgedHistory(e)) {
+                throw;
+            }
+        }
+    }
+    return DecryptedSharedEnvelope{
+        .data = opened->data,
+        .sender = EnvelopeSender{.userId = opened->authorUserId, .pubKey = opened->authorPubKey},
+        .homeGroupId = opened->groupId,
+        .senderMembership = membership,
+        .via = via,
+        .encryptedAt = opened->encryptedAt,
+        .sharedWith = audienceOf(opened->recipients),
+    };
 }
 
 Envelope GroupApiImpl::encryptAnonymously(
     const std::string& groupId,
     const std::string& groupPubKey,
+    const Path& location,
     const core::Buffer& content
 ) {
-    // Public information only — no membership, no server call. That is the whole point: the sender is outside
+    // Public information only: no membership, no server call. That is the whole point: the sender is outside
     // the group and must stay able to write into it knowing nothing but its id and its identity key.
     return _envelopeEncryptor.packAnonymousEnvelope(
-        groupId, privmx::crypto::PublicKey::fromBase58DER(groupPubKey), content
+        groupId, privmx::crypto::PublicKey::fromBase58DER(groupPubKey), content, bindingOf(location)
     );
 }
 
@@ -773,10 +1551,10 @@ FileHandle GroupApiImpl::beginFileDecryption(const Envelope& envelope) {
     std::string groupKey;
     if (routing.type == ENVELOPE_FROM_MEMBER) {
         groupKey = encKeyById(routing.groupId, routing.keyId).key;
-        header = _envelopeEncryptor.unpackFileEnvelope(envelope, groupKey);
+        header = _envelopeEncryptor.unpackFileEnvelope(envelope, groupKey, EnvelopeBinding{});
     } else {
         header = _envelopeEncryptor.unpackAnonymousFileEnvelope(
-            envelope, _keys.grantKeyForPubKey(routing.groupId, routing.groupPubKey)
+            envelope, _keys.grantKeyForPubKey(routing.groupId, routing.groupPubKey), EnvelopeBinding{}
         );
     }
 
@@ -809,11 +1587,12 @@ Envelope GroupApiImpl::finishFileEncryption(FileHandle fileHandle) {
     auto state = _envelopeFiles.finish(fileHandle, false);
     if (state.type == ENVELOPE_ANONYMOUS) {
         return _envelopeEncryptor.packAnonymousFileEnvelope(
-            state.groupId, privmx::crypto::PublicKey::fromBase58DER(state.groupPubKey), state.plainSize, state.fileKey
+            state.groupId, privmx::crypto::PublicKey::fromBase58DER(state.groupPubKey), state.plainSize, state.fileKey,
+            EnvelopeBinding{}
         );
     }
     return _envelopeEncryptor.packFileEnvelope(
-        state.groupId, state.keyId, state.plainSize, state.fileKey, _userPrivKey, state.groupKey
+        state.groupId, state.keyId, state.plainSize, state.fileKey, _userPrivKey, state.groupKey, EnvelopeSeal{}
     );
 }
 

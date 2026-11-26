@@ -710,6 +710,29 @@ TEST_F(TreeKeysRemoval, RefreshesTheRemoversPathAndBlanksTheLeaversRest) {
     expectEveryoneSeatedClimbs(group);
 }
 
+TEST_F(TreeKeysRemoval, SECURITY_AReseatKeepsTheSeatAndWrapsToTheKeyTheMemberHasNow) {
+    // Member 5 lost its identity key and has a new one in the Context. Member 35 reseats it: a removal's blanks and
+    // epoch, the seat kept, the remover's path wrapped through the blank to the key member 5 holds now.
+    Group group = create(40, 0);
+    const TestMember before = group.members[5];
+    group.members[5].priv = privmx::crypto::PrivateKey::generateRandom();
+    const std::vector<std::string> ids{group.members[5].userId};
+    const CommitPlan plan = planBy(group, 35, [&](TreeKeys& keys, const TestMember& who) {
+        return keys.planRemoval(group.state, ids, who.userId, who.priv, true);
+    });
+    group.state = applied(group.state, plan);
+    EXPECT_EQ(plan.epoch, 2u);
+    EXPECT_EQ(plan.shape.subjectSeats, Nodes({5}));
+    EXPECT_EQ(plan.shape.blanked, (std::set<std::uint32_t>{31})) << "what the old key could open is gone";
+    EXPECT_TRUE(isSeated(group.state, before.userId)) << "the member keeps its seat";
+    // Everybody seated reaches the new epoch, the reseated member with its new key.
+    expectEveryoneSeatedClimbs(group);
+    // And the old key reaches nothing of it.
+    const ClimbResult stale = climb(group.state, before);
+    EXPECT_NE(stale.failure, ClimbFailure::None);
+    EXPECT_FALSE(stale.grantKey.has_value());
+}
+
 TEST_F(TreeKeysRemoval, SECURITY_RefusesARemoverAmongTheLeaving) {
     // The remover mints the next grant key; removing yourself would hand you the key meant to lock you out.
     const Group group = create(8);

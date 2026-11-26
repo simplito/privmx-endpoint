@@ -28,6 +28,10 @@ struct GroupApiImplTestAccess {
     static constexpr std::uint64_t RELEASE_WINDOW_MS = CommitEngine::RELEASE_WINDOW_MS;
 
     static void selfUpdate(GroupApiImpl& api, const std::string& groupId) { api.selfUpdate(groupId); }
+    // The key member envelopes are sealed with now: to build one the honest client never would.
+    static core::DecryptedEncKeyV2 currentEncKey(GroupApiImpl& api, const std::string& groupId) {
+        return api.currentEncKey(groupId);
+    }
     // The flush point does nothing from here on, so what a test counts never depends on the random due times.
     // Self-updates are then only the explicit `selfUpdate` above, pin saves only the synchronous ones.
     static void stopDueWork(GroupApiImpl& api) { api._dueWorkOff = true; }

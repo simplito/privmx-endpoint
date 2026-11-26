@@ -27,6 +27,7 @@ limitations under the License.
 #include "privmx/endpoint/core/DefaultUserVerifierInterface.hpp"
 #include "privmx/endpoint/core/EventMiddleware.hpp"
 #include "privmx/endpoint/core/HandleManager.hpp"
+#include "privmx/endpoint/core/KeyContinuityVerifier.hpp"
 #include "privmx/endpoint/core/KeyProvider.hpp"
 #include "privmx/endpoint/core/PinStoreInterface.hpp"
 #include "privmx/endpoint/core/ServerApi.hpp"
@@ -106,6 +107,21 @@ public:
     // The keys `adoptPreviousIdentity` was called with, other than the current one (stored pins or not): the only
     // knowledge of an identity key change this client has that the Bridge did not supply.
     std::vector<crypto::PrivateKey> previousIdentities();
+    // `adoptPreviousIdentity`, and from then on a GroupApi re-wraps the caller's own leaf with `previous` by itself
+    // (once per group) where the current key does not open it.
+    void renewIdentity(const crypto::PrivateKey& previous);
+    bool renewsLeaves();
+    // Replaces the UserVerifier with the built-in key-continuity one (KeyContinuityVerifier), which knows this
+    // connection's own keys from the start.
+    void useKeyContinuity();
+    // Accepts a user's key change in the key-continuity verifier. Throws InvalidParamsException when that verifier is
+    // not the one in use: the application's own decides then, and is the thing to update.
+    void acceptKeyChange(
+        const std::string& contextId,
+        const std::string& userId,
+        const std::string& previousPubKey,
+        const std::string& newPubKey
+    );
     std::string getMyUserId(const std::string& contextId);
     DataIntegrityObject createDIO(
         const std::string& contextId,
@@ -154,10 +170,12 @@ private:
     std::shared_ptr<EventMiddleware> _eventMiddleware;
     std::shared_ptr<HandleManager> _handleManager;
     std::shared_ptr<UserVerifier> _userVerifier;
-    std::shared_ptr<PinStoreInterface> _pinStore;        // under _mutex
-    std::map<std::string, std::string> _stagedPinBodies; // under _mutex
-    std::vector<crypto::PrivateKey> _previousIdentities; // under _mutex
-    bool _public = false;                                // set once, in connectPublic, before the impl is shared
+    std::shared_ptr<KeyContinuityVerifier> _keyContinuity; // under _mutex; set by useKeyContinuity, null otherwise
+    bool _renewsLeaves = false;                            // under _mutex
+    std::shared_ptr<PinStoreInterface> _pinStore;          // under _mutex
+    std::map<std::string, std::string> _stagedPinBodies;   // under _mutex
+    std::vector<crypto::PrivateKey> _previousIdentities;   // under _mutex
+    bool _public = false;                                  // set once, in connectPublic, before the impl is shared
     std::shared_ptr<ContextProvider> _contextProvider;
     std::shared_mutex _mutex;
     std::shared_ptr<SubscriberImpl> _subscriber;

@@ -121,6 +121,8 @@ ContainerPolicyWithoutItem VarDeserializer::deserialize<ContainerPolicyWithoutIt
         ),
         .rotateKeys = deserializeOptional<std::string>(obj->get("rotateKeys"), name + ".rotateKeys"),
         .forwardSecrecy = deserializeOptional<std::string>(obj->get("forwardSecrecy"), name + ".forwardSecrecy"),
+        .addMembers = deserializeOptional<std::string>(obj->get("addMembers"), name + ".addMembers"),
+        .removeMembers = deserializeOptional<std::string>(obj->get("removeMembers"), name + ".removeMembers"),
     };
 }
 

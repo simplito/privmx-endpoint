@@ -74,6 +74,8 @@ struct GroupSession {
     privmx::utils::ThreadSaveMap<std::string, core::DecryptedEncKeyV2> envelopeKeys;
     // Which epoch a published grant public key (Base58) belongs to.
     privmx::utils::ThreadSaveMap<std::string, int64_t> envelopeGrantEpochs;
+    // The epoch each of `envelopeKeys` was opened at, by key id; dropped with them.
+    privmx::utils::ThreadSaveMap<std::string, int64_t> envelopeKeyEpochs;
     // Grant private keys by epoch, each checked against the epoch's published public key. Kept for the whole
     // connection (dropped on disconnect, not on connect): a removal ends a member's access to later epochs, and a hot
     // session keeps the ones it already held — as it would by keeping the keys themselves.

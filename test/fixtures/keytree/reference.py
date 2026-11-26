@@ -7,7 +7,9 @@ source of the other's expectations. Change a layout here first, from the spec, t
 
     H = sha256; u8/u32/u64 big-endian; lp(s) = u32(len) || s; a domain tag ends in NUL
     PH = H("pmx-group-policy\\0" || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy)
-           || lp(ownerCanBeRemovedFromManagers))          each field resolved against the frozen v3 defaults
+           || lp(ownerCanBeRemovedFromManagers) [|| lp(addMembers) || lp(removeMembers)])
+           each field resolved against the frozen v3 defaults; the bracketed pair only when the policy sets one of
+           the two, an unset one of them being `update`'s resolved value
     SB = "pmx-tree-commit\\0" || lp(groupId) || u32(treeVersion) || u64(seq) || lp(prevDigest) || u8(op) || u64(date)
          || u64(keyVersion) || lp(groupPubKey) || u64(rosterVersion) || RH || TH || PH || lp(committer)
          || lp(committerPubKey) || u32(committerSeat) || u32(#path) || (u32(v) || u32(gen) || lp(pk) || CH)*
@@ -31,7 +33,7 @@ TAGS = [
     b"pmx-group-policy\0",
 ]
 
-OP_CODES = {"create": 1, "add": 2, "remove": 3, "selfUpdate": 4, "rotate": 5, "policy": 6}
+OP_CODES = {"create": 1, "add": 2, "remove": 3, "selfUpdate": 4, "rotate": 5, "policy": 6, "roles": 7, "reseat": 8}
 
 # Frozen with the v3 format: NOT the bridge's context defaults.
 V3_POLICY_DEFAULTS = {
@@ -41,6 +43,8 @@ V3_POLICY_DEFAULTS = {
     "ownerCanBeRemovedFromManagers": "yes",
 }
 SIGNED_POLICY_FIELDS = ["update", "rotateKeys", "updatePolicy", "ownerCanBeRemovedFromManagers"]
+# The roster's two rules: unset, each is `update`'s value, and neither is hashed unless one is set.
+MEMBER_RULES = ["addMembers", "removeMembers"]
 
 
 def u8(v):
@@ -76,6 +80,10 @@ def policy_hash(policy, creator):
     pre = tag("pmx-group-policy") + lp(creator)
     for field in SIGNED_POLICY_FIELDS:
         pre += lp(resolve(policy, field))
+    unset = lambda field: policy.get(field) in (None, "inherit", "default")
+    if not all(unset(field) for field in MEMBER_RULES):
+        for field in MEMBER_RULES:
+            pre += lp(resolve(policy, "update") if unset(field) else policy[field])
     return hashlib.sha256(pre).hexdigest()
 
 
@@ -106,6 +114,12 @@ POLICIES = [
     # Fields the statements do not sign: same hash as the explicit set above.
     (dict(EXPLICIT, get="all", delete="none", sendCustomNotification="user", item={"get": "user"}), "alice"),
     (dict(EXPLICIT), "bob"),
+    # The roster's rules: unset ones change nothing, one set hashes both, and the two are not interchangeable.
+    (dict(EXPLICIT, addMembers="inherit", removeMembers="default"), "alice"),
+    ({"addMembers": "user"}, "alice"),
+    ({"addMembers": "user", "removeMembers": "manager,owner"}, "alice"),
+    ({"addMembers": "manager,owner", "removeMembers": "user"}, "alice"),
+    (dict(EXPLICIT, removeMembers="none"), "alice"),
 ]
 
 # rosterHash({carol, alice}, {bob}) and the tiny tree of TreeCommitsTest.cpp (themselves vectors there).
@@ -125,11 +139,20 @@ POLICY_CHANGE = dict(
     path=[], removed=[], policy=dict(EXPLICIT),
 )
 
+# bob becomes a manager, carol a user: no node, no epoch, the roster version moves.
+ROLES = dict(
+    REMOVAL, seq=9, prevDigest="44" * 32, op="roles", date=1760000000002, rosterVersion=10,
+    path=[], removed=[], addedManagers=["bob"], addedUsers=["carol"],
+)
+
+# A removal's statement in every field but the op: `removed` names who was reseated.
+RESEAT = dict(REMOVAL, seq=10, prevDigest="55" * 32, op="reseat", date=1760000000003, keyVersion=5, rosterVersion=11)
+
 
 def vectors():
     return {
         "signedBytes": [
-            {"statement": s, "expectedHex": signed_bytes(s).hex()} for s in (REMOVAL, POLICY_CHANGE)
+            {"statement": s, "expectedHex": signed_bytes(s).hex()} for s in (REMOVAL, POLICY_CHANGE, ROLES, RESEAT)
         ],
         "policyHash": [
             {"policy": p, "creator": c, "expectedHex": policy_hash(p, c)} for p, c in POLICIES
