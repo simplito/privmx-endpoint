@@ -35,7 +35,6 @@ public:
     virtual std::string aes256CbcPkcs7Decrypt(const std::string& data, const std::string& key, const std::string& iv) const  = 0;
     virtual std::string prf_tls12(const std::string& key, const std::string& seed, size_t length) const  = 0;
     virtual std::string aes256CbcHmac256Decrypt(std::string data, const std::string& key32, size_t taglen = 16) const  = 0;
-    virtual std::string ctDecrypt(const std::string& data, const std::string& key32, const std::string& iv16, size_t taglen = 16, const std::string& key16 = std::string()) const  = 0;
     virtual std::string pbkdf2(const std::string& password, const std::string& salt, const int32_t rounds, const size_t length, const std::string& hash) const = 0;
 };
 

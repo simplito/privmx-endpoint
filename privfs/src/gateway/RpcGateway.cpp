@@ -16,7 +16,6 @@ limitations under the License.
 
 #include <privmx/privfs/gateway/RpcGateway.hpp>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/CryptoPrivmx.hpp>
 #include <privmx/crypto/ecc/PrivateKey.hpp>
 #include <privmx/privfs/types/Types.hpp>
 #include <privmx/utils/TypedObject.hpp>

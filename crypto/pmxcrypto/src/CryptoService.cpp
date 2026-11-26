@@ -18,7 +18,6 @@ limitations under the License.
 #include <privmx/cryptoservice/base/CoreTypes.hpp>
 #include <privmx/cryptoservice/base/Exceptions.hpp>
 
-#include <privmx/crypto/CipherType.hpp>
 #include <privmx/crypto/CryptoException.hpp>
 #include <privmx/crypto/pmxcrypto/ProviderAccess.hpp>
 
@@ -152,8 +151,6 @@ std::string pmximpl::CryptoService::pbkdf2(
 // `CompositionVectorsTest`: golden vectors computed from an independent model of each construction,
 // which passed against the previous hand-written implementation and pass against this one.
 //
-// `ctDecrypt` below stays local - it is byte layout (a one-byte cipher-type prefix), not a
-// cryptographic construction, and pmx-crypto has no equivalent to delegate to.
 // ---------------------------------------------------------------------------------------------
 
 string pmximpl::CryptoService::prf_tls12(const string& key, const string& seed, size_t length) const {
@@ -178,28 +175,3 @@ string pmximpl::CryptoService::aes256CbcHmac256Decrypt(string data, const string
     });
 }
 
-string pmximpl::CryptoService::ctDecrypt(
-    const string& data,
-    const string& key32,
-    const string& iv16,
-    size_t taglen,
-    [[maybe_unused]] const string& key16
-) const {
-    if (key32.length() != 32) {
-        throw DecryptInvalidKeyLengthException("required: 32, received: " + to_string(key32.length()));
-    }
-    switch (data[0]) {
-        case CipherType::AES_256_CBC_PKCS7_NO_IV:
-            if (iv16.empty()) {
-                throw MissingIvException();
-            }
-            return aes256CbcPkcs7Decrypt(data.substr(1), key32, iv16);
-        case CipherType::AES_256_CBC_PKCS7_WITH_IV:
-            return aes256CbcPkcs7Decrypt(data.substr(17), key32, data.substr(1, 16));
-        case CipherType::XTEA_ECB_PKCS7:
-            throw NotImplementedException();
-        case CipherType::AES_256_CBC_PKCS7_WITH_IV_AND_HMAC_SHA256:
-            return aes256CbcHmac256Decrypt(data.substr(1), key32, taglen);
-    }
-    throw UnknownDecryptionTypeException(to_string(data[0]));
-}

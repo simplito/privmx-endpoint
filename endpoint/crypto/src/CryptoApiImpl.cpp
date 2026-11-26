@@ -9,9 +9,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include <privmx/crypto/CipherType.hpp>
 #include <privmx/crypto/Crypto.hpp>
-#include <privmx/crypto/CryptoPrivmx.hpp>
 
 #include <privmx/endpoint/core/crypto/PrivateKey.hpp>
 #include <privmx/endpoint/core/crypto/PublicKey.hpp>
@@ -75,24 +73,16 @@ core::Buffer CryptoApiImpl::encryptDataSymmetric(const core::Buffer& data, const
 }
 
 /**
- * Reads both the suite-tagged frame this API writes now and the one it wrote through 2.x.
+ * Reads the suite-tagged frame this API writes.
  *
- * Unlike every other frame in the library, what this one produces does not live on the bridge: the
- * caller is handed bytes and keeps them wherever it likes. There is no container to migrate and no
- * way to reach the old data, so dropping the old format would strand it permanently.
- *
- * Dispatch is exact despite the two numbering schemes sharing values 1 and 2. `CipherType` runs
- * 1..4, but this API only ever wrote `AES_256_CBC_PKCS7_WITH_IV_AND_HMAC_SHA256` (4) and only ever
- * accepted it — `privmxDecrypt(true, ...)` refuses anything else — so 4 is the whole of the legacy
- * surface here, and it is a value no `SuiteId` uses.
+ * It used to read the 2.x frame as well, for the one reason that applied here and nowhere else:
+ * what this API hands back does not live on the bridge, so there is no container to migrate. 3.0.0
+ * does not carry backward compatibility, and keeping a second format reachable means keeping a
+ * second way for a frame to be interpreted — see `CryptoSuite` on why the suite tag is authenticated
+ * and the old `CipherType` byte was not.
  */
 core::Buffer CryptoApiImpl::decryptDataSymmetric(const core::Buffer& data, const core::Buffer& key) {
-    const std::string framed = data.stdString();
-    if (!framed.empty() &&
-        framed[0] == privmx::crypto::CipherType::AES_256_CBC_PKCS7_WITH_IV_AND_HMAC_SHA256) {
-        return core::Buffer::from(privmx::crypto::CryptoPrivmx::privmxDecrypt(true, framed, key.stdString()));
-    }
-    return core::Buffer::from(core::CryptoSuite::decrypt(key.stdString(), framed));
+    return core::Buffer::from(core::CryptoSuite::decrypt(key.stdString(), data.stdString()));
 }
 
 // Returns a WIF rather than a key object: the only consumer needs nothing else, and handing back a

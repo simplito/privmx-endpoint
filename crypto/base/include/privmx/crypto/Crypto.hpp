@@ -38,9 +38,9 @@ namespace crypto {
  *     problem is that equal blocks encrypt equal — is out of the library.
  *   - `kdf`, `getKEM`, `generateIv` — no callers. The KDF construction itself is alive and on the
  *     wire through `core::FormatHash::kdf`, which `FormatHashVectorsTest` pins.
- *   - the encrypting half of the legacy frame (`aes256CbcHmac256Encrypt`, the three `ct*` framings
- *     and `CryptoPrivmx::privmxEncrypt`) — nothing writes that format any more. The decrypting half
- *     stays, because callers still hold bytes written by 2.x.
+ *   - the legacy frame, both halves. Writing it went when its last caller did; reading it went with
+ *     3.0.0, which carries no backward compatibility. `aes256CbcHmac256Decrypt` stays, but as a
+ *     primitive the rpc layer uses — not as a reader for a second frame format.
  */
 class Crypto
 {
@@ -55,7 +55,6 @@ public:
     static std::string prf_tls12(const std::string& key, const std::string& seed, size_t length);
     static std::string pbkdf2(const std::string& password, const std::string& salt, size_t rounds, size_t length, const std::string& algorithm);
     static std::string aes256CbcHmac256Decrypt(std::string data, const std::string& key32, size_t taglen = 16);
-    static std::string ctDecrypt(const std::string& data, const std::string& key32, const std::string& iv16, size_t taglen = 16, const std::string& key16 = std::string());
 };
 
 inline std::string Crypto::randomBytes(size_t length) {
@@ -106,11 +105,6 @@ inline std::string Crypto::pbkdf2(const std::string& password, const std::string
 inline std::string Crypto::aes256CbcHmac256Decrypt(std::string data, const std::string& key32, size_t taglen) {
     auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
     return crypto_service->aes256CbcHmac256Decrypt(data, key32, taglen);
-}
-
-inline std::string Crypto::ctDecrypt(const std::string& data, const std::string& key32, const std::string& iv16, size_t taglen, const std::string& key16) {
-    auto crypto_service = CryptoEnv::getEnv()->getCryptoService();
-    return crypto_service->ctDecrypt(data, key32, iv16, taglen, key16);
 }
 
 } // crypto

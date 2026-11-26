@@ -2,8 +2,6 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <string>
-#include <privmx/crypto/CipherType.hpp>
-#include <privmx/crypto/CryptoPrivmx.hpp>
 #include <privmx/endpoint/crypto/CryptoApi.hpp>
 #include <privmx/endpoint/crypto/ExtKey.hpp>
 #include <privmx/endpoint/core/crypto/KeyFormats.hpp>
@@ -180,38 +178,22 @@ TEST_F(CryptoTest, encryptDataSymmetric_decryptDataSymmetric) {
 }
 
 /**
- * A blob this API produced before the suite-tagged frame must still open.
- *
- * What `encryptDataSymmetric` hands back does not live on the bridge — the caller keeps the bytes
- * wherever it likes — so there is no container to migrate and no second chance at the old data.
- * Reading 2.x output is the only way it stays reachable.
- *
- * The blob is a **constant**, and has to be: nothing writes this format any more. It was captured
- * from `CryptoPrivmx::privmxEncrypt` while that still existed — the same function 2.x shipped, whose
- * output `CompositionVectorsTest` pinned against an independent model — so it is a real 2.x frame
- * and not a description of today's code. Producing it here instead would have meant keeping a writer
- * alive for its own test, which is how the old login paths stayed in the tree for years.
- *
- * 49 bytes: the cipher-type marker, a 16-byte IV, one AES block of ciphertext, and a 16-byte tag.
+ * A 2.x blob used to be pinned here and had to open. It no longer does, and that is the point:
+ * 3.0.0 carries no backward compatibility, so `decryptDataSymmetric` reads one format — the
+ * suite-tagged frame, whose tag is authenticated. The old `CipherType` byte was not, which is
+ * exactly the downgrade surface a second reachable format brings with it.
  */
-TEST_F(CryptoTest, decryptDataSymmetric_readsA2xBlob) {
+TEST_F(CryptoTest, decryptDataSymmetric_refusesA2xBlob) {
     const std::string key = privmx::utils::Hex::toString(
         "3ad696c8c37f286adbbd66b2f31e90041850ae2d3ec30250020c0209085f8c62"
     );
     const std::string legacy = privmx::utils::Hex::toString(
         "0478d6fcdf5be68f5ea8af3029ef637bcbc785d94c3064d008e67f6bd2a7c6669a05219eba9963e53571c782ea17eee476"
     );
-    // The marker the dispatch turns on, and one no `SuiteId` uses. Copied into a local because
-    // `CipherType`'s members are in-class declarations with no out-of-line definition, so binding
-    // one to `ASSERT_EQ`'s reference parameter would not link.
-    const char signedCbcMarker = privmx::crypto::CipherType::AES_256_CBC_PKCS7_WITH_IV_AND_HMAC_SHA256;
-    ASSERT_EQ(signedCbcMarker, legacy[0]);
 
-    core::Buffer decrypted;
-    EXPECT_NO_THROW({
-        decrypted = cryptoApi->decryptDataSymmetric(core::Buffer::from(legacy), core::Buffer::from(key));
-    });
-    EXPECT_EQ("data", decrypted.stdString());
+    EXPECT_ANY_THROW(
+        cryptoApi->decryptDataSymmetric(core::Buffer::from(legacy), core::Buffer::from(key))
+    );
 }
 
 TEST_F(CryptoTest, convertPEMKeytoWIFKey) {

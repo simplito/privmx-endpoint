@@ -28,10 +28,9 @@ namespace pmximpl {
  * The surface is what the remaining callers use and nothing more — see `privmx::crypto::Crypto` for
  * what was removed once the SRP, key and session login paths went, and why an unused primitive is
  * worse than a missing one. Two compositions stay local because they are byte layout rather than
- * cryptography: `hash160` (a digest of a digest) and `ctDecrypt` (a one-byte cipher-type prefix).
- * `prf_tls12` and `aes256CbcHmac256Decrypt` are delegated to pmx-crypto, which implements the same
- * constructions; `CompositionVectorsTest` pins both against an independent model, which is what made
- * that delegation safe to do.
+ * Nothing here is composed any more: `prf_tls12` and `aes256CbcHmac256Decrypt` are delegated to
+ * pmx-crypto, which implements the same constructions, and `CompositionVectorsTest` pins both
+ * against an independent model - which is what made that delegation safe to do.
  */
 class CryptoService : public privmx::crypto::CryptoService
 {
@@ -49,13 +48,6 @@ public:
         const override;
     std::string prf_tls12(const std::string& key, const std::string& seed, size_t length) const override;
     std::string aes256CbcHmac256Decrypt(std::string data, const std::string& key32, size_t taglen = 16) const override;
-    std::string ctDecrypt(
-        const std::string& data,
-        const std::string& key32,
-        const std::string& iv16,
-        size_t taglen = 16,
-        const std::string& key16 = std::string()
-    ) const override;
     std::string pbkdf2(
         const std::string& password,
         const std::string& salt,

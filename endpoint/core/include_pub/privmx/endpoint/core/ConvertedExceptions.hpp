@@ -199,13 +199,10 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointCryptoException, "Unknown Crypto except
     X(ECCIsNotInitializedException, "ECC is not initialized", 0x0005)                                                 \
     X(WrongMessageSecurityTagException, "Wrong message security tag", 0x0007)                                         \
     X(DecryptInvalidKeyLengthException, "Decrypt invalid key length", 0x0008)                                         \
-    X(MissingIvException, "Missing iv", 0x0009)                                                                       \
-    X(UnknownDecryptionTypeException, "Unknown decryption type", 0x000A)                                              \
     X(UnsupportedHashAlgorithmException, "Unsupported hash algorithm", 0x000B)                                        \
     X(CryptoNotImplementedException, "Not implemented", 0x000C)                                                       \
     X(InvalidChecksumException, "Invalid checksum", 0x0010)                                                           \
     X(EncryptInvalidKeyLengthException, "Encrypt invalid key length", 0x0011)                                         \
-    X(MissingRequiredSignatureException, "Missing required signature", 0x0016)                                        \
     X(IncorrectParamsException, "Incorrect params", 0x001B)                                                           \
     X(InvalidHandshakeStateException, "Invalid handshake state", 0x001C)                                              \
     X(InvalidNetworkException, "Invalid network", 0x0023)                                                             \

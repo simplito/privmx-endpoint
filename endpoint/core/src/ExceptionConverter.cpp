@@ -157,10 +157,6 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
             throw crypto::WrongMessageSecurityTagException(std::string(e.what()) + "\n" + e.getData());
         case 0x0008:
             throw crypto::DecryptInvalidKeyLengthException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0009:
-            throw crypto::MissingIvException(std::string(e.what()) + "\n" + e.getData());
-        case 0x000A:
-            throw crypto::UnknownDecryptionTypeException(std::string(e.what()) + "\n" + e.getData());
         case 0x000B:
             throw crypto::UnsupportedHashAlgorithmException(std::string(e.what()) + "\n" + e.getData());
         case 0x000C:
@@ -169,8 +165,6 @@ void ExceptionConverter::rethrowAsCoreException(const privmx::utils::PrivmxExcep
             throw crypto::InvalidChecksumException(std::string(e.what()) + "\n" + e.getData());
         case 0x0011:
             throw crypto::EncryptInvalidKeyLengthException(std::string(e.what()) + "\n" + e.getData());
-        case 0x0016:
-            throw crypto::MissingRequiredSignatureException(std::string(e.what()) + "\n" + e.getData());
         case 0x001B:
             throw crypto::IncorrectParamsException(std::string(e.what()) + "\n" + e.getData());
         case 0x001C:
