@@ -55,6 +55,7 @@ limitations under the License.
 #include <privmx/endpoint/group/keytree/TreeCommits.hpp>
 
 #include "AcceptAllVerifier.hpp"
+#include "TestHelpers.hpp"
 
 using privmx::crypto::PrivateKey;
 
@@ -120,6 +121,7 @@ protected:
         group.publicMetaVersion = publicMetaVersion;
         group.privateMetaVersion = privateMetaVersion;
         group.keyVersion = keyVersion;
+        group.policy = policyOf({}); // the default rules
         const int64_t publicMetaEpoch = publicMetaKeyVersion.value_or(keyVersion);
         const int64_t privateMetaEpoch = privateMetaKeyVersion.value_or(keyVersion);
 
@@ -488,7 +490,7 @@ TEST_F(GroupRosterTag, SECURITY_AMetadataEntryWrittenOffTheRosterIsRefused) {
     EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
     EXPECT_THROW(verifier.assertPrivateMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
     PriorRole prior{
-        .rules = keytree::TreeCommits::rules(Poco::Dynamic::Var(), "alice"),
+        .rules = keytree::TreeCommits::rules(policyOf({}), "alice"),
         .users = {"bob", "carol"},
         .managers = {"alice", "dave"},
         .publicMeta = group.publicMeta,
@@ -500,15 +502,15 @@ TEST_F(GroupRosterTag, SECURITY_AMetadataEntryWrittenOffTheRosterIsRefused) {
     plainUser.users.push_back("dave");
     plainUser.managers = {"alice"};
     EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey), plainUser), GroupMembershipMismatchException)
-        << "dave held no update then";
+        << "dave held no editPublicMeta then";
     PriorRole otherEntry = prior;
     otherEntry.publicMeta.version += 1;
     EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey), otherEntry), GroupMembershipMismatchException)
         << "not the entry read before";
 }
 
-TEST_F(GroupRosterTag, SECURITY_AMetadataPlaneWrittenWithoutTheUpdateRoleIsRefused) {
-    // The role half: bob is on the roster but the group's signed policy gives `update` to managers only.
+TEST_F(GroupRosterTag, SECURITY_AMetadataPlaneWrittenWithoutItsRuleIsRefused) {
+    // The role half: bob is on the roster but the group's signed rules give both planes to managers only.
     auto group = serve({"bob", "carol"}, {"alice"}, 4, 2, encKey, 7, std::nullopt, 7);
     group.creator = "alice";
     group.publicMeta.author = "bob";
@@ -516,13 +518,18 @@ TEST_F(GroupRosterTag, SECURITY_AMetadataPlaneWrittenWithoutTheUpdateRoleIsRefus
     GroupDataSchemaMapper verifier(PrivateKey::generateRandom(), core::Connection());
     EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
     EXPECT_THROW(verifier.assertPrivateMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
-    Poco::JSON::Object::Ptr everyMember = new Poco::JSON::Object();
-    everyMember->set("update", "user");
-    group.policy = everyMember;
+    // Each plane under its own rule.
+    group.policy = policyOf({{"editPublicMeta", "members"}});
     EXPECT_NO_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey)));
+    EXPECT_THROW(verifier.assertPrivateMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
+    group.policy = policyOf({{"editPrivateMeta", "members"}});
+    EXPECT_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
     EXPECT_NO_THROW(verifier.assertPrivateMetaIsAttested(group, key(encKey)));
-    // The key's wrapper needs no role: a rotator with `rotateKeys` alone authors the epoch's key entry.
+    // A served rules object that does not parse is refused, not read as the defaults.
     group.policy = Poco::Dynamic::Var();
+    EXPECT_THROW(verifier.assertPrivateMetaIsAttested(group, key(encKey)), GroupMembershipMismatchException);
+    // The key's wrapper needs no role: any member may rotate, and so author the epoch's key entry.
+    group.policy = policyOf({});
     group.publicMeta.author = "alice";
     EXPECT_NO_THROW(verifier.assertPublicMetaIsAttested(group, key(encKey, "bob")));
 }

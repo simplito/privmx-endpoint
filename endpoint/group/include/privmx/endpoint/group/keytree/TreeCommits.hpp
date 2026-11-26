@@ -129,20 +129,20 @@ public:
         const std::string& policyHash
     );
 
-    // `GroupRules` of a policy object (empty = `{}`) and its creator, with `hash` =
-    // `H("pmx-group-policy\0" || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy)
-    // || lp(ownerCanBeRemovedFromManagers) [|| lp(addMembers) || lp(removeMembers)])`, each resolved against the frozen
-    // v3 defaults (manager, manager, manager, yes) and hashed verbatim; the bracketed pair (an unset one is `update`'s
-    // value) only when the policy sets one of them. Throws std::invalid_argument on a non-object policy, a non-string rule, or a rule outside
-    // the bridge's group grammar (`none`, `all`, or unique alternatives of unique user/manager/owner atoms, no part
-    // empty; `ownerCanBeRemovedFromManagers` yes/no): such a policy is never signed and, served, is an integrity error.
+    // The fields of a rules object, in hash order.
+    static const std::vector<std::string>& ruleFields();
+
+    // `GroupRules` of a rules object and its creator, with `hash` = `H("pmx-group-rules-v1\0" || lp(creator)
+    // || lp(field)* in `ruleFields` order)`. Strict: an object with exactly those nine fields, each "managers",
+    // "members" or "nobody"; anything else throws std::invalid_argument. Defaults are the signer's to fill,
+    // so such an object is never signed and, served, is an integrity error.
     static GroupRules rules(const Poco::Dynamic::Var& policy, const std::string& creator);
 
-    // A policy rule for a member, exactly as the bridge's `PolicyService.userMeetsPolicy`: `,` separates
-    // alternatives, `&` joins atoms that must all hold; `none` is false, `all` true, `user` a roster member, `manager`
-    // a manager, `owner` the creator; `itemOwner` and any unknown atom false. Fails closed: an empty alternative or atom
-    // admits nobody (the bridge sees atom "" and denies too).
-    static bool allows(const std::string& rule, bool member, bool manager, bool owner);
+    // The member of `rules` a field of `ruleFields` names. Throws std::invalid_argument on another name.
+    static std::string& ruleOf(GroupRules& rules, const std::string& field);
+
+    // A rule for a member: "managers" a manager, "members" anybody on the roster, "nobody" nobody.
+    static bool allows(const std::string& rule, bool member, bool manager);
 
     // Whether `userId` is on either list of a served roster.
     static bool onRoster(
@@ -151,10 +151,11 @@ public:
         const std::string& userId
     );
 
-    // The role column of the op-effect table, on the rules and roster before `statement`: create none (the
-    // committer is the creator), add `addMembers`, remove and reseat `removeMembers` (and, removing the creator from
-    // the managers, `ownerCanBeRemovedFromManagers` "yes"), rotate `rotateKeys`, selfUpdate a seat, policy and roles
-    // `updatePolicy` (roles with the same owner rule). False for an op without a row.
+    // The role column of the op-effect table, on the rules and roster before `statement`: every rule the op touches.
+    // Create always (the committer is the creator); add `addMembers` (+ `changeRoles` seating a manager); remove
+    // `removeMembers` (+ `changeRoles` removing a manager); reseat `replaceMemberKeys`; roles `changeRoles`; policy
+    // `changeRules`; rotate and selfUpdate any member. A remove or roles statement that leaves a group that had
+    // managers with none is refused. False for an op without a row.
     static bool permits(
         const GroupRules& rules,
         const CommitStatement& statement,
@@ -202,14 +203,6 @@ private:
 
     // The wire spelling of an op, "" for one outside the enum.
     static const char* opName(CommitOp op);
-
-    // The v3 rule a statement signs for an absent, "inherit" or "default" value: frozen with the format, NOT the
-    // bridge's context defaults (the context only vetoes). Throws std::invalid_argument on a non-string rule.
-    static std::string resolved(const Poco::JSON::Object::Ptr& policy, const std::string& field, const char* fallback);
-
-    // `rule` checked against the bridge's group-rule grammar (`PolicyService.isValidPolicyEntry` with the values
-    // `validateGroupPolicy` allows), after `resolved`. Throws std::invalid_argument on anything outside it.
-    static std::string grammatical(const std::string& field, std::string rule);
 
     // Throws std::invalid_argument when a wire number does not fit `T`, naming `field`.
     template<typename T>

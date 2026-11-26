@@ -76,8 +76,9 @@ bool GroupMetadata::carryMetadataForward(
     const std::string& groupId,
     CarryScope scope,
     bool historyAbandoned,
-    const std::vector<std::string>& losers,
-    const PriorRole& prior
+    const PriorRole& prior,
+    bool narrowedPublic,
+    bool narrowedPrivate
 ) const {
     try {
         // One verified answer decides both whether a plane is carried and what it says: re-signing metadata this
@@ -104,11 +105,8 @@ bool GroupMetadata::carryMetadataForward(
                 return true;
             }
         } else {
-            const auto lost = [&](const std::string& author) {
-                return std::find(losers.begin(), losers.end(), author) != losers.end();
-            };
-            carryPublic = lost(group.publicMeta.author);
-            carryPrivate = lost(group.privateMeta.author);
+            carryPublic = narrowedPublic;
+            carryPrivate = narrowedPrivate;
         }
         // On every carried plane: only the very entry read before the commit. One tagged since (by a member
         // removed meanwhile, or by a loser of a narrowing, which still holds the current key) is never re-signed.
@@ -117,7 +115,7 @@ bool GroupMetadata::carryMetadataForward(
         if (!carryPublic && !carryPrivate) {
             return true; // already current, or written over since: nothing of the read is left to carry
         }
-        // The entries as read are judged by the read's rules and roster: a plane whose author lacked `update`
+        // The entries as read are judged by the read's rules and roster: a plane whose author lacked its rule
         // then is refused here too, so neither a removal nor a narrowing launders it.
         const Group opened = mapper.validateDecryptAndConvertGroup(
             group, keyProvider, keys.resolverOver(&verified), prior
@@ -146,7 +144,9 @@ bool GroupMetadata::carryMetadataForward(
 }
 
 void GroupMetadata::runPolicyCarry(const std::string& groupId, const PendingCarry& carry) const {
-    const bool done = carryMetadataForward(groupId, CarryScope::Policy, false, carry.losers, carry.prior);
+    const bool done = carryMetadataForward(
+        groupId, CarryScope::Policy, false, carry.prior, carry.publicPlane, carry.privatePlane
+    );
     const auto session = deps.sessions.of(groupId);
     std::lock_guard<std::mutex> lock(session->mutex);
     if (done) {

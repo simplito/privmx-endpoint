@@ -68,7 +68,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies,
+        const GroupRulesUpdate& rules,
         // The name the group is created under instead of a random one: its id follows from it (TreeCommits::groupId).
         const std::optional<std::string>& resourceId = std::nullopt,
         const std::optional<std::string>& visibleTo = std::nullopt
@@ -87,7 +87,7 @@ public:
         bool reseat = false
     ) const;
     // Moves members between the two lists (op `roles`): a roster entry, no node, no epoch. `carry` is set when a
-    // metadata plane's author loses `update` with its role.
+    // metadata plane's author loses that plane's rule with its role.
     void setRoles(
         const std::string& groupId,
         const std::vector<GroupRoleChange>& changes,
@@ -105,12 +105,29 @@ public:
         const std::string& op,
         bool mayCompleteOther
     ) const;
-    // `carry` is set when the change narrows `update` under a plane's author.
-    void updatePolicy(
+    // A rules commit (op "policy") over the verified rules with `update`'s set fields replaced. `carry` is set when
+    // the change narrows a plane's rule under that plane's author.
+    void updateRules(
         const std::string& groupId,
-        const core::ContainerPolicy& policies,
+        const GroupRulesUpdate& update,
         std::optional<PendingCarry>& carry
     ) const;
+
+    // The rules object a creator or a rules change signs: `update`'s set fields over `base` (nullptr: the defaults,
+    // "managers" for every rule).
+    static Poco::Dynamic::Var rulesObject(const GroupRulesUpdate& update, const keytree::GroupRules* base);
+    static std::vector<const std::optional<std::string>*> fieldsOf(const GroupRulesUpdate& update);
+
+    // Refuses (GroupUnauthorizedSignerException) when the caller, on `group`'s roster and rules (a verified read),
+    // does not hold `rule`: for the rules only the Bridge enforces, checked before the call is made.
+    static void assertRule(
+        const server::GroupInfo& group,
+        std::string keytree::GroupRules::* rule,
+        const char* ruleName,
+        const std::string& what
+    );
+    // `changeVisibility` on a verified read of `groupId`. Throws InvalidParamsException for a non-member.
+    void assertMayChangeVisibility(const std::string& groupId) const;
 
     // `group` comes from a verified read at plan scope. `removing` (a removal of these users): a climb that fails on
     // the served edges (not on membership) is logged and the state returned anyway — a removal plans from public state
@@ -169,8 +186,20 @@ private:
         const server::GroupGetKeyArchiveResult& archive
     );
 
-    // The rules of a policy the caller asks to sign: one outside the group grammar is the caller's error.
+    // The rules the caller asks to sign: an unknown value is the caller's error.
     static keytree::GroupRules requestedRules(const Poco::Dynamic::Var& policy, const std::string& creator);
+
+    // The planes of `group` (read as `mapped`, under `prior`) whose author loses the plane's rule under `rules` with
+    // `managers` the managers after the commit: nullopt when none. Throws InvalidParamsException when the caller
+    // (`self`) would lose the rule of a plane it has to carry.
+    static std::optional<PendingCarry> narrowing(
+        const server::GroupInfo& group,
+        const Group& mapped,
+        const keytree::GroupRules& rules,
+        const std::vector<std::string>& managers,
+        const PriorRole& prior,
+        const std::string& self
+    );
 
     // The verified read a plan climbs. An unseated one is refused, at the point of the plan where the climb would be:
     // a group without a key tree, one with a tree this client does not support, or a caller without a seat.

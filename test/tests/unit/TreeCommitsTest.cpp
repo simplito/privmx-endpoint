@@ -28,8 +28,7 @@ limitations under the License.
  *     SB     = H-tag || lp(groupId) || u32(treeVersion) || u64(seq) || lp(prevDigest) || ...
  *              ... || RH || TH || PH || lp(committer) || lp(committerPubKey) || u32(committerSeat) || ...
  *              see TreeCommits::signedBytes and reference.py
- *     PH     = H("pmx-group-policy\0" || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy)
- *                || lp(ownerCanBeRemovedFromManagers))      each rule resolved against the frozen v3 defaults
+ *     PH     = H("pmx-group-rules-v1\0" || lp(creator) || lp(rule)*9)   the rulesHash, TreeCommits::ruleFields order
  *              (each path entry: u32(v) || u32(gen) || lp(pk) || subtreeHash)
  */
 
@@ -42,6 +41,7 @@ limitations under the License.
 #include <functional>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <Poco/JSON/Array.h>
@@ -110,7 +110,7 @@ CommitStatement removalStatement() {
     statement.committerSeat = 0;
     statement.path = {StatementNode{3, 2, "pk3", std::string(32, '\x11')}};
     statement.removed = {"bob"};
-    statement.policyHash = TreeCommits::rules(Poco::Dynamic::Var(), "alice").hash;
+    statement.policyHash = TreeCommits::rules(policyOf({}), "alice").hash;
     return statement;
 }
 
@@ -265,9 +265,9 @@ TEST(TreeCommitsStatement, SignedBytesMatchTheReference) {
     EXPECT_EQ(hex(TreeCommits::signedBytes(removalStatement())), all->getObject(0)->getValue<std::string>("expectedHex"));
 }
 
-TEST(TreeCommitsPolicy, APolicyHashesToTheSharedVectors) {
+TEST(TreeCommitsPolicy, RulesHashToTheSharedVectors) {
     const auto all = vectors()->getArray("policyHash");
-    ASSERT_EQ(all->size(), 11u);
+    ASSERT_EQ(all->size(), 6u);
     for (std::size_t i = 0; i < all->size(); ++i) {
         const auto vector = all->getObject(static_cast<unsigned>(i));
         EXPECT_EQ(
@@ -277,98 +277,182 @@ TEST(TreeCommitsPolicy, APolicyHashesToTheSharedVectors) {
     }
 }
 
-TEST(TreeCommitsPolicy, InheritDefaultAndAbsentResolveToTheV3Defaults) {
-    const privmx::endpoint::group::keytree::GroupRules absent = TreeCommits::rules(Poco::Dynamic::Var(), "alice");
-    EXPECT_EQ(absent.update, "manager");
-    EXPECT_EQ(absent.rotateKeys, "manager");
-    EXPECT_EQ(absent.updatePolicy, "manager");
-    EXPECT_EQ(absent.ownerCanBeRemovedFromManagers, "yes");
-    EXPECT_EQ(absent.creator, "alice");
-    for (const std::string value : {"inherit", "default"}) {
-        const privmx::endpoint::group::keytree::GroupRules resolved = TreeCommits::rules(
-            policyOf({{"update", value}, {"rotateKeys", value}, {"updatePolicy", value}, {"ownerCanBeRemovedFromManagers", value}}),
-            "alice"
-        );
-        EXPECT_EQ(resolved.hash, absent.hash) << value;
-    }
-    EXPECT_EQ(TreeCommits::rules(policyOf({}), "alice").hash, absent.hash) << "{} is no policy";
-    EXPECT_NE(TreeCommits::rules(policyOf({{"update", "manager"}}), "bob").hash, absent.hash) << "the creator is signed";
-    EXPECT_THROW(TreeCommits::rules(Poco::Dynamic::Var(5), "alice"), std::invalid_argument);
-    Poco::JSON::Object::Ptr numeric = new Poco::JSON::Object();
-    numeric->set("update", 5);
-    EXPECT_THROW(TreeCommits::rules(numeric, "alice"), std::invalid_argument);
-}
-
-TEST(TreeCommitsPolicy, FieldsTheStatementsDoNotSignDoNotChangeTheHash) {
-    const auto base = TreeCommits::rules(policyOf({{"update", "user"}}), "alice").hash;
-    Poco::JSON::Object::Ptr wider = policyOf({{"update", "user"}, {"get", "all"}, {"delete", "none"}}).extract<Poco::JSON::Object::Ptr>();
-    Poco::JSON::Object::Ptr item = new Poco::JSON::Object();
-    item->set("get", "all");
-    wider->set("item", item);
-    EXPECT_EQ(TreeCommits::rules(wider, "alice").hash, base);
-    EXPECT_NE(TreeCommits::rules(policyOf({{"update", "user,manager"}}), "alice").hash, base) << "verbatim";
-}
-
-TEST(TreeCommitsPolicy, RulesAreEvaluatedAsTheBridgeEvaluatesThem) {
-    // (rule, member, manager, owner) -> allowed, as PolicyService.userMeetsPolicy answers it.
-    struct Case {
-        std::string rule;
-        bool member, manager, owner, allowed;
+TEST(TreeCommitsPolicy, RulesHashToTheBridgesVectors) {
+    // Pasted from the Bridge's conformance test, so neither side's generator is the other's only check.
+    const std::map<std::string, std::string> fifth{
+        {"changeRoles", "nobody"}, {"changeRules", "nobody"}, {"changeVisibility", "members"}, {"editPrivateMeta", "members"}
     };
-    for (const Case& c : std::vector<Case>{
-             {"manager", true, true, false, true},     {"manager", true, false, false, false},
-             {"user", true, false, false, true},       {"user", false, false, false, false},
-             {"owner", false, false, true, true},      {"owner", true, true, false, false},
-             {"manager,owner", true, false, true, true}, {"manager,owner", true, false, false, false},
-             {"owner&user", true, false, true, true},  {"owner&user", false, false, true, false},
-             {"none", true, true, true, false},        {"all", false, false, false, true},
-             {"itemOwner", true, true, true, false},   {"admin", true, true, true, false},
-             {"", true, true, true, false},            {"user,", true, false, false, true},
-             // Fail closed: an empty alternative or atom admits nobody.
-             {",manager", true, false, false, false},  {"manager,,user", false, false, false, false},
-             {"manager,", true, false, false, false},  {"&manager", true, true, false, false},
-             {"manager&", true, true, false, false},   {" manager", true, true, false, false},
+    std::map<std::string, std::string> allMembers;
+    for (const std::string& field : TreeCommits::ruleFields()) {
+        allMembers[field] = "members";
+    }
+    for (const auto& [rules, creator, expected] : std::vector<std::tuple<std::map<std::string, std::string>, std::string, std::string>>{
+             {{}, "alice", "293d66587c59ddae7286ffcdeaa73afea8698e3e1f26b13c3e5dafa212372e77"},
+             {{}, "bob", "83704acfe39c99a755517ae4a56360a3c0f8dc130c52fe56cf553e5b4a43e477"},
+             {{{"addMembers", "members"},
+               {"removeMembers", "nobody"},
+               {"replaceMemberKeys", "members"},
+               {"trimHistory", "nobody"},
+               {"editPublicMeta", "members"}},
+              "alice",
+              "757d92df6e2bef81c90c3aaccddc69642b36a66a0ed15ba807b2ccff639fed9a"},
+             {allMembers, "alice", "833ecdd293832d6ac5daa240242a15b72eb9e9cc8102c2d5de59e86641217586"},
+             {fifth, "alice", "f6f11160baa6217326dbd3e1c8fb2c3a9bbc59253df0ebb60fa7e13eabc42db8"},
          }) {
-        EXPECT_EQ(TreeCommits::allows(c.rule, c.member, c.manager, c.owner), c.allowed)
-            << "'" << c.rule << "' " << c.member << c.manager << c.owner;
+        EXPECT_EQ(hex(TreeCommits::rules(policyOf(rules), creator).hash), expected) << creator;
     }
 }
 
-TEST(TreeCommitsPolicy, SECURITY_ARuleOutsideTheGroupGrammarIsRefused) {
-    // The bridge's validator grammar; a rule outside it is never signed and, served, never evaluated.
-    for (const std::string field : {"update", "rotateKeys", "updatePolicy"}) {
-        for (const std::string rule : {",manager", "manager,,user", "manager,", "&manager", "manager&", " manager",
-                                       "admin", "itemOwner", "manager&manager", "user&manager,manager&user",
-                                       "all&manager", "none,user", ""}) {
-            EXPECT_THROW(TreeCommits::rules(policyOf({{field, rule}}), "alice"), std::invalid_argument)
-                << field << " '" << rule << "'";
+TEST(TreeCommitsPolicy, SECURITY_RulesOutsideTheContractAreRefused) {
+    // Shared with the Bridge: a field missing, an unknown one, a value outside the set, the old grammar.
+    const auto invalid = vectors()->getArray("invalidRules");
+    ASSERT_EQ(invalid->size(), 9u);
+    for (std::size_t i = 0; i < invalid->size(); ++i) {
+        EXPECT_THROW(TreeCommits::rules(invalid->get(static_cast<unsigned>(i)), "alice"), std::invalid_argument) << i;
+    }
+    EXPECT_THROW(TreeCommits::rules(Poco::Dynamic::Var(), "alice"), std::invalid_argument) << "no rules at all";
+    EXPECT_THROW(TreeCommits::rules(Poco::Dynamic::Var(5), "alice"), std::invalid_argument);
+    for (const std::string& field : TreeCommits::ruleFields()) {
+        for (const std::string value : {"managers", "members", "nobody"}) {
+            EXPECT_NO_THROW(TreeCommits::rules(policyOf({{field, value}}), "alice")) << field << " " << value;
         }
-        for (const std::string rule : {"none", "all", "owner&user,manager", "manager,owner"}) {
-            EXPECT_NO_THROW(TreeCommits::rules(policyOf({{field, rule}}), "alice")) << field << " '" << rule << "'";
+        for (const std::string value : {"manager", "user", "owner", "all", "none", "managers,members", ""}) {
+            EXPECT_THROW(TreeCommits::rules(policyOf({{field, value}}), "alice"), std::invalid_argument)
+                << field << " '" << value << "'";
         }
     }
-    EXPECT_THROW(TreeCommits::rules(policyOf({{"ownerCanBeRemovedFromManagers", "maybe"}}), "alice"), std::invalid_argument);
+    for (const std::string field : {"manage", "history", "update", "rotateKeys"}) {
+        EXPECT_THROW(TreeCommits::rules(policyOf({{field, "managers"}}), "alice"), std::invalid_argument) << field;
+    }
 }
 
-TEST(TreeCommitsPolicy, TheOwnerLeavesTheManagersOnlyIfThePolicySaysSo) {
-    CommitStatement removal = removalStatement(); // alice removes bob
+TEST(TreeCommitsPolicy, EveryRuleAndTheCreatorAreSigned) {
+    GroupRules base = TreeCommits::rules(policyOf({}), "alice");
+    EXPECT_EQ(base.creator, "alice");
+    std::set<std::string> hashes{base.hash};
+    for (const std::string& field : TreeCommits::ruleFields()) {
+        EXPECT_EQ(TreeCommits::ruleOf(base, field), "managers") << field;
+        const GroupRules one = TreeCommits::rules(policyOf({{field, "nobody"}}), "alice");
+        EXPECT_TRUE(hashes.insert(one.hash).second) << field;
+    }
+    EXPECT_TRUE(hashes.insert(TreeCommits::rules(policyOf({}), "bob").hash).second) << "the creator";
+}
+
+TEST(TreeCommitsPolicy, RulesAreEvaluatedOnTheRole) {
+    for (const auto& [rule, member, manager, allowed] : std::vector<std::tuple<std::string, bool, bool, bool>>{
+             {"managers", true, true, true},  {"managers", true, false, false}, {"members", true, false, true},
+             {"members", false, false, false}, {"nobody", true, true, false},   {"manager", true, true, false},
+             {"", true, true, false},
+         }) {
+        EXPECT_EQ(TreeCommits::allows(rule, member, manager), allowed) << "'" << rule << "' " << member << manager;
+    }
+}
+
+// The permission table: every rule an op touches, and only those. alice and dave manage, bob and carol are plain
+// members, mallory is not in the group; carol created it and holds no privilege for it.
+TEST(TreeCommitsPolicy, SECURITY_ThePermissionTable) {
+    const std::set<std::string> users{"bob", "carol"};
+    const std::set<std::string> managers{"alice", "dave"};
+    const auto statement = [&](const std::string& committer, CommitOp op) {
+        CommitStatement result = removalStatement();
+        result.committer = committer;
+        result.op = op;
+        result.removed.clear();
+        return result;
+    };
+    // Whether `s` is permitted with `field` set to `value` and every other rule `others`.
+    const auto permitted = [&](const CommitStatement& s, const std::string& field, const std::string& value,
+                               const std::string& others = "members") {
+        std::map<std::string, std::string> rules;
+        for (const std::string& f : TreeCommits::ruleFields()) {
+            rules[f] = others;
+        }
+        if (!field.empty()) {
+            rules[field] = value;
+        }
+        return TreeCommits::permits(TreeCommits::rules(policyOf(rules), "carol"), s, users, managers);
+    };
+    // The rule `s` needs, by `committer`: allowed when only it is open, refused when only it is closed.
+    const auto needs = [&](CommitStatement s, const std::string& field) {
+        s.committer = "bob";
+        EXPECT_TRUE(permitted(s, field, "members", "nobody") || field.empty())
+            << "op " << int(s.op) << " with only " << field << " open";
+        EXPECT_FALSE(permitted(s, field, "nobody")) << "op " << int(s.op) << " with " << field << " closed";
+        EXPECT_FALSE(permitted(s, field, "managers")) << "a plain member, op " << int(s.op) << " " << field;
+        s.committer = "alice";
+        EXPECT_TRUE(permitted(s, field, "managers", "nobody") || field.empty()) << "a manager, op " << int(s.op);
+    };
+
+    CommitStatement add = statement("bob", CommitOp::Add);
+    add.addedUsers = {"erin"};
+    needs(add, "addMembers");
+    EXPECT_TRUE(permitted(add, "changeRoles", "nobody")) << "a plain addition touches no role";
+    add.addedManagers = {"frank"};
+    EXPECT_FALSE(permitted(add, "addMembers", "nobody")) << "adding a manager needs addMembers";
+    EXPECT_FALSE(permitted(add, "changeRoles", "nobody")) << "and changeRoles";
+    EXPECT_TRUE(permitted(add, "", ""));
+
+    CommitStatement removal = statement("bob", CommitOp::Remove);
     removal.removed = {"carol"};
-    const std::set<std::string> users{"alice"};
-    const std::set<std::string> managers{"carol", "bob"};
-    for (const auto& [rule, allowed] : std::vector<std::pair<std::string, bool>>{{"yes", true}, {"no", false}}) {
-        const privmx::endpoint::group::keytree::GroupRules rules =
-            TreeCommits::rules(policyOf({{"update", "user"}, {"ownerCanBeRemovedFromManagers", rule}}), "carol");
-        EXPECT_EQ(TreeCommits::permits(rules, removal, users, managers), allowed) << rule;
+    needs(removal, "removeMembers");
+    EXPECT_TRUE(permitted(removal, "changeRoles", "nobody")) << "a plain member's removal touches no role";
+    removal.removed = {"alice"};
+    EXPECT_FALSE(permitted(removal, "removeMembers", "nobody")) << "removing a manager needs removeMembers";
+    EXPECT_FALSE(permitted(removal, "changeRoles", "nobody")) << "and changeRoles";
+    EXPECT_FALSE(permitted(removal, "changeRoles", "managers")) << "a plain member removes a manager";
+    removal.committer = "dave";
+    EXPECT_TRUE(permitted(removal, "", "", "managers"));
+
+    CommitStatement reseat = statement("bob", CommitOp::Reseat);
+    reseat.removed = {"alice"};
+    needs(reseat, "replaceMemberKeys");
+    EXPECT_TRUE(permitted(reseat, "replaceMemberKeys", "members", "nobody")) << "a manager's reseat touches no role";
+
+    CommitStatement roles = statement("bob", CommitOp::Roles);
+    roles.addedManagers = {"bob"};
+    needs(roles, "changeRoles");
+
+    needs(statement("bob", CommitOp::Policy), "changeRules");
+
+    for (const CommitOp op : {CommitOp::Rotate, CommitOp::SelfUpdate}) {
+        EXPECT_TRUE(permitted(statement("bob", op), "", "", "nobody")) << "any member, op " << int(op);
+        EXPECT_FALSE(permitted(statement("mallory", op), "", "", "members")) << "a non-member, op " << int(op);
     }
-    removal.removed = {"bob"}; // not the owner
-    const privmx::endpoint::group::keytree::GroupRules no = TreeCommits::rules(policyOf({{"update", "user"}, {"ownerCanBeRemovedFromManagers", "no"}}), "carol");
-    EXPECT_TRUE(TreeCommits::permits(no, removal, users, managers));
+    EXPECT_FALSE(permitted(statement("mallory", CommitOp::Policy), "", "", "members")) << "a non-member holds no rule";
+    EXPECT_TRUE(permitted(statement("mallory", CommitOp::Create), "", "", "nobody")) << "the creator, whoever it is";
+}
+
+TEST(TreeCommitsPolicy, SECURITY_AGroupWithManagersKeepsOne) {
+    const auto rules = TreeCommits::rules(policyOf({}), "carol");
+    const std::set<std::string> users{"bob"};
+    CommitStatement removal = removalStatement(); // alice removes
+    removal.removed = {"dave", "erin"};
+    EXPECT_TRUE(TreeCommits::permits(rules, removal, users, {"alice", "dave", "erin"})) << "alice stays";
+    // Self-removal is refused on its own (deltasProblem); the table refuses emptying the managers regardless.
+    removal.removed = {"alice", "dave"};
+    EXPECT_FALSE(TreeCommits::permits(rules, removal, users, {"alice", "dave"})) << "every manager removed";
+
+    CommitStatement demote = removalStatement();
+    demote.op = CommitOp::Roles;
+    demote.removed.clear();
+    demote.committer = "alice";
+    demote.addedUsers = {"alice"};
+    EXPECT_FALSE(TreeCommits::permits(rules, demote, users, {"alice"})) << "the last manager steps down";
+    EXPECT_TRUE(TreeCommits::permits(rules, demote, users, {"alice", "dave"}));
+    demote.addedManagers = {"bob"};
+    EXPECT_TRUE(TreeCommits::permits(rules, demote, users, {"alice"})) << "stepping down for a successor";
+    // A group without managers has nobody to keep.
+    CommitStatement plain = removalStatement();
+    plain.removed = {"bob"};
+    EXPECT_TRUE(
+        TreeCommits::permits(TreeCommits::rules(policyOf({{"removeMembers", "members"}}), "x"), plain, {"alice", "bob"}, {})
+    );
 }
 
 TEST(TreeCommitsPolicy, AnOpWithoutARowIsNotPermitted) {
     CommitStatement statement = removalStatement();
     statement.op = static_cast<CommitOp>(9);
-    const privmx::endpoint::group::keytree::GroupRules open = TreeCommits::rules(policyOf({{"update", "all"}, {"rotateKeys", "all"}, {"updatePolicy", "all"}}), "alice");
+    const GroupRules open = TreeCommits::rules(policyOf({{"addMembers", "members"}, {"removeMembers", "members"}}), "alice");
     EXPECT_FALSE(TreeCommits::permits(open, statement, {"alice"}, {"alice"}));
     EXPECT_TRUE(TreeCommits::deltasProblem(statement, {"alice"}, {}).has_value());
 }
@@ -466,7 +550,7 @@ TEST(TreeCommitsStatement, RoundTripsThroughTheWire) {
     change.op = CommitOp::Policy;
     change.removed.clear();
     change.path.clear();
-    change.policy = policyOf({{"update", "user"}, {"get", "all"}});
+    change.policy = policyOf({{"addMembers", "members"}});
     change.policyHash = TreeCommits::rules(change.policy.value(), "alice").hash;
     TreeCommits::sign(change, PrivateKey::generateRandom());
     const server::GroupTreeCommit changeWire = TreeCommits::toWire(change);
@@ -550,61 +634,6 @@ TEST(TreeCommits, SECURITY_OpKeysOfDifferentOperationsNeverCollide) {
 }
 
 // ── The roster's own rules, and the two ops that are neither an addition nor a removal ──────────────────────────
-
-TEST(TreeCommitsRoster, RosterRulesFollowUpdateUntilSetAndAreSignedOnlyThen) {
-    const auto plain = TreeCommits::rules(policyOf({{"update", "user"}}), "alice");
-    EXPECT_FALSE(plain.splitsRoster);
-    EXPECT_EQ(plain.addMembers, "user");
-    EXPECT_EQ(plain.removeMembers, "user");
-    // Unset in every spelling: the hash a group had before the split existed.
-    const auto unset = TreeCommits::rules(
-        policyOf({{"update", "user"}, {"addMembers", "inherit"}, {"removeMembers", "default"}}), "alice"
-    );
-    EXPECT_EQ(unset.hash, plain.hash);
-    const auto split = TreeCommits::rules(policyOf({{"update", "user"}, {"addMembers", "none"}}), "alice");
-    EXPECT_TRUE(split.splitsRoster);
-    EXPECT_EQ(split.addMembers, "none");
-    EXPECT_EQ(split.removeMembers, "user") << "the one left unset still follows update";
-    EXPECT_NE(split.hash, plain.hash);
-    EXPECT_THROW(TreeCommits::rules(policyOf({{"addMembers", "itemOwner"}}), "alice"), std::invalid_argument);
-}
-
-TEST(TreeCommitsRoster, SECURITY_EachRosterOpIsJudgedUnderItsOwnRule) {
-    const auto rules = TreeCommits::rules(policyOf({{"addMembers", "user"}, {"removeMembers", "manager"}}), "alice");
-    const std::set<std::string> users{"bob", "carol"};
-    const std::set<std::string> managers{"alice"};
-    const auto by = [&](const std::string& committer, CommitOp op) {
-        CommitStatement statement = removalStatement();
-        statement.committer = committer;
-        statement.op = op;
-        statement.removed.clear();
-        return statement;
-    };
-    CommitStatement add = by("bob", CommitOp::Add);
-    add.addedUsers = {"dave"};
-    EXPECT_TRUE(TreeCommits::permits(rules, add, users, managers)) << "a user may add";
-    add.addedUsers.clear();
-    add.addedManagers = {"dave"};
-    EXPECT_FALSE(TreeCommits::permits(rules, add, users, managers)) << "but not hand out the manager role";
-    for (const CommitOp op : {CommitOp::Remove, CommitOp::Reseat}) {
-        CommitStatement statement = by("bob", op);
-        statement.removed = {"carol"};
-        EXPECT_FALSE(TreeCommits::permits(rules, statement, users, managers));
-        statement.committer = "alice";
-        EXPECT_TRUE(TreeCommits::permits(rules, statement, users, managers));
-    }
-    CommitStatement roles = by("bob", CommitOp::Roles);
-    roles.addedManagers = {"bob"};
-    EXPECT_FALSE(TreeCommits::permits(rules, roles, users, managers)) << "a user promoting itself";
-    roles.committer = "alice";
-    EXPECT_TRUE(TreeCommits::permits(rules, roles, users, managers));
-    // The owner leaves the managers under its own rule, by a change of role as by a removal.
-    const auto pinned = TreeCommits::rules(policyOf({{"ownerCanBeRemovedFromManagers", "no"}}), "alice");
-    CommitStatement demote = by("dave", CommitOp::Roles);
-    demote.addedUsers = {"alice"};
-    EXPECT_FALSE(TreeCommits::permits(pinned, demote, users, {"alice", "dave"}));
-    EXPECT_TRUE(TreeCommits::permits(rules, demote, users, {"alice", "dave"}));
-}
 
 TEST(TreeCommitsRoster, DeltasOfARoleChangeAndAReseat) {
     const std::set<std::string> users{"bob", "carol"};

@@ -175,8 +175,8 @@ enum class Settled {
 };
 
 // Which planes a carry-forward moves: after a removal or rotation, the planes behind the new epoch (or, with
-// history abandoned, starts them over empty); after a narrowing policy commit, the planes whose author lost
-// `update` (`losers`).
+// history abandoned, starts them over empty); after a narrowing rules or roles commit, the planes whose author lost
+// that plane's rule (`PendingCarry`).
 enum class CarryScope {
     NewEpoch,
     Policy

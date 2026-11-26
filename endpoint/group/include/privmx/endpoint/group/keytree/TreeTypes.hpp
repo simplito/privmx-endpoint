@@ -270,8 +270,8 @@ struct CommitStatement {
     std::uint64_t rosterVersion = 0;
     std::string rosterHash;
     std::string treeHash;
-    // `TreeCommits::rules(policy, creator).hash` of the group's policy after the commit: the rules that govern commits
-    // and the creator the `owner` atom names, signed into every statement. Raw bytes.
+    // `TreeCommits::rules(policy, creator).hash` of the group's rules after the commit (the rulesHash), signed into
+    // every statement. Raw bytes.
     std::string policyHash;
     std::string committer;
     // The committer's Context public key (base58 DER) at signing time; the signature verifies against it, and the
@@ -284,20 +284,18 @@ struct CommitStatement {
     std::vector<std::string> addedManagers;
     std::vector<std::string> removed;
     std::string signature;
-    // Wire only, on `Create` and `Policy`: the group's whole policy after the commit. Not signed itself; it counts only
-    // once it hashes to `policyHash`, and only its four commit rules do.
+    // Wire only, on `Create` and `Policy`: the group's rules object after the commit. Not signed itself; it counts only
+    // once it hashes to `policyHash`.
     std::optional<Poco::Dynamic::Var> policy;
 };
 
-// The part of a group's policy its statements sign: who may commit what, and who the owner is. Absent, "inherit"
-// and "default" resolve to the frozen v3 defaults, never to the context policy, which only the bridge holds.
+// The group's rules, as its statements sign them (`TreeCommits::rules`): who may do what, and the creator, who
+// holds no privilege of its own but stays a signed identity. Each is "managers", "members" or "nobody".
 struct GroupRules {
-    std::string creator, update, rotateKeys, updatePolicy, ownerCanBeRemovedFromManagers;
-    // Who may add, and who may remove or reseat, members. Unset in the policy they are `update`'s value, and are
-    // then left out of the hash (`splitsRoster` false), so a group that never split `update` hashes as before.
-    std::string addMembers, removeMembers;
-    bool splitsRoster = false;
-    std::string hash; // policyHash, raw
+    std::string creator;
+    std::string addMembers, removeMembers, replaceMemberKeys, changeRoles, changeRules, changeVisibility, trimHistory,
+        editPublicMeta, editPrivateMeta;
+    std::string hash; // rulesHash (the statements' `policyHash`), raw
 };
 
 } // namespace keytree

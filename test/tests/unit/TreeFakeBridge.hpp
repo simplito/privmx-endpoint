@@ -47,9 +47,19 @@ using namespace privmx::endpoint::group::keytree;
 // What the bridge derives from the context and the resourceId the genesis statement signs.
 const std::string GROUP_ID = TreeCommits::groupId("ctx", "res");
 
-// What the test groups are created with unless a test says otherwise: every member may commit, so the existing tests,
+// What the test groups are created with unless a test says otherwise: every rule "members", so the existing tests,
 // whose removers and adders are plain users, keep their meaning.
-const Poco::Dynamic::Var OPEN_POLICY = policyOf({{"update", "user"}, {"rotateKeys", "user"}, {"updatePolicy", "user"}});
+const Poco::Dynamic::Var OPEN_POLICY = policyOf(
+    {{"addMembers", "members"},
+     {"removeMembers", "members"},
+     {"replaceMemberKeys", "members"},
+     {"changeRoles", "members"},
+     {"changeRules", "members"},
+     {"changeVisibility", "members"},
+     {"trimHistory", "members"},
+     {"editPublicMeta", "members"},
+     {"editPrivateMeta", "members"}}
+);
 
 // The Bridge's own error scope; `bridge` is taken by the fake instances the tests hold.
 namespace srv = privmx::endpoint::server;

@@ -26,7 +26,6 @@ Poco::Dynamic::Var VarSerializer::serialize<group::Group>(const group::Group& va
     obj->set("rosterVersion", serialize(val.rosterVersion));
     obj->set("publicMeta", serialize(val.publicMeta));
     obj->set("privateMeta", serialize(val.privateMeta));
-    obj->set("policy", serialize(val.policy));
     obj->set("statusCode", serialize(val.statusCode));
     obj->set("schemaVersion", serialize(val.schemaVersion));
     obj->set("keyVersion", serialize(val.keyVersion));
@@ -423,7 +422,7 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupSummary>(const group::Gr
     obj->set("publicMetaVersion", serialize(val.publicMetaVersion));
     obj->set("privateMetaVersion", serialize(val.privateMetaVersion));
     obj->set("rosterVersion", serialize(val.rosterVersion));
-    obj->set("policy", serialize(val.policy));
+    obj->set("rules", serialize(val.rules));
     obj->set("keyVersion", serialize(val.keyVersion));
     obj->set("visibleTo", serialize(val.visibleTo));
     if (val.type.has_value()) {
@@ -546,7 +545,13 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupRules>(const group::Grou
     }
     obj->set("addMembers", serialize(val.addMembers));
     obj->set("removeMembers", serialize(val.removeMembers));
-    obj->set("updateMeta", serialize(val.updateMeta));
+    obj->set("replaceMemberKeys", serialize(val.replaceMemberKeys));
+    obj->set("changeRoles", serialize(val.changeRoles));
+    obj->set("changeRules", serialize(val.changeRules));
+    obj->set("changeVisibility", serialize(val.changeVisibility));
+    obj->set("trimHistory", serialize(val.trimHistory));
+    obj->set("editPublicMeta", serialize(val.editPublicMeta));
+    obj->set("editPrivateMeta", serialize(val.editPrivateMeta));
     return obj;
 }
 

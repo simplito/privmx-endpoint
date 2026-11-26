@@ -279,12 +279,14 @@ TEST_F(GroupTest, updateGroupPrivateMeta_incorrect_data) {
     }, core::Exception);
 }
 
-TEST_F(GroupTest, updateGroupPolicy_incorrect_data) {
-    // Only the groupId can be wrong here — there is no version to get wrong, because a policy write moves
-    // neither metadata counter and so has nothing to compare against.
+TEST_F(GroupTest, updateGroupRules_incorrect_data) {
+    // No version to get wrong: a rules write moves neither metadata counter. The groupId and the values can be.
     EXPECT_THROW({
-        groupApi->updateGroupPolicy(reader->getString("Context_1.contextId"), core::ContainerPolicy{});
+        groupApi->updateGroupRules(reader->getString("Context_1.contextId"), group::GroupRulesUpdate{});
     }, core::Exception);
+    EXPECT_THROW({
+        groupApi->updateGroupRules(reader->getString("Group_1.groupId"), group::GroupRulesUpdate{.addMembers = "user"});
+    }, core::InvalidParamsException);
 }
 
 TEST_F(GroupTest, updateGroupPublicMeta_correct_data) {
@@ -385,21 +387,20 @@ TEST_F(GroupTest, updateGroupPrivateMeta_correct_data) {
     EXPECT_EQ(group.rosterVersion, before.rosterVersion);
 }
 
-TEST_F(GroupTest, updateGroupPolicy_correct_data) {
-    // A policy write is a commit that appends no metadata entry: neither counter moves and neither buffer changes,
+TEST_F(GroupTest, updateGroupRules_correct_data) {
+    // A rules write is a commit that appends no metadata entry: neither counter moves and neither buffer changes,
     // so no reader has anything to re-verify.
     const std::string groupId = reader->getString("Group_1.groupId");
     group::Group before;
     ASSERT_NO_THROW({ before = groupApi->getGroup(groupId); });
 
-    core::ContainerPolicy policy;
-    policy.get = "all";
-    EXPECT_NO_THROW({ groupApi->updateGroupPolicy(groupId, policy); });
+    EXPECT_NO_THROW({ groupApi->updateGroupRules(groupId, group::GroupRulesUpdate{.changeVisibility = "members"}); });
 
     group::Group after;
     EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });
     EXPECT_EQ(after.statusCode, 0);
-    EXPECT_EQ(after.policy.get.value_or(""), "all");
+    EXPECT_EQ(after.rules.changeVisibility, "members");
+    EXPECT_EQ(after.rules.addMembers, "managers") << "the rest stays";
     EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion);
     EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion);
     EXPECT_EQ(after.rosterVersion, before.rosterVersion);
@@ -407,10 +408,9 @@ TEST_F(GroupTest, updateGroupPolicy_correct_data) {
     EXPECT_EQ(after.privateMeta.stdString(), before.privateMeta.stdString());
 
     // Each call is a signed commit planned on a fresh read, so a second one in a row extends the first.
-    policy.get = "user";
-    EXPECT_NO_THROW({ groupApi->updateGroupPolicy(groupId, policy); });
+    EXPECT_NO_THROW({ groupApi->updateGroupRules(groupId, group::GroupRulesUpdate{.changeVisibility = "managers"}); });
     EXPECT_NO_THROW({ after = groupApi->getGroup(groupId); });
-    EXPECT_EQ(after.policy.get.value_or(""), "user");
+    EXPECT_EQ(after.rules.changeVisibility, "managers");
     EXPECT_EQ(after.publicMetaVersion, before.publicMetaVersion);
     EXPECT_EQ(after.privateMetaVersion, before.privateMetaVersion);
 }
@@ -1210,19 +1210,18 @@ TEST_F(GroupTest, a_role_change_is_a_statement_every_member_verifies) {
 }
 
 TEST_F(GroupTest, the_rules_split_adding_from_removing) {
-    core::ContainerPolicy policy;
-    policy.addMembers = "user";
     std::string groupId = groupApi->createGroup(
         reader->getString("Context_1.contextId"), {user(1), user(2)}, {user(1)}, core::Buffer::from("public"),
-        core::Buffer::from("private"), policy
+        core::Buffer::from("private"), group::GroupRulesUpdate{.addMembers = "members"}
     );
     group::Group created;
     ASSERT_NO_THROW({ created = groupApi->getGroup(groupId); });
-    EXPECT_EQ(created.rules.addMembers, "user");
-    EXPECT_EQ(created.rules.removeMembers, "manager") << "left unset, it follows update";
-    EXPECT_EQ(created.rules.updateMeta, "manager");
+    EXPECT_EQ(created.rules.addMembers, "members");
+    EXPECT_EQ(created.rules.removeMembers, "managers") << "left unset, the default";
+    EXPECT_EQ(created.rules.editPublicMeta, "managers");
+    EXPECT_FALSE(created.rules.isImmutable());
 
-    // A plain user adds, and may not remove.
+    // A plain member adds, and may not remove.
     disconnect();
     connectAs(2);
     ASSERT_NO_THROW({
@@ -1231,25 +1230,58 @@ TEST_F(GroupTest, the_rules_split_adding_from_removing) {
     EXPECT_THROW(
         { groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "manager"}}); },
         core::Exception
-    ) << "adding is not handing out the manager role";
+    ) << "adding a manager also needs changeRoles";
     const std::string user3 = reader->getString("Login.user_3_id");
     EXPECT_THROW({ groupApi->removeGroupMembers(groupId, {user3}); }, group::GroupUnauthorizedSignerException);
 
-    // The manager opens removing to users too; the rest of the policy stays.
+    // The manager opens removing to members too; the rest of the rules stays.
     disconnect();
     connectAs(1);
-    ASSERT_NO_THROW({ groupApi->updateGroupRules(groupId, group::GroupRulesUpdate{.removeMembers = "user"}); });
+    ASSERT_NO_THROW({ groupApi->updateGroupRules(groupId, group::GroupRulesUpdate{.removeMembers = "members"}); });
     group::Group opened;
     ASSERT_NO_THROW({ opened = groupApi->getGroup(groupId); });
     EXPECT_EQ(opened.statusCode, 0);
-    EXPECT_EQ(opened.rules.addMembers, "user");
-    EXPECT_EQ(opened.rules.removeMembers, "user");
+    EXPECT_EQ(opened.rules.addMembers, "members");
+    EXPECT_EQ(opened.rules.removeMembers, "members");
 
     disconnect();
     connectAs(2);
     int64_t epoch = 0;
     ASSERT_NO_THROW({ epoch = groupApi->removeGroupMembers(groupId, {user3}); });
     EXPECT_EQ(epoch, 2);
+    const std::string user1 = reader->getString("Login.user_1_id");
+    EXPECT_THROW({ groupApi->removeGroupMembers(groupId, {user1}); }, group::GroupUnauthorizedSignerException)
+        << "removing a manager also needs changeRoles";
+    disconnect();
+    connectAs(1);
+}
+
+TEST_F(GroupTest, an_immutable_group_keeps_its_membership_roles_and_rules) {
+    std::string groupId = groupApi->createGroup(
+        reader->getString("Context_1.contextId"), {user(1), user(2)}, {user(1)}, core::Buffer::from("public"),
+        core::Buffer::from("private"), group::GroupRulesUpdate::createImmutable()
+    );
+    group::Group created;
+    ASSERT_NO_THROW({ created = groupApi->getGroup(groupId); });
+    EXPECT_TRUE(created.rules.isImmutable());
+    EXPECT_EQ(created.rules.replaceMemberKeys, "managers") << "a leaked device can still be locked out";
+    const std::string user2 = reader->getString("Login.user_2_id");
+    EXPECT_THROW(
+        { groupApi->addGroupMembers(groupId, {group::GroupMemberToAdd{.user = user(3), .role = "user"}}); },
+        group::GroupUnauthorizedSignerException
+    );
+    EXPECT_THROW({ groupApi->removeGroupMembers(groupId, {user2}); }, group::GroupUnauthorizedSignerException);
+    EXPECT_THROW(
+        { groupApi->setGroupRoles(groupId, {group::GroupRoleChange{.userId = user2, .role = "manager"}}); },
+        group::GroupUnauthorizedSignerException
+    );
+    EXPECT_THROW(
+        { groupApi->updateGroupRules(groupId, group::GroupRulesUpdate{.addMembers = "managers"}); },
+        group::GroupUnauthorizedSignerException
+    );
+    EXPECT_NO_THROW({ groupApi->rotateGroupKey(groupId); });
+    EXPECT_NO_THROW({ groupApi->replaceGroupMemberKeys(groupId, {user2}); });
+    EXPECT_NO_THROW({ groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("still editable"), 1); });
 }
 
 TEST_F(GroupTest, the_log_lists_every_statement_from_the_creation) {

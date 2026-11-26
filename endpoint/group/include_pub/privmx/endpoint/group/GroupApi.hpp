@@ -21,7 +21,7 @@ class GroupApiImpl;
 /**
  * 'GroupApi' is a class representing Endpoint's API for Groups.
  *
- * A membership, key or policy change that failed may still take effect: the Bridge may have applied it and lost or
+ * A membership, key or rules change that failed may still take effect: the Bridge may have applied it and lost or
  * refused the answer. For a bounded time, or until the Group changes in some other way, this client resends that
  * change before it makes any other change to the Group: a retry of the same call resends it (and returns once it is
  * found applied), and a different call completes it first. Key refreshes never hold anything back.
@@ -62,10 +62,10 @@ public:
      * rights) to the created Group
      * @param publicMeta public (unencrypted) metadata
      * @param privateMeta private (encrypted) metadata
-     * @param policies Group's policies. Who may add, remove, rotate and change the policy (`update`, `rotateKeys`,
-     * `updatePolicy`, `ownerCanBeRemovedFromManagers`) is signed into the Group's state with the creator;
-     * `inherit`/`default` (or absent) mean the built-in defaults (manager, manager, manager, yes), not the
-     * Context's; the Context can only deny further. The creator must hold `update` under them, or it could not write the Group's metadata.
+     * @param rules Group's rules (GroupRules), signed into the Group's state with the creator; an unset one takes
+     * its default ("managers"). GroupRulesUpdate::createImmutable is the preset of a Group whose membership, roles
+     * and rules never change. The creator must hold `editPublicMeta` and `editPrivateMeta` under them, or it could
+     * not write the Group's metadata.
      * @return ID of the created Group
      */
     std::string createGroup(
@@ -74,7 +74,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies = std::nullopt,
+        const std::optional<GroupRulesUpdate>& rules = std::nullopt,
         const std::optional<core::Buffer>& idSeed = std::nullopt,
         const std::string& visibleTo = "members"
     );
@@ -102,8 +102,9 @@ public:
 
     /**
      * Sets who beside the members may read the Group's identity key, roster and statements: "members" or
-     * "context". A manager's call. Making a Group visible to the Context is what lets someone outside it write to
-     * it with `encryptAsOutsider`; it also shows the roster to every user of the Context.
+     * "context". Allowed by the `changeVisibility` rule (checked here on a verified read, and by the Bridge); the
+     * visibility itself is the Bridge's setting, not signed. Making a Group visible to the Context is what lets
+     * someone outside it write to it with `encryptAsOutsider`; it also shows the roster to every user of the Context.
      */
     void setGroupVisibility(const std::string& groupId, const std::string& visibleTo);
 
@@ -121,6 +122,8 @@ public:
      * A failed call may still take effect (see the class note); it is resent only while the UserVerifier still
      * vouches for the newcomers' keys.
      *
+     * Allowed by the `addMembers` rule; adding a manager also needs `changeRoles`.
+     *
      * @param groupId ID of the Group
      * @param newMembers the members to add, each with their public key and the role they take
      */
@@ -136,11 +139,15 @@ public:
      * Incremental: only the leavers are named, and the roster that remains is derived from the Group's own
      * verified history. Metadata carries through untouched.
      *
-     * A failed call may still take effect (see the class note).
+     * Allowed by the `removeMembers` rule; removing a manager also needs `changeRoles`. The caller cannot remove
+     * itself (it mints the new epoch's key, so it would hold the key meant to exclude it): another member removes
+     * it. Refused when it would leave a Group that has managers with none. A failed call may still take effect (see
+     * the class note).
      *
      * When the caller's own leaf does not open, the removal still goes through (a member that garbled it cannot
      * block its own removal) and, unless this session holds the current Group key, abandons the Group's history for
-     * every member. After the caller's identity key changed and Connection::adoptPreviousIdentity was called, it is
+     * every member; abandoning history needs the `trimHistory` rule, and is refused before anything is sent without
+     * it. After the caller's identity key changed and Connection::adoptPreviousIdentity was called, it is
      * refused instead while the previous key still opens the leaf: call renewLeaf first.
      *
      * @param groupId ID of the Group
@@ -158,8 +165,7 @@ public:
      * take the old key for the current one. Content sealed before stays readable to the members.
      *
      * Not a remedy for a lost device: a device holding the identity key opens the new epoch as well. Change the
-     * identity key first, then rotate. Charged to the Group's rotation budget; allowed by the `rotateKeys` policy
-     * (managers, by default).
+     * identity key first, then rotate. Charged to the Group's rotation budget; any member may rotate.
      *
      * A failed call may still take effect (see the class note). A call made after it was found applied is a new
      * rotation.
@@ -177,7 +183,7 @@ public:
      * The members' current keys go through the Connection's UserVerifier like any key this client wraps to: with
      * key continuity on (Connection::useKeyContinuity), accept the change first (Connection::acceptKeyChange).
      *
-     * Allowed by the `removeMembers` rule. The caller cannot be among `userIds`. A failed call may still take
+     * Allowed by the `replaceMemberKeys` rule. The caller cannot be among `userIds`. A failed call may still take
      * effect (see the class note).
      *
      * @param groupId ID of the Group
@@ -190,8 +196,11 @@ public:
      * Changes the role of members already in the Group. No key moves: a role decides what the Bridge and the other
      * members accept from somebody, not what they can read.
      *
-     * Allowed by the `updatePolicy` rule (managers, by default). Refused when it would leave a Group that has
-     * managers with none. A failed call may still take effect (see the class note).
+     * Allowed by the `changeRoles` rule. Refused when it would leave a Group that has managers with none. A failed
+     * call may still take effect (see the class note).
+     *
+     * A demotion refuses a metadata plane written by an author who loses that plane's rule with it: carried
+     * forward under the caller's name as for updateGroupRules.
      *
      * @param groupId ID of the Group
      * @param changes the members and the role each takes ("user" or "manager")
@@ -199,8 +208,18 @@ public:
     void setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes);
 
     /**
-     * Changes who may add members, remove members and rewrite the Group's metadata, leaving the rest of the policy
-     * as it is. A signed commit like updateGroupPolicy, under the same rule.
+     * Changes the Group's rules (GroupRules), as a signed commit by a member the current rules allow `changeRules`.
+     *
+     * The rules and the creator are part of the Group's signed state; every member follows the change along the
+     * commit chain. The call is refused for non-members and, before anything is signed, for a member without
+     * `changeRules`. It may be retried internally when another commit lands concurrently. No key, epoch or roster
+     * moves, and neither metadata version moves.
+     *
+     * A narrowing of `editPublicMeta` or `editPrivateMeta` refuses that plane when its author loses the rule: this
+     * call carries such a plane forward under the caller's name, and is refused before signing when the caller itself
+     * would lose that plane's rule while such a plane exists. Until that carry-forward completes (it is retried by
+     * this client's next call on the Group if it fails), `getGroup` returns a non-zero `statusCode` for such a plane,
+     * also to concurrent readers; any write of the plane by a member holding its rule repairs it.
      *
      * @param groupId ID of the Group
      * @param rules the rules to change; an unset one stays as it is
@@ -247,7 +266,7 @@ public:
      * Updates a Group's public (unencrypted) metadata, and nothing else.
      *
      * The three things a Group's metadata used to be updated by one call — public metadata, private metadata
-     * and policies — are three separate calls, each with its own permission on the Bridge. This one cannot
+     * and rules — are three separate calls, each with its own permission on the Bridge. This one cannot
      * touch the other two: the request it sends has no field to carry them in, so the permission bounds what
      * the call can *do*, not merely what it is meant for.
      *
@@ -260,6 +279,8 @@ public:
      * the Group and build the update again. The version checked is `Group::publicMetaVersion` alone, so a
      * concurrent private-metadata write cannot make this one lose.
      *
+     * Allowed by the `editPublicMeta` rule.
+     *
      * @param groupId ID of the Group to update
      * @param publicMeta public (unencrypted) metadata
      * @param version current `publicMetaVersion` of the updated Group
@@ -270,33 +291,13 @@ public:
      * Updates a Group's private (encrypted) metadata, and nothing else.
      *
      * The counterpart of `updateGroupPublicMeta`, with its own permission on the Bridge and its own version
-     * counter: the version checked is `Group::privateMetaVersion` alone.
+     * counter: the version checked is `Group::privateMetaVersion` alone. Allowed by the `editPrivateMeta` rule.
      *
      * @param groupId ID of the Group to update
      * @param privateMeta private (encrypted) metadata
      * @param version current `privateMetaVersion` of the updated Group
      */
     void updateGroupPrivateMeta(const std::string& groupId, const core::Buffer& privateMeta, const int64_t version);
-
-    /**
-     * Sets a Group's policies, as a signed commit by a member the current policy allows `updatePolicy`.
-     *
-     * The rules that govern commits (`update`, `rotateKeys`, `updatePolicy`, `ownerCanBeRemovedFromManagers`) and
-     * the creator are part of the Group's signed state; every member follows the change along the commit chain. The
-     * call is refused for non-members and, before anything is signed, for a member without `updatePolicy`. It may be
-     * retried internally when another commit lands concurrently. No key, epoch or roster moves, and neither metadata
-     * version moves.
-     *
-     * A narrowing of `update` refuses metadata written by an author who loses it: this call carries such a plane
-     * forward under the caller's name, and is refused before signing when the caller itself would lose `update`
-     * while such a plane exists. Until that carry-forward completes (it is retried by this client's next call on the
-     * Group if it fails), `getGroup` returns a non-zero `statusCode` for such a plane, also to concurrent readers;
-     * any metadata write by a member holding `update` repairs it.
-     *
-     * @param groupId ID of the Group to update
-     * @param policies Group's policies
-     */
-    void updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies);
 
     /**
      * Deletes a Group by given Group ID.

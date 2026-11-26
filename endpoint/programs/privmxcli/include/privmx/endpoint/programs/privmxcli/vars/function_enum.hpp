@@ -215,7 +215,7 @@ enum func_enum {
     group_rotateGroupKey,
     group_updateGroupPublicMeta,
     group_updateGroupPrivateMeta,
-    group_updateGroupPolicy,
+    group_updateGroupRules,
     group_deleteGroup,
     group_getGroup,
     group_listGroups,

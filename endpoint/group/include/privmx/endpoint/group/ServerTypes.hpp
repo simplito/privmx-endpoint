@@ -268,8 +268,8 @@ JSON_STRUCT(GroupUpdatePublicMetaModel, GROUP_UPDATE_PUBLIC_META_MODEL_FIELDS);
     F(version, int64_t)
 JSON_STRUCT(GroupUpdatePrivateMetaModel, GROUP_UPDATE_PRIVATE_META_MODEL_FIELDS);
 
-// A policy change is a signed commit: the policy travels as `commit.policy`, bound by its `policyHash`, and
-// lands under the same CAS as any commit. It touches neither metadata counter and appends no entry.
+// A rules change (op "policy") is a signed commit: the rules object travels as `commit.policy`, bound by its
+// `policyHash` (the rulesHash), and lands under the same CAS as any commit. It touches neither metadata counter and appends no entry.
 #define GROUP_UPDATE_POLICY_MODEL_FIELDS(F)                                                                            \
     F(id, std::string)                                                                                                 \
     F(commit, GroupTreeCommit)                                                                                         \

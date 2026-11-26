@@ -54,9 +54,10 @@ struct UnresolvedCommit {
     std::function<void()> after;                 // best-effort follow-up (a removal's metadata refresh) or empty
 };
 
-// A narrowing's carry-forward still to do: the planes' authors who lost `update`, and the read before it.
+// A narrowing's carry-forward still to do: which planes' authors lost that plane's rule, and the read before it.
 struct PendingCarry {
-    std::vector<std::string> losers;
+    bool publicPlane = false;
+    bool privatePlane = false;
     PriorRole prior;
 };
 
@@ -101,8 +102,8 @@ struct GroupSession {
     // One released statement per prevDigest. Survives reconnects on purpose: a dropped connection is the
     // commonest unknown outcome, and the same call retried after it must resend, not be held back.
     std::optional<UnresolvedCommit> unresolved;
-    // Limit: in memory only. A crash before the retry leaves the planes refused until a member holding `update`
-    // writes metadata (documented on updateGroupPolicy); persist it next to the pins if that ever matters.
+    // Limit: in memory only. A crash before the retry leaves the planes refused until a member holding the plane's
+    // rule writes it (documented on updateGroupRules); persist it next to the pins if that ever matters.
     std::optional<PendingCarry> pendingCarry;
     // The deferred self-update, at most one. Dropped on disconnect.
     std::optional<PendingSelfUpdate> selfUpdate;

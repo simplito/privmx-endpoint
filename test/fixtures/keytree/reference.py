@@ -6,10 +6,9 @@ Both the Endpoint (C++) and the Bridge (TypeScript) read the vectors this writes
 source of the other's expectations. Change a layout here first, from the spec, then make both sides agree.
 
     H = sha256; u8/u32/u64 big-endian; lp(s) = u32(len) || s; a domain tag ends in NUL
-    PH = H("pmx-group-policy\\0" || lp(creator) || lp(update) || lp(rotateKeys) || lp(updatePolicy)
-           || lp(ownerCanBeRemovedFromManagers) [|| lp(addMembers) || lp(removeMembers)])
-           each field resolved against the frozen v3 defaults; the bracketed pair only when the policy sets one of
-           the two, an unset one of them being `update`'s resolved value
+    PH = H("pmx-group-rules-v1\\0" || lp(creator) || lp(addMembers) || lp(removeMembers) || lp(replaceMemberKeys)
+           || lp(changeRoles) || lp(changeRules) || lp(changeVisibility) || lp(trimHistory) || lp(editPublicMeta)
+           || lp(editPrivateMeta))     the rules object holds exactly these nine, each "managers", "members" or "nobody"
     SB = "pmx-tree-commit\\0" || lp(groupId) || u32(treeVersion) || u64(seq) || lp(prevDigest) || u8(op) || u64(date)
          || u64(keyVersion) || lp(groupPubKey) || u64(rosterVersion) || RH || TH || PH || lp(committer)
          || lp(committerPubKey) || u32(committerSeat) || u32(#path) || (u32(v) || u32(gen) || lp(pk) || CH)*
@@ -30,7 +29,7 @@ import sys
 # Every domain tag of the key tree, in one place. Later branches append theirs.
 TAGS = [
     b"pmx-tree-commit\0",
-    b"pmx-group-policy\0",
+    b"pmx-group-rules-v1\0",
     b"pmx-space-id\0",
     b"pmx-space-recipients\0",
     b"pmx-space-key\0",
@@ -40,16 +39,12 @@ TAGS = [
 
 OP_CODES = {"create": 1, "add": 2, "remove": 3, "selfUpdate": 4, "rotate": 5, "policy": 6, "roles": 7, "reseat": 8}
 
-# Frozen with the v3 format: NOT the bridge's context defaults.
-V3_POLICY_DEFAULTS = {
-    "update": "manager",
-    "rotateKeys": "manager",
-    "updatePolicy": "manager",
-    "ownerCanBeRemovedFromManagers": "yes",
-}
-SIGNED_POLICY_FIELDS = ["update", "rotateKeys", "updatePolicy", "ownerCanBeRemovedFromManagers"]
-# The roster's two rules: unset, each is `update`'s value, and neither is hashed unless one is set.
-MEMBER_RULES = ["addMembers", "removeMembers"]
+WHO = ("managers", "members", "nobody")
+RULE_FIELDS = [
+    "addMembers", "removeMembers", "replaceMemberKeys", "changeRoles", "changeRules", "changeVisibility", "trimHistory",
+    "editPublicMeta", "editPrivateMeta",
+]
+DEFAULT_RULES = {field: "managers" for field in RULE_FIELDS}
 
 
 def u8(v):
@@ -76,19 +71,12 @@ def tag(name):
     return t
 
 
-def resolve(policy, field):
-    value = policy.get(field)
-    return V3_POLICY_DEFAULTS[field] if value in (None, "inherit", "default") else value
-
-
-def policy_hash(policy, creator):
-    pre = tag("pmx-group-policy") + lp(creator)
-    for field in SIGNED_POLICY_FIELDS:
-        pre += lp(resolve(policy, field))
-    unset = lambda field: policy.get(field) in (None, "inherit", "default")
-    if not all(unset(field) for field in MEMBER_RULES):
-        for field in MEMBER_RULES:
-            pre += lp(resolve(policy, "update") if unset(field) else policy[field])
+def rules_hash(rules, creator):
+    assert set(rules) == set(RULE_FIELDS), rules
+    pre = tag("pmx-group-rules-v1") + lp(creator)
+    for field in RULE_FIELDS:
+        assert rules[field] in WHO, (field, rules[field])
+        pre += lp(rules[field])
     return hashlib.sha256(pre).hexdigest()
 
 
@@ -109,22 +97,34 @@ def signed_bytes(s):
     return b
 
 
-EXPLICIT = {"update": "user", "rotateKeys": "manager,owner", "updatePolicy": "owner", "ownerCanBeRemovedFromManagers": "no"}
+EXPLICIT = dict(
+    DEFAULT_RULES, addMembers="members", removeMembers="nobody", replaceMemberKeys="members", trimHistory="nobody",
+    editPublicMeta="members",
+)
+IMMUTABLE = dict(DEFAULT_RULES, addMembers="nobody", removeMembers="nobody", changeRoles="nobody", changeRules="nobody")
 
-POLICIES = [
-    ({}, "alice"),
-    ({f: "inherit" for f in SIGNED_POLICY_FIELDS}, "alice"),
-    ({f: "default" for f in SIGNED_POLICY_FIELDS}, "alice"),
+# The first five are the Bridge's own conformance vectors.
+RULES = [
+    (dict(DEFAULT_RULES), "alice"),
+    (dict(DEFAULT_RULES), "bob"),
     (dict(EXPLICIT), "alice"),
-    # Fields the statements do not sign: same hash as the explicit set above.
-    (dict(EXPLICIT, get="all", delete="none", sendCustomNotification="user", item={"get": "user"}), "alice"),
-    (dict(EXPLICIT), "bob"),
-    # The roster's rules: unset ones change nothing, one set hashes both, and the two are not interchangeable.
-    (dict(EXPLICIT, addMembers="inherit", removeMembers="default"), "alice"),
-    ({"addMembers": "user"}, "alice"),
-    ({"addMembers": "user", "removeMembers": "manager,owner"}, "alice"),
-    ({"addMembers": "manager,owner", "removeMembers": "user"}, "alice"),
-    (dict(EXPLICIT, removeMembers="none"), "alice"),
+    ({field: "members" for field in RULE_FIELDS}, "alice"),
+    (dict(DEFAULT_RULES, changeRoles="nobody", changeRules="nobody", changeVisibility="members", editPrivateMeta="members"),
+     "alice"),
+    (dict(IMMUTABLE), "alice"),
+]
+
+# Rules objects both sides refuse: a field missing, one unknown, a value outside the field's set, the old grammar.
+INVALID_RULES = [
+    {k: v for k, v in DEFAULT_RULES.items() if k != "trimHistory"},
+    dict(DEFAULT_RULES, history="shared"),
+    dict(DEFAULT_RULES, manage="managers"),
+    dict(DEFAULT_RULES, addMembers="manager"),
+    dict(DEFAULT_RULES, removeMembers="manager,owner"),
+    dict(DEFAULT_RULES, editPublicMeta="all"),
+    dict(DEFAULT_RULES, editPrivateMeta=""),
+    dict(DEFAULT_RULES, addMembers=1),
+    {},
 ]
 
 # rosterHash({carol, alice}, {bob}) and the tiny tree of TreeCommitsTest.cpp (themselves vectors there).
@@ -133,14 +133,14 @@ REMOVAL = {
     "date": 1760000000000, "keyVersion": 4, "groupPubKey": "GPK", "rosterVersion": 9,
     "rosterHash": "d42481d52a260799898e5b45a151ab0cfc6e8ebca9ecc8c87b3f87a7c6783a9d",
     "treeHash": "b4db5638b91886d6a97283612ab5a836890e362e279f43dc77f8e059dc17598d",
-    "policyHash": policy_hash({}, "alice"),
+    "policyHash": rules_hash(DEFAULT_RULES, "alice"),
     "committer": "alice", "committerPubKey": "APK", "committerSeat": 0,
     "path": [{"nodeIndex": 3, "generation": 2, "publicKey": "pk3", "subtreeHash": "11" * 32}],
     "addedUsers": [], "addedManagers": [], "removed": ["bob"],
 }
 
 POLICY_CHANGE = dict(
-    REMOVAL, seq=8, prevDigest="33" * 32, op="policy", date=1760000000001, policyHash=policy_hash(EXPLICIT, "alice"),
+    REMOVAL, seq=8, prevDigest="33" * 32, op="policy", date=1760000000001, policyHash=rules_hash(EXPLICIT, "alice"),
     path=[], removed=[], policy=dict(EXPLICIT),
 )
 
@@ -221,8 +221,9 @@ def vectors():
             {"statement": s, "expectedHex": signed_bytes(s).hex()} for s in (REMOVAL, POLICY_CHANGE, ROLES, RESEAT)
         ],
         "policyHash": [
-            {"policy": p, "creator": c, "expectedHex": policy_hash(p, c)} for p, c in POLICIES
+            {"policy": p, "creator": c, "expectedHex": rules_hash(p, c)} for p, c in RULES
         ],
+        "invalidRules": INVALID_RULES,
         "spaceStatement": [
             {
                 "statement": st,
@@ -250,9 +251,9 @@ def self_test():
     for a in TAGS:
         for b in TAGS:
             assert a == b or not b.startswith(a), (a, b)
-    # The unsigned fields really are unsigned, and the creator really is signed.
+    # The creator is signed, and the fields are positional.
     hashes = [v["expectedHex"] for v in vectors()["policyHash"]]
-    assert hashes[0] == hashes[1] == hashes[2] and hashes[3] == hashes[4] and hashes[3] != hashes[5]
+    assert len(set(hashes)) == len(hashes)
 
 
 def main(argv):

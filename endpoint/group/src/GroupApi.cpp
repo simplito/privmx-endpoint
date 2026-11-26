@@ -28,7 +28,7 @@ std::string GroupApi::createGroup(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies,
+    const std::optional<GroupRulesUpdate>& rules,
     const std::optional<core::Buffer>& idSeed,
     const std::string& visibleTo
 ) {
@@ -36,7 +36,7 @@ std::string GroupApi::createGroup(
     core::Validator::validateId(contextId, "field:contextId ");
     core::Validator::validateUserListFormat(users, "field:users ");
     core::Validator::validateUserListFormat(managers, "field:managers ");
-    return impl->createGroup(contextId, users, managers, publicMeta, privateMeta, policies, idSeed, visibleTo);
+    return impl->createGroup(contextId, users, managers, publicMeta, privateMeta, rules, idSeed, visibleTo);
 }
 
 std::string GroupApi::deriveGroupId(const std::string& contextId, const core::Buffer& idSeed) {
@@ -157,12 +157,6 @@ void GroupApi::updateGroupPrivateMeta(
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     impl->updateGroupPrivateMeta(groupId, privateMeta, version);
-}
-
-void GroupApi::updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies) {
-    auto impl = getImpl();
-    core::Validator::validateId(groupId, "field:groupId ");
-    impl->updateGroupPolicy(groupId, policies);
 }
 
 void GroupApi::deleteGroup(const std::string& groupId) {

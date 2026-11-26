@@ -57,7 +57,7 @@ public:
         const std::vector<core::UserWithPubKey>& managers,
         const core::Buffer& publicMeta,
         const core::Buffer& privateMeta,
-        const std::optional<core::ContainerPolicy>& policies,
+        const std::optional<GroupRulesUpdate>& rules,
         const std::optional<core::Buffer>& idSeed = std::nullopt,
         const std::string& visibleTo = "members"
     );
@@ -93,7 +93,6 @@ public:
 
     void updateGroupPublicMeta(const std::string& groupId, const core::Buffer& publicMeta, const int64_t version);
     void updateGroupPrivateMeta(const std::string& groupId, const core::Buffer& privateMeta, const int64_t version);
-    void updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies);
     void deleteGroup(const std::string& groupId);
 
     Group getGroup(const std::string& groupId);

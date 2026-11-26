@@ -128,7 +128,7 @@ std::string GroupApiImpl::createGroup(
     const std::vector<core::UserWithPubKey>& managers,
     const core::Buffer& publicMeta,
     const core::Buffer& privateMeta,
-    const std::optional<core::ContainerPolicy>& policies,
+    const std::optional<GroupRulesUpdate>& rules,
     const std::optional<core::Buffer>& idSeed,
     const std::string& visibleTo
 ) {
@@ -136,7 +136,7 @@ std::string GroupApiImpl::createGroup(
         throw core::InvalidParamsException("visibleTo is \"members\" or \"context\"");
     }
     return _ops.create(
-        contextId, users, managers, publicMeta, privateMeta, policies,
+        contextId, users, managers, publicMeta, privateMeta, rules.value_or(GroupRulesUpdate{}),
         idSeed.has_value() ? std::optional<std::string>(resourceIdOfSeed(idSeed.value())) : std::nullopt,
         visibleTo == "members" ? std::nullopt : std::optional<std::string>(visibleTo)
     );
@@ -223,6 +223,7 @@ void GroupApiImpl::setGroupVisibility(const std::string& groupId, const std::str
     if (visibleTo != "members" && visibleTo != "context") {
         throw core::InvalidParamsException("visibleTo is \"members\" or \"context\"");
     }
+    _ops.assertMayChangeVisibility(groupId);
     server::GroupSetVisibilityModel model;
     model.groupId = groupId;
     model.visibleTo = visibleTo;
@@ -251,7 +252,7 @@ int64_t GroupApiImpl::removeGroupMembers(const std::string& groupId, const std::
     // still holds. Move it up. Outside the write above on purpose — see the header. Already done when an earlier
     // call's removal turned out to have landed (`settle`).
     if (historyAbandoned.has_value()) {
-        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), userIds, prior);
+        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), prior);
     }
     runDueWork(groupId);
     // The epoch this client committed, or verified when an earlier call's removal turned out to have landed.
@@ -267,7 +268,7 @@ int64_t GroupApiImpl::rotateGroupKey(const std::string& groupId) {
     // so nobody is accepted as an author beyond the members. Already done when an earlier call's rotation turned out
     // to have landed (`settle`).
     if (committedHere) {
-        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, {}, prior);
+        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, false, prior);
     }
     runDueWork(groupId);
     return static_cast<int64_t>(pinnedKeyVersion(groupId));
@@ -281,7 +282,7 @@ int64_t GroupApiImpl::replaceGroupMemberKeys(const std::string& groupId, const s
     // As after a rotation: the planes sit one epoch behind, and nobody left, so nobody beyond the members is accepted
     // as an author.
     if (historyAbandoned.has_value()) {
-        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), {}, prior);
+        _metadata.carryMetadataForward(groupId, CarryScope::NewEpoch, historyAbandoned.value(), prior);
     }
     runDueWork(groupId);
     return static_cast<int64_t>(pinnedKeyVersion(groupId));
@@ -303,7 +304,7 @@ void GroupApiImpl::setGroupRoles(const std::string& groupId, const std::vector<G
         carry.reset();
         _ops.setRoles(groupId, changes, carry);
     });
-    // A plane whose author lost `update` with its role is refused from now on; carry it under the caller's name.
+    // A plane whose author lost its rule with its role is refused from now on; carry it under the caller's name.
     if (carry.has_value()) {
         _metadata.runPolicyCarry(groupId, carry.value());
     }
@@ -311,18 +312,17 @@ void GroupApiImpl::setGroupRoles(const std::string& groupId, const std::vector<G
 }
 
 void GroupApiImpl::updateGroupRules(const std::string& groupId, const GroupRulesUpdate& rules) {
-    // The rules are three fields of the policy: the rest of it is carried over as the Group has it.
-    core::ContainerPolicy policy = getGroup(groupId).policy;
-    if (rules.addMembers.has_value()) {
-        policy.addMembers = rules.addMembers;
+    _metadata.retryPendingCarry(groupId);
+    std::optional<PendingCarry> carry;
+    CommitEngine::commitWithRetry([&] {
+        carry.reset();
+        _ops.updateRules(groupId, rules, carry);
+    });
+    // A plane whose author lost its rule is refused from now on; carry it under the caller's name.
+    if (carry.has_value()) {
+        _metadata.runPolicyCarry(groupId, carry.value());
     }
-    if (rules.removeMembers.has_value()) {
-        policy.removeMembers = rules.removeMembers;
-    }
-    if (rules.updateMeta.has_value()) {
-        policy.update = rules.updateMeta;
-    }
-    updateGroupPolicy(groupId, policy);
+    runDueWork(groupId);
 }
 
 core::PagingList<GroupLogEntry> GroupApiImpl::getGroupLog(
@@ -456,20 +456,6 @@ void GroupApiImpl::updateGroupPrivateMeta(
 ) {
     _metadata.writeMeta(readGroupForKeys(groupId), false, privateMeta, version);
     _metadata.retryPendingCarry(groupId);
-    runDueWork(groupId);
-}
-
-void GroupApiImpl::updateGroupPolicy(const std::string& groupId, const core::ContainerPolicy& policies) {
-    _metadata.retryPendingCarry(groupId);
-    std::optional<PendingCarry> carry;
-    CommitEngine::commitWithRetry([&] {
-        carry.reset();
-        _ops.updatePolicy(groupId, policies, carry);
-    });
-    // A plane whose author lost `update` is refused from now on; carry it under the caller's name.
-    if (carry.has_value()) {
-        _metadata.runPolicyCarry(groupId, carry.value());
-    }
     runDueWork(groupId);
 }
 
