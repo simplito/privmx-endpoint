@@ -513,12 +513,14 @@ private:
         bool byGroup = false; // signed through a group, not by a manager as a user
     };
     void requireGroupKeyRefreshesHold(const std::string& contextId, const std::vector<GroupKeyRefresh>& refreshes);
-    // Why a refresh is refused, given the epoch the caller's own key tree gives its key (members only) and the group's
-    // verified current epoch (when there is one); nullopt when it holds.
+    // Why a refresh is refused, given the epoch the caller's own key tree gives its key (members only), the group's
+    // verified current epoch (when there is one) and, for an epoch below that, the key the group's verified chain
+    // opened it with (when it could be read); nullopt when it holds.
     static std::optional<std::string> refusedRefresh(
         const GroupKeyRefresh& refresh,
         std::optional<std::int64_t> memberEpoch,
-        const std::optional<core::GroupEpochInfo>& current
+        const std::optional<core::GroupEpochInfo>& current,
+        const std::optional<std::string>& chainKey = std::nullopt
     );
     // The statements after `fromSeq`, up to and including `upToSeq`.
     std::vector<keytree::SpaceStatement> spaceStatements(

@@ -767,17 +767,6 @@ void TreeVerifier::verifyListed(const server::GroupInfo& summary, const Environm
     }
 }
 
-void TreeVerifier::verifyLatestOnly(const server::GroupInfo& summary, const Environment& environment) {
-    if (!summary.treeCommit.has_value() || !inItsContext(summary)) {
-        throw GroupDataIntegrityException("no latest statement, or a group id that is not its context's");
-    }
-    const CommitStatement latest = parseLatest(summary.treeCommit.value());
-    if (!describes(latest, summary) || !TreeCommits::onRoster(summary.users, summary.managers, latest.committer)) {
-        throw GroupDataIntegrityException("the latest statement does not describe the served group");
-    }
-    verifyStatements(summary.id, summary.contextId, {latest}, environment, true);
-}
-
 void TreeVerifier::pinCommitted(
     const std::string& groupId,
     const std::string& contextId,

@@ -420,3 +420,27 @@ TEST_F(GroupSpaceTest, a_reader_outside_a_team_verifies_its_key_refresh_through_
     EXPECT_EQ(state.keyVersion, 2);
     EXPECT_EQ(groupApi->decryptInSpace(spaceId, note("n1"), after, by(userId(1))).data.stdString(), "after");
 }
+
+TEST_F(GroupSpaceTest, a_new_session_replays_a_refresh_through_a_team_that_has_moved_on_since) {
+    // A refresh of sales' key signed through sales (user 1 is a Space manager through sales only) stays in the
+    // Space's history after sales rotates again. A new session replays it while sales is a later epoch: user 3 is
+    // outside sales and holds no key of it, so the refresh is held to the key sales' verified chain opened that
+    // epoch with.
+    switchTo(3);
+    const std::string support = createTeam({user(3)});
+    switchTo(1);
+    const std::string sales = createTeam({user(1), user(2)});
+    const std::string spaceId =
+        groupApi->createSpace(contextId(), {team(sales, "manager"), team(support, "user")}, text(""), text(""));
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(sales, {userId(2)}); });
+    ASSERT_NO_THROW({ groupApi->rotateSpaceKey(spaceId); }); // refreshes sales to epoch 2, through sales
+    const core::Buffer written = groupApi->encryptInSpace(spaceId, note("n1"), text("at epoch 2 of sales"));
+    ASSERT_NO_THROW({ groupApi->rotateGroupKey(sales); }); // sales moves to epoch 3; the Space log still says 2
+    switchTo(3);
+    SpaceState state;
+    ASSERT_NO_THROW({ state = groupApi->getSpace(spaceId); });
+    EXPECT_EQ(state.keyVersion, 2);
+    EXPECT_EQ(
+        groupApi->decryptInSpace(spaceId, note("n1"), written, by(userId(1))).data.stdString(), "at epoch 2 of sales"
+    );
+}

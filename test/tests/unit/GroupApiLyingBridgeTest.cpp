@@ -5080,4 +5080,12 @@ TEST(SpaceGroupKeyRefresh, SECURITY_ARefreshThroughTheGroupIsHeldToTheGroupsVeri
     EXPECT_FALSE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "a manager could replace G";
     byManager.groupKeyVersion = 4;
     EXPECT_TRUE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "shown wrong even for a manager";
+    // A past epoch of G, replayed after G moved on, by a reader holding no key of that epoch: held to the key G's
+    // verified chain opened that epoch with, never taken for being below the current epoch.
+    const std::string past = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    EXPECT_FALSE(Access::refusedRefresh(viaG(3, past), std::nullopt, current, past).has_value()) << "G's own epoch 3";
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current, past).has_value()) << "not G's epoch 3";
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, past), std::nullopt, std::nullopt, past).has_value()) << "G unverified";
+    byManager.groupKeyVersion = 3;
+    EXPECT_TRUE(Access::refusedRefresh(byManager, std::nullopt, current, past).has_value()) << "the chain shows it wrong";
 }

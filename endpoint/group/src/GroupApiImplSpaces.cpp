@@ -351,9 +351,10 @@ keytree::SpaceLogState GroupApiImpl::verifySpace(group::server::SpaceInfo& space
 // SECURITY: a group's pinned key in a Space's log is what "signed via that group" is checked against from then on,
 // so a refresh of it is held to the group's own verified history, not taken from whoever signed it. Through the group
 // itself (anyone who ever held one of its keys, a removed member too) it must be a key that group had at that epoch,
-// as this client can verify it: one of its epoch keys for a member, its verified current key otherwise. A manager
-// signing as a user could replace the group anyway: refused only when that is shown wrong (ahead of the group, or
-// another key at its current epoch). What cannot be verified is refused.
+// as this client can verify it: one of its epoch keys for a member, else the key G's verified chain of statements
+// opened that epoch with (the Bridge serves the chain to whoever may read the group's public info), or its verified
+// current key. A manager signing as a user could replace the group anyway: refused only when that is shown wrong
+// (ahead of the group, or another key at that epoch). What cannot be verified is refused.
 void GroupApiImpl::requireGroupKeyRefreshesHold(
     const std::string& contextId,
     const std::vector<GroupKeyRefresh>& refreshes
@@ -367,29 +368,29 @@ void GroupApiImpl::requireGroupKeyRefreshesHold(
             groupIds.push_back(refresh.groupId);
         }
     }
-    auto epochs = fetchGroupEpochs(contextId, groupIds);
-    // A group visible to the Context but not the caller's, that the caller verified before a change of it: its pin
-    // cannot be caught up (the Bridge serves the chain to members only), so `fetchGroupEpochs` has no key for it.
-    // Its latest statement still is checked as on first contact, and that is what such a refresh is held to.
-    for (const std::string& groupId : groupIds) {
-        if (epochs.count(groupId) != 0) {
-            continue;
-        }
-        try {
-            server::GroupGetPublicKeyModel model;
-            model.groupId = groupId;
-            const server::GroupInfo group = listedFrom(_serverApi.groupGetPublicKey(model).group);
-            if (group.contextId != contextId) {
-                continue;
+    // Verified and pinned here, chain caught up included; a group refused for a fork or a pin it is behind gets no
+    // key, and every refresh of it is then refused.
+    const auto epochs = fetchGroupEpochs(contextId, groupIds);
+    // Each group's grant key per past epoch, off its verified chain (`epochOpeners`: fetched once a group, only the
+    // statements since on a later replay). Empty when the chain cannot be read: such a refresh is then unverifiable.
+    std::map<std::string, std::map<std::uint64_t, std::string>> chainKeys;
+    const auto chainKeyAt = [&](const std::string& groupId, std::uint64_t epoch) -> std::optional<std::string> {
+        auto chain = chainKeys.find(groupId);
+        if (chain == chainKeys.end()) {
+            chain = chainKeys.emplace(groupId, std::map<std::uint64_t, std::string>()).first;
+            try {
+                for (const auto& [at, opener] : _treeVerifier.epochOpeners(
+                         groupId, contextId, VerifiedGroup::treeEnvironment(_serverApi, _connection, groupId)
+                     )) {
+                    chain->second[at] = opener.groupPubKey;
+                }
+            } catch (const std::exception& e) {
+                LOG_WARN("[space log] group ", groupId, " shows no verifiable chain to this caller: ", e.what())
             }
-            _treeVerifier.verifyLatestOnly(group, VerifiedGroup::treeEnvironment(_serverApi, _connection, group.id));
-            epochs[groupId] = core::GroupEpochInfo{
-                .keyVersion = group.keyVersion, .groupPubKey = keytree::TreeVerifier::canonicalKey(group.groupPubKey)
-            };
-        } catch (const std::exception& e) {
-            LOG_WARN("[space log] group ", groupId, " shows no verifiable key to this caller: ", e.what())
         }
-    }
+        const auto key = chain->second.find(epoch);
+        return key == chain->second.end() ? std::nullopt : std::optional<std::string>(key->second);
+    };
     for (const GroupKeyRefresh& refresh : refreshes) {
         // The epoch the caller's own view of the group gives that key: only a member has one.
         std::optional<std::int64_t> memberEpoch;
@@ -397,11 +398,21 @@ void GroupApiImpl::requireGroupKeyRefreshesHold(
             core::Validator::validateId(refresh.groupId, "field:space.groups.groupId ");
             _keys.grantKeyForPubKey(refresh.groupId, refresh.groupPubKey);
             memberEpoch = _keys.grantEpochOf(refresh.groupId, refresh.groupPubKey);
-        } catch (const std::exception&) {} // not a group of the caller's, or not a key of it
+        } catch (const GroupHistoryForkException&) {
+            throw; // a history that does not hold is the answer, never "not a key of it"
+        } catch (const GroupDataIntegrityException&) { throw; } catch (const std::exception&) {
+        } // not a group of the caller's, or not a key of it
         const auto epoch = epochs.find(refresh.groupId);
+        const std::optional<core::GroupEpochInfo> current = epoch == epochs.end() ?
+            std::nullopt :
+            std::optional<core::GroupEpochInfo>(epoch->second);
+        // A past epoch, below the group's verified current one, with no key of the caller's own to compare.
+        const bool past = !(memberEpoch.has_value() && memberEpoch.value() > 0) &&
+            current.has_value() &&
+            refresh.groupKeyVersion < static_cast<std::uint64_t>(current->keyVersion);
         if (const auto why = refusedRefresh(
-                refresh, memberEpoch,
-                epoch == epochs.end() ? std::nullopt : std::optional<core::GroupEpochInfo>(epoch->second)
+                refresh, memberEpoch, current,
+                past ? chainKeyAt(refresh.groupId, refresh.groupKeyVersion) : std::nullopt
             )) {
             throw GroupUnauthorizedSignerException(
                 "space statement " + std::to_string(refresh.seq) + ": group " + refresh.groupId + " " + why.value()
@@ -413,7 +424,8 @@ void GroupApiImpl::requireGroupKeyRefreshesHold(
 std::optional<std::string> GroupApiImpl::refusedRefresh(
     const GroupKeyRefresh& refresh,
     std::optional<std::int64_t> memberEpoch,
-    const std::optional<core::GroupEpochInfo>& current
+    const std::optional<core::GroupEpochInfo>& current,
+    const std::optional<std::string>& chainKey
 ) {
     if (memberEpoch.has_value() && memberEpoch.value() > 0) {
         return memberEpoch.value() == static_cast<std::int64_t>(refresh.groupKeyVersion) ?
@@ -433,6 +445,14 @@ std::optional<std::string> GroupApiImpl::refusedRefresh(
     }
     if (current.has_value() && refresh.groupKeyVersion > static_cast<std::uint64_t>(current->keyVersion)) {
         return "is not at that epoch yet";
+    }
+    // A past epoch: the key the group's verified chain opened it with. Never "any key below the current epoch": a
+    // removed member could then sign in a key of their own for an epoch the group has left.
+    if (current.has_value() && chainKey.has_value()) {
+        return canonical(chainKey.value()) == canonical(refresh.groupPubKey) &&
+                !canonical(refresh.groupPubKey).empty() ?
+            std::nullopt :
+            std::optional<std::string>("had another key at that epoch");
     }
     if (refresh.byGroup) {
         return "refreshed through a group to a key this client cannot verify";
