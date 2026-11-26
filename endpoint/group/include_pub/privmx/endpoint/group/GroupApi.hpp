@@ -744,9 +744,23 @@ public:
     /**
      * The current key and every earlier version are wrapped for them: they read what is already there. An added
      * Group every writer cannot see blocks their writes (see the note above).
+     *
+     * Checked against the Space's verified history before anything is sent. When every recipient named is already
+     * in the Space, in the role and (for a user) with the key given, the call succeeds and does nothing: a retry
+     * after a lost reply cannot be told from this. An empty list, a recipient named twice, a mix of present and
+     * absent recipients, or one present in another role or with another key throws InvalidParamsException.
      */
     void addSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipient>& recipients);
-    /** Makes a new key the removed do not get. @return the new key version */
+    /**
+     * Makes a new key the removed do not get.
+     *
+     * Checked against the Space's verified history before anything is sent. When every recipient named is already
+     * out of the Space, the call succeeds and does nothing (it returns the current key version): a retry after a
+     * lost reply cannot be told from this. An empty list or a mix of present and absent recipients throws
+     * InvalidParamsException, and so does a removal that would leave the Space with no manager: the client refuses
+     * it before sending, so the Bridge's SpaceLastManagerException is not what the caller sees.
+     * @return the new key version (the current one when nothing was removed)
+     */
     int64_t removeSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipientRef>& recipients);
     /**
      * Makes a new key, wrapped for every recipient's current key. Throws SpaceRecipientUnavailableException
