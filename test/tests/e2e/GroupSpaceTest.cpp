@@ -466,6 +466,23 @@ TEST_F(GroupSpaceTest, a_reader_who_cannot_see_a_team_follows_its_refresh_throug
     EXPECT_EQ(groupApi->decryptInSpace(spaceId, note("n1"), after, by(userId(1))).data.stdString(), "after");
 }
 
+TEST_F(GroupSpaceTest, a_writer_who_cannot_see_a_recipient_team_cannot_write_even_under_a_fresh_key) {
+    // Pins a documented limit: every write checks each recipient Group's current epoch, and a members-only Group
+    // has none this writer can verify. The key is fresh, but user 3 cannot tell, so it may not write.
+    const std::string sales = groupApi->createGroup(
+        contextId(), {user(1), user(2)}, {user(1)}, text("public"), text("private"), std::nullopt, std::nullopt, "members"
+    );
+    const std::string spaceId =
+        groupApi->createSpace(contextId(), {team(sales, "manager"), person(3, "user")}, text(""), text(""));
+    EXPECT_NO_THROW({ groupApi->encryptInSpace(spaceId, note("n1"), text("by a member of sales")); });
+    switchTo(3);
+    SpaceState state;
+    ASSERT_NO_THROW({ state = groupApi->getSpace(spaceId); });
+    EXPECT_FALSE(state.keyIsStale);
+    EXPECT_THROW({ groupApi->encryptInSpace(spaceId, note("n2"), text("by user 3")); }, SpaceRecipientUnavailableException);
+    EXPECT_THROW({ groupApi->beginSequenceInSpace(spaceId, note("s1")); }, SpaceRecipientUnavailableException);
+}
+
 TEST_F(GroupSpaceTest, a_space_this_device_creates_again_under_its_id_is_read_after_a_restart) {
     // The stored pin of the earlier Space (seq 2) must not hold the one created again (seq 1) behind it.
     const core::Buffer seed = text("recreated-space");

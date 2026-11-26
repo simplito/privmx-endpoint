@@ -137,7 +137,7 @@ void DeferredWork::checkLadderAt(const std::string& groupId, const std::string& 
         // verified epoch bounds what the session remembers: the archive's epoch is the bridge's word.
         const auto verified = static_cast<std::uint32_t>(_deps.treeVerifier.pinnedKeyVersion(groupId));
         const std::uint32_t served = keytree::GroupKeyResolver::ladderFloor(
-            raw.eraFloor, raw.archivePrunedBelow, std::max(static_cast<std::int64_t>(verified), raw.keyVersion)
+            raw.eraFloor, std::max(static_cast<std::int64_t>(verified), raw.keyVersion)
         );
         const std::uint32_t floor = std::max(cache->raiseFloor(std::min(served, verified)), served);
         return keytree::LadderKeys::unopenedSpans(at, keytree::GroupKeyResolver::toDownwardRungs(raw), *cache, floor);

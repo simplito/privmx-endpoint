@@ -346,7 +346,14 @@ void ConnectionImpl::adoptPreviousIdentity(const crypto::PrivateKey& previous) {
         const std::string blob = store->load(slot).stdString();
         if (!blob.empty()) {
             body = LocalSeal(previous, LocalSeal::GROUP_PINS_LABEL, LocalSeal::GROUP_PINS_VERSION, slot).open(blob);
-            if (!body.has_value()) {
+            // An authentic blob of an earlier layout: nothing to adopt, as with no slot. Authenticated under its own
+            // version first, so a corrupted slot is not taken for one.
+            bool earlierLayout = false;
+            for (std::uint8_t version = 1; !body.has_value() && version < LocalSeal::GROUP_PINS_VERSION; ++version) {
+                earlierLayout = earlierLayout ||
+                    LocalSeal(previous, LocalSeal::GROUP_PINS_LABEL, version, slot).open(blob).has_value();
+            }
+            if (!body.has_value() && !earlierLayout) {
                 // Never ignored: a store the Bridge can write must not be able to turn adoption off by corrupting it.
                 throw LocalStateIntegrityException("the previous identity's group pins do not open");
             }

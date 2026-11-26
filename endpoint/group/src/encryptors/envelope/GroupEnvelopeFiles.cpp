@@ -231,8 +231,8 @@ CipherRange GroupEnvelopeFiles::cipherRange(FileHandle fileHandle, FilePosition 
     };
 }
 
-EnvelopeFileState GroupEnvelopeFiles::finish(FileHandle fileHandle, bool wantReading) {
-    auto file = get(fileHandle, wantReading);
+EnvelopeFileState GroupEnvelopeFiles::finish(FileHandle fileHandle) {
+    auto file = get(fileHandle, true);
     std::lock_guard lock(file->mutex);
     EnvelopeFileState& state = openState(*file);
     // Closed whatever the outcome, so neither a second finish nor a chunk call still waiting for the lock
@@ -251,9 +251,6 @@ EnvelopeFileState GroupEnvelopeFiles::finish(FileHandle fileHandle, bool wantRea
         }
     } release{this, fileHandle};
 
-    if (!wantReading) {
-        return std::move(state);
-    }
     switch (
         GroupEnvelopeEncryptor::classifyRead(state.seeked, state.index, state.chunks.size(), state.buffer.empty())
     ) {

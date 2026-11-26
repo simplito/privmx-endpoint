@@ -655,7 +655,11 @@ public:
         const DecryptOptions& options,
         const std::optional<core::Buffer>& resumeFrom = std::nullopt
     );
-    /** Items must arrive in order. A skipped one is reported in `missing`; an earlier or repeated one throws. */
+    /**
+     * Items must arrive in order. A skipped one is reported in `missing`; one earlier than, or repeating, the last
+     * one read throws. A mark puts the reader back to its count, also when verifySequenceMark refuses it: items at or
+     * after that count may then arrive (and be returned) again, so a reader de-duplicates by `SequenceItem::index`.
+     */
     SequenceItem readSequenceItem(const SequenceHandle sequence, const core::Buffer& item);
     /**
      * Checks a checkpoint or a close against the items read. Throws `EnvelopeSequenceOrderException` if any
@@ -684,6 +688,12 @@ public:
     // if the application's server gives them the ciphertext. Where that window matters, call rotateSpaceKey
     // right after the removal, or use alsoFor.
     //
+    // Every writer must see each recipient Group. Each write (encryptInSpace, a file or a sequence written in the
+    // Space) checks every recipient Group's current epoch against the one the Space's key was wrapped to, and a
+    // Group the writer cannot verify counts as moved on: the write tries to replace the key and fails with
+    // SpaceRecipientUnavailableException, even while the key is fresh. In practice a Space's recipient Groups are
+    // visible to the Context (setGroupVisibility) or have every writer among their members.
+    //
     // A Space has its own kind of envelope: decrypt() refuses it and decryptInSpace refuses the others
     // (EnvelopeWrongKindException). No outsiders and no alsoFor: to let someone write, make them a recipient.
     // Files and sequences use the chunk and item calls above with the handles returned here.
@@ -694,7 +704,8 @@ public:
 
     /**
      * @param recipients the Groups and users the key is wrapped for; the caller must be among them as a manager,
-     * themselves or through a Group
+     * themselves or through a Group. Every writer must be able to see each recipient Group (visible to the Context,
+     * or the writer a member): see the note above.
      * @param idSeed when set, the Space's ID is deriveSpaceId(contextId, idSeed) instead of random. A Space deleted
      * and created again under the same derived ID by another user starts again at key version 1, below what this
      * process has seen of the earlier one: it reads as a rollback (GroupHistoryForkException) here, and with a
@@ -723,7 +734,10 @@ public:
     SpaceState getSpace(const std::string& spaceId);
     core::PagingList<SpaceState> listSpaces(const std::string& contextId, const core::PagingQuery& pagingQuery);
     void deleteSpace(const std::string& spaceId);
-    /** The current key and every earlier version are wrapped for them: they read what is already there. */
+    /**
+     * The current key and every earlier version are wrapped for them: they read what is already there. An added
+     * Group every writer cannot see blocks their writes (see the note above).
+     */
     void addSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipient>& recipients);
     /** Makes a new key the removed do not get. @return the new key version */
     int64_t removeSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipientRef>& recipients);
@@ -740,7 +754,8 @@ public:
      * One symmetric encryption and one signature. When the key is stale, it is replaced first. A caller who may
      * not replace it (a "user" of the Space outside the Group whose key moved) gets EnvelopeStaleEpochException:
      * nothing is written under a key a removed member holds. A manager, or a member of that Group, calls
-     * rotateSpaceKey.
+     * rotateSpaceKey. A caller who cannot see a recipient Group gets SpaceRecipientUnavailableException, also under
+     * a fresh key (see the note above).
      */
     core::Buffer encryptInSpace(const std::string& spaceId, const Path& location, const core::Buffer& data);
     /** `options.currentEpochOnly` means the Space's current key version. */
@@ -754,6 +769,7 @@ public:
         const std::string& spaceId,
         const std::vector<DecryptItem>& items
     );
+    /** The recipient Groups are checked as by encryptInSpace when the file is finished (finishFileEncryption). */
     FileHandle beginFileEncryptionInSpace(const std::string& spaceId, const Path& location);
     FileHandle beginFileDecryptionInSpace(
         const std::string& spaceId,
@@ -761,6 +777,10 @@ public:
         const core::Buffer& envelope,
         const DecryptOptions& options
     );
+    /**
+     * The recipient Groups are checked as by encryptInSpace here, and again by each item appended: a Group the
+     * writer cannot see ends the sequence (EnvelopeStaleEpochException).
+     */
     SequenceHandle beginSequenceInSpace(const std::string& spaceId, const Path& location, int64_t checkpointEvery = 64);
     SequenceHandle openSequenceInSpace(
         const std::string& spaceId,

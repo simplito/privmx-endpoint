@@ -57,12 +57,8 @@ std::uint32_t GroupKeyResolver::epochOf(std::int64_t value, bool floor) {
     return static_cast<std::uint32_t>(value);
 }
 
-std::uint32_t GroupKeyResolver::ladderFloor(
-    std::int64_t eraFloor,
-    const std::optional<std::int64_t>& prunedBelow,
-    std::int64_t currentEpoch
-) {
-    const std::int64_t floor = std::max<std::int64_t>({1, eraFloor, prunedBelow.value_or(1)});
+std::uint32_t GroupKeyResolver::ladderFloor(std::int64_t eraFloor, std::int64_t currentEpoch) {
+    const std::int64_t floor = std::max<std::int64_t>(1, eraFloor);
     if (floor > currentEpoch || floor > static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
         throw privmx::endpoint::group::GroupDataIntegrityException("a ladder floor past the last epoch");
     }
@@ -256,7 +252,7 @@ std::optional<std::string> GroupKeyResolver::tamperedBy(
     return std::nullopt;
 }
 
-// `rungs`, `registry`, `eraFloor` and `prunedBelow` are passed in rather than read off the group, which no longer
+// `rungs`, `registry` and `eraFloor` are passed in rather than read off the group, which no longer
 // carries them: the bridge serves the ladder separately, and the walk stays ignorant of where they came from.
 ResolveResult GroupKeyResolver::resolveWith(
     const server::GroupInfo& group,
@@ -264,8 +260,7 @@ ResolveResult GroupKeyResolver::resolveWith(
     const privmx::crypto::PrivateKey& ownUserKey,
     const std::vector<ArchiveRung>& rungs,
     const std::vector<EpochRegistryEntry>& registry,
-    std::uint32_t eraFloor,
-    const std::optional<std::uint32_t>& prunedBelow
+    std::uint32_t eraFloor
 ) {
     ResolveResult result;
     if (!hasTree(group)) {
@@ -321,7 +316,7 @@ ResolveResult GroupKeyResolver::resolveWith(
 
     // Step 2: descend the ladder. Verification against the epoch registry happens at every hop.
     LadderKeys ladder(_cache);
-    const DescentResult descent = ladder.descend(currentEpoch, wanted, rungs, registry, eraFloor, prunedBelow);
+    const DescentResult descent = ladder.descend(currentEpoch, wanted, rungs, registry, eraFloor);
     result.brokenSpans = descent.brokenSpans;
     result.reachedEpoch = descent.reachedEpoch;
     if (descent.failure != DescentFailure::None || !descent.key.has_value()) {
@@ -340,11 +335,8 @@ ResolveResult GroupKeyResolver::resolve(
     const privmx::crypto::PrivateKey& ownUserKey,
     const server::GroupGetKeyArchiveResult& archive
 ) {
-    const std::optional<std::uint32_t> prunedBelow = archive.archivePrunedBelow.has_value() ?
-        std::optional<std::uint32_t>(epochOf(archive.archivePrunedBelow.value(), true)) :
-        std::nullopt;
     return resolveWith(
         group, epoch, ownUserKey, toDownwardRungs(archive), registryFromArchive(group, archive),
-        epochOf(archive.eraFloor, true), prunedBelow
+        epochOf(archive.eraFloor, true)
     );
 }

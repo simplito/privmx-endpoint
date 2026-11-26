@@ -411,8 +411,9 @@ void GroupApiImpl::requireGroupKeyRefreshesHold(
         std::optional<std::int64_t> memberEpoch;
         try {
             core::Validator::validateId(refresh.groupId, "field:space.groups.groupId ");
-            _keys.grantKeyForPubKey(refresh.groupId, refresh.groupPubKey);
-            memberEpoch = _keys.grantEpochOf(refresh.groupId, refresh.groupPubKey);
+            std::int64_t epoch = 0;
+            _keys.grantKeyForPubKey(refresh.groupId, refresh.groupPubKey, &epoch);
+            memberEpoch = epoch;
         } catch (const GroupHistoryForkException&) {
             throw; // a history that does not hold is the answer, never "not a key of it"
         } catch (const GroupDataIntegrityException&) { throw; } catch (const std::exception&) {

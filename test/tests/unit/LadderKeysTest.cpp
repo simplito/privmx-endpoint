@@ -150,25 +150,6 @@ TEST_F(LadderKeysBuild, EmitsTheUnitRungAloneOnlyWhenAskedTo) {
     EXPECT_EQ(rungs[0].span.target, 7u);
 }
 
-TEST_F(LadderKeysBuild, DoesNotDemandTargetsBelowThePruneWatermark) {
-    // Pruning is retention policy: those keys are gone for every member alike, and the bridge rejects rungs
-    // pointing below the watermark. Demanding them would block every future rotation on a pruned group.
-    EXPECT_EQ(LadderKeys::requiredSkipTargets(8, 1), std::vector<std::uint32_t>({6, 4}));
-    EXPECT_EQ(LadderKeys::requiredSkipTargets(8, 1, /*prunedBelow*/ 5), std::vector<std::uint32_t>({6}));
-
-    TreeKeyCache store;
-    LadderKeys ladder(store);
-    const PrivateKey atSix = PrivateKey::generateRandom();
-    const PrivateKey previous = PrivateKey::generateRandom();
-    const PrivateKey current = PrivateKey::generateRandom();
-    store.putGrantKey(6, atSix);
-    const std::vector<ArchiveRung> rungs =
-        ladder.buildRungs(8, current.getPublicKey(), previous, 1, AUTHOR, current, true, /*prunedBelow*/ 5);
-    ASSERT_EQ(rungs.size(), 2u) << "the unit rung and the one surviving skip target";
-    EXPECT_EQ(rungs[0].span.target, 7u);
-    EXPECT_EQ(rungs[1].span.target, 6u);
-}
-
 TEST_F(LadderKeysBuild, EverySpanPointsDownwards) {
     const EpochHistory history = simulateEpochHistory(40, 1);
     for (const ArchiveRung& rung : history.rungs) {
@@ -429,24 +410,12 @@ TEST_F(LadderKeysDescend, StopsAtAnEraFloorAndSaysSo) {
     EXPECT_TRUE(store.getGrantKey(12).has_value()) << "and cached";
 }
 
-TEST_F(LadderKeysDescend, ReportsPruningInPreferenceToTheEraFloor) {
-    const EpochHistory history = simulateEpochHistory(20, 1);
-    TreeKeyCache store;
-    LadderKeys ladder(store);
-    store.putGrantKey(20, keyOf(history, 20, 1));
-    const DescentResult result = ladder.descend(
-        20, 1, history.rungs, history.registry, /*eraFloor*/ 3, /*prunedBelow*/ 15
-    );
-    EXPECT_EQ(result.failure, DescentFailure::Pruned) << "the stronger constraint is the more useful message";
-    EXPECT_EQ(result.reachedEpoch, 15u);
-}
-
 TEST_F(LadderKeysDescend, EnforcesTheWalkBound) {
     const EpochHistory history = simulateEpochHistory(64, 1, false);
     TreeKeyCache store;
     LadderKeys ladder(store);
     store.putGrantKey(64, keyOf(history, 64, 1));
-    const DescentResult result = ladder.descend(64, 1, history.rungs, history.registry, 1, std::nullopt, /*maxWalk*/ 5);
+    const DescentResult result = ladder.descend(64, 1, history.rungs, history.registry, 1, /*maxWalk*/ 5);
     EXPECT_EQ(result.failure, DescentFailure::TooLong);
 }
 

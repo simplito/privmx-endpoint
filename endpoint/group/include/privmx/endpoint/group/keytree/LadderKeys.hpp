@@ -56,8 +56,7 @@ public:
         std::uint32_t eraFloor,
         const std::string& author,
         const privmx::crypto::PrivateKey& signer,
-        bool includeSkipRungs = true,
-        std::optional<std::uint32_t> prunedBelow = std::nullopt
+        bool includeSkipRungs = true
     );
 
     // Recovers into the cache every older grant key `buildRungs` will ask for, so a cold client publishes the same
@@ -66,17 +65,12 @@ public:
         std::uint32_t newEpoch,
         const std::vector<ArchiveRung>& available,
         const std::vector<EpochRegistryEntry>& registry,
-        std::uint32_t eraFloor = 1,
-        std::optional<std::uint32_t> prunedBelow = std::nullopt
+        std::uint32_t eraFloor = 1
     );
 
     // The skip targets `newEpoch` owes a rung to, nearest first, minus the unit rung's target and anything at or
-    // below the era floor or prune watermark. The order is a chain `gatherRungKeys` walks; empty means no fetch.
-    static std::vector<std::uint32_t> requiredSkipTargets(
-        std::uint32_t newEpoch,
-        std::uint32_t eraFloor,
-        std::optional<std::uint32_t> prunedBelow = std::nullopt
-    );
+    // below the era floor. The order is a chain `gatherRungKeys` walks; empty means no fetch.
+    static std::vector<std::uint32_t> requiredSkipTargets(std::uint32_t newEpoch, std::uint32_t eraFloor);
 
     // ── Descending ──────────────────────────────────────────────────────────
 
@@ -88,7 +82,6 @@ public:
         const std::vector<ArchiveRung>& available,
         const std::vector<EpochRegistryEntry>& registry,
         std::uint32_t eraFloor = 1,
-        std::optional<std::uint32_t> prunedBelow = std::nullopt,
         std::uint32_t maxWalk = 256
     );
 

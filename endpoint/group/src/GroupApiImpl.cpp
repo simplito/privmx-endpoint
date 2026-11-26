@@ -1419,10 +1419,10 @@ DecryptedOutsiderEnvelope GroupApiImpl::decryptFromOutsider(
     const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope, content);
     requireFor(routing, groupId, ENVELOPE_FROM_OUTSIDER);
 
+    std::int64_t epoch = 0;
     const OpenedEnvelope opened = _envelopeEncryptor.openOutsiderEnvelope(
-        envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey), binding
+        envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey, &epoch), binding
     );
-    const std::int64_t epoch = _keys.grantEpochOf(groupId, routing.groupPubKey);
     RosterView roster = rosterOf(groupId);
     if (options.currentEpochOnly && epoch != roster.keyVersion) {
         // The epoch was just looked up, the roster may be a cached one behind it: read again before refusing (as
@@ -1452,12 +1452,11 @@ DecryptedAnonymousEnvelope GroupApiImpl::decryptAnonymous(
     const EnvelopeBinding binding = bindingOf(location, content);
     const EnvelopeRouting routing = _envelopeEncryptor.peek(envelope, content);
     requireFor(routing, groupId, ENVELOPE_ANONYMOUS);
+    std::int64_t epoch = 0;
     const OpenedEnvelope opened = _envelopeEncryptor.openAnonymousEnvelope(
-        envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey), binding
+        envelope, _keys.grantKeyForPubKey(groupId, routing.groupPubKey, &epoch), binding
     );
-    return DecryptedAnonymousEnvelope{
-        .data = opened.data, .keyVersion = _keys.grantEpochOf(groupId, routing.groupPubKey)
-    };
+    return DecryptedAnonymousEnvelope{.data = opened.data, .keyVersion = epoch};
 }
 
 DecryptedSharedEnvelope GroupApiImpl::decryptShared(
@@ -1504,7 +1503,10 @@ DecryptedSharedEnvelope GroupApiImpl::decryptShared(
         try {
             core::Validator::validateId(recipient.id, "field:envelope.recipient ");
             groupKey = _keys.grantKeyForPubKey(recipient.id, recipient.pubKey);
-        } catch (const core::Exception&) {
+        } catch (const core::Exception& e) {
+            if (isForgedHistory(e)) {
+                throw; // a history that does not hold is the answer, never "not a recipient"
+            }
             continue; // not a group of the caller's, or not a key of that group
         }
         // From here a failure is about the envelope, not about who the caller is: it is reported.
@@ -1746,7 +1748,7 @@ CipherOffset GroupApiImpl::seekInEncryptedFile(FileHandle fileHandle, FilePositi
 }
 
 DecryptedFileInfo GroupApiImpl::finishFileDecryption(FileHandle fileHandle) {
-    EnvelopeFileState state = _envelopeFiles.finish(fileHandle, true);
+    EnvelopeFileState state = _envelopeFiles.finish(fileHandle);
     state.info.complete = !state.seeked;
     return state.info;
 }

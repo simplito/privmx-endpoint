@@ -377,7 +377,7 @@ private:
     void dropCachedGroup(const std::optional<std::string>& groupId = std::nullopt);
 
     static EnvelopeBinding bindingOf(const Path& location, EnvelopeContent content = EnvelopeContent::Message);
-    // "member", "outsider", "anonymous" or "shared", as GroupErrorDetails::envelopeKind names them.
+    // "member", "outsider", "anonymous" or "space", as GroupErrorDetails::envelopeKind names them.
     static std::string kindOf(const EnvelopeRouting& routing);
     static EnvelopeAudience audienceOf(const std::vector<WireRecipient>& recipients);
     static void requireAuthorStated(const DecryptOptions& options);

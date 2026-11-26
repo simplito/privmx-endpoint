@@ -178,8 +178,8 @@ public:
     ) const;
 
 private:
-    // A rotation's floor off an archive read after the group's. Past the group's epoch, another member's prune or era
-    // cut and rotation came in between: planned again on a fresh read, never signed with no rung at all, and not
+    // A rotation's floor off an archive read after the group's. Past the group's epoch, an era cut and rotation came
+    // in between: planned again on a fresh read, never signed with no rung at all, and not
     // remembered. Throws StalePlan.
     static std::uint32_t rotationFloorOf(
         const server::GroupInfo& group,

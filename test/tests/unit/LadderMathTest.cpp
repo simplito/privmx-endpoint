@@ -316,18 +316,6 @@ TEST_F(LadderDescentFloor, ReportsEraBoundaryWhenOnlyAnEraFloorApplies) {
     EXPECT_EQ(result.reason, DescentFloorReason::EraBoundary);
 }
 
-TEST_F(LadderDescentFloor, PrefersPrunedWhenTheWatermarkIsStronger) {
-    const auto result = LadderMath::descentFloor(20, 8000);
-    EXPECT_EQ(result.floor, 8000u);
-    EXPECT_EQ(result.reason, DescentFloorReason::Pruned);
-}
-
-TEST_F(LadderDescentFloor, KeepsEraBoundaryWhenHigherThanTheWatermark) {
-    const auto result = LadderMath::descentFloor(9000, 8000);
-    EXPECT_EQ(result.floor, 9000u);
-    EXPECT_EQ(result.reason, DescentFloorReason::EraBoundary);
-}
-
 // validateRungSet
 class LadderValidate : public testing::Test {};
 
@@ -381,12 +369,6 @@ TEST_F(LadderValidate, RejectsARungTargetingBelowTheEraFloor) {
     const auto result = LadderMath::validateRungSet({RungSpan{8, 7}, RungSpan{8, 3}}, 8, 5);
     EXPECT_FALSE(result.ok);
     EXPECT_EQ(result.problem, LadderProblemKind::BelowEraFloor);
-}
-
-TEST_F(LadderValidate, RejectsARungTargetingBelowThePruneWatermark) {
-    const auto result = LadderMath::validateRungSet({RungSpan{8, 7}, RungSpan{8, 4}}, 8, 1, 5);
-    EXPECT_FALSE(result.ok);
-    EXPECT_EQ(result.problem, LadderProblemKind::BelowPruneWatermark);
 }
 
 TEST_F(LadderValidate, RejectsDuplicatesInOneSubmission) {

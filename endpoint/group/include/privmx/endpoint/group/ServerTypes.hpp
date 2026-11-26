@@ -173,7 +173,6 @@ JSON_STRUCT(GroupArchiveRung, GROUP_ARCHIVE_RUNG_FIELDS);
     F(treeCommits, std::optional<std::vector<GroupTreeCommit>>)                                                        \
     F(copathHashes, std::optional<std::vector<std::string>>)                                                           \
     F(eraFloor, std::optional<int64_t>)                                                                                \
-    F(archivePrunedBelow, std::optional<int64_t>)                                                                      \
     F(policy, Poco::Dynamic::Var)                                                                                      \
     F(history, std::vector<GroupHistoryEntryInfo>)                                                                     \
     F(visibleTo, std::optional<std::string>)
@@ -589,7 +588,6 @@ JSON_STRUCT(GroupGetEpochKeysResult, GROUP_GET_EPOCH_KEYS_RESULT_FIELDS);
 #define GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS(F)                                                                         \
     F(keyVersion, int64_t)                                                                                             \
     F(eraFloor, int64_t)                                                                                               \
-    F(archivePrunedBelow, std::optional<int64_t>)                                                                      \
     F(keyHistory, std::vector<GroupKeyHistoryEntry>)                                                                   \
     F(rungs, std::vector<GroupArchiveRung>)
 JSON_STRUCT(GroupGetKeyArchiveResult, GROUP_GET_KEY_ARCHIVE_RESULT_FIELDS);

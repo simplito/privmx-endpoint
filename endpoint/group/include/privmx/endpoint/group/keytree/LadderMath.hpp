@@ -34,13 +34,12 @@ struct RungSpan {
 // Mirrors the protocol errors the bridge returns.
 enum class LadderProblemKind {
     None,
-    Direction,           // `target >= at` — the entire security guarantee of this layer
-    WrongEpoch,          // not addressed to the epoch being created
-    BelowEraFloor,       // would cross an era boundary
-    BelowPruneWatermark, // targets a pruned epoch
-    Duplicate,           // same span submitted twice
-    UnitRungMissing,     // the mandatory rung to the previous epoch is absent
-    NotCanonical,        // a span the epoch does not owe (`rungSpansFor` above the floor)
+    Direction,       // `target >= at` — the entire security guarantee of this layer
+    WrongEpoch,      // not addressed to the epoch being created
+    BelowEraFloor,   // would cross an era boundary
+    Duplicate,       // same span submitted twice
+    UnitRungMissing, // the mandatory rung to the previous epoch is absent
+    NotCanonical,    // a span the epoch does not owe (`rungSpansFor` above the floor)
 };
 
 struct LadderValidation {
@@ -53,7 +52,6 @@ struct LadderValidation {
 enum class DescentFloorReason {
     None,        // nothing constrains the descent
     EraBoundary, // an era floor is in the way — an entitlement matter
-    Pruned,      // the range was deleted — a retention matter
 };
 
 struct DescentFloor {
@@ -105,16 +103,15 @@ public:
     // Upper bound on descent length with aligned skip rungs: `2*log2(delta) + 2`.
     static std::uint32_t descentBound(std::uint32_t from, std::uint32_t to);
 
-    // The higher of the era floor and the prune watermark. Which one applied is what lets a client say "not
-    // available to you" versus "deleted" instead of surfacing a decryption failure.
-    static DescentFloor descentFloor(std::uint32_t eraFloor, std::optional<std::uint32_t> prunedBelow = std::nullopt);
+    // The era floor, and whether it constrains anything: what lets a client say "not available to you" instead of
+    // surfacing a decryption failure.
+    static DescentFloor descentFloor(std::uint32_t eraFloor);
 
     // Validates a submitted rung set for an epoch being created. Pure; the caller reports the problem.
     static LadderValidation validateRungSet(
         const std::vector<RungSpan>& submitted,
         std::uint32_t newEpoch,
-        std::uint32_t eraFloor,
-        std::optional<std::uint32_t> prunedBelow = std::nullopt
+        std::uint32_t eraFloor
     );
 
 private:

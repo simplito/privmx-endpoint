@@ -3388,6 +3388,31 @@ TEST_F(GroupApiLyingBridge, SECURITY_ACorruptedPreviousIdentityBlobAbortsTheAdop
     EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 2u) << "a retry once the slot is fixed";
 }
 
+TEST_F(GroupApiLyingBridge, APreviousIdentityBlobOfAnEarlierLayoutIsTakenAsNoPins) {
+    // A slot an earlier build sealed (version 1, the nine-rule pins): authentic, but nothing this build reads.
+    quiet = true;
+    store = std::make_shared<MemoryPinStore>();
+    const std::string groupId = createGroup({"alice", "bob"});
+    client("alice").resolveGroupPrivKey(groupId);
+    const PrivateKey previous = bridge.users.at("alice");
+    clients.erase("alice");
+    const std::string slot = store->keyWith("group-pins/", "/" + previous.getPublicKey().toBase58DER());
+    ASSERT_EQ(PinBlob::VERSION, 2);
+    store->put(slot, core::LocalSeal(previous, PinBlob::LABEL, 1, slot).seal("an earlier layout"));
+    changeKeyOf(bridge, clients, "alice");
+    EXPECT_NO_THROW(client("alice").adoptPreviousIdentity(previous));
+    EXPECT_EQ(GroupApiImplTestAccess::pinnedSeq(client("alice"), groupId), 0u) << "nothing adopted";
+    EXPECT_FALSE(clients.at("alice")->connectionImpl->previousIdentities().empty()) << "the key is recorded";
+    // A blob neither version opens is still a corrupted slot.
+    std::string bad = core::LocalSeal(previous, PinBlob::LABEL, 1, slot).seal("an earlier layout");
+    bad[bad.size() / 2] ^= 0x01;
+    store->put(slot, bad);
+    clients.erase("alice");
+    EXPECT_THROW(
+        Client(bridge, "alice", store, bridgeIdentity, previous), core::LocalStateIntegrityException
+    );
+}
+
 TEST_F(GroupApiLyingBridge, SECURITY_ARenewalAdoptsThePreviousKeysPinsFirst) {
     // An app that skipped Connection::adoptPreviousIdentity still renews on the previous key's pins, so the renewal
     // is never planned on a state rolled back below what the previous key verified.
@@ -4538,6 +4563,26 @@ TEST_F(GroupApiLyingBridge, SECURITY_AMemberClaimToARecipientIsReportedAsWhatItI
 
     // Bob is in neither.
     EXPECT_THROW(client("bob").decryptShared(CONTEXT, NOWHERE, forged, ANY), EnvelopeNotARecipientException);
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_ASharedEnvelopeReadOnAForkedHistoryIsRefusedAsAFork) {
+    // The recipient group's history rolled back below the reader's pin: the answer is the fork, never "not a
+    // recipient", which would hide it.
+    quiet = true;
+    const std::string billing = createGroup({"alice", "carol"});
+    const std::string billingKey = client("alice").getGroup(billing).groupPubKey;
+    const Envelope sealed = GroupEnvelopeEncryptor().packMemberEnvelope(
+        "care-team", "0123456789abcdef0123456789abcdef", core::Buffer::from("approved"), bridge.users.at("carol"),
+        privmx::crypto::Crypto::randomBytes(32),
+        EnvelopeSeal{.binding = {}, .keyVersion = 1, .encryptedAt = 1, .authorUserId = "carol"},
+        {WireRecipient{.isGroup = true, .id = billing, .pubKey = billingKey, .keyVersion = 1}}
+    );
+    const Bridge atSeq1 = bridge;
+    selfUpdateBy("carol");
+    client("alice").getGroup(billing); // pins seq 2
+    clients.at("alice")->connectionImpl->getEventMiddleware()->emitDisconnectedEvent(); // drops the cached keys
+    bridge.tree = atSeq1.tree;
+    EXPECT_THROW(client("alice").decryptShared(CONTEXT, NOWHERE, sealed, ANY), GroupHistoryForkException);
 }
 
 TEST_F(GroupApiLyingBridge, APageOfEnvelopesReportsEachOnItsOwn) {

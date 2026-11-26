@@ -179,30 +179,21 @@ std::uint32_t LadderMath::descentBound(std::uint32_t from, std::uint32_t to) {
     return 2 * static_cast<std::uint32_t>(std::ceil(std::log2(static_cast<double>(delta + 1)))) + 2;
 }
 
-DescentFloor LadderMath::descentFloor(std::uint32_t eraFloor, std::optional<std::uint32_t> prunedBelow) {
+DescentFloor LadderMath::descentFloor(std::uint32_t eraFloor) {
     assertEpoch(eraFloor, "eraFloor");
-    const DescentFloorReason eraReason = eraFloor > 1 ? DescentFloorReason::EraBoundary : DescentFloorReason::None;
-    if (!prunedBelow.has_value()) {
-        return DescentFloor{eraFloor, eraReason};
-    }
-    assertEpoch(prunedBelow.value(), "prunedBelow");
-    if (prunedBelow.value() > eraFloor) {
-        return DescentFloor{prunedBelow.value(), DescentFloorReason::Pruned};
-    }
-    return DescentFloor{eraFloor, eraReason};
+    return DescentFloor{eraFloor, eraFloor > 1 ? DescentFloorReason::EraBoundary : DescentFloorReason::None};
 }
 
 LadderValidation LadderMath::validateRungSet(
     const std::vector<RungSpan>& submitted,
     std::uint32_t newEpoch,
-    std::uint32_t eraFloor,
-    std::optional<std::uint32_t> prunedBelow
+    std::uint32_t eraFloor
 ) {
     assertEpoch(newEpoch, "newEpoch");
     assertEpoch(eraFloor, "eraFloor");
 
     // Only the spans the epoch owes, as the bridge requires: what bounds an epoch to ~33 spans.
-    const std::vector<RungSpan> canonical = rungSpansFor(newEpoch, std::max(eraFloor, prunedBelow.value_or(1)));
+    const std::vector<RungSpan> canonical = rungSpansFor(newEpoch, eraFloor);
     std::set<std::pair<std::uint32_t, std::uint32_t>> seen;
     for (const RungSpan& rung : submitted) {
         if (rung.target >= rung.at) {
@@ -213,9 +204,6 @@ LadderValidation LadderMath::validateRungSet(
         }
         if (rung.target < eraFloor) {
             return LadderValidation{false, LadderProblemKind::BelowEraFloor, rung};
-        }
-        if (prunedBelow.has_value() && rung.target < prunedBelow.value()) {
-            return LadderValidation{false, LadderProblemKind::BelowPruneWatermark, rung};
         }
         if (std::find(canonical.begin(), canonical.end(), rung) == canonical.end()) {
             return LadderValidation{false, LadderProblemKind::NotCanonical, rung};

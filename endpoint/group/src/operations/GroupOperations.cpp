@@ -37,7 +37,7 @@ std::uint32_t GroupOperations::rotationFloorOf(
     const server::GroupGetKeyArchiveResult& archive
 ) {
     const std::uint32_t floor = keytree::GroupKeyResolver::ladderFloor(
-        archive.eraFloor, archive.archivePrunedBelow, keytree::GroupKeyResolver::newestEpoch(group, archive)
+        archive.eraFloor, keytree::GroupKeyResolver::newestEpoch(group, archive)
     );
     if (floor > group.keyVersion) {
         throw privmx::endpoint::group::StalePlan{};
@@ -574,9 +574,7 @@ std::vector<keytree::ArchiveRung> GroupOperations::buildRotationRungs(
     keytree::LadderKeys ladder(cache);
     // Never a floor lower than one this session has seen: a bridge under-reporting it gets no rung below it.
     std::uint32_t floor = cache.raiseFloor(
-        keytree::GroupKeyResolver::ladderFloor(
-            group->eraFloor.value_or(1), group->archivePrunedBelow, group->keyVersion
-        )
+        keytree::GroupKeyResolver::ladderFloor(group->eraFloor.value_or(1), group->keyVersion)
     );
     // What the rungs are checked against before submitting: the chain, never the cache. Without skip targets that is
     // the verified group's own key (the unit rung's target); with them, the openers' keys (`fetchKeyArchive`).

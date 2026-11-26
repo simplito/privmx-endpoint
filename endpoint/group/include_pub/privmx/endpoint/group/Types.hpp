@@ -416,7 +416,7 @@ struct GroupErrorDetails {
     /** The user and key in question: who really signed, or whose key the UserVerifier refused. */
     std::string userId;
     std::string pubKey;
-    /** On a wrong kind of envelope: what it is - "member", "outsider", "anonymous" or "shared". */
+    /** On a wrong kind of envelope: what it is - "member", "outsider", "anonymous" or "space". */
     std::string envelopeKind;
 };
 

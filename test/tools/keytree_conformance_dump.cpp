@@ -62,8 +62,6 @@ std::string reasonName(DescentFloorReason reason) {
     switch (reason) {
     case DescentFloorReason::EraBoundary:
         return "ERA_BOUNDARY";
-    case DescentFloorReason::Pruned:
-        return "PRUNED";
     default:
         return "NONE";
     }
@@ -77,8 +75,6 @@ std::string problemName(LadderProblemKind problem) {
         return "WRONG_EPOCH";
     case LadderProblemKind::BelowEraFloor:
         return "BELOW_ERA_FLOOR";
-    case LadderProblemKind::BelowPruneWatermark:
-        return "BELOW_PRUNE_WATERMARK";
     case LadderProblemKind::Duplicate:
         return "DUPLICATE";
     case LadderProblemKind::UnitRungMissing:
@@ -143,13 +139,9 @@ void dumpLadder() {
     }
 
     printf("FLOORS\n");
-    const std::vector<std::pair<std::uint32_t, int>> floors = {
-        {1, -1}, {20, -1}, {20, 8000}, {9000, 8000}, {1, 5},
-    };
-    for (const auto& [era, pruned] : floors) {
-        const auto result = pruned < 0 ? L::descentFloor(era) :
-                                         L::descentFloor(era, static_cast<std::uint32_t>(pruned));
-        printf("  era=%u pruned=%d floor=%u reason=%s\n", era, pruned, result.floor, reasonName(result.reason).c_str());
+    for (const std::uint32_t era : {1u, 20u, 9000u}) {
+        const auto result = L::descentFloor(era);
+        printf("  era=%u floor=%u reason=%s\n", era, result.floor, reasonName(result.reason).c_str());
     }
 
     printf("VALIDATIONS\n");
@@ -157,27 +149,23 @@ void dumpLadder() {
         std::vector<RungSpan> spans;
         std::uint32_t epoch;
         std::uint32_t floor;
-        int pruned;
     };
     const std::vector<Case> cases = {
-        {{}, 1, 1, -1},
-        {{}, 20, 20, -1},
-        {{}, 8, 1, -1},
-        {{RungSpan{8, 7}}, 8, 1, -1},
-        {{RungSpan{8, 7}, RungSpan{8, 5}}, 8, 1, -1},
-        {{RungSpan{8, 8}}, 8, 1, -1},
-        {{RungSpan{8, 9}}, 8, 1, -1},
-        {{RungSpan{7, 6}}, 8, 1, -1},
-        {{RungSpan{8, 6}}, 8, 1, -1},
-        {{RungSpan{8, 7}, RungSpan{8, 3}}, 8, 5, -1},
-        {{RungSpan{8, 7}, RungSpan{8, 4}}, 8, 1, 5},
-        {{RungSpan{8, 7}, RungSpan{8, 7}}, 8, 1, -1},
+        {{}, 1, 1},
+        {{}, 20, 20},
+        {{}, 8, 1},
+        {{RungSpan{8, 7}}, 8, 1},
+        {{RungSpan{8, 7}, RungSpan{8, 5}}, 8, 1},
+        {{RungSpan{8, 8}}, 8, 1},
+        {{RungSpan{8, 9}}, 8, 1},
+        {{RungSpan{7, 6}}, 8, 1},
+        {{RungSpan{8, 6}}, 8, 1},
+        {{RungSpan{8, 7}, RungSpan{8, 3}}, 8, 5},
+        {{RungSpan{8, 7}, RungSpan{8, 7}}, 8, 1},
     };
     for (std::size_t i = 0; i < cases.size(); ++i) {
         const Case& c = cases[i];
-        const auto result = c.pruned < 0 ?
-            L::validateRungSet(c.spans, c.epoch, c.floor) :
-            L::validateRungSet(c.spans, c.epoch, c.floor, static_cast<std::uint32_t>(c.pruned));
+        const auto result = L::validateRungSet(c.spans, c.epoch, c.floor);
         printf("  case=%zu ok=%d problem=%s\n", i, result.ok ? 1 : 0, problemName(result.problem).c_str());
     }
 }

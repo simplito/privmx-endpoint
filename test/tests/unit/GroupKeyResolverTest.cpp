@@ -61,7 +61,6 @@ protected:
         server::GroupGetKeyArchiveResult archive;
         archive.keyVersion = keyVersion;
         archive.eraFloor = 1;
-        archive.archivePrunedBelow = std::nullopt;
         return archive;
     }
 
@@ -713,20 +712,6 @@ TEST_F(ResolverOldEpoch, StopsAtAnEraFloorAndReportsIt) {
     EXPECT_FALSE(result.key.has_value());
 }
 
-TEST_F(ResolverOldEpoch, ReportsPruningDistinctlyFromAnEraBoundary) {
-    Fixture fixture = buildFixture(4);
-    advanceEpochs(fixture, 12);
-    fixture.archive.eraFloor = 2;
-    fixture.archive.archivePrunedBelow = 9;
-    setOwnLeafPosition(fixture.group, 1);
-
-    TreeKeyCache store;
-    GroupKeyResolver resolver(store);
-    const ResolveResult result = resolver.resolve(fixture.group, 3, fixture.members[1].priv, fixture.archive);
-    EXPECT_EQ(result.descent, DescentFailure::Pruned)
-        << "retention and entitlement must read differently to the user";
-}
-
 TEST_F(ResolverOldEpoch, SECURITY_AFloorPast32BitsIsRefusedNotWrapped) {
     // Narrowed unchecked, 2^32 + 8 would read as era floor 8 and 2^32 - 1 as something else again; 0 and below
     // mean no floor, as for `GroupKeyResolver::ladderFloor`, rather than an invalid_argument out of the ladder.
@@ -738,11 +723,7 @@ TEST_F(ResolverOldEpoch, SECURITY_AFloorPast32BitsIsRefusedNotWrapped) {
     server::GroupGetKeyArchiveResult archive = fixture.archive;
     archive.eraFloor = (std::int64_t(1) << 32) + 8;
     EXPECT_THROW(resolver.resolve(fixture.group, 3, fixture.members[1].priv, archive), GroupDataIntegrityException);
-    archive.eraFloor = 1;
-    archive.archivePrunedBelow = (std::int64_t(1) << 32) + 9;
-    EXPECT_THROW(resolver.resolve(fixture.group, 3, fixture.members[1].priv, archive), GroupDataIntegrityException);
     archive.eraFloor = 0;
-    archive.archivePrunedBelow = -5;
     EXPECT_TRUE(resolver.resolve(fixture.group, 3, fixture.members[1].priv, archive).key.has_value());
 }
 
