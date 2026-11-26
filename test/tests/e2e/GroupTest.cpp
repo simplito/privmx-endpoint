@@ -1281,7 +1281,11 @@ TEST_F(GroupTest, an_immutable_group_keeps_its_membership_roles_and_rules) {
     );
     EXPECT_NO_THROW({ groupApi->rotateGroupKey(groupId); });
     EXPECT_NO_THROW({ groupApi->replaceGroupMemberKeys(groupId, {user2}); });
-    EXPECT_NO_THROW({ groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("still editable"), 1); });
+    group::Group current;
+    ASSERT_NO_THROW({ current = groupApi->getGroup(groupId); });
+    EXPECT_NO_THROW({
+        groupApi->updateGroupPublicMeta(groupId, core::Buffer::from("still editable"), current.publicMetaVersion);
+    }) << "the carry-forwards of the rotation and the reseat moved the version";
 }
 
 TEST_F(GroupTest, the_log_lists_every_statement_from_the_creation) {
