@@ -100,6 +100,7 @@ struct Bridge {
     std::map<std::string, PrivateKey> listedKeys;
     FakeBridge tree;
     server::GroupInfo rest; // everything but the tree, as sent
+    bool visibleToContext = false; // `visibleTo` as created: whether `groupGetPublicKey` serves non-members
     std::vector<std::pair<std::string, server::GroupSendCustomEventModel>> events; // (sender, as sent)
     // Hooks run under the lock. `beforeRemoval` may wait on `sync->cv` with it; the others throw to refuse, `onAdd`
     // and `onSelfUpdate` before the commit is applied, `afterRemoval` after.
@@ -263,6 +264,7 @@ struct Bridge {
                 std::set<std::string>(model.managers.begin(), model.managers.end())
             );
             rest = server::GroupInfo{};
+            visibleToContext = model.visibleTo == std::optional<std::string>("context");
             rest.type = model.type;
             rest.creator = caller;
             server::GroupDataEntry head;
@@ -305,6 +307,28 @@ struct Bridge {
                 sync->cv.notify_all();
             }
             return server::GroupGetResult{.group = info}.toJSON();
+        }
+        if (group == "groupGetPublicKey") {
+            // The public read, honest: what `serve` holds, in the public shape, to a member or for a group visible
+            // to the Context.
+            const server::GroupInfo info = serve(tree.state.leafAssignment.at(0).value_or(caller), false);
+            if (!visibleToContext && !TreeCommits::onRoster(info.users, info.managers, caller)) {
+                bridgeError<srv::AccessDeniedException>();
+            }
+            server::GroupPublicInfo pub;
+            pub.id = info.id;
+            pub.contextId = info.contextId;
+            pub.resourceId = info.resourceId;
+            pub.creator = rest.creator;
+            pub.users = info.users;
+            pub.managers = info.managers;
+            pub.rosterVersion = info.rosterVersion;
+            pub.keyVersion = info.keyVersion;
+            pub.groupPubKey = info.groupPubKey;
+            pub.policy = info.policy;
+            pub.visibleTo = "context";
+            pub.treeCommit = info.treeCommit.value();
+            return server::GroupGetPublicKeyResult{.group = pub}.toJSON();
         }
         if (group == "groupGetTreeCommits") {
             const auto model = server::GroupGetTreeCommitsModel::fromJSON(params);
@@ -2272,6 +2296,25 @@ TEST_F(GroupApiLyingBridge, SECURITY_ASeatStrippedReadServingAWiderPolicyDoesNot
     EXPECT_TRUE(widened.groupPubKey.empty());
     bridge.onRead = stripCarol;
     EXPECT_NE(client("carol").getGroup(groupId).statusCode, 0) << "the honest policy refuses bob's plane";
+}
+
+TEST_F(GroupApiLyingBridge, SECURITY_GetGroupPublicKeyTakesNoCreatorFromAnUnattestedRead) {
+    // getGroup reports an unseated answer with a nonzero status but still copies the served creator; the creator
+    // getGroupPublicKey returns comes from the verified public read instead.
+    const std::string groupId = createGroup({"alice", "bob", "carol"});
+    client("carol").getGroup(groupId);
+    bridge.onRead = [&](const std::string& caller, server::GroupInfo& info) {
+        if (caller != "carol") {
+            return;
+        }
+        auto seats = info.leafAssignment.value();
+        std::replace(seats.begin(), seats.end(), std::string("carol"), std::string());
+        info.leafAssignment = seats;
+        info.ownLeafPosition.reset();
+        info.creator = "bob";
+    };
+    ASSERT_NE(client("carol").getGroup(groupId).statusCode, 0);
+    EXPECT_EQ(client("carol").getGroupPublicKey(CONTEXT, groupId).creator, "alice");
 }
 
 TEST_F(GroupApiLyingBridge, SECURITY_AnUnattestedReadMovesNoVersionPin) {

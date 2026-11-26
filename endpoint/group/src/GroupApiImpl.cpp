@@ -190,15 +190,21 @@ GroupPublicKey GroupApiImpl::getGroupPublicKey(const std::string& contextId, con
         throw GroupDataIntegrityException("group " + groupId + " has no verifiable key");
     }
     // The creator, from a read held to the latest signed statement (the policy it signs names the creator): the
-    // caller's own verified read when they are a member, the public one otherwise. A history that does not verify
-    // is the answer, never a reason to try the other read.
-    std::string creator;
+    // caller's own read when it verified (statusCode 0: getGroup reports an unattested answer instead of throwing,
+    // creator still copied from the Bridge), the public one otherwise. A history that does not verify is the
+    // answer, never a reason to try the other read.
+    std::optional<std::string> creator;
     try {
-        creator = getGroup(groupId).creator;
+        const Group group = getGroup(groupId);
+        if (group.statusCode == 0 && group.contextId == contextId) {
+            creator = group.creator;
+        }
     } catch (const core::Exception& e) {
         if (isForgedHistory(e)) {
             throw;
         }
+    }
+    if (!creator.has_value()) {
         server::GroupGetPublicKeyModel model;
         model.groupId = groupId;
         const server::GroupInfo group = listedFrom(_serverApi.groupGetPublicKey(model).group);
@@ -213,7 +219,7 @@ GroupPublicKey GroupApiImpl::getGroupPublicKey(const std::string& contextId, con
         .groupId = groupId,
         .keyVersion = epoch->second.keyVersion,
         .pubKey = epoch->second.groupPubKey,
-        .creator = creator
+        .creator = creator.value()
     };
 }
 
