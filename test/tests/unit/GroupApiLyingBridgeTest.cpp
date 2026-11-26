@@ -5088,4 +5088,11 @@ TEST(SpaceGroupKeyRefresh, SECURITY_ARefreshThroughTheGroupIsHeldToTheGroupsVeri
     EXPECT_TRUE(Access::refusedRefresh(viaG(3, past), std::nullopt, std::nullopt, past).has_value()) << "G unverified";
     byManager.groupKeyVersion = 3;
     EXPECT_TRUE(Access::refusedRefresh(byManager, std::nullopt, current, past).has_value()) << "the chain shows it wrong";
+    // A reader with no view of G at all (not a member, G members-only): the via-G signature is the proof it gets.
+    EXPECT_FALSE(Access::refusedRefresh(viaG(3, forged), std::nullopt, std::nullopt, std::nullopt, true).has_value());
+    // Still refused when anything it does know shows it wrong.
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::int64_t{2}, std::nullopt, std::nullopt, true).has_value());
+    EXPECT_TRUE(Access::refusedRefresh(viaG(4, forged), std::nullopt, current, std::nullopt, true).has_value());
+    EXPECT_TRUE(Access::refusedRefresh(viaG(5, forged), std::nullopt, current, std::nullopt, true).has_value());
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current, past, true).has_value());
 }

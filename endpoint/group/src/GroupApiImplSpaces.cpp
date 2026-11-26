@@ -25,6 +25,7 @@ limitations under the License.
 #include <sstream>
 
 #include <privmx/crypto/Crypto.hpp>
+#include <privmx/endpoint/core/ConvertedExceptions.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/EndpointUtils.hpp>
 #include <privmx/endpoint/core/LocalSeal.hpp>
@@ -395,6 +396,19 @@ void GroupApiImpl::requireGroupKeyRefreshesHold(
         const auto key = chain->second.find(epoch);
         return key == chain->second.end() ? std::nullopt : std::optional<std::string>(key->second);
     };
+    // Whether the Bridge says outright that this caller may not see the group (a members-only group it is not in).
+    // A network failure or any other answer is no such word: the refresh stays unverifiable, and is refused.
+    const auto hiddenFromCaller = [&](const std::string& groupId) {
+        try {
+            server::GroupGetPublicKeyModel model;
+            model.groupId = groupId;
+            _serverApi.groupGetPublicKey(model);
+        } catch (const core::Exception& e) {
+            return e.getCode() == privmx::endpoint::server::GroupDoesNotExistException().getCode() ||
+                e.getCode() == privmx::endpoint::server::AccessDeniedException().getCode();
+        } catch (...) {}
+        return false;
+    };
     for (const GroupKeyRefresh& refresh : refreshes) {
         // The epoch the caller's own view of the group gives that key: only a member has one.
         std::optional<std::int64_t> memberEpoch;
@@ -414,9 +428,14 @@ void GroupApiImpl::requireGroupKeyRefreshesHold(
         const bool past = !(memberEpoch.has_value() && memberEpoch.value() > 0) &&
             current.has_value() &&
             refresh.groupKeyVersion < static_cast<std::uint64_t>(current->keyVersion);
+        // No view of the group at all: no key of it, no verified epoch, and the Bridge says it is hidden from us.
+        const bool hidden = refresh.byGroup &&
+            !(memberEpoch.has_value() && memberEpoch.value() > 0) &&
+            !current.has_value() &&
+            hiddenFromCaller(refresh.groupId);
         if (const auto why = refusedRefresh(
                 refresh, memberEpoch, current,
-                past ? chainKeyAt(refresh.groupId, refresh.groupKeyVersion) : std::nullopt
+                past ? chainKeyAt(refresh.groupId, refresh.groupKeyVersion) : std::nullopt, hidden
             )) {
             throw GroupUnauthorizedSignerException(
                 "space statement " + std::to_string(refresh.seq) + ": group " + refresh.groupId + " " + why.value()
@@ -429,7 +448,8 @@ std::optional<std::string> GroupApiImpl::refusedRefresh(
     const GroupKeyRefresh& refresh,
     std::optional<std::int64_t> memberEpoch,
     const std::optional<core::GroupEpochInfo>& current,
-    const std::optional<std::string>& chainKey
+    const std::optional<std::string>& chainKey,
+    bool groupHidden
 ) {
     if (memberEpoch.has_value() && memberEpoch.value() > 0) {
         return memberEpoch.value() == static_cast<std::int64_t>(refresh.groupKeyVersion) ?
@@ -458,7 +478,10 @@ std::optional<std::string> GroupApiImpl::refusedRefresh(
             std::nullopt :
             std::optional<std::string>("had another key at that epoch");
     }
-    if (refresh.byGroup) {
+    // A group hidden from this reader leaves nothing to hold the refresh to; the via signature SpaceLog::apply
+    // checked is then the proof. Only a holder of the group's pinned key makes it: a current member (an insider) or
+    // one just removed (freshness, out of scope). Readers who can see the group still verify the key above.
+    if (refresh.byGroup && !groupHidden) {
         return "refreshed through a group to a key this client cannot verify";
     }
     return std::nullopt;

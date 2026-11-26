@@ -446,6 +446,26 @@ TEST_F(GroupSpaceTest, a_new_session_replays_a_refresh_through_a_team_that_has_m
     );
 }
 
+TEST_F(GroupSpaceTest, a_reader_who_cannot_see_a_team_follows_its_refresh_through_that_team) {
+    // Sales is members-only: user 3, a recipient in person, sees nothing of it, so a refresh of sales' key signed
+    // through sales is taken on that signature. It must not lock user 3 out of the Space.
+    const std::string sales = groupApi->createGroup(
+        contextId(), {user(1), user(2)}, {user(1)}, text("public"), text("private"), std::nullopt, std::nullopt, "members"
+    );
+    const std::string spaceId =
+        groupApi->createSpace(contextId(), {team(sales, "manager"), person(3, "user")}, text(""), text(""));
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(sales, {userId(2)}); });
+    // User 1 is a recipient through sales only: the stale key is replaced by a write, through sales.
+    const core::Buffer after = groupApi->encryptInSpace(spaceId, note("n1"), text("after"));
+    EXPECT_EQ(GroupApi::peekEnvelope(after).keyVersion, 2);
+
+    switchTo(3);
+    SpaceState state;
+    ASSERT_NO_THROW({ state = groupApi->getSpace(spaceId); });
+    EXPECT_EQ(state.keyVersion, 2);
+    EXPECT_EQ(groupApi->decryptInSpace(spaceId, note("n1"), after, by(userId(1))).data.stdString(), "after");
+}
+
 TEST_F(GroupSpaceTest, a_space_this_device_creates_again_under_its_id_is_read_after_a_restart) {
     // The stored pin of the earlier Space (seq 2) must not hold the one created again (seq 1) behind it.
     const core::Buffer seed = text("recreated-space");

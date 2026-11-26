@@ -59,9 +59,10 @@ struct GroupApiImplTestAccess {
         const GroupKeyRefresh& refresh,
         std::optional<std::int64_t> memberEpoch,
         const std::optional<core::GroupEpochInfo>& current,
-        const std::optional<std::string>& chainKey = std::nullopt
+        const std::optional<std::string>& chainKey = std::nullopt,
+        bool groupHidden = false
     ) {
-        return GroupApiImpl::refusedRefresh(refresh, memberEpoch, current, chainKey);
+        return GroupApiImpl::refusedRefresh(refresh, memberEpoch, current, chainKey, groupHidden);
     }
     // As if the last pin save (or failed attempt) were PIN_SAVE_IDLE_INTERVAL ago: no clock to move in a unit test.
     static void agePinSave(GroupApiImpl& api) {
