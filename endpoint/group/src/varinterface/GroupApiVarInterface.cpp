@@ -48,7 +48,7 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {GetGroups, &GroupApiVarInterface::getGroups},
         {GetGroupPublicKey, &GroupApiVarInterface::getGroupPublicKey},
         {SetGroupVisibility, &GroupApiVarInterface::setGroupVisibility},
-        {ReseatGroupMembers, &GroupApiVarInterface::reseatGroupMembers},
+        {ReplaceGroupMemberKeys, &GroupApiVarInterface::replaceGroupMemberKeys},
         {SetGroupRoles, &GroupApiVarInterface::setGroupRoles},
         {UpdateGroupRules, &GroupApiVarInterface::updateGroupRules},
         {GetGroupLog, &GroupApiVarInterface::getGroupLog},
@@ -85,6 +85,9 @@ std::map<GroupApiVarInterface::METHOD, Poco::Dynamic::Var (GroupApiVarInterface:
         {BeginSequenceInSpace, &GroupApiVarInterface::beginSequenceInSpace},
         {OpenSequenceInSpace, &GroupApiVarInterface::openSequenceInSpace},
         {GetSpaceSequenceOrigin, &GroupApiVarInterface::getSpaceSequenceOrigin},
+        {EncodePath, &GroupApiVarInterface::encodePath},
+        {PinGroupToSubject, &GroupApiVarInterface::pinGroupToSubject},
+        {GetSpaceLog, &GroupApiVarInterface::getSpaceLog},
         {AbortFile, &GroupApiVarInterface::abortFile}
 };
 
@@ -439,11 +442,11 @@ Poco::Dynamic::Var GroupApiVarInterface::setGroupVisibility(const Poco::Dynamic:
     return {};
 }
 
-Poco::Dynamic::Var GroupApiVarInterface::reseatGroupMembers(const Poco::Dynamic::Var& args) {
+Poco::Dynamic::Var GroupApiVarInterface::replaceGroupMemberKeys(const Poco::Dynamic::Var& args) {
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
     auto groupId = _deserializer.deserialize<std::string>(argsArr->get(0), "groupId");
     auto userIds = _deserializer.deserializeVector<std::string>(argsArr->get(1), "userIds");
-    return _serializer.serialize(_groupApi.reseatGroupMembers(groupId, userIds));
+    return _serializer.serialize(_groupApi.replaceGroupMemberKeys(groupId, userIds));
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::setGroupRoles(const Poco::Dynamic::Var& args) {
@@ -726,6 +729,28 @@ Poco::Dynamic::Var GroupApiVarInterface::getSpaceSequenceOrigin(const Poco::Dyna
     auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
     auto sequence = _deserializer.deserialize<int64_t>(argsArr->get(0), "sequence");
     return _serializer.serialize(_groupApi.getSpaceSequenceOrigin(sequence));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::encodePath(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 1);
+    auto path = _deserializer.deserializeVector<PathSegment>(argsArr->get(0), "path");
+    return _serializer.serialize(GroupApi::encodePath(path));
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::pinGroupToSubject(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 3);
+    auto contextId = _deserializer.deserialize<std::string>(argsArr->get(0), "contextId");
+    auto subject = _deserializer.deserializeVector<PathSegment>(argsArr->get(1), "subject");
+    auto groupId = _deserializer.deserialize<std::string>(argsArr->get(2), "groupId");
+    _groupApi.pinGroupToSubject(contextId, subject, groupId);
+    return {};
+}
+
+Poco::Dynamic::Var GroupApiVarInterface::getSpaceLog(const Poco::Dynamic::Var& args) {
+    auto argsArr = core::VarInterfaceUtil::validateAndExtractArray(args, 2);
+    auto spaceId = _deserializer.deserialize<std::string>(argsArr->get(0), "spaceId");
+    auto pagingQuery = _deserializer.deserialize<core::PagingQuery>(argsArr->get(1), "pagingQuery");
+    return _serializer.serialize(_groupApi.getSpaceLog(spaceId, pagingQuery));
 }
 
 Poco::Dynamic::Var GroupApiVarInterface::abortFile(const Poco::Dynamic::Var& args) {

@@ -167,7 +167,7 @@ struct ContainerPolicyWithoutItem {
      */
     std::optional<std::string> addMembers;
     /**
-     * Groups only: who can remove or reseat members. Unset, whoever `update` allows.
+     * Groups only: who can remove members or replace their keys. Unset, whoever `update` allows.
      */
     std::optional<std::string> removeMembers;
 };

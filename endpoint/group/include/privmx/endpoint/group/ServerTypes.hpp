@@ -316,6 +316,15 @@ JSON_STRUCT(GroupDeletedEventData, GROUP_DELETED_EVENT_DATA_FIELDS);
     F(keyVersion, int64_t)                                                                                             \
     F(changeKind, std::string)
 JSON_STRUCT(GroupChangedEventData, GROUP_CHANGED_EVENT_DATA_FIELDS);
+// `spaceDeleted` carries the two ids only; the rest stays at its default.
+#define SPACE_CHANGED_EVENT_DATA_FIELDS(F)                                                                             \
+    F(spaceId, std::string)                                                                                            \
+    F(contextId, std::string)                                                                                          \
+    F(keyVersion, std::optional<int64_t>)                                                                              \
+    F(publicMetaVersion, std::optional<int64_t>)                                                                       \
+    F(privateMetaVersion, std::optional<int64_t>)                                                                      \
+    F(changeKind, std::optional<std::string>)
+JSON_STRUCT(SpaceChangedEventData, SPACE_CHANGED_EVENT_DATA_FIELDS);
 
 // One newcomer. Their seat is `transition.positions[i]` — named in one place, so the two cannot disagree.
 // A batch is not k additions sent together: the newcomers' paths overlap, so the delta re-keys their union once.
@@ -370,10 +379,12 @@ JSON_STRUCT(SpaceKeyRecipient, SPACE_KEY_RECIPIENT_FIELDS);
     F(signature, std::string)
 JSON_STRUCT(SpaceKeyEntry, SPACE_KEY_ENTRY_FIELDS);
 
+// `groupPubKey`: the group's identity key at `groupKeyVersion`, as the Space's statements pin it.
 #define SPACE_GROUP_FIELDS(F)                                                                                          \
     F(groupId, std::string)                                                                                            \
     F(role, std::string)                                                                                               \
-    F(groupKeyVersion, int64_t)
+    F(groupKeyVersion, int64_t)                                                                                        \
+    F(groupPubKey, std::optional<std::string>)
 JSON_STRUCT(SpaceGroup, SPACE_GROUP_FIELDS);
 
 #define SPACE_USER_FIELDS(F)                                                                                           \
@@ -381,6 +392,34 @@ JSON_STRUCT(SpaceGroup, SPACE_GROUP_FIELDS);
     F(pubKey, std::string)                                                                                             \
     F(role, std::string)
 JSON_STRUCT(SpaceUser, SPACE_USER_FIELDS);
+
+// One signed statement of a Space's history. Hashes are hex, signatures base64. See keytree/SpaceLog.hpp.
+#define SPACE_STATEMENT_FIELDS(F)                                                                                      \
+    F(spaceId, std::string)                                                                                            \
+    F(contextId, std::string)                                                                                          \
+    F(seq, int64_t)                                                                                                    \
+    F(prevDigest, std::string)                                                                                         \
+    F(op, std::string)                                                                                                 \
+    F(date, int64_t)                                                                                                   \
+    F(keyVersion, int64_t)                                                                                             \
+    F(keyCommit, std::string)                                                                                          \
+    F(groups, std::vector<SpaceGroup>)                                                                                 \
+    F(users, std::vector<SpaceUser>)                                                                                   \
+    F(signer, std::string)                                                                                             \
+    F(signerPubKey, std::string)                                                                                       \
+    F(via, std::string)                                                                                                \
+    F(signature, std::string)                                                                                          \
+    F(viaSignature, std::string)
+JSON_STRUCT(SpaceStatement, SPACE_STATEMENT_FIELDS);
+
+#define SPACE_GET_STATEMENTS_MODEL_FIELDS(F)                                                                           \
+    F(id, std::string)                                                                                                 \
+    F(fromSeq, int64_t)                                                                                                \
+    F(limit, int64_t)
+JSON_STRUCT(SpaceGetStatementsModel, SPACE_GET_STATEMENTS_MODEL_FIELDS);
+
+#define SPACE_GET_STATEMENTS_RESULT_FIELDS(F) F(statements, std::vector<SpaceStatement>)
+JSON_STRUCT(SpaceGetStatementsResult, SPACE_GET_STATEMENTS_RESULT_FIELDS);
 
 #define SPACE_INFO_FIELDS(F)                                                                                           \
     F(id, std::string)                                                                                                 \
@@ -394,6 +433,7 @@ JSON_STRUCT(SpaceUser, SPACE_USER_FIELDS);
     F(keyId, std::string)                                                                                              \
     F(keyVersion, int64_t)                                                                                             \
     F(keyIsStale, bool)                                                                                                \
+    F(seq, int64_t)                                                                                                    \
     F(keys, std::vector<SpaceKeyEntry>)                                                                                \
     F(publicMeta, Poco::Dynamic::Var)                                                                                  \
     F(privateMeta, Poco::Dynamic::Var)                                                                                 \
@@ -407,6 +447,7 @@ JSON_STRUCT(SpaceInfo, SPACE_INFO_FIELDS);
     F(recipients, std::vector<SpaceRecipient>)                                                                         \
     F(keyId, std::string)                                                                                              \
     F(keys, std::vector<SpaceKeyEntry>)                                                                                \
+    F(statement, SpaceStatement)                                                                                       \
     F(publicMeta, Poco::Dynamic::Var)                                                                                  \
     F(privateMeta, Poco::Dynamic::Var)
 JSON_STRUCT(SpaceCreateModel, SPACE_CREATE_MODEL_FIELDS);
@@ -431,7 +472,8 @@ JSON_STRUCT(SpaceListResult, SPACE_LIST_RESULT_FIELDS);
 #define SPACE_ADD_RECIPIENTS_MODEL_FIELDS(F)                                                                           \
     F(id, std::string)                                                                                                 \
     F(recipients, std::vector<SpaceRecipient>)                                                                         \
-    F(keys, std::vector<SpaceKeyEntry>)
+    F(keys, std::vector<SpaceKeyEntry>)                                                                                \
+    F(statement, SpaceStatement)
 JSON_STRUCT(SpaceAddRecipientsModel, SPACE_ADD_RECIPIENTS_MODEL_FIELDS);
 
 // A rotation; with `groups` or `users`, a removal - which is a rotation those recipients are left out of.
@@ -439,6 +481,7 @@ JSON_STRUCT(SpaceAddRecipientsModel, SPACE_ADD_RECIPIENTS_MODEL_FIELDS);
     F(id, std::string)                                                                                                 \
     F(keyId, std::string)                                                                                              \
     F(keys, std::vector<SpaceKeyEntry>)                                                                                \
+    F(statement, SpaceStatement)                                                                                       \
     F(expectedKeyVersion, int64_t)                                                                                     \
     F(groups, std::optional<std::vector<std::string>>)                                                                 \
     F(users, std::optional<std::vector<std::string>>)

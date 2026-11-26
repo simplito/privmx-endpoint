@@ -58,7 +58,7 @@ struct GroupRoleChange {
 struct GroupRules {
     /** Who may add members. */
     std::string addMembers;
-    /** Who may remove or reseat members. */
+    /** Who may remove members or replace their keys. */
     std::string removeMembers;
     /** Who may rewrite the Group's metadata (the policy's `update`). */
     std::string updateMeta;
@@ -75,7 +75,7 @@ struct GroupRulesUpdate {
 struct GroupLogEntry {
     /** 1 for the creation, one more for each later statement. */
     int64_t seq;
-    /** "create", "add", "remove", "reseat", "roles", "rotate", "policy" or "selfUpdate". */
+    /** "create", "add", "remove", "reseat" (a member's key replaced, see GroupApi::replaceGroupMemberKeys), "roles", "rotate", "policy" or "selfUpdate". */
     std::string kind;
     /** The member who signed it, and the identity key it was signed with. */
     std::string author;
@@ -88,7 +88,7 @@ struct GroupLogEntry {
     /** For "add": who joined as a user or as a manager. For "roles": who became one. */
     std::vector<std::string> addedUsers;
     std::vector<std::string> addedManagers;
-    /** For "remove": who left. For "reseat": who was reseated. */
+    /** For "remove": who left. For "reseat": whose key was replaced. */
     std::vector<std::string> removed;
 };
 
@@ -610,6 +610,7 @@ struct SpaceUserRecipient {
 struct SpaceState {
     std::string spaceId;
     std::string contextId;
+    /** Who created the Space: the signer of its first statement. */
     std::string createdBy;
     std::vector<SpaceGroupRecipient> groups;
     std::vector<SpaceUserRecipient> users;
@@ -640,6 +641,27 @@ struct SpaceOrigin {
     int64_t keyVersion;
 };
 
+/** One signed statement of a Space's history, as GroupApi::getSpaceLog returns it. */
+struct SpaceLogEntry {
+    /** 1 for the creation, one more for each later statement. */
+    int64_t seq;
+    /** "create", "add", "remove" or "rotate". */
+    std::string kind;
+    /** The recipient who signed it, and the identity key it was signed with. */
+    std::string author;
+    std::string authorPubKey;
+    /** "user", or the ID of the recipient Group the author acted through (shown by that Group's key). */
+    std::string via;
+    /** The author's clock, in milliseconds. */
+    int64_t date;
+    /** The version of the Space's key after it. */
+    int64_t keyVersion;
+    std::vector<std::string> addedGroups;
+    std::vector<std::string> addedUsers;
+    std::vector<std::string> removedGroups;
+    std::vector<std::string> removedUsers;
+};
+
 struct DecryptedSpaceEnvelope {
     core::Buffer data;
     SpaceOrigin origin;
@@ -658,11 +680,15 @@ enum EventType : int64_t {
     GROUP_CREATE = 0,
     GROUP_UPDATE = 1,
     GROUP_DELETE = 2,
+    SPACE_CREATE = 3,
+    SPACE_UPDATE = 4,
+    SPACE_DELETE = 5,
 };
 
 enum EventSelectorType : int64_t {
     CONTEXT_ID = 0,
     GROUP_ID = 1,
+    SPACE_ID = 2,
 };
 
 } // namespace group

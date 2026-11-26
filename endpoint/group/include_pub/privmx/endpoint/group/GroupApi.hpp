@@ -181,10 +181,10 @@ public:
      * effect (see the class note).
      *
      * @param groupId ID of the Group
-     * @param userIds IDs of the members to reseat
+     * @param userIds IDs of the members whose key is replaced
      * @return the Group's key epoch after the call
      */
-    int64_t reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
+    int64_t replaceGroupMemberKeys(const std::string& groupId, const std::vector<std::string>& userIds);
 
     /**
      * Changes the role of members already in the Group. No key moves: a role decides what the Bridge and the other
@@ -663,9 +663,11 @@ public:
     // alsoFor wraps a value's key once per recipient, for every value. A Space wraps its key once per recipient
     // when it is created and when the key is replaced; writing a value wraps nothing.
     //
-    // The Bridge stores a Space like a container with no data: the key's versions, each wrapped for the
-    // recipients and signed by whoever made it. The Bridge holds no key to wrap, and a wrap it made of a key of
-    // its own would not carry the signature of a user the UserVerifier accepts.
+    // A Space has a signed history, like a Group: every change of its recipients or its key is a statement signed
+    // by a recipient and chained to the one before. The Bridge stores the statements and the wrapped keys; who
+    // the recipients are, which key is current and who made the Space is what the statements add up to, replayed
+    // and checked here. The Bridge cannot add a recipient or plant a key, and neither can a user of the Context
+    // who is no recipient: a statement needs a recipient's own signature, or the key of a recipient Group.
     //
     // A stale key. When a recipient Group removes a member, that member still holds the Space's key. The Bridge
     // marks the Space (SpaceState::keyIsStale), and the next write by someone who can reach every recipient
@@ -678,14 +680,16 @@ public:
     // Files and sequences use the chunk and item calls above with the handles returned here.
     //
     // ponytail: the Space is read from the Bridge at most every 5 seconds per Space, not on every write. A writer
-    // notices a stale key up to that much later. Space events would close the window; nobody has needed them yet.
+    // notices a stale key up to that much later, unless it is subscribed to the Space's events (SpaceChangedEvent):
+    // each one drops the cached read, so the next write reads the Space again.
 
     /**
      * @param recipients the Groups and users the key is wrapped for; the caller must be among them as a manager,
      * themselves or through a Group
      * @param idSeed when set, the Space's ID is deriveSpaceId(contextId, idSeed) instead of random. A Space deleted
      * and created again under the same derived ID by another user starts again at key version 1, below what this
-     * process has seen of the earlier one: it reads as a rollback (GroupHistoryForkException) here until restart.
+     * process has seen of the earlier one: it reads as a rollback (GroupHistoryForkException) here, and with a
+     * PinStore on this device after a restart too. Re-created by this process, the earlier Space's pin is let go.
      * @return the Space's ID
      */
     std::string createSpace(
@@ -696,6 +700,17 @@ public:
         const std::optional<core::Buffer>& idSeed = std::nullopt
     );
     static std::string deriveSpaceId(const std::string& contextId, const core::Buffer& idSeed);
+    /**
+     * The one spelling of a path, as bytes: what a high-level client gives deriveGroupId and deriveSpaceId as the seed
+     * of a Group or Space addressed by its subject. Two paths give the same bytes only when they have the same
+     * segments, each of the same kind.
+     */
+    static core::Buffer encodePath(const Path& path);
+    /**
+     * Ties a Group to a subject on this device (in the PinStore). Throws GroupSubjectReboundException when the
+     * device already knows the subject under another Group. For a high-level client's "open pinned" (a wrapper's GroupClient).
+     */
+    void pinGroupToSubject(const std::string& contextId, const Path& subject, const std::string& groupId);
     SpaceState getSpace(const std::string& spaceId);
     core::PagingList<SpaceState> listSpaces(const std::string& contextId, const core::PagingQuery& pagingQuery);
     void deleteSpace(const std::string& spaceId);
@@ -712,7 +727,12 @@ public:
     void updateSpacePublicMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
     void updateSpacePrivateMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
 
-    /** One symmetric encryption and one signature. When the key is stale, it is replaced first. */
+    /**
+     * One symmetric encryption and one signature. When the key is stale, it is replaced first. A caller who may
+     * not replace it (a "user" of the Space outside the Group whose key moved) gets EnvelopeStaleEpochException:
+     * nothing is written under a key a removed member holds. A manager, or a member of that Group, calls
+     * rotateSpaceKey.
+     */
     core::Buffer encryptInSpace(const std::string& spaceId, const Path& location, const core::Buffer& data);
     /** `options.currentEpochOnly` means the Space's current key version. */
     DecryptedSpaceEnvelope decryptInSpace(
@@ -742,6 +762,11 @@ public:
     );
     /** Who wrote the sequence opened with openSequenceInSpace, and how they had access. */
     SpaceOrigin getSpaceSequenceOrigin(const SequenceHandle sequence);
+    /**
+     * The Space's history: every change of its recipients and its key, verified from the creation. Each
+     * statement is signed by a recipient - themselves, or through a recipient Group, shown by that Group's key.
+     */
+    core::PagingList<SpaceLogEntry> getSpaceLog(const std::string& spaceId, const core::PagingQuery& pagingQuery);
 
     /**
      * Subscribe for the Group events on the given subscription query.

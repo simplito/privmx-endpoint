@@ -198,6 +198,8 @@ public:
     // of the same kind (name or identifier) and the same bytes. An empty path is refused: "no location" is
     // `EnvelopeBinding{}` and has to be asked for.
     static EnvelopeBinding bindLocation(const Path& location);
+    // The one spelling of a path that `bindLocation` hashes: its segments, each with its kind and length.
+    static std::string canonicalPath(const Path& path);
 
     // -- messages ----------------------------------------------------------------------------------------
 

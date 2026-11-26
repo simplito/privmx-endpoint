@@ -108,6 +108,14 @@ Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::SpaceState>>
 );
 
 template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceLogEntry>(const group::SpaceLogEntry& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<core::PagingList<group::SpaceLogEntry>>(
+    const core::PagingList<group::SpaceLogEntry>& val
+);
+
+template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::CipherRange>(const group::CipherRange& val);
 
 template<>
@@ -142,6 +150,12 @@ Poco::Dynamic::Var VarSerializer::serialize<group::GroupCustomEventData>(const g
 
 template<>
 Poco::Dynamic::Var VarSerializer::serialize<group::GroupCustomEvent>(const group::GroupCustomEvent& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceChangedEventData>(const group::SpaceChangedEventData& val);
+
+template<>
+Poco::Dynamic::Var VarSerializer::serialize<group::SpaceChangedEvent>(const group::SpaceChangedEvent& val);
 
 } // namespace core
 } // namespace endpoint

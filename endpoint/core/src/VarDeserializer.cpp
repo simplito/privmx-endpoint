@@ -155,6 +155,11 @@ ContainerPolicy VarDeserializer::deserialize<ContainerPolicy>(const Poco::Dynami
     result.ownerCanBeRemovedFromManagers = deserializeOptional<std::string>(
         obj->get("ownerCanBeRemovedFromManagers"), name + ".ownerCanBeRemovedFromManagers"
     );
+    // The same fields as ContainerPolicyWithoutItem above: one left out here is one a binding silently drops.
+    result.rotateKeys = deserializeOptional<std::string>(obj->get("rotateKeys"), name + ".rotateKeys");
+    result.forwardSecrecy = deserializeOptional<std::string>(obj->get("forwardSecrecy"), name + ".forwardSecrecy");
+    result.addMembers = deserializeOptional<std::string>(obj->get("addMembers"), name + ".addMembers");
+    result.removeMembers = deserializeOptional<std::string>(obj->get("removeMembers"), name + ".removeMembers");
     result.item = deserializeOptional<ItemPolicy>(obj->get("item"), name + ".item");
     return result;
 }

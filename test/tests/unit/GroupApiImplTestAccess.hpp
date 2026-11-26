@@ -54,6 +54,28 @@ struct GroupApiImplTestAccess {
     }
     static bool savePins(GroupApiImpl& api) { return api.savePins(); }
     static GroupEnvelopeFiles& files(GroupApiImpl& api) { return api._envelopeFiles; }
+    using GroupKeyRefresh = GroupApiImpl::GroupKeyRefresh;
+    static std::optional<std::string> refusedRefresh(
+        const GroupKeyRefresh& refresh,
+        std::optional<std::int64_t> memberEpoch,
+        const std::optional<core::GroupEpochInfo>& current,
+        const std::optional<std::string>& chainKey = std::nullopt,
+        bool groupHidden = false
+    ) {
+        return GroupApiImpl::refusedRefresh(refresh, memberEpoch, current, chainKey, groupHidden);
+    }
+    static void rememberSpaceLog(GroupApiImpl& api, const keytree::SpaceLogState& state, bool created = false) {
+        api.rememberSpaceLog(state, created);
+    }
+    // What a first Space read of the session does: the device's stored pins, loaded once.
+    static void loadSpacePins(GroupApiImpl& api) {
+        std::lock_guard lock(api._spaceLogsMutex);
+        api._spacePins = api.storedSpacePins();
+        api._spacePinsLoaded = true;
+    }
+    static std::map<std::string, std::pair<std::uint64_t, std::string>> storedSpacePins(GroupApiImpl& api) {
+        return api.storedSpacePins();
+    }
     // As if the last pin save (or failed attempt) were PIN_SAVE_IDLE_INTERVAL ago: no clock to move in a unit test.
     static void agePinSave(GroupApiImpl& api) {
         std::lock_guard<std::mutex> lock(api._pinsMovedMutex);

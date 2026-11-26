@@ -11,25 +11,29 @@ using namespace privmx::endpoint::group;
 const std::map<EventSelectorType, std::string> SubscriberImpl::_selectorTypeNames = {
     {EventSelectorType::CONTEXT_ID, "contextId"},
     {EventSelectorType::GROUP_ID, "containerId"},
+    {EventSelectorType::SPACE_ID, "containerId"},
 };
 const std::map<EventType, std::string> SubscriberImpl::_eventTypeNames = {
-    {EventType::GROUP_CREATE, "create"},
-    {EventType::GROUP_UPDATE, "update"},
-    {EventType::GROUP_DELETE, "delete"},
+    {EventType::GROUP_CREATE, "create"}, {EventType::GROUP_UPDATE, "update"}, {EventType::GROUP_DELETE, "delete"},
+    {EventType::SPACE_CREATE, "create"}, {EventType::SPACE_UPDATE, "update"}, {EventType::SPACE_DELETE, "delete"},
 };
 const std::map<EventType, std::set<EventSelectorType>> SubscriberImpl::_eventTypeAllowedSelectorTypes = {
     {EventType::GROUP_CREATE, {EventSelectorType::CONTEXT_ID}},
     {EventType::GROUP_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::GROUP_ID}},
     {EventType::GROUP_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::GROUP_ID}},
+    {EventType::SPACE_CREATE, {EventSelectorType::CONTEXT_ID}},
+    {EventType::SPACE_UPDATE, {EventSelectorType::CONTEXT_ID, EventSelectorType::SPACE_ID}},
+    {EventType::SPACE_DELETE, {EventSelectorType::CONTEXT_ID, EventSelectorType::SPACE_ID}},
 };
 const std::map<EventSelectorType, std::string> SubscriberImpl::_readableSelectorType = {
     {EventSelectorType::CONTEXT_ID, "CONTEXT_ID"},
     {EventSelectorType::GROUP_ID, "GROUP_ID"},
+    {EventSelectorType::SPACE_ID, "SPACE_ID"},
 };
 const std::map<EventType, std::string> SubscriberImpl::_readableEventType = {
-    {EventType::GROUP_CREATE, "GROUP_CREATE"},
-    {EventType::GROUP_UPDATE, "GROUP_UPDATE"},
-    {EventType::GROUP_DELETE, "GROUP_DELETE"},
+    {EventType::GROUP_CREATE, "GROUP_CREATE"}, {EventType::GROUP_UPDATE, "GROUP_UPDATE"},
+    {EventType::GROUP_DELETE, "GROUP_DELETE"}, {EventType::SPACE_CREATE, "SPACE_CREATE"},
+    {EventType::SPACE_UPDATE, "SPACE_UPDATE"}, {EventType::SPACE_DELETE, "SPACE_DELETE"},
 };
 
 std::vector<std::string> SubscriberImpl::getChannelPath(EventType eventType) {
@@ -38,6 +42,10 @@ std::vector<std::string> SubscriberImpl::getChannelPath(EventType eventType) {
     case EventType::GROUP_UPDATE:
     case EventType::GROUP_DELETE:
         return {std::string(_moduleName), std::string(_collectionName), _eventTypeNames.at(eventType)};
+    case EventType::SPACE_CREATE:
+    case EventType::SPACE_UPDATE:
+    case EventType::SPACE_DELETE:
+        return {std::string(_moduleName), std::string(_spaceCollectionName), _eventTypeNames.at(eventType)};
     }
     throw core::NotImplementedException(_readableEventType.at(eventType));
 }
@@ -151,8 +159,11 @@ void SubscriberImpl::assertQuery(const std::vector<core::SubscriptionQueryObj>& 
         if (path.size() != CHANGE_QUERY_PATH_SIZE && path.size() != CUSTOM_QUERY_PATH_SIZE) {
             throw InvalidSubscriptionQueryException();
         }
+        // Spaces have change events only: no custom channels.
+        const bool spaceChange = path.size() == CHANGE_QUERY_PATH_SIZE &&
+            path[COLLECTION_NAME_IN_QUERY_PATH] == std::string(_spaceCollectionName);
         if (path[MODULE_NAME_IN_QUERY_PATH] != std::string(_moduleName) ||
-            path[COLLECTION_NAME_IN_QUERY_PATH] != std::string(_collectionName)) {
+            (path[COLLECTION_NAME_IN_QUERY_PATH] != std::string(_collectionName) && !spaceChange)) {
             throw InvalidSubscriptionQueryException();
         }
         if (path.size() == CUSTOM_QUERY_PATH_SIZE) {

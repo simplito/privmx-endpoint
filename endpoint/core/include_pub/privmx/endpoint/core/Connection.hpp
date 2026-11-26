@@ -181,7 +181,7 @@ public:
      * `setPinStore`, on every start for as long as some Group may still be waiting.
      *
      * Without the previous key there is nothing to renew with: another member lets the user back in with
-     * GroupApi::reseatGroupMembers.
+     * GroupApi::replaceGroupMemberKeys.
      * @param previousUserPrivKey the previous identity private key in WIF
      * @throws LocalStateIntegrityException as adoptPreviousIdentity
      */

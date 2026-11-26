@@ -76,11 +76,11 @@ target_link_libraries(test_e2e_InboxGroupScenarioTest privmx privmxendpointcore 
 # Tree-backed groups end to end (only place the full round trip runs; unit tests and the conformance fixture each cover just one side)
 add_executable(test_e2e_GroupKeyTreeTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupKeyTreeTest.cpp)
 target_link_libraries(test_e2e_GroupKeyTreeTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
-# A hostile client against the key tree: a group's key worn as a user's, nested groups, seat churn, a concurrent
-# add and remove of one member. Needs the Bridge management API key from the dataset ini to register context users.
 add_executable(test_e2e_GroupSpaceTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupSpaceTest.cpp)
 target_link_libraries(test_e2e_GroupSpaceTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 
+# A hostile client against the key tree: a group's key worn as a user's, nested groups, seat churn, a concurrent
+# add and remove of one member. Needs the Bridge management API key from the dataset ini to register context users.
 add_executable(test_e2e_GroupKeyTreeIntegrityTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e/GroupKeyTreeIntegrityTest.cpp)
 target_link_libraries(test_e2e_GroupKeyTreeIntegrityTest privmx privmxendpointcore privmxendpointthread privmxendpointgroup Poco::Foundation Poco::Util GTest::GTest)
 # Lock
@@ -124,6 +124,13 @@ target_link_libraries(test_unit_CryptoTest privmx privmxendpointcore privmxendpo
 
 add_executable(test_unit_UtilsTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/UtilsTest.cpp)
 target_link_libraries(test_unit_UtilsTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
+
+add_executable(test_unit_PolicyVarTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/PolicyVarTest.cpp)
+target_link_libraries(test_unit_PolicyVarTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)
+
+add_executable(test_unit_SpaceLogTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/SpaceLogTest.cpp)
+target_link_libraries(test_unit_SpaceLogTest privmx privmxendpointcore privmxendpointgroup Poco::Foundation GTest::GTest GTest::Main)
+target_compile_definitions(test_unit_SpaceLogTest PRIVATE PRIVMX_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 
 add_executable(test_unit_KeyContinuityVerifierTest ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/KeyContinuityVerifierTest.cpp)
 target_link_libraries(test_unit_KeyContinuityVerifierTest privmx privmxendpointcore Poco::Foundation GTest::GTest GTest::Main)

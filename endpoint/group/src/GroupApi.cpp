@@ -93,13 +93,13 @@ int64_t GroupApi::removeGroupMembers(const std::string& groupId, const std::vect
     return impl->removeGroupMembers(groupId, userIds);
 }
 
-int64_t GroupApi::reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds) {
+int64_t GroupApi::replaceGroupMemberKeys(const std::string& groupId, const std::vector<std::string>& userIds) {
     auto impl = getImpl();
     core::Validator::validateId(groupId, "field:groupId ");
     for (const std::string& userId : userIds) {
         core::Validator::validateId(userId, "field:userIds ");
     }
-    return impl->reseatGroupMembers(groupId, userIds);
+    return impl->replaceGroupMemberKeys(groupId, userIds);
 }
 
 void GroupApi::setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes) {
@@ -461,6 +461,17 @@ std::string GroupApi::deriveSpaceId(const std::string& contextId, const core::Bu
     return GroupApiImpl::deriveSpaceId(contextId, idSeed);
 }
 
+core::Buffer GroupApi::encodePath(const Path& path) {
+    return GroupApiImpl::encodePath(path);
+}
+
+void GroupApi::pinGroupToSubject(const std::string& contextId, const Path& subject, const std::string& groupId) {
+    auto impl = getImpl();
+    core::Validator::validateId(contextId, "field:contextId ");
+    core::Validator::validateId(groupId, "field:groupId ");
+    impl->pinGroupToSubject(contextId, subject, groupId);
+}
+
 SpaceState GroupApi::getSpace(const std::string& spaceId) {
     auto impl = getImpl();
     core::Validator::validateId(spaceId, "field:spaceId ");
@@ -578,6 +589,15 @@ SequenceHandle GroupApi::openSequenceInSpace(
 SpaceOrigin GroupApi::getSpaceSequenceOrigin(const SequenceHandle sequence) {
     auto impl = getImpl();
     return impl->getSpaceSequenceOrigin(sequence);
+}
+
+core::PagingList<SpaceLogEntry> GroupApi::getSpaceLog(
+    const std::string& spaceId,
+    const core::PagingQuery& pagingQuery
+) {
+    auto impl = getImpl();
+    core::Validator::validateId(spaceId, "field:spaceId ");
+    return impl->getSpaceLog(spaceId, pagingQuery);
 }
 
 std::vector<std::string> GroupApi::subscribeFor(const std::vector<std::string>& subscriptionQueries) {

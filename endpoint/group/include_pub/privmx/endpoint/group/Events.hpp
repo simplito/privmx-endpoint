@@ -113,6 +113,71 @@ struct GroupCustomEventData {
 };
 
 /**
+ * Holds what changed about a Space. The event is the Bridge's word alone: treat it as a hint to read the Space
+ * again, which verifies its signed history.
+ */
+struct SpaceChangedEventData {
+
+    /**
+     * Space ID
+     */
+    std::string spaceId;
+
+    /**
+     * Context ID
+     */
+    std::string contextId;
+
+    /**
+     * version of the Space key after the change (0 when the Space was deleted)
+     */
+    int64_t keyVersion;
+
+    /**
+     * version of the public metadata after the change
+     */
+    int64_t publicMetaVersion;
+
+    /**
+     * version of the private metadata after the change
+     */
+    int64_t privateMetaVersion;
+
+    /**
+     * "created", "recipientsAdded", "recipientsRemoved", "keyRotated", "keyStale", "metaUpdated" or "deleted"
+     */
+    std::string changeKind;
+};
+
+/**
+ * Holds data of event that arrives when a Space the user can read is created, changed or deleted.
+ */
+struct SpaceChangedEvent : public core::Event {
+
+    /**
+     * Event constructor
+     */
+    SpaceChangedEvent() : core::Event("spaceChanged") {}
+
+    /**
+     * Get Event as JSON string
+     *
+     * @return JSON string
+     */
+    std::string toJSON() const override;
+
+    /**
+     * //doc-gen:ignore
+     */
+    std::shared_ptr<core::SerializedEvent> serialize() const override;
+
+    /**
+     * what changed about the Space
+     */
+    SpaceChangedEventData data;
+};
+
+/**
  * Holds data of event that arrives when a Group is created.
  */
 struct GroupCreatedEvent : public core::Event {
@@ -268,6 +333,16 @@ public:
      * Gets Event held in the 'EventHolder' as a 'GroupCustomEvent'
      */
     static GroupCustomEvent extractGroupCustomEvent(const core::EventHolder& eventHolder);
+
+    /**
+     * Checks whether event held in the 'EventHolder' is a 'SpaceChangedEvent'
+     */
+    static bool isSpaceChangedEvent(const core::EventHolder& eventHolder);
+
+    /**
+     * Gets Event held in the 'EventHolder' as a 'SpaceChangedEvent'
+     */
+    static SpaceChangedEvent extractSpaceChangedEvent(const core::EventHolder& eventHolder);
 };
 
 } // namespace group

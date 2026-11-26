@@ -30,6 +30,7 @@
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeEncryptor.hpp"
 #include "privmx/endpoint/group/encryptors/envelope/GroupEnvelopeFiles.hpp"
 #include "privmx/endpoint/group/encryptors/group/GroupDataSchemaMapper.hpp"
+#include "privmx/endpoint/group/keytree/SpaceLog.hpp"
 #include "privmx/endpoint/group/keytree/TreeCommits.hpp"
 #include "privmx/endpoint/group/keytree/TreeVerifier.hpp"
 #include <privmx/utils/ThreadSaveMap.hpp>
@@ -74,7 +75,7 @@ public:
     int64_t removeGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
 
     int64_t rotateGroupKey(const std::string& groupId);
-    int64_t reseatGroupMembers(const std::string& groupId, const std::vector<std::string>& userIds);
+    int64_t replaceGroupMemberKeys(const std::string& groupId, const std::vector<std::string>& userIds);
     void setGroupRoles(const std::string& groupId, const std::vector<GroupRoleChange>& changes);
     void updateGroupRules(const std::string& groupId, const GroupRulesUpdate& rules);
     core::PagingList<GroupLogEntry> getGroupLog(const std::string& groupId, const core::PagingQuery& pagingQuery);
@@ -253,6 +254,8 @@ public:
         const std::optional<core::Buffer>& idSeed
     );
     static std::string deriveSpaceId(const std::string& contextId, const core::Buffer& idSeed);
+    static core::Buffer encodePath(const Path& path);
+    void pinGroupToSubject(const std::string& contextId, const Path& subject, const std::string& groupId);
     SpaceState getSpace(const std::string& spaceId);
     core::PagingList<SpaceState> listSpaces(const std::string& contextId, const core::PagingQuery& pagingQuery);
     void deleteSpace(const std::string& spaceId);
@@ -289,6 +292,7 @@ public:
         const std::optional<core::Buffer>& resumeFrom
     );
     SpaceOrigin getSpaceSequenceOrigin(SequenceHandle sequence);
+    core::PagingList<SpaceLogEntry> getSpaceLog(const std::string& spaceId, const core::PagingQuery& pagingQuery);
 
     // The group's own route to its head entry's key must be at the answer's (verified) `keyVersion`: a key from an
     // earlier epoch is one a member removed since still holds. Throws GroupDataIntegrityException.
@@ -366,6 +370,8 @@ private:
     };
     RosterView rosterOf(const std::string& groupId);
     static server::GroupInfo listedFrom(const server::GroupPublicInfo& info);
+    static bool isForgedHistory(const core::Exception& e);
+    std::optional<RosterView> publicRosterOf(const std::string& contextId, const std::string& groupId);
     // The only writer of `_rosters`: called wherever the module-key cache is filled from a verified read.
     void rememberRoster(const server::GroupInfo& group);
     // The only way this class drops a group's cached keys: the roster goes with them.
@@ -474,6 +480,7 @@ private:
         bool allVersions = false;     // read with spaceGet: `info.keys` holds every version the caller can open
         bool groupsFresh = false;     // `spaceKeyIsStale` found no recipient group ahead of its entry, for this read
         std::uint64_t generation = 0; // of the Space when it was read: one from before a delete or create is not used
+        keytree::SpaceLogState log{}; // what `info` was verified as: the one state a write builds on
     };
     struct SpaceKeyUse {
         std::string key{};
@@ -486,21 +493,56 @@ private:
         std::string pubKey{}; // base58-DER
         std::int64_t groupKeyVersion = 0;
     };
-    server::SpaceInfo spaceInfo(const std::string& spaceId, bool fresh = false);
+    // `log`, when given, gets the verified state `info` was replaced with: the same read, never a later one.
+    server::SpaceInfo spaceInfo(const std::string& spaceId, bool fresh = false, keytree::SpaceLogState* log = nullptr);
     void forgetSpace(const std::string& spaceId);
-    // A deleted Space: its keys go too, or one created again under the same id would reuse the old key. The version
-    // seen stays, unless this process creates the Space again (`createSpace`).
+    // A deleted Space: its keys go too, and a read sent before the delete is not kept (`spaceGeneration`), or one
+    // created again under the same id would reuse the old key.
     void dropSpace(const std::string& spaceId);
-    // What a read of a Space is held to, taken before its request: the mark and the Space's generation then.
-    struct SpaceReadTicket {
-        std::int64_t seen = 0;
-        std::uint64_t generation = 0;
+    std::uint64_t spaceGeneration(const std::string& spaceId);
+    bool spaceOvertaken(const server::SpaceInfo& space, std::uint64_t seqWhenSent);
+    // The Space's signed history: see GroupApiImplSpaces.cpp. `verifySpace` replaces what the Bridge said about
+    // the recipients, the key version and the creator with what the statements say.
+    keytree::SpaceLogState verifySpace(server::SpaceInfo& space);
+    // A recipient group's pinned (epoch, key) moved by a statement.
+    struct GroupKeyRefresh {
+        std::uint64_t seq = 0;
+        std::string groupId{};
+        std::uint64_t groupKeyVersion = 0;
+        std::string groupPubKey{};
+        bool byGroup = false; // signed through a group, not by a manager as a user
     };
-    SpaceReadTicket spaceReadTicket(const std::string& spaceId);
-    bool keepSpaceRead(
-        const server::SpaceInfo& space,
-        const SpaceReadTicket& ticket,
-        const std::optional<CachedSpace>& keep
+    void requireGroupKeyRefreshesHold(const std::string& contextId, const std::vector<GroupKeyRefresh>& refreshes);
+    // Why a refresh is refused, given the epoch the caller's own key tree gives its key (members only), the group's
+    // verified current epoch (when there is one) and, for an epoch below that, the key the group's verified chain
+    // opened it with (when it could be read), and whether the Bridge said the group is hidden from the caller;
+    // nullopt when it holds.
+    static std::optional<std::string> refusedRefresh(
+        const GroupKeyRefresh& refresh,
+        std::optional<std::int64_t> memberEpoch,
+        const std::optional<core::GroupEpochInfo>& current,
+        const std::optional<std::string>& chainKey = std::nullopt,
+        bool groupHidden = false
+    );
+    // The statements after `fromSeq`, up to and including `upToSeq`.
+    std::vector<keytree::SpaceStatement> spaceStatements(
+        const std::string& spaceId,
+        std::int64_t fromSeq,
+        std::int64_t upToSeq
+    );
+    std::optional<keytree::SpaceLogState> spaceLogOf(const std::string& spaceId);
+    // `created`: this process made the Space, so the device's stored pin of an earlier Space under its id goes.
+    void rememberSpaceLog(const keytree::SpaceLogState& state, bool created = false);
+    std::map<std::string, std::pair<std::uint64_t, std::string>> storedSpacePins();
+    void storeSpacePin(const keytree::SpaceLogState& state, bool created);
+    keytree::SpaceStatement signSpaceStatement(
+        keytree::SpaceStatement statement,
+        const std::optional<keytree::SpaceLogState>& prior
+    );
+    void appendRecipients(
+        keytree::SpaceStatement& statement,
+        const std::vector<SpaceRecipient>& recipients,
+        const std::vector<SpaceTarget>& targets
     );
     SpaceKeyUse spaceKeyAt(const server::SpaceInfo& space, std::int64_t keyVersion);
     // The recipients' current keys, each verified: a group's off its latest statement, a user's by the UserVerifier.
@@ -516,10 +558,13 @@ private:
         const std::string& spaceKey,
         const std::vector<SpaceTarget>& targets
     );
+    // `forStaleWrite`: the caller may not sign the replacement (EnvelopeStaleEpochException then, for the write that
+    // needed it). Any other refusal - a history that does not verify - is thrown as it is.
     std::int64_t replaceSpaceKey(
         const std::string& spaceId,
         const std::vector<std::string>& withoutGroups,
-        const std::vector<std::string>& withoutUsers
+        const std::vector<std::string>& withoutUsers,
+        bool forStaleWrite = false
     );
     core::Buffer sealInSpace(const std::string& spaceId, const EnvelopeBinding& binding, const core::Buffer& content);
     // Whether the Space's current key must not be written under: the Bridge says so, or a recipient group's verified
@@ -528,9 +573,17 @@ private:
     SpaceState toSpaceState(const server::SpaceInfo& space);
     privmx::utils::ThreadSaveMap<std::string, CachedSpace> _spaces;
     // The highest key version each Space was seen at. Not dropped on a reconnect: it only ever moves forward.
-    std::mutex _spaceKeyVersionsMutex;
-    std::map<std::string, std::int64_t> _spaceKeyVersions;  // guarded by the mutex above
-    std::map<std::string, std::uint64_t> _spaceGenerations; // guarded by it too; moved by a delete or own create
+    // Subject pins of a connection with no PinStore. With a store they live there, sealed.
+    std::mutex _subjectPinsMutex;
+    std::map<std::string, std::string> _subjectPins;
+    // Guards the four below. The verified state of each Space this process has read: it only moves forward, and
+    // is not dropped on a reconnect.
+    std::mutex _spaceLogsMutex;
+    std::map<std::string, keytree::SpaceLogState> _spaceLogs;
+    std::map<std::string, std::pair<std::uint64_t, std::string>>
+        _spacePins; // what the device's store held at first use
+    bool _spacePinsLoaded = false;
+    std::map<std::string, std::uint64_t> _spaceGenerations;            // moved by a delete or own create
     privmx::utils::ThreadSaveMap<std::string, SpaceKeyUse> _spaceKeys; // by "<spaceId>:<keyVersion>"
     std::shared_ptr<Sequence> sequenceOf(SequenceHandle handle, bool wantReading);
     core::Buffer markSequence(Sequence& sequence, bool closed);

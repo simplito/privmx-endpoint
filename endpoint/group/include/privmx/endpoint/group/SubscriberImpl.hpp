@@ -43,6 +43,7 @@ private:
     );
     static constexpr std::string_view _moduleName = "context";
     static constexpr std::string_view _collectionName = "groups";
+    static constexpr std::string_view _spaceCollectionName = "spaces";
     static constexpr std::string_view _customItemName = "custom";
     static const std::map<EventSelectorType, std::string> _selectorTypeNames;
     static const std::map<EventType, std::string> _eventTypeNames;

@@ -132,6 +132,10 @@ server::SpaceListResult ServerApi::spaceList(server::SpaceListModel model) {
     return request<server::SpaceListResult>("spaceList", model.toJSON());
 }
 
+server::SpaceGetStatementsResult ServerApi::spaceGetStatements(server::SpaceGetStatementsModel model) {
+    return request<server::SpaceGetStatementsResult>("spaceGetStatements", model.toJSON());
+}
+
 void ServerApi::spaceDelete(server::SpaceIdModel model) {
     request("spaceDelete", model.toJSON());
 }

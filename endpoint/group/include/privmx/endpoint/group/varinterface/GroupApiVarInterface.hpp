@@ -58,7 +58,7 @@ public:
         GetGroups = 38,
         GetGroupPublicKey = 39,
         SetGroupVisibility = 40,
-        ReseatGroupMembers = 41,
+        ReplaceGroupMemberKeys = 41,
         SetGroupRoles = 42,
         UpdateGroupRules = 43,
         GetGroupLog = 44,
@@ -95,6 +95,9 @@ public:
         BeginSequenceInSpace = 75,
         OpenSequenceInSpace = 76,
         GetSpaceSequenceOrigin = 77,
+        EncodePath = 78,
+        PinGroupToSubject = 79,
+        GetSpaceLog = 80,
         AbortFile = 81,
     };
 
@@ -131,7 +134,7 @@ public:
     Poco::Dynamic::Var getGroups(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getGroupPublicKey(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var setGroupVisibility(const Poco::Dynamic::Var& args);
-    Poco::Dynamic::Var reseatGroupMembers(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var replaceGroupMemberKeys(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var setGroupRoles(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var updateGroupRules(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getGroupLog(const Poco::Dynamic::Var& args);
@@ -176,6 +179,9 @@ public:
     Poco::Dynamic::Var beginSequenceInSpace(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var openSequenceInSpace(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var getSpaceSequenceOrigin(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var encodePath(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var pinGroupToSubject(const Poco::Dynamic::Var& args);
+    Poco::Dynamic::Var getSpaceLog(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var abortFile(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var sendCustomEvent(const Poco::Dynamic::Var& args);
     Poco::Dynamic::Var buildCustomEventSubscriptionQuery(const Poco::Dynamic::Var& args);

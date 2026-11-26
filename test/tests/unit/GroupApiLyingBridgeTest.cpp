@@ -5016,3 +5016,109 @@ TEST_F(GroupSequences, SECURITY_ASequenceEndsWithItsEpoch) {
     EXPECT_NO_THROW(alice.appendToSequence(w2, core::Buffer::from(std::string("n0"))));
     EXPECT_EQ(GroupApiImpl::peekEnvelope(alice.getSequenceHeader(w2)).keyVersion, 2);
 }
+
+// -- a subject tied to a group, on the device -------------------------------------------------------------
+
+TEST_F(GroupApiLyingBridge, SECURITY_ASubjectKeepsTheGroupThisDeviceFirstOpenedForIt) {
+    // openPinnedGroup's memory. The application's server says which Group serves a record; the first answer is
+    // taken on trust, and a different one later is refused - also in the next session, and by the same user only.
+    store = std::make_shared<MemoryPinStore>();
+    const Path room = {name("chat"), id("room-1")};
+    const Path otherRoom = {name("chat"), id("room-2")};
+    const std::string g1(64, 'a'), g2(64, 'b');
+
+    client("alice").pinGroupToSubject(CONTEXT, room, g1);
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g1));
+    EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2), GroupSubjectReboundException);
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, otherRoom, g2));
+    // A name is not an identifier with the same bytes, and another Context is another subject.
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, {name("chat"), name("room-1")}, g2));
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject("another-context", room, g2));
+    EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, Path{}, g1), core::InvalidParamsException);
+    // The store keeps one pin per line: an id that carries a line of its own is no id.
+    for (const std::string& bad : {std::string(), g1 + "\n" + std::string(64, 'c') + " " + g2, g1 + " x", std::string("a\0b", 3)}) {
+        EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, otherRoom, bad), core::InvalidParamsException);
+    }
+
+    clients.erase("alice"); // the session ends; the store stays
+    EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2), GroupSubjectReboundException);
+    EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, otherRoom, g1), GroupSubjectReboundException);
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g1));
+    // Bob, on the same store, keeps his own list.
+    EXPECT_NO_THROW(client("bob").pinGroupToSubject(CONTEXT, room, g2));
+}
+
+TEST_F(GroupApiLyingBridge, WithoutAStoreASubjectIsKeptForTheSession) {
+    const Path room = {name("chat"), id("room-1")};
+    const std::string g1(64, 'a'), g2(64, 'b');
+    client("alice").pinGroupToSubject(CONTEXT, room, g1);
+    EXPECT_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2), GroupSubjectReboundException);
+    clients.erase("alice");
+    EXPECT_NO_THROW(client("alice").pinGroupToSubject(CONTEXT, room, g2)); // a first contact again
+}
+
+TEST(SpaceGroupKeyRefresh, SECURITY_ARefreshThroughTheGroupIsHeldToTheGroupsVerifiedKeys) {
+    using Access = GroupApiImplTestAccess;
+    const std::string real = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    const std::string forged = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    const core::GroupEpochInfo current{.keyVersion = 4, .groupPubKey = real};
+    const auto viaG = [](std::uint64_t version, const std::string& key) {
+        return Access::GroupKeyRefresh{.seq = 7, .groupId = "g", .groupKeyVersion = version, .groupPubKey = key, .byGroup = true};
+    };
+    // A removed member, still holding the key the Space pinned for G, signs "via G" a key of their own for G.
+    EXPECT_TRUE(Access::refusedRefresh(viaG(4, forged), std::nullopt, current).has_value()) << "another key at G's epoch";
+    EXPECT_TRUE(Access::refusedRefresh(viaG(5, forged), std::nullopt, current).has_value()) << "ahead of G";
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current).has_value()) << "cannot be verified";
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, std::nullopt).has_value()) << "G shows nothing";
+    // A member of G knows every epoch key of G.
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::int64_t{2}, current).has_value());
+    EXPECT_FALSE(Access::refusedRefresh(viaG(3, forged), std::int64_t{3}, current).has_value());
+    // The real current key holds, through G or from a manager.
+    EXPECT_FALSE(Access::refusedRefresh(viaG(4, real), std::nullopt, current).has_value());
+    auto byManager = viaG(3, forged);
+    byManager.byGroup = false;
+    EXPECT_FALSE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "a manager could replace G";
+    byManager.groupKeyVersion = 4;
+    EXPECT_TRUE(Access::refusedRefresh(byManager, std::nullopt, current).has_value()) << "shown wrong even for a manager";
+    // A past epoch of G, replayed after G moved on, by a reader holding no key of that epoch: held to the key G's
+    // verified chain opened that epoch with, never taken for being below the current epoch.
+    const std::string past = privmx::crypto::PrivateKey::generateRandom().getPublicKey().toBase58DER();
+    EXPECT_FALSE(Access::refusedRefresh(viaG(3, past), std::nullopt, current, past).has_value()) << "G's own epoch 3";
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current, past).has_value()) << "not G's epoch 3";
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, past), std::nullopt, std::nullopt, past).has_value()) << "G unverified";
+    byManager.groupKeyVersion = 3;
+    EXPECT_TRUE(Access::refusedRefresh(byManager, std::nullopt, current, past).has_value()) << "the chain shows it wrong";
+    // A reader with no view of G at all (not a member, G members-only): the via-G signature is the proof it gets.
+    EXPECT_FALSE(Access::refusedRefresh(viaG(3, forged), std::nullopt, std::nullopt, std::nullopt, true).has_value());
+    // Still refused when anything it does know shows it wrong.
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::int64_t{2}, std::nullopt, std::nullopt, true).has_value());
+    EXPECT_TRUE(Access::refusedRefresh(viaG(4, forged), std::nullopt, current, std::nullopt, true).has_value());
+    EXPECT_TRUE(Access::refusedRefresh(viaG(5, forged), std::nullopt, current, std::nullopt, true).has_value());
+    EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current, past, true).has_value());
+}
+
+// Two processes of one user on one device store. The second loaded an earlier Space S (at seq 2) before S was
+// created again (seq 1) in a third: its next save, of another Space, must not put the earlier S back.
+TEST_F(GroupApiLyingBridge, ASaveOfAnotherSpaceKeepsASpaceCreatedAgainInAnotherProcess) {
+    using Access = GroupApiImplTestAccess;
+    store = std::make_shared<MemoryPinStore>();
+    const auto state = [](const std::string& id, std::uint64_t seq, const std::string& digest) {
+        privmx::endpoint::group::keytree::SpaceLogState s;
+        s.spaceId = id;
+        s.seq = seq;
+        s.digest = digest;
+        return s;
+    };
+    const std::string oldDigest(32, 'o'), newDigest(32, 'n');
+    Access::rememberSpaceLog(client("alice"), state("S", 2, oldDigest)); // an earlier session
+    GroupApiImpl& second = sibling("alice");
+    Access::loadSpacePins(second);
+    Access::rememberSpaceLog(sibling("alice"), state("S", 1, newDigest), true); // S created again
+    Access::rememberSpaceLog(second, state("T", 1, std::string(32, 't')));
+
+    const auto stored = Access::storedSpacePins(sibling("alice"));
+    ASSERT_EQ(stored.count("S"), 1u);
+    EXPECT_EQ(stored.at("S").first, 1u);
+    EXPECT_EQ(stored.at("S").second, newDigest);
+    EXPECT_EQ(stored.count("T"), 1u);
+}

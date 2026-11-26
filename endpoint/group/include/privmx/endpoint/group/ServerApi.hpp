@@ -46,6 +46,7 @@ public:
     server::SpaceGetResult spaceGet(server::SpaceIdModel model);
     server::SpaceListResult spaceList(server::SpaceListModel model);
     void spaceDelete(server::SpaceIdModel model);
+    server::SpaceGetStatementsResult spaceGetStatements(server::SpaceGetStatementsModel model);
     void spaceAddRecipients(server::SpaceAddRecipientsModel model);
     // With `groups` or `users` set in the model this is `spaceRemoveRecipients`.
     server::SpaceRotateKeyResult spaceRotateKey(server::SpaceRotateKeyModel model);

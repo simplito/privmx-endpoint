@@ -31,6 +31,11 @@ import sys
 TAGS = [
     b"pmx-tree-commit\0",
     b"pmx-group-policy\0",
+    b"pmx-space-id\0",
+    b"pmx-space-recipients\0",
+    b"pmx-space-key\0",
+    b"pmx-space-statement\0",
+    b"pmx-space-via\0",
 ]
 
 OP_CODES = {"create": 1, "add": 2, "remove": 3, "selfUpdate": 4, "rotate": 5, "policy": 6, "roles": 7, "reseat": 8}
@@ -149,6 +154,67 @@ ROLES = dict(
 RESEAT = dict(REMOVAL, seq=10, prevDigest="55" * 32, op="reseat", date=1760000000003, keyVersion=5, rosterVersion=11)
 
 
+# -- a Space's statements (proposals/space-log-format.md) ------------------------------------------------
+
+SPACE_OPS = {"create": 1, "add": 2, "remove": 3, "rotate": 4}
+
+
+def space_recipients_hash(groups, users):
+    b = tag("pmx-space-recipients") + u32(len(groups))
+    for g in sorted(groups, key=lambda g: g["groupId"].encode("utf-8")):
+        b += lp(g["groupId"]) + lp(g["role"]) + u64(g["groupKeyVersion"]) + lp(g["groupPubKey"])
+    b += u32(len(users))
+    for u in sorted(users, key=lambda u: u["userId"].encode("utf-8")):
+        b += lp(u["userId"]) + lp(u["pubKey"]) + lp(u["role"])
+    return hashlib.sha256(b).digest()
+
+
+def space_key_commit(space_id, key_version, key_hex):
+    return hashlib.sha256(tag("pmx-space-key") + lp(space_id) + u64(key_version) + bytes.fromhex(key_hex)).hexdigest()
+
+
+def space_signed_bytes(s):
+    prev = bytes.fromhex(s["prevDigest"])
+    assert len(prev) == (0 if s["seq"] == 1 else 32)
+    key_commit = bytes.fromhex(s["keyCommit"])
+    assert len(key_commit) == 32
+    return (
+        tag("pmx-space-statement") + u8(1) + lp(s["spaceId"]) + lp(s["contextId"]) + u64(s["seq"]) + lp(prev)
+        + u8(SPACE_OPS[s["op"]]) + u64(s["date"]) + u64(s["keyVersion"]) + key_commit
+        + space_recipients_hash(s["groups"], s["users"]) + lp(s["signer"]) + lp(s["signerPubKey"]) + lp(s["via"])
+    )
+
+
+def space_via_bytes(s):
+    return tag("pmx-space-via") + hashlib.sha256(space_signed_bytes(s)).digest()
+
+
+SPACE_ID = "5a" * 32
+SPACE_KEY = "11" * 32
+SPACE_GROUPS = [
+    {"groupId": "sales", "role": "manager", "groupKeyVersion": 3, "groupPubKey": "SALES-PK"},
+    {"groupId": "Support", "role": "user", "groupKeyVersion": 1, "groupPubKey": "SUPPORT-PK"},
+]
+SPACE_USERS = [
+    {"userId": "bob", "pubKey": "BOB-PK", "role": "user"},
+    {"userId": "alice", "pubKey": "ALICE-PK", "role": "manager"},
+]
+SPACE_CREATE = {
+    "spaceId": SPACE_ID, "contextId": "ctx-1", "seq": 1, "prevDigest": "", "op": "create", "date": 1760000000000,
+    "keyVersion": 1, "keyCommit": space_key_commit(SPACE_ID, 1, SPACE_KEY), "groups": SPACE_GROUPS,
+    "users": SPACE_USERS, "signer": "alice", "signerPubKey": "ALICE-PK", "via": "",
+}
+SPACE_ROTATE_VIA_GROUP = dict(
+    SPACE_CREATE, seq=2, prevDigest="33" * 32, op="rotate", keyVersion=2,
+    keyCommit=space_key_commit(SPACE_ID, 2, "22" * 32), signer="carol", signerPubKey="CAROL-PK", via="sales",
+)
+SPACE_REMOVE = dict(
+    SPACE_ROTATE_VIA_GROUP, seq=3, prevDigest="44" * 32, op="remove", keyVersion=3,
+    keyCommit=space_key_commit(SPACE_ID, 3, "33" * 32), groups=SPACE_GROUPS[:1], users=[],
+)
+SPACE_ADD = dict(SPACE_REMOVE, seq=4, prevDigest="55" * 32, op="add", users=SPACE_USERS[:1])
+
+
 def vectors():
     return {
         "signedBytes": [
@@ -156,6 +222,19 @@ def vectors():
         ],
         "policyHash": [
             {"policy": p, "creator": c, "expectedHex": policy_hash(p, c)} for p, c in POLICIES
+        ],
+        "spaceStatement": [
+            {
+                "statement": st,
+                "recipientsHashHex": space_recipients_hash(st["groups"], st["users"]).hex(),
+                "signedBytesHex": space_signed_bytes(st).hex(),
+                "viaBytesHex": space_via_bytes(st).hex(),
+            }
+            for st in (SPACE_CREATE, SPACE_ROTATE_VIA_GROUP, SPACE_REMOVE, SPACE_ADD)
+        ],
+        "spaceKeyCommit": [
+            {"spaceId": SPACE_ID, "keyVersion": v, "keyHex": k, "expectedHex": space_key_commit(SPACE_ID, v, k)}
+            for v, k in ((1, SPACE_KEY), (2, SPACE_KEY), (1, "22" * 32))
         ],
     }
 

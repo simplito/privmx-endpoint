@@ -1,7 +1,12 @@
 #include <gtest/gtest.h>
 #include "BaseGroupTest.hpp"
+#include "MemoryPinStore.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
+#include <chrono>
+#include <thread>
 #include <privmx/endpoint/core/Connection.hpp>
+#include <privmx/endpoint/core/EventQueue.hpp>
+#include <privmx/endpoint/group/Events.hpp>
 #include <privmx/endpoint/core/CoreException.hpp>
 #include <privmx/endpoint/core/Exception.hpp>
 #include <privmx/endpoint/group/GroupApi.hpp>
@@ -282,4 +287,211 @@ TEST_F(GroupSpaceTest, files_and_sequences_in_a_space) {
     EXPECT_EQ(origin.via, sales);
     EXPECT_EQ(origin.keyVersion, 1);
     EXPECT_THROW({ groupApi->openSequence(sales, note("ops"), header, anyAuthor()); }, EnvelopeWrongKindException);
+}
+
+TEST_F(GroupSpaceTest, the_history_of_a_space_is_signed_and_says_who_did_what) {
+    const std::string sales = createTeam({user(1), user(2)});
+    // User 1 is no recipient themselves: the Space is made, and later changed, through the sales team.
+    const std::string spaceId = groupApi->createSpace(contextId(), {team(sales, "manager")}, text(""), text(""));
+    ASSERT_NO_THROW({ groupApi->addSpaceRecipients(spaceId, {person(3, "user")}); });
+    switchTo(3);
+    // A user of the Space replaces the key; the recipients are not theirs to change.
+    ASSERT_NO_THROW({ groupApi->rotateSpaceKey(spaceId); });
+    EXPECT_ANY_THROW({ groupApi->addSpaceRecipients(spaceId, {person(2, "user")}); });
+    switchTo(2);
+    int64_t version = 0;
+    ASSERT_NO_THROW({
+        version = groupApi->removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .userId = userId(3)}});
+    });
+    EXPECT_EQ(version, 3);
+
+    // A fresh session of the first user: nothing remembered, the whole history replayed and checked.
+    switchTo(1);
+    const auto log = groupApi->getSpaceLog(spaceId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "asc"});
+    ASSERT_EQ(log.totalAvailable, 4);
+    ASSERT_EQ(log.readItems.size(), 4u);
+    EXPECT_EQ(log.readItems[0].kind, "create");
+    EXPECT_EQ(log.readItems[0].author, userId(1));
+    EXPECT_EQ(log.readItems[0].via, sales);
+    EXPECT_EQ(log.readItems[0].addedGroups, std::vector<std::string>{sales});
+    EXPECT_EQ(log.readItems[0].keyVersion, 1);
+    EXPECT_EQ(log.readItems[1].kind, "add");
+    EXPECT_EQ(log.readItems[1].addedUsers, std::vector<std::string>{userId(3)});
+    EXPECT_EQ(log.readItems[1].keyVersion, 1);
+    EXPECT_EQ(log.readItems[2].kind, "rotate");
+    EXPECT_EQ(log.readItems[2].author, userId(3));
+    EXPECT_EQ(log.readItems[2].via, "user");
+    EXPECT_EQ(log.readItems[2].keyVersion, 2);
+    EXPECT_EQ(log.readItems[3].kind, "remove");
+    EXPECT_EQ(log.readItems[3].author, userId(2));
+    EXPECT_EQ(log.readItems[3].via, sales);
+    EXPECT_EQ(log.readItems[3].removedUsers, std::vector<std::string>{userId(3)});
+    EXPECT_EQ(log.readItems[3].keyVersion, 3);
+    const auto newest = groupApi->getSpaceLog(spaceId, core::PagingQuery{.skip = 0, .limit = 1, .sortOrder = "desc"});
+    ASSERT_EQ(newest.readItems.size(), 1u);
+    EXPECT_EQ(newest.readItems[0].seq, 4);
+
+    // The state is what the statements say: who made the Space, who is in it, which key is current.
+    const SpaceState state = groupApi->getSpace(spaceId);
+    EXPECT_EQ(state.createdBy, userId(1));
+    EXPECT_EQ(state.keyVersion, 3);
+    EXPECT_TRUE(state.users.empty());
+    ASSERT_EQ(state.groups.size(), 1u);
+    // What was written under each version still opens, each key checked against its statement.
+    const core::Buffer sealed = groupApi->encryptInSpace(spaceId, note("n1"), text("after"));
+    EXPECT_EQ(GroupApi::peekEnvelope(sealed).keyVersion, 3);
+    switchTo(3);
+    EXPECT_ANY_THROW({ groupApi->getSpaceLog(spaceId, core::PagingQuery{.skip = 0, .limit = 10, .sortOrder = "asc"}); });
+}
+
+TEST_F(GroupSpaceTest, a_recipient_is_told_when_the_space_changes_and_when_it_is_gone) {
+    const std::string sales = createTeam({user(1), user(2)});
+    const std::string spaceId = groupApi->createSpace(contextId(), {team(sales, "manager")}, text(""), text(""));
+    core::EventQueue eventQueue = core::EventQueue::getInstance();
+    auto connection2 = connect(2);
+    auto groupApi2 = group::GroupApi::create(*connection2);
+    groupApi2.subscribeFor({
+        groupApi2.buildSubscriptionQuery(EventType::SPACE_UPDATE, EventSelectorType::SPACE_ID, spaceId),
+        groupApi2.buildSubscriptionQuery(EventType::SPACE_DELETE, EventSelectorType::SPACE_ID, spaceId),
+    });
+    // Drains: connecting and subscribing put other events in front of the one waited for.
+    const auto awaitChange = [&]() -> std::optional<SpaceChangedEvent> {
+        for (int i = 0; i < 20; ++i) {
+            auto holder = eventQueue.getEvent();
+            if (!holder.has_value()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(150));
+            } else if (Events::isSpaceChangedEvent(holder.value())) {
+                return Events::extractSpaceChangedEvent(holder.value());
+            }
+        }
+        return std::nullopt;
+    };
+
+    EXPECT_EQ(groupApi2.getSpace(spaceId).keyVersion, 1);
+    groupApi->rotateSpaceKey(spaceId);
+    auto rotated = awaitChange();
+    ASSERT_TRUE(rotated.has_value());
+    EXPECT_EQ(rotated->data.spaceId, spaceId);
+    EXPECT_EQ(rotated->data.contextId, contextId());
+    EXPECT_EQ(rotated->data.changeKind, "keyRotated");
+    EXPECT_EQ(rotated->data.keyVersion, 2);
+    // The event dropped the cached read, so this one is fresh and verified.
+    EXPECT_EQ(groupApi2.getSpace(spaceId).keyVersion, 2);
+
+    groupApi->deleteSpace(spaceId);
+    auto deleted = awaitChange();
+    ASSERT_TRUE(deleted.has_value());
+    EXPECT_EQ(deleted->data.spaceId, spaceId);
+    EXPECT_EQ(deleted->data.changeKind, "deleted");
+
+    // A custom channel is a Group's thing; a Space query never names one.
+    EXPECT_ANY_THROW({ groupApi2.subscribeFor({"context/spaces/custom/typing|containerId=" + spaceId}); });
+    connection2->disconnect();
+}
+
+TEST_F(GroupSpaceTest, a_reader_outside_a_team_verifies_its_key_refresh_through_the_public_tree) {
+    std::shared_ptr<core::Connection> keep3;
+    switchTo(3);
+    const std::string support = createTeam({user(3)});
+    switchTo(1);
+    const std::string sales = createTeam({user(1), user(2)});
+    const std::string spaceId =
+        groupApi->createSpace(contextId(), {team(sales, "manager"), team(support, "user")}, text(""), text(""));
+    const core::Buffer before = groupApi->encryptInSpace(spaceId, note("n0"), text("before"));
+    // User 3 reads before the removal, in a session that stays open: what it verified of sales is the old epoch.
+    keep3 = connect(3);
+    auto user3 = std::make_shared<group::GroupApi>(group::GroupApi::create(*keep3));
+    EXPECT_EQ(user3->decryptInSpace(spaceId, note("n0"), before, by(userId(1))).data.stdString(), "before");
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(sales, {userId(2)}); });
+    int64_t version = 0;
+    ASSERT_NO_THROW({ version = groupApi->rotateSpaceKey(spaceId); });
+    EXPECT_EQ(version, 2);
+    const core::Buffer after = groupApi->encryptInSpace(spaceId, note("n1"), text("after"));
+
+    // User 3 is in support, not in sales: the refresh of sales' key, signed through sales, is held to sales'
+    // public verified tree, which the Context can see - in the session that verified the old epoch, and a new one.
+    EXPECT_NO_THROW({ EXPECT_EQ(user3->getSpace(spaceId).keyVersion, 2); });
+    EXPECT_EQ(user3->decryptInSpace(spaceId, note("n1"), after, by(userId(1))).data.stdString(), "after");
+    user3.reset();
+    keep3->disconnect();
+    keep3.reset();
+    switchTo(3);
+    SpaceState state;
+    ASSERT_NO_THROW({ state = groupApi->getSpace(spaceId); });
+    EXPECT_EQ(state.keyVersion, 2);
+    EXPECT_EQ(groupApi->decryptInSpace(spaceId, note("n1"), after, by(userId(1))).data.stdString(), "after");
+}
+
+TEST_F(GroupSpaceTest, a_new_session_replays_a_refresh_through_a_team_that_has_moved_on_since) {
+    // A refresh of sales' key signed through sales (user 1 is a Space manager through sales only) stays in the
+    // Space's history after sales rotates again. A new session replays it while sales is a later epoch: user 3 is
+    // outside sales and holds no key of it, so the refresh is held to the key sales' verified chain opened that
+    // epoch with.
+    switchTo(3);
+    const std::string support = createTeam({user(3)});
+    switchTo(1);
+    const std::string sales = createTeam({user(1), user(2)});
+    const std::string spaceId =
+        groupApi->createSpace(contextId(), {team(sales, "manager"), team(support, "user")}, text(""), text(""));
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(sales, {userId(2)}); });
+    ASSERT_NO_THROW({ groupApi->rotateSpaceKey(spaceId); }); // refreshes sales to epoch 2, through sales
+    const core::Buffer written = groupApi->encryptInSpace(spaceId, note("n1"), text("at epoch 2 of sales"));
+    ASSERT_NO_THROW({ groupApi->rotateGroupKey(sales); }); // sales moves to epoch 3; the Space log still says 2
+    switchTo(3);
+    SpaceState state;
+    ASSERT_NO_THROW({ state = groupApi->getSpace(spaceId); });
+    EXPECT_EQ(state.keyVersion, 2);
+    EXPECT_EQ(
+        groupApi->decryptInSpace(spaceId, note("n1"), written, by(userId(1))).data.stdString(), "at epoch 2 of sales"
+    );
+}
+
+TEST_F(GroupSpaceTest, a_reader_who_cannot_see_a_team_follows_its_refresh_through_that_team) {
+    // Sales is members-only: user 3, a recipient in person, sees nothing of it, so a refresh of sales' key signed
+    // through sales is taken on that signature. It must not lock user 3 out of the Space.
+    const std::string sales = groupApi->createGroup(
+        contextId(), {user(1), user(2)}, {user(1)}, text("public"), text("private"), std::nullopt, std::nullopt, "members"
+    );
+    const std::string spaceId =
+        groupApi->createSpace(contextId(), {team(sales, "manager"), person(3, "user")}, text(""), text(""));
+    ASSERT_NO_THROW({ groupApi->removeGroupMembers(sales, {userId(2)}); });
+    // User 1 is a recipient through sales only: the stale key is replaced by a write, through sales.
+    const core::Buffer after = groupApi->encryptInSpace(spaceId, note("n1"), text("after"));
+    EXPECT_EQ(GroupApi::peekEnvelope(after).keyVersion, 2);
+
+    switchTo(3);
+    SpaceState state;
+    ASSERT_NO_THROW({ state = groupApi->getSpace(spaceId); });
+    EXPECT_EQ(state.keyVersion, 2);
+    EXPECT_EQ(groupApi->decryptInSpace(spaceId, note("n1"), after, by(userId(1))).data.stdString(), "after");
+}
+
+TEST_F(GroupSpaceTest, a_space_this_device_creates_again_under_its_id_is_read_after_a_restart) {
+    // The stored pin of the earlier Space (seq 2) must not hold the one created again (seq 1) behind it.
+    const core::Buffer seed = text("recreated-space");
+    const auto store = std::make_shared<MemoryPinStore>();
+    disconnect();
+    std::string spaceId;
+    {
+        auto session = connect(1);
+        session->setPinStore(store);
+        {
+            auto groups = group::GroupApi::create(*session);
+            spaceId = groups.createSpace(contextId(), {person(1, "manager")}, text(""), text(""), seed);
+            ASSERT_NO_THROW({ groups.rotateSpaceKey(spaceId); });
+            groups.deleteSpace(spaceId);
+            EXPECT_EQ(groups.createSpace(contextId(), {person(1, "manager")}, text(""), text(""), seed), spaceId);
+        }
+        session->disconnect();
+    }
+    auto session = connect(1);
+    session->setPinStore(store);
+    {
+        auto groups = group::GroupApi::create(*session);
+        SpaceState state;
+        ASSERT_NO_THROW({ state = groups.getSpace(spaceId); });
+        EXPECT_EQ(state.keyVersion, 1);
+    }
+    session->disconnect();
+    connectAs(1);
 }
