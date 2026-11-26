@@ -278,7 +278,8 @@ TEST(TreeCommitsPolicy, RulesHashToTheSharedVectors) {
 }
 
 TEST(TreeCommitsPolicy, RulesHashToFixedVectors) {
-    // reference.py's output pasted here, so a change to the generator and its output together still shows.
+    // reference.py's output and the Bridge's vectors pasted here, so a change to the generator and its output
+    // together still shows.
     const std::map<std::string, std::string> mixed{
         {"addMembers", "members"},       {"removeMembers", "nobody"},     {"replaceMemberKeys", "members"},
         {"changeVisibility", "nobody"},  {"editPublicMeta", "members"},
@@ -293,6 +294,13 @@ TEST(TreeCommitsPolicy, RulesHashToFixedVectors) {
              {{}, "bob", "fd7feccffb49d219d3faf8e1fe04481c4ebe75fbc515c2ea9c68e867cb116516"},
              {mixed, "alice", "b4737673d0ce66bd8d3747de8b23331cee1e9ac2aa0b1fb51071a71f48929d20"},
              {allMembers, "alice", "90885317e1f2e45075826d5d0799c5cf9cbf9d444ee506af8a9f216c0afd2eb2"},
+             // The Bridge's mixed vector.
+             {{{"addMembers", "members"},
+               {"removeMembers", "nobody"},
+               {"replaceMemberKeys", "members"},
+               {"editPublicMeta", "members"}},
+              "alice",
+              "d26b3e99e468c2804c518e460ebf2d0b17cdc516b4c0c2cfd43ec722a5aa2100"},
          }) {
         EXPECT_EQ(hex(TreeCommits::rules(policyOf(rules), creator).hash), expected) << creator;
     }
