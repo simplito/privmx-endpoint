@@ -488,11 +488,9 @@ private:
     };
     server::SpaceInfo spaceInfo(const std::string& spaceId, bool fresh = false);
     void forgetSpace(const std::string& spaceId);
-    // A deleted Space: its keys and the version seen go too, or one created again under the same id would reuse the
-    // old key or be called a fork.
+    // A deleted Space: its keys go too, or one created again under the same id would reuse the old key. The version
+    // seen stays, unless this process creates the Space again (`createSpace`).
     void dropSpace(const std::string& spaceId);
-    // The highest key version seen of the Space.
-    std::int64_t seenKeyVersion(const std::string& spaceId);
     // What a read of a Space is held to, taken before its request: the mark and the Space's generation then.
     struct SpaceReadTicket {
         std::int64_t seen = 0;

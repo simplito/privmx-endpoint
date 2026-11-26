@@ -106,12 +106,6 @@ group::server::SpaceInfo GroupApiImpl::spaceInfo(const std::string& spaceId, boo
 // would be theirs to read. So a version this process has seen is never followed by a lower one.
 // ponytail: kept in memory, for the life of the connection's GroupApi. Put it beside the group pins when a
 // rollback across restarts has to be caught as well.
-std::int64_t GroupApiImpl::seenKeyVersion(const std::string& spaceId) {
-    std::lock_guard lock(_spaceKeyVersionsMutex);
-    const auto seen = _spaceKeyVersions.find(spaceId);
-    return seen == _spaceKeyVersions.end() ? 0 : seen->second;
-}
-
 GroupApiImpl::SpaceReadTicket GroupApiImpl::spaceReadTicket(const std::string& spaceId) {
     std::lock_guard lock(_spaceKeyVersionsMutex);
     const auto seen = _spaceKeyVersions.find(spaceId);
@@ -547,14 +541,17 @@ std::int64_t GroupApiImpl::replaceSpaceKey(
         model.users = withoutUsers;
     }
     const std::int64_t made = _serverApi.spaceRotateKey(model).keyVersion;
-    forgetSpace(spaceId);
     if (made != next) {
+        forgetSpace(spaceId);
         throw GroupHistoryForkException("Space " + spaceId + " rotated to another key version than was sent");
     }
     {
+        // The mark and the cache drop under the lock `keepSpaceRead` caches under: a read in flight cannot put the
+        // replaced version back once this is done.
         std::lock_guard lock(_spaceKeyVersionsMutex);
         std::int64_t& seen = _spaceKeyVersions[spaceId];
         seen = std::max(seen, made);
+        forgetSpace(spaceId);
     }
     return made;
 }
@@ -608,9 +605,6 @@ core::Buffer GroupApiImpl::sealInSpace(
     const core::Buffer& content
 ) {
     group::server::SpaceInfo space = spaceInfo(spaceId);
-    if (space.keyVersion < seenKeyVersion(spaceId)) {
-        space = spaceInfo(spaceId, true); // a cached read from before this process moved the key on
-    }
     if (spaceKeyIsStale(space)) {
         // Someone removed from a recipient group still holds this key: nothing more is written under it.
         try {
