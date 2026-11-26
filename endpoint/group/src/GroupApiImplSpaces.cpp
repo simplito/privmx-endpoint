@@ -687,21 +687,32 @@ GroupApiImpl::SpaceKeyUse GroupApiImpl::spaceKeyAt(const group::server::SpaceInf
             keytree::RungSpan span;
             std::string data; // base64, as served
         };
-        const auto log = spaceLogOf(space.id);
-        const auto walk = keytree::LadderMath::walkDown(
-            from, static_cast<std::uint32_t>(keyVersion), key, UINT32_MAX,
-            [&](std::uint32_t at) {
-                // Only this version's rungs: a descent of n versions asks about 2*log2(n) times, never the range.
+        const std::uint32_t goal = static_cast<std::uint32_t>(keyVersion);
+        // What `spaceGetKeyArchive` served: each version's rungs (a version fetched is one key here, even with none),
+        // and the caller's own wraps of earlier versions that still have them.
+        std::map<std::uint32_t, std::vector<Rung>> served;
+        std::vector<group::server::SpaceKeyEntry> ownWraps;
+        const auto fetch = [&](std::uint32_t low, std::uint32_t high) {
+            while (low <= high) {
                 group::server::SpaceGetKeyArchiveModel model;
                 model.id = space.id;
-                model.fromKeyVersion = at;
-                model.toKeyVersion = at;
-                std::vector<Rung> rungs;
-                for (const group::server::SpaceRung& rung : _serverApi.spaceGetKeyArchive(model).rungs) {
+                model.fromKeyVersion = low;
+                model.toKeyVersion = high;
+                const auto page = _serverApi.spaceGetKeyArchive(model);
+                const std::uint32_t pageEnd = page.nextKeyVersion.has_value() &&
+                        page.nextKeyVersion.value() > low &&
+                        page.nextKeyVersion.value() <= static_cast<std::int64_t>(high) ?
+                    static_cast<std::uint32_t>(page.nextKeyVersion.value() - 1) :
+                    high;
+                for (std::uint32_t version = low; version <= pageEnd; ++version) {
+                    served[version].clear();
+                }
+                for (const group::server::SpaceRung& rung : page.rungs) {
                     if (rung.targetKeyVersion > 0 &&
                         rung.targetKeyVersion < rung.atKeyVersion &&
-                        rung.atKeyVersion <= UINT32_MAX) {
-                        rungs.push_back(
+                        rung.atKeyVersion >= low &&
+                        rung.atKeyVersion <= pageEnd) {
+                        served[static_cast<std::uint32_t>(rung.atKeyVersion)].push_back(
                             Rung{
                                 .span =
                                     {static_cast<std::uint32_t>(rung.atKeyVersion),
@@ -711,41 +722,86 @@ GroupApiImpl::SpaceKeyUse GroupApiImpl::spaceKeyAt(const group::server::SpaceInf
                         );
                     }
                 }
-                return rungs;
-            },
-            [&](const Rung& rung, const std::string& atKey) -> std::optional<std::string> {
-                try {
-                    return keytree::SpaceLog::openRung(
-                        space.id, rung.span.at, rung.span.target, atKey, privmx::utils::Base64::toString(rung.data)
-                    );
-                } catch (...) { return std::nullopt; }
-            },
-            [&](std::uint32_t target, const std::string& targetKey) {
-                return spaceKeyCommitted(log, space.id, target, targetKey);
-            },
-            [&](const Rung& rung, bool opened) {
-                LOG_WARN(
-                    "[spaceKeyAt] space ", space.id, " rung ", rung.span.at, "->", rung.span.target,
-                    opened ? " opened to a key its version did not commit to" : " did not open"
-                )
-            },
-            [&](const Rung& rung, const std::string& targetKey) {
-                _spaceKeys.set(
-                    prefix + std::to_string(rung.span.target), SpaceKeyUse{.key = targetKey, .via = {}, .wrap = {}}
-                );
+                ownWraps.insert(ownWraps.end(), page.keys.begin(), page.keys.end());
+                if (pageEnd >= high) {
+                    break;
+                }
+                low = pageEnd + 1;
             }
-        );
-        if (walk.end != keytree::LadderWalkEnd::Reached) {
-            throw GroupDataIntegrityException(
-                "Space " +
-                space.id +
-                ": the key ladder does not lead from version " +
-                std::to_string(walk.reached) +
-                " to " +
-                std::to_string(keyVersion)
+        };
+        const auto log = spaceLogOf(space.id);
+        const auto descend = [&](std::uint32_t start, const std::string& startKey) {
+            return keytree::LadderMath::walkDown(
+                start, goal, startKey, UINT32_MAX,
+                [&](std::uint32_t at) -> const std::vector<Rung>& {
+                    // Only this version's rungs: a descent of n versions asks about 2*log2(n) times, never the range.
+                    if (served.count(at) == 0) {
+                        fetch(at, at);
+                    }
+                    return served[at];
+                },
+                [&](const Rung& rung, const std::string& atKey) -> std::optional<std::string> {
+                    try {
+                        return keytree::SpaceLog::openRung(
+                            space.id, rung.span.at, rung.span.target, atKey, privmx::utils::Base64::toString(rung.data)
+                        );
+                    } catch (...) { return std::nullopt; }
+                },
+                [&](std::uint32_t target, const std::string& targetKey) {
+                    return spaceKeyCommitted(log, space.id, target, targetKey);
+                },
+                [&](const Rung& rung, bool opened) {
+                    LOG_WARN(
+                        "[spaceKeyAt] space ", space.id, " rung ", rung.span.at, "->", rung.span.target,
+                        opened ? " opened to a key its version did not commit to" : " did not open"
+                    )
+                },
+                [&](const Rung& rung, const std::string& targetKey) {
+                    _spaceKeys.set(
+                        prefix + std::to_string(rung.span.target), SpaceKeyUse{.key = targetKey, .via = {}, .wrap = {}}
+                    );
+                }
             );
+        };
+        const auto walk = descend(from, key);
+        if (walk.end == keytree::LadderWalkEnd::Reached) {
+            return SpaceKeyUse{.key = walk.key, .via = {}, .wrap = {}};
         }
-        return SpaceKeyUse{.key = walk.key, .via = {}, .wrap = {}};
+        // A rung that does not lead on: any recipient may rotate, and the Bridge cannot check a symmetric rung, so a
+        // rotation by someone who is no manager keeps the older wraps (the Bridge prunes them only after a manager's).
+        // The caller's own wrap of `keyVersion`, or of a version between it and where the walk stopped from which the
+        // ladder works, is the way round.
+        fetch(goal, walk.reached - 1);
+        for (std::uint32_t version = goal; version < walk.reached; ++version) {
+            const auto atVersion = [&](const group::server::SpaceKeyEntry& entry) {
+                return entry.keyVersion == version;
+            };
+            if (std::none_of(ownWraps.begin(), ownWraps.end(), atVersion)) {
+                continue;
+            }
+            std::optional<SpaceKeyUse> use;
+            try {
+                use = unwrapOwnSpaceKey(space, version, ownWraps);
+            } catch (const std::exception&) {
+                continue; // logged; perhaps another version's opens
+            }
+            _spaceKeys.set(prefix + std::to_string(version), use.value());
+            if (version == goal) {
+                return use.value();
+            }
+            if (const auto again = descend(version, use->key); again.end == keytree::LadderWalkEnd::Reached) {
+                return SpaceKeyUse{.key = again.key, .via = {}, .wrap = {}};
+            }
+        }
+        throw GroupDataIntegrityException(
+            "Space " +
+            space.id +
+            ": the key ladder does not lead from version " +
+            std::to_string(walk.reached) +
+            " to " +
+            std::to_string(keyVersion) +
+            ", and the caller has no wrap of a version on the way"
+        );
     }
     if (const auto cached = _spaceKeys.get(cacheKey); cached.has_value() &&
         std::any_of(space.keys.begin(), space.keys.end(), [&](const group::server::SpaceKeyEntry& entry) {
@@ -754,13 +810,22 @@ GroupApiImpl::SpaceKeyUse GroupApiImpl::spaceKeyAt(const group::server::SpaceInf
                                                       })) {
         return cached.value(); // still the entry the read serves
     }
-    const std::vector<group::server::SpaceKeyEntry>* entries = &space.keys;
+    const SpaceKeyUse use = unwrapOwnSpaceKey(space, keyVersion, space.keys);
+    _spaceKeys.set(cacheKey, use);
+    return use;
+}
+
+GroupApiImpl::SpaceKeyUse GroupApiImpl::unwrapOwnSpaceKey(
+    const group::server::SpaceInfo& space,
+    std::int64_t keyVersion,
+    const std::vector<group::server::SpaceKeyEntry>& entries
+) {
     const std::string ownUserId = _connection.getImpl()->getMyUserId(space.contextId);
     const std::string ownPubKey = _userPrivKey.getPublicKey().toBase58DER();
     std::exception_ptr lastFailure;
     // The caller's own entry first (no request), then the entries of the groups it is in.
     for (const bool wantGroup : {false, true}) {
-        for (const group::server::SpaceKeyEntry& entry : *entries) {
+        for (const group::server::SpaceKeyEntry& entry : entries) {
             const bool isGroup = entry.recipient.groupId.has_value();
             if (entry.keyVersion != keyVersion || isGroup != wantGroup) {
                 continue;
@@ -802,11 +867,7 @@ GroupApiImpl::SpaceKeyUse GroupApiImpl::spaceKeyAt(const group::server::SpaceInf
                 if (!spaceKeyCommitted(spaceLogOf(space.id), space.id, keyVersion, key)) {
                     throw GroupDataIntegrityException("not the key the Space's statements name for this version");
                 }
-                const SpaceKeyUse use{
-                    .key = key, .via = isGroup ? slot.recipientId : std::string(), .wrap = entry.data
-                };
-                _spaceKeys.set(cacheKey, use);
-                return use;
+                return SpaceKeyUse{.key = key, .via = isGroup ? slot.recipientId : std::string(), .wrap = entry.data};
             } catch (const std::exception& e) {
                 LOG_WARN(
                     "[spaceKeyAt] space ", space.id, " version ", keyVersion, ": an entry did not open: ", e.what()

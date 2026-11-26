@@ -688,7 +688,9 @@ public:
     // earlier ones it skips to (a key ladder: about two 60-byte rungs a version, whatever the number of recipients),
     // so whoever holds the current key reads every earlier version: about 2*log2(versions back) requests the first
     // time, then from memory for the session. Every key so derived is checked against the commitment the Space's
-    // signed statement made for its version; a rung that gives another key is refused (GroupDataIntegrityException).
+    // signed statement made for its version. A rung that gives another key is passed by: the reader uses its own
+    // wrap of that version, or of one on the way, while the Bridge keeps it (a rotation by anyone but a manager keeps
+    // the earlier wraps, since the Bridge cannot check a rung), and fails with GroupDataIntegrityException otherwise.
     // So a recipient reads the whole history, a newcomer included, and a removed one gets no later key. The number
     // of key versions has no ceiling of its own; the Bridge's rotation rate limit stays.
     //

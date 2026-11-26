@@ -468,8 +468,9 @@ JSON_STRUCT(SpaceIdModel, SPACE_ID_MODEL_FIELDS);
 JSON_STRUCT(SpaceGetResult, SPACE_GET_RESULT_FIELDS);
 
 // The Space's key ladder, a page at a time by `atKeyVersion` ascending (all rungs of a version together):
-// `nextKeyVersion` is where the next page starts. Recipient entries are kept for the current version only; an earlier
-// version is read by descending these from it.
+// `nextKeyVersion` is where the next page starts. `keys`: the caller's own entries (its user's and its groups') of the
+// page's versions that still have them - a manager's rotation prunes the earlier versions' entries, anyone else's
+// keeps them, since the Bridge cannot check a rung. An earlier version is read by descending the rungs.
 #define SPACE_GET_KEY_ARCHIVE_MODEL_FIELDS(F)                                                                          \
     F(id, std::string)                                                                                                 \
     F(fromKeyVersion, std::optional<int64_t>)                                                                          \
@@ -479,6 +480,7 @@ JSON_STRUCT(SpaceGetKeyArchiveModel, SPACE_GET_KEY_ARCHIVE_MODEL_FIELDS);
 
 #define SPACE_GET_KEY_ARCHIVE_RESULT_FIELDS(F)                                                                         \
     F(rungs, std::vector<SpaceRung>)                                                                                   \
+    F(keys, std::vector<SpaceKeyEntry>)                                                                                \
     F(nextKeyVersion, std::optional<int64_t>)
 JSON_STRUCT(SpaceGetKeyArchiveResult, SPACE_GET_KEY_ARCHIVE_RESULT_FIELDS);
 

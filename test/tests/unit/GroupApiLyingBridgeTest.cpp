@@ -164,9 +164,9 @@ struct Bridge {
     // Edits what `groupGetKeyArchive` serves for an ask.
     std::function<void(const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&)> onArchive =
         [](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&) {};
-    // Spaces, as stored: the current version's key entries, every version's rungs, and the statements; served as
-    // the Bridge serves them (`spaceGet` the entries, `spaceGetKeyArchive` the rungs, at most `spaceKeysPage`
-    // versions a page). A rotation must carry exactly the canonical rungs, an addition only current-version entries.
+    // Spaces, as stored: key entries (earlier versions' pruned by a manager's rotation), every version's rungs, and
+    // the statements; served as the Bridge serves them (`spaceGet` the current entries, `spaceGetKeyArchive` the
+    // rungs and the caller's own entries, at most `spaceKeysPage` versions a page). A rotation must carry exactly the canonical rungs, an addition only current-version entries.
     struct StoredSpace {
         server::SpaceInfo info;
         std::vector<server::SpaceKeyEntry> keys;
@@ -246,6 +246,13 @@ struct Bridge {
             if (version <= to) {
                 result.nextKeyVersion = version;
             }
+            for (const auto& entry : space.keys) {
+                // The caller's own (this fake serves every group's: the client opens only those it holds).
+                if (entry.keyVersion >= from && entry.keyVersion < version &&
+                    (entry.recipient.groupId.has_value() || entry.recipient.userId.value_or("") == caller)) {
+                    result.keys.push_back(entry);
+                }
+            }
             onSpaceArchive(result);
             return result.toJSON();
         }
@@ -273,7 +280,18 @@ struct Bridge {
                 std::any_of(model.keys.begin(), model.keys.end(), [&](const auto& e) { return e.keyVersion != next; })) {
                 throw std::runtime_error("SPACE_KEYS_INVALID");
             }
-            space.keys = model.keys; // the earlier versions' wraps go: they are read down the ladder
+            // The earlier versions' wraps go after a manager's rotation only: anyone else's rungs could be garbage.
+            const bool byManager = model.statement.via.empty() ?
+                std::any_of(space.info.users.begin(), space.info.users.end(), [&](const auto& u) {
+                    return u.userId == model.statement.signer && u.role == "manager";
+                }) :
+                std::any_of(space.info.groups.begin(), space.info.groups.end(), [&](const auto& g) {
+                    return g.groupId == model.statement.via && g.role == "manager";
+                });
+            if (byManager) {
+                space.keys.clear();
+            }
+            space.keys.insert(space.keys.end(), model.keys.begin(), model.keys.end());
             space.rungs.insert(space.rungs.end(), model.rungs.begin(), model.rungs.end());
             space.info.keyId = model.keyId;
             applyStatement(space, model.statement, caller);
@@ -5508,6 +5526,44 @@ TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AForgedRungIsRefusedByTheKeyCommit) {
     bridge.onSpaceArchive = [](server::SpaceGetKeyArchiveResult&) {};
     EXPECT_EQ(client("bob").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1")
         << "nothing forged was kept";
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AForgedRungIsRoutedAroundThroughTheReadersOwnEarlierWrap) {
+    // bob, no manager, rotates: the Bridge keeps version 1's wraps, since it cannot tell his rungs are sound.
+    const std::string spaceId = makeSpace();
+    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
+    client("bob").rotateSpaceKey(spaceId);
+    client("bob").rotateSpaceKey(spaceId);
+    const std::string atThree = GroupApiImplTestAccess::spaceKey(client("bob"), spaceId, 3);
+    bridge.onSpaceArchive = [&](server::SpaceGetKeyArchiveResult& result) {
+        for (auto& rung : result.rungs) {
+            if (rung.atKeyVersion == 3) {
+                rung.data = privmx::utils::Base64::from(SpaceLog::sealRung(
+                    spaceId, 3, static_cast<std::uint64_t>(rung.targetKeyVersion), atThree,
+                    privmx::crypto::Crypto::randomBytes(32)
+                ));
+            }
+        }
+    };
+    // A session holding no earlier key yet.
+    GroupApiImpl& alice = sibling("alice");
+    EXPECT_EQ(alice.decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1")
+        << "through alice's own wrap of version 1";
+
+    // After a manager's rotation the older wraps are gone: nothing to route around a forged rung with.
+    client("alice").rotateSpaceKey(spaceId);
+    const std::string atFour = GroupApiImplTestAccess::spaceKey(client("alice"), spaceId, 4);
+    bridge.onSpaceArchive = [&](server::SpaceGetKeyArchiveResult& result) {
+        for (auto& rung : result.rungs) {
+            if (rung.atKeyVersion == 4) {
+                rung.data = privmx::utils::Base64::from(SpaceLog::sealRung(
+                    spaceId, 4, static_cast<std::uint64_t>(rung.targetKeyVersion), atFour,
+                    privmx::crypto::Crypto::randomBytes(32)
+                ));
+            }
+        }
+    };
+    EXPECT_THROW(sibling("bob").decryptInSpace(spaceId, message("m1"), atOne, ANY), GroupDataIntegrityException);
 }
 
 TEST_F(GroupApiLyingBridgeSpaces, AnAdditionWrapsOnlyTheCurrentVersionAndTheNewcomerReadsTheFirst) {

@@ -545,7 +545,16 @@ private:
     // The key at `keyVersion`, cached per (Space, generation, version). The current version is unwrapped from the
     // caller's entry served with `space`; an earlier one is descended to from it down the Space's key ladder
     // (`spaceGetKeyArchive`, only the rungs on the way), every key checked against the verified keyCommit.
+    // When the ladder does not lead there (a rung someone who is no manager sealed wrong), the caller's own wrap of
+    // that version, or of one on the way, if the Bridge still has it.
     SpaceKeyUse spaceKeyAt(const server::SpaceInfo& space, std::int64_t keyVersion);
+    // The key of `keyVersion` from the caller's own entry among `entries` (its user's, else a group's it is in),
+    // signed by a verified user and the one the version's keyCommit names. Not cached.
+    SpaceKeyUse unwrapOwnSpaceKey(
+        const server::SpaceInfo& space,
+        std::int64_t keyVersion,
+        const std::vector<server::SpaceKeyEntry>& entries
+    );
     // The rungs a new version `next` publishes: its key sealed over each canonical target's (LadderMath, floor 1).
     std::vector<server::SpaceRung> spaceRungsFor(
         const server::SpaceInfo& space,
