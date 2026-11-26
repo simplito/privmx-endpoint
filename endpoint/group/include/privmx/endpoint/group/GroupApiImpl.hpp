@@ -531,7 +531,7 @@ private:
     );
     std::optional<keytree::SpaceLogState> spaceLogOf(const std::string& spaceId);
     void rememberSpaceLog(const keytree::SpaceLogState& state);
-    std::map<std::string, std::pair<std::uint64_t, std::string>> storedSpacePins();
+    std::map<std::string, keytree::SpaceLogState> storedSpacePins();
     void storeSpacePin(const keytree::SpaceLogState& state);
     keytree::SpaceStatement signSpaceStatement(
         keytree::SpaceStatement statement,
@@ -542,15 +542,16 @@ private:
         const std::vector<SpaceRecipient>& recipients,
         const std::vector<SpaceTarget>& targets
     );
-    // The key at `keyVersion`, cached per version. The current version's entries come with `space`; an earlier
-    // version's are read with `spaceGetKeys` (or taken from `older`, entries already read), once.
-    SpaceKeyUse spaceKeyAt(
+    // The key at `keyVersion`, cached per (Space, generation, version). The current version is unwrapped from the
+    // caller's entry served with `space`; an earlier one is descended to from it down the Space's key ladder
+    // (`spaceGetKeyArchive`, only the rungs on the way), every key checked against the verified keyCommit.
+    SpaceKeyUse spaceKeyAt(const server::SpaceInfo& space, std::int64_t keyVersion);
+    // The rungs a new version `next` publishes: its key sealed over each canonical target's (LadderMath, floor 1).
+    std::vector<server::SpaceRung> spaceRungsFor(
         const server::SpaceInfo& space,
-        std::int64_t keyVersion,
-        const std::vector<server::SpaceKeyEntry>* older = nullptr
+        std::int64_t next,
+        const std::string& nextKey
     );
-    // The caller's entries of versions `from`..`to` of a Space, every page of `spaceGetKeys`.
-    std::vector<server::SpaceKeyEntry> spaceKeyEntries(const std::string& spaceId, std::int64_t from, std::int64_t to);
     // The recipients' current keys, each verified: a group's off its latest statement, a user's by the UserVerifier.
     std::vector<SpaceTarget> spaceTargets(
         const std::string& contextId,
@@ -586,11 +587,10 @@ private:
     // is not dropped on a reconnect.
     std::mutex _spaceLogsMutex;
     std::map<std::string, keytree::SpaceLogState> _spaceLogs;
-    std::map<std::string, std::pair<std::uint64_t, std::string>>
-        _spacePins; // what the device's store held at first use
+    std::map<std::string, keytree::SpaceLogState> _spacePins; // what the device's store held at first use
     bool _spacePinsLoaded = false;
     std::map<std::string, std::uint64_t> _spaceGenerations;            // moved by a delete
-    privmx::utils::ThreadSaveMap<std::string, SpaceKeyUse> _spaceKeys; // by "<spaceId>:<keyVersion>"
+    privmx::utils::ThreadSaveMap<std::string, SpaceKeyUse> _spaceKeys; // by "<spaceId>:<generation>:<keyVersion>"
     std::shared_ptr<Sequence> sequenceOf(SequenceHandle handle, bool wantReading);
     core::Buffer markSequence(Sequence& sequence, bool closed);
     privmx::utils::ThreadSaveMap<int64_t, std::shared_ptr<Sequence>> _sequences;

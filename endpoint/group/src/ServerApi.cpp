@@ -128,8 +128,8 @@ server::SpaceGetResult ServerApi::spaceGet(server::SpaceIdModel model) {
     return request<server::SpaceGetResult>("spaceGet", model.toJSON());
 }
 
-server::SpaceGetKeysResult ServerApi::spaceGetKeys(server::SpaceGetKeysModel model) {
-    return request<server::SpaceGetKeysResult>("spaceGetKeys", model.toJSON());
+server::SpaceGetKeyArchiveResult ServerApi::spaceGetKeyArchive(server::SpaceGetKeyArchiveModel model) {
+    return request<server::SpaceGetKeyArchiveResult>("spaceGetKeyArchive", model.toJSON());
 }
 
 server::SpaceListResult ServerApi::spaceList(server::SpaceListModel model) {

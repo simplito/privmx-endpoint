@@ -164,13 +164,17 @@ struct Bridge {
     // Edits what `groupGetKeyArchive` serves for an ask.
     std::function<void(const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&)> onArchive =
         [](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&) {};
-    // Spaces, as stored: every key entry of every version, and the statements; served as the Bridge serves them
-    // (`spaceGet` the current version's entries only, `spaceGetKeys` the earlier ones, at most `spaceKeysPage` a page).
+    // Spaces, as stored: the current version's key entries, every version's rungs, and the statements; served as
+    // the Bridge serves them (`spaceGet` the entries, `spaceGetKeyArchive` the rungs, at most `spaceKeysPage`
+    // versions a page). A rotation must carry exactly the canonical rungs, an addition only current-version entries.
     struct StoredSpace {
         server::SpaceInfo info;
         std::vector<server::SpaceKeyEntry> keys;
+        std::vector<server::SpaceRung> rungs;
         std::vector<server::SpaceStatement> statements;
     };
+    // Edits what `spaceGetKeyArchive` serves.
+    std::function<void(server::SpaceGetKeyArchiveResult&)> onSpaceArchive = [](server::SpaceGetKeyArchiveResult&) {};
     std::map<std::string, StoredSpace> spaces;
     std::int64_t spaceKeysPage = 256;
     // Requests a test may make before a client is taken to loop on the bridge: failed, not hung.
@@ -225,22 +229,24 @@ struct Bridge {
             }
             return server::SpaceGetResult{.space = info}.toJSON();
         }
-        if (method == "spaceGetKeys") {
-            const auto model = server::SpaceGetKeysModel::fromJSON(params);
+        if (method == "spaceGetKeyArchive") {
+            const auto model = server::SpaceGetKeyArchiveModel::fromJSON(params);
+            const std::int64_t from = model.fromKeyVersion.value_or(1);
             const std::int64_t to = std::min(model.toKeyVersion.value_or(INT64_MAX), space.info.keyVersion);
-            const std::int64_t limit = std::min(model.limit.value_or(64), spaceKeysPage);
-            server::SpaceGetKeysResult result;
-            std::int64_t version = model.fromKeyVersion;
-            for (; version <= to && version < model.fromKeyVersion + limit; ++version) {
-                for (const auto& entry : space.keys) {
-                    if (entry.keyVersion == version) {
-                        result.keys.push_back(entry);
+            const std::int64_t limit = std::min(model.limit.value_or(256), spaceKeysPage);
+            server::SpaceGetKeyArchiveResult result;
+            std::int64_t version = from;
+            for (; version <= to && version < from + limit; ++version) {
+                for (const auto& rung : space.rungs) {
+                    if (rung.atKeyVersion == version) {
+                        result.rungs.push_back(rung);
                     }
                 }
             }
             if (version <= to) {
                 result.nextKeyVersion = version;
             }
+            onSpaceArchive(result);
             return result.toJSON();
         }
         if (method == "spaceGetStatements") {
@@ -255,13 +261,31 @@ struct Bridge {
         }
         if (method == "spaceRotateKey" || method == "spaceRemoveRecipients") {
             const auto model = server::SpaceRotateKeyModel::fromJSON(params);
-            space.keys.insert(space.keys.end(), model.keys.begin(), model.keys.end());
+            const std::int64_t next = space.info.keyVersion + 1;
+            std::vector<RungSpan> spans;
+            for (const auto& rung : model.rungs) {
+                spans.push_back(RungSpan{
+                    static_cast<std::uint32_t>(rung.atKeyVersion), static_cast<std::uint32_t>(rung.targetKeyVersion)
+                });
+            }
+            if (!LadderMath::validateRungSet(spans, static_cast<std::uint32_t>(next), 1).ok ||
+                spans.size() != LadderMath::rungSpansFor(static_cast<std::uint32_t>(next), 1).size() ||
+                std::any_of(model.keys.begin(), model.keys.end(), [&](const auto& e) { return e.keyVersion != next; })) {
+                throw std::runtime_error("SPACE_KEYS_INVALID");
+            }
+            space.keys = model.keys; // the earlier versions' wraps go: they are read down the ladder
+            space.rungs.insert(space.rungs.end(), model.rungs.begin(), model.rungs.end());
             space.info.keyId = model.keyId;
             applyStatement(space, model.statement, caller);
             return server::SpaceRotateKeyResult{.keyVersion = space.info.keyVersion}.toJSON();
         }
         if (method == "spaceAddRecipients") {
             const auto model = server::SpaceAddRecipientsModel::fromJSON(params);
+            if (std::any_of(model.keys.begin(), model.keys.end(), [&](const auto& e) {
+                    return e.keyVersion != space.info.keyVersion;
+                })) {
+                throw std::runtime_error("SPACE_KEYS_INVALID");
+            }
             space.keys.insert(space.keys.end(), model.keys.begin(), model.keys.end());
             applyStatement(space, model.statement, caller);
             return Poco::Dynamic::Var();
@@ -5421,30 +5445,145 @@ protected:
     }
 };
 
-TEST_F(GroupApiLyingBridgeSpaces, AnEarlierVersionsKeyIsReadOnDemandAndOnce) {
+TEST_F(GroupApiLyingBridgeSpaces, EveryEarlierVersionIsReadDownTheLadderFromTheCurrentKey) {
     const std::string spaceId = makeSpace();
-    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
-    client("alice").rotateSpaceKey(spaceId);
-    client("alice").rotateSpaceKey(spaceId);
-    ASSERT_EQ(bridge.spaces.at(spaceId).info.keyVersion, 3);
-    EXPECT_EQ(client("bob").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1");
-    EXPECT_EQ(count("bob", "context.spaceGetKeys"), 1u) << "spaceGet serves the current version only";
-    EXPECT_EQ(client("bob").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1");
-    EXPECT_EQ(count("bob", "context.spaceGetKeys"), 1u) << "read once";
+    constexpr std::int64_t VERSIONS = 9;
+    std::vector<core::Buffer> sealed;
+    for (std::int64_t version = 1; version <= VERSIONS; ++version) {
+        if (version > 1) {
+            client("alice").rotateSpaceKey(spaceId);
+        }
+        sealed.push_back(client("alice").encryptInSpace(spaceId, message("m"), core::Buffer::from(std::to_string(version))));
+    }
+    ASSERT_EQ(bridge.spaces.at(spaceId).info.keyVersion, VERSIONS);
+    EXPECT_EQ(bridge.spaces.at(spaceId).rungs.size(), LadderMath::totalRungsThrough(VERSIONS)) << "the canonical rungs";
+    for (const auto& entry : bridge.spaces.at(spaceId).keys) {
+        EXPECT_EQ(entry.keyVersion, VERSIONS) << "only the current version is wrapped to recipients";
+    }
+    // Version 1 first: only the rungs on its path are asked for, one version a request.
+    EXPECT_EQ(client("bob").decryptInSpace(spaceId, message("m"), sealed[0], ANY).data.stdString(), "1");
+    const std::size_t toOne = count("bob", "context.spaceGetKeyArchive");
+    EXPECT_EQ(toOne, LadderMath::canonicalDescent(VERSIONS, 1, 1).size());
+    for (std::int64_t version = VERSIONS; version >= 1; --version) {
+        EXPECT_EQ(
+            client("bob").decryptInSpace(spaceId, message("m"), sealed[version - 1], ANY).data.stdString(),
+            std::to_string(version)
+        );
+    }
+    const std::size_t all = count("bob", "context.spaceGetKeyArchive");
+    for (std::int64_t version = 1; version <= VERSIONS; ++version) {
+        client("bob").decryptInSpace(spaceId, message("m"), sealed[version - 1], ANY);
+    }
+    EXPECT_EQ(count("bob", "context.spaceGetKeyArchive"), all) << "each key derived once";
 }
 
-TEST_F(GroupApiLyingBridgeSpaces, AnAdditionReadsTheEarlierVersionsInPages) {
+TEST_F(GroupApiLyingBridgeSpaces, SECURITY_AForgedRungIsRefusedByTheKeyCommit) {
+    const std::string spaceId = makeSpace();
+    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
+    const core::Buffer atTwo = [&] {
+        client("alice").rotateSpaceKey(spaceId);
+        return client("alice").encryptInSpace(spaceId, message("m2"), core::Buffer::from("v2"));
+    }();
+    client("alice").rotateSpaceKey(spaceId);
+    // A recipient (or the Bridge with a recipient's help) sealing another key into rung 3->2: well-formed, under the
+    // right key and span, and still not the key version 2's statement committed to.
+    const std::string atThree = GroupApiImplTestAccess::spaceKey(client("alice"), spaceId, 3);
+    bridge.onSpaceArchive = [&](server::SpaceGetKeyArchiveResult& result) {
+        for (auto& rung : result.rungs) {
+            if (rung.atKeyVersion == 3 && rung.targetKeyVersion == 2) {
+                rung.data = privmx::utils::Base64::from(
+                    SpaceLog::sealRung(spaceId, 3, 2, atThree, privmx::crypto::Crypto::randomBytes(32))
+                );
+            }
+        }
+    };
+    EXPECT_THROW(client("bob").decryptInSpace(spaceId, message("m2"), atTwo, ANY), GroupDataIntegrityException);
+    // The Bridge alone: bytes that open under no key.
+    bridge.onSpaceArchive = [&](server::SpaceGetKeyArchiveResult& result) {
+        for (auto& rung : result.rungs) {
+            rung.data = privmx::utils::Base64::from(privmx::crypto::Crypto::randomBytes(60));
+        }
+    };
+    EXPECT_THROW(client("carol").decryptInSpace(spaceId, message("m1"), atOne, ANY), std::exception);
+    bridge.onSpaceArchive = [](server::SpaceGetKeyArchiveResult&) {};
+    EXPECT_EQ(client("bob").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1")
+        << "nothing forged was kept";
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, AnAdditionWrapsOnlyTheCurrentVersionAndTheNewcomerReadsTheFirst) {
     const std::string spaceId = makeSpace();
     const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
     for (int i = 0; i < 4; ++i) {
         client("alice").rotateSpaceKey(spaceId);
     }
-    bridge.spaceKeysPage = 2;
-    const std::size_t before = count("alice", "context.spaceGetKeys");
     client("alice").addSpaceRecipients(spaceId, {person("carol", "user")});
-    EXPECT_EQ(count("alice", "context.spaceGetKeys") - before, 2u) << "versions 1..4, two a page";
+    const auto& add = std::find_if(bridge.calls.rbegin(), bridge.calls.rend(), [](const auto& call) {
+        return call.method == "context.spaceAddRecipients";
+    });
+    ASSERT_NE(add, bridge.calls.rend());
+    const auto sent = server::SpaceAddRecipientsModel::fromJSON(add->params);
+    ASSERT_EQ(sent.keys.size(), 1u) << "one wrap, of the current version, for the one newcomer";
+    EXPECT_EQ(sent.keys[0].keyVersion, 5);
     EXPECT_EQ(client("carol").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1")
-        << "the newcomer reads what was there";
+        << "the newcomer reads what was there, down the ladder";
+    EXPECT_EQ(count("carol", "context.spaceGetKeyArchive"), LadderMath::canonicalDescent(5, 1, 1).size());
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, ANewSessionVerifiesOnlyTheStatementsSinceTheStoredState) {
+    store = std::make_shared<MemoryPinStore>();
+    const std::string spaceId = makeSpace();
+    client("alice").rotateSpaceKey(spaceId);
+    client("alice").rotateSpaceKey(spaceId);
+    client("bob").getSpace(spaceId); // verifies statements 1..3 and stores the state
+    client("alice").rotateSpaceKey(spaceId);
+    const std::size_t before = bridge.calls.size();
+    GroupApiImpl& next = sibling("bob");
+    EXPECT_EQ(next.getSpace(spaceId).keyVersion, 4);
+    std::vector<std::int64_t> asked;
+    for (std::size_t i = before; i < bridge.calls.size(); ++i) {
+        if (bridge.calls[i].caller == "bob" && bridge.calls[i].method == "context.spaceGetStatements") {
+            asked.push_back(server::SpaceGetStatementsModel::fromJSON(bridge.calls[i].params).fromSeq);
+        }
+    }
+    EXPECT_EQ(asked, std::vector<std::int64_t>{3}) << "statement 4 only";
+
+    // A history rewritten at the stored state: the statement after it does not follow it.
+    client("alice").rotateSpaceKey(spaceId);
+    auto& statements = bridge.spaces.at(spaceId).statements;
+    const std::string kept = statements[4].prevDigest;
+    statements[4].prevDigest = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32));
+    EXPECT_THROW(sibling("bob").getSpace(spaceId), GroupHistoryForkException);
+    statements[4].prevDigest = kept;
+    // Served behind it.
+    statements.pop_back();
+    bridge.spaces.at(spaceId).info.seq = 4;
+    bridge.spaces.at(spaceId).info.keyVersion = 4;
+    bridge.spaces.at(spaceId).info.seq = 3;
+    EXPECT_THROW(sibling("bob").getSpace(spaceId), GroupHistoryForkException);
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, AStoredStateOfTheEarlierBlobVersionIsAFirstContact) {
+    store = std::make_shared<MemoryPinStore>();
+    const std::string spaceId = makeSpace();
+    client("alice").rotateSpaceKey(spaceId);
+    client("bob").getSpace(spaceId); // the slot exists
+    clients.erase("bob");
+    const std::string slot = store->keyWith("space-pins/", "/" + bridge.users.at("bob").getPublicKey().toBase58DER());
+    ASSERT_FALSE(slot.empty());
+    // Version 1: "<id> <seq> <digest>" lines, here claiming a position far ahead of the Bridge.
+    store->save(
+        slot,
+        core::Buffer::from(core::LocalSeal(bridge.users.at("bob"), "privmx/space/pins", 1, slot)
+                               .seal(spaceId + " 99 " + std::string(64, '0') + "\n")),
+        core::Buffer::from(store->get(slot))
+    );
+    EXPECT_EQ(client("bob").getSpace(spaceId).keyVersion, 2) << "not read as pins: no fork";
+    const auto body = core::LocalSeal(bridge.users.at("bob"), "privmx/space/pins", 2, slot).open(store->get(slot));
+    ASSERT_TRUE(body.has_value()) << "rewritten in the current version";
+    const auto states = SpaceLog::decodeStates(body.value());
+    ASSERT_TRUE(states.has_value());
+    EXPECT_EQ(states->at(spaceId).seq, 2u);
+    EXPECT_EQ(states->at(spaceId).keyCommits.size(), 2u);
 }
 
 TEST_F(GroupApiLyingBridgeSpaces, AnAdditionIsCheckedAgainstTheVerifiedHistoryBeforeSigning) {

@@ -335,6 +335,137 @@ SpaceLogState SpaceLog::apply(const std::optional<SpaceLogState>& prior, const S
     };
 }
 
+namespace {
+
+std::string rungAad(const std::string& spaceId, std::uint64_t at, std::uint64_t target) {
+    std::string aad = tag("pmx-space-rung");
+    be::putLp(aad, spaceId);
+    be::putU64(aad, at);
+    be::putU64(aad, target);
+    return aad;
+}
+
+} // namespace
+
+std::string SpaceLog::sealRung(
+    const std::string& spaceId,
+    std::uint64_t at,
+    std::uint64_t target,
+    const std::string& atKey,
+    const std::string& targetKey
+) {
+    if (target >= at || atKey.size() != 32 || targetKey.size() != 32) {
+        throw std::invalid_argument("a rung seals an earlier version's 32-byte key under a later one's");
+    }
+    const std::string iv = privmx::crypto::Crypto::randomBytes(12);
+    return iv + privmx::crypto::Crypto::aes256GcmEncrypt(targetKey, atKey, iv, rungAad(spaceId, at, target));
+}
+
+std::string SpaceLog::openRung(
+    const std::string& spaceId,
+    std::uint64_t at,
+    std::uint64_t target,
+    const std::string& atKey,
+    const std::string& sealed
+) {
+    std::string key;
+    if (target < at && atKey.size() == 32 && sealed.size() == 12 + 32 + 16) {
+        try {
+            key = privmx::crypto::Crypto::aes256GcmDecrypt(
+                sealed.substr(12), atKey, sealed.substr(0, 12), rungAad(spaceId, at, target)
+            );
+        } catch (...) { key.clear(); }
+    }
+    if (key.size() != 32) {
+        throw GroupDataIntegrityException(
+            "space rung " + std::to_string(at) + "->" + std::to_string(target) + " does not open"
+        );
+    }
+    return key;
+}
+
+std::string SpaceLog::encodeStates(const std::map<std::string, SpaceLogState>& states) {
+    std::string body;
+    be::putU32(body, static_cast<std::uint32_t>(states.size()));
+    for (const auto& [id, state] : states) {
+        be::putLp(body, id);
+        be::putLp(body, state.contextId);
+        be::putLp(body, state.creator);
+        be::putU64(body, state.seq);
+        be::putLp(body, state.digest);
+        be::putU64(body, state.keyVersion);
+        be::putU32(body, static_cast<std::uint32_t>(state.groups.size()));
+        for (const SpaceLogGroup& group : state.groups) {
+            be::putLp(body, group.groupId);
+            be::putLp(body, group.role);
+            be::putU64(body, group.groupKeyVersion);
+            be::putLp(body, group.groupPubKey);
+        }
+        be::putU32(body, static_cast<std::uint32_t>(state.users.size()));
+        for (const SpaceLogUser& user : state.users) {
+            be::putLp(body, user.userId);
+            be::putLp(body, user.pubKey);
+            be::putLp(body, user.role);
+        }
+        // Versions 1..keyVersion, each made by one statement: no gaps, so no version numbers.
+        for (std::uint64_t version = 1; version <= state.keyVersion; ++version) {
+            const auto commit = state.keyCommits.find(version);
+            body += commit == state.keyCommits.end() ? std::string(32, '\0') : commit->second;
+        }
+    }
+    return body;
+}
+
+std::optional<std::map<std::string, SpaceLogState>> SpaceLog::decodeStates(const std::string& body) {
+    try {
+        be::Reader in(body);
+        std::map<std::string, SpaceLogState> states;
+        const std::uint32_t count = in.u32();
+        for (std::uint32_t i = 0; i < count; ++i) {
+            SpaceLogState state;
+            state.spaceId = in.lp();
+            state.contextId = in.lp();
+            state.creator = in.lp();
+            state.seq = in.u64();
+            state.digest = in.lp();
+            state.keyVersion = in.u64();
+            for (std::uint32_t n = in.u32(); n > 0; --n) {
+                SpaceLogGroup group;
+                group.groupId = in.lp();
+                group.role = in.lp();
+                group.groupKeyVersion = in.u64();
+                group.groupPubKey = in.lp();
+                state.groups.push_back(std::move(group));
+            }
+            for (std::uint32_t n = in.u32(); n > 0; --n) {
+                SpaceLogUser user;
+                user.userId = in.lp();
+                user.pubKey = in.lp();
+                user.role = in.lp();
+                state.users.push_back(std::move(user));
+            }
+            if (state.seq == 0 || state.keyVersion == 0 || state.digest.size() != 32) {
+                return std::nullopt;
+            }
+            for (std::uint64_t version = 1; version <= state.keyVersion; ++version) {
+                std::string commit;
+                for (int b = 0; b < 32; ++b) {
+                    commit += static_cast<char>(in.u8());
+                }
+                state.keyCommits[version] = std::move(commit);
+            }
+            const std::string id = state.spaceId;
+            if (!states.emplace(id, std::move(state)).second) {
+                return std::nullopt;
+            }
+        }
+        if (!in.done()) {
+            return std::nullopt;
+        }
+        return states;
+    } catch (const std::exception&) { return std::nullopt; }
+}
+
 server::SpaceStatement SpaceLog::toWire(const SpaceStatement& statement) {
     server::SpaceStatement wire;
     wire.spaceId = statement.spaceId;

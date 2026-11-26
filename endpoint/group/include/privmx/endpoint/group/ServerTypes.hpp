@@ -378,6 +378,13 @@ JSON_STRUCT(SpaceKeyRecipient, SPACE_KEY_RECIPIENT_FIELDS);
     F(signature, std::string)
 JSON_STRUCT(SpaceKeyEntry, SPACE_KEY_ENTRY_FIELDS);
 
+// The key of `targetKeyVersion` sealed under the key of `atKeyVersion` (keytree::SpaceLog::sealRung), base64.
+#define SPACE_RUNG_FIELDS(F)                                                                                           \
+    F(atKeyVersion, int64_t)                                                                                           \
+    F(targetKeyVersion, int64_t)                                                                                       \
+    F(data, std::string)
+JSON_STRUCT(SpaceRung, SPACE_RUNG_FIELDS);
+
 // `groupPubKey`: the group's identity key at `groupKeyVersion`, as the Space's statements pin it.
 #define SPACE_GROUP_FIELDS(F)                                                                                          \
     F(groupId, std::string)                                                                                            \
@@ -460,19 +467,20 @@ JSON_STRUCT(SpaceIdModel, SPACE_ID_MODEL_FIELDS);
 #define SPACE_GET_RESULT_FIELDS(F) F(space, SpaceInfo)
 JSON_STRUCT(SpaceGetResult, SPACE_GET_RESULT_FIELDS);
 
-// The caller's reachable key entries of a Space's earlier versions (`spaceGet` serves the current one only),
-// ascending, a page at a time: `nextKeyVersion` is where the next page starts.
-#define SPACE_GET_KEYS_MODEL_FIELDS(F)                                                                                 \
+// The Space's key ladder, a page at a time by `atKeyVersion` ascending (all rungs of a version together):
+// `nextKeyVersion` is where the next page starts. Recipient entries are kept for the current version only; an earlier
+// version is read by descending these from it.
+#define SPACE_GET_KEY_ARCHIVE_MODEL_FIELDS(F)                                                                          \
     F(id, std::string)                                                                                                 \
-    F(fromKeyVersion, int64_t)                                                                                         \
+    F(fromKeyVersion, std::optional<int64_t>)                                                                          \
     F(toKeyVersion, std::optional<int64_t>)                                                                            \
     F(limit, std::optional<int64_t>)
-JSON_STRUCT(SpaceGetKeysModel, SPACE_GET_KEYS_MODEL_FIELDS);
+JSON_STRUCT(SpaceGetKeyArchiveModel, SPACE_GET_KEY_ARCHIVE_MODEL_FIELDS);
 
-#define SPACE_GET_KEYS_RESULT_FIELDS(F)                                                                                \
-    F(keys, std::vector<SpaceKeyEntry>)                                                                                \
+#define SPACE_GET_KEY_ARCHIVE_RESULT_FIELDS(F)                                                                         \
+    F(rungs, std::vector<SpaceRung>)                                                                                   \
     F(nextKeyVersion, std::optional<int64_t>)
-JSON_STRUCT(SpaceGetKeysResult, SPACE_GET_KEYS_RESULT_FIELDS);
+JSON_STRUCT(SpaceGetKeyArchiveResult, SPACE_GET_KEY_ARCHIVE_RESULT_FIELDS);
 
 #define SPACE_LIST_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(SpaceListModel, core::server::ContainerListModel, SPACE_LIST_MODEL_EXTRA_FIELDS);
@@ -494,6 +502,7 @@ JSON_STRUCT(SpaceAddRecipientsModel, SPACE_ADD_RECIPIENTS_MODEL_FIELDS);
     F(id, std::string)                                                                                                 \
     F(keyId, std::string)                                                                                              \
     F(keys, std::vector<SpaceKeyEntry>)                                                                                \
+    F(rungs, std::vector<SpaceRung>)                                                                                   \
     F(statement, SpaceStatement)                                                                                       \
     F(expectedKeyVersion, int64_t)                                                                                     \
     F(groups, std::optional<std::vector<std::string>>)                                                                 \

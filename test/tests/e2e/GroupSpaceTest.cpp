@@ -19,7 +19,8 @@ using namespace privmx::endpoint::group;
  * Spaces against a running Bridge: one key for several Groups and users, in versions.
  *
  * What a Space must hold to, each a test below: every recipient reads, through its own entry; a value says who
- * wrote it and how they had access; adding a recipient opens the past to them, removing one closes the future;
+ * wrote it and how they had access; adding a recipient opens the past to them (down the key ladder from the current
+ * key, the only one wrapped to them), removing one closes the future;
  * a removal from a recipient Group makes the key stale and the next write replaces it; a Space's envelopes and a
  * Group's never open as each other.
  */
@@ -206,7 +207,7 @@ TEST_F(GroupSpaceTest, an_added_recipient_reads_the_past_and_a_removed_one_gets_
     switchTo(1);
     ASSERT_NO_THROW({ groupApi->addSpaceRecipients(spaceId, {person(3, "user")}); });
     switchTo(3);
-    // Every version was wrapped for the newcomer.
+    // The newcomer got the current key only, and reads the earlier one down the key ladder.
     DecryptedSpaceEnvelope opened = groupApi->decryptInSpace(spaceId, note("n1"), first, by(userId(1)));
     EXPECT_EQ(opened.data.stdString(), "first");
     EXPECT_EQ(opened.origin.via, "user");
@@ -239,6 +240,32 @@ TEST_F(GroupSpaceTest, an_added_recipient_reads_the_past_and_a_removed_one_gets_
     switchTo(1);
     ASSERT_NO_THROW({ groupApi->deleteSpace(spaceId); });
     EXPECT_ANY_THROW({ groupApi->getSpace(spaceId); });
+}
+
+TEST_F(GroupSpaceTest, a_newcomer_reads_every_earlier_version_down_the_key_ladder) {
+    const std::string spaceId = groupApi->createSpace(
+        contextId(), {person(1, "manager"), person(2, "user")}, text("p"), text("q"), std::nullopt
+    );
+    std::vector<core::Buffer> sealed{groupApi->encryptInSpace(spaceId, note("n1"), text("v1"))};
+    // Three rotations, the Bridge's per-minute budget for one user: version 4 carries a skip rung to version 2.
+    for (int version = 2; version <= 4; ++version) {
+        ASSERT_NO_THROW({ EXPECT_EQ(groupApi->rotateSpaceKey(spaceId), version); });
+        sealed.push_back(groupApi->encryptInSpace(spaceId, note("n" + std::to_string(version)), text("v" + std::to_string(version))));
+    }
+    ASSERT_NO_THROW({ groupApi->addSpaceRecipients(spaceId, {person(3, "user")}); });
+
+    switchTo(3);
+    for (int version = 1; version <= 4; ++version) {
+        const DecryptedSpaceEnvelope opened = groupApi->decryptInSpace(
+            spaceId, note("n" + std::to_string(version)), sealed[version - 1], by(userId(1))
+        );
+        EXPECT_EQ(opened.data.stdString(), "v" + std::to_string(version));
+        EXPECT_EQ(opened.origin.keyVersion, version);
+    }
+    EXPECT_EQ(groupApi->getSpace(spaceId).privateMeta.stdString(), "q") << "the metadata of version 1, read the same way";
+
+    switchTo(2);
+    EXPECT_EQ(groupApi->decryptInSpace(spaceId, note("n1"), sealed[0], by(userId(1))).data.stdString(), "v1");
 }
 
 TEST_F(GroupSpaceTest, files_and_sequences_in_a_space) {

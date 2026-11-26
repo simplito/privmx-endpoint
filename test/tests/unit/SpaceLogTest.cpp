@@ -403,3 +403,38 @@ TEST(SpaceLogVectors, AStatementSignedByTheBridgesOwnCodeVerifiesHere) {
     other.date += 1;
     EXPECT_FALSE(PublicKey::fromBase58DER(statement.signerPubKey).verifyCompactSignatureWithHash(SpaceLog::signedBytes(other), statement.signature));
 }
+
+TEST_F(SpaceLogRules, ARungOpensOnlyUnderItsOwnKeyAndSpan) {
+    const std::string sealed = SpaceLog::sealRung(spaceId, 2, 1, key2, key1);
+    EXPECT_EQ(sealed.size(), 12u + 32u + 16u) << "iv || ciphertext || tag";
+    EXPECT_EQ(SpaceLog::openRung(spaceId, 2, 1, key2, sealed), key1);
+    EXPECT_THROW(SpaceLog::openRung(spaceId, 2, 1, key1, sealed), GroupDataIntegrityException) << "another key";
+    EXPECT_THROW(SpaceLog::openRung(spaceId, 3, 1, key2, sealed), GroupDataIntegrityException) << "relabelled";
+    EXPECT_THROW(SpaceLog::openRung(spaceId, 2, 0, key2, sealed), GroupDataIntegrityException) << "relabelled";
+    EXPECT_THROW(SpaceLog::openRung(std::string(64, 'b'), 2, 1, key2, sealed), GroupDataIntegrityException)
+        << "another Space's";
+    EXPECT_THROW(SpaceLog::openRung(spaceId, 2, 1, key2, sealed.substr(1)), GroupDataIntegrityException);
+    EXPECT_THROW(SpaceLog::sealRung(spaceId, 1, 2, key1, key2), std::invalid_argument) << "rungs point down only";
+}
+
+TEST_F(SpaceLogRules, AVerifiedStateIsStoredWholeAndReadBackStrictly) {
+    const SpaceLogState first = created();
+    const SpaceLogState rotated =
+        SpaceLog::apply(first, by(statement(SpaceOp::Rotate, first, 2, key2), "alice", alice));
+    std::map<std::string, SpaceLogState> states{{spaceId, rotated}};
+    const std::string body = SpaceLog::encodeStates(states);
+    const auto back = SpaceLog::decodeStates(body);
+    ASSERT_TRUE(back.has_value());
+    const SpaceLogState& again = back->at(spaceId);
+    EXPECT_EQ(again.seq, rotated.seq);
+    EXPECT_EQ(again.digest, rotated.digest);
+    EXPECT_EQ(again.creator, "alice");
+    EXPECT_EQ(again.keyCommits, rotated.keyCommits);
+    EXPECT_EQ(again.groups.size(), 2u);
+    EXPECT_EQ(again.users.size(), 2u);
+    // Good enough to go on from: the next statement applies to it as to the original.
+    EXPECT_NO_THROW(SpaceLog::apply(again, by(statement(SpaceOp::Rotate, again, 3, key1), "alice", alice)));
+    EXPECT_FALSE(SpaceLog::decodeStates(body + "x").has_value()) << "trailing bytes";
+    EXPECT_FALSE(SpaceLog::decodeStates(body.substr(0, body.size() - 1)).has_value()) << "cut short";
+    EXPECT_TRUE(SpaceLog::decodeStates(SpaceLog::encodeStates({})).has_value());
+}

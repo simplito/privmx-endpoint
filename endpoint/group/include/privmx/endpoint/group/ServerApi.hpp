@@ -44,7 +44,7 @@ public:
 
     server::SpaceCreateResult spaceCreate(server::SpaceCreateModel model);
     server::SpaceGetResult spaceGet(server::SpaceIdModel model);
-    server::SpaceGetKeysResult spaceGetKeys(server::SpaceGetKeysModel model);
+    server::SpaceGetKeyArchiveResult spaceGetKeyArchive(server::SpaceGetKeyArchiveModel model);
     server::SpaceListResult spaceList(server::SpaceListModel model);
     void spaceDelete(server::SpaceIdModel model);
     server::SpaceGetStatementsResult spaceGetStatements(server::SpaceGetStatementsModel model);

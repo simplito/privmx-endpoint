@@ -111,6 +111,31 @@ public:
     // Throws GroupDataIntegrityException or GroupUnauthorizedSignerException.
     static SpaceLogState apply(const std::optional<SpaceLogState>& prior, const SpaceStatement& statement);
 
+    // A rung of the Space's key ladder: the key of version `target` sealed under the key of version `at` (target <
+    // at), AES-256-GCM with aad "pmx-space-rung\0" || lp(spaceId) || u64(at) || u64(target), as raw `iv || ciphertext
+    // || tag`. Unsigned: what it opens to is checked against the version's keyCommit by whoever uses it.
+    static std::string sealRung(
+        const std::string& spaceId,
+        std::uint64_t at,
+        std::uint64_t target,
+        const std::string& atKey,
+        const std::string& targetKey
+    );
+    // The key a rung carries. Throws GroupDataIntegrityException when it does not open under `atKey` and its own span.
+    static std::string openRung(
+        const std::string& spaceId,
+        std::uint64_t at,
+        std::uint64_t target,
+        const std::string& atKey,
+        const std::string& sealed
+    );
+
+    // Verified states as the device keeps them (the Space pin store), by Space id. Per Space: u32-lp ids, u64
+    // numbers, its recipients, and one 32-byte commit per key version: about 250 B + 160 B a recipient + 32 B a key
+    // version. Decode is strict: nullopt on anything but what encode writes.
+    static std::string encodeStates(const std::map<std::string, SpaceLogState>& states);
+    static std::optional<std::map<std::string, SpaceLogState>> decodeStates(const std::string& body);
+
     static server::SpaceStatement toWire(const SpaceStatement& statement);
     static SpaceStatement fromWire(const server::SpaceStatement& wire);
     static std::string opName(SpaceOp op);

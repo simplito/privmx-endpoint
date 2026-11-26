@@ -98,5 +98,9 @@ struct GroupApiImplTestAccess {
     }
     // The group key resolver the key provider is handed (containers, envelopes, the group's own metadata).
     static core::KeyProvider::GroupPrivKeyResolver groupKeyResolver(GroupApiImpl& api) { return api._groupPrivKeyResolver; }
+    // A Space's key at `keyVersion`, as a read of it gets it (the current one unwrapped, an earlier one descended to).
+    static std::string spaceKey(GroupApiImpl& api, const std::string& spaceId, std::int64_t keyVersion) {
+        return api.spaceKeyAt(api.spaceInfo(spaceId, true), keyVersion).key;
+    }
 };
 } // namespace privmx::endpoint::group

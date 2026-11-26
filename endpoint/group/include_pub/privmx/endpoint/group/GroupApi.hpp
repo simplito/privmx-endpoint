@@ -684,8 +684,19 @@ public:
     // alsoFor wraps a value's key once per recipient, for every value. A Space wraps its key once per recipient
     // when it is created and when the key is replaced; writing a value wraps nothing.
     //
+    // Earlier keys. Only the current key version is wrapped to the recipients. Each new version also seals the
+    // earlier ones it skips to (a key ladder: about two 60-byte rungs a version, whatever the number of recipients),
+    // so whoever holds the current key reads every earlier version: about 2*log2(versions back) requests the first
+    // time, then from memory for the session. Every key so derived is checked against the commitment the Space's
+    // signed statement made for its version; a rung that gives another key is refused (GroupDataIntegrityException).
+    // So a recipient reads the whole history, a newcomer included, and a removed one gets no later key. The number
+    // of key versions has no ceiling of its own; the Bridge's rotation rate limit stays.
+    //
+    // With a PinStore set, the device keeps each Space's verified state: the next session checks only the
+    // statements since, and refuses a history served behind it or rewritten under it (GroupHistoryForkException).
+    //
     // A Space has a signed history, like a Group: every change of its recipients or its key is a statement signed
-    // by a recipient and chained to the one before. The Bridge stores the statements and the wrapped keys; who
+    // by a recipient and chained to the one before. The Bridge stores the statements, the wraps and the rungs; who
     // the recipients are, which key is current and who made the Space is what the statements add up to, replayed
     // and checked here. The Bridge cannot add a recipient or plant a key, and neither can a user of the Context
     // who is no recipient: a statement needs a recipient's own signature, or the key of a recipient Group.
@@ -742,8 +753,9 @@ public:
     core::PagingList<SpaceState> listSpaces(const std::string& contextId, const core::PagingQuery& pagingQuery);
     void deleteSpace(const std::string& spaceId);
     /**
-     * The current key and every earlier version are wrapped for them: they read what is already there. An added
-     * Group every writer cannot see blocks their writes (see the note above).
+     * The current key is wrapped for them, one wrap each however long the Space's history: they read the earlier
+     * versions down the key ladder, so they read what is already there (see the note above). An added Group every
+     * writer cannot see blocks their writes (see the note above).
      *
      * Checked against the Space's verified history before anything is sent. When every recipient named is already
      * in the Space, in the role and (for a user) with the key given, the call succeeds and does nothing: a retry
@@ -763,9 +775,10 @@ public:
      */
     int64_t removeSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipientRef>& recipients);
     /**
-     * Makes a new key, wrapped for every recipient's current key. Throws SpaceRecipientUnavailableException
-     * when the caller cannot see a recipient Group's current key, and server::SpaceRotationRateLimitException when
-     * the Bridge's rotation limit for the Space is reached (its data says when to retry).
+     * Makes a new key, wrapped for every recipient's current key, and its rungs to the earlier keys. Throws
+     * SpaceRecipientUnavailableException when the caller cannot see a recipient Group's current key, and
+     * server::SpaceRotationRateLimitException when the Bridge's rotation limit for the Space is reached (its data
+     * says when to retry).
      * @return the new key version
      */
     int64_t rotateSpaceKey(const std::string& spaceId);
