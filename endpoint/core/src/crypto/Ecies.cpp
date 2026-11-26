@@ -30,37 +30,78 @@ namespace {
 /**
  * Wrapping to an identity whose agreement half is a 25519 key.
  *
- * pmx-crypto's own ECIES (`seal`/`open`) cannot serve here: it pulls the sender's private scalar out
- * with `toRawP256PrivateOnly`, which is a P256-family operation, and fails on X25519 with "Failed to
- * get private key raw bytes". So the wrap is built from the pieces that do work — a shared secret,
- * a KDF, and the authenticated frame `CryptoSuite` already produces.
+ * This used to be built here by hand — a Diffie-Hellman, an ML-KEM encapsulation concatenated onto
+ * it, a KDF and a `CryptoSuite` frame — because pmx-crypto's `seal` could not take an X25519 key at
+ * all. That is fixed, and `seal(SealParams, ...)` turns out to be the better construction anyway:
+ * it encapsulates to **both** halves of a composed identity, draws a random IV instead of deriving
+ * one from the plaintext, and signs the message rather than leaving authentication implicit in the
+ * agreement.
  *
- * Frame: `[32 B sender agreement public key][CryptoSuite frame]`. The sender's key travels in the
- * clear because `decrypt` is often called without it — `EncKeyEncryptorV1` has no sender to hand —
- * and it is what the recipient agrees the secret with.
- *
- * This is a different wrapping format from the secp256k1 one, which is fine: nothing was ever
- * written in it, and which one applies follows from the identity's algorithm tag.
+ * So this file no longer composes anything. What is left is choosing the key the wrap is addressed
+ * to, which is the one thing pmx-crypto cannot do for us: the endpoint keeps a composed identity as
+ * separate halves, and a hybrid wrap wants them as one key.
  */
-constexpr std::size_t AGREEMENT_PUBLIC_LENGTH = 32;
-/// An ML-KEM-768 ciphertext. Fixed by the algorithm, which is what lets the frame split by length.
-constexpr std::size_t KEM_CIPHERTEXT_LENGTH = 1088;
-constexpr const char* WRAP_KDF_LABEL = "privmx-key-wrap";
 
 /**
- * The wrapping key, as long as the suite that will consume it needs.
+ * The parameters the wrap is written with.
  *
- * The suite is passed in rather than read from the build, because the two ends of this are not the
- * same build. Writing takes `defaultForWrite()`, which is right by definition; reading has to take
- * the suite the *frame* names, which may be another one — that is the whole point of the tag in the
- * frame. Deriving the read side's length from this build's default worked only as long as every
- * registered suite had a 32-byte key, and would have turned the first suite with a different one
- * into a wrap that no differently-configured client could open: `CryptoSuite::decrypt` checks the
- * key against the frame's suite, so the failure would come out as a key-length error on a perfectly
- * good key.
+ * **This is wire format.** `SealParams` has no default member initialisers, and every field here
+ * ends up deciding bytes: the hashes, the symmetric algorithm, the IV length and the width of the
+ * key hashes in the header. A reader has to pass the same values, so they are pinned in one place
+ * rather than spelled out at each call site.
  */
-std::string wrapKeyFor(const std::string& sharedSecret, const CryptoSuite& suite) {
-    return FormatHash::kdf(sharedSecret, WRAP_KDF_LABEL, suite.keyLength());
+const cs::SealParams& wrapParams() {
+    static const cs::SealParams params = [] {
+        cs::SealParams p{};
+        p.alg = cs::SymAlg::Aes256Cbc;
+        p.shrKeyHash = cs::Hash::Sha512;
+        p.signHash = cs::Hash::Sha256;
+        p.pubKeyHash = cs::Hash::Sha512;
+        p.symKeyLen = 32;
+        p.publHashLen = 32;
+        p.ivLen = 16;
+        return p;
+    }();
+    return params;
+}
+
+/**
+ * The key a 25519 wrap is addressed to.
+ *
+ * For a plain Ed25519 identity that is the X25519 agreement key as it stands. For one with a
+ * post-quantum half it is a single `X25519MLKEM768` key, which `seal` then encapsulates to **both**
+ * halves — the property the hand-built wrap used to provide by concatenating two secrets.
+ *
+ * The halves are concatenated and re-imported because the endpoint keeps them apart: an identity is
+ * built from one secret and its halves are separate `IPublicKey`s, while a hybrid wrap wants one
+ * key. The raw layouts line up exactly — X25519 public is 32 bytes, ML-KEM-768 public is 1184, and
+ * `X25519MLKEM768` reads the first 32 as one and the rest as the other.
+ */
+std::shared_ptr<cs::IPublicKey> sealTarget(const PublicKey& pub) {
+    if (!keyAlgorithmNeedsKemKey(pub.algorithm())) {
+        return pub.agreementImpl();
+    }
+    if (pub.kemImpl() == nullptr) {
+        throw MalformedEncryptionKeyException("post-quantum identity is missing its encapsulation half");
+    }
+    const std::string raw =
+        keyString(pub.agreementImpl()->export_(cs::KeyFormat::Raw)) +
+        keyString(pub.kemImpl()->export_(cs::KeyFormat::Raw));
+    return cryptoProvider().importPublicKey(keyBytes(raw), cs::KeyFormat::Raw, cs::AsymAlg::X25519MLKEM768);
+}
+
+/// The private counterpart of `sealTarget`; X25519 raw private is `pub || priv`, hence 64 bytes.
+std::shared_ptr<cs::IPrivateKey> openTarget(const PrivateKey& priv) {
+    if (!keyAlgorithmNeedsKemKey(priv.algorithm())) {
+        return priv.agreementImpl();
+    }
+    if (priv.kemImpl() == nullptr) {
+        throw MalformedEncryptionKeyException("post-quantum identity is missing its encapsulation half");
+    }
+    const std::string raw =
+        keyString(priv.agreementImpl()->export_(cs::KeyFormat::Raw)) +
+        keyString(priv.kemImpl()->export_(cs::KeyFormat::Raw));
+    return cryptoProvider().importPrivateKey(keyBytes(raw), cs::KeyFormat::Raw, cs::AsymAlg::X25519MLKEM768);
 }
 
 /**
@@ -89,89 +130,6 @@ void assertSameCurve(const PublicKey& pub, const PrivateKey& sender, const std::
     }
 }
 
-std::string wrapToComposedIdentity(const PublicKey& pub, const std::string& data, const PrivateKey& sender) {
-    // A key that names a composed algorithm without carrying its agreement half is not usable as
-    // either end; `assertSameCurve` has already ruled out the two naming different ones.
-    if (pub.agreementImpl() == pub.impl() || sender.agreementImpl() == sender.impl()) {
-        throw MalformedEncryptionKeyException("composed identity is missing its agreement half");
-    }
-    const std::string senderPublic = keyString(sender.agreementImpl()->publicKey()->export_(cs::KeyFormat::Raw));
-    if (senderPublic.size() != AGREEMENT_PUBLIC_LENGTH) {
-        throw MalformedEncryptionKeyException("agreement public key of unexpected length");
-    }
-    std::string shared = keyString(sender.agreementImpl()->deriveSharedSecret(pub.agreementImpl()));
-    // The post-quantum term, when the recipient has one. A key encapsulation is not a Diffie-Hellman:
-    // the secret is chosen here and the recipient can only reach it through the ciphertext, which
-    // therefore travels with the wrap. Both secrets go through one KDF, so recovering the wrapping
-    // key means breaking X25519 **and** ML-KEM-768, not either.
-    std::string kemCiphertext;
-    if (keyAlgorithmNeedsKemKey(pub.algorithm())) {
-        if (pub.kemImpl() == nullptr) {
-            throw MalformedEncryptionKeyException("post-quantum identity is missing its encapsulation half");
-        }
-        const auto [kemSecret, ciphertext] = pub.kemImpl()->encapsulate();
-        shared += keyString(kemSecret);
-        kemCiphertext = keyString(ciphertext);
-    }
-    const CryptoSuite suite = CryptoSuite::defaultForWrite();
-    return senderPublic + kemCiphertext + suite.encrypt(wrapKeyFor(shared, suite), data);
-}
-
-std::string unwrapForComposedIdentity(
-    const PrivateKey& priv,
-    const std::string& cipher,
-    const std::optional<PublicKey>& expectedSender
-) {
-    // The KEM ciphertext has one length for a given algorithm, so the frame still splits by length
-    // alone. An identity with no post-quantum half reads exactly the frame it always did.
-    const std::size_t kemLength = keyAlgorithmNeedsKemKey(priv.algorithm()) ? KEM_CIPHERTEXT_LENGTH : 0;
-    if (cipher.size() <= AGREEMENT_PUBLIC_LENGTH + kemLength) {
-        throw MalformedEncryptionKeyException("wrapped key shorter than its own header");
-    }
-    const std::string senderPublicRaw = cipher.substr(0, AGREEMENT_PUBLIC_LENGTH);
-    // Who the wrap says made it, against who the caller expected.
-    //
-    // The header is not unauthenticated: the wrapping key is `DH(sender, recipient)`, so a frame
-    // naming a sender it does not hold the private half of simply fails to decrypt. What that gives
-    // is "somebody who holds *a* private key made this", and the header says which — not "the one
-    // the caller named made this". Without this comparison a member of the same container can wrap
-    // under their own identity and have it accepted as anyone's, which is precisely what
-    // `pubOfSignature` exists to rule out; the classical branch below gets it from
-    // `IPrivateKey::open`, and this one used to drop the argument on the floor.
-    //
-    // Compared as raw bytes rather than by importing: both are X25519 public keys of one fixed
-    // length, so there is nothing to normalise, and a key that fails to import should be reported
-    // against the frame below rather than here.
-    if (expectedSender.has_value()) {
-        if (expectedSender->agreementImpl() == expectedSender->impl()) {
-            throw MalformedEncryptionKeyException("expected sender is missing its agreement half");
-        }
-        const std::string expectedRaw = keyString(expectedSender->agreementImpl()->export_(cs::KeyFormat::Raw));
-        if (expectedRaw != senderPublicRaw) {
-            // The same endpoint-level error the classical branch produces for this condition
-            // (`PrivmxCryptoservicePeerKeyVerifyException` maps here), so a caller sees one
-            // behaviour whatever algorithm the identity is of.
-            throw privmx::endpoint::crypto::AsymmetricKeyFailureException(
-                "ecies decrypt: the wrap was not made by the expected sender"
-            );
-        }
-    }
-    auto senderPublic = cryptoProvider().importPublicKey(
-        keyBytes(senderPublicRaw), cs::KeyFormat::Raw, agreementAlgorithmFor(priv.algorithm())
-    );
-    std::string shared = keyString(priv.agreementImpl()->deriveSharedSecret(senderPublic));
-    if (kemLength != 0) {
-        if (priv.kemImpl() == nullptr) {
-            throw MalformedEncryptionKeyException("post-quantum identity is missing its encapsulation half");
-        }
-        shared += keyString(priv.kemImpl()->decapsulate(keyBytes(cipher.substr(AGREEMENT_PUBLIC_LENGTH, kemLength))));
-    }
-    // The suite comes from the frame, not from this build: a wrap written by a client configured
-    // differently names its own suite, and the key has to be derived to *that* suite's length.
-    const std::string framed = cipher.substr(AGREEMENT_PUBLIC_LENGTH + kemLength);
-    const CryptoSuite suite = CryptoSuite::forId(CryptoSuite::readSuiteId(framed));
-    return CryptoSuite::decrypt(wrapKeyFor(shared, suite), framed);
-}
 
 } // namespace
 
@@ -182,7 +140,11 @@ std::string Ecies::encrypt(const PublicKey& pub, const std::string& data, const 
         }
         assertSameCurve(pub, privForSignature, "ecies encrypt");
         if (keyAlgorithmNeedsAgreementKey(pub.algorithm())) {
-            return wrapToComposedIdentity(pub, data, privForSignature);
+            // Signed with the identity's **signing** half, not the agreement one: X25519 cannot
+            // sign, and it is the signature that lets `sealedBy` attribute a wrap without opening it.
+            return keyString(
+                sealTarget(pub)->seal(wrapParams(), keyBytes(data), privForSignature.impl())
+            );
         }
         return keyString(pub.agreementImpl()->seal(keyBytes(data), privForSignature.agreementImpl()));
     });
@@ -204,7 +166,11 @@ std::string Ecies::decrypt(
             assertSameCurve(pubOfSignature.value(), priv, "ecies decrypt");
         }
         if (keyAlgorithmNeedsAgreementKey(priv.algorithm())) {
-            return unwrapForComposedIdentity(priv, cipher, pubOfSignature);
+            // `open` verifies the signature when a sender is named, and skips it when none is —
+            // `EncKeyEncryptorV1` has no sender to hand, and the wrap still opens for its recipient.
+            return keyString(openTarget(priv)->open(
+                wrapParams(), keyBytes(cipher), pubOfSignature.has_value() ? pubOfSignature->impl() : nullptr
+            ));
         }
         const std::shared_ptr<cs::IPublicKey> expectedSender = pubOfSignature.has_value() ?
             pubOfSignature->agreementImpl() :
@@ -249,10 +215,10 @@ bool Ecies::sealedBy(const std::string& cipherBase64, const std::string& senderB
         }
         const std::string cipher = privmx::utils::Base64::toString(cipherBase64);
         if (keyAlgorithmNeedsAgreementKey(sender.algorithm())) {
-            // `wrapToComposedIdentity` opens with the sender's raw agreement public key, nothing before it.
-            const std::string agreement = keyString(sender.agreementImpl()->export_(cs::KeyFormat::Raw));
-            return agreement.size() == AGREEMENT_PUBLIC_LENGTH && cipher.size() > AGREEMENT_PUBLIC_LENGTH &&
-                   cipher.compare(0, AGREEMENT_PUBLIC_LENGTH, agreement) == 0;
+            // Checks the signature, not just the sender field — so this answers "X sealed it",
+            // where the branch below only answers "the frame says X". The asymmetry is the two
+            // formats, not a decision: the legacy one carries no signature to check.
+            return sender.impl()->sealedBy(wrapParams(), keyBytes(cipher));
         }
         // The pmx-crypto frame: 'e' || sender DER || recipient DER || iv || ciphertext || tag.
         const std::string der = sender.toDER();
