@@ -199,7 +199,10 @@ public:
      * Not the default, and not free of consequences. What it knows lives in this connection's memory, so every new
      * connection trusts first use again and has to be told again of every change it must accept. And a user whose key
      * changed is refused wherever both keys appear: in a Group's history after a leaf renewal, or on an item one user
-     * wrote and another edited (the item is checked as its author's id with the editor's key). Call it right after
+     * wrote and another edited (the item is checked as its author's id with the editor's key). A user removed from
+     * the Context is refused on first use, so a Group whose statements they signed (its latest committer, say) is
+     * unreadable on every new connection. On a `connectPublic` connection, or for a user without permission to list
+     * the Context's users, the Bridge lists nobody and only the connection's own user is accepted. Call it right after
      * `connect`, before creating any module API.
      */
     void useKeyContinuity();
