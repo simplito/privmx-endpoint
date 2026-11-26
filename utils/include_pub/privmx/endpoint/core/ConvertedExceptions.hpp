@@ -173,7 +173,9 @@ DECLARE_SCOPE_ENDPOINT_EXCEPTION(EndpointServerException, "Unknown server except
     X(GroupMetaUnreachableException,                                                                                  \
       "Group metadata entry would become unreadable; rewrite the affected metadata plane first", 0x6223)              \
     X(GroupRosterVersionMismatchException, "Group roster has moved since this change was planned", 0x6224)            \
-    X(GroupRulesUnsupportedException, "Group predates group rules and must be recreated", 0x622B)
+    X(GroupRulesUnsupportedException, "Group predates group rules and must be recreated", 0x622B)                     \
+    X(SpaceRotationRateLimitException, "Space key rotation rate limit exceeded; retry at the time given", 0x622C)     \
+    X(GroupBatchSizeExceededException, "Too much to read in one batch; read this Group on its own", 0x622D)
 
 #define PRIVMX_SERVER_DECLARE(NAME, MSG, CODE) DECLARE_ENDPOINT_EXCEPTION(EndpointServerException, NAME, MSG, CODE)
 SERVER_EXCEPTIONS(PRIVMX_SERVER_DECLARE)

@@ -706,10 +706,9 @@ public:
      * @param recipients the Groups and users the key is wrapped for; the caller must be among them as a manager,
      * themselves or through a Group. Every writer must be able to see each recipient Group (visible to the Context,
      * or the writer a member): see the note above.
-     * @param idSeed when set, the Space's ID is deriveSpaceId(contextId, idSeed) instead of random. A Space deleted
-     * and created again under the same derived ID by another user starts again at key version 1, below what this
-     * process has seen of the earlier one: it reads as a rollback (GroupHistoryForkException) here, and with a
-     * PinStore on this device after a restart too. Re-created by this process, the earlier Space's pin is let go.
+     * @param publicMeta, privateMeta at most 64 KiB each (the Bridge's limit per plane)
+     * @param idSeed when set, the Space's ID is deriveSpaceId(contextId, idSeed) instead of random. The ID of a
+     * deleted Space is never taken again: creating under its seed is refused (server::DuplicateResourceIdException).
      * @return the Space's ID
      */
     std::string createSpace(
@@ -743,10 +742,12 @@ public:
     int64_t removeSpaceRecipients(const std::string& spaceId, const std::vector<SpaceRecipientRef>& recipients);
     /**
      * Makes a new key, wrapped for every recipient's current key. Throws SpaceRecipientUnavailableException
-     * when the caller cannot see a recipient Group's current key.
+     * when the caller cannot see a recipient Group's current key, and server::SpaceRotationRateLimitException when
+     * the Bridge's rotation limit for the Space is reached (its data says when to retry).
      * @return the new key version
      */
     int64_t rotateSpaceKey(const std::string& spaceId);
+    /** `meta` at most 64 KiB (the Bridge's limit per plane), as for updateSpacePrivateMeta. */
     void updateSpacePublicMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
     void updateSpacePrivateMeta(const std::string& spaceId, const core::Buffer& meta, int64_t version);
 
