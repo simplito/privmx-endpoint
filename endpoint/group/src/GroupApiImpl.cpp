@@ -223,11 +223,14 @@ void GroupApiImpl::setGroupVisibility(const std::string& groupId, const std::str
     if (visibleTo != "members" && visibleTo != "context") {
         throw core::InvalidParamsException("visibleTo is \"members\" or \"context\"");
     }
-    _ops.assertMayChangeVisibility(groupId);
-    server::GroupSetVisibilityModel model;
-    model.groupId = groupId;
-    model.visibleTo = visibleTo;
-    _serverApi.groupSetVisibility(model);
+    // ROTATED_ALREADY: a commit landed between the read and the call; checked and sent again, as any group write.
+    CommitEngine::commitWithRetry([&] {
+        _ops.assertMayChangeVisibility(groupId);
+        server::GroupSetVisibilityModel model;
+        model.groupId = groupId;
+        model.visibleTo = visibleTo;
+        _serverApi.groupSetVisibility(model);
+    });
 }
 
 void GroupApiImpl::addGroupMembers(const std::string& groupId, const std::vector<GroupMemberToAdd>& newMembers) {
@@ -1494,10 +1497,25 @@ DecryptedSharedEnvelope GroupApiImpl::decryptShared(
             via = "user";
         }
     }
-    for (std::size_t i = 0; i < routing.recipients.size() && !opened.has_value(); ++i) {
+    // The recipient groups come off the unsigned header, and each unknown one costs a request: groups this client
+    // already holds (a session or a pin) first, then at most MAX_SHARED_LOOKUPS others.
+    std::vector<std::size_t> order;
+    for (const bool known : {true, false}) {
+        for (std::size_t i = 0; i < routing.recipients.size(); ++i) {
+            const WireRecipient& recipient = routing.recipients[i];
+            if (recipient.isGroup &&
+                (_sessions.find(recipient.id) != nullptr || _treeVerifier.pinnedSeq(recipient.id) > 0) == known) {
+                order.push_back(i);
+            }
+        }
+    }
+    std::size_t remote = 0;
+    for (std::size_t n = 0; n < order.size() && !opened.has_value(); ++n) {
+        const std::size_t i = order[n];
         const WireRecipient& recipient = routing.recipients[i];
-        if (!recipient.isGroup) {
-            continue;
+        const bool known = _sessions.find(recipient.id) != nullptr || _treeVerifier.pinnedSeq(recipient.id) > 0;
+        if (!known && ++remote > MAX_SHARED_LOOKUPS) {
+            break;
         }
         std::optional<privmx::crypto::PrivateKey> groupKey;
         try {

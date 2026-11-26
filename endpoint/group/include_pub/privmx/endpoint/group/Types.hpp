@@ -654,7 +654,12 @@ struct SpaceState {
      * this key. The next write by anyone who can reach every recipient Group's key replaces it.
      */
     bool keyIsStale;
+    /** The Bridge's word: unsigned and unencrypted, anyone the Bridge lets write it may have. */
     core::Buffer publicMeta;
+    /**
+     * Encrypted under the Space's key and signed by its writer, who the UserVerifier vouches for. Any recipient
+     * holding the key may have written it, not only a manager.
+     */
     core::Buffer privateMeta;
     int64_t publicMetaVersion;
     int64_t privateMetaVersion;

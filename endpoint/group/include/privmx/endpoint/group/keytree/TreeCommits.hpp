@@ -133,7 +133,7 @@ public:
     static const std::vector<std::string>& ruleFields();
 
     // `GroupRules` of a rules object and its creator, with `hash` = `H("pmx-group-rules-v1\0" || lp(creator)
-    // || lp(field)* in `ruleFields` order)`. Strict: an object with exactly those nine fields, each "managers",
+    // || lp(field)* in `ruleFields` order)`. Strict: an object with exactly those eight fields, each "managers",
     // "members" or "nobody"; anything else throws std::invalid_argument. Defaults are the signer's to fill,
     // so such an object is never signed and, served, is an integrity error.
     static GroupRules rules(const Poco::Dynamic::Var& policy, const std::string& creator);

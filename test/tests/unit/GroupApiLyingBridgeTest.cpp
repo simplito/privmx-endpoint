@@ -140,6 +140,7 @@ struct Bridge {
     // Edits what any `groupGet` serves `caller`.
     std::function<void(const std::string&, server::GroupInfo&)> onRead = [](const std::string&, server::GroupInfo&) {};
     std::function<void()> onMetaWrite = [] {}; // before a metadata write is stored; throws to refuse
+    std::function<void()> onSetVisibility = [] {}; // before a visibility change is stored; throws to refuse
     std::shared_ptr<std::atomic<int>> verifierCalls = std::make_shared<std::atomic<int>>(0);
     std::function<void()> onVerify = [] {}; // runs inside every UserVerifier call, on the caller's thread
     struct Call {
@@ -163,6 +164,15 @@ struct Bridge {
     // Edits what `groupGetKeyArchive` serves for an ask.
     std::function<void(const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&)> onArchive =
         [](const server::GroupGetKeyArchiveModel&, server::GroupGetKeyArchiveResult&) {};
+    // Spaces, as stored: every key entry of every version, and the statements; served as the Bridge serves them
+    // (`spaceGet` the current version's entries only, `spaceGetKeys` the earlier ones, at most `spaceKeysPage` a page).
+    struct StoredSpace {
+        server::SpaceInfo info;
+        std::vector<server::SpaceKeyEntry> keys;
+        std::vector<server::SpaceStatement> statements;
+    };
+    std::map<std::string, StoredSpace> spaces;
+    std::int64_t spaceKeysPage = 256;
     // Requests a test may make before a client is taken to loop on the bridge: failed, not hung.
     static constexpr std::size_t MAX_CALLS = 20000;
 
@@ -170,6 +180,93 @@ struct Bridge {
         return static_cast<std::size_t>(std::count_if(calls.begin(), calls.end(), [&](const Call& call) {
             return call.caller == caller && call.method == method;
         }));
+    }
+
+    // The new state of a stored Space after a statement: its recipients, version and position.
+    static void applyStatement(StoredSpace& space, const server::SpaceStatement& statement, const std::string& caller) {
+        space.statements.push_back(statement);
+        space.info.seq = statement.seq;
+        space.info.keyVersion = statement.keyVersion;
+        space.info.groups = statement.groups;
+        space.info.users = statement.users;
+        space.info.lastModifier = caller;
+    }
+
+    Poco::Dynamic::Var answerSpace(const std::string& caller, const std::string& method, Poco::JSON::Object::Ptr params) {
+        if (method == "spaceCreate") {
+            const auto model = server::SpaceCreateModel::fromJSON(params);
+            const std::string id = TreeCommits::spaceId(model.contextId, model.resourceId);
+            StoredSpace& space = spaces[id];
+            space.info.id = id;
+            space.info.contextId = model.contextId;
+            space.info.creator = caller;
+            space.info.keyId = model.keyId;
+            space.info.keyIsStale = false;
+            space.info.publicMeta = model.publicMeta;
+            space.info.privateMeta = model.privateMeta;
+            space.info.publicMetaVersion = 1;
+            space.info.privateMetaVersion = 1;
+            space.keys = model.keys;
+            applyStatement(space, model.statement, caller);
+            return server::SpaceCreateResult{.spaceId = id}.toJSON();
+        }
+        const std::string id = params->getValue<std::string>("id");
+        if (spaces.count(id) == 0) {
+            bridgeError<srv::SpaceDoesNotExistException>();
+        }
+        StoredSpace& space = spaces.at(id);
+        if (method == "spaceGet") {
+            server::SpaceInfo info = space.info;
+            info.keys.clear();
+            for (const auto& entry : space.keys) {
+                if (entry.keyVersion == info.keyVersion) {
+                    info.keys.push_back(entry);
+                }
+            }
+            return server::SpaceGetResult{.space = info}.toJSON();
+        }
+        if (method == "spaceGetKeys") {
+            const auto model = server::SpaceGetKeysModel::fromJSON(params);
+            const std::int64_t to = std::min(model.toKeyVersion.value_or(INT64_MAX), space.info.keyVersion);
+            const std::int64_t limit = std::min(model.limit.value_or(64), spaceKeysPage);
+            server::SpaceGetKeysResult result;
+            std::int64_t version = model.fromKeyVersion;
+            for (; version <= to && version < model.fromKeyVersion + limit; ++version) {
+                for (const auto& entry : space.keys) {
+                    if (entry.keyVersion == version) {
+                        result.keys.push_back(entry);
+                    }
+                }
+            }
+            if (version <= to) {
+                result.nextKeyVersion = version;
+            }
+            return result.toJSON();
+        }
+        if (method == "spaceGetStatements") {
+            const auto model = server::SpaceGetStatementsModel::fromJSON(params);
+            server::SpaceGetStatementsResult result;
+            for (std::int64_t i = model.fromSeq; i < model.fromSeq + model.limit &&
+                 i < static_cast<std::int64_t>(space.statements.size());
+                 ++i) {
+                result.statements.push_back(space.statements[static_cast<std::size_t>(i)]);
+            }
+            return result.toJSON();
+        }
+        if (method == "spaceRotateKey" || method == "spaceRemoveRecipients") {
+            const auto model = server::SpaceRotateKeyModel::fromJSON(params);
+            space.keys.insert(space.keys.end(), model.keys.begin(), model.keys.end());
+            space.info.keyId = model.keyId;
+            applyStatement(space, model.statement, caller);
+            return server::SpaceRotateKeyResult{.keyVersion = space.info.keyVersion}.toJSON();
+        }
+        if (method == "spaceAddRecipients") {
+            const auto model = server::SpaceAddRecipientsModel::fromJSON(params);
+            space.keys.insert(space.keys.end(), model.keys.begin(), model.keys.end());
+            applyStatement(space, model.statement, caller);
+            return Poco::Dynamic::Var();
+        }
+        throw std::runtime_error("the fake bridge has no " + method);
     }
 
     server::GroupInfo serve(const std::string& userId, bool plan) const {
@@ -556,6 +653,14 @@ struct Bridge {
             return Poco::Dynamic::Var();
         }
         if (group == "groupDelete") {
+            return Poco::Dynamic::Var();
+        }
+        if (group.rfind("space", 0) == 0) {
+            return answerSpace(caller, group, params);
+        }
+        if (group == "groupSetVisibility") {
+            onSetVisibility();
+            visibleToContext = params->getValue<std::string>("visibleTo") == "context";
             return Poco::Dynamic::Var();
         }
         throw std::runtime_error("the fake bridge has no " + method);
@@ -3533,6 +3638,20 @@ TEST_F(GroupApiLyingBridgeAbandon, RefusedWithoutEditPrivateMeta) {
     EXPECT_FALSE(bobRemovesCarolWithout("editPrivateMeta"));
 }
 
+TEST_F(GroupApiLyingBridge, AVisibilityChangeLosingARaceIsSentAgain) {
+    quiet = true;
+    const std::string groupId = createGroup({"alice", "bob"}, std::nullopt);
+    int calls = 0;
+    bridge.onSetVisibility = [&] {
+        if (calls++ == 0) {
+            bridgeError<srv::GroupRotatedAlreadyException>();
+        }
+    };
+    EXPECT_NO_THROW(client("alice").setGroupVisibility(groupId, "context"));
+    EXPECT_EQ(count("alice", "context.groupSetVisibility"), 2u);
+    EXPECT_TRUE(bridge.visibleToContext);
+}
+
 TEST_F(GroupApiLyingBridge, AVisibilityChangeNeedsChangeVisibility) {
     // The visibility is the Bridge's setting; the rule is signed, and checked on a verified read before the call.
     addUsers({"dave"});
@@ -5284,28 +5403,118 @@ TEST(SpaceGroupKeyRefresh, SECURITY_ARefreshThroughTheGroupIsHeldToTheGroupsVeri
     EXPECT_TRUE(Access::refusedRefresh(viaG(3, forged), std::nullopt, current, past, true).has_value());
 }
 
-// Two processes of one user on one device store. The second loaded an earlier Space S (at seq 2) before S was
-// created again (seq 1) in a third: its next save, of another Space, must not put the earlier S back.
-TEST_F(GroupApiLyingBridge, ASaveOfAnotherSpaceKeepsASpaceCreatedAgainInAnotherProcess) {
-    using Access = GroupApiImplTestAccess;
-    store = std::make_shared<MemoryPinStore>();
-    const auto state = [](const std::string& id, std::uint64_t seq, const std::string& digest) {
-        privmx::endpoint::group::keytree::SpaceLogState s;
-        s.spaceId = id;
-        s.seq = seq;
-        s.digest = digest;
-        return s;
-    };
-    const std::string oldDigest(32, 'o'), newDigest(32, 'n');
-    Access::rememberSpaceLog(client("alice"), state("S", 2, oldDigest)); // an earlier session
-    GroupApiImpl& second = sibling("alice");
-    Access::loadSpacePins(second);
-    Access::rememberSpaceLog(sibling("alice"), state("S", 1, newDigest), true); // S created again
-    Access::rememberSpaceLog(second, state("T", 1, std::string(32, 't')));
 
-    const auto stored = Access::storedSpacePins(sibling("alice"));
-    ASSERT_EQ(stored.count("S"), 1u);
-    EXPECT_EQ(stored.at("S").first, 1u);
-    EXPECT_EQ(stored.at("S").second, newDigest);
-    EXPECT_EQ(stored.count("T"), 1u);
+// ── Spaces against the fake Bridge ───────────────────────────────────────────────────────────────────────
+
+class GroupApiLyingBridgeSpaces : public GroupApiLyingBridge {
+protected:
+    SpaceRecipient person(const std::string& id, const std::string& role) {
+        return SpaceRecipient{.groupId = {}, .user = user(id), .role = role};
+    }
+    std::string makeSpace() {
+        quiet = true;
+        addUsers({"dave"});
+        return client("alice").createSpace(
+            CONTEXT, {person("alice", "manager"), person("bob", "user")}, core::Buffer::from("pub"),
+            core::Buffer::from("priv"), std::nullopt
+        );
+    }
+};
+
+TEST_F(GroupApiLyingBridgeSpaces, AnEarlierVersionsKeyIsReadOnDemandAndOnce) {
+    const std::string spaceId = makeSpace();
+    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
+    client("alice").rotateSpaceKey(spaceId);
+    client("alice").rotateSpaceKey(spaceId);
+    ASSERT_EQ(bridge.spaces.at(spaceId).info.keyVersion, 3);
+    EXPECT_EQ(client("bob").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1");
+    EXPECT_EQ(count("bob", "context.spaceGetKeys"), 1u) << "spaceGet serves the current version only";
+    EXPECT_EQ(client("bob").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1");
+    EXPECT_EQ(count("bob", "context.spaceGetKeys"), 1u) << "read once";
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, AnAdditionReadsTheEarlierVersionsInPages) {
+    const std::string spaceId = makeSpace();
+    const core::Buffer atOne = client("alice").encryptInSpace(spaceId, message("m1"), core::Buffer::from("v1"));
+    for (int i = 0; i < 4; ++i) {
+        client("alice").rotateSpaceKey(spaceId);
+    }
+    bridge.spaceKeysPage = 2;
+    const std::size_t before = count("alice", "context.spaceGetKeys");
+    client("alice").addSpaceRecipients(spaceId, {person("carol", "user")});
+    EXPECT_EQ(count("alice", "context.spaceGetKeys") - before, 2u) << "versions 1..4, two a page";
+    EXPECT_EQ(client("carol").decryptInSpace(spaceId, message("m1"), atOne, ANY).data.stdString(), "v1")
+        << "the newcomer reads what was there";
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, AnAdditionIsCheckedAgainstTheVerifiedHistoryBeforeSigning) {
+    const std::string spaceId = makeSpace();
+    const auto adds = [&] { return count("alice", "context.spaceAddRecipients"); };
+    EXPECT_THROW(client("alice").addSpaceRecipients(spaceId, {}), core::InvalidParamsException);
+    EXPECT_NO_THROW(client("alice").addSpaceRecipients(spaceId, {person("bob", "user")}))
+        << "already there as asked: a retry after a lost answer is done";
+    EXPECT_THROW(
+        client("alice").addSpaceRecipients(spaceId, {person("bob", "manager")}), core::InvalidParamsException
+    ) << "there in another role";
+    EXPECT_THROW(
+        client("alice").addSpaceRecipients(spaceId, {person("carol", "user"), person("bob", "user")}),
+        core::InvalidParamsException
+    ) << "some already there";
+    EXPECT_THROW(
+        client("alice").addSpaceRecipients(spaceId, {person("carol", "user"), person("carol", "user")}),
+        core::InvalidParamsException
+    ) << "named twice";
+    EXPECT_EQ(adds(), 0u) << "nothing was signed or sent";
+}
+
+TEST_F(GroupApiLyingBridgeSpaces, ARemovalIsCheckedAgainstTheVerifiedHistoryBeforeSigning) {
+    const std::string spaceId = makeSpace();
+    const auto rotations = [&] { return count("alice", "context.spaceRotateKey"); };
+    EXPECT_THROW(client("alice").removeSpaceRecipients(spaceId, {}), core::InvalidParamsException);
+    EXPECT_EQ(client("alice").removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .userId = "dave"}}), 1)
+        << "not there: a retry after a lost answer is done";
+    EXPECT_THROW(
+        client("alice").removeSpaceRecipients(
+            spaceId, {SpaceRecipientRef{.groupId = {}, .userId = "bob"}, SpaceRecipientRef{.groupId = {}, .userId = "dave"}}
+        ),
+        core::InvalidParamsException
+    ) << "some not there";
+    EXPECT_THROW(
+        client("alice").removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .userId = "alice"}}),
+        core::InvalidParamsException
+    ) << "no manager left";
+    EXPECT_EQ(rotations(), 0u) << "nothing was signed or sent";
+    EXPECT_EQ(client("alice").removeSpaceRecipients(spaceId, {SpaceRecipientRef{.groupId = {}, .userId = "bob"}}), 2);
+}
+
+TEST_F(GroupApiLyingBridge, ASharedEnvelopeLooksUpAFewUnknownRecipientGroupsAtMost) {
+    // The recipient groups come off the unsigned header: the ones this client holds first, then at most 8 others.
+    quiet = true;
+    const std::string billing = createGroup({"alice", "carol"});
+    const std::string billingKey = client("alice").getGroup(billing).groupPubKey;
+    std::vector<WireRecipient> strangers;
+    for (int i = 0; i < 12; ++i) {
+        strangers.push_back(WireRecipient{
+            .isGroup = true,
+            .id = privmx::utils::Hex::from(privmx::crypto::Crypto::randomBytes(32)),
+            .pubKey = PrivateKey::generateRandom().getPublicKey().toBase58DER(),
+            .keyVersion = 1
+        });
+    }
+    const auto seal = [&](std::vector<WireRecipient> recipients) {
+        return GroupEnvelopeEncryptor().packMemberEnvelope(
+            "care-team", "0123456789abcdef0123456789abcdef", core::Buffer::from("approved"), bridge.users.at("carol"),
+            privmx::crypto::Crypto::randomBytes(32),
+            EnvelopeSeal{.binding = {}, .keyVersion = 1, .encryptedAt = 1, .authorUserId = "carol"}, recipients
+        );
+    };
+    std::vector<WireRecipient> withBilling = strangers;
+    withBilling.push_back(WireRecipient{.isGroup = true, .id = billing, .pubKey = billingKey, .keyVersion = 1});
+    const std::size_t before = count("alice", "context.groupGetEpochKeys");
+    EXPECT_EQ(client("alice").decryptShared(CONTEXT, NOWHERE, seal(withBilling), ANY).via, billing)
+        << "a group this client holds is tried first, wherever it is listed";
+    EXPECT_EQ(count("alice", "context.groupGetEpochKeys") - before, 1u) << "only the held group was looked up";
+    const std::size_t afterFirst = count("alice", "context.groupGetEpochKeys");
+    EXPECT_THROW(client("alice").decryptShared(CONTEXT, NOWHERE, seal(strangers), ANY), EnvelopeNotARecipientException);
+    EXPECT_EQ(count("alice", "context.groupGetEpochKeys") - afterFirst, 8u) << "12 strangers, 8 looked up";
 }

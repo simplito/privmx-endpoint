@@ -460,6 +460,20 @@ JSON_STRUCT(SpaceIdModel, SPACE_ID_MODEL_FIELDS);
 #define SPACE_GET_RESULT_FIELDS(F) F(space, SpaceInfo)
 JSON_STRUCT(SpaceGetResult, SPACE_GET_RESULT_FIELDS);
 
+// The caller's reachable key entries of a Space's earlier versions (`spaceGet` serves the current one only),
+// ascending, a page at a time: `nextKeyVersion` is where the next page starts.
+#define SPACE_GET_KEYS_MODEL_FIELDS(F)                                                                                 \
+    F(id, std::string)                                                                                                 \
+    F(fromKeyVersion, int64_t)                                                                                         \
+    F(toKeyVersion, std::optional<int64_t>)                                                                            \
+    F(limit, std::optional<int64_t>)
+JSON_STRUCT(SpaceGetKeysModel, SPACE_GET_KEYS_MODEL_FIELDS);
+
+#define SPACE_GET_KEYS_RESULT_FIELDS(F)                                                                                \
+    F(keys, std::vector<SpaceKeyEntry>)                                                                                \
+    F(nextKeyVersion, std::optional<int64_t>)
+JSON_STRUCT(SpaceGetKeysResult, SPACE_GET_KEYS_RESULT_FIELDS);
+
 #define SPACE_LIST_MODEL_EXTRA_FIELDS(F)
 JSON_STRUCT_EXT(SpaceListModel, core::server::ContainerListModel, SPACE_LIST_MODEL_EXTRA_FIELDS);
 

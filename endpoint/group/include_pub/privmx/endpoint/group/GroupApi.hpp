@@ -147,6 +147,10 @@ public:
      * it. Refused when it would leave a Group that has managers with none. A failed call may still take effect (see
      * the class note).
      *
+     * The metadata planes are carried up to the new epoch under the caller's name, each only if the caller holds its
+     * rule (`editPublicMeta` / `editPrivateMeta`). A plane written by a removed member that the caller may not carry
+     * is refused by readers until a member holding the rule rewrites it (a warning is logged).
+     *
      * When the caller's own leaf does not open, the removal still goes through (a member that garbled it cannot
      * block its own removal) and, unless this session holds the current Group key, abandons the Group's history for
      * every member, which needs `changeRules`, `editPublicMeta` and `editPrivateMeta` beside the removal's own
@@ -470,6 +474,10 @@ public:
      *
      * The result has a sender, not an author. Check `senderMembership`: anyone in the Context can address an
      * envelope to the caller and name any Group as its origin.
+     *
+     * The recipient Groups are named by the envelope's unsigned header: those this client already holds (read or
+     * pinned) are tried first, and at most 8 others are looked up (a request each). An envelope whose route to the
+     * caller lies past them reads as not addressed to the caller.
      *
      * Throws EnvelopeNotARecipientException when the caller is not among the recipients, and
      * InvalidParamsException for `options.currentEpochOnly`: a recipient has no epoch of the author's Group to hold

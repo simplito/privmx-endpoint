@@ -124,14 +124,32 @@ bool GroupMetadata::carryMetadataForward(
             return false;
         }
         // One write per carried plane, both off the one verified read: a metadata write moves neither the head nor
-        // the epoch it is checked against.
-        if (carryPublic) {
-            writeMeta(verified, true, opened.publicMeta, opened.publicMetaVersion);
+        // the epoch it is checked against. A plane the caller holds no rule for is not written (the Bridge and every
+        // reader would refuse it): one whose author left stays unreadable until a holder of the rule rewrites it.
+        const keytree::GroupRules rules = GroupDataSchemaMapper::rulesOf(group);
+        const std::optional<std::string> self = keytree::GroupKeyResolver::ownUserId(group);
+        const bool manager = self.has_value() &&
+            std::find(group.managers.begin(), group.managers.end(), self.value()) != group.managers.end();
+        bool done = true;
+        for (const bool publicPlane : {true, false}) {
+            if (!(publicPlane ? carryPublic : carryPrivate)) {
+                continue;
+            }
+            if (!keytree::TreeCommits::allows(GroupDataSchemaMapper::editRule(rules, publicPlane), true, manager)) {
+                LOG_WARN(
+                    "[carryMetadataForward] group ", groupId, ": the ", publicPlane ? "public" : "private",
+                    " metadata is not carried forward: this member may not write it; until a member who may rewrites "
+                    "it, readers may refuse it"
+                )
+                done = false;
+                continue;
+            }
+            writeMeta(
+                verified, publicPlane, publicPlane ? opened.publicMeta : opened.privateMeta,
+                publicPlane ? opened.publicMetaVersion : opened.privateMetaVersion
+            );
         }
-        if (carryPrivate) {
-            writeMeta(verified, false, opened.privateMeta, opened.privateMetaVersion);
-        }
-        return true;
+        return done;
     } catch (const std::exception& e) {
         // Best-effort by design. A failure leaves the planes where the commit left them, and the next metadata write
         // closes the window; throwing here would fail a commit that has already happened.

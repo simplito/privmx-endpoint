@@ -64,18 +64,6 @@ struct GroupApiImplTestAccess {
     ) {
         return GroupApiImpl::refusedRefresh(refresh, memberEpoch, current, chainKey, groupHidden);
     }
-    static void rememberSpaceLog(GroupApiImpl& api, const keytree::SpaceLogState& state, bool created = false) {
-        api.rememberSpaceLog(state, created);
-    }
-    // What a first Space read of the session does: the device's stored pins, loaded once.
-    static void loadSpacePins(GroupApiImpl& api) {
-        std::lock_guard lock(api._spaceLogsMutex);
-        api._spacePins = api.storedSpacePins();
-        api._spacePinsLoaded = true;
-    }
-    static std::map<std::string, std::pair<std::uint64_t, std::string>> storedSpacePins(GroupApiImpl& api) {
-        return api.storedSpacePins();
-    }
     // As if the last pin save (or failed attempt) were PIN_SAVE_IDLE_INTERVAL ago: no clock to move in a unit test.
     static void agePinSave(GroupApiImpl& api) {
         std::lock_guard<std::mutex> lock(api._pinsMovedMutex);
