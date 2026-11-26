@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "BaseGroupTest.hpp"
+#include "MemoryPinStore.hpp"
 #include <Poco/Util/IniFileConfiguration.h>
 #include <chrono>
 #include <thread>
@@ -443,4 +444,34 @@ TEST_F(GroupSpaceTest, a_new_session_replays_a_refresh_through_a_team_that_has_m
     EXPECT_EQ(
         groupApi->decryptInSpace(spaceId, note("n1"), written, by(userId(1))).data.stdString(), "at epoch 2 of sales"
     );
+}
+
+TEST_F(GroupSpaceTest, a_space_this_device_creates_again_under_its_id_is_read_after_a_restart) {
+    // The stored pin of the earlier Space (seq 2) must not hold the one created again (seq 1) behind it.
+    const core::Buffer seed = text("recreated-space");
+    const auto store = std::make_shared<MemoryPinStore>();
+    disconnect();
+    std::string spaceId;
+    {
+        auto session = connect(1);
+        session->setPinStore(store);
+        {
+            auto groups = group::GroupApi::create(*session);
+            spaceId = groups.createSpace(contextId(), {person(1, "manager")}, text(""), text(""), seed);
+            ASSERT_NO_THROW({ groups.rotateSpaceKey(spaceId); });
+            groups.deleteSpace(spaceId);
+            EXPECT_EQ(groups.createSpace(contextId(), {person(1, "manager")}, text(""), text(""), seed), spaceId);
+        }
+        session->disconnect();
+    }
+    auto session = connect(1);
+    session->setPinStore(store);
+    {
+        auto groups = group::GroupApi::create(*session);
+        SpaceState state;
+        ASSERT_NO_THROW({ state = groups.getSpace(spaceId); });
+        EXPECT_EQ(state.keyVersion, 1);
+    }
+    session->disconnect();
+    connectAs(1);
 }

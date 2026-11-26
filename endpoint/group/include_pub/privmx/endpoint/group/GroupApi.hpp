@@ -688,7 +688,8 @@ public:
      * themselves or through a Group
      * @param idSeed when set, the Space's ID is deriveSpaceId(contextId, idSeed) instead of random. A Space deleted
      * and created again under the same derived ID by another user starts again at key version 1, below what this
-     * process has seen of the earlier one: it reads as a rollback (GroupHistoryForkException) here until restart.
+     * process has seen of the earlier one: it reads as a rollback (GroupHistoryForkException) here, and with a
+     * PinStore on this device after a restart too. Re-created by this process, the earlier Space's pin is let go.
      * @return the Space's ID
      */
     std::string createSpace(

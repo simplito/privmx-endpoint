@@ -529,9 +529,10 @@ private:
         std::int64_t upToSeq
     );
     std::optional<keytree::SpaceLogState> spaceLogOf(const std::string& spaceId);
-    void rememberSpaceLog(const keytree::SpaceLogState& state);
+    // `created`: this process made the Space, so the device's stored pin of an earlier Space under its id goes.
+    void rememberSpaceLog(const keytree::SpaceLogState& state, bool created = false);
     std::map<std::string, std::pair<std::uint64_t, std::string>> storedSpacePins();
-    void storeSpacePin(const keytree::SpaceLogState& state);
+    void storeSpacePin(const keytree::SpaceLogState& state, bool created);
     keytree::SpaceStatement signSpaceStatement(
         keytree::SpaceStatement statement,
         const std::optional<keytree::SpaceLogState>& prior

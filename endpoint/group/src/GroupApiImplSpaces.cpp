@@ -170,7 +170,7 @@ std::map<std::string, std::pair<std::uint64_t, std::string>> GroupApiImpl::store
     return pins;
 }
 
-void GroupApiImpl::storeSpacePin(const keytree::SpaceLogState& state) {
+void GroupApiImpl::storeSpacePin(const keytree::SpaceLogState& state, bool created) {
     if (!_pinStore || !std::all_of(state.spaceId.begin(), state.spaceId.end(), [](unsigned char c) {
             return std::isalnum(c) != 0;
         })) {
@@ -178,8 +178,9 @@ void GroupApiImpl::storeSpacePin(const keytree::SpaceLogState& state) {
     }
     const std::string slot = _connection.getImpl()->localStateSlot("space-pins", _userPrivKey.getPublicKey());
     const core::LocalSeal seal(_userPrivKey, "privmx/space/pins", 1, slot);
-    // What this process holds: the pins it loaded and every Space it verified since. A stored blob that does not
-    // open (nothing stored, or corrupted) is rebuilt from these, not from the one Space at hand.
+    // What this process holds: the pins it loaded and every Space it verified since, merged into every save, so a
+    // save that failed earlier is made up by the next one. A stored blob that does not open (nothing stored, or
+    // corrupted) is rebuilt from these, not from the one Space at hand.
     std::map<std::string, std::pair<std::uint64_t, std::string>> held;
     {
         std::lock_guard lock(_spaceLogsMutex);
@@ -193,16 +194,19 @@ void GroupApiImpl::storeSpacePin(const keytree::SpaceLogState& state) {
         }
     }
     const bool saved = seal.update(*_pinStore, [&](const std::optional<std::string>& body) {
-        // One line a Space: "<id> <seq> <digest hex>". The higher position stays.
-        std::map<std::string, std::pair<std::uint64_t, std::string>> pins = body.has_value() ? decltype(held)() : held;
+        // One line a Space: "<id> <seq> <digest hex>". The higher position stays, except for a Space this process
+        // created again: an earlier Space's history under its id is let go.
+        std::map<std::string, std::pair<std::uint64_t, std::string>> pins = held;
         std::istringstream lines(body.value_or(std::string()));
         std::string spaceId, digest;
         std::uint64_t seq = 0;
         while (lines >> spaceId >> seq >> digest) {
-            pins[spaceId] = {seq, digest};
+            if (seq >= pins[spaceId].first) {
+                pins[spaceId] = {seq, digest};
+            }
         }
         auto& pin = pins[state.spaceId];
-        if (state.seq >= pin.first) {
+        if (created || state.seq >= pin.first) {
             pin = {state.seq, privmx::utils::Hex::from(state.digest)};
         }
         std::string out;
@@ -234,7 +238,7 @@ std::optional<keytree::SpaceLogState> GroupApiImpl::spaceLogOf(const std::string
     return found == _spaceLogs.end() ? std::nullopt : std::optional<keytree::SpaceLogState>(found->second);
 }
 
-void GroupApiImpl::rememberSpaceLog(const keytree::SpaceLogState& state) {
+void GroupApiImpl::rememberSpaceLog(const keytree::SpaceLogState& state, bool created) {
     {
         // Only forward, under one lock: two reads racing must not leave the earlier state as the mark.
         std::lock_guard lock(_spaceLogsMutex);
@@ -247,7 +251,7 @@ void GroupApiImpl::rememberSpaceLog(const keytree::SpaceLogState& state) {
     // The Bridge has taken the change, or the read is done: a store that fails is logged, never the caller's error.
     // The next save carries this Space again.
     try {
-        storeSpacePin(state);
+        storeSpacePin(state, created);
     } catch (const std::exception& e) { LOG_WARN("[space pins] save dropped: ", e.what()) } catch (...) {
         LOG_WARN("[space pins] save dropped")
     }
@@ -873,7 +877,7 @@ std::string GroupApiImpl::createSpace(
         _spaceLogs.erase(spaceId);
         _spacePins.erase(spaceId);
     }
-    rememberSpaceLog(created);
+    rememberSpaceLog(created, true);
     return spaceId;
 }
 
